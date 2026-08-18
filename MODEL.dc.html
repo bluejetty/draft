@@ -100,12 +100,17 @@
       </sc-for>
     </div>
 
-    <!-- VIEW -->
+    <!-- VIEW (2D only) -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">View</div>
-      <sc-for list="{{ views }}" as="v" hint-placeholder-count="4">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="3">
         <button onClick="{{ v.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ v.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.04em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ v.label }}</button>
       </sc-for>
+    </div>
+
+    <!-- 3D VIEW (special) -->
+    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <button onClick="{{ enter3D }}" style="display:block; width:100%; text-align:center; border:1px solid {{ view3DBorder }}; background:{{ view3DBg }}; color:{{ view3DColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; padding:8px 10px; cursor:pointer;">⬡  3D VIEW</button>
     </div>
 
     <!-- UNITS + SNAP -->
@@ -840,11 +845,14 @@ class Component extends DCLogic {
         { label:'Cut  [C]',    onSelect:()=>{ this._cancelWall(); this.setState({activeTool:'cut'}); }, ...(activeTool==='cut'?on:off) },
       ],
       views: [
-        { label:'Perspective [1]', onSelect:()=>this._setView('perspective'), bg: activeView==='perspective'?hi:lo },
-        { label:'Top / Plan  [2]', onSelect:()=>this._setView('top'),         bg: activeView==='top'        ?hi:lo },
-        { label:'Front  [3]',      onSelect:()=>this._setView('front'),       bg: activeView==='front'      ?hi:lo },
-        { label:'Side  [4]',       onSelect:()=>this._setView('side'),        bg: activeView==='side'       ?hi:lo },
+        { label:'Top / Plan  [2]', onSelect:()=>this._setView('top'),   bg: activeView==='top'  ?hi:lo },
+        { label:'Front  [3]',      onSelect:()=>this._setView('front'), bg: activeView==='front'?hi:lo },
+        { label:'Side  [4]',       onSelect:()=>this._setView('side'),  bg: activeView==='side' ?hi:lo },
       ],
+      enter3D:      ()=>this._setView('perspective'),
+      view3DBg:     activeView==='perspective' ? '#5980a6' : '#fff',
+      view3DColor:  activeView==='perspective' ? '#fff'    : '#5980a6',
+      view3DBorder: '#5980a6',
       snaps: snaps.map((sn, i) => ({ label:sn.label, onSelect:()=>this.setState({activeSnap:i}), bg:activeSnap===i?hi:lo })),
       setImperial: ()=>this.setState({units:'imperial',activeSnap:0}),
       setMetric:   ()=>this.setState({units:'metric',  activeSnap:0}),
