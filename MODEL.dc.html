@@ -38,13 +38,32 @@
 </helmet>
 
 <!-- TOP BAR -->
-<div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff;">
+<div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff; position:relative;">
   <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase; color:#1d1f20;">MODEL</div>
   <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; color:rgba(29,31,32,0.35); margin:0 10px;">/</div>
   <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:{{ topBarColor }};">{{ topBarLabel }}</div>
   <sc-if value="{{ showHint }}" hint-placeholder-val="{{ false }}">
     <div style="margin-left:18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }}; border:1px solid {{ hintColor }}; padding:3px 10px;">{{ hintText }}</div>
   </sc-if>
+
+  <!-- Centred measurement readout / freeze inputs -->
+  <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; align-items:center; gap:10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em; pointer-events:none;">
+    <span data-model-len style="color:#1d1f20; min-width:80px; text-align:right;"></span>
+    <span data-model-ang style="color:rgba(29,31,32,0.4); min-width:52px;"></span>
+    <!-- FT/IN freeze inputs — pointer-events re-enabled when visible -->
+    <sc-if value="{{ lengthFrozen }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; align-items:center; gap:6px; pointer-events:all;">
+        <span style="opacity:0.45; font-size:11px;">LENGTH</span>
+        <input data-frozen-ft type="text" value="{{ frozenFt }}" onInput="{{ onFrozenFtInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="FT" style="width:40px; text-align:right; background:#f2f2f3; border:1px solid rgba(29,31,32,0.25); color:#1d1f20; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; outline:none;" />
+        <span style="color:rgba(29,31,32,0.4);">'</span>
+        <input data-frozen-in type="text" value="{{ frozenIn }}" onInput="{{ onFrozenInInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="IN" style="width:44px; text-align:right; background:#f2f2f3; border:1px solid rgba(29,31,32,0.25); color:#1d1f20; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; outline:none;" />
+        <span style="color:rgba(29,31,32,0.4);">"</span>
+        <button onClick="{{ confirmFrozenLength }}" style="border:none; background:#5980a6; color:#fff; padding:4px 12px; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer; font-family:'Barlow Condensed',system-ui,sans-serif;">CONFIRM</button>
+        <button onClick="{{ cancelFrozenLength }}" style="border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.45); padding:4px 8px; font-size:13px; cursor:pointer;">✕</button>
+      </div>
+    </sc-if>
+  </div>
+
   <div style="flex:1;"></div>
   <a href="./LAYOUT.dc.html" style="margin-left:28px;">LAYOUT</a>
   <a href="./PDF-MARKUP.dc.html" style="margin-left:28px;">PDF-MARKUP</a>
@@ -145,19 +164,6 @@
     <!-- Vertex magnet indicator -->
     <div style="position:absolute; left:{{ magnetX }}px; top:{{ magnetY }}px; width:18px; height:18px; border-radius:50%; border:2px solid #5980a6; transform:translate(-50%,-50%); pointer-events:none; display:{{ magnetDisplay }};"></div>
 
-    <!-- Frozen-length input -->
-    <sc-if value="{{ lengthFrozen }}" hint-placeholder-val="{{ false }}">
-      <div style="position:absolute; bottom:16px; left:50%; transform:translateX(-50%); background:#1d1f20; color:#fff; display:flex; align-items:center; gap:8px; padding:9px 16px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em;">
-        <span style="opacity:0.55; font-size:11px; margin-right:4px;">LENGTH</span>
-        <input data-frozen-ft type="text" value="{{ frozenFt }}" onInput="{{ onFrozenFtInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="FT" style="width:36px; text-align:right; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); color:#fff; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif;" />
-        <span>'–</span>
-        <input data-frozen-in type="text" value="{{ frozenIn }}" onInput="{{ onFrozenInInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="IN" style="width:44px; text-align:right; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); color:#fff; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif;" />
-        <span>"</span>
-        <button onClick="{{ confirmFrozenLength }}" style="border:1px solid #5980a6; background:#5980a6; color:#fff; padding:5px 12px; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer; font-family:'Barlow Condensed',system-ui,sans-serif;">CONFIRM</button>
-        <button onClick="{{ cancelFrozenLength }}" style="border:1px solid rgba(255,255,255,0.3); background:transparent; color:rgba(255,255,255,0.55); padding:5px 8px; font-size:13px; cursor:pointer;">✕</button>
-      </div>
-    </sc-if>
-
     <!-- Direction-choice overlay (shown while choosing cut direction) -->
     <sc-if value="{{ choosingDir }}" hint-placeholder-val="{{ false }}">
       <div style="position:absolute; bottom:16px; left:50%; transform:translateX(-50%); background:#b04060; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; padding:7px 18px; pointer-events:none;">
@@ -172,8 +178,6 @@
 <div style="height:28px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em; color:rgba(29,31,32,0.55); background:#fff; flex-shrink:0; user-select:none;">
   <span data-model-sx>X: —</span>
   <span style="margin-left:24px;" data-model-sy>Y: —</span>
-  <span style="margin-left:36px;" data-model-len></span>
-  <span style="margin-left:16px; color:rgba(29,31,32,0.4);" data-model-ang></span>
   <div style="flex:1;"></div>
   <span>{{ viewLabel }}</span>
 </div>
@@ -1054,7 +1058,7 @@ class Component extends DCLogic {
     if (e.key === 'r' || e.key === 'R') {
       const tool = this.state.activeTool;
       const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._isDrawing);
-      if (drawing && !this.state.lengthFrozen) this._freezeLength();
+      if (drawing && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
       return;
     }
     if (e.key === 'w' || e.key === 'W') { this._cancelLine(); this.setState({ activeTool: 'wall' }); }
