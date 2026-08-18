@@ -142,6 +142,22 @@
       <div style="position:absolute; left:50%; bottom:0; height:calc(50% - 7px); width:1px; background:#1d1f20; transform:translateX(-50%);"></div>
       <div style="position:absolute; left:50%; top:50%; width:10px; height:10px; border-radius:50%; background:transparent; border:1px solid #1d1f20; transform:translate(-50%,-50%);"></div>
     </div>
+    <!-- Vertex magnet indicator -->
+    <div style="position:absolute; left:{{ magnetX }}px; top:{{ magnetY }}px; width:18px; height:18px; border-radius:50%; border:2px solid #5980a6; transform:translate(-50%,-50%); pointer-events:none; display:{{ magnetDisplay }};"></div>
+
+    <!-- Frozen-length input -->
+    <sc-if value="{{ lengthFrozen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; bottom:16px; left:50%; transform:translateX(-50%); background:#1d1f20; color:#fff; display:flex; align-items:center; gap:8px; padding:9px 16px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em;">
+        <span style="opacity:0.55; font-size:11px; margin-right:4px;">LENGTH</span>
+        <input data-frozen-ft type="text" value="{{ frozenFt }}" onInput="{{ onFrozenFtInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="FT" style="width:36px; text-align:right; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); color:#fff; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif;" />
+        <span>'–</span>
+        <input data-frozen-in type="text" value="{{ frozenIn }}" onInput="{{ onFrozenInInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="IN" style="width:44px; text-align:right; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); color:#fff; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif;" />
+        <span>"</span>
+        <button onClick="{{ confirmFrozenLength }}" style="border:1px solid #5980a6; background:#5980a6; color:#fff; padding:5px 12px; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer; font-family:'Barlow Condensed',system-ui,sans-serif;">CONFIRM</button>
+        <button onClick="{{ cancelFrozenLength }}" style="border:1px solid rgba(255,255,255,0.3); background:transparent; color:rgba(255,255,255,0.55); padding:5px 8px; font-size:13px; cursor:pointer;">✕</button>
+      </div>
+    </sc-if>
+
     <!-- Direction-choice overlay (shown while choosing cut direction) -->
     <sc-if value="{{ choosingDir }}" hint-placeholder-val="{{ false }}">
       <div style="position:absolute; bottom:16px; left:50%; transform:translateX(-50%); background:#b04060; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; padding:7px 18px; pointer-events:none;">
@@ -157,6 +173,7 @@
   <span data-model-sx>X: —</span>
   <span style="margin-left:24px;" data-model-sy>Y: —</span>
   <span style="margin-left:36px;" data-model-len></span>
+  <span style="margin-left:16px; color:rgba(29,31,32,0.4);" data-model-ang></span>
   <div style="flex:1;"></div>
   <span>{{ viewLabel }}</span>
 </div>
@@ -201,6 +218,8 @@ class Component extends DCLogic {
     activeLayerIdx: 5,
     nextLayerId:   9,
     cursorX: -100, cursorY: -100, showCursor: false,
+    magnetX: -100, magnetY: -100, showMagnet: false,
+    lengthFrozen: false, frozenFt: '', frozenIn: '',
     cuts:          [],
     nextCutId:     1,
     activeCutId:   null,
@@ -531,41 +550,66 @@ class Component extends DCLogic {
   }
 
   _onMouseMove(e) {
+    if (this.state.lengthFrozen) return;
     const raw = this._getWorldPos(e.clientX, e.clientY);
-    if (!raw) { this.setState({ showCursor: false }); return; }
-    const pt = this._snap(raw);
-    this._snapPt = pt;
-    const sc = this._toScreen(new THREE.Vector3(pt.x, pt.y, pt.z));
-    this.setState({ cursorX: sc.x, cursorY: sc.y, showCursor: true });
+    if (!raw) { this.setState({ showCursor: false, showMagnet: false }); return; }
 
-    const tool = this.state.activeTool;
+    const gridPt = this._snap(raw);
+    const tool   = this.state.activeTool;
+    const start  = tool === 'line' ? this._lineStart : tool === 'wall' ? this._drawStart : null;
+
+    // Magnet snap to existing vertices
+    const magnet   = this._findMagnet(gridPt);
+    const rawEff   = magnet || gridPt;
+
+    // 45° angle lock (Shift)
+    let finalPt = rawEff;
+    if (this._shiftHeld && start) {
+      finalPt = this._applyAngleLock(start, rawEff);
+    } else if (!this._shiftHeld) {
+      this._lockAngle = null;
+    }
+
+    this._snapPt = finalPt;
+
+    // Cursor + magnet positions
+    const sc = this._toScreen(finalPt);
+    const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false };
+    if (magnet && !this._shiftHeld) {
+      const ms = this._toScreen(magnet);
+      newState.magnetX = ms.x; newState.magnetY = ms.y; newState.showMagnet = true;
+    }
+    this.setState(newState);
+
     const imp = this.state.units === 'imperial';
-    const el  = (sel) => document.querySelector(sel);
+    const el  = sel => document.querySelector(sel);
+
+    const _setLen = (s, ept) => {
+      const len = Math.sqrt((ept.x-s.x)**2+(ept.z-s.z)**2);
+      const ang = this._angleDeg(s, ept);
+      if (el('[data-model-len]')) el('[data-model-len]').textContent = len > 0.001 ? '↔ ' + (imp ? this._ftIn(len) : this._metric(len)) : '';
+      if (el('[data-model-ang]')) el('[data-model-ang]').textContent = ang != null ? '∠ ' + ang + '°' : '';
+    };
 
     // Wall preview
     if (tool === 'wall' && this._isDrawing && this._drawStart) {
-      const ept = this._shiftHeld ? this._applyOrtho(this._drawStart, pt) : pt;
       const s = this._drawStart, p = this._previewGeo.attributes.position;
-      p.setXYZ(0, s.x, s.y + 0.02, s.z); p.setXYZ(1, ept.x, ept.y + 0.02, ept.z); p.needsUpdate = true;
-      const len = Math.sqrt((ept.x-s.x)**2+(ept.z-s.z)**2);
-      if (el('[data-model-len]')) el('[data-model-len]').textContent = '↔ ' + (imp ? this._ftIn(len) : this._metric(len));
+      p.setXYZ(0, s.x, s.y+0.02, s.z); p.setXYZ(1, finalPt.x, finalPt.y+0.02, finalPt.z); p.needsUpdate = true;
+      _setLen(s, finalPt);
     }
 
     // Line tool preview
     if (tool === 'line' && this._lineDrawing && this._lineStart) {
-      const ept = this._shiftHeld ? this._applyOrtho(this._lineStart, pt) : pt;
       const s = this._lineStart, p = this._linePreviewGeo.attributes.position;
-      p.setXYZ(0, s.x, s.y + 0.02, s.z); p.setXYZ(1, ept.x, ept.y + 0.02, ept.z); p.needsUpdate = true;
-      const len = Math.sqrt((ept.x-s.x)**2+(ept.z-s.z)**2);
-      if (el('[data-model-len]')) el('[data-model-len]').textContent = '↔ ' + (imp ? this._ftIn(len) : this._metric(len));
+      p.setXYZ(0, s.x, s.y+0.02, s.z); p.setXYZ(1, finalPt.x, finalPt.y+0.02, finalPt.z); p.needsUpdate = true;
+      _setLen(s, finalPt);
     }
 
     // Cut preview
     if (tool === 'cut' && this.state.cutPhase === 'placing' && this._cutStart3) {
       const s = this._cutStart3, p = this._cutPreviewGeo.attributes.position;
-      p.setXYZ(0, s.x, s.y + 0.02, s.z); p.setXYZ(1, pt.x, pt.y + 0.02, pt.z); p.needsUpdate = true;
-      const len = Math.sqrt((pt.x-s.x)**2+(pt.z-s.z)**2);
-      if (el('[data-model-len]')) el('[data-model-len]').textContent = '↔ ' + (imp ? this._ftIn(len) : this._metric(len));
+      p.setXYZ(0, s.x, s.y+0.02, s.z); p.setXYZ(1, finalPt.x, finalPt.y+0.02, finalPt.z); p.needsUpdate = true;
+      _setLen(s, finalPt);
     }
 
     // Choosing direction: highlight whichever arrow is on the cursor's side
@@ -596,6 +640,7 @@ class Component extends DCLogic {
   }
 
   _onMouseDown(e) {
+    if (this.state.lengthFrozen) return;
     const tool = this.state.activeTool;
     if (e.button === 0 && !e.altKey) {
       if (tool === 'wall') this._handleWallClick();
@@ -699,27 +744,66 @@ class Component extends DCLogic {
     this._walls.push({ start: start.clone(), end: end.clone(), line, layerId });
   }
 
-  // ─── Line drawing ────────────────────────────────────────────────────────────
-  _applyOrtho(start, pt) {
-    const dx = Math.abs(pt.x - start.x), dz = Math.abs(pt.z - start.z);
-    return dx > dz
-      ? new THREE.Vector3(pt.x,   pt.y, start.z)  // horizontal
-      : new THREE.Vector3(start.x, pt.y, pt.z);   // vertical
+  // ─── Snap helpers ────────────────────────────────────────────────────────────
+  _collectVertices() {
+    const pts = [];
+    this._lines.forEach(l => { pts.push(l.start, l.end); });
+    this._walls.forEach(w => { pts.push(w.start, w.end); });
+    return pts;
   }
 
+  _magnetRadius() {
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    return (this._orthoHalfH * 2) / h * 20;
+  }
+
+  _findMagnet(gridPt) {
+    const r = this._magnetRadius();
+    let best = null, bestD = r;
+    this._collectVertices().forEach(v => {
+      const d = Math.sqrt((v.x - gridPt.x) ** 2 + (v.z - gridPt.z) ** 2);
+      if (d < bestD) { bestD = d; best = v; }
+    });
+    return best; // THREE.Vector3 or null
+  }
+
+  _applyAngleLock(start, pt) {
+    const dx = pt.x - start.x, dz = pt.z - start.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < 0.001) return pt;
+    if (this._lockAngle == null) {
+      const raw = Math.atan2(dz, dx);
+      this._lockAngle = Math.round(raw / (Math.PI / 4)) * (Math.PI / 4);
+    }
+    const dirX = Math.cos(this._lockAngle), dirZ = Math.sin(this._lockAngle);
+    const proj = dx * dirX + dz * dirZ;
+    return new THREE.Vector3(start.x + dirX * proj, pt.y, start.z + dirZ * proj);
+  }
+
+  _angleDeg(start, end) {
+    const dx = end.x - start.x, dz = end.z - start.z;
+    if (Math.sqrt(dx * dx + dz * dz) < 0.001) return null;
+    let deg = Math.round(Math.atan2(-dz, dx) * 180 / Math.PI); // -dz so North=90°
+    if (deg < 0) deg += 360;
+    return deg;
+  }
+
+  // ─── Line drawing ────────────────────────────────────────────────────────────
+
   _handleLineClick() {
-    const raw = this._snapPt; if (!raw) return;
-    const pt = this._shiftHeld && this._lineStart ? this._applyOrtho(this._lineStart, raw) : raw;
+    const pt = this._snapPt; if (!pt) return;
     if (!this._lineDrawing) {
       this._lineDrawing = true;
       this._lineStart = pt.clone();
       this._linePreviewObj.visible = true;
+      this._lockAngle = null;
       this.setState({ isDrawing: true });
     } else {
       const dx = pt.x - this._lineStart.x, dz = pt.z - this._lineStart.z;
       if (Math.sqrt(dx*dx + dz*dz) < 0.001) return;
       this._commitLine(this._lineStart, pt);
-      this._lineStart = pt.clone(); // chain: next segment starts here
+      this._lineStart = pt.clone();
+      this._lockAngle = null; // fresh angle for next segment
     }
   }
 
@@ -742,6 +826,102 @@ class Component extends DCLogic {
     const obj = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x1d1f20 }));
     this._scene.add(obj);
     this._lines.push({ start: start.clone(), end: end.clone(), obj, layerId });
+  }
+
+  // ─── Frozen-length input ──────────────────────────────────────────────────────
+  _frozenTotalFt() {
+    const ft = parseFloat(this.state.frozenFt) || 0;
+    const inches = parseFloat(this.state.frozenIn) || 0;
+    return ft + inches / 12;
+  }
+
+  _freezeLength() {
+    const tool = this.state.activeTool;
+    const start = tool === 'line' ? this._lineStart : tool === 'wall' ? this._drawStart : null;
+    const drawing = tool === 'line' ? this._lineDrawing : this._isDrawing;
+    if (!start || !drawing) return;
+    const pt = this._snapPt;
+    if (this._lockAngle != null) {
+      this._frozenAngle = this._lockAngle;
+    } else if (pt) {
+      const dx = pt.x - start.x, dz = pt.z - start.z;
+      this._frozenAngle = Math.sqrt(dx*dx+dz*dz) > 0.001 ? Math.atan2(dz, dx) : 0;
+    } else {
+      this._frozenAngle = 0;
+    }
+    this._frozenStart = start.clone();
+    this._frozenTool  = tool;
+    // Pre-fill current length
+    let initFt = '', initIn = '';
+    if (pt) {
+      const len = Math.sqrt((pt.x-start.x)**2+(pt.z-start.z)**2);
+      if (len > 0.001) {
+        const totalIn = len * 12;
+        initFt = Math.floor(totalIn / 12).toString();
+        const rem = Math.round((totalIn % 12) * 16) / 16;
+        initIn = rem > 0 ? rem.toString() : '';
+      }
+    }
+    this.setState({ lengthFrozen: true, frozenFt: initFt, frozenIn: initIn }, () => {
+      const inp = document.querySelector('[data-frozen-ft]');
+      if (inp) { inp.focus(); inp.select(); }
+    });
+    this._updateFrozenPreview();
+  }
+
+  _updateFrozenPreview() {
+    const total = this._frozenTotalFt();
+    if (this._frozenStart == null) return;
+    const dirX = Math.cos(this._frozenAngle), dirZ = Math.sin(this._frozenAngle);
+    const end = new THREE.Vector3(
+      this._frozenStart.x + dirX * total,
+      this._frozenStart.y,
+      this._frozenStart.z + dirZ * total,
+    );
+    const geo = this._frozenTool === 'line' ? this._linePreviewGeo : this._previewGeo;
+    if (geo) {
+      const p = geo.attributes.position;
+      p.setXYZ(0, this._frozenStart.x, this._frozenStart.y+0.02, this._frozenStart.z);
+      p.setXYZ(1, end.x, end.y+0.02, end.z);
+      p.needsUpdate = true;
+    }
+    const obj = this._frozenTool === 'line' ? this._linePreviewObj : this._previewLine;
+    if (obj) obj.visible = total > 0;
+    // Update status bar display
+    const imp = this.state.units === 'imperial';
+    const el = sel => document.querySelector(sel);
+    if (el('[data-model-len]')) el('[data-model-len]').textContent = total > 0 ? '↔ ' + (imp ? this._ftIn(total) : this._metric(total)) : '';
+    const angDeg = Math.round(Math.atan2(-dirZ, dirX) * 180 / Math.PI);
+    if (el('[data-model-ang]')) el('[data-model-ang]').textContent = '∠ ' + (angDeg < 0 ? angDeg + 360 : angDeg) + '°';
+  }
+
+  _confirmFrozenLength() {
+    const total = this._frozenTotalFt();
+    if (total <= 0) { this._cancelFrozenLength(); return; }
+    const dirX = Math.cos(this._frozenAngle), dirZ = Math.sin(this._frozenAngle);
+    const end = new THREE.Vector3(
+      this._frozenStart.x + dirX * total,
+      this._frozenStart.y,
+      this._frozenStart.z + dirZ * total,
+    );
+    if (this._frozenTool === 'line') {
+      this._commitLine(this._frozenStart, end);
+      this._lineStart = end.clone();
+      this._lineDrawing = true;
+      if (this._linePreviewObj) this._linePreviewObj.visible = true;
+    } else {
+      this._commitWall(this._frozenStart, end);
+      this._drawStart = end.clone();
+      this._isDrawing = true;
+      if (this._previewLine) this._previewLine.visible = true;
+    }
+    this._lockAngle = null;
+    this.setState({ lengthFrozen: false, frozenFt: '', frozenIn: '', isDrawing: true });
+  }
+
+  _cancelFrozenLength() {
+    this._lockAngle = null;
+    this.setState({ lengthFrozen: false, frozenFt: '', frozenIn: '' });
   }
 
   // ─── Cut drawing ──────────────────────────────────────────────────────────────
@@ -867,7 +1047,16 @@ class Component extends DCLogic {
   _handleKey(e) {
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-    if (e.key === 'Escape') { this._cancelWall(); this._cancelLine(); this._cancelCut(); }
+    if (e.key === 'Escape') {
+      if (this.state.lengthFrozen) { this._cancelFrozenLength(); return; }
+      this._cancelWall(); this._cancelLine(); this._cancelCut();
+    }
+    if (e.key === 'r' || e.key === 'R') {
+      const tool = this.state.activeTool;
+      const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._isDrawing);
+      if (drawing && !this.state.lengthFrozen) this._freezeLength();
+      return;
+    }
     if (e.key === 'w' || e.key === 'W') { this._cancelLine(); this.setState({ activeTool: 'wall' }); }
     if (e.key === 'l' || e.key === 'L') { this._cancelWall(); this.setState({ activeTool: 'line' }); }
     if (e.key === 's' || e.key === 'S') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'select' }); }
@@ -967,6 +1156,16 @@ class Component extends DCLogic {
       metricBg:   units==='metric'  ?'#1d1f20':'#fff', metricColor:   units==='metric'  ?'#f2f2f3':'#1d1f20',
       cursorX: this.state.cursorX, cursorY: this.state.cursorY,
       cursorDisplay: this.state.showCursor ? 'block' : 'none',
+      magnetX: this.state.magnetX, magnetY: this.state.magnetY,
+      magnetDisplay: this.state.showMagnet ? 'block' : 'none',
+      lengthFrozen: this.state.lengthFrozen,
+      frozenFt: this.state.frozenFt,
+      frozenIn: this.state.frozenIn,
+      onFrozenFtInput: e => { this.setState({ frozenFt: e.target.value }, () => this._updateFrozenPreview()); },
+      onFrozenInInput: e => { this.setState({ frozenIn: e.target.value }, () => this._updateFrozenPreview()); },
+      onFrozenKeyDown: e => { if (e.key === 'Enter') this._confirmFrozenLength(); if (e.key === 'Escape') this._cancelFrozenLength(); e.stopPropagation(); },
+      confirmFrozenLength: () => this._confirmFrozenLength(),
+      cancelFrozenLength:  () => this._cancelFrozenLength(),
       viewLabel: viewLabels[activeView] || 'TOP / PLAN',
     };
   }
