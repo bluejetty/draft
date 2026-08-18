@@ -334,6 +334,9 @@ class Component extends DCLogic {
     this._chainStart   = null; // first point of current chain
     this._cutObjects = {}; // cutId → { line, arrow }
 
+    // Select-tool state
+    this._selectDrag = null; // { refs, startX, startY, active }  — node drag
+
     // Drawing state
     this._isDrawing  = false;
     this._drawStart  = null;
@@ -360,7 +363,7 @@ class Component extends DCLogic {
     canvas.addEventListener('wheel',       this._cwhl = e => this._onWheel(e), { passive: false });
     canvas.addEventListener('mouseleave',  this._cmle = () => this._onMouseLeave());
     window.addEventListener('mousemove',   this._wmmv = e => this._onGlobalMouseMove(e));
-    window.addEventListener('mouseup',     this._wmup = () => { this._panning2D = false; });
+    window.addEventListener('mouseup',     this._wmup = () => { this._panning2D = false; this._selectDrag = null; });
 
     this._ro = new ResizeObserver(() => this._onResize());
     this._ro.observe(cont);
@@ -442,6 +445,16 @@ class Component extends DCLogic {
 
     // Committed lines
     this._lines.forEach(l => { drawSeg(l.start, l.end); drawDot(l.start); drawDot(l.end); });
+
+    // Dragged node highlight (blue ring around the node being moved)
+    if (this._selectDrag && this._selectDrag.active && this._selectDrag.refs.length) {
+      const dragPt = this._selectDrag.refs[0].seg[this._selectDrag.refs[0].prop];
+      const sd = toS(dragPt);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(sd.x, sd.y, DOT_R + 6, 0, Math.PI * 2);
+      ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+    }
 
     // Pending chain
     this._pendingChain.forEach(s => { drawSeg(s.start, s.end); drawDot(s.start); drawDot(s.end); });
@@ -776,6 +789,16 @@ class Component extends DCLogic {
       if (tool === 'wall') this._handleWallClick();
       else if (tool === 'line') this._handleLineClick();
       else if (tool === 'cut') this._handleCutClick();
+      else if (tool === 'select') {
+        const raw = this._getWorldPos(e.clientX, e.clientY);
+        if (raw) {
+          const refs = this._findVertexHit(raw);
+          if (refs) {
+            this._selectDrag = { refs, startX: e.clientX, startY: e.clientY, active: false };
+            e.preventDefault();
+          }
+        }
+      }
     } else if (e.button === 1 || (e.button === 0 && e.altKey)) {
       if (this.state.activeView !== 'perspective') {
         e.preventDefault(); this._panning2D = true;
@@ -791,6 +814,22 @@ class Component extends DCLogic {
   }
 
   _onGlobalMouseMove(e) {
+    // Select-tool node drag
+    if (this._selectDrag) {
+      const sd = this._selectDrag;
+      if (!sd.active) {
+        const ddx = e.clientX - sd.startX, ddy = e.clientY - sd.startY;
+        if (Math.sqrt(ddx*ddx + ddy*ddy) > 4) sd.active = true;
+      }
+      if (sd.active) {
+        const raw = this._getWorldPos(e.clientX, e.clientY);
+        if (raw) {
+          const pt = this._snap(raw);
+          sd.refs.forEach(r => { r.seg[r.prop].x = pt.x; r.seg[r.prop].z = pt.z; });
+        }
+      }
+    }
+
     if (!this._panning2D) return;
     const dx = e.clientX - this._pan2DPrevX, dy = e.clientY - this._pan2DPrevY;
     this._pan2DPrevX = e.clientX; this._pan2DPrevY = e.clientY;
@@ -888,6 +927,58 @@ class Component extends DCLogic {
       if (d < bestD) { bestD = d; best = v; }
     });
     return best; // THREE.Vector3 or null
+  }
+
+  // ─── Select-tool helpers ─────────────────────────────────────────────────────
+
+  // Return all segment endpoint refs that share the vertex nearest to worldPt,
+  // or null if nothing is within magnet radius.
+  _findVertexHit(worldPt) {
+    const r = this._magnetRadius() * 1.5;
+    let bestD = r, bestPt = null;
+    this._lines.forEach(l => {
+      [l.start, l.end].forEach(pt => {
+        const d = Math.sqrt((pt.x - worldPt.x) ** 2 + (pt.z - worldPt.z) ** 2);
+        if (d < bestD) { bestD = d; bestPt = pt; }
+      });
+    });
+    if (!bestPt) return null;
+    // Collect all endpoints that share the same position
+    const refs = [];
+    this._lines.forEach(seg => {
+      if (Math.abs(seg.start.x - bestPt.x) < 0.001 && Math.abs(seg.start.z - bestPt.z) < 0.001)
+        refs.push({ seg, prop: 'start' });
+      if (Math.abs(seg.end.x - bestPt.x) < 0.001 && Math.abs(seg.end.z - bestPt.z) < 0.001)
+        refs.push({ seg, prop: 'end' });
+    });
+    return refs.length ? refs : null;
+  }
+
+  // Return { idx, t } of the _lines segment closest to worldPt (within 12px), or null.
+  _findLineHit(worldPt) {
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    const thresh = (this._orthoHalfH * 2) / h * 12;
+    let bestD = thresh, bestIdx = -1, bestT = 0;
+    this._lines.forEach((l, i) => {
+      const ax = l.start.x, az = l.start.z, bx = l.end.x, bz = l.end.z;
+      const dx = bx - ax, dz = bz - az;
+      const len2 = dx*dx + dz*dz;
+      if (len2 < 0.0001) return;
+      const t = Math.max(0, Math.min(1, ((worldPt.x - ax)*dx + (worldPt.z - az)*dz) / len2));
+      const cx = ax + t*dx, cz = az + t*dz;
+      const d = Math.sqrt((worldPt.x - cx)**2 + (worldPt.z - cz)**2);
+      if (d < bestD) { bestD = d; bestIdx = i; bestT = t; }
+    });
+    return bestIdx >= 0 ? { idx: bestIdx, t: bestT } : null;
+  }
+
+  // Split _lines[idx] at insertPt → two segments.
+  _splitLine(idx, insertPt) {
+    const seg = this._lines[idx];
+    this._lines.splice(idx, 1,
+      { start: seg.start.clone(), end: insertPt.clone(),   layerId: seg.layerId },
+      { start: insertPt.clone(), end: seg.end.clone(),     layerId: seg.layerId }
+    );
   }
 
   // ─── Projection tracking ─────────────────────────────────────────────────────
@@ -1016,9 +1107,19 @@ class Component extends DCLogic {
   }
 
   _onDblClick(e) {
-    // Handled via timing in _handleLineClick; nothing extra needed.
-    // Prevent default to avoid text selection.
     e.preventDefault();
+    // Select tool: cancel any pending drag, then try to split a line at click point
+    if (this.state.activeTool === 'select') {
+      this._selectDrag = null;
+      const raw = this._getWorldPos(e.clientX, e.clientY);
+      if (!raw) return;
+      // Reject if near a vertex (user is double-clicking a node, not a line body)
+      if (this._findVertexHit(raw)) return;
+      const hit = this._findLineHit(raw);
+      if (hit) this._splitLine(hit.idx, this._snap(raw));
+      return;
+    }
+    // Line tool: handled via timing in _handleLineClick
   }
 
   // ─── Frozen-length input ──────────────────────────────────────────────────────
