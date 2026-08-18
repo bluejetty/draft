@@ -261,12 +261,21 @@ class Component extends DCLogic {
     this._scene.add(sun);
 
     // Grids
-    this._gridFine  = new THREE.GridHelper(400, 400, 0xd8d8d8, 0xd8d8d8);
-    this._gridFine.material.opacity = 0.6; this._gridFine.material.transparent = true;
-    this._scene.add(this._gridFine);
-    this._gridMajor = new THREE.GridHelper(400, 40, 0xaaaaaa, 0xaaaaaa);
-    this._gridMajor.material.opacity = 0.7; this._gridMajor.material.transparent = true;
-    this._scene.add(this._gridMajor);
+    // Adaptive LOD grid: 1ft (very light) + 10ft (medium) + 100ft (darker)
+    this._grid1ft = new THREE.GridHelper(400, 400, 0xe4e4e4, 0xe4e4e4);
+    this._grid1ft.material.opacity = 1; this._grid1ft.material.transparent = true;
+    this._scene.add(this._grid1ft);
+
+    this._grid10ft = new THREE.GridHelper(400, 40, 0xcccccc, 0xcccccc);
+    this._grid10ft.material.opacity = 1; this._grid10ft.material.transparent = true;
+    this._scene.add(this._grid10ft);
+
+    this._grid100ft = new THREE.GridHelper(4000, 40, 0xaaaaaa, 0xaaaaaa);
+    this._grid100ft.material.opacity = 1; this._grid100ft.material.transparent = true;
+    this._grid100ft.visible = false;
+    this._scene.add(this._grid100ft);
+
+    this._updateGridLOD();
     this._scene.add(new THREE.AxesHelper(2));
 
     // Ground plane (raycasting)
@@ -359,8 +368,9 @@ class Component extends DCLogic {
     if (!layer) return;
     const e = layer.elev;
     if (this._ground)    this._ground.position.y    = e;
-    if (this._gridFine)  this._gridFine.position.y  = e;
-    if (this._gridMajor) this._gridMajor.position.y = e;
+    if (this._grid1ft)   this._grid1ft.position.y   = e;
+    if (this._grid10ft)  this._grid10ft.position.y  = e;
+    if (this._grid100ft) this._grid100ft.position.y = e;
     this._drawElev = e;
   }
 
@@ -598,11 +608,22 @@ class Component extends DCLogic {
     }
   }
 
+  _updateGridLOD() {
+    const h = this._orthoHalfH;
+    // < 50ft half-height (100ft view): show 1ft fine + 10ft major
+    // >= 50ft half-height            : hide 1ft, show 10ft fine + 100ft major
+    const zoomed = h < 50;
+    if (this._grid1ft)   this._grid1ft.visible   = zoomed;
+    if (this._grid100ft) this._grid100ft.visible  = !zoomed;
+    // 10ft grid always visible — acts as major when zoomed in, fine when zoomed out
+  }
+
   _onWheel(e) {
     if (this.state.activeView === 'perspective') return;
     e.preventDefault();
-    this._orthoHalfH = Math.max(1, Math.min(300, this._orthoHalfH * (e.deltaY < 0 ? 0.88 : 1.14)));
+    this._orthoHalfH = Math.max(1, Math.min(2000, this._orthoHalfH * (e.deltaY < 0 ? 0.88 : 1.14)));
     this._updateOrthoFrustum();
+    this._updateGridLOD();
   }
 
   // ─── Wall drawing ─────────────────────────────────────────────────────────────
