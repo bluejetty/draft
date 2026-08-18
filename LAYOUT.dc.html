@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
+    a { color: rgba(29,31,32,0.45); text-decoration: none; font-family: 'Barlow Condensed', system-ui, sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+    a:hover { color: #5980a6; }
+  </style>
+</helmet>
+
+<!-- TOP BAR -->
+<div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff;">
+  <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase; color:#1d1f20;">LAYOUT</div>
+  <div style="flex:1;"></div>
+  <a href="./MODEL.dc.html" style="margin-left:28px;">MODEL</a>
+  <a href="./PDF-MARKUP.dc.html" style="margin-left:28px;">PDF-MARKUP</a>
+</div>
+
+<!-- BODY -->
+<div style="display:flex; height:calc(100vh - 72px);">
+
+  <!-- LEFT PANEL -->
+  <div style="width:188px; border-right:1px solid rgba(29,31,32,0.16); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20; font-size:13px;">
+
+    <!-- PAPER SIZE -->
+    <div style="padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Paper Size</div>
+      <sc-for list="{{ paperSizes }}" as="ps" hint-placeholder-count="2">
+        <button onClick="{{ ps.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid {{ ps.border }}; background:{{ ps.bg }}; color:{{ ps.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 12px; cursor:pointer; margin-bottom:4px;">{{ ps.label }}</button>
+      </sc-for>
+    </div>
+
+    <!-- ORIENTATION -->
+    <div style="padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Orientation</div>
+      <div style="display:inline-flex; overflow:hidden; border:1px solid rgba(29,31,32,0.16);">
+        <button onClick="{{ setLandscape }}" style="padding:7px 10px; font-size:12px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; letter-spacing:0.04em; border:none; background:{{ landscapeBg }}; color:{{ landscapeColor }}; cursor:pointer; border-right:1px solid rgba(29,31,32,0.16);">LAND</button>
+        <button onClick="{{ setPortrait }}"  style="padding:7px 10px; font-size:12px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; letter-spacing:0.04em; border:none; background:{{ portraitBg }};  color:{{ portraitColor }};  cursor:pointer;">PORT</button>
+      </div>
+    </div>
+
+    <!-- SCALE -->
+    <div style="padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Viewport Scale</div>
+      <sc-for list="{{ scales }}" as="sc" hint-placeholder-count="4">
+        <button onClick="{{ sc.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ sc.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ sc.label }}</button>
+      </sc-for>
+    </div>
+
+    <!-- VIEWPORT -->
+    <div style="padding:12px 14px;">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Viewport</div>
+      <button onClick="{{ addViewport }}" style="display:block; width:100%; text-align:center; border:1px solid #5980a6; background:#5980a6; color:#f2f2f3; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:13px; letter-spacing:0.04em; text-transform:uppercase; padding:9px 12px; cursor:pointer;">+ Add Viewport</button>
+    </div>
+
+  </div>
+
+  <!-- CANVAS AREA -->
+  <div style="flex:1; position:relative; overflow:hidden; background:#c8c8c8;" data-layout-container>
+    <canvas data-layout-canvas style="display:block; width:100%; height:100%; outline:none; cursor:{{ canvasCursor }};"></canvas>
+  </div>
+
+</div>
+
+<!-- STATUS BAR -->
+<div style="height:28px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em; color:rgba(29,31,32,0.55); background:#fff; flex-shrink:0; user-select:none;">
+  <span data-layout-sx>X: —</span>
+  <span style="margin-left:24px;" data-layout-sy>Y: —</span>
+  <div style="flex:1;"></div>
+  <span>{{ paperLabel }}  ·  {{ scaleLabel }}</span>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+// Paper sizes in inches [width, height] in portrait orientation
+const PAPER_SIZES = {
+  '11x17': { label: '11 × 17  (Ledger)', w: 11, h: 17 },
+  '8.5x11': { label: '8.5 × 11  (Letter)', w: 8.5, h: 11 },
+};
+
+// Architectural scales: label, paperInchesPerFoot
+const SCALES = [
+  { label: '1/16" = 1\'-0"', pif: 1/16 },
+  { label: '1/8" = 1\'-0"',  pif: 1/8  },
+  { label: '1/4" = 1\'-0"',  pif: 1/4  },
+  { label: '3/8" = 1\'-0"',  pif: 3/8  },
+  { label: '1/2" = 1\'-0"',  pif: 1/2  },
+  { label: '3/4" = 1\'-0"',  pif: 3/4  },
+  { label: '1" = 1\'-0"',    pif: 1    },
+];
+
+class Component extends DCLogic {
+  state = {
+    paperKey: '11x17',
+    orientation: 'landscape',  // 'landscape' | 'portrait'
+    activeScale: 0,             // index into SCALES
+    addingViewport: false,
+    zoom: 1,   // pixels per paper inch on screen
+    panX: 0,
+    panY: 0,
+  };
+
+  componentDidMount() {
+    this._canvas = document.querySelector('[data-layout-canvas]');
+    this._ctx = this._canvas ? this._canvas.getContext('2d') : null;
+    if (!this._canvas) return;
+
+    this._ro = new ResizeObserver(() => { this._resize(); this._draw(); });
+    const cont = document.querySelector('[data-layout-container]');
+    if (cont) this._ro.observe(cont);
+
+    this._resize();
+    this._fitPaper();
+    this._draw();
+
+    this._canvas.addEventListener('mousemove', this._mmv = (e) => this._onMouseMove(e));
+    this._canvas.addEventListener('mouseleave', this._mle = () => this._clearStatus());
+    this._canvas.addEventListener('wheel',      this._whl = (e) => this._onWheel(e), { passive: false });
+
+    // Pan
+    this._canvas.addEventListener('mousedown',  this._mdn = (e) => this._onPanStart(e));
+    window.addEventListener('mousemove',        this._wmmv = (e) => this._onPanMove(e));
+    window.addEventListener('mouseup',          this._mup  = () => this._onPanEnd());
+  }
+
+  componentWillUnmount() {
+    if (this._ro) this._ro.disconnect();
+    const c = this._canvas;
+    if (c) {
+      c.removeEventListener('mousemove', this._mmv);
+      c.removeEventListener('mouseleave', this._mle);
+      c.removeEventListener('wheel', this._whl);
+      c.removeEventListener('mousedown', this._mdn);
+    }
+    window.removeEventListener('mousemove', this._wmmv);
+    window.removeEventListener('mouseup', this._mup);
+  }
+
+  _resize() {
+    const cont = document.querySelector('[data-layout-container]');
+    if (!cont || !this._canvas) return;
+    this._canvas.width  = cont.clientWidth;
+    this._canvas.height = cont.clientHeight;
+  }
+
+  // Fit the paper to the canvas with a margin
+  _fitPaper() {
+    const canvas = this._canvas;
+    if (!canvas) return;
+    const { paperKey, orientation } = this.state;
+    const paper = PAPER_SIZES[paperKey];
+    const pw = orientation === 'landscape' ? paper.h : paper.w;
+    const ph = orientation === 'landscape' ? paper.w : paper.h;
+    const margin = 60; // px padding around paper
+    const scaleX = (canvas.width  - margin * 2) / pw;
+    const scaleY = (canvas.height - margin * 2) / ph;
+    const zoom = Math.min(scaleX, scaleY);
+    this.state.zoom = zoom;
+    this.state.panX = (canvas.width  - pw * zoom) / 2;
+    this.state.panY = (canvas.height - ph * zoom) / 2;
+  }
+
+  _draw() {
+    const canvas = this._canvas;
+    const ctx = this._ctx;
+    if (!ctx || !canvas) return;
+    const { paperKey, orientation, zoom, panX, panY } = this.state;
+    const paper = PAPER_SIZES[paperKey];
+    const pw = orientation === 'landscape' ? paper.h : paper.w;
+    const ph = orientation === 'landscape' ? paper.w : paper.h;
+    const pxW = pw * zoom;
+    const pxH = ph * zoom;
+
+    // Background
+    ctx.fillStyle = '#c8c8c8';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Paper shadow
+    ctx.shadowColor = 'rgba(0,0,0,0.22)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(panX, panY, pxW, pxH);
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Margin lines (0.5" inset)
+    const mPx = 0.5 * zoom;
+    ctx.strokeStyle = 'rgba(29,31,32,0.18)';
+    ctx.lineWidth = 0.75;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(panX + mPx, panY + mPx, pxW - mPx * 2, pxH - mPx * 2);
+    ctx.setLineDash([]);
+
+    // Title block outline (bottom 1.5" strip)
+    const tbH = 1.5 * zoom;
+    ctx.strokeStyle = 'rgba(29,31,32,0.25)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(panX + mPx, panY + pxH - mPx - tbH, pxW - mPx * 2, tbH);
+
+    // Title block label
+    ctx.fillStyle = 'rgba(29,31,32,0.18)';
+    ctx.font = `${Math.max(9, zoom * 0.3)}px 'Barlow Condensed', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('TITLE BLOCK', panX + pxW / 2, panY + pxH - mPx - tbH / 2);
+
+    // Paper size label (top-left outside paper)
+    ctx.fillStyle = 'rgba(29,31,32,0.4)';
+    ctx.font = `600 11px 'Barlow Condensed', sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`${pw}" × ${ph}"  (${paperKey.toUpperCase()})`, panX, panY - 6);
+  }
+
+  _onWheel(e) {
+    e.preventDefault();
+    const canvas = this._canvas;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const newZoom = Math.max(10, Math.min(300, this.state.zoom * factor));
+    const ratio = newZoom / this.state.zoom;
+    this.state.panX = mx - (mx - this.state.panX) * ratio;
+    this.state.panY = my - (my - this.state.panY) * ratio;
+    this.state.zoom = newZoom;
+    this._draw();
+  }
+
+  _onPanStart(e) {
+    if (e.button !== 1 && !(e.button === 0 && e.altKey)) return; // middle click or alt+left
+    this._panning = true;
+    this._panStartX = e.clientX - this.state.panX;
+    this._panStartY = e.clientY - this.state.panY;
+    e.preventDefault();
+  }
+
+  _onPanMove(e) {
+    if (!this._panning) return;
+    this.state.panX = e.clientX - this._panStartX;
+    this.state.panY = e.clientY - this._panStartY;
+    this._draw();
+  }
+
+  _onPanEnd() { this._panning = false; }
+
+  _onMouseMove(e) {
+    const canvas = this._canvas;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    // Convert screen px to paper inches
+    const { panX, panY, panKey, orientation } = this.state;
+    const { zoom } = this.state;
+    const paperX = (mx - panX) / zoom;
+    const paperY = (my - panY) / zoom;
+    document.querySelector('[data-layout-sx]').textContent = `X: ${this._fmtIn(paperX)}`;
+    document.querySelector('[data-layout-sy]').textContent = `Y: ${this._fmtIn(paperY)}`;
+  }
+
+  _clearStatus() {
+    document.querySelector('[data-layout-sx]').textContent = 'X: —';
+    document.querySelector('[data-layout-sy]').textContent = 'Y: —';
+  }
+
+  _fmtIn(inches) {
+    const neg = inches < 0;
+    const abs = Math.abs(inches);
+    const tot16 = Math.round(abs * 16);
+    const frac = tot16 % 16;
+    const wholeIn = Math.floor(tot16 / 16);
+    let s = `${neg ? '-' : ''}${wholeIn}`;
+    if (frac > 0) {
+      const gcd = (a, b) => b ? gcd(b, a % b) : a;
+      const g = gcd(frac, 16);
+      s += ` ${frac / g}/${16 / g}`;
+    }
+    return s + '"';
+  }
+
+  _setPaper(key) {
+    this.state.paperKey = key;
+    this._fitPaper();
+    this._draw();
+    this.setState({ paperKey: key });
+  }
+
+  _setOrientation(o) {
+    this.state.orientation = o;
+    this._fitPaper();
+    this._draw();
+    this.setState({ orientation: o });
+  }
+
+  _setScale(idx) {
+    this.setState({ activeScale: idx });
+  }
+
+  renderVals() {
+    const { paperKey, orientation, activeScale, addingViewport } = this.state;
+    const paper = PAPER_SIZES[paperKey];
+    const pw = orientation === 'landscape' ? paper.h : paper.w;
+    const ph = orientation === 'landscape' ? paper.w : paper.h;
+    const on  = { bg: '#1d1f20', color: '#f2f2f3', border: '#1d1f20' };
+    const off = { bg: '#fff',    color: '#1d1f20', border: 'rgba(29,31,32,0.16)' };
+    const scOn  = 'rgba(29,31,32,0.09)';
+    const scOff = '#fff';
+    return {
+      paperSizes: Object.entries(PAPER_SIZES).map(([k, v]) => ({
+        label: v.label,
+        onSelect: () => this._setPaper(k),
+        ...(paperKey === k ? on : off),
+      })),
+      setLandscape: () => this._setOrientation('landscape'),
+      setPortrait:  () => this._setOrientation('portrait'),
+      landscapeBg:    orientation === 'landscape' ? '#1d1f20' : '#fff',
+      landscapeColor: orientation === 'landscape' ? '#f2f2f3' : '#1d1f20',
+      portraitBg:     orientation === 'portrait'  ? '#1d1f20' : '#fff',
+      portraitColor:  orientation === 'portrait'  ? '#f2f2f3' : '#1d1f20',
+      scales: SCALES.map((s, i) => ({
+        label: s.label,
+        onSelect: () => this._setScale(i),
+        bg: activeScale === i ? scOn : scOff,
+      })),
+      addViewport: () => this.setState({ addingViewport: !addingViewport }),
+      paperLabel: `${pw}" × ${ph}"`,
+      scaleLabel: SCALES[activeScale].label,
+      canvasCursor: this._panning ? 'grabbing' : 'crosshair',
+    };
+  }
+}
+</script>
+</body>
+</html>

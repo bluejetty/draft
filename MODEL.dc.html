@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap" />
+  <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
+    a { color: rgba(29,31,32,0.45); text-decoration: none; font-family: 'Barlow Condensed', system-ui, sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+    a:hover { color: #5980a6; }
+    .lay-row { display:flex; align-items:stretch; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
+    .lay-row:hover { background:rgba(29,31,32,0.03); }
+    .lay-row.active { border-color:#5980a6; background:rgba(89,128,166,0.09); }
+    .lay-bar { width:3px; flex-shrink:0; }
+    .lay-body { flex:1; padding:5px 7px 5px 8px; min-width:0; }
+    .lay-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .lay-elev { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.45); margin-top:1px; }
+    .lay-eye  { border:none; background:none; cursor:pointer; padding:0 6px; font-size:13px; line-height:1; color:rgba(29,31,32,0.4); flex-shrink:0; align-self:center; }
+    .lay-eye:hover { color:#5980a6; }
+    .lay-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:center; }
+    .lay-del:hover { color:#c04040; }
+    .cut-row { display:flex; align-items:center; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
+    .cut-row:hover { background:rgba(29,31,32,0.03); }
+    .cut-row.active { border-color:#b04060; background:rgba(176,64,96,0.08); }
+    .cut-bar { width:3px; background:#b04060; flex-shrink:0; align-self:stretch; }
+    .cut-body { flex:1; padding:5px 7px 5px 8px; min-width:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cut-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; }
+    .cut-del:hover { color:#c04040; }
+  </style>
+</helmet>
+
+<!-- TOP BAR -->
+<div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff;">
+  <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase; color:#1d1f20;">MODEL</div>
+  <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; color:rgba(29,31,32,0.35); margin:0 10px;">/</div>
+  <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:{{ topBarColor }};">{{ topBarLabel }}</div>
+  <sc-if value="{{ showHint }}" hint-placeholder-val="{{ false }}">
+    <div style="margin-left:18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }}; border:1px solid {{ hintColor }}; padding:3px 10px;">{{ hintText }}</div>
+  </sc-if>
+  <div style="flex:1;"></div>
+  <a href="./LAYOUT.dc.html" style="margin-left:28px;">LAYOUT</a>
+  <a href="./PDF-MARKUP.dc.html" style="margin-left:28px;">PDF-MARKUP</a>
+</div>
+
+<!-- BODY -->
+<div style="display:flex; height:calc(100vh - 72px);">
+
+  <!-- LEFT PANEL -->
+  <div style="width:200px; border-right:1px solid rgba(29,31,32,0.16); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff;">
+
+    <!-- LAYERS -->
+    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="display:flex; align-items:center; margin-bottom:8px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Layers</div>
+        <button onClick="{{ addLayer }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; padding:2px 8px; cursor:pointer; letter-spacing:0.04em;">+ ADD</button>
+      </div>
+      <sc-for list="{{ layers }}" as="lay" hint-placeholder-count="8">
+        <div class="{{ lay.rowClass }}" onClick="{{ lay.onSelect }}">
+          <div class="lay-bar" style="background:{{ lay.color }};"></div>
+          <div class="lay-body">
+            <div class="lay-name">{{ lay.name }}</div>
+            <div class="lay-elev">{{ lay.elevStr }}</div>
+          </div>
+          <button class="lay-eye" onClick="{{ lay.onToggleVis }}" title="{{ lay.visLabel }}">{{ lay.visIcon }}</button>
+          <button class="lay-del" onClick="{{ lay.onDelete }}" title="Delete layer">×</button>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- ELEVATIONS / SECTIONS -->
+    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="display:flex; align-items:center; margin-bottom:8px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Elevations / Sections</div>
+      </div>
+      <sc-if value="{{ noCuts }}" hint-placeholder-val="{{ true }}">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; color:rgba(29,31,32,0.35); padding:4px 2px;">Use Cut tool to add views</div>
+      </sc-if>
+      <sc-for list="{{ cuts }}" as="cut" hint-placeholder-count="0">
+        <div class="{{ cut.rowClass }}" onClick="{{ cut.onView }}">
+          <div class="cut-bar"></div>
+          <div class="cut-body">{{ cut.name }}</div>
+          <button class="cut-del" onClick="{{ cut.onDelete }}" title="Delete">×</button>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- TOOLS -->
+    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Tools</div>
+      <sc-for list="{{ tools }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid {{ t.border }}; background:{{ t.bg }}; color:{{ t.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:pointer; margin-bottom:3px;">{{ t.label }}</button>
+      </sc-for>
+    </div>
+
+    <!-- VIEW -->
+    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">View</div>
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="4">
+        <button onClick="{{ v.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ v.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.04em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ v.label }}</button>
+      </sc-for>
+    </div>
+
+    <!-- UNITS + SNAP -->
+    <div style="padding:10px 12px;">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Units</div>
+      <div style="display:inline-flex; overflow:hidden; border:1px solid rgba(29,31,32,0.16); margin-bottom:10px;">
+        <button onClick="{{ setImperial }}" style="padding:6px 12px; font-size:12px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; letter-spacing:0.04em; border:none; background:{{ imperialBg }}; color:{{ imperialColor }}; cursor:pointer; border-right:1px solid rgba(29,31,32,0.16);">IN / FT</button>
+        <button onClick="{{ setMetric }}" style="padding:6px 12px; font-size:12px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; letter-spacing:0.04em; border:none; background:{{ metricBg }}; color:{{ metricColor }}; cursor:pointer;">M</button>
+      </div>
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:6px;">Snap</div>
+      <sc-for list="{{ snaps }}" as="sn" hint-placeholder-count="2">
+        <button onClick="{{ sn.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ sn.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 9px; cursor:pointer; margin-bottom:3px;">{{ sn.label }}</button>
+      </sc-for>
+    </div>
+
+  </div>
+
+  <!-- CANVAS AREA -->
+  <div style="flex:1; position:relative; overflow:hidden;" data-model-container>
+    <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:{{ canvasCursor }};"></canvas>
+    <!-- Direction-choice overlay (shown while choosing cut direction) -->
+    <sc-if value="{{ choosingDir }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; bottom:16px; left:50%; transform:translateX(-50%); background:#b04060; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; padding:7px 18px; pointer-events:none;">
+        Click the side of the line to look toward
+      </div>
+    </sc-if>
+  </div>
+
+</div>
+
+<!-- STATUS BAR -->
+<div style="height:28px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em; color:rgba(29,31,32,0.55); background:#fff; flex-shrink:0; user-select:none;">
+  <span data-model-sx>X: —</span>
+  <span style="margin-left:24px;" data-model-sy>Y: —</span>
+  <span style="margin-left:36px;" data-model-len></span>
+  <div style="flex:1;"></div>
+  <span>{{ viewLabel }}</span>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const SNAP_PRESETS = [
+  { label: '1/16"', snapFt: 1/192 },
+  { label: '1/8"',  snapFt: 1/96  },
+  { label: '1"',    snapFt: 1/12  },
+  { label: '6"',    snapFt: 0.5   },
+  { label: "1'",    snapFt: 1     },
+];
+const SNAP_METRIC = [
+  { label: '1 mm',  snapFt: 0.001/0.3048 },
+  { label: '5 mm',  snapFt: 0.005/0.3048 },
+  { label: '10 mm', snapFt: 0.010/0.3048 },
+  { label: '100 mm',snapFt: 0.100/0.3048 },
+];
+const LAYER_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a','#9a5a5a','#8a9a6a'];
+const DEFAULT_LAYERS = [
+  { id:1, name:'FOUNDATION',   elev:-10, visible:true },
+  { id:2, name:'BASEMENT',     elev: -9, visible:true },
+  { id:3, name:'MAIN FL',      elev:  0, visible:true },
+  { id:4, name:'MAIN FL PLAN', elev:  0, visible:true },
+  { id:5, name:'2ND FL',       elev:  9, visible:true },
+  { id:6, name:'2ND FL PLAN',  elev:  9, visible:true },
+  { id:7, name:'ROOF PLAN',    elev: 18, visible:true },
+  { id:8, name:'SITE PLAN',    elev:  0, visible:true },
+];
+
+class Component extends DCLogic {
+  state = {
+    activeTool:    'select',
+    units:         'imperial',
+    activeView:    'top',      // 'top'|'front'|'side'|'perspective'|'cut'
+    activeSnap:    0,
+    isDrawing:     false,
+    layers:        DEFAULT_LAYERS.map(l => ({ ...l })),
+    activeLayerIdx: 2,
+    nextLayerId:   9,
+    cuts:          [],
+    nextCutId:     1,
+    activeCutId:   null,
+    cutPhase:      'idle',     // 'idle'|'placing'|'choosing'
+    choosingDir:   false,
+  };
+
+  // ─── Lifecycle ──────────────────────────────────────────────────────────────
+  componentDidMount() {
+    requestAnimationFrame(() => requestAnimationFrame(() => this._init()));
+    window.addEventListener('keydown', this._onKey = e => this._handleKey(e));
+  }
+  componentWillUnmount() {
+    cancelAnimationFrame(this._raf);
+    if (this._ro) this._ro.disconnect();
+    if (this._renderer) this._renderer.dispose();
+    const c = this._canvas;
+    if (c) {
+      c.removeEventListener('mousemove',   this._cmmv);
+      c.removeEventListener('mousedown',   this._cmdn);
+      c.removeEventListener('contextmenu', this._cctx);
+      c.removeEventListener('wheel',       this._cwhl);
+      c.removeEventListener('mouseleave',  this._cmle);
+    }
+    window.removeEventListener('mousemove', this._wmmv);
+    window.removeEventListener('mouseup',   this._wmup);
+    window.removeEventListener('keydown',   this._onKey);
+  }
+
+  // ─── Init ────────────────────────────────────────────────────────────────────
+  _init() {
+    const canvas = document.querySelector('[data-model-canvas]');
+    const cont   = document.querySelector('[data-model-container]');
+    if (!canvas || !cont) return;
+    this._canvas = canvas;
+    const w = cont.clientWidth || 800, h = cont.clientHeight || 600;
+
+    this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this._renderer.setSize(w, h);
+    this._renderer.setClearColor(0xf0f0ee);
+
+    this._scene = new THREE.Scene();
+
+    // Cameras
+    this._perspCam = new THREE.PerspectiveCamera(45, w/h, 0.1, 5000);
+    this._perspCam.position.set(30, 25, 30);
+    this._orthoHalfH = 25;
+    this._orthoCamX  = 0;
+    this._orthoCamZ  = 0;
+    this._orthoCam   = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 5000);
+    this._controls   = new THREE.OrbitControls(this._perspCam, canvas);
+    this._controls.enableDamping = true;
+    this._controls.dampingFactor = 0.08;
+    this._controls.enabled       = false;
+
+    // Lighting
+    this._scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const sun = new THREE.DirectionalLight(0xfff8f0, 0.7);
+    sun.position.set(60, 100, 40);
+    this._scene.add(sun);
+
+    // Grids
+    this._gridFine  = new THREE.GridHelper(400, 400, 0xbbbbbb, 0xbbbbbb);
+    this._gridFine.material.opacity = 0.4; this._gridFine.material.transparent = true;
+    this._scene.add(this._gridFine);
+    this._gridMajor = new THREE.GridHelper(400, 40, 0x999999, 0x999999);
+    this._gridMajor.material.opacity = 0.6; this._gridMajor.material.transparent = true;
+    this._scene.add(this._gridMajor);
+    this._scene.add(new THREE.AxesHelper(2));
+
+    // Ground plane (raycasting)
+    this._ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(8000, 8000),
+      new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })
+    );
+    this._ground.rotation.x = -Math.PI / 2;
+    this._scene.add(this._ground);
+
+    this._raycaster = new THREE.Raycaster();
+
+    // Snap crosshair
+    const sm = new THREE.LineBasicMaterial({ color: 0x5980a6, depthTest: false });
+    const a = 0.5;
+    this._snapCross = new THREE.Group();
+    this._snapCross.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-a,0,0),new THREE.Vector3(a,0,0)]), sm.clone()));
+    this._snapCross.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,-a),new THREE.Vector3(0,0,a)]), sm.clone()));
+    this._snapCross.visible = false;
+    this._scene.add(this._snapCross);
+    this._snapArm = a;
+
+    // Preview line (walls)
+    this._previewPts = [new THREE.Vector3(), new THREE.Vector3()];
+    this._previewGeo = new THREE.BufferGeometry().setFromPoints(this._previewPts);
+    this._previewLine = new THREE.Line(this._previewGeo, new THREE.LineBasicMaterial({ color: 0x5980a6, depthTest: false }));
+    this._previewLine.visible = false;
+    this._scene.add(this._previewLine);
+
+    // Cut preview line
+    this._cutPreviewPts = [new THREE.Vector3(), new THREE.Vector3()];
+    this._cutPreviewGeo = new THREE.BufferGeometry().setFromPoints(this._cutPreviewPts);
+    this._cutPreviewLine = new THREE.Line(this._cutPreviewGeo, new THREE.LineBasicMaterial({ color: 0xb04060, depthTest: false }));
+    this._cutPreviewLine.visible = false;
+    this._scene.add(this._cutPreviewLine);
+
+    // Storage
+    this._walls     = [];
+    this._cutObjects = {}; // cutId → { line, arrow }
+
+    // Drawing state
+    this._isDrawing  = false;
+    this._drawStart  = null;
+    this._cutStart3  = null; // THREE.Vector3
+    this._cutEnd3    = null;
+    this._cutArrowL  = null;
+    this._cutArrowR  = null;
+    this._panning2D  = false;
+    this._snapPt     = null;
+
+    // Events
+    canvas.addEventListener('mousemove',   this._cmmv = e => this._onMouseMove(e));
+    canvas.addEventListener('mousedown',   this._cmdn = e => this._onMouseDown(e));
+    canvas.addEventListener('contextmenu', this._cctx = e => { e.preventDefault(); this._onRightClick(); });
+    canvas.addEventListener('wheel',       this._cwhl = e => this._onWheel(e), { passive: false });
+    canvas.addEventListener('mouseleave',  this._cmle = () => this._onMouseLeave());
+    window.addEventListener('mousemove',   this._wmmv = e => this._onGlobalMouseMove(e));
+    window.addEventListener('mouseup',     this._wmup = () => { this._panning2D = false; });
+
+    this._ro = new ResizeObserver(() => this._onResize());
+    this._ro.observe(cont);
+
+    this._applyLayerElevation(this.state.activeLayerIdx);
+    this._setView('top');
+    this._animate();
+  }
+
+  _animate() {
+    this._raf = requestAnimationFrame(() => this._animate());
+    if (this._controls?.enabled) this._controls.update();
+    if (this._renderer) this._renderer.render(this._scene, this._camera);
+  }
+
+  _onResize() {
+    const cont = document.querySelector('[data-model-container]');
+    if (!cont || !this._renderer) return;
+    const w = cont.clientWidth, h = cont.clientHeight;
+    this._renderer.setSize(w, h);
+    if (this._perspCam) { this._perspCam.aspect = w/h; this._perspCam.updateProjectionMatrix(); }
+    this._updateOrthoFrustum();
+  }
+
+  _updateOrthoFrustum() {
+    const c = this._canvas;
+    if (!c || !this._orthoCam) return;
+    const w = c.clientWidth || 800, h = c.clientHeight || 600;
+    const half = this._orthoHalfH, asp = w / h;
+    this._orthoCam.left = -half * asp; this._orthoCam.right = half * asp;
+    this._orthoCam.top  =  half;       this._orthoCam.bottom = -half;
+    this._orthoCam.updateProjectionMatrix();
+  }
+
+  // ─── Layers ──────────────────────────────────────────────────────────────────
+  _activeLayer() { return this.state.layers[this.state.activeLayerIdx] || this.state.layers[0]; }
+
+  _applyLayerElevation(idx) {
+    const layer = this.state.layers[idx];
+    if (!layer) return;
+    const e = layer.elev;
+    if (this._ground)    this._ground.position.y    = e;
+    if (this._gridFine)  this._gridFine.position.y  = e;
+    if (this._gridMajor) this._gridMajor.position.y = e;
+    this._drawElev = e;
+  }
+
+  _switchLayer(idx) {
+    if (idx === this.state.activeLayerIdx) return;
+    this._cancelWall(); this._cancelCut();
+    this._applyLayerElevation(idx);
+    this.setState({ activeLayerIdx: idx }, () => this._setView('top'));
+  }
+
+  _addLayer() {
+    const name = window.prompt('Layer name:', 'NEW LAYER'); if (name === null) return;
+    const elevRaw = window.prompt('Elevation in feet (negative = below grade):', '0'); if (elevRaw === null) return;
+    const elev = parseFloat(elevRaw); if (isNaN(elev)) return;
+    const id = this.state.nextLayerId;
+    this.setState({ layers: [...this.state.layers, { id, name: name.toUpperCase().trim(), elev, visible: true }], nextLayerId: id + 1 });
+  }
+
+  _deleteLayer(idx) {
+    const { layers, activeLayerIdx } = this.state;
+    if (layers.length <= 1) { window.alert('Cannot delete the last layer.'); return; }
+    if (!window.confirm(`Delete layer "${layers[idx].name}"? Lines on this layer will be removed.`)) return;
+    const lid = layers[idx].id;
+    this._walls = this._walls.filter(w => { if (w.layerId !== lid) return true; this._scene.remove(w.line); w.line.geometry.dispose(); return false; });
+    const newLayers = layers.filter((_, i) => i !== idx);
+    const newIdx = Math.min(activeLayerIdx, newLayers.length - 1);
+    this._applyLayerElevation(newIdx);
+    this.setState({ layers: newLayers, activeLayerIdx: newIdx });
+  }
+
+  _toggleLayerVisibility(idx, e) {
+    e.stopPropagation();
+    const layers = this.state.layers.map((l, i) => i === idx ? { ...l, visible: !l.visible } : l);
+    const tid = this.state.layers[idx].id, vis = layers[idx].visible;
+    this._walls.forEach(w => { if (w.layerId === tid) w.line.visible = vis; });
+    this.setState({ layers });
+  }
+
+  // ─── Views ───────────────────────────────────────────────────────────────────
+  _setView(view) {
+    const e = this._drawElev || 0;
+    if (view === 'perspective') {
+      this._camera = this._perspCam;
+      this._controls.enabled = true;
+      this._perspCam.position.set(30, e + 25, 30);
+      this._perspCam.lookAt(0, e, 0);
+      this._controls.target.set(0, e, 0);
+      this._controls.update();
+    } else {
+      this._camera = this._orthoCam;
+      this._controls.enabled = false;
+      this._updateOrthoFrustum();
+      if (view === 'top') {
+        this._orthoCam.position.set(this._orthoCamX, e + 200, this._orthoCamZ);
+        this._orthoCam.up.set(0, 0, -1);
+        this._orthoCam.lookAt(this._orthoCamX, e, this._orthoCamZ);
+      } else if (view === 'front') {
+        this._orthoCam.position.set(this._orthoCamX, e + 8, 200);
+        this._orthoCam.up.set(0, 1, 0);
+        this._orthoCam.lookAt(this._orthoCamX, e + 8, 0);
+      } else if (view === 'side') {
+        this._orthoCam.position.set(200, e + 8, this._orthoCamZ);
+        this._orthoCam.up.set(0, 1, 0);
+        this._orthoCam.lookAt(0, e + 8, this._orthoCamZ);
+      }
+      this._orthoCam.updateProjectionMatrix();
+    }
+    this.setState({ activeView: view, activeCutId: null });
+  }
+
+  _enterCutView(cutId) {
+    const cut = this.state.cuts.find(c => c.id === cutId);
+    if (!cut) return;
+    // Line midpoint and perpendicular direction = view direction
+    const mx = (cut.startPt.x + cut.endPt.x) / 2;
+    const mz = (cut.startPt.z + cut.endPt.z) / 2;
+    const midElev = cut.elev;
+    const eyeH   = midElev + 6;  // camera eye height
+    const lookH  = midElev + 4;  // look-at height
+    const dist   = 120;
+    const cx = mx + cut.dirVec.x * dist;
+    const cz = mz + cut.dirVec.z * dist;
+
+    this._camera = this._orthoCam;
+    this._controls.enabled = false;
+    this._orthoCam.position.set(cx, eyeH, cz);
+    this._orthoCam.up.set(0, 1, 0);
+    this._orthoCam.lookAt(mx, lookH, mz);
+
+    // Frustum based on cut line length
+    const dx = cut.endPt.x - cut.startPt.x, dz = cut.endPt.z - cut.startPt.z;
+    const cutLen = Math.sqrt(dx*dx + dz*dz);
+    this._orthoHalfH = Math.max(12, cutLen / 2 + 4);
+    this._updateOrthoFrustum();
+    this._orthoCam.updateProjectionMatrix();
+
+    this.setState({ activeView: 'cut', activeCutId: cutId });
+  }
+
+  _deleteCut(id, e) {
+    e.stopPropagation();
+    if (!window.confirm('Delete this elevation/section view?')) return;
+    const objs = this._cutObjects[id];
+    if (objs) {
+      objs.forEach(o => { this._scene.remove(o); if (o.geometry) o.geometry.dispose(); });
+      delete this._cutObjects[id];
+    }
+    const cuts = this.state.cuts.filter(c => c.id !== id);
+    const activeCutId = this.state.activeCutId === id ? null : this.state.activeCutId;
+    if (activeCutId === null && this.state.activeView === 'cut') this._setView('top');
+    this.setState({ cuts, activeCutId });
+  }
+
+  // ─── World position ──────────────────────────────────────────────────────────
+  _getWorldPos(clientX, clientY) {
+    const c = this._canvas; if (!c) return null;
+    const rect = c.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      (clientX - rect.left) / rect.width  * 2 - 1,
+      -((clientY - rect.top)  / rect.height) * 2 + 1
+    );
+    this._raycaster.setFromCamera(mouse, this._camera);
+    const hits = this._raycaster.intersectObject(this._ground);
+    return hits.length ? hits[0].point : null;
+  }
+
+  _snap(pt) {
+    const { units, activeSnap } = this.state;
+    const list = units === 'imperial' ? SNAP_PRESETS : SNAP_METRIC;
+    const unit = (list[activeSnap] || list[0]).snapFt;
+    return new THREE.Vector3(Math.round(pt.x/unit)*unit, pt.y, Math.round(pt.z/unit)*unit);
+  }
+
+  // ─── Mouse ───────────────────────────────────────────────────────────────────
+  _onMouseMove(e) {
+    const raw = this._getWorldPos(e.clientX, e.clientY);
+    if (!raw) { this._snapCross.visible = false; return; }
+    const pt = this._snap(raw);
+    this._snapPt = pt;
+    this._snapCross.position.set(pt.x, pt.y + 0.02, pt.z);
+    this._snapCross.visible = true;
+
+    const tool = this.state.activeTool;
+    const imp = this.state.units === 'imperial';
+    const el  = (sel) => document.querySelector(sel);
+
+    // Wall preview
+    if (tool === 'wall' && this._isDrawing && this._drawStart) {
+      const s = this._drawStart, p = this._previewGeo.attributes.position;
+      p.setXYZ(0, s.x, s.y + 0.02, s.z); p.setXYZ(1, pt.x, pt.y + 0.02, pt.z); p.needsUpdate = true;
+      const len = Math.sqrt((pt.x-s.x)**2+(pt.z-s.z)**2);
+      if (el('[data-model-len]')) el('[data-model-len]').textContent = '↔ ' + (imp ? this._ftIn(len) : this._metric(len));
+    }
+
+    // Cut preview
+    if (tool === 'cut' && this.state.cutPhase === 'placing' && this._cutStart3) {
+      const s = this._cutStart3, p = this._cutPreviewGeo.attributes.position;
+      p.setXYZ(0, s.x, s.y + 0.02, s.z); p.setXYZ(1, pt.x, pt.y + 0.02, pt.z); p.needsUpdate = true;
+      const len = Math.sqrt((pt.x-s.x)**2+(pt.z-s.z)**2);
+      if (el('[data-model-len]')) el('[data-model-len]').textContent = '↔ ' + (imp ? this._ftIn(len) : this._metric(len));
+    }
+
+    // Choosing direction: highlight whichever arrow is on the cursor's side
+    if (this.state.cutPhase === 'choosing' && this._cutStart3 && this._cutEnd3) {
+      const dx = this._cutEnd3.x - this._cutStart3.x;
+      const dz = this._cutEnd3.z - this._cutStart3.z;
+      const tx = pt.x - this._cutStart3.x;
+      const tz = pt.z - this._cutStart3.z;
+      const side = dx * tz - dz * tx; // positive = right of A→B, negative = left
+      if (this._cutArrowL) this._cutArrowL.setColor(new THREE.Color(side < 0 ? 0xff3366 : 0x994466));
+      if (this._cutArrowR) this._cutArrowR.setColor(new THREE.Color(side > 0 ? 0xff3366 : 0x994466));
+    }
+
+    if (tool !== 'wall' || !this._isDrawing) {
+      const lenEl = el('[data-model-len]');
+      if (tool !== 'cut' || this.state.cutPhase === 'idle') if (lenEl) lenEl.textContent = '';
+    }
+
+    if (el('[data-model-sx]')) el('[data-model-sx]').textContent = 'X: ' + (imp ? this._ftIn(pt.x) : this._metric(pt.x));
+    if (el('[data-model-sy]')) el('[data-model-sy]').textContent = 'Y: ' + (imp ? this._ftIn(pt.z) : this._metric(pt.z));
+  }
+
+  _onMouseLeave() {
+    this._snapCross.visible = false;
+    ['[data-model-sx]','[data-model-sy]','[data-model-len]'].forEach((s, i) => {
+      const el = document.querySelector(s); if (el) el.textContent = ['X: —','Y: —',''][i];
+    });
+  }
+
+  _onMouseDown(e) {
+    const tool = this.state.activeTool;
+    if (e.button === 0 && !e.altKey) {
+      if (tool === 'wall') this._handleWallClick();
+      else if (tool === 'cut') this._handleCutClick();
+    } else if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      if (this.state.activeView !== 'perspective') {
+        e.preventDefault(); this._panning2D = true;
+        this._pan2DPrevX = e.clientX; this._pan2DPrevY = e.clientY;
+      }
+    }
+  }
+
+  _onRightClick() {
+    this._cancelWall();
+    this._cancelCut();
+  }
+
+  _onGlobalMouseMove(e) {
+    if (!this._panning2D) return;
+    const dx = e.clientX - this._pan2DPrevX, dy = e.clientY - this._pan2DPrevY;
+    this._pan2DPrevX = e.clientX; this._pan2DPrevY = e.clientY;
+    const h = this._canvas?.clientHeight || 600, w = this._canvas?.clientWidth || 800;
+    const fpx = (this._orthoHalfH * 2) / h;
+    const e0 = this._drawElev || 0, view = this.state.activeView;
+    if (view === 'top' || view === 'cut') {
+      this._orthoCamX -= dx * fpx * (w/h);
+      this._orthoCamZ -= dy * fpx;
+      if (view === 'top') {
+        this._orthoCam.position.set(this._orthoCamX, e0 + 200, this._orthoCamZ);
+        this._orthoCam.lookAt(this._orthoCamX, e0, this._orthoCamZ);
+      }
+    } else if (view === 'front') {
+      this._orthoCam.position.x -= dx * fpx; this._orthoCam.position.y += dy * fpx;
+      this._orthoCam.lookAt(this._orthoCam.position.x, this._orthoCam.position.y, 0);
+    } else if (view === 'side') {
+      this._orthoCam.position.z += dx * fpx; this._orthoCam.position.y += dy * fpx;
+      this._orthoCam.lookAt(0, this._orthoCam.position.y, this._orthoCam.position.z);
+    }
+  }
+
+  _onWheel(e) {
+    if (this.state.activeView === 'perspective') return;
+    e.preventDefault();
+    this._orthoHalfH = Math.max(1, Math.min(300, this._orthoHalfH * (e.deltaY < 0 ? 0.88 : 1.14)));
+    this._updateOrthoFrustum();
+    const arm = Math.max(0.1, Math.min(4, this._orthoHalfH * 0.022));
+    if (arm !== this._snapArm) {
+      this._snapArm = arm;
+      const g0 = this._snapCross.children[0].geometry.attributes.position;
+      g0.setXYZ(0,-arm,0,0); g0.setXYZ(1,arm,0,0); g0.needsUpdate = true;
+      const g1 = this._snapCross.children[1].geometry.attributes.position;
+      g1.setXYZ(0,0,0,-arm); g1.setXYZ(1,0,0,arm); g1.needsUpdate = true;
+    }
+  }
+
+  // ─── Wall drawing ─────────────────────────────────────────────────────────────
+  _handleWallClick() {
+    const pt = this._snapPt; if (!pt) return;
+    if (!this._isDrawing) {
+      this._isDrawing = true; this._drawStart = pt.clone();
+      this._previewLine.visible = true;
+      this.setState({ isDrawing: true });
+    } else {
+      const dx = pt.x - this._drawStart.x, dz = pt.z - this._drawStart.z;
+      if (Math.sqrt(dx*dx + dz*dz) < 0.001) return;
+      this._commitWall(this._drawStart, pt);
+      this._drawStart = pt.clone();
+    }
+  }
+
+  _cancelWall() {
+    if (!this._isDrawing) return;
+    this._isDrawing = false; this._drawStart = null;
+    this._previewLine.visible = false;
+    this.setState({ isDrawing: false });
+  }
+
+  _commitWall(start, end) {
+    const layer = this._activeLayer();
+    const layerId = layer ? layer.id : -1;
+    const y = (this._drawElev || 0) + 0.01;
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(start.x, y, start.z),
+      new THREE.Vector3(end.x,   y, end.z),
+    ]);
+    const col = new THREE.Color(LAYER_COLORS[this.state.activeLayerIdx % LAYER_COLORS.length]);
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: col }));
+    this._scene.add(line);
+    this._walls.push({ start: start.clone(), end: end.clone(), line, layerId });
+  }
+
+  // ─── Cut drawing ──────────────────────────────────────────────────────────────
+  _handleCutClick() {
+    const pt = this._snapPt; if (!pt) return;
+    const phase = this.state.cutPhase;
+
+    if (phase === 'idle') {
+      // Phase 1: place start point
+      this._cutStart3 = pt.clone();
+      this._cutPreviewLine.visible = true;
+      this.setState({ cutPhase: 'placing' });
+
+    } else if (phase === 'placing') {
+      // Phase 2: place end point — enter direction-choosing state
+      const dx = pt.x - this._cutStart3.x, dz = pt.z - this._cutStart3.z;
+      if (Math.sqrt(dx*dx + dz*dz) < 0.001) return;
+      this._cutEnd3 = pt.clone();
+
+      // Commit the cut line preview as a permanent dashed line temporarily shown
+      const p = this._cutPreviewGeo.attributes.position;
+      p.setXYZ(0, this._cutStart3.x, this._cutStart3.y + 0.02, this._cutStart3.z);
+      p.setXYZ(1, this._cutEnd3.x,   this._cutEnd3.y   + 0.02, this._cutEnd3.z);
+      p.needsUpdate = true;
+
+      // Compute perpendicular directions
+      const len = Math.sqrt(dx*dx + dz*dz);
+      const nx = dx/len, nz = dz/len;               // line direction (normalized)
+      const lx = -nz,   lz =  nx;                   // left perpendicular
+      const rx =  nz,   rz = -nx;                   // right perpendicular
+      const mx = (this._cutStart3.x + this._cutEnd3.x) / 2;
+      const mz = (this._cutStart3.z + this._cutEnd3.z) / 2;
+      const ey = (this._drawElev || 0) + 0.05;
+      const arrowLen = Math.max(3, len * 0.25);
+
+      this._cutDirLeft  = new THREE.Vector3(lx, 0, lz);
+      this._cutDirRight = new THREE.Vector3(rx, 0, rz);
+
+      const midPt = new THREE.Vector3(mx, ey, mz);
+      this._cutArrowL = new THREE.ArrowHelper(this._cutDirLeft,  midPt, arrowLen, 0x994466, arrowLen*0.35, arrowLen*0.25);
+      this._cutArrowR = new THREE.ArrowHelper(this._cutDirRight, midPt, arrowLen, 0x994466, arrowLen*0.35, arrowLen*0.25);
+      this._scene.add(this._cutArrowL);
+      this._scene.add(this._cutArrowR);
+
+      this.setState({ cutPhase: 'choosing', choosingDir: true });
+
+    } else if (phase === 'choosing') {
+      // Phase 3: click selects the direction based on which side the mouse is on
+      if (!this._snapPt || !this._cutStart3 || !this._cutEnd3) return;
+      const dx2 = this._cutEnd3.x - this._cutStart3.x;
+      const dz2 = this._cutEnd3.z - this._cutStart3.z;
+      const tx  = this._snapPt.x - this._cutStart3.x;
+      const tz  = this._snapPt.z - this._cutStart3.z;
+      const side = dx2 * tz - dz2 * tx;
+      const dirVec = side < 0 ? this._cutDirLeft : this._cutDirRight;
+      this._finalizeCut(dirVec);
+    }
+  }
+
+  _finalizeCut(dirVec) {
+    const name = window.prompt('Name this elevation / section:', 'SECTION A-A');
+    if (!name) { this._cancelCut(); return; }
+
+    const id    = this.state.nextCutId;
+    const start = { x: this._cutStart3.x, z: this._cutStart3.z };
+    const end   = { x: this._cutEnd3.x,   z: this._cutEnd3.z };
+    const elev  = this._drawElev || 0;
+
+    // Build permanent Three.js objects for this cut
+    const y = elev + 0.02;
+    const lineMat = new THREE.LineDashedMaterial({ color: 0xb04060, dashSize: 1, gapSize: 0.5 });
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(start.x, y, start.z),
+      new THREE.Vector3(end.x,   y, end.z),
+    ]);
+    const cutLine = new THREE.Line(lineGeo, lineMat);
+    cutLine.computeLineDistances();
+    this._scene.add(cutLine);
+
+    const dx = end.x - start.x, dz = end.z - start.z, len = Math.sqrt(dx*dx + dz*dz);
+    const mx = (start.x + end.x) / 2, mz = (start.z + end.z) / 2;
+    const arrowLen = Math.max(3, len * 0.25);
+    const arrDir = new THREE.Vector3(dirVec.x, 0, dirVec.z).normalize();
+    const arrow = new THREE.ArrowHelper(arrDir, new THREE.Vector3(mx, y, mz), arrowLen, 0xb04060, arrowLen*0.35, arrowLen*0.25);
+    this._scene.add(arrow);
+
+    this._cutObjects[id] = [cutLine, arrow];
+
+    // Remove temp arrows and preview
+    this._removeCutArrows();
+    this._cutPreviewLine.visible = false;
+
+    const cut = {
+      id, name: name.toUpperCase().trim(),
+      startPt: start, endPt: end,
+      dirVec: { x: dirVec.x, z: dirVec.z },
+      elev,
+    };
+    this.setState({
+      cuts: [...this.state.cuts, cut],
+      nextCutId: id + 1,
+      cutPhase: 'idle',
+      choosingDir: false,
+    });
+    this._cutStart3 = null; this._cutEnd3 = null;
+    this._cutDirLeft = null; this._cutDirRight = null;
+  }
+
+  _cancelCut() {
+    this._removeCutArrows();
+    this._cutPreviewLine.visible = false;
+    this._cutStart3 = null; this._cutEnd3 = null;
+    this._cutDirLeft = null; this._cutDirRight = null;
+    this.setState({ cutPhase: 'idle', choosingDir: false });
+  }
+
+  _removeCutArrows() {
+    if (this._cutArrowL) { this._scene.remove(this._cutArrowL); this._cutArrowL = null; }
+    if (this._cutArrowR) { this._scene.remove(this._cutArrowR); this._cutArrowR = null; }
+  }
+
+  // ─── Keyboard ────────────────────────────────────────────────────────────────
+  _handleKey(e) {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (e.key === 'Escape') { this._cancelWall(); this._cancelCut(); }
+    if (e.key === 'w' || e.key === 'W') this.setState({ activeTool: 'wall' });
+    if (e.key === 's' || e.key === 'S') this.setState({ activeTool: 'select' });
+    if (e.key === 'c' || e.key === 'C') this.setState({ activeTool: 'cut' });
+    if (e.key === '1') this._setView('perspective');
+    if (e.key === '2') this._setView('top');
+    if (e.key === '3') this._setView('front');
+    if (e.key === '4') this._setView('side');
+  }
+
+  // ─── Formatters ───────────────────────────────────────────────────────────────
+  _ftIn(feet) {
+    const neg = feet < 0; const abs = Math.abs(feet);
+    const tot = Math.round(abs * 192); const frac = tot % 16;
+    const tin = Math.floor(tot / 16); const inch = tin % 12; const ft = Math.floor(tin / 12);
+    let s = `${neg?'-':''}${ft}'-${inch}`;
+    if (frac > 0) { const gcd=(a,b)=>b?gcd(b,a%b):a; const g=gcd(frac,16); s+=` ${frac/g}/${16/g}`; }
+    return s + '"';
+  }
+  _metric(feet) { return (feet * 0.3048).toFixed(3) + ' m'; }
+  _elevLabel(elev) {
+    const sign = elev > 0 ? '+' : '';
+    return sign + (this.state.units === 'imperial' ? this._ftIn(elev) : this._metric(elev));
+  }
+
+  // ─── renderVals ───────────────────────────────────────────────────────────────
+  renderVals() {
+    const { activeTool, units, activeView, activeSnap, isDrawing,
+            layers, activeLayerIdx, cuts, activeCutId, cutPhase, choosingDir } = this.state;
+    const on  = { bg:'#1d1f20', color:'#f2f2f3', border:'#1d1f20' };
+    const off = { bg:'#fff',    color:'#1d1f20', border:'rgba(29,31,32,0.16)' };
+    const hi  = 'rgba(29,31,32,0.09)', lo = '#fff';
+    const snaps = units === 'imperial' ? SNAP_PRESETS : SNAP_METRIC;
+
+    const activeLayer = layers[activeLayerIdx] || layers[0];
+    const activeCut   = cuts.find(c => c.id === activeCutId);
+
+    const isCutTool = activeTool === 'cut';
+    const drawingWall = isDrawing && activeTool === 'wall';
+    const placingCut  = isCutTool && cutPhase === 'placing';
+    const showHint    = drawingWall || placingCut || choosingDir;
+    const hintText    = choosingDir
+      ? 'Click to choose view direction · ESC to cancel'
+      : (drawingWall
+        ? 'DRAWING — Right-click or ESC to finish'
+        : 'CUT — Click end point · Right-click to cancel');
+    const hintColor   = choosingDir ? '#b04060' : '#5980a6';
+
+    const viewLabels = { perspective:'PERSPECTIVE', top:'TOP / PLAN', front:'FRONT ELEV', side:'SIDE ELEV', cut: activeCut?.name || 'SECTION' };
+    const topBarLabel = activeView === 'cut' && activeCut ? activeCut.name : (activeLayer?.name || '—');
+    const topBarColor = activeView === 'cut' ? '#b04060' : '#5980a6';
+
+    return {
+      topBarLabel, topBarColor,
+      showHint, hintText, hintColor,
+      choosingDir,
+      noCuts: cuts.length === 0,
+
+      layers: layers.map((l, i) => ({
+        name: l.name, elevStr: this._elevLabel(l.elev),
+        color: LAYER_COLORS[i % LAYER_COLORS.length],
+        rowClass: 'lay-row' + (i === activeLayerIdx ? ' active' : ''),
+        visIcon: l.visible ? '●' : '○', visLabel: l.visible ? 'Hide' : 'Show',
+        onSelect:    ()  => this._switchLayer(i),
+        onDelete:    (e) => { e.stopPropagation(); this._deleteLayer(i); },
+        onToggleVis: (e) => this._toggleLayerVisibility(i, e),
+      })),
+      addLayer: () => this._addLayer(),
+
+      cuts: cuts.map(c => ({
+        name: c.name,
+        rowClass: 'cut-row' + (activeCutId === c.id ? ' active' : ''),
+        onView:   () => this._enterCutView(c.id),
+        onDelete: (e) => this._deleteCut(c.id, e),
+      })),
+
+      tools: [
+        { label:'Select  [S]', onSelect:()=>this.setState({activeTool:'select'}), ...(activeTool==='select'?on:off) },
+        { label:'Wall  [W]',   onSelect:()=>this.setState({activeTool:'wall'}),   ...(activeTool==='wall'  ?on:off) },
+        { label:'Cut  [C]',    onSelect:()=>{ this._cancelWall(); this.setState({activeTool:'cut'}); }, ...(activeTool==='cut'?on:off) },
+      ],
+      views: [
+        { label:'Perspective [1]', onSelect:()=>this._setView('perspective'), bg: activeView==='perspective'?hi:lo },
+        { label:'Top / Plan  [2]', onSelect:()=>this._setView('top'),         bg: activeView==='top'        ?hi:lo },
+        { label:'Front  [3]',      onSelect:()=>this._setView('front'),       bg: activeView==='front'      ?hi:lo },
+        { label:'Side  [4]',       onSelect:()=>this._setView('side'),        bg: activeView==='side'       ?hi:lo },
+      ],
+      snaps: snaps.map((sn, i) => ({ label:sn.label, onSelect:()=>this.setState({activeSnap:i}), bg:activeSnap===i?hi:lo })),
+      setImperial: ()=>this.setState({units:'imperial',activeSnap:0}),
+      setMetric:   ()=>this.setState({units:'metric',  activeSnap:0}),
+      imperialBg: units==='imperial'?'#1d1f20':'#fff', imperialColor: units==='imperial'?'#f2f2f3':'#1d1f20',
+      metricBg:   units==='metric'  ?'#1d1f20':'#fff', metricColor:   units==='metric'  ?'#f2f2f3':'#1d1f20',
+      canvasCursor: (choosingDir || isCutTool || isDrawing) ? 'crosshair' : 'default',
+      viewLabel: viewLabels[activeView] || 'TOP / PLAN',
+    };
+  }
+}
+</script>
+</body>
+</html>
