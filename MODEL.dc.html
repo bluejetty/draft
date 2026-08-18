@@ -153,6 +153,7 @@
   <!-- CANVAS AREA -->
   <div style="flex:1; position:relative; overflow:hidden;" data-model-container>
     <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:none;"></canvas>
+    <canvas data-model-overlay style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
     <!-- HTML crosshair cursor -->
     <div style="position:absolute; left:{{ cursorX }}px; top:{{ cursorY }}px; width:36px; height:36px; transform:translate(-50%,-50%); pointer-events:none; display:{{ cursorDisplay }};">
       <div style="position:absolute; top:50%; left:0; width:calc(50% - 7px); height:1px; background:#1d1f20; transform:translateY(-50%);"></div>
@@ -343,7 +344,9 @@ class Component extends DCLogic {
 
     // Storage
     this._walls      = [];
-    this._lines      = []; // line tool segments
+    this._lines      = []; // committed line segments
+    this._pendingChain = []; // in-progress chain (not yet committed)
+    this._chainStart   = null; // first point of current chain
     this._cutObjects = {}; // cutId → { line, arrow }
 
     // Drawing state
@@ -351,6 +354,7 @@ class Component extends DCLogic {
     this._drawStart  = null;
     this._lineDrawing = false;
     this._lineStart   = null;
+    this._lastClickTime = 0;
     this._shiftHeld   = false;
     this._cutStart3  = null; // THREE.Vector3
     this._cutEnd3    = null;
@@ -359,9 +363,14 @@ class Component extends DCLogic {
     this._panning2D  = false;
     this._snapPt     = null;
 
+    // 2D overlay canvas (for crisp line + node rendering)
+    this._overlayCanvas = document.querySelector('[data-model-overlay]');
+    this._overlayCtx = this._overlayCanvas ? this._overlayCanvas.getContext('2d') : null;
+
     // Events
     canvas.addEventListener('mousemove',   this._cmmv = e => this._onMouseMove(e));
     canvas.addEventListener('mousedown',   this._cmdn = e => this._onMouseDown(e));
+    canvas.addEventListener('dblclick',    this._cdbl = e => this._onDblClick(e));
     canvas.addEventListener('contextmenu', this._cctx = e => { e.preventDefault(); this._onRightClick(); });
     canvas.addEventListener('wheel',       this._cwhl = e => this._onWheel(e), { passive: false });
     canvas.addEventListener('mouseleave',  this._cmle = () => this._onMouseLeave());
@@ -380,6 +389,63 @@ class Component extends DCLogic {
     this._raf = requestAnimationFrame(() => this._animate());
     if (this._controls?.enabled) this._controls.update();
     if (this._renderer) this._renderer.render(this._scene, this._camera);
+    this._redrawOverlay();
+  }
+
+  _redrawOverlay() {
+    const ctx = this._overlayCtx, oc = this._overlayCanvas;
+    if (!ctx || !oc || !this._canvas) return;
+    const w = this._canvas.clientWidth, h = this._canvas.clientHeight;
+    if (oc.width !== w || oc.height !== h) { oc.width = w; oc.height = h; }
+    ctx.clearRect(0, 0, w, h);
+    if (this.state.activeView === 'perspective') return;
+
+    const cam = this._orthoCam;
+    const toS = pt => {
+      const v = new THREE.Vector3(pt.x, pt.y || 0, pt.z).project(cam);
+      return { x: (v.x + 1) / 2 * w, y: (-v.y + 1) / 2 * h };
+    };
+
+    const LINE_COLOR = '#1d1f20';
+    const DOT_R = 5;
+
+    const drawSeg = (a, b) => {
+      const sa = toS(a), sb = toS(b);
+      ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
+    };
+    const drawDot = pt => {
+      const s = toS(pt);
+      ctx.beginPath(); ctx.arc(s.x, s.y, DOT_R, 0, Math.PI * 2); ctx.fill();
+    };
+
+    ctx.strokeStyle = LINE_COLOR; ctx.lineWidth = 2; ctx.fillStyle = LINE_COLOR;
+
+    // Committed lines
+    this._lines.forEach(l => { drawSeg(l.start, l.end); drawDot(l.start); drawDot(l.end); });
+
+    // Pending chain
+    this._pendingChain.forEach(s => { drawSeg(s.start, s.end); drawDot(s.start); drawDot(s.end); });
+
+    // Chain-start close target (blue ring when ≥2 segments pending)
+    if (this._chainStart && this._lineDrawing && this._pendingChain.length >= 1) {
+      const sc = toS(this._chainStart);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
+      ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+    }
+
+    // Preview line (cursor to last placed point)
+    if (this._lineDrawing && this._lineStart && this._snapPt) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(29,31,32,0.35)'; ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      drawSeg(this._lineStart, this._snapPt);
+      ctx.setLineDash([]);
+      ctx.restore();
+      // dot at current chain tip
+      ctx.fillStyle = LINE_COLOR; drawDot(this._lineStart);
+    }
   }
 
   _onResize() {
@@ -752,6 +818,7 @@ class Component extends DCLogic {
   _collectVertices() {
     const pts = [];
     this._lines.forEach(l => { pts.push(l.start, l.end); });
+    this._pendingChain.forEach(s => { pts.push(s.start, s.end); });
     this._walls.forEach(w => { pts.push(w.start, w.end); });
     return pts;
   }
@@ -796,40 +863,76 @@ class Component extends DCLogic {
 
   _handleLineClick() {
     const pt = this._snapPt; if (!pt) return;
+
+    // Double-click detection (two clicks ≤350ms apart)
+    const now = Date.now();
+    const isDbl = (now - this._lastClickTime) < 350;
+    this._lastClickTime = now;
+
     if (!this._lineDrawing) {
-      this._lineDrawing = true;
-      this._lineStart = pt.clone();
-      this._linePreviewObj.visible = true;
-      this._lockAngle = null;
+      if (isDbl) return; // ignore 2nd click of a dbl-click when idle
+      this._lineDrawing  = true;
+      this._chainStart   = pt.clone();
+      this._lineStart    = pt.clone();
+      this._pendingChain = [];
+      this._lockAngle    = null;
       this.setState({ isDrawing: true });
     } else {
+      if (isDbl) {
+        // Double-click → finish chain (keep whatever was placed by first click)
+        this._finishChain();
+        return;
+      }
       const dx = pt.x - this._lineStart.x, dz = pt.z - this._lineStart.z;
       if (Math.sqrt(dx*dx + dz*dz) < 0.001) return;
-      this._commitLine(this._lineStart, pt);
+
+      // Close detection: snap near chain start (≥2 segments already)
+      const cs = this._chainStart;
+      const cdx = pt.x - cs.x, cdz = pt.z - cs.z;
+      if (this._pendingChain.length >= 2 && Math.sqrt(cdx*cdx + cdz*cdz) < this._magnetRadius() * 2) {
+        this._pendingChain.push({ start: this._lineStart.clone(), end: cs.clone() });
+        this._finishChain();
+        return;
+      }
+
+      this._pendingChain.push({ start: this._lineStart.clone(), end: pt.clone() });
       this._lineStart = pt.clone();
-      this._lockAngle = null; // fresh angle for next segment
+      this._lockAngle = null;
     }
+  }
+
+  _finishChain() {
+    if (!this._lineDrawing) return;
+    this._pendingChain.forEach(seg => this._commitLine(seg.start, seg.end));
+    this._pendingChain  = [];
+    this._lineDrawing   = false;
+    this._chainStart    = null;
+    this._lineStart     = null;
+    this._lockAngle     = null;
+    this.setState({ isDrawing: false });
   }
 
   _cancelLine() {
     if (!this._lineDrawing) return;
-    this._lineDrawing = false;
-    this._lineStart = null;
-    this._linePreviewObj.visible = false;
+    this._pendingChain  = [];
+    this._lineDrawing   = false;
+    this._chainStart    = null;
+    this._lineStart     = null;
+    this._lockAngle     = null;
     this.setState({ isDrawing: false });
   }
 
   _commitLine(start, end) {
     const layer = this._activeLayer();
     const layerId = layer ? layer.id : -1;
-    const y = (this._drawElev || 0) + 0.01;
-    const geo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(start.x, y, start.z),
-      new THREE.Vector3(end.x,   y, end.z),
-    ]);
-    const obj = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x1d1f20 }));
-    this._scene.add(obj);
-    this._lines.push({ start: start.clone(), end: end.clone(), obj, layerId });
+    // Data only — overlay canvas handles 2D rendering
+    this._lines.push({ start: start.clone(), end: end.clone(), layerId });
+  }
+
+  _onDblClick(e) {
+    // Handled via timing in _handleLineClick; nothing extra needed.
+    // Prevent default to avoid text selection.
+    e.preventDefault();
   }
 
   // ─── Frozen-length input ──────────────────────────────────────────────────────
@@ -909,10 +1012,10 @@ class Component extends DCLogic {
       this._frozenStart.z + dirZ * total,
     );
     if (this._frozenTool === 'line') {
-      this._commitLine(this._frozenStart, end);
-      this._lineStart = end.clone();
+      // Add to pending chain (not yet committed until Space/Enter)
+      this._pendingChain.push({ start: this._frozenStart.clone(), end: end.clone() });
+      this._lineStart   = end.clone();
       this._lineDrawing = true;
-      if (this._linePreviewObj) this._linePreviewObj.visible = true;
     } else {
       this._commitWall(this._frozenStart, end);
       this._drawStart = end.clone();
@@ -1054,6 +1157,9 @@ class Component extends DCLogic {
     if (e.key === 'Escape') {
       if (this.state.lengthFrozen) { this._cancelFrozenLength(); return; }
       this._cancelWall(); this._cancelLine(); this._cancelCut();
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      if (this._lineDrawing) { e.preventDefault(); this._finishChain(); return; }
     }
     if (e.key === 'r' || e.key === 'R') {
       const tool = this.state.activeTool;
