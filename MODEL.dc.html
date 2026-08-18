@@ -291,22 +291,7 @@ class Component extends DCLogic {
     sun.position.set(60, 100, 40);
     this._scene.add(sun);
 
-    // Grids
-    // Adaptive LOD grid: 1ft (very light) + 10ft (medium) + 100ft (darker)
-    this._grid1ft = new THREE.GridHelper(400, 400, 0xe4e4e4, 0xe4e4e4);
-    this._grid1ft.material.opacity = 1; this._grid1ft.material.transparent = true;
-    this._scene.add(this._grid1ft);
-
-    this._grid10ft = new THREE.GridHelper(400, 40, 0xcccccc, 0xcccccc);
-    this._grid10ft.material.opacity = 1; this._grid10ft.material.transparent = true;
-    this._scene.add(this._grid10ft);
-
-    this._grid100ft = new THREE.GridHelper(4000, 40, 0xaaaaaa, 0xaaaaaa);
-    this._grid100ft.material.opacity = 1; this._grid100ft.material.transparent = true;
-    this._grid100ft.visible = false;
-    this._scene.add(this._grid100ft);
-
-    this._updateGridLOD();
+    // Grids now drawn on the 2D overlay canvas — no Three.js grid objects needed
     this._scene.add(new THREE.AxesHelper(2));
 
     // Ground plane (raycasting)
@@ -392,6 +377,38 @@ class Component extends DCLogic {
     this._redrawOverlay();
   }
 
+  _drawGrid2D(ctx, w, h) {
+    // Only meaningful for top / plan view
+    if (this.state.activeView !== 'top') return;
+    const halfH = this._orthoHalfH;
+    const halfW = halfH * (w / h);
+    const camX  = this._orthoCamX || 0;
+    const camZ  = this._orthoCamZ || 0;
+
+    // World → screen (top-down ortho, up=(0,0,-1) so +Z = down on screen)
+    const sx = wx => (wx - camX + halfW) / (2 * halfW) * w;
+    const sy = wz => (wz - camZ + halfH) / (2 * halfH) * h;
+
+    const drawGridLines = (unit, color, lineWidth) => {
+      ctx.beginPath();
+      ctx.strokeStyle = color; ctx.lineWidth = lineWidth;
+      const x0 = Math.ceil((camX - halfW) / unit) * unit;
+      const z0 = Math.ceil((camZ - halfH) / unit) * unit;
+      for (let x = x0; x <= camX + halfW + unit; x += unit) {
+        ctx.moveTo(sx(x), 0); ctx.lineTo(sx(x), h);
+      }
+      for (let z = z0; z <= camZ + halfH + unit; z += unit) {
+        ctx.moveTo(0, sy(z)); ctx.lineTo(w, sy(z));
+      }
+      ctx.stroke();
+    };
+
+    const zoomed = halfH < 50;
+    if (zoomed) drawGridLines(1,   '#e8e8e8', 0.5); // 1ft fine
+    drawGridLines(10,  '#cccccc', 0.5);              // 10ft major / fine
+    if (!zoomed) drawGridLines(100, '#aaaaaa', 0.75);// 100ft major when zoomed out
+  }
+
   _redrawOverlay() {
     const ctx = this._overlayCtx, oc = this._overlayCanvas;
     if (!ctx || !oc || !this._canvas) return;
@@ -399,6 +416,9 @@ class Component extends DCLogic {
     if (oc.width !== w || oc.height !== h) { oc.width = w; oc.height = h; }
     ctx.clearRect(0, 0, w, h);
     if (this.state.activeView === 'perspective') return;
+
+    // Grid first (drawn beneath geometry)
+    this._drawGrid2D(ctx, w, h);
 
     const cam = this._orthoCam;
     const toS = pt => {
@@ -487,10 +507,7 @@ class Component extends DCLogic {
     const layer = this.state.layers[idx];
     if (!layer) return;
     const e = layer.elev;
-    if (this._ground)    this._ground.position.y    = e;
-    if (this._grid1ft)   this._grid1ft.position.y   = e;
-    if (this._grid10ft)  this._grid10ft.position.y  = e;
-    if (this._grid100ft) this._grid100ft.position.y = e;
+    if (this._ground) this._ground.position.y = e;
     this._drawElev = e;
   }
 
@@ -797,15 +814,7 @@ class Component extends DCLogic {
     this._updateGridLOD();
   }
 
-  _updateGridLOD() {
-    const h = this._orthoHalfH;
-    // < 50ft half-height (100ft view): show 1ft fine + 10ft major
-    // >= 50ft half-height            : hide 1ft, show 10ft fine + 100ft major
-    const zoomed = h < 50;
-    if (this._grid1ft)   this._grid1ft.visible   = zoomed;
-    if (this._grid100ft) this._grid100ft.visible  = !zoomed;
-    // 10ft grid always visible — acts as major when zoomed in, fine when zoomed out
-  }
+  _updateGridLOD() { /* grid now drawn on 2D overlay */ }
 
   _onWheel(e) {
     if (this.state.activeView === 'perspective') return;
