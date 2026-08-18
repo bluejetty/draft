@@ -677,8 +677,9 @@ class Component extends DCLogic {
     this._trackingRef  = trackingHit ? trackingHit.refPt  : null;
     this._trackingSnap = trackingHit ? trackingHit.snapPt : null;
 
-    // Cursor + magnet positions
-    const sc = this._toScreen(finalPt);
+    // Cursor position: sit on the reference node when tracking, otherwise follow snap point
+    const cursorWorldPt = trackingHit ? trackingHit.refPt : finalPt;
+    const sc = this._toScreen(cursorWorldPt);
     const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false };
     if (magnet && !this._shiftHeld) {
       const ms = this._toScreen(magnet);
