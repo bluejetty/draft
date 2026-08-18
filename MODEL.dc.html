@@ -130,7 +130,15 @@
 
   <!-- CANVAS AREA -->
   <div style="flex:1; position:relative; overflow:hidden;" data-model-container>
-    <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:{{ canvasCursor }};"></canvas>
+    <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:none;"></canvas>
+    <!-- HTML crosshair cursor -->
+    <div style="position:absolute; left:{{ cursorX }}px; top:{{ cursorY }}px; width:36px; height:36px; transform:translate(-50%,-50%); pointer-events:none; display:{{ cursorDisplay }};">
+      <div style="position:absolute; top:50%; left:0; width:calc(50% - 7px); height:1px; background:#1d1f20; transform:translateY(-50%);"></div>
+      <div style="position:absolute; top:50%; right:0; width:calc(50% - 7px); height:1px; background:#1d1f20; transform:translateY(-50%);"></div>
+      <div style="position:absolute; left:50%; top:0; height:calc(50% - 7px); width:1px; background:#1d1f20; transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:50%; bottom:0; height:calc(50% - 7px); width:1px; background:#1d1f20; transform:translateX(-50%);"></div>
+      <div style="position:absolute; left:50%; top:50%; width:10px; height:10px; border-radius:50%; background:transparent; border:1px solid #1d1f20; transform:translate(-50%,-50%);"></div>
+    </div>
     <!-- Direction-choice overlay (shown while choosing cut direction) -->
     <sc-if value="{{ choosingDir }}" hint-placeholder-val="{{ false }}">
       <div style="position:absolute; bottom:16px; left:50%; transform:translateX(-50%); background:#b04060; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; padding:7px 18px; pointer-events:none;">
@@ -189,6 +197,7 @@ class Component extends DCLogic {
     layers:        DEFAULT_LAYERS.map(l => ({ ...l })),
     activeLayerIdx: 5,
     nextLayerId:   9,
+    cursorX: -100, cursorY: -100, showCursor: false,
     cuts:          [],
     nextCutId:     1,
     activeCutId:   null,
@@ -270,15 +279,7 @@ class Component extends DCLogic {
 
     this._raycaster = new THREE.Raycaster();
 
-    // Snap crosshair
-    const sm = new THREE.LineBasicMaterial({ color: 0x5980a6, depthTest: false });
-    const a = 0.5;
-    this._snapCross = new THREE.Group();
-    this._snapCross.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-a,0,0),new THREE.Vector3(a,0,0)]), sm.clone()));
-    this._snapCross.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,-a),new THREE.Vector3(0,0,a)]), sm.clone()));
-    this._snapCross.visible = false;
-    this._scene.add(this._snapCross);
-    this._snapArm = a;
+    this._snapArm = 0.5; // kept for compat, no longer drives 3D cross
 
     // Preview line (walls)
     this._previewPts = [new THREE.Vector3(), new THREE.Vector3()];
@@ -494,13 +495,20 @@ class Component extends DCLogic {
   }
 
   // ─── Mouse ───────────────────────────────────────────────────────────────────
+  _toScreen(pt3) {
+    const cam = this.state.activeView === 'perspective' ? this._perspCam : this._orthoCam;
+    const w = this._canvas.clientWidth, h = this._canvas.clientHeight;
+    const v = pt3.clone().project(cam);
+    return { x: (v.x + 1) / 2 * w, y: (-v.y + 1) / 2 * h };
+  }
+
   _onMouseMove(e) {
     const raw = this._getWorldPos(e.clientX, e.clientY);
-    if (!raw) { this._snapCross.visible = false; return; }
+    if (!raw) { this.setState({ showCursor: false }); return; }
     const pt = this._snap(raw);
     this._snapPt = pt;
-    this._snapCross.position.set(pt.x, pt.y + 0.02, pt.z);
-    this._snapCross.visible = true;
+    const sc = this._toScreen(new THREE.Vector3(pt.x, pt.y, pt.z));
+    this.setState({ cursorX: sc.x, cursorY: sc.y, showCursor: true });
 
     const tool = this.state.activeTool;
     const imp = this.state.units === 'imperial';
@@ -543,7 +551,7 @@ class Component extends DCLogic {
   }
 
   _onMouseLeave() {
-    this._snapCross.visible = false;
+    this.setState({ showCursor: false });
     ['[data-model-sx]','[data-model-sy]','[data-model-len]'].forEach((s, i) => {
       const el = document.querySelector(s); if (el) el.textContent = ['X: —','Y: —',''][i];
     });
@@ -595,14 +603,6 @@ class Component extends DCLogic {
     e.preventDefault();
     this._orthoHalfH = Math.max(1, Math.min(300, this._orthoHalfH * (e.deltaY < 0 ? 0.88 : 1.14)));
     this._updateOrthoFrustum();
-    const arm = Math.max(0.1, Math.min(4, this._orthoHalfH * 0.022));
-    if (arm !== this._snapArm) {
-      this._snapArm = arm;
-      const g0 = this._snapCross.children[0].geometry.attributes.position;
-      g0.setXYZ(0,-arm,0,0); g0.setXYZ(1,arm,0,0); g0.needsUpdate = true;
-      const g1 = this._snapCross.children[1].geometry.attributes.position;
-      g1.setXYZ(0,0,0,-arm); g1.setXYZ(1,0,0,arm); g1.needsUpdate = true;
-    }
   }
 
   // ─── Wall drawing ─────────────────────────────────────────────────────────────
@@ -858,7 +858,8 @@ class Component extends DCLogic {
       setMetric:   ()=>this.setState({units:'metric',  activeSnap:0}),
       imperialBg: units==='imperial'?'#1d1f20':'#fff', imperialColor: units==='imperial'?'#f2f2f3':'#1d1f20',
       metricBg:   units==='metric'  ?'#1d1f20':'#fff', metricColor:   units==='metric'  ?'#f2f2f3':'#1d1f20',
-      canvasCursor: (choosingDir || isCutTool || isDrawing) ? 'crosshair' : 'default',
+      cursorX: this.state.cursorX, cursorY: this.state.cursorY,
+      cursorDisplay: this.state.showCursor ? 'block' : 'none',
       viewLabel: viewLabels[activeView] || 'TOP / PLAN',
     };
   }
