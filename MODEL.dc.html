@@ -126,6 +126,17 @@
         <sc-for list="{{ wallTypes }}" as="wt" hint-placeholder-count="5">
           <button onClick="{{ wt.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid {{ wt.border }}; background:{{ wt.bg }}; color:{{ wt.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:500; font-size:11px; letter-spacing:0.03em; padding:5px 10px; cursor:pointer; margin-bottom:2px;">{{ wt.label }}</button>
         </sc-for>
+        <!-- Reference line position -->
+        <div style="margin-top:10px;">
+          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:4px;">Ref Line (Exterior Face)</div>
+          <div style="display:flex; gap:3px; margin-bottom:5px;">
+            <sc-for list="{{ wallRefBtns }}" as="rb" hint-placeholder-count="3">
+              <button onClick="{{ rb.onSelect }}" style="flex:1; border:1px solid {{ rb.border }}; background:{{ rb.bg }}; color:{{ rb.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:10px; letter-spacing:0.04em; padding:5px 2px; cursor:pointer;">{{ rb.label }}</button>
+            </sc-for>
+          </div>
+          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:#5980a6; letter-spacing:0.04em; text-align:center;">{{ wallExtNote }}</div>
+        </div>
+        <!-- Heights -->
         <div style="margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
           <div>
             <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Base Ht (ft)</div>
@@ -250,6 +261,7 @@ class Component extends DCLogic {
     activeSnap:    0,
     isDrawing:     false,
     activeWallType: 'stud_2x6',
+    wallRefLine:    'left',   // 'left'|'center'|'right' — where the drawn line sits on the assembly
     wallBaseHeight: 0,
     wallTopHeight:  9,
     layers:        DEFAULT_LAYERS.map(l => ({ ...l })),
@@ -482,10 +494,11 @@ class Component extends DCLogic {
 
     // ── Walls (fills drawn beneath lines) ────────────────────────────────────
     const pwType = this.state.activeWallType;
+    const pwRef  = this.state.wallRefLine;
     this._walls.forEach(w => this._drawWallSeg2D(ctx, toS, w, false));
-    this._wallChain.forEach(s => this._drawWallSeg2D(ctx, toS, { ...s, wallType: pwType }, false));
+    this._wallChain.forEach(s => this._drawWallSeg2D(ctx, toS, { ...s, wallType: pwType, refLine: pwRef }, false));
     if (this._wallDrawing && this._wallStart && this._snapPt) {
-      this._drawWallSeg2D(ctx, toS, { start: this._wallStart, end: this._snapPt, wallType: pwType }, true);
+      this._drawWallSeg2D(ctx, toS, { start: this._wallStart, end: this._snapPt, wallType: pwType, refLine: pwRef }, true);
     }
     if (this._wallChainStart && this._wallDrawing && this._wallChain.length >= 1) {
       const sc = toS(this._wallChainStart);
@@ -960,7 +973,8 @@ class Component extends DCLogic {
     const wType = this.state.activeWallType;
     const baseH = this.state.wallBaseHeight;
     const topH  = this.state.wallTopHeight;
-    this._wallChain.forEach(seg => this._commitWall(seg.start, seg.end, wType, baseH, topH));
+    const refL  = this.state.wallRefLine;
+    this._wallChain.forEach(seg => this._commitWall(seg.start, seg.end, wType, baseH, topH, refL));
     this._wallChain      = [];
     this._wallDrawing    = false;
     this._wallChainStart = null;
@@ -980,7 +994,7 @@ class Component extends DCLogic {
     this.setState({ isDrawing: false });
   }
 
-  _commitWall(start, end, wallType, baseHeight, topHeight) {
+  _commitWall(start, end, wallType, baseHeight, topHeight, refLine) {
     const layer = this._activeLayer();
     const layerId = layer ? layer.id : -1;
     this._walls.push({
@@ -990,6 +1004,7 @@ class Component extends DCLogic {
       wallType:   wallType   || this.state.activeWallType,
       baseHeight: baseHeight != null ? baseHeight : this.state.wallBaseHeight,
       topHeight:  topHeight  != null ? topHeight  : this.state.wallTopHeight,
+      refLine:    refLine    || this.state.wallRefLine,
     });
   }
 
@@ -1001,6 +1016,14 @@ class Component extends DCLogic {
     const totalFt = wtDef.totalIn / 12;
     const half = totalFt / 2;
 
+    // Reference-line offset: where does the drawn line sit on the wall assembly?
+    // 'left'   → drawn line = exterior left face;  wall body fills to the right (+perp)
+    // 'right'  → drawn line = exterior right face; wall body fills to the left (−perp)
+    // 'center' → drawn line = centreline; fills symmetrically on both sides
+    const refLine  = seg.refLine || 'center';
+    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -half;
+    const endOff   = startOff + totalFt;
+
     const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
     const len = Math.sqrt(dx*dx + dz*dz);
     if (len < 0.001) return;
@@ -1011,7 +1034,7 @@ class Component extends DCLogic {
     const alpha = preview ? 0.45 : 1;
 
     // Draw each layer fill
-    let offset = -half;
+    let offset = startOff;
     wtDef.layers.forEach(layer => {
       const layerFt = layer.in / 12;
       const nextOff = offset + layerFt;
@@ -1069,7 +1092,7 @@ class Component extends DCLogic {
     // Boundary lines (all layer edges + end caps)
     ctx.strokeStyle = preview ? 'rgba(29,31,32,0.45)' : '#1d1f20';
     ctx.lineWidth   = preview ? 1 : 1.5;
-    let bOff = -half;
+    let bOff = startOff;
     wtDef.layers.forEach((layer, i) => {
       const bNext = bOff + layer.in / 12;
       if (i === 0) {
@@ -1082,7 +1105,7 @@ class Component extends DCLogic {
     });
     // End caps
     [seg.start, seg.end].forEach(pt => {
-      const a = toS(wp(pt, -half)), b = toS(wp(pt, half));
+      const a = toS(wp(pt, startOff)), b = toS(wp(pt, endOff));
       ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
     });
 
@@ -1617,6 +1640,17 @@ class Component extends DCLogic {
       wallTopHeight:  this.state.wallTopHeight,
       onWallBaseH: e => this.setState({ wallBaseHeight: parseFloat(e.target.value) || 0 }),
       onWallTopH:  e => this.setState({ wallTopHeight:  parseFloat(e.target.value) || 0 }),
+      wallRefLine: this.state.wallRefLine,
+      wallRefBtns: ['left','center','right'].map(v => ({
+        label:  v === 'left' ? 'LEFT' : v === 'center' ? 'CENTER' : 'RIGHT',
+        bg:     this.state.wallRefLine === v ? '#1d1f20' : '#fff',
+        color:  this.state.wallRefLine === v ? '#f2f2f3' : '#1d1f20',
+        border: this.state.wallRefLine === v ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        onSelect: () => this.setState({ wallRefLine: v }),
+      })),
+      wallExtNote: this.state.wallRefLine === 'left'   ? '← EXTERIOR FACE'
+                 : this.state.wallRefLine === 'right'  ? 'EXTERIOR FACE →'
+                 : 'SYMMETRIC / NO EXT',
 
       layers: layers.map((l, i) => ({
         name: l.name, elevStr: this._elevLabel(l.elev),
