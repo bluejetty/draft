@@ -388,6 +388,11 @@ class Component extends DCLogic {
     this._wallChainStart = null; // first placed point (for close detection)
     this._wallStart      = null; // last placed point (current seg origin)
 
+    // Shared vertex pool — all committed segment endpoints reference objects in here.
+    // Two segments meeting at a corner share the SAME Vector3 instance; mutating
+    // one endpoint moves every segment that references it.
+    this._vertices = [];
+
     // Select-tool state
     this._selectDrag     = null;       // { refs, startX, startY, active }  — node drag
     this._selectDownInfo = null;       // { worldPt, clientX, clientY, shiftHeld } — pending click
@@ -537,6 +542,40 @@ class Component extends DCLogic {
       ctx.beginPath(); ctx.arc(sd.x, sd.y, DOT_R + 6, 0, Math.PI * 2);
       ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2; ctx.stroke();
       ctx.restore();
+    }
+
+    // ── Trim hover highlight ──────────────────────────────────────────────────
+    if (this.state.activeTool === 'trim' && this._snapPt) {
+      const hovSeg = this._findNearestSeg(this._snapPt);
+      if (hovSeg) {
+        // Find nearest intersection on hovered segment
+        const others = [...this._lines, ...this._walls].filter(s => s !== hovSeg);
+        const hits = others.map(o => this._segIntersect(hovSeg, o)).filter(Boolean);
+        if (hits.length > 0) {
+          const ax = hovSeg.start.x, az = hovSeg.start.z, bx = hovSeg.end.x, bz = hovSeg.end.z;
+          const ddx = bx-ax, ddz = bz-az, len2 = ddx*ddx+ddz*ddz;
+          const tC = len2 > 0 ? Math.max(0, Math.min(1, ((this._snapPt.x-ax)*ddx+(this._snapPt.z-az)*ddz)/len2)) : 0;
+          hits.sort((a, b) => Math.abs(a.t - tC) - Math.abs(b.t - tC));
+          const near = hits[0];
+          // Draw the to-be-removed side in red
+          const clipFrom = tC <= near.t ? hovSeg.start : hovSeg.end;
+          const clipTo   = new THREE.Vector3(near.x, hovSeg.start.y, near.z);
+          const rA = toS(clipFrom), rB = toS(clipTo);
+          ctx.save();
+          ctx.beginPath(); ctx.moveTo(rA.x, rA.y); ctx.lineTo(rB.x, rB.y);
+          ctx.strokeStyle = 'rgba(192,40,60,0.6)'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+          ctx.stroke();
+          ctx.restore();
+        } else {
+          // No intersections — highlight whole segment as not trimmable
+          const rA = toS(hovSeg.start), rB = toS(hovSeg.end);
+          ctx.save();
+          ctx.beginPath(); ctx.moveTo(rA.x, rA.y); ctx.lineTo(rB.x, rB.y);
+          ctx.strokeStyle = 'rgba(192,40,60,0.25)'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
     }
 
     // ── Selection highlight ───────────────────────────────────────────────────
@@ -906,6 +945,10 @@ class Component extends DCLogic {
           this._selectDownInfo = { worldPt: raw, clientX: e.clientX, clientY: e.clientY, shiftHeld: e.shiftKey, wasVertex: !!refs };
         }
       }
+      else if (tool === 'trim') {
+        const raw = this._getWorldPos(e.clientX, e.clientY);
+        if (raw) { this._doTrim(raw); e.preventDefault(); }
+      }
     } else if (e.button === 1 || (e.button === 0 && e.altKey)) {
       if (this.state.activeView !== 'perspective') {
         e.preventDefault(); this._panning2D = true;
@@ -1040,8 +1083,8 @@ class Component extends DCLogic {
     const layer = this._activeLayer();
     const layerId = layer ? layer.id : -1;
     this._walls.push({
-      start:      start.clone(),
-      end:        end.clone(),
+      start:      this._mergeVertex(start),
+      end:        this._mergeVertex(end),
       layerId,
       wallType:   wallType   || this.state.activeWallType,
       baseHeight: baseHeight != null ? baseHeight : this.state.wallBaseHeight,
@@ -1172,6 +1215,20 @@ class Component extends DCLogic {
     return pts;
   }
 
+  // ─── Vertex pool ─────────────────────────────────────────────────────────────
+  // Return an existing pooled Vector3 at (pt.x, pt.z) within 1/8" tolerance,
+  // or create and register a new one. All committed segment endpoints use this
+  // so shared corners reference the exact same object.
+  _mergeVertex(pt) {
+    const THRESH = 0.001; // ~1/8" — grid snap guarantees exact matches
+    for (const v of this._vertices) {
+      if (Math.abs(v.x - pt.x) < THRESH && Math.abs(v.z - pt.z) < THRESH) return v;
+    }
+    const v = new THREE.Vector3(pt.x, pt.y != null ? pt.y : 0, pt.z);
+    this._vertices.push(v);
+    return v;
+  }
+
   _magnetRadius() {
     const h = this._canvas ? this._canvas.clientHeight : 600;
     return (this._orthoHalfH * 2) / h * 20;
@@ -1206,23 +1263,22 @@ class Component extends DCLogic {
 
   // Return all segment endpoint refs that share the vertex nearest to worldPt,
   // or null if nothing is within magnet radius.
+  // Uses reference equality — segments sharing a pooled vertex are found instantly.
   _findVertexHit(worldPt) {
     const r = this._magnetRadius() * 1.5;
-    let bestD = r, bestPt = null;
-    this._lines.forEach(l => {
-      [l.start, l.end].forEach(pt => {
-        const d = Math.sqrt((pt.x - worldPt.x) ** 2 + (pt.z - worldPt.z) ** 2);
-        if (d < bestD) { bestD = d; bestPt = pt; }
+    let bestD = r, bestVtx = null;
+    [...this._lines, ...this._walls].forEach(seg => {
+      [seg.start, seg.end].forEach(v => {
+        const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
+        if (d < bestD) { bestD = d; bestVtx = v; }
       });
     });
-    if (!bestPt) return null;
-    // Collect all endpoints that share the same position
+    if (!bestVtx) return null;
+    // Collect all segment props pointing at this exact vertex object
     const refs = [];
-    this._lines.forEach(seg => {
-      if (Math.abs(seg.start.x - bestPt.x) < 0.001 && Math.abs(seg.start.z - bestPt.z) < 0.001)
-        refs.push({ seg, prop: 'start' });
-      if (Math.abs(seg.end.x - bestPt.x) < 0.001 && Math.abs(seg.end.z - bestPt.z) < 0.001)
-        refs.push({ seg, prop: 'end' });
+    [...this._lines, ...this._walls].forEach(seg => {
+      if (seg.start === bestVtx) refs.push({ seg, prop: 'start' });
+      if (seg.end   === bestVtx) refs.push({ seg, prop: 'end' });
     });
     return refs.length ? refs : null;
   }
@@ -1245,12 +1301,13 @@ class Component extends DCLogic {
     return bestIdx >= 0 ? { idx: bestIdx, t: bestT } : null;
   }
 
-  // Split _lines[idx] at insertPt → two segments.
+  // Split _lines[idx] at insertPt → two segments sharing the mid vertex.
   _splitLine(idx, insertPt) {
     const seg = this._lines[idx];
+    const mid = this._mergeVertex(insertPt);
     this._lines.splice(idx, 1,
-      { start: seg.start.clone(), end: insertPt.clone(),   layerId: seg.layerId },
-      { start: insertPt.clone(), end: seg.end.clone(),     layerId: seg.layerId }
+      { start: seg.start, end: mid,     layerId: seg.layerId },
+      { start: mid,       end: seg.end, layerId: seg.layerId }
     );
   }
 
@@ -1292,6 +1349,73 @@ class Component extends DCLogic {
     } else {
       this._selectedSegs.clear();
       this._selectedSegs.add(hit);
+    }
+  }
+
+  // ─── Trim tool ───────────────────────────────────────────────────────────────
+
+  // 2D segment intersection. Returns { t, u, x, z } where t∈[0,1] is the param
+  // on segment A and u∈[0,1] on segment B, or null if parallel / non-intersecting.
+  _segIntersect(a, b) {
+    const ax = a.start.x, az = a.start.z, bx = a.end.x, bz = a.end.z;
+    const cx = b.start.x, cz = b.start.z, dx = b.end.x, dz = b.end.z;
+    const den = (bx-ax)*(dz-cz) - (bz-az)*(dx-cx);
+    if (Math.abs(den) < 1e-10) return null;
+    const t = ((cx-ax)*(dz-cz) - (cz-az)*(dx-cx)) / den;
+    const u = ((cx-ax)*(bz-az) - (cz-az)*(bx-ax)) / den;
+    if (t < -0.001 || t > 1.001 || u < -0.001 || u > 1.001) return null;
+    const tc = Math.max(0, Math.min(1, t));
+    return { t: tc, u: Math.max(0, Math.min(1, u)), x: ax + tc*(bx-ax), z: az + tc*(bz-az) };
+  }
+
+  // Click a segment in Trim mode → remove the clicked-side portion at the nearest
+  // intersection, creating a shared vertex on both segments at the cut point.
+  _doTrim(clickWorldPt) {
+    const seg = this._findNearestSeg(clickWorldPt);
+    if (!seg) return;
+
+    const others = [...this._lines, ...this._walls].filter(s => s !== seg);
+
+    // Find all intersections of clicked segment with every other segment
+    const hits = [];
+    others.forEach(other => {
+      const ix = this._segIntersect(seg, other);
+      if (ix) hits.push({ ...ix, other });
+    });
+    if (hits.length === 0) return;
+
+    // t-parameter of the click on the clicked segment
+    const ax = seg.start.x, az = seg.start.z, bx = seg.end.x, bz = seg.end.z;
+    const ddx = bx-ax, ddz = bz-az, len2 = ddx*ddx+ddz*ddz;
+    const tClick = len2 > 0 ? Math.max(0, Math.min(1, ((clickWorldPt.x-ax)*ddx + (clickWorldPt.z-az)*ddz) / len2)) : 0;
+
+    // Nearest intersection to the click location along the segment
+    hits.sort((a, b) => Math.abs(a.t - tClick) - Math.abs(b.t - tClick));
+    const nearest = hits[0];
+
+    // Create (or reuse) the intersection vertex in the pool
+    const ixVtx = this._mergeVertex(new THREE.Vector3(nearest.x, seg.start.y, nearest.z));
+
+    // Remove clicked side: update the endpoint of the clicked segment
+    if (tClick <= nearest.t) seg.start = ixVtx; // click was on the start side
+    else                      seg.end   = ixVtx; // click was on the end side
+
+    // Insert the intersection vertex on the cutting segment (split if interior)
+    const other = nearest.other;
+    if (nearest.u > 0.005 && nearest.u < 0.995) {
+      const isLine = this._lines.includes(other);
+      const isWall = this._walls.includes(other);
+      const arr    = isLine ? this._lines : isWall ? this._walls : null;
+      if (arr) {
+        const idx = arr.indexOf(other);
+        const half1 = { ...other, start: other.start, end: ixVtx };
+        const half2 = { ...other, start: ixVtx,       end: other.end };
+        arr.splice(idx, 1, half1, half2);
+      }
+    } else {
+      // Intersection is at an endpoint of the cutting segment — just merge
+      if (nearest.u <= 0.005) other.start = ixVtx;
+      else                    other.end   = ixVtx;
     }
   }
 
@@ -1416,8 +1540,7 @@ class Component extends DCLogic {
   _commitLine(start, end) {
     const layer = this._activeLayer();
     const layerId = layer ? layer.id : -1;
-    // Data only — overlay canvas handles 2D rendering
-    this._lines.push({ start: start.clone(), end: end.clone(), layerId });
+    this._lines.push({ start: this._mergeVertex(start), end: this._mergeVertex(end), layerId });
   }
 
   _onDblClick(e) {
@@ -1673,6 +1796,7 @@ class Component extends DCLogic {
     if (e.key === 'w' || e.key === 'W') { this._cancelLine(); this.setState({ activeTool: 'wall' }); }
     if (e.key === 'l' || e.key === 'L') { this._cancelWall(); this.setState({ activeTool: 'line' }); }
     if (e.key === 's' || e.key === 'S') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'select' }); }
+    if (e.key === 't' || e.key === 'T') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'trim' }); }
     if (e.key === 'c' || e.key === 'C') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'cut' }); }
     if (e.key === '1') this._setView('perspective');
     if (e.key === '2') this._setView('top');
@@ -1773,6 +1897,7 @@ class Component extends DCLogic {
         { label:'Select  [S]', onSelect:()=>{ this._cancelWall(); this._cancelLine(); this.setState({activeTool:'select'}); }, ...(activeTool==='select'?on:off) },
         { label:'Line  [L]',   onSelect:()=>{ this._cancelWall(); this.setState({activeTool:'line'}); },                       ...(activeTool==='line'  ?on:off) },
         { label:'Wall  [W]',   onSelect:()=>{ this._cancelLine(); this.setState({activeTool:'wall'}); },                       ...(activeTool==='wall'  ?on:off) },
+        { label:'Trim  [T]',   onSelect:()=>{ this._cancelWall(); this._cancelLine(); this.setState({activeTool:'trim'}); },   ...(activeTool==='trim'  ?on:off) },
         { label:'Cut  [C]',    onSelect:()=>{ this._cancelWall(); this._cancelLine(); this.setState({activeTool:'cut'}); },    ...(activeTool==='cut'   ?on:off) },
       ],
       views: [
