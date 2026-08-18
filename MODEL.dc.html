@@ -758,8 +758,8 @@ class Component extends DCLogic {
       if (tool !== 'cut' || this.state.cutPhase === 'idle') if (lenEl) lenEl.textContent = '';
     }
 
-    if (el('[data-model-sx]')) el('[data-model-sx]').textContent = 'X: ' + (imp ? this._ftIn(pt.x) : this._metric(pt.x));
-    if (el('[data-model-sy]')) el('[data-model-sy]').textContent = 'Y: ' + (imp ? this._ftIn(pt.z) : this._metric(pt.z));
+    if (el('[data-model-sx]')) el('[data-model-sx]').textContent = 'X: ' + (imp ? this._ftIn(finalPt.x) : this._metric(finalPt.x));
+    if (el('[data-model-sy]')) el('[data-model-sy]').textContent = 'Y: ' + (imp ? this._ftIn(finalPt.z) : this._metric(finalPt.z));
   }
 
   _onMouseLeave() {
