@@ -211,7 +211,9 @@ class Component extends DCLogic {
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
   componentDidMount() {
     requestAnimationFrame(() => requestAnimationFrame(() => this._init()));
-    window.addEventListener('keydown', this._onKey = e => this._handleKey(e));
+    window.addEventListener('keydown', this._onKey  = e => this._handleKey(e));
+    window.addEventListener('keydown', this._onKdn  = e => { if (e.key === 'Shift') this._shiftHeld = true; });
+    window.addEventListener('keyup',   this._onKup  = e => { if (e.key === 'Shift') this._shiftHeld = false; });
   }
   componentWillUnmount() {
     cancelAnimationFrame(this._raf);
@@ -228,6 +230,8 @@ class Component extends DCLogic {
     window.removeEventListener('mousemove', this._wmmv);
     window.removeEventListener('mouseup',   this._wmup);
     window.removeEventListener('keydown',   this._onKey);
+    window.removeEventListener('keydown',   this._onKdn);
+    window.removeEventListener('keyup',     this._onKup);
   }
 
   // ─── Init ────────────────────────────────────────────────────────────────────
@@ -300,6 +304,13 @@ class Component extends DCLogic {
     this._previewLine.visible = false;
     this._scene.add(this._previewLine);
 
+    // Preview line (line tool)
+    this._linePreviewPts = [new THREE.Vector3(), new THREE.Vector3()];
+    this._linePreviewGeo = new THREE.BufferGeometry().setFromPoints(this._linePreviewPts);
+    this._linePreviewObj = new THREE.Line(this._linePreviewGeo, new THREE.LineBasicMaterial({ color: 0x5980a6, depthTest: false }));
+    this._linePreviewObj.visible = false;
+    this._scene.add(this._linePreviewObj);
+
     // Cut preview line
     this._cutPreviewPts = [new THREE.Vector3(), new THREE.Vector3()];
     this._cutPreviewGeo = new THREE.BufferGeometry().setFromPoints(this._cutPreviewPts);
@@ -308,12 +319,16 @@ class Component extends DCLogic {
     this._scene.add(this._cutPreviewLine);
 
     // Storage
-    this._walls     = [];
+    this._walls      = [];
+    this._lines      = []; // line tool segments
     this._cutObjects = {}; // cutId → { line, arrow }
 
     // Drawing state
     this._isDrawing  = false;
     this._drawStart  = null;
+    this._lineDrawing = false;
+    this._lineStart   = null;
+    this._shiftHeld   = false;
     this._cutStart3  = null; // THREE.Vector3
     this._cutEnd3    = null;
     this._cutArrowL  = null;
@@ -529,9 +544,19 @@ class Component extends DCLogic {
 
     // Wall preview
     if (tool === 'wall' && this._isDrawing && this._drawStart) {
+      const ept = this._shiftHeld ? this._applyOrtho(this._drawStart, pt) : pt;
       const s = this._drawStart, p = this._previewGeo.attributes.position;
-      p.setXYZ(0, s.x, s.y + 0.02, s.z); p.setXYZ(1, pt.x, pt.y + 0.02, pt.z); p.needsUpdate = true;
-      const len = Math.sqrt((pt.x-s.x)**2+(pt.z-s.z)**2);
+      p.setXYZ(0, s.x, s.y + 0.02, s.z); p.setXYZ(1, ept.x, ept.y + 0.02, ept.z); p.needsUpdate = true;
+      const len = Math.sqrt((ept.x-s.x)**2+(ept.z-s.z)**2);
+      if (el('[data-model-len]')) el('[data-model-len]').textContent = '↔ ' + (imp ? this._ftIn(len) : this._metric(len));
+    }
+
+    // Line tool preview
+    if (tool === 'line' && this._lineDrawing && this._lineStart) {
+      const ept = this._shiftHeld ? this._applyOrtho(this._lineStart, pt) : pt;
+      const s = this._lineStart, p = this._linePreviewGeo.attributes.position;
+      p.setXYZ(0, s.x, s.y + 0.02, s.z); p.setXYZ(1, ept.x, ept.y + 0.02, ept.z); p.needsUpdate = true;
+      const len = Math.sqrt((ept.x-s.x)**2+(ept.z-s.z)**2);
       if (el('[data-model-len]')) el('[data-model-len]').textContent = '↔ ' + (imp ? this._ftIn(len) : this._metric(len));
     }
 
@@ -574,6 +599,7 @@ class Component extends DCLogic {
     const tool = this.state.activeTool;
     if (e.button === 0 && !e.altKey) {
       if (tool === 'wall') this._handleWallClick();
+      else if (tool === 'line') this._handleLineClick();
       else if (tool === 'cut') this._handleCutClick();
     } else if (e.button === 1 || (e.button === 0 && e.altKey)) {
       if (this.state.activeView !== 'perspective') {
@@ -585,6 +611,7 @@ class Component extends DCLogic {
 
   _onRightClick() {
     this._cancelWall();
+    this._cancelLine();
     this._cancelCut();
   }
 
@@ -670,6 +697,51 @@ class Component extends DCLogic {
     const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x1d1f20 }));
     this._scene.add(line);
     this._walls.push({ start: start.clone(), end: end.clone(), line, layerId });
+  }
+
+  // ─── Line drawing ────────────────────────────────────────────────────────────
+  _applyOrtho(start, pt) {
+    const dx = Math.abs(pt.x - start.x), dz = Math.abs(pt.z - start.z);
+    return dx > dz
+      ? new THREE.Vector3(pt.x,   pt.y, start.z)  // horizontal
+      : new THREE.Vector3(start.x, pt.y, pt.z);   // vertical
+  }
+
+  _handleLineClick() {
+    const raw = this._snapPt; if (!raw) return;
+    const pt = this._shiftHeld && this._lineStart ? this._applyOrtho(this._lineStart, raw) : raw;
+    if (!this._lineDrawing) {
+      this._lineDrawing = true;
+      this._lineStart = pt.clone();
+      this._linePreviewObj.visible = true;
+      this.setState({ isDrawing: true });
+    } else {
+      const dx = pt.x - this._lineStart.x, dz = pt.z - this._lineStart.z;
+      if (Math.sqrt(dx*dx + dz*dz) < 0.001) return;
+      this._commitLine(this._lineStart, pt);
+      this._lineStart = pt.clone(); // chain: next segment starts here
+    }
+  }
+
+  _cancelLine() {
+    if (!this._lineDrawing) return;
+    this._lineDrawing = false;
+    this._lineStart = null;
+    this._linePreviewObj.visible = false;
+    this.setState({ isDrawing: false });
+  }
+
+  _commitLine(start, end) {
+    const layer = this._activeLayer();
+    const layerId = layer ? layer.id : -1;
+    const y = (this._drawElev || 0) + 0.01;
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(start.x, y, start.z),
+      new THREE.Vector3(end.x,   y, end.z),
+    ]);
+    const obj = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x1d1f20 }));
+    this._scene.add(obj);
+    this._lines.push({ start: start.clone(), end: end.clone(), obj, layerId });
   }
 
   // ─── Cut drawing ──────────────────────────────────────────────────────────────
@@ -795,10 +867,11 @@ class Component extends DCLogic {
   _handleKey(e) {
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-    if (e.key === 'Escape') { this._cancelWall(); this._cancelCut(); }
-    if (e.key === 'w' || e.key === 'W') this.setState({ activeTool: 'wall' });
-    if (e.key === 's' || e.key === 'S') this.setState({ activeTool: 'select' });
-    if (e.key === 'c' || e.key === 'C') this.setState({ activeTool: 'cut' });
+    if (e.key === 'Escape') { this._cancelWall(); this._cancelLine(); this._cancelCut(); }
+    if (e.key === 'w' || e.key === 'W') { this._cancelLine(); this.setState({ activeTool: 'wall' }); }
+    if (e.key === 'l' || e.key === 'L') { this._cancelWall(); this.setState({ activeTool: 'line' }); }
+    if (e.key === 's' || e.key === 'S') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'select' }); }
+    if (e.key === 'c' || e.key === 'C') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'cut' }); }
     if (e.key === '1') this._setView('perspective');
     if (e.key === '2') this._setView('top');
     if (e.key === '3') this._setView('front');
@@ -872,9 +945,10 @@ class Component extends DCLogic {
       })),
 
       tools: [
-        { label:'Select  [S]', onSelect:()=>this.setState({activeTool:'select'}), ...(activeTool==='select'?on:off) },
-        { label:'Wall  [W]',   onSelect:()=>this.setState({activeTool:'wall'}),   ...(activeTool==='wall'  ?on:off) },
-        { label:'Cut  [C]',    onSelect:()=>{ this._cancelWall(); this.setState({activeTool:'cut'}); }, ...(activeTool==='cut'?on:off) },
+        { label:'Select  [S]', onSelect:()=>{ this._cancelWall(); this._cancelLine(); this.setState({activeTool:'select'}); }, ...(activeTool==='select'?on:off) },
+        { label:'Line  [L]',   onSelect:()=>{ this._cancelWall(); this.setState({activeTool:'line'}); },                       ...(activeTool==='line'  ?on:off) },
+        { label:'Wall  [W]',   onSelect:()=>{ this._cancelLine(); this.setState({activeTool:'wall'}); },                       ...(activeTool==='wall'  ?on:off) },
+        { label:'Cut  [C]',    onSelect:()=>{ this._cancelWall(); this._cancelLine(); this.setState({activeTool:'cut'}); },    ...(activeTool==='cut'   ?on:off) },
       ],
       views: [
         { label:'Top / Plan  [2]', onSelect:()=>this._setView('top'),   bg: activeView==='top'  ?hi:lo },
