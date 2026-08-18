@@ -164,14 +164,14 @@ const SNAP_METRIC = [
 ];
 const LAYER_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a','#9a5a5a','#8a9a6a'];
 const DEFAULT_LAYERS = [
-  { id:1, name:'FOUNDATION',   elev:-10, visible:true },
-  { id:2, name:'BASEMENT',     elev: -9, visible:true },
-  { id:3, name:'MAIN FL',      elev:  0, visible:true },
-  { id:4, name:'MAIN FL PLAN', elev:  0, visible:true },
-  { id:5, name:'2ND FL',       elev:  9, visible:true },
-  { id:6, name:'2ND FL PLAN',  elev:  9, visible:true },
-  { id:7, name:'ROOF PLAN',    elev: 18, visible:true },
   { id:8, name:'SITE PLAN',    elev:  0, visible:true },
+  { id:7, name:'ROOF PLAN',    elev: 18, visible:true },
+  { id:6, name:'2ND FL PLAN',  elev:  9, visible:true },
+  { id:5, name:'2ND FL',       elev:  9, visible:true },
+  { id:4, name:'MAIN FL PLAN', elev:  0, visible:true },
+  { id:3, name:'MAIN FL',      elev:  0, visible:true },
+  { id:2, name:'BASEMENT',     elev: -9, visible:true },
+  { id:1, name:'FOUNDATION',   elev:-10, visible:true },
 ];
 
 class Component extends DCLogic {
@@ -182,7 +182,7 @@ class Component extends DCLogic {
     activeSnap:    0,
     isDrawing:     false,
     layers:        DEFAULT_LAYERS.map(l => ({ ...l })),
-    activeLayerIdx: 2,
+    activeLayerIdx: 5,
     nextLayerId:   9,
     cuts:          [],
     nextCutId:     1,
@@ -224,7 +224,7 @@ class Component extends DCLogic {
     this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this._renderer.setSize(w, h);
-    this._renderer.setClearColor(0xf0f0ee);
+    this._renderer.setClearColor(0xfafafa);
 
     this._scene = new THREE.Scene();
 
@@ -247,11 +247,11 @@ class Component extends DCLogic {
     this._scene.add(sun);
 
     // Grids
-    this._gridFine  = new THREE.GridHelper(400, 400, 0xbbbbbb, 0xbbbbbb);
-    this._gridFine.material.opacity = 0.4; this._gridFine.material.transparent = true;
+    this._gridFine  = new THREE.GridHelper(400, 400, 0xd8d8d8, 0xd8d8d8);
+    this._gridFine.material.opacity = 0.6; this._gridFine.material.transparent = true;
     this._scene.add(this._gridFine);
-    this._gridMajor = new THREE.GridHelper(400, 40, 0x999999, 0x999999);
-    this._gridMajor.material.opacity = 0.6; this._gridMajor.material.transparent = true;
+    this._gridMajor = new THREE.GridHelper(400, 40, 0xaaaaaa, 0xaaaaaa);
+    this._gridMajor.material.opacity = 0.7; this._gridMajor.material.transparent = true;
     this._scene.add(this._gridMajor);
     this._scene.add(new THREE.AxesHelper(2));
 
@@ -630,8 +630,7 @@ class Component extends DCLogic {
       new THREE.Vector3(start.x, y, start.z),
       new THREE.Vector3(end.x,   y, end.z),
     ]);
-    const col = new THREE.Color(LAYER_COLORS[this.state.activeLayerIdx % LAYER_COLORS.length]);
-    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: col }));
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x1d1f20 }));
     this._scene.add(line);
     this._walls.push({ start: start.clone(), end: end.clone(), line, layerId });
   }
