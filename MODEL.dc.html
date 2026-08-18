@@ -119,6 +119,26 @@
       </sc-for>
     </div>
 
+    <!-- WALL PROPERTIES (shown when Wall tool is active) -->
+    <sc-if value="{{ wallToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Wall Type</div>
+        <sc-for list="{{ wallTypes }}" as="wt" hint-placeholder-count="5">
+          <button onClick="{{ wt.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid {{ wt.border }}; background:{{ wt.bg }}; color:{{ wt.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:500; font-size:11px; letter-spacing:0.03em; padding:5px 10px; cursor:pointer; margin-bottom:2px;">{{ wt.label }}</button>
+        </sc-for>
+        <div style="margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+          <div>
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Base Ht (ft)</div>
+            <input type="number" step="0.5" value="{{ wallBaseHeight }}" onChange="{{ onWallBaseH }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(29,31,32,0.2); padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+          </div>
+          <div>
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Top Ht (ft)</div>
+            <input type="number" step="0.5" value="{{ wallTopHeight }}" onChange="{{ onWallTopH }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(29,31,32,0.2); padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
     <!-- VIEW (2D only) -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
@@ -201,6 +221,16 @@ const SNAP_METRIC = [
   { label: '100 mm',snapFt: 0.100/0.3048 },
 ];
 const LAYER_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a','#9a5a5a','#8a9a6a'];
+
+// Wall type definitions — totalIn is full assembly width in inches, centreline-based
+// layers listed left→right (outside→inside); fill: 'stud'|'concrete'|'insulation'
+const WALL_TYPES = [
+  { id:'stud_2x4',    label:'2×4 Stud  (3½")',   totalIn:3.5,   layers:[{in:3.5,   fill:'stud'}] },
+  { id:'stud_2x6',    label:'2×6 Stud  (5½")',   totalIn:5.5,   layers:[{in:5.5,   fill:'stud'}] },
+  { id:'concrete_8',  label:'8" Concrete',         totalIn:8,     layers:[{in:8,     fill:'concrete'}] },
+  { id:'concrete_12', label:'12" Concrete',        totalIn:12,    layers:[{in:12,    fill:'concrete'}] },
+  { id:'icf',         label:'ICF  (11¼")',         totalIn:11.25, layers:[{in:2.625,fill:'insulation'},{in:6,fill:'concrete'},{in:2.625,fill:'insulation'}] },
+];
 const DEFAULT_LAYERS = [
   { id:8, name:'SITE PLAN',    elev:  0, visible:true },
   { id:7, name:'ROOF PLAN',    elev: 18, visible:true },
@@ -219,6 +249,9 @@ class Component extends DCLogic {
     activeView:    'top',      // 'top'|'front'|'side'|'perspective'|'cut'
     activeSnap:    0,
     isDrawing:     false,
+    activeWallType: 'stud_2x6',
+    wallBaseHeight: 0,
+    wallTopHeight:  9,
     layers:        DEFAULT_LAYERS.map(l => ({ ...l })),
     activeLayerIdx: 5,
     nextLayerId:   9,
@@ -334,6 +367,12 @@ class Component extends DCLogic {
     this._chainStart   = null; // first point of current chain
     this._cutObjects = {}; // cutId → { line, arrow }
 
+    // Wall drawing state (pending-chain model, mirrors line tool)
+    this._wallDrawing    = false;
+    this._wallChain      = [];   // [{start, end}] not yet committed
+    this._wallChainStart = null; // first placed point (for close detection)
+    this._wallStart      = null; // last placed point (current seg origin)
+
     // Select-tool state
     this._selectDrag = null; // { refs, startX, startY, active }  — node drag
 
@@ -440,6 +479,21 @@ class Component extends DCLogic {
       const s = toS(pt);
       ctx.beginPath(); ctx.arc(s.x, s.y, DOT_R, 0, Math.PI * 2); ctx.fill();
     };
+
+    // ── Walls (fills drawn beneath lines) ────────────────────────────────────
+    const pwType = this.state.activeWallType;
+    this._walls.forEach(w => this._drawWallSeg2D(ctx, toS, w, false));
+    this._wallChain.forEach(s => this._drawWallSeg2D(ctx, toS, { ...s, wallType: pwType }, false));
+    if (this._wallDrawing && this._wallStart && this._snapPt) {
+      this._drawWallSeg2D(ctx, toS, { start: this._wallStart, end: this._snapPt, wallType: pwType }, true);
+    }
+    if (this._wallChainStart && this._wallDrawing && this._wallChain.length >= 1) {
+      const sc = toS(this._wallChainStart);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
+      ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+    }
 
     ctx.strokeStyle = LINE_COLOR; ctx.lineWidth = 2; ctx.fillStyle = LINE_COLOR;
 
@@ -669,7 +723,7 @@ class Component extends DCLogic {
 
     const gridPt = this._snap(raw);
     const tool   = this.state.activeTool;
-    const start  = tool === 'line' ? this._lineStart : tool === 'wall' ? this._drawStart : null;
+    const start  = tool === 'line' ? this._lineStart : tool === 'wall' ? this._wallStart : null;
 
     // 45° angle lock — must establish lockAngle before tracking/magnet
     if (this._shiftHeld && start) {
@@ -734,11 +788,9 @@ class Component extends DCLogic {
       if (el('[data-model-ang]')) el('[data-model-ang]').textContent = ang != null ? '∠ ' + ang + '°' : '';
     };
 
-    // Wall preview
-    if (tool === 'wall' && this._isDrawing && this._drawStart) {
-      const s = this._drawStart, p = this._previewGeo.attributes.position;
-      p.setXYZ(0, s.x, s.y+0.02, s.z); p.setXYZ(1, finalPt.x, finalPt.y+0.02, finalPt.z); p.needsUpdate = true;
-      _setLen(s, finalPt);
+    // Wall preview — cross-section drawn on 2D overlay; just update status bar here
+    if (tool === 'wall' && this._wallDrawing && this._wallStart) {
+      _setLen(this._wallStart, finalPt);
     }
 
     // Line tool preview
@@ -766,7 +818,7 @@ class Component extends DCLogic {
       if (this._cutArrowR) this._cutArrowR.setColor(new THREE.Color(side > 0 ? 0xff3366 : 0x994466));
     }
 
-    if (tool !== 'wall' || !this._isDrawing) {
+    if (tool !== 'wall' || !this._wallDrawing) {
       const lenEl = el('[data-model-len]');
       if (tool !== 'cut' || this.state.cutPhase === 'idle') if (lenEl) lenEl.textContent = '';
     }
@@ -873,36 +925,176 @@ class Component extends DCLogic {
   // ─── Wall drawing ─────────────────────────────────────────────────────────────
   _handleWallClick() {
     const pt = this._snapPt; if (!pt) return;
-    if (!this._isDrawing) {
-      this._isDrawing = true; this._drawStart = pt.clone();
-      this._previewLine.visible = true;
+    const now = Date.now();
+    const isDbl = (now - this._lastClickTime) < 350;
+    this._lastClickTime = now;
+
+    if (!this._wallDrawing) {
+      if (isDbl) return;
+      this._wallDrawing    = true;
+      this._wallChainStart = pt.clone();
+      this._wallStart      = pt.clone();
+      this._wallChain      = [];
+      this._lockAngle      = null;
       this.setState({ isDrawing: true });
     } else {
-      const dx = pt.x - this._drawStart.x, dz = pt.z - this._drawStart.z;
+      if (isDbl) { this._finishWall(); return; }
+      const dx = pt.x - this._wallStart.x, dz = pt.z - this._wallStart.z;
       if (Math.sqrt(dx*dx + dz*dz) < 0.001) return;
-      this._commitWall(this._drawStart, pt);
-      this._drawStart = pt.clone();
+      // Close detection: snap near chain start (≥2 segments)
+      const cs = this._wallChainStart;
+      const cdx = pt.x - cs.x, cdz = pt.z - cs.z;
+      if (this._wallChain.length >= 2 && Math.sqrt(cdx*cdx + cdz*cdz) < this._magnetRadius() * 2) {
+        this._wallChain.push({ start: this._wallStart.clone(), end: cs.clone() });
+        this._finishWall();
+        return;
+      }
+      this._wallChain.push({ start: this._wallStart.clone(), end: pt.clone() });
+      this._wallStart = pt.clone();
+      this._lockAngle = null;
     }
   }
 
-  _cancelWall() {
-    if (!this._isDrawing) return;
-    this._isDrawing = false; this._drawStart = null;
-    this._previewLine.visible = false;
+  _finishWall() {
+    if (!this._wallDrawing) return;
+    const wType = this.state.activeWallType;
+    const baseH = this.state.wallBaseHeight;
+    const topH  = this.state.wallTopHeight;
+    this._wallChain.forEach(seg => this._commitWall(seg.start, seg.end, wType, baseH, topH));
+    this._wallChain      = [];
+    this._wallDrawing    = false;
+    this._wallChainStart = null;
+    this._wallStart      = null;
+    this._lockAngle      = null;
     this.setState({ isDrawing: false });
   }
 
-  _commitWall(start, end) {
+  _cancelWall() {
+    if (!this._wallDrawing) return;
+    this._wallChain      = [];
+    this._wallDrawing    = false;
+    this._wallChainStart = null;
+    this._wallStart      = null;
+    this._lockAngle      = null;
+    if (this._previewLine) this._previewLine.visible = false;
+    this.setState({ isDrawing: false });
+  }
+
+  _commitWall(start, end, wallType, baseHeight, topHeight) {
     const layer = this._activeLayer();
     const layerId = layer ? layer.id : -1;
-    const y = (this._drawElev || 0) + 0.01;
-    const geo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(start.x, y, start.z),
-      new THREE.Vector3(end.x,   y, end.z),
-    ]);
-    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x1d1f20 }));
-    this._scene.add(line);
-    this._walls.push({ start: start.clone(), end: end.clone(), line, layerId });
+    this._walls.push({
+      start:      start.clone(),
+      end:        end.clone(),
+      layerId,
+      wallType:   wallType   || this.state.activeWallType,
+      baseHeight: baseHeight != null ? baseHeight : this.state.wallBaseHeight,
+      topHeight:  topHeight  != null ? topHeight  : this.state.wallTopHeight,
+    });
+  }
+
+  // ─── Wall 2D cross-section renderer ─────────────────────────────────────────
+  // Draws one wall segment on the overlay canvas.
+  // toS(pt) converts world {x,z} → screen {x,y}.  preview=true → ghost opacity.
+  _drawWallSeg2D(ctx, toS, seg, preview) {
+    const wtDef = WALL_TYPES.find(w => w.id === (seg.wallType || 'stud_2x6')) || WALL_TYPES[1];
+    const totalFt = wtDef.totalIn / 12;
+    const half = totalFt / 2;
+
+    const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
+    const len = Math.sqrt(dx*dx + dz*dz);
+    if (len < 0.001) return;
+
+    const nx = -dz / len, nz = dx / len; // perp normal
+    const wp = (pt, across) => ({ x: pt.x + nx*across, z: pt.z + nz*across });
+
+    const alpha = preview ? 0.45 : 1;
+
+    // Draw each layer fill
+    let offset = -half;
+    wtDef.layers.forEach(layer => {
+      const layerFt = layer.in / 12;
+      const nextOff = offset + layerFt;
+
+      const p0 = toS(wp(seg.start, offset)), p1 = toS(wp(seg.end,   offset));
+      const p2 = toS(wp(seg.end,   nextOff)),p3 = toS(wp(seg.start, nextOff));
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y);
+      ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y);
+      ctx.closePath();
+
+      if (layer.fill === 'stud') {
+        ctx.fillStyle = preview ? 'rgba(255,255,255,0.8)' : '#ffffff';
+        ctx.fill();
+      } else if (layer.fill === 'concrete') {
+        ctx.fillStyle = `rgba(182,182,182,${alpha})`;
+        ctx.fill();
+        ctx.clip();
+        ctx.strokeStyle = `rgba(90,90,90,${alpha * 0.45})`;
+        ctx.lineWidth = 0.7;
+        const xs = [p0.x,p1.x,p2.x,p3.x], ys = [p0.y,p1.y,p2.y,p3.y];
+        const x0 = Math.min(...xs)-6, x1 = Math.max(...xs)+6;
+        const y0 = Math.min(...ys)-6, y1 = Math.max(...ys)+6;
+        const span = Math.max(x1-x0, y1-y0)+12;
+        const step = 5;
+        ctx.beginPath();
+        for (let i = -span; i < span*2; i += step) {
+          ctx.moveTo(x0+i, y0); ctx.lineTo(x0+i-(y1-y0), y1); // NE
+          ctx.moveTo(x0+i, y1); ctx.lineTo(x0+i+(y1-y0), y0); // NW
+        }
+        ctx.stroke();
+      } else if (layer.fill === 'insulation') {
+        ctx.fillStyle = `rgba(205,228,248,${alpha})`;
+        ctx.fill();
+        ctx.clip();
+        ctx.strokeStyle = `rgba(70,130,200,${alpha * 0.4})`;
+        ctx.lineWidth = 0.7;
+        const xs = [p0.x,p1.x,p2.x,p3.x], ys = [p0.y,p1.y,p2.y,p3.y];
+        const x0 = Math.min(...xs)-6, y0 = Math.min(...ys)-6, y1 = Math.max(...ys)+6;
+        const span = Math.max(Math.max(...xs)-x0, y1-y0)+12;
+        const step = 5;
+        ctx.beginPath();
+        for (let i = -span; i < span*2; i += step) {
+          ctx.moveTo(x0+i, y0); ctx.lineTo(x0+i-(y1-y0), y1);
+        }
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      offset = nextOff;
+    });
+
+    // Boundary lines (all layer edges + end caps)
+    ctx.strokeStyle = preview ? 'rgba(29,31,32,0.45)' : '#1d1f20';
+    ctx.lineWidth   = preview ? 1 : 1.5;
+    let bOff = -half;
+    wtDef.layers.forEach((layer, i) => {
+      const bNext = bOff + layer.in / 12;
+      if (i === 0) {
+        const a = toS(wp(seg.start, bOff)), b = toS(wp(seg.end, bOff));
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      }
+      const a = toS(wp(seg.start, bNext)), b = toS(wp(seg.end, bNext));
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      bOff = bNext;
+    });
+    // End caps
+    [seg.start, seg.end].forEach(pt => {
+      const a = toS(wp(pt, -half)), b = toS(wp(pt, half));
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    });
+
+    // Centreline endpoint dots
+    if (!preview) {
+      ctx.fillStyle = '#1d1f20';
+      const DOT_R = 5;
+      [seg.start, seg.end].forEach(pt => {
+        const s = toS(pt);
+        ctx.beginPath(); ctx.arc(s.x,s.y,DOT_R,0,Math.PI*2); ctx.fill();
+      });
+    }
   }
 
   // ─── Snap helpers ────────────────────────────────────────────────────────────
@@ -911,6 +1103,7 @@ class Component extends DCLogic {
     this._lines.forEach(l => { pts.push(l.start, l.end); });
     this._pendingChain.forEach(s => { pts.push(s.start, s.end); });
     this._walls.forEach(w => { pts.push(w.start, w.end); });
+    this._wallChain.forEach(s => { pts.push(s.start, s.end); });
     return pts;
   }
 
@@ -1131,8 +1324,8 @@ class Component extends DCLogic {
 
   _freezeLength() {
     const tool = this.state.activeTool;
-    const start = tool === 'line' ? this._lineStart : tool === 'wall' ? this._drawStart : null;
-    const drawing = tool === 'line' ? this._lineDrawing : this._isDrawing;
+    const start = tool === 'line' ? this._lineStart : tool === 'wall' ? this._wallStart : null;
+    const drawing = tool === 'line' ? this._lineDrawing : this._wallDrawing;
     if (!start || !drawing) return;
     const pt = this._snapPt;
     if (this._lockAngle != null) {
@@ -1204,10 +1397,10 @@ class Component extends DCLogic {
       this._lineStart   = end.clone();
       this._lineDrawing = true;
     } else {
-      this._commitWall(this._frozenStart, end);
-      this._drawStart = end.clone();
-      this._isDrawing = true;
-      if (this._previewLine) this._previewLine.visible = true;
+      this._wallChain.push({ start: this._frozenStart.clone(), end: end.clone() });
+      this._wallStart   = end.clone();
+      this._wallDrawing = true;
+      if (this._previewLine) this._previewLine.visible = false;
     }
     this._lockAngle = null;
     this.setState({ lengthFrozen: false, frozenFt: '', frozenIn: '', isDrawing: true });
@@ -1347,10 +1540,11 @@ class Component extends DCLogic {
     }
     if (e.key === 'Enter' || e.key === ' ') {
       if (this._lineDrawing) { e.preventDefault(); this._finishChain(); return; }
+      if (this._wallDrawing) { e.preventDefault(); this._finishWall();  return; }
     }
     if (e.key === 'r' || e.key === 'R') {
       const tool = this.state.activeTool;
-      const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._isDrawing);
+      const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._wallDrawing);
       if (drawing && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
       return;
     }
@@ -1398,7 +1592,7 @@ class Component extends DCLogic {
     const hintText    = choosingDir
       ? 'Click to choose view direction · ESC to cancel'
       : (drawingWall
-        ? 'DRAWING — Right-click or ESC to finish'
+        ? 'Click to place corners · Space or ↵ to commit · ESC to cancel'
         : 'CUT — Click end point · Right-click to cancel');
     const hintColor   = choosingDir ? '#b04060' : '#5980a6';
 
@@ -1411,6 +1605,18 @@ class Component extends DCLogic {
       showHint, hintText, hintColor,
       choosingDir,
       noCuts: cuts.length === 0,
+      wallToolActive: activeTool === 'wall',
+      wallTypes: WALL_TYPES.map(wt => ({
+        label: wt.label,
+        bg:     wt.id === this.state.activeWallType ? '#1d1f20' : '#fff',
+        color:  wt.id === this.state.activeWallType ? '#f2f2f3' : '#1d1f20',
+        border: wt.id === this.state.activeWallType ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        onSelect: () => this.setState({ activeWallType: wt.id }),
+      })),
+      wallBaseHeight: this.state.wallBaseHeight,
+      wallTopHeight:  this.state.wallTopHeight,
+      onWallBaseH: e => this.setState({ wallBaseHeight: parseFloat(e.target.value) || 0 }),
+      onWallTopH:  e => this.setState({ wallTopHeight:  parseFloat(e.target.value) || 0 }),
 
       layers: layers.map((l, i) => ({
         name: l.name, elevStr: this._elevLabel(l.elev),
