@@ -193,8 +193,10 @@
       <div style="position:absolute; left:50%; bottom:0; height:calc(50% - 7px); width:1px; background:#1d1f20; transform:translateX(-50%);"></div>
       <div style="position:absolute; left:50%; top:50%; width:10px; height:10px; border-radius:50%; background:transparent; border:1px solid #1d1f20; transform:translate(-50%,-50%);"></div>
     </div>
-    <!-- Vertex magnet indicator -->
+    <!-- Vertex magnet indicator (blue circle) -->
     <div style="position:absolute; left:{{ magnetX }}px; top:{{ magnetY }}px; width:18px; height:18px; border-radius:50%; border:2px solid #5980a6; transform:translate(-50%,-50%); pointer-events:none; display:{{ magnetDisplay }};"></div>
+    <!-- Midpoint snap indicator (amber diamond) -->
+    <div style="position:absolute; left:{{ midSnapX }}px; top:{{ midSnapY }}px; width:13px; height:13px; border:2px solid #e8a020; background:rgba(232,160,32,0.12); transform:translate(-50%,-50%) rotate(45deg); pointer-events:none; display:{{ midSnapDisplay }};"></div>
 
     <!-- Direction-choice overlay (shown while choosing cut direction) -->
     <sc-if value="{{ choosingDir }}" hint-placeholder-val="{{ false }}">
@@ -269,6 +271,7 @@ class Component extends DCLogic {
     nextLayerId:   9,
     cursorX: -100, cursorY: -100, showCursor: false,
     magnetX: -100, magnetY: -100, showMagnet: false,
+    midSnapX: -100, midSnapY: -100, showMidSnap: false,
     lengthFrozen: false, frozenFt: '', frozenIn: '',
     cuts:          [],
     nextCutId:     1,
@@ -732,7 +735,7 @@ class Component extends DCLogic {
   _onMouseMove(e) {
     if (this.state.lengthFrozen) return;
     const raw = this._getWorldPos(e.clientX, e.clientY);
-    if (!raw) { this.setState({ showCursor: false, showMagnet: false }); return; }
+    if (!raw) { this.setState({ showCursor: false, showMagnet: false, showMidSnap: false }); return; }
 
     const gridPt = this._snap(raw);
     const tool   = this.state.activeTool;
@@ -758,6 +761,8 @@ class Component extends DCLogic {
 
     // Magnet snap (checked even when shift-locked; magnet overrides angle lock)
     const magnet = !trackingHit ? this._findMagnet(gridPt) : null;
+    // Midpoint snap — only when no vertex magnet and not tracking
+    const midSnap = (!trackingHit && !magnet) ? this._findMidpointSnap(gridPt) : null;
 
     // Final snap point and cursor position
     let finalPt, cursorPt;
@@ -769,6 +774,10 @@ class Component extends DCLogic {
       // Magnet to existing node — overrides angle lock; cursor and endpoint both snap to node
       finalPt  = magnet;
       cursorPt = magnet;
+    } else if (midSnap) {
+      // Midpoint snap — cursor and endpoint both jump to segment midpoint
+      finalPt  = midSnap;
+      cursorPt = midSnap;
     } else if (this._shiftHeld && start) {
       // Angle lock: endpoint stays on locked ray, cursor roams freely with mouse
       finalPt  = this._applyAngleLock(start, gridPt);
@@ -783,11 +792,14 @@ class Component extends DCLogic {
     this._trackingSnap = trackingHit ? trackingHit.snapPt : null;
 
     const sc = this._toScreen(cursorPt);
-    const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false };
+    const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false, showMidSnap: false };
     if (magnet) {
-      // Show magnet ring at the node even if cursor is already there
       const ms = this._toScreen(magnet);
       newState.magnetX = ms.x; newState.magnetY = ms.y; newState.showMagnet = true;
+    }
+    if (midSnap) {
+      const ms = this._toScreen(midSnap);
+      newState.midSnapX = ms.x; newState.midSnapY = ms.y; newState.showMidSnap = true;
     }
     this.setState(newState);
 
@@ -1142,6 +1154,21 @@ class Component extends DCLogic {
       const d = Math.sqrt((v.x - gridPt.x) ** 2 + (v.z - gridPt.z) ** 2);
       if (d < bestD) { bestD = d; best = v; }
     });
+    return best; // THREE.Vector3 or null
+  }
+
+  // Return midpoint of the nearest line/wall segment if the cursor is within snap
+  // radius. Only called when vertex magnet is null (vertex takes priority).
+  _findMidpointSnap(gridPt) {
+    const r = this._magnetRadius() * 1.4; // slightly wider catch radius than node snap
+    let best = null, bestD = r;
+    const check = (a, b) => {
+      const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
+      const d = Math.sqrt((mx - gridPt.x) ** 2 + (mz - gridPt.z) ** 2);
+      if (d < bestD) { bestD = d; best = new THREE.Vector3(mx, a.y, mz); }
+    };
+    this._lines.forEach(l => check(l.start, l.end));
+    this._walls.forEach(w => check(w.start, w.end));
     return best; // THREE.Vector3 or null
   }
 
@@ -1694,7 +1721,10 @@ class Component extends DCLogic {
       cursorX: this.state.cursorX, cursorY: this.state.cursorY,
       cursorDisplay: this.state.showCursor ? 'block' : 'none',
       magnetX: this.state.magnetX, magnetY: this.state.magnetY,
-      magnetDisplay: this.state.showMagnet ? 'block' : 'none',
+      magnetDisplay:  this.state.showMagnet  ? 'block' : 'none',
+      midSnapX:       this.state.midSnapX,
+      midSnapY:       this.state.midSnapY,
+      midSnapDisplay: this.state.showMidSnap ? 'block' : 'none',
       lengthFrozen: this.state.lengthFrozen,
       frozenFt: this.state.frozenFt,
       frozenIn: this.state.frozenIn,
