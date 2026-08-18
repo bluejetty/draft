@@ -435,6 +435,19 @@ class Component extends DCLogic {
       ctx.restore();
     }
 
+    // Projection-tracking indicator: dashed line from reference node to snap point
+    if (this._trackingRef && this._trackingSnap) {
+      ctx.save();
+      ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+      const sr = toS(this._trackingRef), ss = toS(this._trackingSnap);
+      ctx.beginPath(); ctx.moveTo(sr.x, sr.y); ctx.lineTo(ss.x, ss.y); ctx.stroke();
+      ctx.setLineDash([]);
+      // small square at the reference node to distinguish from regular dot
+      ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 1.5;
+      ctx.strokeRect(sr.x - 5, sr.y - 5, 10, 10);
+      ctx.restore();
+    }
+
     // Preview line (cursor to last placed point)
     if (this._lineDrawing && this._lineStart && this._snapPt) {
       ctx.save();
@@ -628,19 +641,41 @@ class Component extends DCLogic {
     const tool   = this.state.activeTool;
     const start  = tool === 'line' ? this._lineStart : tool === 'wall' ? this._drawStart : null;
 
-    // Magnet snap to existing vertices
-    const magnet   = this._findMagnet(gridPt);
-    const rawEff   = magnet || gridPt;
-
-    // 45° angle lock (Shift)
-    let finalPt = rawEff;
+    // 45° angle lock — must establish lockAngle before tracking/magnet
     if (this._shiftHeld && start) {
-      finalPt = this._applyAngleLock(start, rawEff);
+      // Establish angle from raw cursor if not yet locked
+      if (this._lockAngle == null) {
+        const dx0 = gridPt.x - start.x, dz0 = gridPt.z - start.z;
+        const raw0 = Math.atan2(dz0, dx0);
+        this._lockAngle = Math.round(raw0 / (Math.PI / 4)) * (Math.PI / 4);
+      }
     } else if (!this._shiftHeld) {
       this._lockAngle = null;
     }
 
+    // Projection tracking: cursor near perpendicular through a vertex → snap to intersection
+    let trackingHit = null;
+    if (this._shiftHeld && start && this._lockAngle != null) {
+      trackingHit = this._findTrackingSnap(gridPt, start);
+    }
+
+    // Magnet snap to existing vertices (only when not tracking)
+    const magnet = !trackingHit ? this._findMagnet(gridPt) : null;
+    const rawEff = magnet || gridPt;
+
+    // Final point
+    let finalPt;
+    if (trackingHit) {
+      finalPt = trackingHit.snapPt;
+    } else if (this._shiftHeld && start) {
+      finalPt = this._applyAngleLock(start, rawEff);
+    } else {
+      finalPt = rawEff;
+    }
+
     this._snapPt = finalPt;
+    this._trackingRef  = trackingHit ? trackingHit.refPt  : null;
+    this._trackingSnap = trackingHit ? trackingHit.snapPt : null;
 
     // Cursor + magnet positions
     const sc = this._toScreen(finalPt);
@@ -836,6 +871,40 @@ class Component extends DCLogic {
       if (d < bestD) { bestD = d; best = v; }
     });
     return best; // THREE.Vector3 or null
+  }
+
+  // ─── Projection tracking ─────────────────────────────────────────────────────
+  // When angle-locked, find a vertex whose perpendicular tracking line the cursor
+  // is near and return the intersection of that perpendicular with the locked ray.
+  _findTrackingSnap(gridPt, start) {
+    if (this._lockAngle == null) return null;
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    const worldPerPx = (this._orthoHalfH * 2) / h;
+    const THRESH_PX = 18;
+    const threshWorld = THRESH_PX * worldPerPx;
+
+    const dirX = Math.cos(this._lockAngle), dirZ = Math.sin(this._lockAngle);
+
+    let best = null, bestPerp = threshWorld;
+    this._collectVertices().forEach(V => {
+      // Skip the current chain tip (avoid snapping to self)
+      if (start && Math.abs(V.x - start.x) < 0.001 && Math.abs(V.z - start.z) < 0.001) return;
+      // Perp distance from gridPt to the vertical (perp) tracking line through V
+      // = |dot(gridPt - V, dir)| (component along locked direction)
+      const dx = gridPt.x - V.x, dz = gridPt.z - V.z;
+      const perpDist = Math.abs(dx * dirX + dz * dirZ);
+      if (perpDist < bestPerp) {
+        bestPerp = perpDist;
+        // Snap point: project V onto the locked ray from start
+        const svx = V.x - start.x, svz = V.z - start.z;
+        const t = svx * dirX + svz * dirZ;
+        best = {
+          snapPt: new THREE.Vector3(start.x + dirX * t, start.y, start.z + dirZ * t),
+          refPt:  V,
+        };
+      }
+    });
+    return best;
   }
 
   _applyAngleLock(start, pt) {
