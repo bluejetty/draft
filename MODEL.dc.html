@@ -676,29 +676,36 @@ class Component extends DCLogic {
       trackingHit = this._findTrackingSnap(gridPt, start);
     }
 
-    // Magnet snap to existing vertices (only when not tracking)
+    // Magnet snap (checked even when shift-locked; magnet overrides angle lock)
     const magnet = !trackingHit ? this._findMagnet(gridPt) : null;
-    const rawEff = magnet || gridPt;
 
-    // Final point
-    let finalPt;
+    // Final snap point and cursor position
+    let finalPt, cursorPt;
     if (trackingHit) {
-      finalPt = trackingHit.snapPt;
+      // Projection tracking: cursor at reference node, endpoint at locked-ray intersection
+      finalPt  = trackingHit.snapPt;
+      cursorPt = trackingHit.refPt;
+    } else if (magnet) {
+      // Magnet to existing node — overrides angle lock; cursor and endpoint both snap to node
+      finalPt  = magnet;
+      cursorPt = magnet;
     } else if (this._shiftHeld && start) {
-      finalPt = this._applyAngleLock(start, rawEff);
+      // Angle lock: endpoint stays on locked ray, cursor roams freely with mouse
+      finalPt  = this._applyAngleLock(start, gridPt);
+      cursorPt = gridPt;
     } else {
-      finalPt = rawEff;
+      finalPt  = gridPt;
+      cursorPt = gridPt;
     }
 
     this._snapPt = finalPt;
     this._trackingRef  = trackingHit ? trackingHit.refPt  : null;
     this._trackingSnap = trackingHit ? trackingHit.snapPt : null;
 
-    // Cursor position: sit on the reference node when tracking, otherwise follow snap point
-    const cursorWorldPt = trackingHit ? trackingHit.refPt : finalPt;
-    const sc = this._toScreen(cursorWorldPt);
+    const sc = this._toScreen(cursorPt);
     const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false };
-    if (magnet && !this._shiftHeld) {
+    if (magnet) {
+      // Show magnet ring at the node even if cursor is already there
       const ms = this._toScreen(magnet);
       newState.magnetX = ms.x; newState.magnetY = ms.y; newState.showMagnet = true;
     }
