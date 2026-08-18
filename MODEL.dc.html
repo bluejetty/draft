@@ -389,7 +389,9 @@ class Component extends DCLogic {
     this._wallStart      = null; // last placed point (current seg origin)
 
     // Select-tool state
-    this._selectDrag = null; // { refs, startX, startY, active }  — node drag
+    this._selectDrag     = null;       // { refs, startX, startY, active }  — node drag
+    this._selectDownInfo = null;       // { worldPt, clientX, clientY, shiftHeld } — pending click
+    this._selectedSegs   = new Set(); // segment objects currently selected
 
     // Drawing state
     this._isDrawing  = false;
@@ -417,7 +419,18 @@ class Component extends DCLogic {
     canvas.addEventListener('wheel',       this._cwhl = e => this._onWheel(e), { passive: false });
     canvas.addEventListener('mouseleave',  this._cmle = () => this._onMouseLeave());
     window.addEventListener('mousemove',   this._wmmv = e => this._onGlobalMouseMove(e));
-    window.addEventListener('mouseup',     this._wmup = () => { this._panning2D = false; this._selectDrag = null; });
+    window.addEventListener('mouseup',     this._wmup = e => {
+      this._panning2D = false;
+      const sd   = this._selectDrag;
+      const info = this._selectDownInfo;
+      this._selectDrag     = null;
+      this._selectDownInfo = null;
+      // If the mousedown was in select mode and the cursor never moved far → treat as click
+      if (info && this.state.activeTool === 'select' && !(sd && sd.active)) {
+        const dx = e.clientX - info.clientX, dy = e.clientY - info.clientY;
+        if (Math.sqrt(dx*dx + dy*dy) <= 4) this._handleSelectClick(info.worldPt, info.shiftHeld);
+      }
+    });
 
     this._ro = new ResizeObserver(() => this._onResize());
     this._ro.observe(cont);
@@ -523,6 +536,21 @@ class Component extends DCLogic {
       ctx.save();
       ctx.beginPath(); ctx.arc(sd.x, sd.y, DOT_R + 6, 0, Math.PI * 2);
       ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+    }
+
+    // ── Selection highlight ───────────────────────────────────────────────────
+    if (this._selectedSegs.size > 0) {
+      ctx.save();
+      this._selectedSegs.forEach(seg => {
+        const a = toS(seg.start), b = toS(seg.end);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = 'rgba(89,128,166,0.55)'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+        ctx.stroke();
+        // Small square handles at each endpoint
+        ctx.fillStyle = '#5980a6';
+        [a, b].forEach(p => ctx.fillRect(p.x - 4, p.y - 4, 8, 8));
+      });
       ctx.restore();
     }
 
@@ -874,6 +902,8 @@ class Component extends DCLogic {
             this._selectDrag = { refs, startX: e.clientX, startY: e.clientY, active: false };
             e.preventDefault();
           }
+          // Record for click-to-select detection on mouseup
+          this._selectDownInfo = { worldPt: raw, clientX: e.clientX, clientY: e.clientY, shiftHeld: e.shiftKey, wasVertex: !!refs };
         }
       }
     } else if (e.button === 1 || (e.button === 0 && e.altKey)) {
@@ -1222,6 +1252,47 @@ class Component extends DCLogic {
       { start: seg.start.clone(), end: insertPt.clone(),   layerId: seg.layerId },
       { start: insertPt.clone(), end: seg.end.clone(),     layerId: seg.layerId }
     );
+  }
+
+  // ─── Multi-select helpers ────────────────────────────────────────────────────
+
+  // Return the nearest line or wall segment within a ~12px screen threshold, or null.
+  _findNearestSeg(worldPt) {
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    const thresh = (this._orthoHalfH * 2) / h * 14;
+    let bestD = thresh, bestSeg = null;
+    const check = segs => {
+      segs.forEach(seg => {
+        const ax = seg.start.x, az = seg.start.z, bx = seg.end.x, bz = seg.end.z;
+        const dx = bx - ax, dz = bz - az, len2 = dx*dx + dz*dz;
+        if (len2 < 0.0001) return;
+        const t = Math.max(0, Math.min(1, ((worldPt.x-ax)*dx + (worldPt.z-az)*dz) / len2));
+        const d = Math.sqrt((worldPt.x - ax-t*dx)**2 + (worldPt.z - az-t*dz)**2);
+        if (d < bestD) { bestD = d; bestSeg = seg; }
+      });
+    };
+    check(this._lines);
+    check(this._walls);
+    return bestSeg;
+  }
+
+  // Called on a clean click (no drag) in select mode.
+  _handleSelectClick(worldPt, shiftHeld) {
+    // Node clicks are handled by the drag system — don't double-process them.
+    if (this._findVertexHit(worldPt)) return;
+    const hit = this._findNearestSeg(worldPt);
+    if (!hit) {
+      if (!shiftHeld) this._selectedSegs.clear();
+      return;
+    }
+    if (shiftHeld) {
+      // Toggle this segment in/out of the selection
+      if (this._selectedSegs.has(hit)) this._selectedSegs.delete(hit);
+      else this._selectedSegs.add(hit);
+    } else {
+      this._selectedSegs.clear();
+      this._selectedSegs.add(hit);
+    }
   }
 
   // ─── Projection tracking ─────────────────────────────────────────────────────
@@ -1587,6 +1658,7 @@ class Component extends DCLogic {
     if (e.key === 'Escape') {
       if (this.state.lengthFrozen) { this._cancelFrozenLength(); return; }
       this._cancelWall(); this._cancelLine(); this._cancelCut();
+      this._selectedSegs.clear();
     }
     if (e.key === 'Enter' || e.key === ' ') {
       if (this._lineDrawing) { e.preventDefault(); this._finishChain(); return; }
