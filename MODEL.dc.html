@@ -99,6 +99,8 @@
         <option value="model">.model</option>
         <option value="plan">.plan</option>
       </select>
+       <button onClick="{{ importDrawing }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">IMPORT</button>
+       <input data-drawing-import type="file" accept="application/json,.json,.draft,.model,.plan" onChange="{{ onDrawingFilePicked }}" style="display:none;" />
       <button onClick="{{ saveDrawingFile }}" style="height:24px; border:1px solid #5980a6; background:#5980a6; color:#fff; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE</button>
     </div>
     <div data-profile-stack style="display:flex; flex-direction:column; gap:1px;">
@@ -141,6 +143,21 @@
   </div>
 </sc-if>
 
+<sc-if value="{{ groupDialogOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; inset:0; z-index:45; display:flex; align-items:flex-start; justify-content:center; padding-top:92px; background:rgba(29,31,32,0.16);">
+    <div data-group-dialog tabindex="0" role="dialog" aria-modal="true" aria-label="Create group" style="width:min(360px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:16px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">Create Group</div>
+      <div style="margin-top:5px; font-size:11px; line-height:1.4; color:rgba(29,31,32,0.62);">Name the selected drawing items, then choose whether this assembly stays rigid.</div>
+      <input data-group-name value="{{ groupNameInput }}" onInput="{{ onGroupNameInput }}" onKeyDown="{{ onGroupNameKey }}" aria-label="Group name" style="width:100%; height:32px; margin-top:12px; border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none;" />
+      <div style="margin-top:10px; padding:7px 8px; background:rgba(89,128,166,0.08); color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.35; letter-spacing:0.03em;">Y / ENTER / SPACE = FIXED · N / ESC = NOT FIXED</div>
+      <div style="display:flex; gap:6px; margin-top:12px;">
+        <button onClick="{{ createFixedGroup }}" style="flex:1; height:32px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">FIXED</button>
+        <button onClick="{{ createFlexibleGroup }}" style="flex:1; height:32px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">NOT FIXED</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
 <!-- BODY -->
 <div style="display:flex; height:calc(100vh - 72px);">
 
@@ -165,6 +182,51 @@
           <button onClick="{{ setAllLevelsSelectionMode }}" style="grid-column:1 / -1; border:1px solid {{ allLevelsSelectionBorder }}; background:{{ allLevelsSelectionBg }}; color:{{ allLevelsSelectionColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">ALL LEVELS</button>
         </div>
         <div style="margin-top:6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:rgba(29,31,32,0.48);">{{ selectionModeHelp }}</div>
+         <button onClick="{{ groupSelection }}" disabled="{{ groupDisabled }}" style="display:block; width:100%; margin-top:8px; border:1px solid {{ groupButtonBorder }}; background:{{ groupButtonBg }}; color:{{ groupButtonColor }}; padding:6px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; cursor:{{ groupButtonCursor }};">GROUP  [{{ groupShortcut }}]</button>
+         <div style="margin-top:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.3; color:{{ groupHelpColor }};">{{ groupActionHelp }}</div>
+         <sc-if value="{{ selectedGroup }}" hint-placeholder-val="{{ false }}">
+           <div style="margin-top:9px; border:1px solid {{ selectedGroupBorder }}; background:{{ selectedGroupBg }}; padding:7px 8px;">
+             <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:{{ selectedGroupColor }};">{{ selectedGroupLabel }}</div>
+             <div style="margin-top:3px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.3; color:rgba(29,31,32,0.58);">{{ selectedGroupDetail }}</div>
+             <button onClick="{{ ungroupSelection }}" style="width:100%; margin-top:7px; border:1px solid rgba(176,64,80,0.45); background:#fff; color:#b04050; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">UNGROUP</button>
+           </div>
+         </sc-if>
+         <sc-if value="{{ selectedGroupHasWalls }}" hint-placeholder-val="{{ false }}">
+           <div style="margin-top:9px; border-top:1px solid rgba(29,31,32,0.13); padding-top:8px;">
+             <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:6px;">Group Wall Assembly</div>
+             <sc-for list="{{ groupWallTypes }}" as="gwt" hint-placeholder-count="5">
+               <button onClick="{{ gwt.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid {{ gwt.border }}; background:{{ gwt.bg }}; color:{{ gwt.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:500; font-size:10px; letter-spacing:0.03em; padding:4px 8px; cursor:pointer; margin-bottom:2px;">{{ gwt.label }}</button>
+             </sc-for>
+             <div style="margin-top:7px; display:flex; gap:3px;">
+               <sc-for list="{{ groupWallRefBtns }}" as="grb" hint-placeholder-count="3">
+                 <button onClick="{{ grb.onSelect }}" style="flex:1; border:1px solid {{ grb.border }}; background:{{ grb.bg }}; color:{{ grb.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:9px; letter-spacing:0.03em; padding:4px 1px; cursor:pointer;">{{ grb.label }}</button>
+               </sc-for>
+             </div>
+             <div style="margin-top:6px; display:grid; grid-template-columns:1fr 1fr; gap:5px;">
+               <input type="text" value="{{ groupWallBaseInput }}" onInput="{{ onGroupWallBaseInput }}" onBlur="{{ onGroupWallBaseCommit }}" onKeyDown="{{ onGroupWallBaseKey }}" aria-label="Group wall base height" style="width:100%; box-sizing:border-box; border:1px solid {{ groupWallDimensionBorder }}; padding:4px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; background:#fff; color:#1d1f20;" />
+               <input type="text" value="{{ groupWallTopInput }}" onInput="{{ onGroupWallTopInput }}" onBlur="{{ onGroupWallTopCommit }}" onKeyDown="{{ onGroupWallTopKey }}" aria-label="Group wall top height" style="width:100%; box-sizing:border-box; border:1px solid {{ groupWallDimensionBorder }}; padding:4px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; background:#fff; color:#1d1f20;" />
+             </div>
+             <div style="margin-top:3px; display:grid; grid-template-columns:1fr 1fr; gap:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; color:rgba(29,31,32,0.45);"><span>BASE HEIGHT</span><span>TOP HEIGHT</span></div>
+             <sc-if value="{{ hasGroupWallDimensionError }}" hint-placeholder-val="{{ false }}">
+               <div style="margin-top:4px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; line-height:1.2;">{{ groupWallDimensionError }}</div>
+             </sc-if>
+           </div>
+         </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- EXTEND TOOLS (shown only while Extend is active) -->
+    <sc-if value="{{ extendToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Extend</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px;">
+          <button onClick="{{ setExtendCurrentLevel }}" style="border:1px solid {{ extendCurrentBorder }}; background:{{ extendCurrentBg }}; color:{{ extendCurrentColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">CURRENT LEVEL</button>
+          <button onClick="{{ setExtendAllLevels }}" style="border:1px solid {{ extendAllBorder }}; background:{{ extendAllBg }}; color:{{ extendAllColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">ALL LEVELS</button>
+        </div>
+        <div style="margin-top:6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:rgba(29,31,32,0.48);">{{ extendHelp }}</div>
+        <sc-if value="{{ hasExtendMessage }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:#b04050;">{{ extendMessage }}</div>
+        </sc-if>
       </div>
     </sc-if>
 
@@ -457,6 +519,7 @@ const DEFAULT_KEYBINDINGS = Object.freeze({
   floor: 'F',
   trim: 'T',
   cut: 'C',
+  extend: 'X',
   perspective: '1',
   top: '2',
   front: '3',
@@ -466,6 +529,7 @@ const DEFAULT_KEYBINDINGS = Object.freeze({
   finishAlt: 'Space',
   cancel: 'Escape',
   delete: 'Delete',
+  group: 'G',
   background: 'B',
 });
 
@@ -526,10 +590,24 @@ class Component extends DCLogic {
   state = {
     activeTool:    'select',
     selectionMode: 'click',    // 'click' | 'window' | 'window-all'
+    extendScope: 'current',
+    extendPhase: 'idle',
+    extendMessage: '',
+    extendBase: null,
     units:         'imperial',
     activeView:    'top',      // 'top'|'front'|'side'|'perspective'|'cut'
     gridSnapEnabled: true,
     keybindings:   { ...DEFAULT_KEYBINDINGS },
+    selectionVersion: 0,
+    groupDialog:    false,
+    groupNameInput: '',
+    groupWallType:  'stud_2x6',
+    groupWallRefLine: 'left',
+    groupWallBaseHeight: 0,
+    groupWallTopHeight: DEFAULT_WALL_TOP_FT,
+    groupWallBaseInput: formatArchitecturalInches(0),
+    groupWallTopInput: formatArchitecturalInches(DEFAULT_WALL_TOP_FT * 12),
+    groupWallDimensionError: '',
     isDrawing:     false,
     activeWallType: 'stud_2x6',
     wallRefLine:    'left',   // 'left'|'center'|'right' — where the drawn line sits on the assembly
@@ -580,6 +658,13 @@ class Component extends DCLogic {
     if (!Array.isArray(this._walls)) this._walls = [];
     if (!Array.isArray(this._floors)) this._floors = [];
     if (!Array.isArray(this._vertices)) this._vertices = [];
+    if (!Array.isArray(this._groups)) this._groups = [];
+  }
+
+  _newDrawingItemId(type) {
+    const id = `${type}-${this._nextDrawingItemId || 1}`;
+    this._nextDrawingItemId = (this._nextDrawingItemId || 1) + 1;
+    return id;
   }
 
   _pointForStorage(point) {
@@ -592,11 +677,13 @@ class Component extends DCLogic {
     return {
       version: 1,
       lines: this._lines.map(line => ({
+        id: line.id,
         start: point(line.start),
         end: point(line.end),
         levelId: line.levelId,
       })),
       walls: this._walls.map(wall => ({
+        id: wall.id,
         start: point(wall.start),
         end: point(wall.end),
         levelId: wall.levelId,
@@ -606,6 +693,7 @@ class Component extends DCLogic {
         refLine: wall.refLine,
       })),
       floors: this._floors.map(floor => ({
+        id: floor.id,
         points: floor.points.map(point),
         levelId: floor.levelId,
         thickness: floor.thickness,
@@ -632,6 +720,16 @@ class Component extends DCLogic {
         elev: cut.elev,
       })),
       nextCutId: this.state.nextCutId,
+      groups: this._groups.map(group => ({
+        id: group.id,
+        name: group.name,
+        fixed: group.fixed === true,
+        stretchBehavior: group.stretchBehavior || (group.fixed ? 'rigid' : 'item-geometry'),
+        members: group.members.map(member => ({ type: member.type, id: member.id })),
+        wallSettings: group.wallSettings ? { ...group.wallSettings } : null,
+      })),
+      nextGroupId: this._nextGroupId || 1,
+      nextDrawingItemId: this._nextDrawingItemId || 1,
     };
   }
 
@@ -657,6 +755,16 @@ class Component extends DCLogic {
   _saveDrawingFile() {
     this._downloadDrawingFile();
     this._markUnsaved();
+  }
+
+  _chooseDrawingImport() {
+    document.querySelector('[data-drawing-import]')?.click();
+  }
+
+  async _importDrawingFile(file) {
+    if (!file) return;
+    await this._loadDrawing(file);
+    if (!this.state.persistenceError) this._markUnsaved();
   }
 
   // ─── Personal settings and company standards packages ───────────────────────
@@ -829,11 +937,20 @@ class Component extends DCLogic {
     return levelIds.has(levelId) ? levelId : null;
   }
 
-  async _loadDrawing() {
+  _storedItemId(value, type, usedIds) {
+    const raw = String(value || '').trim();
+    const id = raw && !usedIds.has(`${type}:${raw}`)
+      ? raw
+      : this._newDrawingItemId(type);
+    usedIds.add(`${type}:${id}`);
+    return id;
+  }
+
+  async _loadDrawing(importedFile = null) {
     this._loadingDrawing = true;
     try {
-      if (!window.SharedFileStore) return;
-      const file = await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET);
+      if (!importedFile && !window.SharedFileStore) return;
+      const file = importedFile || await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET);
       if (!file) return;
       const raw = await file.text();
       const saved = JSON.parse(raw);
@@ -916,12 +1033,15 @@ class Component extends DCLogic {
       // Rebuild the pool as a single pass through every endpoint. This restores
       // reference equality at shared corners instead of merely restoring values.
       this._vertices = [];
-      const restoreSegment = (segment, extra = {}) => {
+       const usedIds = new Set();
+       this._nextDrawingItemId = Math.max(1, Number.isInteger(saved.nextDrawingItemId) ? saved.nextDrawingItemId : 1);
+       const restoreSegment = (segment, type, extra = {}) => {
         const start = this._storedPoint(segment?.start);
         const end = this._storedPoint(segment?.end);
         const levelId = this._storedLevelId(segment?.levelId, levelIds);
         if (!start || !end || levelId == null) return null;
         return {
+           id: this._storedItemId(segment?.id, type, usedIds),
           start: this._mergeVertex(start, levelId),
           end: this._mergeVertex(end, levelId),
           levelId,
@@ -929,10 +1049,10 @@ class Component extends DCLogic {
         };
       };
       this._lines = Array.isArray(saved.lines)
-        ? saved.lines.map(line => restoreSegment(line)).filter(Boolean)
+         ? saved.lines.map(line => restoreSegment(line, 'line')).filter(Boolean)
         : [];
       this._walls = Array.isArray(saved.walls)
-        ? saved.walls.map(wall => restoreSegment(wall, {
+         ? saved.walls.map(wall => restoreSegment(wall, 'wall', {
           wallType: WALL_TYPES.some(type => type.id === wall.wallType) ? wall.wallType : 'stud_2x6',
           baseHeight: Number.isFinite(Number(wall.baseHeight)) ? Number(wall.baseHeight) : 0,
           topHeight: Number.isFinite(Number(wall.topHeight))
@@ -946,6 +1066,7 @@ class Component extends DCLogic {
           const points = Array.isArray(floor?.points) ? floor.points.map(this._storedPoint).filter(Boolean) : [];
           if (levelId == null || points.length < 3) return null;
           return {
+             id: this._storedItemId(floor?.id, 'floor', usedIds),
             points: points.map(point => this._mergeVertex(point, levelId)),
             levelId,
             thickness: Number.isFinite(Number(floor.thickness)) && Number(floor.thickness) > 0
@@ -954,6 +1075,56 @@ class Component extends DCLogic {
           };
         }).filter(Boolean)
         : [];
+       const numericItemIds = [...this._lines, ...this._walls, ...this._floors]
+         .map(item => Number(String(item.id).match(/-(\d+)$/)?.[1]))
+         .filter(Number.isInteger);
+       this._nextDrawingItemId = Math.max(this._nextDrawingItemId, ...numericItemIds.map(id => id + 1), 1);
+       const itemForMember = member => {
+         if (!member || !['line', 'wall', 'floor'].includes(member.type)) return null;
+         const items = member.type === 'line' ? this._lines
+           : member.type === 'wall' ? this._walls : this._floors;
+         return items.find(item => item.id === String(member.id)) || null;
+       };
+       const usedGroupIds = new Set();
+       this._nextGroupId = Math.max(1, Number.isInteger(saved.nextGroupId) ? saved.nextGroupId : 1);
+       this._groups = Array.isArray(saved.groups) ? saved.groups.map(rawGroup => {
+         const rawId = String(rawGroup?.id || '').trim();
+         const id = rawId && !usedGroupIds.has(rawId) ? rawId : `group-${this._nextGroupId++}`;
+         usedGroupIds.add(id);
+         const members = Array.isArray(rawGroup?.members) ? rawGroup.members
+           .map(member => {
+             const item = itemForMember(member);
+             return item ? { type: member.type, id: item.id } : null;
+           })
+           .filter(Boolean)
+           .filter((member, index, list) => list.findIndex(other => other.type === member.type && other.id === member.id) === index)
+           : [];
+         if (!members.length) return null;
+         const walls = members
+           .filter(member => member.type === 'wall')
+           .map(itemForMember)
+           .filter(Boolean);
+         const settings = rawGroup?.wallSettings && typeof rawGroup.wallSettings === 'object' ? rawGroup.wallSettings : {};
+         const firstWall = walls[0];
+         return {
+           id,
+           name: String(rawGroup?.name || `GROUP ${id.replace(/^group-/, '')}`).trim().toUpperCase() || 'GROUP',
+           fixed: rawGroup?.fixed === true,
+           stretchBehavior: rawGroup?.fixed === true ? 'rigid' : 'item-geometry',
+           members,
+           wallSettings: walls.length ? {
+             wallType: WALL_TYPES.some(type => type.id === settings.wallType) ? settings.wallType : firstWall.wallType,
+             baseHeight: Number.isFinite(Number(settings.baseHeight)) ? Number(settings.baseHeight) : firstWall.baseHeight,
+             topHeight: Number.isFinite(Number(settings.topHeight)) ? Number(settings.topHeight) : firstWall.topHeight,
+             refLine: ['left', 'center', 'right'].includes(settings.refLine) ? settings.refLine : firstWall.refLine,
+           } : null,
+         };
+       }).filter(Boolean) : [];
+       const numericGroupIds = this._groups
+         .map(group => Number(String(group.id).replace(/^group-/, '')))
+         .filter(Number.isInteger);
+       this._nextGroupId = Math.max(this._nextGroupId, ...numericGroupIds.map(id => id + 1), 1);
+       this._clearSelection(false);
       this._cutObjects = {};
       cuts.forEach(cut => this._restoreCutObjects(cut));
     } catch (error) {
@@ -1128,6 +1299,9 @@ class Component extends DCLogic {
     this._walls      = [];
     this._lines      = []; // committed line segments
     this._floors     = []; // committed closed floor outlines
+     this._groups     = [];
+     this._nextGroupId = 1;
+     this._nextDrawingItemId = 1;
     this._pendingChain = []; // in-progress chain (not yet committed)
     this._chainStart   = null; // first point of current chain
     this._cutObjects = {}; // cutId → { line, arrow }
@@ -1154,6 +1328,7 @@ class Component extends DCLogic {
     this._windowSelection = null;      // { start, current, startX, startY, shiftHeld } — window drag
     this._selectedSegs   = new Set(); // line/wall segment objects currently selected
     this._selectedFloors = new Set(); // floor outline objects currently selected
+    this._extendSession  = null;      // { vertices, scope } — captured Extend nodes
 
     // Drawing state
     this._isDrawing  = false;
@@ -1194,7 +1369,11 @@ class Component extends DCLogic {
         if (end) windowSelection.current = end;
         const dx = e.clientX - windowSelection.startX, dy = e.clientY - windowSelection.startY;
         if (Math.sqrt(dx * dx + dy * dy) > 4 && windowSelection.current) {
-          this._handleWindowSelection(windowSelection.start, windowSelection.current, windowSelection.shiftHeld, windowSelection.mode);
+          if (windowSelection.kind === 'extend') {
+            this._captureExtendWindow(windowSelection.start, windowSelection.current);
+          } else {
+            this._handleWindowSelection(windowSelection.start, windowSelection.current, windowSelection.shiftHeld, windowSelection.mode);
+          }
         }
         return;
       }
@@ -1571,8 +1750,6 @@ class Component extends DCLogic {
   _switchLevel(idx) {
     if (idx === this.state.activeLevelIdx) return;
     this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut();
-    if (this._selectedSegs) this._selectedSegs.clear();
-    if (this._selectedFloors) this._selectedFloors.clear();
     this._applyLevelElevation(idx);
     // A level cannot also be one of its own references.
     const activeId = this.state.levels[idx]?.id;
@@ -1581,6 +1758,7 @@ class Component extends DCLogic {
       // Keep level switching functional even when the optional WebGL renderer
       // is unavailable; the 2D overlay can still render once it is initialized.
       if (this._orthoCam) this._setView('top');
+      this._notifySelectionChanged();
       this._markUnsaved();
     });
   }
@@ -1607,18 +1785,21 @@ class Component extends DCLogic {
     this._lines = this._lines.filter(line => line.levelId !== levelId);
     this._walls = this._walls.filter(wall => wall.levelId !== levelId);
     this._floors = this._floors.filter(floor => floor.levelId !== levelId);
+    this._cleanupGroups();
     const newLevels = levels.filter((_, i) => i !== idx);
     const newIdx = idx < activeLevelIdx
       ? activeLevelIdx - 1
       : Math.min(activeLevelIdx, newLevels.length - 1);
     this._applyLevelElevation(newIdx);
-    if (this._selectedSegs) this._selectedSegs.clear();
-    if (this._selectedFloors) this._selectedFloors.clear();
+    this._clearSelection(false);
     this.setState({
       levels: newLevels,
       activeLevelIdx: newIdx,
       backgroundLevelIds: this.state.backgroundLevelIds.filter(id => id !== levelId),
-    }, () => this._markUnsaved());
+    }, () => {
+      this._notifySelectionChanged();
+      this._markUnsaved();
+    });
   }
 
   _toggleLevelVisibility(idx, e) {
@@ -1899,11 +2080,42 @@ class Component extends DCLogic {
           }
           const refs = this._findVertexHit(raw);
           if (refs) {
-            this._selectDrag = { refs, startX: e.clientX, startY: e.clientY, active: false };
+            const fixedAssembly = this._itemsFromVertexRefs(refs)
+              .some(item => this._groupForItem(item)?.fixed === true);
+            // Fixed assemblies are rigid: they can be selected, but their
+            // individual nodes cannot be reshaped by the existing node drag.
+            if (!fixedAssembly) {
+              this._selectDrag = { refs, startX: e.clientX, startY: e.clientY, active: false };
+            }
             e.preventDefault();
           }
           // Record for click-to-select detection on mouseup
           this._selectDownInfo = { worldPt: raw, clientX: e.clientX, clientY: e.clientY, shiftHeld: e.shiftKey };
+        }
+      }
+      else if (tool === 'extend') {
+        const raw = this._getWorldPos(e.clientX, e.clientY);
+        if (!raw) return;
+        if (this.state.activeView !== 'top') {
+          this.setState({ extendMessage: 'Extend works in TOP / PLAN view.' });
+          return;
+        }
+        if (this.state.extendPhase === 'idle') {
+          this._windowSelection = {
+            kind: 'extend', start: raw, current: raw, startX: e.clientX, startY: e.clientY,
+            mode: this.state.extendScope === 'all' ? 'window-all' : 'window',
+          };
+          e.preventDefault();
+          return;
+        }
+        if (this.state.extendPhase === 'base') {
+          this._setExtendBase(this._snap(raw));
+          e.preventDefault();
+          return;
+        }
+        if (this.state.extendPhase === 'destination') {
+          this._commitExtend(this._snap(raw));
+          e.preventDefault();
         }
       }
       else if (tool === 'trim') {
@@ -1920,6 +2132,7 @@ class Component extends DCLogic {
 
   _onRightClick() {
     this._windowSelection = null;
+    this._cancelExtend();
     this._cancelWall();
     this._cancelLine();
     this._cancelFloor();
@@ -2101,6 +2314,7 @@ class Component extends DCLogic {
     const level = this._activeLevel();
     const levelId = level ? level.id : -1;
     this._floors.push({
+      id: this._newDrawingItemId('floor'),
       points: points.map(point => this._mergeVertex(point, levelId)),
       levelId,
       thickness: this.state.floorThickness,
@@ -2112,6 +2326,7 @@ class Component extends DCLogic {
     const level = this._activeLevel();
     const levelId = level ? level.id : -1;
     this._walls.push({
+      id: this._newDrawingItemId('wall'),
       start:      this._mergeVertex(start, levelId),
       end:        this._mergeVertex(end, levelId),
       levelId,
@@ -2632,13 +2847,240 @@ class Component extends DCLogic {
     const seg = this._lines[idx];
     const mid = this._mergeVertex(insertPt, seg.levelId);
     this._lines.splice(idx, 1,
-      { start: seg.start, end: mid,     levelId: seg.levelId },
-      { start: mid,       end: seg.end, levelId: seg.levelId }
+      { ...seg, end: mid },
+      { ...seg, id: this._newDrawingItemId('line'), start: mid }
     );
+    this._copyGroupMembership('line', seg.id, this._lines[idx + 1].id);
     this._markUnsaved();
   }
 
-  // ─── Multi-select helpers ────────────────────────────────────────────────────
+  // ─── Selection and drawing groups ─────────────────────────────────────────────
+
+  _itemType(item) {
+    if ((this._lines || []).includes(item)) return 'line';
+    if ((this._walls || []).includes(item)) return 'wall';
+    if ((this._floors || []).includes(item)) return 'floor';
+    return null;
+  }
+
+  _itemForMember(member) {
+    if (!member) return null;
+    const items = member.type === 'line' ? (this._lines || [])
+      : member.type === 'wall' ? (this._walls || [])
+        : member.type === 'floor' ? (this._floors || []) : [];
+    return items.find(item => item.id === member.id) || null;
+  }
+
+  _groupForItem(item) {
+    const type = this._itemType(item);
+    if (!type || !item.id) return null;
+    return (this._groups || []).find(group => group.members.some(member => member.type === type && member.id === item.id)) || null;
+  }
+
+  _groupItems(group) {
+    return (group?.members || []).map(member => this._itemForMember(member)).filter(Boolean);
+  }
+
+  _selectedDrawingItems() {
+    return [...(this._selectedSegs || []), ...(this._selectedFloors || [])];
+  }
+
+  _itemsFromVertexRefs(refs) {
+    return [...new Set((refs || []).map(ref => {
+      if ((this._lines || []).includes(ref.target) || (this._walls || []).includes(ref.target)) return ref.target;
+      return (this._floors || []).find(floor => floor.points === ref.target) || null;
+    }).filter(Boolean))];
+  }
+
+  _canReshapeItems(items) {
+    return !items.some(item => this._groupForItem(item)?.fixed === true);
+  }
+
+  _isItemSelected(item) {
+    return Boolean(this._selectedFloors?.has(item) || this._selectedSegs?.has(item));
+  }
+
+  _setItemSelected(item, selected) {
+    if (!item) return;
+    const target = this._itemType(item) === 'floor' ? this._selectedFloors : this._selectedSegs;
+    if (selected) target.add(item);
+    else target.delete(item);
+  }
+
+  _isGroupSelected(group) {
+    const items = this._groupItems(group);
+    return items.length > 0 && items.every(item => this._isItemSelected(item));
+  }
+
+  _selectedGroups() {
+    return (this._groups || []).filter(group => this._groupItems(group).some(item => this._isItemSelected(item)));
+  }
+
+  _clearSelection(notify = true) {
+    this._selectedSegs?.clear();
+    this._selectedFloors?.clear();
+    if (notify) this._notifySelectionChanged();
+  }
+
+  _selectItemOrGroup(item, shiftHeld) {
+    const group = this._groupForItem(item);
+    if (!shiftHeld) this._clearSelection(false);
+    if (group) {
+      const select = !shiftHeld || !this._isGroupSelected(group);
+      this._groupItems(group).forEach(member => this._setItemSelected(member, select));
+    } else {
+      const select = !shiftHeld || !this._isItemSelected(item);
+      this._setItemSelected(item, select);
+    }
+    this._notifySelectionChanged();
+  }
+
+  _addItemsAndTheirGroups(items, clearFirst = false) {
+    if (clearFirst) this._clearSelection(false);
+    const groups = new Set();
+    items.forEach(item => {
+      const group = this._groupForItem(item);
+      if (group) groups.add(group);
+      else this._setItemSelected(item, true);
+    });
+    groups.forEach(group => this._groupItems(group).forEach(item => this._setItemSelected(item, true)));
+    this._notifySelectionChanged();
+  }
+
+  _copyGroupMembership(type, sourceId, newId) {
+    this._groups.forEach(group => {
+      if (group.members.some(member => member.type === type && member.id === sourceId)
+        && !group.members.some(member => member.type === type && member.id === newId)) {
+        group.members.push({ type, id: newId });
+      }
+    });
+  }
+
+  _cleanupGroups() {
+    this._groups = this._groups.map(group => ({
+      ...group,
+      members: group.members.filter(member => this._itemForMember(member)),
+    })).filter(group => group.members.length > 0);
+  }
+
+  _selectedGroupForWallEditing() {
+    const groups = this._selectedGroups();
+    return groups.length === 1 && this._groupItems(groups[0]).some(item => this._itemType(item) === 'wall')
+      ? groups[0] : null;
+  }
+
+  _notifySelectionChanged() {
+    const group = this._selectedGroupForWallEditing();
+    const firstWall = group && this._groupItems(group).find(item => this._itemType(item) === 'wall');
+    const settings = group?.wallSettings || firstWall;
+    this.setState({
+      selectionVersion: this.state.selectionVersion + 1,
+      ...(settings ? {
+        groupWallType: settings.wallType,
+        groupWallRefLine: settings.refLine,
+        groupWallBaseHeight: settings.baseHeight,
+        groupWallTopHeight: settings.topHeight,
+        groupWallBaseInput: formatArchitecturalInches(settings.baseHeight * 12),
+        groupWallTopInput: formatArchitecturalInches(settings.topHeight * 12),
+        groupWallDimensionError: '',
+      } : {}),
+    });
+  }
+
+  _startGroupCommand() {
+    const selected = this._selectedDrawingItems();
+    if (!selected.length) {
+      this._notifySelectionChanged();
+      return;
+    }
+    this.setState({
+      groupDialog: true,
+      groupNameInput: `GROUP ${this._nextGroupId || 1}`,
+    }, () => document.querySelector('[data-group-dialog]')?.focus());
+  }
+
+  _createGroup(fixed) {
+    const selected = this._selectedDrawingItems();
+    if (!selected.length) {
+      this.setState({ groupDialog: false });
+      return;
+    }
+    const members = selected.map(item => ({ type: this._itemType(item), id: item.id }))
+      .filter(member => member.type && member.id)
+      .filter((member, index, list) => list.findIndex(other => other.type === member.type && other.id === member.id) === index);
+    const selectedKeys = new Set(members.map(member => `${member.type}:${member.id}`));
+    this._groups = this._groups.map(group => ({
+      ...group,
+      members: group.members.filter(member => !selectedKeys.has(`${member.type}:${member.id}`)),
+    })).filter(group => group.members.length > 0);
+    const walls = selected.filter(item => this._itemType(item) === 'wall');
+    const firstWall = walls[0];
+    const group = {
+      id: `group-${this._nextGroupId || 1}`,
+      name: (this.state.groupNameInput || `GROUP ${this._nextGroupId || 1}`).trim().toUpperCase() || `GROUP ${this._nextGroupId || 1}`,
+      fixed: fixed === true,
+      stretchBehavior: fixed === true ? 'rigid' : 'item-geometry',
+      members,
+      wallSettings: firstWall ? {
+        wallType: firstWall.wallType,
+        baseHeight: firstWall.baseHeight,
+        topHeight: firstWall.topHeight,
+        refLine: firstWall.refLine,
+      } : null,
+    };
+    this._nextGroupId = (this._nextGroupId || 1) + 1;
+    this._groups.push(group);
+    this._clearSelection(false);
+    this._groupItems(group).forEach(item => this._setItemSelected(item, true));
+    this.setState({ groupDialog: false, groupNameInput: '' });
+    this._notifySelectionChanged();
+    this._markUnsaved();
+  }
+
+  _ungroupSelected() {
+    const groups = this._selectedGroups();
+    if (!groups.length) return;
+    const ids = new Set(groups.map(group => group.id));
+    this._groups = this._groups.filter(group => !ids.has(group.id));
+    this._notifySelectionChanged();
+    this._markUnsaved();
+  }
+
+  _applyGroupWallSettings(patch) {
+    const group = this._selectedGroupForWallEditing();
+    if (!group) return;
+    const current = group.wallSettings || {};
+    const settings = { ...current, ...patch };
+    this._groupItems(group)
+      .filter(item => this._itemType(item) === 'wall')
+      .forEach(wall => {
+        if (settings.wallType) wall.wallType = settings.wallType;
+        if (Number.isFinite(settings.baseHeight)) wall.baseHeight = settings.baseHeight;
+        if (Number.isFinite(settings.topHeight)) wall.topHeight = settings.topHeight;
+        if (settings.refLine) wall.refLine = settings.refLine;
+      });
+    group.wallSettings = settings;
+    this._notifySelectionChanged();
+    this._markUnsaved();
+  }
+
+  _commitGroupWallDimension(which) {
+    const isBase = which === 'base';
+    const inputKey = isBase ? 'groupWallBaseInput' : 'groupWallTopInput';
+    const otherValue = isBase ? this.state.groupWallTopHeight : this.state.groupWallBaseHeight;
+    const parsed = parseArchitecturalLength(this.state[inputKey]);
+    if (!parsed.ok) {
+      this.setState({ groupWallDimensionError: parsed.error });
+      return false;
+    }
+    const feet = parsed.inches / 12;
+    if ((isBase && feet > otherValue) || (!isBase && feet < otherValue)) {
+      this.setState({ groupWallDimensionError: 'Top height must be at or above the base height.' });
+      return false;
+    }
+    this._applyGroupWallSettings(isBase ? { baseHeight: feet } : { topHeight: feet });
+    return true;
+  }
 
   // Return the nearest line or wall segment within a ~12px screen threshold, or null.
   _findNearestSeg(worldPt) {
@@ -2676,37 +3118,24 @@ class Component extends DCLogic {
 
   // Called on a clean click (no drag) in select mode.
   _handleSelectClick(worldPt, shiftHeld) {
-    // Node clicks are handled by the drag system — don't double-process them.
-    if (this._findVertexHit(worldPt)) return;
+    // A clean vertex click selects all touched items; a dragged vertex still uses
+    // the same reference list to move geometry without changing group behavior.
+    const vertexRefs = this._findVertexHit(worldPt);
+    if (vertexRefs) {
+      this._addItemsAndTheirGroups(this._itemsFromVertexRefs(vertexRefs), !shiftHeld);
+      return;
+    }
     const hit = this._findNearestSeg(worldPt);
     if (!hit) {
       const floor = this._findFloorAt(worldPt);
       if (!floor) {
-        if (!shiftHeld) {
-          this._selectedSegs.clear();
-          this._selectedFloors.clear();
-        }
+        if (!shiftHeld) this._clearSelection();
         return;
       }
-      if (shiftHeld) {
-        if (this._selectedFloors.has(floor)) this._selectedFloors.delete(floor);
-        else this._selectedFloors.add(floor);
-      } else {
-        this._selectedSegs.clear();
-        this._selectedFloors.clear();
-        this._selectedFloors.add(floor);
-      }
+      this._selectItemOrGroup(floor, shiftHeld);
       return;
     }
-    if (shiftHeld) {
-      // Toggle this segment in/out of the selection
-      if (this._selectedSegs.has(hit)) this._selectedSegs.delete(hit);
-      else this._selectedSegs.add(hit);
-    } else {
-      this._selectedSegs.clear();
-      this._selectedFloors.clear();
-      this._selectedSegs.add(hit);
-    }
+    this._selectItemOrGroup(hit, shiftHeld);
   }
 
   // Select active-level geometry only when it is fully contained by the window.
@@ -2723,12 +3152,71 @@ class Component extends DCLogic {
     const floors = floorsInScope
       .filter(floor => floor.points.length >= 3 && floor.points.every(inside));
 
-    if (!shiftHeld) {
-      this._selectedSegs.clear();
-      this._selectedFloors.clear();
+    this._addItemsAndTheirGroups([...segments, ...floors], !shiftHeld);
+  }
+
+  _extendScopeItems() {
+    return this.state.extendScope === 'all'
+      ? { lines: this._lines, walls: this._walls, floors: this._floors }
+      : { lines: this._activeLines(), walls: this._activeWalls(), floors: this._activeFloors() };
+  }
+
+  _captureExtendWindow(start, end) {
+    const minX = Math.min(start.x, end.x), maxX = Math.max(start.x, end.x);
+    const minZ = Math.min(start.z, end.z), maxZ = Math.max(start.z, end.z);
+    const inside = point => point.x >= minX && point.x <= maxX && point.z >= minZ && point.z <= maxZ;
+    const scope = this._extendScopeItems();
+    const vertices = new Set();
+    const fixedGroups = new Set();
+    const addPoints = item => (item.points || [item.start, item.end]).filter(Boolean).forEach(point => vertices.add(point));
+    [...scope.lines, ...scope.walls, ...scope.floors].forEach(item => {
+      const points = (item.points || [item.start, item.end]).filter(Boolean);
+      if (!points.some(inside)) return;
+      const group = this._groupForItem(item);
+      if (group?.fixed) fixedGroups.add(group);
+      else points.filter(inside).forEach(point => vertices.add(point));
+    });
+    fixedGroups.forEach(group => this._groupItems(group).forEach(addPoints));
+    if (!vertices.size) {
+      this._extendSession = null;
+      this.setState({ extendPhase: 'idle', extendBase: null, extendMessage: 'Drag the rectangle over one or more drawing nodes.' });
+      return;
     }
-    segments.forEach(seg => this._selectedSegs.add(seg));
-    floors.forEach(floor => this._selectedFloors.add(floor));
+    this._extendSession = { vertices, scope: this.state.extendScope };
+    this.setState({
+      extendPhase: 'base',
+      extendBase: null,
+      extendMessage: `${vertices.size} node${vertices.size === 1 ? '' : 's'} captured. Pick a base point.`,
+    });
+  }
+
+  _setExtendBase(point) {
+    if (!this._extendSession || !point) return;
+    this.setState({
+      extendPhase: 'destination',
+      extendBase: { x: point.x, y: point.y, z: point.z },
+      extendMessage: 'Pick a destination point. Press Esc to cancel.',
+    });
+  }
+
+  _commitExtend(destination) {
+    if (!this._extendSession || !this.state.extendBase || !destination) return;
+    const base = this.state.extendBase;
+    const dx = destination.x - base.x, dz = destination.z - base.z;
+    if (Math.hypot(dx, dz) < 0.001) return;
+    this._extendSession.vertices.forEach(vertex => {
+      vertex.x += dx;
+      vertex.z += dz;
+    });
+    this._extendSession = null;
+    this._markUnsaved();
+    this.setState({ extendPhase: 'idle', extendBase: null, extendMessage: '' });
+  }
+
+  _cancelExtend() {
+    this._windowSelection = this._windowSelection?.kind === 'extend' ? null : this._windowSelection;
+    this._extendSession = null;
+    this.setState({ extendPhase: 'idle', extendBase: null, extendMessage: '' });
   }
 
   // ─── Trim tool ───────────────────────────────────────────────────────────────
@@ -2771,6 +3259,7 @@ class Component extends DCLogic {
     // Nearest intersection to the click location along the segment
     hits.sort((a, b) => Math.abs(a.t - tClick) - Math.abs(b.t - tClick));
     const nearest = hits[0];
+    if (!this._canReshapeItems([seg, nearest.other])) return false;
 
     // Create (or reuse) the intersection vertex in the pool
     const ixVtx = this._mergeVertex(
@@ -2790,9 +3279,11 @@ class Component extends DCLogic {
       const arr    = isLine ? this._lines : isWall ? this._walls : null;
       if (arr) {
         const idx = arr.indexOf(other);
+        const type = isLine ? 'line' : 'wall';
         const half1 = { ...other, start: other.start, end: ixVtx };
-        const half2 = { ...other, start: ixVtx,       end: other.end };
+        const half2 = { ...other, id: this._newDrawingItemId(type), start: ixVtx, end: other.end };
         arr.splice(idx, 1, half1, half2);
+        this._copyGroupMembership(type, other.id, half2.id);
       }
     } else {
       // Intersection is at an endpoint of the cutting segment — just merge
@@ -2928,6 +3419,7 @@ class Component extends DCLogic {
     const level = this._activeLevel();
     const levelId = level ? level.id : -1;
     this._lines.push({
+      id: this._newDrawingItemId('line'),
       start: this._mergeVertex(start, levelId),
       end: this._mergeVertex(end, levelId),
       levelId,
@@ -3201,15 +3693,29 @@ class Component extends DCLogic {
   _handleKey(e) {
     if (!this._drawingReady || this.state.profileDialog) return;
     const tag = document.activeElement?.tagName;
+    if (this.state.groupDialog && tag !== 'INPUT' && tag !== 'TEXTAREA') {
+      const key = e.key === ' ' ? 'Space' : e.key;
+      if (key === 'y' || key === 'Y' || key === 'Enter' || key === 'Space') {
+        e.preventDefault();
+        this._createGroup(true);
+      } else if (key === 'n' || key === 'N' || key === 'Escape') {
+        e.preventDefault();
+        this._createGroup(false);
+      }
+      return;
+    }
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     const matches = command => eventMatchesBinding(e, this.state.keybindings[command]);
     if (matches('cancel')) {
       e.preventDefault();
       if (this.state.lengthFrozen) { this._cancelFrozenLength(); return; }
+      if (this.state.activeTool === 'extend' && (this._extendSession || this._windowSelection?.kind === 'extend')) {
+        this._cancelExtend();
+        return;
+      }
       if (this._windowSelection) { this._windowSelection = null; return; }
-      this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut();
-      this._selectedSegs.clear();
-      this._selectedFloors.clear();
+      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut();
+      this._clearSelection();
       return;
     }
     if (matches('delete')) {
@@ -3219,8 +3725,8 @@ class Component extends DCLogic {
         this._lines = this._lines.filter(l => !this._selectedSegs.has(l));
         this._walls = this._walls.filter(w => !this._selectedSegs.has(w));
         this._floors = this._floors.filter(floor => !this._selectedFloors.has(floor));
-        this._selectedSegs.clear();
-        this._selectedFloors.clear();
+        this._cleanupGroups();
+        this._clearSelection();
         if (selectedCount) this._markUnsaved();
       }
       return;
@@ -3236,12 +3742,25 @@ class Component extends DCLogic {
       if (drawing && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
       return;
     }
-    if (matches('wall')) { e.preventDefault(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'wall' }); return; }
-    if (matches('line')) { e.preventDefault(); this._cancelWall(); this._cancelFloor(); this.setState({ activeTool: 'line' }); return; }
-    if (matches('floor')) { e.preventDefault(); this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'floor' }); return; }
-    if (matches('select')) { e.preventDefault(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
-    if (matches('trim')) { e.preventDefault(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'trim' }); return; }
-    if (matches('cut')) { e.preventDefault(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'cut' }); return; }
+    if (matches('group')) {
+      if (this.state.activeTool === 'select') {
+        e.preventDefault();
+        this._startGroupCommand();
+      }
+      return;
+    }
+    if (matches('wall')) { e.preventDefault(); this._cancelExtend(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'wall' }); return; }
+    if (matches('line')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelFloor(); this.setState({ activeTool: 'line' }); return; }
+    if (matches('floor')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'floor' }); return; }
+    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
+    if (matches('extend')) {
+      e.preventDefault();
+      this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut(); this._cancelExtend();
+      this.setState({ activeTool: 'extend', extendScope: 'current', extendPhase: 'idle', extendMessage: '' });
+      return;
+    }
+    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'trim' }); return; }
+    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
     if (matches('top')) { e.preventDefault(); this._setView('top'); return; }
@@ -3314,7 +3833,7 @@ class Component extends DCLogic {
   renderVals() {
     const { activeTool, units, activeView, isDrawing,
             levels, activeLevelIdx, backgroundLevelIds, backgroundMode,
-            cuts, activeCutId, cutPhase, choosingDir } = this.state;
+            cuts, activeCutId, cutPhase, choosingDir, extendScope, extendPhase } = this.state;
     const on  = { bg:'#1d1f20', color:'#f2f2f3', border:'#1d1f20' };
     const off = { bg:'#fff',    color:'#1d1f20', border:'rgba(29,31,32,0.16)' };
     const hi  = 'rgba(29,31,32,0.09)', lo = '#fff';
@@ -3322,13 +3841,29 @@ class Component extends DCLogic {
     const activeCut   = cuts.find(c => c.id === activeCutId);
     const keybindings = { ...DEFAULT_KEYBINDINGS, ...(this.state.keybindings || {}) };
     const shortcut = command => keyBindingLabel(keybindings[command]);
+    const selectedItems = this._selectedDrawingItems();
+    const selectedGroups = this._selectedGroups();
+    const groupForWalls = this._selectedGroupForWallEditing();
+    const selectedGroupLabel = selectedGroups.length === 1
+      ? `${selectedGroups[0].name} · ${selectedGroups[0].fixed ? 'FIXED / RIGID' : 'NOT FIXED'}`
+      : `${selectedGroups.length} GROUPS SELECTED`;
+    const selectedGroupDetail = selectedGroups.length === 1
+      ? `${this._groupItems(selectedGroups[0]).length} items · ${new Set(this._groupItems(selectedGroups[0]).map(item => item.levelId)).size} level(s)`
+      : 'Ungroup removes every selected group while keeping its drawing items.';
 
     const isCutTool = activeTool === 'cut';
     const drawingWall = isDrawing && activeTool === 'wall';
     const drawingFloor = isDrawing && activeTool === 'floor';
+    const extending = activeTool === 'extend';
     const placingCut  = isCutTool && cutPhase === 'placing';
-    const showHint    = drawingWall || drawingFloor || placingCut || choosingDir;
-    const hintText    = choosingDir
+    const showHint    = drawingWall || drawingFloor || placingCut || choosingDir || extending;
+    const hintText    = extending
+      ? (extendPhase === 'idle'
+        ? 'EXTEND — Drag a rectangle around the nodes to move'
+        : (extendPhase === 'base'
+          ? 'EXTEND — Click a base point · Esc to cancel'
+          : 'EXTEND — Click a destination point · Esc to cancel'))
+      : choosingDir
       ? 'Click to choose view direction · ESC to cancel'
       : (drawingWall
         ? `Click to place corners · ${shortcut('finish')} or ${shortcut('finishAlt')} to commit · ${shortcut('cancel')} to cancel`
@@ -3364,6 +3899,28 @@ class Component extends DCLogic {
       wallToolActive: activeTool === 'wall',
       floorToolActive: activeTool === 'floor',
       selectToolActive: activeTool === 'select',
+      extendToolActive: extending,
+      extendCurrentBg: extendScope === 'current' ? '#1d1f20' : '#fff',
+      extendCurrentColor: extendScope === 'current' ? '#f2f2f3' : '#1d1f20',
+      extendCurrentBorder: extendScope === 'current' ? '#1d1f20' : 'rgba(29,31,32,0.2)',
+      extendAllBg: extendScope === 'all' ? '#b04050' : '#fff',
+      extendAllColor: extendScope === 'all' ? '#fff' : '#b04050',
+      extendAllBorder: extendScope === 'all' ? '#b04050' : 'rgba(176,64,80,0.45)',
+      extendHelp: extendPhase === 'idle'
+        ? `Drag a ${extendScope === 'all' ? 'red' : 'blue'} rectangle over the nodes to move.`
+        : (extendPhase === 'base'
+          ? 'Captured nodes are ready. Choose a base point.'
+          : 'Move the preview, then click the destination point.'),
+      hasExtendMessage: Boolean(this.state.extendMessage),
+      extendMessage: this.state.extendMessage,
+      setExtendCurrentLevel: () => {
+        this._cancelExtend();
+        this.setState({ extendScope: 'current', extendPhase: 'idle', extendMessage: '' });
+      },
+      setExtendAllLevels: () => {
+        this._cancelExtend();
+        this.setState({ extendScope: 'all', extendPhase: 'idle', extendMessage: '' });
+      },
       clickSelectionBg: this.state.selectionMode === 'click' ? on.bg : off.bg,
       clickSelectionColor: this.state.selectionMode === 'click' ? on.color : off.color,
       clickSelectionBorder: this.state.selectionMode === 'click' ? on.border : off.border,
@@ -3378,6 +3935,74 @@ class Component extends DCLogic {
         : (this.state.selectionMode === 'window-all'
           ? 'Drag a red box to select fully enclosed items on every level.'
           : 'Click items to select. Shift adds or removes individual items.'),
+       groupShortcut: shortcut('group'),
+       groupDisabled: selectedItems.length === 0,
+       groupButtonBg: selectedItems.length ? '#5980a6' : '#f4f4f4',
+       groupButtonColor: selectedItems.length ? '#fff' : 'rgba(29,31,32,0.38)',
+       groupButtonBorder: selectedItems.length ? '#5980a6' : 'rgba(29,31,32,0.16)',
+       groupButtonCursor: selectedItems.length ? 'pointer' : 'not-allowed',
+       groupHelpColor: selectedItems.length ? 'rgba(29,31,32,0.52)' : '#b04050',
+       groupActionHelp: selectedItems.length
+         ? `${selectedItems.length} selected item${selectedItems.length === 1 ? '' : 's'} · make a named assembly.`
+         : 'Select drawing items before grouping them.',
+       groupSelection: () => this._startGroupCommand(),
+       selectedGroup: selectedGroups.length > 0,
+       selectedGroupLabel,
+       selectedGroupDetail,
+       selectedGroupBg: selectedGroups.length === 1 && selectedGroups[0].fixed ? 'rgba(89,128,166,0.10)' : 'rgba(106,122,82,0.10)',
+       selectedGroupBorder: selectedGroups.length === 1 && selectedGroups[0].fixed ? 'rgba(89,128,166,0.48)' : 'rgba(106,122,82,0.48)',
+       selectedGroupColor: selectedGroups.length === 1 && selectedGroups[0].fixed ? '#5980a6' : '#6a7a52',
+       ungroupSelection: () => this._ungroupSelected(),
+       selectedGroupHasWalls: Boolean(groupForWalls),
+       groupWallTypes: WALL_TYPES.map(wt => ({
+         label: wt.label,
+         bg: wt.id === this.state.groupWallType ? '#1d1f20' : '#fff',
+         color: wt.id === this.state.groupWallType ? '#f2f2f3' : '#1d1f20',
+         border: wt.id === this.state.groupWallType ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+         onSelect: () => this._applyGroupWallSettings({ wallType: wt.id }),
+       })),
+       groupWallRefBtns: ['left', 'center', 'right'].map(value => ({
+         label: value === 'left' ? 'LEFT' : value === 'center' ? 'CENTER' : 'RIGHT',
+         bg: this.state.groupWallRefLine === value ? '#1d1f20' : '#fff',
+         color: this.state.groupWallRefLine === value ? '#f2f2f3' : '#1d1f20',
+         border: this.state.groupWallRefLine === value ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+         onSelect: () => this._applyGroupWallSettings({ refLine: value }),
+       })),
+       groupWallBaseInput: this.state.groupWallBaseInput,
+       groupWallTopInput: this.state.groupWallTopInput,
+       groupWallDimensionBorder: this.state.groupWallDimensionError ? '#b04050' : 'rgba(29,31,32,0.2)',
+       hasGroupWallDimensionError: Boolean(this.state.groupWallDimensionError),
+       groupWallDimensionError: this.state.groupWallDimensionError,
+       onGroupWallBaseInput: e => {
+         const parsed = parseArchitecturalLength(e.target.value);
+         this.setState({ groupWallBaseInput: e.target.value, groupWallDimensionError: parsed.ok || !e.target.value.trim() ? '' : parsed.error });
+       },
+       onGroupWallTopInput: e => {
+         const parsed = parseArchitecturalLength(e.target.value);
+         this.setState({ groupWallTopInput: e.target.value, groupWallDimensionError: parsed.ok || !e.target.value.trim() ? '' : parsed.error });
+       },
+       onGroupWallBaseCommit: () => this._commitGroupWallDimension('base'),
+       onGroupWallTopCommit: () => this._commitGroupWallDimension('top'),
+       onGroupWallBaseKey: e => {
+         if (e.key === 'Enter') { e.preventDefault(); this._commitGroupWallDimension('base'); e.currentTarget.blur(); }
+         if (e.key === 'Escape') { e.preventDefault(); this._notifySelectionChanged(); e.currentTarget.blur(); }
+         e.stopPropagation();
+       },
+       onGroupWallTopKey: e => {
+         if (e.key === 'Enter') { e.preventDefault(); this._commitGroupWallDimension('top'); e.currentTarget.blur(); }
+         if (e.key === 'Escape') { e.preventDefault(); this._notifySelectionChanged(); e.currentTarget.blur(); }
+         e.stopPropagation();
+       },
+       groupDialogOpen: Boolean(this.state.groupDialog),
+       groupNameInput: this.state.groupNameInput,
+       onGroupNameInput: e => this.setState({ groupNameInput: e.target.value }),
+       onGroupNameKey: e => {
+         if (e.key === 'Enter') { e.preventDefault(); this._createGroup(true); }
+         if (e.key === 'Escape') { e.preventDefault(); this._createGroup(false); }
+         e.stopPropagation();
+       },
+       createFixedGroup: () => this._createGroup(true),
+       createFlexibleGroup: () => this._createGroup(false),
       setClickSelectionMode: () => {
         this._windowSelection = null;
         this.setState({ activeTool: 'select', selectionMode: 'click' });
@@ -3483,12 +4108,13 @@ class Component extends DCLogic {
       })),
 
       tools: [
-        { label:`Select  [${shortcut('select')}]`, onSelect:()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, ...(activeTool==='select'?on:off) },
-        { label:`Line  [${shortcut('line')}]`,     onSelect:()=>{ this._cancelWall(); this._cancelFloor(); this.setState({activeTool:'line'}); },                       ...(activeTool==='line'  ?on:off) },
-        { label:`Wall  [${shortcut('wall')}]`,     onSelect:()=>{ this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'wall'}); },                       ...(activeTool==='wall'  ?on:off) },
-        { label:`Floor  [${shortcut('floor')}]`,   onSelect:()=>{ this._cancelWall(); this._cancelLine(); this.setState({activeTool:'floor'}); },                       ...(activeTool==='floor' ?on:off) },
-        { label:`Trim  [${shortcut('trim')}]`,     onSelect:()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'trim'}); },   ...(activeTool==='trim'  ?on:off) },
-        { label:`Cut  [${shortcut('cut')}]`,       onSelect:()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'cut'}); },    ...(activeTool==='cut'   ?on:off) },
+        { label:`Select  [${shortcut('select')}]`, onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, ...(activeTool==='select'?on:off) },
+        { label:`Line  [${shortcut('line')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelFloor(); this.setState({activeTool:'line'}); },                       ...(activeTool==='line'  ?on:off) },
+        { label:`Wall  [${shortcut('wall')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'wall'}); },                       ...(activeTool==='wall'  ?on:off) },
+        { label:`Floor  [${shortcut('floor')}]`,   onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this.setState({activeTool:'floor'}); },                       ...(activeTool==='floor' ?on:off) },
+        { label:`Extend  [${shortcut('extend')}]`, onSelect:()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut(); this._cancelExtend(); this.setState({activeTool:'extend', extendScope:'current', extendPhase:'idle', extendMessage:''}); }, ...(activeTool==='extend'?on:off) },
+        { label:`Trim  [${shortcut('trim')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'trim'}); },   ...(activeTool==='trim'  ?on:off) },
+        { label:`Cut  [${shortcut('cut')}]`,       onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'cut'}); },    ...(activeTool==='cut'   ?on:off) },
       ],
       views: [
         { label:`Top / Plan  [${shortcut('top')}]`, onSelect:()=>this._setView('top'),   bg: activeView==='top'  ?hi:lo },
@@ -3583,6 +4209,12 @@ class Component extends DCLogic {
           .replace(/[^a-z0-9_-]/g, '') || 'json';
         this.setState({ saveExtension: extension }, () => this._markUnsaved());
       },
+       importDrawing: () => this._chooseDrawingImport(),
+       onDrawingFilePicked: e => {
+         const file = e.target.files?.[0];
+         if (file) this._importDrawingFile(file);
+         e.target.value = '';
+       },
       saveDrawingFile: () => this._saveDrawingFile(),
       viewLabel: viewLabels[activeView] || 'TOP / PLAN',
       backgroundStatus,

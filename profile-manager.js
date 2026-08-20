@@ -107,6 +107,8 @@ if (!window.DraftProfileManager) {
     floor: 'F',
     trim: 'T',
     cut: 'C',
+    group: 'G',
+    extend: 'X',
     perspective: '1',
     top: '2',
     front: '3',
@@ -116,6 +118,7 @@ if (!window.DraftProfileManager) {
     finishAlt: 'Space',
     cancel: 'Escape',
     delete: 'Delete',
+    group: 'G',
     background: 'B',
   });
 
