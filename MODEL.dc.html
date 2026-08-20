@@ -293,9 +293,9 @@
       <div style="position:absolute; left:50%; top:50%; width:10px; height:10px; border-radius:50%; background:transparent; border:1px solid #1d1f20; transform:translate(-50%,-50%);"></div>
     </div>
     <!-- Vertex magnet indicator (blue circle) -->
-    <div style="position:absolute; left:{{ magnetX }}px; top:{{ magnetY }}px; width:18px; height:18px; border-radius:50%; border:2px solid #5980a6; transform:translate(-50%,-50%); pointer-events:none; display:{{ magnetDisplay }};"></div>
+    <div data-model-magnet style="position:absolute; left:{{ magnetX }}px; top:{{ magnetY }}px; width:18px; height:18px; border-radius:50%; border:2px solid #5980a6; transform:translate(-50%,-50%); pointer-events:none; display:{{ magnetDisplay }};"></div>
     <!-- Midpoint snap indicator (amber diamond) -->
-    <div style="position:absolute; left:{{ midSnapX }}px; top:{{ midSnapY }}px; width:13px; height:13px; border:2px solid #e8a020; background:rgba(232,160,32,0.12); transform:translate(-50%,-50%) rotate(45deg); pointer-events:none; display:{{ midSnapDisplay }};"></div>
+    <div data-model-midsnap style="position:absolute; left:{{ midSnapX }}px; top:{{ midSnapY }}px; width:13px; height:13px; border:2px solid #e8a020; background:rgba(232,160,32,0.12); transform:translate(-50%,-50%) rotate(45deg); pointer-events:none; display:{{ midSnapDisplay }};"></div>
 
     <!-- Direction-choice overlay (shown while choosing cut direction) -->
     <sc-if value="{{ choosingDir }}" hint-placeholder-val="{{ false }}">
@@ -648,9 +648,10 @@ class Component extends DCLogic {
   componentDidMount() {
     this._ensureDrawingCollections();
     requestAnimationFrame(() => requestAnimationFrame(() => this._init()));
-    window.addEventListener('keydown', this._onKey  = e => this._handleKey(e));
+    window.addEventListener('keydown', this._onKey  = e => { this._invalidate(); this._handleKey(e); });
     window.addEventListener('keydown', this._onKdn  = e => { if (e.key === 'Shift') this._shiftHeld = true; });
     window.addEventListener('keydown', this._onCtrlDown = e => { if (e.key === 'Control') this._ctrlHeld = true; });
+    document.addEventListener('visibilitychange', this._onVis = () => { if (!document.hidden) this._invalidate(); });
     window.addEventListener('keyup',   this._onKup  = e => {
       if (e.key === 'Shift') this._shiftHeld = false;
       if (e.key === 'Control') this._ctrlHeld = false;
@@ -1328,6 +1329,7 @@ class Component extends DCLogic {
   componentWillUnmount() {
     cancelAnimationFrame(this._raf);
     if (this._ro) this._ro.disconnect();
+    if (this._controls && typeof this._controls.dispose === 'function') this._controls.dispose();
     if (this._renderer) this._renderer.dispose();
     const c = this._canvas;
     if (c) {
@@ -1344,6 +1346,7 @@ class Component extends DCLogic {
     window.removeEventListener('keydown',   this._onKdn);
     window.removeEventListener('keydown',   this._onCtrlDown);
     window.removeEventListener('keyup',     this._onKup);
+    document.removeEventListener('visibilitychange', this._onVis);
   }
 
   // ─── Init ────────────────────────────────────────────────────────────────────
@@ -1518,14 +1521,15 @@ class Component extends DCLogic {
     this._overlayCtx = this._overlayCanvas ? this._overlayCanvas.getContext('2d') : null;
 
     // Events
-    canvas.addEventListener('mousemove',   this._cmmv = e => this._onMouseMove(e));
-    canvas.addEventListener('mousedown',   this._cmdn = e => this._onMouseDown(e));
-    canvas.addEventListener('dblclick',    this._cdbl = e => this._onDblClick(e));
-    canvas.addEventListener('contextmenu', this._cctx = e => { e.preventDefault(); this._onRightClick(); });
-    canvas.addEventListener('wheel',       this._cwhl = e => this._onWheel(e), { passive: false });
-    canvas.addEventListener('mouseleave',  this._cmle = () => this._onMouseLeave());
-    window.addEventListener('mousemove',   this._wmmv = e => this._onGlobalMouseMove(e));
+    canvas.addEventListener('mousemove',   this._cmmv = e => { this._invalidate(); this._onMouseMove(e); });
+    canvas.addEventListener('mousedown',   this._cmdn = e => { this._invalidate(); this._onMouseDown(e); });
+    canvas.addEventListener('dblclick',    this._cdbl = e => { this._invalidate(); this._onDblClick(e); });
+    canvas.addEventListener('contextmenu', this._cctx = e => { e.preventDefault(); this._invalidate(); this._onRightClick(); });
+    canvas.addEventListener('wheel',       this._cwhl = e => { this._invalidate(); this._onWheel(e); }, { passive: false });
+    canvas.addEventListener('mouseleave',  this._cmle = () => { this._invalidate(); this._onMouseLeave(); });
+    window.addEventListener('mousemove',   this._wmmv = e => { this._invalidate(); this._onGlobalMouseMove(e); });
     window.addEventListener('mouseup',     this._wmup = e => {
+      this._invalidate();
       this._panning2D = false;
       const sd   = this._selectDrag;
       const info = this._selectDownInfo;
@@ -1561,12 +1565,29 @@ class Component extends DCLogic {
     this._setView('top');
     this.setState({ webglUnavailable: !this._webglAvailable });
     this._loadDrawing();
+    this._invalidate();
     this._animate();
+  }
+
+  // Nothing in a drafting view moves on its own, so frames are drawn on demand:
+  // every input handler and every setState marks the view dirty. Orbiting is the
+  // one case that keeps animating by itself.
+  setState(update, callback) {
+    this._needsRedraw = true;
+    super.setState(update, callback);
+  }
+
+  _invalidate() {
+    this._needsRedraw = true;
   }
 
   _animate() {
     this._raf = requestAnimationFrame(() => this._animate());
-    if (this._controls?.enabled) this._controls.update();
+    const orbiting = this._controls?.enabled === true;
+    if (orbiting) this._controls.update();
+    if (document.hidden) return;
+    if (!this._needsRedraw && !orbiting) return;
+    this._needsRedraw = false;
     if (this._renderer) this._renderer.render(this._scene, this._camera);
     this._redrawOverlay();
   }
@@ -1907,6 +1928,7 @@ class Component extends DCLogic {
   }
 
   _updateOrthoFrustum() {
+    this._invalidate();
     const c = this._canvas;
     if (!c || !this._orthoCam) return;
     const w = c.clientWidth || 800, h = c.clientHeight || 600;
@@ -2317,7 +2339,7 @@ class Component extends DCLogic {
   }
 
   _onMouseLeave() {
-    this.setState({ showCursor: false });
+    this.setState({ showCursor: false, showMagnet: false, showMidSnap: false });
     ['[data-model-sx]','[data-model-sy]','[data-model-len]'].forEach((s, i) => {
       const el = document.querySelector(s); if (el) el.textContent = ['X: —','Y: —',''][i];
     });
@@ -2454,14 +2476,6 @@ class Component extends DCLogic {
       this._orthoCam.position.z += dx * fpx; this._orthoCam.position.y += dy * fpx;
       this._orthoCam.lookAt(0, this._orthoCam.position.y, this._orthoCam.position.z);
     }
-  }
-
-  _resetView() {
-    this._orthoHalfH = 25;
-    this._orthoCamX  = 0;
-    this._orthoCamZ  = 0;
-    this._updateOrthoFrustum();
-    this._updateGridLOD();
   }
 
   _updateGridLOD() { /* grid now drawn on 2D overlay */ }
@@ -4477,12 +4491,6 @@ class Component extends DCLogic {
         { label:`Trim  [${shortcut('trim')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'trim'}); },   ...(activeTool==='trim'  ?on:off) },
         { label:`Cut  [${shortcut('cut')}]`,       onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'cut'}); },    ...(activeTool==='cut'   ?on:off) },
       ],
-      views: [
-        { label:`Top / Plan  [${shortcut('top')}]`, onSelect:()=>this._setView('top'),   bg: activeView==='top'  ?hi:lo },
-        { label:`Front  [${shortcut('front')}]`,    onSelect:()=>this._setView('front'), bg: activeView==='front'?hi:lo },
-        { label:`Side  [${shortcut('side')}]`,      onSelect:()=>this._setView('side'),  bg: activeView==='side' ?hi:lo },
-      ],
-      resetView:    ()=>this._resetView(),
       enter3D:      ()=>this._setView('perspective'),
       webglUnavailable: this.state.webglUnavailable,
       view3DLabel:  this.state.webglUnavailable ? '3D VIEW — UNAVAILABLE' : '3D VIEW',
