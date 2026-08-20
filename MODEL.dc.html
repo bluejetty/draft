@@ -278,17 +278,6 @@
       </div>
     </sc-if>
 
-    <!-- VIEW (2D only) -->
-    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5);">View</div>
-        <button onClick="{{ resetView }}" title="Reset view to origin" style="border:1px solid rgba(29,31,32,0.2); background:transparent; color:#1d1f20; font-size:13px; width:22px; height:22px; padding:0; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1;" title="Home — reset view to origin">⌂</button>
-      </div>
-      <sc-for list="{{ views }}" as="v" hint-placeholder-count="3">
-        <button onClick="{{ v.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ v.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.04em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ v.label }}</button>
-      </sc-for>
-    </div>
-
   </div>
 
   <!-- CANVAS AREA -->
