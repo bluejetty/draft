@@ -841,6 +841,7 @@ class Component extends DCLogic {
     window.removeEventListener('dragover', this._blockNav);
     window.removeEventListener('drop', this._blockNav);
     window.removeEventListener('keydown', this._onKeyDown);
+    window.removeEventListener('resize', this._onResize);
   }
 
   async consumeHandoff() {
