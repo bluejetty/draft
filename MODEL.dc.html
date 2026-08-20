@@ -1039,7 +1039,10 @@ class Component extends DCLogic {
          .filter(Number.isInteger);
        this._nextGroupId = Math.max(this._nextGroupId, ...numericGroupIds.map(id => id + 1), 1);
        this._clearSelection(false);
-      this._cutObjects = {};
+      // A restored drawing replaces the complete Cuts collection. Dispose the
+      // old scene objects first so an import or history restore cannot leave
+      // invisible/stale sections behind in 3D or accumulate duplicates.
+      this._clearCutObjects();
       cuts.forEach(cut => this._restoreCutObjects(cut));
       return { ok: true, reason: 'loaded', skipped: Math.max(0, skipped) };
   }
@@ -1226,6 +1229,7 @@ class Component extends DCLogic {
     cancelAnimationFrame(this._raf);
     if (this._ro) this._ro.disconnect();
     if (this._controls && typeof this._controls.dispose === 'function') this._controls.dispose();
+    this._clearCutObjects();
     if (this._renderer) this._renderer.dispose();
     const c = this._canvas;
     if (c) {
@@ -2052,8 +2056,20 @@ class Component extends DCLogic {
   _disposeCutObjects(id) {
     const objs = this._cutObjects[id];
     if (!objs) return;
-    objs.forEach(o => { if (this._scene) this._scene.remove(o); if (o.geometry) o.geometry.dispose(); });
+    objs.forEach(object => {
+      if (this._scene) this._scene.remove(object);
+      object.traverse?.(child => {
+        if (child.geometry?.dispose) child.geometry.dispose();
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.filter(Boolean).forEach(material => material.dispose?.());
+      });
+    });
     delete this._cutObjects[id];
+  }
+
+  _clearCutObjects() {
+    Object.keys(this._cutObjects || {}).forEach(id => this._disposeCutObjects(id));
+    this._cutObjects = {};
   }
 
   _deleteCut(id, e) {
