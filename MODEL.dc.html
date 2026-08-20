@@ -276,10 +276,11 @@
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const LEVEL_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a','#9a5a5a','#8a9a6a'];
-// Free-cursor endpoint magnet catch distance in screen pixels.
-const NODE_SNAP_PX = 2;
+// All drafting snap catch distances are screen-space pixels.
+const NODE_SNAP_PX = 3;
+const MIDPOINT_SNAP_PX = 3;
 // Shift/angle-locked alignment catch distance from a node center.
-const LOCKED_NODE_SNAP_PX = 4;
+const LOCKED_NODE_SNAP_PX = 3;
 const SIXTEENTH_IN = 1 / 16;
 const DEFAULT_WALL_TOP_FT = (8 * 12 + 1 + 1 / 8) / 12;
 const DEFAULT_FLOOR_THICKNESS_IN = 12 + 5 / 8;
@@ -1447,7 +1448,7 @@ class Component extends DCLogic {
     // Projection tracking: cursor near perpendicular through a vertex → snap to intersection
     let trackingHit = null;
     if (this._shiftHeld && start && this._lockAngle != null) {
-      trackingHit = this._findTrackingSnap(gridPt, start);
+      trackingHit = this._findTrackingSnap(raw, start);
     }
 
     // Magnet snap (checked even when shift-locked; magnet overrides angle lock)
@@ -1455,7 +1456,7 @@ class Component extends DCLogic {
     // a node feel magnetic beyond the one-pixel hit radius.
     const magnet = !trackingHit ? this._findMagnet(raw) : null;
     // Midpoint snap — only when no vertex magnet and not tracking
-    const midSnap = (!trackingHit && !magnet) ? this._findMidpointSnap(gridPt) : null;
+    const midSnap = (!trackingHit && !magnet) ? this._findMidpointSnap(raw) : null;
 
     // Final snap point and cursor position
     let finalPt, cursorPt;
@@ -2223,14 +2224,15 @@ class Component extends DCLogic {
 
   // Return midpoint of the nearest line/wall segment if the cursor is within snap
   // radius. Only called when vertex magnet is null (vertex takes priority).
-  _findMidpointSnap(gridPt) {
-    const r = this._magnetRadius() * 1.4; // slightly wider catch radius than node snap
+  _findMidpointSnap(cursorPt) {
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    const r = (this._orthoHalfH * 2) / h * MIDPOINT_SNAP_PX;
     const nearest = segments => {
       let best = null, bestD = r;
       segments.forEach(seg => {
         const a = seg.start, b = seg.end;
         const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
-        const d = Math.sqrt((mx - gridPt.x) ** 2 + (mz - gridPt.z) ** 2);
+        const d = Math.sqrt((mx - cursorPt.x) ** 2 + (mz - cursorPt.z) ** 2);
         if (d < bestD) { bestD = d; best = new THREE.Vector3(mx, a.y, mz); }
       });
       return best;
@@ -2449,27 +2451,26 @@ class Component extends DCLogic {
   // ─── Projection tracking ─────────────────────────────────────────────────────
   // When angle-locked, find a vertex whose perpendicular tracking line the cursor
   // is near and return the intersection of that perpendicular with the locked ray.
-  _findTrackingSnap(gridPt, start) {
+  _findTrackingSnap(cursorPt, start) {
     if (this._lockAngle == null) return null;
     const h = this._canvas ? this._canvas.clientHeight : 600;
     const worldPerPx = (this._orthoHalfH * 2) / h;
-    const THRESH_PX = LOCKED_NODE_SNAP_PX;
-    const threshWorld = THRESH_PX * worldPerPx;
+    const threshWorld = LOCKED_NODE_SNAP_PX * worldPerPx;
 
     const dirX = Math.cos(this._lockAngle), dirZ = Math.sin(this._lockAngle);
 
     const find = vertices => {
-      let best = null, bestPerp = threshWorld;
+      let best = null, bestDistance = threshWorld;
       vertices.forEach(V => {
         // Skip the current chain tip (avoid snapping to self)
         if (start && Math.abs(V.x - start.x) < 0.001 && Math.abs(V.z - start.z) < 0.001) return;
-        // Perp distance from gridPt to the vertical (perp) tracking line through V
-        // = |dot(gridPt - V, dir)| (component along locked direction)
-        const dx = gridPt.x - V.x, dz = gridPt.z - V.z;
-        const perpDist = Math.abs(dx * dirX + dz * dirZ);
-        if (perpDist < bestPerp) {
-          bestPerp = perpDist;
-          // Snap point: project V onto the locked ray from start
+        // Require the cursor to be genuinely near the node center. The previous
+        // perpendicular-only check could snap to a node far away along the ray.
+        const dx = cursorPt.x - V.x, dz = cursorPt.z - V.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          // Snap point: project the nearby node onto the locked ray from start
           const svx = V.x - start.x, svz = V.z - start.z;
           const t = svx * dirX + svz * dirZ;
           best = {
