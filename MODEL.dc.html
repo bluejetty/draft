@@ -20,11 +20,13 @@
     .lay-row:hover { background:rgba(29,31,32,0.03); }
     .lay-row.active { border-color:#5980a6; background:rgba(89,128,166,0.09); }
     .lay-bar { width:3px; flex-shrink:0; }
-    .lay-body { flex:1; padding:5px 7px 5px 8px; min-width:0; }
+    .lay-body { flex:1; min-width:0; padding:5px 7px 5px 8px; border:none; background:transparent; text-align:left; cursor:pointer; }
     .lay-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .lay-elev { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.45); margin-top:1px; }
     .lay-eye  { border:none; background:none; cursor:pointer; padding:0 6px; font-size:13px; line-height:1; color:rgba(29,31,32,0.4); flex-shrink:0; align-self:center; }
     .lay-eye:hover { color:#5980a6; }
+    .lay-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:center; }
+    .lay-bg:hover { border-color:#5980a6; color:#5980a6; }
     .lay-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:center; }
     .lay-del:hover { color:#c04040; }
     .cut-row { display:flex; align-items:center; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
@@ -82,13 +84,14 @@
         <button onClick="{{ addLayer }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; padding:2px 8px; cursor:pointer; letter-spacing:0.04em;">+ ADD</button>
       </div>
       <sc-for list="{{ layers }}" as="lay" hint-placeholder-count="8">
-        <div class="{{ lay.rowClass }}" onClick="{{ lay.onSelect }}">
-          <div class="lay-bar" style="background:{{ lay.color }};"></div>
-          <div class="lay-body">
+        <div class="{{ lay.rowClass }}">
+          <div class="lay-bar" style="background:{{ lay.color }};" onClick="{{ lay.onSelect }}"></div>
+          <button type="button" class="lay-body" onClick="{{ lay.onSelect }}" title="Switch to {{ lay.name }}">
             <div class="lay-name">{{ lay.name }}</div>
             <div class="lay-elev">{{ lay.elevStr }}</div>
-          </div>
+          </button>
           <button class="lay-eye" onClick="{{ lay.onToggleVis }}" title="{{ lay.visLabel }}">{{ lay.visIcon }}</button>
+          <button class="lay-bg" onClick="{{ lay.onToggleBackground }}" title="{{ lay.bgTitle }}" style="background:{{ lay.bgButtonBg }}; border-color:{{ lay.bgButtonBorder }}; color:{{ lay.bgButtonColor }};">{{ lay.bgLabel }}</button>
           <button class="lay-del" onClick="{{ lay.onDelete }}" title="Delete layer">×</button>
         </div>
       </sc-for>
@@ -212,6 +215,7 @@
 <div style="height:28px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em; color:rgba(29,31,32,0.55); background:#fff; flex-shrink:0; user-select:none;">
   <span data-model-sx>X: —</span>
   <span style="margin-left:24px;" data-model-sy>Y: —</span>
+  <span style="margin-left:24px; color:{{ backgroundStatusColor }};">{{ backgroundStatus }}</span>
   <div style="flex:1;"></div>
   <span>{{ viewLabel }}</span>
 </div>
@@ -272,6 +276,8 @@ class Component extends DCLogic {
     layers:        DEFAULT_LAYERS.map(l => ({ ...l })),
     activeLayerIdx: 5,
     nextLayerId:   9,
+    backgroundLayerIds: [],
+    backgroundMode: 'blue', // 'blue' | 'red' | 'none'
     cursorX: -100, cursorY: -100, showCursor: false,
     magnetX: -100, magnetY: -100, showMagnet: false,
     midSnapX: -100, midSnapY: -100, showMidSnap: false,
@@ -515,11 +521,33 @@ class Component extends DCLogic {
       const s = toS(pt);
       ctx.beginPath(); ctx.arc(s.x, s.y, DOT_R, 0, Math.PI * 2); ctx.fill();
     };
+    const drawReferenceSeg = (seg, color) => {
+      const a = toS(seg.start), b = toS(seg.end);
+      ctx.save();
+      ctx.strokeStyle = color; ctx.fillStyle = color;
+      ctx.lineWidth = 1.25;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      [a, b].forEach(p => {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.restore();
+    };
+
+    const activeLayer = this._activeLayer();
+    const activeVisible = activeLayer?.visible !== false;
+    const reference = this._visibleBackgroundReference();
+
+    // ── Visible background (reference-only, deliberately beneath active geometry)
+    // Walls appear as their centreline so material fills never obscure active work.
+    if (reference) {
+      this._backgroundWalls().forEach(wall => drawReferenceSeg(wall, reference.color));
+      this._backgroundLines().forEach(line => drawReferenceSeg(line, reference.color));
+    }
 
     // ── Walls (fills drawn beneath lines) ────────────────────────────────────
     const pwType = this.state.activeWallType;
     const pwRef  = this.state.wallRefLine;
-    this._walls.forEach(w => this._drawWallSeg2D(ctx, toS, w, false));
+    if (activeVisible) this._activeWalls().forEach(w => this._drawWallSeg2D(ctx, toS, w, false));
     this._wallChain.forEach(s => this._drawWallSeg2D(ctx, toS, { ...s, wallType: pwType, refLine: pwRef }, false));
     if (this._wallDrawing && this._wallStart && this._snapPt) {
       this._drawWallSeg2D(ctx, toS, { start: this._wallStart, end: this._snapPt, wallType: pwType, refLine: pwRef }, true);
@@ -535,7 +563,7 @@ class Component extends DCLogic {
     ctx.strokeStyle = LINE_COLOR; ctx.lineWidth = 2; ctx.fillStyle = LINE_COLOR;
 
     // Committed lines
-    this._lines.forEach(l => { drawSeg(l.start, l.end); drawDot(l.start); drawDot(l.end); });
+    if (activeVisible) this._activeLines().forEach(l => { drawSeg(l.start, l.end); drawDot(l.start); drawDot(l.end); });
 
     // Dragged node highlight (blue ring around the node being moved)
     if (this._selectDrag && this._selectDrag.active && this._selectDrag.refs.length) {
@@ -552,7 +580,7 @@ class Component extends DCLogic {
       const hovSeg = this._findNearestSeg(this._snapPt);
       if (hovSeg) {
         // Find nearest intersection on hovered segment
-        const others = [...this._lines, ...this._walls].filter(s => s !== hovSeg);
+        const others = [...this._activeLines(), ...this._activeWalls()].filter(s => s !== hovSeg);
         const hits = others.map(o => this._segIntersect(hovSeg, o)).filter(Boolean);
         if (hits.length > 0) {
           const ax = hovSeg.start.x, az = hovSeg.start.z, bx = hovSeg.end.x, bz = hovSeg.end.z;
@@ -656,6 +684,64 @@ class Component extends DCLogic {
   // ─── Layers ──────────────────────────────────────────────────────────────────
   _activeLayer() { return this.state.layers[this.state.activeLayerIdx] || this.state.layers[0]; }
 
+  _activeLayerId() { return this._activeLayer()?.id; }
+
+  _activeLines() {
+    const layerId = this._activeLayerId();
+    return this._lines.filter(line => line.layerId === layerId);
+  }
+
+  _activeWalls() {
+    const layerId = this._activeLayerId();
+    return this._walls.filter(wall => wall.layerId === layerId);
+  }
+
+  // One reference slot is visible at a time: B cycles blue → red → none.
+  _visibleBackgroundReference() {
+    const { backgroundLayerIds, backgroundMode, layers } = this.state;
+    const slot = backgroundMode === 'blue' ? 0 : backgroundMode === 'red' ? 1 : -1;
+    const layerId = slot >= 0 ? backgroundLayerIds[slot] : null;
+    if (layerId == null || layerId === this._activeLayerId()) return null;
+    const layer = layers.find(l => l.id === layerId);
+    if (!layer) return null;
+    return {
+      layerId,
+      layer,
+      color: backgroundMode === 'blue' ? 'rgba(82,151,218,0.58)' : 'rgba(221,101,104,0.58)',
+      label: backgroundMode.toUpperCase(),
+    };
+  }
+
+  _backgroundLines() {
+    const ref = this._visibleBackgroundReference();
+    return ref ? this._lines.filter(line => line.layerId === ref.layerId) : [];
+  }
+
+  _backgroundWalls() {
+    const ref = this._visibleBackgroundReference();
+    return ref ? this._walls.filter(wall => wall.layerId === ref.layerId) : [];
+  }
+
+  _toggleBackgroundLayer(idx, e) {
+    e.stopPropagation();
+    const layerId = this.state.layers[idx]?.id;
+    if (layerId == null || layerId === this._activeLayerId()) return;
+    const ids = [...this.state.backgroundLayerIds];
+    const selectedAt = ids.indexOf(layerId);
+    if (selectedAt >= 0) ids.splice(selectedAt, 1);
+    else {
+      ids.push(layerId);
+      if (ids.length > 2) ids.shift(); // third selection replaces the oldest
+    }
+    this.setState({ backgroundLayerIds: ids });
+  }
+
+  _cycleBackground() {
+    const modes = ['blue', 'red', 'none'];
+    const current = modes.indexOf(this.state.backgroundMode);
+    this.setState({ backgroundMode: modes[(current + 1) % modes.length] });
+  }
+
   _applyLayerElevation(idx) {
     const layer = this.state.layers[idx];
     if (!layer) return;
@@ -667,8 +753,16 @@ class Component extends DCLogic {
   _switchLayer(idx) {
     if (idx === this.state.activeLayerIdx) return;
     this._cancelWall(); this._cancelCut();
+    if (this._selectedSegs) this._selectedSegs.clear();
     this._applyLayerElevation(idx);
-    this.setState({ activeLayerIdx: idx }, () => this._setView('top'));
+    // A floor cannot also be one of its own references.
+    const activeId = this.state.layers[idx]?.id;
+    const backgroundLayerIds = this.state.backgroundLayerIds.filter(id => id !== activeId);
+    this.setState({ activeLayerIdx: idx, backgroundLayerIds }, () => {
+      // Keep layer switching functional even when the optional WebGL renderer
+      // is unavailable; the 2D overlay can still render once it is initialized.
+      if (this._orthoCam && this._controls) this._setView('top');
+    });
   }
 
   _addLayer() {
@@ -684,18 +778,24 @@ class Component extends DCLogic {
     if (layers.length <= 1) { window.alert('Cannot delete the last layer.'); return; }
     if (!window.confirm(`Delete layer "${layers[idx].name}"? Lines on this layer will be removed.`)) return;
     const lid = layers[idx].id;
-    this._walls = this._walls.filter(w => { if (w.layerId !== lid) return true; this._scene.remove(w.line); w.line.geometry.dispose(); return false; });
+    this._lines = this._lines.filter(line => line.layerId !== lid);
+    this._walls = this._walls.filter(wall => wall.layerId !== lid);
     const newLayers = layers.filter((_, i) => i !== idx);
-    const newIdx = Math.min(activeLayerIdx, newLayers.length - 1);
+    const newIdx = idx < activeLayerIdx
+      ? activeLayerIdx - 1
+      : Math.min(activeLayerIdx, newLayers.length - 1);
     this._applyLayerElevation(newIdx);
-    this.setState({ layers: newLayers, activeLayerIdx: newIdx });
+    if (this._selectedSegs) this._selectedSegs.clear();
+    this.setState({
+      layers: newLayers,
+      activeLayerIdx: newIdx,
+      backgroundLayerIds: this.state.backgroundLayerIds.filter(id => id !== lid),
+    });
   }
 
   _toggleLayerVisibility(idx, e) {
     e.stopPropagation();
     const layers = this.state.layers.map((l, i) => i === idx ? { ...l, visible: !l.visible } : l);
-    const tid = this.state.layers[idx].id, vis = layers[idx].visible;
-    this._walls.forEach(w => { if (w.layerId === tid) w.line.visible = vis; });
     this.setState({ layers });
   }
 
@@ -1209,13 +1309,24 @@ class Component extends DCLogic {
   }
 
   // ─── Snap helpers ────────────────────────────────────────────────────────────
-  _collectVertices() {
+  _collectActiveVertices() {
     const pts = [];
-    this._lines.forEach(l => { pts.push(l.start, l.end); });
+    this._activeLines().forEach(l => { pts.push(l.start, l.end); });
     this._pendingChain.forEach(s => { pts.push(s.start, s.end); });
-    this._walls.forEach(w => { pts.push(w.start, w.end); });
+    this._activeWalls().forEach(w => { pts.push(w.start, w.end); });
     this._wallChain.forEach(s => { pts.push(s.start, s.end); });
     return pts;
+  }
+
+  _collectBackgroundVertices() {
+    const pts = [];
+    this._backgroundLines().forEach(l => { pts.push(l.start, l.end); });
+    this._backgroundWalls().forEach(w => { pts.push(w.start, w.end); });
+    return pts;
+  }
+
+  _collectVertices() {
+    return [...this._collectActiveVertices(), ...this._collectBackgroundVertices()];
   }
 
   // ─── Vertex pool ─────────────────────────────────────────────────────────────
@@ -1244,27 +1355,34 @@ class Component extends DCLogic {
 
   _findMagnet(gridPt) {
     const r = this._nodeSnapRadius();
-    let best = null, bestD = r;
-    this._collectVertices().forEach(v => {
-      const d = Math.sqrt((v.x - gridPt.x) ** 2 + (v.z - gridPt.z) ** 2);
-      if (d < bestD) { bestD = d; best = v; }
-    });
-    return best; // THREE.Vector3 or null
+    const nearest = vertices => {
+      let best = null, bestD = r;
+      vertices.forEach(v => {
+        const d = Math.sqrt((v.x - gridPt.x) ** 2 + (v.z - gridPt.z) ** 2);
+        if (d < bestD) { bestD = d; best = v; }
+      });
+      return best;
+    };
+    // Active geometry always wins over a background reference when both qualify.
+    return nearest(this._collectActiveVertices()) || nearest(this._collectBackgroundVertices());
   }
 
   // Return midpoint of the nearest line/wall segment if the cursor is within snap
   // radius. Only called when vertex magnet is null (vertex takes priority).
   _findMidpointSnap(gridPt) {
     const r = this._magnetRadius() * 1.4; // slightly wider catch radius than node snap
-    let best = null, bestD = r;
-    const check = (a, b) => {
-      const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
-      const d = Math.sqrt((mx - gridPt.x) ** 2 + (mz - gridPt.z) ** 2);
-      if (d < bestD) { bestD = d; best = new THREE.Vector3(mx, a.y, mz); }
+    const nearest = segments => {
+      let best = null, bestD = r;
+      segments.forEach(seg => {
+        const a = seg.start, b = seg.end;
+        const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
+        const d = Math.sqrt((mx - gridPt.x) ** 2 + (mz - gridPt.z) ** 2);
+        if (d < bestD) { bestD = d; best = new THREE.Vector3(mx, a.y, mz); }
+      });
+      return best;
     };
-    this._lines.forEach(l => check(l.start, l.end));
-    this._walls.forEach(w => check(w.start, w.end));
-    return best; // THREE.Vector3 or null
+    return nearest([...this._activeLines(), ...this._activeWalls()])
+      || nearest([...this._backgroundLines(), ...this._backgroundWalls()]);
   }
 
   // ─── Select-tool helpers ─────────────────────────────────────────────────────
@@ -1276,7 +1394,7 @@ class Component extends DCLogic {
   _findVertexHit(worldPt) {
     const r = this._magnetRadius() * 1.5;
     let bestD = r, bestVtx = null;
-    [...this._lines, ...this._walls].forEach(seg => {
+    [...this._activeLines(), ...this._activeWalls()].forEach(seg => {
       [seg.start, seg.end].forEach(v => {
         const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
         if (d < bestD) { bestD = d; bestVtx = v; }
@@ -1285,7 +1403,7 @@ class Component extends DCLogic {
     if (!bestVtx) return null;
     // Collect all segment props pointing at this exact vertex object
     const refs = [];
-    [...this._lines, ...this._walls].forEach(seg => {
+    [...this._activeLines(), ...this._activeWalls()].forEach(seg => {
       if (seg.start === bestVtx) refs.push({ seg, prop: 'start' });
       if (seg.end   === bestVtx) refs.push({ seg, prop: 'end' });
     });
@@ -1297,7 +1415,7 @@ class Component extends DCLogic {
     const h = this._canvas ? this._canvas.clientHeight : 600;
     const thresh = (this._orthoHalfH * 2) / h * 12;
     let bestD = thresh, bestIdx = -1, bestT = 0;
-    this._lines.forEach((l, i) => {
+    this._activeLines().forEach(l => {
       const ax = l.start.x, az = l.start.z, bx = l.end.x, bz = l.end.z;
       const dx = bx - ax, dz = bz - az;
       const len2 = dx*dx + dz*dz;
@@ -1305,7 +1423,7 @@ class Component extends DCLogic {
       const t = Math.max(0, Math.min(1, ((worldPt.x - ax)*dx + (worldPt.z - az)*dz) / len2));
       const cx = ax + t*dx, cz = az + t*dz;
       const d = Math.sqrt((worldPt.x - cx)**2 + (worldPt.z - cz)**2);
-      if (d < bestD) { bestD = d; bestIdx = i; bestT = t; }
+      if (d < bestD) { bestD = d; bestIdx = this._lines.indexOf(l); bestT = t; }
     });
     return bestIdx >= 0 ? { idx: bestIdx, t: bestT } : null;
   }
@@ -1337,8 +1455,8 @@ class Component extends DCLogic {
         if (d < bestD) { bestD = d; bestSeg = seg; }
       });
     };
-    check(this._lines);
-    check(this._walls);
+    check(this._activeLines());
+    check(this._activeWalls());
     return bestSeg;
   }
 
@@ -1383,7 +1501,7 @@ class Component extends DCLogic {
     const seg = this._findNearestSeg(clickWorldPt);
     if (!seg) return;
 
-    const others = [...this._lines, ...this._walls].filter(s => s !== seg);
+    const others = [...this._activeLines(), ...this._activeWalls()].filter(s => s !== seg);
 
     // Find all intersections of clicked segment with every other segment
     const hits = [];
@@ -1440,26 +1558,29 @@ class Component extends DCLogic {
 
     const dirX = Math.cos(this._lockAngle), dirZ = Math.sin(this._lockAngle);
 
-    let best = null, bestPerp = threshWorld;
-    this._collectVertices().forEach(V => {
-      // Skip the current chain tip (avoid snapping to self)
-      if (start && Math.abs(V.x - start.x) < 0.001 && Math.abs(V.z - start.z) < 0.001) return;
-      // Perp distance from gridPt to the vertical (perp) tracking line through V
-      // = |dot(gridPt - V, dir)| (component along locked direction)
-      const dx = gridPt.x - V.x, dz = gridPt.z - V.z;
-      const perpDist = Math.abs(dx * dirX + dz * dirZ);
-      if (perpDist < bestPerp) {
-        bestPerp = perpDist;
-        // Snap point: project V onto the locked ray from start
-        const svx = V.x - start.x, svz = V.z - start.z;
-        const t = svx * dirX + svz * dirZ;
-        best = {
-          snapPt: new THREE.Vector3(start.x + dirX * t, start.y, start.z + dirZ * t),
-          refPt:  V,
-        };
-      }
-    });
-    return best;
+    const find = vertices => {
+      let best = null, bestPerp = threshWorld;
+      vertices.forEach(V => {
+        // Skip the current chain tip (avoid snapping to self)
+        if (start && Math.abs(V.x - start.x) < 0.001 && Math.abs(V.z - start.z) < 0.001) return;
+        // Perp distance from gridPt to the vertical (perp) tracking line through V
+        // = |dot(gridPt - V, dir)| (component along locked direction)
+        const dx = gridPt.x - V.x, dz = gridPt.z - V.z;
+        const perpDist = Math.abs(dx * dirX + dz * dirZ);
+        if (perpDist < bestPerp) {
+          bestPerp = perpDist;
+          // Snap point: project V onto the locked ray from start
+          const svx = V.x - start.x, svz = V.z - start.z;
+          const t = svx * dirX + svz * dirZ;
+          best = {
+            snapPt: new THREE.Vector3(start.x + dirX * t, start.y, start.z + dirZ * t),
+            refPt:  V,
+          };
+        }
+      });
+      return best;
+    };
+    return find(this._collectActiveVertices()) || find(this._collectBackgroundVertices());
   }
 
   _applyAngleLock(start, pt) {
@@ -1772,7 +1893,7 @@ class Component extends DCLogic {
 
   _cancelCut() {
     this._removeCutArrows();
-    this._cutPreviewLine.visible = false;
+    if (this._cutPreviewLine) this._cutPreviewLine.visible = false;
     this._cutStart3 = null; this._cutEnd3 = null;
     this._cutDirLeft = null; this._cutDirRight = null;
     this.setState({ cutPhase: 'idle', choosingDir: false });
@@ -1816,6 +1937,7 @@ class Component extends DCLogic {
     if (e.key === 's' || e.key === 'S') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'select' }); }
     if (e.key === 't' || e.key === 'T') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'trim' }); }
     if (e.key === 'c' || e.key === 'C') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'cut' }); }
+    if (e.key === 'b' || e.key === 'B') { this._cycleBackground(); }
     if (e.key === '1') this._setView('perspective');
     if (e.key === '2') this._setView('top');
     if (e.key === '3') this._setView('front');
@@ -1840,7 +1962,8 @@ class Component extends DCLogic {
   // ─── renderVals ───────────────────────────────────────────────────────────────
   renderVals() {
     const { activeTool, units, activeView, activeSnap, isDrawing,
-            layers, activeLayerIdx, cuts, activeCutId, cutPhase, choosingDir } = this.state;
+            layers, activeLayerIdx, backgroundLayerIds, backgroundMode,
+            cuts, activeCutId, cutPhase, choosingDir } = this.state;
     const on  = { bg:'#1d1f20', color:'#f2f2f3', border:'#1d1f20' };
     const off = { bg:'#fff',    color:'#1d1f20', border:'rgba(29,31,32,0.16)' };
     const hi  = 'rgba(29,31,32,0.09)', lo = '#fff';
@@ -1863,6 +1986,14 @@ class Component extends DCLogic {
     const viewLabels = { perspective:'PERSPECTIVE', top:'TOP / PLAN', front:'FRONT ELEV', side:'SIDE ELEV', cut: activeCut?.name || 'SECTION' };
     const topBarLabel = activeView === 'cut' && activeCut ? activeCut.name : (activeLayer?.name || '—');
     const topBarColor = activeView === 'cut' ? '#b04060' : '#5980a6';
+    const visibleBackground = this._visibleBackgroundReference();
+    const backgroundStatus = backgroundMode === 'none'
+      ? 'BACKGROUND: OFF  [B]'
+      : visibleBackground
+        ? `BACKGROUND ${visibleBackground.label}: ${visibleBackground.layer.name}  [B]`
+        : `BACKGROUND ${backgroundMode.toUpperCase()}: NONE SELECTED  [B]`;
+    const backgroundStatusColor = backgroundMode === 'blue' ? '#5297da'
+      : backgroundMode === 'red' ? '#dd6568' : 'rgba(29,31,32,0.42)';
 
     return {
       topBarLabel, topBarColor,
@@ -1893,15 +2024,27 @@ class Component extends DCLogic {
                  : this.state.wallRefLine === 'right'  ? 'EXTERIOR FACE →'
                  : 'SYMMETRIC / NO EXT',
 
-      layers: layers.map((l, i) => ({
-        name: l.name, elevStr: this._elevLabel(l.elev),
-        color: LAYER_COLORS[i % LAYER_COLORS.length],
-        rowClass: 'lay-row' + (i === activeLayerIdx ? ' active' : ''),
-        visIcon: l.visible ? '●' : '○', visLabel: l.visible ? 'Hide' : 'Show',
-        onSelect:    ()  => this._switchLayer(i),
-        onDelete:    (e) => { e.stopPropagation(); this._deleteLayer(i); },
-        onToggleVis: (e) => this._toggleLayerVisibility(i, e),
-      })),
+      layers: layers.map((l, i) => {
+        const slot = l.id === activeLayer?.id ? -1 : backgroundLayerIds.indexOf(l.id);
+        const bgColor = slot === 0 ? '#5297da' : slot === 1 ? '#dd6568' : 'rgba(29,31,32,0.45)';
+        return {
+          name: l.name, elevStr: this._elevLabel(l.elev),
+          color: LAYER_COLORS[i % LAYER_COLORS.length],
+          rowClass: 'lay-row' + (i === activeLayerIdx ? ' active' : ''),
+          visIcon: l.visible ? '●' : '○', visLabel: l.visible ? 'Hide' : 'Show',
+          bgLabel: slot === 0 ? 'BG1' : slot === 1 ? 'BG2' : 'BG',
+          bgTitle: slot === 0 ? 'Background 1 — blue reference'
+            : slot === 1 ? 'Background 2 — red reference'
+            : (l.id === activeLayer?.id ? 'Active floor cannot be a background' : 'Use as background reference'),
+          bgButtonBg: slot >= 0 ? (slot === 0 ? 'rgba(82,151,218,0.12)' : 'rgba(221,101,104,0.12)') : '#fff',
+          bgButtonBorder: slot >= 0 ? bgColor : 'rgba(29,31,32,0.2)',
+          bgButtonColor: bgColor,
+          onSelect:    ()  => this._switchLayer(i),
+          onDelete:    (e) => { e.stopPropagation(); this._deleteLayer(i); },
+          onToggleVis: (e) => this._toggleLayerVisibility(i, e),
+          onToggleBackground: (e) => this._toggleBackgroundLayer(i, e),
+        };
+      }),
       addLayer: () => this._addLayer(),
 
       cuts: cuts.map(c => ({
@@ -1949,6 +2092,8 @@ class Component extends DCLogic {
       confirmFrozenLength: () => this._confirmFrozenLength(),
       cancelFrozenLength:  () => this._cancelFrozenLength(),
       viewLabel: viewLabels[activeView] || 'TOP / PLAN',
+      backgroundStatus,
+      backgroundStatusColor,
     };
   }
 }
