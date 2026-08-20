@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
+<script src="./shared-file-store.js"></script>
 </head>
 <body>
 <x-dc>
@@ -36,6 +37,15 @@
     .cut-body { flex:1; padding:5px 7px 5px 8px; min-width:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .cut-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; }
     .cut-del:hover { color:#c04040; }
+    @media (max-width: 760px) {
+      [data-model-left], [data-model-right] { width:176px !important; }
+      [data-model-right] { position:absolute; right:0; top:44px; bottom:28px; z-index:5; box-shadow:-5px 0 14px rgba(29,31,32,0.08); }
+      [data-model-container] { min-width:0; }
+      [data-save-controls] { margin-left:4px !important; }
+      [data-save-controls] > span { display:none; }
+      [data-save-controls] select { max-width:58px; }
+      [data-model-nav] { margin-left:8px !important; }
+    }
   </style>
 </helmet>
 
@@ -52,68 +62,40 @@
   <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; align-items:center; gap:10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em; pointer-events:none;">
     <span data-model-len style="color:#1d1f20; min-width:80px; text-align:right;"></span>
     <span data-model-ang style="color:rgba(29,31,32,0.4); min-width:52px;"></span>
-    <!-- FT/IN freeze inputs — pointer-events re-enabled when visible -->
+     <!-- Architectural-length freeze input — pointer-events re-enabled when visible -->
     <sc-if value="{{ lengthFrozen }}" hint-placeholder-val="{{ false }}">
       <div style="display:flex; align-items:center; gap:6px; pointer-events:all;">
         <span style="opacity:0.45; font-size:11px;">LENGTH</span>
-        <input data-frozen-ft type="text" value="{{ frozenFt }}" onInput="{{ onFrozenFtInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="FT" style="width:40px; text-align:right; background:#f2f2f3; border:1px solid rgba(29,31,32,0.25); color:#1d1f20; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; outline:none;" />
-        <span style="color:rgba(29,31,32,0.4);">'</span>
-        <input data-frozen-in type="text" value="{{ frozenIn }}" onInput="{{ onFrozenInInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="IN" style="width:44px; text-align:right; background:#f2f2f3; border:1px solid rgba(29,31,32,0.25); color:#1d1f20; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; outline:none;" />
-        <span style="color:rgba(29,31,32,0.4);">"</span>
+         <input data-frozen-length type="text" value="{{ frozenLengthInput }}" onInput="{{ onFrozenLengthInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="8'-1 1/8&quot;" aria-label="Frozen length" style="width:112px; text-align:right; background:#f2f2f3; border:1px solid {{ frozenDimensionBorder }}; color:#1d1f20; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; outline:none;" />
         <button onClick="{{ confirmFrozenLength }}" style="border:none; background:#5980a6; color:#fff; padding:4px 12px; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer; font-family:'Barlow Condensed',system-ui,sans-serif;">CONFIRM</button>
         <button onClick="{{ cancelFrozenLength }}" style="border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.45); padding:4px 8px; font-size:13px; cursor:pointer;">✕</button>
+         <sc-if value="{{ hasFrozenDimensionError }}" hint-placeholder-val="{{ false }}">
+           <span style="color:#b04050; font-size:10px; max-width:130px;">{{ frozenDimensionError }}</span>
+         </sc-if>
       </div>
     </sc-if>
   </div>
 
   <div style="flex:1;"></div>
-  <a href="./LAYOUT.dc.html" style="margin-left:28px;">LAYOUT</a>
-  <a href="./PDF-MARKUP.dc.html" style="margin-left:28px;">PDF-MARKUP</a>
+  <div data-save-controls style="display:flex; align-items:center; gap:5px; margin-left:18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em;">
+    <span style="color:rgba(29,31,32,0.45);">SAVE AS</span>
+    <select value="{{ saveExtension }}" onChange="{{ onSaveExtensionChange }}" aria-label="Save file extension" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; cursor:pointer;">
+      <option value="json">.json</option>
+      <option value="draft">.draft</option>
+      <option value="model">.model</option>
+      <option value="plan">.plan</option>
+    </select>
+    <button onClick="{{ saveDrawingFile }}" style="height:24px; border:1px solid #5980a6; background:#5980a6; color:#fff; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE</button>
+  </div>
+  <a data-model-nav href="./LAYOUT.dc.html" style="margin-left:28px;">LAYOUT</a>
+  <a data-model-nav href="./PDF-MARKUP.dc.html" style="margin-left:28px;">PDF-MARKUP</a>
 </div>
 
 <!-- BODY -->
 <div style="display:flex; height:calc(100vh - 72px);">
 
-  <!-- LEFT PANEL -->
-  <div style="width:200px; border-right:1px solid rgba(29,31,32,0.16); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff;">
-
-    <!-- LEVELS — floor elevations, separate from future object layers -->
-    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="display:flex; align-items:center; margin-bottom:8px;">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Levels</div>
-        <button onClick="{{ addLevel }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; padding:2px 8px; cursor:pointer; letter-spacing:0.04em;">+ ADD</button>
-      </div>
-      <div style="margin:-2px 0 7px; color:rgba(29,31,32,0.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.03em;">FLOOR ELEVATIONS · OBJECT LAYERS SEPARATE</div>
-      <sc-for list="{{ levels }}" as="level" hint-placeholder-count="8">
-        <div class="{{ level.rowClass }}">
-          <div class="level-bar" style="background:{{ level.color }};" onClick="{{ level.onSelect }}"></div>
-          <button type="button" class="level-body" onClick="{{ level.onSelect }}" title="Switch to {{ level.name }}">
-            <div class="level-name">{{ level.name }}</div>
-            <div class="level-elev">{{ level.elevStr }}</div>
-          </button>
-          <button class="level-eye" onClick="{{ level.onToggleVis }}" title="{{ level.visLabel }}">{{ level.visIcon }}</button>
-          <button class="level-bg" onClick="{{ level.onToggleBackground }}" title="{{ level.bgTitle }}" style="background:{{ level.bgButtonBg }}; border-color:{{ level.bgButtonBorder }}; color:{{ level.bgButtonColor }};">{{ level.bgLabel }}</button>
-          <button class="level-del" onClick="{{ level.onDelete }}" title="Delete level">×</button>
-        </div>
-      </sc-for>
-    </div>
-
-    <!-- ELEVATIONS / SECTIONS -->
-    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="display:flex; align-items:center; margin-bottom:8px;">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Elevations / Sections</div>
-      </div>
-      <sc-if value="{{ noCuts }}" hint-placeholder-val="{{ true }}">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; color:rgba(29,31,32,0.35); padding:4px 2px;">Use Cut tool to add views</div>
-      </sc-if>
-      <sc-for list="{{ cuts }}" as="cut" hint-placeholder-count="0">
-        <div class="{{ cut.rowClass }}" onClick="{{ cut.onView }}">
-          <div class="cut-bar"></div>
-          <div class="cut-body">{{ cut.name }}</div>
-          <button class="cut-del" onClick="{{ cut.onDelete }}" title="Delete">×</button>
-        </div>
-      </sc-for>
-    </div>
+  <!-- LEFT TOOL RAIL -->
+  <div data-model-left style="width:200px; border-right:1px solid rgba(29,31,32,0.16); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff;">
 
     <!-- TOOLS -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
@@ -143,14 +125,31 @@
         <!-- Heights -->
         <div style="margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
           <div>
-            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Base Ht (ft)</div>
-            <input type="number" step="0.5" value="{{ wallBaseHeight }}" onChange="{{ onWallBaseH }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(29,31,32,0.2); padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Base Ht</div>
+            <input type="text" value="{{ wallBaseInput }}" onInput="{{ onWallBaseInput }}" onBlur="{{ onWallBaseCommit }}" onKeyDown="{{ onWallBaseKey }}" placeholder="0'-0&quot;" aria-label="Wall base height" style="width:100%; box-sizing:border-box; border:1px solid {{ wallDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
           </div>
           <div>
-            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Top Ht (ft)</div>
-            <input type="number" step="0.5" value="{{ wallTopHeight }}" onChange="{{ onWallTopH }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(29,31,32,0.2); padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Top Ht</div>
+            <input type="text" value="{{ wallTopInput }}" onInput="{{ onWallTopInput }}" onBlur="{{ onWallTopCommit }}" onKeyDown="{{ onWallTopKey }}" placeholder="8'-1 1/8&quot;" aria-label="Wall top height" style="width:100%; box-sizing:border-box; border:1px solid {{ wallDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
           </div>
         </div>
+        <div style="margin-top:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.48);">Use 8-1 1/8, 8'-1 1/8&quot;, or 97.125&quot;</div>
+        <sc-if value="{{ hasWallDimensionError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ wallDimensionError }}</div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- FLOOR PROPERTIES (shown when Floor tool is active) -->
+    <sc-if value="{{ floorToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Floor</div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Total Thickness</div>
+        <input type="text" value="{{ floorThicknessInput }}" onInput="{{ onFloorThicknessInput }}" onBlur="{{ onFloorThicknessCommit }}" onKeyDown="{{ onFloorDimensionKey }}" placeholder="1'-0 5/8&quot;" aria-label="Floor thickness" style="width:100%; box-sizing:border-box; border:1px solid {{ floorDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+        <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ floorAssemblyLabel }}</div>
+        <sc-if value="{{ hasFloorDimensionError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ floorDimensionError }}</div>
+        </sc-if>
       </div>
     </sc-if>
 
@@ -167,7 +166,7 @@
 
     <!-- 3D VIEW (special) -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <button onClick="{{ enter3D }}" style="display:block; width:100%; text-align:center; border:1px solid {{ view3DBorder }}; background:{{ view3DBg }}; color:{{ view3DColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; padding:8px 10px; cursor:pointer;">⬡  3D VIEW</button>
+      <button onClick="{{ enter3D }}" title="{{ view3DTitle }}" style="display:block; width:100%; text-align:center; border:1px solid {{ view3DBorder }}; background:{{ view3DBg }}; color:{{ view3DColor }}; opacity:{{ view3DOpacity }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; padding:8px 10px; cursor:{{ view3DCursor }};">⬡  {{ view3DLabel }}</button>
     </div>
 
     <!-- UNITS + SNAP -->
@@ -208,6 +207,57 @@
         Click the side of the line to look toward
       </div>
     </sc-if>
+
+    <!-- WebGL is optional: the 2D overlay remains the drafting surface. -->
+    <sc-if value="{{ webglUnavailable }}" hint-placeholder-val="{{ false }}">
+      <div role="status" style="position:absolute; top:12px; left:50%; transform:translateX(-50%); max-width:calc(100% - 28px); padding:7px 12px; border:1px solid rgba(176,64,80,0.45); background:rgba(255,248,249,0.96); color:#8f3042; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; line-height:1.25; letter-spacing:0.05em; text-align:center; text-transform:uppercase; pointer-events:none; z-index:2;">
+        <strong style="font-weight:700;">3D PREVIEW UNAVAILABLE</strong>
+        <span style="display:block; margin-top:2px; color:rgba(29,31,32,0.62); letter-spacing:0.03em; text-transform:none;">2D drafting remains available. Use the plan, elevation, and snapping tools normally.</span>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- RIGHT LEVEL RAIL -->
+  <div data-model-right style="width:200px; border-left:1px solid rgba(29,31,32,0.16); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff;">
+
+    <!-- LEVELS — floor elevations, separate from future object layers -->
+    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="display:flex; align-items:center; margin-bottom:8px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Levels</div>
+        <button onClick="{{ addLevel }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; padding:2px 8px; cursor:pointer; letter-spacing:0.04em;">+ ADD</button>
+      </div>
+      <div style="margin:-2px 0 7px; color:rgba(29,31,32,0.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.03em;">FLOOR ELEVATIONS · OBJECT LAYERS SEPARATE</div>
+      <sc-for list="{{ levels }}" as="level" hint-placeholder-count="8">
+        <div class="{{ level.rowClass }}">
+          <div class="level-bar" style="background:{{ level.color }};" onClick="{{ level.onSelect }}"></div>
+          <button type="button" class="level-body" onClick="{{ level.onSelect }}" title="Switch to {{ level.name }}">
+            <div class="level-name">{{ level.name }}</div>
+            <div class="level-elev">{{ level.elevStr }}</div>
+          </button>
+          <button class="level-eye" onClick="{{ level.onToggleVis }}" title="{{ level.visLabel }}">{{ level.visIcon }}</button>
+          <button class="level-bg" onClick="{{ level.onToggleBackground }}" title="{{ level.bgTitle }}" style="background:{{ level.bgButtonBg }}; border-color:{{ level.bgButtonBorder }}; color:{{ level.bgButtonColor }};">{{ level.bgLabel }}</button>
+          <button class="level-del" onClick="{{ level.onDelete }}" title="Delete level">×</button>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- ELEVATIONS / SECTIONS -->
+    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="display:flex; align-items:center; margin-bottom:8px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Elevations / Sections</div>
+      </div>
+      <sc-if value="{{ noCuts }}" hint-placeholder-val="{{ true }}">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; color:rgba(29,31,32,0.35); padding:4px 2px;">Use Cut tool to add views</div>
+      </sc-if>
+      <sc-for list="{{ cuts }}" as="cut" hint-placeholder-count="0">
+        <div class="{{ cut.rowClass }}" onClick="{{ cut.onView }}">
+          <div class="cut-bar"></div>
+          <div class="cut-body">{{ cut.name }}</div>
+          <button class="cut-del" onClick="{{ cut.onDelete }}" title="Delete">×</button>
+        </div>
+      </sc-for>
+    </div>
+
   </div>
 
 </div>
@@ -217,6 +267,7 @@
   <span data-model-sx>X: —</span>
   <span style="margin-left:24px;" data-model-sy>Y: —</span>
   <span style="margin-left:24px; color:{{ backgroundStatusColor }};">{{ backgroundStatus }}</span>
+  <span style="margin-left:24px; color:{{ persistenceStatusColor }};">{{ persistenceStatus }}</span>
   <div style="flex:1;"></div>
   <span>{{ viewLabel }}</span>
 </div>
@@ -241,7 +292,100 @@ const SNAP_METRIC = [
 const LEVEL_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a','#9a5a5a','#8a9a6a'];
 // Endpoint magnet catch distance in screen pixels. Keep this small so the
 // cursor is only pulled when it is deliberately placed very near a node.
-const NODE_SNAP_PX = 5;
+const NODE_SNAP_PX = 1;
+const SIXTEENTH_IN = 1 / 16;
+const DEFAULT_WALL_TOP_FT = (8 * 12 + 1 + 1 / 8) / 12;
+const DEFAULT_FLOOR_THICKNESS_IN = 12 + 5 / 8;
+const DEFAULT_FLOOR_ASSEMBLY = {
+  joistDepthIn: 11 + 7 / 8,
+  joistSpacingIn: 16,
+  sheathingIn: 3 / 4,
+};
+const MODEL_STORAGE_BUCKET = 'model-drawing';
+
+function _reduceFraction(n, d) {
+  const gcd = (a, b) => b ? gcd(b, a % b) : a;
+  const factor = gcd(n, d);
+  return [n / factor, d / factor];
+}
+
+function formatArchitecturalInches(totalInches) {
+  if (!Number.isFinite(totalInches)) return '';
+  const negative = totalInches < 0;
+  const sixteenths = Math.round(Math.abs(totalInches) / SIXTEENTH_IN);
+  const wholeInches = Math.floor(sixteenths / 16);
+  const numerator = sixteenths % 16;
+  const feet = Math.floor(wholeInches / 12);
+  const inches = wholeInches % 12;
+  let result = `${negative ? '-' : ''}${feet}'-${inches}`;
+  if (numerator) {
+    const [n, d] = _reduceFraction(numerator, 16);
+    result += ` ${n}/${d}`;
+  }
+  return result + '"';
+}
+
+function normalizeArchitecturalInches(totalInches) {
+  return Math.round(totalInches / SIXTEENTH_IN) * SIXTEENTH_IN;
+}
+
+function architecturalLengthResult(inches) {
+  return { ok: true, inches: normalizeArchitecturalInches(inches) };
+}
+
+function parseInchesComponent(value) {
+  const text = String(value || '').trim()
+    .replace(/(?:inches|inch|in)\.?$/i, '')
+    .replace(/"$/g, '')
+    .trim();
+  if (!text) return { ok: true, inches: 0 };
+  let match = text.match(/^(\d+(?:\.\d+)?)\s+(\d+)\s*\/\s*(\d+)$/);
+  if (match) {
+    const denominator = Number(match[3]);
+    if (!denominator) return { ok: false, error: 'The fraction denominator cannot be zero.' };
+    return { ok: true, inches: Number(match[1]) + Number(match[2]) / denominator };
+  }
+  match = text.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (match) {
+    const denominator = Number(match[2]);
+    if (!denominator) return { ok: false, error: 'The fraction denominator cannot be zero.' };
+    return { ok: true, inches: Number(match[1]) / denominator };
+  }
+  if (/^\d+(?:\.\d+)?$/.test(text)) return { ok: true, inches: Number(text) };
+  return { ok: false, error: 'Use inches such as 4, 4 1/16, or 4.5.' };
+}
+
+function parseArchitecturalLength(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return { ok: false, error: 'Enter a dimension such as 8-1 1/8.' };
+  if (/^[+-]?0(?:\.0+)?$/.test(raw)) return architecturalLengthResult(0);
+
+  let match = raw.match(/^([+-]?\d+(?:\.\d+)?)\s*(?:'|ft)\s*(.*)$/i);
+  if (match) {
+    const feetValue = Number(match[1]);
+    const inchesText = match[2].replace(/^-/, '').trim();
+    const parsedInches = parseInchesComponent(inchesText);
+    if (!parsedInches.ok) return parsedInches;
+    const sign = feetValue < 0 ? -1 : 1;
+    return architecturalLengthResult(sign * (Math.abs(feetValue) * 12 + parsedInches.inches));
+  }
+
+  match = raw.match(/^([+-]?\d+)\s*-\s*(.+)$/);
+  if (match) {
+    const parsedInches = parseInchesComponent(match[2]);
+    if (!parsedInches.ok) return parsedInches;
+    const feetValue = Number(match[1]);
+    const sign = feetValue < 0 ? -1 : 1;
+    return architecturalLengthResult(sign * (Math.abs(feetValue) * 12 + parsedInches.inches));
+  }
+
+  if (/(?:inches|inch|in)\.?$|"$/.test(raw)) {
+    const parsed = parseInchesComponent(raw);
+    return parsed.ok ? architecturalLengthResult(parsed.inches) : parsed;
+  }
+
+  return { ok: false, error: `Add feet/inches notation, for example 8-1 1/8 or 8'-1 1/8".` };
+}
 
 // Wall type definitions — totalIn is full assembly width in inches, centreline-based
 // layers listed left→right (outside→inside); fill: 'stud'|'concrete'|'insulation'
@@ -273,7 +417,13 @@ class Component extends DCLogic {
     activeWallType: 'stud_2x6',
     wallRefLine:    'left',   // 'left'|'center'|'right' — where the drawn line sits on the assembly
     wallBaseHeight: 0,
-    wallTopHeight:  9,
+    wallTopHeight:  DEFAULT_WALL_TOP_FT,
+    wallBaseInput: formatArchitecturalInches(0),
+    wallTopInput:  formatArchitecturalInches(DEFAULT_WALL_TOP_FT * 12),
+    wallDimensionError: '',
+    floorThickness: DEFAULT_FLOOR_THICKNESS_IN / 12,
+    floorThicknessInput: formatArchitecturalInches(DEFAULT_FLOOR_THICKNESS_IN),
+    floorDimensionError: '',
     levels:        DEFAULT_LEVELS.map(l => ({ ...l })),
     activeLevelIdx: 5,
     nextLevelId:   9,
@@ -282,20 +432,292 @@ class Component extends DCLogic {
     cursorX: -100, cursorY: -100, showCursor: false,
     magnetX: -100, magnetY: -100, showMagnet: false,
     midSnapX: -100, midSnapY: -100, showMidSnap: false,
-    lengthFrozen: false, frozenFt: '', frozenIn: '',
+    lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '',
     cuts:          [],
     nextCutId:     1,
     activeCutId:   null,
     cutPhase:      'idle',     // 'idle'|'placing'|'choosing'
     choosingDir:   false,
+    saveExtension: 'draft',
+    persistenceStatus: 'UNSAVED',
+    persistenceError: '',
+    webglUnavailable: false,
   };
 
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
   componentDidMount() {
+    this._ensureDrawingCollections();
     requestAnimationFrame(() => requestAnimationFrame(() => this._init()));
     window.addEventListener('keydown', this._onKey  = e => this._handleKey(e));
     window.addEventListener('keydown', this._onKdn  = e => { if (e.key === 'Shift') this._shiftHeld = true; });
     window.addEventListener('keyup',   this._onKup  = e => { if (e.key === 'Shift') this._shiftHeld = false; });
+  }
+
+  // ─── Local drawing persistence ───────────────────────────────────────────────
+  _ensureDrawingCollections() {
+    if (!Array.isArray(this._lines)) this._lines = [];
+    if (!Array.isArray(this._walls)) this._walls = [];
+    if (!Array.isArray(this._floors)) this._floors = [];
+    if (!Array.isArray(this._vertices)) this._vertices = [];
+  }
+
+  _pointForStorage(point) {
+    return { x: point.x, y: point.y || 0, z: point.z };
+  }
+
+  _serializeDrawing() {
+    this._ensureDrawingCollections();
+    const point = p => this._pointForStorage(p);
+    return {
+      version: 1,
+      lines: this._lines.map(line => ({
+        start: point(line.start),
+        end: point(line.end),
+        levelId: line.levelId,
+      })),
+      walls: this._walls.map(wall => ({
+        start: point(wall.start),
+        end: point(wall.end),
+        levelId: wall.levelId,
+        wallType: wall.wallType,
+        baseHeight: wall.baseHeight,
+        topHeight: wall.topHeight,
+        refLine: wall.refLine,
+      })),
+      floors: this._floors.map(floor => ({
+        points: floor.points.map(point),
+        levelId: floor.levelId,
+        thickness: floor.thickness,
+        assembly: { ...floor.assembly },
+      })),
+      levels: this.state.levels.map(level => ({ ...level })),
+      activeLevelIdx: this.state.activeLevelIdx,
+      nextLevelId: this.state.nextLevelId,
+      backgroundLevelIds: [...this.state.backgroundLevelIds],
+      backgroundMode: this.state.backgroundMode,
+      units: this.state.units,
+      activeSnap: this.state.activeSnap,
+      activeWallType: this.state.activeWallType,
+      wallRefLine: this.state.wallRefLine,
+      wallBaseHeight: this.state.wallBaseHeight,
+      wallTopHeight: this.state.wallTopHeight,
+      floorThickness: this.state.floorThickness,
+      cuts: this.state.cuts.map(cut => ({
+        id: cut.id,
+        name: cut.name,
+        startPt: { ...cut.startPt },
+        endPt: { ...cut.endPt },
+        dirVec: { ...cut.dirVec },
+        elev: cut.elev,
+      })),
+      nextCutId: this.state.nextCutId,
+    };
+  }
+
+  _drawingFile() {
+    const extension = String(this.state.saveExtension || 'json')
+      .toLowerCase()
+      .replace(/^\./, '')
+      .replace(/[^a-z0-9_-]/g, '') || 'json';
+    const contents = JSON.stringify(this._serializeDrawing());
+    return new File([contents], `model-drawing.${extension}`, { type: 'application/json' });
+  }
+
+  _downloadDrawingFile() {
+    const file = this._drawingFile();
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = file.name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  _saveDrawingFile() {
+    this._downloadDrawingFile();
+    this._markUnsaved();
+  }
+
+  _storedPoint(value) {
+    if (!value || !Number.isFinite(Number(value.x)) || !Number.isFinite(Number(value.z))) return null;
+    return {
+      x: Number(value.x),
+      y: Number.isFinite(Number(value.y)) ? Number(value.y) : 0,
+      z: Number(value.z),
+    };
+  }
+
+  _storedLevelId(value, levelIds) {
+    const levelId = Number(value);
+    return levelIds.has(levelId) ? levelId : null;
+  }
+
+  async _loadDrawing() {
+    this._loadingDrawing = true;
+    try {
+      if (!window.SharedFileStore) return;
+      const file = await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET);
+      if (!file) return;
+      const raw = await file.text();
+      const saved = JSON.parse(raw);
+      if (!saved || saved.version !== 1 || !Array.isArray(saved.levels)) return;
+
+      const levels = saved.levels
+        .filter(level => level && Number.isFinite(Number(level.id)))
+        .map(level => ({
+          id: Number(level.id),
+          name: String(level.name || 'LEVEL').toUpperCase(),
+          elev: Number.isFinite(Number(level.elev)) ? Number(level.elev) : 0,
+          visible: level.visible !== false,
+        }));
+      if (!levels.length) return;
+
+      const levelIds = new Set(levels.map(level => level.id));
+      const activeLevelIdx = Math.max(0, Math.min(
+        levels.length - 1,
+        Number.isInteger(saved.activeLevelIdx) ? saved.activeLevelIdx : 0,
+      ));
+      const backgroundLevelIds = Array.isArray(saved.backgroundLevelIds)
+        ? saved.backgroundLevelIds.map(Number).filter((id, index, ids) =>
+          levelIds.has(id) && id !== levels[activeLevelIdx].id && ids.indexOf(id) === index
+        ).slice(0, 2)
+        : [];
+      const cutIds = new Set();
+      const cuts = Array.isArray(saved.cuts) ? saved.cuts.map(cut => {
+        const id = Number(cut?.id);
+        const startPt = this._storedPoint(cut?.startPt);
+        const endPt = this._storedPoint(cut?.endPt);
+        const dirX = Number(cut?.dirVec?.x);
+        const dirZ = Number(cut?.dirVec?.z);
+        const dirLength = Math.hypot(dirX, dirZ);
+        if (!Number.isInteger(id) || cutIds.has(id) || !startPt || !endPt
+          || !Number.isFinite(dirX) || !Number.isFinite(dirZ) || dirLength < 0.001
+          || !Number.isFinite(Number(cut?.elev))) return null;
+        cutIds.add(id);
+        return {
+          id,
+          name: String(cut.name || 'SECTION').toUpperCase(),
+          startPt: { x: startPt.x, z: startPt.z },
+          endPt: { x: endPt.x, z: endPt.z },
+          dirVec: { x: dirX / dirLength, z: dirZ / dirLength },
+          elev: Number(cut.elev),
+        };
+      }).filter(Boolean) : [];
+      const nextCutId = Math.max(
+        1,
+        ...cuts.map(cut => cut.id + 1),
+        Number.isInteger(saved.nextCutId) ? saved.nextCutId : 1,
+      );
+
+      await new Promise(resolve => this.setState({
+        levels,
+        activeLevelIdx,
+        nextLevelId: Number.isInteger(saved.nextLevelId)
+          ? saved.nextLevelId
+          : Math.max(...levels.map(level => level.id)) + 1,
+        backgroundLevelIds,
+        backgroundMode: ['blue', 'red', 'none'].includes(saved.backgroundMode)
+          ? saved.backgroundMode : 'blue',
+        units: saved.units === 'metric' ? 'metric' : 'imperial',
+        activeSnap: Number.isInteger(saved.activeSnap) ? saved.activeSnap : 0,
+        activeWallType: WALL_TYPES.some(type => type.id === saved.activeWallType)
+          ? saved.activeWallType : 'stud_2x6',
+        wallRefLine: ['left', 'center', 'right'].includes(saved.wallRefLine)
+          ? saved.wallRefLine : 'left',
+        wallBaseHeight: Number.isFinite(Number(saved.wallBaseHeight)) ? Number(saved.wallBaseHeight) : 0,
+        wallTopHeight: Number.isFinite(Number(saved.wallTopHeight))
+          ? Number(saved.wallTopHeight) : DEFAULT_WALL_TOP_FT,
+        floorThickness: Number.isFinite(Number(saved.floorThickness)) && Number(saved.floorThickness) > 0
+          ? Number(saved.floorThickness) : DEFAULT_FLOOR_THICKNESS_IN / 12,
+        cuts,
+        nextCutId,
+        activeCutId: null,
+        cutPhase: 'idle',
+        choosingDir: false,
+      }, resolve));
+
+      // Rebuild the pool as a single pass through every endpoint. This restores
+      // reference equality at shared corners instead of merely restoring values.
+      this._vertices = [];
+      const restoreSegment = (segment, extra = {}) => {
+        const start = this._storedPoint(segment?.start);
+        const end = this._storedPoint(segment?.end);
+        const levelId = this._storedLevelId(segment?.levelId, levelIds);
+        if (!start || !end || levelId == null) return null;
+        return {
+          start: this._mergeVertex(start, levelId),
+          end: this._mergeVertex(end, levelId),
+          levelId,
+          ...extra,
+        };
+      };
+      this._lines = Array.isArray(saved.lines)
+        ? saved.lines.map(line => restoreSegment(line)).filter(Boolean)
+        : [];
+      this._walls = Array.isArray(saved.walls)
+        ? saved.walls.map(wall => restoreSegment(wall, {
+          wallType: WALL_TYPES.some(type => type.id === wall.wallType) ? wall.wallType : 'stud_2x6',
+          baseHeight: Number.isFinite(Number(wall.baseHeight)) ? Number(wall.baseHeight) : 0,
+          topHeight: Number.isFinite(Number(wall.topHeight))
+            ? Number(wall.topHeight) : DEFAULT_WALL_TOP_FT,
+          refLine: ['left', 'center', 'right'].includes(wall.refLine) ? wall.refLine : 'left',
+        })).filter(Boolean)
+        : [];
+      this._floors = Array.isArray(saved.floors)
+        ? saved.floors.map(floor => {
+          const levelId = this._storedLevelId(floor?.levelId, levelIds);
+          const points = Array.isArray(floor?.points) ? floor.points.map(this._storedPoint).filter(Boolean) : [];
+          if (levelId == null || points.length < 3) return null;
+          return {
+            points: points.map(point => this._mergeVertex(point, levelId)),
+            levelId,
+            thickness: Number.isFinite(Number(floor.thickness)) && Number(floor.thickness) > 0
+              ? Number(floor.thickness) : this.state.floorThickness,
+            assembly: { ...DEFAULT_FLOOR_ASSEMBLY, ...(floor.assembly || {}) },
+          };
+        }).filter(Boolean)
+        : [];
+      this._cutObjects = {};
+      cuts.forEach(cut => this._restoreCutObjects(cut));
+    } catch (error) {
+      console.warn('Unable to load saved model drawing:', error);
+      this.setState({ persistenceError: 'Load failed' });
+    } finally {
+      this._loadingDrawing = false;
+      this._drawingReady = true;
+      this.setState({
+        persistenceStatus: this.state.persistenceError ? 'UNSAVED' : 'SAVED',
+        wallBaseInput: formatArchitecturalInches(this.state.wallBaseHeight * 12),
+        wallTopInput: formatArchitecturalInches(this.state.wallTopHeight * 12),
+        floorThicknessInput: formatArchitecturalInches(this.state.floorThickness * 12),
+      }, () => {
+        this._applyLevelElevation(this.state.activeLevelIdx);
+        if (this._orthoCam) this._setView('top');
+      });
+    }
+  }
+
+  _markUnsaved() {
+    if (this._loadingDrawing || !this._drawingReady) return;
+    this.setState({ persistenceStatus: 'UNSAVED', persistenceError: '' });
+    if (!window.SharedFileStore) return;
+
+    const generation = (this._saveGeneration || 0) + 1;
+    this._saveGeneration = generation;
+    const file = this._drawingFile();
+    this._saveQueue = (this._saveQueue || Promise.resolve())
+      .catch(() => {})
+      .then(() => window.SharedFileStore.saveSharedFile(file, MODEL_STORAGE_BUCKET))
+      .then(() => {
+        if (generation === this._saveGeneration) this.setState({ persistenceStatus: 'SAVED' });
+      })
+      .catch(error => {
+        console.warn('Unable to save model drawing:', error);
+        if (generation === this._saveGeneration) this.setState({
+          persistenceStatus: 'UNSAVED',
+          persistenceError: 'Save failed',
+        });
+      });
   }
   componentWillUnmount() {
     cancelAnimationFrame(this._raf);
@@ -324,11 +746,38 @@ class Component extends DCLogic {
     this._canvas = canvas;
     const w = cont.clientWidth || 800, h = cont.clientHeight || 600;
 
-    this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this._renderer.setSize(w, h);
-    this._renderer.setClearColor(0xfafafa);
-
+    // WebGL is an enhancement. Keep the scene, orthographic camera, and
+    // overlay-driven drafting surface alive when a browser cannot create a
+    // WebGL context (common in automated previews and restricted browsers).
+    this._renderer = null;
+    this._webglAvailable = false;
+    const supportsWebGL = (() => {
+      try {
+        const probe = document.createElement('canvas');
+        return Boolean(
+          probe.getContext('webgl2')
+          || probe.getContext('webgl')
+          || probe.getContext('experimental-webgl')
+        );
+      } catch {
+        return false;
+      }
+    })();
+    if (!supportsWebGL) {
+      canvas.style.background = '#fafafa';
+      console.info('3D preview unavailable; continuing with 2D drafting.');
+    } else {
+      try {
+        this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this._renderer.setSize(w, h);
+        this._renderer.setClearColor(0xfafafa);
+        this._webglAvailable = true;
+      } catch (error) {
+        canvas.style.background = '#fafafa';
+        console.warn('3D preview unavailable; continuing with 2D drafting:', error);
+      }
+    }
     this._scene = new THREE.Scene();
 
     // Cameras
@@ -338,10 +787,21 @@ class Component extends DCLogic {
     this._orthoCamX  = 0;
     this._orthoCamZ  = 0;
     this._orthoCam   = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 5000);
-    this._controls   = new THREE.OrbitControls(this._perspCam, canvas);
-    this._controls.enableDamping = true;
-    this._controls.dampingFactor = 0.08;
-    this._controls.enabled       = false;
+    this._controls   = null;
+    if (this._webglAvailable) {
+      try {
+        this._controls = new THREE.OrbitControls(this._perspCam, canvas);
+        this._controls.enableDamping = true;
+        this._controls.dampingFactor = 0.08;
+        this._controls.enabled       = false;
+      } catch (error) {
+        this._renderer.dispose();
+        this._renderer = null;
+        this._webglAvailable = false;
+        canvas.style.background = '#fafafa';
+        console.warn('3D controls unavailable; continuing with 2D drafting:', error);
+      }
+    }
 
     // Lighting
     this._scene.add(new THREE.AmbientLight(0xffffff, 0.8));
@@ -386,8 +846,10 @@ class Component extends DCLogic {
     this._scene.add(this._cutPreviewLine);
 
     // Storage
+    this._drawingReady = false;
     this._walls      = [];
     this._lines      = []; // committed line segments
+    this._floors     = []; // committed closed floor outlines
     this._pendingChain = []; // in-progress chain (not yet committed)
     this._chainStart   = null; // first point of current chain
     this._cutObjects = {}; // cutId → { line, arrow }
@@ -398,6 +860,11 @@ class Component extends DCLogic {
     this._wallChainStart = null; // first placed point (for close detection)
     this._wallStart      = null; // last placed point (current seg origin)
 
+    // Floor drawing state — a closed multi-point outline on the active level.
+    this._floorDrawing = false;
+    this._floorPoints  = [];
+    this._floorStart   = null;
+
     // Shared vertex pool — all committed segment endpoints reference objects in here.
     // Two segments meeting at a corner share the SAME Vector3 instance; mutating
     // one endpoint moves every segment that references it.
@@ -406,7 +873,8 @@ class Component extends DCLogic {
     // Select-tool state
     this._selectDrag     = null;       // { refs, startX, startY, active }  — node drag
     this._selectDownInfo = null;       // { worldPt, clientX, clientY, shiftHeld } — pending click
-    this._selectedSegs   = new Set(); // segment objects currently selected
+    this._selectedSegs   = new Set(); // line/wall segment objects currently selected
+    this._selectedFloors = new Set(); // floor outline objects currently selected
 
     // Drawing state
     this._isDrawing  = false;
@@ -445,6 +913,7 @@ class Component extends DCLogic {
         const dx = e.clientX - info.clientX, dy = e.clientY - info.clientY;
         if (Math.sqrt(dx*dx + dy*dy) <= 4) this._handleSelectClick(info.worldPt, info.shiftHeld);
       }
+      if (sd?.active) this._markUnsaved();
     });
 
     this._ro = new ResizeObserver(() => this._onResize());
@@ -452,6 +921,8 @@ class Component extends DCLogic {
 
     this._applyLevelElevation(this.state.activeLevelIdx);
     this._setView('top');
+    this.setState({ webglUnavailable: !this._webglAvailable });
+    this._loadDrawing();
     this._animate();
   }
 
@@ -506,6 +977,9 @@ class Component extends DCLogic {
     this._drawGrid2D(ctx, w, h);
 
     const cam = this._orthoCam;
+    // In 2D-only mode there is no WebGL render pass to refresh matrices.
+    // Update them here so projection stays accurate while panning or switching views.
+    cam.updateMatrixWorld();
     const toS = pt => {
       const v = new THREE.Vector3(pt.x, pt.y || 0, pt.z).project(cam);
       return { x: (v.x + 1) / 2 * w, y: (-v.y + 1) / 2 * h };
@@ -541,17 +1015,31 @@ class Component extends DCLogic {
     // ── Visible background (reference-only, deliberately beneath active geometry)
     // Walls appear as their centreline so material fills never obscure active work.
     if (reference) {
+      this._backgroundFloors().forEach(floor => this._drawFloor2D(ctx, toS, floor, { referenceColor: reference.color }));
       this._backgroundWalls().forEach(wall => drawReferenceSeg(wall, reference.color));
       this._backgroundLines().forEach(line => drawReferenceSeg(line, reference.color));
+    }
+
+    // ── Floors (drawn below walls and lines) ───────────────────────────────────
+    if (activeVisible) this._activeFloors().forEach(floor => this._drawFloor2D(ctx, toS, floor));
+    if (this._floorDrawing && this._floorPoints.length) {
+      const previewPoints = [...this._floorPoints];
+      if (this._snapPt && (!this._floorStart || this._snapPt.distanceTo(this._floorStart) > 0.001)) previewPoints.push(this._snapPt);
+      this._drawFloor2D(ctx, toS, { points: previewPoints }, { preview: true });
     }
 
     // ── Walls (fills drawn beneath lines) ────────────────────────────────────
     const pwType = this.state.activeWallType;
     const pwRef  = this.state.wallRefLine;
-    if (activeVisible) this._activeWalls().forEach(w => this._drawWallSeg2D(ctx, toS, w, false));
-    this._wallChain.forEach(s => this._drawWallSeg2D(ctx, toS, { ...s, wallType: pwType, refLine: pwRef }, false));
+    const activeWalls = activeVisible ? this._activeWalls() : [];
+    const wallJoins = this._wallJoins(activeWalls);
+    // Keep every assembly fill below every boundary. Drawing a completed wall
+    // in one pass used to let a later fill paint over an earlier miter line.
+    activeWalls.forEach(w => this._drawWallSeg2D(ctx, toS, w, false, wallJoins, 'fill'));
+    activeWalls.forEach(w => this._drawWallSeg2D(ctx, toS, w, false, wallJoins, 'stroke'));
+    this._wallChain.forEach(s => this._drawWallSeg2D(ctx, toS, { ...s, wallType: pwType, refLine: pwRef }, false, null, 'both'));
     if (this._wallDrawing && this._wallStart && this._snapPt) {
-      this._drawWallSeg2D(ctx, toS, { start: this._wallStart, end: this._snapPt, wallType: pwType, refLine: pwRef }, true);
+      this._drawWallSeg2D(ctx, toS, { start: this._wallStart, end: this._snapPt, wallType: pwType, refLine: pwRef }, true, null, 'both');
     }
     if (this._wallChainStart && this._wallDrawing && this._wallChain.length >= 1) {
       const sc = toS(this._wallChainStart);
@@ -568,7 +1056,8 @@ class Component extends DCLogic {
 
     // Dragged node highlight (blue ring around the node being moved)
     if (this._selectDrag && this._selectDrag.active && this._selectDrag.refs.length) {
-      const dragPt = this._selectDrag.refs[0].seg[this._selectDrag.refs[0].prop];
+      const dragRef = this._selectDrag.refs[0];
+      const dragPt = (dragRef.target || dragRef.seg)[dragRef.prop];
       const sd = toS(dragPt);
       ctx.save();
       ctx.beginPath(); ctx.arc(sd.x, sd.y, DOT_R + 6, 0, Math.PI * 2);
@@ -624,6 +1113,9 @@ class Component extends DCLogic {
       });
       ctx.restore();
     }
+    if (this._selectedFloors.size > 0) {
+      this._selectedFloors.forEach(floor => this._drawFloor2D(ctx, toS, floor, { selected: true }));
+    }
 
     // Pending chain
     this._pendingChain.forEach(s => { drawSeg(s.start, s.end); drawDot(s.start); drawDot(s.end); });
@@ -661,13 +1153,20 @@ class Component extends DCLogic {
       // dot at current chain tip
       ctx.fillStyle = LINE_COLOR; drawDot(this._lineStart);
     }
+    if (this._floorDrawing && this._floorStart && this._snapPt) {
+      const sc = toS(this._floorStart);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
+      ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+    }
   }
 
   _onResize() {
     const cont = document.querySelector('[data-model-container]');
-    if (!cont || !this._renderer) return;
+    if (!cont) return;
     const w = cont.clientWidth, h = cont.clientHeight;
-    this._renderer.setSize(w, h);
+    if (this._renderer) this._renderer.setSize(w, h);
     if (this._perspCam) { this._perspCam.aspect = w/h; this._perspCam.updateProjectionMatrix(); }
     this._updateOrthoFrustum();
   }
@@ -697,6 +1196,11 @@ class Component extends DCLogic {
     return this._walls.filter(wall => wall.levelId === levelId);
   }
 
+  _activeFloors() {
+    const levelId = this._activeLevelId();
+    return this._floors.filter(floor => floor.levelId === levelId);
+  }
+
   // One reference slot is visible at a time: B cycles blue → red → none.
   _visibleBackgroundReference() {
     const { backgroundLevelIds, backgroundMode, levels } = this.state;
@@ -723,6 +1227,11 @@ class Component extends DCLogic {
     return ref ? this._walls.filter(wall => wall.levelId === ref.levelId) : [];
   }
 
+  _backgroundFloors() {
+    const ref = this._visibleBackgroundReference();
+    return ref ? this._floors.filter(floor => floor.levelId === ref.levelId) : [];
+  }
+
   _toggleBackgroundLevel(idx, e) {
     e.stopPropagation();
     const levelId = this.state.levels[idx]?.id;
@@ -734,13 +1243,13 @@ class Component extends DCLogic {
       ids.push(levelId);
       if (ids.length > 2) ids.shift(); // third selection replaces the oldest
     }
-    this.setState({ backgroundLevelIds: ids });
+    this.setState({ backgroundLevelIds: ids }, () => this._markUnsaved());
   }
 
   _cycleBackground() {
     const modes = ['blue', 'red', 'none'];
     const current = modes.indexOf(this.state.backgroundMode);
-    this.setState({ backgroundMode: modes[(current + 1) % modes.length] });
+    this.setState({ backgroundMode: modes[(current + 1) % modes.length] }, () => this._markUnsaved());
   }
 
   _applyLevelElevation(idx) {
@@ -753,8 +1262,9 @@ class Component extends DCLogic {
 
   _switchLevel(idx) {
     if (idx === this.state.activeLevelIdx) return;
-    this._cancelWall(); this._cancelLine(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut();
     if (this._selectedSegs) this._selectedSegs.clear();
+    if (this._selectedFloors) this._selectedFloors.clear();
     this._applyLevelElevation(idx);
     // A level cannot also be one of its own references.
     const activeId = this.state.levels[idx]?.id;
@@ -762,7 +1272,8 @@ class Component extends DCLogic {
     this.setState({ activeLevelIdx: idx, backgroundLevelIds }, () => {
       // Keep level switching functional even when the optional WebGL renderer
       // is unavailable; the 2D overlay can still render once it is initialized.
-      if (this._orthoCam && this._controls) this._setView('top');
+      if (this._orthoCam) this._setView('top');
+      this._markUnsaved();
     });
   }
 
@@ -771,7 +1282,10 @@ class Component extends DCLogic {
     const elevRaw = window.prompt('Elevation in feet (negative = below grade):', '0'); if (elevRaw === null) return;
     const elev = parseFloat(elevRaw); if (isNaN(elev)) return;
     const id = this.state.nextLevelId;
-    this.setState({ levels: [...this.state.levels, { id, name: name.toUpperCase().trim(), elev, visible: true }], nextLevelId: id + 1 });
+    this.setState({
+      levels: [...this.state.levels, { id, name: name.toUpperCase().trim(), elev, visible: true }],
+      nextLevelId: id + 1,
+    }, () => this._markUnsaved());
   }
 
   _deleteLevel(idx) {
@@ -780,33 +1294,36 @@ class Component extends DCLogic {
     if (!window.confirm(`Delete level "${levels[idx].name}"? Geometry on this level will be removed.`)) return;
     // Pending geometry belongs to the floor it was started on. Discard it before
     // changing the level collection so no chain can commit into another floor.
-    this._cancelWall(); this._cancelLine(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut();
     const levelId = levels[idx].id;
     this._lines = this._lines.filter(line => line.levelId !== levelId);
     this._walls = this._walls.filter(wall => wall.levelId !== levelId);
+    this._floors = this._floors.filter(floor => floor.levelId !== levelId);
     const newLevels = levels.filter((_, i) => i !== idx);
     const newIdx = idx < activeLevelIdx
       ? activeLevelIdx - 1
       : Math.min(activeLevelIdx, newLevels.length - 1);
     this._applyLevelElevation(newIdx);
     if (this._selectedSegs) this._selectedSegs.clear();
+    if (this._selectedFloors) this._selectedFloors.clear();
     this.setState({
       levels: newLevels,
       activeLevelIdx: newIdx,
       backgroundLevelIds: this.state.backgroundLevelIds.filter(id => id !== levelId),
-    });
+    }, () => this._markUnsaved());
   }
 
   _toggleLevelVisibility(idx, e) {
     e.stopPropagation();
     const levels = this.state.levels.map((l, i) => i === idx ? { ...l, visible: !l.visible } : l);
-    this.setState({ levels });
+    this.setState({ levels }, () => this._markUnsaved());
   }
 
   // ─── Views ───────────────────────────────────────────────────────────────────
   _setView(view) {
     const e = this._drawElev || 0;
     if (view === 'perspective') {
+      if (!this._webglAvailable || !this._controls || !this._perspCam) return;
       this._camera = this._perspCam;
       this._controls.enabled = true;
       this._perspCam.position.set(30, e + 25, 30);
@@ -815,7 +1332,7 @@ class Component extends DCLogic {
       this._controls.update();
     } else {
       this._camera = this._orthoCam;
-      this._controls.enabled = false;
+      if (this._controls) this._controls.enabled = false;
       this._updateOrthoFrustum();
       if (view === 'top') {
         this._orthoCam.position.set(this._orthoCamX, e + 200, this._orthoCamZ);
@@ -849,7 +1366,7 @@ class Component extends DCLogic {
     const cz = mz + cut.dirVec.z * dist;
 
     this._camera = this._orthoCam;
-    this._controls.enabled = false;
+    if (this._controls) this._controls.enabled = false;
     this._orthoCam.position.set(cx, eyeH, cz);
     this._orthoCam.up.set(0, 1, 0);
     this._orthoCam.lookAt(mx, lookH, mz);
@@ -875,17 +1392,22 @@ class Component extends DCLogic {
     const cuts = this.state.cuts.filter(c => c.id !== id);
     const activeCutId = this.state.activeCutId === id ? null : this.state.activeCutId;
     if (activeCutId === null && this.state.activeView === 'cut') this._setView('top');
-    this.setState({ cuts, activeCutId });
+    this.setState({ cuts, activeCutId }, () => this._markUnsaved());
   }
 
   // ─── World position ──────────────────────────────────────────────────────────
   _getWorldPos(clientX, clientY) {
-    const c = this._canvas; if (!c) return null;
+    const c = this._canvas;
+    if (!c || !this._camera || !this._raycaster || !this._ground) return null;
     const rect = c.getBoundingClientRect();
     const mouse = new THREE.Vector2(
       (clientX - rect.left) / rect.width  * 2 - 1,
       -((clientY - rect.top)  / rect.height) * 2 + 1
     );
+    // A WebGLRenderer normally updates the scene/camera matrices each frame.
+    // Do it explicitly so raycasting drives the 2D-only drafting fallback too.
+    this._scene?.updateMatrixWorld(true);
+    this._camera.updateMatrixWorld();
     this._raycaster.setFromCamera(mouse, this._camera);
     const hits = this._raycaster.intersectObject(this._ground);
     return hits.length ? hits[0].point : null;
@@ -902,6 +1424,7 @@ class Component extends DCLogic {
   _toScreen(pt3) {
     const cam = this.state.activeView === 'perspective' ? this._perspCam : this._orthoCam;
     const w = this._canvas.clientWidth, h = this._canvas.clientHeight;
+    cam.updateMatrixWorld();
     const v = pt3.clone().project(cam);
     return { x: (v.x + 1) / 2 * w, y: (-v.y + 1) / 2 * h };
   }
@@ -913,7 +1436,10 @@ class Component extends DCLogic {
 
     const gridPt = this._snap(raw);
     const tool   = this.state.activeTool;
-    const start  = tool === 'line' ? this._lineStart : tool === 'wall' ? this._wallStart : null;
+    const start  = tool === 'line' ? this._lineStart
+      : tool === 'wall' ? this._wallStart
+      : tool === 'floor' ? this._floorPoints[this._floorPoints.length - 1]
+      : null;
 
     // 45° angle lock — must establish lockAngle before tracking/magnet
     if (this._shiftHeld && start) {
@@ -934,7 +1460,9 @@ class Component extends DCLogic {
     }
 
     // Magnet snap (checked even when shift-locked; magnet overrides angle lock)
-    const magnet = !trackingHit ? this._findMagnet(gridPt) : null;
+    // Vertex magnet uses the raw cursor position so grid rounding cannot make
+    // a node feel magnetic beyond the one-pixel hit radius.
+    const magnet = !trackingHit ? this._findMagnet(raw) : null;
     // Midpoint snap — only when no vertex magnet and not tracking
     const midSnap = (!trackingHit && !magnet) ? this._findMidpointSnap(gridPt) : null;
 
@@ -999,6 +1527,10 @@ class Component extends DCLogic {
       _setLen(s, finalPt);
     }
 
+    if (tool === 'floor' && this._floorDrawing && this._floorPoints.length) {
+      _setLen(this._floorPoints[this._floorPoints.length - 1], finalPt);
+    }
+
     // Cut preview
     if (tool === 'cut' && this.state.cutPhase === 'placing' && this._cutStart3) {
       const s = this._cutStart3, p = this._cutPreviewGeo.attributes.position;
@@ -1017,7 +1549,8 @@ class Component extends DCLogic {
       if (this._cutArrowR) this._cutArrowR.setColor(new THREE.Color(side > 0 ? 0xff3366 : 0x994466));
     }
 
-    if (tool !== 'wall' || !this._wallDrawing) {
+    if ((tool !== 'wall' || !this._wallDrawing)
+      && (tool !== 'floor' || !this._floorDrawing)) {
       const lenEl = el('[data-model-len]');
       if (tool !== 'cut' || this.state.cutPhase === 'idle') if (lenEl) lenEl.textContent = '';
     }
@@ -1034,11 +1567,13 @@ class Component extends DCLogic {
   }
 
   _onMouseDown(e) {
+    if (!this._drawingReady) return;
     if (this.state.lengthFrozen) return;
     const tool = this.state.activeTool;
     if (e.button === 0 && !e.altKey) {
       if (tool === 'wall') this._handleWallClick();
       else if (tool === 'line') this._handleLineClick();
+      else if (tool === 'floor') this._handleFloorClick();
       else if (tool === 'cut') this._handleCutClick();
       else if (tool === 'select') {
         const raw = this._getWorldPos(e.clientX, e.clientY);
@@ -1067,6 +1602,7 @@ class Component extends DCLogic {
   _onRightClick() {
     this._cancelWall();
     this._cancelLine();
+    this._cancelFloor();
     this._cancelCut();
   }
 
@@ -1082,7 +1618,11 @@ class Component extends DCLogic {
         const raw = this._getWorldPos(e.clientX, e.clientY);
         if (raw) {
           const pt = this._snap(raw);
-          sd.refs.forEach(r => { r.seg[r.prop].x = pt.x; r.seg[r.prop].z = pt.z; });
+          sd.refs.forEach(r => {
+            const target = r.target || r.seg;
+            target[r.prop].x = pt.x;
+            target[r.prop].z = pt.z;
+          });
         }
       }
     }
@@ -1173,6 +1713,7 @@ class Component extends DCLogic {
     this._wallStart      = null;
     this._lockAngle      = null;
     this.setState({ isDrawing: false });
+    this._markUnsaved();
   }
 
   _cancelWall() {
@@ -1184,6 +1725,62 @@ class Component extends DCLogic {
     this._lockAngle      = null;
     if (this._previewLine) this._previewLine.visible = false;
     this.setState({ isDrawing: false });
+  }
+
+  // ─── Floor drawing ───────────────────────────────────────────────────────────
+  _handleFloorClick() {
+    const pt = this._snapPt; if (!pt) return;
+
+    if (!this._floorDrawing) {
+      this._floorDrawing = true;
+      this._floorStart = pt.clone();
+      this._floorPoints = [pt.clone()];
+      this._lockAngle = null;
+      this.setState({ isDrawing: true });
+      return;
+    }
+
+    const last = this._floorPoints[this._floorPoints.length - 1];
+    if (last && Math.hypot(pt.x - last.x, pt.z - last.z) < 0.001) return;
+    const first = this._floorStart;
+    if (this._floorPoints.length >= 3 && first
+      && Math.hypot(pt.x - first.x, pt.z - first.z) < this._magnetRadius() * 2) {
+      this._finishFloor();
+      return;
+    }
+    this._floorPoints.push(pt.clone());
+    this._lockAngle = null;
+  }
+
+  _finishFloor() {
+    if (!this._floorDrawing) return;
+    if (this._floorPoints.length >= 3) this._commitFloor(this._floorPoints);
+    this._floorPoints = [];
+    this._floorDrawing = false;
+    this._floorStart = null;
+    this._lockAngle = null;
+    this.setState({ isDrawing: false });
+    this._markUnsaved();
+  }
+
+  _cancelFloor() {
+    if (!this._floorDrawing) return;
+    this._floorPoints = [];
+    this._floorDrawing = false;
+    this._floorStart = null;
+    this._lockAngle = null;
+    this.setState({ isDrawing: false });
+  }
+
+  _commitFloor(points) {
+    const level = this._activeLevel();
+    const levelId = level ? level.id : -1;
+    this._floors.push({
+      points: points.map(point => this._mergeVertex(point, levelId)),
+      levelId,
+      thickness: this.state.floorThickness,
+      assembly: { ...DEFAULT_FLOOR_ASSEMBLY },
+    });
   }
 
   _commitWall(start, end, wallType, baseHeight, topHeight, refLine) {
@@ -1203,7 +1800,9 @@ class Component extends DCLogic {
   // ─── Wall 2D cross-section renderer ─────────────────────────────────────────
   // Draws one wall segment on the overlay canvas.
   // toS(pt) converts world {x,z} → screen {x,y}.  preview=true → ghost opacity.
-  _drawWallSeg2D(ctx, toS, seg, preview) {
+  // joins is the map returned by _wallJoins(); pending/preview segments pass null.
+  // mode keeps the fills below all boundary strokes for clean overlaps.
+  _drawWallSeg2D(ctx, toS, seg, preview, joins, mode = 'both') {
     const wtDef = WALL_TYPES.find(w => w.id === (seg.wallType || 'stud_2x6')) || WALL_TYPES[1];
     const totalFt = wtDef.totalIn / 12;
     const half = totalFt / 2;
@@ -1225,61 +1824,191 @@ class Component extends DCLogic {
 
     const alpha = preview ? 0.45 : 1;
 
+    const wallMetrics = wall => {
+      const def = WALL_TYPES.find(w => w.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
+      const total = def.totalIn / 12;
+      const mid = total / 2;
+      const ref = wall.refLine || 'center';
+      const first = ref === 'left' ? 0 : ref === 'right' ? -total : -mid;
+      return { total, first, last: first + total };
+    };
+    const otherOffset = (across, other) => {
+      const metric = wallMetrics(other);
+      // Match every layer edge from its nearest physical face, not from the
+      // authored reference line. This carries an ICF's layer edge correctly
+      // between left-, centre-, and right-referenced walls of any thickness.
+      const distFromFirst = across - startOff;
+      const distFromLast = endOff - across;
+      const mapped = distFromFirst <= distFromLast
+        ? metric.first + distFromFirst
+        : metric.last - distFromLast;
+      return Math.max(metric.first, Math.min(metric.last, mapped));
+    };
+    const pointOnWall = (wall, at, across) => {
+      const dxWall = wall.end.x - wall.start.x, dzWall = wall.end.z - wall.start.z;
+      const wallLen = Math.sqrt(dxWall * dxWall + dzWall * dzWall);
+      if (wallLen < 0.001) return null;
+      const nxWall = -dzWall / wallLen, nzWall = dxWall / wallLen;
+      const vertex = at === 'start' ? wall.start : wall.end;
+      return { x: vertex.x + nxWall * across, z: vertex.z + nzWall * across };
+    };
+    const lineIntersection = (origin, dxA, dzA, otherOrigin, dxB, dzB) => {
+      const den = dxA * dzB - dzA * dxB;
+      if (Math.abs(den) < 0.001) return null;
+      const rx = otherOrigin.x - origin.x, rz = otherOrigin.z - origin.z;
+      const t = (rx * dzB - rz * dxB) / den;
+      return { x: origin.x + t * dxA, z: origin.z + t * dzA };
+    };
+
+    // Return a clipped endpoint and whether the join is genuinely resolved.
+    // A cap is only suppressed when this returns true for both assembly faces.
+    const joinPoint = (pt, across) => {
+      const fallback = wp(pt, across);
+      if (!joins || !joins.has(pt)) return { point: fallback, resolved: false };
+      const join = joins.get(pt);
+      if (!join || join.type === 'none') return { point: fallback, resolved: false };
+
+      const at = pt === seg.start ? 'start' : pt === seg.end ? 'end' : null;
+      if (!at) return { point: fallback, resolved: false };
+
+      const dxOut = (at === 'start' ? seg.end.x - seg.start.x : seg.start.x - seg.end.x);
+      const dzOut = (at === 'start' ? seg.end.z - seg.start.z : seg.start.z - seg.end.z);
+      const outLen = Math.sqrt(dxOut * dxOut + dzOut * dzOut);
+      if (outLen < 0.001) return { point: fallback, resolved: false };
+      const currentOrigin = wp(pt, across);
+
+      if (join.type === 'tee') {
+        if (join.host.some(entry => entry.seg === seg)) {
+          return { point: fallback, resolved: true };
+        }
+        if (join.stem.seg !== seg) return { point: fallback, resolved: false };
+        const host = join.host[0];
+        const hdx = host.seg.end.x - host.seg.start.x, hdz = host.seg.end.z - host.seg.start.z;
+        const hLen = Math.sqrt(hdx * hdx + hdz * hdz);
+        if (hLen < 0.001) return { point: fallback, resolved: false };
+        const hNormalX = -hdz / hLen, hNormalZ = hdx / hLen;
+        const hostMetric = wallMetrics(host.seg);
+        const stemSide = hNormalX * dxOut / outLen + hNormalZ * dzOut / outLen;
+        const hostAcross = stemSide >= 0 ? hostMetric.last : hostMetric.first;
+        const hostOrigin = pointOnWall(host.seg, host.at, hostAcross);
+        const ix = hostOrigin && lineIntersection(currentOrigin, dxOut, dzOut, hostOrigin, hdx, hdz);
+        return ix ? { point: ix, resolved: true } : { point: fallback, resolved: false };
+      }
+      if (join.type === 'continuation' || join.type === 'multi') {
+        // Continuous hosts and cross intersections do not have an exposed
+        // cap. Their boundary lines remain square/continuous at the vertex.
+        return { point: fallback, resolved: true };
+      }
+
+      const otherEntry = join.entries.find(entry => entry.seg !== seg);
+      if (!otherEntry) return { point: fallback, resolved: false };
+      const other = otherEntry.seg;
+      const otherAt = otherEntry.at;
+      const odxOut = (otherAt === 'start' ? other.end.x - other.start.x : other.start.x - other.end.x);
+      const odzOut = (otherAt === 'start' ? other.end.z - other.start.z : other.start.z - other.end.z);
+      const otherOrigin = pointOnWall(other, otherAt, otherOffset(across, other));
+      const ix = otherOrigin && lineIntersection(currentOrigin, dxOut, dzOut, otherOrigin, odxOut, odzOut);
+      if (!ix) return { point: fallback, resolved: false };
+      const miterLen = Math.sqrt((ix.x - pt.x) ** 2 + (ix.z - pt.z) ** 2);
+      const limit = Math.max(totalFt, wallMetrics(other).total) * 8;
+      return miterLen <= limit ? { point: ix, resolved: true } : { point: fallback, resolved: false };
+    };
+    const joinTransitions = pt => {
+      if (!joins || !joins.has(pt)) return [];
+      const join = joins.get(pt);
+      const at = pt === seg.start ? 'start' : pt === seg.end ? 'end' : null;
+      if (!at || !join) return [];
+      let peer = null;
+      if (join.type === 'continuation') {
+        peer = join.entries.find(entry => entry.seg !== seg) || null;
+      } else if (join.type === 'tee' && join.host.some(entry => entry.seg === seg)) {
+        peer = join.host.find(entry => entry.seg !== seg) || null;
+      }
+      if (!peer) return [];
+
+      // When continuous host profiles differ, leave only the exposed face
+      // transition visible. A full cap would cut straight through the other
+      // wall; no transition at all leaves the wider profile open.
+      const peerMetric = wallMetrics(peer.seg);
+      const peerDx = peer.seg.end.x - peer.seg.start.x;
+      const peerDz = peer.seg.end.z - peer.seg.start.z;
+      const peerLen = Math.hypot(peerDx, peerDz);
+      if (peerLen < 0.001) return [];
+      const peerNormalX = -peerDz / peerLen, peerNormalZ = peerDx / peerLen;
+      const samePhysicalNormal = nx * peerNormalX + nz * peerNormalZ >= 0;
+      // A collinear continuation may be authored in either direction. Match
+      // faces by their physical normal, not by the local start/end label, so
+      // equal wall profiles stay seamless when one segment is drawn backwards.
+      const pairs = samePhysicalNormal
+        ? [[startOff, peerMetric.first], [endOff, peerMetric.last]]
+        : [[startOff, peerMetric.last], [endOff, peerMetric.first]];
+      return pairs.flatMap(([ownAcross, peerAcross]) => {
+        const own = wp(pt, ownAcross);
+        const other = pointOnWall(peer.seg, peer.at, peerAcross);
+        if (!other || Math.hypot(own.x - other.x, own.z - other.z) < 0.0001) return [];
+        return [{ own, other }];
+      });
+    };
+
     // Draw each layer fill
     let offset = startOff;
     wtDef.layers.forEach(layer => {
       const layerFt = layer.in / 12;
       const nextOff = offset + layerFt;
 
-      const p0 = toS(wp(seg.start, offset)), p1 = toS(wp(seg.end,   offset));
-      const p2 = toS(wp(seg.end,   nextOff)),p3 = toS(wp(seg.start, nextOff));
+      const p0 = toS(joinPoint(seg.start, offset).point), p1 = toS(joinPoint(seg.end,   offset).point);
+      const p2 = toS(joinPoint(seg.end,   nextOff).point),p3 = toS(joinPoint(seg.start, nextOff).point);
 
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y);
-      ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y);
-      ctx.closePath();
+      if (mode !== 'stroke') {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y);
+        ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y);
+        ctx.closePath();
 
-      if (layer.fill === 'stud') {
-        ctx.fillStyle = preview ? 'rgba(255,255,255,0.8)' : '#ffffff';
-        ctx.fill();
-      } else if (layer.fill === 'concrete') {
-        ctx.fillStyle = `rgba(182,182,182,${alpha})`;
-        ctx.fill();
-        ctx.clip();
-        ctx.strokeStyle = `rgba(90,90,90,${alpha * 0.45})`;
-        ctx.lineWidth = 0.7;
-        const xs = [p0.x,p1.x,p2.x,p3.x], ys = [p0.y,p1.y,p2.y,p3.y];
-        const x0 = Math.min(...xs)-6, x1 = Math.max(...xs)+6;
-        const y0 = Math.min(...ys)-6, y1 = Math.max(...ys)+6;
-        const span = Math.max(x1-x0, y1-y0)+12;
-        const step = 5;
-        ctx.beginPath();
-        for (let i = -span; i < span*2; i += step) {
-          ctx.moveTo(x0+i, y0); ctx.lineTo(x0+i-(y1-y0), y1); // NE
-          ctx.moveTo(x0+i, y1); ctx.lineTo(x0+i+(y1-y0), y0); // NW
+        if (layer.fill === 'stud') {
+          ctx.fillStyle = preview ? 'rgba(255,255,255,0.8)' : '#ffffff';
+          ctx.fill();
+        } else if (layer.fill === 'concrete') {
+          ctx.fillStyle = `rgba(182,182,182,${alpha})`;
+          ctx.fill();
+          ctx.clip();
+          ctx.strokeStyle = `rgba(90,90,90,${alpha * 0.45})`;
+          ctx.lineWidth = 0.7;
+          const xs = [p0.x,p1.x,p2.x,p3.x], ys = [p0.y,p1.y,p2.y,p3.y];
+          const x0 = Math.min(...xs)-6, x1 = Math.max(...xs)+6;
+          const y0 = Math.min(...ys)-6, y1 = Math.max(...ys)+6;
+          const span = Math.max(x1-x0, y1-y0)+12;
+          const step = 5;
+          ctx.beginPath();
+          for (let i = -span; i < span*2; i += step) {
+            ctx.moveTo(x0+i, y0); ctx.lineTo(x0+i-(y1-y0), y1); // NE
+            ctx.moveTo(x0+i, y1); ctx.lineTo(x0+i+(y1-y0), y0); // NW
+          }
+          ctx.stroke();
+        } else if (layer.fill === 'insulation') {
+          ctx.fillStyle = `rgba(205,228,248,${alpha})`;
+          ctx.fill();
+          ctx.clip();
+          ctx.strokeStyle = `rgba(70,130,200,${alpha * 0.4})`;
+          ctx.lineWidth = 0.7;
+          const xs = [p0.x,p1.x,p2.x,p3.x], ys = [p0.y,p1.y,p2.y,p3.y];
+          const x0 = Math.min(...xs)-6, y0 = Math.min(...ys)-6, y1 = Math.max(...ys)+6;
+          const span = Math.max(Math.max(...xs)-x0, y1-y0)+12;
+          const step = 5;
+          ctx.beginPath();
+          for (let i = -span; i < span*2; i += step) {
+            ctx.moveTo(x0+i, y0); ctx.lineTo(x0+i-(y1-y0), y1);
+          }
+          ctx.stroke();
         }
-        ctx.stroke();
-      } else if (layer.fill === 'insulation') {
-        ctx.fillStyle = `rgba(205,228,248,${alpha})`;
-        ctx.fill();
-        ctx.clip();
-        ctx.strokeStyle = `rgba(70,130,200,${alpha * 0.4})`;
-        ctx.lineWidth = 0.7;
-        const xs = [p0.x,p1.x,p2.x,p3.x], ys = [p0.y,p1.y,p2.y,p3.y];
-        const x0 = Math.min(...xs)-6, y0 = Math.min(...ys)-6, y1 = Math.max(...ys)+6;
-        const span = Math.max(Math.max(...xs)-x0, y1-y0)+12;
-        const step = 5;
-        ctx.beginPath();
-        for (let i = -span; i < span*2; i += step) {
-          ctx.moveTo(x0+i, y0); ctx.lineTo(x0+i-(y1-y0), y1);
-        }
-        ctx.stroke();
+
+        ctx.restore();
       }
-
-      ctx.restore();
       offset = nextOff;
     });
+
+    if (mode === 'fill') return;
 
     // Boundary lines (all layer edges + end caps)
     ctx.strokeStyle = preview ? 'rgba(29,31,32,0.45)' : '#1d1f20';
@@ -1288,15 +2017,26 @@ class Component extends DCLogic {
     wtDef.layers.forEach((layer, i) => {
       const bNext = bOff + layer.in / 12;
       if (i === 0) {
-        const a = toS(wp(seg.start, bOff)), b = toS(wp(seg.end, bOff));
+        const a = toS(joinPoint(seg.start, bOff).point), b = toS(joinPoint(seg.end, bOff).point);
         ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
       }
-      const a = toS(wp(seg.start, bNext)), b = toS(wp(seg.end, bNext));
+      const a = toS(joinPoint(seg.start, bNext).point), b = toS(joinPoint(seg.end, bNext).point);
       ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
       bOff = bNext;
     });
-    // End caps
+    // End caps stop at a shared vertex. The mitered layer boundaries above
+    // continue through the join and form the architectural corner instead.
     [seg.start, seg.end].forEach(pt => {
+      const transitions = joinTransitions(pt);
+      if (transitions.length) {
+        transitions.forEach(({ own, other }) => {
+          const a = toS(own), b = toS(other);
+          ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+        });
+        return;
+      }
+      const isJoined = joinPoint(pt, startOff).resolved && joinPoint(pt, endOff).resolved;
+      if (isJoined) return;
       const a = toS(wp(pt, startOff)), b = toS(wp(pt, endOff));
       ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
     });
@@ -1312,6 +2052,117 @@ class Component extends DCLogic {
     }
   }
 
+  _drawFloor2D(ctx, toS, floor, options = {}) {
+    const points = floor?.points || [];
+    if (points.length < 2) return;
+    const { preview = false, referenceColor = null, selected = false } = options;
+    const screenPoints = points.map(toS);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(screenPoints[0].x, screenPoints[0].y);
+    screenPoints.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+
+    if (referenceColor) {
+      if (points.length >= 3) {
+        ctx.closePath();
+        ctx.fillStyle = referenceColor.replace(/[\d.]+\)$/, '0.08)');
+        ctx.fill();
+      }
+      ctx.strokeStyle = referenceColor;
+      ctx.lineWidth = 1.25;
+      ctx.setLineDash([5, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      return;
+    }
+
+    if (points.length >= 3) {
+      ctx.closePath();
+      ctx.fillStyle = preview ? 'rgba(89,128,166,0.12)' : 'rgba(89,128,166,0.16)';
+      ctx.fill();
+    }
+    ctx.strokeStyle = selected ? '#5980a6' : (preview ? 'rgba(89,128,166,0.72)' : '#47779a');
+    ctx.lineWidth = selected ? 3 : 1.5;
+    if (preview) ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (!preview) {
+      ctx.fillStyle = selected ? '#5980a6' : '#47779a';
+      screenPoints.forEach(point => ctx.fillRect(point.x - 2.5, point.y - 2.5, 5, 5));
+    }
+    ctx.restore();
+  }
+
+  // Build the shared-endpoint index used by the wall renderer. Identity is
+  // intentional: _mergeVertex guarantees that a real shared corner uses the
+  // same Vector3 instance, while nearby-but-distinct endpoints remain separate.
+  // Two non-collinear walls form a miter; collinear pairs are continuous.
+  // Three entries with a collinear pair form a T: the pair is the host and
+  // the third is the butt stem. Larger nodes suppress ambiguous cap lines.
+  _wallJoins(walls = this._walls) {
+    const endpointGroups = new Map();
+    const add = (seg, pt, at) => {
+      if (!endpointGroups.has(pt)) endpointGroups.set(pt, []);
+      endpointGroups.get(pt).push({ seg, at });
+    };
+    walls.forEach(w => {
+      add(w, w.start, 'start');
+      add(w, w.end, 'end');
+    });
+    const joins = new Map();
+    const outward = entry => {
+      const vertex = entry.at === 'start' ? entry.seg.start : entry.seg.end;
+      const other = entry.at === 'start' ? entry.seg.end : entry.seg.start;
+      const dx = other.x - vertex.x, dz = other.z - vertex.z;
+      const len = Math.sqrt(dx * dx + dz * dz);
+      return len < 0.001 ? null : { x: dx / len, z: dz / len };
+    };
+    for (const [vertex, entries] of endpointGroups) {
+      if (entries.length === 2) {
+        const a = outward(entries[0]), b = outward(entries[1]);
+        if (a && b) {
+          if (Math.abs(a.x * b.z - a.z * b.x) > 0.001) {
+            joins.set(vertex, { type: 'miter', entries });
+          } else if (a.x * b.x + a.z * b.z < -0.995) {
+            joins.set(vertex, { type: 'continuation', entries });
+          }
+        }
+        continue;
+      }
+      if (entries.length === 3) {
+        let hostPair = null;
+        let strongestOpposition = -1;
+        for (let i = 0; i < entries.length; i++) {
+          for (let j = i + 1; j < entries.length; j++) {
+            const a = outward(entries[i]), b = outward(entries[j]);
+            if (!a || !b) continue;
+            const opposition = -(a.x * b.x + a.z * b.z);
+            if (opposition > strongestOpposition) {
+              strongestOpposition = opposition;
+              hostPair = [entries[i], entries[j]];
+            }
+          }
+        }
+        if (hostPair && strongestOpposition > 0.995) {
+          joins.set(vertex, {
+            type: 'tee',
+            host: hostPair,
+            stem: entries.find(entry => !hostPair.includes(entry)),
+          });
+        }
+        continue;
+      }
+      if (entries.length >= 4) {
+        // A cross or multi-stem node has no unambiguous two-wall miter. Keep
+        // every arm open to the shared vertex rather than drawing cap lines
+        // through it; the existing fill pass still draws every assembly.
+        joins.set(vertex, { type: 'multi', entries });
+      }
+    }
+    return joins;
+  }
+
   // ─── Snap helpers ────────────────────────────────────────────────────────────
   _collectActiveVertices() {
     const pts = [];
@@ -1319,6 +2170,8 @@ class Component extends DCLogic {
     this._pendingChain.forEach(s => { pts.push(s.start, s.end); });
     this._activeWalls().forEach(w => { pts.push(w.start, w.end); });
     this._wallChain.forEach(s => { pts.push(s.start, s.end); });
+    this._activeFloors().forEach(floor => pts.push(...floor.points));
+    if (this._floorDrawing) pts.push(...this._floorPoints);
     return pts;
   }
 
@@ -1326,6 +2179,7 @@ class Component extends DCLogic {
     const pts = [];
     this._backgroundLines().forEach(l => { pts.push(l.start, l.end); });
     this._backgroundWalls().forEach(w => { pts.push(w.start, w.end); });
+    this._backgroundFloors().forEach(floor => pts.push(...floor.points));
     return pts;
   }
 
@@ -1398,8 +2252,7 @@ class Component extends DCLogic {
 
   // Return all segment endpoint refs that share the vertex nearest to worldPt,
   // or null if nothing is within magnet radius.
-  // Uses reference equality — segments sharing a pooled vertex are found instantly.
-  // Searches both _lines and _walls so wall-only vertices are hit-tested correctly.
+  // Uses reference equality — segments and floors sharing a pooled vertex move together.
   _findVertexHit(worldPt) {
     const r = this._magnetRadius() * 1.5;
     let bestD = r, bestVtx = null;
@@ -1409,12 +2262,23 @@ class Component extends DCLogic {
         if (d < bestD) { bestD = d; bestVtx = v; }
       });
     });
+    this._activeFloors().forEach(floor => {
+      floor.points.forEach(v => {
+        const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
+        if (d < bestD) { bestD = d; bestVtx = v; }
+      });
+    });
     if (!bestVtx) return null;
     // Collect all segment props pointing at this exact vertex object
     const refs = [];
     [...this._activeLines(), ...this._activeWalls()].forEach(seg => {
-      if (seg.start === bestVtx) refs.push({ seg, prop: 'start' });
-      if (seg.end   === bestVtx) refs.push({ seg, prop: 'end' });
+      if (seg.start === bestVtx) refs.push({ target: seg, prop: 'start' });
+      if (seg.end   === bestVtx) refs.push({ target: seg, prop: 'end' });
+    });
+    this._activeFloors().forEach(floor => {
+      floor.points.forEach((point, index) => {
+        if (point === bestVtx) refs.push({ target: floor.points, prop: index });
+      });
     });
     return refs.length ? refs : null;
   }
@@ -1445,6 +2309,7 @@ class Component extends DCLogic {
       { start: seg.start, end: mid,     levelId: seg.levelId },
       { start: mid,       end: seg.end, levelId: seg.levelId }
     );
+    this._markUnsaved();
   }
 
   // ─── Multi-select helpers ────────────────────────────────────────────────────
@@ -1469,13 +2334,42 @@ class Component extends DCLogic {
     return bestSeg;
   }
 
+  _findFloorAt(worldPt) {
+    const pointInPolygon = points => {
+      let inside = false;
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const a = points[i], b = points[j];
+        const intersects = ((a.z > worldPt.z) !== (b.z > worldPt.z))
+          && (worldPt.x < (b.x - a.x) * (worldPt.z - a.z) / ((b.z - a.z) || Number.EPSILON) + a.x);
+        if (intersects) inside = !inside;
+      }
+      return inside;
+    };
+    return this._activeFloors().find(floor => floor.points.length >= 3 && pointInPolygon(floor.points)) || null;
+  }
+
   // Called on a clean click (no drag) in select mode.
   _handleSelectClick(worldPt, shiftHeld) {
     // Node clicks are handled by the drag system — don't double-process them.
     if (this._findVertexHit(worldPt)) return;
     const hit = this._findNearestSeg(worldPt);
     if (!hit) {
-      if (!shiftHeld) this._selectedSegs.clear();
+      const floor = this._findFloorAt(worldPt);
+      if (!floor) {
+        if (!shiftHeld) {
+          this._selectedSegs.clear();
+          this._selectedFloors.clear();
+        }
+        return;
+      }
+      if (shiftHeld) {
+        if (this._selectedFloors.has(floor)) this._selectedFloors.delete(floor);
+        else this._selectedFloors.add(floor);
+      } else {
+        this._selectedSegs.clear();
+        this._selectedFloors.clear();
+        this._selectedFloors.add(floor);
+      }
       return;
     }
     if (shiftHeld) {
@@ -1484,6 +2378,7 @@ class Component extends DCLogic {
       else this._selectedSegs.add(hit);
     } else {
       this._selectedSegs.clear();
+      this._selectedFloors.clear();
       this._selectedSegs.add(hit);
     }
   }
@@ -1508,7 +2403,7 @@ class Component extends DCLogic {
   // intersection, creating a shared vertex on both segments at the cut point.
   _doTrim(clickWorldPt) {
     const seg = this._findNearestSeg(clickWorldPt);
-    if (!seg) return;
+    if (!seg) return false;
 
     const others = [...this._activeLines(), ...this._activeWalls()].filter(s => s !== seg);
 
@@ -1518,7 +2413,7 @@ class Component extends DCLogic {
       const ix = this._segIntersect(seg, other);
       if (ix) hits.push({ ...ix, other });
     });
-    if (hits.length === 0) return;
+    if (hits.length === 0) return false;
 
     // t-parameter of the click on the clicked segment
     const ax = seg.start.x, az = seg.start.z, bx = seg.end.x, bz = seg.end.z;
@@ -1556,6 +2451,8 @@ class Component extends DCLogic {
       if (nearest.u <= 0.005) other.start = ixVtx;
       else                    other.end   = ixVtx;
     }
+    this._markUnsaved();
+    return true;
   }
 
   // ─── Projection tracking ─────────────────────────────────────────────────────
@@ -1667,6 +2564,7 @@ class Component extends DCLogic {
     this._lineStart     = null;
     this._lockAngle     = null;
     this.setState({ isDrawing: false });
+    this._markUnsaved();
   }
 
   _cancelLine() {
@@ -1702,14 +2600,17 @@ class Component extends DCLogic {
       if (hit) this._splitLine(hit.idx, this._snap(raw));
       return;
     }
+    if (this.state.activeTool === 'floor' && this._floorDrawing) {
+      this._finishFloor();
+      return;
+    }
     // Line tool: handled via timing in _handleLineClick
   }
 
   // ─── Frozen-length input ──────────────────────────────────────────────────────
   _frozenTotalFt() {
-    const ft = parseFloat(this.state.frozenFt) || 0;
-    const inches = parseFloat(this.state.frozenIn) || 0;
-    return ft + inches / 12;
+    const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
+    return parsed.ok ? parsed.inches / 12 : 0;
   }
 
   _freezeLength() {
@@ -1728,19 +2629,15 @@ class Component extends DCLogic {
     }
     this._frozenStart = start.clone();
     this._frozenTool  = tool;
-    // Pre-fill current length
-    let initFt = '', initIn = '';
+    // Pre-fill the current length using the same architectural notation as every
+    // other imperial input in the editor.
+    let frozenLengthInput = '';
     if (pt) {
       const len = Math.sqrt((pt.x-start.x)**2+(pt.z-start.z)**2);
-      if (len > 0.001) {
-        const totalIn = len * 12;
-        initFt = Math.floor(totalIn / 12).toString();
-        const rem = Math.round((totalIn % 12) * 16) / 16;
-        initIn = rem > 0 ? rem.toString() : '';
-      }
+      if (len > 0.001) frozenLengthInput = formatArchitecturalInches(len * 12);
     }
-    this.setState({ lengthFrozen: true, frozenFt: initFt, frozenIn: initIn }, () => {
-      const inp = document.querySelector('[data-frozen-ft]');
+    this.setState({ lengthFrozen: true, frozenLengthInput, frozenDimensionError: '' }, () => {
+      const inp = document.querySelector('[data-frozen-length]');
       if (inp) { inp.focus(); inp.select(); }
     });
     this._updateFrozenPreview();
@@ -1773,8 +2670,12 @@ class Component extends DCLogic {
   }
 
   _confirmFrozenLength() {
-    const total = this._frozenTotalFt();
-    if (total <= 0) { this._cancelFrozenLength(); return; }
+    const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
+    const total = parsed.ok ? parsed.inches / 12 : 0;
+    if (!parsed.ok || total <= 0) {
+      this.setState({ frozenDimensionError: parsed.ok ? 'Length must be greater than zero.' : parsed.error });
+      return;
+    }
     const dirX = Math.cos(this._frozenAngle), dirZ = Math.sin(this._frozenAngle);
     const end = new THREE.Vector3(
       this._frozenStart.x + dirX * total,
@@ -1793,12 +2694,12 @@ class Component extends DCLogic {
       if (this._previewLine) this._previewLine.visible = false;
     }
     this._lockAngle = null;
-    this.setState({ lengthFrozen: false, frozenFt: '', frozenIn: '', isDrawing: true });
+    this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true });
   }
 
   _cancelFrozenLength() {
     this._lockAngle = null;
-    this.setState({ lengthFrozen: false, frozenFt: '', frozenIn: '' });
+    this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '' });
   }
 
   // ─── Cut drawing ──────────────────────────────────────────────────────────────
@@ -1902,9 +2803,37 @@ class Component extends DCLogic {
       nextCutId: id + 1,
       cutPhase: 'idle',
       choosingDir: false,
-    });
+    }, () => this._markUnsaved());
     this._cutStart3 = null; this._cutEnd3 = null;
     this._cutDirLeft = null; this._cutDirRight = null;
+  }
+
+  _restoreCutObjects(cut) {
+    if (!this._scene || !cut) return;
+    const { id, startPt: start, endPt: end, dirVec, elev } = cut;
+    const y = elev + 0.02;
+    const lineMat = new THREE.LineDashedMaterial({ color: 0xb04060, dashSize: 1, gapSize: 0.5 });
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(start.x, y, start.z),
+      new THREE.Vector3(end.x,   y, end.z),
+    ]);
+    const cutLine = new THREE.Line(lineGeo, lineMat);
+    cutLine.computeLineDistances();
+    this._scene.add(cutLine);
+
+    const dx = end.x - start.x, dz = end.z - start.z;
+    const length = Math.hypot(dx, dz);
+    const arrowLength = Math.max(3, length * 0.25);
+    const arrow = new THREE.ArrowHelper(
+      new THREE.Vector3(dirVec.x, 0, dirVec.z).normalize(),
+      new THREE.Vector3((start.x + end.x) / 2, y, (start.z + end.z) / 2),
+      arrowLength,
+      0xb04060,
+      arrowLength * 0.35,
+      arrowLength * 0.25,
+    );
+    this._scene.add(arrow);
+    this._cutObjects[id] = [cutLine, arrow];
   }
 
   _cancelCut() {
@@ -1922,25 +2851,32 @@ class Component extends DCLogic {
 
   // ─── Keyboard ────────────────────────────────────────────────────────────────
   _handleKey(e) {
+    if (!this._drawingReady) return;
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     if (e.key === 'Escape') {
       if (this.state.lengthFrozen) { this._cancelFrozenLength(); return; }
-      this._cancelWall(); this._cancelLine(); this._cancelCut();
+      this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut();
       this._selectedSegs.clear();
+      this._selectedFloors.clear();
     }
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (this.state.activeTool === 'select' && this._selectedSegs.size > 0) {
+      if (this.state.activeTool === 'select' && (this._selectedSegs.size > 0 || this._selectedFloors.size > 0)) {
         e.preventDefault();
+        const selectedCount = this._selectedSegs.size + this._selectedFloors.size;
         this._lines = this._lines.filter(l => !this._selectedSegs.has(l));
         this._walls = this._walls.filter(w => !this._selectedSegs.has(w));
+        this._floors = this._floors.filter(floor => !this._selectedFloors.has(floor));
         this._selectedSegs.clear();
+        this._selectedFloors.clear();
+        if (selectedCount) this._markUnsaved();
       }
       return;
     }
     if (e.key === 'Enter' || e.key === ' ') {
       if (this._lineDrawing) { e.preventDefault(); this._finishChain(); return; }
       if (this._wallDrawing) { e.preventDefault(); this._finishWall();  return; }
+      if (this._floorDrawing) { e.preventDefault(); this._finishFloor(); return; }
     }
     if (e.key === 'r' || e.key === 'R') {
       const tool = this.state.activeTool;
@@ -1948,11 +2884,12 @@ class Component extends DCLogic {
       if (drawing && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
       return;
     }
-    if (e.key === 'w' || e.key === 'W') { this._cancelLine(); this.setState({ activeTool: 'wall' }); }
-    if (e.key === 'l' || e.key === 'L') { this._cancelWall(); this.setState({ activeTool: 'line' }); }
-    if (e.key === 's' || e.key === 'S') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'select' }); }
-    if (e.key === 't' || e.key === 'T') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'trim' }); }
-    if (e.key === 'c' || e.key === 'C') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'cut' }); }
+    if (e.key === 'w' || e.key === 'W') { this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'wall' }); }
+    if (e.key === 'l' || e.key === 'L') { this._cancelWall(); this._cancelFloor(); this.setState({ activeTool: 'line' }); }
+    if (e.key === 'f' || e.key === 'F') { this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'floor' }); }
+    if (e.key === 's' || e.key === 'S') { this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'select' }); }
+    if (e.key === 't' || e.key === 'T') { this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'trim' }); }
+    if (e.key === 'c' || e.key === 'C') { this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'cut' }); }
     if (e.key === 'b' || e.key === 'B') { this._cycleBackground(); }
     if (e.key === '1') this._setView('perspective');
     if (e.key === '2') this._setView('top');
@@ -1961,13 +2898,59 @@ class Component extends DCLogic {
   }
 
   // ─── Formatters ───────────────────────────────────────────────────────────────
+  _commitWallDimension(which) {
+    const isBase = which === 'base';
+    const inputKey = isBase ? 'wallBaseInput' : 'wallTopInput';
+    const valueKey = isBase ? 'wallBaseHeight' : 'wallTopHeight';
+    const otherValue = isBase ? this.state.wallTopHeight : this.state.wallBaseHeight;
+    const parsed = parseArchitecturalLength(this.state[inputKey]);
+    if (!parsed.ok) {
+      this.setState({ wallDimensionError: parsed.error });
+      return false;
+    }
+    const feet = parsed.inches / 12;
+    if ((isBase && feet > otherValue) || (!isBase && feet < otherValue)) {
+      this.setState({ wallDimensionError: 'Top height must be at or above the base height.' });
+      return false;
+    }
+    this.setState({
+      [valueKey]: feet,
+      [inputKey]: formatArchitecturalInches(parsed.inches),
+      wallDimensionError: '',
+    });
+    return true;
+  }
+
+  _restoreWallDimension(which) {
+    const isBase = which === 'base';
+    const inputKey = isBase ? 'wallBaseInput' : 'wallTopInput';
+    const valueKey = isBase ? 'wallBaseHeight' : 'wallTopHeight';
+    this.setState({ [inputKey]: formatArchitecturalInches(this.state[valueKey] * 12), wallDimensionError: '' });
+  }
+
+  _commitFloorThickness() {
+    const parsed = parseArchitecturalLength(this.state.floorThicknessInput);
+    if (!parsed.ok || parsed.inches <= 0) {
+      this.setState({ floorDimensionError: parsed.ok ? 'Floor thickness must be greater than zero.' : parsed.error });
+      return false;
+    }
+    this.setState({
+      floorThickness: parsed.inches / 12,
+      floorThicknessInput: formatArchitecturalInches(parsed.inches),
+      floorDimensionError: '',
+    });
+    return true;
+  }
+
+  _restoreFloorThickness() {
+    this.setState({
+      floorThicknessInput: formatArchitecturalInches(this.state.floorThickness * 12),
+      floorDimensionError: '',
+    });
+  }
+
   _ftIn(feet) {
-    const neg = feet < 0; const abs = Math.abs(feet);
-    const tot = Math.round(abs * 192); const frac = tot % 16;
-    const tin = Math.floor(tot / 16); const inch = tin % 12; const ft = Math.floor(tin / 12);
-    let s = `${neg?'-':''}${ft}'-${inch}`;
-    if (frac > 0) { const gcd=(a,b)=>b?gcd(b,a%b):a; const g=gcd(frac,16); s+=` ${frac/g}/${16/g}`; }
-    return s + '"';
+    return formatArchitecturalInches(feet * 12);
   }
   _metric(feet) { return (feet * 0.3048).toFixed(3) + ' m'; }
   _elevLabel(elev) {
@@ -1990,13 +2973,16 @@ class Component extends DCLogic {
 
     const isCutTool = activeTool === 'cut';
     const drawingWall = isDrawing && activeTool === 'wall';
+    const drawingFloor = isDrawing && activeTool === 'floor';
     const placingCut  = isCutTool && cutPhase === 'placing';
-    const showHint    = drawingWall || placingCut || choosingDir;
+    const showHint    = drawingWall || drawingFloor || placingCut || choosingDir;
     const hintText    = choosingDir
       ? 'Click to choose view direction · ESC to cancel'
       : (drawingWall
         ? 'Click to place corners · Space or ↵ to commit · ESC to cancel'
-        : 'CUT — Click end point · Right-click to cancel');
+        : (drawingFloor
+          ? 'Click floor corners · Click first point or Space / ↵ to close · ESC to cancel'
+          : 'CUT — Click end point · Right-click to cancel'));
     const hintColor   = choosingDir ? '#b04060' : '#5980a6';
 
     const viewLabels = { perspective:'PERSPECTIVE', top:'TOP / PLAN', front:'FRONT ELEV', side:'SIDE ELEV', cut: activeCut?.name || 'SECTION' };
@@ -2010,6 +2996,8 @@ class Component extends DCLogic {
         : `BACKGROUND ${backgroundMode.toUpperCase()}: NONE SELECTED  [B]`;
     const backgroundStatusColor = backgroundMode === 'blue' ? '#5297da'
       : backgroundMode === 'red' ? '#dd6568' : 'rgba(29,31,32,0.42)';
+    const persistenceStatusColor = this.state.persistenceStatus === 'SAVED'
+      ? '#6a7a52' : '#b04050';
 
     return {
       topBarLabel, topBarColor,
@@ -2017,6 +3005,7 @@ class Component extends DCLogic {
       choosingDir,
       noCuts: cuts.length === 0,
       wallToolActive: activeTool === 'wall',
+      floorToolActive: activeTool === 'floor',
       wallTypes: WALL_TYPES.map(wt => ({
         label: wt.label,
         bg:     wt.id === this.state.activeWallType ? '#1d1f20' : '#fff',
@@ -2024,10 +3013,37 @@ class Component extends DCLogic {
         border: wt.id === this.state.activeWallType ? '#1d1f20' : 'rgba(29,31,32,0.16)',
         onSelect: () => this.setState({ activeWallType: wt.id }),
       })),
-      wallBaseHeight: this.state.wallBaseHeight,
-      wallTopHeight:  this.state.wallTopHeight,
-      onWallBaseH: e => this.setState({ wallBaseHeight: parseFloat(e.target.value) || 0 }),
-      onWallTopH:  e => this.setState({ wallTopHeight:  parseFloat(e.target.value) || 0 }),
+      wallBaseInput: this.state.wallBaseInput,
+      wallTopInput:  this.state.wallTopInput,
+      wallDimensionBorder: this.state.wallDimensionError ? '#b04050' : 'rgba(29,31,32,0.2)',
+      hasWallDimensionError: Boolean(this.state.wallDimensionError),
+      wallDimensionError: this.state.wallDimensionError,
+      onWallBaseInput: e => {
+        const parsed = parseArchitecturalLength(e.target.value);
+        this.setState({
+          wallBaseInput: e.target.value,
+          wallDimensionError: parsed.ok || !e.target.value.trim() ? '' : parsed.error,
+        });
+      },
+      onWallTopInput: e => {
+        const parsed = parseArchitecturalLength(e.target.value);
+        this.setState({
+          wallTopInput: e.target.value,
+          wallDimensionError: parsed.ok || !e.target.value.trim() ? '' : parsed.error,
+        });
+      },
+      onWallBaseCommit: () => this._commitWallDimension('base'),
+      onWallTopCommit:  () => this._commitWallDimension('top'),
+      onWallBaseKey: e => {
+        if (e.key === 'Enter') { e.preventDefault(); this._commitWallDimension('base'); e.currentTarget.blur(); }
+        if (e.key === 'Escape') { e.preventDefault(); this._restoreWallDimension('base'); e.currentTarget.blur(); }
+        e.stopPropagation();
+      },
+      onWallTopKey: e => {
+        if (e.key === 'Enter') { e.preventDefault(); this._commitWallDimension('top'); e.currentTarget.blur(); }
+        if (e.key === 'Escape') { e.preventDefault(); this._restoreWallDimension('top'); e.currentTarget.blur(); }
+        e.stopPropagation();
+      },
       wallRefLine: this.state.wallRefLine,
       wallRefBtns: ['left','center','right'].map(v => ({
         label:  v === 'left' ? 'LEFT' : v === 'center' ? 'CENTER' : 'RIGHT',
@@ -2039,6 +3055,18 @@ class Component extends DCLogic {
       wallExtNote: this.state.wallRefLine === 'left'   ? '← EXTERIOR FACE'
                  : this.state.wallRefLine === 'right'  ? 'EXTERIOR FACE →'
                  : 'SYMMETRIC / NO EXT',
+      floorThicknessInput: this.state.floorThicknessInput,
+      floorDimensionBorder: this.state.floorDimensionError ? '#b04050' : 'rgba(29,31,32,0.2)',
+      hasFloorDimensionError: Boolean(this.state.floorDimensionError),
+      floorDimensionError: this.state.floorDimensionError,
+      floorAssemblyLabel: `11 7/8" TJI @ 16" O.C. + 3/4" sheathing · ${this._ftIn(this.state.floorThickness)} total`,
+      onFloorThicknessInput: e => this.setState({ floorThicknessInput: e.target.value, floorDimensionError: '' }),
+      onFloorThicknessCommit: () => this._commitFloorThickness(),
+      onFloorDimensionKey: e => {
+        if (e.key === 'Enter') { e.preventDefault(); this._commitFloorThickness(); e.currentTarget.blur(); }
+        if (e.key === 'Escape') { e.preventDefault(); this._restoreFloorThickness(); e.currentTarget.blur(); }
+        e.stopPropagation();
+      },
 
       levels: levels.map((l, i) => {
         const slot = l.id === activeLevel?.id ? -1 : backgroundLevelIds.indexOf(l.id);
@@ -2071,11 +3099,12 @@ class Component extends DCLogic {
       })),
 
       tools: [
-        { label:'Select  [S]', onSelect:()=>{ this._cancelWall(); this._cancelLine(); this.setState({activeTool:'select'}); }, ...(activeTool==='select'?on:off) },
-        { label:'Line  [L]',   onSelect:()=>{ this._cancelWall(); this.setState({activeTool:'line'}); },                       ...(activeTool==='line'  ?on:off) },
-        { label:'Wall  [W]',   onSelect:()=>{ this._cancelLine(); this.setState({activeTool:'wall'}); },                       ...(activeTool==='wall'  ?on:off) },
-        { label:'Trim  [T]',   onSelect:()=>{ this._cancelWall(); this._cancelLine(); this.setState({activeTool:'trim'}); },   ...(activeTool==='trim'  ?on:off) },
-        { label:'Cut  [C]',    onSelect:()=>{ this._cancelWall(); this._cancelLine(); this.setState({activeTool:'cut'}); },    ...(activeTool==='cut'   ?on:off) },
+        { label:'Select  [S]', onSelect:()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'select'}); }, ...(activeTool==='select'?on:off) },
+        { label:'Line  [L]',   onSelect:()=>{ this._cancelWall(); this._cancelFloor(); this.setState({activeTool:'line'}); },                       ...(activeTool==='line'  ?on:off) },
+        { label:'Wall  [W]',   onSelect:()=>{ this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'wall'}); },                       ...(activeTool==='wall'  ?on:off) },
+        { label:'Floor  [F]',  onSelect:()=>{ this._cancelWall(); this._cancelLine(); this.setState({activeTool:'floor'}); },                       ...(activeTool==='floor' ?on:off) },
+        { label:'Trim  [T]',   onSelect:()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'trim'}); },   ...(activeTool==='trim'  ?on:off) },
+        { label:'Cut  [C]',    onSelect:()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'cut'}); },    ...(activeTool==='cut'   ?on:off) },
       ],
       views: [
         { label:'Top / Plan  [2]', onSelect:()=>this._setView('top'),   bg: activeView==='top'  ?hi:lo },
@@ -2084,6 +3113,11 @@ class Component extends DCLogic {
       ],
       resetView:    ()=>this._resetView(),
       enter3D:      ()=>this._setView('perspective'),
+      webglUnavailable: this.state.webglUnavailable,
+      view3DLabel:  this.state.webglUnavailable ? '3D VIEW — UNAVAILABLE' : '3D VIEW',
+      view3DTitle:  this.state.webglUnavailable ? '3D preview is unavailable in this browser; 2D drafting remains available.' : 'Switch to the 3D perspective view',
+      view3DOpacity: this.state.webglUnavailable ? '0.58' : '1',
+      view3DCursor:  this.state.webglUnavailable ? 'not-allowed' : 'pointer',
       view3DBg:     activeView==='perspective' ? '#5980a6' : '#fff',
       view3DColor:  activeView==='perspective' ? '#fff'    : '#5980a6',
       view3DBorder: '#5980a6',
@@ -2100,16 +3134,34 @@ class Component extends DCLogic {
       midSnapY:       this.state.midSnapY,
       midSnapDisplay: this.state.showMidSnap ? 'block' : 'none',
       lengthFrozen: this.state.lengthFrozen,
-      frozenFt: this.state.frozenFt,
-      frozenIn: this.state.frozenIn,
-      onFrozenFtInput: e => { this.setState({ frozenFt: e.target.value }, () => this._updateFrozenPreview()); },
-      onFrozenInInput: e => { this.setState({ frozenIn: e.target.value }, () => this._updateFrozenPreview()); },
+      frozenLengthInput: this.state.frozenLengthInput,
+      frozenDimensionBorder: this.state.frozenDimensionError ? '#b04050' : 'rgba(29,31,32,0.25)',
+      hasFrozenDimensionError: Boolean(this.state.frozenDimensionError),
+      frozenDimensionError: this.state.frozenDimensionError,
+      onFrozenLengthInput: e => {
+        const parsed = parseArchitecturalLength(e.target.value);
+        this.setState({
+          frozenLengthInput: e.target.value,
+          frozenDimensionError: parsed.ok || !e.target.value.trim() ? '' : parsed.error,
+        }, () => this._updateFrozenPreview());
+      },
       onFrozenKeyDown: e => { if (e.key === 'Enter') this._confirmFrozenLength(); if (e.key === 'Escape') this._cancelFrozenLength(); e.stopPropagation(); },
       confirmFrozenLength: () => this._confirmFrozenLength(),
       cancelFrozenLength:  () => this._cancelFrozenLength(),
+      saveExtension: this.state.saveExtension,
+      onSaveExtensionChange: e => {
+        const extension = String(e.target.value || 'json')
+          .toLowerCase()
+          .replace(/^\./, '')
+          .replace(/[^a-z0-9_-]/g, '') || 'json';
+        this.setState({ saveExtension: extension }, () => this._markUnsaved());
+      },
+      saveDrawingFile: () => this._saveDrawingFile(),
       viewLabel: viewLabels[activeView] || 'TOP / PLAN',
       backgroundStatus,
       backgroundStatusColor,
+      persistenceStatus: this.state.persistenceStatus,
+      persistenceStatusColor,
     };
   }
 }

@@ -61,18 +61,24 @@
         display: block;
         width: fit-content;
         margin: 0 auto 34px;
-        color: var(--blue-dark);
-        font-size: clamp(28px, 4vw, 42px);
-        font-weight: 600;
-        letter-spacing: 0.02em;
         line-height: 1;
         text-decoration: none;
       }
-      .site-link:hover,
-      .site-link:focus-visible {
-        color: var(--blue-medium);
-        text-decoration: underline;
-        text-underline-offset: 6px;
+       .site-logo {
+         display: block;
+         width: clamp(190px, 22vw, 250px);
+         max-height: 100px;
+         object-fit: contain;
+         transition: opacity 160ms ease, transform 160ms ease;
+       }
+       .site-link:hover .site-logo,
+       .site-link:focus-visible .site-logo {
+         opacity: 0.78;
+         transform: translateY(-1px);
+       }
+       .site-link:focus-visible {
+         outline: 2px solid var(--blue-medium);
+         outline-offset: 8px;
       }
 
       .spaces {
@@ -142,7 +148,9 @@
   <body>
     <div class="shell">
       <main>
-        <a class="site-link" href="https://bluejetty.ca" aria-label="Visit bluejetty.ca">bluejetty.ca</a>
+        <a class="site-link" href="https://bluejetty.ca" aria-label="Visit bluejetty.ca">
+          <img class="site-logo" src="https://bluejetty.ca/logo.png" alt="bluejetty.ca" />
+        </a>
         <nav class="spaces" aria-label="Draft workspaces" id="spaces"></nav>
       </main>
     </div>
