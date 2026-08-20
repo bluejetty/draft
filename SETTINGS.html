@@ -22,9 +22,9 @@
     .groups { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px; margin-top:22px; }
     .group { border:1px solid rgba(29,31,32,.17); background:#fff; }
     .group-title { padding:9px 12px; border-bottom:1px solid rgba(29,31,32,.12); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#5980a6; }
-    .group-head { display:grid; grid-template-columns:1fr 58px 72px; gap:8px; padding:6px 12px; background:#fafafa; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    .group-head { display:grid; grid-template-columns:1fr 58px 72px 22px; gap:8px; padding:6px 12px; background:#fafafa; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
     .group-head span:nth-child(2), .group-head span:nth-child(3) { text-align:center; }
-    .command { display:grid; grid-template-columns:1fr 58px 72px; align-items:center; gap:8px; min-height:47px; padding:8px 12px; border-bottom:1px solid rgba(29,31,32,.09); }
+    .command { display:grid; grid-template-columns:1fr 58px 72px 22px; align-items:center; gap:8px; min-height:47px; padding:8px 12px; border-bottom:1px solid rgba(29,31,32,.09); }
     .command:last-child { border-bottom:0; }
     .command-name { font-size:13px; line-height:1.2; }
     .command-info { display:flex; flex-direction:column; gap:2px; min-width:0; }
@@ -32,6 +32,8 @@
     .default-key { color:rgba(29,31,32,.5); text-align:center; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; }
     .key { min-width:72px; border:1px solid rgba(29,31,32,.28); background:#fafafa; color:#1d1f20; padding:5px 8px; border-radius:2px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.04em; cursor:pointer; }
     .key:hover, .key:focus { border-color:#5980a6; background:rgba(89,128,166,.09); outline:2px solid rgba(89,128,166,.18); outline-offset:1px; }
+    .clear { width:22px; height:22px; padding:0; border:1px solid rgba(29,31,32,.2); background:#fff; color:rgba(29,31,32,.55); font-size:13px; line-height:1; cursor:pointer; }
+    .clear:hover, .clear:focus { border-color:#5980a6; color:#5980a6; }
     .actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:18px; }
     button.action { height:34px; border:1px solid rgba(29,31,32,.24); background:#fff; color:#1d1f20; padding:0 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; cursor:pointer; }
     button.action.primary { border-color:#5980a6; background:#5980a6; color:#fff; }
@@ -79,23 +81,31 @@
         { title:'Drawing actions', commands:[
           ['freezeLength', 'Freeze length'], ['finish', 'Finish / commit'],
           ['finishAlt', 'Alternate finish / commit'], ['cancel', 'Cancel current command'],
-           ['delete', 'Delete selected'], ['group', 'Group selected'], ['undo', 'Undo last Extend'], ['background', 'Cycle background reference'], ['gridSnap', 'Toggle grid snap'],
+           ['delete', 'Delete selected'], ['undo', 'Undo last Extend'], ['background', 'Cycle background reference'], ['gridSnap', 'Toggle grid snap'],
         ]},
       ];
       const defaults = keyboard.DEFAULT_KEYBINDINGS;
       const active = manager.getActive('settings');
       const existing = active?.content?.model?.keybindings || {};
       let packageName = active?.name || manager.defaultName();
+      // A stored empty string means the user deliberately cleared the command,
+      // so only a command that was never stored falls back to its default.
       let bindings = Object.fromEntries(Object.entries(defaults).map(([command, fallback]) => [
-        command, keyboard.normaliseKeyBinding(existing[command]) || fallback,
+        command,
+        command in existing ? keyboard.normaliseKeyBinding(existing[command]) : fallback,
       ]));
+
+      // Combinations the browser answers itself: assigning them would either do
+      // nothing or reload the drawing out from under the user.
+      const RESERVED = ['Ctrl+R', 'Ctrl+T', 'Ctrl+W', 'Ctrl+N', 'Ctrl+L', 'Ctrl+P', 'Ctrl+Q',
+        'Meta+R', 'Meta+T', 'Meta+W', 'Meta+N', 'Meta+L', 'Meta+P', 'Meta+Q'];
 
       const status = document.querySelector('#status');
       const render = () => {
         document.querySelector('#groups').innerHTML = groups.map(group => `
           <section class="group">
             <div class="group-title">${group.title}</div>
-            <div class="group-head"><span>Command</span><span>Default</span><span>Active</span></div>
+            <div class="group-head"><span>Command</span><span>Default</span><span>Active</span><span></span></div>
             ${group.commands.map(([command, label]) => `
               <div class="command">
                 <div class="command-info">
@@ -103,7 +113,8 @@
                   <span class="command-note">Click Active, then press a key</span>
                 </div>
                 <span class="default-key">${keyboard.keyBindingLabel(defaults[command])}</span>
-                <button class="key" type="button" data-command="${command}" aria-label="Set shortcut for ${label}" title="Click here, then press a new key or combination">${keyboard.keyBindingLabel(bindings[command])}</button>
+                <button class="key" type="button" data-command="${command}" aria-label="Set shortcut for ${label}" title="Click here, then press a new key or combination">${keyboard.keyBindingLabel(bindings[command]) || '—'}</button>
+                <button class="clear" type="button" data-clear="${command}" aria-label="Clear shortcut for ${label}" title="Clear this shortcut">×</button>
               </div>
             `).join('')}
           </section>
@@ -117,8 +128,19 @@
               showStatus('Press a non-modifier key or a key combination.', true);
               return;
             }
+            if (RESERVED.includes(binding)) {
+              showStatus(`${keyboard.keyBindingLabel(binding)} is reserved by the browser and cannot be used.`, true);
+              return;
+            }
             bindings = { ...bindings, [button.dataset.command]: binding };
             saveActive('Shortcut saved locally.');
+            render();
+          });
+        });
+        document.querySelectorAll('[data-clear]').forEach(button => {
+          button.addEventListener('click', () => {
+            bindings = { ...bindings, [button.dataset.clear]: '' };
+            saveActive('Shortcut cleared.');
             render();
           });
         });
@@ -127,11 +149,15 @@
       const duplicateMessage = () => {
         const seen = {};
         Object.entries(bindings).forEach(([command, binding]) => {
+          // An unassigned command is not a conflict, however many share it.
+          if (!binding) return;
           if (!seen[binding]) seen[binding] = [];
           seen[binding].push(command);
         });
-        const duplicates = Object.values(seen).filter(commands => commands.length > 1);
-        return duplicates.length ? 'Some commands share a shortcut. The first matching command will run.' : '';
+        const duplicates = Object.entries(seen).filter(([, commands]) => commands.length > 1);
+        return duplicates.length
+          ? `${duplicates.map(([binding]) => keyboard.keyBindingLabel(binding)).join(', ')} is assigned to more than one command. The first matching command will run.`
+          : '';
       };
 
       const showStatus = (message, warning = false) => {

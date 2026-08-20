@@ -368,7 +368,8 @@
   <span data-model-sx>X: —</span>
   <span style="margin-left:24px;" data-model-sy>Y: —</span>
    <span data-model-background-status style="margin-left:24px; color:{{ backgroundStatusColor }};">{{ backgroundStatus }}</span>
-  <span style="margin-left:24px; color:{{ persistenceStatusColor }};">{{ persistenceStatus }}</span>
+  <span data-model-status style="margin-left:24px; color:{{ persistenceStatusColor }};">{{ persistenceStatus }}</span>
+  <span data-model-drawing-message style="margin-left:24px; color:{{ drawingMessageColor }};">{{ drawingMessage }}</span>
   <div style="flex:1;"></div>
   <span>{{ viewLabel }}</span>
 </div>
@@ -491,6 +492,8 @@ const WALL_TYPES = [
   { id:'concrete_12', label:'12" Concrete',        totalIn:12,    layers:[{in:12,    fill:'concrete'}] },
   { id:'icf',         label:'ICF  (11¼")',         totalIn:11.25, layers:[{in:2.625,fill:'insulation'},{in:6,fill:'concrete'},{in:2.625,fill:'insulation'}] },
 ];
+// Bump when the stored shape changes; loads of any other version are refused.
+const DRAWING_FORMAT_VERSION = 1;
 const DEFAULT_LEVELS = [
   { id:8, name:'SITE PLAN',    elev:  0, visible:true },
   { id:7, name:'ROOF PLAN',    elev: 18, visible:true },
@@ -631,6 +634,8 @@ class Component extends DCLogic {
     profileDialogError: false,
     persistenceStatus: 'UNSAVED',
     persistenceError: '',
+    drawingMessage: '',
+    drawingMessageError: false,
     webglUnavailable: false,
   };
 
@@ -670,7 +675,7 @@ class Component extends DCLogic {
     this._ensureDrawingCollections();
     const point = p => this._pointForStorage(p);
     return {
-      version: 1,
+      version: DRAWING_FORMAT_VERSION,
       lines: this._lines.map(line => ({
         id: line.id,
         start: point(line.start),
@@ -713,6 +718,7 @@ class Component extends DCLogic {
         endPt: { ...cut.endPt },
         dirVec: { ...cut.dirVec },
         elev: cut.elev,
+        levelId: cut.levelId ?? null,
       })),
       nextCutId: this.state.nextCutId,
       groups: this._groups.map(group => ({
@@ -758,8 +764,11 @@ class Component extends DCLogic {
 
   async _importDrawingFile(file) {
     if (!file) return;
-    await this._loadDrawing(file);
-    if (!this.state.persistenceError) this._markUnsaved();
+    const result = await this._loadDrawing(file);
+    if (result.ok) {
+      this._markUnsaved();
+      this.setState({ drawingMessage: `${file.name} imported.`, drawingMessageError: false });
+    }
   }
 
   // ─── Personal settings and company standards packages ───────────────────────
@@ -793,9 +802,11 @@ class Component extends DCLogic {
         ...(typeof values.gridSnapEnabled === 'boolean' ? { gridSnapEnabled: values.gridSnapEnabled } : {}),
         ...(values.keybindings && typeof values.keybindings === 'object'
           ? {
+            // A stored empty string means the command was deliberately cleared;
+            // only a command that was never stored falls back to its default.
             keybindings: Object.fromEntries(Object.entries(DEFAULT_KEYBINDINGS).map(([command, fallback]) => [
               command,
-              normaliseKeyBinding(values.keybindings[command]) || fallback,
+              command in values.keybindings ? normaliseKeyBinding(values.keybindings[command]) : fallback,
             ])),
           }
           : {}),
@@ -941,16 +952,37 @@ class Component extends DCLogic {
     return id;
   }
 
+  // Returns { ok, reason }. A load that cannot be understood leaves the current
+  // drawing and the stored copy untouched — nothing is imported and nothing is
+  // overwritten — and reports the failure to the status bar.
   async _loadDrawing(importedFile = null) {
     this._extendUndo = null;
     this._loadingDrawing = true;
+    const previousStatus = this.state.persistenceStatus;
+    let outcome = { ok: false, reason: 'empty' };
     try {
-      if (!importedFile && !window.SharedFileStore) return;
+      if (!importedFile && !window.SharedFileStore) return outcome;
       const file = importedFile || await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET);
-      if (!file) return;
+      if (!file) return outcome;
       const raw = await file.text();
-      const saved = JSON.parse(raw);
-      if (!saved || saved.version !== 1 || !Array.isArray(saved.levels)) return;
+      let saved = null;
+      try {
+        saved = JSON.parse(raw);
+      } catch {
+        outcome = { ok: false, reason: 'invalid' };
+        return outcome;
+      }
+      if (!saved || typeof saved !== 'object' || !Array.isArray(saved.levels)) {
+        outcome = { ok: false, reason: 'invalid' };
+        return outcome;
+      }
+      if (saved.version !== DRAWING_FORMAT_VERSION) {
+        outcome = {
+          ok: false,
+          reason: Number(saved.version) > DRAWING_FORMAT_VERSION ? 'version' : 'invalid',
+        };
+        return outcome;
+      }
 
       const levels = saved.levels
         .filter(level => level && Number.isFinite(Number(level.id)))
@@ -960,7 +992,10 @@ class Component extends DCLogic {
           elev: Number.isFinite(Number(level.elev)) ? Number(level.elev) : 0,
           visible: level.visible !== false,
         }));
-      if (!levels.length) return;
+      if (!levels.length) {
+        outcome = { ok: false, reason: 'invalid' };
+        return outcome;
+      }
 
       const levelIds = new Set(levels.map(level => level.id));
       const activeLevelIdx = Math.max(0, Math.min(
@@ -984,6 +1019,10 @@ class Component extends DCLogic {
           || !Number.isFinite(dirX) || !Number.isFinite(dirZ) || dirLength < 0.001
           || !Number.isFinite(Number(cut?.elev))) return null;
         cutIds.add(id);
+        // Drawings saved before cuts carried a level keep a null owner: two
+        // levels can share an elevation, so guessing one could delete the
+        // wrong section later.
+        const levelId = this._storedLevelId(cut?.levelId, levelIds);
         return {
           id,
           name: String(cut.name || 'SECTION').toUpperCase(),
@@ -991,6 +1030,7 @@ class Component extends DCLogic {
           endPt: { x: endPt.x, z: endPt.z },
           dirVec: { x: dirX / dirLength, z: dirZ / dirLength },
           elev: Number(cut.elev),
+          levelId,
         };
       }).filter(Boolean) : [];
       const nextCutId = Math.max(
@@ -1123,28 +1163,46 @@ class Component extends DCLogic {
        this._clearSelection(false);
       this._cutObjects = {};
       cuts.forEach(cut => this._restoreCutObjects(cut));
+      outcome = { ok: true, reason: 'loaded' };
     } catch (error) {
       console.warn('Unable to load saved model drawing:', error);
-      this.setState({ persistenceError: 'Load failed' });
+      outcome = { ok: false, reason: 'invalid' };
     } finally {
       this._loadingDrawing = false;
       this._drawingReady = true;
+      const failed = !outcome.ok && outcome.reason !== 'empty';
+      const source = importedFile ? 'import' : 'store';
+      const message = !failed ? ''
+        : outcome.reason === 'version'
+          ? (source === 'import'
+            ? 'Import failed — this file was made by a newer version of Draft. Nothing was changed.'
+            : 'Saved drawing was made by a newer version of Draft. Nothing was changed.')
+          : (source === 'import'
+            ? 'Import failed — this is not a Draft drawing. Nothing was changed.'
+            : 'Saved drawing could not be read. Nothing was changed.');
       this.setState({
-        persistenceStatus: this.state.persistenceError ? 'UNSAVED' : 'SAVED',
+        // A refused load changes nothing, so the stored copy is still whatever
+        // it was: never report it as unsaved because of a bad file.
+        persistenceStatus: outcome.ok ? 'SAVED' : (importedFile ? previousStatus : 'SAVED'),
+        persistenceError: '',
+        drawingMessage: message,
+        drawingMessageError: failed,
         wallBaseInput: formatArchitecturalInches(this.state.wallBaseHeight * 12),
         wallTopInput: formatArchitecturalInches(this.state.wallTopHeight * 12),
         floorThicknessInput: formatArchitecturalInches(this.state.floorThickness * 12),
       }, () => {
+        if (failed && importedFile) return;
         this._applyLevelElevation(this.state.activeLevelIdx);
         if (this._orthoCam) this._setView('top');
         this._restoreActiveProfilePackages();
       });
     }
+    return outcome;
   }
 
   _markUnsaved() {
     if (this._loadingDrawing || !this._drawingReady) return;
-    this.setState({ persistenceStatus: 'UNSAVED', persistenceError: '' });
+    this.setState({ persistenceStatus: 'UNSAVED', persistenceError: '', drawingMessage: '', drawingMessageError: false });
     if (!window.SharedFileStore) return;
 
     const generation = (this._saveGeneration || 0) + 1;
@@ -1172,6 +1230,7 @@ class Component extends DCLogic {
     if (c) {
       c.removeEventListener('mousemove',   this._cmmv);
       c.removeEventListener('mousedown',   this._cmdn);
+      c.removeEventListener('dblclick',    this._cdbl);
       c.removeEventListener('contextmenu', this._cctx);
       c.removeEventListener('wheel',       this._cwhl);
       c.removeEventListener('mouseleave',  this._cmle);
@@ -1180,6 +1239,7 @@ class Component extends DCLogic {
     window.removeEventListener('mouseup',   this._wmup);
     window.removeEventListener('keydown',   this._onKey);
     window.removeEventListener('keydown',   this._onKdn);
+    window.removeEventListener('keydown',   this._onCtrlDown);
     window.removeEventListener('keyup',     this._onKup);
   }
 
@@ -1298,15 +1358,18 @@ class Component extends DCLogic {
      this._groups     = [];
      this._nextGroupId = 1;
      this._nextDrawingItemId = 1;
-    this._pendingChain = []; // in-progress chain (not yet committed)
-    this._chainStart   = null; // first point of current chain
+    this._pendingChain  = []; // in-progress chain (not yet committed)
+    this._chainStart    = null; // first point of current chain
+    this._chainSegments = 0;  // segments placed in this chain, committed or not
     this._cutObjects = {}; // cutId → { line, arrow }
 
     // Wall drawing state (pending-chain model, mirrors line tool)
-    this._wallDrawing    = false;
-    this._wallChain      = [];   // [{start, end}] not yet committed
-    this._wallChainStart = null; // first placed point (for close detection)
-    this._wallStart      = null; // last placed point (current seg origin)
+    this._wallDrawing       = false;
+    this._wallChain         = [];   // [{start, end}] not yet committed
+    this._wallChainStart    = null; // first placed point (for close detection)
+    this._wallChainSegments = 0;    // segments placed in this chain
+    this._wallStart         = null; // last placed point (current seg origin)
+    this._frozenEnd         = null; // typed-length endpoint while the input is open
 
     // Floor drawing state — a closed multi-point outline on the active level.
     this._floorDrawing = false;
@@ -1432,6 +1495,12 @@ class Component extends DCLogic {
     if (!zoomed) drawGridLines(100, '#aaaaaa', 0.75);// 100ft major when zoomed out
   }
 
+  // While a typed length is open the cursor is ignored, so the rubber band has
+  // to follow the typed endpoint instead of the last mouse position.
+  _previewEndPoint() {
+    return this.state.lengthFrozen ? this._frozenEnd : this._snapPt;
+  }
+
   _redrawOverlay() {
     const ctx = this._overlayCtx, oc = this._overlayCanvas;
     if (!ctx || !oc || !this._canvas) return;
@@ -1505,10 +1574,11 @@ class Component extends DCLogic {
     activeWalls.forEach(w => this._drawWallSeg2D(ctx, toS, w, false, wallJoins, 'fill'));
     activeWalls.forEach(w => this._drawWallSeg2D(ctx, toS, w, false, wallJoins, 'stroke'));
     this._wallChain.forEach(s => this._drawWallSeg2D(ctx, toS, { ...s, wallType: pwType, refLine: pwRef }, false, null, 'both'));
-    if (this._wallDrawing && this._wallStart && this._snapPt) {
-      this._drawWallSeg2D(ctx, toS, { start: this._wallStart, end: this._snapPt, wallType: pwType, refLine: pwRef }, true, null, 'both');
+    const wallPreviewEnd = this._previewEndPoint();
+    if (this._wallDrawing && this._wallStart && wallPreviewEnd) {
+      this._drawWallSeg2D(ctx, toS, { start: this._wallStart, end: wallPreviewEnd, wallType: pwType, refLine: pwRef }, true, null, 'both');
     }
-    if (this._wallChainStart && this._wallDrawing && this._wallChain.length >= 1) {
+    if (this._wallChainStart && this._wallDrawing && this._wallChainSegments >= 1) {
       const sc = toS(this._wallChainStart);
       ctx.save();
       ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
@@ -1605,8 +1675,8 @@ class Component extends DCLogic {
     // Pending chain
     this._pendingChain.forEach(s => { drawSeg(s.start, s.end); drawDot(s.start); drawDot(s.end); });
 
-    // Chain-start close target (blue ring when ≥2 segments pending)
-    if (this._chainStart && this._lineDrawing && this._pendingChain.length >= 1) {
+    // Chain-start close target (blue ring once the chain has a segment)
+    if (this._chainStart && this._lineDrawing && this._chainSegments >= 1) {
       const sc = toS(this._chainStart);
       ctx.save();
       ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
@@ -1628,11 +1698,12 @@ class Component extends DCLogic {
     }
 
     // Preview line (cursor to last placed point)
-    if (this._lineDrawing && this._lineStart && this._snapPt) {
+    const linePreviewEnd = this._previewEndPoint();
+    if (this._lineDrawing && this._lineStart && linePreviewEnd) {
       ctx.save();
       ctx.strokeStyle = 'rgba(29,31,32,0.35)'; ctx.lineWidth = 1.5;
       ctx.setLineDash([6, 4]);
-      drawSeg(this._lineStart, this._snapPt);
+      drawSeg(this._lineStart, linePreviewEnd);
       ctx.setLineDash([]);
       ctx.restore();
       // dot at current chain tip
@@ -1645,6 +1716,77 @@ class Component extends DCLogic {
       ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2; ctx.stroke();
       ctx.restore();
     }
+
+    this._drawCuts2D(ctx, toS);
+  }
+
+  _drawArrow2D(ctx, toS, from, to) {
+    const a = toS(from), b = toS(to);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    const head = Math.max(6, Math.hypot(b.x - a.x, b.y - a.y) * 0.3);
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(b.x - head * Math.cos(angle - 0.4), b.y - head * Math.sin(angle - 0.4));
+    ctx.lineTo(b.x - head * Math.cos(angle + 0.4), b.y - head * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Cuts are Three.js objects, and nothing renders that scene without WebGL:
+  // the overlay is the only place 2D-only drafting can see them.
+  _drawCuts2D(ctx, toS) {
+    const dashedSeg = (start, end) => {
+      const a = toS(start), b = toS(end);
+      ctx.setLineDash([8, 5]);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.setLineDash([]);
+    };
+    const arrowFromMid = (start, end, dir) => {
+      const len = Math.hypot(end.x - start.x, end.z - start.z);
+      const arrowLen = Math.max(3, len * 0.25);
+      const mid = { x: (start.x + end.x) / 2, y: start.y, z: (start.z + end.z) / 2 };
+      this._drawArrow2D(ctx, toS, mid, {
+        x: mid.x + dir.x * arrowLen,
+        y: start.y,
+        z: mid.z + dir.z * arrowLen,
+      });
+    };
+
+    ctx.save();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#b04060';
+    ctx.fillStyle = '#b04060';
+    this.state.cuts.forEach(cut => {
+      const y = cut.elev + 0.02;
+      const start = { x: cut.startPt.x, y, z: cut.startPt.z };
+      const end = { x: cut.endPt.x, y, z: cut.endPt.z };
+      dashedSeg(start, end);
+      arrowFromMid(start, end, cut.dirVec);
+      if (cut.name) {
+        const a = toS(start);
+        ctx.font = '10px "Barlow Condensed", system-ui, sans-serif';
+        ctx.fillText(cut.name, a.x + 5, a.y - 5);
+      }
+    });
+
+    const phase = this.state.cutPhase;
+    if (phase !== 'idle' && this._cutStart3) {
+      const y = (this._drawElev || 0) + 0.05;
+      const start = { x: this._cutStart3.x, y, z: this._cutStart3.z };
+      const pending = phase === 'placing' ? this._snapPt : this._cutEnd3;
+      if (pending) {
+        const end = { x: pending.x, y, z: pending.z };
+        ctx.strokeStyle = '#994466';
+        ctx.fillStyle = '#994466';
+        dashedSeg(start, end);
+        if (phase === 'choosing' && this._cutDirLeft && this._cutDirRight) {
+          arrowFromMid(start, end, this._cutDirLeft);
+          arrowFromMid(start, end, this._cutDirRight);
+        }
+      }
+    }
+    ctx.restore();
   }
 
   _onResize() {
@@ -1789,6 +1931,13 @@ class Component extends DCLogic {
     this._lines = this._lines.filter(line => line.levelId !== levelId);
     this._walls = this._walls.filter(wall => wall.levelId !== levelId);
     this._floors = this._floors.filter(floor => floor.levelId !== levelId);
+    // Cuts are owned by a level id, not by elevation: two levels can sit at the
+    // same height, so only the deleted level's own sections go with it.
+    const removedCuts = this.state.cuts.filter(cut => cut.levelId === levelId);
+    removedCuts.forEach(cut => this._disposeCutObjects(cut.id));
+    const remainingCuts = this.state.cuts.filter(cut => cut.levelId !== levelId);
+    const activeCutId = removedCuts.some(cut => cut.id === this.state.activeCutId)
+      ? null : this.state.activeCutId;
     this._cleanupGroups();
     const newLevels = levels.filter((_, i) => i !== idx);
     const newIdx = idx < activeLevelIdx
@@ -1796,9 +1945,12 @@ class Component extends DCLogic {
       : Math.min(activeLevelIdx, newLevels.length - 1);
     this._applyLevelElevation(newIdx);
     this._clearSelection(false);
+    if (activeCutId === null && this.state.activeView === 'cut') this._setView('top');
     this.setState({
       levels: newLevels,
       activeLevelIdx: newIdx,
+      cuts: remainingCuts,
+      activeCutId,
       backgroundLevelIds: this.state.backgroundLevelIds.filter(id => id !== levelId),
     }, () => {
       this._notifySelectionChanged();
@@ -1874,14 +2026,17 @@ class Component extends DCLogic {
     this.setState({ activeView: 'cut', activeCutId: cutId });
   }
 
+  _disposeCutObjects(id) {
+    const objs = this._cutObjects[id];
+    if (!objs) return;
+    objs.forEach(o => { if (this._scene) this._scene.remove(o); if (o.geometry) o.geometry.dispose(); });
+    delete this._cutObjects[id];
+  }
+
   _deleteCut(id, e) {
     e.stopPropagation();
     if (!window.confirm('Delete this elevation/section view?')) return;
-    const objs = this._cutObjects[id];
-    if (objs) {
-      objs.forEach(o => { this._scene.remove(o); if (o.geometry) o.geometry.dispose(); });
-      delete this._cutObjects[id];
-    }
+    this._disposeCutObjects(id);
     const cuts = this.state.cuts.filter(c => c.id !== id);
     const activeCutId = this.state.activeCutId === id ? null : this.state.activeCutId;
     if (activeCutId === null && this.state.activeView === 'cut') this._setView('top');
@@ -2220,25 +2375,30 @@ class Component extends DCLogic {
 
     if (!this._wallDrawing) {
       if (isDbl) return;
-      this._wallDrawing    = true;
-      this._wallChainStart = pt.clone();
-      this._wallStart      = pt.clone();
-      this._wallChain      = [];
-      this._lockAngle      = null;
+      this._wallDrawing        = true;
+      this._wallChainStart     = pt.clone();
+      this._wallStart          = pt.clone();
+      this._wallChain          = [];
+      this._wallChainSegments  = 0;
+      this._lockAngle          = null;
       this.setState({ isDrawing: true });
     } else {
       if (isDbl) { this._finishWall(); return; }
       const dx = pt.x - this._wallStart.x, dz = pt.z - this._wallStart.z;
       if (Math.sqrt(dx*dx + dz*dz) < 0.001) return;
-      // Close detection: snap near chain start (≥2 segments)
+      // Close detection: snap near chain start (≥2 segments). Typed lengths
+      // commit immediately and empty the pending list, so the segment count —
+      // not the list length — decides when closing is possible.
       const cs = this._wallChainStart;
       const cdx = pt.x - cs.x, cdz = pt.z - cs.z;
-      if (this._wallChain.length >= 2 && Math.sqrt(cdx*cdx + cdz*cdz) < this._magnetRadius() * 2) {
+      if (this._wallChainSegments >= 2 && Math.sqrt(cdx*cdx + cdz*cdz) < this._magnetRadius() * 2) {
         this._wallChain.push({ start: this._wallStart.clone(), end: cs.clone() });
+        this._wallChainSegments += 1;
         this._finishWall();
         return;
       }
       this._wallChain.push({ start: this._wallStart.clone(), end: pt.clone() });
+      this._wallChainSegments += 1;
       this._wallStart = pt.clone();
       this._lockAngle = null;
     }
@@ -2251,22 +2411,24 @@ class Component extends DCLogic {
     const topH  = this.state.wallTopHeight;
     const refL  = this.state.wallRefLine;
     this._wallChain.forEach(seg => this._commitWall(seg.start, seg.end, wType, baseH, topH, refL));
-    this._wallChain      = [];
-    this._wallDrawing    = false;
-    this._wallChainStart = null;
-    this._wallStart      = null;
-    this._lockAngle      = null;
+    this._wallChain         = [];
+    this._wallChainSegments = 0;
+    this._wallDrawing       = false;
+    this._wallChainStart    = null;
+    this._wallStart         = null;
+    this._lockAngle         = null;
     this.setState({ isDrawing: false });
     this._markUnsaved();
   }
 
   _cancelWall() {
     if (!this._wallDrawing) return;
-    this._wallChain      = [];
-    this._wallDrawing    = false;
-    this._wallChainStart = null;
-    this._wallStart      = null;
-    this._lockAngle      = null;
+    this._wallChain         = [];
+    this._wallChainSegments = 0;
+    this._wallDrawing       = false;
+    this._wallChainStart    = null;
+    this._wallStart         = null;
+    this._lockAngle         = null;
     if (this._previewLine) this._previewLine.visible = false;
     this.setState({ isDrawing: false });
   }
@@ -3238,8 +3400,8 @@ class Component extends DCLogic {
     });
     this._extendUndo = null;
     this._markUnsaved();
+    // Undo restores geometry; it is not a request to switch tools.
     this.setState({
-      activeTool: 'extend',
       extendPhase: 'idle',
       extendBase: null,
       extendMessage: 'Last Extend undone.',
@@ -3397,11 +3559,12 @@ class Component extends DCLogic {
 
     if (!this._lineDrawing) {
       if (isDbl) return; // ignore 2nd click of a dbl-click when idle
-      this._lineDrawing  = true;
-      this._chainStart   = pt.clone();
-      this._lineStart    = pt.clone();
-      this._pendingChain = [];
-      this._lockAngle    = null;
+      this._lineDrawing   = true;
+      this._chainStart    = pt.clone();
+      this._lineStart     = pt.clone();
+      this._pendingChain  = [];
+      this._chainSegments = 0;
+      this._lockAngle     = null;
       this.setState({ isDrawing: true });
     } else {
       if (isDbl) {
@@ -3412,16 +3575,20 @@ class Component extends DCLogic {
       const dx = pt.x - this._lineStart.x, dz = pt.z - this._lineStart.z;
       if (Math.sqrt(dx*dx + dz*dz) < 0.001) return;
 
-      // Close detection: snap near chain start (≥2 segments already)
+      // Close detection: snap near chain start (≥2 segments already). Typed
+      // lengths commit immediately and empty the pending list, so the segment
+      // count — not the list length — decides when closing is possible.
       const cs = this._chainStart;
       const cdx = pt.x - cs.x, cdz = pt.z - cs.z;
-      if (this._pendingChain.length >= 2 && Math.sqrt(cdx*cdx + cdz*cdz) < this._magnetRadius() * 2) {
+      if (this._chainSegments >= 2 && Math.sqrt(cdx*cdx + cdz*cdz) < this._magnetRadius() * 2) {
         this._pendingChain.push({ start: this._lineStart.clone(), end: cs.clone() });
+        this._chainSegments += 1;
         this._finishChain();
         return;
       }
 
       this._pendingChain.push({ start: this._lineStart.clone(), end: pt.clone() });
+      this._chainSegments += 1;
       this._lineStart = pt.clone();
       this._lockAngle = null;
     }
@@ -3431,6 +3598,7 @@ class Component extends DCLogic {
     if (!this._lineDrawing) return;
     this._pendingChain.forEach(seg => this._commitLine(seg.start, seg.end));
     this._pendingChain  = [];
+    this._chainSegments = 0;
     this._lineDrawing   = false;
     this._chainStart    = null;
     this._lineStart     = null;
@@ -3442,6 +3610,7 @@ class Component extends DCLogic {
   _cancelLine() {
     if (!this._lineDrawing) return;
     this._pendingChain  = [];
+    this._chainSegments = 0;
     this._lineDrawing   = false;
     this._chainStart    = null;
     this._lineStart     = null;
@@ -3535,6 +3704,9 @@ class Component extends DCLogic {
     const obj = this._frozenTool === 'line' ? this._linePreviewObj : this._previewLine;
     const hasLength = Math.abs(total) > 0.001;
     if (obj) obj.visible = hasLength;
+    // The 2D overlay ignores the cursor while a length is typed, so give it the
+    // typed endpoint to draw towards.
+    this._frozenEnd = hasLength ? end : null;
     // Update status bar display
     const imp = this.state.units === 'imperial';
     const el = sel => document.querySelector(sel);
@@ -3562,9 +3734,9 @@ class Component extends DCLogic {
       this._pendingChain.forEach(seg => this._commitLine(seg.start, seg.end));
       this._pendingChain = [];
       this._commitLine(this._frozenStart, end);
-      this._lineStart   = end.clone();
-      this._chainStart  = end.clone();
-      this._lineDrawing = true;
+      this._lineStart     = end.clone();
+      this._chainSegments += 1;
+      this._lineDrawing   = true;
       if (this._linePreviewObj) this._linePreviewObj.visible = false;
     } else {
       const wallType = this.state.activeWallType;
@@ -3576,18 +3748,20 @@ class Component extends DCLogic {
       ));
       this._wallChain = [];
       this._commitWall(this._frozenStart, end, wallType, baseHeight, topHeight, refLine);
-      this._wallStart   = end.clone();
-      this._wallChainStart = end.clone();
-      this._wallDrawing = true;
+      this._wallStart          = end.clone();
+      this._wallChainSegments += 1;
+      this._wallDrawing        = true;
       if (this._previewLine) this._previewLine.visible = false;
     }
     this._lockAngle = null;
+    this._frozenEnd = null;
     this._markUnsaved();
     this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true });
   }
 
   _cancelFrozenLength() {
     this._lockAngle = null;
+    this._frozenEnd = null;
     this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '' });
   }
 
@@ -3686,6 +3860,7 @@ class Component extends DCLogic {
       startPt: start, endPt: end,
       dirVec: { x: dirVec.x, z: dirVec.z },
       elev,
+      levelId: this._activeLevelId() ?? null,
     };
     this.setState({
       cuts: [...this.state.cuts, cut],
@@ -3739,10 +3914,21 @@ class Component extends DCLogic {
   }
 
   // ─── Keyboard ────────────────────────────────────────────────────────────────
+  // 'field' — the control is being typed or chosen in and owns every key.
+  // 'widget' — the control answers Space and Enter by activating itself.
+  _focusedControl() {
+    const el = document.activeElement;
+    if (!el || el === document.body || el === this._canvas) return null;
+    if (el.isContentEditable) return 'field';
+    if (['INPUT', 'TEXTAREA', 'SELECT', 'OPTION'].includes(el.tagName)) return 'field';
+    if (['BUTTON', 'A'].includes(el.tagName) || el.hasAttribute('tabindex')) return 'widget';
+    return null;
+  }
+
   _handleKey(e) {
     if (!this._drawingReady || this.state.profileDialog) return;
-    const tag = document.activeElement?.tagName;
-    if (this.state.groupDialog && tag !== 'INPUT' && tag !== 'TEXTAREA') {
+    const focusedControl = this._focusedControl();
+    if (this.state.groupDialog && focusedControl !== 'field') {
       const key = e.key === ' ' ? 'Space' : e.key;
       if (key === 'y' || key === 'Y' || key === 'Enter' || key === 'Space') {
         e.preventDefault();
@@ -3753,7 +3939,10 @@ class Component extends DCLogic {
       }
       return;
     }
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (focusedControl === 'field') return;
+    // A focused button or link already answers Space and Enter by activating
+    // itself; running the drawing command too would fire it twice.
+    if (focusedControl === 'widget' && (e.key === ' ' || e.key === 'Enter')) return;
     const matches = command => eventMatchesBinding(e, this.state.keybindings[command]);
     if (matches('undo')) {
       e.preventDefault();
@@ -4285,6 +4474,8 @@ class Component extends DCLogic {
       backgroundStatusColor,
       persistenceStatus: this.state.persistenceStatus,
       persistenceStatusColor,
+      drawingMessage: this.state.drawingMessage,
+      drawingMessageColor: this.state.drawingMessageError ? '#b04050' : 'rgba(29,31,32,0.55)',
     };
   }
 }
