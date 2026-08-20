@@ -90,7 +90,7 @@
       <button onClick="{{ setImperial }}" style="min-width:64px; border:1px solid {{ imperialBorder }}; background:{{ imperialBg }}; color:{{ imperialColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">IMPERIAL</button>
       <button onClick="{{ setMetric }}" style="min-width:64px; border:1px solid {{ metricBorder }}; background:{{ metricBg }}; color:{{ metricColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">METRIC</button>
     </div>
-    <button data-grid-snap onClick="{{ toggleGridSnap }}" title="{{ gridSnapTitle }}" style="height:29px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; color:{{ gridSnapColor }}; padding:3px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">{{ gridSnapLabel }}</button>
+    <button data-grid-snap onClick="{{ toggleGridSnap }}" onKeyDown="{{ onGridSnapKeyDown }}" title="{{ gridSnapTitle }}" style="height:29px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; color:{{ gridSnapColor }}; padding:3px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">{{ gridSnapLabel }}</button>
     <div data-save-controls style="display:flex; align-items:center; gap:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em;">
       <span style="color:rgba(29,31,32,0.45);">SAVE AS</span>
       <select value="{{ saveExtension }}" onChange="{{ onSaveExtensionChange }}" aria-label="Save file extension" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; cursor:pointer;">
@@ -532,6 +532,7 @@ const DEFAULT_KEYBINDINGS = Object.freeze({
   group: 'G',
   undo: 'Ctrl+Z',
   background: 'B',
+  gridSnap: '',
 });
 
 function normaliseKeyBinding(value) {
@@ -1745,6 +1746,12 @@ class Component extends DCLogic {
     const modes = ['blue', 'red', 'none'];
     const current = modes.indexOf(this.state.backgroundMode);
     this.setState({ backgroundMode: modes[(current + 1) % modes.length] }, () => this._markUnsaved());
+  }
+
+  _toggleGridSnap() {
+    this.setState({
+      gridSnapEnabled: !this.state.gridSnapEnabled,
+    }, () => { this._rememberActiveProfile('settings'); this._markUnsaved(); });
   }
 
   _applyLevelElevation(idx) {
@@ -3820,6 +3827,7 @@ class Component extends DCLogic {
     if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'trim' }); return; }
     if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
+    if (matches('gridSnap')) { e.preventDefault(); this._toggleGridSnap(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
     if (matches('top')) { e.preventDefault(); this._setView('top'); return; }
     if (matches('front')) { e.preventDefault(); this._setView('front'); return; }
@@ -4195,9 +4203,10 @@ class Component extends DCLogic {
       metricBg:   units==='metric'  ?'#1d1f20':'#fff', metricColor:   units==='metric'  ?'#f2f2f3':'#1d1f20',
       imperialBorder: units==='imperial'?'#1d1f20':'rgba(29,31,32,0.2)',
       metricBorder: units==='metric'?'#1d1f20':'rgba(29,31,32,0.2)',
-      toggleGridSnap: () => this.setState({
-        gridSnapEnabled: !this.state.gridSnapEnabled,
-      }, () => { this._rememberActiveProfile('settings'); this._markUnsaved(); }),
+      toggleGridSnap: () => this._toggleGridSnap(),
+      onGridSnapKeyDown: e => {
+        if (e.key === ' ' || e.key === 'Enter') e.preventDefault();
+      },
       gridSnapLabel: this.state.gridSnapEnabled ? 'GRID SNAP · ON' : 'GRID SNAP · OFF',
       gridSnapTitle: this.state.gridSnapEnabled
         ? 'Grid snap is on: points round to 1-foot increments. Click to turn it off.'

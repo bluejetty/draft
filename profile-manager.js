@@ -120,6 +120,7 @@ if (!window.DraftProfileManager) {
     delete: 'Delete',
     undo: 'Ctrl+Z',
     background: 'B',
+    gridSnap: '',
   });
 
   const normaliseKeyBinding = value => {
