@@ -3561,17 +3561,32 @@ class Component extends DCLogic {
       this._frozenStart.z + dirZ * total,
     );
     if (this._frozenTool === 'line') {
-      // Add to pending chain (not yet committed until Space/Enter)
-      this._pendingChain.push({ start: this._frozenStart.clone(), end: end.clone() });
+      // A typed length is an explicit commit. Preserve any earlier chain
+      // segments too, so changing tools cannot discard measured geometry.
+      this._pendingChain.forEach(seg => this._commitLine(seg.start, seg.end));
+      this._pendingChain = [];
+      this._commitLine(this._frozenStart, end);
       this._lineStart   = end.clone();
+      this._chainStart  = end.clone();
       this._lineDrawing = true;
+      if (this._linePreviewObj) this._linePreviewObj.visible = false;
     } else {
-      this._wallChain.push({ start: this._frozenStart.clone(), end: end.clone() });
+      const wallType = this.state.activeWallType;
+      const baseHeight = this.state.wallBaseHeight;
+      const topHeight = this.state.wallTopHeight;
+      const refLine = this.state.wallRefLine;
+      this._wallChain.forEach(seg => this._commitWall(
+        seg.start, seg.end, wallType, baseHeight, topHeight, refLine,
+      ));
+      this._wallChain = [];
+      this._commitWall(this._frozenStart, end, wallType, baseHeight, topHeight, refLine);
       this._wallStart   = end.clone();
+      this._wallChainStart = end.clone();
       this._wallDrawing = true;
       if (this._previewLine) this._previewLine.visible = false;
     }
     this._lockAngle = null;
+    this._markUnsaved();
     this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true });
   }
 
@@ -4241,7 +4256,11 @@ class Component extends DCLogic {
           frozenDimensionError: parsed.ok || !e.target.value.trim() ? '' : parsed.error,
         }, () => this._updateFrozenPreview());
       },
-      onFrozenKeyDown: e => { if (e.key === 'Enter') this._confirmFrozenLength(); if (e.key === 'Escape') this._cancelFrozenLength(); e.stopPropagation(); },
+      onFrozenKeyDown: e => {
+        if (e.key === 'Enter') { e.preventDefault(); this._confirmFrozenLength(); }
+        if (e.key === 'Escape') { e.preventDefault(); this._cancelFrozenLength(); }
+        e.stopPropagation();
+      },
       confirmFrozenLength: () => this._confirmFrozenLength(),
       cancelFrozenLength:  () => this._cancelFrozenLength(),
       saveExtension: this.state.saveExtension,
