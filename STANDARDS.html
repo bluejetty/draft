@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Draft — Company Standard Layers</title>
+  <script src="./profile-manager.js"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap">
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:#f5f5f4; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; }
+    .topbar { height:52px; display:flex; align-items:center; gap:14px; padding:0 20px; border-bottom:1px solid rgba(29,31,32,.16); background:#fff; }
+    .brand { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:21px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    .slash { color:rgba(29,31,32,.32); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:18px; }
+    .section { color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
+    .back { margin-left:auto; color:rgba(29,31,32,.56); text-decoration:none; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
+    .back:hover { color:#5980a6; }
+    main { width:min(880px, calc(100vw - 32px)); margin:34px auto 48px; }
+    h1 { margin:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:27px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+    .intro { max-width:640px; margin:7px 0 0; color:rgba(29,31,32,.63); font-size:14px; line-height:1.5; }
+    .notice { margin-top:18px; padding:10px 12px; border-left:3px solid #5980a6; background:rgba(89,128,166,.08); color:rgba(29,31,32,.68); font-size:12px; line-height:1.45; }
+    .groups { display:flex; flex-direction:column; gap:14px; margin-top:22px; }
+    .group { border:1px solid rgba(29,31,32,.17); background:#fff; }
+    .group-title { padding:9px 12px; border-bottom:1px solid rgba(29,31,32,.12); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#5980a6; }
+    .group-head { display:grid; grid-template-columns:130px minmax(0,1fr) 190px 80px 22px; gap:10px; padding:6px 12px; background:#fafafa; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    .group-head span:nth-child(4) { text-align:center; }
+    .layer-row { display:grid; grid-template-columns:130px minmax(0,1fr) 190px 80px 22px; align-items:center; gap:10px; min-height:47px; padding:8px 12px; border-bottom:1px solid rgba(29,31,32,.09); }
+    .layer-row:last-child { border-bottom:0; }
+    .default-name { color:rgba(29,31,32,.5); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:.04em; }
+    .layer-use { color:rgba(29,31,32,.58); font-size:11px; line-height:1.3; }
+    .layer-name-input { min-width:0; width:100%; height:30px; border:1px solid rgba(29,31,32,.28); background:#fafafa; color:#1d1f20; padding:5px 8px; border-radius:2px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; }
+    .layer-name-input:hover, .layer-name-input:focus { border-color:#5980a6; background:rgba(89,128,166,.09); outline:2px solid rgba(89,128,166,.18); outline-offset:1px; }
+    .layer-print { display:flex; align-items:center; justify-content:center; gap:5px; color:rgba(29,31,32,.68); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; }
+    .layer-print input { accent-color:#5980a6; }
+    .reset-layer { width:22px; height:22px; padding:0; border:1px solid rgba(29,31,32,.2); background:#fff; color:rgba(29,31,32,.55); font-size:13px; line-height:1; cursor:pointer; }
+    .reset-layer:hover, .reset-layer:focus { border-color:#5980a6; color:#5980a6; }
+    .actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:18px; }
+    button.action { height:34px; border:1px solid rgba(29,31,32,.24); background:#fff; color:#1d1f20; padding:0 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; cursor:pointer; }
+    button.action.primary { border-color:#5980a6; background:#5980a6; color:#fff; }
+    button.action:hover { border-color:#5980a6; }
+    #status { margin-left:auto; color:#557a46; font-size:12px; }
+    #status.warning { color:#a06035; }
+    @media (max-width:720px) {
+      .group-head { display:none; }
+      .layer-row { grid-template-columns:1fr 80px 22px; }
+      .default-name, .layer-use { display:none; }
+      main { margin-top:24px; }
+      #status { width:100%; margin-left:0; order:3; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Draft</div>
+    <div class="slash">/</div>
+    <div class="section">Company Standards</div>
+    <a class="back" href="./MODEL.dc.html">← Back to Model</a>
+  </header>
+  <main>
+    <h1>Company Standard Layers</h1>
+    <p class="intro">The office layer list. Commands assign these layers automatically as you draft — nobody manages layers by hand — and this list is what a future AutoCAD/DXF export maps onto, so name each layer the way your CAD standard expects.</p>
+    <div class="notice"><strong>Layer philosophy:</strong> layers follow AIA-style CAD names (A-WALL-EXT, S-SLAB&hellip;) so drawings convert cleanly to AutoCAD. Views (PLAN, FLOOR, E-POWER&hellip;) are display groupings only; this layer list is the source of truth for export. A layer marked <strong>not printed</strong> (like NO-DRAFT) shows in the drawing spaces but is excluded from LAYOUT model displays and printed output.</div>
+    <section class="groups" id="groups" aria-label="Standard layers"></section>
+    <div class="actions">
+      <button class="action" id="reset" type="button">RESET DEFAULTS</button>
+      <button class="action primary" id="download" type="button">DOWNLOAD .DRAFT.STANDARDS</button>
+      <span id="status" role="status"></span>
+    </div>
+  </main>
+  <script>
+    (() => {
+      const manager = window.DraftProfileManager;
+      const standardsApi = window.DraftLayerStandards;
+      const groups = standardsApi.DEFAULT_LAYER_STANDARDS;
+      const active = manager.getActive('standards');
+      let packageName = active?.name || manager.defaultName();
+      let layerStandards = standardsApi.normaliseLayerStandards(active?.content?.model?.layerStandards);
+
+      const defaults = standardsApi.normaliseLayerStandards(null);
+      const status = document.querySelector('#status');
+
+      const showStatus = (message, warning = false) => {
+        status.textContent = message || '';
+        status.classList.toggle('warning', warning);
+      };
+
+      const saveActive = message => {
+        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards } });
+        manager.saveActive(pkg);
+        packageName = pkg.name;
+        showStatus(message);
+      };
+
+      const render = () => {
+        document.querySelector('#groups').innerHTML = groups.map(group => `
+          <section class="group">
+            <div class="group-title">${group.group}</div>
+            <div class="group-head"><span>Default</span><span>Used for</span><span>Layer name</span><span>Print</span><span></span></div>
+            ${group.layers.map(layer => {
+              const current = layerStandards[layer.id];
+              return `
+                <div class="layer-row">
+                  <span class="default-name">${layer.name}</span>
+                  <span class="layer-use">${layer.use}</span>
+                  <input class="layer-name-input" type="text" data-layer-name="${layer.id}" value="${current.name}" aria-label="Standard name for ${layer.name}" title="The layer name used in exports and layer lists">
+                  <span class="layer-print"><input type="checkbox" data-layer-print="${layer.id}" ${current.printable ? 'checked' : ''} aria-label="Print ${layer.name}"> Printed</span>
+                  <button class="reset-layer" type="button" data-layer-reset="${layer.id}" aria-label="Reset ${layer.name} to its default" title="Reset this layer to its default">×</button>
+                </div>
+              `;
+            }).join('')}
+          </section>
+        `).join('');
+        document.querySelectorAll('[data-layer-name]').forEach(input => {
+          input.addEventListener('change', () => {
+            const layerId = input.dataset.layerName;
+            const name = input.value.trim() ? input.value.trim().toUpperCase() : defaults[layerId].name;
+            layerStandards = { ...layerStandards, [layerId]: { ...layerStandards[layerId], name } };
+            saveActive(`${name} saved to the company standard.`);
+            render();
+          });
+        });
+        document.querySelectorAll('[data-layer-print]').forEach(input => {
+          input.addEventListener('change', () => {
+            const layerId = input.dataset.layerPrint;
+            layerStandards = { ...layerStandards, [layerId]: { ...layerStandards[layerId], printable: input.checked } };
+            saveActive(`${layerStandards[layerId].name} is now ${input.checked ? 'printed' : 'not printed'}.`);
+            render();
+          });
+        });
+        document.querySelectorAll('[data-layer-reset]').forEach(button => {
+          button.addEventListener('click', () => {
+            const layerId = button.dataset.layerReset;
+            layerStandards = { ...layerStandards, [layerId]: { ...defaults[layerId] } };
+            saveActive(`${defaults[layerId].name} restored to its default.`);
+            render();
+          });
+        });
+      };
+
+      document.querySelector('#reset').addEventListener('click', () => {
+        layerStandards = standardsApi.normaliseLayerStandards(null);
+        saveActive('Default layer standards restored.');
+        render();
+      });
+      document.querySelector('#download').addEventListener('click', () => {
+        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards } });
+        manager.saveActive(pkg);
+        packageName = pkg.name;
+        const fileName = manager.download(pkg);
+        showStatus(`${fileName} downloaded.`);
+      });
+
+      render();
+      showStatus('');
+    })();
+  </script>
+</body>
+</html>

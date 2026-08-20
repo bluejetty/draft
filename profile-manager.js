@@ -155,6 +155,55 @@ if (!window.DraftProfileManager) {
 
   const normaliseActiveLineLayer = value => value === 'no-draft' ? 'no-draft' : 'draft';
 
+  // Company-standard CAD layer list. Ids are fixed — they are what commands
+  // stamp onto entities — while the display name and print rule are office
+  // standards, so exports can match a firm's AutoCAD/DXF layer conventions.
+  const DEFAULT_LAYER_STANDARDS = Object.freeze([
+    Object.freeze({
+      group: 'Generic linework',
+      layers: Object.freeze([
+        Object.freeze({ id: 'draft', name: 'DRAFT', use: 'Default layer for the Line and Node / Arc tools.', printable: true }),
+        Object.freeze({ id: 'no-draft', name: 'NO-DRAFT', use: 'Construction / reference linework; drawing spaces only.', printable: false }),
+      ]),
+    }),
+    Object.freeze({
+      group: 'Architectural — PLAN',
+      layers: Object.freeze([
+        Object.freeze({ id: 'A-WALL-EXT', name: 'A-WALL-EXT', use: 'Exterior walls (Wall tool).', printable: true }),
+        Object.freeze({ id: 'A-WALL-INT', name: 'A-WALL-INT', use: 'Interior walls (Wall tool).', printable: true }),
+        Object.freeze({ id: 'A-FL', name: 'A-FL', use: 'Floor plan geometry.', printable: true }),
+        Object.freeze({ id: 'A-FL-DECK', name: 'A-FL-DECK', use: 'Floor deck.', printable: true }),
+        Object.freeze({ id: 'A-FL-FLOORING', name: 'A-FL-FLOORING', use: 'Floor finishes.', printable: true }),
+        Object.freeze({ id: 'PLAN DIMENSIONS', name: 'PLAN DIMENSIONS', use: 'Dimension strings placed in PLAN.', printable: true }),
+        Object.freeze({ id: 'ROOM IDS / AREA', name: 'ROOM IDS / AREA', use: 'Room tags and areas.', printable: true }),
+      ]),
+    }),
+    Object.freeze({
+      group: 'Structural — FLOOR / FOUNDATION',
+      layers: Object.freeze([
+        Object.freeze({ id: 'S-BEAM', name: 'S-BEAM', use: 'Beams.', printable: true }),
+        Object.freeze({ id: 'S-SLAB', name: 'S-SLAB', use: 'Slabs.', printable: true }),
+        Object.freeze({ id: 'FLOOR DIMENSION', name: 'FLOOR DIMENSION', use: 'Dimension strings placed in FLOOR.', printable: true }),
+        Object.freeze({ id: 'S-FDN', name: 'S-FDN', use: 'Foundation walls.', printable: true }),
+        Object.freeze({ id: 'S-COL/FOOTING', name: 'S-COL/FOOTING', use: 'Columns and footings.', printable: true }),
+      ]),
+    }),
+  ]);
+
+  const flatLayerStandards = () => DEFAULT_LAYER_STANDARDS.flatMap(group => group.layers);
+
+  const normaliseLayerStandards = value => {
+    const stored = value && typeof value === 'object' ? value : {};
+    return Object.fromEntries(flatLayerStandards().map(layer => {
+      const entry = stored[layer.id] && typeof stored[layer.id] === 'object' ? stored[layer.id] : {};
+      const name = typeof entry.name === 'string' && entry.name.trim()
+        ? entry.name.trim().toUpperCase()
+        : layer.name;
+      const printable = typeof entry.printable === 'boolean' ? entry.printable : layer.printable;
+      return [layer.id, { name, printable }];
+    }));
+  };
+
   const normaliseKeyBinding = value => {
     const aliases = {
       esc: 'Escape', escape: 'Escape', spacebar: 'Space', space: 'Space',
@@ -224,6 +273,10 @@ if (!window.DraftProfileManager) {
     DEFAULT_LINE_LAYERS,
     normaliseLineLayers,
     normaliseActiveLineLayer,
+  };
+  window.DraftLayerStandards = {
+    DEFAULT_LAYER_STANDARDS,
+    normaliseLayerStandards,
   };
 })();
 }

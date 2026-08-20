@@ -1,0 +1,91 @@
+// The company standard layer list lives on STANDARDS.html: every CAD layer the
+// commands assign, with an office-editable name and print rule, packaged as
+// .draft.standards so the taxonomy can drive an AutoCAD/DXF export later.
+const { test, expect } = require('@playwright/test');
+const h = require('./helpers');
+
+const LINE_STROKE = [29, 31, 32]; // #1d1f20, committed generic line color
+
+const ALL_LAYER_IDS = [
+  'draft', 'no-draft',
+  'A-WALL-EXT', 'A-WALL-INT', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING',
+  'PLAN DIMENSIONS', 'ROOM IDS / AREA',
+  'S-BEAM', 'S-SLAB', 'FLOOR DIMENSION', 'S-FDN', 'S-COL/FOOTING',
+];
+
+async function openStandards(page) {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('draft-test-storage-cleared')) return;
+    sessionStorage.setItem('draft-test-storage-cleared', '1');
+    indexedDB.deleteDatabase('pdf-img-mgr-shared');
+    localStorage.clear();
+  });
+  await page.goto('/STANDARDS.html');
+  await expect(page.locator('#groups .group')).toHaveCount(3);
+}
+
+async function drawLine(page, x1, z1, x2, z2) {
+  await h.selectTool(page, 'Line');
+  await h.clickWorld(page, x1, z1);
+  await h.clickWorld(page, x2, z2);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+}
+
+async function lineStrokeCount(page, x, z) {
+  const p = await h.worldToClient(page, x, z);
+  const pixels = await h.overlayPixels(page, p.x, p.y);
+  return h.countColor(pixels, LINE_STROKE);
+}
+
+test('the standards page lists every command layer with its default print rule', async ({ page }) => {
+  await openStandards(page);
+
+  for (const layerId of ALL_LAYER_IDS) {
+    await expect(page.locator(`[data-layer-name="${layerId}"]`)).toBeVisible();
+  }
+  // NO-DRAFT is the construction-only layer: everything prints except it.
+  await expect(page.locator('[data-layer-print="no-draft"]')).not.toBeChecked();
+  await expect(page.locator('[data-layer-print="draft"]')).toBeChecked();
+  await expect(page.locator('[data-layer-print="A-WALL-EXT"]')).toBeChecked();
+});
+
+test('renaming a layer in the standards shows in the Model Space layer views', async ({ page }) => {
+  await openStandards(page);
+  await page.locator('[data-layer-name="A-WALL-EXT"]').fill('X-WALL-CUSTOM');
+  await page.locator('[data-layer-name="A-WALL-EXT"]').blur();
+  await expect(page.locator('#status')).toContainText('X-WALL-CUSTOM');
+
+  await h.openModel(page);
+  // The active level's PLAN view lists its layers with the standard's names.
+  await expect(page.locator('.level-layer-content', { hasText: 'X-WALL-CUSTOM' }).first()).toBeVisible();
+});
+
+test('a layer whose standard says not printed is excluded from print output', async ({ page }) => {
+  await openStandards(page);
+  await page.locator('[data-layer-print="draft"]').uncheck();
+  await expect(page.locator('#status')).toContainText('not printed');
+
+  await h.openModel(page);
+  await drawLine(page, -10, 0, 10, 0);
+  expect(await lineStrokeCount(page, 5, 0)).toBeGreaterThan(0);
+
+  await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+  await page.waitForTimeout(400);
+  expect(await lineStrokeCount(page, 5, 0)).toBe(0);
+  await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+
+  // Print exclusion hides the line from output only; the geometry survives.
+  expect(h.allLines(await h.savedDrawing(page))).toHaveLength(1);
+});
+
+test('generic line layer names in Settings come from the company standard', async ({ page }) => {
+  await openStandards(page);
+  await page.locator('[data-layer-name="draft"]').fill('A-LINE');
+  await page.locator('[data-layer-name="draft"]').blur();
+
+  await page.goto('/SETTINGS.html');
+  const layerSection = page.locator('.layer-settings');
+  await expect(layerSection.getByText('A-LINE')).toBeVisible();
+  await expect(layerSection.getByText('NO-DRAFT')).toBeVisible();
+});

@@ -71,7 +71,7 @@
     <section class="groups" id="groups" aria-label="Keyboard commands"></section>
     <section class="layer-settings" aria-label="Generic line layers">
       <div class="layer-title">Generic Line Layers</div>
-      <p class="layer-intro">Choose the layer used by the Line tool and control what you see. <strong>NO-DRAFT</strong> is construction-only and is excluded from printed output.</p>
+      <p class="layer-intro">Choose the layer used by the Line tool and control what you see here. Layer names and print rules are office standards — change them in <a href="./STANDARDS.html" style="color:#5980a6;">Company Standard Layers</a>.</p>
       <div id="line-layers"></div>
     </section>
     <div class="actions">
@@ -85,6 +85,7 @@
       const manager = window.DraftProfileManager;
       const keyboard = window.DraftKeyboard;
       const lineLayerApi = window.DraftLineLayers;
+      const layerStandardsApi = window.DraftLayerStandards;
       const groups = [
         { title:'Drawing tools', commands:[
           ['select', 'Select'], ['line', 'Line'], ['node', 'Node / Arc'], ['wall', 'Wall'],
@@ -113,6 +114,10 @@
       ]));
       let lineLayers = lineLayerApi.normaliseLineLayers(existingLineLayers);
       let activeLineLayer = lineLayerApi.normaliseActiveLineLayer(active?.content?.model?.activeLineLayer);
+      // Names and print rules come from the company standard, not personal settings.
+      const layerStandards = layerStandardsApi.normaliseLayerStandards(
+        manager.getActive('standards')?.content?.model?.layerStandards,
+      );
 
       // Combinations the browser answers itself: assigning them would either do
       // nothing or reload the drawing out from under the user.
@@ -165,23 +170,23 @@
         });
         document.querySelector('#line-layers').innerHTML = ['draft', 'no-draft'].map(layerId => {
           const layer = lineLayers[layerId];
-          const isNoDraft = layerId === 'no-draft';
+          const standard = layerStandards[layerId];
           return `
             <label class="layer-row">
-              <input type="radio" name="active-line-layer" data-active-layer="${layerId}" ${activeLineLayer === layerId ? 'checked' : ''} aria-label="Use ${layer.name} for new generic lines">
+              <input type="radio" name="active-line-layer" data-active-layer="${layerId}" ${activeLineLayer === layerId ? 'checked' : ''} aria-label="Use ${standard.name} for new generic lines">
               <span>
-                <span class="layer-name">${layer.name}</span>
-                <span class="layer-note">${isNoDraft ? 'Construction-only generic lines; never printed.' : 'Standard generic lines; included in printed output.'}</span>
+                <span class="layer-name">${standard.name}</span>
+                <span class="layer-note">${standard.printable ? 'Included in printed output.' : 'Construction-only; excluded from printed output.'}</span>
               </span>
               <span class="layer-option"><input type="checkbox" data-layer-visible="${layerId}" ${layer.visible ? 'checked' : ''}> Visible</span>
-              <span class="layer-option">${isNoDraft ? 'Not printed' : 'Printed'}</span>
+              <span class="layer-option">${standard.printable ? 'Printed' : 'Not printed'}</span>
             </label>
           `;
         }).join('');
         document.querySelectorAll('[data-active-layer]').forEach(input => {
           input.addEventListener('change', () => {
             activeLineLayer = lineLayerApi.normaliseActiveLineLayer(input.dataset.activeLayer);
-            saveActive(`${lineLayers[activeLineLayer].name} will receive new generic lines.`);
+            saveActive(`${layerStandards[activeLineLayer].name} will receive new generic lines.`);
             render();
           });
         });
@@ -196,7 +201,7 @@
               const alternate = activeLineLayer === 'draft' ? 'no-draft' : 'draft';
               if (lineLayers[alternate].visible) activeLineLayer = alternate;
             }
-            saveActive(`${lineLayers[layerId].name} is now ${input.checked ? 'visible' : 'hidden'}.`);
+            saveActive(`${layerStandards[layerId].name} is now ${input.checked ? 'visible' : 'hidden'}.`);
             render();
           });
         });
