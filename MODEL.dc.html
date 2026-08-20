@@ -29,6 +29,8 @@
     .level-body { flex:1; min-width:0; padding:5px 7px 5px 8px; border:none; background:transparent; text-align:left; cursor:pointer; }
     .level-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .level-elev { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.45); margin-top:1px; }
+    .level-layer-stack { display:flex; flex-direction:column; gap:1px; margin-top:4px; }
+    .level-layer { min-height:13px; display:flex; align-items:center; border:1px solid rgba(29,31,32,0.18); padding:1px 5px; background:rgba(255,255,255,0.72); color:rgba(29,31,32,0.68); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-transform:uppercase; }
     .level-eye  { border:none; background:none; cursor:pointer; padding:0 6px; font-size:13px; line-height:1; color:rgba(29,31,32,0.4); flex-shrink:0; align-self:center; }
     .level-eye:hover { color:#5980a6; }
     .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:center; }
@@ -318,20 +320,27 @@
   <!-- RIGHT LEVEL RAIL -->
   <div data-model-right style="width:200px; border-left:1px solid rgba(29,31,32,0.16); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff;">
 
-    <!-- LEVELS — floor elevations, separate from future object layers -->
+     <!-- LEVELS — floor elevations with compact layer rows where defined -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
       <div style="display:flex; align-items:center; margin-bottom:8px;">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Levels</div>
         <button onClick="{{ addLevel }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; padding:2px 8px; cursor:pointer; letter-spacing:0.04em;">+ ADD</button>
       </div>
-      <div style="margin:-2px 0 7px; color:rgba(29,31,32,0.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.03em;">FLOOR ELEVATIONS · OBJECT LAYERS SEPARATE</div>
+       <div style="margin:-2px 0 7px; color:rgba(29,31,32,0.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.03em;">FLOOR ELEVATIONS · LAYERS NESTED WHERE DEFINED</div>
       <sc-for list="{{ levels }}" as="level" hint-placeholder-count="8">
         <div class="{{ level.rowClass }}">
           <div class="level-bar" style="background:{{ level.color }};" onClick="{{ level.onSelect }}"></div>
-          <button type="button" class="level-body" onClick="{{ level.onSelect }}" title="Switch to {{ level.name }}">
+           <div class="level-body" onClick="{{ level.onSelect }}" title="Switch to {{ level.name }}">
             <div class="level-name">{{ level.name }}</div>
             <div class="level-elev">{{ level.elevStr }}</div>
-          </button>
+             <sc-if value="{{ level.hasLayers }}" hint-placeholder-val="{{ false }}">
+               <div class="level-layer-stack">
+                 <sc-for list="{{ level.layers }}" as="layer" hint-placeholder-count="3">
+                   <div class="level-layer">{{ layer }}</div>
+                 </sc-for>
+               </div>
+             </sc-if>
+           </div>
           <button class="level-eye" onClick="{{ level.onToggleVis }}" title="{{ level.visLabel }}">{{ level.visIcon }}</button>
           <button class="level-bg" onClick="{{ level.onToggleBackground }}" title="{{ level.bgTitle }}" style="background:{{ level.bgButtonBg }}; border-color:{{ level.bgButtonBorder }}; color:{{ level.bgButtonColor }};">{{ level.bgLabel }}</button>
           <button class="level-del" onClick="{{ level.onDelete }}" title="Delete level">×</button>
@@ -501,14 +510,20 @@ const geo = window.DraftGeometry2D;
 const DRAWING_FORMAT_VERSION = format.VERSION;
 const REF_LINES = ['left', 'center', 'right'];
 // The old UI represented PLAN and FL as separate levels at the same elevation.
-// They are now one level each; layer controls will be added later inside these
-// level buttons. Existing saved geometry is remapped instead of discarded.
-const LEGACY_LEVEL_ID_REMAP = Object.freeze({ 6: 5, 4: 3 });
+// They are now one level each, with compact layer rows shown where defined.
+// Existing saved geometry is remapped instead of discarded.
+const LEGACY_LEVEL_ID_REMAP = Object.freeze({ 6: 5, 4: 3, 2: 1 });
 const LEVEL_BUTTON_NAMES = Object.freeze({
   8: 'SITE',
   7: 'ROOF',
   5: '2ND FL',
   3: 'MAIN FL',
+  1: 'FOUNDATION',
+});
+const LEVEL_LAYERS = Object.freeze({
+  5: Object.freeze(['ELECTRIC', 'PLAN', 'FLOOR']),
+  3: Object.freeze(['ELECTRIC', 'PLAN', 'FLOOR']),
+  1: Object.freeze(['ELECTRIC', 'PLAN', 'FOUNDATION']),
 });
 const migrateLevelId = value => {
   const id = Number(value);
@@ -516,16 +531,23 @@ const migrateLevelId = value => {
 };
 const migrateStoredLevels = rawLevels => {
   const merged = [];
-  const seen = new Set();
+  const mergedIndexById = new Map();
   rawLevels.forEach(level => {
     const id = migrateLevelId(level.id);
-    if (seen.has(id)) return;
-    seen.add(id);
-    merged.push({
+    const migrated = {
       ...level,
       id,
       name: LEVEL_BUTTON_NAMES[id] || level.name,
-    });
+    };
+    const existingIndex = mergedIndexById.get(id);
+    // Prefer the existing target level's elevation and visibility when a
+    // legacy duplicate (PLAN or BASEMENT) is merged into it.
+    if (existingIndex == null) {
+      mergedIndexById.set(id, merged.length);
+      merged.push(migrated);
+    } else if (level.id === id) {
+      merged[existingIndex] = migrated;
+    }
   });
   return merged;
 };
@@ -534,7 +556,6 @@ const DEFAULT_LEVELS = [
   { id:7, name:'ROOF',         elev: 18, visible:true },
   { id:5, name:'2ND FL',       elev:  9, visible:true },
   { id:3, name:'MAIN FL',      elev:  0, visible:true },
-  { id:2, name:'BASEMENT',     elev: -9, visible:true },
   { id:1, name:'FOUNDATION',   elev:-10, visible:true },
 ];
 // Shortcut defaults and key normalisation live in profile-manager.js so Model
@@ -4342,8 +4363,11 @@ class Component extends DCLogic {
       levels: levels.map((l, i) => {
         const slot = l.id === activeLevel?.id ? -1 : backgroundLevelIds.indexOf(l.id);
         const bgColor = slot === 0 ? '#5297da' : slot === 1 ? '#dd6568' : 'rgba(29,31,32,0.45)';
+        const layers = LEVEL_LAYERS[l.id] || [];
         return {
           name: l.name, elevStr: this._elevLabel(l.elev),
+          layers,
+          hasLayers: layers.length > 0,
           color: LEVEL_COLORS[i % LEVEL_COLORS.length],
           rowClass: 'level-row' + (i === activeLevelIdx ? ' active' : ''),
           visIcon: l.visible ? '●' : '○', visLabel: l.visible ? 'Hide level' : 'Show level',
