@@ -16,19 +16,19 @@
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
     a { color: rgba(29,31,32,0.45); text-decoration: none; font-family: 'Barlow Condensed', system-ui, sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
     a:hover { color: #5980a6; }
-    .lay-row { display:flex; align-items:stretch; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
-    .lay-row:hover { background:rgba(29,31,32,0.03); }
-    .lay-row.active { border-color:#5980a6; background:rgba(89,128,166,0.09); }
-    .lay-bar { width:3px; flex-shrink:0; }
-    .lay-body { flex:1; min-width:0; padding:5px 7px 5px 8px; border:none; background:transparent; text-align:left; cursor:pointer; }
-    .lay-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .lay-elev { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.45); margin-top:1px; }
-    .lay-eye  { border:none; background:none; cursor:pointer; padding:0 6px; font-size:13px; line-height:1; color:rgba(29,31,32,0.4); flex-shrink:0; align-self:center; }
-    .lay-eye:hover { color:#5980a6; }
-    .lay-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:center; }
-    .lay-bg:hover { border-color:#5980a6; color:#5980a6; }
-    .lay-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:center; }
-    .lay-del:hover { color:#c04040; }
+    .level-row { display:flex; align-items:stretch; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
+    .level-row:hover { background:rgba(29,31,32,0.03); }
+    .level-row.active { border-color:#5980a6; background:rgba(89,128,166,0.09); }
+    .level-bar { width:3px; flex-shrink:0; }
+    .level-body { flex:1; min-width:0; padding:5px 7px 5px 8px; border:none; background:transparent; text-align:left; cursor:pointer; }
+    .level-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .level-elev { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.45); margin-top:1px; }
+    .level-eye  { border:none; background:none; cursor:pointer; padding:0 6px; font-size:13px; line-height:1; color:rgba(29,31,32,0.4); flex-shrink:0; align-self:center; }
+    .level-eye:hover { color:#5980a6; }
+    .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:center; }
+    .level-bg:hover { border-color:#5980a6; color:#5980a6; }
+    .level-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:center; }
+    .level-del:hover { color:#c04040; }
     .cut-row { display:flex; align-items:center; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
     .cut-row:hover { background:rgba(29,31,32,0.03); }
     .cut-row.active { border-color:#b04060; background:rgba(176,64,96,0.08); }
@@ -77,22 +77,23 @@
   <!-- LEFT PANEL -->
   <div style="width:200px; border-right:1px solid rgba(29,31,32,0.16); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff;">
 
-    <!-- LAYERS -->
+    <!-- LEVELS — floor elevations, separate from future object layers -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
       <div style="display:flex; align-items:center; margin-bottom:8px;">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Layers</div>
-        <button onClick="{{ addLayer }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; padding:2px 8px; cursor:pointer; letter-spacing:0.04em;">+ ADD</button>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Levels</div>
+        <button onClick="{{ addLevel }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; padding:2px 8px; cursor:pointer; letter-spacing:0.04em;">+ ADD</button>
       </div>
-      <sc-for list="{{ layers }}" as="lay" hint-placeholder-count="8">
-        <div class="{{ lay.rowClass }}">
-          <div class="lay-bar" style="background:{{ lay.color }};" onClick="{{ lay.onSelect }}"></div>
-          <button type="button" class="lay-body" onClick="{{ lay.onSelect }}" title="Switch to {{ lay.name }}">
-            <div class="lay-name">{{ lay.name }}</div>
-            <div class="lay-elev">{{ lay.elevStr }}</div>
+      <div style="margin:-2px 0 7px; color:rgba(29,31,32,0.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.03em;">FLOOR ELEVATIONS · OBJECT LAYERS SEPARATE</div>
+      <sc-for list="{{ levels }}" as="level" hint-placeholder-count="8">
+        <div class="{{ level.rowClass }}">
+          <div class="level-bar" style="background:{{ level.color }};" onClick="{{ level.onSelect }}"></div>
+          <button type="button" class="level-body" onClick="{{ level.onSelect }}" title="Switch to {{ level.name }}">
+            <div class="level-name">{{ level.name }}</div>
+            <div class="level-elev">{{ level.elevStr }}</div>
           </button>
-          <button class="lay-eye" onClick="{{ lay.onToggleVis }}" title="{{ lay.visLabel }}">{{ lay.visIcon }}</button>
-          <button class="lay-bg" onClick="{{ lay.onToggleBackground }}" title="{{ lay.bgTitle }}" style="background:{{ lay.bgButtonBg }}; border-color:{{ lay.bgButtonBorder }}; color:{{ lay.bgButtonColor }};">{{ lay.bgLabel }}</button>
-          <button class="lay-del" onClick="{{ lay.onDelete }}" title="Delete layer">×</button>
+          <button class="level-eye" onClick="{{ level.onToggleVis }}" title="{{ level.visLabel }}">{{ level.visIcon }}</button>
+          <button class="level-bg" onClick="{{ level.onToggleBackground }}" title="{{ level.bgTitle }}" style="background:{{ level.bgButtonBg }}; border-color:{{ level.bgButtonBorder }}; color:{{ level.bgButtonColor }};">{{ level.bgLabel }}</button>
+          <button class="level-del" onClick="{{ level.onDelete }}" title="Delete level">×</button>
         </div>
       </sc-for>
     </div>
@@ -237,7 +238,7 @@ const SNAP_METRIC = [
   { label: '10 mm', snapFt: 0.010/0.3048 },
   { label: '100 mm',snapFt: 0.100/0.3048 },
 ];
-const LAYER_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a','#9a5a5a','#8a9a6a'];
+const LEVEL_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a','#9a5a5a','#8a9a6a'];
 // Endpoint magnet catch distance in screen pixels. Keep this small so the
 // cursor is only pulled when it is deliberately placed very near a node.
 const NODE_SNAP_PX = 5;
@@ -251,7 +252,7 @@ const WALL_TYPES = [
   { id:'concrete_12', label:'12" Concrete',        totalIn:12,    layers:[{in:12,    fill:'concrete'}] },
   { id:'icf',         label:'ICF  (11¼")',         totalIn:11.25, layers:[{in:2.625,fill:'insulation'},{in:6,fill:'concrete'},{in:2.625,fill:'insulation'}] },
 ];
-const DEFAULT_LAYERS = [
+const DEFAULT_LEVELS = [
   { id:8, name:'SITE PLAN',    elev:  0, visible:true },
   { id:7, name:'ROOF PLAN',    elev: 18, visible:true },
   { id:6, name:'2ND FL PLAN',  elev:  9, visible:true },
@@ -273,10 +274,10 @@ class Component extends DCLogic {
     wallRefLine:    'left',   // 'left'|'center'|'right' — where the drawn line sits on the assembly
     wallBaseHeight: 0,
     wallTopHeight:  9,
-    layers:        DEFAULT_LAYERS.map(l => ({ ...l })),
-    activeLayerIdx: 5,
-    nextLayerId:   9,
-    backgroundLayerIds: [],
+    levels:        DEFAULT_LEVELS.map(l => ({ ...l })),
+    activeLevelIdx: 5,
+    nextLevelId:   9,
+    backgroundLevelIds: [],
     backgroundMode: 'blue', // 'blue' | 'red' | 'none'
     cursorX: -100, cursorY: -100, showCursor: false,
     magnetX: -100, magnetY: -100, showMagnet: false,
@@ -449,7 +450,7 @@ class Component extends DCLogic {
     this._ro = new ResizeObserver(() => this._onResize());
     this._ro.observe(cont);
 
-    this._applyLayerElevation(this.state.activeLayerIdx);
+    this._applyLevelElevation(this.state.activeLevelIdx);
     this._setView('top');
     this._animate();
   }
@@ -533,8 +534,8 @@ class Component extends DCLogic {
       ctx.restore();
     };
 
-    const activeLayer = this._activeLayer();
-    const activeVisible = activeLayer?.visible !== false;
+    const activeLevel = this._activeLevel();
+    const activeVisible = activeLevel?.visible !== false;
     const reference = this._visibleBackgroundReference();
 
     // ── Visible background (reference-only, deliberately beneath active geometry)
@@ -681,32 +682,32 @@ class Component extends DCLogic {
     this._orthoCam.updateProjectionMatrix();
   }
 
-  // ─── Layers ──────────────────────────────────────────────────────────────────
-  _activeLayer() { return this.state.layers[this.state.activeLayerIdx] || this.state.layers[0]; }
+  // ─── Levels (floor elevations, distinct from future object layers) ───────────
+  _activeLevel() { return this.state.levels[this.state.activeLevelIdx] || this.state.levels[0]; }
 
-  _activeLayerId() { return this._activeLayer()?.id; }
+  _activeLevelId() { return this._activeLevel()?.id; }
 
   _activeLines() {
-    const layerId = this._activeLayerId();
-    return this._lines.filter(line => line.layerId === layerId);
+    const levelId = this._activeLevelId();
+    return this._lines.filter(line => line.levelId === levelId);
   }
 
   _activeWalls() {
-    const layerId = this._activeLayerId();
-    return this._walls.filter(wall => wall.layerId === layerId);
+    const levelId = this._activeLevelId();
+    return this._walls.filter(wall => wall.levelId === levelId);
   }
 
   // One reference slot is visible at a time: B cycles blue → red → none.
   _visibleBackgroundReference() {
-    const { backgroundLayerIds, backgroundMode, layers } = this.state;
+    const { backgroundLevelIds, backgroundMode, levels } = this.state;
     const slot = backgroundMode === 'blue' ? 0 : backgroundMode === 'red' ? 1 : -1;
-    const layerId = slot >= 0 ? backgroundLayerIds[slot] : null;
-    if (layerId == null || layerId === this._activeLayerId()) return null;
-    const layer = layers.find(l => l.id === layerId);
-    if (!layer || layer.visible === false) return null;
+    const levelId = slot >= 0 ? backgroundLevelIds[slot] : null;
+    if (levelId == null || levelId === this._activeLevelId()) return null;
+    const level = levels.find(l => l.id === levelId);
+    if (!level || level.visible === false) return null;
     return {
-      layerId,
-      layer,
+      levelId,
+      level,
       color: backgroundMode === 'blue' ? 'rgba(82,151,218,0.58)' : 'rgba(221,101,104,0.58)',
       label: backgroundMode.toUpperCase(),
     };
@@ -714,26 +715,26 @@ class Component extends DCLogic {
 
   _backgroundLines() {
     const ref = this._visibleBackgroundReference();
-    return ref ? this._lines.filter(line => line.layerId === ref.layerId) : [];
+    return ref ? this._lines.filter(line => line.levelId === ref.levelId) : [];
   }
 
   _backgroundWalls() {
     const ref = this._visibleBackgroundReference();
-    return ref ? this._walls.filter(wall => wall.layerId === ref.layerId) : [];
+    return ref ? this._walls.filter(wall => wall.levelId === ref.levelId) : [];
   }
 
-  _toggleBackgroundLayer(idx, e) {
+  _toggleBackgroundLevel(idx, e) {
     e.stopPropagation();
-    const layerId = this.state.layers[idx]?.id;
-    if (layerId == null || layerId === this._activeLayerId()) return;
-    const ids = [...this.state.backgroundLayerIds];
-    const selectedAt = ids.indexOf(layerId);
+    const levelId = this.state.levels[idx]?.id;
+    if (levelId == null || levelId === this._activeLevelId()) return;
+    const ids = [...this.state.backgroundLevelIds];
+    const selectedAt = ids.indexOf(levelId);
     if (selectedAt >= 0) ids.splice(selectedAt, 1);
     else {
-      ids.push(layerId);
+      ids.push(levelId);
       if (ids.length > 2) ids.shift(); // third selection replaces the oldest
     }
-    this.setState({ backgroundLayerIds: ids });
+    this.setState({ backgroundLevelIds: ids });
   }
 
   _cycleBackground() {
@@ -742,64 +743,64 @@ class Component extends DCLogic {
     this.setState({ backgroundMode: modes[(current + 1) % modes.length] });
   }
 
-  _applyLayerElevation(idx) {
-    const layer = this.state.layers[idx];
-    if (!layer) return;
-    const e = layer.elev;
+  _applyLevelElevation(idx) {
+    const level = this.state.levels[idx];
+    if (!level) return;
+    const e = level.elev;
     if (this._ground) this._ground.position.y = e;
     this._drawElev = e;
   }
 
-  _switchLayer(idx) {
-    if (idx === this.state.activeLayerIdx) return;
+  _switchLevel(idx) {
+    if (idx === this.state.activeLevelIdx) return;
     this._cancelWall(); this._cancelLine(); this._cancelCut();
     if (this._selectedSegs) this._selectedSegs.clear();
-    this._applyLayerElevation(idx);
-    // A floor cannot also be one of its own references.
-    const activeId = this.state.layers[idx]?.id;
-    const backgroundLayerIds = this.state.backgroundLayerIds.filter(id => id !== activeId);
-    this.setState({ activeLayerIdx: idx, backgroundLayerIds }, () => {
-      // Keep layer switching functional even when the optional WebGL renderer
+    this._applyLevelElevation(idx);
+    // A level cannot also be one of its own references.
+    const activeId = this.state.levels[idx]?.id;
+    const backgroundLevelIds = this.state.backgroundLevelIds.filter(id => id !== activeId);
+    this.setState({ activeLevelIdx: idx, backgroundLevelIds }, () => {
+      // Keep level switching functional even when the optional WebGL renderer
       // is unavailable; the 2D overlay can still render once it is initialized.
       if (this._orthoCam && this._controls) this._setView('top');
     });
   }
 
-  _addLayer() {
-    const name = window.prompt('Layer name:', 'NEW LAYER'); if (name === null) return;
+  _addLevel() {
+    const name = window.prompt('Level name:', 'NEW LEVEL'); if (name === null) return;
     const elevRaw = window.prompt('Elevation in feet (negative = below grade):', '0'); if (elevRaw === null) return;
     const elev = parseFloat(elevRaw); if (isNaN(elev)) return;
-    const id = this.state.nextLayerId;
-    this.setState({ layers: [...this.state.layers, { id, name: name.toUpperCase().trim(), elev, visible: true }], nextLayerId: id + 1 });
+    const id = this.state.nextLevelId;
+    this.setState({ levels: [...this.state.levels, { id, name: name.toUpperCase().trim(), elev, visible: true }], nextLevelId: id + 1 });
   }
 
-  _deleteLayer(idx) {
-    const { layers, activeLayerIdx } = this.state;
-    if (layers.length <= 1) { window.alert('Cannot delete the last layer.'); return; }
-    if (!window.confirm(`Delete layer "${layers[idx].name}"? Lines on this layer will be removed.`)) return;
+  _deleteLevel(idx) {
+    const { levels, activeLevelIdx } = this.state;
+    if (levels.length <= 1) { window.alert('Cannot delete the last level.'); return; }
+    if (!window.confirm(`Delete level "${levels[idx].name}"? Geometry on this level will be removed.`)) return;
     // Pending geometry belongs to the floor it was started on. Discard it before
-    // changing the layer collection so no chain can commit into another floor.
+    // changing the level collection so no chain can commit into another floor.
     this._cancelWall(); this._cancelLine(); this._cancelCut();
-    const lid = layers[idx].id;
-    this._lines = this._lines.filter(line => line.layerId !== lid);
-    this._walls = this._walls.filter(wall => wall.layerId !== lid);
-    const newLayers = layers.filter((_, i) => i !== idx);
-    const newIdx = idx < activeLayerIdx
-      ? activeLayerIdx - 1
-      : Math.min(activeLayerIdx, newLayers.length - 1);
-    this._applyLayerElevation(newIdx);
+    const levelId = levels[idx].id;
+    this._lines = this._lines.filter(line => line.levelId !== levelId);
+    this._walls = this._walls.filter(wall => wall.levelId !== levelId);
+    const newLevels = levels.filter((_, i) => i !== idx);
+    const newIdx = idx < activeLevelIdx
+      ? activeLevelIdx - 1
+      : Math.min(activeLevelIdx, newLevels.length - 1);
+    this._applyLevelElevation(newIdx);
     if (this._selectedSegs) this._selectedSegs.clear();
     this.setState({
-      layers: newLayers,
-      activeLayerIdx: newIdx,
-      backgroundLayerIds: this.state.backgroundLayerIds.filter(id => id !== lid),
+      levels: newLevels,
+      activeLevelIdx: newIdx,
+      backgroundLevelIds: this.state.backgroundLevelIds.filter(id => id !== levelId),
     });
   }
 
-  _toggleLayerVisibility(idx, e) {
+  _toggleLevelVisibility(idx, e) {
     e.stopPropagation();
-    const layers = this.state.layers.map((l, i) => i === idx ? { ...l, visible: !l.visible } : l);
-    this.setState({ layers });
+    const levels = this.state.levels.map((l, i) => i === idx ? { ...l, visible: !l.visible } : l);
+    this.setState({ levels });
   }
 
   // ─── Views ───────────────────────────────────────────────────────────────────
@@ -1186,12 +1187,12 @@ class Component extends DCLogic {
   }
 
   _commitWall(start, end, wallType, baseHeight, topHeight, refLine) {
-    const layer = this._activeLayer();
-    const layerId = layer ? layer.id : -1;
+    const level = this._activeLevel();
+    const levelId = level ? level.id : -1;
     this._walls.push({
-      start:      this._mergeVertex(start, layerId),
-      end:        this._mergeVertex(end, layerId),
-      layerId,
+      start:      this._mergeVertex(start, levelId),
+      end:        this._mergeVertex(end, levelId),
+      levelId,
       wallType:   wallType   || this.state.activeWallType,
       baseHeight: baseHeight != null ? baseHeight : this.state.wallBaseHeight,
       topHeight:  topHeight  != null ? topHeight  : this.state.wallTopHeight,
@@ -1333,20 +1334,20 @@ class Component extends DCLogic {
   }
 
   // ─── Vertex pool ─────────────────────────────────────────────────────────────
-  // Return an existing pooled Vector3 at (pt.x, pt.z) on the SAME layer, or
-  // create one at that layer's elevation. Matching coordinates on different
+  // Return an existing pooled Vector3 at (pt.x, pt.z) on the SAME level, or
+  // create one at that level's elevation. Matching coordinates on different
   // floors must remain distinct so background snaps never unite floor geometry.
-  _mergeVertex(pt, layerId) {
+  _mergeVertex(pt, levelId) {
     const THRESH = 0.001; // tight coordinate tolerance; grid snap is exact
     for (const v of this._vertices) {
-      if (v._draftLayerId === layerId
+      if (v._draftLevelId === levelId
         && Math.abs(v.x - pt.x) < THRESH
         && Math.abs(v.z - pt.z) < THRESH) return v;
     }
-    const layer = this.state.layers.find(l => l.id === layerId);
-    const elevation = layer ? layer.elev : (pt.y != null ? pt.y : 0);
+    const level = this.state.levels.find(l => l.id === levelId);
+    const elevation = level ? level.elev : (pt.y != null ? pt.y : 0);
     const v = new THREE.Vector3(pt.x, elevation, pt.z);
-    v._draftLayerId = layerId;
+    v._draftLevelId = levelId;
     this._vertices.push(v);
     return v;
   }
@@ -1439,10 +1440,10 @@ class Component extends DCLogic {
   // Split _lines[idx] at insertPt → two segments sharing the mid vertex.
   _splitLine(idx, insertPt) {
     const seg = this._lines[idx];
-    const mid = this._mergeVertex(insertPt, seg.layerId);
+    const mid = this._mergeVertex(insertPt, seg.levelId);
     this._lines.splice(idx, 1,
-      { start: seg.start, end: mid,     layerId: seg.layerId },
-      { start: mid,       end: seg.end, layerId: seg.layerId }
+      { start: seg.start, end: mid,     levelId: seg.levelId },
+      { start: mid,       end: seg.end, levelId: seg.levelId }
     );
   }
 
@@ -1531,7 +1532,7 @@ class Component extends DCLogic {
     // Create (or reuse) the intersection vertex in the pool
     const ixVtx = this._mergeVertex(
       new THREE.Vector3(nearest.x, seg.start.y, nearest.z),
-      seg.layerId,
+      seg.levelId,
     );
 
     // Remove clicked side: update the endpoint of the clicked segment
@@ -1679,12 +1680,12 @@ class Component extends DCLogic {
   }
 
   _commitLine(start, end) {
-    const layer = this._activeLayer();
-    const layerId = layer ? layer.id : -1;
+    const level = this._activeLevel();
+    const levelId = level ? level.id : -1;
     this._lines.push({
-      start: this._mergeVertex(start, layerId),
-      end: this._mergeVertex(end, layerId),
-      layerId,
+      start: this._mergeVertex(start, levelId),
+      end: this._mergeVertex(end, levelId),
+      levelId,
     });
   }
 
@@ -1977,14 +1978,14 @@ class Component extends DCLogic {
   // ─── renderVals ───────────────────────────────────────────────────────────────
   renderVals() {
     const { activeTool, units, activeView, activeSnap, isDrawing,
-            layers, activeLayerIdx, backgroundLayerIds, backgroundMode,
+            levels, activeLevelIdx, backgroundLevelIds, backgroundMode,
             cuts, activeCutId, cutPhase, choosingDir } = this.state;
     const on  = { bg:'#1d1f20', color:'#f2f2f3', border:'#1d1f20' };
     const off = { bg:'#fff',    color:'#1d1f20', border:'rgba(29,31,32,0.16)' };
     const hi  = 'rgba(29,31,32,0.09)', lo = '#fff';
     const snaps = units === 'imperial' ? SNAP_PRESETS : SNAP_METRIC;
 
-    const activeLayer = layers[activeLayerIdx] || layers[0];
+    const activeLevel = levels[activeLevelIdx] || levels[0];
     const activeCut   = cuts.find(c => c.id === activeCutId);
 
     const isCutTool = activeTool === 'cut';
@@ -1999,13 +2000,13 @@ class Component extends DCLogic {
     const hintColor   = choosingDir ? '#b04060' : '#5980a6';
 
     const viewLabels = { perspective:'PERSPECTIVE', top:'TOP / PLAN', front:'FRONT ELEV', side:'SIDE ELEV', cut: activeCut?.name || 'SECTION' };
-    const topBarLabel = activeView === 'cut' && activeCut ? activeCut.name : (activeLayer?.name || '—');
+    const topBarLabel = activeView === 'cut' && activeCut ? activeCut.name : (activeLevel?.name || '—');
     const topBarColor = activeView === 'cut' ? '#b04060' : '#5980a6';
     const visibleBackground = this._visibleBackgroundReference();
     const backgroundStatus = backgroundMode === 'none'
       ? 'BACKGROUND: OFF  [B]'
       : visibleBackground
-        ? `BACKGROUND ${visibleBackground.label}: ${visibleBackground.layer.name}  [B]`
+        ? `BACKGROUND ${visibleBackground.label}: ${visibleBackground.level.name}  [B]`
         : `BACKGROUND ${backgroundMode.toUpperCase()}: NONE SELECTED  [B]`;
     const backgroundStatusColor = backgroundMode === 'blue' ? '#5297da'
       : backgroundMode === 'red' ? '#dd6568' : 'rgba(29,31,32,0.42)';
@@ -2039,28 +2040,28 @@ class Component extends DCLogic {
                  : this.state.wallRefLine === 'right'  ? 'EXTERIOR FACE →'
                  : 'SYMMETRIC / NO EXT',
 
-      layers: layers.map((l, i) => {
-        const slot = l.id === activeLayer?.id ? -1 : backgroundLayerIds.indexOf(l.id);
+      levels: levels.map((l, i) => {
+        const slot = l.id === activeLevel?.id ? -1 : backgroundLevelIds.indexOf(l.id);
         const bgColor = slot === 0 ? '#5297da' : slot === 1 ? '#dd6568' : 'rgba(29,31,32,0.45)';
         return {
           name: l.name, elevStr: this._elevLabel(l.elev),
-          color: LAYER_COLORS[i % LAYER_COLORS.length],
-          rowClass: 'lay-row' + (i === activeLayerIdx ? ' active' : ''),
-          visIcon: l.visible ? '●' : '○', visLabel: l.visible ? 'Hide' : 'Show',
+          color: LEVEL_COLORS[i % LEVEL_COLORS.length],
+          rowClass: 'level-row' + (i === activeLevelIdx ? ' active' : ''),
+          visIcon: l.visible ? '●' : '○', visLabel: l.visible ? 'Hide level' : 'Show level',
           bgLabel: slot === 0 ? 'BG1' : slot === 1 ? 'BG2' : 'BG',
           bgTitle: slot === 0 ? 'Background 1 — blue reference'
             : slot === 1 ? 'Background 2 — red reference'
-            : (l.id === activeLayer?.id ? 'Active floor cannot be a background' : 'Use as background reference'),
+            : (l.id === activeLevel?.id ? 'Active level cannot be a background' : 'Use as background level reference'),
           bgButtonBg: slot >= 0 ? (slot === 0 ? 'rgba(82,151,218,0.12)' : 'rgba(221,101,104,0.12)') : '#fff',
           bgButtonBorder: slot >= 0 ? bgColor : 'rgba(29,31,32,0.2)',
           bgButtonColor: bgColor,
-          onSelect:    ()  => this._switchLayer(i),
-          onDelete:    (e) => { e.stopPropagation(); this._deleteLayer(i); },
-          onToggleVis: (e) => this._toggleLayerVisibility(i, e),
-          onToggleBackground: (e) => this._toggleBackgroundLayer(i, e),
+          onSelect:    ()  => this._switchLevel(i),
+          onDelete:    (e) => { e.stopPropagation(); this._deleteLevel(i); },
+          onToggleVis: (e) => this._toggleLevelVisibility(i, e),
+          onToggleBackground: (e) => this._toggleBackgroundLevel(i, e),
         };
       }),
-      addLayer: () => this._addLayer(),
+      addLevel: () => this._addLevel(),
 
       cuts: cuts.map(c => ({
         name: c.name,
