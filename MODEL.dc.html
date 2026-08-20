@@ -72,7 +72,7 @@
     <sc-if value="{{ lengthFrozen }}" hint-placeholder-val="{{ false }}">
       <div style="display:flex; align-items:center; gap:6px; pointer-events:all;">
         <span style="opacity:0.45; font-size:11px;">LENGTH</span>
-         <input data-frozen-length type="text" value="{{ frozenLengthInput }}" onInput="{{ onFrozenLengthInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="8'-1 1/8&quot;" aria-label="Frozen length" style="width:112px; text-align:right; background:#f2f2f3; border:1px solid {{ frozenDimensionBorder }}; color:#1d1f20; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; outline:none;" />
+          <input data-frozen-length type="text" value="{{ frozenLengthInput }}" onInput="{{ onFrozenLengthInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="15 or 8'-1 1/8&quot;" aria-label="Frozen length" style="width:112px; text-align:right; background:#f2f2f3; border:1px solid {{ frozenDimensionBorder }}; color:#1d1f20; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; outline:none;" />
         <button onClick="{{ confirmFrozenLength }}" style="border:none; background:#5980a6; color:#fff; padding:4px 12px; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer; font-family:'Barlow Condensed',system-ui,sans-serif;">CONFIRM</button>
         <button onClick="{{ cancelFrozenLength }}" style="border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.45); padding:4px 8px; font-size:13px; cursor:pointer;">✕</button>
          <sc-if value="{{ hasFrozenDimensionError }}" hint-placeholder-val="{{ false }}">
@@ -352,7 +352,7 @@ function parseArchitecturalLength(value) {
     const inchesText = match[2].replace(/^-/, '').trim();
     const parsedInches = parseInchesComponent(inchesText);
     if (!parsedInches.ok) return parsedInches;
-    const sign = feetValue < 0 ? -1 : 1;
+    const sign = match[1].startsWith('-') ? -1 : 1;
     return architecturalLengthResult(sign * (Math.abs(feetValue) * 12 + parsedInches.inches));
   }
 
@@ -361,16 +361,21 @@ function parseArchitecturalLength(value) {
     const parsedInches = parseInchesComponent(match[2]);
     if (!parsedInches.ok) return parsedInches;
     const feetValue = Number(match[1]);
-    const sign = feetValue < 0 ? -1 : 1;
+    const sign = match[1].startsWith('-') ? -1 : 1;
     return architecturalLengthResult(sign * (Math.abs(feetValue) * 12 + parsedInches.inches));
   }
 
   if (/(?:inches|inch|in)\.?$|"$/.test(raw)) {
-    const parsed = parseInchesComponent(raw);
-    return parsed.ok ? architecturalLengthResult(parsed.inches) : parsed;
+    const sign = raw.startsWith('-') ? -1 : 1;
+    const parsed = parseInchesComponent(raw.replace(/^[+-]/, ''));
+    return parsed.ok ? architecturalLengthResult(sign * parsed.inches) : parsed;
   }
 
-  return { ok: false, error: `Add feet/inches notation, for example 8-1 1/8 or 8'-1 1/8".` };
+  if (/^[+-]?\d+(?:\.\d+)?$/.test(raw)) {
+    return architecturalLengthResult(Number(raw) * 12);
+  }
+
+  return { ok: false, error: `Use 15 for feet, or specify inches as 0-5 or 5".` };
 }
 
 // Wall type definitions — totalIn is full assembly width in inches, centreline-based
@@ -2645,11 +2650,12 @@ class Component extends DCLogic {
       p.needsUpdate = true;
     }
     const obj = this._frozenTool === 'line' ? this._linePreviewObj : this._previewLine;
-    if (obj) obj.visible = total > 0;
+    const hasLength = Math.abs(total) > 0.001;
+    if (obj) obj.visible = hasLength;
     // Update status bar display
     const imp = this.state.units === 'imperial';
     const el = sel => document.querySelector(sel);
-    if (el('[data-model-len]')) el('[data-model-len]').textContent = total > 0 ? '↔ ' + (imp ? this._ftIn(total) : this._metric(total)) : '';
+    if (el('[data-model-len]')) el('[data-model-len]').textContent = hasLength ? '↔ ' + (imp ? this._ftIn(total) : this._metric(total)) : '';
     const angDeg = Math.round(Math.atan2(-dirZ, dirX) * 180 / Math.PI);
     if (el('[data-model-ang]')) el('[data-model-ang]').textContent = '∠ ' + (angDeg < 0 ? angDeg + 360 : angDeg) + '°';
   }
@@ -2657,8 +2663,8 @@ class Component extends DCLogic {
   _confirmFrozenLength() {
     const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
     const total = parsed.ok ? parsed.inches / 12 : 0;
-    if (!parsed.ok || total <= 0) {
-      this.setState({ frozenDimensionError: parsed.ok ? 'Length must be greater than zero.' : parsed.error });
+    if (!parsed.ok || Math.abs(total) <= 0.001) {
+      this.setState({ frozenDimensionError: parsed.ok ? 'Length cannot be zero.' : parsed.error });
       return;
     }
     const dirX = Math.cos(this._frozenAngle), dirZ = Math.sin(this._frozenAngle);
