@@ -89,10 +89,11 @@
       .space-card {
         position: relative;
         display: flex;
-        min-height: 218px;
-        flex-direction: column;
-        justify-content: space-between;
-        padding: 22px;
+         height: 76px;
+         min-height: 76px;
+         align-items: center;
+         justify-content: center;
+         padding: 0 22px;
         border: 1px solid rgba(255, 255, 255, 0.52);
         background: var(--accent);
         color: #fff;
@@ -110,38 +111,19 @@
       }
       .space-card:focus-visible { box-shadow: 0 0 0 3px rgba(22, 54, 83, 0.28), 0 16px 30px rgba(22, 54, 83, 0.22); }
       .space-code {
-        color: rgba(255, 255, 255, 0.8);
+         color: #fff;
         font-family: "DM Mono", monospace;
-        font-size: 11px;
+         font-size: 14px;
         letter-spacing: 0.08em;
+         line-height: 1;
       }
-      .space-title { margin-top: 28px; font-size: 32px; font-weight: 500; line-height: 1; }
-      .space-description {
-        max-width: 230px;
-        margin-top: 10px;
-        color: rgba(255, 255, 255, 0.82);
-        font-size: 16px;
-        line-height: 1.15;
-      }
-      .space-open {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-top: 28px;
-        color: rgba(255, 255, 255, 0.94);
-        font-family: "DM Mono", monospace;
-        font-size: 10px;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-      }
-      .space-arrow { color: #fff; font-size: 19px; line-height: 0.5; }
 
       @media (max-width: 760px) {
         .shell { width: min(100% - 32px, 540px); }
         main { padding: 32px 0; }
         .site-link { margin-bottom: 26px; }
         .spaces { grid-template-columns: 1fr; }
-        .space-card { min-height: 170px; }
+         .space-card { height: 68px; min-height: 68px; }
       }
     </style>
   </head>
@@ -160,22 +142,16 @@
       const spaces = [
         {
           code: "01 / MODEL",
-          title: "Model Space",
-          description: "Draft plans, walls, lines, and floor references in 2D.",
           href: "MODEL.dc.html",
           accent: "#1d4d78",
         },
         {
           code: "02 / LAYOUT",
-          title: "Layout Space",
-          description: "Organize the project shell and page structure.",
           href: "LAYOUT.dc.html",
           accent: "#3675a7",
         },
         {
           code: "03 / PDF",
-          title: "PDF Markup",
-          description: "Annotate drawings, plans, and reference documents.",
           href: "PDF-MARKUP.dc.html",
           accent: "#77a8cb",
         },
@@ -183,15 +159,7 @@
 
       document.querySelector("#spaces").innerHTML = spaces.map((space) => `
         <a class="space-card" href="${space.href}" style="--accent: ${space.accent}">
-          <div>
-            <div class="space-code">${space.code}</div>
-            <div class="space-title">${space.title}</div>
-            <div class="space-description">${space.description}</div>
-          </div>
-          <div class="space-open">
-            <span>Open workspace</span>
-            <span class="space-arrow" aria-hidden="true">↗</span>
-          </div>
+          <div class="space-code">${space.code}</div>
         </a>
       `).join("");
     </script>
