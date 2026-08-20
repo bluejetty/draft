@@ -6,6 +6,7 @@
 <script src="./support.js"></script>
 <script src="./profile-manager.js"></script>
 <script src="./shared-file-store.js"></script>
+<script src="./drawing-format.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
      would otherwise run here and be mounted again by the helmet runtime. -->
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
@@ -492,8 +493,10 @@ const WALL_TYPES = [
   { id:'concrete_12', label:'12" Concrete',        totalIn:12,    layers:[{in:12,    fill:'concrete'}] },
   { id:'icf',         label:'ICF  (11¼")',         totalIn:11.25, layers:[{in:2.625,fill:'insulation'},{in:6,fill:'concrete'},{in:2.625,fill:'insulation'}] },
 ];
-// Bump when the stored shape changes; loads of any other version are refused.
-const DRAWING_FORMAT_VERSION = 1;
+// Stored-drawing readers and the format version live in drawing-format.js.
+const format = window.DraftDrawingFormat;
+const DRAWING_FORMAT_VERSION = format.VERSION;
+const REF_LINES = ['left', 'center', 'right'];
 const DEFAULT_LEVELS = [
   { id:8, name:'SITE PLAN',    elev:  0, visible:true },
   { id:7, name:'ROOF PLAN',    elev: 18, visible:true },
@@ -868,20 +871,6 @@ class Component extends DCLogic {
     }
   }
 
-  _storedPoint(value) {
-    if (!value || !Number.isFinite(Number(value.x)) || !Number.isFinite(Number(value.z))) return null;
-    return {
-      x: Number(value.x),
-      y: Number.isFinite(Number(value.y)) ? Number(value.y) : 0,
-      z: Number(value.z),
-    };
-  }
-
-  _storedLevelId(value, levelIds) {
-    const levelId = Number(value);
-    return levelIds.has(levelId) ? levelId : null;
-  }
-
   _storedItemId(value, type, usedIds) {
     const raw = String(value || '').trim();
     const id = raw && !usedIds.has(`${type}:${raw}`)
@@ -896,24 +885,10 @@ class Component extends DCLogic {
   // profiles, so both file loading and the undo history can share it.
   // Returns { ok, reason }; a drawing it cannot understand is left untouched.
   async _applyDrawingData(saved) {
-      if (!saved || typeof saved !== 'object' || !Array.isArray(saved.levels)) {
-        return { ok: false, reason: 'invalid' };
-      }
-      if (saved.version !== DRAWING_FORMAT_VERSION) {
-        return {
-          ok: false,
-          reason: Number(saved.version) > DRAWING_FORMAT_VERSION ? 'version' : 'invalid',
-        };
-      }
+      const envelope = format.checkEnvelope(saved);
+      if (!envelope.ok) return envelope;
 
-      const levels = saved.levels
-        .filter(level => level && Number.isFinite(Number(level.id)))
-        .map(level => ({
-          id: Number(level.id),
-          name: String(level.name || 'LEVEL').toUpperCase(),
-          elev: Number.isFinite(Number(level.elev)) ? Number(level.elev) : 0,
-          visible: level.visible !== false,
-        }));
+      const levels = format.levels(saved.levels);
       if (!levels.length) return { ok: false, reason: 'invalid' };
 
       const levelIds = new Set(levels.map(level => level.id));
@@ -921,37 +896,10 @@ class Component extends DCLogic {
         levels.length - 1,
         Number.isInteger(saved.activeLevelIdx) ? saved.activeLevelIdx : 0,
       ));
-      const backgroundLevelIds = Array.isArray(saved.backgroundLevelIds)
-        ? saved.backgroundLevelIds.map(Number).filter((id, index, ids) =>
-          levelIds.has(id) && id !== levels[activeLevelIdx].id && ids.indexOf(id) === index
-        ).slice(0, 2)
-        : [];
-      const cutIds = new Set();
-      const cuts = Array.isArray(saved.cuts) ? saved.cuts.map(cut => {
-        const id = Number(cut?.id);
-        const startPt = this._storedPoint(cut?.startPt);
-        const endPt = this._storedPoint(cut?.endPt);
-        const dirX = Number(cut?.dirVec?.x);
-        const dirZ = Number(cut?.dirVec?.z);
-        const dirLength = Math.hypot(dirX, dirZ);
-        if (!Number.isInteger(id) || cutIds.has(id) || !startPt || !endPt
-          || !Number.isFinite(dirX) || !Number.isFinite(dirZ) || dirLength < 0.001
-          || !Number.isFinite(Number(cut?.elev))) return null;
-        cutIds.add(id);
-        // Drawings saved before cuts carried a level keep a null owner: two
-        // levels can share an elevation, so guessing one could delete the
-        // wrong section later.
-        const levelId = this._storedLevelId(cut?.levelId, levelIds);
-        return {
-          id,
-          name: String(cut.name || 'SECTION').toUpperCase(),
-          startPt: { x: startPt.x, z: startPt.z },
-          endPt: { x: endPt.x, z: endPt.z },
-          dirVec: { x: dirX / dirLength, z: dirZ / dirLength },
-          elev: Number(cut.elev),
-          levelId,
-        };
-      }).filter(Boolean) : [];
+      const backgroundLevelIds = format.backgroundLevelIds(
+        saved.backgroundLevelIds, levelIds, levels[activeLevelIdx].id,
+      );
+      const cuts = format.cuts(saved.cuts, levelIds);
       const nextCutId = Math.max(
         1,
         ...cuts.map(cut => cut.id + 1),
@@ -965,19 +913,15 @@ class Component extends DCLogic {
           ? saved.nextLevelId
           : Math.max(...levels.map(level => level.id)) + 1,
         backgroundLevelIds,
-        backgroundMode: ['blue', 'red', 'none'].includes(saved.backgroundMode)
-          ? saved.backgroundMode : 'blue',
+        backgroundMode: format.oneOf(saved.backgroundMode, ['blue', 'red', 'none'], 'blue'),
         units: saved.units === 'metric' ? 'metric' : 'imperial',
         gridSnapEnabled: saved.gridSnapEnabled !== false,
         activeWallType: WALL_TYPES.some(type => type.id === saved.activeWallType)
           ? saved.activeWallType : 'stud_2x6',
-        wallRefLine: ['left', 'center', 'right'].includes(saved.wallRefLine)
-          ? saved.wallRefLine : 'left',
-        wallBaseHeight: Number.isFinite(Number(saved.wallBaseHeight)) ? Number(saved.wallBaseHeight) : 0,
-        wallTopHeight: Number.isFinite(Number(saved.wallTopHeight))
-          ? Number(saved.wallTopHeight) : DEFAULT_WALL_TOP_FT,
-        floorThickness: Number.isFinite(Number(saved.floorThickness)) && Number(saved.floorThickness) > 0
-          ? Number(saved.floorThickness) : DEFAULT_FLOOR_THICKNESS_IN / 12,
+        wallRefLine: format.oneOf(saved.wallRefLine, REF_LINES, 'left'),
+        wallBaseHeight: format.number(saved.wallBaseHeight, 0),
+        wallTopHeight: format.number(saved.wallTopHeight, DEFAULT_WALL_TOP_FT),
+        floorThickness: format.positive(saved.floorThickness, DEFAULT_FLOOR_THICKNESS_IN / 12),
         cuts,
         nextCutId,
         activeCutId: null,
@@ -991,9 +935,9 @@ class Component extends DCLogic {
        const usedIds = new Set();
        this._nextDrawingItemId = Math.max(1, Number.isInteger(saved.nextDrawingItemId) ? saved.nextDrawingItemId : 1);
        const restoreSegment = (segment, type, extra = {}) => {
-        const start = this._storedPoint(segment?.start);
-        const end = this._storedPoint(segment?.end);
-        const levelId = this._storedLevelId(segment?.levelId, levelIds);
+        const start = format.point(segment?.start);
+        const end = format.point(segment?.end);
+        const levelId = format.levelId(segment?.levelId, levelIds);
         if (!start || !end || levelId == null) return null;
         return {
            id: this._storedItemId(segment?.id, type, usedIds),
@@ -1009,23 +953,21 @@ class Component extends DCLogic {
       this._walls = Array.isArray(saved.walls)
          ? saved.walls.map(wall => restoreSegment(wall, 'wall', {
           wallType: WALL_TYPES.some(type => type.id === wall.wallType) ? wall.wallType : 'stud_2x6',
-          baseHeight: Number.isFinite(Number(wall.baseHeight)) ? Number(wall.baseHeight) : 0,
-          topHeight: Number.isFinite(Number(wall.topHeight))
-            ? Number(wall.topHeight) : DEFAULT_WALL_TOP_FT,
-          refLine: ['left', 'center', 'right'].includes(wall.refLine) ? wall.refLine : 'left',
+          baseHeight: format.number(wall.baseHeight, 0),
+          topHeight: format.number(wall.topHeight, DEFAULT_WALL_TOP_FT),
+          refLine: format.oneOf(wall.refLine, REF_LINES, 'left'),
         })).filter(Boolean)
         : [];
       this._floors = Array.isArray(saved.floors)
         ? saved.floors.map(floor => {
-          const levelId = this._storedLevelId(floor?.levelId, levelIds);
-          const points = Array.isArray(floor?.points) ? floor.points.map(this._storedPoint).filter(Boolean) : [];
+          const levelId = format.levelId(floor?.levelId, levelIds);
+          const points = Array.isArray(floor?.points) ? floor.points.map(format.point).filter(Boolean) : [];
           if (levelId == null || points.length < 3) return null;
           return {
              id: this._storedItemId(floor?.id, 'floor', usedIds),
             points: points.map(point => this._mergeVertex(point, levelId)),
             levelId,
-            thickness: Number.isFinite(Number(floor.thickness)) && Number(floor.thickness) > 0
-              ? Number(floor.thickness) : this.state.floorThickness,
+            thickness: format.positive(floor.thickness, this.state.floorThickness),
             assembly: { ...DEFAULT_FLOOR_ASSEMBLY, ...(floor.assembly || {}) },
           };
         }).filter(Boolean)
