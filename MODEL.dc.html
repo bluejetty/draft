@@ -511,7 +511,7 @@ class Component extends DCLogic {
     };
 
     const LINE_COLOR = '#1d1f20';
-    const DOT_R = 5;
+    const DOT_R = 2.5;
 
     const drawSeg = (a, b) => {
       const sa = toS(a), sb = toS(b);
@@ -528,7 +528,7 @@ class Component extends DCLogic {
       ctx.lineWidth = 1.25;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       [a, b].forEach(p => {
-        ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
       });
       ctx.restore();
     };
@@ -1303,7 +1303,7 @@ class Component extends DCLogic {
     // Centreline endpoint dots
     if (!preview) {
       ctx.fillStyle = '#1d1f20';
-      const DOT_R = 5;
+      const DOT_R = 2.5;
       [seg.start, seg.end].forEach(pt => {
         const s = toS(pt);
         ctx.beginPath(); ctx.arc(s.x,s.y,DOT_R,0,Math.PI*2); ctx.fill();
