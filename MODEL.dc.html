@@ -130,6 +130,7 @@
             <a href="./SETTINGS.html" style="display:inline-block; margin-top:9px; color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">OPEN KEYBOARD &amp; LAYER SETTINGS →</a>
           </sc-if>
           <sc-if value="{{ showLayerPhilosophy }}" hint-placeholder-val="{{ false }}">
+            <a href="./STANDARDS.html" style="display:inline-block; margin-top:9px; color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">OPEN COMPANY STANDARD LAYERS →</a>
             <div style="margin-top:12px; padding:9px 10px; background:rgba(89,128,166,0.08); border-left:2px solid rgba(89,128,166,0.48);">
               <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:#5980a6;">Layer Philosophy</div>
               <ul style="margin:6px 0 0; padding-left:16px; font-size:11px; line-height:1.5; color:rgba(29,31,32,0.68);">
@@ -608,6 +609,7 @@ const {
   normaliseLineLayers,
   normaliseActiveLineLayer,
 } = window.DraftLineLayers;
+const { normaliseLayerStandards } = window.DraftLayerStandards;
 
 // Undo keeps whole serialized drawings, so it is bounded by count and by size.
 const HISTORY_LIMIT = 60;
@@ -627,6 +629,7 @@ class Component extends DCLogic {
     keybindings:   { ...DEFAULT_KEYBINDINGS },
     lineLayers: normaliseLineLayers(DEFAULT_LINE_LAYERS),
     activeLineLayer: 'draft',
+    layerStandards: normaliseLayerStandards(null),
     selectionVersion: 0,
     groupDialog:    false,
     groupNameInput: '',
@@ -686,6 +689,12 @@ class Component extends DCLogic {
       if (!document.hidden) {
         const settings = window.DraftProfileManager?.getActive('settings');
         if (settings) this._applyProfilePackage(settings, false);
+        // Only the layer list follows the standards page live; wall settings
+        // and the rest of the package stay as the user left them this session.
+        const standards = window.DraftProfileManager?.getActive('standards');
+        if (standards?.content?.model?.layerStandards) {
+          this.setState({ layerStandards: normaliseLayerStandards(standards.content.model.layerStandards) });
+        }
         this._invalidate();
       }
     });
@@ -867,6 +876,7 @@ class Component extends DCLogic {
         wallBaseHeight: this.state.wallBaseHeight,
         wallTopHeight: this.state.wallTopHeight,
         floorThickness: this.state.floorThickness,
+        layerStandards: normaliseLayerStandards(this.state.layerStandards),
       },
     };
   }
@@ -904,6 +914,9 @@ class Component extends DCLogic {
       if (Number.isFinite(Number(values.wallTopHeight))) patch.wallTopHeight = Number(values.wallTopHeight);
       if (Number.isFinite(Number(values.floorThickness)) && Number(values.floorThickness) > 0) {
         patch.floorThickness = Number(values.floorThickness);
+      }
+      if (values.layerStandards && typeof values.layerStandards === 'object') {
+        patch.layerStandards = normaliseLayerStandards(values.layerStandards);
       }
       if ('wallBaseHeight' in patch) patch.wallBaseInput = formatArchitecturalInches(patch.wallBaseHeight * 12);
       if ('wallTopHeight' in patch) patch.wallTopInput = formatArchitecturalInches(patch.wallTopHeight * 12);
@@ -2242,8 +2255,15 @@ class Component extends DCLogic {
   }
 
   _lineLayerConfig(layerId) {
+    const id = layerId === 'no-draft' ? 'no-draft' : 'draft';
     const layers = normaliseLineLayers(this.state.lineLayers);
-    return layers[layerId === 'no-draft' ? 'no-draft' : 'draft'];
+    const standard = this._layerStandard(id);
+    return { ...layers[id], name: standard.name, printable: standard.printable };
+  }
+
+  _layerStandard(layerId) {
+    const standards = normaliseLayerStandards(this.state.layerStandards);
+    return standards[layerId] || { name: layerId, printable: true };
   }
 
   _activeLineLayer() {
@@ -5093,7 +5113,9 @@ class Component extends DCLogic {
         const layers = this._layerViewsForLevel(l.id).map(view => ({
           label: view.label,
           title: `Show ${view.label} items on ${l.name}`,
-          contents: view.id === selectedLayerView ? view.contents : [],
+          contents: view.id === selectedLayerView
+            ? view.contents.map(id => this._layerStandard(id).name)
+            : [],
           hasContents: view.id === selectedLayerView && view.contents.length > 0,
           rowClass: 'level-layer' + (view.id === selectedLayerView ? ' active' : ''),
           onSelect: event => this._selectLayerView(l.id, view.id, event),
