@@ -500,12 +500,39 @@ const format = window.DraftDrawingFormat;
 const geo = window.DraftGeometry2D;
 const DRAWING_FORMAT_VERSION = format.VERSION;
 const REF_LINES = ['left', 'center', 'right'];
+// The old UI represented PLAN and FL as separate levels at the same elevation.
+// They are now one level each; layer controls will be added later inside these
+// level buttons. Existing saved geometry is remapped instead of discarded.
+const LEGACY_LEVEL_ID_REMAP = Object.freeze({ 6: 5, 4: 3 });
+const LEVEL_BUTTON_NAMES = Object.freeze({
+  8: 'SITE',
+  7: 'ROOF',
+  5: '2ND FL',
+  3: 'MAIN FL',
+});
+const migrateLevelId = value => {
+  const id = Number(value);
+  return LEGACY_LEVEL_ID_REMAP[id] ?? id;
+};
+const migrateStoredLevels = rawLevels => {
+  const merged = [];
+  const seen = new Set();
+  rawLevels.forEach(level => {
+    const id = migrateLevelId(level.id);
+    if (seen.has(id)) return;
+    seen.add(id);
+    merged.push({
+      ...level,
+      id,
+      name: LEVEL_BUTTON_NAMES[id] || level.name,
+    });
+  });
+  return merged;
+};
 const DEFAULT_LEVELS = [
-  { id:8, name:'SITE PLAN',    elev:  0, visible:true },
-  { id:7, name:'ROOF PLAN',    elev: 18, visible:true },
-  { id:6, name:'2ND FL PLAN',  elev:  9, visible:true },
+  { id:8, name:'SITE',         elev:  0, visible:true },
+  { id:7, name:'ROOF',         elev: 18, visible:true },
   { id:5, name:'2ND FL',       elev:  9, visible:true },
-  { id:4, name:'MAIN FL PLAN', elev:  0, visible:true },
   { id:3, name:'MAIN FL',      elev:  0, visible:true },
   { id:2, name:'BASEMENT',     elev: -9, visible:true },
   { id:1, name:'FOUNDATION',   elev:-10, visible:true },
@@ -558,7 +585,7 @@ class Component extends DCLogic {
     floorThicknessInput: formatArchitecturalInches(DEFAULT_FLOOR_THICKNESS_IN),
     floorDimensionError: '',
     levels:        DEFAULT_LEVELS.map(l => ({ ...l })),
-    activeLevelIdx: 5,
+    activeLevelIdx: 3,
     nextLevelId:   9,
     backgroundLevelIds: [],
     backgroundMode: 'blue', // 'blue' | 'red' | 'none'
@@ -900,18 +927,26 @@ class Component extends DCLogic {
       const envelope = format.checkEnvelope(saved);
       if (!envelope.ok) return envelope;
 
-      const levels = format.levels(saved.levels);
+      const savedLevels = format.levels(saved.levels);
+      const levels = migrateStoredLevels(savedLevels);
       if (!levels.length) return { ok: false, reason: 'invalid' };
 
       const levelIds = new Set(levels.map(level => level.id));
-      const activeLevelIdx = Math.max(0, Math.min(
-        levels.length - 1,
+      const savedActiveIdx = Math.max(0, Math.min(
+        savedLevels.length - 1,
         Number.isInteger(saved.activeLevelIdx) ? saved.activeLevelIdx : 0,
       ));
+      const activeLevelId = migrateLevelId(savedLevels[savedActiveIdx]?.id ?? levels[0].id);
+      const activeLevelIdx = Math.max(0, levels.findIndex(level => level.id === activeLevelId));
       const backgroundLevelIds = format.backgroundLevelIds(
-        saved.backgroundLevelIds, levelIds, levels[activeLevelIdx].id,
+        (Array.isArray(saved.backgroundLevelIds) ? saved.backgroundLevelIds : []).map(migrateLevelId),
+        levelIds,
+        levels[activeLevelIdx].id,
       );
-      const cuts = format.cuts(saved.cuts, levelIds);
+      const storedCuts = Array.isArray(saved.cuts)
+        ? saved.cuts.map(cut => ({ ...cut, levelId: migrateLevelId(cut?.levelId) }))
+        : saved.cuts;
+      const cuts = format.cuts(storedCuts, levelIds);
       let skipped = (Array.isArray(saved.cuts) ? saved.cuts.length : 0) - cuts.length;
       const nextCutId = Math.max(
         1,
@@ -950,7 +985,7 @@ class Component extends DCLogic {
        const restoreSegment = (segment, type, extra = {}) => {
         const start = format.point(segment?.start);
         const end = format.point(segment?.end);
-        const levelId = format.levelId(segment?.levelId, levelIds);
+        const levelId = format.levelId(migrateLevelId(segment?.levelId), levelIds);
         if (!start || !end || levelId == null) return null;
         return {
            id: this._storedItemId(segment?.id, type, usedIds),
@@ -975,7 +1010,7 @@ class Component extends DCLogic {
       skipped += (Array.isArray(saved.walls) ? saved.walls.length : 0) - this._walls.length;
       this._floors = Array.isArray(saved.floors)
         ? saved.floors.map(floor => {
-          const levelId = format.levelId(floor?.levelId, levelIds);
+          const levelId = format.levelId(migrateLevelId(floor?.levelId), levelIds);
           const points = Array.isArray(floor?.points) ? floor.points.map(format.point).filter(Boolean) : [];
           if (levelId == null || points.length < 3) return null;
           return {
