@@ -703,7 +703,7 @@ class Component extends DCLogic {
     const layerId = slot >= 0 ? backgroundLayerIds[slot] : null;
     if (layerId == null || layerId === this._activeLayerId()) return null;
     const layer = layers.find(l => l.id === layerId);
-    if (!layer) return null;
+    if (!layer || layer.visible === false) return null;
     return {
       layerId,
       layer,
