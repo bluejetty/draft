@@ -30,7 +30,11 @@
     .level-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .level-elev { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.45); margin-top:1px; }
     .level-layer-stack { display:flex; flex-direction:column; gap:1px; margin-top:4px; }
-    .level-layer { min-height:13px; display:flex; align-items:center; border:1px solid rgba(29,31,32,0.18); padding:1px 5px; background:rgba(255,255,255,0.72); color:rgba(29,31,32,0.68); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-transform:uppercase; }
+    .level-layer { width:100%; min-height:13px; display:flex; align-items:center; border:1px solid rgba(29,31,32,0.18); padding:1px 5px; background:rgba(255,255,255,0.72); color:rgba(29,31,32,0.68); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-align:left; text-transform:uppercase; cursor:pointer; }
+    .level-layer:hover { border-color:#5980a6; color:#365e86; }
+    .level-layer.active { background:#5980a6; border-color:#5980a6; color:#fff; }
+    .level-layer-contents { margin:1px 0 2px 7px; border-left:2px solid rgba(89,128,166,0.48); padding-left:4px; }
+    .level-layer-content { min-height:12px; display:flex; align-items:center; color:rgba(29,31,32,0.58); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.05em; text-transform:uppercase; }
     .level-eye  { border:none; background:none; cursor:pointer; padding:0 6px; font-size:13px; line-height:1; color:rgba(29,31,32,0.4); flex-shrink:0; align-self:center; }
     .level-eye:hover { color:#5980a6; }
     .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:center; }
@@ -336,7 +340,14 @@
              <sc-if value="{{ level.hasLayers }}" hint-placeholder-val="{{ false }}">
                <div class="level-layer-stack">
                  <sc-for list="{{ level.layers }}" as="layer" hint-placeholder-count="3">
-                   <div class="level-layer">{{ layer }}</div>
+                   <button type="button" class="{{ layer.rowClass }}" onClick="{{ layer.onSelect }}" title="{{ layer.title }}">{{ layer.label }}</button>
+                   <sc-if value="{{ layer.hasContents }}" hint-placeholder-val="{{ false }}">
+                     <div class="level-layer-contents">
+                       <sc-for list="{{ layer.contents }}" as="content" hint-placeholder-count="5">
+                         <div class="level-layer-content">{{ content }}</div>
+                       </sc-for>
+                     </div>
+                   </sc-if>
                  </sc-for>
                </div>
              </sc-if>
@@ -520,11 +531,24 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
   3: 'MAIN FL',
   1: 'FOUNDATION',
 });
-const LEVEL_LAYERS = Object.freeze({
-  5: Object.freeze(['ELECTRIC', 'PLAN', 'FLOOR']),
-  3: Object.freeze(['ELECTRIC', 'PLAN', 'FLOOR']),
-  1: Object.freeze(['ELECTRIC', 'PLAN', 'FOUNDATION']),
+const LEVEL_LAYER_VIEWS = Object.freeze({
+  5: Object.freeze([
+    Object.freeze({ id:'electric', label:'ELECTRIC', contents:[] }),
+    Object.freeze({ id:'plan', label:'PLAN', contents:['WALLS', 'STAIRS', 'DECKS', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
+    Object.freeze({ id:'floor', label:'FLOOR', contents:['FLOOR', 'BEAM', 'JOISTS', 'COLUMNS', 'FLOOR DIMENSION'] }),
+  ]),
+  3: Object.freeze([
+    Object.freeze({ id:'electric', label:'ELECTRIC', contents:[] }),
+    Object.freeze({ id:'plan', label:'PLAN', contents:['WALLS', 'STAIRS', 'DECKS', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
+    Object.freeze({ id:'floor', label:'FLOOR', contents:['FLOOR', 'BEAM', 'JOISTS', 'COLUMNS', 'FLOOR DIMENSION'] }),
+  ]),
+  1: Object.freeze([
+    Object.freeze({ id:'electric', label:'ELECTRIC', contents:[] }),
+    Object.freeze({ id:'plan', label:'PLAN', contents:[] }),
+    Object.freeze({ id:'foundation', label:'FOUNDATION', contents:[] }),
+  ]),
 });
+const DEFAULT_LEVEL_LAYER_VIEWS = Object.freeze({ 5:'plan', 3:'plan', 1:'plan' });
 const migrateLevelId = value => {
   const id = Number(value);
   return LEGACY_LEVEL_ID_REMAP[id] ?? id;
@@ -606,6 +630,7 @@ class Component extends DCLogic {
     floorThicknessInput: formatArchitecturalInches(DEFAULT_FLOOR_THICKNESS_IN),
     floorDimensionError: '',
     levels:        DEFAULT_LEVELS.map(l => ({ ...l })),
+    levelLayerViews: { ...DEFAULT_LEVEL_LAYER_VIEWS },
     activeLevelIdx: 3,
     nextLevelId:   9,
     backgroundLevelIds: [],
@@ -650,6 +675,7 @@ class Component extends DCLogic {
     if (!Array.isArray(this._lines)) this._lines = [];
     if (!Array.isArray(this._walls)) this._walls = [];
     if (!Array.isArray(this._floors)) this._floors = [];
+    if (!Array.isArray(this._dimensions)) this._dimensions = [];
     if (!Array.isArray(this._vertices)) this._vertices = [];
     if (!Array.isArray(this._groups)) this._groups = [];
   }
@@ -692,8 +718,17 @@ class Component extends DCLogic {
         thickness: floor.thickness,
         assembly: { ...floor.assembly },
       })),
+      dimensions: this._dimensions.map(dimension => ({
+        id: dimension.id,
+        start: point(dimension.start),
+        end: point(dimension.end),
+        levelId: dimension.levelId,
+        view: dimension.view,
+      })),
+      nextDimensionId: this._nextDimensionId || 1,
       levels: this.state.levels.map(level => ({ ...level })),
       activeLevelIdx: this.state.activeLevelIdx,
+      levelLayerViews: { ...this.state.levelLayerViews },
       nextLevelId: this.state.nextLevelId,
       backgroundLevelIds: [...this.state.backgroundLevelIds],
       backgroundMode: this.state.backgroundMode,
@@ -959,6 +994,16 @@ class Component extends DCLogic {
       ));
       const activeLevelId = migrateLevelId(savedLevels[savedActiveIdx]?.id ?? levels[0].id);
       const activeLevelIdx = Math.max(0, levels.findIndex(level => level.id === activeLevelId));
+      const levelLayerViews = {};
+      levels.forEach(level => {
+        const availableViews = LEVEL_LAYER_VIEWS[level.id] || [];
+        if (!availableViews.length) return;
+        const savedView = saved.levelLayerViews?.[level.id];
+        const fallbackView = DEFAULT_LEVEL_LAYER_VIEWS[level.id] || availableViews[0].id;
+        levelLayerViews[level.id] = availableViews.some(view => view.id === savedView)
+          ? savedView
+          : fallbackView;
+      });
       const backgroundLevelIds = format.backgroundLevelIds(
         (Array.isArray(saved.backgroundLevelIds) ? saved.backgroundLevelIds : []).map(migrateLevelId),
         levelIds,
@@ -969,6 +1014,16 @@ class Component extends DCLogic {
         : saved.cuts;
       const cuts = format.cuts(storedCuts, levelIds);
       let skipped = (Array.isArray(saved.cuts) ? saved.cuts.length : 0) - cuts.length;
+      const storedDimensions = Array.isArray(saved.dimensions)
+        ? saved.dimensions.map(dimension => ({ ...dimension, levelId: migrateLevelId(dimension?.levelId) }))
+        : saved.dimensions;
+      const dimensions = format.dimensions(storedDimensions, levelIds);
+      skipped += (Array.isArray(saved.dimensions) ? saved.dimensions.length : 0) - dimensions.length;
+      const nextDimensionId = Math.max(
+        1,
+        ...dimensions.map(dimension => dimension.id + 1),
+        Number.isInteger(saved.nextDimensionId) ? saved.nextDimensionId : 1,
+      );
       const nextCutId = Math.max(
         1,
         ...cuts.map(cut => cut.id + 1),
@@ -978,6 +1033,7 @@ class Component extends DCLogic {
       await new Promise(resolve => this.setState({
         levels,
         activeLevelIdx,
+        levelLayerViews,
         nextLevelId: Number.isInteger(saved.nextLevelId)
           ? saved.nextLevelId
           : Math.max(...levels.map(level => level.id)) + 1,
@@ -1044,6 +1100,16 @@ class Component extends DCLogic {
         }).filter(Boolean)
         : [];
       skipped += (Array.isArray(saved.floors) ? saved.floors.length : 0) - this._floors.length;
+      const levelsById = new Map(levels.map(level => [level.id, level]));
+      this._dimensions = dimensions.map(dimension => {
+        const elevation = levelsById.get(dimension.levelId)?.elev ?? 0;
+        return {
+          ...dimension,
+          start: new THREE.Vector3(dimension.start.x, elevation, dimension.start.z),
+          end: new THREE.Vector3(dimension.end.x, elevation, dimension.end.z),
+        };
+      });
+      this._nextDimensionId = nextDimensionId;
        const numericItemIds = [...this._lines, ...this._walls, ...this._floors]
          .map(item => Number(String(item.id).match(/-(\d+)$/)?.[1]))
          .filter(Number.isInteger);
@@ -1417,9 +1483,12 @@ class Component extends DCLogic {
     this._walls      = [];
     this._lines      = []; // committed line segments
     this._floors     = []; // committed closed floor outlines
+    this._dimensions = []; // two-point plan/floor dimensions
      this._groups     = [];
      this._nextGroupId = 1;
      this._nextDrawingItemId = 1;
+    this._nextDimensionId = 1;
+    this._dimensionStart = null;
     this._pendingChain  = []; // in-progress chain (not yet committed)
     this._chainStart    = null; // first point of current chain
     this._chainSegments = 0;  // segments placed in this chain, committed or not
@@ -1675,6 +1744,11 @@ class Component extends DCLogic {
 
     // Committed lines
     if (activeVisible) this._activeLines().forEach(l => { drawSeg(l.start, l.end); drawDot(l.start); drawDot(l.end); });
+    if (activeVisible) this._activeDimensions().forEach(dimension => this._drawDimension2D(ctx, toS, dimension));
+    const dimensionPreviewEnd = this._previewEndPoint();
+    if (this._dimensionStart && dimensionPreviewEnd) {
+      this._drawDimension2D(ctx, toS, { start:this._dimensionStart, end:dimensionPreviewEnd }, { preview:true });
+    }
 
     // Dragged node highlight (blue ring around the node being moved)
     if (this._selectDrag && this._selectDrag.active && this._selectDrag.refs.length) {
@@ -1802,6 +1876,57 @@ class Component extends DCLogic {
     this._drawCuts2D(ctx, toS);
   }
 
+  _drawDimension2D(ctx, toS, dimension, options = {}) {
+    const a = toS(dimension.start);
+    const b = toS(dimension.end);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 1) return;
+    const nx = -dy / length;
+    const ny = dx / length;
+    const offset = options.preview ? 14 : 19;
+    const da = { x:a.x + nx * offset, y:a.y + ny * offset };
+    const db = { x:b.x + nx * offset, y:b.y + ny * offset };
+    const value = Math.hypot(dimension.end.x - dimension.start.x, dimension.end.z - dimension.start.z);
+    const label = this.state.units === 'imperial' ? this._ftIn(value) : this._metric(value);
+    const color = options.preview ? 'rgba(89,128,166,0.58)' : '#365e86';
+    const arrow = (point, angle) => {
+      const size = 5;
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y);
+      ctx.lineTo(point.x + size * Math.cos(angle + 2.65), point.y + size * Math.sin(angle + 2.65));
+      ctx.lineTo(point.x + size * Math.cos(angle - 2.65), point.y + size * Math.sin(angle - 2.65));
+      ctx.closePath();
+      ctx.fill();
+    };
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y); ctx.lineTo(da.x, da.y);
+    ctx.moveTo(b.x, b.y); ctx.lineTo(db.x, db.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y);
+    ctx.stroke();
+    const angle = Math.atan2(db.y - da.y, db.x - da.x);
+    arrow(da, angle);
+    arrow(db, angle + Math.PI);
+    const midX = (da.x + db.x) / 2;
+    const midY = (da.y + db.y) / 2;
+    ctx.font = "600 11px 'Barlow Condensed', system-ui, sans-serif";
+    const textWidth = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillRect(midX - textWidth / 2 - 3, midY - 8, textWidth + 6, 15);
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, midX, midY);
+    ctx.restore();
+  }
+
   _drawArrow2D(ctx, toS, from, to) {
     const a = toS(from), b = toS(to);
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
@@ -1891,10 +2016,42 @@ class Component extends DCLogic {
     this._orthoCam.updateProjectionMatrix();
   }
 
-  // ─── Levels (floor elevations, distinct from future object layers) ───────────
+  // ─── Levels and nested drawing views ─────────────────────────────────────────
   _activeLevel() { return this.state.levels[this.state.activeLevelIdx] || this.state.levels[0]; }
 
   _activeLevelId() { return this._activeLevel()?.id; }
+
+  _layerViewsForLevel(levelId = this._activeLevelId()) {
+    return LEVEL_LAYER_VIEWS[levelId] || [];
+  }
+
+  _activeLayerViewId(levelId = this._activeLevelId()) {
+    const views = this._layerViewsForLevel(levelId);
+    if (!views.length) return null;
+    const selected = this.state.levelLayerViews?.[levelId];
+    return views.some(view => view.id === selected)
+      ? selected
+      : (DEFAULT_LEVEL_LAYER_VIEWS[levelId] || views[0].id);
+  }
+
+  _selectLayerView(levelId, viewId, event) {
+    event?.stopPropagation();
+    if (!this._layerViewsForLevel(levelId).some(view => view.id === viewId)) return;
+    const levelIndex = this.state.levels.findIndex(level => level.id === levelId);
+    if (levelIndex < 0) return;
+    const backgroundLevelIds = this.state.backgroundLevelIds.filter(id => id !== levelId);
+    this._cancelDimension();
+    this._applyLevelElevation(levelIndex);
+    this.setState({
+      activeLevelIdx: levelIndex,
+      backgroundLevelIds,
+      levelLayerViews: { ...this.state.levelLayerViews, [levelId]: viewId },
+    }, () => {
+      if (this._orthoCam) this._setView('top');
+      this._notifySelectionChanged();
+      this._markUnsaved();
+    });
+  }
 
   _activeLines() {
     const levelId = this._activeLevelId();
@@ -1909,6 +2066,12 @@ class Component extends DCLogic {
   _activeFloors() {
     const levelId = this._activeLevelId();
     return this._floors.filter(floor => floor.levelId === levelId);
+  }
+
+  _activeDimensions() {
+    const levelId = this._activeLevelId();
+    const view = this._activeLayerViewId(levelId);
+    return this._dimensions.filter(dimension => dimension.levelId === levelId && dimension.view === view);
   }
 
   // One reference slot is visible at a time: B cycles blue → red → none.
@@ -1978,7 +2141,7 @@ class Component extends DCLogic {
 
   _switchLevel(idx) {
     if (idx === this.state.activeLevelIdx) return;
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut();
     this._applyLevelElevation(idx);
     // A level cannot also be one of its own references.
     const activeId = this.state.levels[idx]?.id;
@@ -2182,6 +2345,7 @@ class Component extends DCLogic {
     const start  = tool === 'line' ? this._lineStart
       : tool === 'wall' ? this._wallStart
       : tool === 'floor' ? this._floorPoints[this._floorPoints.length - 1]
+      : tool === 'dimension' ? this._dimensionStart
       : tool === 'cut' && this.state.cutPhase === 'placing' ? this._cutStart3
       : null;
     const angleLockHeld = this._shiftHeld || this._ctrlHeld;
@@ -2316,6 +2480,7 @@ class Component extends DCLogic {
       if (tool === 'wall') this._handleWallClick();
       else if (tool === 'line') this._handleLineClick();
       else if (tool === 'floor') this._handleFloorClick();
+      else if (tool === 'dimension') this._handleDimensionClick();
       else if (tool === 'cut') this._handleCutClick();
       else if (tool === 'select') {
         const raw = this._getWorldPos(e.clientX, e.clientY);
@@ -3579,6 +3744,44 @@ class Component extends DCLogic {
 
   // ─── Line drawing ────────────────────────────────────────────────────────────
 
+  _handleDimensionClick() {
+    if (this.state.activeView !== 'top') {
+      this.setState({ drawingMessage: 'Dimensions are placed in TOP / PLAN view.', drawingMessageError: true });
+      return;
+    }
+    const view = this._activeLayerViewId();
+    if (!['plan', 'floor'].includes(view)) {
+      this.setState({ drawingMessage: 'Select PLAN or FLOOR before placing a dimension.', drawingMessageError: true });
+      return;
+    }
+    const pt = this._snapPt;
+    if (!pt) return;
+    if (!this._dimensionStart) {
+      this._dimensionStart = pt.clone();
+      this.setState({ drawingMessage: 'Dimension start set. Click the end point.', drawingMessageError: false });
+      return;
+    }
+    if (Math.hypot(pt.x - this._dimensionStart.x, pt.z - this._dimensionStart.z) < 0.001) return;
+    this._dimensions.push({
+      id: this._nextDimensionId++,
+      start: this._dimensionStart.clone(),
+      end: pt.clone(),
+      levelId: this._activeLevelId(),
+      view,
+    });
+    this._dimensionStart = null;
+    this._lockAngle = null;
+    this.setState({ drawingMessage: `${view === 'plan' ? 'Plan' : 'Floor'} dimension added.`, drawingMessageError: false });
+    this._markUnsaved();
+  }
+
+  _cancelDimension() {
+    if (!this._dimensionStart) return;
+    this._dimensionStart = null;
+    this._lockAngle = null;
+    this.setState({ drawingMessage: '', drawingMessageError: false });
+  }
+
   _handleLineClick() {
     const pt = this._snapPt; if (!pt) return;
 
@@ -3992,7 +4195,7 @@ class Component extends DCLogic {
         return;
       }
       if (this._windowSelection) { this._windowSelection = null; return; }
-      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut();
+      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut();
       this._clearSelection();
       return;
     }
@@ -4031,18 +4234,19 @@ class Component extends DCLogic {
       }
       return;
     }
-    if (matches('wall')) { e.preventDefault(); this._cancelExtend(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'wall' }); return; }
-    if (matches('line')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelFloor(); this.setState({ activeTool: 'line' }); return; }
-    if (matches('floor')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this.setState({ activeTool: 'floor' }); return; }
-    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
+    if (matches('wall')) { e.preventDefault(); this._cancelExtend(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({ activeTool: 'wall' }); return; }
+    if (matches('line')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelFloor(); this._cancelDimension(); this.setState({ activeTool: 'line' }); return; }
+    if (matches('floor')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelDimension(); this.setState({ activeTool: 'floor' }); return; }
+    if (matches('dimension')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'dimension' }); return; }
+    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
     if (matches('extend')) {
       e.preventDefault();
-      this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut(); this._cancelExtend();
+      this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut(); this._cancelExtend();
       this.setState({ activeTool: 'extend', extendScope: 'current', extendPhase: 'idle', extendMessage: '' });
       return;
     }
-    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'trim' }); return; }
-    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'cut' }); return; }
+    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({ activeTool: 'trim' }); return; }
+    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
     if (matches('gridSnap')) { e.preventDefault(); this._toggleGridSnap(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
@@ -4137,9 +4341,10 @@ class Component extends DCLogic {
     const isCutTool = activeTool === 'cut';
     const drawingWall = isDrawing && activeTool === 'wall';
     const drawingFloor = isDrawing && activeTool === 'floor';
+    const dimensioning = activeTool === 'dimension';
     const extending = activeTool === 'extend';
     const placingCut  = isCutTool && cutPhase === 'placing';
-    const showHint    = drawingWall || drawingFloor || placingCut || choosingDir || extending;
+    const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending;
     const hintText    = extending
       ? (extendPhase === 'idle'
         ? 'EXTEND — Drag a rectangle around the nodes to move'
@@ -4148,6 +4353,8 @@ class Component extends DCLogic {
           : 'EXTEND — Click a destination point · Esc to cancel'))
       : choosingDir
       ? 'Click to choose view direction · ESC to cancel'
+      : dimensioning
+      ? (this._dimensionStart ? 'DIMENSION — Click end point · ESC to cancel' : 'DIMENSION — Click start point')
       : (drawingWall
         ? `Click to place corners · ${shortcut('finish')} or ${shortcut('finishAlt')} to commit · ${shortcut('cancel')} to cancel`
         : (drawingFloor
@@ -4156,7 +4363,11 @@ class Component extends DCLogic {
     const hintColor   = choosingDir ? '#b04060' : '#5980a6';
 
     const viewLabels = { perspective:'PERSPECTIVE', top:'TOP / PLAN', front:'FRONT ELEV', side:'SIDE ELEV', cut: activeCut?.name || 'SECTION' };
-    const topBarLabel = activeView === 'cut' && activeCut ? activeCut.name : (activeLevel?.name || '—');
+    const activeLayerView = this._layerViewsForLevel(activeLevel?.id)
+      .find(view => view.id === this._activeLayerViewId(activeLevel?.id));
+    const topBarLabel = activeView === 'cut' && activeCut
+      ? activeCut.name
+      : `${activeLevel?.name || '—'}${activeLayerView ? ` / ${activeLayerView.label}` : ''}`;
     const topBarColor = activeView === 'cut' ? '#b04060' : '#5980a6';
     const visibleBackground = this._visibleBackgroundReference();
     const backgroundStatus = backgroundMode === 'none'
@@ -4363,7 +4574,15 @@ class Component extends DCLogic {
       levels: levels.map((l, i) => {
         const slot = l.id === activeLevel?.id ? -1 : backgroundLevelIds.indexOf(l.id);
         const bgColor = slot === 0 ? '#5297da' : slot === 1 ? '#dd6568' : 'rgba(29,31,32,0.45)';
-        const layers = LEVEL_LAYERS[l.id] || [];
+        const selectedLayerView = this._activeLayerViewId(l.id);
+        const layers = this._layerViewsForLevel(l.id).map(view => ({
+          label: view.label,
+          title: `Show ${view.label} items on ${l.name}`,
+          contents: view.id === selectedLayerView ? view.contents : [],
+          hasContents: view.id === selectedLayerView && view.contents.length > 0,
+          rowClass: 'level-layer' + (view.id === selectedLayerView ? ' active' : ''),
+          onSelect: event => this._selectLayerView(l.id, view.id, event),
+        }));
         return {
           name: l.name, elevStr: this._elevLabel(l.elev),
           layers,
@@ -4394,13 +4613,14 @@ class Component extends DCLogic {
       })),
 
       tools: [
-        { label:`Select  [${shortcut('select')}]`, onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, ...(activeTool==='select'?on:off) },
-        { label:`Line  [${shortcut('line')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelFloor(); this.setState({activeTool:'line'}); },                       ...(activeTool==='line'  ?on:off) },
-        { label:`Wall  [${shortcut('wall')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'wall'}); },                       ...(activeTool==='wall'  ?on:off) },
-        { label:`Floor  [${shortcut('floor')}]`,   onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this.setState({activeTool:'floor'}); },                       ...(activeTool==='floor' ?on:off) },
-        { label:`Extend  [${shortcut('extend')}]`, onSelect:()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut(); this._cancelExtend(); this.setState({activeTool:'extend', extendScope:'current', extendPhase:'idle', extendMessage:''}); }, ...(activeTool==='extend'?on:off) },
-        { label:`Trim  [${shortcut('trim')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'trim'}); },   ...(activeTool==='trim'  ?on:off) },
-        { label:`Cut  [${shortcut('cut')}]`,       onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'cut'}); },    ...(activeTool==='cut'   ?on:off) },
+        { label:`Select  [${shortcut('select')}]`, onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, ...(activeTool==='select'?on:off) },
+        { label:`Line  [${shortcut('line')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'line'}); },                       ...(activeTool==='line'  ?on:off) },
+        { label:`Wall  [${shortcut('wall')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'wall'}); },                       ...(activeTool==='wall'  ?on:off) },
+        { label:`Floor  [${shortcut('floor')}]`,   onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelDimension(); this.setState({activeTool:'floor'}); },                       ...(activeTool==='floor' ?on:off) },
+        { label:`Dimension  [${shortcut('dimension')}]`, onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'dimension'}); }, ...(activeTool==='dimension'?on:off) },
+        { label:`Extend  [${shortcut('extend')}]`, onSelect:()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut(); this._cancelExtend(); this.setState({activeTool:'extend', extendScope:'current', extendPhase:'idle', extendMessage:''}); }, ...(activeTool==='extend'?on:off) },
+        { label:`Trim  [${shortcut('trim')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'trim'}); },   ...(activeTool==='trim'  ?on:off) },
+        { label:`Cut  [${shortcut('cut')}]`,       onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'cut'}); },    ...(activeTool==='cut'   ?on:off) },
       ],
       enter3D:      ()=>this._setView('perspective'),
       webglUnavailable: this.state.webglUnavailable,

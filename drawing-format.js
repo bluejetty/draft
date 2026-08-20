@@ -70,6 +70,21 @@ if (!window.DraftDrawingFormat) {
     }).filter(Boolean);
   };
 
+  const dimensions = (rawDimensions, levelIds) => {
+    const seen = new Set();
+    return (Array.isArray(rawDimensions) ? rawDimensions : []).map(dimension => {
+      const id = Number(dimension?.id);
+      const start = point(dimension?.start);
+      const end = point(dimension?.end);
+      const dimensionLevelId = levelId(dimension?.levelId, levelIds);
+      const view = oneOf(dimension?.view, ['plan', 'floor'], null);
+      if (!Number.isInteger(id) || seen.has(id) || !start || !end || dimensionLevelId == null || !view) return null;
+      if (Math.hypot(end.x - start.x, end.z - start.z) < 0.001) return null;
+      seen.add(id);
+      return { id, start, end, levelId: dimensionLevelId, view };
+    }).filter(Boolean);
+  };
+
   // Backgrounds are at most two other levels, never the active one.
   const backgroundLevelIds = (rawIds, levelIds, activeLevelId) =>
     (Array.isArray(rawIds) ? rawIds : [])
@@ -91,6 +106,7 @@ if (!window.DraftDrawingFormat) {
     levelId,
     levels,
     cuts,
+    dimensions,
     backgroundLevelIds,
     oneOf,
     number,

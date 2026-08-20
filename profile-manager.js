@@ -105,6 +105,7 @@ if (!window.DraftProfileManager) {
     line: 'L',
     wall: 'W',
     floor: 'F',
+    dimension: 'D',
     trim: 'T',
     cut: 'C',
     group: 'G',
