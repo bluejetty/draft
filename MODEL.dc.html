@@ -175,8 +175,9 @@
     <!-- TOOLS -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Tools</div>
+      <div style="margin:-2px 0 8px; color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;">Working in: {{ workingContextLabel }}</div>
       <sc-for list="{{ tools }}" as="t" hint-placeholder-count="3">
-        <button onClick="{{ t.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid {{ t.border }}; background:{{ t.bg }}; color:{{ t.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:pointer; margin-bottom:3px;">{{ t.label }}</button>
+        <button onClick="{{ t.onSelect }}" disabled="{{ t.disabled }}" title="{{ t.title }}" style="display:block; width:100%; text-align:left; border:1px solid {{ t.border }}; background:{{ t.bg }}; color:{{ t.color }}; opacity:{{ t.opacity }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:{{ t.cursor }}; margin-bottom:3px;">{{ t.label }}</button>
       </sc-for>
     </div>
 
@@ -707,6 +708,7 @@ class Component extends DCLogic {
         start: point(wall.start),
         end: point(wall.end),
         levelId: wall.levelId,
+        view: wall.view || 'plan',
         wallType: wall.wallType,
         baseHeight: wall.baseHeight,
         topHeight: wall.topHeight,
@@ -716,6 +718,7 @@ class Component extends DCLogic {
         id: floor.id,
         points: floor.points.map(point),
         levelId: floor.levelId,
+        view: floor.view || 'floor',
         thickness: floor.thickness,
         assembly: { ...floor.assembly },
       })),
@@ -1067,20 +1070,21 @@ class Component extends DCLogic {
         if (!start || !end || levelId == null) return null;
         return {
            id: this._storedItemId(segment?.id, type, usedIds),
-          start: this._mergeVertex(start, levelId),
-          end: this._mergeVertex(end, levelId),
+          start: this._mergeVertex(start, levelId, extra.view),
+          end: this._mergeVertex(end, levelId, extra.view),
           levelId,
           ...extra,
         };
       };
        this._lines = Array.isArray(saved.lines)
           ? saved.lines.map(line => restoreSegment(line, 'line', {
-            view: ['plan', 'floor', 'e-power'].includes(line?.view) ? line.view : 'plan',
+            view: ['plan', 'floor', 'e-power', 'foundation'].includes(line?.view) ? line.view : 'plan',
           })).filter(Boolean)
         : [];
       skipped += (Array.isArray(saved.lines) ? saved.lines.length : 0) - this._lines.length;
       this._walls = Array.isArray(saved.walls)
          ? saved.walls.map(wall => restoreSegment(wall, 'wall', {
+          view: 'plan',
           wallType: WALL_TYPES.some(type => type.id === wall.wallType) ? wall.wallType : 'stud_2x6',
           baseHeight: format.number(wall.baseHeight, 0),
           topHeight: format.number(wall.topHeight, DEFAULT_WALL_TOP_FT),
@@ -1095,8 +1099,9 @@ class Component extends DCLogic {
           if (levelId == null || points.length < 3) return null;
           return {
              id: this._storedItemId(floor?.id, 'floor', usedIds),
-            points: points.map(point => this._mergeVertex(point, levelId)),
+             points: points.map(point => this._mergeVertex(point, levelId, 'floor')),
             levelId,
+             view: 'floor',
             thickness: format.positive(floor.thickness, this.state.floorThickness),
             assembly: { ...DEFAULT_FLOOR_ASSEMBLY, ...(floor.assembly || {}) },
           };
@@ -2037,18 +2042,90 @@ class Component extends DCLogic {
       : (DEFAULT_LEVEL_LAYER_VIEWS[levelId] || views[0].id);
   }
 
+  _draftingContextLabel(viewId = this._activeLayerViewId()) {
+    return {
+      plan: 'PLAN',
+      floor: 'FLOOR',
+      'e-power': 'E-POWER',
+      foundation: 'FOUNDATION',
+    }[viewId] || 'LEVEL';
+  }
+
+  _contextAllowsTool(tool, viewId = this._activeLayerViewId()) {
+    if (tool === 'line') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
+    if (tool === 'wall') return viewId === 'plan';
+    if (tool === 'floor') return viewId === 'floor';
+    if (tool === 'dimension') return ['plan', 'floor'].includes(viewId);
+    return true;
+  }
+
+  _contextToolLabel(tool, shortcut = '') {
+    const viewId = this._activeLayerViewId();
+    const suffix = shortcut ? `  [${shortcut}]` : '';
+    if (tool === 'line') {
+      const prefix = { plan:'PLAN', floor:'FLOOR', 'e-power':'E-POWER', foundation:'FOUNDATION' }[viewId] || 'LINE';
+      return prefix === 'LINE' ? `LINE${suffix}` : `${prefix} LINE${suffix}`;
+    }
+    if (tool === 'wall') return viewId === 'plan' ? `PLAN WALL${suffix}` : `WALL — PLAN ONLY${suffix}`;
+    if (tool === 'floor') return viewId === 'floor' ? `FLOOR OUTLINE${suffix}` : `FLOOR — FLOOR ONLY${suffix}`;
+    if (tool === 'dimension') {
+      if (viewId === 'plan') return `PLAN DIMENSION${suffix}`;
+      if (viewId === 'floor') return `FLOOR DIMENSION${suffix}`;
+      return `DIMENSION — PLAN / FLOOR${suffix}`;
+    }
+    return `${tool.toUpperCase()}${suffix}`;
+  }
+
+  _contextToolMessage(tool, viewId = this._activeLayerViewId()) {
+    const context = this._draftingContextLabel(viewId);
+    if (tool === 'wall') return `Walls are placed in PLAN. Switch to PLAN to draw walls. Current context: ${context}.`;
+    if (tool === 'floor') return `Floor outlines are placed in FLOOR. Switch to FLOOR to draw one. Current context: ${context}.`;
+    if (tool === 'dimension') return `Dimensions are placed in PLAN or FLOOR. Current context: ${context}.`;
+    if (tool === 'line') return `Select PLAN, FLOOR, E-POWER, or FOUNDATION before drawing a line. Current context: ${context}.`;
+    return `${tool} is not available in ${context}.`;
+  }
+
+  _activateContextTool(tool) {
+    if (!this._contextAllowsTool(tool)) {
+      this.setState({ drawingMessage: this._contextToolMessage(tool), drawingMessageError: true });
+      return false;
+    }
+    this._cancelExtend();
+    if (tool !== 'wall') this._cancelWall();
+    if (tool !== 'line') this._cancelLine();
+    if (tool !== 'floor') this._cancelFloor();
+    if (tool !== 'dimension') this._cancelDimension();
+    this._cancelCut();
+    this.setState({
+      activeTool: tool,
+      drawingMessage: `${this._contextToolLabel(tool).replace(/\s+\[[^\]]+\]$/, '')} active.`,
+      drawingMessageError: false,
+    });
+    return true;
+  }
+
   _selectLayerView(levelId, viewId, event) {
     event?.stopPropagation();
     if (!this._layerViewsForLevel(levelId).some(view => view.id === viewId)) return;
     const levelIndex = this.state.levels.findIndex(level => level.id === levelId);
     if (levelIndex < 0) return;
     const backgroundLevelIds = this.state.backgroundLevelIds.filter(id => id !== levelId);
-    this._cancelDimension();
+    this._cancelFrozenLength();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension();
     this._applyLevelElevation(levelIndex);
+    const activeTool = ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
+      && !this._contextAllowsTool(this.state.activeTool, viewId)
+      ? 'select'
+      : this.state.activeTool;
     this.setState({
       activeLevelIdx: levelIndex,
       backgroundLevelIds,
       levelLayerViews: { ...this.state.levelLayerViews, [levelId]: viewId },
+      activeTool,
+      drawingMessage: activeTool === 'select' && ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
+        ? this._contextToolMessage(this.state.activeTool, viewId)
+        : `Working in ${this._draftingContextLabel(viewId)}.`,
+      drawingMessageError: activeTool === 'select' && ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool),
     }, () => {
       if (this._orthoCam) this._setView('top');
       this._notifySelectionChanged();
@@ -2064,12 +2141,14 @@ class Component extends DCLogic {
 
   _activeWalls() {
     const levelId = this._activeLevelId();
-    return this._walls.filter(wall => wall.levelId === levelId);
+    const view = this._activeLayerViewId(levelId);
+    return this._walls.filter(wall => wall.levelId === levelId && (view == null || (wall.view || 'plan') === view));
   }
 
   _activeFloors() {
     const levelId = this._activeLevelId();
-    return this._floors.filter(floor => floor.levelId === levelId);
+    const view = this._activeLayerViewId(levelId);
+    return this._floors.filter(floor => floor.levelId === levelId && (view == null || (floor.view || 'floor') === view));
   }
 
   _activeDimensions() {
@@ -2102,12 +2181,14 @@ class Component extends DCLogic {
 
   _backgroundWalls() {
     const ref = this._visibleBackgroundReference();
-    return ref ? this._walls.filter(wall => wall.levelId === ref.levelId) : [];
+    const view = this._activeLayerViewId();
+    return ref ? this._walls.filter(wall => wall.levelId === ref.levelId && (view == null || (wall.view || 'plan') === view)) : [];
   }
 
   _backgroundFloors() {
     const ref = this._visibleBackgroundReference();
-    return ref ? this._floors.filter(floor => floor.levelId === ref.levelId) : [];
+    const view = this._activeLayerViewId();
+    return ref ? this._floors.filter(floor => floor.levelId === ref.levelId && (view == null || (floor.view || 'floor') === view)) : [];
   }
 
   _toggleBackgroundLevel(idx, e) {
@@ -2146,12 +2227,26 @@ class Component extends DCLogic {
 
   _switchLevel(idx) {
     if (idx === this.state.activeLevelIdx) return;
+    this._cancelFrozenLength();
     this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut();
     this._applyLevelElevation(idx);
     // A level cannot also be one of its own references.
     const activeId = this.state.levels[idx]?.id;
     const backgroundLevelIds = this.state.backgroundLevelIds.filter(id => id !== activeId);
-    this.setState({ activeLevelIdx: idx, backgroundLevelIds }, () => {
+    const targetView = this._activeLayerViewId(activeId);
+    const activeTool = ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
+      && !this._contextAllowsTool(this.state.activeTool, targetView)
+      ? 'select'
+      : this.state.activeTool;
+    this.setState({
+      activeLevelIdx: idx,
+      backgroundLevelIds,
+      activeTool,
+      drawingMessage: activeTool === 'select' && ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
+        ? this._contextToolMessage(this.state.activeTool, targetView)
+        : `Working in ${this._draftingContextLabel(targetView)}.`,
+      drawingMessageError: activeTool === 'select' && ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool),
+    }, () => {
       // Keep level switching functional even when the optional WebGL renderer
       // is unavailable; the 2D overlay can still render once it is initialized.
       if (this._orthoCam) this._setView('top');
@@ -2623,6 +2718,10 @@ class Component extends DCLogic {
 
   // ─── Wall drawing ─────────────────────────────────────────────────────────────
   _handleWallClick() {
+    if (!this._contextAllowsTool('wall')) {
+      this.setState({ drawingMessage: this._contextToolMessage('wall'), drawingMessageError: true });
+      return;
+    }
     const pt = this._snapPt; if (!pt) return;
     const now = Date.now();
     const isDbl = (now - this._lastClickTime) < 350;
@@ -2677,6 +2776,7 @@ class Component extends DCLogic {
   }
 
   _cancelWall() {
+    if (this._frozenTool === 'wall' && this.state.lengthFrozen) this._cancelFrozenLength();
     if (!this._wallDrawing) return;
     this._wallChain         = [];
     this._wallChainSegments = 0;
@@ -2690,6 +2790,10 @@ class Component extends DCLogic {
 
   // ─── Floor drawing ───────────────────────────────────────────────────────────
   _handleFloorClick() {
+    if (!this._contextAllowsTool('floor')) {
+      this.setState({ drawingMessage: this._contextToolMessage('floor'), drawingMessageError: true });
+      return;
+    }
     const pt = this._snapPt; if (!pt) return;
 
     if (!this._floorDrawing) {
@@ -2736,28 +2840,36 @@ class Component extends DCLogic {
   _commitFloor(points) {
     const level = this._activeLevel();
     const levelId = level ? level.id : -1;
+    const view = this._activeLayerViewId(levelId);
+    if (!this._contextAllowsTool('floor', view)) return false;
     this._floors.push({
       id: this._newDrawingItemId('floor'),
-      points: points.map(point => this._mergeVertex(point, levelId)),
+      points: points.map(point => this._mergeVertex(point, levelId, view)),
       levelId,
+      view,
       thickness: this.state.floorThickness,
       assembly: { ...DEFAULT_FLOOR_ASSEMBLY },
     });
+    return true;
   }
 
   _commitWall(start, end, wallType, baseHeight, topHeight, refLine) {
     const level = this._activeLevel();
     const levelId = level ? level.id : -1;
+    const view = this._activeLayerViewId(levelId);
+    if (!this._contextAllowsTool('wall', view)) return false;
     this._walls.push({
       id: this._newDrawingItemId('wall'),
-      start:      this._mergeVertex(start, levelId),
-      end:        this._mergeVertex(end, levelId),
+      start:      this._mergeVertex(start, levelId, view),
+      end:        this._mergeVertex(end, levelId, view),
       levelId,
+      view,
       wallType:   wallType   || this.state.activeWallType,
       baseHeight: baseHeight != null ? baseHeight : this.state.wallBaseHeight,
       topHeight:  topHeight  != null ? topHeight  : this.state.wallTopHeight,
       refLine:    refLine    || this.state.wallRefLine,
     });
+    return true;
   }
 
   // ─── Wall 2D cross-section renderer ─────────────────────────────────────────
@@ -3151,13 +3263,14 @@ class Component extends DCLogic {
   }
 
   // ─── Vertex pool ─────────────────────────────────────────────────────────────
-  // Return an existing pooled Vector3 at (pt.x, pt.z) on the SAME level, or
-  // create one at that level's elevation. Matching coordinates on different
-  // floors must remain distinct so background snaps never unite floor geometry.
-  _mergeVertex(pt, levelId) {
+  // Return an existing pooled Vector3 at (pt.x, pt.z) in the SAME level and
+  // drawing context, or create one at that level's elevation. Different views
+  // must never share a mutable vertex: dragging a FLOOR point cannot edit PLAN.
+  _mergeVertex(pt, levelId, viewId = this._activeLayerViewId(levelId) || 'plan') {
     const THRESH = 0.001; // tight coordinate tolerance; grid snap is exact
     for (const v of this._vertices) {
       if (v._draftLevelId === levelId
+        && v._draftViewId === viewId
         && Math.abs(v.x - pt.x) < THRESH
         && Math.abs(v.z - pt.z) < THRESH) return v;
     }
@@ -3165,6 +3278,7 @@ class Component extends DCLogic {
     const elevation = level ? level.elev : (pt.y != null ? pt.y : 0);
     const v = new THREE.Vector3(pt.x, elevation, pt.z);
     v._draftLevelId = levelId;
+    v._draftViewId = viewId;
     this._vertices.push(v);
     return v;
   }
@@ -3258,7 +3372,7 @@ class Component extends DCLogic {
   // Split _lines[idx] at insertPt → two segments sharing the mid vertex.
   _splitLine(idx, insertPt) {
     const seg = this._lines[idx];
-    const mid = this._mergeVertex(insertPt, seg.levelId);
+    const mid = this._mergeVertex(insertPt, seg.levelId, seg.view || 'plan');
     this._lines.splice(idx, 1,
       { ...seg, end: mid },
       { ...seg, id: this._newDrawingItemId('line'), start: mid }
@@ -3685,6 +3799,7 @@ class Component extends DCLogic {
     const ixVtx = this._mergeVertex(
       new THREE.Vector3(nearest.x, seg.start.y, nearest.z),
       seg.levelId,
+      seg.view || 'plan',
     );
 
     // Remove clicked side: update the endpoint of the clicked segment
@@ -3755,15 +3870,15 @@ class Component extends DCLogic {
       return;
     }
     const view = this._activeLayerViewId();
-    if (!['plan', 'floor'].includes(view)) {
-      this.setState({ drawingMessage: 'Select PLAN or FLOOR before placing a dimension.', drawingMessageError: true });
+    if (!this._contextAllowsTool('dimension', view)) {
+      this.setState({ drawingMessage: this._contextToolMessage('dimension', view), drawingMessageError: true });
       return;
     }
     const pt = this._snapPt;
     if (!pt) return;
     if (!this._dimensionStart) {
       this._dimensionStart = pt.clone();
-      this.setState({ drawingMessage: 'Dimension start set. Click the end point.', drawingMessageError: false });
+      this.setState({ drawingMessage: `${this._draftingContextLabel(view)} dimension start set. Click the end point.`, drawingMessageError: false });
       return;
     }
     if (Math.hypot(pt.x - this._dimensionStart.x, pt.z - this._dimensionStart.z) < 0.001) return;
@@ -3788,6 +3903,10 @@ class Component extends DCLogic {
   }
 
   _handleLineClick() {
+    if (!this._contextAllowsTool('line')) {
+      this.setState({ drawingMessage: this._contextToolMessage('line'), drawingMessageError: true });
+      return;
+    }
     const pt = this._snapPt; if (!pt) return;
 
     // Double-click detection (two clicks ≤350ms apart)
@@ -3846,6 +3965,7 @@ class Component extends DCLogic {
   }
 
   _cancelLine() {
+    if (this._frozenTool === 'line' && this.state.lengthFrozen) this._cancelFrozenLength();
     if (!this._lineDrawing) return;
     this._pendingChain  = [];
     this._chainSegments = 0;
@@ -3859,13 +3979,16 @@ class Component extends DCLogic {
   _commitLine(start, end) {
     const level = this._activeLevel();
     const levelId = level ? level.id : -1;
+    const view = this._activeLayerViewId(levelId);
+    if (!this._contextAllowsTool('line', view)) return false;
     this._lines.push({
       id: this._newDrawingItemId('line'),
-      start: this._mergeVertex(start, levelId),
-      end: this._mergeVertex(end, levelId),
+      start: this._mergeVertex(start, levelId, view),
+      end: this._mergeVertex(end, levelId, view),
       levelId,
-      view: this._activeLayerViewId(levelId) || 'plan',
+      view,
     });
+    return true;
   }
 
   _onDblClick(e) {
@@ -3955,6 +4078,19 @@ class Component extends DCLogic {
   }
 
   _confirmFrozenLength() {
+    const frozenTool = this._frozenTool;
+    if (!this.state.lengthFrozen || !this._frozenStart || !['line', 'wall'].includes(frozenTool)) {
+      this._cancelFrozenLength();
+      return;
+    }
+    if (!this._contextAllowsTool(frozenTool)) {
+      const message = this._contextToolMessage(frozenTool);
+      this._cancelFrozenLength();
+      if (frozenTool === 'line') this._cancelLine();
+      if (frozenTool === 'wall') this._cancelWall();
+      this.setState({ drawingMessage: message, drawingMessageError: true });
+      return;
+    }
     const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
     const total = parsed.ok ? parsed.inches / 12 : 0;
     if (!parsed.ok || Math.abs(total) <= 0.001) {
@@ -3999,8 +4135,14 @@ class Component extends DCLogic {
   }
 
   _cancelFrozenLength() {
+    const frozenTool = this._frozenTool;
     this._lockAngle = null;
     this._frozenEnd = null;
+    this._frozenStart = null;
+    this._frozenTool = null;
+    this._frozenAngle = 0;
+    if (frozenTool === 'line' && this._linePreviewObj) this._linePreviewObj.visible = false;
+    if (frozenTool === 'wall' && this._previewLine) this._previewLine.visible = false;
     this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '' });
   }
 
@@ -4240,10 +4382,10 @@ class Component extends DCLogic {
       }
       return;
     }
-    if (matches('wall')) { e.preventDefault(); this._cancelExtend(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({ activeTool: 'wall' }); return; }
-    if (matches('line')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelFloor(); this._cancelDimension(); this.setState({ activeTool: 'line' }); return; }
-    if (matches('floor')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelDimension(); this.setState({ activeTool: 'floor' }); return; }
-    if (matches('dimension')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({ activeTool: 'dimension' }); return; }
+    if (matches('wall')) { e.preventDefault(); this._activateContextTool('wall'); return; }
+    if (matches('line')) { e.preventDefault(); this._activateContextTool('line'); return; }
+    if (matches('floor')) { e.preventDefault(); this._activateContextTool('floor'); return; }
+    if (matches('dimension')) { e.preventDefault(); this._activateContextTool('dimension'); return; }
     if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
     if (matches('extend')) {
       e.preventDefault();
@@ -4334,6 +4476,32 @@ class Component extends DCLogic {
     const activeCut   = cuts.find(c => c.id === activeCutId);
     const keybindings = { ...DEFAULT_KEYBINDINGS, ...(this.state.keybindings || {}) };
     const shortcut = command => keyBindingLabel(keybindings[command]);
+    const activeLayerViewId = this._activeLayerViewId(activeLevel?.id);
+    const workingContextLabel = this._draftingContextLabel(activeLayerViewId);
+    const contextualTool = tool => {
+      const available = this._contextAllowsTool(tool, activeLayerViewId);
+      const active = activeTool === tool;
+      return {
+        label: this._contextToolLabel(tool, shortcut(tool)),
+        title: available
+          ? `${this._contextToolLabel(tool).replace(/\s+\[[^\]]+\]$/, '')} will be saved in ${workingContextLabel}.`
+          : this._contextToolMessage(tool, activeLayerViewId),
+        disabled: !available,
+        opacity: available ? '1' : '0.42',
+        cursor: available ? 'pointer' : 'not-allowed',
+        onSelect: () => this._activateContextTool(tool),
+        ...(active ? on : off),
+      };
+    };
+    const standardTool = (label, onSelect, active) => ({
+      label,
+      title: label.replace(/\s+\[[^\]]+\]$/, ''),
+      disabled: false,
+      opacity: '1',
+      cursor: 'pointer',
+      onSelect,
+      ...(active ? on : off),
+    });
     const selectedItems = this._selectedDrawingItems();
     const selectedGroups = this._selectedGroups();
     const groupForWalls = this._selectedGroupForWallEditing();
@@ -4370,7 +4538,7 @@ class Component extends DCLogic {
 
     const viewLabels = { perspective:'PERSPECTIVE', top:'TOP / PLAN', front:'FRONT ELEV', side:'SIDE ELEV', cut: activeCut?.name || 'SECTION' };
     const activeLayerView = this._layerViewsForLevel(activeLevel?.id)
-      .find(view => view.id === this._activeLayerViewId(activeLevel?.id));
+      .find(view => view.id === activeLayerViewId);
     const topBarLabel = activeView === 'cut' && activeCut
       ? activeCut.name
       : `${activeLevel?.name || '—'}${activeLayerView ? ` / ${activeLayerView.label}` : ''}`;
@@ -4392,7 +4560,7 @@ class Component extends DCLogic {
       : 'Save the current personal drafting preferences, or import a saved setup from another browser or computer.';
 
     return {
-      topBarLabel, topBarColor,
+      topBarLabel, topBarColor, workingContextLabel,
       showHint, hintText, hintColor,
       choosingDir,
       noCuts: cuts.length === 0,
@@ -4619,14 +4787,14 @@ class Component extends DCLogic {
       })),
 
       tools: [
-        { label:`Select  [${shortcut('select')}]`, onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, ...(activeTool==='select'?on:off) },
-        { label:`Line  [${shortcut('line')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'line'}); },                       ...(activeTool==='line'  ?on:off) },
-        { label:`Wall  [${shortcut('wall')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'wall'}); },                       ...(activeTool==='wall'  ?on:off) },
-        { label:`Floor  [${shortcut('floor')}]`,   onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelDimension(); this.setState({activeTool:'floor'}); },                       ...(activeTool==='floor' ?on:off) },
-        { label:`Dimension  [${shortcut('dimension')}]`, onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this.setState({activeTool:'dimension'}); }, ...(activeTool==='dimension'?on:off) },
-        { label:`Extend  [${shortcut('extend')}]`, onSelect:()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut(); this._cancelExtend(); this.setState({activeTool:'extend', extendScope:'current', extendPhase:'idle', extendMessage:''}); }, ...(activeTool==='extend'?on:off) },
-        { label:`Trim  [${shortcut('trim')}]`,     onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'trim'}); },   ...(activeTool==='trim'  ?on:off) },
-        { label:`Cut  [${shortcut('cut')}]`,       onSelect:()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'cut'}); },    ...(activeTool==='cut'   ?on:off) },
+        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
+        contextualTool('line'),
+        contextualTool('wall'),
+        contextualTool('floor'),
+        contextualTool('dimension'),
+        standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut(); this._cancelExtend(); this.setState({activeTool:'extend', extendScope:'current', extendPhase:'idle', extendMessage:''}); }, activeTool==='extend'),
+        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
+        standardTool(`Cut  [${shortcut('cut')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'cut'}); }, activeTool==='cut'),
       ],
       enter3D:      ()=>this._setView('perspective'),
       webglUnavailable: this.state.webglUnavailable,
