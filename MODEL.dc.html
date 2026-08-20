@@ -5,13 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
 <script src="./shared-file-store.js"></script>
+<!-- Load the 3D dependencies once during document parsing. Template scripts
+     would otherwise run here and be mounted again by the helmet runtime. -->
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
 <x-dc>
 <helmet>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap" />
-  <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
@@ -41,10 +43,14 @@
       [data-model-left], [data-model-right] { width:176px !important; }
       [data-model-right] { position:absolute; right:0; top:44px; bottom:28px; z-index:5; box-shadow:-5px 0 14px rgba(29,31,32,0.08); }
       [data-model-container] { min-width:0; }
-      [data-save-controls] { margin-left:4px !important; }
+      [data-model-title-detail] { display:none; }
+      [data-top-actions] { gap:3px !important; margin-left:auto !important; }
+      [data-unit-toggle] button { min-width:54px !important; padding:1px 4px !important; font-size:8px !important; }
+      [data-grid-snap] { padding:3px 5px !important; font-size:8px !important; }
+      [data-save-controls] { margin-left:0 !important; }
       [data-save-controls] > span { display:none; }
       [data-save-controls] select { max-width:58px; }
-      [data-model-nav] { margin-left:8px !important; }
+      [data-model-nav] { margin-left:0 !important; font-size:10px !important; }
     }
   </style>
 </helmet>
@@ -52,8 +58,8 @@
 <!-- TOP BAR -->
 <div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff; position:relative;">
   <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase; color:#1d1f20;">MODEL</div>
-  <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; color:rgba(29,31,32,0.35); margin:0 10px;">/</div>
-  <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:{{ topBarColor }};">{{ topBarLabel }}</div>
+  <div data-model-title-detail style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; color:rgba(29,31,32,0.35); margin:0 10px;">/</div>
+  <div data-model-title-detail style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:{{ topBarColor }};">{{ topBarLabel }}</div>
   <sc-if value="{{ showHint }}" hint-placeholder-val="{{ false }}">
     <div style="margin-left:18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }}; border:1px solid {{ hintColor }}; padding:3px 10px;">{{ hintText }}</div>
   </sc-if>
@@ -77,18 +83,24 @@
   </div>
 
   <div style="flex:1;"></div>
-  <div data-save-controls style="display:flex; align-items:center; gap:5px; margin-left:18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em;">
-    <span style="color:rgba(29,31,32,0.45);">SAVE AS</span>
-    <select value="{{ saveExtension }}" onChange="{{ onSaveExtensionChange }}" aria-label="Save file extension" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; cursor:pointer;">
-      <option value="json">.json</option>
-      <option value="draft">.draft</option>
-      <option value="model">.model</option>
-      <option value="plan">.plan</option>
-    </select>
-    <button onClick="{{ saveDrawingFile }}" style="height:24px; border:1px solid #5980a6; background:#5980a6; color:#fff; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE</button>
+  <div data-top-actions style="display:flex; align-items:center; gap:8px; margin-left:18px;">
+    <div data-unit-toggle style="display:flex; flex-direction:column; gap:1px;">
+      <button onClick="{{ setImperial }}" style="min-width:64px; border:1px solid {{ imperialBorder }}; background:{{ imperialBg }}; color:{{ imperialColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">IMPERIAL</button>
+      <button onClick="{{ setMetric }}" style="min-width:64px; border:1px solid {{ metricBorder }}; background:{{ metricBg }}; color:{{ metricColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">METRIC</button>
+    </div>
+    <button data-grid-snap onClick="{{ toggleGridSnap }}" title="{{ gridSnapTitle }}" style="height:29px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; color:{{ gridSnapColor }}; padding:3px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">{{ gridSnapLabel }}</button>
+    <div data-save-controls style="display:flex; align-items:center; gap:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em;">
+      <span style="color:rgba(29,31,32,0.45);">SAVE AS</span>
+      <select value="{{ saveExtension }}" onChange="{{ onSaveExtensionChange }}" aria-label="Save file extension" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; cursor:pointer;">
+        <option value="json">.json</option>
+        <option value="draft">.draft</option>
+        <option value="model">.model</option>
+        <option value="plan">.plan</option>
+      </select>
+      <button onClick="{{ saveDrawingFile }}" style="height:24px; border:1px solid #5980a6; background:#5980a6; color:#fff; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE</button>
+    </div>
+    <a data-model-nav href="./LAYOUT.dc.html" style="margin-left:8px;">LAYOUT</a>
   </div>
-  <a data-model-nav href="./LAYOUT.dc.html" style="margin-left:28px;">LAYOUT</a>
-  <a data-model-nav href="./PDF-MARKUP.dc.html" style="margin-left:28px;">PDF-MARKUP</a>
 </div>
 
 <!-- BODY -->
@@ -161,19 +173,6 @@
       </div>
       <sc-for list="{{ views }}" as="v" hint-placeholder-count="3">
         <button onClick="{{ v.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ v.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.04em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ v.label }}</button>
-      </sc-for>
-    </div>
-
-    <!-- UNITS + SNAP -->
-    <div style="padding:10px 12px;">
-      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Units</div>
-      <div style="display:inline-flex; overflow:hidden; border:1px solid rgba(29,31,32,0.16); margin-bottom:10px;">
-        <button onClick="{{ setImperial }}" style="padding:6px 12px; font-size:12px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; letter-spacing:0.04em; border:none; background:{{ imperialBg }}; color:{{ imperialColor }}; cursor:pointer; border-right:1px solid rgba(29,31,32,0.16);">IN / FT</button>
-        <button onClick="{{ setMetric }}" style="padding:6px 12px; font-size:12px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; letter-spacing:0.04em; border:none; background:{{ metricBg }}; color:{{ metricColor }}; cursor:pointer;">M</button>
-      </div>
-      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:6px;">Snap</div>
-      <sc-for list="{{ snaps }}" as="sn" hint-placeholder-count="2">
-        <button onClick="{{ sn.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ sn.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 9px; cursor:pointer; margin-bottom:3px;">{{ sn.label }}</button>
       </sc-for>
     </div>
 
@@ -276,19 +275,6 @@
 <script type="text/x-dc" data-dc-script data-props="{}">
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const SNAP_PRESETS = [
-  { label: '1/16"', snapFt: 1/192 },
-  { label: '1/8"',  snapFt: 1/96  },
-  { label: '1"',    snapFt: 1/12  },
-  { label: '6"',    snapFt: 0.5   },
-  { label: "1'",    snapFt: 1     },
-];
-const SNAP_METRIC = [
-  { label: '1 mm',  snapFt: 0.001/0.3048 },
-  { label: '5 mm',  snapFt: 0.005/0.3048 },
-  { label: '10 mm', snapFt: 0.010/0.3048 },
-  { label: '100 mm',snapFt: 0.100/0.3048 },
-];
 const LEVEL_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a','#9a5a5a','#8a9a6a'];
 // Endpoint magnet catch distance in screen pixels. Keep this small so the
 // cursor is only pulled when it is deliberately placed very near a node.
@@ -412,7 +398,7 @@ class Component extends DCLogic {
     activeTool:    'select',
     units:         'imperial',
     activeView:    'top',      // 'top'|'front'|'side'|'perspective'|'cut'
-    activeSnap:    0,
+    gridSnapEnabled: true,
     isDrawing:     false,
     activeWallType: 'stud_2x6',
     wallRefLine:    'left',   // 'left'|'center'|'right' — where the drawn line sits on the assembly
@@ -496,7 +482,7 @@ class Component extends DCLogic {
       backgroundLevelIds: [...this.state.backgroundLevelIds],
       backgroundMode: this.state.backgroundMode,
       units: this.state.units,
-      activeSnap: this.state.activeSnap,
+      gridSnapEnabled: this.state.gridSnapEnabled,
       activeWallType: this.state.activeWallType,
       wallRefLine: this.state.wallRefLine,
       wallBaseHeight: this.state.wallBaseHeight,
@@ -619,7 +605,7 @@ class Component extends DCLogic {
         backgroundMode: ['blue', 'red', 'none'].includes(saved.backgroundMode)
           ? saved.backgroundMode : 'blue',
         units: saved.units === 'metric' ? 'metric' : 'imperial',
-        activeSnap: Number.isInteger(saved.activeSnap) ? saved.activeSnap : 0,
+        gridSnapEnabled: saved.gridSnapEnabled !== false,
         activeWallType: WALL_TYPES.some(type => type.id === saved.activeWallType)
           ? saved.activeWallType : 'stud_2x6',
         wallRefLine: ['left', 'center', 'right'].includes(saved.wallRefLine)
@@ -1414,10 +1400,9 @@ class Component extends DCLogic {
   }
 
   _snap(pt) {
-    const { units, activeSnap } = this.state;
-    const list = units === 'imperial' ? SNAP_PRESETS : SNAP_METRIC;
-    const unit = (list[activeSnap] || list[0]).snapFt;
-    return new THREE.Vector3(Math.round(pt.x/unit)*unit, pt.y, Math.round(pt.z/unit)*unit);
+    if (!this.state.gridSnapEnabled) return pt.clone();
+    const unit = 1; // GRID SNAP is intentionally limited to one-foot increments.
+    return new THREE.Vector3(Math.round(pt.x / unit) * unit, pt.y, Math.round(pt.z / unit) * unit);
   }
 
   // ─── Mouse ───────────────────────────────────────────────────────────────────
@@ -2960,14 +2945,12 @@ class Component extends DCLogic {
 
   // ─── renderVals ───────────────────────────────────────────────────────────────
   renderVals() {
-    const { activeTool, units, activeView, activeSnap, isDrawing,
+    const { activeTool, units, activeView, isDrawing,
             levels, activeLevelIdx, backgroundLevelIds, backgroundMode,
             cuts, activeCutId, cutPhase, choosingDir } = this.state;
     const on  = { bg:'#1d1f20', color:'#f2f2f3', border:'#1d1f20' };
     const off = { bg:'#fff',    color:'#1d1f20', border:'rgba(29,31,32,0.16)' };
     const hi  = 'rgba(29,31,32,0.09)', lo = '#fff';
-    const snaps = units === 'imperial' ? SNAP_PRESETS : SNAP_METRIC;
-
     const activeLevel = levels[activeLevelIdx] || levels[0];
     const activeCut   = cuts.find(c => c.id === activeCutId);
 
@@ -3121,11 +3104,22 @@ class Component extends DCLogic {
       view3DBg:     activeView==='perspective' ? '#5980a6' : '#fff',
       view3DColor:  activeView==='perspective' ? '#fff'    : '#5980a6',
       view3DBorder: '#5980a6',
-      snaps: snaps.map((sn, i) => ({ label:sn.label, onSelect:()=>this.setState({activeSnap:i}), bg:activeSnap===i?hi:lo })),
-      setImperial: ()=>this.setState({units:'imperial',activeSnap:0}),
-      setMetric:   ()=>this.setState({units:'metric',  activeSnap:0}),
+      setImperial: ()=>this.setState({units:'imperial'}, () => this._markUnsaved()),
+      setMetric:   ()=>this.setState({units:'metric'}, () => this._markUnsaved()),
       imperialBg: units==='imperial'?'#1d1f20':'#fff', imperialColor: units==='imperial'?'#f2f2f3':'#1d1f20',
       metricBg:   units==='metric'  ?'#1d1f20':'#fff', metricColor:   units==='metric'  ?'#f2f2f3':'#1d1f20',
+      imperialBorder: units==='imperial'?'#1d1f20':'rgba(29,31,32,0.2)',
+      metricBorder: units==='metric'?'#1d1f20':'rgba(29,31,32,0.2)',
+      toggleGridSnap: () => this.setState({
+        gridSnapEnabled: !this.state.gridSnapEnabled,
+      }, () => this._markUnsaved()),
+      gridSnapLabel: this.state.gridSnapEnabled ? 'GRID SNAP · ON' : 'GRID SNAP · OFF',
+      gridSnapTitle: this.state.gridSnapEnabled
+        ? 'Grid snap is on: points round to 1-foot increments. Click to turn it off.'
+        : 'Grid snap is off: points follow the cursor exactly. Click to snap to 1-foot increments.',
+      gridSnapBg: this.state.gridSnapEnabled ? '#1d1f20' : '#fff',
+      gridSnapColor: this.state.gridSnapEnabled ? '#f2f2f3' : '#1d1f20',
+      gridSnapBorder: this.state.gridSnapEnabled ? '#1d1f20' : 'rgba(29,31,32,0.2)',
       cursorX: this.state.cursorX, cursorY: this.state.cursorY,
       cursorDisplay: this.state.showCursor ? 'block' : 'none',
       magnetX: this.state.magnetX, magnetY: this.state.magnetY,
