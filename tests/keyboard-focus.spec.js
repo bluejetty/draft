@@ -11,7 +11,7 @@ test.describe('shortcuts while a control has focus', () => {
     await page.waitForTimeout(200);
 
     const labels = await h.activeToolLabels(page);
-    expect(labels.some(l => /^Line/.test(l))).toBe(false);
+    expect(labels.some(l => /\bLINE\b/i.test(l))).toBe(false);
     expect(labels.some(l => /^Select/.test(l))).toBe(true);
   });
 
@@ -24,7 +24,7 @@ test.describe('shortcuts while a control has focus', () => {
     // Space finishes a chain. With the Wall button focused the button owns the
     // key, so the pending segment must be discarded by the tool switch, never
     // committed behind the user's back.
-    await page.getByRole('button', { name: /^Wall/ }).focus();
+    await page.getByRole('button', { name: /\bWall\b/i }).focus();
     await page.keyboard.press(' ');
     await page.waitForTimeout(400);
 
@@ -38,6 +38,6 @@ test.describe('shortcuts while a control has focus', () => {
     await page.waitForTimeout(200);
 
     const labels = await h.activeToolLabels(page);
-    expect(labels.some(l => /^Wall/.test(l))).toBe(true);
+    expect(labels.some(l => /\bWALL\b/i.test(l))).toBe(true);
   });
 });
