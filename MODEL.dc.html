@@ -187,7 +187,12 @@
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Tools</div>
       <div style="margin:-2px 0 8px; color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;">Working in: {{ workingContextLabel }}</div>
-      <div style="margin:-2px 0 8px; color:rgba(29,31,32,0.56); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;">Generic lines: {{ activeLineLayerLabel }} · <a href="./SETTINGS.html" style="color:#5980a6; text-decoration:none;">Settings</a></div>
+      <div style="margin:-2px 0 4px; color:rgba(29,31,32,0.56); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;">Line layer · <a href="./STANDARDS.html" style="color:#5980a6; text-decoration:none;">Standards</a></div>
+      <div style="display:flex; gap:3px; margin-bottom:8px;">
+        <sc-for list="{{ genericLineLayers }}" as="gl" hint-placeholder-count="2">
+          <button onClick="{{ gl.onSelect }}" title="{{ gl.title }}" style="flex:1; min-width:0; border:1px solid {{ gl.border }}; background:{{ gl.bg }}; color:{{ gl.color }}; padding:5px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ gl.label }}</button>
+        </sc-for>
+      </div>
       <sc-for list="{{ tools }}" as="t" hint-placeholder-count="3">
         <button onClick="{{ t.onSelect }}" disabled="{{ t.disabled }}" title="{{ t.title }}" style="display:block; width:100%; text-align:left; border:1px solid {{ t.border }}; background:{{ t.bg }}; color:{{ t.color }}; opacity:{{ t.opacity }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:{{ t.cursor }}; margin-bottom:3px;">{{ t.label }}</button>
       </sc-for>
@@ -864,8 +869,6 @@ class Component extends DCLogic {
           units: this.state.units,
           gridSnapEnabled: this.state.gridSnapEnabled,
           keybindings: { ...this.state.keybindings },
-          lineLayers: normaliseLineLayers(this.state.lineLayers),
-          activeLineLayer: this._activeLineLayer(),
         },
       };
     }
@@ -888,12 +891,6 @@ class Component extends DCLogic {
       return {
         ...(values.units === 'metric' || values.units === 'imperial' ? { units: values.units } : {}),
         ...(typeof values.gridSnapEnabled === 'boolean' ? { gridSnapEnabled: values.gridSnapEnabled } : {}),
-        ...(values.lineLayers && typeof values.lineLayers === 'object'
-          ? { lineLayers: normaliseLineLayers(values.lineLayers) }
-          : {}),
-        ...('activeLineLayer' in values
-          ? { activeLineLayer: normaliseActiveLineLayer(values.activeLineLayer) }
-          : {}),
         ...(values.keybindings && typeof values.keybindings === 'object'
           ? {
             // A stored empty string means the command was deliberately cleared;
@@ -2198,7 +2195,7 @@ class Component extends DCLogic {
     if (tool === 'dimension') return `Dimensions are placed in PLAN or FLOOR. Current context: ${context}.`;
     if (tool === 'line') {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
-        return 'Turn on DRAFT or NO-DRAFT in Settings before drawing a generic line.';
+        return 'Turn on DRAFT or NO-DRAFT in the Company Standard Layers before drawing a generic line.';
       }
       return `Select PLAN, FLOOR, E-POWER, or FOUNDATION before drawing a line. Current context: ${context}.`;
     }
@@ -2255,15 +2252,29 @@ class Component extends DCLogic {
   }
 
   _lineLayerConfig(layerId) {
-    const id = layerId === 'no-draft' ? 'no-draft' : 'draft';
-    const layers = normaliseLineLayers(this.state.lineLayers);
-    const standard = this._layerStandard(id);
-    return { ...layers[id], name: standard.name, printable: standard.printable };
+    return this._layerStandard(layerId === 'no-draft' ? 'no-draft' : 'draft');
   }
 
   _layerStandard(layerId) {
     const standards = normaliseLayerStandards(this.state.layerStandards);
-    return standards[layerId] || { name: layerId, printable: true };
+    return standards[layerId] || { name: layerId, printable: true, visible: true };
+  }
+
+  _setActiveLineLayer(layerId) {
+    const id = normaliseActiveLineLayer(layerId);
+    const config = this._lineLayerConfig(id);
+    if (!config.visible) {
+      this.setState({
+        drawingMessage: `${config.name} is hidden — turn it on in the Company Standard Layers first.`,
+        drawingMessageError: true,
+      });
+      return;
+    }
+    this.setState({
+      activeLineLayer: id,
+      drawingMessage: `New generic lines go on ${config.name}.`,
+      drawingMessageError: false,
+    }, () => this._markUnsaved());
   }
 
   _activeLineLayer() {
@@ -4922,6 +4933,20 @@ class Component extends DCLogic {
 
     return {
       topBarLabel, topBarColor, workingContextLabel, activeLineLayerLabel: this._activeLineLayerLabel(),
+      genericLineLayers: ['draft', 'no-draft'].map(id => {
+        const config = this._lineLayerConfig(id);
+        const isActive = this._activeLineLayer() === id;
+        return {
+          label: config.name,
+          title: config.visible
+            ? `Place new generic lines on ${config.name}`
+            : `${config.name} is hidden in the Company Standard Layers`,
+          border: isActive ? '#5980a6' : 'rgba(29,31,32,0.24)',
+          bg: isActive ? 'rgba(89,128,166,0.14)' : '#fff',
+          color: config.visible ? (isActive ? '#3e6285' : 'rgba(29,31,32,0.72)') : 'rgba(29,31,32,0.35)',
+          onSelect: () => this._setActiveLineLayer(id),
+        };
+      }),
       showHint, hintText, hintColor,
       choosingDir,
       noCuts: cuts.length === 0,
