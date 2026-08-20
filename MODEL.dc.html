@@ -129,6 +129,16 @@
           <sc-if value="{{ showKeyboardSettingsLink }}" hint-placeholder-val="{{ false }}">
             <a href="./SETTINGS.html" style="display:inline-block; margin-top:9px; color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">OPEN KEYBOARD &amp; LAYER SETTINGS →</a>
           </sc-if>
+          <sc-if value="{{ showLayerPhilosophy }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px; padding:9px 10px; background:rgba(89,128,166,0.08); border-left:2px solid rgba(89,128,166,0.48);">
+              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:#5980a6;">Layer Philosophy</div>
+              <ul style="margin:6px 0 0; padding-left:16px; font-size:11px; line-height:1.5; color:rgba(29,31,32,0.68);">
+                <li>Layers follow AIA-style CAD names (A-WALL-EXT, S-SLAB&hellip;) so drawings convert cleanly to AutoCAD/DXF.</li>
+                <li>Commands assign layers automatically &mdash; the layers organize themselves, so nobody manages them by hand.</li>
+                <li>Views (PLAN, FLOOR, E-POWER&hellip;) are display groupings only; the layer taxonomy is the source of truth for export. Layers can be shared across views &mdash; e.g. walls show in both PLAN and E-POWER but are only edited in PLAN.</li>
+              </ul>
+            </div>
+          </sc-if>
         </div>
         <button onClick="{{ closeProfileDialog }}" aria-label="Close" style="border:none; background:transparent; color:rgba(29,31,32,0.48); font-size:18px; line-height:1; cursor:pointer;">×</button>
       </div>
@@ -1779,11 +1789,12 @@ class Component extends DCLogic {
     const pwType = this.state.activeWallType;
     const pwRef  = this.state.wallRefLine;
     const activeWalls = activeVisible ? this._activeWalls() : [];
-    const wallJoins = this._wallJoins(activeWalls);
+    const displayWalls = activeVisible ? [...activeWalls, ...this._sharedContextWalls()] : [];
+    const wallJoins = this._wallJoins(displayWalls);
     // Keep every assembly fill below every boundary. Drawing a completed wall
     // in one pass used to let a later fill paint over an earlier miter line.
-    activeWalls.forEach(w => this._drawWallSeg2D(ctx, toS, w, false, wallJoins, 'fill'));
-    activeWalls.forEach(w => this._drawWallSeg2D(ctx, toS, w, false, wallJoins, 'stroke'));
+    displayWalls.forEach(w => this._drawWallSeg2D(ctx, toS, w, false, wallJoins, 'fill'));
+    displayWalls.forEach(w => this._drawWallSeg2D(ctx, toS, w, false, wallJoins, 'stroke'));
     this._wallChain.forEach(s => this._drawWallSeg2D(ctx, toS, { ...s, wallType: pwType, refLine: pwRef }, false, null, 'both'));
     const wallPreviewEnd = this._previewEndPoint();
     if (this._wallDrawing && this._wallStart && wallPreviewEnd) {
@@ -2249,7 +2260,16 @@ class Component extends DCLogic {
   _contextReferenceWalls() {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
-    if (view !== 'floor' && view !== 'e-power') return [];
+    if (view !== 'floor') return [];
+    return this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan');
+  }
+
+  // E-Power shares the PLAN wall layers at full strength: walls render and print
+  // exactly as they do in PLAN, but stay locked against selection and editing.
+  _sharedContextWalls() {
+    const levelId = this._activeLevelId();
+    const view = this._activeLayerViewId(levelId);
+    if (view !== 'e-power') return [];
     return this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan');
   }
 
@@ -3406,6 +3426,7 @@ class Component extends DCLogic {
 
   _collectContextReferenceVertices() {
     const pts = [];
+    this._sharedContextWalls().forEach(wall => pts.push(wall.start, wall.end));
     this._contextReferenceWalls().forEach(wall => pts.push(wall.start, wall.end));
     this._contextReferenceFloors().forEach(floor => pts.push(...floor.points));
     return pts;
@@ -3413,6 +3434,7 @@ class Component extends DCLogic {
 
   _contextReferenceSegments() {
     return [
+      ...this._sharedContextWalls(),
       ...this._contextReferenceWalls(),
       ...this._referenceFloorSegments(this._contextReferenceFloors()),
     ];
@@ -5004,6 +5026,7 @@ class Component extends DCLogic {
       profileDialogTitle,
       profileDialogDescription,
       showKeyboardSettingsLink: profileDialog === 'settings',
+      showLayerPhilosophy: profileDialog === 'standards',
       profileFileName: this.state.profileFileName,
       profileExtension: `.draft.${profileDialog || 'settings'}`,
       profileAccept: `application/json,.draft.${profileDialog || 'settings'}`,
