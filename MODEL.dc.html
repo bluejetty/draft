@@ -234,6 +234,9 @@ const SNAP_METRIC = [
   { label: '100 mm',snapFt: 0.100/0.3048 },
 ];
 const LAYER_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a','#9a5a5a','#8a9a6a'];
+// Endpoint magnet catch distance in screen pixels. Keep this small so the
+// cursor is only pulled when it is deliberately placed very near a node.
+const NODE_SNAP_PX = 5;
 
 // Wall type definitions — totalIn is full assembly width in inches, centreline-based
 // layers listed left→right (outside→inside); fill: 'stud'|'concrete'|'insulation'
@@ -942,7 +945,7 @@ class Component extends DCLogic {
             e.preventDefault();
           }
           // Record for click-to-select detection on mouseup
-          this._selectDownInfo = { worldPt: raw, clientX: e.clientX, clientY: e.clientY, shiftHeld: e.shiftKey, wasVertex: !!refs };
+          this._selectDownInfo = { worldPt: raw, clientX: e.clientX, clientY: e.clientY, shiftHeld: e.shiftKey };
         }
       }
       else if (tool === 'trim') {
@@ -1234,8 +1237,13 @@ class Component extends DCLogic {
     return (this._orthoHalfH * 2) / h * 20;
   }
 
+  _nodeSnapRadius() {
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    return (this._orthoHalfH * 2) / h * NODE_SNAP_PX;
+  }
+
   _findMagnet(gridPt) {
-    const r = this._magnetRadius();
+    const r = this._nodeSnapRadius();
     let best = null, bestD = r;
     this._collectVertices().forEach(v => {
       const d = Math.sqrt((v.x - gridPt.x) ** 2 + (v.z - gridPt.z) ** 2);
@@ -1264,6 +1272,7 @@ class Component extends DCLogic {
   // Return all segment endpoint refs that share the vertex nearest to worldPt,
   // or null if nothing is within magnet radius.
   // Uses reference equality — segments sharing a pooled vertex are found instantly.
+  // Searches both _lines and _walls so wall-only vertices are hit-tested correctly.
   _findVertexHit(worldPt) {
     const r = this._magnetRadius() * 1.5;
     let bestD = r, bestVtx = null;
@@ -1782,6 +1791,15 @@ class Component extends DCLogic {
       if (this.state.lengthFrozen) { this._cancelFrozenLength(); return; }
       this._cancelWall(); this._cancelLine(); this._cancelCut();
       this._selectedSegs.clear();
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (this.state.activeTool === 'select' && this._selectedSegs.size > 0) {
+        e.preventDefault();
+        this._lines = this._lines.filter(l => !this._selectedSegs.has(l));
+        this._walls = this._walls.filter(w => !this._selectedSegs.has(w));
+        this._selectedSegs.clear();
+      }
+      return;
     }
     if (e.key === 'Enter' || e.key === ' ') {
       if (this._lineDrawing) { e.preventDefault(); this._finishChain(); return; }
