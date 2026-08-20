@@ -127,7 +127,7 @@
           <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">{{ profileDialogTitle }}</div>
           <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">{{ profileDialogDescription }}</div>
           <sc-if value="{{ showKeyboardSettingsLink }}" hint-placeholder-val="{{ false }}">
-            <a href="./SETTINGS.html" style="display:inline-block; margin-top:9px; color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">OPEN KEYBOARD COMMANDS →</a>
+            <a href="./SETTINGS.html" style="display:inline-block; margin-top:9px; color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">OPEN KEYBOARD &amp; LAYER SETTINGS →</a>
           </sc-if>
         </div>
         <button onClick="{{ closeProfileDialog }}" aria-label="Close" style="border:none; background:transparent; color:rgba(29,31,32,0.48); font-size:18px; line-height:1; cursor:pointer;">×</button>
@@ -176,6 +176,7 @@
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Tools</div>
       <div style="margin:-2px 0 8px; color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;">Working in: {{ workingContextLabel }}</div>
+      <div style="margin:-2px 0 8px; color:rgba(29,31,32,0.56); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;">Generic lines: {{ activeLineLayerLabel }} · <a href="./SETTINGS.html" style="color:#5980a6; text-decoration:none;">Settings</a></div>
       <sc-for list="{{ tools }}" as="t" hint-placeholder-count="3">
         <button onClick="{{ t.onSelect }}" disabled="{{ t.disabled }}" title="{{ t.title }}" style="display:block; width:100%; text-align:left; border:1px solid {{ t.border }}; background:{{ t.bg }}; color:{{ t.color }}; opacity:{{ t.opacity }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:{{ t.cursor }}; margin-bottom:3px;">{{ t.label }}</button>
       </sc-for>
@@ -592,6 +593,11 @@ const {
   eventMatchesBinding,
   keyBindingLabel,
 } = window.DraftKeyboard;
+const {
+  DEFAULT_LINE_LAYERS,
+  normaliseLineLayers,
+  normaliseActiveLineLayer,
+} = window.DraftLineLayers;
 
 // Undo keeps whole serialized drawings, so it is bounded by count and by size.
 const HISTORY_LIMIT = 60;
@@ -609,6 +615,8 @@ class Component extends DCLogic {
     activeView:    'top',      // 'top'|'front'|'side'|'perspective'|'cut'
     gridSnapEnabled: true,
     keybindings:   { ...DEFAULT_KEYBINDINGS },
+    lineLayers: normaliseLineLayers(DEFAULT_LINE_LAYERS),
+    activeLineLayer: 'draft',
     selectionVersion: 0,
     groupDialog:    false,
     groupNameInput: '',
@@ -664,7 +672,23 @@ class Component extends DCLogic {
     window.addEventListener('keydown', this._onKey  = e => { this._invalidate(); this._handleKey(e); });
     window.addEventListener('keydown', this._onKdn  = e => { if (e.key === 'Shift') this._shiftHeld = true; });
     window.addEventListener('keydown', this._onCtrlDown = e => { if (e.key === 'Control') this._ctrlHeld = true; });
-    document.addEventListener('visibilitychange', this._onVis = () => { if (!document.hidden) this._invalidate(); });
+    document.addEventListener('visibilitychange', this._onVis = () => {
+      if (!document.hidden) {
+        const settings = window.DraftProfileManager?.getActive('settings');
+        if (settings) this._applyProfilePackage(settings, false);
+        this._invalidate();
+      }
+    });
+    window.addEventListener('beforeprint', this._onBeforePrint = () => {
+      this._isPrinting = true;
+      this._redrawOverlay();
+      requestAnimationFrame(() => this._redrawOverlay());
+    });
+    window.addEventListener('afterprint', this._onAfterPrint = () => {
+      this._isPrinting = false;
+      this._redrawOverlay();
+      requestAnimationFrame(() => this._redrawOverlay());
+    });
     window.addEventListener('keyup',   this._onKup  = e => {
       if (e.key === 'Shift') this._shiftHeld = false;
       if (e.key === 'Control') this._ctrlHeld = false;
@@ -702,6 +726,7 @@ class Component extends DCLogic {
         end: point(line.end),
         levelId: line.levelId,
         view: line.view || 'plan',
+        layer: line.layer || 'draft',
       })),
       walls: this._walls.map(wall => ({
         id: wall.id,
@@ -738,6 +763,8 @@ class Component extends DCLogic {
       backgroundMode: this.state.backgroundMode,
       units: this.state.units,
       gridSnapEnabled: this.state.gridSnapEnabled,
+      lineLayers: normaliseLineLayers(this.state.lineLayers),
+      activeLineLayer: this._activeLineLayer(),
       activeWallType: this.state.activeWallType,
       wallRefLine: this.state.wallRefLine,
       wallBaseHeight: this.state.wallBaseHeight,
@@ -817,6 +844,8 @@ class Component extends DCLogic {
           units: this.state.units,
           gridSnapEnabled: this.state.gridSnapEnabled,
           keybindings: { ...this.state.keybindings },
+          lineLayers: normaliseLineLayers(this.state.lineLayers),
+          activeLineLayer: this._activeLineLayer(),
         },
       };
     }
@@ -838,6 +867,12 @@ class Component extends DCLogic {
       return {
         ...(values.units === 'metric' || values.units === 'imperial' ? { units: values.units } : {}),
         ...(typeof values.gridSnapEnabled === 'boolean' ? { gridSnapEnabled: values.gridSnapEnabled } : {}),
+        ...(values.lineLayers && typeof values.lineLayers === 'object'
+          ? { lineLayers: normaliseLineLayers(values.lineLayers) }
+          : {}),
+        ...('activeLineLayer' in values
+          ? { activeLineLayer: normaliseActiveLineLayer(values.activeLineLayer) }
+          : {}),
         ...(values.keybindings && typeof values.keybindings === 'object'
           ? {
             // A stored empty string means the command was deliberately cleared;
@@ -1045,6 +1080,8 @@ class Component extends DCLogic {
         backgroundMode: format.oneOf(saved.backgroundMode, ['blue', 'red', 'none'], 'blue'),
         units: saved.units === 'metric' ? 'metric' : 'imperial',
         gridSnapEnabled: saved.gridSnapEnabled !== false,
+        lineLayers: normaliseLineLayers(saved.lineLayers || this.state.lineLayers),
+        activeLineLayer: normaliseActiveLineLayer(saved.activeLineLayer),
         activeWallType: WALL_TYPES.some(type => type.id === saved.activeWallType)
           ? saved.activeWallType : 'stud_2x6',
         wallRefLine: format.oneOf(saved.wallRefLine, REF_LINES, 'left'),
@@ -1079,6 +1116,7 @@ class Component extends DCLogic {
        this._lines = Array.isArray(saved.lines)
           ? saved.lines.map(line => restoreSegment(line, 'line', {
             view: ['plan', 'floor', 'e-power', 'foundation'].includes(line?.view) ? line.view : 'plan',
+            layer: line?.layer === 'no-draft' ? 'no-draft' : 'draft',
           })).filter(Boolean)
         : [];
       skipped += (Array.isArray(saved.lines) ? saved.lines.length : 0) - this._lines.length;
@@ -1377,6 +1415,8 @@ class Component extends DCLogic {
     window.removeEventListener('keydown',   this._onCtrlDown);
     window.removeEventListener('keyup',     this._onKup);
     document.removeEventListener('visibilitychange', this._onVis);
+    window.removeEventListener('beforeprint', this._onBeforePrint);
+    window.removeEventListener('afterprint', this._onAfterPrint);
   }
 
   // ─── Init ────────────────────────────────────────────────────────────────────
@@ -1836,11 +1876,12 @@ class Component extends DCLogic {
       ctx.restore();
     }
 
-    // Pending chain
-    this._pendingChain.forEach(s => { drawSeg(s.start, s.end); drawDot(s.start); drawDot(s.end); });
+    // Pending generic lines honor NO-DRAFT's construction-only print rule too.
+    const showLinePreview = !this._isPrinting || this._lineLayerConfig(this._activeLineLayer()).printable;
+    if (showLinePreview) this._pendingChain.forEach(s => { drawSeg(s.start, s.end); drawDot(s.start); drawDot(s.end); });
 
     // Chain-start close target (blue ring once the chain has a segment)
-    if (this._chainStart && this._lineDrawing && this._chainSegments >= 1) {
+    if (showLinePreview && this._chainStart && this._lineDrawing && this._chainSegments >= 1) {
       const sc = toS(this._chainStart);
       ctx.save();
       ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
@@ -1863,7 +1904,7 @@ class Component extends DCLogic {
 
     // Preview line (cursor to last placed point)
     const linePreviewEnd = this._previewEndPoint();
-    if (this._lineDrawing && this._lineStart && linePreviewEnd) {
+    if (showLinePreview && this._lineDrawing && this._lineStart && linePreviewEnd) {
       ctx.save();
       ctx.strokeStyle = 'rgba(29,31,32,0.35)'; ctx.lineWidth = 1.5;
       ctx.setLineDash([6, 4]);
@@ -2052,7 +2093,10 @@ class Component extends DCLogic {
   }
 
   _contextAllowsTool(tool, viewId = this._activeLayerViewId()) {
-    if (tool === 'line') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
+    if (tool === 'line') {
+      return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId)
+        && this._lineLayerConfig(this._activeLineLayer()).visible;
+    }
     if (tool === 'wall') return viewId === 'plan';
     if (tool === 'floor') return viewId === 'floor';
     if (tool === 'dimension') return ['plan', 'floor'].includes(viewId);
@@ -2064,7 +2108,8 @@ class Component extends DCLogic {
     const suffix = shortcut ? `  [${shortcut}]` : '';
     if (tool === 'line') {
       const prefix = { plan:'PLAN', floor:'FLOOR', 'e-power':'E-POWER', foundation:'FOUNDATION' }[viewId] || 'LINE';
-      return prefix === 'LINE' ? `LINE${suffix}` : `${prefix} LINE${suffix}`;
+      const layer = this._activeLineLayerLabel();
+      return prefix === 'LINE' ? `${layer} LINE${suffix}` : `${prefix} ${layer} LINE${suffix}`;
     }
     if (tool === 'wall') return viewId === 'plan' ? `PLAN WALL${suffix}` : `WALL — PLAN ONLY${suffix}`;
     if (tool === 'floor') return viewId === 'floor' ? `FLOOR OUTLINE${suffix}` : `FLOOR — FLOOR ONLY${suffix}`;
@@ -2081,7 +2126,12 @@ class Component extends DCLogic {
     if (tool === 'wall') return `Walls are placed in PLAN. Switch to PLAN to draw walls. Current context: ${context}.`;
     if (tool === 'floor') return `Floor outlines are placed in FLOOR. Switch to FLOOR to draw one. Current context: ${context}.`;
     if (tool === 'dimension') return `Dimensions are placed in PLAN or FLOOR. Current context: ${context}.`;
-    if (tool === 'line') return `Select PLAN, FLOOR, E-POWER, or FOUNDATION before drawing a line. Current context: ${context}.`;
+    if (tool === 'line') {
+      if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
+        return 'Turn on DRAFT or NO-DRAFT in Settings before drawing a generic line.';
+      }
+      return `Select PLAN, FLOOR, E-POWER, or FOUNDATION before drawing a line. Current context: ${context}.`;
+    }
     return `${tool} is not available in ${context}.`;
   }
 
@@ -2133,10 +2183,29 @@ class Component extends DCLogic {
     });
   }
 
+  _lineLayerConfig(layerId) {
+    const layers = normaliseLineLayers(this.state.lineLayers);
+    return layers[layerId === 'no-draft' ? 'no-draft' : 'draft'];
+  }
+
+  _activeLineLayer() {
+    const requested = normaliseActiveLineLayer(this.state.activeLineLayer);
+    if (this._lineLayerConfig(requested).visible) return requested;
+    const alternate = requested === 'draft' ? 'no-draft' : 'draft';
+    return this._lineLayerConfig(alternate).visible ? alternate : requested;
+  }
+
+  _activeLineLayerLabel() {
+    return this._lineLayerConfig(this._activeLineLayer()).name;
+  }
+
   _activeLines() {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
-    return this._lines.filter(line => line.levelId === levelId && (view == null || (line.view || 'plan') === view));
+    return this._lines.filter(line => line.levelId === levelId
+      && (view == null || (line.view || 'plan') === view)
+      && this._lineLayerConfig(line.layer).visible
+      && (!this._isPrinting || this._lineLayerConfig(line.layer).printable));
   }
 
   _activeWalls() {
@@ -2176,7 +2245,10 @@ class Component extends DCLogic {
   _backgroundLines() {
     const ref = this._visibleBackgroundReference();
     const view = this._activeLayerViewId();
-    return ref ? this._lines.filter(line => line.levelId === ref.levelId && (view == null || (line.view || 'plan') === view)) : [];
+    return ref ? this._lines.filter(line => line.levelId === ref.levelId
+      && (view == null || (line.view || 'plan') === view)
+      && this._lineLayerConfig(line.layer).visible
+      && (!this._isPrinting || this._lineLayerConfig(line.layer).printable)) : [];
   }
 
   _backgroundWalls() {
@@ -3981,12 +4053,14 @@ class Component extends DCLogic {
     const levelId = level ? level.id : -1;
     const view = this._activeLayerViewId(levelId);
     if (!this._contextAllowsTool('line', view)) return false;
+    const layer = this._activeLineLayer();
     this._lines.push({
       id: this._newDrawingItemId('line'),
       start: this._mergeVertex(start, levelId, view),
       end: this._mergeVertex(end, levelId, view),
       levelId,
       view,
+      layer,
     });
     return true;
   }
@@ -4560,7 +4634,7 @@ class Component extends DCLogic {
       : 'Save the current personal drafting preferences, or import a saved setup from another browser or computer.';
 
     return {
-      topBarLabel, topBarColor, workingContextLabel,
+      topBarLabel, topBarColor, workingContextLabel, activeLineLayerLabel: this._activeLineLayerLabel(),
       showHint, hintText, hintColor,
       choosingDir,
       noCuts: cuts.length === 0,

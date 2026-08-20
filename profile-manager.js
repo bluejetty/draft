@@ -125,6 +125,35 @@ if (!window.DraftProfileManager) {
     gridSnap: '',
   });
 
+  // Generic linework is deliberately separate from PLAN/FLOOR/E-POWER context.
+  // NO-DRAFT is construction-only and is always excluded from printed output.
+  const DEFAULT_LINE_LAYERS = Object.freeze({
+    draft: Object.freeze({ name: 'DRAFT', visible: true, printable: true }),
+    'no-draft': Object.freeze({ name: 'NO-DRAFT', visible: true, printable: false }),
+  });
+
+  const normaliseLineLayers = value => {
+    const layers = value && typeof value === 'object' ? value : {};
+    return {
+      draft: {
+        name: 'DRAFT',
+        visible: typeof layers.draft?.visible === 'boolean'
+          ? layers.draft.visible
+          : DEFAULT_LINE_LAYERS.draft.visible,
+        printable: true,
+      },
+      'no-draft': {
+        name: 'NO-DRAFT',
+        visible: typeof layers['no-draft']?.visible === 'boolean'
+          ? layers['no-draft'].visible
+          : DEFAULT_LINE_LAYERS['no-draft'].visible,
+        printable: false,
+      },
+    };
+  };
+
+  const normaliseActiveLineLayer = value => value === 'no-draft' ? 'no-draft' : 'draft';
+
   const normaliseKeyBinding = value => {
     const aliases = {
       esc: 'Escape', escape: 'Escape', spacebar: 'Space', space: 'Space',
@@ -189,6 +218,11 @@ if (!window.DraftProfileManager) {
     eventBinding,
     eventMatchesBinding,
     keyBindingLabel,
+  };
+  window.DraftLineLayers = {
+    DEFAULT_LINE_LAYERS,
+    normaliseLineLayers,
+    normaliseActiveLineLayer,
   };
 })();
 }
