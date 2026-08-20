@@ -530,6 +530,7 @@ const DEFAULT_KEYBINDINGS = Object.freeze({
   cancel: 'Escape',
   delete: 'Delete',
   group: 'G',
+  undo: 'Ctrl+Z',
   background: 'B',
 });
 
@@ -947,6 +948,7 @@ class Component extends DCLogic {
   }
 
   async _loadDrawing(importedFile = null) {
+    this._extendUndo = null;
     this._loadingDrawing = true;
     try {
       if (!importedFile && !window.SharedFileStore) return;
@@ -1329,6 +1331,7 @@ class Component extends DCLogic {
     this._selectedSegs   = new Set(); // line/wall segment objects currently selected
     this._selectedFloors = new Set(); // floor outline objects currently selected
     this._extendSession  = null;      // { vertices, scope } — captured Extend nodes
+    this._extendUndo     = null;      // { changes } — last committed Extend move
 
     // Drawing state
     this._isDrawing  = false;
@@ -3204,13 +3207,41 @@ class Component extends DCLogic {
     const base = this.state.extendBase;
     const dx = destination.x - base.x, dz = destination.z - base.z;
     if (Math.hypot(dx, dz) < 0.001) return;
+    const changes = [...this._extendSession.vertices].map(vertex => ({
+      vertex,
+      x: vertex.x,
+      y: vertex.y,
+      z: vertex.z,
+    }));
     this._extendSession.vertices.forEach(vertex => {
       vertex.x += dx;
       vertex.z += dz;
     });
+    this._extendUndo = { changes };
     this._extendSession = null;
     this._markUnsaved();
     this.setState({ extendPhase: 'idle', extendBase: null, extendMessage: '' });
+  }
+
+  _undoExtend() {
+    if (!this._extendUndo?.changes?.length) {
+      this.setState({ extendMessage: 'Nothing to undo for Extend.' });
+      return false;
+    }
+    this._extendUndo.changes.forEach(({ vertex, x, y, z }) => {
+      vertex.x = x;
+      vertex.y = y;
+      vertex.z = z;
+    });
+    this._extendUndo = null;
+    this._markUnsaved();
+    this.setState({
+      activeTool: 'extend',
+      extendPhase: 'idle',
+      extendBase: null,
+      extendMessage: 'Last Extend undone.',
+    });
+    return true;
   }
 
   _cancelExtend() {
@@ -3706,6 +3737,11 @@ class Component extends DCLogic {
     }
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     const matches = command => eventMatchesBinding(e, this.state.keybindings[command]);
+    if (matches('undo')) {
+      e.preventDefault();
+      this._undoExtend();
+      return;
+    }
     if (matches('cancel')) {
       e.preventDefault();
       if (this.state.lengthFrozen) { this._cancelFrozenLength(); return; }

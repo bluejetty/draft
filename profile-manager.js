@@ -118,7 +118,7 @@ if (!window.DraftProfileManager) {
     finishAlt: 'Space',
     cancel: 'Escape',
     delete: 'Delete',
-    group: 'G',
+    undo: 'Ctrl+Z',
     background: 'B',
   });
 
