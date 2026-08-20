@@ -276,9 +276,10 @@
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const LEVEL_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a','#9a5a5a','#8a9a6a'];
-// Endpoint magnet catch distance in screen pixels. Keep this small so the
-// cursor is only pulled when it is deliberately placed very near a node.
-const NODE_SNAP_PX = 1;
+// Free-cursor endpoint magnet catch distance in screen pixels.
+const NODE_SNAP_PX = 2;
+// Shift/angle-locked alignment catch distance from a node center.
+const LOCKED_NODE_SNAP_PX = 4;
 const SIXTEENTH_IN = 1 / 16;
 const DEFAULT_WALL_TOP_FT = (8 * 12 + 1 + 1 / 8) / 12;
 const DEFAULT_FLOOR_THICKNESS_IN = 12 + 5 / 8;
@@ -2452,7 +2453,7 @@ class Component extends DCLogic {
     if (this._lockAngle == null) return null;
     const h = this._canvas ? this._canvas.clientHeight : 600;
     const worldPerPx = (this._orthoHalfH * 2) / h;
-    const THRESH_PX = 18;
+    const THRESH_PX = LOCKED_NODE_SNAP_PX;
     const threshWorld = THRESH_PX * worldPerPx;
 
     const dirX = Math.cos(this._lockAngle), dirZ = Math.sin(this._lockAngle);
