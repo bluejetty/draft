@@ -95,6 +95,59 @@ test.describe('undo history', () => {
     await expect(page.locator('[data-model-drawing-message]')).toContainText('Nothing to redo');
   });
 
+  // History boundaries: loading is not an edit, and neither is a refused one.
+  test('reopening a stored drawing records nothing to undo', async ({ page }) => {
+    await h.openModel(page);
+    await drawLine(page, 0, 0, 10, 0);
+
+    await page.reload();
+    await expect(page.locator('[data-model-canvas]')).toBeVisible();
+    await page.waitForTimeout(600);
+    expect(h.allLines(await h.savedDrawing(page))).toHaveLength(1);
+
+    await page.keyboard.press(UNDO);
+    await page.waitForTimeout(400);
+    expect(h.allLines(await h.savedDrawing(page))).toHaveLength(1);
+  });
+
+  test('a refused import adds no history entry', async ({ page }) => {
+    await h.openModel(page);
+    await drawLine(page, 0, 0, 10, 0);
+    await drawLine(page, 0, 5, 10, 5);
+
+    await page.locator('[data-drawing-import]').setInputFiles({
+      name: 'broken.draft', mimeType: 'application/json',
+      buffer: Buffer.from('not a drawing'),
+    });
+    await expect(page.locator('[data-model-drawing-message]')).toContainText('Import failed');
+
+    // One undo has to reach the single-line state. If the refused import had
+    // recorded an entry, this would restore the two-line state instead.
+    await page.keyboard.press(UNDO);
+    await h.waitForSaved(page);
+    expect(h.allLines(await h.savedDrawing(page))).toHaveLength(1);
+  });
+
+  test('undo and redo do not add history entries of their own', async ({ page }) => {
+    await h.openModel(page);
+    await drawLine(page, 0, 0, 10, 0);
+    await drawLine(page, 0, 5, 10, 5);
+
+    await page.keyboard.press(UNDO);
+    await h.waitForSaved(page);
+    await page.keyboard.press(REDO);
+    await h.waitForSaved(page);
+    expect(h.allLines(await h.savedDrawing(page))).toHaveLength(2);
+
+    // Two edits were made, so two undos must empty the drawing regardless of the
+    // undo/redo round trip in between.
+    await page.keyboard.press(UNDO);
+    await h.waitForSaved(page);
+    await page.keyboard.press(UNDO);
+    await h.waitForSaved(page);
+    expect(h.allLines(await h.savedDrawing(page))).toHaveLength(0);
+  });
+
   test('undo restores shared corners rather than duplicating them', async ({ page }) => {
     await h.openModel(page);
     await h.selectTool(page, 'Line');

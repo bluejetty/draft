@@ -41,6 +41,36 @@ test.describe('failed imports', () => {
     expect(await h.savedDrawing(page)).toEqual(before);
   });
 
+  // A drawing whose envelope is sound but whose entities are partly broken is
+  // loaded rather than refused: refusing would throw away the good geometry too.
+  // What must never happen is losing entities quietly.
+  test('broken entities are skipped, kept out of the drawing, and reported', async ({ page }) => {
+    await h.openModel(page);
+    await drawOneLine(page);
+    const exported = await h.savedDrawing(page);
+    const levelId = exported.levels[0].id;
+
+    const partly = {
+      ...exported,
+      lines: [
+        ...exported.lines,
+        { id: 'line-900', start: { x: 0, z: 0 }, end: null, levelId },          // no endpoint
+        { id: 'line-901', start: { x: 0, z: 0 }, end: { x: 5, z: 5 }, levelId: 9999 }, // missing level
+      ],
+      floors: [
+        { id: 'floor-900', levelId, points: [{ x: 0, z: 0 }, { x: 4, z: 0 }] }, // too few points
+      ],
+    };
+
+    await importFile(page, 'partly-broken.draft', JSON.stringify(partly));
+
+    await expect(page.locator('[data-model-drawing-message]')).toContainText('3 items were incomplete');
+    await h.waitForSaved(page);
+    const saved = await h.savedDrawing(page);
+    expect(h.allLines(saved)).toHaveLength(h.allLines(exported).length);
+    expect(saved.floors).toHaveLength(0);
+  });
+
   test('a valid drawing round-trips', async ({ page }) => {
     await h.openModel(page);
     await drawOneLine(page);

@@ -9,7 +9,11 @@ const HALF_HEIGHT_FT = 25;          // default ortho half-height in _init()
 const STORAGE_BUCKET = 'model-drawing';
 
 async function openModel(page, { webgl = true } = {}) {
+  // Init scripts run on every navigation, so the flag keeps a reload inside a
+  // test from wiping the drawing the test just made.
   await page.addInitScript(() => {
+    if (sessionStorage.getItem('draft-test-storage-cleared')) return;
+    sessionStorage.setItem('draft-test-storage-cleared', '1');
     indexedDB.deleteDatabase('pdf-img-mgr-shared');
     localStorage.clear();
   });
