@@ -3801,7 +3801,11 @@ class Component extends DCLogic {
       if (this._wallDrawing) { e.preventDefault(); this._finishWall();  return; }
       if (this._floorDrawing) { e.preventDefault(); this._finishFloor(); return; }
     }
-    if (matches('freezeLength')) {
+    // Shift is a temporary 45° angle lock while drawing. A plain Freeze Length
+    // binding must remain usable without making the user release Shift first.
+    const freezeLengthWhileShiftLocking = e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
+      && normaliseKeyBinding(this.state.keybindings.freezeLength) === normaliseKeyBinding(e.key);
+    if (matches('freezeLength') || freezeLengthWhileShiftLocking) {
       const tool = this.state.activeTool;
       const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._wallDrawing);
       if (drawing && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
