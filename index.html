@@ -15,13 +15,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <style>
       :root {
-        --ink: #1d1f20;
-        --muted: #6f777a;
-        --line: rgba(29, 31, 32, 0.14);
-        --paper: #f6f6f3;
-        --card: rgba(255, 255, 253, 0.9);
-        --blue: #5980a6;
-        --gold: #b58a4b;
+        --ink: #163653;
+        --muted: rgba(22, 54, 83, 0.68);
+        --line: rgba(22, 54, 83, 0.2);
+        --paper: #eef5fb;
+        --blue-dark: #1d4d78;
+        --blue-medium: #3675a7;
+        --blue-light: #77a8cb;
       }
 
       * { box-sizing: border-box; }
@@ -30,47 +30,23 @@
         margin: 0;
         color: var(--ink);
         background:
-          linear-gradient(rgba(29, 31, 32, 0.035) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(29, 31, 32, 0.035) 1px, transparent 1px),
+          linear-gradient(rgba(22, 54, 83, 0.28) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(22, 54, 83, 0.28) 1px, transparent 1px),
+          linear-gradient(rgba(22, 54, 83, 0.16) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(22, 54, 83, 0.16) 1px, transparent 1px),
+          linear-gradient(rgba(22, 54, 83, 0.07) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(22, 54, 83, 0.07) 1px, transparent 1px),
           var(--paper);
-        background-size: 32px 32px;
+        background-size: 1600px 1600px, 1600px 1600px, 160px 160px, 160px 160px, 16px 16px, 16px 16px;
         font-family: "Barlow Condensed", system-ui, sans-serif;
       }
 
       .shell {
-        width: min(1100px, calc(100% - 48px));
+        width: min(1120px, calc(100% - 48px));
         min-height: 100vh;
         margin: 0 auto;
         display: flex;
         flex-direction: column;
-      }
-
-      header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        min-height: 88px;
-        border-bottom: 1px solid var(--line);
-      }
-
-      .brand {
-        display: flex;
-        align-items: baseline;
-        gap: 12px;
-        letter-spacing: 0.08em;
-      }
-      .brand-mark {
-        color: var(--blue);
-        font-family: "DM Mono", monospace;
-        font-size: 12px;
-        letter-spacing: 0;
-      }
-      .brand-name { font-size: 23px; font-weight: 600; }
-      .brand-note {
-        color: var(--muted);
-        font-family: "DM Mono", monospace;
-        font-size: 10px;
-        letter-spacing: 0.04em;
       }
 
       main {
@@ -78,37 +54,31 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        padding: 84px 0 96px;
+        padding: 48px 0;
       }
 
-      .eyebrow {
-        margin: 0 0 14px;
-        color: var(--blue);
-        font-family: "DM Mono", monospace;
-        font-size: 11px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
+      .site-link {
+        display: block;
+        width: fit-content;
+        margin: 0 auto 34px;
+        color: var(--blue-dark);
+        font-size: clamp(28px, 4vw, 42px);
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        line-height: 1;
+        text-decoration: none;
       }
-      h1 {
-        max-width: 650px;
-        margin: 0;
-        font-size: clamp(46px, 8vw, 92px);
-        font-weight: 500;
-        line-height: 0.9;
-        letter-spacing: -0.025em;
-      }
-      .intro {
-        max-width: 510px;
-        margin: 26px 0 56px;
-        color: var(--muted);
-        font-size: 19px;
-        line-height: 1.25;
+      .site-link:hover,
+      .site-link:focus-visible {
+        color: var(--blue-medium);
+        text-decoration: underline;
+        text-underline-offset: 6px;
       }
 
       .spaces {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 14px;
+        gap: 16px;
       }
       .space-card {
         position: relative;
@@ -117,31 +87,24 @@
         flex-direction: column;
         justify-content: space-between;
         padding: 22px;
-        border: 1px solid var(--line);
-        background: var(--card);
-        color: var(--ink);
-        text-decoration: none;
-        transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-      }
-      .space-card::before {
-        position: absolute;
-        top: 0;
-        right: 0;
-        left: 0;
-        height: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.52);
         background: var(--accent);
-        content: "";
+        color: #fff;
+        text-decoration: none;
+        box-shadow: 0 10px 22px rgba(22, 54, 83, 0.12);
+        transition: border-color 160ms ease, box-shadow 160ms ease, filter 160ms ease, transform 160ms ease;
       }
       .space-card:hover,
       .space-card:focus-visible {
-        border-color: var(--accent);
-        box-shadow: 0 12px 28px rgba(29, 31, 32, 0.1);
+        border-color: #fff;
+        box-shadow: 0 16px 30px rgba(22, 54, 83, 0.22);
+        filter: brightness(1.08);
         outline: none;
         transform: translateY(-3px);
       }
-      .space-card:focus-visible { box-shadow: 0 0 0 3px rgba(89, 128, 166, 0.26); }
+      .space-card:focus-visible { box-shadow: 0 0 0 3px rgba(22, 54, 83, 0.28), 0 16px 30px rgba(22, 54, 83, 0.22); }
       .space-code {
-        color: var(--accent);
+        color: rgba(255, 255, 255, 0.8);
         font-family: "DM Mono", monospace;
         font-size: 11px;
         letter-spacing: 0.08em;
@@ -150,7 +113,7 @@
       .space-description {
         max-width: 230px;
         margin-top: 10px;
-        color: var(--muted);
+        color: rgba(255, 255, 255, 0.82);
         font-size: 16px;
         line-height: 1.15;
       }
@@ -159,31 +122,18 @@
         align-items: center;
         justify-content: space-between;
         margin-top: 28px;
+        color: rgba(255, 255, 255, 0.94);
         font-family: "DM Mono", monospace;
         font-size: 10px;
         letter-spacing: 0.06em;
         text-transform: uppercase;
       }
-      .space-arrow { color: var(--accent); font-size: 19px; line-height: 0.5; }
-
-      footer {
-        display: flex;
-        justify-content: space-between;
-        padding: 18px 0;
-        border-top: 1px solid var(--line);
-        color: var(--muted);
-        font-family: "DM Mono", monospace;
-        font-size: 10px;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-      }
+      .space-arrow { color: #fff; font-size: 19px; line-height: 0.5; }
 
       @media (max-width: 760px) {
         .shell { width: min(100% - 32px, 540px); }
-        header { min-height: 72px; }
-        .brand-note { display: none; }
-        main { padding: 58px 0 72px; }
-        .intro { margin-bottom: 38px; }
+        main { padding: 32px 0; }
+        .site-link { margin-bottom: 26px; }
         .spaces { grid-template-columns: 1fr; }
         .space-card { min-height: 170px; }
       }
@@ -191,26 +141,10 @@
   </head>
   <body>
     <div class="shell">
-      <header>
-        <div class="brand">
-          <span class="brand-mark">BJ/</span>
-          <span class="brand-name">DRAFT</span>
-          <span class="brand-note">architectural workspace</span>
-        </div>
-        <div class="brand-note">BLUEJETTY / 01</div>
-      </header>
-
       <main>
-        <p class="eyebrow">Start a workspace</p>
-        <h1>Make space<br />for the work.</h1>
-        <p class="intro">Choose a place to draw, arrange, or mark up your project. More workspaces can be added here as Draft grows.</p>
+        <a class="site-link" href="https://bluejetty.ca" aria-label="Visit bluejetty.ca">bluejetty.ca</a>
         <nav class="spaces" aria-label="Draft workspaces" id="spaces"></nav>
       </main>
-
-      <footer>
-        <span>Draft / Bluejetty</span>
-        <span>Local-first architectural tools</span>
-      </footer>
     </div>
 
     <script>
@@ -221,21 +155,21 @@
           title: "Model Space",
           description: "Draft plans, walls, lines, and floor references in 2D.",
           href: "MODEL.dc.html",
-          accent: "#5980a6",
+          accent: "#1d4d78",
         },
         {
           code: "02 / LAYOUT",
           title: "Layout Space",
           description: "Organize the project shell and page structure.",
           href: "LAYOUT.dc.html",
-          accent: "#b58a4b",
+          accent: "#3675a7",
         },
         {
           code: "03 / PDF",
           title: "PDF Markup",
           description: "Annotate drawings, plans, and reference documents.",
           href: "PDF-MARKUP.dc.html",
-          accent: "#6b8b72",
+          accent: "#77a8cb",
         },
       ];
 
