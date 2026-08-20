@@ -737,6 +737,7 @@ class Component extends DCLogic {
         levelId: line.levelId,
         view: line.view || 'plan',
         layer: line.layer || 'draft',
+        bulge: Number(line.bulge) || 0,
       })),
       walls: this._walls.map(wall => ({
         id: wall.id,
@@ -1127,6 +1128,7 @@ class Component extends DCLogic {
           ? saved.lines.map(line => restoreSegment(line, 'line', {
             view: ['plan', 'floor', 'e-power', 'foundation'].includes(line?.view) ? line.view : 'plan',
             layer: line?.layer === 'no-draft' ? 'no-draft' : 'draft',
+            bulge: Number.isFinite(Number(line?.bulge)) ? Number(line.bulge) : 0,
           })).filter(Boolean)
         : [];
       skipped += (Array.isArray(saved.lines) ? saved.lines.length : 0) - this._lines.length;
@@ -1572,6 +1574,7 @@ class Component extends DCLogic {
 
     // Select-tool state
     this._selectDrag     = null;       // { refs, startX, startY, active }  — node drag
+    this._arcDrag        = null;       // { line, startX, startY, active }  — arc bulge drag
     this._selectDownInfo = null;       // { worldPt, clientX, clientY, shiftHeld } — pending click
     this._windowSelection = null;      // { start, current, startX, startY, shiftHeld } — window drag
     this._selectedSegs   = new Set(); // line/wall segment objects currently selected
@@ -1615,11 +1618,14 @@ class Component extends DCLogic {
       this._invalidate();
       this._panning2D = false;
       const sd   = this._selectDrag;
+      const ad   = this._arcDrag;
       const info = this._selectDownInfo;
       const windowSelection = this._windowSelection;
       this._selectDrag     = null;
+      this._arcDrag        = null;
       this._selectDownInfo = null;
       this._windowSelection = null;
+      if (ad?.active) this._markUnsaved();
       if (windowSelection) {
         const end = this._getWorldPos(e.clientX, e.clientY);
         if (end) windowSelection.current = end;
@@ -1740,6 +1746,18 @@ class Component extends DCLogic {
       const sa = toS(a), sb = toS(b);
       ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
     };
+    // Line segments may carry a bulge; arced ones stroke as quadratic curves.
+    const strokeLinePath = seg => {
+      const a = toS(seg.start), b = toS(seg.end);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y);
+      if (seg.bulge) {
+        const c = toS(this._lineControlPoint(seg));
+        ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
+      } else {
+        ctx.lineTo(b.x, b.y);
+      }
+      ctx.stroke();
+    };
     const drawDot = pt => {
       const s = toS(pt);
       ctx.beginPath(); ctx.arc(s.x, s.y, DOT_R, 0, Math.PI * 2); ctx.fill();
@@ -1749,7 +1767,7 @@ class Component extends DCLogic {
       ctx.save();
       ctx.strokeStyle = color; ctx.fillStyle = color;
       ctx.lineWidth = 1.25;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      strokeLinePath(seg);
       [a, b].forEach(p => {
         ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
       });
@@ -1811,7 +1829,7 @@ class Component extends DCLogic {
     ctx.strokeStyle = LINE_COLOR; ctx.lineWidth = 2; ctx.fillStyle = LINE_COLOR;
 
     // Committed lines
-    if (activeVisible) this._activeLines().forEach(l => { drawSeg(l.start, l.end); drawDot(l.start); drawDot(l.end); });
+    if (activeVisible) this._activeLines().forEach(l => { strokeLinePath(l); drawDot(l.start); drawDot(l.end); });
     if (activeVisible) this._activeDimensions().forEach(dimension => this._drawDimension2D(ctx, toS, dimension));
     const dimensionPreviewEnd = this._previewEndPoint();
     if (this._dimensionStart && dimensionPreviewEnd) {
@@ -1877,9 +1895,8 @@ class Component extends DCLogic {
       this._selectedSegs.forEach(seg => {
         if (!visibleSelectedSegments.has(seg)) return;
         const a = toS(seg.start), b = toS(seg.end);
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
         ctx.strokeStyle = 'rgba(89,128,166,0.55)'; ctx.lineWidth = 7; ctx.lineCap = 'round';
-        ctx.stroke();
+        strokeLinePath(seg);
         // Small square handles at each endpoint
         ctx.fillStyle = '#5980a6';
         [a, b].forEach(p => ctx.fillRect(p.x - 4, p.y - 4, 8, 8));
@@ -2131,6 +2148,7 @@ class Component extends DCLogic {
       return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId)
         && this._lineLayerConfig(this._activeLineLayer()).visible;
     }
+    if (tool === 'node') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
     if (tool === 'wall') return viewId === 'plan';
     if (tool === 'floor') return viewId === 'floor';
     if (tool === 'dimension') return ['plan', 'floor'].includes(viewId);
@@ -2145,6 +2163,10 @@ class Component extends DCLogic {
       const layer = this._activeLineLayerLabel();
       return prefix === 'LINE' ? `${layer} LINE${suffix}` : `${prefix} ${layer} LINE${suffix}`;
     }
+    if (tool === 'node') {
+      const prefix = { plan:'PLAN', floor:'FLOOR', 'e-power':'E-POWER', foundation:'FOUNDATION' }[viewId];
+      return prefix ? `${prefix} NODE / ARC${suffix}` : `NODE / ARC${suffix}`;
+    }
     if (tool === 'wall') return viewId === 'plan' ? `PLAN WALL${suffix}` : `WALL — PLAN ONLY${suffix}`;
     if (tool === 'floor') return viewId === 'floor' ? `FLOOR OUTLINE${suffix}` : `FLOOR — FLOOR ONLY${suffix}`;
     if (tool === 'dimension') {
@@ -2157,6 +2179,7 @@ class Component extends DCLogic {
 
   _contextToolMessage(tool, viewId = this._activeLayerViewId()) {
     const context = this._draftingContextLabel(viewId);
+    if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, E-POWER, or FOUNDATION. Current context: ${context}.`;
     if (tool === 'wall') return `Walls are placed in PLAN. Switch to PLAN to draw walls. Current context: ${context}.`;
     if (tool === 'floor') return `Floor outlines are placed in FLOOR. Switch to FLOOR to draw one. Current context: ${context}.`;
     if (tool === 'dimension') return `Dimensions are placed in PLAN or FLOOR. Current context: ${context}.`;
@@ -2197,7 +2220,7 @@ class Component extends DCLogic {
     this._cancelFrozenLength();
     this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension();
     this._applyLevelElevation(levelIndex);
-    const activeTool = ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
+    const activeTool = ['line', 'node', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
       && !this._contextAllowsTool(this.state.activeTool, viewId)
       ? 'select'
       : this.state.activeTool;
@@ -2206,10 +2229,10 @@ class Component extends DCLogic {
       backgroundLevelIds,
       levelLayerViews: { ...this.state.levelLayerViews, [levelId]: viewId },
       activeTool,
-      drawingMessage: activeTool === 'select' && ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
+      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
         ? this._contextToolMessage(this.state.activeTool, viewId)
         : `Working in ${this._draftingContextLabel(viewId)}.`,
-      drawingMessageError: activeTool === 'select' && ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool),
+      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'dimension'].includes(this.state.activeTool),
     }, () => {
       if (this._orthoCam) this._setView('top');
       this._pruneContextReferenceSelection();
@@ -2732,6 +2755,7 @@ class Component extends DCLogic {
     if (e.button === 0 && !e.altKey) {
       if (tool === 'wall') this._handleWallClick();
       else if (tool === 'line') this._handleLineClick();
+      else if (tool === 'node') this._handleNodeArcDown(e);
       else if (tool === 'floor') this._handleFloorClick();
       else if (tool === 'dimension') this._handleDimensionClick();
       else if (tool === 'cut') this._handleCutClick();
@@ -2815,6 +2839,28 @@ class Component extends DCLogic {
     if (this._windowSelection) {
       const raw = this._getWorldPos(e.clientX, e.clientY);
       if (raw) this._windowSelection.current = raw;
+    }
+
+    // Node/Arc tool — pulling a segment sideways sets its bulge
+    if (this._arcDrag) {
+      const ad = this._arcDrag;
+      if (!ad.active) {
+        const ddx = e.clientX - ad.startX, ddy = e.clientY - ad.startY;
+        if (Math.sqrt(ddx*ddx + ddy*ddy) > 4) ad.active = true;
+      }
+      if (ad.active) {
+        const raw = this._getWorldPos(e.clientX, e.clientY);
+        if (raw) {
+          const seg = ad.line;
+          const mx = (seg.start.x + seg.end.x) / 2, mz = (seg.start.z + seg.end.z) / 2;
+          const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
+          const len = Math.hypot(dx, dz) || 1;
+          const bulge = (raw.x - mx) * (-dz / len) + (raw.z - mz) * (dx / len);
+          const h = this._canvas?.clientHeight || 600;
+          const flat = (this._orthoHalfH * 2) / h * 4; // within ~4px of straight → snap flat
+          seg.bulge = Math.abs(bulge) < flat ? 0 : bulge;
+        }
+      }
     }
 
     // Select-tool node drag
@@ -3536,34 +3582,128 @@ class Component extends DCLogic {
     return refs.length ? refs : null;
   }
 
-  // Return { idx, t } of the _lines segment closest to worldPt (within 12px), or null.
+  // Arc segments are quadratic curves: the control point sits at the segment
+  // midpoint, offset along the left normal by the line's bulge (in feet).
+  _lineControlPoint(seg) {
+    const bulge = seg.bulge || 0;
+    const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return {
+      x: (seg.start.x + seg.end.x) / 2 + (-dz / len) * bulge,
+      y: ((seg.start.y || 0) + (seg.end.y || 0)) / 2,
+      z: (seg.start.z + seg.end.z) / 2 + (dx / len) * bulge,
+    };
+  }
+
+  _pointOnLineSeg(seg, t) {
+    const it = 1 - t;
+    if (!seg.bulge) {
+      return {
+        x: seg.start.x + (seg.end.x - seg.start.x) * t,
+        y: ((seg.start.y || 0) + (seg.end.y || 0)) / 2,
+        z: seg.start.z + (seg.end.z - seg.start.z) * t,
+      };
+    }
+    const c = this._lineControlPoint(seg);
+    return {
+      x: it * it * seg.start.x + 2 * it * t * c.x + t * t * seg.end.x,
+      y: c.y,
+      z: it * it * seg.start.z + 2 * it * t * c.z + t * t * seg.end.z,
+    };
+  }
+
+  // Distance from worldPt to a line segment (straight or arced) → { d, t }.
+  _distToLineSeg(worldPt, seg) {
+    if (!seg.bulge) {
+      const ax = seg.start.x, az = seg.start.z;
+      const dx = seg.end.x - ax, dz = seg.end.z - az;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < 0.0001) return { d: Infinity, t: 0 };
+      const t = Math.max(0, Math.min(1, ((worldPt.x - ax) * dx + (worldPt.z - az) * dz) / len2));
+      return { d: Math.hypot(worldPt.x - ax - t * dx, worldPt.z - az - t * dz), t };
+    }
+    let bestD = Infinity, bestT = 0;
+    const STEPS = 24;
+    for (let i = 0; i <= STEPS; i++) {
+      const t = i / STEPS;
+      const p = this._pointOnLineSeg(seg, t);
+      const d = Math.hypot(worldPt.x - p.x, worldPt.z - p.z);
+      if (d < bestD) { bestD = d; bestT = t; }
+    }
+    return { d: bestD, t: bestT };
+  }
+
+  // Return { idx, t, d } of the _lines segment closest to worldPt (within 12px), or null.
   _findLineHit(worldPt) {
     const h = this._canvas ? this._canvas.clientHeight : 600;
     const thresh = (this._orthoHalfH * 2) / h * 12;
     let bestD = thresh, bestIdx = -1, bestT = 0;
     this._activeLines().forEach(l => {
-      const ax = l.start.x, az = l.start.z, bx = l.end.x, bz = l.end.z;
-      const dx = bx - ax, dz = bz - az;
-      const len2 = dx*dx + dz*dz;
-      if (len2 < 0.0001) return;
-      const t = Math.max(0, Math.min(1, ((worldPt.x - ax)*dx + (worldPt.z - az)*dz) / len2));
-      const cx = ax + t*dx, cz = az + t*dz;
-      const d = Math.sqrt((worldPt.x - cx)**2 + (worldPt.z - cz)**2);
+      const { d, t } = this._distToLineSeg(worldPt, l);
       if (d < bestD) { bestD = d; bestIdx = this._lines.indexOf(l); bestT = t; }
     });
-    return bestIdx >= 0 ? { idx: bestIdx, t: bestT } : null;
+    return bestIdx >= 0 ? { idx: bestIdx, t: bestT, d: bestD } : null;
   }
 
   // Split _lines[idx] at insertPt → two segments sharing the mid vertex.
-  _splitLine(idx, insertPt) {
+  // An existing arc's bulge is shared between the halves so the curve relaxes
+  // around the new node instead of doubling up.
+  _splitLine(idx, insertPt, t = 0.5) {
     const seg = this._lines[idx];
     const mid = this._mergeVertex(insertPt, seg.levelId, seg.view || 'plan');
+    const bulge = seg.bulge || 0;
     this._lines.splice(idx, 1,
-      { ...seg, end: mid },
-      { ...seg, id: this._newDrawingItemId('line'), start: mid }
+      { ...seg, end: mid, bulge: bulge * (1 - t) * 0.7 },
+      { ...seg, id: this._newDrawingItemId('line'), start: mid, bulge: bulge * t * 0.7 }
     );
     this._copyGroupMembership('line', seg.id, this._lines[idx + 1].id);
     this._markUnsaved();
+  }
+
+  // ─── Node / Arc tool ────────────────────────────────────────────────────────────────
+  // Dead-centre press on a line inserts a node there (draggable right away);
+  // a press beside the line grabs the whole segment and pulls it into an arc.
+  // Both edits keep the line's layer, view and level — nothing to organise.
+  _handleNodeArcDown(e) {
+    if (!this._contextAllowsTool('node')) {
+      this.setState({ drawingMessage: this._contextToolMessage('node'), drawingMessageError: true });
+      return;
+    }
+    const raw = this._getWorldPos(e.clientX, e.clientY);
+    if (!raw) return;
+    // An existing node under the cursor is grabbed directly, never split again.
+    const vertexRefs = this._findVertexHit(raw);
+    if (vertexRefs) {
+      if (this._canReshapeItems(this._itemsFromVertexRefs(vertexRefs))) {
+        this._selectDrag = { refs: vertexRefs, startX: e.clientX, startY: e.clientY, active: false };
+        e.preventDefault();
+      }
+      return;
+    }
+    const hit = this._findLineHit(raw);
+    if (!hit) return;
+    const line = this._lines[hit.idx];
+    if (this._groupForItem(line)?.fixed === true) {
+      this.setState({ drawingMessage: 'This line belongs to a fixed group and cannot be reshaped.', drawingMessageError: true });
+      return;
+    }
+    const h = this._canvas?.clientHeight || 600;
+    const fpx = (this._orthoHalfH * 2) / h;
+    if (hit.d <= fpx * 4) {
+      // Cursor centre is on the line → insert a node at that point
+      this._splitLine(hit.idx, this._pointOnLineSeg(line, hit.t), hit.t);
+      this._selectDrag = {
+        refs: [
+          { target: this._lines[hit.idx], prop: 'end' },
+          { target: this._lines[hit.idx + 1], prop: 'start' },
+        ],
+        startX: e.clientX, startY: e.clientY, active: false,
+      };
+    } else {
+      // Cursor edge is touching the line → pull the segment into an arc
+      this._arcDrag = { line, startX: e.clientX, startY: e.clientY, active: false };
+    }
+    e.preventDefault();
   }
 
   // ─── Selection and drawing groups ─────────────────────────────────────────────
@@ -3807,11 +3947,7 @@ class Component extends DCLogic {
     let bestD = thresh, bestSeg = null;
     const check = segs => {
       segs.forEach(seg => {
-        const ax = seg.start.x, az = seg.start.z, bx = seg.end.x, bz = seg.end.z;
-        const dx = bx - ax, dz = bz - az, len2 = dx*dx + dz*dz;
-        if (len2 < 0.0001) return;
-        const t = Math.max(0, Math.min(1, ((worldPt.x-ax)*dx + (worldPt.z-az)*dz) / len2));
-        const d = Math.sqrt((worldPt.x - ax-t*dx)**2 + (worldPt.z - az-t*dz)**2);
+        const { d } = this._distToLineSeg(worldPt, seg);
         if (d < bestD) { bestD = d; bestSeg = seg; }
       });
     };
@@ -4198,7 +4334,11 @@ class Component extends DCLogic {
       // Reject if near a vertex (user is double-clicking a node, not a line body)
       if (this._findVertexHit(raw)) return;
       const hit = this._findLineHit(raw);
-      if (hit) this._splitLine(hit.idx, this._snap(raw));
+      if (hit) {
+        const seg = this._lines[hit.idx];
+        const pt = seg.bulge ? this._pointOnLineSeg(seg, hit.t) : this._snap(raw);
+        this._splitLine(hit.idx, pt, hit.t);
+      }
       return;
     }
     if (this.state.activeTool === 'floor' && this._floorDrawing) {
@@ -4581,6 +4721,7 @@ class Component extends DCLogic {
     }
     if (matches('wall')) { e.preventDefault(); this._activateContextTool('wall'); return; }
     if (matches('line')) { e.preventDefault(); this._activateContextTool('line'); return; }
+    if (matches('node')) { e.preventDefault(); this._activateContextTool('node'); return; }
     if (matches('floor')) { e.preventDefault(); this._activateContextTool('floor'); return; }
     if (matches('dimension')) { e.preventDefault(); this._activateContextTool('dimension'); return; }
     if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
@@ -4714,9 +4855,12 @@ class Component extends DCLogic {
     const drawingFloor = isDrawing && activeTool === 'floor';
     const dimensioning = activeTool === 'dimension';
     const extending = activeTool === 'extend';
+    const nodeArcing = activeTool === 'node';
     const placingCut  = isCutTool && cutPhase === 'placing';
-    const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending;
-    const hintText    = extending
+    const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending || nodeArcing;
+    const hintText    = nodeArcing
+      ? 'NODE / ARC — Click a line to add a node · Drag beside a line to pull an arc'
+      : extending
       ? (extendPhase === 'idle'
         ? 'EXTEND — Drag a rectangle around the nodes to move'
         : (extendPhase === 'base'
@@ -4986,6 +5130,7 @@ class Component extends DCLogic {
       tools: [
         standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
         contextualTool('line'),
+        contextualTool('node'),
         contextualTool('wall'),
         contextualTool('floor'),
         contextualTool('dimension'),

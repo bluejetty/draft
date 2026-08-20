@@ -103,6 +103,7 @@ if (!window.DraftProfileManager) {
   const DEFAULT_KEYBINDINGS = Object.freeze({
     select: 'S',
     line: 'L',
+    node: 'N',
     wall: 'W',
     floor: 'F',
     dimension: 'D',
