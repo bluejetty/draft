@@ -650,7 +650,11 @@ class Component extends DCLogic {
     requestAnimationFrame(() => requestAnimationFrame(() => this._init()));
     window.addEventListener('keydown', this._onKey  = e => this._handleKey(e));
     window.addEventListener('keydown', this._onKdn  = e => { if (e.key === 'Shift') this._shiftHeld = true; });
-    window.addEventListener('keyup',   this._onKup  = e => { if (e.key === 'Shift') this._shiftHeld = false; });
+    window.addEventListener('keydown', this._onCtrlDown = e => { if (e.key === 'Control') this._ctrlHeld = true; });
+    window.addEventListener('keyup',   this._onKup  = e => {
+      if (e.key === 'Shift') this._shiftHeld = false;
+      if (e.key === 'Control') this._ctrlHeld = false;
+    });
   }
 
   // ─── Local drawing persistence ───────────────────────────────────────────────
@@ -1340,6 +1344,7 @@ class Component extends DCLogic {
     this._lineStart   = null;
     this._lastClickTime = 0;
     this._shiftHeld   = false;
+    this._ctrlHeld    = false;
     this._cutStart3  = null; // THREE.Vector3
     this._cutEnd3    = null;
     this._cutArrowL  = null;
@@ -1930,23 +1935,25 @@ class Component extends DCLogic {
     const start  = tool === 'line' ? this._lineStart
       : tool === 'wall' ? this._wallStart
       : tool === 'floor' ? this._floorPoints[this._floorPoints.length - 1]
+      : tool === 'cut' && this.state.cutPhase === 'placing' ? this._cutStart3
       : null;
+    const angleLockHeld = this._shiftHeld || this._ctrlHeld;
 
     // 45° angle lock — must establish lockAngle before tracking/magnet
-    if (this._shiftHeld && start) {
+    if (angleLockHeld && start) {
       // Establish angle from raw cursor if not yet locked
       if (this._lockAngle == null) {
         const dx0 = gridPt.x - start.x, dz0 = gridPt.z - start.z;
         const raw0 = Math.atan2(dz0, dx0);
         this._lockAngle = Math.round(raw0 / (Math.PI / 4)) * (Math.PI / 4);
       }
-    } else if (!this._shiftHeld) {
+    } else if (!angleLockHeld) {
       this._lockAngle = null;
     }
 
     // Projection tracking: cursor near perpendicular through a vertex → snap to intersection
     let trackingHit = null;
-    if (this._shiftHeld && start && this._lockAngle != null) {
+    if (angleLockHeld && start && this._lockAngle != null) {
       trackingHit = this._findTrackingSnap(raw, start);
     }
 
@@ -1971,7 +1978,7 @@ class Component extends DCLogic {
       // Midpoint snap — cursor and endpoint both jump to segment midpoint
       finalPt  = midSnap;
       cursorPt = midSnap;
-    } else if (this._shiftHeld && start) {
+    } else if (angleLockHeld && start) {
       // Angle lock: endpoint stays on locked ray, cursor roams freely with mouse
       finalPt  = this._applyAngleLock(start, gridPt);
       cursorPt = gridPt;
@@ -2033,8 +2040,8 @@ class Component extends DCLogic {
     if (this.state.cutPhase === 'choosing' && this._cutStart3 && this._cutEnd3) {
       const dx = this._cutEnd3.x - this._cutStart3.x;
       const dz = this._cutEnd3.z - this._cutStart3.z;
-      const tx = pt.x - this._cutStart3.x;
-      const tz = pt.z - this._cutStart3.z;
+      const tx = finalPt.x - this._cutStart3.x;
+      const tz = finalPt.z - this._cutStart3.z;
       const side = dx * tz - dz * tx; // positive = right of A→B, negative = left
       if (this._cutArrowL) this._cutArrowL.setColor(new THREE.Color(side < 0 ? 0xff3366 : 0x994466));
       if (this._cutArrowR) this._cutArrowR.setColor(new THREE.Color(side > 0 ? 0xff3366 : 0x994466));
