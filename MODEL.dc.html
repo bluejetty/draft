@@ -1798,15 +1798,26 @@ class Component extends DCLogic {
       this._drawDimension2D(ctx, toS, { start:this._dimensionStart, end:dimensionPreviewEnd }, { preview:true });
     }
 
+    const visibleSelectedSegments = new Set([
+      ...this._activeLines(),
+      ...activeWalls,
+    ]);
+    const visibleSelectedFloors = new Set(this._activeFloors());
+
     // Dragged node highlight (blue ring around the node being moved)
-    if (this._selectDrag && this._selectDrag.active && this._selectDrag.refs.length) {
+    if (activeVisible && this._selectDrag && this._selectDrag.active && this._selectDrag.refs.length) {
       const dragRef = this._selectDrag.refs[0];
-      const dragPt = (dragRef.target || dragRef.seg)[dragRef.prop];
-      const sd = toS(dragPt);
-      ctx.save();
-      ctx.beginPath(); ctx.arc(sd.x, sd.y, DOT_R + 6, 0, Math.PI * 2);
-      ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.restore();
+      const target = dragRef.target || dragRef.seg;
+      const visible = visibleSelectedSegments.has(target)
+        || [...visibleSelectedFloors].some(floor => floor.points === target);
+      if (visible) {
+        const dragPt = target[dragRef.prop];
+        const sd = toS(dragPt);
+        ctx.save();
+        ctx.beginPath(); ctx.arc(sd.x, sd.y, DOT_R + 6, 0, Math.PI * 2);
+        ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // ── Trim hover highlight ──────────────────────────────────────────────────
@@ -1841,9 +1852,10 @@ class Component extends DCLogic {
     }
 
     // ── Selection highlight ───────────────────────────────────────────────────
-    if (this._selectedSegs.size > 0) {
+    if (activeVisible && this._selectedSegs.size > 0) {
       ctx.save();
       this._selectedSegs.forEach(seg => {
+        if (!visibleSelectedSegments.has(seg)) return;
         const a = toS(seg.start), b = toS(seg.end);
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
         ctx.strokeStyle = 'rgba(89,128,166,0.55)'; ctx.lineWidth = 7; ctx.lineCap = 'round';
@@ -1854,8 +1866,10 @@ class Component extends DCLogic {
       });
       ctx.restore();
     }
-    if (this._selectedFloors.size > 0) {
-      this._selectedFloors.forEach(floor => this._drawFloor2D(ctx, toS, floor, { selected: true }));
+    if (activeVisible && this._selectedFloors.size > 0) {
+      this._selectedFloors.forEach(floor => {
+        if (visibleSelectedFloors.has(floor)) this._drawFloor2D(ctx, toS, floor, { selected: true });
+      });
     }
 
     // ── Window-selection preview ─────────────────────────────────────────────
