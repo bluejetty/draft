@@ -504,86 +504,19 @@ const DEFAULT_LEVELS = [
   { id:2, name:'BASEMENT',     elev: -9, visible:true },
   { id:1, name:'FOUNDATION',   elev:-10, visible:true },
 ];
-const DEFAULT_KEYBINDINGS = Object.freeze({
-  select: 'S',
-  line: 'L',
-  wall: 'W',
-  floor: 'F',
-  trim: 'T',
-  cut: 'C',
-  extend: 'X',
-  perspective: '1',
-  top: '2',
-  front: '3',
-  side: '4',
-  freezeLength: 'R',
-  finish: 'Enter',
-  finishAlt: 'Space',
-  cancel: 'Escape',
-  delete: 'Delete',
-  group: 'G',
-  undo: 'Ctrl+Z',
-  redo: 'Ctrl+Shift+Z',
-  background: 'B',
-  gridSnap: '',
-});
+// Shortcut defaults and key normalisation live in profile-manager.js so Model
+// Space and Settings cannot drift apart.
+const {
+  DEFAULT_KEYBINDINGS,
+  normaliseKeyBinding,
+  eventBinding,
+  eventMatchesBinding,
+  keyBindingLabel,
+} = window.DraftKeyboard;
 
 // Undo keeps whole serialized drawings, so it is bounded by count and by size.
 const HISTORY_LIMIT = 60;
 const HISTORY_MAX_CHARS = 8000000;
-
-function normaliseKeyBinding(value) {
-  const aliases = {
-    esc: 'Escape', escape: 'Escape', spacebar: 'Space', space: 'Space',
-    return: 'Enter', enter: 'Enter', del: 'Delete', delete: 'Delete',
-    backspace: 'Backspace', ctrl: 'Ctrl', control: 'Ctrl',
-    alt: 'Alt', option: 'Alt', shift: 'Shift', meta: 'Meta', cmd: 'Meta', command: 'Meta',
-  };
-  const pieces = String(value || '').split('+').map(part => part.trim()).filter(Boolean);
-  if (!pieces.length) return '';
-  const modifiers = [];
-  let key = '';
-  pieces.forEach(piece => {
-    const lower = piece.toLowerCase();
-    const resolved = aliases[lower] || (piece.length === 1 ? piece.toUpperCase() : '');
-    if (['Ctrl', 'Alt', 'Shift', 'Meta'].includes(resolved)) {
-      if (!modifiers.includes(resolved)) modifiers.push(resolved);
-    } else if (resolved) {
-      key = resolved;
-    }
-  });
-  return key ? [...modifiers, key].join('+') : '';
-}
-
-function eventBinding(event) {
-  if (['Control', 'Alt', 'Meta', 'Shift'].includes(event.key)) return '';
-  const raw = event.key === ' ' ? 'Space' : event.key;
-  const key = normaliseKeyBinding(raw);
-  if (!key) return '';
-  const modifiers = [
-    event.ctrlKey ? 'Ctrl' : '',
-    event.altKey ? 'Alt' : '',
-    event.shiftKey ? 'Shift' : '',
-    event.metaKey ? 'Meta' : '',
-  ].filter(Boolean);
-  return normaliseKeyBinding([...modifiers, key].join('+'));
-}
-
-function eventMatchesBinding(event, binding) {
-  const normalized = normaliseKeyBinding(binding);
-  if (!normalized) return false;
-  const parts = normalized.split('+');
-  const key = parts.pop();
-  const has = modifier => parts.includes(modifier);
-  if (event.ctrlKey !== has('Ctrl') || event.altKey !== has('Alt')
-    || event.shiftKey !== has('Shift') || event.metaKey !== has('Meta')) return false;
-  const actual = normaliseKeyBinding(event.key === ' ' ? 'Space' : event.key);
-  return actual === key;
-}
-
-function keyBindingLabel(value) {
-  return normaliseKeyBinding(value).replace('Escape', 'Esc');
-}
 
 class Component extends DCLogic {
   state = {

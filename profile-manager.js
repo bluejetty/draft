@@ -161,6 +161,17 @@ if (!window.DraftProfileManager) {
     ].filter(Boolean).join('+'));
   };
 
+  const eventMatchesBinding = (event, binding) => {
+    const normalised = normaliseKeyBinding(binding);
+    if (!normalised) return false;
+    const parts = normalised.split('+');
+    const key = parts.pop();
+    const has = modifier => parts.includes(modifier);
+    if (event.ctrlKey !== has('Ctrl') || event.altKey !== has('Alt')
+      || event.shiftKey !== has('Shift') || event.metaKey !== has('Meta')) return false;
+    return normaliseKeyBinding(event.key === ' ' ? 'Space' : event.key) === key;
+  };
+
   const keyBindingLabel = value => normaliseKeyBinding(value).replace('Escape', 'Esc');
 
   window.DraftProfileManager = {
@@ -175,6 +186,7 @@ if (!window.DraftProfileManager) {
     DEFAULT_KEYBINDINGS,
     normaliseKeyBinding,
     eventBinding,
+    eventMatchesBinding,
     keyBindingLabel,
   };
 })();
