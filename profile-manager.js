@@ -200,7 +200,8 @@ if (!window.DraftProfileManager) {
         ? entry.name.trim().toUpperCase()
         : layer.name;
       const printable = typeof entry.printable === 'boolean' ? entry.printable : layer.printable;
-      return [layer.id, { name, printable }];
+      const visible = typeof entry.visible === 'boolean' ? entry.visible : true;
+      return [layer.id, { name, printable, visible }];
     }));
   };
 

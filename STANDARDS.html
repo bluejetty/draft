@@ -22,16 +22,17 @@
     .groups { display:flex; flex-direction:column; gap:14px; margin-top:22px; }
     .group { border:1px solid rgba(29,31,32,.17); background:#fff; }
     .group-title { padding:9px 12px; border-bottom:1px solid rgba(29,31,32,.12); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#5980a6; }
-    .group-head { display:grid; grid-template-columns:130px minmax(0,1fr) 190px 80px 22px; gap:10px; padding:6px 12px; background:#fafafa; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
-    .group-head span:nth-child(4) { text-align:center; }
-    .layer-row { display:grid; grid-template-columns:130px minmax(0,1fr) 190px 80px 22px; align-items:center; gap:10px; min-height:47px; padding:8px 12px; border-bottom:1px solid rgba(29,31,32,.09); }
+    .group-head { display:grid; grid-template-columns:120px minmax(0,1fr) 170px 74px 74px 22px; gap:10px; padding:6px 12px; background:#fafafa; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    .group-head span:nth-child(4), .group-head span:nth-child(5) { text-align:center; }
+    .layer-row { display:grid; grid-template-columns:120px minmax(0,1fr) 170px 74px 74px 22px; align-items:center; gap:10px; min-height:47px; padding:8px 12px; border-bottom:1px solid rgba(29,31,32,.09); }
     .layer-row:last-child { border-bottom:0; }
     .default-name { color:rgba(29,31,32,.5); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:.04em; }
     .layer-use { color:rgba(29,31,32,.58); font-size:11px; line-height:1.3; }
     .layer-name-input { min-width:0; width:100%; height:30px; border:1px solid rgba(29,31,32,.28); background:#fafafa; color:#1d1f20; padding:5px 8px; border-radius:2px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; }
     .layer-name-input:hover, .layer-name-input:focus { border-color:#5980a6; background:rgba(89,128,166,.09); outline:2px solid rgba(89,128,166,.18); outline-offset:1px; }
-    .layer-print { display:flex; align-items:center; justify-content:center; gap:5px; color:rgba(29,31,32,.68); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; }
-    .layer-print input { accent-color:#5980a6; }
+    .layer-print, .layer-visible { display:flex; align-items:center; justify-content:center; gap:5px; color:rgba(29,31,32,.68); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; }
+    .layer-print input, .layer-visible input { accent-color:#5980a6; }
+    .layer-visible.blank { visibility:hidden; }
     .reset-layer { width:22px; height:22px; padding:0; border:1px solid rgba(29,31,32,.2); background:#fff; color:rgba(29,31,32,.55); font-size:13px; line-height:1; cursor:pointer; }
     .reset-layer:hover, .reset-layer:focus { border-color:#5980a6; color:#5980a6; }
     .actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:18px; }
@@ -42,7 +43,7 @@
     #status.warning { color:#a06035; }
     @media (max-width:720px) {
       .group-head { display:none; }
-      .layer-row { grid-template-columns:1fr 80px 22px; }
+      .layer-row { grid-template-columns:1fr 74px 74px 22px; }
       .default-name, .layer-use { display:none; }
       main { margin-top:24px; }
       #status { width:100%; margin-left:0; order:3; }
@@ -95,14 +96,19 @@
         document.querySelector('#groups').innerHTML = groups.map(group => `
           <section class="group">
             <div class="group-title">${group.group}</div>
-            <div class="group-head"><span>Default</span><span>Used for</span><span>Layer name</span><span>Print</span><span></span></div>
+            <div class="group-head"><span>Default</span><span>Used for</span><span>Layer name</span><span>Visible</span><span>Print</span><span></span></div>
             ${group.layers.map(layer => {
               const current = layerStandards[layer.id];
+              const hasVisibility = layer.id === 'draft' || layer.id === 'no-draft';
+              const visibleCell = hasVisibility
+                ? `<span class="layer-visible"><input type="checkbox" data-layer-visible="${layer.id}" ${current.visible ? 'checked' : ''} aria-label="Show ${layer.name} in Model Space"> Visible</span>`
+                : '<span class="layer-visible blank"></span>';
               return `
                 <div class="layer-row">
                   <span class="default-name">${layer.name}</span>
                   <span class="layer-use">${layer.use}</span>
                   <input class="layer-name-input" type="text" data-layer-name="${layer.id}" value="${current.name}" aria-label="Standard name for ${layer.name}" title="The layer name used in exports and layer lists">
+                  ${visibleCell}
                   <span class="layer-print"><input type="checkbox" data-layer-print="${layer.id}" ${current.printable ? 'checked' : ''} aria-label="Print ${layer.name}"> Printed</span>
                   <button class="reset-layer" type="button" data-layer-reset="${layer.id}" aria-label="Reset ${layer.name} to its default" title="Reset this layer to its default">×</button>
                 </div>
@@ -116,6 +122,14 @@
             const name = input.value.trim() ? input.value.trim().toUpperCase() : defaults[layerId].name;
             layerStandards = { ...layerStandards, [layerId]: { ...layerStandards[layerId], name } };
             saveActive(`${name} saved to the company standard.`);
+            render();
+          });
+        });
+        document.querySelectorAll('[data-layer-visible]').forEach(input => {
+          input.addEventListener('change', () => {
+            const layerId = input.dataset.layerVisible;
+            layerStandards = { ...layerStandards, [layerId]: { ...layerStandards[layerId], visible: input.checked } };
+            saveActive(`${layerStandards[layerId].name} is now ${input.checked ? 'visible' : 'hidden'} in Model Space.`);
             render();
           });
         });

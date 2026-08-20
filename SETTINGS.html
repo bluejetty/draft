@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Draft — Keyboard & Layer Settings</title>
+  <title>Draft — Keyboard Settings</title>
   <script src="./profile-manager.js"></script>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap">
   <style>
@@ -40,18 +40,8 @@
     button.action:hover { border-color:#5980a6; }
     #status { margin-left:auto; color:#557a46; font-size:12px; }
     #status.warning { color:#a06035; }
-    .layer-settings { margin-top:22px; border:1px solid rgba(29,31,32,.17); background:#fff; }
-    .layer-title { padding:9px 12px; border-bottom:1px solid rgba(29,31,32,.12); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#5980a6; }
-    .layer-intro { margin:0; padding:9px 12px; color:rgba(29,31,32,.58); font-size:12px; line-height:1.4; background:#fafafa; }
-    .layer-row { display:grid; grid-template-columns:22px minmax(0,1fr) 100px 120px; align-items:center; gap:10px; min-height:48px; padding:8px 12px; border-top:1px solid rgba(29,31,32,.09); }
-    .layer-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:.05em; }
-    .layer-note { display:block; margin-top:2px; color:rgba(29,31,32,.5); font-size:10px; line-height:1.2; }
-    .layer-option { display:flex; align-items:center; justify-content:center; gap:5px; color:rgba(29,31,32,.68); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; }
-    .layer-option input { accent-color:#5980a6; }
     @media (max-width:720px) {
       .groups { grid-template-columns:1fr; }
-      .layer-row { grid-template-columns:22px 1fr; }
-      .layer-option { justify-content:flex-start; }
       main { margin-top:24px; }
       #status { width:100%; margin-left:0; order:3; }
     }
@@ -65,15 +55,10 @@
     <a class="back" href="./MODEL.dc.html">← Back to Model</a>
   </header>
   <main>
-    <h1>Keyboard &amp; Layer Settings</h1>
-    <p class="intro">Choose shortcuts and line-layer behavior that feel natural to you. Generic lines are placed on the selected layer; these settings are saved to this browser immediately.</p>
+    <h1>Keyboard Settings</h1>
+    <p class="intro">Choose shortcuts that feel natural to you; they are saved to this browser immediately. Layers live in <a href="./STANDARDS.html" style="color:#5980a6;">Company Standard Layers</a>, and the drawing layer for new lines is picked in Model Space.</p>
     <div class="notice">Commands are grouped by purpose. A key can include modifiers such as <strong>Shift+W</strong>, <strong>Ctrl+L</strong>, or <strong>Alt+1</strong>. Some shortcuts reserved by your browser or operating system may not be available.</div>
     <section class="groups" id="groups" aria-label="Keyboard commands"></section>
-    <section class="layer-settings" aria-label="Generic line layers">
-      <div class="layer-title">Generic Line Layers</div>
-      <p class="layer-intro">Choose the layer used by the Line tool and control what you see here. Layer names and print rules are office standards — change them in <a href="./STANDARDS.html" style="color:#5980a6;">Company Standard Layers</a>.</p>
-      <div id="line-layers"></div>
-    </section>
     <div class="actions">
       <button class="action" id="reset" type="button">RESET DEFAULTS</button>
       <button class="action primary" id="download" type="button">DOWNLOAD .DRAFT.SETTINGS</button>
@@ -84,8 +69,6 @@
     (() => {
       const manager = window.DraftProfileManager;
       const keyboard = window.DraftKeyboard;
-      const lineLayerApi = window.DraftLineLayers;
-      const layerStandardsApi = window.DraftLayerStandards;
       const groups = [
         { title:'Drawing tools', commands:[
           ['select', 'Select'], ['line', 'Line'], ['node', 'Node / Arc'], ['wall', 'Wall'],
@@ -104,7 +87,6 @@
       const defaults = keyboard.DEFAULT_KEYBINDINGS;
       const active = manager.getActive('settings');
       const existing = active?.content?.model?.keybindings || {};
-      const existingLineLayers = active?.content?.model?.lineLayers || {};
       let packageName = active?.name || manager.defaultName();
       // A stored empty string means the user deliberately cleared the command,
       // so only a command that was never stored falls back to its default.
@@ -112,12 +94,6 @@
         command,
         command in existing ? keyboard.normaliseKeyBinding(existing[command]) : fallback,
       ]));
-      let lineLayers = lineLayerApi.normaliseLineLayers(existingLineLayers);
-      let activeLineLayer = lineLayerApi.normaliseActiveLineLayer(active?.content?.model?.activeLineLayer);
-      // Names and print rules come from the company standard, not personal settings.
-      const layerStandards = layerStandardsApi.normaliseLayerStandards(
-        manager.getActive('standards')?.content?.model?.layerStandards,
-      );
 
       // Combinations the browser answers itself: assigning them would either do
       // nothing or reload the drawing out from under the user.
@@ -168,43 +144,6 @@
             render();
           });
         });
-        document.querySelector('#line-layers').innerHTML = ['draft', 'no-draft'].map(layerId => {
-          const layer = lineLayers[layerId];
-          const standard = layerStandards[layerId];
-          return `
-            <label class="layer-row">
-              <input type="radio" name="active-line-layer" data-active-layer="${layerId}" ${activeLineLayer === layerId ? 'checked' : ''} aria-label="Use ${standard.name} for new generic lines">
-              <span>
-                <span class="layer-name">${standard.name}</span>
-                <span class="layer-note">${standard.printable ? 'Included in printed output.' : 'Construction-only; excluded from printed output.'}</span>
-              </span>
-              <span class="layer-option"><input type="checkbox" data-layer-visible="${layerId}" ${layer.visible ? 'checked' : ''}> Visible</span>
-              <span class="layer-option">${standard.printable ? 'Printed' : 'Not printed'}</span>
-            </label>
-          `;
-        }).join('');
-        document.querySelectorAll('[data-active-layer]').forEach(input => {
-          input.addEventListener('change', () => {
-            activeLineLayer = lineLayerApi.normaliseActiveLineLayer(input.dataset.activeLayer);
-            saveActive(`${layerStandards[activeLineLayer].name} will receive new generic lines.`);
-            render();
-          });
-        });
-        document.querySelectorAll('[data-layer-visible]').forEach(input => {
-          input.addEventListener('change', () => {
-            const layerId = input.dataset.layerVisible;
-            lineLayers = {
-              ...lineLayers,
-              [layerId]: { ...lineLayers[layerId], visible: input.checked },
-            };
-            if (!lineLayers[activeLineLayer].visible) {
-              const alternate = activeLineLayer === 'draft' ? 'no-draft' : 'draft';
-              if (lineLayers[alternate].visible) activeLineLayer = alternate;
-            }
-            saveActive(`${layerStandards[layerId].name} is now ${input.checked ? 'visible' : 'hidden'}.`);
-            render();
-          });
-        });
       };
 
       const duplicateMessage = () => {
@@ -227,7 +166,7 @@
       };
 
       const saveActive = message => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, lineLayers, activeLineLayer } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -235,13 +174,11 @@
 
       document.querySelector('#reset').addEventListener('click', () => {
         bindings = { ...defaults };
-        lineLayers = lineLayerApi.normaliseLineLayers(lineLayerApi.DEFAULT_LINE_LAYERS);
-        activeLineLayer = 'draft';
-        saveActive('Default shortcuts and layers restored.');
+        saveActive('Default shortcuts restored.');
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, lineLayers, activeLineLayer } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);

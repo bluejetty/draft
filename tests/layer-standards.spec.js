@@ -79,13 +79,33 @@ test('a layer whose standard says not printed is excluded from print output', as
   expect(h.allLines(await h.savedDrawing(page))).toHaveLength(1);
 });
 
-test('generic line layer names in Settings come from the company standard', async ({ page }) => {
-  await openStandards(page);
-  await page.locator('[data-layer-name="draft"]').fill('A-LINE');
-  await page.locator('[data-layer-name="draft"]').blur();
+test('the Model Space picker places new lines on the chosen generic layer', async ({ page }) => {
+  await h.openModel(page);
+  await page.getByRole('button', { name: 'NO-DRAFT', exact: true }).click();
+  await drawLine(page, -10, 0, 10, 0);
+  const lines = h.allLines(await h.savedDrawing(page));
+  expect(lines).toHaveLength(1);
+  expect(lines[0].layer).toBe('no-draft');
 
+  await page.getByRole('button', { name: 'DRAFT', exact: true }).click();
+  await drawLine(page, -10, 5, 10, 5);
+  const after = h.allLines(await h.savedDrawing(page));
+  expect(after).toHaveLength(2);
+  expect(after.filter(line => line.layer === 'draft')).toHaveLength(1);
+});
+
+test('hiding a generic layer in the standards falls back to the other layer', async ({ page }) => {
+  await openStandards(page);
+  await page.locator('[data-layer-visible="draft"]').uncheck();
+  await expect(page.locator('#status')).toContainText('hidden');
+
+  await h.openModel(page);
+  // With DRAFT hidden, the Line tool falls back to NO-DRAFT automatically.
+  await expect(page.getByRole('button', { name: /NO-DRAFT LINE/ })).toBeVisible();
+});
+
+test('the layer section is gone from Settings, which links to the standards', async ({ page }) => {
   await page.goto('/SETTINGS.html');
-  const layerSection = page.locator('.layer-settings');
-  await expect(layerSection.getByText('A-LINE')).toBeVisible();
-  await expect(layerSection.getByText('NO-DRAFT')).toBeVisible();
+  await expect(page.locator('.layer-settings')).toHaveCount(0);
+  await expect(page.locator('a[href="./STANDARDS.html"]')).toBeVisible();
 });
