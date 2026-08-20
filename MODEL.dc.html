@@ -7,6 +7,7 @@
 <script src="./profile-manager.js"></script>
 <script src="./shared-file-store.js"></script>
 <script src="./drawing-format.js"></script>
+<script src="./geometry-2d.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
      would otherwise run here and be mounted again by the helmet runtime. -->
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
@@ -493,8 +494,10 @@ const WALL_TYPES = [
   { id:'concrete_12', label:'12" Concrete',        totalIn:12,    layers:[{in:12,    fill:'concrete'}] },
   { id:'icf',         label:'ICF  (11¼")',         totalIn:11.25, layers:[{in:2.625,fill:'insulation'},{in:6,fill:'concrete'},{in:2.625,fill:'insulation'}] },
 ];
-// Stored-drawing readers and the format version live in drawing-format.js.
+// Stored-drawing readers and the format version live in drawing-format.js;
+// the plan-view snapping and trim maths lives in geometry-2d.js.
 const format = window.DraftDrawingFormat;
+const geo = window.DraftGeometry2D;
 const DRAWING_FORMAT_VERSION = format.VERSION;
 const REF_LINES = ['left', 'center', 'right'];
 const DEFAULT_LEVELS = [
@@ -709,7 +712,13 @@ class Component extends DCLogic {
     const result = await this._loadDrawing(file);
     if (result.ok) {
       this._markUnsaved();
-      this.setState({ drawingMessage: `${file.name} imported.`, drawingMessageError: false });
+      const skipped = result.skipped || 0;
+      this.setState({
+        drawingMessage: skipped
+          ? `${file.name} imported — ${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded.`
+          : `${file.name} imported.`,
+        drawingMessageError: skipped > 0,
+      });
     }
   }
 
@@ -883,7 +892,10 @@ class Component extends DCLogic {
   // Restore-only path. Validates a plain drawing object and swaps it into the
   // component; it does no file IO, writes nothing to the store and reloads no
   // profiles, so both file loading and the undo history can share it.
-  // Returns { ok, reason }; a drawing it cannot understand is left untouched.
+  // Returns { ok, reason, skipped }; a drawing it cannot understand is left
+  // untouched. A drawing whose envelope is sound but which carries individual
+  // broken entities loads the rest and counts what it dropped, so the status bar
+  // can say so instead of losing geometry quietly.
   async _applyDrawingData(saved) {
       const envelope = format.checkEnvelope(saved);
       if (!envelope.ok) return envelope;
@@ -900,6 +912,7 @@ class Component extends DCLogic {
         saved.backgroundLevelIds, levelIds, levels[activeLevelIdx].id,
       );
       const cuts = format.cuts(saved.cuts, levelIds);
+      let skipped = (Array.isArray(saved.cuts) ? saved.cuts.length : 0) - cuts.length;
       const nextCutId = Math.max(
         1,
         ...cuts.map(cut => cut.id + 1),
@@ -950,6 +963,7 @@ class Component extends DCLogic {
       this._lines = Array.isArray(saved.lines)
          ? saved.lines.map(line => restoreSegment(line, 'line')).filter(Boolean)
         : [];
+      skipped += (Array.isArray(saved.lines) ? saved.lines.length : 0) - this._lines.length;
       this._walls = Array.isArray(saved.walls)
          ? saved.walls.map(wall => restoreSegment(wall, 'wall', {
           wallType: WALL_TYPES.some(type => type.id === wall.wallType) ? wall.wallType : 'stud_2x6',
@@ -958,6 +972,7 @@ class Component extends DCLogic {
           refLine: format.oneOf(wall.refLine, REF_LINES, 'left'),
         })).filter(Boolean)
         : [];
+      skipped += (Array.isArray(saved.walls) ? saved.walls.length : 0) - this._walls.length;
       this._floors = Array.isArray(saved.floors)
         ? saved.floors.map(floor => {
           const levelId = format.levelId(floor?.levelId, levelIds);
@@ -972,6 +987,7 @@ class Component extends DCLogic {
           };
         }).filter(Boolean)
         : [];
+      skipped += (Array.isArray(saved.floors) ? saved.floors.length : 0) - this._floors.length;
        const numericItemIds = [...this._lines, ...this._walls, ...this._floors]
          .map(item => Number(String(item.id).match(/-(\d+)$/)?.[1]))
          .filter(Number.isInteger);
@@ -1017,6 +1033,7 @@ class Component extends DCLogic {
            } : null,
          };
        }).filter(Boolean) : [];
+       skipped += (Array.isArray(saved.groups) ? saved.groups.length : 0) - this._groups.length;
        const numericGroupIds = this._groups
          .map(group => Number(String(group.id).replace(/^group-/, '')))
          .filter(Number.isInteger);
@@ -1024,7 +1041,7 @@ class Component extends DCLogic {
        this._clearSelection(false);
       this._cutObjects = {};
       cuts.forEach(cut => this._restoreCutObjects(cut));
-      return { ok: true, reason: 'loaded' };
+      return { ok: true, reason: 'loaded', skipped: Math.max(0, skipped) };
   }
 
   // Returns { ok, reason }. A load that cannot be understood leaves the current
@@ -1056,7 +1073,11 @@ class Component extends DCLogic {
       this._drawingReady = true;
       const failed = !outcome.ok && outcome.reason !== 'empty';
       const source = importedFile ? 'import' : 'store';
-      const message = !failed ? ''
+      const skipped = outcome.ok ? (outcome.skipped || 0) : 0;
+      const message = !failed
+        ? (skipped && !importedFile
+          ? `Saved drawing loaded — ${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded.`
+          : '')
         : outcome.reason === 'version'
           ? (source === 'import'
             ? 'Import failed — this file was made by a newer version of Draft. Nothing was changed.'
@@ -1070,7 +1091,7 @@ class Component extends DCLogic {
         persistenceStatus: outcome.ok ? 'SAVED' : (importedFile ? previousStatus : 'SAVED'),
         persistenceError: '',
         drawingMessage: message,
-        drawingMessageError: failed,
+        drawingMessageError: failed || skipped > 0,
         wallBaseInput: formatArchitecturalInches(this.state.wallBaseHeight * 12),
         wallTopInput: formatArchitecturalInches(this.state.wallTopHeight * 12),
         floorThicknessInput: formatArchitecturalInches(this.state.floorThickness * 12),
@@ -1610,15 +1631,12 @@ class Component extends DCLogic {
     if (this.state.activeTool === 'trim' && this._snapPt) {
       const hovSeg = this._findNearestSeg(this._snapPt);
       if (hovSeg) {
-        // Find nearest intersection on hovered segment
+        // Find nearest intersection on hovered segment — the same choice _doTrim
+        // makes, so the red highlight always shows what a click would remove.
         const others = [...this._activeLines(), ...this._activeWalls()].filter(s => s !== hovSeg);
-        const hits = others.map(o => this._segIntersect(hovSeg, o)).filter(Boolean);
-        if (hits.length > 0) {
-          const ax = hovSeg.start.x, az = hovSeg.start.z, bx = hovSeg.end.x, bz = hovSeg.end.z;
-          const ddx = bx-ax, ddz = bz-az, len2 = ddx*ddx+ddz*ddz;
-          const tC = len2 > 0 ? Math.max(0, Math.min(1, ((this._snapPt.x-ax)*ddx+(this._snapPt.z-az)*ddz)/len2)) : 0;
-          hits.sort((a, b) => Math.abs(a.t - tC) - Math.abs(b.t - tC));
-          const near = hits[0];
+        const near = geo.nearestIntersection(hovSeg, others, this._snapPt);
+        if (near) {
+          const tC = near.tPoint;
           // Draw the to-be-removed side in red
           const clipFrom = tC <= near.t ? hovSeg.start : hovSeg.end;
           const clipTo   = new THREE.Vector3(near.x, hovSeg.start.y, near.z);
@@ -2068,8 +2086,9 @@ class Component extends DCLogic {
 
   _snap(pt) {
     if (!this.state.gridSnapEnabled) return pt.clone();
-    const unit = 1; // GRID SNAP is intentionally limited to one-foot increments.
-    return new THREE.Vector3(Math.round(pt.x / unit) * unit, pt.y, Math.round(pt.z / unit) * unit);
+    // GRID SNAP is intentionally limited to one-foot increments.
+    const snapped = geo.snapToGrid(pt, 1);
+    return new THREE.Vector3(snapped.x, snapped.y, snapped.z);
   }
 
   // ─── Mouse ───────────────────────────────────────────────────────────────────
@@ -2097,12 +2116,9 @@ class Component extends DCLogic {
 
     // 45° angle lock — must establish lockAngle before tracking/magnet
     if (angleLockHeld && start) {
-      // Establish angle from raw cursor if not yet locked
-      if (this._lockAngle == null) {
-        const dx0 = gridPt.x - start.x, dz0 = gridPt.z - start.z;
-        const raw0 = Math.atan2(dz0, dx0);
-        this._lockAngle = Math.round(raw0 / (Math.PI / 4)) * (Math.PI / 4);
-      }
+      // Establish angle from raw cursor if not yet locked. A cursor still sitting
+      // on the start point has no direction yet, so the lock waits for one.
+      if (this._lockAngle == null) this._lockAngle = geo.lockAngleFor(start, gridPt);
     } else if (!angleLockHeld) {
       this._lockAngle = null;
     }
@@ -2911,44 +2927,34 @@ class Component extends DCLogic {
     return v;
   }
 
+  // Snap radii are expressed in screen pixels so they stay constant on screen
+  // however far the plan is zoomed.
+  _worldPerPixel() {
+    return geo.worldPerPixel(this._orthoHalfH, this._canvas ? this._canvas.clientHeight : 600);
+  }
+
   _magnetRadius() {
-    const h = this._canvas ? this._canvas.clientHeight : 600;
-    return (this._orthoHalfH * 2) / h * 20;
+    return this._worldPerPixel() * 20;
   }
 
   _nodeSnapRadius() {
-    const h = this._canvas ? this._canvas.clientHeight : 600;
-    return (this._orthoHalfH * 2) / h * NODE_SNAP_PX;
+    return this._worldPerPixel() * NODE_SNAP_PX;
   }
 
   _findMagnet(gridPt) {
     const r = this._nodeSnapRadius();
-    const nearest = vertices => {
-      let best = null, bestD = r;
-      vertices.forEach(v => {
-        const d = Math.sqrt((v.x - gridPt.x) ** 2 + (v.z - gridPt.z) ** 2);
-        if (d < bestD) { bestD = d; best = v; }
-      });
-      return best;
-    };
     // Active geometry always wins over a background reference when both qualify.
-    return nearest(this._collectActiveVertices()) || nearest(this._collectBackgroundVertices());
+    return geo.nearestVertex(this._collectActiveVertices(), gridPt, r)
+      || geo.nearestVertex(this._collectBackgroundVertices(), gridPt, r);
   }
 
   // Return midpoint of the nearest line/wall segment if the cursor is within snap
   // radius. Only called when vertex magnet is null (vertex takes priority).
   _findMidpointSnap(cursorPt) {
-    const h = this._canvas ? this._canvas.clientHeight : 600;
-    const r = (this._orthoHalfH * 2) / h * MIDPOINT_SNAP_PX;
+    const r = this._worldPerPixel() * MIDPOINT_SNAP_PX;
     const nearest = segments => {
-      let best = null, bestD = r;
-      segments.forEach(seg => {
-        const a = seg.start, b = seg.end;
-        const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
-        const d = Math.sqrt((mx - cursorPt.x) ** 2 + (mz - cursorPt.z) ** 2);
-        if (d < bestD) { bestD = d; best = new THREE.Vector3(mx, a.y, mz); }
-      });
-      return best;
+      const mid = geo.nearestMidpoint(segments, cursorPt, r);
+      return mid ? new THREE.Vector3(mid.x, mid.y, mid.z) : null;
     };
     return nearest([...this._activeLines(), ...this._activeWalls()])
       || nearest([...this._backgroundLines(), ...this._backgroundWalls()]);
@@ -3417,15 +3423,7 @@ class Component extends DCLogic {
   // 2D segment intersection. Returns { t, u, x, z } where t∈[0,1] is the param
   // on segment A and u∈[0,1] on segment B, or null if parallel / non-intersecting.
   _segIntersect(a, b) {
-    const ax = a.start.x, az = a.start.z, bx = a.end.x, bz = a.end.z;
-    const cx = b.start.x, cz = b.start.z, dx = b.end.x, dz = b.end.z;
-    const den = (bx-ax)*(dz-cz) - (bz-az)*(dx-cx);
-    if (Math.abs(den) < 1e-10) return null;
-    const t = ((cx-ax)*(dz-cz) - (cz-az)*(dx-cx)) / den;
-    const u = ((cx-ax)*(bz-az) - (cz-az)*(bx-ax)) / den;
-    if (t < -0.001 || t > 1.001 || u < -0.001 || u > 1.001) return null;
-    const tc = Math.max(0, Math.min(1, t));
-    return { t: tc, u: Math.max(0, Math.min(1, u)), x: ax + tc*(bx-ax), z: az + tc*(bz-az) };
+    return geo.segmentIntersection(a, b);
   }
 
   // Click a segment in Trim mode → remove the clicked-side portion at the nearest
@@ -3436,22 +3434,9 @@ class Component extends DCLogic {
 
     const others = [...this._activeLines(), ...this._activeWalls()].filter(s => s !== seg);
 
-    // Find all intersections of clicked segment with every other segment
-    const hits = [];
-    others.forEach(other => {
-      const ix = this._segIntersect(seg, other);
-      if (ix) hits.push({ ...ix, other });
-    });
-    if (hits.length === 0) return false;
-
-    // t-parameter of the click on the clicked segment
-    const ax = seg.start.x, az = seg.start.z, bx = seg.end.x, bz = seg.end.z;
-    const ddx = bx-ax, ddz = bz-az, len2 = ddx*ddx+ddz*ddz;
-    const tClick = len2 > 0 ? Math.max(0, Math.min(1, ((clickWorldPt.x-ax)*ddx + (clickWorldPt.z-az)*ddz) / len2)) : 0;
-
-    // Nearest intersection to the click location along the segment
-    hits.sort((a, b) => Math.abs(a.t - tClick) - Math.abs(b.t - tClick));
-    const nearest = hits[0];
+    const nearest = geo.nearestIntersection(seg, others, clickWorldPt);
+    if (!nearest) return false;
+    const tClick = nearest.tPoint;
     if (!this._canReshapeItems([seg, nearest.other])) return false;
 
     // Create (or reuse) the intersection vertex in the pool
@@ -3492,56 +3477,32 @@ class Component extends DCLogic {
   // is near and return the intersection of that perpendicular with the locked ray.
   _findTrackingSnap(cursorPt, start) {
     if (this._lockAngle == null) return null;
-    const h = this._canvas ? this._canvas.clientHeight : 600;
-    const worldPerPx = (this._orthoHalfH * 2) / h;
-    const threshWorld = LOCKED_NODE_SNAP_PX * worldPerPx;
-
-    const dirX = Math.cos(this._lockAngle), dirZ = Math.sin(this._lockAngle);
+    const threshWorld = LOCKED_NODE_SNAP_PX * this._worldPerPixel();
 
     const find = vertices => {
-      let best = null, bestDistance = threshWorld;
-      vertices.forEach(V => {
-        // Skip the current chain tip (avoid snapping to self)
-        if (start && Math.abs(V.x - start.x) < 0.001 && Math.abs(V.z - start.z) < 0.001) return;
-        // Require the cursor to be genuinely near the node center. The previous
-        // perpendicular-only check could snap to a node far away along the ray.
-        const dx = cursorPt.x - V.x, dz = cursorPt.z - V.z;
-        const distance = Math.sqrt(dx * dx + dz * dz);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          // Snap point: project the nearby node onto the locked ray from start
-          const svx = V.x - start.x, svz = V.z - start.z;
-          const t = svx * dirX + svz * dirZ;
-          best = {
-            snapPt: new THREE.Vector3(start.x + dirX * t, start.y, start.z + dirZ * t),
-            refPt:  V,
-          };
-        }
-      });
-      return best;
+      // Require the cursor to be genuinely near the node center, and skip the
+      // chain tip so the ray cannot snap to its own start.
+      const candidates = vertices.filter(vertex => !start
+        || Math.abs(vertex.x - start.x) >= 0.001 || Math.abs(vertex.z - start.z) >= 0.001);
+      const refPt = geo.nearestVertex(candidates, cursorPt, threshWorld);
+      if (!refPt) return null;
+      // Snap point: project the nearby node onto the locked ray from start.
+      const projected = geo.projectOntoRay(start, this._lockAngle, refPt);
+      return { snapPt: new THREE.Vector3(projected.x, start.y, projected.z), refPt };
     };
     return find(this._collectActiveVertices()) || find(this._collectBackgroundVertices());
   }
 
   _applyAngleLock(start, pt) {
-    const dx = pt.x - start.x, dz = pt.z - start.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist < 0.001) return pt;
-    if (this._lockAngle == null) {
-      const raw = Math.atan2(dz, dx);
-      this._lockAngle = Math.round(raw / (Math.PI / 4)) * (Math.PI / 4);
-    }
-    const dirX = Math.cos(this._lockAngle), dirZ = Math.sin(this._lockAngle);
-    const proj = dx * dirX + dz * dirZ;
-    return new THREE.Vector3(start.x + dirX * proj, pt.y, start.z + dirZ * proj);
+    const angle = this._lockAngle ?? geo.lockAngleFor(start, pt);
+    if (angle == null) return pt;
+    this._lockAngle = angle;
+    const projected = geo.projectOntoRay(start, angle, pt);
+    return new THREE.Vector3(projected.x, pt.y, projected.z);
   }
 
   _angleDeg(start, end) {
-    const dx = end.x - start.x, dz = end.z - start.z;
-    if (Math.sqrt(dx * dx + dz * dz) < 0.001) return null;
-    let deg = Math.round(Math.atan2(-dz, dx) * 180 / Math.PI); // -dz so North=90°
-    if (deg < 0) deg += 360;
-    return deg;
+    return geo.angleDeg(start, end);
   }
 
   // ─── Line drawing ────────────────────────────────────────────────────────────
