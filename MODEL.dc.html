@@ -1757,6 +1757,15 @@ class Component extends DCLogic {
       this._backgroundWalls().forEach(wall => drawReferenceSeg(wall, reference.color));
       this._backgroundLines().forEach(line => drawReferenceSeg(line, reference.color));
     }
+    // Same-level context references help align related drafting views without
+    // becoming printable or editable geometry in the current context.
+    if (!this._isPrinting) {
+      const contextReferenceColor = 'rgba(89,128,166,0.48)';
+      this._contextReferenceFloors().forEach(floor => {
+        this._drawFloor2D(ctx, toS, floor, { referenceColor: contextReferenceColor });
+      });
+      this._contextReferenceWalls().forEach(wall => drawReferenceSeg(wall, contextReferenceColor));
+    }
 
     // ── Floors (drawn below walls and lines) ───────────────────────────────────
     if (activeVisible) this._activeFloors().forEach(floor => this._drawFloor2D(ctx, toS, floor));
@@ -2192,6 +2201,7 @@ class Component extends DCLogic {
       drawingMessageError: activeTool === 'select' && ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool),
     }, () => {
       if (this._orthoCam) this._setView('top');
+      this._pruneContextReferenceSelection();
       this._notifySelectionChanged();
       this._markUnsaved();
     });
@@ -2225,14 +2235,49 @@ class Component extends DCLogic {
   _activeWalls() {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
-    const wallView = view === 'e-power' ? 'plan' : view;
-    return this._walls.filter(wall => wall.levelId === levelId && (wallView == null || (wall.view || 'plan') === wallView));
+    return this._walls.filter(wall => wall.levelId === levelId && (view == null || (wall.view || 'plan') === view));
   }
 
   _activeFloors() {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
     return this._floors.filter(floor => floor.levelId === levelId && (view == null || (floor.view || 'floor') === view));
+  }
+
+  // Same-level overlays remain source-context geometry. They render as references
+  // only, and are intentionally excluded from editing and print collections.
+  _contextReferenceWalls() {
+    const levelId = this._activeLevelId();
+    const view = this._activeLayerViewId(levelId);
+    if (view !== 'floor' && view !== 'e-power') return [];
+    return this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan');
+  }
+
+  _contextReferenceFloors() {
+    const levelId = this._activeLevelId();
+    const view = this._activeLayerViewId(levelId);
+    if (view !== 'plan') return [];
+    return this._floors.filter(floor => floor.levelId === levelId && (floor.view || 'floor') === 'floor');
+  }
+
+  _isCurrentContextReferenceItem(item) {
+    if (!item || item.levelId !== this._activeLevelId()) return false;
+    const view = this._activeLayerViewId(item.levelId);
+    if (view === 'plan') {
+      return this._floors.includes(item) && (item.view || 'floor') === 'floor';
+    }
+    return (view === 'floor' || view === 'e-power')
+      && this._walls.includes(item)
+      && (item.view || 'plan') === 'plan';
+  }
+
+  _pruneContextReferenceSelection() {
+    this._selectedSegs?.forEach(item => {
+      if (this._isCurrentContextReferenceItem(item)) this._selectedSegs.delete(item);
+    });
+    this._selectedFloors?.forEach(item => {
+      if (this._isCurrentContextReferenceItem(item)) this._selectedFloors.delete(item);
+    });
   }
 
   _activeDimensions() {
@@ -3346,6 +3391,33 @@ class Component extends DCLogic {
     return pts;
   }
 
+  _referenceFloorSegments(floors) {
+    const segments = [];
+    floors.forEach(floor => {
+      const points = floor.points || [];
+      if (points.length < 2) return;
+      for (let index = 0; index < points.length - 1; index++) {
+        segments.push({ start: points[index], end: points[index + 1] });
+      }
+      if (points.length >= 3) segments.push({ start: points.at(-1), end: points[0] });
+    });
+    return segments;
+  }
+
+  _collectContextReferenceVertices() {
+    const pts = [];
+    this._contextReferenceWalls().forEach(wall => pts.push(wall.start, wall.end));
+    this._contextReferenceFloors().forEach(floor => pts.push(...floor.points));
+    return pts;
+  }
+
+  _contextReferenceSegments() {
+    return [
+      ...this._contextReferenceWalls(),
+      ...this._referenceFloorSegments(this._contextReferenceFloors()),
+    ];
+  }
+
   _collectVertices() {
     return [...this._collectActiveVertices(), ...this._collectBackgroundVertices()];
   }
@@ -3387,8 +3459,10 @@ class Component extends DCLogic {
 
   _findMagnet(gridPt) {
     const r = this._nodeSnapRadius();
-    // Active geometry always wins over a background reference when both qualify.
+    // Active geometry always wins; same-level references then beat optional
+    // cross-level backgrounds. References offer only nodes and midpoints.
     return geo.nearestVertex(this._collectActiveVertices(), gridPt, r)
+      || geo.nearestVertex(this._collectContextReferenceVertices(), gridPt, r)
       || geo.nearestVertex(this._collectBackgroundVertices(), gridPt, r);
   }
 
@@ -3401,6 +3475,7 @@ class Component extends DCLogic {
       return mid ? new THREE.Vector3(mid.x, mid.y, mid.z) : null;
     };
     return nearest([...this._activeLines(), ...this._activeWalls()])
+      || nearest(this._contextReferenceSegments())
       || nearest([...this._backgroundLines(), ...this._backgroundWalls()]);
   }
 
@@ -3517,6 +3592,7 @@ class Component extends DCLogic {
 
   _setItemSelected(item, selected) {
     if (!item) return;
+    if (selected && this._isCurrentContextReferenceItem(item)) return;
     const target = this._itemType(item) === 'floor' ? this._selectedFloors : this._selectedSegs;
     if (selected) target.add(item);
     else target.delete(item);
@@ -3528,7 +3604,11 @@ class Component extends DCLogic {
   }
 
   _selectedGroups() {
-    return (this._groups || []).filter(group => this._groupItems(group).some(item => this._isItemSelected(item)));
+    return (this._groups || []).filter(group => {
+      const items = this._groupItems(group);
+      return items.some(item => this._isItemSelected(item))
+        && !items.some(item => this._isCurrentContextReferenceItem(item));
+    });
   }
 
   _clearSelection(notify = true) {
@@ -3580,7 +3660,8 @@ class Component extends DCLogic {
 
   _selectedGroupForWallEditing() {
     const groups = this._selectedGroups();
-    return groups.length === 1 && this._groupItems(groups[0]).some(item => this._itemType(item) === 'wall')
+    return groups.length === 1 && this._groupItems(groups[0])
+      .some(item => this._itemType(item) === 'wall' && !this._isCurrentContextReferenceItem(item))
       ? groups[0] : null;
   }
 
@@ -3667,7 +3748,7 @@ class Component extends DCLogic {
     const current = group.wallSettings || {};
     const settings = { ...current, ...patch };
     this._groupItems(group)
-      .filter(item => this._itemType(item) === 'wall')
+      .filter(item => this._itemType(item) === 'wall' && !this._isCurrentContextReferenceItem(item))
       .forEach(wall => {
         if (settings.wallType) wall.wallType = settings.wallType;
         if (Number.isFinite(settings.baseHeight)) wall.baseHeight = settings.baseHeight;
@@ -3759,9 +3840,10 @@ class Component extends DCLogic {
     const minX = Math.min(start.x, end.x), maxX = Math.max(start.x, end.x);
     const minZ = Math.min(start.z, end.z), maxZ = Math.max(start.z, end.z);
     const inside = point => point.x >= minX && point.x <= maxX && point.z >= minZ && point.z <= maxZ;
-    const lines = mode === 'window-all' ? this._lines : this._activeLines();
-    const walls = mode === 'window-all' ? this._walls : this._activeWalls();
-    const floorsInScope = mode === 'window-all' ? this._floors : this._activeFloors();
+    const selectable = items => items.filter(item => !this._isCurrentContextReferenceItem(item));
+    const lines = mode === 'window-all' ? selectable(this._lines) : this._activeLines();
+    const walls = mode === 'window-all' ? selectable(this._walls) : this._activeWalls();
+    const floorsInScope = mode === 'window-all' ? selectable(this._floors) : this._activeFloors();
     const segments = [...lines, ...walls]
       .filter(seg => inside(seg.start) && inside(seg.end));
     const floors = floorsInScope
@@ -3771,8 +3853,9 @@ class Component extends DCLogic {
   }
 
   _extendScopeItems() {
+    const movable = items => items.filter(item => !this._isCurrentContextReferenceItem(item));
     return this.state.extendScope === 'all'
-      ? { lines: this._lines, walls: this._walls, floors: this._floors }
+      ? { lines: movable(this._lines), walls: movable(this._walls), floors: movable(this._floors) }
       : { lines: this._activeLines(), walls: this._activeWalls(), floors: this._activeFloors() };
   }
 
@@ -3791,7 +3874,9 @@ class Component extends DCLogic {
       if (group?.fixed) fixedGroups.add(group);
       else points.filter(inside).forEach(point => vertices.add(point));
     });
-    fixedGroups.forEach(group => this._groupItems(group).forEach(addPoints));
+    fixedGroups.forEach(group => this._groupItems(group)
+      .filter(item => !this._isCurrentContextReferenceItem(item))
+      .forEach(addPoints));
     if (!vertices.size) {
       this._extendSession = null;
       this.setState({ extendPhase: 'idle', extendBase: null, extendMessage: 'Drag the rectangle over one or more drawing nodes.' });
