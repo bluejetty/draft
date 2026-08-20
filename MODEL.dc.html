@@ -535,17 +535,17 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
 });
 const LEVEL_LAYER_VIEWS = Object.freeze({
   5: Object.freeze([
-    Object.freeze({ id:'e-power', label:'E-POWER', contents:[] }),
+    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
     Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'FLOOR DIMENSION'] }),
   ]),
   3: Object.freeze([
-    Object.freeze({ id:'e-power', label:'E-POWER', contents:[] }),
+    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
     Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'FLOOR DIMENSION'] }),
   ]),
   1: Object.freeze([
-    Object.freeze({ id:'e-power', label:'E-POWER', contents:[] }),
+    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT'] }),
     Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL/FOOTING', 'S-BEAM', 'S-SLAB'] }),
   ]),
@@ -2225,7 +2225,8 @@ class Component extends DCLogic {
   _activeWalls() {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
-    return this._walls.filter(wall => wall.levelId === levelId && (view == null || (wall.view || 'plan') === view));
+    const wallView = view === 'e-power' ? 'plan' : view;
+    return this._walls.filter(wall => wall.levelId === levelId && (wallView == null || (wall.view || 'plan') === wallView));
   }
 
   _activeFloors() {
@@ -2268,7 +2269,8 @@ class Component extends DCLogic {
   _backgroundWalls() {
     const ref = this._visibleBackgroundReference();
     const view = this._activeLayerViewId();
-    return ref ? this._walls.filter(wall => wall.levelId === ref.levelId && (view == null || (wall.view || 'plan') === view)) : [];
+    const wallView = view === 'e-power' ? 'plan' : view;
+    return ref ? this._walls.filter(wall => wall.levelId === ref.levelId && (wallView == null || (wall.view || 'plan') === wallView)) : [];
   }
 
   _backgroundFloors() {
