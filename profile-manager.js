@@ -119,6 +119,7 @@ if (!window.DraftProfileManager) {
     cancel: 'Escape',
     delete: 'Delete',
     undo: 'Ctrl+Z',
+    redo: 'Ctrl+Shift+Z',
     background: 'B',
     gridSnap: '',
   });

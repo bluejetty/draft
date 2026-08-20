@@ -523,9 +523,14 @@ const DEFAULT_KEYBINDINGS = Object.freeze({
   delete: 'Delete',
   group: 'G',
   undo: 'Ctrl+Z',
+  redo: 'Ctrl+Shift+Z',
   background: 'B',
   gridSnap: '',
 });
+
+// Undo keeps whole serialized drawings, so it is bounded by count and by size.
+const HISTORY_LIMIT = 60;
+const HISTORY_MAX_CHARS = 8000000;
 
 function normaliseKeyBinding(value) {
   const aliases = {
@@ -952,36 +957,19 @@ class Component extends DCLogic {
     return id;
   }
 
-  // Returns { ok, reason }. A load that cannot be understood leaves the current
-  // drawing and the stored copy untouched — nothing is imported and nothing is
-  // overwritten — and reports the failure to the status bar.
-  async _loadDrawing(importedFile = null) {
-    this._extendUndo = null;
-    this._loadingDrawing = true;
-    const previousStatus = this.state.persistenceStatus;
-    let outcome = { ok: false, reason: 'empty' };
-    try {
-      if (!importedFile && !window.SharedFileStore) return outcome;
-      const file = importedFile || await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET);
-      if (!file) return outcome;
-      const raw = await file.text();
-      let saved = null;
-      try {
-        saved = JSON.parse(raw);
-      } catch {
-        outcome = { ok: false, reason: 'invalid' };
-        return outcome;
-      }
+  // Restore-only path. Validates a plain drawing object and swaps it into the
+  // component; it does no file IO, writes nothing to the store and reloads no
+  // profiles, so both file loading and the undo history can share it.
+  // Returns { ok, reason }; a drawing it cannot understand is left untouched.
+  async _applyDrawingData(saved) {
       if (!saved || typeof saved !== 'object' || !Array.isArray(saved.levels)) {
-        outcome = { ok: false, reason: 'invalid' };
-        return outcome;
+        return { ok: false, reason: 'invalid' };
       }
       if (saved.version !== DRAWING_FORMAT_VERSION) {
-        outcome = {
+        return {
           ok: false,
           reason: Number(saved.version) > DRAWING_FORMAT_VERSION ? 'version' : 'invalid',
         };
-        return outcome;
       }
 
       const levels = saved.levels
@@ -992,10 +980,7 @@ class Component extends DCLogic {
           elev: Number.isFinite(Number(level.elev)) ? Number(level.elev) : 0,
           visible: level.visible !== false,
         }));
-      if (!levels.length) {
-        outcome = { ok: false, reason: 'invalid' };
-        return outcome;
-      }
+      if (!levels.length) return { ok: false, reason: 'invalid' };
 
       const levelIds = new Set(levels.map(level => level.id));
       const activeLevelIdx = Math.max(0, Math.min(
@@ -1163,7 +1148,30 @@ class Component extends DCLogic {
        this._clearSelection(false);
       this._cutObjects = {};
       cuts.forEach(cut => this._restoreCutObjects(cut));
-      outcome = { ok: true, reason: 'loaded' };
+      return { ok: true, reason: 'loaded' };
+  }
+
+  // Returns { ok, reason }. A load that cannot be understood leaves the current
+  // drawing and the stored copy untouched — nothing is imported and nothing is
+  // overwritten — and reports the failure to the status bar.
+  async _loadDrawing(importedFile = null) {
+    this._extendUndo = null;
+    this._loadingDrawing = true;
+    const previousStatus = this.state.persistenceStatus;
+    let outcome = { ok: false, reason: 'empty' };
+    try {
+      if (!importedFile && !window.SharedFileStore) return outcome;
+      const file = importedFile || await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET);
+      if (!file) return outcome;
+      const raw = await file.text();
+      let saved = null;
+      try {
+        saved = JSON.parse(raw);
+      } catch {
+        outcome = { ok: false, reason: 'invalid' };
+        return outcome;
+      }
+      outcome = await this._applyDrawingData(saved);
     } catch (error) {
       console.warn('Unable to load saved model drawing:', error);
       outcome = { ok: false, reason: 'invalid' };
@@ -1196,12 +1204,107 @@ class Component extends DCLogic {
         if (this._orthoCam) this._setView('top');
         this._restoreActiveProfilePackages();
       });
+      // Only the first load seeds the baseline: an import has to stay undoable,
+      // so the pre-import snapshot must survive it.
+      if (this._historySnapshot === null) {
+        this._historySnapshot = JSON.stringify(this._serializeDrawing());
+      }
     }
     return outcome;
   }
 
+  // ─── Undo history ────────────────────────────────────────────────────────────
+  // Every mutation already funnels through _markUnsaved, so history is recorded
+  // there: _historySnapshot always holds the drawing as it was before the change
+  // that is being saved right now.
+  _recordHistory() {
+    const snapshot = JSON.stringify(this._serializeDrawing());
+    if (snapshot === this._historySnapshot) return;
+    if (this._historySnapshot !== null && !this._restoringHistory) {
+      this._history.past.push(this._historySnapshot);
+      this._history.future = [];
+      this._trimHistory();
+    }
+    this._historySnapshot = snapshot;
+  }
+
+  _trimHistory() {
+    const past = this._history.past;
+    while (past.length > HISTORY_LIMIT) past.shift();
+    let bytes = past.reduce((total, snapshot) => total + snapshot.length, 0);
+    while (past.length > 1 && bytes > HISTORY_MAX_CHARS) bytes -= past.shift().length;
+  }
+
+  async _restoreSnapshot(snapshot) {
+    let data = null;
+    try {
+      data = JSON.parse(snapshot);
+    } catch {
+      return false;
+    }
+    this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut();
+    this._extendUndo = null;
+    this._restoringHistory = true;
+    this._loadingDrawing = true;
+    let result = { ok: false, reason: 'invalid' };
+    try {
+      result = await this._applyDrawingData(data);
+    } catch (error) {
+      console.warn('Unable to restore drawing history:', error);
+    } finally {
+      this._loadingDrawing = false;
+    }
+    if (!result.ok) {
+      this._restoringHistory = false;
+      return false;
+    }
+    this._historySnapshot = snapshot;
+    await new Promise(resolve => this.setState({
+      wallBaseInput: formatArchitecturalInches(this.state.wallBaseHeight * 12),
+      wallTopInput: formatArchitecturalInches(this.state.wallTopHeight * 12),
+      floorThicknessInput: formatArchitecturalInches(this.state.floorThickness * 12),
+    }, resolve));
+    this._applyLevelElevation(this.state.activeLevelIdx);
+    // Persists the restored drawing without recording it as a new change.
+    this._markUnsaved();
+    this._restoringHistory = false;
+    return true;
+  }
+
+  async _undo() {
+    // The Extend tool keeps its own single-step undo for sessions where the
+    // shared history has nothing recorded yet.
+    if (!this._history.past.length) return this._undoExtend();
+    const current = this._historySnapshot;
+    const snapshot = this._history.past.pop();
+    if (!await this._restoreSnapshot(snapshot)) {
+      this._history.past.push(snapshot);
+      return false;
+    }
+    if (current !== null) this._history.future.push(current);
+    this.setState({ extendMessage: '', drawingMessage: 'Undone.', drawingMessageError: false });
+    return true;
+  }
+
+  async _redo() {
+    if (!this._history.future.length) {
+      this.setState({ drawingMessage: 'Nothing to redo.', drawingMessageError: false });
+      return false;
+    }
+    const current = this._historySnapshot;
+    const snapshot = this._history.future.pop();
+    if (!await this._restoreSnapshot(snapshot)) {
+      this._history.future.push(snapshot);
+      return false;
+    }
+    if (current !== null) this._history.past.push(current);
+    this.setState({ extendMessage: '', drawingMessage: 'Redone.', drawingMessageError: false });
+    return true;
+  }
+
   _markUnsaved() {
     if (this._loadingDrawing || !this._drawingReady) return;
+    this._recordHistory();
     this.setState({ persistenceStatus: 'UNSAVED', persistenceError: '', drawingMessage: '', drawingMessageError: false });
     if (!window.SharedFileStore) return;
 
@@ -1389,6 +1492,11 @@ class Component extends DCLogic {
     this._selectedFloors = new Set(); // floor outline objects currently selected
     this._extendSession  = null;      // { vertices, scope } — captured Extend nodes
     this._extendUndo     = null;      // { changes } — last committed Extend move
+
+    // Undo history — serialized drawings, oldest first
+    this._history          = { past: [], future: [] };
+    this._historySnapshot  = null;    // the drawing as it stands right now
+    this._restoringHistory = false;
 
     // Drawing state
     this._isDrawing  = false;
@@ -3944,9 +4052,14 @@ class Component extends DCLogic {
     // itself; running the drawing command too would fire it twice.
     if (focusedControl === 'widget' && (e.key === ' ' || e.key === 'Enter')) return;
     const matches = command => eventMatchesBinding(e, this.state.keybindings[command]);
+    if (matches('redo')) {
+      e.preventDefault();
+      this._redo();
+      return;
+    }
     if (matches('undo')) {
       e.preventDefault();
-      this._undoExtend();
+      this._undo();
       return;
     }
     if (matches('cancel')) {
