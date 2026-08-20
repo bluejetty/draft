@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
+<script src="./profile-manager.js"></script>
 </head>
 <body>
 <x-dc>
@@ -14,6 +15,9 @@
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
     a { color: rgba(29,31,32,0.45); text-decoration: none; font-family: 'Barlow Condensed', system-ui, sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
     a:hover { color: #5980a6; }
+    @media (max-width:560px) {
+      .layout-profile-button { min-width:48px !important; padding:1px 4px !important; font-size:7px !important; }
+    }
   </style>
 </helmet>
 
@@ -21,9 +25,43 @@
 <div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff;">
   <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase; color:#1d1f20;">LAYOUT</div>
   <div style="flex:1;"></div>
-  <a href="./MODEL.dc.html" style="margin-left:28px;">MODEL</a>
-  <a href="./PDF-MARKUP.dc.html" style="margin-left:28px;">PDF-MARKUP</a>
+  <div style="display:flex; flex-direction:column; gap:1px; margin-left:18px;">
+    <button class="layout-profile-button" onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
+    <button class="layout-profile-button" onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
+  </div>
+  <a href="./MODEL.dc.html" style="margin-left:12px;">MODEL</a>
 </div>
+
+<sc-if value="{{ profileDialogOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:flex-start; justify-content:center; padding-top:78px; background:rgba(29,31,32,0.18);">
+    <div role="dialog" aria-modal="true" aria-label="{{ profileDialogTitle }}" style="width:min(400px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
+      <div style="display:flex; align-items:flex-start; gap:14px;">
+        <div style="flex:1;">
+          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">{{ profileDialogTitle }}</div>
+          <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">{{ profileDialogDescription }}</div>
+          <sc-if value="{{ showKeyboardSettingsLink }}" hint-placeholder-val="{{ false }}">
+            <a href="./SETTINGS.html" style="display:inline-block; margin-top:9px; color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">OPEN KEYBOARD COMMANDS →</a>
+          </sc-if>
+        </div>
+        <button onClick="{{ closeProfileDialog }}" aria-label="Close" style="border:none; background:transparent; color:rgba(29,31,32,0.48); font-size:18px; line-height:1; cursor:pointer;">×</button>
+      </div>
+      <div style="margin-top:16px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">File name</div>
+      <div style="display:flex; align-items:center; margin-top:5px;">
+        <input value="{{ profileFileName }}" onInput="{{ onProfileFileNameInput }}" onKeyDown="{{ onProfileFileNameKey }}" aria-label="File name" style="min-width:0; flex:1; height:32px; border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none;" />
+        <span style="margin-left:6px; color:rgba(29,31,32,0.55); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; white-space:nowrap;">{{ profileExtension }}</span>
+      </div>
+      <button onClick="{{ saveProfilePackage }}" style="width:100%; height:34px; margin-top:10px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE {{ profileDialogTitle }}</button>
+      <div style="margin-top:14px; border:1px dashed rgba(29,31,32,0.32); background:#fafafa; padding:12px; text-align:center;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.58);">Import an existing file</div>
+        <button onClick="{{ chooseProfileFile }}" style="height:28px; margin-top:8px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; padding:3px 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">IMPORT FILE</button>
+        <input data-profile-import type="file" accept="{{ profileAccept }}" onChange="{{ onProfileFilePicked }}" style="display:none;" />
+      </div>
+      <sc-if value="{{ hasProfileDialogMessage }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:10px; color:{{ profileDialogMessageColor }}; font-size:11px; line-height:1.4;">{{ profileDialogMessage }}</div>
+      </sc-if>
+    </div>
+  </div>
+</sc-if>
 
 <!-- BODY -->
 <div style="display:flex; height:calc(100vh - 72px);">
@@ -107,6 +145,10 @@ class Component extends DCLogic {
     zoom: 1,   // pixels per paper inch on screen
     panX: 0,
     panY: 0,
+    profileDialog: null,
+    profileFileName: '',
+    profileDialogMessage: '',
+    profileDialogError: false,
   };
 
   componentDidMount() {
@@ -121,6 +163,7 @@ class Component extends DCLogic {
     this._resize();
     this._fitPaper();
     this._draw();
+    this._restoreActiveProfilePackages();
 
     this._canvas.addEventListener('mousemove', this._mmv = (e) => this._onMouseMove(e));
     this._canvas.addEventListener('mouseleave', this._mle = () => this._clearStatus());
@@ -130,6 +173,107 @@ class Component extends DCLogic {
     this._canvas.addEventListener('mousedown',  this._mdn = (e) => this._onPanStart(e));
     window.addEventListener('mousemove',        this._wmmv = (e) => this._onPanMove(e));
     window.addEventListener('mouseup',          this._mup  = () => this._onPanEnd());
+  }
+
+  // ─── Personal settings and company standards packages ───────────────────────
+  _profileContent() {
+    return {
+      layout: {
+        paperKey: this.state.paperKey,
+        orientation: this.state.orientation,
+        activeScale: this.state.activeScale,
+      },
+    };
+  }
+
+  _profileStatePatch(pkg) {
+    const values = pkg?.content?.layout;
+    if (!values || typeof values !== 'object') return {};
+    const patch = {};
+    if (PAPER_SIZES[values.paperKey]) patch.paperKey = values.paperKey;
+    if (['landscape', 'portrait'].includes(values.orientation)) patch.orientation = values.orientation;
+    if (Number.isInteger(values.activeScale) && SCALES[values.activeScale]) patch.activeScale = values.activeScale;
+    return patch;
+  }
+
+  _applyProfilePackage(pkg) {
+    const patch = this._profileStatePatch(pkg);
+    if (!Object.keys(patch).length) return;
+    this.setState(patch, () => {
+      this._fitPaper();
+      this._draw();
+    });
+  }
+
+  _restoreActiveProfilePackages() {
+    const manager = window.DraftProfileManager;
+    if (!manager) return;
+    const patch = {
+      ...this._profileStatePatch(manager.getActive('settings')),
+      ...this._profileStatePatch(manager.getActive('standards')),
+    };
+    if (Object.keys(patch).length) {
+      this.setState(patch, () => {
+        this._fitPaper();
+        this._draw();
+      });
+    }
+  }
+
+  _rememberActiveProfile(kind) {
+    const manager = window.DraftProfileManager;
+    if (!manager) return;
+    const active = manager.getActive(kind);
+    manager.saveActive(manager.createPackage(kind, active?.name || manager.defaultName(), this._profileContent()));
+  }
+
+  _openProfileDialog(kind) {
+    const manager = window.DraftProfileManager;
+    this.setState({
+      profileDialog: kind,
+      profileFileName: manager ? manager.defaultName() : 'draft-profile',
+      profileDialogMessage: '',
+      profileDialogError: false,
+    });
+  }
+
+  _closeProfileDialog() {
+    this.setState({ profileDialog: null, profileDialogMessage: '', profileDialogError: false });
+  }
+
+  _saveProfilePackage() {
+    const kind = this.state.profileDialog;
+    const manager = window.DraftProfileManager;
+    if (!kind || !manager) return;
+    const pkg = manager.createPackage(kind, this.state.profileFileName, this._profileContent());
+    manager.saveActive(pkg);
+    const fileName = manager.download(pkg);
+    this.setState({
+      profileFileName: pkg.name,
+      profileDialogMessage: `${fileName} downloaded and is active in this browser.`,
+      profileDialogError: false,
+    });
+  }
+
+  async _importProfilePackage(file) {
+    const kind = this.state.profileDialog;
+    const manager = window.DraftProfileManager;
+    if (!kind || !manager) return;
+    try {
+      const pkg = await manager.parseFile(file, kind);
+      manager.saveActive(pkg);
+      this._applyProfilePackage(pkg);
+      this.setState({
+        profileFileName: pkg.name,
+        profileDialogMessage: `${file.name} imported and is now active.`,
+        profileDialogError: false,
+      });
+    } catch (error) {
+      this.setState({
+        profileDialogMessage: error instanceof Error ? error.message : 'Unable to import this file.',
+        profileDialogError: true,
+      });
+    }
   }
 
   componentWillUnmount() {
@@ -297,18 +441,18 @@ class Component extends DCLogic {
     this.state.paperKey = key;
     this._fitPaper();
     this._draw();
-    this.setState({ paperKey: key });
+    this.setState({ paperKey: key }, () => this._rememberActiveProfile('settings'));
   }
 
   _setOrientation(o) {
     this.state.orientation = o;
     this._fitPaper();
     this._draw();
-    this.setState({ orientation: o });
+    this.setState({ orientation: o }, () => this._rememberActiveProfile('settings'));
   }
 
   _setScale(idx) {
-    this.setState({ activeScale: idx });
+    this.setState({ activeScale: idx }, () => this._rememberActiveProfile('settings'));
   }
 
   renderVals() {
@@ -320,6 +464,11 @@ class Component extends DCLogic {
     const off = { bg: '#fff',    color: '#1d1f20', border: 'rgba(29,31,32,0.16)' };
     const scOn  = 'rgba(29,31,32,0.09)';
     const scOff = '#fff';
+    const profileDialog = this.state.profileDialog;
+    const profileDialogTitle = profileDialog === 'standards' ? 'Company Standards' : 'Personal Settings';
+    const profileDialogDescription = profileDialog === 'standards'
+      ? 'Save the current layout standards to share with an office, or import standards from a portable file.'
+      : 'Save the current personal layout preferences, or import a saved setup from another browser or computer.';
     return {
       paperSizes: Object.entries(PAPER_SIZES).map(([k, v]) => ({
         label: v.label,
@@ -338,6 +487,31 @@ class Component extends DCLogic {
         bg: activeScale === i ? scOn : scOff,
       })),
       addViewport: () => this.setState({ addingViewport: !addingViewport }),
+      openSettingsDialog: () => this._openProfileDialog('settings'),
+      openStandardsDialog: () => this._openProfileDialog('standards'),
+      closeProfileDialog: () => this._closeProfileDialog(),
+      profileDialogOpen: Boolean(profileDialog),
+      profileDialogTitle,
+      profileDialogDescription,
+      showKeyboardSettingsLink: profileDialog === 'settings',
+      profileFileName: this.state.profileFileName,
+      profileExtension: `.draft.${profileDialog || 'settings'}`,
+      profileAccept: `application/json,.draft.${profileDialog || 'settings'}`,
+      onProfileFileNameInput: e => this.setState({ profileFileName: e.target.value }),
+      onProfileFileNameKey: e => {
+        if (e.key === 'Enter') { e.preventDefault(); this._saveProfilePackage(); }
+        if (e.key === 'Escape') { e.preventDefault(); this._closeProfileDialog(); }
+      },
+      saveProfilePackage: () => this._saveProfilePackage(),
+      chooseProfileFile: () => document.querySelector('[data-profile-import]')?.click(),
+      onProfileFilePicked: e => {
+        const file = e.target.files?.[0];
+        if (file) this._importProfilePackage(file);
+        e.target.value = '';
+      },
+      hasProfileDialogMessage: Boolean(this.state.profileDialogMessage),
+      profileDialogMessage: this.state.profileDialogMessage,
+      profileDialogMessageColor: this.state.profileDialogError ? '#b04050' : '#557a46',
       paperLabel: `${pw}" × ${ph}"`,
       scaleLabel: SCALES[activeScale].label,
       canvasCursor: this._panning ? 'grabbing' : 'crosshair',
