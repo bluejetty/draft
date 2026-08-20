@@ -752,7 +752,7 @@ class Component extends DCLogic {
 
   _switchLayer(idx) {
     if (idx === this.state.activeLayerIdx) return;
-    this._cancelWall(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelCut();
     if (this._selectedSegs) this._selectedSegs.clear();
     this._applyLayerElevation(idx);
     // A floor cannot also be one of its own references.
@@ -777,6 +777,9 @@ class Component extends DCLogic {
     const { layers, activeLayerIdx } = this.state;
     if (layers.length <= 1) { window.alert('Cannot delete the last layer.'); return; }
     if (!window.confirm(`Delete layer "${layers[idx].name}"? Lines on this layer will be removed.`)) return;
+    // Pending geometry belongs to the floor it was started on. Discard it before
+    // changing the layer collection so no chain can commit into another floor.
+    this._cancelWall(); this._cancelLine(); this._cancelCut();
     const lid = layers[idx].id;
     this._lines = this._lines.filter(line => line.layerId !== lid);
     this._walls = this._walls.filter(wall => wall.layerId !== lid);
