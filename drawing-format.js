@@ -142,18 +142,28 @@ if (!window.DraftDrawingFormat) {
 
   // Shapes are closed construction outlines owned by a level — drawn by hand
   // or captured from a wall network. They carry no roof or floor semantics;
-  // the ROOF and FLOOR commands build their own geometry from a shape.
+  // the ROOF and FLOOR commands build their own geometry from a shape. A shape
+  // may double as a flooring area: a finish type plus thickness laid over the
+  // floor sheathing, saved on A-FL-FLOORING.
+  const FLOORING_TYPES = ['hardwood', 'laminate', 'tile', 'carpet'];
+  const flooring = raw => {
+    const type = oneOf(raw?.type, FLOORING_TYPES, null);
+    if (type == null) return null;
+    return { type, thicknessIn: positive(raw?.thicknessIn, 3 / 8) };
+  };
   const shapes = (rawShapes, levelIds) => (Array.isArray(rawShapes) ? rawShapes : [])
     .map(shape => {
       const shapeLevelId = levelId(shape?.levelId, levelIds);
       const points = (Array.isArray(shape?.points) ? shape.points : []).map(point).filter(Boolean);
       if (shapeLevelId == null || points.length < 3) return null;
+      const shapeFlooring = flooring(shape?.flooring);
       return {
         id: String(shape?.id || '').trim(),
         points,
         levelId: shapeLevelId,
         sourceLevelId: levelId(shape?.sourceLevelId, levelIds),
-        layer: 'SHAPE',
+        flooring: shapeFlooring,
+        layer: shapeFlooring ? 'A-FL-FLOORING' : 'SHAPE',
       };
     }).filter(Boolean);
 

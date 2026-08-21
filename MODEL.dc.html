@@ -353,6 +353,24 @@
         <button onClick="{{ onShapeCapture }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">CAPTURE WALL OUTLINE</button>
         <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ shapeHint }}</div>
         <sc-if value="{{ hasActiveShapes }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:10px; padding-top:8px; border-top:1px solid rgba(29,31,32,0.12);">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
+              <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5);">Flooring</span>
+              <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; color:#1d1f20;">{{ shapeAreaLabel }}</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px;">
+              <sc-for list="{{ flooringBtns }}" as="veneer" hint-placeholder-count="5">
+                <button type="button" onClick="{{ veneer.onSelect }}" title="{{ veneer.title }}" style="flex:1 1 auto; border:1px solid {{ veneer.border }}; background:{{ veneer.bg }}; color:{{ veneer.color }}; padding:4px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ veneer.label }}</button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ hasShapeFlooring }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.55);">ABOVE SHEATHING</span>
+                <input value="{{ flooringThicknessInput }}" onInput="{{ onFlooringThicknessInput }}" onKeyDown="{{ onFlooringThicknessKey }}" onBlur="{{ onFlooringThicknessCommit }}" placeholder="{{ flooringThicknessPlaceholder }}" style="flex:1; min-width:0; border:1px solid rgba(29,31,32,0.2); padding:3px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px;" />
+              </div>
+              <div style="margin-top:6px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">Saves on A-FL-FLOORING · area + finish feed the future estimates</div>
+            </sc-if>
+          </div>
           <button onClick="{{ onShapeDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST SHAPE</button>
         </sc-if>
       </div>
@@ -623,6 +641,16 @@ const JOIST_TYPES = Object.freeze([
   Object.freeze({ id: 'owj', label: 'OWJ', depthIn: null }),
 ]);
 const DEFAULT_JOIST_TYPE = 'tji';
+// Flooring veneers an AREA shape can carry, laid over the floor sheathing.
+// Thickness is stored per shape so the same pattern can later carry exterior
+// finishes (brick at 2-3") and feed elevation views and estimates.
+const FLOORING_TYPES = Object.freeze([
+  Object.freeze({ id: 'hardwood', label: 'HARDWOOD' }),
+  Object.freeze({ id: 'laminate', label: 'LAMINATE' }),
+  Object.freeze({ id: 'tile', label: 'TILE' }),
+  Object.freeze({ id: 'carpet', label: 'CARPET' }),
+]);
+const DEFAULT_FLOORING_THICKNESS_IN = 3 / 8;
 // Per-level wall + floor assembly: the WALL HEIGHT and FLOOR JOISTS boxes edit
 // these, and the sidebar's border heights derive from them.
 const defaultLevelAssembly = () => ({
@@ -938,6 +966,7 @@ class Component extends DCLogic {
     fenestrationHead: DEFAULT_OPENING_HEAD_FT,
     fenestrationHeadInput: formatArchitecturalInches(DEFAULT_OPENING_HEAD_FT * 12),
     fenestrationDimensionError: '',
+    flooringThicknessInput: '',
     roofMode: 'basic',   // 'basic' edge-drawn roof | 'shape' built from a SHAPE outline
     roofPhase: 'idle',   // basic flow: 'idle' → 'edge' → 'direction' → 'overhang'
     roofOverhang: DEFAULT_ROOF_OVERHANG_FT,
@@ -1093,7 +1122,8 @@ class Component extends DCLogic {
         points: shape.points.map(point),
         levelId: shape.levelId,
         sourceLevelId: shape.sourceLevelId ?? null,
-        layer: SHAPE_LAYER,
+        flooring: shape.flooring ? { ...shape.flooring } : null,
+        layer: shape.flooring ? 'A-FL-FLOORING' : SHAPE_LAYER,
       })),
       roofs: this._roofs.map(roof => ({
         id: roof.id,
@@ -4027,6 +4057,7 @@ class Component extends DCLogic {
       points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, level.id, 'shape')),
       levelId: level.id,
       sourceLevelId: sourceLevelId ?? null,
+      flooring: null,
       layer: SHAPE_LAYER,
     };
     this._shapes.push(shape);
@@ -4092,6 +4123,75 @@ class Component extends DCLogic {
     this._shapes = this._shapes.filter(shape => shape !== target);
     this._markUnsaved();
     this.setState({ drawingMessage: 'Shape removed.', drawingMessageError: false });
+  }
+
+  // ─── Flooring areas ───────────────────────────────────────────────────────────
+  // A closed shape doubles as a room's flooring area: a finish veneer laid over
+  // the floor sheathing. The area (shoelace over the outline) and finish feed
+  // the future estimates — tile just the bathroom, or area the whole floor and
+  // subtract the rooms carrying their own finish.
+  _outlineAreaSqFt(points) {
+    if (!Array.isArray(points) || points.length < 3) return 0;
+    let doubled = 0;
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      doubled += a.x * b.z - b.x * a.z;
+    }
+    return Math.abs(doubled) / 2;
+  }
+
+  _newestShape() {
+    const active = this._activeShapes();
+    return active.length ? active[active.length - 1] : null;
+  }
+
+  _setShapeFlooring(typeId) {
+    const shape = this._newestShape();
+    if (!shape) return;
+    if (typeId == null) {
+      shape.flooring = null;
+      this._markUnsaved();
+      this.setState({ drawingMessage: 'Flooring cleared — shape is a plain outline on SHAPE again.', drawingMessageError: false });
+      return;
+    }
+    const type = FLOORING_TYPES.find(entry => entry.id === typeId);
+    if (!type) return;
+    const thicknessIn = shape.flooring?.thicknessIn ?? DEFAULT_FLOORING_THICKNESS_IN;
+    shape.flooring = { type: type.id, thicknessIn };
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `${type.label} flooring area on A-FL-FLOORING — ${this._areaLabel(this._outlineAreaSqFt(shape.points))}, laid ${formatInchesOnly(thicknessIn)} over the sheathing.`,
+      drawingMessageError: false,
+      flooringThicknessInput: '',
+    });
+  }
+
+  _commitFlooringThickness() {
+    const shape = this._newestShape();
+    if (!shape || !shape.flooring) return;
+    const raw = (this.state.flooringThicknessInput || '').trim();
+    if (raw) {
+      const parsed = parseAssemblyInches(raw);
+      if (!parsed.ok || parsed.inches <= 0) {
+        this.setState({ drawingMessage: parsed.error || 'Flooring thickness must be a positive measurement in inches.', drawingMessageError: true });
+        return;
+      }
+      shape.flooring = { ...shape.flooring, thicknessIn: parsed.inches };
+      this._markUnsaved();
+    }
+    this.setState({
+      drawingMessage: `Flooring sits ${formatInchesOnly(shape.flooring.thicknessIn)} above the sheathing.`,
+      drawingMessageError: false,
+      flooringThicknessInput: '',
+    });
+  }
+
+  _areaLabel(sqFt) {
+    if (!(sqFt > 0)) return '';
+    return this.state.units === 'imperial'
+      ? `${(Math.round(sqFt * 10) / 10).toLocaleString()} SQ FT`
+      : `${(Math.round(sqFt * 0.09290304 * 100) / 100).toLocaleString()} m²`;
   }
 
   // FLOOR built from the newest shape on the level: copies of the shape's
@@ -5342,6 +5442,24 @@ class Component extends DCLogic {
     if (!preview && !this._isPrinting) {
       ctx.fillStyle = SHAPE_COLOR;
       screenPoints.forEach(point => ctx.fillRect(point.x - 2.5, point.y - 2.5, 5, 5));
+    }
+    // A flooring area labels itself with its finish and measured area.
+    if (!preview && shape.flooring && points.length >= 3) {
+      const type = FLOORING_TYPES.find(entry => entry.id === shape.flooring.type);
+      const label = [type?.label, this._areaLabel(this._outlineAreaSqFt(points))]
+        .filter(Boolean).join(' · ');
+      if (label) {
+        const cx = screenPoints.reduce((sum, pt) => sum + pt.x, 0) / screenPoints.length;
+        const cy = screenPoints.reduce((sum, pt) => sum + pt.y, 0) / screenPoints.length;
+        ctx.font = "600 11px 'Barlow Condensed', system-ui, sans-serif";
+        const textWidth = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.fillRect(cx - textWidth / 2 - 3, cy - 8, textWidth + 6, 15);
+        ctx.fillStyle = SHAPE_COLOR;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, cx, cy);
+      }
     }
     ctx.restore();
   }
@@ -7331,6 +7449,28 @@ class Component extends DCLogic {
       hasActiveShapes: this._activeShapes().length > 0,
       onShapeDelete: () => this._deleteLastShape(),
       shapeHint: 'Closed construction outline on SHAPE · ROOF and FLOOR build from the newest shape',
+      shapeAreaLabel: this._areaLabel(this._outlineAreaSqFt(this._newestShape()?.points)),
+      flooringBtns: [{ id: null, label: 'NONE' }, ...FLOORING_TYPES].map(type => {
+        const current = this._newestShape()?.flooring?.type ?? null;
+        const isActive = current === type.id;
+        return {
+          label: type.label ?? 'NONE',
+          title: type.id
+            ? `${type.label} finish over the sheathing on the newest shape`
+            : 'Plain construction outline — no flooring finish',
+          border: isActive ? '#5980a6' : 'rgba(29,31,32,0.2)',
+          bg: isActive ? 'rgba(89,128,166,0.14)' : '#fff',
+          color: isActive ? '#3e6285' : '#1d1f20',
+          onSelect: () => this._setShapeFlooring(type.id ?? null),
+        };
+      }),
+      hasShapeFlooring: Boolean(this._newestShape()?.flooring),
+      flooringThicknessInput: this.state.flooringThicknessInput,
+      flooringThicknessPlaceholder: formatInchesOnly(
+        this._newestShape()?.flooring?.thicknessIn ?? DEFAULT_FLOORING_THICKNESS_IN),
+      onFlooringThicknessInput: e => this.setState({ flooringThicknessInput: e.target.value }),
+      onFlooringThicknessCommit: () => this._commitFlooringThickness(),
+      onFlooringThicknessKey: e => { if (e.key === 'Enter') e.target.blur(); e.stopPropagation(); },
       roofToolActive: roofing,
       roofModeBtns: ['basic', 'shape'].map(value => {
         const isActive = this.state.roofMode === value;
