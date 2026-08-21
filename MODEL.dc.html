@@ -39,6 +39,10 @@
     .level-eye:hover { color:#5980a6; }
     .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:center; }
     .level-bg:hover { border-color:#5980a6; color:#5980a6; }
+    .level-layer-row { display:flex; align-items:stretch; gap:2px; }
+    .level-layer-row .level-layer { flex:1; min-width:0; }
+    .level-layer-bg { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:1px 3px; min-width:23px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.42); flex-shrink:0; }
+    .level-layer-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:center; }
     .level-del:hover { color:#c04040; }
     .cut-row { display:flex; align-items:center; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
@@ -358,7 +362,10 @@
              <sc-if value="{{ level.hasLayers }}" hint-placeholder-val="{{ false }}">
                <div class="level-layer-stack">
                  <sc-for list="{{ level.layers }}" as="layer" hint-placeholder-count="3">
-                   <button type="button" class="{{ layer.rowClass }}" onClick="{{ layer.onSelect }}" title="{{ layer.title }}">{{ layer.label }}</button>
+                   <div class="level-layer-row">
+                     <button type="button" class="{{ layer.rowClass }}" onClick="{{ layer.onSelect }}" title="{{ layer.title }}">{{ layer.label }}</button>
+                     <button type="button" class="level-layer-bg" onClick="{{ layer.onToggleBackground }}" title="{{ layer.bgTitle }}" style="background:{{ layer.bgButtonBg }}; border-color:{{ layer.bgButtonBorder }}; color:{{ layer.bgButtonColor }};">{{ layer.bgLabel }}</button>
+                   </div>
                    <sc-if value="{{ layer.hasContents }}" hint-placeholder-val="{{ false }}">
                      <div class="level-layer-contents">
                        <sc-for list="{{ layer.contents }}" as="content" hint-placeholder-count="5">
@@ -661,6 +668,8 @@ class Component extends DCLogic {
     activeLevelIdx: 3,
     nextLevelId:   9,
     backgroundLevelIds: [],
+    backgroundLevelViews: {},   // levelId -> layer view id; absent = whole level
+    contextBackgrounds: {},     // 'levelId:viewId' -> { ids, views } remembered per working context
     backgroundMode: 'blue', // 'blue' | 'red' | 'none'
     cursorX: -100, cursorY: -100, showCursor: false,
     magnetX: -100, magnetY: -100, showMagnet: false,
@@ -785,6 +794,10 @@ class Component extends DCLogic {
       levelLayerViews: { ...this.state.levelLayerViews },
       nextLevelId: this.state.nextLevelId,
       backgroundLevelIds: [...this.state.backgroundLevelIds],
+      backgroundLevelViews: { ...this.state.backgroundLevelViews },
+      contextBackgrounds: Object.fromEntries(Object.entries(this.state.contextBackgrounds).map(
+        ([key, value]) => [key, { ids: [...value.ids], views: { ...value.views } }],
+      )),
       backgroundMode: this.state.backgroundMode,
       units: this.state.units,
       gridSnapEnabled: this.state.gridSnapEnabled,
@@ -1069,6 +1082,35 @@ class Component extends DCLogic {
         levelIds,
         levels[activeLevelIdx].id,
       );
+      const viewIdsFor = id => (LEVEL_LAYER_VIEWS[id] || []).map(view => view.id);
+      const storedBackgroundViews = saved.backgroundLevelViews && typeof saved.backgroundLevelViews === 'object'
+        ? saved.backgroundLevelViews : {};
+      const backgroundLevelViews = {};
+      Object.entries(storedBackgroundViews).forEach(([rawId, view]) => {
+        const id = migrateLevelId(rawId);
+        if (backgroundLevelIds.includes(id) && viewIdsFor(id).includes(view)) backgroundLevelViews[id] = view;
+      });
+      const storedContextBackgrounds = saved.contextBackgrounds && typeof saved.contextBackgrounds === 'object'
+        ? saved.contextBackgrounds : {};
+      const contextBackgrounds = {};
+      Object.entries(storedContextBackgrounds).forEach(([rawKey, value]) => {
+        const [rawLevel, contextView] = String(rawKey).split(':');
+        const contextLevelId = migrateLevelId(rawLevel);
+        if (!levelIds.has(contextLevelId)) return;
+        if (contextView !== 'level' && !viewIdsFor(contextLevelId).includes(contextView)) return;
+        const ids = format.backgroundLevelIds(
+          (Array.isArray(value?.ids) ? value.ids : []).map(migrateLevelId),
+          levelIds,
+          contextLevelId,
+        );
+        if (!ids.length) return;
+        const views = {};
+        Object.entries(value?.views && typeof value.views === 'object' ? value.views : {}).forEach(([rawId, view]) => {
+          const id = migrateLevelId(rawId);
+          if (ids.includes(id) && viewIdsFor(id).includes(view)) views[id] = view;
+        });
+        contextBackgrounds[`${contextLevelId}:${contextView}`] = { ids, views };
+      });
       const storedCuts = Array.isArray(saved.cuts)
         ? saved.cuts.map(cut => ({ ...cut, levelId: migrateLevelId(cut?.levelId) }))
         : saved.cuts;
@@ -1098,6 +1140,8 @@ class Component extends DCLogic {
           ? saved.nextLevelId
           : Math.max(...levels.map(level => level.id)) + 1,
         backgroundLevelIds,
+        backgroundLevelViews,
+        contextBackgrounds,
         backgroundMode: format.oneOf(saved.backgroundMode, ['blue', 'red', 'none'], 'blue'),
         units: saved.units === 'metric' ? 'metric' : 'imperial',
         gridSnapEnabled: saved.gridSnapEnabled !== false,
@@ -2226,7 +2270,7 @@ class Component extends DCLogic {
     if (!this._layerViewsForLevel(levelId).some(view => view.id === viewId)) return;
     const levelIndex = this.state.levels.findIndex(level => level.id === levelId);
     if (levelIndex < 0) return;
-    const backgroundLevelIds = this.state.backgroundLevelIds.filter(id => id !== levelId);
+    const { ids: backgroundLevelIds, views: backgroundLevelViews } = this._restoredBackgroundFor(levelId, viewId);
     this._cancelFrozenLength();
     this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension();
     this._applyLevelElevation(levelIndex);
@@ -2237,6 +2281,7 @@ class Component extends DCLogic {
     this.setState({
       activeLevelIdx: levelIndex,
       backgroundLevelIds,
+      backgroundLevelViews,
       levelLayerViews: { ...this.state.levelLayerViews, [levelId]: viewId },
       activeTool,
       drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
@@ -2361,16 +2406,21 @@ class Component extends DCLogic {
   }
 
   // One reference slot is visible at a time: B cycles blue → red → none.
+  // A reference may be scoped to one layer set of its level; unscoped
+  // references show every layer set of the level.
   _visibleBackgroundReference() {
-    const { backgroundLevelIds, backgroundMode, levels } = this.state;
+    const { backgroundLevelIds, backgroundLevelViews, backgroundMode, levels } = this.state;
     const slot = backgroundMode === 'blue' ? 0 : backgroundMode === 'red' ? 1 : -1;
     const levelId = slot >= 0 ? backgroundLevelIds[slot] : null;
     if (levelId == null || levelId === this._activeLevelId()) return null;
     const level = levels.find(l => l.id === levelId);
     if (!level || level.visible === false) return null;
+    const view = backgroundLevelViews[levelId] ?? null;
     return {
       levelId,
       level,
+      view,
+      viewLabel: view ? this._layerViewsForLevel(levelId).find(v => v.id === view)?.label || view.toUpperCase() : null,
       color: backgroundMode === 'blue' ? 'rgba(82,151,218,0.58)' : 'rgba(221,101,104,0.58)',
       label: backgroundMode.toUpperCase(),
     };
@@ -2378,24 +2428,55 @@ class Component extends DCLogic {
 
   _backgroundLines() {
     const ref = this._visibleBackgroundReference();
-    const view = this._activeLayerViewId();
     return ref ? this._lines.filter(line => line.levelId === ref.levelId
-      && (view == null || (line.view || 'plan') === view)
+      && (ref.view == null || (line.view || 'plan') === ref.view)
       && this._lineLayerConfig(line.layer).visible
       && (!this._isPrinting || this._lineLayerConfig(line.layer).printable)) : [];
   }
 
   _backgroundWalls() {
     const ref = this._visibleBackgroundReference();
-    const view = this._activeLayerViewId();
-    const wallView = view === 'e-power' ? 'plan' : view;
-    return ref ? this._walls.filter(wall => wall.levelId === ref.levelId && (wallView == null || (wall.view || 'plan') === wallView)) : [];
+    if (!ref) return [];
+    // Walls live on PLAN; an E-POWER scope shows them the way E-POWER does.
+    const wallView = ref.view === 'e-power' ? 'plan' : ref.view;
+    return this._walls.filter(wall => wall.levelId === ref.levelId && (wallView == null || (wall.view || 'plan') === wallView));
   }
 
   _backgroundFloors() {
     const ref = this._visibleBackgroundReference();
-    const view = this._activeLayerViewId();
-    return ref ? this._floors.filter(floor => floor.levelId === ref.levelId && (view == null || (floor.view || 'floor') === view)) : [];
+    return ref ? this._floors.filter(floor => floor.levelId === ref.levelId && (ref.view == null || (floor.view || 'floor') === ref.view)) : [];
+  }
+
+  _contextBackgroundKey(levelId = this._activeLevelId(), viewId = this._activeLayerViewId(levelId)) {
+    return `${levelId}:${viewId || 'level'}`;
+  }
+
+  // Background choices are remembered per working context, so returning to a
+  // level / layer set restores the references that were picked while on it.
+  _applyBackgroundSelection(ids, views) {
+    const key = this._contextBackgroundKey();
+    this.setState({
+      backgroundLevelIds: ids,
+      backgroundLevelViews: views,
+      contextBackgrounds: {
+        ...this.state.contextBackgrounds,
+        [key]: { ids: [...ids], views: { ...views } },
+      },
+    }, () => this._markUnsaved());
+  }
+
+  _restoredBackgroundFor(levelId, viewId) {
+    const stored = this.state.contextBackgrounds[`${levelId}:${viewId || 'level'}`];
+    const levelIds = new Set(this.state.levels.map(level => level.id));
+    const sourceIds = stored ? stored.ids : this.state.backgroundLevelIds;
+    const sourceViews = stored ? stored.views : this.state.backgroundLevelViews;
+    const ids = sourceIds.filter(id => levelIds.has(id) && id !== levelId).slice(0, 2);
+    const views = {};
+    ids.forEach(id => {
+      const view = sourceViews?.[id];
+      if (view && this._layerViewsForLevel(id).some(v => v.id === view)) views[id] = view;
+    });
+    return { ids, views };
   }
 
   _toggleBackgroundLevel(idx, e) {
@@ -2403,13 +2484,37 @@ class Component extends DCLogic {
     const levelId = this.state.levels[idx]?.id;
     if (levelId == null || levelId === this._activeLevelId()) return;
     const ids = [...this.state.backgroundLevelIds];
+    const views = { ...this.state.backgroundLevelViews };
     const selectedAt = ids.indexOf(levelId);
-    if (selectedAt >= 0) ids.splice(selectedAt, 1);
-    else {
-      ids.push(levelId);
-      if (ids.length > 2) ids.shift(); // third selection replaces the oldest
+    if (selectedAt >= 0 && views[levelId] == null) {
+      ids.splice(selectedAt, 1); // whole level already selected → remove
+    } else {
+      if (selectedAt < 0) {
+        ids.push(levelId);
+        if (ids.length > 2) delete views[ids.shift()]; // third selection replaces the oldest
+      }
+      delete views[levelId]; // widen a layer-set scope to the whole level
     }
-    this.setState({ backgroundLevelIds: ids }, () => this._markUnsaved());
+    this._applyBackgroundSelection(ids, views);
+  }
+
+  _toggleBackgroundLayerView(levelId, viewId, e) {
+    e.stopPropagation();
+    if (levelId == null || levelId === this._activeLevelId()) return;
+    const ids = [...this.state.backgroundLevelIds];
+    const views = { ...this.state.backgroundLevelViews };
+    const selectedAt = ids.indexOf(levelId);
+    if (selectedAt >= 0 && views[levelId] === viewId) {
+      ids.splice(selectedAt, 1); // this set already selected → remove
+      delete views[levelId];
+    } else {
+      if (selectedAt < 0) {
+        ids.push(levelId);
+        if (ids.length > 2) delete views[ids.shift()];
+      }
+      views[levelId] = viewId; // narrow the reference to this layer set
+    }
+    this._applyBackgroundSelection(ids, views);
   }
 
   _cycleBackground() {
@@ -2437,10 +2542,11 @@ class Component extends DCLogic {
     this._cancelFrozenLength();
     this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut();
     this._applyLevelElevation(idx);
-    // A level cannot also be one of its own references.
+    // A level cannot also be one of its own references; the destination
+    // context's remembered background is restored when it has one.
     const activeId = this.state.levels[idx]?.id;
-    const backgroundLevelIds = this.state.backgroundLevelIds.filter(id => id !== activeId);
     const targetView = this._activeLayerViewId(activeId);
+    const { ids: backgroundLevelIds, views: backgroundLevelViews } = this._restoredBackgroundFor(activeId, targetView);
     const activeTool = ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
       && !this._contextAllowsTool(this.state.activeTool, targetView)
       ? 'select'
@@ -2448,6 +2554,7 @@ class Component extends DCLogic {
     this.setState({
       activeLevelIdx: idx,
       backgroundLevelIds,
+      backgroundLevelViews,
       activeTool,
       drawingMessage: activeTool === 'select' && ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
         ? this._contextToolMessage(this.state.activeTool, targetView)
@@ -2505,6 +2612,8 @@ class Component extends DCLogic {
       cuts: remainingCuts,
       activeCutId,
       backgroundLevelIds: this.state.backgroundLevelIds.filter(id => id !== levelId),
+      backgroundLevelViews: Object.fromEntries(Object.entries(this.state.backgroundLevelViews)
+        .filter(([id]) => Number(id) !== levelId)),
     }, () => {
       this._notifySelectionChanged();
       this._markUnsaved();
@@ -4836,7 +4945,7 @@ class Component extends DCLogic {
   // ─── renderVals ───────────────────────────────────────────────────────────────
   renderVals() {
     const { activeTool, units, activeView, isDrawing,
-            levels, activeLevelIdx, backgroundLevelIds, backgroundMode,
+            levels, activeLevelIdx, backgroundLevelIds, backgroundLevelViews, backgroundMode,
             cuts, activeCutId, cutPhase, choosingDir, extendScope, extendPhase } = this.state;
     const on  = { bg:'#1d1f20', color:'#f2f2f3', border:'#1d1f20' };
     const off = { bg:'#fff',    color:'#1d1f20', border:'rgba(29,31,32,0.16)' };
@@ -4919,7 +5028,7 @@ class Component extends DCLogic {
     const backgroundStatus = backgroundMode === 'none'
       ? `BACKGROUND: OFF  [${shortcut('background')}]`
       : visibleBackground
-        ? `BACKGROUND ${visibleBackground.label}: ${visibleBackground.level.name}  [${shortcut('background')}]`
+        ? `BACKGROUND ${visibleBackground.label}: ${visibleBackground.level.name}${visibleBackground.viewLabel ? ` / ${visibleBackground.viewLabel}` : ''}  [${shortcut('background')}]`
         : `BACKGROUND ${backgroundMode.toUpperCase()}: NONE SELECTED  [${shortcut('background')}]`;
     const backgroundStatusColor = backgroundMode === 'blue' ? '#5297da'
       : backgroundMode === 'red' ? '#dd6568' : 'rgba(29,31,32,0.42)';
@@ -5133,18 +5242,36 @@ class Component extends DCLogic {
 
       levels: levels.map((l, i) => {
         const slot = l.id === activeLevel?.id ? -1 : backgroundLevelIds.indexOf(l.id);
-        const bgColor = slot === 0 ? '#5297da' : slot === 1 ? '#dd6568' : 'rgba(29,31,32,0.45)';
+        const scopedView = backgroundLevelViews[l.id] ?? null;
+        const bgSlotStyle = s => ({
+          bgLabel: s === 0 ? 'BG1' : s === 1 ? 'BG2' : 'BG',
+          bgButtonBg: s === 0 ? 'rgba(82,151,218,0.12)' : s === 1 ? 'rgba(221,101,104,0.12)' : '#fff',
+          bgButtonBorder: s === 0 ? '#5297da' : s === 1 ? '#dd6568' : 'rgba(29,31,32,0.2)',
+          bgButtonColor: s === 0 ? '#5297da' : s === 1 ? '#dd6568' : 'rgba(29,31,32,0.45)',
+        });
+        // The level button owns the slot when the whole level is referenced;
+        // a scoped reference lights up its layer-set button instead.
+        const levelSlot = scopedView == null ? slot : -1;
         const selectedLayerView = this._activeLayerViewId(l.id);
-        const layers = this._layerViewsForLevel(l.id).map(view => ({
-          label: view.label,
-          title: `Show ${view.label} items on ${l.name}`,
-          contents: view.id === selectedLayerView
-            ? view.contents.map(id => this._layerStandard(id).name)
-            : [],
-          hasContents: view.id === selectedLayerView && view.contents.length > 0,
-          rowClass: 'level-layer' + (view.id === selectedLayerView ? ' active' : ''),
-          onSelect: event => this._selectLayerView(l.id, view.id, event),
-        }));
+        const layers = this._layerViewsForLevel(l.id).map(view => {
+          const viewSlot = scopedView === view.id ? slot : -1;
+          return {
+            label: view.label,
+            title: `Show ${view.label} items on ${l.name}`,
+            contents: view.id === selectedLayerView
+              ? view.contents.map(id => this._layerStandard(id).name)
+              : [],
+            hasContents: view.id === selectedLayerView && view.contents.length > 0,
+            rowClass: 'level-layer' + (view.id === selectedLayerView ? ' active' : ''),
+            onSelect: event => this._selectLayerView(l.id, view.id, event),
+            ...bgSlotStyle(viewSlot),
+            bgTitle: viewSlot === 0 ? `Background 1 — blue, only ${view.label} shows`
+              : viewSlot === 1 ? `Background 2 — red, only ${view.label} shows`
+              : (l.id === activeLevel?.id ? 'Active level cannot be a background'
+                : `Use only ${l.name} ${view.label} as the background`),
+            onToggleBackground: event => this._toggleBackgroundLayerView(l.id, view.id, event),
+          };
+        });
         return {
           name: l.name, elevStr: this._elevLabel(l.elev),
           layers,
@@ -5152,13 +5279,10 @@ class Component extends DCLogic {
           color: LEVEL_COLORS[i % LEVEL_COLORS.length],
           rowClass: 'level-row' + (i === activeLevelIdx ? ' active' : ''),
           visIcon: l.visible ? '●' : '○', visLabel: l.visible ? 'Hide level' : 'Show level',
-          bgLabel: slot === 0 ? 'BG1' : slot === 1 ? 'BG2' : 'BG',
-          bgTitle: slot === 0 ? 'Background 1 — blue reference'
-            : slot === 1 ? 'Background 2 — red reference'
-            : (l.id === activeLevel?.id ? 'Active level cannot be a background' : 'Use as background level reference'),
-          bgButtonBg: slot >= 0 ? (slot === 0 ? 'rgba(82,151,218,0.12)' : 'rgba(221,101,104,0.12)') : '#fff',
-          bgButtonBorder: slot >= 0 ? bgColor : 'rgba(29,31,32,0.2)',
-          bgButtonColor: bgColor,
+          ...bgSlotStyle(levelSlot),
+          bgTitle: levelSlot === 0 ? 'Background 1 — blue, whole level shows'
+            : levelSlot === 1 ? 'Background 2 — red, whole level shows'
+            : (l.id === activeLevel?.id ? 'Active level cannot be a background' : 'Use the whole level as the background'),
           onSelect:    ()  => this._switchLevel(i),
           onDelete:    (e) => { e.stopPropagation(); this._deleteLevel(i); },
           onToggleVis: (e) => this._toggleLevelVisibility(i, e),
