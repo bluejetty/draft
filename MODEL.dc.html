@@ -7001,7 +7001,7 @@ class Component extends DCLogic {
   }
   _metric(feet) { return (feet * 0.3048).toFixed(3) + ' m'; }
   _elevLabel(elev) {
-    const sign = elev > 0 ? '+' : '';
+    const sign = elev > 0 && !this.state.elevationDatum ? '+' : '';
     return sign + (this.state.units === 'imperial' ? this._ftIn(elev) : this._metric(elev));
   }
 

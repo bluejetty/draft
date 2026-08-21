@@ -82,9 +82,9 @@ test('the datum toggle shifts every mark by 100 feet and persists', async ({ pag
   await expect(page.getByRole('button', { name: "DATUM 100'" })).toBeVisible();
 
   const main = levelRow(page, 'MAIN FL');
-  await expect(main.locator('.level-edge-val').nth(0)).toHaveText(`+100'-0"`);
+  await expect(main.locator('.level-edge-val').nth(0)).toHaveText(`100'-0"`);
   const fdn = levelRow(page, 'FOUNDATION');
-  await expect(fdn.locator('.level-height', { hasText: 'T.O. FDN WALL' })).toContainText(`+98'-11 3/8"`);
+  await expect(fdn.locator('.level-height', { hasText: 'T.O. FDN WALL' })).toContainText(`98'-11 3/8"`);
 
   await h.waitForSaved(page);
   expect((await h.savedDrawing(page)).elevationDatum).toBe(100);
