@@ -99,7 +99,7 @@ test('WALL HEIGHT edits the level wall height and moves the marks above', async 
   await h.openModel(page);
   const main = levelRow(page, 'MAIN FL');
 
-  await main.getByRole('button', { name: 'WALL HEIGHT' }).click();
+  await main.getByRole('button', { name: 'WALL HT' }).click();
   const wallInput = main.locator('.assembly-input');
   await expect(wallInput).toHaveValue(`8'-1 1/8"`);
   await wallInput.fill(`9'`);
@@ -125,7 +125,7 @@ test('FLOOR JOISTS edits the assembly and recomputes the foundation top', async 
   await h.openModel(page);
   const main = levelRow(page, 'MAIN FL');
 
-  await main.getByRole('button', { name: 'FLOOR JOISTS' }).click();
+  await main.getByRole('button', { name: 'FL JST' }).click();
   const editor = main.locator('.level-assembly-editor');
   await expect(editor.locator('.assembly-input').nth(0)).toHaveValue(`11 7/8"`);
   await expect(editor.locator('.assembly-input').nth(2)).toHaveValue(`3/4"`);
@@ -152,14 +152,14 @@ test('Space accepts the offered floor values until the user starts typing', asyn
   await h.openModel(page);
   const main = levelRow(page, 'MAIN FL');
 
-  await main.getByRole('button', { name: 'FLOOR JOISTS' }).click();
+  await main.getByRole('button', { name: 'FL JST' }).click();
   const editor = main.locator('.level-assembly-editor');
   await editor.locator('.assembly-input').nth(2).press(' ');
   await expect(main.locator('.level-assembly-editor')).toHaveCount(0);
   await expect(main.locator('.level-edge-val').nth(1)).toHaveText(`-1'-0 5/8"`);
 
   // After typing, Space is a character again and Enter commits.
-  await main.getByRole('button', { name: 'FLOOR JOISTS' }).click();
+  await main.getByRole('button', { name: 'FL JST' }).click();
   const spacing = editor.locator('.assembly-input').nth(1);
   await spacing.fill('19.2');
   await spacing.press(' ');

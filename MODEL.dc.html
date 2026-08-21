@@ -33,7 +33,7 @@
     .level-layer-stack { display:flex; flex-direction:column; gap:1px; margin-top:3px; }
     .level-layer { width:100%; min-height:13px; display:flex; align-items:center; border:1px solid rgba(29,31,32,0.18); padding:1px 5px; background:rgba(255,255,255,0.72); color:rgba(29,31,32,0.68); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-align:left; text-transform:uppercase; cursor:pointer; }
     .level-layer:hover { border-color:#5980a6; color:#365e86; }
-    .level-layer.active { background:#5980a6; border-color:#5980a6; color:#fff; }
+    .level-layer.active { background:#fff; border-color:#5980a6; color:#365e86; }
     .level-layer-contents { margin:1px 0 2px 7px; border-left:2px solid rgba(89,128,166,0.48); padding-left:4px; }
     .level-layer-content { min-height:12px; display:flex; align-items:center; color:rgba(29,31,32,0.58); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.05em; text-transform:uppercase; }
     .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:flex-start; margin-top:5px; }
@@ -52,10 +52,8 @@
     .level-edge { display:flex; align-items:center; gap:3px; min-height:9px; }
     .level-edge-line { flex:1; border-top:1px solid rgba(29,31,32,0.55); }
     .level-edge-val { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; color:#1d1f20; white-space:nowrap; }
-    .level-layer.floor-profile { background:linear-gradient(rgba(29,31,32,0.62) 0, rgba(29,31,32,0.62) 3px, transparent 3px), repeating-linear-gradient(45deg, rgba(29,31,32,0.05), rgba(29,31,32,0.05) 2px, rgba(255,255,255,0.72) 2px, rgba(255,255,255,0.72) 6px); }
-    .level-layer.floor-profile.active { background:#5980a6; }
-    .level-assembly { border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; cursor:pointer; padding:1px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.05em; flex-shrink:0; text-transform:uppercase; }
-    .level-assembly:hover { background:#3a3d3f; border-color:#3a3d3f; }
+    .level-assembly { border:1px solid rgba(29,31,32,0.18); background:#fff; color:rgba(29,31,32,0.68); cursor:pointer; padding:1px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; flex-shrink:0; text-transform:uppercase; }
+    .level-assembly:hover { border-color:#5980a6; color:#365e86; }
     .level-assembly-editor { display:flex; flex-direction:column; gap:3px; border:1px solid rgba(29,31,32,0.3); background:#fff; padding:5px 6px; margin:1px 0 2px; cursor:default; }
     .assembly-row { display:flex; align-items:center; gap:4px; }
     .assembly-label { width:48px; flex-shrink:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.05em; color:rgba(29,31,32,0.55); }
@@ -64,8 +62,8 @@
     .assembly-joists { display:flex; gap:2px; }
     .assembly-joist { flex:1; border:1px solid; cursor:pointer; padding:2px 0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.04em; line-height:1; }
     .assembly-error { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.03em; color:#c04040; }
-    .assembly-ok { align-self:flex-end; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; cursor:pointer; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; line-height:1; }
-    .assembly-ok:hover { background:#3a3d3f; border-color:#3a3d3f; }
+    .assembly-ok { align-self:flex-end; border:1px solid rgba(29,31,32,0.18); background:#fff; color:rgba(29,31,32,0.68); cursor:pointer; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.06em; line-height:1; text-transform:uppercase; }
+    .assembly-ok:hover { border-color:#5980a6; color:#365e86; }
     .level-del:hover { color:#c04040; }
     .cut-row { display:flex; align-items:center; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
     .cut-row:hover { background:rgba(29,31,32,0.03); }
@@ -7775,7 +7773,7 @@ class Component extends DCLogic {
               + (assemblyKind === 'floor' ? ' floor-profile' : ''),
             onSelect: event => this._selectLayerView(l.id, view.id, event),
             hasAssembly: assemblyKind != null,
-            assemblyLabel: assemblyKind === 'wall' ? 'WALL HEIGHT' : 'FLOOR JOISTS',
+            assemblyLabel: assemblyKind === 'wall' ? 'WALL HT' : 'FL JST',
             assemblyTitle: assemblyKind === 'wall'
               ? `Wall height on ${l.name}: ${this._ftIn(assembly.wallHeightFt)}`
               : `Floor: ${JOIST_TYPES.find(t => t.id === assembly.joistType)?.label} ${formatInchesOnly(assembly.joistDepthIn)} @ ${formatInchesOnly(assembly.joistSpacingIn)} O.C. + ${formatInchesOnly(assembly.sheathingIn)} sheathing`,
