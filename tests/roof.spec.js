@@ -1,8 +1,8 @@
 // The ROOF tool works on the ROOF level in two modes. ROOF (basic): draw a
 // line at the roof edge, click the side the roof extends toward, and accept
-// an overhang to drop in a square footprint. CAPTURE: trace the exterior
-// wall outline of the level below, grown outward by the eave overhang.
-// Either way the footprint is an editable A-ROOF shape whose edges tag as
+// an overhang to drop in a square footprint. FROM SHAPE: build the footprint
+// from the newest SHAPE outline, grown outward by the eave overhang.
+// Either way the footprint is an editable A-ROOF outline whose edges tag as
 // EAVE / GABLE.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
@@ -111,41 +111,45 @@ test('roof corners drag independently with Select', async ({ page }) => {
   expect(roof.points.some(p => h.near(p.x, 10) && h.near(p.z, 16))).toBe(true);
 });
 
-test('capture traces the walls below and grows the footprint by the overhang', async ({ page }) => {
+test('FROM SHAPE builds the footprint from the newest shape grown by the overhang', async ({ page }) => {
   await h.openModel(page);
 
-  // A closed rectangle of exterior walls on MAIN FL PLAN.
-  await h.selectTool(page, 'Wall');
+  // A hand-drawn shape on the ROOF level is the roof's source outline.
+  await switchLevel(page, 'ROOF');
+  await h.selectTool(page, 'Shape');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);
   await h.clickWorld(page, 8, 6);
   await h.clickWorld(page, -8, 6);
-  await h.clickWorld(page, -8, -6); // close onto the first point
+  await page.keyboard.press('Enter');
   await h.waitForSaved(page);
 
-  await switchLevel(page, 'ROOF');
   await h.selectTool(page, 'Roof');
-  await page.getByRole('button', { name: 'CAPTURE', exact: true }).click();
-  await page.getByRole('button', { name: 'CAPTURE WALLS BELOW' }).click();
+  await page.getByRole('button', { name: 'FROM SHAPE', exact: true }).click();
+  await page.getByRole('button', { name: 'BUILD FROM SHAPE' }).click();
   await h.waitForSaved(page);
 
   const saved = await h.savedDrawing(page);
   expect(saved.roofs).toHaveLength(1);
   const roof = saved.roofs[0];
   expect(roof.levelId).toBe(7);
-  expect(roof.sourceLevelId).toBe(3); // MAIN FL
+  expect(roof.layer).toBe('A-ROOF');
+  expect(roof.sourceShapeId).toBe(saved.shapes[0].id);
   expect(roof.points).toHaveLength(4);
   expect(roof.edges).toEqual(['eave', 'eave', 'eave', 'eave']);
-  // Wall centerline outline ±(8, 6) grown by the 2' overhang → ±(10, 8).
+  // Shape outline ±(8, 6) grown by the 2' overhang → ±(10, 8).
   const xs = roof.points.map(p => Math.abs(p.x));
   const zs = roof.points.map(p => Math.abs(p.z));
   xs.forEach(x => expect(x).toBeGreaterThan(9.5));
   zs.forEach(z => expect(z).toBeGreaterThan(7.5));
 
-  // The captured walls stay untouched on MAIN FL.
-  const walls = h.allWalls(saved);
-  expect(walls).toHaveLength(4);
-  expect(walls.every(wall => wall.levelId === 3)).toBe(true);
+  // The source shape stays untouched at the wall line.
+  const shape = saved.shapes[0];
+  expect(shape.points).toHaveLength(4);
+  shape.points.forEach(p => {
+    expect(Math.abs(p.x)).toBeLessThan(8.5);
+    expect(Math.abs(p.z)).toBeLessThan(6.5);
+  });
 });
 
 test('a roof survives a reload', async ({ page }) => {

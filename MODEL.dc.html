@@ -321,8 +321,23 @@
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Total Thickness</div>
         <input type="text" value="{{ floorThicknessInput }}" onInput="{{ onFloorThicknessInput }}" onBlur="{{ onFloorThicknessCommit }}" onKeyDown="{{ onFloorDimensionKey }}" placeholder="1'-0 5/8&quot;" aria-label="Floor thickness" style="width:100%; box-sizing:border-box; border:1px solid {{ floorDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
         <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ floorAssemblyLabel }}</div>
+        <sc-if value="{{ hasActiveShapes }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onFloorFromShape }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">FLOOR FROM SHAPE</button>
+        </sc-if>
         <sc-if value="{{ hasFloorDimensionError }}" hint-placeholder-val="{{ false }}">
           <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ floorDimensionError }}</div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- SHAPE PROPERTIES (shown when Shape tool is active) -->
+    <sc-if value="{{ shapeToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Shape</div>
+        <button onClick="{{ onShapeCapture }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">CAPTURE WALL OUTLINE</button>
+        <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ shapeHint }}</div>
+        <sc-if value="{{ hasActiveShapes }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onShapeDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST SHAPE</button>
         </sc-if>
       </div>
     </sc-if>
@@ -368,8 +383,8 @@
             <button onClick="{{ rm.onSelect }}" title="{{ rm.title }}" style="flex:1; border:1px solid {{ rm.border }}; background:{{ rm.bg }}; color:{{ rm.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ rm.label }}</button>
           </sc-for>
         </div>
-        <sc-if value="{{ roofCaptureMode }}" hint-placeholder-val="{{ false }}">
-          <button onClick="{{ onRoofCapture }}" style="width:100%; box-sizing:border-box; border:1px solid #5980a6; background:rgba(89,128,166,0.14); color:#3e6285; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">CAPTURE WALLS BELOW</button>
+        <sc-if value="{{ roofShapeMode }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onRoofFromShape }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD FROM SHAPE</button>
         </sc-if>
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Eave Overhang</div>
         <div style="display:flex; gap:3px; margin-bottom:5px;">
@@ -650,8 +665,8 @@ const DEFAULT_WINDOW_WIDTH_FT = 4;
 const DEFAULT_WINDOW_SILL_FT = 2.5;
 const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
 const FENESTRATION_LAYERS = Object.freeze({ door: 'A-DOOR', window: 'A-GLAZ' });
-// Roof defaults — the footprint captures the exterior wall outline of the
-// level below and grows by the eave overhang. The fascia is a fixed 5½" for
+// Roof defaults — the footprint is drawn edge-first or built from a SHAPE
+// outline grown by the eave overhang. The fascia is a fixed 5½" for
 // now, with its bottom level with the top of the wall plate, so the heel at
 // the wall face is the fascia depth plus the rise gained across the overhang.
 const ROOF_OVERHANG_PRESETS_FT = Object.freeze([0.5, 1, 1.5, 2]);
@@ -661,6 +676,10 @@ const DEFAULT_ROOF_PITCH = 4;   // rise in inches per 12" of run
 const MAX_ROOF_PITCH = 24;
 const ROOF_FASCIA_IN = 5.5;
 const ROOF_LAYER = 'A-ROOF';
+// Shapes are closed construction outlines with no roof / floor semantics of
+// their own; the ROOF and FLOOR commands build their geometry from a shape.
+const SHAPE_LAYER = 'SHAPE';
+const SHAPE_COLOR = '#3f8f7a';
 const clampRoofOverhang = value => Math.min(MAX_ROOF_OVERHANG_FT, Math.max(0, value));
 const clampRoofPitch = value => Math.min(MAX_ROOF_PITCH, Math.max(0, value));
 // Stored-drawing readers and the format version live in drawing-format.js;
@@ -800,7 +819,7 @@ class Component extends DCLogic {
     fenestrationHead: DEFAULT_OPENING_HEAD_FT,
     fenestrationHeadInput: formatArchitecturalInches(DEFAULT_OPENING_HEAD_FT * 12),
     fenestrationDimensionError: '',
-    roofMode: 'basic',   // 'basic' edge-drawn roof | 'capture' walls-below outline
+    roofMode: 'basic',   // 'basic' edge-drawn roof | 'shape' built from a SHAPE outline
     roofPhase: 'idle',   // basic flow: 'idle' → 'edge' → 'direction' → 'overhang'
     roofOverhang: DEFAULT_ROOF_OVERHANG_FT,
     roofOverhangInput: formatArchitecturalInches(DEFAULT_ROOF_OVERHANG_FT * 12),
@@ -886,6 +905,7 @@ class Component extends DCLogic {
     if (!Array.isArray(this._walls)) this._walls = [];
     if (!Array.isArray(this._floors)) this._floors = [];
     if (!Array.isArray(this._fenestrations)) this._fenestrations = [];
+    if (!Array.isArray(this._shapes)) this._shapes = [];
     if (!Array.isArray(this._roofs)) this._roofs = [];
     if (!(this._selectedFenestrations instanceof Set)) this._selectedFenestrations = new Set();
     if (!Array.isArray(this._dimensions)) this._dimensions = [];
@@ -937,11 +957,19 @@ class Component extends DCLogic {
         thickness: floor.thickness,
         assembly: { ...floor.assembly },
       })),
+      shapes: this._shapes.map(shape => ({
+        id: shape.id,
+        points: shape.points.map(point),
+        levelId: shape.levelId,
+        sourceLevelId: shape.sourceLevelId ?? null,
+        layer: SHAPE_LAYER,
+      })),
       roofs: this._roofs.map(roof => ({
         id: roof.id,
         points: roof.points.map(point),
         levelId: roof.levelId,
         sourceLevelId: roof.sourceLevelId ?? null,
+        sourceShapeId: roof.sourceShapeId ?? null,
         edges: roof.edges.map(kind => (kind === 'gable' ? 'gable' : 'eave')),
         overhang: roof.overhang,
         pitch: roof.pitch,
@@ -1405,6 +1433,12 @@ class Component extends DCLogic {
         }).filter(Boolean)
         : [];
       skipped += (Array.isArray(saved.floors) ? saved.floors.length : 0) - this._floors.length;
+      this._shapes = format.shapes(saved.shapes, levelIds).map(shape => ({
+        ...shape,
+        id: this._storedItemId(shape.id, 'shape', usedIds),
+        points: shape.points.map(point => this._mergeVertex(point, shape.levelId, 'shape')),
+      }));
+      skipped += (Array.isArray(saved.shapes) ? saved.shapes.length : 0) - this._shapes.length;
       this._roofs = format.roofs(saved.roofs, levelIds).map(roof => ({
         ...roof,
         id: this._storedItemId(roof.id, 'roof', usedIds),
@@ -1434,7 +1468,7 @@ class Component extends DCLogic {
         };
       });
       this._nextDimensionId = nextDimensionId;
-       const numericItemIds = [...this._lines, ...this._walls, ...this._floors, ...this._fenestrations, ...this._roofs]
+       const numericItemIds = [...this._lines, ...this._walls, ...this._floors, ...this._fenestrations, ...this._shapes, ...this._roofs]
          .map(item => Number(String(item.id).match(/-(\d+)$/)?.[1]))
          .filter(Number.isInteger);
        this._nextDrawingItemId = Math.max(this._nextDrawingItemId, ...numericItemIds.map(id => id + 1), 1);
@@ -1590,7 +1624,7 @@ class Component extends DCLogic {
     } catch {
       return false;
     }
-    this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut(); this._cancelRoof();
+    this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelCut(); this._cancelRoof();
     this._extendUndo = null;
     this._restoringHistory = true;
     this._loadingDrawing = true;
@@ -1815,7 +1849,7 @@ class Component extends DCLogic {
     this._lines      = []; // committed line segments
     this._floors     = []; // committed closed floor outlines
     this._fenestrations = []; // door/window openings hosted on walls
-    this._roofs      = []; // roof footprints captured from the walls below
+    this._roofs      = []; // roof footprints — edge-drawn or built from a shape
     this._dimensions = []; // two-point plan/floor dimensions
      this._groups     = [];
      this._nextGroupId = 1;
@@ -1839,6 +1873,11 @@ class Component extends DCLogic {
     this._floorDrawing = false;
     this._floorPoints  = [];
     this._floorStart   = null;
+
+    // Shape drawing state — a closed multi-point construction outline.
+    this._shapeDrawing = false;
+    this._shapePoints  = [];
+    this._shapeStart   = null;
 
     // Roof tool state — the BASIC flow's in-progress edge line.
     this._roofEdgeStart = null; // first click of the roof edge
@@ -2088,6 +2127,14 @@ class Component extends DCLogic {
       const previewPoints = [...this._floorPoints];
       if (this._snapPt && (!this._floorStart || this._snapPt.distanceTo(this._floorStart) > 0.001)) previewPoints.push(this._snapPt);
       this._drawFloor2D(ctx, toS, { points: previewPoints }, { preview: true });
+    }
+
+    // ── Shapes (construction outlines — the source geometry for ROOF / FLOOR)
+    if (activeVisible) this._activeShapes().forEach(shape => this._drawShape2D(ctx, toS, shape));
+    if (this._shapeDrawing && this._shapePoints.length) {
+      const previewPoints = [...this._shapePoints];
+      if (this._snapPt && (!this._shapeStart || this._snapPt.distanceTo(this._shapeStart) > 0.001)) previewPoints.push(this._snapPt);
+      this._drawShape2D(ctx, toS, { points: previewPoints }, { preview: true });
     }
 
     // ── Roofs (footprint + generated ridge / hip / valley guides) ───────────
@@ -2398,6 +2445,15 @@ class Component extends DCLogic {
       // dot at current chain tip
       ctx.fillStyle = LINE_COLOR; drawDot(this._lineStart);
     }
+    if (this._shapeDrawing && this._shapeStart && this._snapPt) {
+      const sc = toS(this._shapeStart);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
+      ctx.strokeStyle = SHAPE_COLOR;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
     if (this._floorDrawing && this._floorStart && this._snapPt) {
       const sc = toS(this._floorStart);
       ctx.save();
@@ -2583,9 +2639,11 @@ class Component extends DCLogic {
       return (viewId == null || ['plan', 'floor', 'e-power', 'foundation'].includes(viewId))
         && this._lineLayerConfig(this._activeLineLayer()).visible;
     }
-    // The Roof tool only works on whole-level contexts (ROOF, SITE) — the
-    // footprint it captures references the walls of the level below.
+    // The Roof tool only works on whole-level contexts (ROOF, SITE); it
+    // builds its footprint from a drawn edge or from a SHAPE outline.
     if (tool === 'roof') return viewId == null;
+    // Shapes are level-wide construction outlines: available everywhere.
+    if (tool === 'shape') return true;
     if (viewId == null) return true;
     if (tool === 'node') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
     if (tool === 'wall') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
@@ -2599,7 +2657,7 @@ class Component extends DCLogic {
   // only decides where the geometry saves, never what the command is called.
   _contextToolLabel(tool, shortcut = '') {
     const suffix = shortcut ? `  [${shortcut}]` : '';
-    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', roof:'ROOF', dimension:'DIMENSION' };
+    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', shape:'SHAPE', roof:'ROOF', dimension:'DIMENSION' };
     return `${names[tool] || tool.toUpperCase()}${suffix}`;
   }
 
@@ -2615,6 +2673,7 @@ class Component extends DCLogic {
     if (tool === 'wall') return this._draftingContextLabel(this._wallHomeView(viewId));
     if (tool === 'floor') return this._draftingContextLabel('floor');
     if (tool === 'fenestration') return this._draftingContextLabel(viewId === 'foundation' ? 'foundation' : 'plan');
+    if (tool === 'shape') return 'SHAPE';
     if (tool === 'roof') return 'A-ROOF';
     return this._draftingContextLabel(viewId);
   }
@@ -2625,7 +2684,8 @@ class Component extends DCLogic {
     if (tool === 'wall') return `Walls are drawn in any layer set: FOUNDATION walls save to S-FDN, all others save to PLAN. Current context: ${context}.`;
     if (tool === 'floor') return `Floor outlines are drawn in FLOOR or PLAN and always save to FLOOR. Current context: ${context}.`;
     if (tool === 'fenestration') return `Door and window openings are placed on walls in PLAN or FOUNDATION. Current context: ${context}.`;
-    if (tool === 'roof') return `The Roof tool works on the ROOF level: it captures the exterior wall outline of the level below. Current context: ${context}.`;
+    if (tool === 'shape') return `Shapes are closed construction outlines drawn or captured on any level. Current context: ${context}.`;
+    if (tool === 'roof') return `The Roof tool works on the ROOF level: draw a roof edge, or build the footprint from a SHAPE. Current context: ${context}.`;
     if (tool === 'dimension') return `Dimensions are placed in any layer set and save with it. Current context: ${context}.`;
     if (tool === 'line') {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
@@ -2645,6 +2705,7 @@ class Component extends DCLogic {
     if (tool !== 'wall') this._cancelWall();
     if (tool !== 'line') this._cancelLine();
     if (tool !== 'floor') this._cancelFloor();
+    if (tool !== 'shape') this._cancelShape();
     if (tool !== 'dimension') this._cancelDimension();
     this._cancelRoof();
     this._cancelCut();
@@ -2665,9 +2726,9 @@ class Component extends DCLogic {
     this._courtesyWallIds?.clear();
     this._courtesyFloorIds?.clear();
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof();
     this._applyLevelElevation(levelIndex);
-    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'roof', 'dimension'].includes(this.state.activeTool)
+    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension'].includes(this.state.activeTool)
       && !this._contextAllowsTool(this.state.activeTool, viewId)
       ? 'select'
       : this.state.activeTool;
@@ -2678,10 +2739,10 @@ class Component extends DCLogic {
       levelLayerViews: { ...this.state.levelLayerViews, [levelId]: viewId },
       layerRevealKey: `${levelId}:${viewId}`,
       activeTool,
-      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'roof', 'dimension'].includes(this.state.activeTool)
+      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension'].includes(this.state.activeTool)
         ? this._contextToolMessage(this.state.activeTool, viewId)
         : `Working in ${this._draftingContextLabel(viewId)}.`,
-      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'roof', 'dimension'].includes(this.state.activeTool),
+      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension'].includes(this.state.activeTool),
     }, () => {
       if (this._orthoCam) this._setView('top');
       this._scheduleLayerRevealHide();
@@ -2762,6 +2823,16 @@ class Component extends DCLogic {
     const levelId = this._activeLevelId();
     if (this._activeLayerViewId(levelId) != null) return [];
     return this._roofs.filter(roof => roof.levelId === levelId);
+  }
+
+  // Shapes are level-wide construction outlines: every layer set of the level
+  // shows them (they are the source geometry ROOF and FLOOR build from), and
+  // the SHAPE standard's visibility / print rules apply.
+  _activeShapes() {
+    const levelId = this._activeLevelId();
+    const standard = this._layerStandard(SHAPE_LAYER);
+    if (!standard.visible || (this._isPrinting && !standard.printable)) return [];
+    return this._shapes.filter(shape => shape.levelId === levelId);
   }
 
   _backgroundRoofs() {
@@ -2961,7 +3032,7 @@ class Component extends DCLogic {
   _switchLevel(idx) {
     if (idx === this.state.activeLevelIdx) return;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
     this._applyLevelElevation(idx);
     // A level cannot also be one of its own references; the destination
     // context's remembered background is restored when it has one.
@@ -3007,11 +3078,12 @@ class Component extends DCLogic {
     if (!window.confirm(`Delete level "${levels[idx].name}"? Geometry on this level will be removed.`)) return;
     // Pending geometry belongs to the floor it was started on. Discard it before
     // changing the level collection so no chain can commit into another floor.
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelCut();
     const levelId = levels[idx].id;
     this._lines = this._lines.filter(line => line.levelId !== levelId);
     this._walls = this._walls.filter(wall => wall.levelId !== levelId);
     this._floors = this._floors.filter(floor => floor.levelId !== levelId);
+    this._shapes = this._shapes.filter(shape => shape.levelId !== levelId);
     this._roofs = this._roofs.filter(roof => roof.levelId !== levelId);
     // Cuts are owned by a level id, not by elevation: two levels can sit at the
     // same height, so only the deleted level's own sections go with it.
@@ -3309,6 +3381,10 @@ class Component extends DCLogic {
       _setLen(this._floorPoints[this._floorPoints.length - 1], finalPt);
     }
 
+    if (tool === 'shape' && this._shapeDrawing && this._shapePoints.length) {
+      _setLen(this._shapePoints[this._shapePoints.length - 1], finalPt);
+    }
+
     // Cut preview
     if (tool === 'cut' && this.state.cutPhase === 'placing' && this._cutStart3) {
       const s = this._cutStart3, p = this._cutPreviewGeo.attributes.position;
@@ -3328,7 +3404,8 @@ class Component extends DCLogic {
     }
 
     if ((tool !== 'wall' || !this._wallDrawing)
-      && (tool !== 'floor' || !this._floorDrawing)) {
+      && (tool !== 'floor' || !this._floorDrawing)
+      && (tool !== 'shape' || !this._shapeDrawing)) {
       const lenEl = el('[data-model-len]');
       if (tool !== 'cut' || this.state.cutPhase === 'idle') if (lenEl) lenEl.textContent = '';
     }
@@ -3353,6 +3430,7 @@ class Component extends DCLogic {
       else if (tool === 'line') this._handleLineClick();
       else if (tool === 'node') this._handleNodeArcDown(e);
       else if (tool === 'floor') this._handleFloorClick();
+      else if (tool === 'shape') this._handleShapeClick();
       else if (tool === 'fenestration') this._handleFenestrationClick();
       else if (tool === 'roof') this._handleRoofClick(e);
       else if (tool === 'dimension') this._handleDimensionClick();
@@ -3688,6 +3766,156 @@ class Component extends DCLogic {
     return true;
   }
 
+  // ─── Shape drawing ─────────────────────────────────────────────────────────────────
+  // A SHAPE is a closed construction outline with no roof / floor semantics:
+  // draw one by hand, or CAPTURE it from the exterior wall outline. ROOF and
+  // FLOOR then build their own geometry from a shape, leaving it untouched.
+  _handleShapeClick() {
+    const pt = this._snapPt; if (!pt) return;
+
+    if (!this._shapeDrawing) {
+      this._shapeDrawing = true;
+      this._shapeStart = pt.clone();
+      this._shapePoints = [pt.clone()];
+      this._lockAngle = null;
+      this.setState({ isDrawing: true });
+      return;
+    }
+
+    const last = this._shapePoints[this._shapePoints.length - 1];
+    if (last && Math.hypot(pt.x - last.x, pt.z - last.z) < 0.001) return;
+    const first = this._shapeStart;
+    if (this._shapePoints.length >= 3 && first
+      && Math.hypot(pt.x - first.x, pt.z - first.z) < this._magnetRadius() * 2) {
+      this._finishShape();
+      return;
+    }
+    this._shapePoints.push(pt.clone());
+    this._lockAngle = null;
+  }
+
+  _finishShape() {
+    if (!this._shapeDrawing) return;
+    const points = this._shapePoints.map(pt => ({ x: pt.x, z: pt.z }));
+    this._shapePoints = [];
+    this._shapeDrawing = false;
+    this._shapeStart = null;
+    this._lockAngle = null;
+    this.setState({ isDrawing: false });
+    if (points.length >= 3) this._commitShape(points, null);
+  }
+
+  _cancelShape() {
+    if (!this._shapeDrawing) return;
+    this._shapePoints = [];
+    this._shapeDrawing = false;
+    this._shapeStart = null;
+    this._lockAngle = null;
+    this.setState({ isDrawing: false });
+  }
+
+  _commitShape(points, sourceLevelId) {
+    const level = this._activeLevel();
+    if (!level || points.length < 3) return null;
+    const shape = {
+      id: this._newDrawingItemId('shape'),
+      points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, level.id, 'shape')),
+      levelId: level.id,
+      sourceLevelId: sourceLevelId ?? null,
+      layer: SHAPE_LAYER,
+    };
+    this._shapes.push(shape);
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `Shape closed on SHAPE — ${points.length} corners. Build a ROOF or FLOOR from it, or drag its nodes with Select.`,
+      drawingMessageError: false,
+    });
+    return shape;
+  }
+
+  // CAPTURE derives a shape from an exterior wall outline: the active level's
+  // own PLAN walls first, otherwise the nearest level below that has any.
+  _shapeSourceLevel() {
+    const active = this._activeLevel();
+    if (!active) return null;
+    const hasPlanWalls = level => this._walls.some(wall =>
+      wall.levelId === level.id && (wall.view || 'plan') === 'plan');
+    if (hasPlanWalls(active)) return active;
+    return this.state.levels
+      .filter(level => level.id !== active.id && level.elev < active.elev)
+      .sort((a, b) => b.elev - a.elev)
+      .find(hasPlanWalls) || null;
+  }
+
+  _captureShape() {
+    const level = this._activeLevel();
+    const source = this._shapeSourceLevel();
+    if (!level || !source) {
+      this.setState({
+        drawingMessage: 'CAPTURE found no PLAN walls on this level or any level below.',
+        drawingMessageError: true,
+      });
+      return false;
+    }
+    const outline = this._wallOutline(source.id);
+    if (!outline) {
+      this.setState({
+        drawingMessage: `The walls on ${source.name} do not close into an outline — join the exterior walls, then capture again.`,
+        drawingMessageError: true,
+      });
+      return false;
+    }
+    this._cancelShape();
+    const shape = this._commitShape(outline.map(pt => ({ x: pt.x, z: pt.z })),
+      source.id === level.id ? null : source.id);
+    if (!shape) return false;
+    // Show the captured level as the BG wall shadow if nothing is picked yet.
+    if (source.id !== level.id && !this.state.backgroundLevelIds.length) {
+      this._applyBackgroundSelection([source.id], { [source.id]: 'plan' });
+    }
+    this.setState({
+      drawingMessage: `Shape captured from the ${source.name} walls — build a ROOF or FLOOR from it, or reshape its nodes with Select.`,
+      drawingMessageError: false,
+    });
+    return true;
+  }
+
+  _deleteLastShape() {
+    const active = this._activeShapes();
+    if (!active.length) return;
+    const target = active[active.length - 1];
+    this._shapes = this._shapes.filter(shape => shape !== target);
+    this._markUnsaved();
+    this.setState({ drawingMessage: 'Shape removed.', drawingMessageError: false });
+  }
+
+  // FLOOR built from the newest shape on the level: copies of the shape's
+  // corners become an ordinary floor outline, so editing either one never
+  // moves the other.
+  _buildFloorFromShape() {
+    if (!this._contextAllowsTool('floor')) {
+      this.setState({ drawingMessage: this._contextToolMessage('floor'), drawingMessageError: true });
+      return false;
+    }
+    const shapes = this._activeShapes();
+    if (!shapes.length) {
+      this.setState({
+        drawingMessage: 'No shape on this level — draw or CAPTURE one with the Shape tool first.',
+        drawingMessageError: true,
+      });
+      return false;
+    }
+    const shape = shapes[shapes.length - 1];
+    this._cancelFloor();
+    if (!this._commitFloor(shape.points.map(pt => ({ x: pt.x, z: pt.z })))) return false;
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: 'Floor built from the shape — it saves to the FLOOR layer set; the shape itself is untouched.',
+      drawingMessageError: false,
+    });
+    return true;
+  }
+
   _commitWall(start, end, wallType, baseHeight, topHeight, refLine) {
     const level = this._activeLevel();
     const levelId = level ? level.id : -1;
@@ -3940,14 +4168,14 @@ class Component extends DCLogic {
   }
 
   _setRoofMode(mode) {
-    const next = mode === 'capture' ? 'capture' : 'basic';
+    const next = mode === 'shape' ? 'shape' : 'basic';
     if (next === this.state.roofMode) return;
     this._cancelRoof();
     this.setState({
       roofMode: next,
       drawingMessage: next === 'basic'
         ? 'ROOF — click both ends of a roof edge, then the side the roof extends toward.'
-        : 'CAPTURE roof — press Capture to trace the exterior walls of the level below.',
+        : 'ROOF FROM SHAPE — press Build from Shape to grow the newest shape by the eave overhang.',
       drawingMessageError: false,
     });
   }
@@ -4007,7 +4235,7 @@ class Component extends DCLogic {
     }
     if (this.state.roofMode !== 'basic') {
       this.setState({
-        drawingMessage: 'CAPTURE mode — press Capture in the ROOF panel, or click a roof edge to toggle EAVE / GABLE.',
+        drawingMessage: 'FROM SHAPE mode — press Build from Shape in the ROOF panel, or click a roof edge to toggle EAVE / GABLE.',
         drawingMessageError: false,
       });
       return;
@@ -4057,6 +4285,7 @@ class Component extends DCLogic {
       points: footprint.map(point => this._mergeVertex({ x: point.x, z: point.z }, level.id, 'roof')),
       levelId: level.id,
       sourceLevelId: null,
+      sourceShapeId: null,
       // The drawn edge and its opposite start as eaves; the two sides as gables.
       edges: ['eave', 'gable', 'eave', 'gable'],
       overhang: this.state.roofOverhang,
@@ -4075,61 +4304,42 @@ class Component extends DCLogic {
     return true;
   }
 
-  // The most relevant lower level: the highest level below the active one that
-  // has PLAN walls (2ND FL for a two-storey house, MAIN FL for a one-storey).
-  _roofSourceLevel() {
-    const active = this._activeLevel();
-    if (!active) return null;
-    return this.state.levels
-      .filter(level => level.id !== active.id && level.elev < active.elev)
-      .sort((a, b) => b.elev - a.elev)
-      .find(level => this._walls.some(wall =>
-        wall.levelId === level.id && (wall.view || 'plan') === 'plan')) || null;
-  }
-
-  _captureRoofOutline() {
+  // ROOF built from the newest shape on the level: copies of the shape's
+  // corners, grown outward by the eave overhang, become an ordinary roof
+  // footprint — the shape itself is never modified.
+  _buildRoofFromShape() {
     if (!this._contextAllowsTool('roof')) {
       this.setState({ drawingMessage: this._contextToolMessage('roof'), drawingMessageError: true });
       return false;
     }
     const level = this._activeLevel();
-    const source = this._roofSourceLevel();
-    if (!level || !source) {
+    const shapes = this._activeShapes();
+    if (!level || !shapes.length) {
       this.setState({
-        drawingMessage: 'No walls found on a level below to capture.',
+        drawingMessage: 'No shape on this level — draw or CAPTURE one with the Shape tool first.',
         drawingMessageError: true,
       });
       return false;
     }
-    const outline = this._wallOutline(source.id);
-    if (!outline) {
-      this.setState({
-        drawingMessage: `The walls on ${source.name} do not close into an outline — join the exterior walls, then capture again.`,
-        drawingMessageError: true,
-      });
-      return false;
-    }
+    const shape = shapes[shapes.length - 1];
     const overhang = this.state.roofOverhang;
-    const points = this._offsetOutline(outline.map(pt => ({ x: pt.x, z: pt.z })), overhang);
+    const points = this._offsetOutline(shape.points.map(pt => ({ x: pt.x, z: pt.z })), overhang);
     this._roofs.push({
       id: this._newDrawingItemId('roof'),
       points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, level.id, 'roof')),
       levelId: level.id,
-      sourceLevelId: source.id,
+      sourceLevelId: shape.sourceLevelId ?? null,
+      sourceShapeId: shape.id,
       edges: points.map(() => 'eave'),
       overhang,
       pitch: this.state.roofPitch,
       fascia: ROOF_FASCIA_IN,
       layer: ROOF_LAYER,
     });
-    // Show the captured level as the BG wall shadow if nothing is picked yet.
-    if (!this.state.backgroundLevelIds.length) {
-      this._applyBackgroundSelection([source.id], { [source.id]: 'plan' });
-    }
     this._markUnsaved();
     this.setState({
-      drawingMessage: `Roof footprint captured from ${source.name} + ${formatArchitecturalInches(overhang * 12)} overhang. `
-        + 'Click an edge with the Roof tool to toggle EAVE / GABLE.',
+      drawingMessage: `Roof built from the shape + ${formatArchitecturalInches(overhang * 12)} overhang on A-ROOF. `
+        + 'Click an edge with the Roof tool to toggle EAVE / GABLE; the shape itself is untouched.',
       drawingMessageError: false,
     });
     return true;
@@ -4144,20 +4354,30 @@ class Component extends DCLogic {
     this.setState({ drawingMessage: 'Roof removed.', drawingMessageError: false });
   }
 
-  // Trace the outer boundary of the level's PLAN walls. Shared pooled vertices
-  // join segments; the walk starts at the leftmost node and always takes the
-  // tightest turn, which keeps it on the exterior face of the wall network.
+  // Trace the outer boundary of the level's PLAN walls. Wall endpoints within
+  // a small join tolerance cluster into one node, so corners that were drawn
+  // slightly apart still read as joined; the walk starts at the leftmost node
+  // and always takes the tightest turn, which keeps it on the exterior face
+  // of the wall network.
   _wallOutline(levelId) {
     const walls = this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan');
+    const JOIN_TOL_FT = 0.25; // 3" — forgiving enough for a near-miss corner
+    const nodes = [];
+    const nodeFor = pt => {
+      let node = nodes.find(n => Math.hypot(n.x - pt.x, n.z - pt.z) <= JOIN_TOL_FT);
+      if (!node) { node = { x: pt.x, z: pt.z }; nodes.push(node); }
+      return node;
+    };
     const neighbours = new Map();
     const link = (a, b) => {
       if (!neighbours.has(a)) neighbours.set(a, new Set());
       neighbours.get(a).add(b);
     };
     walls.forEach(wall => {
-      if (wall.start === wall.end) return;
-      link(wall.start, wall.end);
-      link(wall.end, wall.start);
+      const start = nodeFor(wall.start), end = nodeFor(wall.end);
+      if (start === end) return;
+      link(start, end);
+      link(end, start);
     });
     let start = null;
     neighbours.forEach((_, vertex) => {
@@ -4184,7 +4404,16 @@ class Component extends DCLogic {
     for (let steps = 0; steps <= neighbours.size * 4; steps++) {
       const next = nextAround(prev, curr);
       if (!next) return null;
-      if (next === start) return loop.length >= 3 ? loop : null;
+      if (next === start) {
+        // A dead-end chain walks out and doubles back; only a loop of distinct
+        // nodes enclosing a real area counts as a closed outline.
+        if (loop.length < 3 || new Set(loop).size !== loop.length) return null;
+        const area = loop.reduce((sum, pt, index) => {
+          const after = loop[(index + 1) % loop.length];
+          return sum + (pt.x * after.z - after.x * pt.z);
+        }, 0) / 2;
+        return Math.abs(area) > 1 ? loop : null;
+      }
       loop.push(next);
       prev = curr;
       curr = next;
@@ -4723,6 +4952,35 @@ class Component extends DCLogic {
     }
   }
 
+  // ─── Shape 2D renderer ────────────────────────────────────────────────────────
+  // Construction-outline look: dashed stroke and faint fill, deliberately
+  // unlike the roof / floor styles so a shape never reads as either.
+  _drawShape2D(ctx, toS, shape, options = {}) {
+    const points = shape?.points || [];
+    if (points.length < 2) return;
+    const { preview = false } = options;
+    const screenPoints = points.map(toS);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(screenPoints[0].x, screenPoints[0].y);
+    screenPoints.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+    if (points.length >= 3) {
+      ctx.closePath();
+      ctx.fillStyle = preview ? 'rgba(63,143,122,0.06)' : 'rgba(63,143,122,0.09)';
+      ctx.fill();
+    }
+    ctx.strokeStyle = preview ? 'rgba(63,143,122,0.72)' : SHAPE_COLOR;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([7, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (!preview && !this._isPrinting) {
+      ctx.fillStyle = SHAPE_COLOR;
+      screenPoints.forEach(point => ctx.fillRect(point.x - 2.5, point.y - 2.5, 5, 5));
+    }
+    ctx.restore();
+  }
+
   _drawFloor2D(ctx, toS, floor, options = {}) {
     const points = floor?.points || [];
     if (points.length < 2) return;
@@ -4842,8 +5100,10 @@ class Component extends DCLogic {
     this._activeWalls().forEach(w => { pts.push(w.start, w.end); });
     this._wallChain.forEach(s => { pts.push(s.start, s.end); });
     this._activeFloors().forEach(floor => pts.push(...floor.points));
+    this._activeShapes().forEach(shape => pts.push(...shape.points));
     this._activeRoofs().forEach(roof => pts.push(...roof.points));
     if (this._floorDrawing) pts.push(...this._floorPoints);
+    if (this._shapeDrawing) pts.push(...this._shapePoints);
     // Opening centres are the fenestration grab / dimension anchors.
     this._activeFenestrations().forEach(opening => {
       const center = this._openingGeometry(opening)?.center;
@@ -4964,8 +5224,8 @@ class Component extends DCLogic {
         if (d < bestD) { bestD = d; bestVtx = v; }
       });
     });
-    [...this._activeFloors(), ...this._activeRoofs()].forEach(shape => {
-      shape.points.forEach(v => {
+    [...this._activeFloors(), ...this._activeShapes(), ...this._activeRoofs()].forEach(outline => {
+      outline.points.forEach(v => {
         const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
         if (d < bestD) { bestD = d; bestVtx = v; }
       });
@@ -4977,9 +5237,9 @@ class Component extends DCLogic {
       if (seg.start === bestVtx) refs.push({ target: seg, prop: 'start' });
       if (seg.end   === bestVtx) refs.push({ target: seg, prop: 'end' });
     });
-    [...this._activeFloors(), ...this._activeRoofs()].forEach(shape => {
-      shape.points.forEach((point, index) => {
-        if (point === bestVtx) refs.push({ target: shape.points, prop: index });
+    [...this._activeFloors(), ...this._activeShapes(), ...this._activeRoofs()].forEach(outline => {
+      outline.points.forEach((point, index) => {
+        if (point === bestVtx) refs.push({ target: outline.points, prop: index });
       });
     });
     return refs.length ? refs : null;
@@ -5535,7 +5795,7 @@ class Component extends DCLogic {
 
   _activateExtendTool() {
     const seeded = this.state.activeTool === 'select' ? this._extendSessionFromSelection() : null;
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this._cancelCut(); this._cancelExtend();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this._cancelCut(); this._cancelExtend();
     if (seeded) {
       this._clearSelection();
       this._extendSession = seeded;
@@ -5802,6 +6062,10 @@ class Component extends DCLogic {
     }
     if (this.state.activeTool === 'floor' && this._floorDrawing) {
       this._finishFloor();
+      return;
+    }
+    if (this.state.activeTool === 'shape' && this._shapeDrawing) {
+      this._finishShape();
       return;
     }
     // Line tool: handled via timing in _handleLineClick
@@ -6170,7 +6434,7 @@ class Component extends DCLogic {
         return;
       }
       if (this._windowSelection) { this._windowSelection = null; return; }
-      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
+      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
       this._clearSelection();
       return;
     }
@@ -6196,6 +6460,7 @@ class Component extends DCLogic {
       if (this._lineDrawing) { e.preventDefault(); this._finishChain(); return; }
       if (this._wallDrawing) { e.preventDefault(); this._finishWall();  return; }
       if (this._floorDrawing) { e.preventDefault(); this._finishFloor(); return; }
+      if (this._shapeDrawing) { e.preventDefault(); this._finishShape(); return; }
       // BASIC roof: Enter / Space accepts the current overhang and drops the roof.
       if (this.state.activeTool === 'roof' && this.state.roofPhase === 'overhang') {
         e.preventDefault(); this._commitBasicRoof(); return;
@@ -6224,16 +6489,17 @@ class Component extends DCLogic {
     if (matches('node')) { e.preventDefault(); this._activateContextTool('node'); return; }
     if (matches('floor')) { e.preventDefault(); this._activateContextTool('floor'); return; }
     if (matches('fenestration')) { e.preventDefault(); this._activateContextTool('fenestration'); return; }
+    if (matches('shape')) { e.preventDefault(); this._activateContextTool('shape'); return; }
     if (matches('roof')) { e.preventDefault(); this._activateContextTool('roof'); return; }
     if (matches('dimension')) { e.preventDefault(); this._activateContextTool('dimension'); return; }
-    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
+    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
     if (matches('extend') || matches('extendAlt')) {
       e.preventDefault();
       this._activateExtendTool();
       return;
     }
-    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
-    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
+    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
+    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
     if (matches('gridSnap') || matches('gridSnapAlt')) { e.preventDefault(); this._toggleGridSnap(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
@@ -6412,10 +6678,12 @@ class Component extends DCLogic {
     const extending = activeTool === 'extend';
     const nodeArcing = activeTool === 'node';
     const fenestrating = activeTool === 'fenestration';
+    const shaping = activeTool === 'shape';
+    const drawingShape = isDrawing && shaping;
     const roofing = activeTool === 'roof';
     const roofPhase = this.state.roofPhase;
     const placingCut  = isCutTool && cutPhase === 'placing';
-    const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending || nodeArcing || fenestrating || roofing;
+    const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending || nodeArcing || fenestrating || shaping || roofing;
     const hintText    = roofing
       ? (roofPhase === 'edge'
         ? 'ROOF — Click the other end of the roof edge · Esc to cancel'
@@ -6425,7 +6693,11 @@ class Component extends DCLogic {
         ? `ROOF — ${shortcut('finish')} / ${shortcut('finishAlt')} or click accepts the overhang · type a new one in the panel`
         : this.state.roofMode === 'basic'
         ? 'ROOF — Click both ends of a roof edge · Click an existing edge to toggle EAVE / GABLE'
-        : 'ROOF — Press Capture in the panel · Click an existing edge to toggle EAVE / GABLE')
+        : 'ROOF — Press Build from Shape in the panel · Click an existing edge to toggle EAVE / GABLE')
+      : shaping
+      ? (drawingShape
+        ? `Click shape corners · Click first point or ${shortcut('finish')} / ${shortcut('finishAlt')} to close · ${shortcut('cancel')} to cancel`
+        : 'SHAPE — Click to draw a closed outline · or press Capture in the panel')
       : fenestrating
       ? 'FENESTRATION — Click a wall to place the opening at the cursor'
       : nodeArcing
@@ -6523,22 +6795,28 @@ class Component extends DCLogic {
       fenestrationLayerNote: this.state.fenestrationType === 'window'
         ? 'Saves on A-GLAZ · heights from the bottom of the wall'
         : 'Saves on A-DOOR · sill sits at the bottom of the wall',
+      shapeToolActive: shaping,
+      onShapeCapture: () => this._captureShape(),
+      hasActiveShapes: this._activeShapes().length > 0,
+      onShapeDelete: () => this._deleteLastShape(),
+      shapeHint: 'Closed construction outline on SHAPE · ROOF and FLOOR build from the newest shape',
       roofToolActive: roofing,
-      roofModeBtns: ['basic', 'capture'].map(value => {
+      roofModeBtns: ['basic', 'shape'].map(value => {
         const isActive = this.state.roofMode === value;
         return {
-          label: value === 'basic' ? 'ROOF' : 'CAPTURE',
+          label: value === 'basic' ? 'ROOF' : 'FROM SHAPE',
           title: value === 'basic'
             ? 'Draw a roof edge, pick the overhang side, and drop in a rectangle to reshape'
-            : 'Trace the exterior wall outline of the level below, grown by the overhang',
+            : 'Build the roof footprint from the newest shape, grown by the eave overhang',
           border: isActive ? '#1d1f20' : 'rgba(29,31,32,0.2)',
           bg: isActive ? '#1d1f20' : '#fff',
           color: isActive ? '#f2f2f3' : '#1d1f20',
           onSelect: () => this._setRoofMode(value),
         };
       }),
-      roofCaptureMode: this.state.roofMode === 'capture',
-      onRoofCapture: () => this._captureRoofOutline(),
+      roofShapeMode: this.state.roofMode === 'shape',
+      onRoofFromShape: () => this._buildRoofFromShape(),
+      onFloorFromShape: () => this._buildFloorFromShape(),
       roofOverhangPresets: ROOF_OVERHANG_PRESETS_FT.map(feet => {
         const isActive = Math.abs(this.state.roofOverhang - feet) < 1e-9;
         return {
@@ -6823,19 +7101,20 @@ class Component extends DCLogic {
       })),
 
       tools: [
-        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
+        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
         contextualTool('line'),
         contextualTool('node'),
         contextualTool('wall'),
         contextualTool('floor'),
         contextualTool('fenestration'),
+        contextualTool('shape'),
         contextualTool('roof'),
         contextualTool('dimension'),
         standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._activateExtendTool(); }, activeTool==='extend'),
-        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
+        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
       ],
       cutShortcut: shortcut('cut'),
-      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this.setState({activeTool:'cut'}); },
+      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this.setState({activeTool:'cut'}); },
       cutToolBg:     isCutTool ? on.bg     : off.bg,
       cutToolColor:  isCutTool ? on.color  : off.color,
       cutToolBorder: isCutTool ? on.border : off.border,

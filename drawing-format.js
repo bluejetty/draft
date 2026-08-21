@@ -120,6 +120,23 @@ if (!window.DraftDrawingFormat) {
       };
     }).filter(Boolean);
 
+  // Shapes are closed construction outlines owned by a level — drawn by hand
+  // or captured from a wall network. They carry no roof or floor semantics;
+  // the ROOF and FLOOR commands build their own geometry from a shape.
+  const shapes = (rawShapes, levelIds) => (Array.isArray(rawShapes) ? rawShapes : [])
+    .map(shape => {
+      const shapeLevelId = levelId(shape?.levelId, levelIds);
+      const points = (Array.isArray(shape?.points) ? shape.points : []).map(point).filter(Boolean);
+      if (shapeLevelId == null || points.length < 3) return null;
+      return {
+        id: String(shape?.id || '').trim(),
+        points,
+        levelId: shapeLevelId,
+        sourceLevelId: levelId(shape?.sourceLevelId, levelIds),
+        layer: 'SHAPE',
+      };
+    }).filter(Boolean);
+
   // Roof footprints are closed outlines owned by a whole level; each footprint
   // segment classifies as EAVE or GABLE, and the overhang / pitch stay clamped
   // to the drafting limits so the stored heel is always derivable.
@@ -133,6 +150,7 @@ if (!window.DraftDrawingFormat) {
         points,
         levelId: roofLevelId,
         sourceLevelId: levelId(roof?.sourceLevelId, levelIds),
+        sourceShapeId: String(roof?.sourceShapeId || '').trim() || null,
         edges: points.map((_, index) =>
           (Array.isArray(roof?.edges) && roof.edges[index] === 'gable' ? 'gable' : 'eave')),
         overhang: Math.min(6, Math.max(0, number(roof?.overhang, 2))),
@@ -158,6 +176,7 @@ if (!window.DraftDrawingFormat) {
     cuts,
     dimensions,
     fenestrations,
+    shapes,
     roofs,
     backgroundLevelIds,
     oneOf,
