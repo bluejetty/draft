@@ -191,16 +191,23 @@
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Tools</div>
       <div style="margin:-2px 0 8px; color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;">Working in: {{ workingContextLabel }}</div>
-      <div style="margin:-2px 0 4px; color:rgba(29,31,32,0.56); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;">Line layer · <a href="./STANDARDS.html" style="color:#5980a6; text-decoration:none;">Standards</a></div>
-      <div style="display:flex; gap:3px; margin-bottom:8px;">
-        <sc-for list="{{ genericLineLayers }}" as="gl" hint-placeholder-count="2">
-          <button onClick="{{ gl.onSelect }}" title="{{ gl.title }}" style="flex:1; min-width:0; border:1px solid {{ gl.border }}; background:{{ gl.bg }}; color:{{ gl.color }}; padding:5px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ gl.label }}</button>
-        </sc-for>
-      </div>
       <sc-for list="{{ tools }}" as="t" hint-placeholder-count="3">
         <button onClick="{{ t.onSelect }}" disabled="{{ t.disabled }}" title="{{ t.title }}" style="display:block; width:100%; text-align:left; border:1px solid {{ t.border }}; background:{{ t.bg }}; color:{{ t.color }}; opacity:{{ t.opacity }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:{{ t.cursor }}; margin-bottom:3px;">{{ t.label }}</button>
       </sc-for>
     </div>
+
+    <!-- LINE LAYER (shown only while Line is active) -->
+    <sc-if value="{{ lineToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Line Layer</div>
+        <div style="display:flex; gap:3px;">
+          <sc-for list="{{ genericLineLayers }}" as="gl" hint-placeholder-count="2">
+            <button onClick="{{ gl.onSelect }}" title="{{ gl.title }}" style="flex:1; min-width:0; border:1px solid {{ gl.border }}; background:{{ gl.bg }}; color:{{ gl.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ gl.label }}</button>
+          </sc-for>
+        </div>
+        <div style="margin-top:6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:rgba(29,31,32,0.48);">Names and print rules live in <a href="./STANDARDS.html" style="color:#5980a6; text-decoration:none;">Company Standard Layers</a>.</div>
+      </div>
+    </sc-if>
 
     <!-- SELECTION TOOLS (shown only while Select is active) -->
     <sc-if value="{{ selectToolActive }}" hint-placeholder-val="{{ false }}">
@@ -299,6 +306,12 @@
     <sc-if value="{{ floorToolActive }}" hint-placeholder-val="{{ false }}">
       <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Floor</div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Structure</div>
+        <div style="display:flex; gap:3px; margin-bottom:8px;">
+          <sc-for list="{{ floorStructureBtns }}" as="fs" hint-placeholder-count="2">
+            <button onClick="{{ fs.onSelect }}" title="{{ fs.title }}" style="flex:1; border:1px solid {{ fs.border }}; background:{{ fs.bg }}; color:{{ fs.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ fs.label }}</button>
+          </sc-for>
+        </div>
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Total Thickness</div>
         <input type="text" value="{{ floorThicknessInput }}" onInput="{{ onFloorThicknessInput }}" onBlur="{{ onFloorThicknessCommit }}" onKeyDown="{{ onFloorDimensionKey }}" placeholder="1'-0 5/8&quot;" aria-label="Floor thickness" style="width:100%; box-sizing:border-box; border:1px solid {{ floorDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
         <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ floorAssemblyLabel }}</div>
@@ -391,6 +404,7 @@
       <div style="display:flex; align-items:center; margin-bottom:8px;">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Elevations / Sections</div>
       </div>
+      <button onClick="{{ activateCutTool }}" title="Cut a new section or elevation view" style="display:block; width:100%; text-align:left; border:1px solid {{ cutToolBorder }}; background:{{ cutToolBg }}; color:{{ cutToolColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:pointer; margin-bottom:6px;">Cut  [{{ cutShortcut }}]</button>
       <sc-if value="{{ noCuts }}" hint-placeholder-val="{{ true }}">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; color:rgba(29,31,32,0.35); padding:4px 2px;">Use Cut tool to add views</div>
       </sc-if>
@@ -435,6 +449,7 @@ const LOCKED_NODE_SNAP_PX = 3;
 const SIXTEENTH_IN = 1 / 16;
 const DEFAULT_WALL_TOP_FT = (8 * 12 + 1 + 1 / 8) / 12;
 const DEFAULT_FLOOR_THICKNESS_IN = 12 + 5 / 8;
+const DEFAULT_SLAB_THICKNESS_IN = 4;
 const DEFAULT_FLOOR_ASSEMBLY = {
   joistDepthIn: 11 + 7 / 8,
   joistSpacingIn: 16,
@@ -666,6 +681,7 @@ class Component extends DCLogic {
     floorThickness: DEFAULT_FLOOR_THICKNESS_IN / 12,
     floorThicknessInput: formatArchitecturalInches(DEFAULT_FLOOR_THICKNESS_IN),
     floorDimensionError: '',
+    floorStructure: 'floor',  // 'floor' framed assembly | 'slab' concrete slab
     levels:        DEFAULT_LEVELS.map(l => ({ ...l })),
     levelLayerViews: { ...DEFAULT_LEVEL_LAYER_VIEWS },
     activeLevelIdx: 3,
@@ -734,6 +750,10 @@ class Component extends DCLogic {
 
   // ─── Local drawing persistence ───────────────────────────────────────────────
   _ensureDrawingCollections() {
+    // Items drawn from a neighbouring layer set (a wall drawn in FLOOR, a floor
+    // drawn in PLAN) stay visible in that context until the layer set changes.
+    if (!(this._courtesyWallIds instanceof Set)) this._courtesyWallIds = new Set();
+    if (!(this._courtesyFloorIds instanceof Set)) this._courtesyFloorIds = new Set();
     if (!Array.isArray(this._lines)) this._lines = [];
     if (!Array.isArray(this._walls)) this._walls = [];
     if (!Array.isArray(this._floors)) this._floors = [];
@@ -782,6 +802,7 @@ class Component extends DCLogic {
         points: floor.points.map(point),
         levelId: floor.levelId,
         view: floor.view || 'floor',
+        structure: floor.structure === 'slab' ? 'slab' : 'floor',
         thickness: floor.thickness,
         assembly: { ...floor.assembly },
       })),
@@ -1214,6 +1235,7 @@ class Component extends DCLogic {
              points: points.map(point => this._mergeVertex(point, levelId, 'floor')),
             levelId,
              view: 'floor',
+            structure: floor.structure === 'slab' ? 'slab' : 'floor',
             thickness: format.positive(floor.thickness, this.state.floorThickness),
             assembly: { ...DEFAULT_FLOOR_ASSEMBLY, ...(floor.assembly || {}) },
           };
@@ -2211,39 +2233,33 @@ class Component extends DCLogic {
         && this._lineLayerConfig(this._activeLineLayer()).visible;
     }
     if (tool === 'node') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
-    if (tool === 'wall') return viewId === 'plan';
-    if (tool === 'floor') return viewId === 'floor';
+    if (tool === 'wall') return ['plan', 'floor'].includes(viewId);
+    if (tool === 'floor') return ['floor', 'plan'].includes(viewId);
     if (tool === 'dimension') return ['plan', 'floor'].includes(viewId);
     return true;
   }
 
+  // Tool names stay the same on every level and layer set; the active context
+  // only decides where the geometry saves, never what the command is called.
   _contextToolLabel(tool, shortcut = '') {
-    const viewId = this._activeLayerViewId();
     const suffix = shortcut ? `  [${shortcut}]` : '';
-    if (tool === 'line') {
-      const prefix = { plan:'PLAN', floor:'FLOOR', 'e-power':'E-POWER', foundation:'FOUNDATION' }[viewId] || 'LINE';
-      const layer = this._activeLineLayerLabel();
-      return prefix === 'LINE' ? `${layer} LINE${suffix}` : `${prefix} ${layer} LINE${suffix}`;
-    }
-    if (tool === 'node') {
-      const prefix = { plan:'PLAN', floor:'FLOOR', 'e-power':'E-POWER', foundation:'FOUNDATION' }[viewId];
-      return prefix ? `${prefix} NODE / ARC${suffix}` : `NODE / ARC${suffix}`;
-    }
-    if (tool === 'wall') return viewId === 'plan' ? `PLAN WALL${suffix}` : `WALL — PLAN ONLY${suffix}`;
-    if (tool === 'floor') return viewId === 'floor' ? `FLOOR OUTLINE${suffix}` : `FLOOR — FLOOR ONLY${suffix}`;
-    if (tool === 'dimension') {
-      if (viewId === 'plan') return `PLAN DIMENSION${suffix}`;
-      if (viewId === 'floor') return `FLOOR DIMENSION${suffix}`;
-      return `DIMENSION — PLAN / FLOOR${suffix}`;
-    }
-    return `${tool.toUpperCase()}${suffix}`;
+    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', dimension:'DIMENSION' };
+    return `${names[tool] || tool.toUpperCase()}${suffix}`;
+  }
+
+  // Where a tool's geometry saves: walls always live in PLAN and floor outlines
+  // in FLOOR, no matter which layer set they were drawn from.
+  _contextToolSaveLabel(tool, viewId = this._activeLayerViewId()) {
+    if (tool === 'wall') return this._draftingContextLabel('plan');
+    if (tool === 'floor') return this._draftingContextLabel('floor');
+    return this._draftingContextLabel(viewId);
   }
 
   _contextToolMessage(tool, viewId = this._activeLayerViewId()) {
     const context = this._draftingContextLabel(viewId);
     if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, E-POWER, or FOUNDATION. Current context: ${context}.`;
-    if (tool === 'wall') return `Walls are placed in PLAN. Switch to PLAN to draw walls. Current context: ${context}.`;
-    if (tool === 'floor') return `Floor outlines are placed in FLOOR. Switch to FLOOR to draw one. Current context: ${context}.`;
+    if (tool === 'wall') return `Walls are drawn in PLAN or FLOOR and always save to PLAN. Current context: ${context}.`;
+    if (tool === 'floor') return `Floor outlines are drawn in FLOOR or PLAN and always save to FLOOR. Current context: ${context}.`;
     if (tool === 'dimension') return `Dimensions are placed in PLAN or FLOOR. Current context: ${context}.`;
     if (tool === 'line') {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
@@ -2279,6 +2295,8 @@ class Component extends DCLogic {
     const levelIndex = this.state.levels.findIndex(level => level.id === levelId);
     if (levelIndex < 0) return;
     const { ids: backgroundLevelIds, views: backgroundLevelViews } = this._restoredBackgroundFor(levelId, viewId);
+    this._courtesyWallIds?.clear();
+    this._courtesyFloorIds?.clear();
     this._cancelFrozenLength();
     this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension();
     this._applyLevelElevation(levelIndex);
@@ -2353,13 +2371,15 @@ class Component extends DCLogic {
   _activeWalls() {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
-    return this._walls.filter(wall => wall.levelId === levelId && (view == null || (wall.view || 'plan') === view));
+    return this._walls.filter(wall => wall.levelId === levelId && (view == null || (wall.view || 'plan') === view
+      || (!this._isPrinting && this._courtesyWallIds?.has(wall.id))));
   }
 
   _activeFloors() {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
-    return this._floors.filter(floor => floor.levelId === levelId && (view == null || (floor.view || 'floor') === view));
+    return this._floors.filter(floor => floor.levelId === levelId && (view == null || (floor.view || 'floor') === view
+      || (!this._isPrinting && this._courtesyFloorIds?.has(floor.id))));
   }
 
   // Same-level overlays remain source-context geometry. They render as references
@@ -2368,7 +2388,8 @@ class Component extends DCLogic {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
     if (view !== 'floor') return [];
-    return this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan');
+    return this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan'
+      && !this._courtesyWallIds?.has(wall.id));
   }
 
   // E-Power shares the PLAN wall layers at full strength: walls render and print
@@ -2384,18 +2405,21 @@ class Component extends DCLogic {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
     if (view !== 'plan') return [];
-    return this._floors.filter(floor => floor.levelId === levelId && (floor.view || 'floor') === 'floor');
+    return this._floors.filter(floor => floor.levelId === levelId && (floor.view || 'floor') === 'floor'
+      && !this._courtesyFloorIds?.has(floor.id));
   }
 
   _isCurrentContextReferenceItem(item) {
     if (!item || item.levelId !== this._activeLevelId()) return false;
     const view = this._activeLayerViewId(item.levelId);
     if (view === 'plan') {
-      return this._floors.includes(item) && (item.view || 'floor') === 'floor';
+      return this._floors.includes(item) && (item.view || 'floor') === 'floor'
+        && !this._courtesyFloorIds?.has(item.id);
     }
     return (view === 'floor' || view === 'e-power')
       && this._walls.includes(item)
-      && (item.view || 'plan') === 'plan';
+      && (item.view || 'plan') === 'plan'
+      && !(view === 'floor' && this._courtesyWallIds?.has(item.id));
   }
 
   _pruneContextReferenceSelection() {
@@ -3202,30 +3226,39 @@ class Component extends DCLogic {
   _commitFloor(points) {
     const level = this._activeLevel();
     const levelId = level ? level.id : -1;
-    const view = this._activeLayerViewId(levelId);
-    if (!this._contextAllowsTool('floor', view)) return false;
+    const activeView = this._activeLayerViewId(levelId);
+    if (!this._contextAllowsTool('floor', activeView)) return false;
+    const id = this._newDrawingItemId('floor');
+    // Floor outlines always live in the FLOOR layer set; one drawn from PLAN
+    // stays visible there until the layer set changes.
     this._floors.push({
-      id: this._newDrawingItemId('floor'),
-      points: points.map(point => this._mergeVertex(point, levelId, view)),
+      id,
+      points: points.map(point => this._mergeVertex(point, levelId, 'floor')),
       levelId,
-      view,
+      view: 'floor',
+      structure: this.state.floorStructure === 'slab' ? 'slab' : 'floor',
       thickness: this.state.floorThickness,
       assembly: { ...DEFAULT_FLOOR_ASSEMBLY },
     });
+    if (activeView !== 'floor') this._courtesyFloorIds?.add(id);
     return true;
   }
 
   _commitWall(start, end, wallType, baseHeight, topHeight, refLine) {
     const level = this._activeLevel();
     const levelId = level ? level.id : -1;
-    const view = this._activeLayerViewId(levelId);
-    if (!this._contextAllowsTool('wall', view)) return false;
+    const activeView = this._activeLayerViewId(levelId);
+    if (!this._contextAllowsTool('wall', activeView)) return false;
+    const id = this._newDrawingItemId('wall');
+    // Walls always live in the PLAN layer set; one drawn from FLOOR stays
+    // visible there until the layer set changes.
+    if (activeView !== 'plan') this._courtesyWallIds?.add(id);
     this._walls.push({
-      id: this._newDrawingItemId('wall'),
-      start:      this._mergeVertex(start, levelId, view),
-      end:        this._mergeVertex(end, levelId, view),
+      id,
+      start:      this._mergeVertex(start, levelId, 'plan'),
+      end:        this._mergeVertex(end, levelId, 'plan'),
       levelId,
-      view,
+      view: 'plan',
       wallType:   wallType   || this.state.activeWallType,
       baseHeight: baseHeight != null ? baseHeight : this.state.wallBaseHeight,
       topHeight:  topHeight  != null ? topHeight  : this.state.wallTopHeight,
@@ -4956,6 +4989,22 @@ class Component extends DCLogic {
     });
   }
 
+  _setFloorStructure(structure) {
+    const value = structure === 'slab' ? 'slab' : 'floor';
+    if (value === this.state.floorStructure) return;
+    const thicknessIn = value === 'slab' ? DEFAULT_SLAB_THICKNESS_IN : DEFAULT_FLOOR_THICKNESS_IN;
+    this.setState({
+      floorStructure: value,
+      floorThickness: thicknessIn / 12,
+      floorThicknessInput: formatArchitecturalInches(thicknessIn),
+      floorDimensionError: '',
+      drawingMessage: value === 'slab'
+        ? 'New floor outlines are SLAB — concrete, no framing.'
+        : 'New floor outlines are framed FLOOR assemblies.',
+      drawingMessageError: false,
+    });
+  }
+
   _ftIn(feet) {
     return formatArchitecturalInches(feet * 12);
   }
@@ -4985,7 +5034,7 @@ class Component extends DCLogic {
       return {
         label: this._contextToolLabel(tool, shortcut(tool)),
         title: available
-          ? `${this._contextToolLabel(tool).replace(/\s+\[[^\]]+\]$/, '')} will be saved in ${workingContextLabel}.`
+          ? `${this._contextToolLabel(tool).replace(/\s+\[[^\]]+\]$/, '')} saves in ${this._contextToolSaveLabel(tool, activeLayerViewId)}.`
           : this._contextToolMessage(tool, activeLayerViewId),
         disabled: !available,
         opacity: available ? '1' : '0.42',
@@ -5082,6 +5131,7 @@ class Component extends DCLogic {
       showHint, hintText, hintColor,
       choosingDir,
       noCuts: cuts.length === 0,
+      lineToolActive: activeTool === 'line',
       wallToolActive: activeTool === 'wall',
       floorToolActive: activeTool === 'floor',
       selectToolActive: activeTool === 'select',
@@ -5254,7 +5304,19 @@ class Component extends DCLogic {
       floorDimensionBorder: this.state.floorDimensionError ? '#b04050' : 'rgba(29,31,32,0.2)',
       hasFloorDimensionError: Boolean(this.state.floorDimensionError),
       floorDimensionError: this.state.floorDimensionError,
-      floorAssemblyLabel: `11 7/8" TJI @ 16" O.C. + 3/4" sheathing · ${this._ftIn(this.state.floorThickness)} total`,
+      floorAssemblyLabel: this.state.floorStructure === 'slab'
+        ? `Concrete slab · ${this._ftIn(this.state.floorThickness)} total`
+        : `11 7/8" TJI @ 16" O.C. + 3/4" sheathing · ${this._ftIn(this.state.floorThickness)} total`,
+      floorStructureBtns: ['floor', 'slab'].map(value => ({
+        label: value === 'slab' ? 'SLAB' : 'FLOOR',
+        title: value === 'slab'
+          ? 'Concrete slab — no framing, 4" default thickness'
+          : 'Framed floor assembly — joists and sheathing',
+        bg: this.state.floorStructure === value ? '#1d1f20' : '#fff',
+        color: this.state.floorStructure === value ? '#f2f2f3' : '#1d1f20',
+        border: this.state.floorStructure === value ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        onSelect: () => this._setFloorStructure(value),
+      })),
       onFloorThicknessInput: e => this.setState({ floorThicknessInput: e.target.value, floorDimensionError: '' }),
       onFloorThicknessCommit: () => this._commitFloorThickness(),
       onFloorDimensionKey: e => {
@@ -5330,8 +5392,12 @@ class Component extends DCLogic {
         contextualTool('dimension'),
         standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut(); this._cancelExtend(); this.setState({activeTool:'extend', extendScope:'current', extendPhase:'idle', extendMessage:''}); }, activeTool==='extend'),
         standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
-        standardTool(`Cut  [${shortcut('cut')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'cut'}); }, activeTool==='cut'),
       ],
+      cutShortcut: shortcut('cut'),
+      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'cut'}); },
+      cutToolBg:     isCutTool ? on.bg     : off.bg,
+      cutToolColor:  isCutTool ? on.color  : off.color,
+      cutToolBorder: isCutTool ? on.border : off.border,
       enter3D:      ()=>this._setView('perspective'),
       webglUnavailable: this.state.webglUnavailable,
       view3DLabel:  this.state.webglUnavailable ? '3D VIEW — UNAVAILABLE' : '3D VIEW',
