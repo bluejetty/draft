@@ -107,6 +107,7 @@ if (!window.DraftProfileManager) {
     wall: 'W',
     floor: 'F',
     fenestration: 'E',
+    shape: 'P',
     roof: 'O',
     dimension: 'D',
     trim: 'T',
@@ -185,6 +186,7 @@ if (!window.DraftProfileManager) {
       layers: Object.freeze([
         Object.freeze({ id: 'draft', name: 'DRAFT', use: 'Default layer for the Line and Node / Arc tools.', printable: true }),
         Object.freeze({ id: 'no-draft', name: 'NO-DRAFT', use: 'Construction / reference linework; drawing spaces only.', printable: false }),
+        Object.freeze({ id: 'SHAPE', name: 'SHAPE', use: 'Closed construction outlines (Shape tool — drawn or captured); source geometry for ROOF and FLOOR.', printable: false }),
       ]),
     }),
     Object.freeze({
