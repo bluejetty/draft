@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./vendor/react-18.3.1.production.min.js"></script>
+<script src="./vendor/react-dom-18.3.1.production.min.js"></script>
 <script src="./support.js"></script>
 <script src="./profile-manager.js"></script>
 <script src="./shared-file-store.js"></script>
@@ -10,8 +12,8 @@
 <script src="./geometry-2d.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
      would otherwise run here and be mounted again by the helmet runtime. -->
-<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
-<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="./vendor/three-0.128.0.min.js"></script>
+<script src="./vendor/three-orbitcontrols-0.128.0.js"></script>
 </head>
 <body>
 <x-dc>
