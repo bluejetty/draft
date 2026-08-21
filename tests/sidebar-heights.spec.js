@@ -14,6 +14,18 @@ async function switchLevel(page, name) {
   await page.waitForTimeout(300);
 }
 
+// clock.fastForward occasionally no-ops (the fake clock reports ~0ms of
+// travel), so keep nudging until the page really saw the time pass.
+async function fastForward(page, ms) {
+  const target = (await page.evaluate(() => Date.now())) + ms;
+  for (let i = 0; i < 20; i++) {
+    const now = await page.evaluate(() => Date.now());
+    if (now >= target) return;
+    await page.clock.fastForward(target - now);
+  }
+  throw new Error(`clock refused to advance ${ms}ms`);
+}
+
 test('layer standards stay hidden until their set is clicked, then hide after a minute', async ({ page }) => {
   await page.clock.install();
   await h.openModel(page);
@@ -23,7 +35,7 @@ test('layer standards stay hidden until their set is clicked, then hide after a 
   await levelRow(page, 'MAIN FL').getByRole('button', { name: 'PLAN', exact: true }).click();
   await expect(page.locator('.level-layer-content').first()).toBeVisible();
 
-  await page.clock.fastForward(61_000);
+  await fastForward(page, 61_000);
   await expect(page.locator('.level-layer-content')).toHaveCount(0);
 });
 
@@ -32,34 +44,35 @@ test('switching layer sets moves the revealed list and restarts the timer', asyn
   await h.openModel(page);
 
   await levelRow(page, 'MAIN FL').getByRole('button', { name: 'PLAN', exact: true }).click();
-  await page.clock.fastForward(40_000);
+  await fastForward(page, 40_000);
   await levelRow(page, 'MAIN FL').getByRole('button', { name: 'FLOOR', exact: true }).click();
   await expect(levelRow(page, 'MAIN FL').locator('.level-layer-content').first()).toBeVisible();
 
   // The earlier click's timer must not hide the newly revealed set.
-  await page.clock.fastForward(40_000);
+  await fastForward(page, 40_000);
   await expect(page.locator('.level-layer-content').first()).toBeVisible();
-  await page.clock.fastForward(30_000);
+  await fastForward(page, 30_000);
   await expect(page.locator('.level-layer-content')).toHaveCount(0);
 });
 
-test('levels show construction height marks from the sheathing datum', async ({ page }) => {
+test('level cards draw the floor profile with heights on its border lines', async ({ page }) => {
   await h.openModel(page);
 
-  // MAIN FL: sheathing is the 0' datum, walls default to 8'-1 1/8" plates.
+  // MAIN FL: sheathing top is the 0' datum; the floor bottom (top of
+  // foundation) sits one default floor assembly below it (11 7/8 + 3/4).
   const main = levelRow(page, 'MAIN FL');
-  await expect(main.locator('.level-height', { hasText: 'T.O. SHEATHING' })).toContainText(`0"`);
-  await expect(main.locator('.level-height', { hasText: 'T.O. WALL' })).toContainText(`8'-1 1/8"`);
+  await expect(main.locator('.level-edge-val').nth(0)).toHaveText(`0'-0"`);
+  await expect(main.locator('.level-edge-val').nth(1)).toHaveText(`-1'-0 5/8"`);
 
-  // FOUNDATION: wall top sits one floor thickness below the datum.
+  // 2ND FL: floor bottom = main wall top; sheathing = wall top + floor.
+  const second = levelRow(page, '2ND FL');
+  await expect(second.locator('.level-edge-val').nth(0)).toHaveText(`+9'-1 3/4"`);
+  await expect(second.locator('.level-edge-val').nth(1)).toHaveText(`+8'-1 1/8"`);
+
+  // FOUNDATION keeps its wall-top and footing marks beside the title.
   const fdn = levelRow(page, 'FOUNDATION');
   await expect(fdn.locator('.level-height', { hasText: 'T.O. FDN WALL' })).toContainText(`-1'-0 5/8"`);
   await expect(fdn.locator('.level-height', { hasText: 'T.O. FOOTING' })).toBeVisible();
-
-  // 2ND FL: sheathing = main wall top + floor thickness.
-  const second = levelRow(page, '2ND FL');
-  await expect(second.locator('.level-height', { hasText: 'T.O. SHEATHING' })).toContainText(`9'-1 3/4"`);
-  await expect(second.locator('.level-height', { hasText: 'B.O. TRUSS' })).toBeVisible();
 });
 
 test('the datum toggle shifts every mark by 100 feet and persists', async ({ page }) => {
@@ -69,7 +82,7 @@ test('the datum toggle shifts every mark by 100 feet and persists', async ({ pag
   await expect(page.getByRole('button', { name: "DATUM 100'" })).toBeVisible();
 
   const main = levelRow(page, 'MAIN FL');
-  await expect(main.locator('.level-height', { hasText: 'T.O. SHEATHING' })).toContainText(`+100'-0"`);
+  await expect(main.locator('.level-edge-val').nth(0)).toHaveText(`+100'-0"`);
   const fdn = levelRow(page, 'FOUNDATION');
   await expect(fdn.locator('.level-height', { hasText: 'T.O. FDN WALL' })).toContainText(`+98'-11 3/8"`);
 
@@ -80,4 +93,81 @@ test('the datum toggle shifts every mark by 100 feet and persists', async ({ pag
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
   await page.waitForTimeout(500);
   await expect(page.getByRole('button', { name: "DATUM 100'" })).toBeVisible();
+});
+
+test('WALL HEIGHT edits the level wall height and moves the marks above', async ({ page }) => {
+  await h.openModel(page);
+  const main = levelRow(page, 'MAIN FL');
+
+  await main.getByRole('button', { name: 'WALL HEIGHT' }).click();
+  const wallInput = main.locator('.assembly-input');
+  await expect(wallInput).toHaveValue(`8'-1 1/8"`);
+  await wallInput.fill(`9'`);
+  await wallInput.press('Enter');
+  await expect(main.locator('.level-assembly-editor')).toHaveCount(0);
+
+  // The 2nd-floor border heights ride on the main-floor wall top.
+  const second = levelRow(page, '2ND FL');
+  await expect(second.locator('.level-edge-val').nth(1)).toHaveText(`+9'-0"`);
+  await expect(second.locator('.level-edge-val').nth(0)).toHaveText(`+10'-0 5/8"`);
+
+  await h.waitForSaved(page);
+  expect((await h.savedDrawing(page)).levelAssemblies['3'].wallHeightFt).toBe(9);
+
+  // The assembly survives a reload.
+  await page.reload();
+  await expect(page.locator('[data-model-canvas]')).toBeVisible();
+  await page.waitForTimeout(500);
+  await expect(levelRow(page, '2ND FL').locator('.level-edge-val').nth(1)).toHaveText(`+9'-0"`);
+});
+
+test('FLOOR JOISTS edits the assembly and recomputes the foundation top', async ({ page }) => {
+  await h.openModel(page);
+  const main = levelRow(page, 'MAIN FL');
+
+  await main.getByRole('button', { name: 'FLOOR JOISTS' }).click();
+  const editor = main.locator('.level-assembly-editor');
+  await expect(editor.locator('.assembly-input').nth(0)).toHaveValue(`11 7/8"`);
+  await expect(editor.locator('.assembly-input').nth(2)).toHaveValue(`3/4"`);
+
+  // Conventional 2x10 pre-fills its 9 1/4" depth.
+  await editor.getByRole('button', { name: '2x10' }).click();
+  await expect(editor.locator('.assembly-input').nth(0)).toHaveValue(`9 1/4"`);
+  await editor.locator('.assembly-input').nth(0).press('Enter');
+  await expect(main.locator('.level-assembly-editor')).toHaveCount(0);
+
+  // Floor is now 10" total, so the bottom line and foundation top follow.
+  await expect(main.locator('.level-edge-val').nth(1)).toHaveText(`-0'-10"`);
+  const fdn = levelRow(page, 'FOUNDATION');
+  await expect(fdn.locator('.level-height', { hasText: 'T.O. FDN WALL' })).toContainText(`-0'-10"`);
+
+  await h.waitForSaved(page);
+  const saved = (await h.savedDrawing(page)).levelAssemblies['3'];
+  expect(saved.joistType).toBe('conv_2x10');
+  expect(saved.joistDepthIn).toBeCloseTo(9.25);
+  expect(saved.sheathingIn).toBeCloseTo(0.75);
+});
+
+test('Space accepts the offered floor values until the user starts typing', async ({ page }) => {
+  await h.openModel(page);
+  const main = levelRow(page, 'MAIN FL');
+
+  await main.getByRole('button', { name: 'FLOOR JOISTS' }).click();
+  const editor = main.locator('.level-assembly-editor');
+  await editor.locator('.assembly-input').nth(2).press(' ');
+  await expect(main.locator('.level-assembly-editor')).toHaveCount(0);
+  await expect(main.locator('.level-edge-val').nth(1)).toHaveText(`-1'-0 5/8"`);
+
+  // After typing, Space is a character again and Enter commits.
+  await main.getByRole('button', { name: 'FLOOR JOISTS' }).click();
+  const spacing = editor.locator('.assembly-input').nth(1);
+  await spacing.fill('19.2');
+  await spacing.press(' ');
+  await expect(main.locator('.level-assembly-editor')).toHaveCount(1);
+  await spacing.press('Enter');
+  await expect(main.locator('.level-assembly-editor')).toHaveCount(0);
+
+  await h.waitForSaved(page);
+  // Stored lengths snap to the nearest 1/16".
+  expect((await h.savedDrawing(page)).levelAssemblies['3'].joistSpacingIn).toBeCloseTo(19.1875);
 });

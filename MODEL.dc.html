@@ -24,21 +24,19 @@
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
     a { color: rgba(29,31,32,0.45); text-decoration: none; font-family: 'Barlow Condensed', system-ui, sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
     a:hover { color: #5980a6; }
-    .level-row { display:flex; align-items:stretch; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
+    .level-row { display:flex; align-items:stretch; border:1px solid rgba(29,31,32,0.16); margin-bottom:2px; cursor:pointer; background:#fff; }
     .level-row:hover { background:rgba(29,31,32,0.03); }
     .level-row.active { border-color:#5980a6; background:rgba(89,128,166,0.09); }
     .level-bar { width:3px; flex-shrink:0; }
-    .level-body { flex:1; min-width:0; padding:5px 7px 5px 8px; border:none; background:transparent; text-align:left; cursor:pointer; }
+    .level-body { flex:1; min-width:0; padding:3px 7px 4px 8px; border:none; background:transparent; text-align:left; cursor:pointer; }
     .level-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .level-elev { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.45); margin-top:1px; }
-    .level-layer-stack { display:flex; flex-direction:column; gap:1px; margin-top:4px; }
+    .level-layer-stack { display:flex; flex-direction:column; gap:1px; margin-top:3px; }
     .level-layer { width:100%; min-height:13px; display:flex; align-items:center; border:1px solid rgba(29,31,32,0.18); padding:1px 5px; background:rgba(255,255,255,0.72); color:rgba(29,31,32,0.68); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-align:left; text-transform:uppercase; cursor:pointer; }
     .level-layer:hover { border-color:#5980a6; color:#365e86; }
     .level-layer.active { background:#5980a6; border-color:#5980a6; color:#fff; }
     .level-layer-contents { margin:1px 0 2px 7px; border-left:2px solid rgba(89,128,166,0.48); padding-left:4px; }
     .level-layer-content { min-height:12px; display:flex; align-items:center; color:rgba(29,31,32,0.58); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.05em; text-transform:uppercase; }
-    .level-eye  { border:none; background:none; cursor:pointer; padding:0 6px; font-size:13px; line-height:1; color:rgba(29,31,32,0.4); flex-shrink:0; align-self:flex-start; margin-top:7px; }
-    .level-eye:hover { color:#5980a6; }
     .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:flex-start; margin-top:5px; }
     .level-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-layer-row { display:flex; align-items:stretch; gap:2px; }
@@ -51,7 +49,24 @@
     .level-height { display:flex; justify-content:space-between; gap:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; line-height:1.25; letter-spacing:0.03em; color:rgba(29,31,32,0.5); text-transform:uppercase; white-space:nowrap; overflow:hidden; }
     .level-height-val { color:rgba(29,31,32,0.72); font-weight:600; }
     .level-head .level-bg { margin-top:0; }
-    .level-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:flex-start; margin-top:6px; }
+    .level-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:flex-start; margin-top:4px; }
+    .level-edge { display:flex; align-items:center; gap:3px; min-height:9px; }
+    .level-edge-line { flex:1; border-top:1px solid rgba(29,31,32,0.55); }
+    .level-edge-val { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; color:#1d1f20; white-space:nowrap; }
+    .level-layer.floor-profile { background:repeating-linear-gradient(45deg, rgba(29,31,32,0.05), rgba(29,31,32,0.05) 2px, rgba(255,255,255,0.72) 2px, rgba(255,255,255,0.72) 6px); }
+    .level-layer.floor-profile.active { background:#5980a6; }
+    .level-assembly { border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; cursor:pointer; padding:1px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.05em; flex-shrink:0; text-transform:uppercase; }
+    .level-assembly:hover { background:#3a3d3f; border-color:#3a3d3f; }
+    .level-assembly-editor { display:flex; flex-direction:column; gap:3px; border:1px solid rgba(29,31,32,0.3); background:#fff; padding:5px 6px; margin:1px 0 2px; cursor:default; }
+    .assembly-row { display:flex; align-items:center; gap:4px; }
+    .assembly-label { width:48px; flex-shrink:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.05em; color:rgba(29,31,32,0.55); }
+    .assembly-input { flex:1; min-width:0; border:1px solid rgba(29,31,32,0.25); padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:#1d1f20; }
+    .assembly-input:focus { outline:none; border-color:#5980a6; }
+    .assembly-joists { display:flex; gap:2px; }
+    .assembly-joist { flex:1; border:1px solid; cursor:pointer; padding:2px 0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.04em; line-height:1; }
+    .assembly-error { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.03em; color:#c04040; }
+    .assembly-ok { align-self:flex-end; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; cursor:pointer; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; line-height:1; }
+    .assembly-ok:hover { background:#3a3d3f; border-color:#3a3d3f; }
     .level-del:hover { color:#c04040; }
     .cut-row { display:flex; align-items:center; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
     .cut-row:hover { background:rgba(29,31,32,0.03); }
@@ -148,7 +163,7 @@
               <ul style="margin:6px 0 0; padding-left:16px; font-size:11px; line-height:1.5; color:rgba(29,31,32,0.68);">
                 <li>Layers follow AIA-style CAD names (A-WALL-EXT, S-SLAB&hellip;) so drawings convert cleanly to AutoCAD/DXF.</li>
                 <li>Commands assign layers automatically &mdash; the layers organize themselves, so nobody manages them by hand.</li>
-                <li>Views (PLAN, FLOOR, E-POWER&hellip;) are display groupings only; the layer taxonomy is the source of truth for export. Layers can be shared across views &mdash; e.g. walls show in both PLAN and E-POWER but are only edited in PLAN.</li>
+                <li>Views (PLAN, FLOOR, ELECTRIC&hellip;) are display groupings only; the layer taxonomy is the source of truth for export. Layers can be shared across views &mdash; e.g. walls show in both PLAN and ELECTRIC but are only edited in PLAN.</li>
               </ul>
             </div>
           </sc-if>
@@ -481,10 +496,52 @@
              <sc-if value="{{ level.hasLayers }}" hint-placeholder-val="{{ false }}">
                <div class="level-layer-stack">
                  <sc-for list="{{ level.layers }}" as="layer" hint-placeholder-count="3">
+                   <sc-if value="{{ layer.hasEdgeTop }}" hint-placeholder-val="{{ false }}">
+                     <div class="level-edge" title="Top of floor sheathing"><span class="level-edge-line"></span><span class="level-edge-val">{{ layer.edgeTop }}</span></div>
+                   </sc-if>
                    <div class="level-layer-row">
                      <button type="button" class="{{ layer.rowClass }}" onClick="{{ layer.onSelect }}" title="{{ layer.title }}">{{ layer.label }}</button>
+                     <sc-if value="{{ layer.hasAssembly }}" hint-placeholder-val="{{ false }}">
+                       <button type="button" class="level-assembly" onClick="{{ layer.onOpenAssembly }}" title="{{ layer.assemblyTitle }}">{{ layer.assemblyLabel }}</button>
+                     </sc-if>
                      <button type="button" class="level-layer-bg" onClick="{{ layer.onToggleBackground }}" title="{{ layer.bgTitle }}" style="background:{{ layer.bgButtonBg }}; border-color:{{ layer.bgButtonBorder }}; color:{{ layer.bgButtonColor }};">{{ layer.bgLabel }}</button>
                    </div>
+                   <sc-if value="{{ layer.hasAssemblyEditor }}" hint-placeholder-val="{{ false }}">
+                     <div class="level-assembly-editor" onClick="{{ layer.assemblyEditor.onClick }}">
+                       <sc-if value="{{ layer.assemblyEditor.isWall }}" hint-placeholder-val="{{ false }}">
+                         <div class="assembly-row">
+                           <span class="assembly-label">WALL HT</span>
+                           <input class="assembly-input" value="{{ layer.assemblyEditor.wallInput }}" onInput="{{ layer.assemblyEditor.onWallInput }}" onKeyDown="{{ layer.assemblyEditor.onKey }}" />
+                         </div>
+                       </sc-if>
+                       <sc-if value="{{ layer.assemblyEditor.isFloor }}" hint-placeholder-val="{{ false }}">
+                         <div class="assembly-joists">
+                           <sc-for list="{{ layer.assemblyEditor.joistTypes }}" as="joist" hint-placeholder-count="4">
+                             <button type="button" class="assembly-joist" onClick="{{ joist.onSelect }}" title="{{ joist.title }}" style="background:{{ joist.bg }}; color:{{ joist.color }}; border-color:{{ joist.border }};">{{ joist.label }}</button>
+                           </sc-for>
+                         </div>
+                         <div class="assembly-row">
+                           <span class="assembly-label">DEPTH</span>
+                           <input class="assembly-input" value="{{ layer.assemblyEditor.depthInput }}" onInput="{{ layer.assemblyEditor.onDepthInput }}" onKeyDown="{{ layer.assemblyEditor.onKey }}" />
+                         </div>
+                         <div class="assembly-row">
+                           <span class="assembly-label">O.C.</span>
+                           <input class="assembly-input" value="{{ layer.assemblyEditor.spacingInput }}" onInput="{{ layer.assemblyEditor.onSpacingInput }}" onKeyDown="{{ layer.assemblyEditor.onKey }}" />
+                         </div>
+                         <div class="assembly-row">
+                           <span class="assembly-label">SHEATHING</span>
+                           <input class="assembly-input" value="{{ layer.assemblyEditor.sheathingInput }}" onInput="{{ layer.assemblyEditor.onSheathingInput }}" onKeyDown="{{ layer.assemblyEditor.onKey }}" />
+                         </div>
+                       </sc-if>
+                       <sc-if value="{{ layer.assemblyEditor.hasError }}" hint-placeholder-val="{{ false }}">
+                         <div class="assembly-error">{{ layer.assemblyEditor.error }}</div>
+                       </sc-if>
+                       <button type="button" class="assembly-ok" onClick="{{ layer.assemblyEditor.onAccept }}" title="Accept — Enter or Space">OK</button>
+                     </div>
+                   </sc-if>
+                   <sc-if value="{{ layer.hasEdgeBottom }}" hint-placeholder-val="{{ false }}">
+                     <div class="level-edge" title="Bottom of floor — top of wall or foundation below"><span class="level-edge-line"></span><span class="level-edge-val">{{ layer.edgeBottom }}</span></div>
+                   </sc-if>
                    <sc-if value="{{ layer.hasContents }}" hint-placeholder-val="{{ false }}">
                      <div class="level-layer-contents">
                        <sc-for list="{{ layer.contents }}" as="content" hint-placeholder-count="5">
@@ -496,7 +553,6 @@
                </div>
              </sc-if>
            </div>
-          <button class="level-eye" onClick="{{ level.onToggleVis }}" title="{{ level.visLabel }}">{{ level.visIcon }}</button>
           <button class="level-del" onClick="{{ level.onDelete }}" title="Delete level">×</button>
         </div>
       </sc-for>
@@ -560,6 +616,37 @@ const DEFAULT_FLOOR_ASSEMBLY = {
   joistSpacingIn: 16,
   sheathingIn: 3 / 4,
 };
+// Framed floor joist choices offered by the FLOOR JOISTS box. OWJ depth is
+// entered by hand since open-web joists come in many depths.
+const JOIST_TYPES = Object.freeze([
+  Object.freeze({ id: 'conv_2x10', label: '2x10', depthIn: 9 + 1 / 4 }),
+  Object.freeze({ id: 'conv_2x12', label: '2x12', depthIn: 11 + 1 / 2 }),
+  Object.freeze({ id: 'tji', label: 'TJI', depthIn: 11 + 7 / 8 }),
+  Object.freeze({ id: 'owj', label: 'OWJ', depthIn: null }),
+]);
+const DEFAULT_JOIST_TYPE = 'tji';
+// Per-level wall + floor assembly: the WALL HEIGHT and FLOOR JOISTS boxes edit
+// these, and the sidebar's border heights derive from them.
+const defaultLevelAssembly = () => ({
+  wallHeightFt: DEFAULT_WALL_TOP_FT,
+  joistType: DEFAULT_JOIST_TYPE,
+  joistDepthIn: DEFAULT_FLOOR_ASSEMBLY.joistDepthIn,
+  joistSpacingIn: DEFAULT_FLOOR_ASSEMBLY.joistSpacingIn,
+  sheathingIn: DEFAULT_FLOOR_ASSEMBLY.sheathingIn,
+});
+const normaliseLevelAssembly = raw => {
+  const base = defaultLevelAssembly();
+  if (!raw || typeof raw !== 'object') return base;
+  const positive = (value, fallback) =>
+    Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
+  return {
+    wallHeightFt: positive(raw.wallHeightFt, base.wallHeightFt),
+    joistType: JOIST_TYPES.some(type => type.id === raw.joistType) ? raw.joistType : base.joistType,
+    joistDepthIn: positive(raw.joistDepthIn, base.joistDepthIn),
+    joistSpacingIn: positive(raw.joistSpacingIn, base.joistSpacingIn),
+    sheathingIn: positive(raw.sheathingIn, base.sheathingIn),
+  };
+};
 const MODEL_STORAGE_BUCKET = 'model-drawing';
 
 function _reduceFraction(n, d) {
@@ -582,6 +669,23 @@ function formatArchitecturalInches(totalInches) {
     result += ` ${n}/${d}`;
   }
   return result + '"';
+}
+
+// Inch-scale assembly values (joist depth, spacing, sheathing) read naturally
+// as plain inches: 11 7/8", 16", 3/4".
+function formatInchesOnly(totalInches) {
+  if (!Number.isFinite(totalInches)) return '';
+  const negative = totalInches < 0;
+  const sixteenths = Math.round(Math.abs(totalInches) / SIXTEENTH_IN);
+  const wholeInches = Math.floor(sixteenths / 16);
+  const numerator = sixteenths % 16;
+  let body = '';
+  if (wholeInches || !numerator) body = String(wholeInches);
+  if (numerator) {
+    const [n, d] = _reduceFraction(numerator, 16);
+    body += body ? ` ${n}/${d}` : `${n}/${d}`;
+  }
+  return `${negative ? '-' : ''}${body}"`;
 }
 
 function normalizeArchitecturalInches(totalInches) {
@@ -651,6 +755,14 @@ function parseArchitecturalLength(value) {
   return { ok: false, error: `Use 15 for feet, or specify inches as 0-5 or 5".` };
 }
 
+// Joist depth, spacing, and sheathing are inch-scale values, so a bare number
+// or fraction reads as inches; anything with feet marks parses architecturally.
+function parseAssemblyInches(value) {
+  const component = parseInchesComponent(String(value ?? '').trim());
+  if (component.ok && component.inches > 0) return architecturalLengthResult(component.inches);
+  return parseArchitecturalLength(value);
+}
+
 // Wall type definitions — totalIn is full assembly width in inches, centreline-based
 // layers listed left→right (outside→inside); fill: 'stud'|'concrete'|'insulation'
 const WALL_TYPES = [
@@ -710,17 +822,17 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
 });
 const LEVEL_LAYER_VIEWS = Object.freeze({
   5: Object.freeze([
-    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
+    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
     Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION'] }),
   ]),
   3: Object.freeze([
-    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
+    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
     Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION'] }),
   ]),
   1: Object.freeze([
-    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
+    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ'] }),
     Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL/FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION'] }),
   ]),
@@ -837,6 +949,15 @@ class Component extends DCLogic {
     roofDimensionError: '',
     levels:        DEFAULT_LEVELS.map(l => ({ ...l })),
     levelLayerViews: { ...DEFAULT_LEVEL_LAYER_VIEWS },
+    levelAssemblies: {},        // levelId -> wall height + floor joist/sheathing assembly
+    assemblyEditor: null,       // { levelId, kind:'wall'|'floor' } open in the level rail
+    assemblyWallInput: '',
+    assemblyDepthInput: '',
+    assemblySpacingInput: '',
+    assemblySheathingInput: '',
+    assemblyJoistType: DEFAULT_JOIST_TYPE,
+    assemblyTyped: false,
+    assemblyError: '',
     activeLevelIdx: 3,
     nextLevelId:   9,
     backgroundLevelIds: [],
@@ -1036,6 +1157,9 @@ class Component extends DCLogic {
       wallBaseHeight: this.state.wallBaseHeight,
       wallTopHeight: this.state.wallTopHeight,
       floorThickness: this.state.floorThickness,
+      levelAssemblies: Object.fromEntries(Object.entries(this.state.levelAssemblies).map(
+        ([id, assembly]) => [id, { ...assembly }],
+      )),
       roofOverhang: this.state.roofOverhang,
       roofPitch: this.state.roofPitch,
       elevationDatum: this.state.elevationDatum,
@@ -1388,6 +1512,13 @@ class Component extends DCLogic {
         wallBaseHeight: format.number(saved.wallBaseHeight, 0),
         wallTopHeight: format.number(saved.wallTopHeight, DEFAULT_WALL_TOP_FT),
         floorThickness: format.positive(saved.floorThickness, DEFAULT_FLOOR_THICKNESS_IN / 12),
+        levelAssemblies: Object.fromEntries(
+          Object.entries(saved.levelAssemblies && typeof saved.levelAssemblies === 'object' ? saved.levelAssemblies : {})
+            .map(([rawId, assembly]) => [migrateLevelId(rawId), normaliseLevelAssembly(assembly)])
+            .filter(([id]) => levelIds.has(Number(id))),
+        ),
+        assemblyEditor: null,
+        assemblyError: '',
         roofOverhang: clampRoofOverhang(format.number(saved.roofOverhang, DEFAULT_ROOF_OVERHANG_FT)),
         roofPitch: clampRoofPitch(format.number(saved.roofPitch, DEFAULT_ROOF_PITCH)),
         elevationDatum: format.number(saved.elevationDatum, 0) === 100 ? 100 : 0,
@@ -1418,11 +1549,15 @@ class Component extends DCLogic {
         };
       };
        this._lines = Array.isArray(saved.lines)
-          ? saved.lines.map(line => restoreSegment(line, 'line', {
-            view: ['plan', 'floor', 'e-power', 'foundation'].includes(line?.view) ? line.view : 'plan',
-            layer: line?.layer === 'no-draft' ? 'no-draft' : 'draft',
-            bulge: Number.isFinite(Number(line?.bulge)) ? Number(line.bulge) : 0,
-          })).filter(Boolean)
+          ? saved.lines.map(line => {
+            const view = ['plan', 'floor', 'e-power', 'foundation'].includes(line?.view) ? line.view : 'plan';
+            return restoreSegment(line, 'line', {
+              view,
+              layer: line?.layer === 'no-draft' ? 'no-draft'
+                : (line?.layer === 'E-POWER' || view === 'e-power') ? 'E-POWER' : 'draft',
+              bulge: Number.isFinite(Number(line?.bulge)) ? Number(line.bulge) : 0,
+            });
+          }).filter(Boolean)
         : [];
       skipped += (Array.isArray(saved.lines) ? saved.lines.length : 0) - this._lines.length;
       this._walls = Array.isArray(saved.walls)
@@ -2690,7 +2825,7 @@ class Component extends DCLogic {
     return {
       plan: 'PLAN',
       floor: 'FLOOR',
-      'e-power': 'E-POWER',
+      'e-power': 'ELECTRIC',
       foundation: 'FOUNDATION',
     }[viewId] || 'LEVEL';
   }
@@ -2743,7 +2878,7 @@ class Component extends DCLogic {
 
   _contextToolMessage(tool, viewId = this._activeLayerViewId()) {
     const context = this._draftingContextLabel(viewId);
-    if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, E-POWER, or FOUNDATION. Current context: ${context}.`;
+    if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, ELECTRIC, or FOUNDATION. Current context: ${context}.`;
     if (tool === 'wall') return `Walls are drawn in any layer set: FOUNDATION walls save to S-FDN, all others save to PLAN. Current context: ${context}.`;
     if (tool === 'floor') return `Floor outlines are drawn in FLOOR or PLAN and always save to FLOOR. Current context: ${context}.`;
     if (tool === 'fenestration') return `Openings go on walls in PLAN or FOUNDATION, or into a selected floor or roof. Current context: ${context}.`;
@@ -2754,7 +2889,7 @@ class Component extends DCLogic {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
         return 'Turn on DRAFT or NO-DRAFT in the Company Standard Layers before drawing a generic line.';
       }
-      return `Select PLAN, FLOOR, E-POWER, or FOUNDATION before drawing a line. Current context: ${context}.`;
+      return `Select PLAN, FLOOR, ELECTRIC, or FOUNDATION before drawing a line. Current context: ${context}.`;
     }
     return `${tool} is not available in ${context}.`;
   }
@@ -2822,7 +2957,15 @@ class Component extends DCLogic {
   }
 
   _lineLayerConfig(layerId) {
-    return this._layerStandard(layerId === 'no-draft' ? 'no-draft' : 'draft');
+    return this._layerStandard(
+      layerId === 'no-draft' ? 'no-draft' : layerId === 'E-POWER' ? 'E-POWER' : 'draft');
+  }
+
+  // Command-driven layers: generic lines drawn in the ELECTRIC layer set are
+  // electric linework and save on E-POWER; NO-DRAFT stays construction-only.
+  _contextLineLayer(layerId, viewId = this._activeLayerViewId()) {
+    const id = normaliseActiveLineLayer(layerId);
+    return id === 'draft' && viewId === 'e-power' ? 'E-POWER' : id;
   }
 
   _layerStandard(layerId) {
@@ -2832,7 +2975,7 @@ class Component extends DCLogic {
 
   _setActiveLineLayer(layerId) {
     const id = normaliseActiveLineLayer(layerId);
-    const config = this._lineLayerConfig(id);
+    const config = this._lineLayerConfig(this._contextLineLayer(id));
     if (!config.visible) {
       this.setState({
         drawingMessage: `${config.name} is hidden — turn it on in the Company Standard Layers first.`,
@@ -2848,9 +2991,9 @@ class Component extends DCLogic {
   }
 
   _activeLineLayer() {
-    const requested = normaliseActiveLineLayer(this.state.activeLineLayer);
+    const requested = this._contextLineLayer(this.state.activeLineLayer);
     if (this._lineLayerConfig(requested).visible) return requested;
-    const alternate = requested === 'draft' ? 'no-draft' : 'draft';
+    const alternate = requested === 'no-draft' ? this._contextLineLayer('draft') : 'no-draft';
     return this._lineLayerConfig(alternate).visible ? alternate : requested;
   }
 
@@ -2915,7 +3058,7 @@ class Component extends DCLogic {
       && !this._courtesyWallIds?.has(wall.id));
   }
 
-  // E-Power shares the PLAN wall layers at full strength: walls render and print
+  // ELECTRIC shares the PLAN wall layers at full strength: walls render and print
   // exactly as they do in PLAN, but stay locked against selection and editing.
   _sharedContextWalls() {
     const levelId = this._activeLevelId();
@@ -2993,7 +3136,7 @@ class Component extends DCLogic {
   _backgroundWalls() {
     const ref = this._visibleBackgroundReference();
     if (!ref) return [];
-    // Walls live on PLAN; an E-POWER scope shows them the way E-POWER does.
+    // Walls live on PLAN; an ELECTRIC scope shows them the way ELECTRIC does.
     const wallView = ref.view === 'e-power' ? 'plan' : ref.view;
     return this._walls.filter(wall => wall.levelId === ref.levelId && (wallView == null || (wall.view || 'plan') === wallView));
   }
@@ -3177,12 +3320,6 @@ class Component extends DCLogic {
       this._notifySelectionChanged();
       this._markUnsaved();
     });
-  }
-
-  _toggleLevelVisibility(idx, e) {
-    e.stopPropagation();
-    const levels = this.state.levels.map((l, i) => i === idx ? { ...l, visible: !l.visible } : l);
-    this.setState({ levels }, () => this._markUnsaved());
   }
 
   // ─── Views ───────────────────────────────────────────────────────────────────
@@ -3994,7 +4131,7 @@ class Component extends DCLogic {
     const id = this._newDrawingItemId('wall');
     const homeView = this._wallHomeView(activeView);
     // Walls live in their home layer set; one drawn from another set stays
-    // visible there until the layer set changes. E-POWER already shares the
+    // visible there until the layer set changes. ELECTRIC already shares the
     // PLAN walls at full strength, so no courtesy pass is needed there.
     if (activeView !== homeView && activeView !== 'e-power') this._courtesyWallIds?.add(id);
     this._walls.push({
@@ -4087,7 +4224,7 @@ class Component extends DCLogic {
 
   // Nearest editable wall within the pick radius → { wall, offset, width } or
   // { wall, error } when the wall cannot take the opening. Reference-only walls
-  // (E-POWER shares, cross-context overlays) are deliberately excluded.
+  // (ELECTRIC shares, cross-context overlays) are deliberately excluded.
   _fenestrationPlacement(worldPt) {
     const h = this._canvas ? this._canvas.clientHeight : 600;
     const thresh = (this._orthoHalfH * 2) / h * 18;
@@ -6877,35 +7014,135 @@ class Component extends DCLogic {
     return tops.length ? Math.max(...tops) : DEFAULT_WALL_TOP_FT;
   }
 
-  // Key construction heights measured from drawn wall heights and the floor
-  // thickness. Top of main-floor sheathing is the 0' datum, switchable to a
+  _levelAssembly(levelId) {
+    return normaliseLevelAssembly(this.state.levelAssemblies?.[levelId]);
+  }
+  _levelFloorFt(levelId) {
+    const assembly = this._levelAssembly(levelId);
+    return (assembly.joistDepthIn + assembly.sheathingIn) / 12;
+  }
+
+  // The level cards draw a side profile: the PLAN row is the wall, the FLOOR
+  // row is the joists + sheathing, and the row borders carry the construction
+  // heights. Top of main-floor sheathing is the 0' datum, switchable to a
   // 100' datum so basement marks stay positive.
+  _levelBorderHeights(levelId) {
+    const datum = this.state.elevationDatum;
+    const label = feet => this._elevLabel(feet + datum);
+    const mainWallTop = this._levelAssembly(3).wallHeightFt;
+    if (levelId === 3) {
+      return {
+        sheathingTop: label(0),
+        floorBottom: label(-this._levelFloorFt(3)),
+      };
+    }
+    if (levelId === 5) {
+      return {
+        sheathingTop: label(mainWallTop + this._levelFloorFt(5)),
+        floorBottom: label(mainWallTop),
+      };
+    }
+    return null;
+  }
+
   _levelHeightMarks(levelId) {
     const datum = this.state.elevationDatum;
     const mark = (label, feet) => ({ label, value: this._elevLabel(feet + datum) });
-    const floorFt = this.state.floorThickness;
-    const mainWallTop = this._levelWallTopFt(3);
     if (levelId === 1) {
-      const fdnWallTop = -floorFt;
+      const fdnWallTop = -this._levelFloorFt(3);
       return [
         mark('T.O. FDN WALL', fdnWallTop),
         mark('T.O. FOOTING', fdnWallTop - this._levelWallTopFt(1, 'foundation')),
       ];
     }
-    if (levelId === 3) {
-      return [
-        mark('T.O. SHEATHING', 0),
-        mark('T.O. WALL', mainWallTop),
-      ];
-    }
-    if (levelId === 5) {
-      const sheathing = mainWallTop + floorFt;
-      return [
-        mark('T.O. SHEATHING', sheathing),
-        mark('T.O. WALL / B.O. TRUSS', sheathing + this._levelWallTopFt(5)),
-      ];
-    }
     return [];
+  }
+
+  _openAssemblyEditor(levelId, kind, event) {
+    event?.stopPropagation();
+    const current = this.state.assemblyEditor;
+    if (current && current.levelId === levelId && current.kind === kind) {
+      this.setState({ assemblyEditor: null, assemblyError: '' });
+      return;
+    }
+    const assembly = this._levelAssembly(levelId);
+    this.setState({
+      assemblyEditor: { levelId, kind },
+      assemblyWallInput: formatArchitecturalInches(assembly.wallHeightFt * 12),
+      assemblyJoistType: assembly.joistType,
+      assemblyDepthInput: formatInchesOnly(assembly.joistDepthIn),
+      assemblySpacingInput: formatInchesOnly(assembly.joistSpacingIn),
+      assemblySheathingInput: formatInchesOnly(assembly.sheathingIn),
+      assemblyTyped: false,
+      assemblyError: '',
+    });
+  }
+
+  _setAssemblyJoistType(typeId) {
+    const type = JOIST_TYPES.find(t => t.id === typeId);
+    if (!type) return;
+    this.setState({
+      assemblyJoistType: type.id,
+      ...(type.depthIn != null ? { assemblyDepthInput: formatInchesOnly(type.depthIn), assemblyTyped: false } : {}),
+      assemblyError: '',
+    });
+  }
+
+  _commitAssemblyEditor() {
+    const editor = this.state.assemblyEditor;
+    if (!editor) return;
+    const assembly = this._levelAssembly(editor.levelId);
+    const patch = { ...assembly };
+    if (editor.kind === 'wall') {
+      const parsed = parseArchitecturalLength(this.state.assemblyWallInput);
+      if (!parsed.ok || parsed.inches <= 0) {
+        this.setState({ assemblyError: parsed.ok ? 'Wall height must be greater than zero.' : parsed.error });
+        return;
+      }
+      patch.wallHeightFt = parsed.inches / 12;
+      // A wall-height edit on the working level also drives the WALL tool's
+      // top height, so newly drawn walls match the entered height.
+      if (editor.levelId === this._activeLevel()?.id) {
+        this.setState({
+          wallTopHeight: patch.wallHeightFt,
+          wallTopInput: formatArchitecturalInches(parsed.inches),
+          wallDimensionError: '',
+        });
+      }
+    } else {
+      const depth = parseAssemblyInches(this.state.assemblyDepthInput);
+      const spacing = parseAssemblyInches(this.state.assemblySpacingInput);
+      const sheathing = parseAssemblyInches(this.state.assemblySheathingInput);
+      const bad = [
+        [depth, 'joist depth'],
+        [spacing, 'spacing'],
+        [sheathing, 'sheathing'],
+      ].find(([parsed]) => !parsed.ok || parsed.inches <= 0);
+      if (bad) {
+        this.setState({ assemblyError: bad[0].ok ? `Enter a ${bad[1]} greater than zero.` : bad[0].error });
+        return;
+      }
+      patch.joistType = this.state.assemblyJoistType;
+      patch.joistDepthIn = depth.inches;
+      patch.joistSpacingIn = spacing.inches;
+      patch.sheathingIn = sheathing.inches;
+    }
+    // A framed-floor edit on the working level also drives the FLOOR tool's
+    // total thickness, so drawn floors match the entered assembly.
+    const totalIn = patch.joistDepthIn + patch.sheathingIn;
+    const syncFloor = editor.kind === 'floor'
+      && editor.levelId === this._activeLevel()?.id
+      && this.state.floorStructure === 'floor';
+    this.setState({
+      levelAssemblies: { ...this.state.levelAssemblies, [editor.levelId]: patch },
+      assemblyEditor: null,
+      assemblyError: '',
+      ...(syncFloor ? {
+        floorThickness: totalIn / 12,
+        floorThicknessInput: formatArchitecturalInches(totalIn),
+        floorDimensionError: '',
+      } : {}),
+    }, () => this._markUnsaved());
   }
 
   // ─── renderVals ───────────────────────────────────────────────────────────────
@@ -7036,8 +7273,9 @@ class Component extends DCLogic {
     return {
       topBarLabel, topBarColor, workingContextLabel, activeLineLayerLabel: this._activeLineLayerLabel(),
       genericLineLayers: ['draft', 'no-draft'].map(id => {
-        const config = this._lineLayerConfig(id);
-        const isActive = this._activeLineLayer() === id;
+        const layerId = this._contextLineLayer(id);
+        const config = this._lineLayerConfig(layerId);
+        const isActive = this._activeLineLayer() === layerId;
         return {
           label: config.name,
           title: config.visible
@@ -7305,9 +7543,12 @@ class Component extends DCLogic {
       floorDimensionBorder: this.state.floorDimensionError ? '#b04050' : 'rgba(29,31,32,0.2)',
       hasFloorDimensionError: Boolean(this.state.floorDimensionError),
       floorDimensionError: this.state.floorDimensionError,
-      floorAssemblyLabel: this.state.floorStructure === 'slab'
-        ? `Concrete slab · ${this._ftIn(this.state.floorThickness)} total`
-        : `11 7/8" TJI @ 16" O.C. + 3/4" sheathing · ${this._ftIn(this.state.floorThickness)} total`,
+      floorAssemblyLabel: (() => {
+        if (this.state.floorStructure === 'slab') return `Concrete slab · ${this._ftIn(this.state.floorThickness)} total`;
+        const assembly = this._levelAssembly(activeLevel?.id);
+        const typeLabel = JOIST_TYPES.find(type => type.id === assembly.joistType)?.label ?? 'TJI';
+        return `${formatInchesOnly(assembly.joistDepthIn)} ${typeLabel} @ ${formatInchesOnly(assembly.joistSpacingIn)} O.C. + ${formatInchesOnly(assembly.sheathingIn)} sheathing · ${this._ftIn(this.state.floorThickness)} total`;
+      })(),
       floorStructureBtns: ['floor', 'slab'].map(value => ({
         label: value === 'slab' ? 'SLAB' : 'FLOOR',
         title: value === 'slab'
@@ -7339,8 +7580,52 @@ class Component extends DCLogic {
         // a scoped reference lights up its layer-set button instead.
         const levelSlot = scopedView == null ? slot : -1;
         const selectedLayerView = this._activeLayerViewId(l.id);
+        const borderHeights = this._levelBorderHeights(l.id);
+        const editor = this.state.assemblyEditor;
+        const assembly = this._levelAssembly(l.id);
+        const editorModel = kind => (editor && editor.levelId === l.id && editor.kind === kind
+          ? {
+              isWall: kind === 'wall',
+              isFloor: kind === 'floor',
+              wallInput: this.state.assemblyWallInput,
+              depthInput: this.state.assemblyDepthInput,
+              spacingInput: this.state.assemblySpacingInput,
+              sheathingInput: this.state.assemblySheathingInput,
+              error: this.state.assemblyError,
+              hasError: Boolean(this.state.assemblyError),
+              joistTypes: JOIST_TYPES.map(type => ({
+                label: type.label,
+                title: type.depthIn != null
+                  ? `${type.label} — ${formatArchitecturalInches(type.depthIn)} deep`
+                  : `${type.label} — enter the joist depth`,
+                bg: this.state.assemblyJoistType === type.id ? '#1d1f20' : '#fff',
+                color: this.state.assemblyJoistType === type.id ? '#f2f2f3' : '#1d1f20',
+                border: this.state.assemblyJoistType === type.id ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+                onSelect: event => { event.stopPropagation(); this._setAssemblyJoistType(type.id); },
+              })),
+              onWallInput: e => this.setState({ assemblyWallInput: e.target.value, assemblyTyped: true, assemblyError: '' }),
+              onDepthInput: e => this.setState({ assemblyDepthInput: e.target.value, assemblyTyped: true, assemblyError: '' }),
+              onSpacingInput: e => this.setState({ assemblySpacingInput: e.target.value, assemblyTyped: true, assemblyError: '' }),
+              onSheathingInput: e => this.setState({ assemblySheathingInput: e.target.value, assemblyTyped: true, assemblyError: '' }),
+              // Space accepts the offered values, but only until the user
+              // starts typing — fractions such as 11 7/8 need the space key.
+              onKey: e => {
+                if (e.key === 'Enter' || (e.key === ' ' && !this.state.assemblyTyped)) {
+                  e.preventDefault();
+                  this._commitAssemblyEditor();
+                }
+                if (e.key === 'Escape') { e.preventDefault(); this.setState({ assemblyEditor: null, assemblyError: '' }); }
+                e.stopPropagation();
+              },
+              onClick: e => e.stopPropagation(),
+              onAccept: e => { e.stopPropagation(); this._commitAssemblyEditor(); },
+            }
+          : null);
         const layers = this._layerViewsForLevel(l.id).map(view => {
           const viewSlot = scopedView === view.id ? slot : -1;
+          const assemblyKind = borderHeights && view.id === 'plan' ? 'wall'
+            : borderHeights && view.id === 'floor' ? 'floor' : null;
+          const assemblyEditor = assemblyKind ? editorModel(assemblyKind) : null;
           return {
             label: view.label,
             title: `Show ${view.label} items on ${l.name}`,
@@ -7348,8 +7633,21 @@ class Component extends DCLogic {
               ? view.contents.map(id => this._layerStandard(id).name)
               : [],
             hasContents: this.state.layerRevealKey === `${l.id}:${view.id}` && view.contents.length > 0,
-            rowClass: 'level-layer' + (view.id === selectedLayerView ? ' active' : ''),
+            rowClass: 'level-layer' + (view.id === selectedLayerView ? ' active' : '')
+              + (assemblyKind === 'floor' ? ' floor-profile' : ''),
             onSelect: event => this._selectLayerView(l.id, view.id, event),
+            hasAssembly: assemblyKind != null,
+            assemblyLabel: assemblyKind === 'wall' ? 'WALL HEIGHT' : 'FLOOR JOISTS',
+            assemblyTitle: assemblyKind === 'wall'
+              ? `Wall height on ${l.name}: ${this._ftIn(assembly.wallHeightFt)}`
+              : `Floor: ${JOIST_TYPES.find(t => t.id === assembly.joistType)?.label} ${formatInchesOnly(assembly.joistDepthIn)} @ ${formatInchesOnly(assembly.joistSpacingIn)} O.C. + ${formatInchesOnly(assembly.sheathingIn)} sheathing`,
+            onOpenAssembly: event => this._openAssemblyEditor(l.id, assemblyKind, event),
+            assemblyEditor,
+            hasAssemblyEditor: assemblyEditor != null,
+            edgeTop: assemblyKind === 'floor' ? borderHeights.sheathingTop : null,
+            hasEdgeTop: assemblyKind === 'floor',
+            edgeBottom: assemblyKind === 'floor' ? borderHeights.floorBottom : null,
+            hasEdgeBottom: assemblyKind === 'floor',
             ...bgSlotStyle(viewSlot),
             bgTitle: viewSlot === 0 ? `Background 1 — blue, only ${view.label} shows`
               : viewSlot === 1 ? `Background 2 — red, only ${view.label} shows`
@@ -7367,14 +7665,12 @@ class Component extends DCLogic {
           hasHeights: heights.length > 0,
           color: LEVEL_COLORS[i % LEVEL_COLORS.length],
           rowClass: 'level-row' + (i === activeLevelIdx ? ' active' : ''),
-          visIcon: l.visible ? '●' : '○', visLabel: l.visible ? 'Hide level' : 'Show level',
           ...bgSlotStyle(levelSlot),
           bgTitle: levelSlot === 0 ? 'Background 1 — blue, whole level shows'
             : levelSlot === 1 ? 'Background 2 — red, whole level shows'
             : (l.id === activeLevel?.id ? 'Active level cannot be a background' : 'Use the whole level as the background'),
           onSelect:    ()  => this._switchLevel(i),
           onDelete:    (e) => { e.stopPropagation(); this._deleteLevel(i); },
-          onToggleVis: (e) => this._toggleLevelVisibility(i, e),
           onToggleBackground: (e) => this._toggleBackgroundLevel(i, e),
         };
       }),

@@ -148,7 +148,7 @@ if (!window.DraftProfileManager) {
     return { grid: px('grid'), node: px('node'), midpoint: px('midpoint'), polar: px('polar') };
   };
 
-  // Generic linework is deliberately separate from PLAN/FLOOR/E-POWER context.
+  // Generic linework is deliberately separate from PLAN/FLOOR/ELECTRIC context.
   // NO-DRAFT is construction-only and is always excluded from printed output.
   const DEFAULT_LINE_LAYERS = Object.freeze({
     draft: Object.freeze({ name: 'DRAFT', visible: true, printable: true }),
@@ -223,9 +223,10 @@ if (!window.DraftProfileManager) {
       ]),
     }),
     Object.freeze({
-      group: 'Electrical — E-POWER',
+      group: 'Electrical — ELECTRIC',
       layers: Object.freeze([
-        Object.freeze({ id: 'E-POWER DIMENSION', name: 'E-POWER DIMENSION', use: 'Dimension strings placed in E-POWER.', printable: true }),
+        Object.freeze({ id: 'E-POWER', name: 'E-POWER', use: 'Electric linework (Line tool in ELECTRIC).', printable: true }),
+        Object.freeze({ id: 'E-POWER DIMENSION', name: 'E-POWER DIMENSION', use: 'Dimension strings placed in ELECTRIC.', printable: true }),
       ]),
     }),
   ]);

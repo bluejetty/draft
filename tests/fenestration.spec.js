@@ -8,7 +8,7 @@ const h = require('./helpers');
 const WALL_STROKE = [29, 31, 32]; // #1d1f20, committed wall boundary color
 
 async function switchLayerView(page, label) {
-  await page.locator('.level-row.active').getByRole('button', { name: label }).click();
+  await page.locator('.level-row.active').getByRole('button', { name: label, exact: true }).click();
   await page.waitForTimeout(400);
 }
 
