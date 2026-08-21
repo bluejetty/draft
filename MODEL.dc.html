@@ -322,6 +322,8 @@
     <div data-model-magnet style="position:absolute; left:{{ magnetX }}px; top:{{ magnetY }}px; width:18px; height:18px; border-radius:50%; border:2px solid #5980a6; transform:translate(-50%,-50%); pointer-events:none; display:{{ magnetDisplay }};"></div>
     <!-- Midpoint snap indicator (amber diamond) -->
     <div data-model-midsnap style="position:absolute; left:{{ midSnapX }}px; top:{{ midSnapY }}px; width:13px; height:13px; border:2px solid #e8a020; background:rgba(232,160,32,0.12); transform:translate(-50%,-50%) rotate(45deg); pointer-events:none; display:{{ midSnapDisplay }};"></div>
+    <!-- Grid snap indicator (green ring on the engaged grid point) -->
+    <div data-model-gridsnap style="position:absolute; left:{{ gridSnapPtX }}px; top:{{ gridSnapPtY }}px; width:14px; height:14px; border-radius:50%; border:2px solid #557a46; transform:translate(-50%,-50%); pointer-events:none; display:{{ gridSnapPtDisplay }};"></div>
 
     <!-- Direction-choice overlay (shown while choosing cut direction) -->
     <sc-if value="{{ choosingDir }}" hint-placeholder-val="{{ false }}">
@@ -419,9 +421,8 @@
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const LEVEL_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a','#9a5a5a','#8a9a6a'];
-// All drafting snap catch distances are screen-space pixels.
-const NODE_SNAP_PX = 3;
-const MIDPOINT_SNAP_PX = 3;
+// Grid, node, and midpoint snap catch distances come from the user's
+// snap-strength settings (screen-space pixels, adjustable in Settings).
 // Shift/angle-locked alignment catch distance from a node center.
 const LOCKED_NODE_SNAP_PX = 3;
 const SIXTEENTH_IN = 1 / 16;
@@ -615,6 +616,7 @@ const {
   normaliseActiveLineLayer,
 } = window.DraftLineLayers;
 const { normaliseLayerStandards } = window.DraftLayerStandards;
+const { normaliseSnapStrength } = window.DraftSnapStrength;
 
 // Undo keeps whole serialized drawings, so it is bounded by count and by size.
 const HISTORY_LIMIT = 60;
@@ -631,6 +633,7 @@ class Component extends DCLogic {
     units:         'imperial',
     activeView:    'top',      // 'top'|'front'|'side'|'perspective'|'cut'
     gridSnapEnabled: true,
+    snapStrength: normaliseSnapStrength(null),
     keybindings:   { ...DEFAULT_KEYBINDINGS },
     lineLayers: normaliseLineLayers(DEFAULT_LINE_LAYERS),
     activeLineLayer: 'draft',
@@ -665,6 +668,7 @@ class Component extends DCLogic {
     cursorX: -100, cursorY: -100, showCursor: false,
     magnetX: -100, magnetY: -100, showMagnet: false,
     midSnapX: -100, midSnapY: -100, showMidSnap: false,
+    gridSnapPtX: -100, gridSnapPtY: -100, showGridSnapPt: false,
     lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '',
     cuts:          [],
     nextCutId:     1,
@@ -868,6 +872,7 @@ class Component extends DCLogic {
         model: {
           units: this.state.units,
           gridSnapEnabled: this.state.gridSnapEnabled,
+          snapStrength: { ...this.state.snapStrength },
           keybindings: { ...this.state.keybindings },
         },
       };
@@ -891,6 +896,9 @@ class Component extends DCLogic {
       return {
         ...(values.units === 'metric' || values.units === 'imperial' ? { units: values.units } : {}),
         ...(typeof values.gridSnapEnabled === 'boolean' ? { gridSnapEnabled: values.gridSnapEnabled } : {}),
+        ...(values.snapStrength && typeof values.snapStrength === 'object'
+          ? { snapStrength: normaliseSnapStrength(values.snapStrength) }
+          : {}),
         ...(values.keybindings && typeof values.keybindings === 'object'
           ? {
             // A stored empty string means the command was deliberately cleared;
@@ -2627,9 +2635,17 @@ class Component extends DCLogic {
   }
 
   _snap(pt) {
-    if (!this.state.gridSnapEnabled) return pt.clone();
+    return this._gridSnapPoint(pt) || pt.clone();
+  }
+
+  // The snapped one-foot grid point, or null when grid snap is off or the
+  // cursor is outside the grid's magnetic pull.
+  _gridSnapPoint(pt) {
+    if (!this.state.gridSnapEnabled) return null;
     // GRID SNAP is intentionally limited to one-foot increments.
     const snapped = geo.snapToGrid(pt, 1);
+    const pull = this._worldPerPixel() * this.state.snapStrength.grid;
+    if (Math.hypot(snapped.x - pt.x, snapped.z - pt.z) > pull) return null;
     return new THREE.Vector3(snapped.x, snapped.y, snapped.z);
   }
 
@@ -2645,9 +2661,10 @@ class Component extends DCLogic {
   _onMouseMove(e) {
     if (this.state.lengthFrozen) return;
     const raw = this._getWorldPos(e.clientX, e.clientY);
-    if (!raw) { this.setState({ showCursor: false, showMagnet: false, showMidSnap: false }); return; }
+    if (!raw) { this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false }); return; }
 
-    const gridPt = this._snap(raw);
+    const gridHit = this._gridSnapPoint(raw);
+    const gridPt = gridHit ? gridHit.clone() : raw.clone();
     const tool   = this.state.activeTool;
     const start  = tool === 'line' ? this._lineStart
       : tool === 'wall' ? this._wallStart
@@ -2707,7 +2724,7 @@ class Component extends DCLogic {
     this._trackingSnap = trackingHit ? trackingHit.snapPt : null;
 
     const sc = this._toScreen(cursorPt);
-    const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false, showMidSnap: false };
+    const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false, showMidSnap: false, showGridSnapPt: false };
     if (magnet) {
       const ms = this._toScreen(magnet);
       newState.magnetX = ms.x; newState.magnetY = ms.y; newState.showMagnet = true;
@@ -2715,6 +2732,12 @@ class Component extends DCLogic {
     if (midSnap) {
       const ms = this._toScreen(midSnap);
       newState.midSnapX = ms.x; newState.midSnapY = ms.y; newState.showMidSnap = true;
+    }
+    // Ring the engaged grid point so it is obvious grid snap has hold of the
+    // cursor; higher-priority snaps (tracking, magnet, midpoint) replace it.
+    if (gridHit && !trackingHit && !magnet && !midSnap && !(angleLockHeld && start)) {
+      const gs = this._toScreen(gridHit);
+      newState.gridSnapPtX = gs.x; newState.gridSnapPtY = gs.y; newState.showGridSnapPt = true;
     }
     this.setState(newState);
 
@@ -2773,7 +2796,7 @@ class Component extends DCLogic {
   }
 
   _onMouseLeave() {
-    this.setState({ showCursor: false, showMagnet: false, showMidSnap: false });
+    this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false });
     ['[data-model-sx]','[data-model-sy]','[data-model-len]'].forEach((s, i) => {
       const el = document.querySelector(s); if (el) el.textContent = ['X: —','Y: —',''][i];
     });
@@ -3553,7 +3576,7 @@ class Component extends DCLogic {
   }
 
   _nodeSnapRadius() {
-    return this._worldPerPixel() * NODE_SNAP_PX;
+    return this._worldPerPixel() * this.state.snapStrength.node;
   }
 
   _findMagnet(gridPt) {
@@ -3568,7 +3591,7 @@ class Component extends DCLogic {
   // Return midpoint of the nearest line/wall segment if the cursor is within snap
   // radius. Only called when vertex magnet is null (vertex takes priority).
   _findMidpointSnap(cursorPt) {
-    const r = this._worldPerPixel() * MIDPOINT_SNAP_PX;
+    const r = this._worldPerPixel() * this.state.snapStrength.midpoint;
     const nearest = segments => {
       const mid = geo.nearestMidpoint(segments, cursorPt, r);
       return mid ? new THREE.Vector3(mid.x, mid.y, mid.z) : null;
@@ -5251,6 +5274,9 @@ class Component extends DCLogic {
       midSnapX:       this.state.midSnapX,
       midSnapY:       this.state.midSnapY,
       midSnapDisplay: this.state.showMidSnap ? 'block' : 'none',
+      gridSnapPtX:    this.state.gridSnapPtX,
+      gridSnapPtY:    this.state.gridSnapPtY,
+      gridSnapPtDisplay: this.state.showGridSnapPt ? 'block' : 'none',
       lengthFrozen: this.state.lengthFrozen,
       frozenLengthInput: this.state.frozenLengthInput,
       frozenDimensionBorder: this.state.frozenDimensionError ? '#b04050' : 'rgba(29,31,32,0.25)',
