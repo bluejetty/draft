@@ -190,12 +190,12 @@ test('deleting a selected opening or its host wall removes the opening', async (
   expect(drawing.fenestrations).toHaveLength(0);
 });
 
-test('FENESTRATION places openings in PLAN and FOUNDATION, not FLOOR', async ({ page }) => {
+test('FENESTRATION works in PLAN, FOUNDATION, and FLOOR (floor / roof holes)', async ({ page }) => {
   await h.openModel(page);
   await drawWall(page);
-  await switchLayerView(page, 'FLOOR');
   const tool = page.locator('[data-model-left]').getByRole('button', { name: /\bFenestration\b/i });
-  await expect(tool).toBeDisabled();
+  await switchLayerView(page, 'FLOOR');
+  await expect(tool).toBeEnabled();
 
   await switchLayerView(page, 'PLAN');
   await expect(tool).toBeEnabled();

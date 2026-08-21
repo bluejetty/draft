@@ -120,6 +120,26 @@ if (!window.DraftDrawingFormat) {
       };
     }).filter(Boolean);
 
+  // Surface openings are free-form closed outlines cut from a host floor or
+  // roof footprint (stairwells, skylights, chimneys). Host existence is the
+  // caller's check — floors and roofs restore before openings resolve.
+  const surfaceOpenings = (rawOpenings, levelIds) => (Array.isArray(rawOpenings) ? rawOpenings : [])
+    .map(opening => {
+      const openingLevelId = levelId(opening?.levelId, levelIds);
+      const hostType = oneOf(opening?.hostType, ['floor', 'roof'], null);
+      const hostId = String(opening?.hostId || '').trim();
+      const points = (Array.isArray(opening?.points) ? opening.points : []).map(point).filter(Boolean);
+      if (openingLevelId == null || !hostType || !hostId || points.length < 3) return null;
+      return {
+        id: String(opening?.id || '').trim(),
+        hostType,
+        hostId,
+        points,
+        levelId: openingLevelId,
+        layer: hostType === 'roof' ? 'A-ROOF-OPNG' : 'A-FL-OPNG',
+      };
+    }).filter(Boolean);
+
   // Shapes are closed construction outlines owned by a level — drawn by hand
   // or captured from a wall network. They carry no roof or floor semantics;
   // the ROOF and FLOOR commands build their own geometry from a shape.
@@ -176,6 +196,7 @@ if (!window.DraftDrawingFormat) {
     cuts,
     dimensions,
     fenestrations,
+    surfaceOpenings,
     shapes,
     roofs,
     backgroundLevelIds,

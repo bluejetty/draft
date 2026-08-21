@@ -197,6 +197,7 @@ if (!window.DraftProfileManager) {
         Object.freeze({ id: 'A-FL', name: 'A-FL', use: 'Floor plan geometry.', printable: true }),
         Object.freeze({ id: 'A-FL-DECK', name: 'A-FL-DECK', use: 'Floor deck.', printable: true }),
         Object.freeze({ id: 'A-FL-FLOORING', name: 'A-FL-FLOORING', use: 'Floor finishes.', printable: true }),
+        Object.freeze({ id: 'A-FL-OPNG', name: 'A-FL-OPNG', use: 'Floor openings — stairwells, chases (Fenestration tool on a selected floor).', printable: true }),
         Object.freeze({ id: 'A-DOOR', name: 'A-DOOR', use: 'Door openings (Fenestration tool).', printable: true }),
         Object.freeze({ id: 'A-GLAZ', name: 'A-GLAZ', use: 'Window openings (Fenestration tool).', printable: true }),
         Object.freeze({ id: 'PLAN DIMENSIONS', name: 'PLAN DIMENSIONS', use: 'Dimension strings placed in PLAN.', printable: true }),
@@ -218,6 +219,7 @@ if (!window.DraftProfileManager) {
       group: 'Architectural — ROOF',
       layers: Object.freeze([
         Object.freeze({ id: 'A-ROOF', name: 'A-ROOF', use: 'Roof footprints, ridges, hips, and valleys (Roof tool on ROOF).', printable: true }),
+        Object.freeze({ id: 'A-ROOF-OPNG', name: 'A-ROOF-OPNG', use: 'Roof openings — skylights, chimneys, dormers (Fenestration tool on a selected roof).', printable: true }),
       ]),
     }),
     Object.freeze({
