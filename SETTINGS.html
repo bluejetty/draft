@@ -40,7 +40,7 @@
     button.action:hover { border-color:#5980a6; }
     #status { margin-left:auto; color:#557a46; font-size:12px; }
     #status.warning { color:#a06035; }
-    .advanced { margin-top:34px; border-top:1px solid rgba(29,31,32,.12); padding-top:10px; }
+    .advanced { margin:14px 0 22px; border-bottom:1px solid rgba(29,31,32,.12); padding-bottom:10px; }
     .advanced summary { color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; cursor:pointer; }
     .advanced summary:hover { color:#5980a6; }
     .advanced-note { max-width:560px; color:rgba(29,31,32,.55); font-size:12px; line-height:1.45; margin:10px 0 12px; }
@@ -68,20 +68,21 @@
     <h1>Keyboard Settings</h1>
     <p class="intro">Choose shortcuts that feel natural to you; they are saved to this browser immediately. Layers live in <a href="./STANDARDS.html" style="color:#5980a6;">Company Standard Layers</a>, and the drawing layer for new lines is picked in Model Space.</p>
     <div class="notice">Commands are grouped by purpose. A key can include modifiers such as <strong>Shift+W</strong>, <strong>Ctrl+L</strong>, or <strong>Alt+1</strong>. Some shortcuts reserved by your browser or operating system may not be available.</div>
+    <details class="advanced">
+      <summary>Snap magnetic pull</summary>
+      <p class="advanced-note">How close the cursor must be, in screen pixels, before each snap grabs it. Larger values catch from farther away; smaller values only snap when the cursor is nearly on the point. Saved with your keyboard settings.</p>
+      <div class="snap-row"><label for="snap-grid">Grid snap</label><input type="number" id="snap-grid" data-snap="grid" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="grid"></span></div>
+      <div class="snap-row"><label for="snap-node">Node snap</label><input type="number" id="snap-node" data-snap="node" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="node"></span></div>
+      <div class="snap-row"><label for="snap-midpoint">Midpoint snap</label><input type="number" id="snap-midpoint" data-snap="midpoint" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="midpoint"></span></div>
+      <div class="snap-row"><label for="snap-polar">Polar tracking</label><input type="number" id="snap-polar" data-snap="polar" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="polar"></span></div>
+      <button class="action" id="snap-reset" type="button">RESET SNAP DEFAULTS</button>
+    </details>
     <section class="groups" id="groups" aria-label="Keyboard commands"></section>
     <div class="actions">
       <button class="action" id="reset" type="button">RESET DEFAULTS</button>
       <button class="action primary" id="download" type="button">DOWNLOAD .DRAFT.SETTINGS</button>
       <span id="status" role="status"></span>
     </div>
-    <details class="advanced">
-      <summary>Advanced — Snap magnetic pull</summary>
-      <p class="advanced-note">How close the cursor must be, in screen pixels, before each snap grabs it. Larger values catch from farther away; smaller values only snap when the cursor is nearly on the point. Saved with your keyboard settings.</p>
-      <div class="snap-row"><label for="snap-grid">Grid snap</label><input type="number" id="snap-grid" data-snap="grid" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="grid"></span></div>
-      <div class="snap-row"><label for="snap-node">Node snap</label><input type="number" id="snap-node" data-snap="node" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="node"></span></div>
-      <div class="snap-row"><label for="snap-midpoint">Midpoint snap</label><input type="number" id="snap-midpoint" data-snap="midpoint" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="midpoint"></span></div>
-      <button class="action" id="snap-reset" type="button">RESET SNAP DEFAULTS</button>
-    </details>
   </main>
   <script>
     (() => {

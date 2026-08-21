@@ -142,6 +142,31 @@ test('a wall drawn on FOUNDATION is a foundation wall living in that layer set',
   expect(await wallStrokeCount(page, 5, 0)).toBe(0);
 });
 
+test('ROOF and SITE are whole-level contexts with every command available', async ({ page }) => {
+  await h.openModel(page);
+  const rail = page.locator('[data-model-left]');
+  for (const level of ['ROOF', 'SITE']) {
+    await switchLevel(page, level);
+    for (const name of ['Line', 'Node / Arc', 'Wall', 'Floor', 'Fenestration', 'Dimension']) {
+      await expect(rail.getByRole('button', { name: new RegExp(`\\b${name}\\b`, 'i') })).toBeEnabled();
+    }
+  }
+
+  // Drawing works: a wall on ROOF saves, renders, and hosts an opening.
+  await switchLevel(page, 'ROOF');
+  await drawWall(page, -10, 0, 10, 0);
+  expect(await wallStrokeCount(page, 5, 0)).toBeGreaterThan(0);
+  await h.selectTool(page, 'Fenestration');
+  await h.clickWorld(page, 2, 0);
+  await h.waitForSaved(page);
+  await drawDimension(page, -10, 5, 10, 5);
+
+  const drawing = await h.savedDrawing(page);
+  expect(h.allWalls(drawing)).toHaveLength(1);
+  expect(drawing.fenestrations).toHaveLength(1);
+  expect(drawing.dimensions).toHaveLength(1);
+});
+
 test('dimensions can be placed on any layer set and save with it', async ({ page }) => {
   await h.openModel(page);
   await switchLayerView(page, 'E-POWER');

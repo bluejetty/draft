@@ -479,8 +479,6 @@ const LEVEL_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a
 // snap-strength settings (screen-space pixels, adjustable in Settings).
 // Shift/angle-locked alignment catch distance from a node center.
 const LOCKED_NODE_SNAP_PX = 3;
-// How close (px) the cursor must pass to a 45° polar-tracking ray to snap onto it.
-const POLAR_SNAP_PX = 6;
 // Tools whose next click can ride a polar-tracking ray from an acquired node.
 const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'dimension', 'cut', 'extend']);
 const SIXTEENTH_IN = 1 / 16;
@@ -2161,6 +2159,72 @@ class Component extends DCLogic {
       ctx.restore();
     }
 
+    // ── Extend capture preview: the rectangle and captured nodes stay visible,
+    // and the captured geometry ghosts along with the cursor to the destination
+    if (!this._isPrinting && this._extendSession && this.state.activeTool === 'extend' && this.state.extendPhase !== 'idle') {
+      const session = this._extendSession;
+      const accent = session.scope === 'all' ? '#b04050' : '#5980a6';
+      const base = this.state.extendBase;
+      const dest = this.state.extendPhase === 'destination' ? this._previewEndPoint() : null;
+      const dx = base && dest ? dest.x - base.x : 0;
+      const dz = base && dest ? dest.z - base.z : 0;
+      const moving = Boolean(base && dest) && Math.hypot(dx, dz) > 0.001;
+      const shifted = pt => session.vertices.has(pt) ? { x: pt.x + dx, y: pt.y, z: pt.z + dz } : pt;
+      ctx.save();
+
+      if (session.rect) {
+        const drawRect = (offX, offZ, dash) => {
+          const a = toS({ x: session.rect.start.x + offX, y: session.rect.start.y, z: session.rect.start.z + offZ });
+          const b = toS({ x: session.rect.end.x + offX, y: session.rect.end.y, z: session.rect.end.z + offZ });
+          ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.setLineDash(dash);
+          ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+          ctx.setLineDash([]);
+        };
+        drawRect(0, 0, [6, 4]);
+        if (moving) drawRect(dx, dz, [3, 3]);
+      }
+
+      if (moving) {
+        ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+        const ghostItem = (item, close) => {
+          const points = (item.points || [item.start, item.end]).filter(Boolean);
+          if (!points.some(pt => session.vertices.has(pt))) return;
+          ctx.beginPath();
+          points.forEach((pt, i) => {
+            const s = toS(shifted(pt));
+            if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+          });
+          if (close && points.length > 2) ctx.closePath();
+          ctx.stroke();
+        };
+        this._lines.forEach(item => ghostItem(item, false));
+        this._walls.forEach(item => ghostItem(item, false));
+        this._floors.forEach(item => ghostItem(item, true));
+        ctx.setLineDash([]);
+      }
+
+      // Captured nodes highlighted, travelling with the move
+      ctx.fillStyle = accent;
+      session.vertices.forEach(pt => {
+        const s = toS(moving ? { x: pt.x + dx, y: pt.y, z: pt.z + dz } : pt);
+        ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
+      });
+
+      // Base marker and rubber band to the destination
+      if (base) {
+        const sb = toS(base);
+        ctx.strokeStyle = accent; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(sb.x, sb.y, 5, 0, Math.PI * 2); ctx.stroke();
+        if (moving) {
+          const sd = toS(dest);
+          ctx.setLineDash([6, 4]);
+          ctx.beginPath(); ctx.moveTo(sb.x, sb.y); ctx.lineTo(sd.x, sd.y); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+      ctx.restore();
+    }
+
     // Pending generic lines honor NO-DRAFT's construction-only print rule too.
     const showLinePreview = !this._isPrinting || this._lineLayerConfig(this._activeLineLayer()).printable;
     if (showLinePreview) this._pendingChain.forEach(s => { drawSeg(s.start, s.end); drawDot(s.start); drawDot(s.end); });
@@ -2387,15 +2451,18 @@ class Component extends DCLogic {
     }[viewId] || 'LEVEL';
   }
 
+  // Levels without layer sets (ROOF, SITE) are one whole-level drafting
+  // context (viewId null) where every command is available.
   _contextAllowsTool(tool, viewId = this._activeLayerViewId()) {
     if (tool === 'line') {
-      return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId)
+      return (viewId == null || ['plan', 'floor', 'e-power', 'foundation'].includes(viewId))
         && this._lineLayerConfig(this._activeLineLayer()).visible;
     }
+    if (viewId == null) return true;
     if (tool === 'node') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
     if (tool === 'wall') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
     if (tool === 'floor') return ['floor', 'plan'].includes(viewId);
-    if (tool === 'fenestration') return viewId === 'plan';
+    if (tool === 'fenestration') return ['plan', 'foundation'].includes(viewId);
     if (tool === 'dimension') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
     return true;
   }
@@ -2419,7 +2486,7 @@ class Component extends DCLogic {
   _contextToolSaveLabel(tool, viewId = this._activeLayerViewId()) {
     if (tool === 'wall') return this._draftingContextLabel(this._wallHomeView(viewId));
     if (tool === 'floor') return this._draftingContextLabel('floor');
-    if (tool === 'fenestration') return this._draftingContextLabel('plan');
+    if (tool === 'fenestration') return this._draftingContextLabel(viewId === 'foundation' ? 'foundation' : 'plan');
     return this._draftingContextLabel(viewId);
   }
 
@@ -2428,7 +2495,7 @@ class Component extends DCLogic {
     if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, E-POWER, or FOUNDATION. Current context: ${context}.`;
     if (tool === 'wall') return `Walls are drawn in any layer set: FOUNDATION walls save to S-FDN, all others save to PLAN. Current context: ${context}.`;
     if (tool === 'floor') return `Floor outlines are drawn in FLOOR or PLAN and always save to FLOOR. Current context: ${context}.`;
-    if (tool === 'fenestration') return `Door and window openings are placed on walls in PLAN. Current context: ${context}.`;
+    if (tool === 'fenestration') return `Door and window openings are placed on walls in PLAN or FOUNDATION. Current context: ${context}.`;
     if (tool === 'dimension') return `Dimensions are placed in any layer set and save with it. Current context: ${context}.`;
     if (tool === 'line') {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
@@ -2603,7 +2670,8 @@ class Component extends DCLogic {
   _activeDimensions() {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
-    return this._dimensions.filter(dimension => dimension.levelId === levelId && dimension.view === view);
+    return this._dimensions.filter(dimension => dimension.levelId === levelId
+      && (view == null || dimension.view === view));
   }
 
   // One reference slot is visible at a time: B cycles blue → red → none.
@@ -3590,7 +3658,7 @@ class Component extends DCLogic {
       id: this._newDrawingItemId('fenestration'),
       wallId: placement.wall.id,
       levelId: placement.wall.levelId,
-      view: 'plan',
+      view: placement.wall.view || 'plan',
       type,
       layer: FENESTRATION_LAYERS[type],
       offset: placement.offset,
@@ -4672,7 +4740,10 @@ class Component extends DCLogic {
       this.setState({ extendPhase: 'idle', extendBase: null, extendMessage: 'Drag the rectangle over one or more drawing nodes.' });
       return;
     }
-    this._extendSession = { vertices, scope: this.state.extendScope };
+    this._extendSession = {
+      vertices, scope: this.state.extendScope,
+      rect: { start: { x: start.x, y: start.y, z: start.z }, end: { x: end.x, y: end.y, z: end.z } },
+    };
     this.setState({
       extendPhase: 'base',
       extendBase: null,
@@ -4852,7 +4923,7 @@ class Component extends DCLogic {
     if (along <= 0) return null;
     const sx = origin.x + Math.cos(angle) * along;
     const sz = origin.z + Math.sin(angle) * along;
-    if (Math.hypot(pt.x - sx, pt.z - sz) > POLAR_SNAP_PX * this._worldPerPixel()) return null;
+    if (Math.hypot(pt.x - sx, pt.z - sz) > this.state.snapStrength.polar * this._worldPerPixel()) return null;
     return new THREE.Vector3(sx, pt.y, sz);
   }
 
@@ -4893,7 +4964,7 @@ class Component extends DCLogic {
       start: this._dimensionStart.clone(),
       end: pt.clone(),
       levelId: this._activeLevelId(),
-      view,
+      view: view || 'plan',
     });
     this._dimensionStart = null;
     this._lockAngle = null;
@@ -4985,8 +5056,8 @@ class Component extends DCLogic {
   _commitLine(start, end) {
     const level = this._activeLevel();
     const levelId = level ? level.id : -1;
-    const view = this._activeLayerViewId(levelId);
-    if (!this._contextAllowsTool('line', view)) return false;
+    if (!this._contextAllowsTool('line')) return false;
+    const view = this._activeLayerViewId(levelId) || 'plan';
     const layer = this._activeLineLayer();
     this._lines.push({
       id: this._newDrawingItemId('line'),
@@ -5094,6 +5165,7 @@ class Component extends DCLogic {
     if (el('[data-model-len]')) el('[data-model-len]').textContent = hasLength ? '↔ ' + (imp ? this._ftIn(total) : this._metric(total)) : '';
     const angDeg = Math.round(Math.atan2(-dirZ, dirX) * 180 / Math.PI);
     if (el('[data-model-ang]')) el('[data-model-ang]').textContent = '∠ ' + (angDeg < 0 ? angDeg + 360 : angDeg) + '°';
+    this._invalidate();
   }
 
   _confirmFrozenLength() {
