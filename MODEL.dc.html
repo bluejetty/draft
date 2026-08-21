@@ -43,6 +43,12 @@
     .level-layer-row .level-layer { flex:1; min-width:0; }
     .level-layer-bg { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:1px 3px; min-width:23px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.42); flex-shrink:0; }
     .level-layer-bg:hover { border-color:#5980a6; color:#5980a6; }
+    .level-head { display:flex; align-items:flex-start; gap:5px; }
+    .level-title { flex-shrink:0; min-width:0; }
+    .level-heights { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; padding-top:1px; }
+    .level-height { display:flex; justify-content:space-between; gap:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; line-height:1.25; letter-spacing:0.03em; color:rgba(29,31,32,0.5); text-transform:uppercase; white-space:nowrap; overflow:hidden; }
+    .level-height-val { color:rgba(29,31,32,0.72); font-weight:600; }
+    .level-head .level-bg { margin-top:0; }
     .level-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:flex-start; margin-top:6px; }
     .level-del:hover { color:#c04040; }
     .cut-row { display:flex; align-items:center; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
@@ -352,6 +358,38 @@
       </div>
     </sc-if>
 
+    <!-- ROOF PROPERTIES (shown when Roof tool is active) -->
+    <sc-if value="{{ roofToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Roof</div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Mode</div>
+        <div style="display:flex; gap:3px; margin-bottom:8px;">
+          <sc-for list="{{ roofModeBtns }}" as="rm" hint-placeholder-count="2">
+            <button onClick="{{ rm.onSelect }}" title="{{ rm.title }}" style="flex:1; border:1px solid {{ rm.border }}; background:{{ rm.bg }}; color:{{ rm.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ rm.label }}</button>
+          </sc-for>
+        </div>
+        <sc-if value="{{ roofCaptureMode }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onRoofCapture }}" style="width:100%; box-sizing:border-box; border:1px solid #5980a6; background:rgba(89,128,166,0.14); color:#3e6285; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">CAPTURE WALLS BELOW</button>
+        </sc-if>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Eave Overhang</div>
+        <div style="display:flex; gap:3px; margin-bottom:5px;">
+          <sc-for list="{{ roofOverhangPresets }}" as="op" hint-placeholder-count="4">
+            <button onClick="{{ op.onSelect }}" style="flex:1; border:1px solid {{ op.border }}; background:{{ op.bg }}; color:{{ op.color }}; padding:5px 2px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.02em; cursor:pointer;">{{ op.label }}</button>
+          </sc-for>
+        </div>
+        <input type="text" value="{{ roofOverhangInput }}" onInput="{{ onRoofOverhangInput }}" onBlur="{{ onRoofOverhangCommit }}" onKeyDown="{{ onRoofDimensionKey }}" placeholder="2'-0&quot;" aria-label="Eave overhang" style="width:100%; box-sizing:border-box; border:1px solid {{ roofDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+        <div style="margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Pitch (rise : 12)</div>
+        <input type="text" value="{{ roofPitchInput }}" onInput="{{ onRoofPitchInput }}" onBlur="{{ onRoofPitchCommit }}" onKeyDown="{{ onRoofDimensionKey }}" placeholder="4" aria-label="Roof pitch" style="width:100%; box-sizing:border-box; border:1px solid {{ roofDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+        <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ roofHeelLabel }}</div>
+        <sc-if value="{{ hasRoofDimensionError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ roofDimensionError }}</div>
+        </sc-if>
+        <sc-if value="{{ hasActiveRoofs }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onRoofDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.45); background:#fff; color:#b04050; padding:5px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST ROOF</button>
+        </sc-if>
+      </div>
+    </sc-if>
+
   </div>
 
   <!-- CANVAS AREA -->
@@ -398,6 +436,7 @@
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
       <div style="display:flex; align-items:center; margin-bottom:8px;">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Levels</div>
+        <button onClick="{{ toggleElevationDatum }}" title="{{ elevationDatumTitle }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:rgba(29,31,32,0.55); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; padding:3px 6px; margin-right:4px; cursor:pointer; letter-spacing:0.04em;">{{ elevationDatumLabel }}</button>
         <button onClick="{{ addLevel }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; padding:2px 8px; cursor:pointer; letter-spacing:0.04em;">+ ADD</button>
       </div>
        <div style="margin:-2px 0 7px; color:rgba(29,31,32,0.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.03em;">FLOOR ELEVATIONS · LAYERS NESTED WHERE DEFINED</div>
@@ -405,8 +444,20 @@
         <div class="{{ level.rowClass }}">
           <div class="level-bar" style="background:{{ level.color }};" onClick="{{ level.onSelect }}"></div>
            <div class="level-body" onClick="{{ level.onSelect }}" title="Switch to {{ level.name }}">
-            <div class="level-name">{{ level.name }}</div>
-            <div class="level-elev">{{ level.elevStr }}</div>
+            <div class="level-head">
+              <div class="level-title">
+                <div class="level-name">{{ level.name }}</div>
+                <div class="level-elev">{{ level.elevStr }}</div>
+              </div>
+              <sc-if value="{{ level.hasHeights }}" hint-placeholder-val="{{ false }}">
+                <div class="level-heights">
+                  <sc-for list="{{ level.heights }}" as="mark" hint-placeholder-count="2">
+                    <div class="level-height"><span>{{ mark.label }}</span><span class="level-height-val">{{ mark.value }}</span></div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <button class="level-bg" onClick="{{ level.onToggleBackground }}" title="{{ level.bgTitle }}" style="background:{{ level.bgButtonBg }}; border-color:{{ level.bgButtonBorder }}; color:{{ level.bgButtonColor }};">{{ level.bgLabel }}</button>
+            </div>
              <sc-if value="{{ level.hasLayers }}" hint-placeholder-val="{{ false }}">
                <div class="level-layer-stack">
                  <sc-for list="{{ level.layers }}" as="layer" hint-placeholder-count="3">
@@ -426,7 +477,6 @@
              </sc-if>
            </div>
           <button class="level-eye" onClick="{{ level.onToggleVis }}" title="{{ level.visLabel }}">{{ level.visIcon }}</button>
-          <button class="level-bg" onClick="{{ level.onToggleBackground }}" title="{{ level.bgTitle }}" style="background:{{ level.bgButtonBg }}; border-color:{{ level.bgButtonBorder }}; color:{{ level.bgButtonColor }};">{{ level.bgLabel }}</button>
           <button class="level-del" onClick="{{ level.onDelete }}" title="Delete level">×</button>
         </div>
       </sc-for>
@@ -600,6 +650,19 @@ const DEFAULT_WINDOW_WIDTH_FT = 4;
 const DEFAULT_WINDOW_SILL_FT = 2.5;
 const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
 const FENESTRATION_LAYERS = Object.freeze({ door: 'A-DOOR', window: 'A-GLAZ' });
+// Roof defaults — the footprint captures the exterior wall outline of the
+// level below and grows by the eave overhang. The fascia is a fixed 5½" for
+// now, with its bottom level with the top of the wall plate, so the heel at
+// the wall face is the fascia depth plus the rise gained across the overhang.
+const ROOF_OVERHANG_PRESETS_FT = Object.freeze([0.5, 1, 1.5, 2]);
+const DEFAULT_ROOF_OVERHANG_FT = 2;
+const MAX_ROOF_OVERHANG_FT = 6;
+const DEFAULT_ROOF_PITCH = 4;   // rise in inches per 12" of run
+const MAX_ROOF_PITCH = 24;
+const ROOF_FASCIA_IN = 5.5;
+const ROOF_LAYER = 'A-ROOF';
+const clampRoofOverhang = value => Math.min(MAX_ROOF_OVERHANG_FT, Math.max(0, value));
+const clampRoofPitch = value => Math.min(MAX_ROOF_PITCH, Math.max(0, value));
 // Stored-drawing readers and the format version live in drawing-format.js;
 // the plan-view snapping and trim maths lives in geometry-2d.js.
 const format = window.DraftDrawingFormat;
@@ -635,6 +698,8 @@ const LEVEL_LAYER_VIEWS = Object.freeze({
   ]),
 });
 const DEFAULT_LEVEL_LAYER_VIEWS = Object.freeze({ 5:'plan', 3:'plan', 1:'plan' });
+// Layer standards revealed by a layer-set button collapse again after a minute.
+const LAYER_REVEAL_MS = 60000;
 const migrateLevelId = value => {
   const id = Number(value);
   return LEGACY_LEVEL_ID_REMAP[id] ?? id;
@@ -735,6 +800,13 @@ class Component extends DCLogic {
     fenestrationHead: DEFAULT_OPENING_HEAD_FT,
     fenestrationHeadInput: formatArchitecturalInches(DEFAULT_OPENING_HEAD_FT * 12),
     fenestrationDimensionError: '',
+    roofMode: 'basic',   // 'basic' edge-drawn roof | 'capture' walls-below outline
+    roofPhase: 'idle',   // basic flow: 'idle' → 'edge' → 'direction' → 'overhang'
+    roofOverhang: DEFAULT_ROOF_OVERHANG_FT,
+    roofOverhangInput: formatArchitecturalInches(DEFAULT_ROOF_OVERHANG_FT * 12),
+    roofPitch: DEFAULT_ROOF_PITCH,
+    roofPitchInput: String(DEFAULT_ROOF_PITCH),
+    roofDimensionError: '',
     levels:        DEFAULT_LEVELS.map(l => ({ ...l })),
     levelLayerViews: { ...DEFAULT_LEVEL_LAYER_VIEWS },
     activeLevelIdx: 3,
@@ -742,6 +814,8 @@ class Component extends DCLogic {
     backgroundLevelIds: [],
     backgroundLevelViews: {},   // levelId -> layer view id; absent = whole level
     contextBackgrounds: {},     // 'levelId:viewId' -> { ids, views } remembered per working context
+    layerRevealKey: null,       // 'levelId:viewId' whose standards list is expanded in the rail
+    elevationDatum: 0,          // ft added to displayed height marks: 0' or 100' datum
     backgroundMode: 'blue', // 'blue' | 'red' | 'none'
     cursorX: -100, cursorY: -100, showCursor: false,
     magnetX: -100, magnetY: -100, showMagnet: false,
@@ -812,6 +886,7 @@ class Component extends DCLogic {
     if (!Array.isArray(this._walls)) this._walls = [];
     if (!Array.isArray(this._floors)) this._floors = [];
     if (!Array.isArray(this._fenestrations)) this._fenestrations = [];
+    if (!Array.isArray(this._roofs)) this._roofs = [];
     if (!(this._selectedFenestrations instanceof Set)) this._selectedFenestrations = new Set();
     if (!Array.isArray(this._dimensions)) this._dimensions = [];
     if (!Array.isArray(this._vertices)) this._vertices = [];
@@ -862,6 +937,18 @@ class Component extends DCLogic {
         thickness: floor.thickness,
         assembly: { ...floor.assembly },
       })),
+      roofs: this._roofs.map(roof => ({
+        id: roof.id,
+        points: roof.points.map(point),
+        levelId: roof.levelId,
+        sourceLevelId: roof.sourceLevelId ?? null,
+        edges: roof.edges.map(kind => (kind === 'gable' ? 'gable' : 'eave')),
+        overhang: roof.overhang,
+        pitch: roof.pitch,
+        fascia: roof.fascia,
+        heel: this._roofHeelIn(roof.pitch, roof.overhang),
+        layer: ROOF_LAYER,
+      })),
       fenestrations: this._fenestrations.map(opening => ({
         id: opening.id,
         wallId: opening.wallId,
@@ -901,6 +988,9 @@ class Component extends DCLogic {
       wallBaseHeight: this.state.wallBaseHeight,
       wallTopHeight: this.state.wallTopHeight,
       floorThickness: this.state.floorThickness,
+      roofOverhang: this.state.roofOverhang,
+      roofPitch: this.state.roofPitch,
+      elevationDatum: this.state.elevationDatum,
       cuts: this.state.cuts.map(cut => ({
         id: cut.id,
         name: cut.name,
@@ -1250,6 +1340,10 @@ class Component extends DCLogic {
         wallBaseHeight: format.number(saved.wallBaseHeight, 0),
         wallTopHeight: format.number(saved.wallTopHeight, DEFAULT_WALL_TOP_FT),
         floorThickness: format.positive(saved.floorThickness, DEFAULT_FLOOR_THICKNESS_IN / 12),
+        roofOverhang: clampRoofOverhang(format.number(saved.roofOverhang, DEFAULT_ROOF_OVERHANG_FT)),
+        roofPitch: clampRoofPitch(format.number(saved.roofPitch, DEFAULT_ROOF_PITCH)),
+        elevationDatum: format.number(saved.elevationDatum, 0) === 100 ? 100 : 0,
+        roofDimensionError: '',
         cuts,
         nextCutId,
         activeCutId: null,
@@ -1311,6 +1405,12 @@ class Component extends DCLogic {
         }).filter(Boolean)
         : [];
       skipped += (Array.isArray(saved.floors) ? saved.floors.length : 0) - this._floors.length;
+      this._roofs = format.roofs(saved.roofs, levelIds).map(roof => ({
+        ...roof,
+        id: this._storedItemId(roof.id, 'roof', usedIds),
+        points: roof.points.map(point => this._mergeVertex(point, roof.levelId, 'roof')),
+      }));
+      skipped += (Array.isArray(saved.roofs) ? saved.roofs.length : 0) - this._roofs.length;
       const wallsById = new Map(this._walls.map(wall => [wall.id, wall]));
       this._fenestrations = format.fenestrations(saved.fenestrations, levelIds).map(opening => {
         const wall = wallsById.get(opening.wallId);
@@ -1334,7 +1434,7 @@ class Component extends DCLogic {
         };
       });
       this._nextDimensionId = nextDimensionId;
-       const numericItemIds = [...this._lines, ...this._walls, ...this._floors, ...this._fenestrations]
+       const numericItemIds = [...this._lines, ...this._walls, ...this._floors, ...this._fenestrations, ...this._roofs]
          .map(item => Number(String(item.id).match(/-(\d+)$/)?.[1]))
          .filter(Number.isInteger);
        this._nextDrawingItemId = Math.max(this._nextDrawingItemId, ...numericItemIds.map(id => id + 1), 1);
@@ -1444,6 +1544,8 @@ class Component extends DCLogic {
         wallBaseInput: formatArchitecturalInches(this.state.wallBaseHeight * 12),
         wallTopInput: formatArchitecturalInches(this.state.wallTopHeight * 12),
         floorThicknessInput: formatArchitecturalInches(this.state.floorThickness * 12),
+        roofOverhangInput: formatArchitecturalInches(this.state.roofOverhang * 12),
+        roofPitchInput: String(this.state.roofPitch),
       }, () => {
         if (failed && importedFile) return;
         this._applyLevelElevation(this.state.activeLevelIdx);
@@ -1488,7 +1590,7 @@ class Component extends DCLogic {
     } catch {
       return false;
     }
-    this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut();
+    this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelCut(); this._cancelRoof();
     this._extendUndo = null;
     this._restoringHistory = true;
     this._loadingDrawing = true;
@@ -1509,6 +1611,8 @@ class Component extends DCLogic {
       wallBaseInput: formatArchitecturalInches(this.state.wallBaseHeight * 12),
       wallTopInput: formatArchitecturalInches(this.state.wallTopHeight * 12),
       floorThicknessInput: formatArchitecturalInches(this.state.floorThickness * 12),
+      roofOverhangInput: formatArchitecturalInches(this.state.roofOverhang * 12),
+      roofPitchInput: String(this.state.roofPitch),
     }, resolve));
     this._applyLevelElevation(this.state.activeLevelIdx);
     // Persists the restored drawing without recording it as a new change.
@@ -1573,6 +1677,7 @@ class Component extends DCLogic {
   }
   componentWillUnmount() {
     cancelAnimationFrame(this._raf);
+    clearTimeout(this._layerRevealTimer);
     if (this._ro) this._ro.disconnect();
     if (this._controls && typeof this._controls.dispose === 'function') this._controls.dispose();
     this._clearCutObjects();
@@ -1710,6 +1815,7 @@ class Component extends DCLogic {
     this._lines      = []; // committed line segments
     this._floors     = []; // committed closed floor outlines
     this._fenestrations = []; // door/window openings hosted on walls
+    this._roofs      = []; // roof footprints captured from the walls below
     this._dimensions = []; // two-point plan/floor dimensions
      this._groups     = [];
      this._nextGroupId = 1;
@@ -1733,6 +1839,11 @@ class Component extends DCLogic {
     this._floorDrawing = false;
     this._floorPoints  = [];
     this._floorStart   = null;
+
+    // Roof tool state — the BASIC flow's in-progress edge line.
+    this._roofEdgeStart = null; // first click of the roof edge
+    this._roofEdge = null;      // committed edge awaiting direction / overhang
+    this._roofSide = 0;         // +1 / -1: which side of the edge the roof extends
 
     // Shared vertex pool — all committed segment endpoints reference objects in here.
     // Two segments meeting at a corner share the SAME Vector3 instance; mutating
@@ -1957,6 +2068,7 @@ class Component extends DCLogic {
     // Walls appear as their centreline so material fills never obscure active work.
     if (reference) {
       this._backgroundFloors().forEach(floor => this._drawFloor2D(ctx, toS, floor, { referenceColor: reference.color }));
+      this._backgroundRoofs().forEach(roof => this._drawRoof2D(ctx, toS, roof, { referenceColor: reference.color }));
       this._backgroundWalls().forEach(wall => drawReferenceSeg(wall, reference.color));
       this._backgroundLines().forEach(line => drawReferenceSeg(line, reference.color));
     }
@@ -1976,6 +2088,19 @@ class Component extends DCLogic {
       const previewPoints = [...this._floorPoints];
       if (this._snapPt && (!this._floorStart || this._snapPt.distanceTo(this._floorStart) > 0.001)) previewPoints.push(this._snapPt);
       this._drawFloor2D(ctx, toS, { points: previewPoints }, { preview: true });
+    }
+
+    // ── Roofs (footprint + generated ridge / hip / valley guides) ───────────
+    if (activeVisible) {
+      const roofStandard = this._layerStandard(ROOF_LAYER);
+      if (roofStandard.visible && (!this._isPrinting || roofStandard.printable)) {
+        this._activeRoofs().forEach(roof => this._drawRoof2D(ctx, toS, roof, {
+          tagging: this.state.activeTool === 'roof' && !this._isPrinting,
+        }));
+      }
+    }
+    if (activeVisible && this.state.activeTool === 'roof' && !this._isPrinting) {
+      this._drawRoofPreview2D(ctx, toS);
     }
 
     // ── Walls (fills drawn beneath lines) ────────────────────────────────────
@@ -2458,6 +2583,9 @@ class Component extends DCLogic {
       return (viewId == null || ['plan', 'floor', 'e-power', 'foundation'].includes(viewId))
         && this._lineLayerConfig(this._activeLineLayer()).visible;
     }
+    // The Roof tool only works on whole-level contexts (ROOF, SITE) — the
+    // footprint it captures references the walls of the level below.
+    if (tool === 'roof') return viewId == null;
     if (viewId == null) return true;
     if (tool === 'node') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
     if (tool === 'wall') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
@@ -2471,7 +2599,7 @@ class Component extends DCLogic {
   // only decides where the geometry saves, never what the command is called.
   _contextToolLabel(tool, shortcut = '') {
     const suffix = shortcut ? `  [${shortcut}]` : '';
-    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', dimension:'DIMENSION' };
+    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', roof:'ROOF', dimension:'DIMENSION' };
     return `${names[tool] || tool.toUpperCase()}${suffix}`;
   }
 
@@ -2487,6 +2615,7 @@ class Component extends DCLogic {
     if (tool === 'wall') return this._draftingContextLabel(this._wallHomeView(viewId));
     if (tool === 'floor') return this._draftingContextLabel('floor');
     if (tool === 'fenestration') return this._draftingContextLabel(viewId === 'foundation' ? 'foundation' : 'plan');
+    if (tool === 'roof') return 'A-ROOF';
     return this._draftingContextLabel(viewId);
   }
 
@@ -2496,6 +2625,7 @@ class Component extends DCLogic {
     if (tool === 'wall') return `Walls are drawn in any layer set: FOUNDATION walls save to S-FDN, all others save to PLAN. Current context: ${context}.`;
     if (tool === 'floor') return `Floor outlines are drawn in FLOOR or PLAN and always save to FLOOR. Current context: ${context}.`;
     if (tool === 'fenestration') return `Door and window openings are placed on walls in PLAN or FOUNDATION. Current context: ${context}.`;
+    if (tool === 'roof') return `The Roof tool works on the ROOF level: it captures the exterior wall outline of the level below. Current context: ${context}.`;
     if (tool === 'dimension') return `Dimensions are placed in any layer set and save with it. Current context: ${context}.`;
     if (tool === 'line') {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
@@ -2516,6 +2646,7 @@ class Component extends DCLogic {
     if (tool !== 'line') this._cancelLine();
     if (tool !== 'floor') this._cancelFloor();
     if (tool !== 'dimension') this._cancelDimension();
+    this._cancelRoof();
     this._cancelCut();
     this.setState({
       activeTool: tool,
@@ -2534,9 +2665,9 @@ class Component extends DCLogic {
     this._courtesyWallIds?.clear();
     this._courtesyFloorIds?.clear();
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof();
     this._applyLevelElevation(levelIndex);
-    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'dimension'].includes(this.state.activeTool)
+    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'roof', 'dimension'].includes(this.state.activeTool)
       && !this._contextAllowsTool(this.state.activeTool, viewId)
       ? 'select'
       : this.state.activeTool;
@@ -2545,17 +2676,24 @@ class Component extends DCLogic {
       backgroundLevelIds,
       backgroundLevelViews,
       levelLayerViews: { ...this.state.levelLayerViews, [levelId]: viewId },
+      layerRevealKey: `${levelId}:${viewId}`,
       activeTool,
-      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'dimension'].includes(this.state.activeTool)
+      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'roof', 'dimension'].includes(this.state.activeTool)
         ? this._contextToolMessage(this.state.activeTool, viewId)
         : `Working in ${this._draftingContextLabel(viewId)}.`,
-      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'dimension'].includes(this.state.activeTool),
+      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'roof', 'dimension'].includes(this.state.activeTool),
     }, () => {
       if (this._orthoCam) this._setView('top');
+      this._scheduleLayerRevealHide();
       this._pruneContextReferenceSelection();
       this._notifySelectionChanged();
       this._markUnsaved();
     });
+  }
+
+  _scheduleLayerRevealHide() {
+    clearTimeout(this._layerRevealTimer);
+    this._layerRevealTimer = setTimeout(() => this.setState({ layerRevealKey: null }), LAYER_REVEAL_MS);
   }
 
   _lineLayerConfig(layerId) {
@@ -2616,6 +2754,20 @@ class Component extends DCLogic {
     const view = this._activeLayerViewId(levelId);
     return this._floors.filter(floor => floor.levelId === levelId && (view == null || (floor.view || 'floor') === view
       || (!this._isPrinting && this._courtesyFloorIds?.has(floor.id))));
+  }
+
+  // Roof footprints belong to whole-level contexts (viewId null): the ROOF
+  // level shows and edits them; layer-set contexts never do.
+  _activeRoofs() {
+    const levelId = this._activeLevelId();
+    if (this._activeLayerViewId(levelId) != null) return [];
+    return this._roofs.filter(roof => roof.levelId === levelId);
+  }
+
+  _backgroundRoofs() {
+    const ref = this._visibleBackgroundReference();
+    if (!ref || ref.view != null) return [];
+    return this._roofs.filter(roof => roof.levelId === ref.levelId);
   }
 
   // Same-level overlays remain source-context geometry. They render as references
@@ -2809,7 +2961,7 @@ class Component extends DCLogic {
   _switchLevel(idx) {
     if (idx === this.state.activeLevelIdx) return;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
     this._applyLevelElevation(idx);
     // A level cannot also be one of its own references; the destination
     // context's remembered background is restored when it has one.
@@ -2860,6 +3012,7 @@ class Component extends DCLogic {
     this._lines = this._lines.filter(line => line.levelId !== levelId);
     this._walls = this._walls.filter(wall => wall.levelId !== levelId);
     this._floors = this._floors.filter(floor => floor.levelId !== levelId);
+    this._roofs = this._roofs.filter(roof => roof.levelId !== levelId);
     // Cuts are owned by a level id, not by elevation: two levels can sit at the
     // same height, so only the deleted level's own sections go with it.
     const removedCuts = this.state.cuts.filter(cut => cut.levelId === levelId);
@@ -3201,6 +3354,7 @@ class Component extends DCLogic {
       else if (tool === 'node') this._handleNodeArcDown(e);
       else if (tool === 'floor') this._handleFloorClick();
       else if (tool === 'fenestration') this._handleFenestrationClick();
+      else if (tool === 'roof') this._handleRoofClick(e);
       else if (tool === 'dimension') this._handleDimensionClick();
       else if (tool === 'cut') this._handleCutClick();
       else if (tool === 'select') {
@@ -3374,8 +3528,21 @@ class Component extends DCLogic {
   _onWheel(e) {
     if (this.state.activeView === 'perspective') return;
     e.preventDefault();
+    // Zoom about the cursor: the plan point under it stays put on screen.
+    const anchor = this.state.activeView === 'top' ? this._getWorldPos(e.clientX, e.clientY) : null;
     this._orthoHalfH = Math.max(1, Math.min(300, this._orthoHalfH * (e.deltaY < 0 ? 0.88 : 1.14)));
     this._updateOrthoFrustum();
+    if (anchor) {
+      const after = this._getWorldPos(e.clientX, e.clientY);
+      if (after) {
+        this._orthoCamX += anchor.x - after.x;
+        this._orthoCamZ += anchor.z - after.z;
+        const e0 = this._drawElev || 0;
+        this._orthoCam.position.set(this._orthoCamX, e0 + 200, this._orthoCamZ);
+        this._orthoCam.lookAt(this._orthoCamX, e0, this._orthoCamZ);
+        this._invalidate();
+      }
+    }
     this._updateGridLOD();
   }
 
@@ -3756,6 +3923,551 @@ class Component extends DCLogic {
     return true;
   }
 
+  // ─── Roof tool ───────────────────────────────────────────────────────────────
+  // Two modes share the ROOF command. BASIC: draw a line at the roof edge,
+  // click the side the roof extends toward, accept an overhang (Enter / Space
+  // takes the current value), and a rectangular footprint drops in ready to
+  // reshape. CAPTURE: trace the exterior wall outline of the level below and
+  // grow it outward by the eave overhang. Either way the result is an editable
+  // A-ROOF footprint whose edges tag as EAVE or GABLE, with ridge / hip /
+  // valley guides generated from the tags.
+
+  _cancelRoof() {
+    this._roofEdgeStart = null;
+    this._roofEdge = null;
+    this._roofSide = 0;
+    if (this.state.roofPhase !== 'idle') this.setState({ roofPhase: 'idle' });
+  }
+
+  _setRoofMode(mode) {
+    const next = mode === 'capture' ? 'capture' : 'basic';
+    if (next === this.state.roofMode) return;
+    this._cancelRoof();
+    this.setState({
+      roofMode: next,
+      drawingMessage: next === 'basic'
+        ? 'ROOF — click both ends of a roof edge, then the side the roof extends toward.'
+        : 'CAPTURE roof — press Capture to trace the exterior walls of the level below.',
+      drawingMessageError: false,
+    });
+  }
+
+  // The heel is measured at the exterior wall face: the 5½" fascia bottom sits
+  // level with the top of the wall plate, so the heel is the fascia depth plus
+  // the rise the pitch gains back across the overhang.
+  _roofHeelIn(pitch = this.state.roofPitch, overhangFt = this.state.roofOverhang) {
+    return ROOF_FASCIA_IN + overhangFt * pitch;
+  }
+
+  _handleRoofClick(e) {
+    if (!this._contextAllowsTool('roof')) {
+      this.setState({ drawingMessage: this._contextToolMessage('roof'), drawingMessageError: true });
+      return;
+    }
+    const pt = this._snapPt || this._getWorldPos(e.clientX, e.clientY);
+    if (!pt) return;
+    const phase = this.state.roofPhase;
+    if (phase === 'edge') {
+      const start = this._roofEdgeStart;
+      if (!start || Math.hypot(pt.x - start.x, pt.z - start.z) < 0.05) return;
+      this._roofEdge = { start, end: { x: pt.x, z: pt.z } };
+      this._roofEdgeStart = null;
+      this.setState({
+        roofPhase: 'direction',
+        drawingMessage: 'Click the side the roof extends toward.',
+        drawingMessageError: false,
+      });
+      return;
+    }
+    if (phase === 'direction') {
+      const side = this._roofEdgeSide(this._roofEdge, pt);
+      if (!side) return;
+      this._roofSide = side;
+      this.setState({
+        roofPhase: 'overhang',
+        drawingMessage: `Overhang ${formatArchitecturalInches(this.state.roofOverhang * 12)} — type a new value in the ROOF panel, then Enter / Space (or click) to drop the roof.`,
+        drawingMessageError: false,
+      });
+      return;
+    }
+    if (phase === 'overhang') {
+      this._commitBasicRoof();
+      return;
+    }
+    // Idle: a click near an existing roof edge toggles its EAVE / GABLE tag.
+    const hit = this._findRoofEdgeAt(pt);
+    if (hit) {
+      hit.roof.edges[hit.index] = hit.roof.edges[hit.index] === 'gable' ? 'eave' : 'gable';
+      this._markUnsaved();
+      this.setState({
+        drawingMessage: `Edge tagged ${hit.roof.edges[hit.index].toUpperCase()}.`,
+        drawingMessageError: false,
+      });
+      return;
+    }
+    if (this.state.roofMode !== 'basic') {
+      this.setState({
+        drawingMessage: 'CAPTURE mode — press Capture in the ROOF panel, or click a roof edge to toggle EAVE / GABLE.',
+        drawingMessageError: false,
+      });
+      return;
+    }
+    this._roofEdgeStart = { x: pt.x, z: pt.z };
+    this.setState({
+      roofPhase: 'edge',
+      drawingMessage: 'Click the other end of the roof edge.',
+      drawingMessageError: false,
+    });
+  }
+
+  // +1 / -1 for which side of the edge the point sits on, 0 when on the line.
+  _roofEdgeSide(edge, pt) {
+    if (!edge) return 0;
+    const dx = edge.end.x - edge.start.x, dz = edge.end.z - edge.start.z;
+    const cross = dx * (pt.z - edge.start.z) - dz * (pt.x - edge.start.x);
+    return cross > 1e-9 ? 1 : cross < -1e-9 ? -1 : 0;
+  }
+
+  // The BASIC footprint starts square: the drawn edge is one side of the roof
+  // and the body extends the edge's own length toward the chosen side.
+  _basicRoofFootprint(side = this._roofSide) {
+    const edge = this._roofEdge;
+    if (!edge || !side) return null;
+    const dx = edge.end.x - edge.start.x, dz = edge.end.z - edge.start.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.05) return null;
+    const nx = side * -dz / len, nz = side * dx / len;
+    return [
+      { x: edge.start.x, z: edge.start.z },
+      { x: edge.end.x, z: edge.end.z },
+      { x: edge.end.x + nx * len, z: edge.end.z + nz * len },
+      { x: edge.start.x + nx * len, z: edge.start.z + nz * len },
+    ];
+  }
+
+  _commitBasicRoof() {
+    const level = this._activeLevel();
+    const footprint = this._basicRoofFootprint();
+    if (!level || !footprint) {
+      this._cancelRoof();
+      return false;
+    }
+    this._roofs.push({
+      id: this._newDrawingItemId('roof'),
+      points: footprint.map(point => this._mergeVertex({ x: point.x, z: point.z }, level.id, 'roof')),
+      levelId: level.id,
+      sourceLevelId: null,
+      // The drawn edge and its opposite start as eaves; the two sides as gables.
+      edges: ['eave', 'gable', 'eave', 'gable'],
+      overhang: this.state.roofOverhang,
+      pitch: this.state.roofPitch,
+      fascia: ROOF_FASCIA_IN,
+      layer: ROOF_LAYER,
+    });
+    this._cancelRoof();
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `Roof dropped on A-ROOF — ${formatArchitecturalInches(this.state.roofOverhang * 12)} overhang, `
+        + `${this.state.roofPitch}:12 pitch, heel ${formatArchitecturalInches(this._roofHeelIn())}. `
+        + 'Drag its nodes with Select to reshape; click an edge with the Roof tool to toggle EAVE / GABLE.',
+      drawingMessageError: false,
+    });
+    return true;
+  }
+
+  // The most relevant lower level: the highest level below the active one that
+  // has PLAN walls (2ND FL for a two-storey house, MAIN FL for a one-storey).
+  _roofSourceLevel() {
+    const active = this._activeLevel();
+    if (!active) return null;
+    return this.state.levels
+      .filter(level => level.id !== active.id && level.elev < active.elev)
+      .sort((a, b) => b.elev - a.elev)
+      .find(level => this._walls.some(wall =>
+        wall.levelId === level.id && (wall.view || 'plan') === 'plan')) || null;
+  }
+
+  _captureRoofOutline() {
+    if (!this._contextAllowsTool('roof')) {
+      this.setState({ drawingMessage: this._contextToolMessage('roof'), drawingMessageError: true });
+      return false;
+    }
+    const level = this._activeLevel();
+    const source = this._roofSourceLevel();
+    if (!level || !source) {
+      this.setState({
+        drawingMessage: 'No walls found on a level below to capture.',
+        drawingMessageError: true,
+      });
+      return false;
+    }
+    const outline = this._wallOutline(source.id);
+    if (!outline) {
+      this.setState({
+        drawingMessage: `The walls on ${source.name} do not close into an outline — join the exterior walls, then capture again.`,
+        drawingMessageError: true,
+      });
+      return false;
+    }
+    const overhang = this.state.roofOverhang;
+    const points = this._offsetOutline(outline.map(pt => ({ x: pt.x, z: pt.z })), overhang);
+    this._roofs.push({
+      id: this._newDrawingItemId('roof'),
+      points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, level.id, 'roof')),
+      levelId: level.id,
+      sourceLevelId: source.id,
+      edges: points.map(() => 'eave'),
+      overhang,
+      pitch: this.state.roofPitch,
+      fascia: ROOF_FASCIA_IN,
+      layer: ROOF_LAYER,
+    });
+    // Show the captured level as the BG wall shadow if nothing is picked yet.
+    if (!this.state.backgroundLevelIds.length) {
+      this._applyBackgroundSelection([source.id], { [source.id]: 'plan' });
+    }
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `Roof footprint captured from ${source.name} + ${formatArchitecturalInches(overhang * 12)} overhang. `
+        + 'Click an edge with the Roof tool to toggle EAVE / GABLE.',
+      drawingMessageError: false,
+    });
+    return true;
+  }
+
+  _deleteLastRoof() {
+    const active = this._activeRoofs();
+    if (!active.length) return;
+    const target = active[active.length - 1];
+    this._roofs = this._roofs.filter(roof => roof !== target);
+    this._markUnsaved();
+    this.setState({ drawingMessage: 'Roof removed.', drawingMessageError: false });
+  }
+
+  // Trace the outer boundary of the level's PLAN walls. Shared pooled vertices
+  // join segments; the walk starts at the leftmost node and always takes the
+  // tightest turn, which keeps it on the exterior face of the wall network.
+  _wallOutline(levelId) {
+    const walls = this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan');
+    const neighbours = new Map();
+    const link = (a, b) => {
+      if (!neighbours.has(a)) neighbours.set(a, new Set());
+      neighbours.get(a).add(b);
+    };
+    walls.forEach(wall => {
+      if (wall.start === wall.end) return;
+      link(wall.start, wall.end);
+      link(wall.end, wall.start);
+    });
+    let start = null;
+    neighbours.forEach((_, vertex) => {
+      if (!start || vertex.x < start.x || (vertex.x === start.x && vertex.z < start.z)) start = vertex;
+    });
+    if (!start) return null;
+    const angle = (from, to) => Math.atan2(to.z - from.z, to.x - from.x);
+    const nextAround = (prev, curr) => {
+      const back = angle(curr, prev);
+      let best = null, bestTurn = Infinity;
+      neighbours.get(curr)?.forEach(candidate => {
+        if (candidate === prev && neighbours.get(curr).size > 1) return;
+        let turn = angle(curr, candidate) - back;
+        while (turn <= 1e-9) turn += Math.PI * 2;
+        if (turn < bestTurn) { bestTurn = turn; best = candidate; }
+      });
+      return best;
+    };
+    // Enter the start node from a virtual point directly above it so the first
+    // hop hugs the outside of the leftmost corner.
+    const loop = [start];
+    let prev = { x: start.x, z: start.z - 1 };
+    let curr = start;
+    for (let steps = 0; steps <= neighbours.size * 4; steps++) {
+      const next = nextAround(prev, curr);
+      if (!next) return null;
+      if (next === start) return loop.length >= 3 ? loop : null;
+      loop.push(next);
+      prev = curr;
+      curr = next;
+    }
+    return null;
+  }
+
+  // Offset a closed outline outward by a distance: each edge line shifts along
+  // its outward normal and each corner is the intersection of its two shifted
+  // edges, so angled footprints stay true. Orientation-agnostic — whichever
+  // normal direction grows the area is outward.
+  _offsetOutline(points, distance) {
+    if (!distance) return points.map(pt => ({ ...pt }));
+    const count = points.length;
+    const polygonArea = pts => Math.abs(pts.reduce((sum, pt, index) => {
+      const next = pts[(index + 1) % pts.length];
+      return sum + (pt.x * next.z - next.x * pt.z);
+    }, 0) / 2);
+    const offsetWith = flip => {
+      const edges = points.map((pt, index) => {
+        const next = points[(index + 1) % count];
+        const dx = next.x - pt.x, dz = next.z - pt.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const nx = flip * dz / len, nz = -flip * dx / len;
+        return { ax: pt.x + nx * distance, az: pt.z + nz * distance, dx: dx / len, dz: dz / len, nx, nz };
+      });
+      return points.map((pt, index) => {
+        const prevEdge = edges[(index + count - 1) % count], edge = edges[index];
+        const cross = prevEdge.dx * edge.dz - prevEdge.dz * edge.dx;
+        if (Math.abs(cross) < 1e-9) return { x: pt.x + edge.nx * distance, z: pt.z + edge.nz * distance };
+        const t = ((edge.ax - prevEdge.ax) * edge.dz - (edge.az - prevEdge.az) * edge.dx) / cross;
+        return { x: prevEdge.ax + prevEdge.dx * t, z: prevEdge.az + prevEdge.dz * t };
+      });
+    };
+    const grown = offsetWith(1);
+    return polygonArea(grown) >= polygonArea(points) ? grown : offsetWith(-1);
+  }
+
+  _findRoofEdgeAt(worldPt) {
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    const thresh = (this._orthoHalfH * 2) / h * 14;
+    let best = null, bestD = thresh;
+    this._activeRoofs().forEach(roof => {
+      roof.points.forEach((point, index) => {
+        const next = roof.points[(index + 1) % roof.points.length];
+        const { d } = this._distToLineSeg(worldPt, { start: point, end: next });
+        if (d < bestD) { bestD = d; best = { roof, index }; }
+      });
+    });
+    return best;
+  }
+
+  // Straight-skeleton wavefront for the tagged footprint: eave edges advance
+  // inward at a uniform rate while gable edges stay put, and the paths the
+  // corners trace as edges collapse become the hip / valley / ridge lines.
+  // Handles rectangles and L-shapes cleanly; gnarlier footprints degrade to
+  // whatever guide lines the wavefront produces before it stops.
+  _roofSkeleton(roof) {
+    const initialCount = roof.points.length;
+    if (initialCount < 3) return [];
+    let pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
+    let kinds = pts.map((_, index) => (roof.edges[index] === 'gable' ? 'gable' : 'eave'));
+    const signedArea = list => list.reduce((sum, pt, index) => {
+      const next = list[(index + 1) % list.length];
+      return sum + (pt.x * next.z - next.x * pt.z);
+    }, 0);
+    // Work on a CCW copy so the inward normals are consistent. Edge i runs
+    // point i → i+1, so reversing the points remaps edge kinds too.
+    if (signedArea(pts) < 0) {
+      const original = kinds;
+      pts = pts.slice().reverse();
+      kinds = pts.map((_, index) => original[(initialCount * 2 - 2 - index) % initialCount]);
+    }
+    const gableEdges = [];
+    pts.forEach((pt, index) => {
+      if (kinds[index] === 'gable') gableEdges.push({ a: pt, b: pts[(index + 1) % pts.length] });
+    });
+    const eps = 1e-6;
+    const arcs = [];
+    let guard = initialCount * 3;
+    while (pts.length >= 3 && guard-- > 0) {
+      const count = pts.length;
+      const normals = pts.map((pt, index) => {
+        const next = pts[(index + 1) % count];
+        const dx = next.x - pt.x, dz = next.z - pt.z;
+        const len = Math.hypot(dx, dz) || 1;
+        return { x: -dz / len, z: dx / len };
+      });
+      const speeds = kinds.map(kind => (kind === 'gable' ? 0 : 1));
+      // Each vertex moves so both adjacent offset edges stay in contact:
+      // v · nA = speedA and v · nB = speedB.
+      const velocities = pts.map((pt, index) => {
+        const nA = normals[(index + count - 1) % count], nB = normals[index];
+        const sA = speeds[(index + count - 1) % count], sB = speeds[index];
+        const det = nA.x * nB.z - nA.z * nB.x;
+        if (Math.abs(det) < 1e-9) {
+          const speed = Math.max(sA, sB);
+          return { x: nB.x * speed, z: nB.z * speed };
+        }
+        return { x: (sA * nB.z - sB * nA.z) / det, z: (sB * nA.x - sA * nB.x) / det };
+      });
+      // Earliest edge collapse: endpoints closing along the edge direction.
+      let bestT = Infinity;
+      for (let index = 0; index < count; index++) {
+        const next = (index + 1) % count;
+        const dx = pts[next].x - pts[index].x, dz = pts[next].z - pts[index].z;
+        const len = Math.hypot(dx, dz);
+        if (len < eps) { bestT = 0; break; }
+        const closing = (velocities[index].x - velocities[next].x) * (dx / len)
+          + (velocities[index].z - velocities[next].z) * (dz / len);
+        if (closing > eps) bestT = Math.min(bestT, len / closing);
+      }
+      if (!Number.isFinite(bestT)) break;
+      const moved = pts.map((pt, index) => ({
+        x: pt.x + velocities[index].x * bestT,
+        z: pt.z + velocities[index].z * bestT,
+      }));
+      moved.forEach((pt, index) => {
+        if (Math.hypot(pt.x - pts[index].x, pt.z - pts[index].z) > eps) arcs.push({ a: pts[index], b: pt });
+      });
+      // Drop collapsed edges; each surviving edge keeps its start vertex.
+      const nextPts = [];
+      const nextKinds = [];
+      for (let index = 0; index < count; index++) {
+        const next = (index + 1) % count;
+        if (Math.hypot(moved[next].x - moved[index].x, moved[next].z - moved[index].z) <= eps * 10) continue;
+        nextPts.push(moved[index]);
+        nextKinds.push(kinds[index]);
+      }
+      if (nextPts.length === count) break; // no topological change — stop
+      if (nextPts.length === 2) {
+        if (Math.hypot(nextPts[1].x - nextPts[0].x, nextPts[1].z - nextPts[0].z) > eps) {
+          arcs.push({ a: nextPts[0], b: nextPts[1] }); // the ridge
+        }
+        break;
+      }
+      pts = nextPts;
+      kinds = nextKinds;
+    }
+    // A gable corner slides along its own gable edge — that trace is the edge
+    // itself, not a roof line, so drop arcs lying on a single gable edge.
+    const onSegment = (pt, seg) => {
+      const dx = seg.b.x - seg.a.x, dz = seg.b.z - seg.a.z;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < eps) return false;
+      const t = ((pt.x - seg.a.x) * dx + (pt.z - seg.a.z) * dz) / len2;
+      if (t < -0.01 || t > 1.01) return false;
+      const px = seg.a.x + dx * t, pz = seg.a.z + dz * t;
+      return Math.hypot(pt.x - px, pt.z - pz) < 0.01;
+    };
+    return arcs.filter(arc => !gableEdges.some(edge => onSegment(arc.a, edge) && onSegment(arc.b, edge)));
+  }
+
+  // ─── Roof 2D renderer ─────────────────────────────────────────────────────
+  _drawRoof2D(ctx, toS, roof, options = {}) {
+    const pts = roof.points.map(pt => toS(pt));
+    if (pts.length < 3) return;
+    const referenceColor = options.referenceColor;
+    ctx.save();
+    ctx.beginPath();
+    pts.forEach((pt, index) => (index ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)));
+    ctx.closePath();
+    if (!referenceColor) { ctx.fillStyle = 'rgba(122,74,33,0.07)'; ctx.fill(); }
+    ctx.strokeStyle = referenceColor || '#7a4a21';
+    ctx.lineWidth = referenceColor ? 1.25 : 2;
+    ctx.stroke();
+    // Gable edges read as a double line; when the Roof tool is active every
+    // edge also carries its tag at the midpoint.
+    const count = pts.length;
+    for (let index = 0; index < count; index++) {
+      const a = pts[index], b = pts[(index + 1) % count];
+      const isGable = roof.edges[index] === 'gable';
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      if (isGable) {
+        const off = 4;
+        const nx = -dy / len * off, ny = dx / len * off;
+        ctx.beginPath();
+        ctx.moveTo(a.x + nx, a.y + ny); ctx.lineTo(b.x + nx, b.y + ny);
+        ctx.lineWidth = referenceColor ? 1 : 1.25;
+        ctx.stroke();
+      }
+      if (options.tagging && !referenceColor) {
+        ctx.font = '10px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = isGable ? '#7a4a21' : 'rgba(122,74,33,0.7)';
+        ctx.fillText(isGable ? 'GABLE' : 'EAVE', (a.x + b.x) / 2 - dy / len * 12, (a.y + b.y) / 2 + dx / len * 12);
+      }
+    }
+    // Generated ridge / hip / valley guides.
+    ctx.strokeStyle = referenceColor || '#a3703f';
+    ctx.lineWidth = referenceColor ? 1 : 1.5;
+    ctx.setLineDash([8, 5]);
+    this._roofSkeleton(roof).forEach(seg => {
+      const a = toS(seg.a), b = toS(seg.b);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    if (!this._isPrinting && !referenceColor) {
+      ctx.fillStyle = '#7a4a21';
+      pts.forEach(pt => {
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2); ctx.fill();
+      });
+    }
+    ctx.restore();
+  }
+
+  _drawRoofPreview2D(ctx, toS) {
+    const phase = this.state.roofPhase;
+    const cursor = this._snapPt;
+    ctx.save();
+    ctx.strokeStyle = '#7a4a21';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    if (phase === 'edge' && this._roofEdgeStart && cursor) {
+      const a = toS(this._roofEdgeStart), b = toS(cursor);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    } else if (phase === 'direction' || phase === 'overhang') {
+      const side = phase === 'direction'
+        ? (cursor ? this._roofEdgeSide(this._roofEdge, cursor) : 0)
+        : this._roofSide;
+      const footprint = side ? this._basicRoofFootprint(side) : null;
+      if (footprint) {
+        const pts = footprint.map(pt => toS(pt));
+        ctx.beginPath();
+        pts.forEach((pt, index) => (index ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)));
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(122,74,33,0.05)';
+        ctx.fill();
+      }
+      if (this._roofEdge) {
+        const a = toS(this._roofEdge.start), b = toS(this._roofEdge.end);
+        ctx.setLineDash([]);
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  _commitRoofOverhang() {
+    const parsed = parseArchitecturalLength(this.state.roofOverhangInput);
+    if (!parsed.ok) {
+      this.setState({ roofDimensionError: parsed.error });
+      return false;
+    }
+    const feet = parsed.inches / 12;
+    if (feet < 0 || feet > MAX_ROOF_OVERHANG_FT) {
+      this.setState({ roofDimensionError: `Overhang must be between 0 and ${MAX_ROOF_OVERHANG_FT}'.` });
+      return false;
+    }
+    this.setState({
+      roofOverhang: feet,
+      roofOverhangInput: formatArchitecturalInches(parsed.inches),
+      roofDimensionError: '',
+    }, () => this._markUnsaved());
+    return true;
+  }
+
+  _setRoofOverhang(feet) {
+    this.setState({
+      roofOverhang: feet,
+      roofOverhangInput: formatArchitecturalInches(feet * 12),
+      roofDimensionError: '',
+    }, () => this._markUnsaved());
+  }
+
+  _commitRoofPitch() {
+    const value = Number(String(this.state.roofPitchInput).trim());
+    if (!Number.isFinite(value) || value < 0 || value > MAX_ROOF_PITCH) {
+      this.setState({ roofDimensionError: `Pitch must be a rise between 0 and ${MAX_ROOF_PITCH} (inches per 12" run).` });
+      return false;
+    }
+    this.setState({
+      roofPitch: value,
+      roofPitchInput: String(value),
+      roofDimensionError: '',
+    }, () => this._markUnsaved());
+    return true;
+  }
+
   // ─── Wall 2D cross-section renderer ─────────────────────────────────────────
   // Draws one wall segment on the overlay canvas.
   // toS(pt) converts world {x,z} → screen {x,y}.  preview=true → ghost opacity.
@@ -4130,6 +4842,7 @@ class Component extends DCLogic {
     this._activeWalls().forEach(w => { pts.push(w.start, w.end); });
     this._wallChain.forEach(s => { pts.push(s.start, s.end); });
     this._activeFloors().forEach(floor => pts.push(...floor.points));
+    this._activeRoofs().forEach(roof => pts.push(...roof.points));
     if (this._floorDrawing) pts.push(...this._floorPoints);
     // Opening centres are the fenestration grab / dimension anchors.
     this._activeFenestrations().forEach(opening => {
@@ -4251,8 +4964,8 @@ class Component extends DCLogic {
         if (d < bestD) { bestD = d; bestVtx = v; }
       });
     });
-    this._activeFloors().forEach(floor => {
-      floor.points.forEach(v => {
+    [...this._activeFloors(), ...this._activeRoofs()].forEach(shape => {
+      shape.points.forEach(v => {
         const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
         if (d < bestD) { bestD = d; bestVtx = v; }
       });
@@ -4264,9 +4977,9 @@ class Component extends DCLogic {
       if (seg.start === bestVtx) refs.push({ target: seg, prop: 'start' });
       if (seg.end   === bestVtx) refs.push({ target: seg, prop: 'end' });
     });
-    this._activeFloors().forEach(floor => {
-      floor.points.forEach((point, index) => {
-        if (point === bestVtx) refs.push({ target: floor.points, prop: index });
+    [...this._activeFloors(), ...this._activeRoofs()].forEach(shape => {
+      shape.points.forEach((point, index) => {
+        if (point === bestVtx) refs.push({ target: shape.points, prop: index });
       });
     });
     return refs.length ? refs : null;
@@ -4822,7 +5535,7 @@ class Component extends DCLogic {
 
   _activateExtendTool() {
     const seeded = this.state.activeTool === 'select' ? this._extendSessionFromSelection() : null;
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut(); this._cancelExtend();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this._cancelCut(); this._cancelExtend();
     if (seeded) {
       this._clearSelection();
       this._extendSession = seeded;
@@ -5457,7 +6170,7 @@ class Component extends DCLogic {
         return;
       }
       if (this._windowSelection) { this._windowSelection = null; return; }
-      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut();
+      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
       this._clearSelection();
       return;
     }
@@ -5483,6 +6196,10 @@ class Component extends DCLogic {
       if (this._lineDrawing) { e.preventDefault(); this._finishChain(); return; }
       if (this._wallDrawing) { e.preventDefault(); this._finishWall();  return; }
       if (this._floorDrawing) { e.preventDefault(); this._finishFloor(); return; }
+      // BASIC roof: Enter / Space accepts the current overhang and drops the roof.
+      if (this.state.activeTool === 'roof' && this.state.roofPhase === 'overhang') {
+        e.preventDefault(); this._commitBasicRoof(); return;
+      }
     }
     // Shift is a temporary 45° angle lock while drawing. A plain Freeze Length
     // binding must remain usable without making the user release Shift first.
@@ -5507,15 +6224,16 @@ class Component extends DCLogic {
     if (matches('node')) { e.preventDefault(); this._activateContextTool('node'); return; }
     if (matches('floor')) { e.preventDefault(); this._activateContextTool('floor'); return; }
     if (matches('fenestration')) { e.preventDefault(); this._activateContextTool('fenestration'); return; }
+    if (matches('roof')) { e.preventDefault(); this._activateContextTool('roof'); return; }
     if (matches('dimension')) { e.preventDefault(); this._activateContextTool('dimension'); return; }
-    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
+    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
     if (matches('extend') || matches('extendAlt')) {
       e.preventDefault();
       this._activateExtendTool();
       return;
     }
-    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({ activeTool: 'trim' }); return; }
-    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({ activeTool: 'cut' }); return; }
+    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
+    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
     if (matches('gridSnap') || matches('gridSnapAlt')) { e.preventDefault(); this._toggleGridSnap(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
@@ -5601,6 +6319,44 @@ class Component extends DCLogic {
     return sign + (this.state.units === 'imperial' ? this._ftIn(elev) : this._metric(elev));
   }
 
+  _levelWallTopFt(levelId, view = 'plan') {
+    const tops = this._walls
+      .filter(wall => wall.levelId === levelId && (wall.view || 'plan') === view)
+      .map(wall => wall.topHeight);
+    return tops.length ? Math.max(...tops) : DEFAULT_WALL_TOP_FT;
+  }
+
+  // Key construction heights measured from drawn wall heights and the floor
+  // thickness. Top of main-floor sheathing is the 0' datum, switchable to a
+  // 100' datum so basement marks stay positive.
+  _levelHeightMarks(levelId) {
+    const datum = this.state.elevationDatum;
+    const mark = (label, feet) => ({ label, value: this._elevLabel(feet + datum) });
+    const floorFt = this.state.floorThickness;
+    const mainWallTop = this._levelWallTopFt(3);
+    if (levelId === 1) {
+      const fdnWallTop = -floorFt;
+      return [
+        mark('T.O. FDN WALL', fdnWallTop),
+        mark('T.O. FOOTING', fdnWallTop - this._levelWallTopFt(1, 'foundation')),
+      ];
+    }
+    if (levelId === 3) {
+      return [
+        mark('T.O. SHEATHING', 0),
+        mark('T.O. WALL', mainWallTop),
+      ];
+    }
+    if (levelId === 5) {
+      const sheathing = mainWallTop + floorFt;
+      return [
+        mark('T.O. SHEATHING', sheathing),
+        mark('T.O. WALL / B.O. TRUSS', sheathing + this._levelWallTopFt(5)),
+      ];
+    }
+    return [];
+  }
+
   // ─── renderVals ───────────────────────────────────────────────────────────────
   renderVals() {
     const { activeTool, units, activeView, isDrawing,
@@ -5656,9 +6412,21 @@ class Component extends DCLogic {
     const extending = activeTool === 'extend';
     const nodeArcing = activeTool === 'node';
     const fenestrating = activeTool === 'fenestration';
+    const roofing = activeTool === 'roof';
+    const roofPhase = this.state.roofPhase;
     const placingCut  = isCutTool && cutPhase === 'placing';
-    const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending || nodeArcing || fenestrating;
-    const hintText    = fenestrating
+    const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending || nodeArcing || fenestrating || roofing;
+    const hintText    = roofing
+      ? (roofPhase === 'edge'
+        ? 'ROOF — Click the other end of the roof edge · Esc to cancel'
+        : roofPhase === 'direction'
+        ? 'ROOF — Click the side the roof extends toward · Esc to cancel'
+        : roofPhase === 'overhang'
+        ? `ROOF — ${shortcut('finish')} / ${shortcut('finishAlt')} or click accepts the overhang · type a new one in the panel`
+        : this.state.roofMode === 'basic'
+        ? 'ROOF — Click both ends of a roof edge · Click an existing edge to toggle EAVE / GABLE'
+        : 'ROOF — Press Capture in the panel · Click an existing edge to toggle EAVE / GABLE')
+      : fenestrating
       ? 'FENESTRATION — Click a wall to place the opening at the cursor'
       : nodeArcing
       ? 'NODE / ARC — Click a line to add a node · Drag beside a line to pull an arc'
@@ -5755,6 +6523,45 @@ class Component extends DCLogic {
       fenestrationLayerNote: this.state.fenestrationType === 'window'
         ? 'Saves on A-GLAZ · heights from the bottom of the wall'
         : 'Saves on A-DOOR · sill sits at the bottom of the wall',
+      roofToolActive: roofing,
+      roofModeBtns: ['basic', 'capture'].map(value => {
+        const isActive = this.state.roofMode === value;
+        return {
+          label: value === 'basic' ? 'ROOF' : 'CAPTURE',
+          title: value === 'basic'
+            ? 'Draw a roof edge, pick the overhang side, and drop in a rectangle to reshape'
+            : 'Trace the exterior wall outline of the level below, grown by the overhang',
+          border: isActive ? '#1d1f20' : 'rgba(29,31,32,0.2)',
+          bg: isActive ? '#1d1f20' : '#fff',
+          color: isActive ? '#f2f2f3' : '#1d1f20',
+          onSelect: () => this._setRoofMode(value),
+        };
+      }),
+      roofCaptureMode: this.state.roofMode === 'capture',
+      onRoofCapture: () => this._captureRoofOutline(),
+      roofOverhangPresets: ROOF_OVERHANG_PRESETS_FT.map(feet => {
+        const isActive = Math.abs(this.state.roofOverhang - feet) < 1e-9;
+        return {
+          label: formatArchitecturalInches(feet * 12),
+          border: isActive ? '#5980a6' : 'rgba(29,31,32,0.2)',
+          bg: isActive ? 'rgba(89,128,166,0.14)' : '#fff',
+          color: isActive ? '#3e6285' : '#1d1f20',
+          onSelect: () => this._setRoofOverhang(feet),
+        };
+      }),
+      roofOverhangInput: this.state.roofOverhangInput,
+      onRoofOverhangInput: e => this.setState({ roofOverhangInput: e.target.value }),
+      onRoofOverhangCommit: () => this._commitRoofOverhang(),
+      roofPitchInput: this.state.roofPitchInput,
+      onRoofPitchInput: e => this.setState({ roofPitchInput: e.target.value }),
+      onRoofPitchCommit: () => this._commitRoofPitch(),
+      onRoofDimensionKey: e => { if (e.key === 'Enter') e.target.blur(); e.stopPropagation(); },
+      roofDimensionBorder: this.state.roofDimensionError ? '#b04050' : 'rgba(29,31,32,0.2)',
+      hasRoofDimensionError: Boolean(this.state.roofDimensionError),
+      roofDimensionError: this.state.roofDimensionError,
+      roofHeelLabel: `Heel ${formatArchitecturalInches(this._roofHeelIn())} · fascia ${formatArchitecturalInches(ROOF_FASCIA_IN)} fixed · saves on A-ROOF`,
+      hasActiveRoofs: this._activeRoofs().length > 0,
+      onRoofDelete: () => this._deleteLastRoof(),
       selectToolActive: activeTool === 'select',
       extendToolActive: extending,
       extendCurrentBg: extendScope === 'current' ? '#1d1f20' : '#fff',
@@ -5964,10 +6771,10 @@ class Component extends DCLogic {
           return {
             label: view.label,
             title: `Show ${view.label} items on ${l.name}`,
-            contents: view.id === selectedLayerView
+            contents: this.state.layerRevealKey === `${l.id}:${view.id}`
               ? view.contents.map(id => this._layerStandard(id).name)
               : [],
-            hasContents: view.id === selectedLayerView && view.contents.length > 0,
+            hasContents: this.state.layerRevealKey === `${l.id}:${view.id}` && view.contents.length > 0,
             rowClass: 'level-layer' + (view.id === selectedLayerView ? ' active' : ''),
             onSelect: event => this._selectLayerView(l.id, view.id, event),
             ...bgSlotStyle(viewSlot),
@@ -5978,10 +6785,13 @@ class Component extends DCLogic {
             onToggleBackground: event => this._toggleBackgroundLayerView(l.id, view.id, event),
           };
         });
+        const heights = this._levelHeightMarks(l.id);
         return {
           name: l.name, elevStr: this._elevLabel(l.elev),
           layers,
           hasLayers: layers.length > 0,
+          heights,
+          hasHeights: heights.length > 0,
           color: LEVEL_COLORS[i % LEVEL_COLORS.length],
           rowClass: 'level-row' + (i === activeLevelIdx ? ' active' : ''),
           visIcon: l.visible ? '●' : '○', visLabel: l.visible ? 'Hide level' : 'Show level',
@@ -5996,6 +6806,14 @@ class Component extends DCLogic {
         };
       }),
       addLevel: () => this._addLevel(),
+      elevationDatumLabel: this.state.elevationDatum === 100 ? "DATUM 100'" : "DATUM 0'",
+      elevationDatumTitle: this.state.elevationDatum === 100
+        ? "Height marks measured from a 100' datum — switch back to 0' at top of main-floor sheathing"
+        : "Height marks measured from 0' at top of main-floor sheathing — switch to a 100' datum to avoid negative basement values",
+      toggleElevationDatum: () => this.setState(
+        { elevationDatum: this.state.elevationDatum === 100 ? 0 : 100 },
+        () => this._markUnsaved(),
+      ),
 
       cuts: cuts.map(c => ({
         name: c.name,
@@ -6005,18 +6823,19 @@ class Component extends DCLogic {
       })),
 
       tools: [
-        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
+        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
         contextualTool('line'),
         contextualTool('node'),
         contextualTool('wall'),
         contextualTool('floor'),
         contextualTool('fenestration'),
+        contextualTool('roof'),
         contextualTool('dimension'),
         standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._activateExtendTool(); }, activeTool==='extend'),
-        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
+        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
       ],
       cutShortcut: shortcut('cut'),
-      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'cut'}); },
+      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelRoof(); this.setState({activeTool:'cut'}); },
       cutToolBg:     isCutTool ? on.bg     : off.bg,
       cutToolColor:  isCutTool ? on.color  : off.color,
       cutToolBorder: isCutTool ? on.border : off.border,

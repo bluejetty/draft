@@ -120,6 +120,28 @@ if (!window.DraftDrawingFormat) {
       };
     }).filter(Boolean);
 
+  // Roof footprints are closed outlines owned by a whole level; each footprint
+  // segment classifies as EAVE or GABLE, and the overhang / pitch stay clamped
+  // to the drafting limits so the stored heel is always derivable.
+  const roofs = (rawRoofs, levelIds) => (Array.isArray(rawRoofs) ? rawRoofs : [])
+    .map(roof => {
+      const roofLevelId = levelId(roof?.levelId, levelIds);
+      const points = (Array.isArray(roof?.points) ? roof.points : []).map(point).filter(Boolean);
+      if (roofLevelId == null || points.length < 3) return null;
+      return {
+        id: String(roof?.id || '').trim(),
+        points,
+        levelId: roofLevelId,
+        sourceLevelId: levelId(roof?.sourceLevelId, levelIds),
+        edges: points.map((_, index) =>
+          (Array.isArray(roof?.edges) && roof.edges[index] === 'gable' ? 'gable' : 'eave')),
+        overhang: Math.min(6, Math.max(0, number(roof?.overhang, 2))),
+        pitch: Math.min(24, Math.max(0, number(roof?.pitch, 4))),
+        fascia: 5.5,
+        layer: 'A-ROOF',
+      };
+    }).filter(Boolean);
+
   // Backgrounds are at most two other levels, never the active one.
   const backgroundLevelIds = (rawIds, levelIds, activeLevelId) =>
     (Array.isArray(rawIds) ? rawIds : [])
@@ -136,6 +158,7 @@ if (!window.DraftDrawingFormat) {
     cuts,
     dimensions,
     fenestrations,
+    roofs,
     backgroundLevelIds,
     oneOf,
     number,

@@ -8,7 +8,7 @@ const LINE_STROKE = [29, 31, 32]; // #1d1f20, committed generic line color
 
 const ALL_LAYER_IDS = [
   'draft', 'no-draft',
-  'A-WALL-EXT', 'A-WALL-INT', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-DOOR', 'A-GLAZ',
+  'A-WALL-EXT', 'A-WALL-INT', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-DOOR', 'A-GLAZ', 'A-ROOF',
   'PLAN DIMENSIONS', 'ROOM IDS / AREA',
   'S-BEAM', 'S-SLAB', 'FLOOR DIMENSION', 'S-FDN', 'S-COL/FOOTING', 'FOUNDATION DIMENSION',
   'E-POWER DIMENSION',
@@ -22,7 +22,7 @@ async function openStandards(page) {
     localStorage.clear();
   });
   await page.goto('/STANDARDS.html');
-  await expect(page.locator('#groups .group')).toHaveCount(4);
+  await expect(page.locator('#groups .group')).toHaveCount(5);
 }
 
 async function drawLine(page, x1, z1, x2, z2) {
@@ -58,7 +58,8 @@ test('renaming a layer in the standards shows in the Model Space layer views', a
   await expect(page.locator('#status')).toContainText('X-WALL-CUSTOM');
 
   await h.openModel(page);
-  // The active level's PLAN view lists its layers with the standard's names.
+  // Clicking a layer set reveals its layers, named after the standards.
+  await page.locator('.level-row.active').getByRole('button', { name: 'PLAN', exact: true }).click();
   await expect(page.locator('.level-layer-content', { hasText: 'X-WALL-CUSTOM' }).first()).toBeVisible();
 });
 

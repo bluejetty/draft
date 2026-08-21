@@ -132,6 +132,7 @@ module.exports = {
   savedDrawing,
   allLines,
   allWalls,
+  near,
   touchesPoint,
   overlayPixels,
   countColor,
