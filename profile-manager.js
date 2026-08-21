@@ -127,6 +127,23 @@ if (!window.DraftProfileManager) {
     gridSnap: '~',
   });
 
+  // Snap magnetic pull: catch radius in screen pixels for each snap type, so
+  // the feel stays the same at any zoom. Grid snap only rounds to a one-foot
+  // increment when the cursor is within its pull of the grid point.
+  const DEFAULT_SNAP_STRENGTH = Object.freeze({ grid: 16, node: 3, midpoint: 3 });
+  const SNAP_STRENGTH_RANGE = Object.freeze({ min: 1, max: 60 });
+
+  const normaliseSnapStrength = value => {
+    const stored = value && typeof value === 'object' ? value : {};
+    const px = key => {
+      const raw = Number(stored[key]);
+      return Number.isFinite(raw)
+        ? Math.min(SNAP_STRENGTH_RANGE.max, Math.max(SNAP_STRENGTH_RANGE.min, Math.round(raw)))
+        : DEFAULT_SNAP_STRENGTH[key];
+    };
+    return { grid: px('grid'), node: px('node'), midpoint: px('midpoint') };
+  };
+
   // Generic linework is deliberately separate from PLAN/FLOOR/E-POWER context.
   // NO-DRAFT is construction-only and is always excluded from printed output.
   const DEFAULT_LINE_LAYERS = Object.freeze({
@@ -272,6 +289,11 @@ if (!window.DraftProfileManager) {
     eventBinding,
     eventMatchesBinding,
     keyBindingLabel,
+  };
+  window.DraftSnapStrength = {
+    DEFAULT_SNAP_STRENGTH,
+    SNAP_STRENGTH_RANGE,
+    normaliseSnapStrength,
   };
   window.DraftLineLayers = {
     DEFAULT_LINE_LAYERS,

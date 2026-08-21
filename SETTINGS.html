@@ -40,6 +40,16 @@
     button.action:hover { border-color:#5980a6; }
     #status { margin-left:auto; color:#557a46; font-size:12px; }
     #status.warning { color:#a06035; }
+    .advanced { margin-top:34px; border-top:1px solid rgba(29,31,32,.12); padding-top:10px; }
+    .advanced summary { color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; cursor:pointer; }
+    .advanced summary:hover { color:#5980a6; }
+    .advanced-note { max-width:560px; color:rgba(29,31,32,.55); font-size:12px; line-height:1.45; margin:10px 0 12px; }
+    .snap-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:13px; }
+    .snap-row label { width:130px; }
+    .snap-row input { width:64px; border:1px solid rgba(29,31,32,.28); background:#fafafa; padding:5px 8px; border-radius:2px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; }
+    .snap-row input:focus { border-color:#5980a6; outline:2px solid rgba(89,128,166,.18); outline-offset:1px; }
+    .snap-row .px { color:rgba(29,31,32,.5); font-size:11px; }
+    .snap-default { color:rgba(29,31,32,.4); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; }
     @media (max-width:720px) {
       .groups { grid-template-columns:1fr; }
       main { margin-top:24px; }
@@ -64,11 +74,20 @@
       <button class="action primary" id="download" type="button">DOWNLOAD .DRAFT.SETTINGS</button>
       <span id="status" role="status"></span>
     </div>
+    <details class="advanced">
+      <summary>Advanced — Snap magnetic pull</summary>
+      <p class="advanced-note">How close the cursor must be, in screen pixels, before each snap grabs it. Larger values catch from farther away; smaller values only snap when the cursor is nearly on the point. Saved with your keyboard settings.</p>
+      <div class="snap-row"><label for="snap-grid">Grid snap</label><input type="number" id="snap-grid" data-snap="grid" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="grid"></span></div>
+      <div class="snap-row"><label for="snap-node">Node snap</label><input type="number" id="snap-node" data-snap="node" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="node"></span></div>
+      <div class="snap-row"><label for="snap-midpoint">Midpoint snap</label><input type="number" id="snap-midpoint" data-snap="midpoint" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="midpoint"></span></div>
+      <button class="action" id="snap-reset" type="button">RESET SNAP DEFAULTS</button>
+    </details>
   </main>
   <script>
     (() => {
       const manager = window.DraftProfileManager;
       const keyboard = window.DraftKeyboard;
+      const snaps = window.DraftSnapStrength;
       const groups = [
         { title:'Drawing tools', commands:[
           ['select', 'Select'], ['line', 'Line'], ['node', 'Node / Arc'], ['wall', 'Wall'],
@@ -94,6 +113,7 @@
         command,
         command in existing ? keyboard.normaliseKeyBinding(existing[command]) : fallback,
       ]));
+      let snapStrength = snaps.normaliseSnapStrength(active?.content?.model?.snapStrength);
 
       // Combinations the browser answers itself: assigning them would either do
       // nothing or reload the drawing out from under the user.
@@ -166,11 +186,32 @@
       };
 
       const saveActive = message => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapStrength } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
       };
+
+      const renderSnaps = () => {
+        document.querySelectorAll('[data-snap]').forEach(input => {
+          input.value = snapStrength[input.dataset.snap];
+        });
+        document.querySelectorAll('[data-snap-default]').forEach(span => {
+          span.textContent = `default ${snaps.DEFAULT_SNAP_STRENGTH[span.dataset.snapDefault]}`;
+        });
+      };
+      document.querySelectorAll('[data-snap]').forEach(input => {
+        input.addEventListener('change', () => {
+          snapStrength = snaps.normaliseSnapStrength({ ...snapStrength, [input.dataset.snap]: input.value });
+          saveActive('Snap pull saved locally.');
+          renderSnaps();
+        });
+      });
+      document.querySelector('#snap-reset').addEventListener('click', () => {
+        snapStrength = snaps.normaliseSnapStrength(null);
+        saveActive('Default snap pull restored.');
+        renderSnaps();
+      });
 
       document.querySelector('#reset').addEventListener('click', () => {
         bindings = { ...defaults };
@@ -178,7 +219,7 @@
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapStrength } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
@@ -186,6 +227,7 @@
       });
 
       render();
+      renderSnaps();
       showStatus('');
     })();
   </script>
