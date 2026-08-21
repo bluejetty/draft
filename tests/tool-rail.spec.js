@@ -1,7 +1,7 @@
 // The left tool rail keeps one stable set of command names on every level and
 // layer set: the context decides where geometry saves, never what a command is
-// called. Walls always save to PLAN and floor outlines to FLOOR, staying
-// visible where they were drawn until the layer set changes.
+// called. Walls save to PLAN (or FOUNDATION when drawn there) and floor
+// outlines to FLOOR, staying visible where drawn until the layer set changes.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -10,6 +10,28 @@ const WALL_STROKE = [29, 31, 32]; // #1d1f20, committed wall boundary color
 async function switchLayerView(page, label) {
   await page.locator('.level-row.active').getByRole('button', { name: label }).click();
   await page.waitForTimeout(400);
+}
+
+async function switchLevel(page, name) {
+  await page.locator('.level-row')
+    .filter({ has: page.locator('.level-name', { hasText: name }) })
+    .locator('.level-name').click();
+  await page.waitForTimeout(300);
+}
+
+async function drawWall(page, x1, z1, x2, z2) {
+  await h.selectTool(page, 'Wall');
+  await h.clickWorld(page, x1, z1);
+  await h.clickWorld(page, x2, z2);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+}
+
+async function drawDimension(page, x1, z1, x2, z2) {
+  await h.selectTool(page, 'Dimension');
+  await h.clickWorld(page, x1, z1);
+  await h.clickWorld(page, x2, z2);
+  await h.waitForSaved(page);
 }
 
 async function drawTriangle(page) {
@@ -75,11 +97,7 @@ test('the Select menu offers rectangle selection options', async ({ page }) => {
 test('a wall drawn from FLOOR saves to PLAN and stays visible until the layer set changes', async ({ page }) => {
   await h.openModel(page);
   await switchLayerView(page, 'FLOOR');
-  await h.selectTool(page, 'Wall');
-  await h.clickWorld(page, -10, 0);
-  await h.clickWorld(page, 10, 0);
-  await page.keyboard.press('Enter');
-  await h.waitForSaved(page);
+  await drawWall(page, -10, 0, 10, 0);
 
   const walls = h.allWalls(await h.savedDrawing(page));
   expect(walls).toHaveLength(1);
@@ -92,6 +110,50 @@ test('a wall drawn from FLOOR saves to PLAN and stays visible until the layer se
   await switchLayerView(page, 'PLAN');
   await switchLayerView(page, 'FLOOR');
   expect(await wallStrokeCount(page, 5, 0)).toBe(0);
+});
+
+test('a wall drawn from E-POWER saves to PLAN and shows through the shared layers', async ({ page }) => {
+  await h.openModel(page);
+  await switchLayerView(page, 'E-POWER');
+  await drawWall(page, -10, 0, 10, 0);
+
+  const walls = h.allWalls(await h.savedDrawing(page));
+  expect(walls).toHaveLength(1);
+  expect(walls[0].view).toBe('plan');
+
+  // E-POWER shares PLAN walls at full strength, so it renders right away.
+  expect(await wallStrokeCount(page, 5, 0)).toBeGreaterThan(0);
+});
+
+test('a wall drawn on FOUNDATION is a foundation wall living in that layer set', async ({ page }) => {
+  await h.openModel(page);
+  await switchLevel(page, 'FOUNDATION');
+  await switchLayerView(page, 'FOUNDATION');
+  await drawWall(page, -10, 0, 10, 0);
+
+  const walls = h.allWalls(await h.savedDrawing(page));
+  expect(walls).toHaveLength(1);
+  expect(walls[0].view).toBe('foundation');
+
+  expect(await wallStrokeCount(page, 5, 0)).toBeGreaterThan(0);
+
+  // A foundation wall belongs to S-FDN, not the PLAN wall layers.
+  await switchLayerView(page, 'PLAN');
+  expect(await wallStrokeCount(page, 5, 0)).toBe(0);
+});
+
+test('dimensions can be placed on any layer set and save with it', async ({ page }) => {
+  await h.openModel(page);
+  await switchLayerView(page, 'E-POWER');
+  await drawDimension(page, -10, -5, 10, -5);
+
+  await switchLevel(page, 'FOUNDATION');
+  await switchLayerView(page, 'FOUNDATION');
+  await drawDimension(page, -10, 5, 10, 5);
+
+  const drawing = await h.savedDrawing(page);
+  const views = drawing.dimensions.map(dimension => dimension.view).sort();
+  expect(views).toEqual(['e-power', 'foundation']);
 });
 
 test('a floor drawn from PLAN saves to the FLOOR layer set', async ({ page }) => {

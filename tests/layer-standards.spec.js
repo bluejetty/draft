@@ -10,7 +10,8 @@ const ALL_LAYER_IDS = [
   'draft', 'no-draft',
   'A-WALL-EXT', 'A-WALL-INT', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-DOOR', 'A-GLAZ',
   'PLAN DIMENSIONS', 'ROOM IDS / AREA',
-  'S-BEAM', 'S-SLAB', 'FLOOR DIMENSION', 'S-FDN', 'S-COL/FOOTING',
+  'S-BEAM', 'S-SLAB', 'FLOOR DIMENSION', 'S-FDN', 'S-COL/FOOTING', 'FOUNDATION DIMENSION',
+  'E-POWER DIMENSION',
 ];
 
 async function openStandards(page) {
@@ -21,7 +22,7 @@ async function openStandards(page) {
     localStorage.clear();
   });
   await page.goto('/STANDARDS.html');
-  await expect(page.locator('#groups .group')).toHaveCount(3);
+  await expect(page.locator('#groups .group')).toHaveCount(4);
 }
 
 async function drawLine(page, x1, z1, x2, z2) {

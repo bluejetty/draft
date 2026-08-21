@@ -35,15 +35,15 @@
     .level-layer.active { background:#5980a6; border-color:#5980a6; color:#fff; }
     .level-layer-contents { margin:1px 0 2px 7px; border-left:2px solid rgba(89,128,166,0.48); padding-left:4px; }
     .level-layer-content { min-height:12px; display:flex; align-items:center; color:rgba(29,31,32,0.58); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.05em; text-transform:uppercase; }
-    .level-eye  { border:none; background:none; cursor:pointer; padding:0 6px; font-size:13px; line-height:1; color:rgba(29,31,32,0.4); flex-shrink:0; align-self:center; }
+    .level-eye  { border:none; background:none; cursor:pointer; padding:0 6px; font-size:13px; line-height:1; color:rgba(29,31,32,0.4); flex-shrink:0; align-self:flex-start; margin-top:7px; }
     .level-eye:hover { color:#5980a6; }
-    .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:center; }
+    .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:flex-start; margin-top:5px; }
     .level-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-layer-row { display:flex; align-items:stretch; gap:2px; }
     .level-layer-row .level-layer { flex:1; min-width:0; }
     .level-layer-bg { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:1px 3px; min-width:23px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.42); flex-shrink:0; }
     .level-layer-bg:hover { border-color:#5980a6; color:#5980a6; }
-    .level-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:center; }
+    .level-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:flex-start; margin-top:6px; }
     .level-del:hover { color:#c04040; }
     .cut-row { display:flex; align-items:center; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
     .cut-row:hover { background:rgba(29,31,32,0.03); }
@@ -583,9 +583,12 @@ const WALL_TYPES = [
   { id:'stud_2x4',    label:'2×4 Stud  (3½")',   totalIn:3.5,   layers:[{in:3.5,   fill:'stud'}] },
   { id:'stud_2x6',    label:'2×6 Stud  (5½")',   totalIn:5.5,   layers:[{in:5.5,   fill:'stud'}] },
   { id:'concrete_8',  label:'8" Concrete',         totalIn:8,     layers:[{in:8,     fill:'concrete'}] },
-  { id:'concrete_12', label:'12" Concrete',        totalIn:12,    layers:[{in:12,    fill:'concrete'}] },
   { id:'icf',         label:'ICF  (11¼")',         totalIn:11.25, layers:[{in:2.625,fill:'insulation'},{in:6,fill:'concrete'},{in:2.625,fill:'insulation'}] },
+  { id:'icf_13',      label:'ICF  (13¼")',         totalIn:13.25, layers:[{in:2.625,fill:'insulation'},{in:8,fill:'concrete'},{in:2.625,fill:'insulation'}] },
+  { id:'pt_wood_fdn', label:'2×8 PT Wood Fdn  (8")', totalIn:8,   layers:[{in:0.75,fill:'stud'},{in:7.25,fill:'stud'}] },
 ];
+// Retired wall types in saved drawings map to their closest current assembly.
+const LEGACY_WALL_TYPES = Object.freeze({ concrete_12: 'concrete_8' });
 // Fenestration defaults — door and window openings hosted on a wall. Heights
 // are measured from the bottom of the host wall; doors sit on it (sill 0).
 const DEFAULT_DOOR_WIDTH_FT = 3;
@@ -612,19 +615,19 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
 });
 const LEVEL_LAYER_VIEWS = Object.freeze({
   5: Object.freeze([
-    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT'] }),
+    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
     Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'FLOOR DIMENSION'] }),
   ]),
   3: Object.freeze([
-    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT'] }),
+    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
     Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'FLOOR DIMENSION'] }),
   ]),
   1: Object.freeze([
-    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT'] }),
+    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ'] }),
-    Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL/FOOTING', 'S-BEAM', 'S-SLAB'] }),
+    Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL/FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION'] }),
   ]),
 });
 const DEFAULT_LEVEL_LAYER_VIEWS = Object.freeze({ 5:'plan', 3:'plan', 1:'plan' });
@@ -1277,8 +1280,9 @@ class Component extends DCLogic {
       skipped += (Array.isArray(saved.lines) ? saved.lines.length : 0) - this._lines.length;
       this._walls = Array.isArray(saved.walls)
          ? saved.walls.map(wall => restoreSegment(wall, 'wall', {
-          view: 'plan',
-          wallType: WALL_TYPES.some(type => type.id === wall.wallType) ? wall.wallType : 'stud_2x6',
+          view: wall?.view === 'foundation' ? 'foundation' : 'plan',
+          wallType: WALL_TYPES.some(type => type.id === wall.wallType) ? wall.wallType
+            : (LEGACY_WALL_TYPES[wall.wallType] || 'stud_2x6'),
           baseHeight: format.number(wall.baseHeight, 0),
           topHeight: format.number(wall.topHeight, DEFAULT_WALL_TOP_FT),
           refLine: format.oneOf(wall.refLine, REF_LINES, 'left'),
@@ -2364,10 +2368,10 @@ class Component extends DCLogic {
         && this._lineLayerConfig(this._activeLineLayer()).visible;
     }
     if (tool === 'node') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
-    if (tool === 'wall') return ['plan', 'floor'].includes(viewId);
+    if (tool === 'wall') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
     if (tool === 'floor') return ['floor', 'plan'].includes(viewId);
     if (tool === 'fenestration') return viewId === 'plan';
-    if (tool === 'dimension') return ['plan', 'floor'].includes(viewId);
+    if (tool === 'dimension') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
     return true;
   }
 
@@ -2379,10 +2383,16 @@ class Component extends DCLogic {
     return `${names[tool] || tool.toUpperCase()}${suffix}`;
   }
 
-  // Where a tool's geometry saves: walls always live in PLAN and floor outlines
-  // in FLOOR, no matter which layer set they were drawn from.
+  // Walls drawn on FOUNDATION are foundation walls / frost walls / grade beams
+  // and live on S-FDN; drawn anywhere else they save home to PLAN's A-WALL layers.
+  _wallHomeView(viewId = this._activeLayerViewId()) {
+    return viewId === 'foundation' ? 'foundation' : 'plan';
+  }
+
+  // Where a tool's geometry saves: walls live in PLAN (or FOUNDATION when drawn
+  // there) and floor outlines in FLOOR, no matter which layer set drew them.
   _contextToolSaveLabel(tool, viewId = this._activeLayerViewId()) {
-    if (tool === 'wall') return this._draftingContextLabel('plan');
+    if (tool === 'wall') return this._draftingContextLabel(this._wallHomeView(viewId));
     if (tool === 'floor') return this._draftingContextLabel('floor');
     if (tool === 'fenestration') return this._draftingContextLabel('plan');
     return this._draftingContextLabel(viewId);
@@ -2391,10 +2401,10 @@ class Component extends DCLogic {
   _contextToolMessage(tool, viewId = this._activeLayerViewId()) {
     const context = this._draftingContextLabel(viewId);
     if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, E-POWER, or FOUNDATION. Current context: ${context}.`;
-    if (tool === 'wall') return `Walls are drawn in PLAN or FLOOR and always save to PLAN. Current context: ${context}.`;
+    if (tool === 'wall') return `Walls are drawn in any layer set: FOUNDATION walls save to S-FDN, all others save to PLAN. Current context: ${context}.`;
     if (tool === 'floor') return `Floor outlines are drawn in FLOOR or PLAN and always save to FLOOR. Current context: ${context}.`;
     if (tool === 'fenestration') return `Door and window openings are placed on walls in PLAN. Current context: ${context}.`;
-    if (tool === 'dimension') return `Dimensions are placed in PLAN or FLOOR. Current context: ${context}.`;
+    if (tool === 'dimension') return `Dimensions are placed in any layer set and save with it. Current context: ${context}.`;
     if (tool === 'line') {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
         return 'Turn on DRAFT or NO-DRAFT in the Company Standard Layers before drawing a generic line.';
@@ -3385,15 +3395,17 @@ class Component extends DCLogic {
     const activeView = this._activeLayerViewId(levelId);
     if (!this._contextAllowsTool('wall', activeView)) return false;
     const id = this._newDrawingItemId('wall');
-    // Walls always live in the PLAN layer set; one drawn from FLOOR stays
-    // visible there until the layer set changes.
-    if (activeView !== 'plan') this._courtesyWallIds?.add(id);
+    const homeView = this._wallHomeView(activeView);
+    // Walls live in their home layer set; one drawn from another set stays
+    // visible there until the layer set changes. E-POWER already shares the
+    // PLAN walls at full strength, so no courtesy pass is needed there.
+    if (activeView !== homeView && activeView !== 'e-power') this._courtesyWallIds?.add(id);
     this._walls.push({
       id,
-      start:      this._mergeVertex(start, levelId, 'plan'),
-      end:        this._mergeVertex(end, levelId, 'plan'),
+      start:      this._mergeVertex(start, levelId, homeView),
+      end:        this._mergeVertex(end, levelId, homeView),
       levelId,
-      view: 'plan',
+      view: homeView,
       wallType:   wallType   || this.state.activeWallType,
       baseHeight: baseHeight != null ? baseHeight : this.state.wallBaseHeight,
       topHeight:  topHeight  != null ? topHeight  : this.state.wallTopHeight,
@@ -4778,7 +4790,7 @@ class Component extends DCLogic {
     });
     this._dimensionStart = null;
     this._lockAngle = null;
-    this.setState({ drawingMessage: `${view === 'plan' ? 'Plan' : 'Floor'} dimension added.`, drawingMessageError: false });
+    this.setState({ drawingMessage: `${this._draftingContextLabel(view)} dimension added.`, drawingMessageError: false });
     this._markUnsaved();
   }
 

@@ -84,7 +84,7 @@ if (!window.DraftDrawingFormat) {
       const start = point(dimension?.start);
       const end = point(dimension?.end);
       const dimensionLevelId = levelId(dimension?.levelId, levelIds);
-      const view = oneOf(dimension?.view, ['plan', 'floor'], null);
+      const view = oneOf(dimension?.view, ['plan', 'floor', 'e-power', 'foundation'], null);
       if (!Number.isInteger(id) || seen.has(id) || !start || !end || dimensionLevelId == null || !view) return null;
       if (Math.hypot(end.x - start.x, end.z - start.z) < 0.001) return null;
       seen.add(id);
