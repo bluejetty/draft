@@ -12,6 +12,13 @@ async function switchLayerView(page, label) {
   await page.waitForTimeout(400);
 }
 
+async function switchLevel(page, name) {
+  await page.locator('.level-row')
+    .filter({ has: page.locator('.level-name', { hasText: name }) })
+    .locator('.level-name').click();
+  await page.waitForTimeout(300);
+}
+
 async function drawWall(page) {
   await h.selectTool(page, 'Wall');
   await h.clickWorld(page, -10, 0);
@@ -183,7 +190,7 @@ test('deleting a selected opening or its host wall removes the opening', async (
   expect(drawing.fenestrations).toHaveLength(0);
 });
 
-test('FENESTRATION only places openings in PLAN', async ({ page }) => {
+test('FENESTRATION places openings in PLAN and FOUNDATION, not FLOOR', async ({ page }) => {
   await h.openModel(page);
   await drawWall(page);
   await switchLayerView(page, 'FLOOR');
@@ -192,6 +199,46 @@ test('FENESTRATION only places openings in PLAN', async ({ page }) => {
 
   await switchLayerView(page, 'PLAN');
   await expect(tool).toBeEnabled();
+
+  await switchLevel(page, 'FOUNDATION');
+  await switchLayerView(page, 'FOUNDATION');
+  await expect(tool).toBeEnabled();
+});
+
+test('a door opening hosts on an S-FDN foundation wall', async ({ page }) => {
+  await h.openModel(page);
+  await switchLevel(page, 'FOUNDATION');
+  await switchLayerView(page, 'FOUNDATION');
+  await drawWall(page);
+  await h.selectTool(page, 'Fenestration');
+  await h.clickWorld(page, 2, 0);
+  await h.waitForSaved(page);
+
+  const drawing = await h.savedDrawing(page);
+  const wall = h.allWalls(drawing)[0];
+  expect(wall.view).toBe('foundation');
+  expect(drawing.fenestrations).toHaveLength(1);
+  const opening = drawing.fenestrations[0];
+  expect(opening.wallId).toBe(wall.id);
+  expect(opening.view).toBe('foundation');
+  expect(opening.layer).toBe('A-DOOR');
+});
+
+test('interior 2x4 and 2x6 stud walls stay available on the foundation level PLAN', async ({ page }) => {
+  await h.openModel(page);
+  await switchLevel(page, 'FOUNDATION');
+  await switchLayerView(page, 'PLAN');
+  await h.selectTool(page, 'Wall');
+  await expect(page.getByRole('button', { name: /2×4 Stud/ })).toBeVisible();
+  await page.getByRole('button', { name: /2×4 Stud/ }).click();
+  await h.clickWorld(page, -10, 0);
+  await h.clickWorld(page, 10, 0);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  const wall = h.allWalls(await h.savedDrawing(page))[0];
+  expect(wall.view).toBe('plan');
+  expect(wall.wallType).toBe('stud_2x4');
 });
 
 test('A-DOOR and A-GLAZ are Company Standard Layers', async ({ page }) => {

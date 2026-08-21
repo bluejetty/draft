@@ -110,7 +110,7 @@ if (!window.DraftDrawingFormat) {
         id: String(opening?.id || '').trim(),
         wallId,
         levelId: openingLevelId,
-        view: 'plan',
+        view: oneOf(opening?.view, ['plan', 'foundation'], 'plan'),
         type,
         layer: type === 'door' ? 'A-DOOR' : 'A-GLAZ',
         offset,

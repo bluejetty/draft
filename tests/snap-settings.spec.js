@@ -86,13 +86,14 @@ test('the Settings page edits and saves the snap pull', async ({ page }) => {
   await expect(page.locator('#snap-grid')).toHaveValue(String(defaults.grid));
   await expect(page.locator('#snap-node')).toHaveValue(String(defaults.node));
   await expect(page.locator('#snap-midpoint')).toHaveValue(String(defaults.midpoint));
+  await expect(page.locator('#snap-polar')).toHaveValue(String(defaults.polar));
 
-  await page.locator('#snap-grid').fill('4');
+  await page.locator('#snap-grid').fill('9');
   await page.locator('#snap-grid').blur();
 
   const stored = await page.evaluate(() =>
     window.DraftProfileManager.getActive('settings')?.content?.model?.snapStrength);
-  expect(stored.grid).toBe(4);
+  expect(stored.grid).toBe(9);
 
   // Out-of-range values clamp instead of saving nonsense.
   await page.locator('#snap-node').fill('500');
