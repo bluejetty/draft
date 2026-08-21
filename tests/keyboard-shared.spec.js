@@ -46,3 +46,33 @@ test('the shared matcher honours modifiers', async ({ page }) => {
     normalisedEsc: 'Escape',
   });
 });
+
+test('Extend answers to X and Ctrl+H', async ({ page }) => {
+  await openModel(page);
+
+  const extendPanel = page.getByRole('button', { name: 'CURRENT LEVEL' });
+
+  await page.keyboard.press('x');
+  await expect(extendPanel).toBeVisible();
+
+  await page.keyboard.press('s');
+  await expect(extendPanel).toHaveCount(0);
+
+  await page.keyboard.press('Control+h');
+  await expect(extendPanel).toBeVisible();
+});
+
+test('the ~ key and the square button toggle grid snap', async ({ page }) => {
+  await openModel(page);
+  const button = page.locator('[data-grid-snap]');
+  await expect(button).toHaveText('~');
+  await expect(button).toHaveCSS('background-color', 'rgb(29, 31, 32)');
+
+  await page.keyboard.press('`'); // The grave/tilde key works with or without Shift.
+  await expect(button).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(button).toHaveCSS('box-shadow', 'none');
+
+  await button.click();
+  await expect(button).toHaveCSS('background-color', 'rgb(29, 31, 32)');
+  await expect(button).not.toHaveCSS('box-shadow', 'none');
+});
