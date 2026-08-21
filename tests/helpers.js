@@ -52,8 +52,8 @@ async function clickWorld(page, x, z) {
   await page.waitForTimeout(400);
 }
 
-// Tool labels carry the drafting context as a prefix (e.g. "PLAN WALL [W]"),
-// so tools are matched by word, not by the start of the label.
+// Tool labels stay stable across contexts (e.g. "WALL [W]"); tools are
+// matched by word so shortcut suffixes don't matter.
 async function selectTool(page, name) {
   await page.getByRole('button', { name: new RegExp(`\\b${name}\\b`, 'i') }).first().click();
 }

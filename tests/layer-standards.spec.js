@@ -81,6 +81,8 @@ test('a layer whose standard says not printed is excluded from print output', as
 
 test('the Model Space picker places new lines on the chosen generic layer', async ({ page }) => {
   await h.openModel(page);
+  // The DRAFT / NO-DRAFT picker lives in the Line tool's menu.
+  await h.selectTool(page, 'Line');
   await page.getByRole('button', { name: 'NO-DRAFT', exact: true }).click();
   await drawLine(page, -10, 0, 10, 0);
   const lines = h.allLines(await h.savedDrawing(page));
@@ -101,7 +103,10 @@ test('hiding a generic layer in the standards falls back to the other layer', as
 
   await h.openModel(page);
   // With DRAFT hidden, the Line tool falls back to NO-DRAFT automatically.
-  await expect(page.getByRole('button', { name: /NO-DRAFT LINE/ })).toBeVisible();
+  await drawLine(page, -10, 0, 10, 0);
+  const lines = h.allLines(await h.savedDrawing(page));
+  expect(lines).toHaveLength(1);
+  expect(lines[0].layer).toBe('no-draft');
 });
 
 test('the layer section is gone from Settings, which links to the standards', async ({ page }) => {

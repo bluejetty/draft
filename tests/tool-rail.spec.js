@@ -1,0 +1,120 @@
+// The left tool rail keeps one stable set of command names on every level and
+// layer set: the context decides where geometry saves, never what a command is
+// called. Walls always save to PLAN and floor outlines to FLOOR, staying
+// visible where they were drawn until the layer set changes.
+const { test, expect } = require('@playwright/test');
+const h = require('./helpers');
+
+const WALL_STROKE = [29, 31, 32]; // #1d1f20, committed wall boundary color
+
+async function switchLayerView(page, label) {
+  await page.locator('.level-row.active').getByRole('button', { name: label }).click();
+  await page.waitForTimeout(400);
+}
+
+async function drawTriangle(page) {
+  await h.clickWorld(page, -10, -10);
+  await h.clickWorld(page, 10, -10);
+  await h.clickWorld(page, 10, 10);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+}
+
+async function wallStrokeCount(page, x, z) {
+  const p = await h.worldToClient(page, x, z);
+  const pixels = await h.overlayPixels(page, p.x, p.y);
+  return h.countColor(pixels, WALL_STROKE);
+}
+
+async function toolRailLabels(page) {
+  return page.locator('[data-model-left] button').allTextContents();
+}
+
+test('tool names stay the same on every layer set', async ({ page }) => {
+  await h.openModel(page);
+  const expected = ['SELECT', 'LINE', 'NODE / ARC', 'WALL', 'FLOOR', 'DIMENSION', 'EXTEND', 'TRIM'];
+  for (const view of ['PLAN', 'FLOOR', 'E-POWER']) {
+    await switchLayerView(page, view);
+    const labels = (await toolRailLabels(page))
+      .map(label => label.replace(/\s+\[[^\]]+\]$/, '').trim().toUpperCase());
+    for (const name of expected) expect(labels).toContain(name);
+    // No context-prefixed variants anywhere in the rail.
+    expect(labels.some(label => /^(PLAN|FLOOR|E-POWER|FOUNDATION) /.test(label))).toBe(false);
+  }
+});
+
+test('Cut lives with the section views, not in the tool list', async ({ page }) => {
+  await h.openModel(page);
+  const railCut = page.locator('[data-model-left]').getByRole('button', { name: /\bCut\b/i });
+  await expect(railCut).toHaveCount(0);
+
+  const sectionCut = page.getByRole('button', { name: /Cut\s+\[/i });
+  await expect(sectionCut).toBeVisible();
+  await sectionCut.click();
+  const active = await h.activeToolLabels(page);
+  expect(active.some(label => /\bCut\b/i.test(label))).toBe(true);
+});
+
+test('the DRAFT / NO-DRAFT choice lives in the Line tool menu', async ({ page }) => {
+  await h.openModel(page);
+  await expect(page.getByRole('button', { name: 'DRAFT', exact: true })).toHaveCount(0);
+
+  await h.selectTool(page, 'Line');
+  await expect(page.getByRole('button', { name: 'DRAFT', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'NO-DRAFT', exact: true })).toBeVisible();
+});
+
+test('the Select menu offers rectangle selection options', async ({ page }) => {
+  await h.openModel(page);
+  await h.selectTool(page, 'Select');
+  await expect(page.getByRole('button', { name: 'ITEMS' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'WINDOW' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'ALL LEVELS' })).toBeVisible();
+});
+
+test('a wall drawn from FLOOR saves to PLAN and stays visible until the layer set changes', async ({ page }) => {
+  await h.openModel(page);
+  await switchLayerView(page, 'FLOOR');
+  await h.selectTool(page, 'Wall');
+  await h.clickWorld(page, -10, 0);
+  await h.clickWorld(page, 10, 0);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  const walls = h.allWalls(await h.savedDrawing(page));
+  expect(walls).toHaveLength(1);
+  expect(walls[0].view).toBe('plan');
+
+  // Full-strength in FLOOR until the layer set changes…
+  expect(await wallStrokeCount(page, 5, 0)).toBeGreaterThan(0);
+
+  // …then it becomes the usual faded PLAN reference.
+  await switchLayerView(page, 'PLAN');
+  await switchLayerView(page, 'FLOOR');
+  expect(await wallStrokeCount(page, 5, 0)).toBe(0);
+});
+
+test('a floor drawn from PLAN saves to the FLOOR layer set', async ({ page }) => {
+  await h.openModel(page);
+  await switchLayerView(page, 'PLAN');
+  await h.selectTool(page, 'Floor');
+  await drawTriangle(page);
+
+  const drawing = await h.savedDrawing(page);
+  expect(drawing.floors).toHaveLength(1);
+  expect(drawing.floors[0].view).toBe('floor');
+  expect(drawing.floors[0].structure).toBe('floor');
+});
+
+test('the Floor tool SLAB setting saves concrete slab outlines', async ({ page }) => {
+  await h.openModel(page);
+  await switchLayerView(page, 'FLOOR');
+  await h.selectTool(page, 'Floor');
+  await page.getByRole('button', { name: 'SLAB', exact: true }).click();
+  await drawTriangle(page);
+
+  const drawing = await h.savedDrawing(page);
+  expect(drawing.floors).toHaveLength(1);
+  expect(drawing.floors[0].structure).toBe('slab');
+  expect(drawing.floors[0].thickness * 12).toBeCloseTo(4, 5);
+});
