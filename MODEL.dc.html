@@ -2796,6 +2796,7 @@ class Component extends DCLogic {
       && !this._contextAllowsTool(this.state.activeTool, viewId)
       ? 'select'
       : this.state.activeTool;
+    this._scheduleLayerRevealHide();
     this.setState({
       activeLevelIdx: levelIndex,
       backgroundLevelIds,
@@ -2809,7 +2810,6 @@ class Component extends DCLogic {
       drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension'].includes(this.state.activeTool),
     }, () => {
       if (this._orthoCam) this._setView('top');
-      this._scheduleLayerRevealHide();
       this._pruneContextReferenceSelection();
       this._notifySelectionChanged();
       this._markUnsaved();
@@ -6910,6 +6910,7 @@ class Component extends DCLogic {
 
   // ─── renderVals ───────────────────────────────────────────────────────────────
   renderVals() {
+    this._ensureDrawingCollections();
     const { activeTool, units, activeView, isDrawing,
             levels, activeLevelIdx, backgroundLevelIds, backgroundLevelViews, backgroundMode,
             cuts, activeCutId, cutPhase, choosingDir, extendScope, extendPhase } = this.state;
