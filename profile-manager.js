@@ -205,8 +205,15 @@ if (!window.DraftProfileManager) {
         Object.freeze({ id: 'S-BEAM', name: 'S-BEAM', use: 'Beams.', printable: true }),
         Object.freeze({ id: 'S-SLAB', name: 'S-SLAB', use: 'Slabs.', printable: true }),
         Object.freeze({ id: 'FLOOR DIMENSION', name: 'FLOOR DIMENSION', use: 'Dimension strings placed in FLOOR.', printable: true }),
-        Object.freeze({ id: 'S-FDN', name: 'S-FDN', use: 'Foundation walls.', printable: true }),
+        Object.freeze({ id: 'S-FDN', name: 'S-FDN', use: 'Foundation / frost walls and grade beams (Wall tool in FOUNDATION).', printable: true }),
         Object.freeze({ id: 'S-COL/FOOTING', name: 'S-COL/FOOTING', use: 'Columns and footings.', printable: true }),
+        Object.freeze({ id: 'FOUNDATION DIMENSION', name: 'FOUNDATION DIMENSION', use: 'Dimension strings placed in FOUNDATION.', printable: true }),
+      ]),
+    }),
+    Object.freeze({
+      group: 'Electrical — E-POWER',
+      layers: Object.freeze([
+        Object.freeze({ id: 'E-POWER DIMENSION', name: 'E-POWER DIMENSION', use: 'Dimension strings placed in E-POWER.', printable: true }),
       ]),
     }),
   ]);
