@@ -6985,7 +6985,9 @@ class Component extends DCLogic {
         ? `Click shape corners · Click first point or ${shortcut('finish')} / ${shortcut('finishAlt')} to close · ${shortcut('cancel')} to cancel`
         : 'SHAPE — Click to draw a closed outline · or press Capture in the panel')
       : fenestrating
-      ? 'FENESTRATION — Click a wall to place the opening at the cursor'
+      ? (holeHost
+        ? `FENESTRATION — Click the opening's corners inside the ${holeHost.type === 'roof' ? 'roof' : 'floor'} · Click the first corner or ${shortcut('finish')} to close`
+        : 'FENESTRATION — Click a wall to place the opening at the cursor')
       : nodeArcing
       ? 'NODE / ARC — Click a line to add a node · Drag beside a line to pull an arc'
       : extending
