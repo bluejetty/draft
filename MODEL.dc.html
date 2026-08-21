@@ -792,7 +792,7 @@ class Component extends DCLogic {
       requestAnimationFrame(() => this._redrawOverlay());
     });
     window.addEventListener('keyup',   this._onKup  = e => {
-      if (e.key === 'Shift') this._shiftHeld = false;
+      if (e.key === 'Shift') { this._shiftHeld = false; if (this._windowSelection?.dynamic) this._invalidate(); }
       if (e.key === 'Control') this._ctrlHeld = false;
     });
   }
@@ -1796,10 +1796,13 @@ class Component extends DCLogic {
           if (windowSelection.kind === 'extend') {
             this._captureExtendWindow(windowSelection.start, windowSelection.current);
           } else {
-            this._handleWindowSelection(windowSelection.start, windowSelection.current, windowSelection.shiftHeld, windowSelection.mode);
+            this._handleWindowSelection(windowSelection.start, windowSelection.current, windowSelection.shiftHeld,
+              this._windowSelectionMode(windowSelection));
           }
+          return;
         }
-        return;
+        // A press that never travelled is a click, not a window — fall through.
+        if (!windowSelection.dynamic) return;
       }
       // If the mousedown was in select mode and the cursor never moved far → treat as click
       if (info && this.state.activeTool === 'select' && !(sd && sd.active)) {
@@ -2134,7 +2137,7 @@ class Component extends DCLogic {
       const b = toS(this._windowSelection.current);
       const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
       const width = Math.abs(b.x - a.x), height = Math.abs(b.y - a.y);
-      const allLevels = this._windowSelection.mode === 'window-all';
+      const allLevels = this._windowSelectionMode(this._windowSelection) === 'window-all';
       ctx.save();
       ctx.fillStyle = allLevels ? 'rgba(176,64,80,0.12)' : 'rgba(89,128,166,0.12)';
       ctx.fillRect(x, y, width, height);
@@ -3116,6 +3119,18 @@ class Component extends DCLogic {
               this._selectDrag = { refs, startX: e.clientX, startY: e.clientY, active: false };
             }
             e.preventDefault();
+          } else {
+            // Press-and-drag away from any node opens a window; Shift while
+            // dragging widens it to all levels. A short click still selects.
+            this._windowSelection = {
+              start: raw,
+              current: raw,
+              startX: e.clientX,
+              startY: e.clientY,
+              shiftHeld: e.shiftKey,
+              mode: 'window',
+              dynamic: true,
+            };
           }
           // Record for click-to-select detection on mouseup
           this._selectDownInfo = { worldPt: raw, clientX: e.clientX, clientY: e.clientY, shiftHeld: e.shiftKey };
@@ -3156,6 +3171,14 @@ class Component extends DCLogic {
         this._pan2DPrevX = e.clientX; this._pan2DPrevY = e.clientY;
       }
     }
+  }
+
+  // A window opened by press-and-drag in click mode follows the Shift key live:
+  // held it selects across all levels (red), released it stays on this one (blue).
+  _windowSelectionMode(windowSelection) {
+    if (!windowSelection) return this.state.selectionMode;
+    if (windowSelection.dynamic) return this._shiftHeld ? 'window-all' : 'window';
+    return windowSelection.mode;
   }
 
   _onRightClick() {
@@ -5308,7 +5331,7 @@ class Component extends DCLogic {
     if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({ activeTool: 'trim' }); return; }
     if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
-    if (matches('gridSnap')) { e.preventDefault(); this._toggleGridSnap(); return; }
+    if (matches('gridSnap') || matches('gridSnapAlt')) { e.preventDefault(); this._toggleGridSnap(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
     if (matches('top')) { e.preventDefault(); this._setView('top'); return; }
     if (matches('front')) { e.preventDefault(); this._setView('front'); return; }
@@ -5582,7 +5605,7 @@ class Component extends DCLogic {
         ? 'Drag a blue box to select fully enclosed items on the current level.'
         : (this.state.selectionMode === 'window-all'
           ? 'Drag a red box to select fully enclosed items on every level.'
-          : 'Click items to select. Shift adds or removes individual items.'),
+          : 'Click items to select; Shift adds or removes. Press and drag for a blue window — hold Shift while dragging for a red all-levels window.'),
        groupShortcut: shortcut('group'),
        groupDisabled: selectedItems.length === 0,
        groupButtonBg: selectedItems.length ? '#5980a6' : '#f4f4f4',
