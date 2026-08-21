@@ -30,7 +30,6 @@
     .level-bar { width:3px; flex-shrink:0; }
     .level-body { flex:1; min-width:0; padding:3px 7px 4px 8px; border:none; background:transparent; text-align:left; cursor:pointer; }
     .level-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .level-elev { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.45); margin-top:1px; }
     .level-layer-stack { display:flex; flex-direction:column; gap:1px; margin-top:3px; }
     .level-layer { width:100%; min-height:13px; display:flex; align-items:center; border:1px solid rgba(29,31,32,0.18); padding:1px 5px; background:rgba(255,255,255,0.72); color:rgba(29,31,32,0.68); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-align:left; text-transform:uppercase; cursor:pointer; }
     .level-layer:hover { border-color:#5980a6; color:#365e86; }
@@ -53,7 +52,7 @@
     .level-edge { display:flex; align-items:center; gap:3px; min-height:9px; }
     .level-edge-line { flex:1; border-top:1px solid rgba(29,31,32,0.55); }
     .level-edge-val { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; color:#1d1f20; white-space:nowrap; }
-    .level-layer.floor-profile { background:repeating-linear-gradient(45deg, rgba(29,31,32,0.05), rgba(29,31,32,0.05) 2px, rgba(255,255,255,0.72) 2px, rgba(255,255,255,0.72) 6px); }
+    .level-layer.floor-profile { background:linear-gradient(rgba(29,31,32,0.62) 0, rgba(29,31,32,0.62) 3px, transparent 3px), repeating-linear-gradient(45deg, rgba(29,31,32,0.05), rgba(29,31,32,0.05) 2px, rgba(255,255,255,0.72) 2px, rgba(255,255,255,0.72) 6px); }
     .level-layer.floor-profile.active { background:#5980a6; }
     .level-assembly { border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; cursor:pointer; padding:1px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.05em; flex-shrink:0; text-transform:uppercase; }
     .level-assembly:hover { background:#3a3d3f; border-color:#3a3d3f; }
@@ -482,7 +481,6 @@
             <div class="level-head">
               <div class="level-title">
                 <div class="level-name">{{ level.name }}</div>
-                <div class="level-elev">{{ level.elevStr }}</div>
               </div>
               <sc-if value="{{ level.hasHeights }}" hint-placeholder-val="{{ false }}">
                 <div class="level-heights">
@@ -7658,7 +7656,7 @@ class Component extends DCLogic {
         });
         const heights = this._levelHeightMarks(l.id);
         return {
-          name: l.name, elevStr: this._elevLabel(l.elev),
+          name: l.name,
           layers,
           hasLayers: layers.length > 0,
           heights,
