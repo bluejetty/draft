@@ -12,7 +12,7 @@ const ALL_LAYER_IDS = [
   'A-FL-OPNG', 'A-ROOF-OPNG',
   'PLAN DIMENSIONS', 'ROOM IDS / AREA',
   'S-BEAM', 'S-SLAB', 'FLOOR DIMENSION', 'S-FDN', 'S-COL/FOOTING', 'FOUNDATION DIMENSION',
-  'E-POWER DIMENSION',
+  'E-POWER', 'E-POWER DIMENSION',
 ];
 
 async function openStandards(page) {
@@ -97,6 +97,22 @@ test('the Model Space picker places new lines on the chosen generic layer', asyn
   const after = h.allLines(await h.savedDrawing(page));
   expect(after).toHaveLength(2);
   expect(after.filter(line => line.layer === 'draft')).toHaveLength(1);
+});
+
+test('lines drawn in the ELECTRIC layer set save on E-POWER', async ({ page }) => {
+  await h.openModel(page);
+  await page.locator('.level-row.active').getByRole('button', { name: 'ELECTRIC', exact: true }).click();
+  await page.waitForTimeout(400);
+
+  // The picker offers E-POWER in place of DRAFT while working in ELECTRIC.
+  await h.selectTool(page, 'Line');
+  await expect(page.getByRole('button', { name: 'E-POWER', exact: true })).toBeVisible();
+
+  await drawLine(page, -10, 0, 10, 0);
+  const lines = h.allLines(await h.savedDrawing(page));
+  expect(lines).toHaveLength(1);
+  expect(lines[0].layer).toBe('E-POWER');
+  expect(lines[0].view).toBe('e-power');
 });
 
 test('hiding a generic layer in the standards falls back to the other layer', async ({ page }) => {

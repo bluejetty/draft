@@ -37,8 +37,6 @@
     .level-layer.active { background:#5980a6; border-color:#5980a6; color:#fff; }
     .level-layer-contents { margin:1px 0 2px 7px; border-left:2px solid rgba(89,128,166,0.48); padding-left:4px; }
     .level-layer-content { min-height:12px; display:flex; align-items:center; color:rgba(29,31,32,0.58); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.05em; text-transform:uppercase; }
-    .level-eye  { border:none; background:none; cursor:pointer; padding:0 6px; font-size:13px; line-height:1; color:rgba(29,31,32,0.4); flex-shrink:0; align-self:flex-start; margin-top:7px; }
-    .level-eye:hover { color:#5980a6; }
     .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:flex-start; margin-top:5px; }
     .level-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-layer-row { display:flex; align-items:stretch; gap:2px; }
@@ -148,7 +146,7 @@
               <ul style="margin:6px 0 0; padding-left:16px; font-size:11px; line-height:1.5; color:rgba(29,31,32,0.68);">
                 <li>Layers follow AIA-style CAD names (A-WALL-EXT, S-SLAB&hellip;) so drawings convert cleanly to AutoCAD/DXF.</li>
                 <li>Commands assign layers automatically &mdash; the layers organize themselves, so nobody manages them by hand.</li>
-                <li>Views (PLAN, FLOOR, E-POWER&hellip;) are display groupings only; the layer taxonomy is the source of truth for export. Layers can be shared across views &mdash; e.g. walls show in both PLAN and E-POWER but are only edited in PLAN.</li>
+                <li>Views (PLAN, FLOOR, ELECTRIC&hellip;) are display groupings only; the layer taxonomy is the source of truth for export. Layers can be shared across views &mdash; e.g. walls show in both PLAN and ELECTRIC but are only edited in PLAN.</li>
               </ul>
             </div>
           </sc-if>
@@ -496,7 +494,6 @@
                </div>
              </sc-if>
            </div>
-          <button class="level-eye" onClick="{{ level.onToggleVis }}" title="{{ level.visLabel }}">{{ level.visIcon }}</button>
           <button class="level-del" onClick="{{ level.onDelete }}" title="Delete level">×</button>
         </div>
       </sc-for>
@@ -710,17 +707,17 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
 });
 const LEVEL_LAYER_VIEWS = Object.freeze({
   5: Object.freeze([
-    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
+    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
     Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION'] }),
   ]),
   3: Object.freeze([
-    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
+    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
     Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION'] }),
   ]),
   1: Object.freeze([
-    Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
+    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ'] }),
     Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL/FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION'] }),
   ]),
@@ -1418,11 +1415,15 @@ class Component extends DCLogic {
         };
       };
        this._lines = Array.isArray(saved.lines)
-          ? saved.lines.map(line => restoreSegment(line, 'line', {
-            view: ['plan', 'floor', 'e-power', 'foundation'].includes(line?.view) ? line.view : 'plan',
-            layer: line?.layer === 'no-draft' ? 'no-draft' : 'draft',
-            bulge: Number.isFinite(Number(line?.bulge)) ? Number(line.bulge) : 0,
-          })).filter(Boolean)
+          ? saved.lines.map(line => {
+            const view = ['plan', 'floor', 'e-power', 'foundation'].includes(line?.view) ? line.view : 'plan';
+            return restoreSegment(line, 'line', {
+              view,
+              layer: line?.layer === 'no-draft' ? 'no-draft'
+                : (line?.layer === 'E-POWER' || view === 'e-power') ? 'E-POWER' : 'draft',
+              bulge: Number.isFinite(Number(line?.bulge)) ? Number(line.bulge) : 0,
+            });
+          }).filter(Boolean)
         : [];
       skipped += (Array.isArray(saved.lines) ? saved.lines.length : 0) - this._lines.length;
       this._walls = Array.isArray(saved.walls)
@@ -2690,7 +2691,7 @@ class Component extends DCLogic {
     return {
       plan: 'PLAN',
       floor: 'FLOOR',
-      'e-power': 'E-POWER',
+      'e-power': 'ELECTRIC',
       foundation: 'FOUNDATION',
     }[viewId] || 'LEVEL';
   }
@@ -2743,7 +2744,7 @@ class Component extends DCLogic {
 
   _contextToolMessage(tool, viewId = this._activeLayerViewId()) {
     const context = this._draftingContextLabel(viewId);
-    if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, E-POWER, or FOUNDATION. Current context: ${context}.`;
+    if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, ELECTRIC, or FOUNDATION. Current context: ${context}.`;
     if (tool === 'wall') return `Walls are drawn in any layer set: FOUNDATION walls save to S-FDN, all others save to PLAN. Current context: ${context}.`;
     if (tool === 'floor') return `Floor outlines are drawn in FLOOR or PLAN and always save to FLOOR. Current context: ${context}.`;
     if (tool === 'fenestration') return `Openings go on walls in PLAN or FOUNDATION, or into a selected floor or roof. Current context: ${context}.`;
@@ -2754,7 +2755,7 @@ class Component extends DCLogic {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
         return 'Turn on DRAFT or NO-DRAFT in the Company Standard Layers before drawing a generic line.';
       }
-      return `Select PLAN, FLOOR, E-POWER, or FOUNDATION before drawing a line. Current context: ${context}.`;
+      return `Select PLAN, FLOOR, ELECTRIC, or FOUNDATION before drawing a line. Current context: ${context}.`;
     }
     return `${tool} is not available in ${context}.`;
   }
@@ -2822,7 +2823,15 @@ class Component extends DCLogic {
   }
 
   _lineLayerConfig(layerId) {
-    return this._layerStandard(layerId === 'no-draft' ? 'no-draft' : 'draft');
+    return this._layerStandard(
+      layerId === 'no-draft' ? 'no-draft' : layerId === 'E-POWER' ? 'E-POWER' : 'draft');
+  }
+
+  // Command-driven layers: generic lines drawn in the ELECTRIC layer set are
+  // electric linework and save on E-POWER; NO-DRAFT stays construction-only.
+  _contextLineLayer(layerId, viewId = this._activeLayerViewId()) {
+    const id = normaliseActiveLineLayer(layerId);
+    return id === 'draft' && viewId === 'e-power' ? 'E-POWER' : id;
   }
 
   _layerStandard(layerId) {
@@ -2832,7 +2841,7 @@ class Component extends DCLogic {
 
   _setActiveLineLayer(layerId) {
     const id = normaliseActiveLineLayer(layerId);
-    const config = this._lineLayerConfig(id);
+    const config = this._lineLayerConfig(this._contextLineLayer(id));
     if (!config.visible) {
       this.setState({
         drawingMessage: `${config.name} is hidden — turn it on in the Company Standard Layers first.`,
@@ -2848,9 +2857,9 @@ class Component extends DCLogic {
   }
 
   _activeLineLayer() {
-    const requested = normaliseActiveLineLayer(this.state.activeLineLayer);
+    const requested = this._contextLineLayer(this.state.activeLineLayer);
     if (this._lineLayerConfig(requested).visible) return requested;
-    const alternate = requested === 'draft' ? 'no-draft' : 'draft';
+    const alternate = requested === 'no-draft' ? this._contextLineLayer('draft') : 'no-draft';
     return this._lineLayerConfig(alternate).visible ? alternate : requested;
   }
 
@@ -2915,7 +2924,7 @@ class Component extends DCLogic {
       && !this._courtesyWallIds?.has(wall.id));
   }
 
-  // E-Power shares the PLAN wall layers at full strength: walls render and print
+  // ELECTRIC shares the PLAN wall layers at full strength: walls render and print
   // exactly as they do in PLAN, but stay locked against selection and editing.
   _sharedContextWalls() {
     const levelId = this._activeLevelId();
@@ -2993,7 +3002,7 @@ class Component extends DCLogic {
   _backgroundWalls() {
     const ref = this._visibleBackgroundReference();
     if (!ref) return [];
-    // Walls live on PLAN; an E-POWER scope shows them the way E-POWER does.
+    // Walls live on PLAN; an ELECTRIC scope shows them the way ELECTRIC does.
     const wallView = ref.view === 'e-power' ? 'plan' : ref.view;
     return this._walls.filter(wall => wall.levelId === ref.levelId && (wallView == null || (wall.view || 'plan') === wallView));
   }
@@ -3177,12 +3186,6 @@ class Component extends DCLogic {
       this._notifySelectionChanged();
       this._markUnsaved();
     });
-  }
-
-  _toggleLevelVisibility(idx, e) {
-    e.stopPropagation();
-    const levels = this.state.levels.map((l, i) => i === idx ? { ...l, visible: !l.visible } : l);
-    this.setState({ levels }, () => this._markUnsaved());
   }
 
   // ─── Views ───────────────────────────────────────────────────────────────────
@@ -3994,7 +3997,7 @@ class Component extends DCLogic {
     const id = this._newDrawingItemId('wall');
     const homeView = this._wallHomeView(activeView);
     // Walls live in their home layer set; one drawn from another set stays
-    // visible there until the layer set changes. E-POWER already shares the
+    // visible there until the layer set changes. ELECTRIC already shares the
     // PLAN walls at full strength, so no courtesy pass is needed there.
     if (activeView !== homeView && activeView !== 'e-power') this._courtesyWallIds?.add(id);
     this._walls.push({
@@ -4087,7 +4090,7 @@ class Component extends DCLogic {
 
   // Nearest editable wall within the pick radius → { wall, offset, width } or
   // { wall, error } when the wall cannot take the opening. Reference-only walls
-  // (E-POWER shares, cross-context overlays) are deliberately excluded.
+  // (ELECTRIC shares, cross-context overlays) are deliberately excluded.
   _fenestrationPlacement(worldPt) {
     const h = this._canvas ? this._canvas.clientHeight : 600;
     const thresh = (this._orthoHalfH * 2) / h * 18;
@@ -7036,8 +7039,9 @@ class Component extends DCLogic {
     return {
       topBarLabel, topBarColor, workingContextLabel, activeLineLayerLabel: this._activeLineLayerLabel(),
       genericLineLayers: ['draft', 'no-draft'].map(id => {
-        const config = this._lineLayerConfig(id);
-        const isActive = this._activeLineLayer() === id;
+        const layerId = this._contextLineLayer(id);
+        const config = this._lineLayerConfig(layerId);
+        const isActive = this._activeLineLayer() === layerId;
         return {
           label: config.name,
           title: config.visible
@@ -7367,14 +7371,12 @@ class Component extends DCLogic {
           hasHeights: heights.length > 0,
           color: LEVEL_COLORS[i % LEVEL_COLORS.length],
           rowClass: 'level-row' + (i === activeLevelIdx ? ' active' : ''),
-          visIcon: l.visible ? '●' : '○', visLabel: l.visible ? 'Hide level' : 'Show level',
           ...bgSlotStyle(levelSlot),
           bgTitle: levelSlot === 0 ? 'Background 1 — blue, whole level shows'
             : levelSlot === 1 ? 'Background 2 — red, whole level shows'
             : (l.id === activeLevel?.id ? 'Active level cannot be a background' : 'Use the whole level as the background'),
           onSelect:    ()  => this._switchLevel(i),
           onDelete:    (e) => { e.stopPropagation(); this._deleteLevel(i); },
-          onToggleVis: (e) => this._toggleLevelVisibility(i, e),
           onToggleBackground: (e) => this._toggleBackgroundLevel(i, e),
         };
       }),

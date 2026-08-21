@@ -55,13 +55,13 @@ async function toolRailLabels(page) {
 test('tool names stay the same on every layer set', async ({ page }) => {
   await h.openModel(page);
   const expected = ['SELECT', 'LINE', 'NODE / ARC', 'WALL', 'FLOOR', 'DIMENSION', 'EXTEND', 'TRIM'];
-  for (const view of ['PLAN', 'FLOOR', 'E-POWER']) {
+  for (const view of ['PLAN', 'FLOOR', 'ELECTRIC']) {
     await switchLayerView(page, view);
     const labels = (await toolRailLabels(page))
       .map(label => label.replace(/\s+\[[^\]]+\]$/, '').trim().toUpperCase());
     for (const name of expected) expect(labels).toContain(name);
     // No context-prefixed variants anywhere in the rail.
-    expect(labels.some(label => /^(PLAN|FLOOR|E-POWER|FOUNDATION) /.test(label))).toBe(false);
+    expect(labels.some(label => /^(PLAN|FLOOR|ELECTRIC|FOUNDATION) /.test(label))).toBe(false);
   }
 });
 
@@ -112,16 +112,16 @@ test('a wall drawn from FLOOR saves to PLAN and stays visible until the layer se
   expect(await wallStrokeCount(page, 5, 0)).toBe(0);
 });
 
-test('a wall drawn from E-POWER saves to PLAN and shows through the shared layers', async ({ page }) => {
+test('a wall drawn from ELECTRIC saves to PLAN and shows through the shared layers', async ({ page }) => {
   await h.openModel(page);
-  await switchLayerView(page, 'E-POWER');
+  await switchLayerView(page, 'ELECTRIC');
   await drawWall(page, -10, 0, 10, 0);
 
   const walls = h.allWalls(await h.savedDrawing(page));
   expect(walls).toHaveLength(1);
   expect(walls[0].view).toBe('plan');
 
-  // E-POWER shares PLAN walls at full strength, so it renders right away.
+  // ELECTRIC shares PLAN walls at full strength, so it renders right away.
   expect(await wallStrokeCount(page, 5, 0)).toBeGreaterThan(0);
 });
 
@@ -169,7 +169,7 @@ test('ROOF and SITE are whole-level contexts with every command available', asyn
 
 test('dimensions can be placed on any layer set and save with it', async ({ page }) => {
   await h.openModel(page);
-  await switchLayerView(page, 'E-POWER');
+  await switchLayerView(page, 'ELECTRIC');
   await drawDimension(page, -10, -5, 10, -5);
 
   await switchLevel(page, 'FOUNDATION');

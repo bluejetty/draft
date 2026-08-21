@@ -99,8 +99,8 @@ test('a scoped background draws only its own layer set', async ({ page }) => {
 
   const mid = await h.worldToClient(page, 0, 0);
 
-  // Scoped to E-POWER, the PLAN line stays out of the background.
-  await layerBg(page, '2ND FL', 'E-POWER').click();
+  // Scoped to ELECTRIC, the PLAN line stays out of the background.
+  await layerBg(page, '2ND FL', 'ELECTRIC').click();
   await page.waitForTimeout(300);
   expect(countBluish(await h.overlayPixels(page, mid.x, mid.y))).toBe(0);
 

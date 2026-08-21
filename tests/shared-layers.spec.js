@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
-// Wall layers are shared between PLAN and E-POWER: they render and print at
+// Wall layers are shared between PLAN and ELECTRIC: they render and print at
 // full strength in both views, but only PLAN can edit them.
 const WALL_STROKE = [29, 31, 32]; // #1d1f20, the committed wall boundary color
 
@@ -25,14 +25,14 @@ async function wallStrokeCount(page, x, z) {
 }
 
 test.describe('shared wall layers', () => {
-  test('PLAN walls render at full strength in E-POWER but stay uneditable there', async ({ page }) => {
+  test('PLAN walls render at full strength in ELECTRIC but stay uneditable there', async ({ page }) => {
     await h.openModel(page);
     await drawWall(page, -10, 0, 10, 0);
 
-    await switchLayerView(page, 'E-POWER');
+    await switchLayerView(page, 'ELECTRIC');
     expect(await wallStrokeCount(page, 5, 0)).toBeGreaterThan(0);
 
-    // Clicking and deleting in E-POWER must leave the wall untouched.
+    // Clicking and deleting in ELECTRIC must leave the wall untouched.
     await h.selectTool(page, 'Select');
     await h.clickWorld(page, 5, 0);
     await page.keyboard.press('Delete');
@@ -48,10 +48,10 @@ test.describe('shared wall layers', () => {
     expect(h.allWalls(await h.savedDrawing(page))).toHaveLength(0);
   });
 
-  test('shared walls stay in the E-POWER print output', async ({ page }) => {
+  test('shared walls stay in the ELECTRIC print output', async ({ page }) => {
     await h.openModel(page);
     await drawWall(page, -10, 0, 10, 0);
-    await switchLayerView(page, 'E-POWER');
+    await switchLayerView(page, 'ELECTRIC');
 
     await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
     await page.waitForTimeout(400);

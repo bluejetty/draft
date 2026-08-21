@@ -46,7 +46,7 @@ if (!window.DraftDrawingFormat) {
       id: Number(level.id),
       name: String(level.name || 'LEVEL').toUpperCase(),
       elev: num(level.elev) ?? 0,
-      visible: level.visible !== false,
+      visible: true,
     }));
 
   // Cuts predating explicit ownership keep a null levelId: two levels can share
