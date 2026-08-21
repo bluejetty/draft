@@ -107,6 +107,7 @@ if (!window.DraftProfileManager) {
     wall: 'W',
     floor: 'F',
     fenestration: 'E',
+    roof: 'O',
     dimension: 'D',
     trim: 'T',
     cut: 'C',
@@ -209,6 +210,12 @@ if (!window.DraftProfileManager) {
         Object.freeze({ id: 'S-FDN', name: 'S-FDN', use: 'Foundation / frost walls and grade beams (Wall tool in FOUNDATION).', printable: true }),
         Object.freeze({ id: 'S-COL/FOOTING', name: 'S-COL/FOOTING', use: 'Columns and footings.', printable: true }),
         Object.freeze({ id: 'FOUNDATION DIMENSION', name: 'FOUNDATION DIMENSION', use: 'Dimension strings placed in FOUNDATION.', printable: true }),
+      ]),
+    }),
+    Object.freeze({
+      group: 'Architectural — ROOF',
+      layers: Object.freeze([
+        Object.freeze({ id: 'A-ROOF', name: 'A-ROOF', use: 'Roof footprints, ridges, hips, and valleys (Roof tool on ROOF).', printable: true }),
       ]),
     }),
     Object.freeze({
