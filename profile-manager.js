@@ -126,6 +126,7 @@ if (!window.DraftProfileManager) {
     redo: 'Ctrl+Shift+Z',
     background: 'B',
     gridSnap: '~',
+    gridSnapAlt: '/',
   });
 
   // Snap magnetic pull: catch radius in screen pixels for each snap type, so
