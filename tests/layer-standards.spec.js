@@ -8,7 +8,7 @@ const LINE_STROKE = [29, 31, 32]; // #1d1f20, committed generic line color
 
 const ALL_LAYER_IDS = [
   'draft', 'no-draft',
-  'A-WALL-EXT', 'A-WALL-INT', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING',
+  'A-WALL-EXT', 'A-WALL-INT', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-DOOR', 'A-GLAZ',
   'PLAN DIMENSIONS', 'ROOM IDS / AREA',
   'S-BEAM', 'S-SLAB', 'FLOOR DIMENSION', 'S-FDN', 'S-COL/FOOTING',
 ];

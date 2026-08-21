@@ -8,6 +8,13 @@ if (!window.DraftDrawingFormat) {
 
   const num = value => (Number.isFinite(Number(value)) ? Number(value) : null);
 
+  const oneOf = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
+  const positive = (value, fallback) => {
+    const parsed = num(value);
+    return parsed !== null && parsed > 0 ? parsed : fallback;
+  };
+  const number = (value, fallback) => num(value) ?? fallback;
+
   // { ok } when the object is a drawing of this exact version, otherwise a
   // reason: 'version' only for drawings from a newer Draft, 'invalid' for the rest.
   const checkEnvelope = saved => {
@@ -85,19 +92,40 @@ if (!window.DraftDrawingFormat) {
     }).filter(Boolean);
   };
 
+  // Openings anchor to a host wall by id: type decides the CAD layer, offset
+  // is the distance from the wall start to the opening centre along the wall.
+  // Host-wall existence is the caller's check — walls restore after this runs.
+  const fenestrations = (rawFenestrations, levelIds) => (Array.isArray(rawFenestrations) ? rawFenestrations : [])
+    .map(opening => {
+      const wallId = String(opening?.wallId || '').trim();
+      const openingLevelId = levelId(opening?.levelId, levelIds);
+      const type = oneOf(opening?.type, ['door', 'window'], null);
+      const width = positive(opening?.width, null);
+      const offset = num(opening?.offset);
+      if (!wallId || openingLevelId == null || !type || width == null || offset === null || offset < 0) return null;
+      const sillHeight = Math.max(0, number(opening?.sillHeight, 0));
+      const headHeight = positive(opening?.headHeight, null);
+      if (headHeight == null || headHeight <= sillHeight) return null;
+      return {
+        id: String(opening?.id || '').trim(),
+        wallId,
+        levelId: openingLevelId,
+        view: 'plan',
+        type,
+        layer: type === 'door' ? 'A-DOOR' : 'A-GLAZ',
+        offset,
+        width,
+        sillHeight,
+        headHeight,
+      };
+    }).filter(Boolean);
+
   // Backgrounds are at most two other levels, never the active one.
   const backgroundLevelIds = (rawIds, levelIds, activeLevelId) =>
     (Array.isArray(rawIds) ? rawIds : [])
       .map(Number)
       .filter((id, index, ids) => levelIds.has(id) && id !== activeLevelId && ids.indexOf(id) === index)
       .slice(0, 2);
-
-  const oneOf = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
-  const positive = (value, fallback) => {
-    const parsed = num(value);
-    return parsed !== null && parsed > 0 ? parsed : fallback;
-  };
-  const number = (value, fallback) => num(value) ?? fallback;
 
   window.DraftDrawingFormat = {
     VERSION,
@@ -107,6 +135,7 @@ if (!window.DraftDrawingFormat) {
     levels,
     cuts,
     dimensions,
+    fenestrations,
     backgroundLevelIds,
     oneOf,
     number,

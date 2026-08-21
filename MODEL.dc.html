@@ -321,6 +321,37 @@
       </div>
     </sc-if>
 
+    <!-- FENESTRATION PROPERTIES (shown when Fenestration tool is active) -->
+    <sc-if value="{{ fenestrationToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Fenestration</div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Type</div>
+        <div style="display:flex; gap:3px; margin-bottom:8px;">
+          <sc-for list="{{ fenestrationTypeBtns }}" as="ft" hint-placeholder-count="2">
+            <button onClick="{{ ft.onSelect }}" title="{{ ft.title }}" style="flex:1; border:1px solid {{ ft.border }}; background:{{ ft.bg }}; color:{{ ft.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ ft.label }}</button>
+          </sc-for>
+        </div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Width</div>
+        <input type="text" value="{{ fenestrationWidthInput }}" onInput="{{ onFenestrationWidthInput }}" onBlur="{{ onFenestrationWidthCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="3'-0&quot;" aria-label="Opening width" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+        <div style="margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+          <sc-if value="{{ fenestrationIsWindow }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Sill Ht</div>
+              <input type="text" value="{{ fenestrationSillInput }}" onInput="{{ onFenestrationSillInput }}" onBlur="{{ onFenestrationSillCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="2'-6&quot;" aria-label="Window sill height" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+            </div>
+          </sc-if>
+          <div>
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Head Ht</div>
+            <input type="text" value="{{ fenestrationHeadInput }}" onInput="{{ onFenestrationHeadInput }}" onBlur="{{ onFenestrationHeadCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="6'-8&quot;" aria-label="Opening head height" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+          </div>
+        </div>
+        <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ fenestrationLayerNote }}</div>
+        <sc-if value="{{ hasFenestrationDimensionError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ fenestrationDimensionError }}</div>
+        </sc-if>
+      </div>
+    </sc-if>
+
   </div>
 
   <!-- CANVAS AREA -->
@@ -555,6 +586,13 @@ const WALL_TYPES = [
   { id:'concrete_12', label:'12" Concrete',        totalIn:12,    layers:[{in:12,    fill:'concrete'}] },
   { id:'icf',         label:'ICF  (11¼")',         totalIn:11.25, layers:[{in:2.625,fill:'insulation'},{in:6,fill:'concrete'},{in:2.625,fill:'insulation'}] },
 ];
+// Fenestration defaults — door and window openings hosted on a wall. Heights
+// are measured from the bottom of the host wall; doors sit on it (sill 0).
+const DEFAULT_DOOR_WIDTH_FT = 3;
+const DEFAULT_WINDOW_WIDTH_FT = 4;
+const DEFAULT_WINDOW_SILL_FT = 2.5;
+const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
+const FENESTRATION_LAYERS = Object.freeze({ door: 'A-DOOR', window: 'A-GLAZ' });
 // Stored-drawing readers and the format version live in drawing-format.js;
 // the plan-view snapping and trim maths lives in geometry-2d.js.
 const format = window.DraftDrawingFormat;
@@ -575,17 +613,17 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
 const LEVEL_LAYER_VIEWS = Object.freeze({
   5: Object.freeze([
     Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT'] }),
-    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
+    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
     Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'FLOOR DIMENSION'] }),
   ]),
   3: Object.freeze([
     Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT'] }),
-    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
+    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
     Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'FLOOR DIMENSION'] }),
   ]),
   1: Object.freeze([
     Object.freeze({ id:'e-power', label:'E-POWER', contents:['A-WALL-EXT', 'A-WALL-INT'] }),
-    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT'] }),
+    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ'] }),
     Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL/FOOTING', 'S-BEAM', 'S-SLAB'] }),
   ]),
 });
@@ -682,6 +720,14 @@ class Component extends DCLogic {
     floorThicknessInput: formatArchitecturalInches(DEFAULT_FLOOR_THICKNESS_IN),
     floorDimensionError: '',
     floorStructure: 'floor',  // 'floor' framed assembly | 'slab' concrete slab
+    fenestrationType: 'door', // 'door' | 'window' — picks the CAD layer and defaults
+    fenestrationWidths: { door: DEFAULT_DOOR_WIDTH_FT, window: DEFAULT_WINDOW_WIDTH_FT },
+    fenestrationWidthInput: formatArchitecturalInches(DEFAULT_DOOR_WIDTH_FT * 12),
+    fenestrationSill: DEFAULT_WINDOW_SILL_FT,
+    fenestrationSillInput: formatArchitecturalInches(DEFAULT_WINDOW_SILL_FT * 12),
+    fenestrationHead: DEFAULT_OPENING_HEAD_FT,
+    fenestrationHeadInput: formatArchitecturalInches(DEFAULT_OPENING_HEAD_FT * 12),
+    fenestrationDimensionError: '',
     levels:        DEFAULT_LEVELS.map(l => ({ ...l })),
     levelLayerViews: { ...DEFAULT_LEVEL_LAYER_VIEWS },
     activeLevelIdx: 3,
@@ -757,6 +803,8 @@ class Component extends DCLogic {
     if (!Array.isArray(this._lines)) this._lines = [];
     if (!Array.isArray(this._walls)) this._walls = [];
     if (!Array.isArray(this._floors)) this._floors = [];
+    if (!Array.isArray(this._fenestrations)) this._fenestrations = [];
+    if (!(this._selectedFenestrations instanceof Set)) this._selectedFenestrations = new Set();
     if (!Array.isArray(this._dimensions)) this._dimensions = [];
     if (!Array.isArray(this._vertices)) this._vertices = [];
     if (!Array.isArray(this._groups)) this._groups = [];
@@ -805,6 +853,18 @@ class Component extends DCLogic {
         structure: floor.structure === 'slab' ? 'slab' : 'floor',
         thickness: floor.thickness,
         assembly: { ...floor.assembly },
+      })),
+      fenestrations: this._fenestrations.map(opening => ({
+        id: opening.id,
+        wallId: opening.wallId,
+        levelId: opening.levelId,
+        view: opening.view || 'plan',
+        type: opening.type,
+        layer: opening.layer,
+        offset: opening.offset,
+        width: opening.width,
+        sillHeight: opening.sillHeight,
+        headHeight: opening.headHeight,
       })),
       dimensions: this._dimensions.map(dimension => ({
         id: dimension.id,
@@ -1242,6 +1302,19 @@ class Component extends DCLogic {
         }).filter(Boolean)
         : [];
       skipped += (Array.isArray(saved.floors) ? saved.floors.length : 0) - this._floors.length;
+      const wallsById = new Map(this._walls.map(wall => [wall.id, wall]));
+      this._fenestrations = format.fenestrations(saved.fenestrations, levelIds).map(opening => {
+        const wall = wallsById.get(opening.wallId);
+        if (!wall || wall.levelId !== opening.levelId) return null;
+        const clamped = this._clampOpeningToWall(wall, opening.offset, opening.width);
+        if (!clamped) return null;
+        return {
+          ...opening,
+          id: this._storedItemId(opening.id, 'fenestration', usedIds),
+          offset: clamped.offset,
+        };
+      }).filter(Boolean);
+      skipped += (Array.isArray(saved.fenestrations) ? saved.fenestrations.length : 0) - this._fenestrations.length;
       const levelsById = new Map(levels.map(level => [level.id, level]));
       this._dimensions = dimensions.map(dimension => {
         const elevation = levelsById.get(dimension.levelId)?.elev ?? 0;
@@ -1252,7 +1325,7 @@ class Component extends DCLogic {
         };
       });
       this._nextDimensionId = nextDimensionId;
-       const numericItemIds = [...this._lines, ...this._walls, ...this._floors]
+       const numericItemIds = [...this._lines, ...this._walls, ...this._floors, ...this._fenestrations]
          .map(item => Number(String(item.id).match(/-(\d+)$/)?.[1]))
          .filter(Number.isInteger);
        this._nextDrawingItemId = Math.max(this._nextDrawingItemId, ...numericItemIds.map(id => id + 1), 1);
@@ -1627,6 +1700,7 @@ class Component extends DCLogic {
     this._walls      = [];
     this._lines      = []; // committed line segments
     this._floors     = []; // committed closed floor outlines
+    this._fenestrations = []; // door/window openings hosted on walls
     this._dimensions = []; // two-point plan/floor dimensions
      this._groups     = [];
      this._nextGroupId = 1;
@@ -1908,6 +1982,63 @@ class Component extends DCLogic {
       ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
       ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2; ctx.stroke();
       ctx.restore();
+    }
+
+    // ── Fenestrations (door / window openings carved into their host wall) ──
+    const drawOpening = (opening, options = {}) => {
+      const geoInfo = this._openingGeometry(opening);
+      if (!geoInfo) return;
+      const pts = geoInfo.corners.map(toS);
+      ctx.save();
+      ctx.beginPath();
+      pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.globalAlpha = options.preview ? 0.75 : 1;
+      ctx.fillStyle = '#fafafa';  // matches the renderer clear colour, so the gap reads as paper
+      ctx.fill();
+      ctx.strokeStyle = options.preview ? 'rgba(29,31,32,0.5)' : '#1d1f20';
+      ctx.lineWidth = 1.5;
+      geoInfo.jambs.forEach(([a, b]) => {
+        const sa = toS(a), sb = toS(b);
+        ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
+      });
+      if (opening.type === 'window') {
+        const [ga, gb] = geoInfo.glazing.map(toS);
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ga.x, ga.y); ctx.lineTo(gb.x, gb.y); ctx.stroke();
+      }
+      if (!this._isPrinting) {
+        // Centre grab point — the dimension / snap anchor.
+        const c = toS(geoInfo.center);
+        ctx.fillStyle = options.preview ? 'rgba(89,128,166,0.85)' : '#1d1f20';
+        ctx.beginPath(); ctx.arc(c.x, c.y, 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+      if (options.selected) {
+        ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        ctx.closePath(); ctx.stroke();
+      }
+      ctx.restore();
+    };
+    if (activeVisible) {
+      const displayWallIds = new Set(displayWalls.map(w => w.id));
+      this._fenestrations
+        .filter(opening => displayWallIds.has(opening.wallId)
+          && this._layerStandard(opening.layer).visible
+          && (!this._isPrinting || this._layerStandard(opening.layer).printable))
+        .forEach(opening => drawOpening(opening, { selected: this._selectedFenestrations?.has(opening) }));
+    }
+    if (activeVisible && this.state.activeTool === 'fenestration' && this._snapPt && !this._isPrinting) {
+      const placement = this._fenestrationPlacement(this._snapPt);
+      if (placement && !placement.error) {
+        drawOpening({
+          type: this.state.fenestrationType,
+          wallId: placement.wall.id,
+          offset: placement.offset,
+          width: placement.width,
+        }, { preview: true });
+      }
     }
 
     ctx.strokeStyle = LINE_COLOR; ctx.lineWidth = 2; ctx.fillStyle = LINE_COLOR;
@@ -2235,6 +2366,7 @@ class Component extends DCLogic {
     if (tool === 'node') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
     if (tool === 'wall') return ['plan', 'floor'].includes(viewId);
     if (tool === 'floor') return ['floor', 'plan'].includes(viewId);
+    if (tool === 'fenestration') return viewId === 'plan';
     if (tool === 'dimension') return ['plan', 'floor'].includes(viewId);
     return true;
   }
@@ -2243,7 +2375,7 @@ class Component extends DCLogic {
   // only decides where the geometry saves, never what the command is called.
   _contextToolLabel(tool, shortcut = '') {
     const suffix = shortcut ? `  [${shortcut}]` : '';
-    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', dimension:'DIMENSION' };
+    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', dimension:'DIMENSION' };
     return `${names[tool] || tool.toUpperCase()}${suffix}`;
   }
 
@@ -2252,6 +2384,7 @@ class Component extends DCLogic {
   _contextToolSaveLabel(tool, viewId = this._activeLayerViewId()) {
     if (tool === 'wall') return this._draftingContextLabel('plan');
     if (tool === 'floor') return this._draftingContextLabel('floor');
+    if (tool === 'fenestration') return this._draftingContextLabel('plan');
     return this._draftingContextLabel(viewId);
   }
 
@@ -2260,6 +2393,7 @@ class Component extends DCLogic {
     if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, E-POWER, or FOUNDATION. Current context: ${context}.`;
     if (tool === 'wall') return `Walls are drawn in PLAN or FLOOR and always save to PLAN. Current context: ${context}.`;
     if (tool === 'floor') return `Floor outlines are drawn in FLOOR or PLAN and always save to FLOOR. Current context: ${context}.`;
+    if (tool === 'fenestration') return `Door and window openings are placed on walls in PLAN. Current context: ${context}.`;
     if (tool === 'dimension') return `Dimensions are placed in PLAN or FLOOR. Current context: ${context}.`;
     if (tool === 'line') {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
@@ -2300,7 +2434,7 @@ class Component extends DCLogic {
     this._cancelFrozenLength();
     this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension();
     this._applyLevelElevation(levelIndex);
-    const activeTool = ['line', 'node', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
+    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'dimension'].includes(this.state.activeTool)
       && !this._contextAllowsTool(this.state.activeTool, viewId)
       ? 'select'
       : this.state.activeTool;
@@ -2310,10 +2444,10 @@ class Component extends DCLogic {
       backgroundLevelViews,
       levelLayerViews: { ...this.state.levelLayerViews, [levelId]: viewId },
       activeTool,
-      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
+      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'dimension'].includes(this.state.activeTool)
         ? this._contextToolMessage(this.state.activeTool, viewId)
         : `Working in ${this._draftingContextLabel(viewId)}.`,
-      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'dimension'].includes(this.state.activeTool),
+      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'dimension'].includes(this.state.activeTool),
     }, () => {
       if (this._orthoCam) this._setView('top');
       this._pruneContextReferenceSelection();
@@ -2944,6 +3078,7 @@ class Component extends DCLogic {
       else if (tool === 'line') this._handleLineClick();
       else if (tool === 'node') this._handleNodeArcDown(e);
       else if (tool === 'floor') this._handleFloorClick();
+      else if (tool === 'fenestration') this._handleFenestrationClick();
       else if (tool === 'dimension') this._handleDimensionClick();
       else if (tool === 'cut') this._handleCutClick();
       else if (tool === 'select') {
@@ -3263,6 +3398,216 @@ class Component extends DCLogic {
       baseHeight: baseHeight != null ? baseHeight : this.state.wallBaseHeight,
       topHeight:  topHeight  != null ? topHeight  : this.state.wallTopHeight,
       refLine:    refLine    || this.state.wallRefLine,
+    });
+    return true;
+  }
+
+  // ─── Fenestration (door / window openings) ───────────────────────────────────
+  // An opening anchors to its host wall by id and stores only its centre offset
+  // along the wall, width, and heights from the bottom of the wall. The wall
+  // geometry itself is never modified; rendering carves the gap.
+  _wallLength(wall) {
+    return Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+  }
+
+  // Keep the whole opening on the wall, with a small jamb left at each end.
+  // Returns null when the wall is too short for the width.
+  _clampOpeningToWall(wall, offset, width) {
+    const JAMB_FT = 0.01;
+    const len = this._wallLength(wall);
+    if (!(width > 0) || len < width + JAMB_FT * 2) return null;
+    const half = width / 2;
+    return { offset: Math.min(Math.max(offset, half + JAMB_FT), len - half - JAMB_FT) };
+  }
+
+  _fenestrationWidth(type = this.state.fenestrationType) {
+    const width = Number(this.state.fenestrationWidths?.[type]);
+    if (width > 0) return width;
+    return type === 'window' ? DEFAULT_WINDOW_WIDTH_FT : DEFAULT_DOOR_WIDTH_FT;
+  }
+
+  _activeFenestrations() {
+    const levelId = this._activeLevelId();
+    const wallIds = new Set([...this._activeWalls(), ...this._sharedContextWalls()].map(wall => wall.id));
+    return this._fenestrations.filter(opening => opening.levelId === levelId && wallIds.has(opening.wallId));
+  }
+
+  // World-space footprint of an opening on its host wall: the carved quad, the
+  // two jamb caps, the glazing centreline and the centre grab/snap point.
+  _openingGeometry(opening, wall = this._walls.find(w => w.id === opening.wallId)) {
+    if (!wall) return null;
+    const clamped = this._clampOpeningToWall(wall, opening.offset, opening.width);
+    if (!clamped) return null;
+    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+    const len = Math.hypot(dx, dz);
+    const ux = dx / len, uz = dz / len;
+    const nx = -uz, nz = ux;
+    const def = WALL_TYPES.find(w => w.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
+    const totalFt = def.totalIn / 12;
+    const refLine = wall.refLine || 'center';
+    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
+    const endOff = startOff + totalFt;
+    const midOff = (startOff + endOff) / 2;
+    const half = opening.width / 2;
+    // The wall boundary stroke is centred on the face, so the gap fill must
+    // reach a couple of pixels past each face to fully interrupt it.
+    const pad = this._canvas
+      ? (this._orthoHalfH * 2) / this._canvas.clientHeight * 2
+      : 0.02;
+    const at = (along, across) => ({
+      x: wall.start.x + ux * along + nx * across,
+      y: wall.start.y || 0,
+      z: wall.start.z + uz * along + nz * across,
+    });
+    return {
+      wall,
+      center: at(clamped.offset, midOff),
+      corners: [
+        at(clamped.offset - half, startOff - pad),
+        at(clamped.offset + half, startOff - pad),
+        at(clamped.offset + half, endOff + pad),
+        at(clamped.offset - half, endOff + pad),
+      ],
+      jambs: [
+        [at(clamped.offset - half, startOff - pad), at(clamped.offset - half, endOff + pad)],
+        [at(clamped.offset + half, startOff - pad), at(clamped.offset + half, endOff + pad)],
+      ],
+      glazing: [at(clamped.offset - half, midOff), at(clamped.offset + half, midOff)],
+    };
+  }
+
+  // Nearest editable wall within the pick radius → { wall, offset, width } or
+  // { wall, error } when the wall cannot take the opening. Reference-only walls
+  // (E-POWER shares, cross-context overlays) are deliberately excluded.
+  _fenestrationPlacement(worldPt) {
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    const thresh = (this._orthoHalfH * 2) / h * 18;
+    let best = null, bestD = thresh;
+    this._activeWalls().forEach(wall => {
+      const { d, t } = this._distToLineSeg(worldPt, wall);
+      if (d < bestD) { bestD = d; best = { wall, t }; }
+    });
+    if (!best) return null;
+    const width = this._fenestrationWidth();
+    const clamped = this._clampOpeningToWall(best.wall, best.t * this._wallLength(best.wall), width);
+    if (!clamped) return { wall: best.wall, error: 'too-short' };
+    return { wall: best.wall, offset: clamped.offset, width };
+  }
+
+  _handleFenestrationClick() {
+    if (!this._contextAllowsTool('fenestration')) {
+      this.setState({ drawingMessage: this._contextToolMessage('fenestration'), drawingMessageError: true });
+      return;
+    }
+    const pt = this._snapPt; if (!pt) return;
+    const placement = this._fenestrationPlacement(pt);
+    if (!placement) {
+      this.setState({ drawingMessage: 'Click on a wall to place the opening.', drawingMessageError: true });
+      return;
+    }
+    if (placement.error) {
+      this.setState({ drawingMessage: 'That wall is too short for this opening width.', drawingMessageError: true });
+      return;
+    }
+    const type = this.state.fenestrationType === 'window' ? 'window' : 'door';
+    this._fenestrations.push({
+      id: this._newDrawingItemId('fenestration'),
+      wallId: placement.wall.id,
+      levelId: placement.wall.levelId,
+      view: 'plan',
+      type,
+      layer: FENESTRATION_LAYERS[type],
+      offset: placement.offset,
+      width: placement.width,
+      sillHeight: type === 'door' ? 0 : this.state.fenestrationSill,
+      headHeight: this.state.fenestrationHead,
+    });
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `${type === 'door' ? 'Door' : 'Window'} opening placed on ${FENESTRATION_LAYERS[type]}.`,
+      drawingMessageError: false,
+    });
+  }
+
+  // Openings under a select click take priority over their host wall, so an
+  // opening can be picked and deleted without grabbing the wall around it.
+  _findFenestrationAt(worldPt) {
+    return this._activeFenestrations().find(opening => {
+      const wall = this._walls.find(w => w.id === opening.wallId);
+      if (!wall || this._isCurrentContextReferenceItem(wall)) return false;
+      const geoInfo = this._openingGeometry(opening, wall);
+      if (!geoInfo) return false;
+      const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+      const len = Math.hypot(dx, dz);
+      const ux = dx / len, uz = dz / len;
+      const relX = worldPt.x - wall.start.x, relZ = worldPt.z - wall.start.z;
+      const along = relX * ux + relZ * uz;
+      const across = relX * -uz + relZ * ux;
+      const def = WALL_TYPES.find(w => w.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
+      const totalFt = def.totalIn / 12;
+      const refLine = wall.refLine || 'center';
+      const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
+      const clamped = this._clampOpeningToWall(wall, opening.offset, opening.width);
+      // A couple of pixels of slack so a click on the wall face still counts.
+      const slack = this._canvas ? (this._orthoHalfH * 2) / this._canvas.clientHeight * 2 : 0.01;
+      return clamped != null
+        && Math.abs(along - clamped.offset) <= opening.width / 2
+        && across >= startOff - slack && across <= startOff + totalFt + slack;
+    }) || null;
+  }
+
+  _setFenestrationType(value) {
+    const type = value === 'window' ? 'window' : 'door';
+    if (type === this.state.fenestrationType) return;
+    this.setState({
+      fenestrationType: type,
+      fenestrationWidthInput: formatArchitecturalInches(this._fenestrationWidth(type) * 12),
+      fenestrationDimensionError: '',
+    });
+  }
+
+  _commitFenestrationWidth() {
+    const parsed = parseArchitecturalLength(this.state.fenestrationWidthInput);
+    if (!parsed.ok || parsed.inches <= 0) {
+      this.setState({ fenestrationDimensionError: parsed.ok ? 'Width must be greater than zero.' : parsed.error });
+      return false;
+    }
+    const type = this.state.fenestrationType;
+    this.setState({
+      fenestrationWidths: { ...this.state.fenestrationWidths, [type]: parsed.inches / 12 },
+      fenestrationWidthInput: formatArchitecturalInches(parsed.inches),
+      fenestrationDimensionError: '',
+    });
+    return true;
+  }
+
+  _commitFenestrationSill() {
+    const parsed = parseArchitecturalLength(this.state.fenestrationSillInput);
+    if (!parsed.ok || parsed.inches < 0 || parsed.inches / 12 >= this.state.fenestrationHead) {
+      this.setState({ fenestrationDimensionError: parsed.ok
+        ? 'Sill height must sit below the head height.' : parsed.error });
+      return false;
+    }
+    this.setState({
+      fenestrationSill: parsed.inches / 12,
+      fenestrationSillInput: formatArchitecturalInches(parsed.inches),
+      fenestrationDimensionError: '',
+    });
+    return true;
+  }
+
+  _commitFenestrationHead() {
+    const parsed = parseArchitecturalLength(this.state.fenestrationHeadInput);
+    const sill = this.state.fenestrationType === 'window' ? this.state.fenestrationSill : 0;
+    if (!parsed.ok || parsed.inches <= 0 || parsed.inches / 12 <= sill) {
+      this.setState({ fenestrationDimensionError: parsed.ok
+        ? 'Head height must sit above the sill.' : parsed.error });
+      return false;
+    }
+    this.setState({
+      fenestrationHead: parsed.inches / 12,
+      fenestrationHeadInput: formatArchitecturalInches(parsed.inches),
+      fenestrationDimensionError: '',
     });
     return true;
   }
@@ -3642,6 +3987,11 @@ class Component extends DCLogic {
     this._wallChain.forEach(s => { pts.push(s.start, s.end); });
     this._activeFloors().forEach(floor => pts.push(...floor.points));
     if (this._floorDrawing) pts.push(...this._floorPoints);
+    // Opening centres are the fenestration grab / dimension anchors.
+    this._activeFenestrations().forEach(opening => {
+      const center = this._openingGeometry(opening)?.center;
+      if (center) pts.push(new THREE.Vector3(center.x, center.y, center.z));
+    });
     return pts;
   }
 
@@ -3972,6 +4322,7 @@ class Component extends DCLogic {
   _clearSelection(notify = true) {
     this._selectedSegs?.clear();
     this._selectedFloors?.clear();
+    this._selectedFenestrations?.clear();
     if (notify) this._notifySelectionChanged();
   }
 
@@ -4173,6 +4524,15 @@ class Component extends DCLogic {
     const vertexRefs = this._findVertexHit(worldPt);
     if (vertexRefs) {
       this._addItemsAndTheirGroups(this._itemsFromVertexRefs(vertexRefs), !shiftHeld);
+      return;
+    }
+    // A click inside an opening picks the opening, not the wall around it.
+    const opening = this._findFenestrationAt(worldPt);
+    if (opening) {
+      if (!shiftHeld) this._clearSelection(false);
+      if (shiftHeld && this._selectedFenestrations.has(opening)) this._selectedFenestrations.delete(opening);
+      else this._selectedFenestrations.add(opening);
+      this._notifySelectionChanged();
       return;
     }
     const hit = this._findNearestSeg(worldPt);
@@ -4881,12 +5241,17 @@ class Component extends DCLogic {
       return;
     }
     if (matches('delete')) {
-      if (this.state.activeTool === 'select' && (this._selectedSegs.size > 0 || this._selectedFloors.size > 0)) {
+      if (this.state.activeTool === 'select'
+        && (this._selectedSegs.size > 0 || this._selectedFloors.size > 0 || this._selectedFenestrations.size > 0)) {
         e.preventDefault();
-        const selectedCount = this._selectedSegs.size + this._selectedFloors.size;
+        const selectedCount = this._selectedSegs.size + this._selectedFloors.size + this._selectedFenestrations.size;
         this._lines = this._lines.filter(l => !this._selectedSegs.has(l));
         this._walls = this._walls.filter(w => !this._selectedSegs.has(w));
         this._floors = this._floors.filter(floor => !this._selectedFloors.has(floor));
+        // Openings go with their own selection and with any deleted host wall.
+        const wallIds = new Set(this._walls.map(w => w.id));
+        this._fenestrations = this._fenestrations.filter(opening =>
+          !this._selectedFenestrations.has(opening) && wallIds.has(opening.wallId));
         this._cleanupGroups();
         this._clearSelection();
         if (selectedCount) this._markUnsaved();
@@ -4919,6 +5284,7 @@ class Component extends DCLogic {
     if (matches('line')) { e.preventDefault(); this._activateContextTool('line'); return; }
     if (matches('node')) { e.preventDefault(); this._activateContextTool('node'); return; }
     if (matches('floor')) { e.preventDefault(); this._activateContextTool('floor'); return; }
+    if (matches('fenestration')) { e.preventDefault(); this._activateContextTool('fenestration'); return; }
     if (matches('dimension')) { e.preventDefault(); this._activateContextTool('dimension'); return; }
     if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
     if (matches('extend') || matches('extendAlt')) {
@@ -5068,9 +5434,12 @@ class Component extends DCLogic {
     const dimensioning = activeTool === 'dimension';
     const extending = activeTool === 'extend';
     const nodeArcing = activeTool === 'node';
+    const fenestrating = activeTool === 'fenestration';
     const placingCut  = isCutTool && cutPhase === 'placing';
-    const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending || nodeArcing;
-    const hintText    = nodeArcing
+    const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending || nodeArcing || fenestrating;
+    const hintText    = fenestrating
+      ? 'FENESTRATION — Click a wall to place the opening at the cursor'
+      : nodeArcing
       ? 'NODE / ARC — Click a line to add a node · Drag beside a line to pull an arc'
       : extending
       ? (extendPhase === 'idle'
@@ -5134,6 +5503,37 @@ class Component extends DCLogic {
       lineToolActive: activeTool === 'line',
       wallToolActive: activeTool === 'wall',
       floorToolActive: activeTool === 'floor',
+      fenestrationToolActive: fenestrating,
+      fenestrationIsWindow: this.state.fenestrationType === 'window',
+      fenestrationTypeBtns: ['door', 'window'].map(value => {
+        const isActive = this.state.fenestrationType === value;
+        return {
+          label: value === 'window' ? 'WINDOW' : 'DOOR',
+          title: value === 'window'
+            ? 'Window opening — saves on A-GLAZ with a sill height'
+            : 'Door opening — saves on A-DOOR, sill at the bottom of the wall',
+          border: isActive ? '#1d1f20' : 'rgba(29,31,32,0.2)',
+          bg: isActive ? '#1d1f20' : '#fff',
+          color: isActive ? '#f2f2f3' : '#1d1f20',
+          onSelect: () => this._setFenestrationType(value),
+        };
+      }),
+      fenestrationWidthInput: this.state.fenestrationWidthInput,
+      onFenestrationWidthInput: e => this.setState({ fenestrationWidthInput: e.target.value }),
+      onFenestrationWidthCommit: () => this._commitFenestrationWidth(),
+      fenestrationSillInput: this.state.fenestrationSillInput,
+      onFenestrationSillInput: e => this.setState({ fenestrationSillInput: e.target.value }),
+      onFenestrationSillCommit: () => this._commitFenestrationSill(),
+      fenestrationHeadInput: this.state.fenestrationHeadInput,
+      onFenestrationHeadInput: e => this.setState({ fenestrationHeadInput: e.target.value }),
+      onFenestrationHeadCommit: () => this._commitFenestrationHead(),
+      onFenestrationDimensionKey: e => { if (e.key === 'Enter') e.target.blur(); e.stopPropagation(); },
+      fenestrationDimensionBorder: this.state.fenestrationDimensionError ? '#b04050' : 'rgba(29,31,32,0.2)',
+      hasFenestrationDimensionError: Boolean(this.state.fenestrationDimensionError),
+      fenestrationDimensionError: this.state.fenestrationDimensionError,
+      fenestrationLayerNote: this.state.fenestrationType === 'window'
+        ? 'Saves on A-GLAZ · heights from the bottom of the wall'
+        : 'Saves on A-DOOR · sill sits at the bottom of the wall',
       selectToolActive: activeTool === 'select',
       extendToolActive: extending,
       extendCurrentBg: extendScope === 'current' ? '#1d1f20' : '#fff',
@@ -5389,6 +5789,7 @@ class Component extends DCLogic {
         contextualTool('node'),
         contextualTool('wall'),
         contextualTool('floor'),
+        contextualTool('fenestration'),
         contextualTool('dimension'),
         standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut(); this._cancelExtend(); this.setState({activeTool:'extend', extendScope:'current', extendPhase:'idle', extendMessage:''}); }, activeTool==='extend'),
         standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
