@@ -372,6 +372,8 @@
     <div data-model-midsnap style="position:absolute; left:{{ midSnapX }}px; top:{{ midSnapY }}px; width:13px; height:13px; border:2px solid #e8a020; background:rgba(232,160,32,0.12); transform:translate(-50%,-50%) rotate(45deg); pointer-events:none; display:{{ midSnapDisplay }};"></div>
     <!-- Grid snap indicator (green ring on the engaged grid point) -->
     <div data-model-gridsnap style="position:absolute; left:{{ gridSnapPtX }}px; top:{{ gridSnapPtY }}px; width:14px; height:14px; border-radius:50%; border:2px solid #557a46; transform:translate(-50%,-50%); pointer-events:none; display:{{ gridSnapPtDisplay }};"></div>
+    <!-- Polar-tracking origin (orange glow on the acquired node) -->
+    <div data-model-polar style="position:absolute; left:{{ polarOriginX }}px; top:{{ polarOriginY }}px; width:16px; height:16px; border-radius:50%; border:2px solid #e07a20; box-shadow:0 0 8px rgba(224,122,32,0.85); transform:translate(-50%,-50%); pointer-events:none; display:{{ polarOriginDisplay }};"></div>
 
     <!-- Direction-choice overlay (shown while choosing cut direction) -->
     <sc-if value="{{ choosingDir }}" hint-placeholder-val="{{ false }}">
@@ -477,6 +479,10 @@ const LEVEL_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a
 // snap-strength settings (screen-space pixels, adjustable in Settings).
 // Shift/angle-locked alignment catch distance from a node center.
 const LOCKED_NODE_SNAP_PX = 3;
+// How close (px) the cursor must pass to a 45° polar-tracking ray to snap onto it.
+const POLAR_SNAP_PX = 6;
+// Tools whose next click can ride a polar-tracking ray from an acquired node.
+const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'dimension', 'cut', 'extend']);
 const SIXTEENTH_IN = 1 / 16;
 const DEFAULT_WALL_TOP_FT = (8 * 12 + 1 + 1 / 8) / 12;
 const DEFAULT_FLOOR_THICKNESS_IN = 12 + 5 / 8;
@@ -743,6 +749,7 @@ class Component extends DCLogic {
     magnetX: -100, magnetY: -100, showMagnet: false,
     midSnapX: -100, midSnapY: -100, showMidSnap: false,
     gridSnapPtX: -100, gridSnapPtY: -100, showGridSnapPt: false,
+    polarOriginX: -100, polarOriginY: -100, showPolarOrigin: false,
     lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '',
     cuts:          [],
     nextCutId:     1,
@@ -1744,6 +1751,11 @@ class Component extends DCLogic {
     this._extendSession  = null;      // { vertices, scope } — captured Extend nodes
     this._extendUndo     = null;      // { changes } — last committed Extend move
 
+    // Polar tracking — hovering a node acquires it as a temporary origin whose
+    // 45° rays the cursor can snap along while drawing.
+    this._polarOrigin = null;
+    this._polarSnap   = null;
+
     // Undo history — serialized drawings, oldest first
     this._history          = { past: [], future: [] };
     this._historySnapshot  = null;    // the drawing as it stands right now
@@ -2159,6 +2171,16 @@ class Component extends DCLogic {
       ctx.save();
       ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
       ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+    }
+
+    // Polar-tracking ruler: dashed orange ray from the acquired origin node
+    if (this._polarOrigin && this._polarSnap) {
+      ctx.save();
+      ctx.strokeStyle = '#e07a20'; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
+      const so = toS(this._polarOrigin), sp = toS(this._polarSnap);
+      ctx.beginPath(); ctx.moveTo(so.x, so.y); ctx.lineTo(sp.x, sp.y); ctx.stroke();
+      ctx.setLineDash([]);
       ctx.restore();
     }
 
@@ -2941,7 +2963,7 @@ class Component extends DCLogic {
   _onMouseMove(e) {
     if (this.state.lengthFrozen) return;
     const raw = this._getWorldPos(e.clientX, e.clientY);
-    if (!raw) { this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false }); return; }
+    if (!raw) { this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false, showPolarOrigin: false }); return; }
 
     const gridHit = this._gridSnapPoint(raw);
     const gridPt = gridHit ? gridHit.clone() : raw.clone();
@@ -2951,6 +2973,7 @@ class Component extends DCLogic {
       : tool === 'floor' ? this._floorPoints[this._floorPoints.length - 1]
       : tool === 'dimension' ? this._dimensionStart
       : tool === 'cut' && this.state.cutPhase === 'placing' ? this._cutStart3
+      : tool === 'extend' && this.state.extendPhase === 'destination' ? this.state.extendBase
       : null;
     const angleLockHeld = this._shiftHeld || this._ctrlHeld;
 
@@ -2976,6 +2999,12 @@ class Component extends DCLogic {
     // Midpoint snap — only when no vertex magnet and not tracking
     const midSnap = (!trackingHit && !magnet) ? this._findMidpointSnap(raw) : null;
 
+    // Rolling over a node acquires it as the polar-tracking origin.
+    if (magnet && POLAR_TRACKING_TOOLS.has(tool)) this._polarOrigin = magnet.clone();
+    const polarHit = (!trackingHit && !magnet && !midSnap && !(angleLockHeld && start)
+      && this._polarOrigin && POLAR_TRACKING_TOOLS.has(tool))
+      ? this._findPolarSnap(raw) : null;
+
     // Final snap point and cursor position
     let finalPt, cursorPt;
     if (trackingHit) {
@@ -2994,6 +3023,10 @@ class Component extends DCLogic {
       // Angle lock: endpoint stays on locked ray, cursor roams freely with mouse
       finalPt  = this._applyAngleLock(start, gridPt);
       cursorPt = gridPt;
+    } else if (polarHit) {
+      // Polar tracking: cursor rides a 45° ray cast from the acquired node
+      finalPt  = polarHit;
+      cursorPt = polarHit;
     } else {
       finalPt  = gridPt;
       cursorPt = gridPt;
@@ -3002,9 +3035,10 @@ class Component extends DCLogic {
     this._snapPt = finalPt;
     this._trackingRef  = trackingHit ? trackingHit.refPt  : null;
     this._trackingSnap = trackingHit ? trackingHit.snapPt : null;
+    this._polarSnap    = polarHit;
 
     const sc = this._toScreen(cursorPt);
-    const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false, showMidSnap: false, showGridSnapPt: false };
+    const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false, showMidSnap: false, showGridSnapPt: false, showPolarOrigin: false };
     if (magnet) {
       const ms = this._toScreen(magnet);
       newState.magnetX = ms.x; newState.magnetY = ms.y; newState.showMagnet = true;
@@ -3015,9 +3049,16 @@ class Component extends DCLogic {
     }
     // Ring the engaged grid point so it is obvious grid snap has hold of the
     // cursor; higher-priority snaps (tracking, magnet, midpoint) replace it.
-    if (gridHit && !trackingHit && !magnet && !midSnap && !(angleLockHeld && start)) {
+    if (gridHit && !trackingHit && !magnet && !midSnap && !(angleLockHeld && start) && !polarHit) {
       const gs = this._toScreen(gridHit);
       newState.gridSnapPtX = gs.x; newState.gridSnapPtY = gs.y; newState.showGridSnapPt = true;
+    }
+    // The acquired polar origin glows orange while hovered or while its ray is engaged.
+    const hoveringOrigin = magnet && this._polarOrigin
+      && Math.hypot(magnet.x - this._polarOrigin.x, magnet.z - this._polarOrigin.z) < 0.001;
+    if (this._polarOrigin && (polarHit || hoveringOrigin)) {
+      const os = this._toScreen(this._polarOrigin);
+      newState.polarOriginX = os.x; newState.polarOriginY = os.y; newState.showPolarOrigin = true;
     }
     this.setState(newState);
 
@@ -3076,7 +3117,7 @@ class Component extends DCLogic {
   }
 
   _onMouseLeave() {
-    this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false });
+    this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false, showPolarOrigin: false });
     ['[data-model-sx]','[data-model-sy]','[data-model-len]'].forEach((s, i) => {
       const el = document.querySelector(s); if (el) el.textContent = ['X: —','Y: —',''][i];
     });
@@ -3152,12 +3193,12 @@ class Component extends DCLogic {
           return;
         }
         if (this.state.extendPhase === 'base') {
-          this._setExtendBase(this._snap(raw));
+          this._setExtendBase(this._snapPt || this._snap(raw));
           e.preventDefault();
           return;
         }
         if (this.state.extendPhase === 'destination') {
-          this._commitExtend(this._snap(raw));
+          this._commitExtend(this._snapPt || this._snap(raw));
           e.preventDefault();
         }
       }
@@ -4696,6 +4737,33 @@ class Component extends DCLogic {
     this.setState({ extendPhase: 'idle', extendBase: null, extendMessage: '' });
   }
 
+  // Selection-first Extend: nodes of the currently selected items become the
+  // captured set, so a window selection followed by the Extend key skips the
+  // capture rectangle and goes straight to picking a base point.
+  _extendSessionFromSelection() {
+    const items = [...(this._selectedSegs || []), ...(this._selectedFloors || [])]
+      .filter(item => !this._isCurrentContextReferenceItem(item));
+    const vertices = new Set();
+    items.forEach(item => (item.points || [item.start, item.end]).filter(Boolean)
+      .forEach(point => vertices.add(point)));
+    return vertices.size ? { vertices, scope: this.state.extendScope } : null;
+  }
+
+  _activateExtendTool() {
+    const seeded = this.state.activeTool === 'select' ? this._extendSessionFromSelection() : null;
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut(); this._cancelExtend();
+    if (seeded) {
+      this._clearSelection();
+      this._extendSession = seeded;
+      this.setState({
+        activeTool: 'extend', extendScope: 'current', extendPhase: 'base',
+        extendMessage: `${seeded.vertices.size} node${seeded.vertices.size === 1 ? '' : 's'} from the selection. Pick a base point.`,
+      });
+    } else {
+      this.setState({ activeTool: 'extend', extendScope: 'current', extendPhase: 'idle', extendMessage: '' });
+    }
+  }
+
   // ─── Trim tool ───────────────────────────────────────────────────────────────
 
   // 2D segment intersection. Returns { t, u, x, z } where t∈[0,1] is the param
@@ -4770,6 +4838,22 @@ class Component extends DCLogic {
       return { snapPt: new THREE.Vector3(projected.x, start.y, projected.z), refPt };
     };
     return find(this._collectActiveVertices()) || find(this._collectBackgroundVertices());
+  }
+
+  // Polar tracking: snap the cursor onto the nearest 45° ray cast from the
+  // acquired origin node when it passes within a few pixels of one.
+  _findPolarSnap(pt) {
+    const origin = this._polarOrigin;
+    const dx = pt.x - origin.x, dz = pt.z - origin.z;
+    if (Math.hypot(dx, dz) < 0.001) return null;
+    const step = Math.PI / 4;
+    const angle = Math.round(Math.atan2(dz, dx) / step) * step;
+    const along = dx * Math.cos(angle) + dz * Math.sin(angle);
+    if (along <= 0) return null;
+    const sx = origin.x + Math.cos(angle) * along;
+    const sz = origin.z + Math.sin(angle) * along;
+    if (Math.hypot(pt.x - sx, pt.z - sz) > POLAR_SNAP_PX * this._worldPerPixel()) return null;
+    return new THREE.Vector3(sx, pt.y, sz);
   }
 
   _applyAngleLock(start, pt) {
@@ -4947,8 +5031,15 @@ class Component extends DCLogic {
 
   _freezeLength() {
     const tool = this.state.activeTool;
-    const start = tool === 'line' ? this._lineStart : tool === 'wall' ? this._wallStart : null;
-    const drawing = tool === 'line' ? this._lineDrawing : this._wallDrawing;
+    const extendReady = tool === 'extend' && this.state.extendPhase === 'destination'
+      && this._extendSession && this.state.extendBase;
+    const start = tool === 'line' ? this._lineStart
+      : tool === 'wall' ? this._wallStart
+      : extendReady ? new THREE.Vector3(this.state.extendBase.x, this.state.extendBase.y, this.state.extendBase.z)
+      : null;
+    const drawing = tool === 'line' ? this._lineDrawing
+      : tool === 'wall' ? this._wallDrawing
+      : Boolean(extendReady);
     if (!start || !drawing) return;
     const pt = this._snapPt;
     if (this._lockAngle != null) {
@@ -5007,8 +5098,29 @@ class Component extends DCLogic {
 
   _confirmFrozenLength() {
     const frozenTool = this._frozenTool;
-    if (!this.state.lengthFrozen || !this._frozenStart || !['line', 'wall'].includes(frozenTool)) {
+    if (!this.state.lengthFrozen || !this._frozenStart || !['line', 'wall', 'extend'].includes(frozenTool)) {
       this._cancelFrozenLength();
+      return;
+    }
+    if (frozenTool === 'extend') {
+      const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
+      const total = parsed.ok ? parsed.inches / 12 : 0;
+      if (!parsed.ok || Math.abs(total) <= 0.001) {
+        this.setState({ frozenDimensionError: parsed.ok ? 'Length cannot be zero.' : parsed.error });
+        return;
+      }
+      const destination = {
+        x: this._frozenStart.x + Math.cos(this._frozenAngle) * total,
+        y: this._frozenStart.y,
+        z: this._frozenStart.z + Math.sin(this._frozenAngle) * total,
+      };
+      this._commitExtend(destination);
+      this._lockAngle = null;
+      this._frozenEnd = null;
+      this._frozenStart = null;
+      this._frozenTool = null;
+      if (this._previewLine) this._previewLine.visible = false;
+      this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '' });
       return;
     }
     if (!this._contextAllowsTool(frozenTool)) {
@@ -5070,7 +5182,7 @@ class Component extends DCLogic {
     this._frozenTool = null;
     this._frozenAngle = 0;
     if (frozenTool === 'line' && this._linePreviewObj) this._linePreviewObj.visible = false;
-    if (frozenTool === 'wall' && this._previewLine) this._previewLine.visible = false;
+    if ((frozenTool === 'wall' || frozenTool === 'extend') && this._previewLine) this._previewLine.visible = false;
     this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '' });
   }
 
@@ -5266,6 +5378,8 @@ class Component extends DCLogic {
     if (matches('cancel')) {
       e.preventDefault();
       if (this.state.lengthFrozen) { this._cancelFrozenLength(); return; }
+      this._polarOrigin = null;
+      this._polarSnap = null;
       if (this.state.activeTool === 'extend' && (this._extendSession || this._windowSelection?.kind === 'extend')) {
         this._cancelExtend();
         return;
@@ -5304,7 +5418,8 @@ class Component extends DCLogic {
       && normaliseKeyBinding(this.state.keybindings.freezeLength) === normaliseKeyBinding(e.key);
     if (matches('freezeLength') || freezeLengthWhileShiftLocking) {
       const tool = this.state.activeTool;
-      const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._wallDrawing);
+      const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._wallDrawing)
+        || (tool === 'extend' && this.state.extendPhase === 'destination');
       if (drawing && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
       return;
     }
@@ -5324,8 +5439,7 @@ class Component extends DCLogic {
     if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
     if (matches('extend') || matches('extendAlt')) {
       e.preventDefault();
-      this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut(); this._cancelExtend();
-      this.setState({ activeTool: 'extend', extendScope: 'current', extendPhase: 'idle', extendMessage: '' });
+      this._activateExtendTool();
       return;
     }
     if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({ activeTool: 'trim' }); return; }
@@ -5578,10 +5692,10 @@ class Component extends DCLogic {
       extendAllColor: extendScope === 'all' ? '#fff' : '#b04050',
       extendAllBorder: extendScope === 'all' ? '#b04050' : 'rgba(176,64,80,0.45)',
       extendHelp: extendPhase === 'idle'
-        ? `Drag a ${extendScope === 'all' ? 'red' : 'blue'} rectangle over the nodes to move.`
+        ? `Drag a ${extendScope === 'all' ? 'red' : 'blue'} rectangle over the nodes to move — or window-select first, then press ${shortcut('extend')}.`
         : (extendPhase === 'base'
           ? 'Captured nodes are ready. Choose a base point.'
-          : 'Move the preview, then click the destination point.'),
+          : `Click the destination · Shift locks 45° · ${shortcut('freezeLength')} to type a length.`),
       hasExtendMessage: Boolean(this.state.extendMessage),
       extendMessage: this.state.extendMessage,
       setExtendCurrentLevel: () => {
@@ -5826,7 +5940,7 @@ class Component extends DCLogic {
         contextualTool('floor'),
         contextualTool('fenestration'),
         contextualTool('dimension'),
-        standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut(); this._cancelExtend(); this.setState({activeTool:'extend', extendScope:'current', extendPhase:'idle', extendMessage:''}); }, activeTool==='extend'),
+        standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._activateExtendTool(); }, activeTool==='extend'),
         standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
       ],
       cutShortcut: shortcut('cut'),
@@ -5903,6 +6017,9 @@ class Component extends DCLogic {
       gridSnapPtX:    this.state.gridSnapPtX,
       gridSnapPtY:    this.state.gridSnapPtY,
       gridSnapPtDisplay: this.state.showGridSnapPt ? 'block' : 'none',
+      polarOriginX:      this.state.polarOriginX,
+      polarOriginY:      this.state.polarOriginY,
+      polarOriginDisplay: this.state.showPolarOrigin ? 'block' : 'none',
       lengthFrozen: this.state.lengthFrozen,
       frozenLengthInput: this.state.frozenLengthInput,
       frozenDimensionBorder: this.state.frozenDimensionError ? '#b04050' : 'rgba(29,31,32,0.25)',
