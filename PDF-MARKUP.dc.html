@@ -3,15 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./vendor/react-18.3.1.production.min.js"></script>
+<script src="./vendor/react-dom-18.3.1.production.min.js"></script>
 <script src="./support.js"></script>
 </head>
 <body>
 <x-dc>
 <helmet>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="./vendor/pdf-3.11.174.min.js"></script>
+  <script src="./vendor/jspdf-2.5.1.umd.min.js"></script>
+  <script src="./vendor/pdf-lib-1.17.1.min.js"></script>
   <script src="./shared-file-store.js"></script>
   <style>
     a { color: #5980a6; }
@@ -819,7 +821,6 @@ class Component extends DCLogic {
       }
     };
     window.addEventListener('keydown', this._onKeyDown);
-    if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     this.consumeHandoff();
     if (window.SharedFileStore) {
       setTimeout(() => {
@@ -943,6 +944,7 @@ class Component extends DCLogic {
     this.setState({ loading: true });
     const buf = await file.arrayBuffer();
     this.originalBytes = buf.slice(0);
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf-3.11.174.worker.min.js';
     this.pdfDoc = await window.pdfjsLib.getDocument({ data: buf }).promise;
     this.originalNumPages = this.pdfDoc.numPages;
     await this.tryRestoreEmbeddedMarkup();
