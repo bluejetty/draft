@@ -16,7 +16,7 @@ async function switchLevel(page, name) {
 }
 
 async function switchLayerView(page, label) {
-  await page.locator('.level-row.active').getByRole('button', { name: label }).click();
+  await page.locator('.level-row.active').getByRole('button', { name: label, exact: true }).click();
   await page.waitForTimeout(400);
 }
 

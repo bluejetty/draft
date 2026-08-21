@@ -14,7 +14,7 @@ async function drawWall(page, x1, z1, x2, z2) {
 }
 
 async function switchLayerView(page, label) {
-  await page.locator('.level-row.active').getByRole('button', { name: label }).click();
+  await page.locator('.level-row.active').getByRole('button', { name: label, exact: true }).click();
   await page.waitForTimeout(400);
 }
 
