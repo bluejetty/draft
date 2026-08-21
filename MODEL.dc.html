@@ -479,6 +479,7 @@
           <div class="level-bar" style="background:{{ level.color }};" onClick="{{ level.onSelect }}"></div>
            <div class="level-body" onClick="{{ level.onSelect }}" title="Switch to {{ level.name }}">
             <div class="level-head">
+              <button class="level-bg" onClick="{{ level.onToggleBackground }}" title="{{ level.bgTitle }}" style="background:{{ level.bgButtonBg }}; border-color:{{ level.bgButtonBorder }}; color:{{ level.bgButtonColor }};">{{ level.bgLabel }}</button>
               <div class="level-title">
                 <div class="level-name">{{ level.name }}</div>
               </div>
@@ -489,7 +490,6 @@
                   </sc-for>
                 </div>
               </sc-if>
-              <button class="level-bg" onClick="{{ level.onToggleBackground }}" title="{{ level.bgTitle }}" style="background:{{ level.bgButtonBg }}; border-color:{{ level.bgButtonBorder }}; color:{{ level.bgButtonColor }};">{{ level.bgLabel }}</button>
             </div>
              <sc-if value="{{ level.hasLayers }}" hint-placeholder-val="{{ false }}">
                <div class="level-layer-stack">
@@ -498,11 +498,11 @@
                      <div class="level-edge" title="Top of floor sheathing"><span class="level-edge-line"></span><span class="level-edge-val">{{ layer.edgeTop }}</span></div>
                    </sc-if>
                    <div class="level-layer-row">
+                     <button type="button" class="level-layer-bg" onClick="{{ layer.onToggleBackground }}" title="{{ layer.bgTitle }}" style="background:{{ layer.bgButtonBg }}; border-color:{{ layer.bgButtonBorder }}; color:{{ layer.bgButtonColor }};">{{ layer.bgLabel }}</button>
                      <button type="button" class="{{ layer.rowClass }}" onClick="{{ layer.onSelect }}" title="{{ layer.title }}">{{ layer.label }}</button>
                      <sc-if value="{{ layer.hasAssembly }}" hint-placeholder-val="{{ false }}">
                        <button type="button" class="level-assembly" onClick="{{ layer.onOpenAssembly }}" title="{{ layer.assemblyTitle }}">{{ layer.assemblyLabel }}</button>
                      </sc-if>
-                     <button type="button" class="level-layer-bg" onClick="{{ layer.onToggleBackground }}" title="{{ layer.bgTitle }}" style="background:{{ layer.bgButtonBg }}; border-color:{{ layer.bgButtonBorder }}; color:{{ layer.bgButtonColor }};">{{ layer.bgLabel }}</button>
                    </div>
                    <sc-if value="{{ layer.hasAssemblyEditor }}" hint-placeholder-val="{{ false }}">
                      <div class="level-assembly-editor" onClick="{{ layer.assemblyEditor.onClick }}">
