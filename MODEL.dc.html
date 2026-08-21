@@ -30,7 +30,6 @@
     .level-bar { width:3px; flex-shrink:0; }
     .level-body { flex:1; min-width:0; padding:3px 7px 4px 8px; border:none; background:transparent; text-align:left; cursor:pointer; }
     .level-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .level-elev { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.45); margin-top:1px; }
     .level-layer-stack { display:flex; flex-direction:column; gap:1px; margin-top:3px; }
     .level-layer { width:100%; min-height:13px; display:flex; align-items:center; border:1px solid rgba(29,31,32,0.18); padding:1px 5px; background:rgba(255,255,255,0.72); color:rgba(29,31,32,0.68); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-align:left; text-transform:uppercase; cursor:pointer; }
     .level-layer:hover { border-color:#5980a6; color:#365e86; }
@@ -53,7 +52,7 @@
     .level-edge { display:flex; align-items:center; gap:3px; min-height:9px; }
     .level-edge-line { flex:1; border-top:1px solid rgba(29,31,32,0.55); }
     .level-edge-val { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; color:#1d1f20; white-space:nowrap; }
-    .level-layer.floor-profile { background:repeating-linear-gradient(45deg, rgba(29,31,32,0.05), rgba(29,31,32,0.05) 2px, rgba(255,255,255,0.72) 2px, rgba(255,255,255,0.72) 6px); }
+    .level-layer.floor-profile { background:linear-gradient(rgba(29,31,32,0.62) 0, rgba(29,31,32,0.62) 3px, transparent 3px), repeating-linear-gradient(45deg, rgba(29,31,32,0.05), rgba(29,31,32,0.05) 2px, rgba(255,255,255,0.72) 2px, rgba(255,255,255,0.72) 6px); }
     .level-layer.floor-profile.active { background:#5980a6; }
     .level-assembly { border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; cursor:pointer; padding:1px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.05em; flex-shrink:0; text-transform:uppercase; }
     .level-assembly:hover { background:#3a3d3f; border-color:#3a3d3f; }
@@ -94,7 +93,9 @@
 
 <!-- TOP BAR -->
 <div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff; position:relative;">
+  <button data-grid-snap onClick="{{ toggleGridSnap }}" onKeyDown="{{ onGridSnapKeyDown }}" title="{{ gridSnapTitle }}" aria-label="Toggle grid snap" style="width:29px; height:29px; margin-right:12px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; color:{{ gridSnapColor }}; box-shadow:{{ gridSnapGlow }}; padding:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:600; line-height:1; cursor:pointer;">~</button>
   <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase; color:#1d1f20;">MODEL</div>
+  <a data-model-nav href="./LAYOUT.dc.html" style="margin-left:10px;">LAYOUT</a>
   <div data-model-title-detail style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; color:rgba(29,31,32,0.35); margin:0 10px;">/</div>
   <div data-model-title-detail style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:{{ topBarColor }};">{{ topBarLabel }}</div>
   <sc-if value="{{ showHint }}" hint-placeholder-val="{{ false }}">
@@ -121,10 +122,6 @@
 
   <div style="flex:1;"></div>
   <div data-top-actions style="display:flex; align-items:center; gap:8px; margin-left:18px;">
-    <div data-unit-toggle style="display:flex; flex-direction:column; gap:1px;">
-      <button onClick="{{ setImperial }}" style="min-width:64px; border:1px solid {{ imperialBorder }}; background:{{ imperialBg }}; color:{{ imperialColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">IMPERIAL</button>
-      <button onClick="{{ setMetric }}" style="min-width:64px; border:1px solid {{ metricBorder }}; background:{{ metricBg }}; color:{{ metricColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">METRIC</button>
-    </div>
     <div data-save-controls style="display:flex; align-items:center; gap:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em;">
       <span style="color:rgba(29,31,32,0.45);">SAVE AS</span>
       <select value="{{ saveExtension }}" onChange="{{ onSaveExtensionChange }}" aria-label="Save file extension" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; cursor:pointer;">
@@ -141,8 +138,10 @@
       <button onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
       <button onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
     </div>
-    <button data-grid-snap onClick="{{ toggleGridSnap }}" onKeyDown="{{ onGridSnapKeyDown }}" title="{{ gridSnapTitle }}" aria-label="Toggle grid snap" style="width:29px; height:29px; margin-left:8px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; color:{{ gridSnapColor }}; box-shadow:{{ gridSnapGlow }}; padding:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:600; line-height:1; cursor:pointer;">~</button>
-    <a data-model-nav href="./LAYOUT.dc.html" style="margin-left:8px;">LAYOUT</a>
+    <div data-unit-toggle style="display:flex; flex-direction:column; gap:1px;">
+      <button onClick="{{ setImperial }}" style="min-width:64px; border:1px solid {{ imperialBorder }}; background:{{ imperialBg }}; color:{{ imperialColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">IMPERIAL</button>
+      <button onClick="{{ setMetric }}" style="min-width:64px; border:1px solid {{ metricBorder }}; background:{{ metricBg }}; color:{{ metricColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">METRIC</button>
+    </div>
   </div>
 </div>
 
@@ -354,6 +353,24 @@
         <button onClick="{{ onShapeCapture }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">CAPTURE WALL OUTLINE</button>
         <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ shapeHint }}</div>
         <sc-if value="{{ hasActiveShapes }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:10px; padding-top:8px; border-top:1px solid rgba(29,31,32,0.12);">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
+              <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5);">Flooring</span>
+              <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; color:#1d1f20;">{{ shapeAreaLabel }}</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px;">
+              <sc-for list="{{ flooringBtns }}" as="veneer" hint-placeholder-count="5">
+                <button type="button" onClick="{{ veneer.onSelect }}" title="{{ veneer.title }}" style="flex:1 1 auto; border:1px solid {{ veneer.border }}; background:{{ veneer.bg }}; color:{{ veneer.color }}; padding:4px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ veneer.label }}</button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ hasShapeFlooring }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.55);">ABOVE SHEATHING</span>
+                <input value="{{ flooringThicknessInput }}" onInput="{{ onFlooringThicknessInput }}" onKeyDown="{{ onFlooringThicknessKey }}" onBlur="{{ onFlooringThicknessCommit }}" placeholder="{{ flooringThicknessPlaceholder }}" style="flex:1; min-width:0; border:1px solid rgba(29,31,32,0.2); padding:3px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px;" />
+              </div>
+              <div style="margin-top:6px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">Saves on A-FL-FLOORING · area + finish feed the future estimates</div>
+            </sc-if>
+          </div>
           <button onClick="{{ onShapeDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST SHAPE</button>
         </sc-if>
       </div>
@@ -480,9 +497,9 @@
           <div class="level-bar" style="background:{{ level.color }};" onClick="{{ level.onSelect }}"></div>
            <div class="level-body" onClick="{{ level.onSelect }}" title="Switch to {{ level.name }}">
             <div class="level-head">
+              <button class="level-bg" onClick="{{ level.onToggleBackground }}" title="{{ level.bgTitle }}" style="background:{{ level.bgButtonBg }}; border-color:{{ level.bgButtonBorder }}; color:{{ level.bgButtonColor }};">{{ level.bgLabel }}</button>
               <div class="level-title">
                 <div class="level-name">{{ level.name }}</div>
-                <div class="level-elev">{{ level.elevStr }}</div>
               </div>
               <sc-if value="{{ level.hasHeights }}" hint-placeholder-val="{{ false }}">
                 <div class="level-heights">
@@ -491,7 +508,6 @@
                   </sc-for>
                 </div>
               </sc-if>
-              <button class="level-bg" onClick="{{ level.onToggleBackground }}" title="{{ level.bgTitle }}" style="background:{{ level.bgButtonBg }}; border-color:{{ level.bgButtonBorder }}; color:{{ level.bgButtonColor }};">{{ level.bgLabel }}</button>
             </div>
              <sc-if value="{{ level.hasLayers }}" hint-placeholder-val="{{ false }}">
                <div class="level-layer-stack">
@@ -500,11 +516,11 @@
                      <div class="level-edge" title="Top of floor sheathing"><span class="level-edge-line"></span><span class="level-edge-val">{{ layer.edgeTop }}</span></div>
                    </sc-if>
                    <div class="level-layer-row">
+                     <button type="button" class="level-layer-bg" onClick="{{ layer.onToggleBackground }}" title="{{ layer.bgTitle }}" style="background:{{ layer.bgButtonBg }}; border-color:{{ layer.bgButtonBorder }}; color:{{ layer.bgButtonColor }};">{{ layer.bgLabel }}</button>
                      <button type="button" class="{{ layer.rowClass }}" onClick="{{ layer.onSelect }}" title="{{ layer.title }}">{{ layer.label }}</button>
                      <sc-if value="{{ layer.hasAssembly }}" hint-placeholder-val="{{ false }}">
                        <button type="button" class="level-assembly" onClick="{{ layer.onOpenAssembly }}" title="{{ layer.assemblyTitle }}">{{ layer.assemblyLabel }}</button>
                      </sc-if>
-                     <button type="button" class="level-layer-bg" onClick="{{ layer.onToggleBackground }}" title="{{ layer.bgTitle }}" style="background:{{ layer.bgButtonBg }}; border-color:{{ layer.bgButtonBorder }}; color:{{ layer.bgButtonColor }};">{{ layer.bgLabel }}</button>
                    </div>
                    <sc-if value="{{ layer.hasAssemblyEditor }}" hint-placeholder-val="{{ false }}">
                      <div class="level-assembly-editor" onClick="{{ layer.assemblyEditor.onClick }}">
@@ -625,6 +641,16 @@ const JOIST_TYPES = Object.freeze([
   Object.freeze({ id: 'owj', label: 'OWJ', depthIn: null }),
 ]);
 const DEFAULT_JOIST_TYPE = 'tji';
+// Flooring veneers an AREA shape can carry, laid over the floor sheathing.
+// Thickness is stored per shape so the same pattern can later carry exterior
+// finishes (brick at 2-3") and feed elevation views and estimates.
+const FLOORING_TYPES = Object.freeze([
+  Object.freeze({ id: 'hardwood', label: 'HARDWOOD' }),
+  Object.freeze({ id: 'laminate', label: 'LAMINATE' }),
+  Object.freeze({ id: 'tile', label: 'TILE' }),
+  Object.freeze({ id: 'carpet', label: 'CARPET' }),
+]);
+const DEFAULT_FLOORING_THICKNESS_IN = 3 / 8;
 // Per-level wall + floor assembly: the WALL HEIGHT and FLOOR JOISTS boxes edit
 // these, and the sidebar's border heights derive from them.
 const defaultLevelAssembly = () => ({
@@ -940,6 +966,7 @@ class Component extends DCLogic {
     fenestrationHead: DEFAULT_OPENING_HEAD_FT,
     fenestrationHeadInput: formatArchitecturalInches(DEFAULT_OPENING_HEAD_FT * 12),
     fenestrationDimensionError: '',
+    flooringThicknessInput: '',
     roofMode: 'basic',   // 'basic' edge-drawn roof | 'shape' built from a SHAPE outline
     roofPhase: 'idle',   // basic flow: 'idle' → 'edge' → 'direction' → 'overhang'
     roofOverhang: DEFAULT_ROOF_OVERHANG_FT,
@@ -1095,7 +1122,8 @@ class Component extends DCLogic {
         points: shape.points.map(point),
         levelId: shape.levelId,
         sourceLevelId: shape.sourceLevelId ?? null,
-        layer: SHAPE_LAYER,
+        flooring: shape.flooring ? { ...shape.flooring } : null,
+        layer: shape.flooring ? 'A-FL-FLOORING' : SHAPE_LAYER,
       })),
       roofs: this._roofs.map(roof => ({
         id: roof.id,
@@ -4029,6 +4057,7 @@ class Component extends DCLogic {
       points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, level.id, 'shape')),
       levelId: level.id,
       sourceLevelId: sourceLevelId ?? null,
+      flooring: null,
       layer: SHAPE_LAYER,
     };
     this._shapes.push(shape);
@@ -4094,6 +4123,75 @@ class Component extends DCLogic {
     this._shapes = this._shapes.filter(shape => shape !== target);
     this._markUnsaved();
     this.setState({ drawingMessage: 'Shape removed.', drawingMessageError: false });
+  }
+
+  // ─── Flooring areas ───────────────────────────────────────────────────────────
+  // A closed shape doubles as a room's flooring area: a finish veneer laid over
+  // the floor sheathing. The area (shoelace over the outline) and finish feed
+  // the future estimates — tile just the bathroom, or area the whole floor and
+  // subtract the rooms carrying their own finish.
+  _outlineAreaSqFt(points) {
+    if (!Array.isArray(points) || points.length < 3) return 0;
+    let doubled = 0;
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      doubled += a.x * b.z - b.x * a.z;
+    }
+    return Math.abs(doubled) / 2;
+  }
+
+  _newestShape() {
+    const active = this._activeShapes();
+    return active.length ? active[active.length - 1] : null;
+  }
+
+  _setShapeFlooring(typeId) {
+    const shape = this._newestShape();
+    if (!shape) return;
+    if (typeId == null) {
+      shape.flooring = null;
+      this._markUnsaved();
+      this.setState({ drawingMessage: 'Flooring cleared — shape is a plain outline on SHAPE again.', drawingMessageError: false });
+      return;
+    }
+    const type = FLOORING_TYPES.find(entry => entry.id === typeId);
+    if (!type) return;
+    const thicknessIn = shape.flooring?.thicknessIn ?? DEFAULT_FLOORING_THICKNESS_IN;
+    shape.flooring = { type: type.id, thicknessIn };
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `${type.label} flooring area on A-FL-FLOORING — ${this._areaLabel(this._outlineAreaSqFt(shape.points))}, laid ${formatInchesOnly(thicknessIn)} over the sheathing.`,
+      drawingMessageError: false,
+      flooringThicknessInput: '',
+    });
+  }
+
+  _commitFlooringThickness() {
+    const shape = this._newestShape();
+    if (!shape || !shape.flooring) return;
+    const raw = (this.state.flooringThicknessInput || '').trim();
+    if (raw) {
+      const parsed = parseAssemblyInches(raw);
+      if (!parsed.ok || parsed.inches <= 0) {
+        this.setState({ drawingMessage: parsed.error || 'Flooring thickness must be a positive measurement in inches.', drawingMessageError: true });
+        return;
+      }
+      shape.flooring = { ...shape.flooring, thicknessIn: parsed.inches };
+      this._markUnsaved();
+    }
+    this.setState({
+      drawingMessage: `Flooring sits ${formatInchesOnly(shape.flooring.thicknessIn)} above the sheathing.`,
+      drawingMessageError: false,
+      flooringThicknessInput: '',
+    });
+  }
+
+  _areaLabel(sqFt) {
+    if (!(sqFt > 0)) return '';
+    return this.state.units === 'imperial'
+      ? `${(Math.round(sqFt * 10) / 10).toLocaleString()} SQ FT`
+      : `${(Math.round(sqFt * 0.09290304 * 100) / 100).toLocaleString()} m²`;
   }
 
   // FLOOR built from the newest shape on the level: copies of the shape's
@@ -5344,6 +5442,24 @@ class Component extends DCLogic {
     if (!preview && !this._isPrinting) {
       ctx.fillStyle = SHAPE_COLOR;
       screenPoints.forEach(point => ctx.fillRect(point.x - 2.5, point.y - 2.5, 5, 5));
+    }
+    // A flooring area labels itself with its finish and measured area.
+    if (!preview && shape.flooring && points.length >= 3) {
+      const type = FLOORING_TYPES.find(entry => entry.id === shape.flooring.type);
+      const label = [type?.label, this._areaLabel(this._outlineAreaSqFt(points))]
+        .filter(Boolean).join(' · ');
+      if (label) {
+        const cx = screenPoints.reduce((sum, pt) => sum + pt.x, 0) / screenPoints.length;
+        const cy = screenPoints.reduce((sum, pt) => sum + pt.y, 0) / screenPoints.length;
+        ctx.font = "600 11px 'Barlow Condensed', system-ui, sans-serif";
+        const textWidth = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.fillRect(cx - textWidth / 2 - 3, cy - 8, textWidth + 6, 15);
+        ctx.fillStyle = SHAPE_COLOR;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, cx, cy);
+      }
     }
     ctx.restore();
   }
@@ -7003,7 +7119,7 @@ class Component extends DCLogic {
   }
   _metric(feet) { return (feet * 0.3048).toFixed(3) + ' m'; }
   _elevLabel(elev) {
-    const sign = elev > 0 ? '+' : '';
+    const sign = elev > 0 && !this.state.elevationDatum ? '+' : '';
     return sign + (this.state.units === 'imperial' ? this._ftIn(elev) : this._metric(elev));
   }
 
@@ -7333,6 +7449,28 @@ class Component extends DCLogic {
       hasActiveShapes: this._activeShapes().length > 0,
       onShapeDelete: () => this._deleteLastShape(),
       shapeHint: 'Closed construction outline on SHAPE · ROOF and FLOOR build from the newest shape',
+      shapeAreaLabel: this._areaLabel(this._outlineAreaSqFt(this._newestShape()?.points)),
+      flooringBtns: [{ id: null, label: 'NONE' }, ...FLOORING_TYPES].map(type => {
+        const current = this._newestShape()?.flooring?.type ?? null;
+        const isActive = current === type.id;
+        return {
+          label: type.label ?? 'NONE',
+          title: type.id
+            ? `${type.label} finish over the sheathing on the newest shape`
+            : 'Plain construction outline — no flooring finish',
+          border: isActive ? '#5980a6' : 'rgba(29,31,32,0.2)',
+          bg: isActive ? 'rgba(89,128,166,0.14)' : '#fff',
+          color: isActive ? '#3e6285' : '#1d1f20',
+          onSelect: () => this._setShapeFlooring(type.id ?? null),
+        };
+      }),
+      hasShapeFlooring: Boolean(this._newestShape()?.flooring),
+      flooringThicknessInput: this.state.flooringThicknessInput,
+      flooringThicknessPlaceholder: formatInchesOnly(
+        this._newestShape()?.flooring?.thicknessIn ?? DEFAULT_FLOORING_THICKNESS_IN),
+      onFlooringThicknessInput: e => this.setState({ flooringThicknessInput: e.target.value }),
+      onFlooringThicknessCommit: () => this._commitFlooringThickness(),
+      onFlooringThicknessKey: e => { if (e.key === 'Enter') e.target.blur(); e.stopPropagation(); },
       roofToolActive: roofing,
       roofModeBtns: ['basic', 'shape'].map(value => {
         const isActive = this.state.roofMode === value;
@@ -7658,7 +7796,7 @@ class Component extends DCLogic {
         });
         const heights = this._levelHeightMarks(l.id);
         return {
-          name: l.name, elevStr: this._elevLabel(l.elev),
+          name: l.name,
           layers,
           hasLayers: layers.length > 0,
           heights,
