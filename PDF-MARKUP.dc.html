@@ -821,7 +821,6 @@ class Component extends DCLogic {
       }
     };
     window.addEventListener('keydown', this._onKeyDown);
-    if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker-3.11.174.min.js';
     this.consumeHandoff();
     if (window.SharedFileStore) {
       setTimeout(() => {
@@ -945,6 +944,7 @@ class Component extends DCLogic {
     this.setState({ loading: true });
     const buf = await file.arrayBuffer();
     this.originalBytes = buf.slice(0);
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf-3.11.174.worker.min.js';
     this.pdfDoc = await window.pdfjsLib.getDocument({ data: buf }).promise;
     this.originalNumPages = this.pdfDoc.numPages;
     await this.tryRestoreEmbeddedMarkup();
