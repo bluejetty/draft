@@ -98,7 +98,6 @@
       <button onClick="{{ setImperial }}" style="min-width:64px; border:1px solid {{ imperialBorder }}; background:{{ imperialBg }}; color:{{ imperialColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">IMPERIAL</button>
       <button onClick="{{ setMetric }}" style="min-width:64px; border:1px solid {{ metricBorder }}; background:{{ metricBg }}; color:{{ metricColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">METRIC</button>
     </div>
-    <button data-grid-snap onClick="{{ toggleGridSnap }}" onKeyDown="{{ onGridSnapKeyDown }}" title="{{ gridSnapTitle }}" style="height:29px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; color:{{ gridSnapColor }}; padding:3px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">{{ gridSnapLabel }}</button>
     <div data-save-controls style="display:flex; align-items:center; gap:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em;">
       <span style="color:rgba(29,31,32,0.45);">SAVE AS</span>
       <select value="{{ saveExtension }}" onChange="{{ onSaveExtensionChange }}" aria-label="Save file extension" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; cursor:pointer;">
@@ -115,6 +114,7 @@
       <button onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
       <button onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
     </div>
+    <button data-grid-snap onClick="{{ toggleGridSnap }}" onKeyDown="{{ onGridSnapKeyDown }}" title="{{ gridSnapTitle }}" aria-label="Toggle grid snap" style="width:29px; height:29px; margin-left:8px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; color:{{ gridSnapColor }}; box-shadow:{{ gridSnapGlow }}; padding:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:600; line-height:1; cursor:pointer;">~</button>
     <a data-model-nav href="./LAYOUT.dc.html" style="margin-left:8px;">LAYOUT</a>
   </div>
 </div>
@@ -4756,7 +4756,7 @@ class Component extends DCLogic {
     if (matches('floor')) { e.preventDefault(); this._activateContextTool('floor'); return; }
     if (matches('dimension')) { e.preventDefault(); this._activateContextTool('dimension'); return; }
     if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
-    if (matches('extend')) {
+    if (matches('extend') || matches('extendAlt')) {
       e.preventDefault();
       this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelDimension(); this._cancelCut(); this._cancelExtend();
       this.setState({ activeTool: 'extend', extendScope: 'current', extendPhase: 'idle', extendMessage: '' });
@@ -5204,13 +5204,13 @@ class Component extends DCLogic {
       onGridSnapKeyDown: e => {
         if (e.key === ' ' || e.key === 'Enter') e.preventDefault();
       },
-      gridSnapLabel: this.state.gridSnapEnabled ? 'GRID SNAP · ON' : 'GRID SNAP · OFF',
       gridSnapTitle: this.state.gridSnapEnabled
-        ? 'Grid snap is on: points round to 1-foot increments. Click to turn it off.'
-        : 'Grid snap is off: points follow the cursor exactly. Click to snap to 1-foot increments.',
+        ? 'Grid snap is on: points round to 1-foot increments. Press ~ or click to turn it off.'
+        : 'Grid snap is off: points follow the cursor exactly. Press ~ or click to snap to 1-foot increments.',
       gridSnapBg: this.state.gridSnapEnabled ? '#1d1f20' : '#fff',
       gridSnapColor: this.state.gridSnapEnabled ? '#f2f2f3' : '#1d1f20',
       gridSnapBorder: this.state.gridSnapEnabled ? '#1d1f20' : 'rgba(29,31,32,0.2)',
+      gridSnapGlow: this.state.gridSnapEnabled ? '0 0 8px rgba(89,128,166,0.85)' : 'none',
       openSettingsDialog: () => this._openProfileDialog('settings'),
       openStandardsDialog: () => this._openProfileDialog('standards'),
       closeProfileDialog: () => this._closeProfileDialog(),

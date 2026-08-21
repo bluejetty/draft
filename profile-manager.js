@@ -111,6 +111,7 @@ if (!window.DraftProfileManager) {
     cut: 'C',
     group: 'G',
     extend: 'X',
+    extendAlt: 'Ctrl+H',
     perspective: '1',
     top: '2',
     front: '3',
@@ -123,7 +124,7 @@ if (!window.DraftProfileManager) {
     undo: 'Ctrl+Z',
     redo: 'Ctrl+Shift+Z',
     background: 'B',
-    gridSnap: '',
+    gridSnap: '~',
   });
 
   // Generic linework is deliberately separate from PLAN/FLOOR/E-POWER context.
@@ -209,7 +210,7 @@ if (!window.DraftProfileManager) {
     const aliases = {
       esc: 'Escape', escape: 'Escape', spacebar: 'Space', space: 'Space',
       return: 'Enter', enter: 'Enter', del: 'Delete', delete: 'Delete',
-      backspace: 'Backspace', ctrl: 'Ctrl', control: 'Ctrl',
+      backspace: 'Backspace', ctrl: 'Ctrl', control: 'Ctrl', '`': '~',
       alt: 'Alt', option: 'Alt', shift: 'Shift', meta: 'Meta', cmd: 'Meta', command: 'Meta',
     };
     const pieces = String(value || '').split('+').map(part => part.trim()).filter(Boolean);
@@ -248,8 +249,10 @@ if (!window.DraftProfileManager) {
     const parts = normalised.split('+');
     const key = parts.pop();
     const has = modifier => parts.includes(modifier);
+    // The grave and tilde share a physical key, so '~' matches with or without Shift.
+    const shiftAgnostic = key === '~';
     if (event.ctrlKey !== has('Ctrl') || event.altKey !== has('Alt')
-      || event.shiftKey !== has('Shift') || event.metaKey !== has('Meta')) return false;
+      || (!shiftAgnostic && event.shiftKey !== has('Shift')) || event.metaKey !== has('Meta')) return false;
     return normaliseKeyBinding(event.key === ' ' ? 'Space' : event.key) === key;
   };
 
