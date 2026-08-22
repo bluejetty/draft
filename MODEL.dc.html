@@ -506,7 +506,6 @@
         <button onClick="{{ toggleElevationDatum }}" title="{{ elevationDatumTitle }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:rgba(29,31,32,0.55); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; padding:3px 6px; margin-right:4px; cursor:pointer; letter-spacing:0.04em;">{{ elevationDatumLabel }}</button>
         <button onClick="{{ addLevel }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; padding:2px 8px; cursor:pointer; letter-spacing:0.04em;">+ ADD</button>
       </div>
-       <div style="margin:-2px 0 7px; color:rgba(29,31,32,0.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.03em;">FLOOR ELEVATIONS · LAYERS NESTED WHERE DEFINED</div>
       <sc-for list="{{ levels }}" as="level" hint-placeholder-count="8">
         <div class="{{ level.rowClass }}">
           <div class="level-bar" style="background:{{ level.color }};" onClick="{{ level.onSelect }}"></div>
