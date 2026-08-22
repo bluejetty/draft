@@ -190,6 +190,55 @@ if (!window.DraftDrawingFormat) {
       };
     }).filter(Boolean);
 
+  // Columns are manual point supports (teleposts on pad footings) owned by a
+  // level; the footing choice rides along so the FOUNDATION plan can mark the
+  // pad centre and the estimates can price it.
+  const columns = (rawColumns, levelIds) => {
+    const seen = new Set();
+    return (Array.isArray(rawColumns) ? rawColumns : []).map(column => {
+      const id = Number(column?.id);
+      const centre = point(column?.point);
+      const columnLevelId = levelId(column?.levelId, levelIds);
+      const view = oneOf(column?.view, ['plan', 'floor', 'foundation'], null);
+      if (!Number.isInteger(id) || seen.has(id) || !centre || columnLevelId == null || !view) return null;
+      seen.add(id);
+      return {
+        id,
+        point: centre,
+        levelId: columnLevelId,
+        view,
+        footing: oneOf(column?.footing, ['pad36', 'pad42'], 'pad36'),
+        layer: 'S-COL/FOOTING',
+      };
+    }).filter(Boolean);
+  };
+
+  // A beam is one span between two supports, FLUSH (top flush with the joists,
+  // bearing on the sill plate at foundation walls) or DROPPED (joists resting
+  // on it — a beam pocket where it bears on a foundation wall).
+  const beams = (rawBeams, levelIds) => {
+    const seen = new Set();
+    return (Array.isArray(rawBeams) ? rawBeams : []).map(beam => {
+      const id = Number(beam?.id);
+      const start = point(beam?.start);
+      const end = point(beam?.end);
+      const beamLevelId = levelId(beam?.levelId, levelIds);
+      const view = oneOf(beam?.view, ['plan', 'floor', 'foundation'], null);
+      if (!Number.isInteger(id) || seen.has(id) || !start || !end || beamLevelId == null || !view) return null;
+      if (Math.hypot(end.x - start.x, end.z - start.z) < 0.001) return null;
+      seen.add(id);
+      return {
+        id,
+        start,
+        end,
+        levelId: beamLevelId,
+        view,
+        mode: oneOf(beam?.mode, ['flush', 'dropped'], 'flush'),
+        layer: 'S-BEAM',
+      };
+    }).filter(Boolean);
+  };
+
   // BONEYARD shelves are storage slots outside the level stack. Every drawing
   // has at least one shelf; drawings saved before the BONEYARD existed load
   // with the single default shelf.
@@ -271,6 +320,8 @@ if (!window.DraftDrawingFormat) {
     levels,
     cuts,
     dimensions,
+    columns,
+    beams,
     fenestrations,
     surfaceOpenings,
     shapes,

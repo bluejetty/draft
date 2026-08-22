@@ -434,6 +434,40 @@
       </div>
     </sc-if>
 
+    <!-- COLUMN PROPERTIES (shown when Column tool is active) -->
+    <sc-if value="{{ columnToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Column</div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Pad Footing</div>
+        <div style="display:flex; gap:3px; margin-bottom:6px;">
+          <sc-for list="{{ columnFootingBtns }}" as="cf" hint-placeholder-count="2">
+            <button onClick="{{ cf.onSelect }}" title="{{ cf.title }}" style="flex:1; border:1px solid {{ cf.border }}; background:{{ cf.bg }}; color:{{ cf.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ cf.label }}</button>
+          </sc-for>
+        </div>
+        <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ columnFootingNote }}</div>
+        <sc-if value="{{ hasActiveColumns }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onColumnDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST COLUMN</button>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- BEAM PROPERTIES (shown when Beam tool is active) -->
+    <sc-if value="{{ beamToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Beam</div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Mode</div>
+        <div style="display:flex; gap:3px; margin-bottom:6px;">
+          <sc-for list="{{ beamModeBtns }}" as="bm" hint-placeholder-count="2">
+            <button onClick="{{ bm.onSelect }}" title="{{ bm.title }}" style="flex:1; border:1px solid {{ bm.border }}; background:{{ bm.bg }}; color:{{ bm.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ bm.label }}</button>
+          </sc-for>
+        </div>
+        <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ beamModeNote }}</div>
+        <sc-if value="{{ hasActiveBeams }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onBeamDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST BEAM</button>
+        </sc-if>
+      </div>
+    </sc-if>
+
     <!-- ROOF PROPERTIES (shown when Roof tool is active) -->
     <sc-if value="{{ roofToolActive }}" hint-placeholder-val="{{ false }}">
       <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
@@ -919,6 +953,22 @@ const DEFAULT_ROOF_PITCH = 4;   // rise in inches per 12" of run
 const MAX_ROOF_PITCH = 24;
 const ROOF_FASCIA_IN = 5.5;
 const ROOF_LAYER = 'A-ROOF';
+// Structural point supports and spans, placed manually in either order —
+// columns centre onto a beam line and beam ends snap to columns, so they line
+// up whichever is placed first. A beam is one span between two supports:
+// FLUSH (top flush with the joists, bears on the sill plate at foundation
+// walls) or DROPPED (joists rest on it — needs a BEAM POCKET where it bears
+// on a foundation wall). Columns are 3"ø adjustable steel teleposts on a pad
+// footing; the FOUNDATION plan marks centres only — the contractor sizes and
+// positions from the pad type, so no automatic dimensions.
+const COLUMN_FOOTINGS = [
+  { id:'pad36', label:'TYP 36×36 PAD', sizeIn:36, note:'36"×36"×8" DP PAD — 3-15M @ 10" O.C. E/W' },
+  { id:'pad42', label:'MED 42×42 PAD', sizeIn:42, note:'42"×42"×10" DP PAD — 4-15M @ 9" O.C. E/W' },
+];
+const COLUMN_SIZE_IN = 3; // 3"ø adjustable steel telepost
+const STRUCT_SNAP_FT = 1; // columns and beam ends pull onto each other inside this
+const COLUMN_LAYER = 'S-COL/FOOTING';
+const BEAM_LAYER = 'S-BEAM';
 // Shapes are closed construction outlines with no roof / floor semantics of
 // their own; the ROOF and FLOOR commands build their geometry from a shape.
 const SHAPE_LAYER = 'SHAPE';
@@ -1065,6 +1115,8 @@ class Component extends DCLogic {
     floorThicknessInput: formatArchitecturalInches(DEFAULT_FLOOR_THICKNESS_IN),
     floorDimensionError: '',
     floorStructure: 'floor',  // 'floor' framed assembly | 'slab' concrete slab
+    beamMode: 'flush',        // 'flush' top flush with joists | 'dropped' joists rest on it
+    columnFooting: 'pad36',   // pad under the next placed telepost
     fenestrationType: 'door', // 'door' | 'window' — picks the CAD layer and defaults
     fenestrationWidths: { door: DEFAULT_DOOR_WIDTH_FT, window: DEFAULT_WINDOW_WIDTH_FT },
     fenestrationWidthInput: formatArchitecturalInches(DEFAULT_DOOR_WIDTH_FT * 12),
@@ -1185,6 +1237,8 @@ class Component extends DCLogic {
     if (!(this._selectedRoofs instanceof Set)) this._selectedRoofs = new Set();
     if (!(this._selectedSurfaceOpenings instanceof Set)) this._selectedSurfaceOpenings = new Set();
     if (!Array.isArray(this._dimensions)) this._dimensions = [];
+    if (!Array.isArray(this._columns)) this._columns = [];
+    if (!Array.isArray(this._beams)) this._beams = [];
     if (!Array.isArray(this._vertices)) this._vertices = [];
     if (!Array.isArray(this._groups)) this._groups = [];
   }
@@ -1282,6 +1336,25 @@ class Component extends DCLogic {
         view: dimension.view,
       })),
       nextDimensionId: this._nextDimensionId || 1,
+      columns: this._columns.map(column => ({
+        id: column.id,
+        point: point(column.point),
+        levelId: column.levelId,
+        view: column.view,
+        footing: column.footing,
+        layer: COLUMN_LAYER,
+      })),
+      nextColumnId: this._nextColumnId || 1,
+      beams: this._beams.map(beam => ({
+        id: beam.id,
+        start: point(beam.start),
+        end: point(beam.end),
+        levelId: beam.levelId,
+        view: beam.view,
+        mode: beam.mode,
+        layer: BEAM_LAYER,
+      })),
+      nextBeamId: this._nextBeamId || 1,
       boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
       activeBoneyardShelfId: this.state.activeBoneyardShelfId,
       nextBoneyardShelfId: this.state.nextBoneyardShelfId,
@@ -1864,6 +1937,42 @@ class Component extends DCLogic {
         };
       });
       this._nextDimensionId = nextDimensionId;
+      const storedColumns = Array.isArray(saved.columns)
+        ? saved.columns.map(column => ({ ...column, levelId: migrateLevelId(column?.levelId) }))
+        : saved.columns;
+      const columns = format.columns(storedColumns, ownerLevelIds);
+      skipped += (Array.isArray(saved.columns) ? saved.columns.length : 0) - columns.length;
+      this._columns = columns.map(column => {
+        const elevation = levelsById.get(column.levelId)?.elev ?? 0;
+        return {
+          ...column,
+          point: new THREE.Vector3(column.point.x, elevation, column.point.z),
+        };
+      });
+      this._nextColumnId = Math.max(
+        1,
+        ...columns.map(column => column.id + 1),
+        Number.isInteger(saved.nextColumnId) ? saved.nextColumnId : 1,
+      );
+      const storedBeams = Array.isArray(saved.beams)
+        ? saved.beams.map(beam => ({ ...beam, levelId: migrateLevelId(beam?.levelId) }))
+        : saved.beams;
+      const beams = format.beams(storedBeams, ownerLevelIds);
+      skipped += (Array.isArray(saved.beams) ? saved.beams.length : 0) - beams.length;
+      this._beams = beams.map(beam => {
+        const elevation = levelsById.get(beam.levelId)?.elev ?? 0;
+        return {
+          ...beam,
+          start: new THREE.Vector3(beam.start.x, elevation, beam.start.z),
+          end: new THREE.Vector3(beam.end.x, elevation, beam.end.z),
+        };
+      });
+      this._nextBeamId = Math.max(
+        1,
+        ...beams.map(beam => beam.id + 1),
+        Number.isInteger(saved.nextBeamId) ? saved.nextBeamId : 1,
+      );
+      this._beamStart = null;
       // Outlines restore as isolated points — they never join the shared
       // vertex pool, so a guide can sit on a wall corner without gluing to it.
       // Masters restore first so level copies can verify their masterId.
@@ -2288,11 +2397,16 @@ class Component extends DCLogic {
     this._surfaceOpenings = []; // free-form openings cut from a floor or roof
     this._roofs      = []; // roof footprints — edge-drawn or built from a shape
     this._dimensions = []; // two-point plan/floor dimensions
+    this._columns    = []; // telepost + pad supports, centred on beam lines
+    this._beams      = []; // one span between two supports, flush or dropped
      this._groups     = [];
      this._nextGroupId = 1;
      this._nextDrawingItemId = 1;
     this._nextDimensionId = 1;
     this._dimensionStart = null;
+    this._nextColumnId = 1;
+    this._nextBeamId = 1;
+    this._beamStart = null;
     this._pendingChain  = []; // in-progress chain (not yet committed)
     this._chainStart    = null; // first point of current chain
     this._chainSegments = 0;  // segments placed in this chain, committed or not
@@ -2702,6 +2816,17 @@ class Component extends DCLogic {
       this._drawDimension2D(ctx, toS, { start:this._dimensionStart, end:dimensionPreviewEnd }, { preview:true });
     }
 
+    // Columns, beams, and beam-pocket notations of the active context.
+    if (activeVisible) this._drawStructure2D(ctx, toS);
+    if (this._beamStart && dimensionPreviewEnd && !this._isPrinting) {
+      const a = toS(this._beamStart), b = toS(dimensionPreviewEnd);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(122,74,33,0.6)'; ctx.lineWidth = 3;
+      ctx.setLineDash(this.state.beamMode === 'dropped' ? [8, 5] : []);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.restore();
+    }
+
     const visibleSelectedSegments = new Set([
       ...this._activeLines(),
       ...activeWalls,
@@ -3011,6 +3136,93 @@ class Component extends DCLogic {
     ctx.restore();
   }
 
+  // Columns draw as a telepost square with a centre mark; on a FOUNDATION
+  // context every column of the drawing shows its pad centre, because the
+  // contractor locates footings from the centre and the specified pad — no
+  // automatic dimensions. Beams draw solid when FLUSH and dashed when DROPPED,
+  // and each dropped-beam end bearing on a foundation wall gets a BEAM POCKET
+  // notation on the foundation plan.
+  _drawStructure2D(ctx, toS) {
+    const view = this._activeLayerViewId();
+    const font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+    const columnStd = this._layerStandard(COLUMN_LAYER);
+    const beamStd = this._layerStandard(BEAM_LAYER);
+    const showColumns = columnStd.visible && (!this._isPrinting || columnStd.printable);
+    const showBeams = beamStd.visible && (!this._isPrinting || beamStd.printable);
+    const elev = this._drawElev || 0;
+    const origin = toS({ x: 0, y: elev, z: 0 });
+    const unit = toS({ x: 1, y: elev, z: 0 });
+    const pxPerFt = Math.max(0.001, Math.hypot(unit.x - origin.x, unit.y - origin.y));
+
+    if (showBeams) {
+      this._activeBeams().forEach(beam => {
+        const a = toS(beam.start), b = toS(beam.end);
+        ctx.save();
+        ctx.strokeStyle = '#7a4a21'; ctx.lineWidth = 3;
+        ctx.setLineDash(beam.mode === 'dropped' ? [8, 5] : []);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#7a4a21'; ctx.font = font;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText(beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM', (a.x + b.x) / 2, (a.y + b.y) / 2 - 5);
+        ctx.restore();
+      });
+    }
+
+    if (showColumns) {
+      const drawColumn = (column, { centreOnly = false } = {}) => {
+        const c = toS(column.point);
+        const half = Math.max(2.5, (COLUMN_SIZE_IN / 12) * pxPerFt / 2);
+        ctx.save();
+        ctx.strokeStyle = '#1d1f20'; ctx.lineWidth = 1.5;
+        if (!centreOnly) ctx.strokeRect(c.x - half, c.y - half, half * 2, half * 2);
+        const cross = half + 4;
+        ctx.beginPath();
+        ctx.moveTo(c.x - cross, c.y); ctx.lineTo(c.x + cross, c.y);
+        ctx.moveTo(c.x, c.y - cross); ctx.lineTo(c.x, c.y + cross);
+        ctx.stroke();
+        if (view === 'foundation') {
+          const footing = this._columnFooting(column);
+          const padHalf = (footing.sizeIn / 12) * pxPerFt / 2;
+          ctx.setLineDash([5, 4]);
+          ctx.strokeRect(c.x - padHalf, c.y - padHalf, padHalf * 2, padHalf * 2);
+          ctx.setLineDash([]);
+          ctx.fillStyle = '#1d1f20'; ctx.font = font;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+          ctx.fillText(footing.label, c.x, c.y + padHalf + 3);
+        }
+        ctx.restore();
+      };
+      this._activeColumns().forEach(column => drawColumn(column));
+      if (view === 'foundation') {
+        const shown = new Set(this._activeColumns());
+        this._columns.filter(column => column.levelId > 0 && !shown.has(column))
+          .forEach(column => drawColumn(column));
+      }
+    }
+
+    // BEAM POCKET notations: every dropped beam in the drawing that bears on a
+    // foundation wall marks the pocket on the FOUNDATION plan.
+    if (view === 'foundation' && showBeams) {
+      this._beams.filter(beam => beam.levelId > 0 && beam.mode === 'dropped').forEach(beam => {
+        this._beamPocketsFor(beam).forEach(pocket => {
+          const p = toS({ x: pocket.x, y: elev, z: pocket.z });
+          ctx.save();
+          ctx.strokeStyle = '#b04050'; ctx.lineWidth = 1.5;
+          ctx.strokeRect(p.x - 6, p.y - 6, 12, 12);
+          ctx.beginPath();
+          ctx.moveTo(p.x - 6, p.y - 6); ctx.lineTo(p.x + 6, p.y + 6);
+          ctx.moveTo(p.x + 6, p.y - 6); ctx.lineTo(p.x - 6, p.y + 6);
+          ctx.stroke();
+          ctx.fillStyle = '#b04050'; ctx.font = font;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+          ctx.fillText('BEAM POCKET — VERIFY W/ FLOOR SUPPLIER', p.x, p.y - 9);
+          ctx.restore();
+        });
+      });
+    }
+  }
+
   _drawDimension2D(ctx, toS, dimension, options = {}) {
     const a = toS(dimension.start);
     const b = toS(dimension.end);
@@ -3221,6 +3433,9 @@ class Component extends DCLogic {
     if (tool === 'floor') return ['floor', 'plan', 'foundation'].includes(viewId);
     if (tool === 'fenestration') return ['plan', 'foundation', 'floor'].includes(viewId);
     if (tool === 'dimension') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
+    // Structure lives with the framing: beams and their columns are placed in
+    // FLOOR (the framing they carry) or FOUNDATION (teleposts and pads below).
+    if (tool === 'column' || tool === 'beam') return ['floor', 'foundation'].includes(viewId);
     return true;
   }
 
@@ -3228,7 +3443,7 @@ class Component extends DCLogic {
   // only decides where the geometry saves, never what the command is called.
   _contextToolLabel(tool, shortcut = '') {
     const suffix = shortcut ? `  [${shortcut}]` : '';
-    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', shape:'SHAPE', outline:'OUTLINE', roof:'ROOF', dimension:'DIMENSION' };
+    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', shape:'SHAPE', outline:'OUTLINE', roof:'ROOF', dimension:'DIMENSION', column:'COLUMN', beam:'BEAM' };
     return `${names[tool] || tool.toUpperCase()}${suffix}`;
   }
 
@@ -3257,6 +3472,8 @@ class Component extends DCLogic {
     if (tool === 'shape') return 'SHAPE';
     if (tool === 'outline') return 'OUTLINE';
     if (tool === 'roof') return 'A-ROOF';
+    if (tool === 'column') return COLUMN_LAYER;
+    if (tool === 'beam') return BEAM_LAYER;
     return this._draftingContextLabel(viewId);
   }
 
@@ -3270,6 +3487,8 @@ class Component extends DCLogic {
     if (tool === 'shape') return `Shapes are closed construction outlines drawn or captured on any level. Current context: ${context}.`;
     if (tool === 'roof') return `The Roof tool works on any level: draw a roof edge, or build the footprint from a SHAPE. Current context: ${context}.`;
     if (tool === 'dimension') return `Dimensions are placed in any layer set and save with it. Current context: ${context}.`;
+    if (tool === 'column') return `Columns are placed in FLOOR or FOUNDATION — teleposts on pad footings, centred onto a nearby beam line. Current context: ${context}.`;
+    if (tool === 'beam') return `Beams are placed in FLOOR or FOUNDATION — two clicks span between supports, FLUSH or DROPPED. Current context: ${context}.`;
     if (tool === 'line') {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
         return 'Turn on DRAFT or NO-DRAFT in the Company Standard Layers before drawing a generic line.';
@@ -3295,6 +3514,7 @@ class Component extends DCLogic {
     if (tool !== 'outline') this._cancelOutline();
     if (tool !== 'fenestration') this._cancelSurfaceOpening();
     if (tool !== 'dimension') this._cancelDimension();
+    if (tool !== 'beam') this._cancelBeam();
     this._cancelRoof();
     this._cancelCut();
     this.setState({
@@ -3314,9 +3534,9 @@ class Component extends DCLogic {
     this._courtesyWallIds?.clear();
     this._courtesyFloorIds?.clear();
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof();
     this._applyLevelElevation(levelIndex);
-    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'outline', 'roof', 'dimension'].includes(this.state.activeTool)
+    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'outline', 'roof', 'dimension', 'column', 'beam'].includes(this.state.activeTool)
       && !this._contextAllowsTool(this.state.activeTool, viewId, false)
       ? 'select'
       : this.state.activeTool;
@@ -3329,10 +3549,10 @@ class Component extends DCLogic {
       levelLayerViews: { ...this.state.levelLayerViews, [levelId]: viewId },
       layerRevealKey: `${levelId}:${viewId}`,
       activeTool,
-      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension'].includes(this.state.activeTool)
+      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension', 'column', 'beam'].includes(this.state.activeTool)
         ? this._contextToolMessage(this.state.activeTool, viewId)
         : `Working in ${this._draftingContextLabel(viewId)}.`,
-      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension'].includes(this.state.activeTool),
+      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension', 'column', 'beam'].includes(this.state.activeTool),
     }, () => {
       if (this._orthoCam) this._setView('top');
       this._pruneContextReferenceSelection();
@@ -3631,7 +3851,7 @@ class Component extends DCLogic {
   _switchLevel(idx) {
     if (idx === this.state.activeLevelIdx && !this.state.boneyardActive) return;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this._cancelCut();
     this._applyLevelElevation(idx);
     // A level cannot also be one of its own references; the destination
     // context's remembered background is restored when it has one.
@@ -3708,6 +3928,9 @@ class Component extends DCLogic {
     // a level, so it is never touched by level deletion.
     this._outlines = this._outlines.filter(outline => outline.levelId !== levelId);
     this._surfaceOpenings = this._surfaceOpenings.filter(opening => opening.levelId !== levelId);
+    this._dimensions = this._dimensions.filter(dimension => dimension.levelId !== levelId);
+    this._columns = this._columns.filter(column => column.levelId !== levelId);
+    this._beams = this._beams.filter(beam => beam.levelId !== levelId);
     // Cuts are owned by a level id, not by elevation: two levels can sit at the
     // same height, so only the deleted level's own sections go with it.
     const removedCuts = this.state.cuts.filter(cut => cut.levelId === levelId);
@@ -4058,6 +4281,8 @@ class Component extends DCLogic {
       else if (tool === 'fenestration') this._handleFenestrationClick();
       else if (tool === 'roof') this._handleRoofClick(e);
       else if (tool === 'dimension') this._handleDimensionClick();
+      else if (tool === 'column') this._handleColumnClick();
+      else if (tool === 'beam') this._handleBeamClick();
       else if (tool === 'cut') this._handleCutClick();
       else if (tool === 'select') {
         const raw = this._getWorldPos(e.clientX, e.clientY);
@@ -4935,7 +5160,7 @@ class Component extends DCLogic {
   _selectBoneyard() {
     if (this.state.boneyardActive) return;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this._cancelCut();
     this._clearSelection(false);
     const shelf = this._activeBoneyardShelf();
     // Shelf geometry draws at elevation 0 no matter which level was active.
@@ -4956,7 +5181,7 @@ class Component extends DCLogic {
     const shelf = this.state.boneyardShelves.find(s => s.id === shelfId);
     if (!shelf) return;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof();
     this._clearSelection(false);
     if (!this.state.boneyardActive) this._selectBoneyard();
     this.setState({ activeBoneyardShelfId: shelf.id, boneyardActive: true }, () => this._markUnsaved());
@@ -4974,7 +5199,7 @@ class Component extends DCLogic {
     event?.stopPropagation();
     const id = this.state.nextBoneyardShelfId;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof();
     this._clearSelection(false);
     this.setState({
       boneyardShelves: [...this.state.boneyardShelves, { id, name: `SHELF ${id}` }],
@@ -7205,7 +7430,7 @@ class Component extends DCLogic {
 
   _activateExtendTool() {
     const seeded = this.state.activeTool === 'select' ? this._extendSessionFromSelection() : null;
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this._cancelCut(); this._cancelExtend();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this._cancelCut(); this._cancelExtend();
     if (seeded) {
       this._clearSelection();
       this._extendSession = seeded;
@@ -7360,6 +7585,208 @@ class Component extends DCLogic {
     this._dimensionStart = null;
     this._lockAngle = null;
     this.setState({ drawingMessage: '', drawingMessageError: false });
+  }
+
+  // ─── Columns and beams ──────────────────────────────────────────────────────
+  // Manual structure, placed in either order: a column pulls onto the nearest
+  // beam line and a beam end pulls onto the nearest column, so posts and spans
+  // line up whichever comes first. One beam is the span between two supports.
+
+  _structuralContext() {
+    const view = this._activeLayerViewId();
+    return ['floor', 'foundation'].includes(view) ? view : null;
+  }
+
+  _activeColumns() {
+    const levelId = this._activeLevelId();
+    const view = this._activeLayerViewId(levelId);
+    return this._columns.filter(column => column.levelId === levelId
+      && (view == null || column.view === view));
+  }
+
+  _activeBeams() {
+    const levelId = this._activeLevelId();
+    const view = this._activeLayerViewId(levelId);
+    return this._beams.filter(beam => beam.levelId === levelId
+      && (view == null || beam.view === view));
+  }
+
+  _columnFooting(column) {
+    return COLUMN_FOOTINGS.find(footing => footing.id === column.footing) || COLUMN_FOOTINGS[0];
+  }
+
+  _closestPointOnSeg(pt, seg) {
+    const t = geo.paramAlongSegment(seg, pt);
+    return {
+      x: seg.start.x + (seg.end.x - seg.start.x) * t,
+      z: seg.start.z + (seg.end.z - seg.start.z) * t,
+    };
+  }
+
+  // Nearest point on any beam line of the active context within the pull
+  // distance — a placed column centres itself on the beam.
+  _snapPointToBeams(pt) {
+    let best = null;
+    let bestDist = STRUCT_SNAP_FT;
+    this._activeBeams().forEach(beam => {
+      const projected = this._closestPointOnSeg(pt, beam);
+      const dist = Math.hypot(projected.x - pt.x, projected.z - pt.z);
+      if (dist < bestDist) { bestDist = dist; best = projected; }
+    });
+    return best;
+  }
+
+  // Nearest column centre within the pull distance — a beam end lands exactly
+  // on its support.
+  _snapPointToColumns(pt) {
+    let best = null;
+    let bestDist = STRUCT_SNAP_FT;
+    this._activeColumns().forEach(column => {
+      const dist = Math.hypot(column.point.x - pt.x, column.point.z - pt.z);
+      if (dist < bestDist) { bestDist = dist; best = column.point; }
+    });
+    return best;
+  }
+
+  // Re-centre columns sitting near a beam line onto it, so beam-first and
+  // column-first placement both end up aligned.
+  _centreColumnsOnBeam(beam) {
+    this._activeColumns().forEach(column => {
+      const projected = this._closestPointOnSeg(column.point, beam);
+      const dist = Math.hypot(projected.x - column.point.x, projected.z - column.point.z);
+      if (dist > 0.0005 && dist < STRUCT_SNAP_FT) {
+        column.point = new THREE.Vector3(projected.x, column.point.y, projected.z);
+      }
+    });
+  }
+
+  _handleColumnClick() {
+    if (this.state.activeView !== 'top') {
+      this.setState({ drawingMessage: 'Columns are placed in TOP / PLAN view.', drawingMessageError: true });
+      return;
+    }
+    const view = this._structuralContext();
+    if (!view) {
+      this.setState({ drawingMessage: this._contextToolMessage('column'), drawingMessageError: true });
+      return;
+    }
+    const pt = this._snapPt;
+    if (!pt) return;
+    const onBeam = this._snapPointToBeams(pt);
+    const centre = onBeam
+      ? new THREE.Vector3(onBeam.x, pt.y || 0, onBeam.z)
+      : pt.clone();
+    const footing = this._columnFooting({ footing: this.state.columnFooting });
+    this._columns.push({
+      id: this._nextColumnId++,
+      point: centre,
+      levelId: this._activeLevelId(),
+      view,
+      footing: footing.id,
+      layer: COLUMN_LAYER,
+    });
+    this.setState({
+      drawingMessage: `Column added${onBeam ? ' — centred on the beam line' : ''}. ${footing.note}, 3"ø adjustable steel telepost.`,
+      drawingMessageError: false,
+    });
+    this._markUnsaved();
+  }
+
+  _handleBeamClick() {
+    if (this.state.activeView !== 'top') {
+      this.setState({ drawingMessage: 'Beams are placed in TOP / PLAN view.', drawingMessageError: true });
+      return;
+    }
+    const view = this._structuralContext();
+    if (!view) {
+      this.setState({ drawingMessage: this._contextToolMessage('beam'), drawingMessageError: true });
+      return;
+    }
+    const pt = this._snapPt;
+    if (!pt) return;
+    const onColumn = this._snapPointToColumns(pt);
+    const snapped = onColumn
+      ? new THREE.Vector3(onColumn.x, pt.y || 0, onColumn.z)
+      : pt.clone();
+    if (!this._beamStart) {
+      this._beamStart = snapped;
+      this.setState({
+        drawingMessage: `${this.state.beamMode === 'dropped' ? 'DROPPED' : 'FLUSH'} beam start set${onColumn ? ' on the column' : ''}. Click the other support.`,
+        drawingMessageError: false,
+      });
+      return;
+    }
+    if (Math.hypot(snapped.x - this._beamStart.x, snapped.z - this._beamStart.z) < 0.001) return;
+    const beam = {
+      id: this._nextBeamId++,
+      start: this._beamStart,
+      end: snapped,
+      levelId: this._activeLevelId(),
+      view,
+      mode: this.state.beamMode === 'dropped' ? 'dropped' : 'flush',
+      layer: BEAM_LAYER,
+    };
+    this._beams.push(beam);
+    this._centreColumnsOnBeam(beam);
+    this._beamStart = null;
+    this._lockAngle = null;
+    const pockets = this._beamPocketsFor(beam).length;
+    this.setState({
+      drawingMessage: beam.mode === 'dropped'
+        ? `DROPPED beam added — joists rest on it.${pockets ? ` BEAM POCKET required at ${pockets === 1 ? 'one foundation wall' : `${pockets} foundation walls`} — verify pocket size with the floor supplier.` : ''}`
+        : 'FLUSH beam added — top flush with the joists, bears on the sill plate at foundation walls.',
+      drawingMessageError: false,
+    });
+    this._markUnsaved();
+  }
+
+  _cancelBeam() {
+    if (!this._beamStart) return;
+    this._beamStart = null;
+    this.setState({ drawingMessage: '', drawingMessageError: false });
+  }
+
+  _deleteLastColumn() {
+    const active = this._activeColumns();
+    if (!active.length) return;
+    const column = active[active.length - 1];
+    this._columns = this._columns.filter(item => item !== column);
+    this.setState({ drawingMessage: 'Column removed.', drawingMessageError: false });
+    this._markUnsaved();
+  }
+
+  _deleteLastBeam() {
+    const active = this._activeBeams();
+    if (!active.length) return;
+    const beam = active[active.length - 1];
+    this._beams = this._beams.filter(item => item !== beam);
+    this.setState({ drawingMessage: 'Beam removed.', drawingMessageError: false });
+    this._markUnsaved();
+  }
+
+  // Concrete foundation walls of the level a beam belongs to (or of the
+  // FOUNDATION level below a floor beam) that a beam end bears on.
+  _foundationWallsForBeam(beam) {
+    return this._walls.filter(wall => wall.view === 'foundation'
+      && (WALL_TYPES.find(type => type.id === wall.wallType)?.layers || []).some(layer => layer.fill === 'concrete'));
+  }
+
+  // A DROPPED beam bearing on a foundation wall needs a BEAM POCKET there — a
+  // blocked-out area of the pour so the beam sits on the created concrete
+  // ledge. FLUSH beams bear on the sill plate instead, so no pocket.
+  _beamPocketsFor(beam) {
+    if (beam.mode !== 'dropped') return [];
+    const walls = this._foundationWallsForBeam(beam);
+    const pockets = [];
+    [beam.start, beam.end].forEach(endPt => {
+      const bearing = walls.some(wall => {
+        const projected = this._closestPointOnSeg(endPt, wall);
+        const halfWidth = (WALL_TYPES.find(type => type.id === wall.wallType)?.totalIn || 8) / 24;
+        return Math.hypot(projected.x - endPt.x, projected.z - endPt.z) <= halfWidth + STRUCT_SNAP_FT;
+      });
+      if (bearing) pockets.push({ x: endPt.x, z: endPt.z });
+    });
+    return pockets;
   }
 
   _handleLineClick() {
@@ -7874,7 +8301,7 @@ class Component extends DCLogic {
         return;
       }
       if (this._windowSelection) { this._windowSelection = null; return; }
-      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
+      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this._cancelCut();
       this._clearSelection();
       return;
     }
@@ -7945,14 +8372,14 @@ class Component extends DCLogic {
     if (matches('outline')) { e.preventDefault(); this._activateContextTool('outline'); return; }
     if (matches('roof')) { e.preventDefault(); this._activateContextTool('roof'); return; }
     if (matches('dimension')) { e.preventDefault(); this._activateContextTool('dimension'); return; }
-    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
+    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
     if (matches('extend') || matches('extendAlt')) {
       e.preventDefault();
       this._activateExtendTool();
       return;
     }
-    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
-    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
+    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
+    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
     if (matches('gridSnap') || matches('gridSnapAlt')) { e.preventDefault(); this._toggleGridSnap(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
@@ -8439,6 +8866,34 @@ class Component extends DCLogic {
       noCuts: cuts.length === 0,
       lineToolActive: activeTool === 'line',
       wallToolActive: activeTool === 'wall',
+      columnToolActive: activeTool === 'column',
+      beamToolActive: activeTool === 'beam',
+      columnFootingBtns: COLUMN_FOOTINGS.map(footing => ({
+        label: footing.label,
+        title: `${footing.note} — shown as a centre mark on the FOUNDATION plan; the contractor positions from the centre and pad type.`,
+        bg: this.state.columnFooting === footing.id ? '#1d1f20' : '#fff',
+        color: this.state.columnFooting === footing.id ? '#f2f2f3' : '#1d1f20',
+        border: this.state.columnFooting === footing.id ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        onSelect: () => this.setState({ columnFooting: footing.id }),
+      })),
+      columnFootingNote: `${this._columnFooting({ footing: this.state.columnFooting }).note} · 3"ø adjustable steel telepost`,
+      hasActiveColumns: this._activeColumns().length > 0,
+      onColumnDelete: () => this._deleteLastColumn(),
+      beamModeBtns: ['flush', 'dropped'].map(value => ({
+        label: value === 'dropped' ? 'DROPPED' : 'FLUSH',
+        title: value === 'dropped'
+          ? 'Top of beam under the joists — joists rest on it; needs a BEAM POCKET where it bears on a foundation wall'
+          : 'Top of beam flush with the joists — bears on the sill plate at foundation walls, no pocket',
+        bg: this.state.beamMode === value ? '#1d1f20' : '#fff',
+        color: this.state.beamMode === value ? '#f2f2f3' : '#1d1f20',
+        border: this.state.beamMode === value ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        onSelect: () => this.setState({ beamMode: value }),
+      })),
+      beamModeNote: this.state.beamMode === 'dropped'
+        ? 'DROPPED — joists rest on the beam; BEAM POCKET noted where it bears on a foundation wall (verify size with the floor supplier).'
+        : 'FLUSH — beam top flush with the joists; bears on the sill plate at foundation walls.',
+      hasActiveBeams: this._activeBeams().length > 0,
+      onBeamDelete: () => this._deleteLastBeam(),
       floorToolActive: activeTool === 'floor',
       fenestrationToolActive: fenestrating,
       fenestrationHoleMode: fenestrating && Boolean(holeHost),
@@ -8946,7 +9401,7 @@ class Component extends DCLogic {
       })),
 
       tools: [
-        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
+        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
         contextualTool('line'),
         contextualTool('node'),
         contextualTool('wall'),
@@ -8956,11 +9411,13 @@ class Component extends DCLogic {
         contextualTool('outline'),
         contextualTool('roof'),
         contextualTool('dimension'),
+        contextualTool('column'),
+        contextualTool('beam'),
         standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._activateExtendTool(); }, activeTool==='extend'),
-        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
+        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
       ],
       cutShortcut: shortcut('cut'),
-      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof(); this.setState({activeTool:'cut'}); },
+      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this.setState({activeTool:'cut'}); },
       cutToolBg:     isCutTool ? on.bg     : off.bg,
       cutToolColor:  isCutTool ? on.color  : off.color,
       cutToolBorder: isCutTool ? on.border : off.border,
