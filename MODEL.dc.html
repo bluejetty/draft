@@ -401,6 +401,21 @@
       </div>
     </sc-if>
 
+    <!-- DIMENSION / AUTO DIMS (shown when Dimension tool is active) -->
+    <sc-if value="{{ dimensionToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Dimension</div>
+        <button onClick="{{ onAutoDims }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">AUTO DIMS</button>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">First string offset</div>
+        <div style="display:flex; gap:3px; margin-bottom:8px;">
+          <sc-for list="{{ autoDimOffsetBtns }}" as="od" hint-placeholder-count="2">
+            <button onClick="{{ od.onSelect }}" title="{{ od.title }}" style="flex:1; border:1px solid {{ od.border }}; background:{{ od.bg }}; color:{{ od.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ od.label }}</button>
+          </sc-for>
+        </div>
+        <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ autoDimHint }}</div>
+      </div>
+    </sc-if>
+
     <!-- FENESTRATION PROPERTIES (shown when Fenestration tool is active) -->
     <sc-if value="{{ fenestrationToolActive }}" hint-placeholder-val="{{ false }}">
       <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
@@ -743,6 +758,14 @@ const DEFAULT_SLAB_THICKNESS_IN = 4;
 // Garage slab: 4" pour sloping 1/8" per foot, over the grade beam at the doors.
 const GARAGE_SLAB_THICKNESS_IN = 4;
 const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;
+// Auto dims: exterior strings per side — openings closest, corner jogs one
+// string out, overall outside. The first string sits at an adjustable offset
+// from the plan and every further string steps out by the string spacing.
+const AUTO_DIM_STRING_SPACING_FT = 1.5;
+const AUTO_DIM_FIRST_OFFSETS_FT = [
+  { value: 1.5, label: '1\'-6"' },
+  { value: 3, label: '3\'-0"' },
+];
 const DEFAULT_FLOOR_ASSEMBLY = {
   joistDepthIn: 11 + 7 / 8,
   joistSpacingIn: 16,
@@ -1148,6 +1171,7 @@ class Component extends DCLogic {
     boneyardActive: false,   // BONEYARD card selected instead of a level
     outlineColor: DEFAULT_OUTLINE_COLOR,
     outlineGarage: false,     // next outline drawn marks the GARAGE portion
+    autoDimFirstOffsetFt: 1.5, // gap between the plan and the closest auto string
     levelLayerViews: { 5:'plan', 3:'plan', 1:'plan' },
     levelAssemblies: {},        // levelId -> wall height + floor joist/sheathing assembly
     assemblyEditor: null,       // { levelId, kind:'wall'|'floor' } open in the level rail
@@ -1347,6 +1371,7 @@ class Component extends DCLogic {
         end: point(dimension.end),
         levelId: dimension.levelId,
         view: dimension.view,
+        auto: dimension.auto === true,
       })),
       nextDimensionId: this._nextDimensionId || 1,
       columns: this._columns.map(column => ({
@@ -7965,6 +7990,112 @@ class Component extends DCLogic {
     this.setState({ drawingMessage: '', drawingMessageError: false });
   }
 
+  // AUTO DIMS: exterior dimension strings on all four sides of the plan.
+  // Per side, closest string dims corner-to-corner through the fenestration
+  // centres facing that side, the next string dims every footprint jog, and
+  // the outermost string is the overall. Corners come from the level's
+  // outlines when they exist (the design points), else from wall endpoints.
+  // Re-running replaces the previous auto strings; everything placed is an
+  // ordinary dimension, so single dims can be deleted or redrawn by hand.
+  _generateAutoDims() {
+    if (this.state.activeView !== 'top') {
+      this.setState({ drawingMessage: 'Dimensions are placed in TOP / PLAN view.', drawingMessageError: true });
+      return false;
+    }
+    const levelId = this._activeLevelId();
+    const view = this._activeLayerViewId(levelId) || 'plan';
+    if (!this._contextAllowsTool('dimension', view)) {
+      this.setState({ drawingMessage: this._contextToolMessage('dimension', view), drawingMessageError: true });
+      return false;
+    }
+    const wallView = view === 'e-power' ? 'plan' : view;
+    const walls = this._walls.filter(wall => wall.levelId === levelId
+      && (wall.view || 'plan') === wallView);
+    const outlinePoints = this._outlines
+      .filter(outline => outline.levelId === levelId && outline.points.length >= 3)
+      .flatMap(outline => outline.points.map(point => ({ x: point.x, z: point.z })));
+    const corners = outlinePoints.length
+      ? outlinePoints
+      : walls.flatMap(wall => [
+        { x: wall.start.x, z: wall.start.z },
+        { x: wall.end.x, z: wall.end.z },
+      ]);
+    if (corners.length < 2) {
+      this.setState({ drawingMessage: 'AUTO DIMS needs walls or an outline on this level first.', drawingMessageError: true });
+      return false;
+    }
+    const uniqSorted = values => {
+      const sorted = [...values].sort((a, b) => a - b);
+      return sorted.filter((value, index) => index === 0 || value - sorted[index - 1] > 0.01);
+    };
+    const xs = uniqSorted(corners.map(point => point.x));
+    const zs = uniqSorted(corners.map(point => point.z));
+    const minX = xs[0], maxX = xs[xs.length - 1];
+    const minZ = zs[0], maxZ = zs[zs.length - 1];
+    if (maxX - minX < 0.01 || maxZ - minZ < 0.01) {
+      this.setState({ drawingMessage: 'AUTO DIMS needs a plan with some size to dimension.', drawingMessageError: true });
+      return false;
+    }
+    // Fenestration centres, keyed to the side their host wall faces.
+    const openings = { N: [], S: [], W: [], E: [] };
+    const wallIds = new Set(walls.map(wall => wall.id));
+    this._fenestrations
+      .filter(opening => opening.levelId === levelId && wallIds.has(opening.wallId))
+      .forEach(opening => {
+        const geoInfo = this._openingGeometry(opening);
+        if (!geoInfo) return;
+        const wall = geoInfo.wall;
+        const horizontal = Math.abs(wall.end.x - wall.start.x) >= Math.abs(wall.end.z - wall.start.z);
+        const mid = { x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 };
+        if (horizontal) openings[mid.z - minZ <= maxZ - mid.z ? 'N' : 'S'].push(geoInfo.center.x);
+        else openings[mid.x - minX <= maxX - mid.x ? 'W' : 'E'].push(geoInfo.center.z);
+      });
+    const elev = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
+    this._dimensions = this._dimensions.filter(dimension =>
+      !(dimension.auto && dimension.levelId === levelId && dimension.view === view));
+    const firstOffset = this.state.autoDimFirstOffsetFt;
+    let added = 0;
+    const pushString = (side, coords, stringIndex) => {
+      const lineOffset = firstOffset + stringIndex * AUTO_DIM_STRING_SPACING_FT;
+      for (let i = 0; i < coords.length - 1; i++) {
+        const a = coords[i], b = coords[i + 1];
+        if (b - a < 0.05) continue;
+        const start = side === 'N' ? { x: a, z: minZ - lineOffset }
+          : side === 'S' ? { x: a, z: maxZ + lineOffset }
+          : side === 'W' ? { x: minX - lineOffset, z: a }
+          : { x: maxX + lineOffset, z: a };
+        const end = side === 'N' ? { x: b, z: minZ - lineOffset }
+          : side === 'S' ? { x: b, z: maxZ + lineOffset }
+          : side === 'W' ? { x: minX - lineOffset, z: b }
+          : { x: maxX + lineOffset, z: b };
+        this._dimensions.push({
+          id: this._nextDimensionId++,
+          start: new THREE.Vector3(start.x, elev, start.z),
+          end: new THREE.Vector3(end.x, elev, end.z),
+          levelId,
+          view,
+          auto: true,
+        });
+        added++;
+      }
+    };
+    ['N', 'S', 'W', 'E'].forEach(side => {
+      const cornerCoords = side === 'N' || side === 'S' ? xs : zs;
+      const lo = cornerCoords[0], hi = cornerCoords[cornerCoords.length - 1];
+      let stringIndex = 0;
+      const centres = uniqSorted(openings[side]).filter(value => value > lo + 0.01 && value < hi - 0.01);
+      if (centres.length) pushString(side, uniqSorted([lo, ...centres, hi]), stringIndex++);
+      if (cornerCoords.length > 2) pushString(side, cornerCoords, stringIndex++);
+      pushString(side, [lo, hi], stringIndex);
+    });
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `AUTO DIMS placed ${added} dimensions around the ${this._draftingContextLabel(view)} plan — re-run after edits to refresh them.`,
+      drawingMessageError: false,
+    });
+    return true;
+  }
+
   // ─── Columns and beams ──────────────────────────────────────────────────────
   // Manual structure, placed in either order: a column pulls onto the nearest
   // beam line and a beam end pulls onto the nearest column, so posts and spans
@@ -9310,6 +9441,20 @@ class Component extends DCLogic {
         : 'Saves on A-DOOR · sill sits at the bottom of the wall',
       shapeToolActive: shaping,
       outlineToolActive: activeTool === 'outline',
+      dimensionToolActive: dimensioning,
+      onAutoDims: () => this._generateAutoDims(),
+      autoDimOffsetBtns: AUTO_DIM_FIRST_OFFSETS_FT.map(offset => {
+        const isActive = this.state.autoDimFirstOffsetFt === offset.value;
+        return {
+          label: offset.label,
+          title: `First auto string sits ${offset.label} off the plan; further strings step out 1'-6" each`,
+          border: isActive ? '#5980a6' : 'rgba(29,31,32,0.2)',
+          bg: isActive ? 'rgba(89,128,166,0.14)' : '#fff',
+          color: isActive ? '#3e6285' : '#1d1f20',
+          onSelect: () => this.setState({ autoDimFirstOffsetFt: offset.value }),
+        };
+      }),
+      autoDimHint: 'AUTO DIMS strings the exterior on all four sides: openings closest, footprint jogs next, overall outside. Re-run to refresh after edits — every dim stays ordinary and editable.',
       onBuildHouse: () => this._buildHouse(),
       onOutlineGarageToggle: () => this.setState(state => ({
         outlineGarage: !state.outlineGarage,
