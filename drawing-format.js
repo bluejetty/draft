@@ -217,7 +217,8 @@ if (!window.DraftDrawingFormat) {
         const id = String(raw?.id || '').trim();
         if (!parsed || !id || seenPointIds.has(id)) return null;
         seenPointIds.add(id);
-        return { ...parsed, id };
+        const bulge = Number(raw?.bulge);
+        return { ...parsed, id, bulge: Number.isFinite(bulge) ? bulge : 0 };
       }).filter(Boolean);
       if (points.length < 3) return null;
       return {
@@ -240,7 +241,8 @@ if (!window.DraftDrawingFormat) {
         const parsed = point(raw);
         if (!parsed) return null;
         const srcId = String(raw?.srcId || '').trim();
-        return { ...parsed, srcId: srcId || null };
+        const bulge = Number(raw?.bulge);
+        return { ...parsed, srcId: srcId || null, bulge: Number.isFinite(bulge) ? bulge : 0 };
       }).filter(Boolean);
       if (outlineLevelId == null || points.length < 3) return null;
       return {

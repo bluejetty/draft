@@ -1265,13 +1265,13 @@ class Component extends DCLogic {
         id: outline.id,
         shelfId: outline.shelfId,
         sourceLevelId: outline.sourceLevelId ?? null,
-        points: outline.points.map(p => ({ id: p.pointId, x: p.x, y: p.y || 0, z: p.z })),
+        points: outline.points.map(p => ({ id: p.pointId, x: p.x, y: p.y || 0, z: p.z, bulge: p.bulge || 0 })),
       })),
       outlines: this._outlines.map(outline => ({
         id: outline.id,
         masterId: outline.masterId ?? null,
         levelId: outline.levelId,
-        points: outline.points.map(p => ({ x: p.x, y: p.y || 0, z: p.z, srcId: p.srcId ?? null })),
+        points: outline.points.map(p => ({ x: p.x, y: p.y || 0, z: p.z, srcId: p.srcId ?? null, bulge: p.bulge || 0 })),
         overriddenSrcIds: [...(outline.overriddenSrcIds || [])],
         layer: OUTLINE_LAYER,
       })),
@@ -1658,15 +1658,28 @@ class Component extends DCLogic {
         });
         contextBackgrounds[`${contextLevelId}:${contextView}`] = { ids, views };
       });
+      // BONEYARD shelves live outside the level stack; drawings saved before
+      // the BONEYARD existed load with the single default shelf. Shelf geometry
+      // restores under its negative pseudo level id (-shelfId), so drawing items
+      // may be owned by a level or by a shelf.
+      const boneyardShelves = format.boneyardShelves(saved.boneyardShelves);
+      const activeBoneyardShelfId = boneyardShelves.some(shelf => shelf.id === Number(saved.activeBoneyardShelfId))
+        ? Number(saved.activeBoneyardShelfId)
+        : boneyardShelves[0].id;
+      const nextBoneyardShelfId = Math.max(
+        Number.isInteger(saved.nextBoneyardShelfId) ? saved.nextBoneyardShelfId : 1,
+        ...boneyardShelves.map(shelf => shelf.id + 1),
+      );
+      const ownerLevelIds = new Set([...levelIds, ...boneyardShelves.map(shelf => -shelf.id)]);
       const storedCuts = Array.isArray(saved.cuts)
         ? saved.cuts.map(cut => ({ ...cut, levelId: migrateLevelId(cut?.levelId) }))
         : saved.cuts;
-      const cuts = format.cuts(storedCuts, levelIds);
+      const cuts = format.cuts(storedCuts, ownerLevelIds);
       let skipped = (Array.isArray(saved.cuts) ? saved.cuts.length : 0) - cuts.length;
       const storedDimensions = Array.isArray(saved.dimensions)
         ? saved.dimensions.map(dimension => ({ ...dimension, levelId: migrateLevelId(dimension?.levelId) }))
         : saved.dimensions;
-      const dimensions = format.dimensions(storedDimensions, levelIds);
+      const dimensions = format.dimensions(storedDimensions, ownerLevelIds);
       skipped += (Array.isArray(saved.dimensions) ? saved.dimensions.length : 0) - dimensions.length;
       const nextDimensionId = Math.max(
         1,
@@ -1677,16 +1690,6 @@ class Component extends DCLogic {
         1,
         ...cuts.map(cut => cut.id + 1),
         Number.isInteger(saved.nextCutId) ? saved.nextCutId : 1,
-      );
-      // BONEYARD shelves live outside the level stack; drawings saved before
-      // the BONEYARD existed load with the single default shelf.
-      const boneyardShelves = format.boneyardShelves(saved.boneyardShelves);
-      const activeBoneyardShelfId = boneyardShelves.some(shelf => shelf.id === Number(saved.activeBoneyardShelfId))
-        ? Number(saved.activeBoneyardShelfId)
-        : boneyardShelves[0].id;
-      const nextBoneyardShelfId = Math.max(
-        Number.isInteger(saved.nextBoneyardShelfId) ? saved.nextBoneyardShelfId : 1,
-        ...boneyardShelves.map(shelf => shelf.id + 1),
       );
 
       await new Promise(resolve => this.setState({
@@ -1740,7 +1743,7 @@ class Component extends DCLogic {
        const restoreSegment = (segment, type, extra = {}) => {
         const start = format.point(segment?.start);
         const end = format.point(segment?.end);
-        const levelId = format.levelId(migrateLevelId(segment?.levelId), levelIds);
+        const levelId = format.levelId(migrateLevelId(segment?.levelId), ownerLevelIds);
         if (!start || !end || levelId == null) return null;
         return {
            id: this._storedItemId(segment?.id, type, usedIds),
@@ -1775,7 +1778,7 @@ class Component extends DCLogic {
       skipped += (Array.isArray(saved.walls) ? saved.walls.length : 0) - this._walls.length;
       this._floors = Array.isArray(saved.floors)
         ? saved.floors.map(floor => {
-          const levelId = format.levelId(migrateLevelId(floor?.levelId), levelIds);
+          const levelId = format.levelId(migrateLevelId(floor?.levelId), ownerLevelIds);
           const points = Array.isArray(floor?.points) ? floor.points.map(format.point).filter(Boolean) : [];
           if (levelId == null || points.length < 3) return null;
           return {
@@ -1790,20 +1793,20 @@ class Component extends DCLogic {
         }).filter(Boolean)
         : [];
       skipped += (Array.isArray(saved.floors) ? saved.floors.length : 0) - this._floors.length;
-      this._shapes = format.shapes(saved.shapes, levelIds).map(shape => ({
+      this._shapes = format.shapes(saved.shapes, ownerLevelIds).map(shape => ({
         ...shape,
         id: this._storedItemId(shape.id, 'shape', usedIds),
         points: shape.points.map(point => this._mergeVertex(point, shape.levelId, 'shape')),
       }));
       skipped += (Array.isArray(saved.shapes) ? saved.shapes.length : 0) - this._shapes.length;
-      this._roofs = format.roofs(saved.roofs, levelIds).map(roof => ({
+      this._roofs = format.roofs(saved.roofs, ownerLevelIds).map(roof => ({
         ...roof,
         id: this._storedItemId(roof.id, 'roof', usedIds),
         points: roof.points.map(point => this._mergeVertex(point, roof.levelId, 'roof')),
       }));
       skipped += (Array.isArray(saved.roofs) ? saved.roofs.length : 0) - this._roofs.length;
       const wallsById = new Map(this._walls.map(wall => [wall.id, wall]));
-      this._fenestrations = format.fenestrations(saved.fenestrations, levelIds).map(opening => {
+      this._fenestrations = format.fenestrations(saved.fenestrations, ownerLevelIds).map(opening => {
         const wall = wallsById.get(opening.wallId);
         if (!wall || wall.levelId !== opening.levelId) return null;
         const clamped = this._clampOpeningToWall(wall, opening.offset, opening.width);
@@ -1817,7 +1820,7 @@ class Component extends DCLogic {
       skipped += (Array.isArray(saved.fenestrations) ? saved.fenestrations.length : 0) - this._fenestrations.length;
       const floorIds = new Set(this._floors.map(floor => floor.id));
       const roofIds = new Set(this._roofs.map(roof => roof.id));
-      this._surfaceOpenings = format.surfaceOpenings(saved.surfaceOpenings, levelIds).map(opening => {
+      this._surfaceOpenings = format.surfaceOpenings(saved.surfaceOpenings, ownerLevelIds).map(opening => {
         const hostOk = opening.hostType === 'roof' ? roofIds.has(opening.hostId) : floorIds.has(opening.hostId);
         if (!hostOk) return null;
         return {
@@ -1852,6 +1855,7 @@ class Component extends DCLogic {
           points: outline.points.map(p => {
             const vtx = new THREE.Vector3(p.x, p.y, p.z);
             vtx.pointId = p.id;
+            vtx.bulge = p.bulge || 0;
             return vtx;
           }),
         };
@@ -1865,6 +1869,7 @@ class Component extends DCLogic {
           points: outline.points.map(p => {
             const vtx = new THREE.Vector3(p.x, levelsById.get(outline.levelId)?.elev ?? p.y, p.z);
             vtx.srcId = masterId != null ? p.srcId : null;
+            vtx.bulge = p.bulge || 0;
             return vtx;
           }),
           overriddenSrcIds: [...outline.overriddenSrcIds],
@@ -2311,6 +2316,7 @@ class Component extends DCLogic {
     // Select-tool state
     this._selectDrag     = null;       // { refs, startX, startY, active }  — node drag
     this._arcDrag        = null;       // { line, startX, startY, active }  — arc bulge drag
+    this._outlineArcDrag = null;       // { outline, index, startX, startY, active } — outline segment arc drag
     this._selectDownInfo = null;       // { worldPt, clientX, clientY, shiftHeld } — pending click
     this._windowSelection = null;      // { start, current, startX, startY, shiftHeld } — window drag
     this._selectedSegs   = new Set(); // line/wall segment objects currently selected
@@ -2362,13 +2368,16 @@ class Component extends DCLogic {
       this._panning2D = false;
       const sd   = this._selectDrag;
       const ad   = this._arcDrag;
+      const oad  = this._outlineArcDrag;
       const info = this._selectDownInfo;
       const windowSelection = this._windowSelection;
       this._selectDrag     = null;
       this._arcDrag        = null;
+      this._outlineArcDrag = null;
       this._selectDownInfo = null;
       this._windowSelection = null;
       if (ad?.active) this._markUnsaved();
+      if (oad?.active) this._afterOutlineArcDrag(oad);
       if (windowSelection) {
         const end = this._getWorldPos(e.clientX, e.clientY);
         if (end) windowSelection.current = end;
@@ -2523,9 +2532,11 @@ class Component extends DCLogic {
     };
 
     const activeLevel = this._activeLevel();
-    // On the BONEYARD only shelf contents show: no level geometry, no
-    // background references — the shelves are storage, not a drafting context.
-    const activeVisible = activeLevel?.visible !== false && !this.state.boneyardActive;
+    // On the BONEYARD only the active shelf's contents show: no level geometry,
+    // no background references — and shelf contents never print.
+    const activeVisible = this.state.boneyardActive
+      ? !this._isPrinting
+      : activeLevel?.visible !== false;
     const reference = this.state.boneyardActive ? null : this._visibleBackgroundReference();
 
     // ── Visible background (reference-only, deliberately beneath active geometry)
@@ -2929,10 +2940,16 @@ class Component extends DCLogic {
       ctx.setLineDash([9, 5]);
       ctx.beginPath();
       outline.points.forEach((point, index) => {
-        const s = toS(point);
-        if (index) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
+        const seg = this._outlineSegment(outline, index);
+        const a = toS(seg.start), b = toS(seg.end);
+        if (!index) ctx.moveTo(a.x, a.y);
+        if (seg.bulge) {
+          const c = toS(this._lineControlPoint(seg));
+          ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
+        } else {
+          ctx.lineTo(b.x, b.y);
+        }
       });
-      ctx.closePath();
       ctx.stroke();
       ctx.setLineDash([]);
       if (showHandles) {
@@ -2951,7 +2968,9 @@ class Component extends DCLogic {
         const s = toS(point);
         if (index) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
       });
-      if (this._snapPt) { const s = toS(this._snapPt); ctx.lineTo(s.x, s.y); }
+      const cursor = this.state.lengthFrozen && this._frozenTool === 'outline' && this._frozenEnd
+        ? this._frozenEnd : this._snapPt;
+      if (cursor) { const s = toS(cursor); ctx.lineTo(s.x, s.y); }
       ctx.stroke();
       ctx.setLineDash([]);
       this._outlinePoints.forEach(point => {
@@ -3111,7 +3130,14 @@ class Component extends DCLogic {
   // ─── Levels and nested drawing views ─────────────────────────────────────────
   _activeLevel() { return this.state.levels[this.state.activeLevelIdx] || this.state.levels[0]; }
 
-  _activeLevelId() { return this._activeLevel()?.id; }
+  // Shelf geometry owns a negative pseudo level id (-shelfId), so a shelf and
+  // a level can never share an item and level ids stay strictly positive.
+  _boneyardLevelId(shelfId = this.state.activeBoneyardShelfId) { return -shelfId; }
+
+  _activeLevelId() {
+    if (this.state.boneyardActive) return this._boneyardLevelId();
+    return this._activeLevel()?.id;
+  }
 
   _layerViewsForLevel(levelId = this._activeLevelId()) {
     return LEVEL_LAYER_VIEWS[levelId] || [];
@@ -3132,15 +3158,17 @@ class Component extends DCLogic {
       floor: 'FLOOR',
       'e-power': 'ELECTRIC',
       foundation: 'FOUNDATION',
-    }[viewId] || 'LEVEL';
+    }[viewId] || (viewId == null && this.state.boneyardActive
+      ? `BONEYARD ${this._activeBoneyardShelf().name}`
+      : 'LEVEL');
   }
 
   // Levels without layer sets (ROOF, SITE) are one whole-level drafting
   // context (viewId null) where every command is available.
   _contextAllowsTool(tool, viewId = this._activeLayerViewId(), boneyardActive = this.state.boneyardActive) {
-    // On the BONEYARD only the Outline tool draws — shelves store geometry,
-    // they are not an architectural level.
-    if (boneyardActive) return tool === 'outline';
+    // A BONEYARD shelf is one whole-level drafting context, like ROOF or SITE:
+    // every drawing tool works there and stores to the active shelf.
+    if (boneyardActive) viewId = null;
     // The Outline guide works on any level; the first one completed becomes
     // the master on the active BONEYARD shelf.
     if (tool === 'outline') return true;
@@ -3200,11 +3228,8 @@ class Component extends DCLogic {
   }
 
   _contextToolMessage(tool, viewId = this._activeLayerViewId()) {
-    if (this.state.boneyardActive && tool !== 'outline') {
-      return `${this._contextToolLabel(tool)} works on a floor level — the BONEYARD only stores geometry. Switch to a level first.`;
-    }
     const context = this._draftingContextLabel(viewId);
-    if (tool === 'outline') return `The Outline guide is drawn on any level; the first one becomes the BONEYARD master. Current context: ${context}.`;
+    if (tool === 'outline') return `The Outline guide is drawn on any level; the first one becomes the BONEYARD master. ${keyBindingLabel(this.state.keybindings.freezeLength)} types an exact length; drag a finished edge to arc it. Current context: ${context}.`;
     if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, ELECTRIC, or FOUNDATION. Current context: ${context}.`;
     if (tool === 'wall') return `Walls are drawn in any layer set: FOUNDATION walls save to S-FDN, all others save to PLAN. Current context: ${context}.`;
     if (tool === 'floor') return `Floor outlines are drawn in FLOOR, PLAN, or FOUNDATION — foundation floors are concrete slabs on S-SLAB. Current context: ${context}.`;
@@ -3984,7 +4009,7 @@ class Component extends DCLogic {
       else if (tool === 'node') this._handleNodeArcDown(e);
       else if (tool === 'floor') this._handleFloorClick();
       else if (tool === 'shape') this._handleShapeClick();
-      else if (tool === 'outline') this._handleOutlineClick();
+      else if (tool === 'outline') this._handleOutlineClick(e);
       else if (tool === 'fenestration') this._handleFenestrationClick();
       else if (tool === 'roof') this._handleRoofClick(e);
       else if (tool === 'dimension') this._handleDimensionClick();
@@ -4110,6 +4135,28 @@ class Component extends DCLogic {
           const h = this._canvas?.clientHeight || 600;
           const flat = (this._orthoHalfH * 2) / h * 4; // within ~4px of straight → snap flat
           seg.bulge = Math.abs(bulge) < flat ? 0 : bulge;
+        }
+      }
+    }
+
+    // Outline tool — pulling an outline edge sideways sets that segment's bulge
+    if (this._outlineArcDrag) {
+      const ad = this._outlineArcDrag;
+      if (!ad.active) {
+        const ddx = e.clientX - ad.startX, ddy = e.clientY - ad.startY;
+        if (Math.sqrt(ddx*ddx + ddy*ddy) > 4) ad.active = true;
+      }
+      if (ad.active) {
+        const raw = this._getWorldPos(e.clientX, e.clientY);
+        if (raw) {
+          const seg = this._outlineSegment(ad.outline, ad.index);
+          const mx = (seg.start.x + seg.end.x) / 2, mz = (seg.start.z + seg.end.z) / 2;
+          const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
+          const len = Math.hypot(dx, dz) || 1;
+          const bulge = (raw.x - mx) * (-dz / len) + (raw.z - mz) * (dx / len);
+          const h = this._canvas?.clientHeight || 600;
+          const flat = (this._orthoHalfH * 2) / h * 4; // within ~4px of straight → snap flat
+          ad.outline.points[ad.index].bulge = Math.abs(bulge) < flat ? 0 : bulge;
         }
       }
     }
@@ -4302,8 +4349,7 @@ class Component extends DCLogic {
   }
 
   _commitFloor(points) {
-    const level = this._activeLevel();
-    const levelId = level ? level.id : -1;
+    const levelId = this._activeLevelId();
     const activeView = this._activeLayerViewId(levelId);
     if (!this._contextAllowsTool('floor', activeView)) return false;
     const id = this._newDrawingItemId('floor');
@@ -4376,12 +4422,12 @@ class Component extends DCLogic {
   }
 
   _commitShape(points, sourceLevelId) {
-    const level = this._activeLevel();
-    if (!level || points.length < 3) return null;
+    const levelId = this._activeLevelId();
+    if (levelId == null || points.length < 3) return null;
     const shape = {
       id: this._newDrawingItemId('shape'),
-      points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, level.id, 'shape')),
-      levelId: level.id,
+      points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, levelId, 'shape')),
+      levelId,
       sourceLevelId: sourceLevelId ?? null,
       flooring: null,
       layer: SHAPE_LAYER,
@@ -4445,8 +4491,23 @@ class Component extends DCLogic {
   // ── OUTLINE — the bright building-footprint guide ─────────────────────────
   // Outline points are isolated (never merged into the shared vertex pool) so
   // the guide can trace wall corners without gluing itself to them.
-  _handleOutlineClick() {
+  _handleOutlineClick(e) {
     const pt = this._snapPt; if (!pt) return;
+
+    // With no outline in progress, a press on an existing outline edge pulls
+    // that segment into an arc instead of starting a new outline; presses on
+    // vertices keep starting a new outline so guides can snap-chain corners.
+    if (!this._outlineDrawing && e) {
+      const raw = this._getWorldPos(e.clientX, e.clientY);
+      if (raw && !this._findVertexHit(raw)) {
+        const hit = this._findOutlineEdgeHit(raw);
+        if (hit) {
+          this._outlineArcDrag = { ...hit, startX: e.clientX, startY: e.clientY, active: false };
+          e.preventDefault();
+          return;
+        }
+      }
+    }
 
     if (!this._outlineDrawing) {
       this._outlineDrawing = true;
@@ -4471,6 +4532,7 @@ class Component extends DCLogic {
 
   _finishOutline() {
     if (!this._outlineDrawing) return;
+    if (this._frozenTool === 'outline') this._cancelFrozenLength();
     const points = this._outlinePoints.map(pt => ({ x: pt.x, z: pt.z }));
     this._outlinePoints = [];
     this._outlineDrawing = false;
@@ -4482,6 +4544,7 @@ class Component extends DCLogic {
 
   _cancelOutline() {
     if (!this._outlineDrawing) return;
+    if (this._frozenTool === 'outline') this._cancelFrozenLength();
     this._outlinePoints = [];
     this._outlineDrawing = false;
     this._outlineStart = null;
@@ -4555,6 +4618,7 @@ class Component extends DCLogic {
       points: master.points.map(point => {
         const vtx = new THREE.Vector3(point.x, level.elev, point.z);
         vtx.srcId = point.pointId;
+        vtx.bulge = point.bulge || 0;
         return vtx;
       }),
       overriddenSrcIds: [],
@@ -4572,7 +4636,7 @@ class Component extends DCLogic {
       outline.points.forEach(point => {
         if (!point.srcId || overridden.has(point.srcId)) return;
         const source = masterPoints.get(point.srcId);
-        if (source) { point.x = source.x; point.z = source.z; }
+        if (source) { point.x = source.x; point.z = source.z; point.bulge = source.bulge || 0; }
       });
     });
   }
@@ -4596,6 +4660,47 @@ class Component extends DCLogic {
       }
     });
     if (touched) this._markUnsaved();
+  }
+
+  // Outline segments are keyed to their starting point: points[index] carries
+  // the bulge of the edge running to the next point (wrapping at the close).
+  _outlineSegment(outline, index) {
+    const points = outline.points;
+    const start = points[index];
+    return { start, end: points[(index + 1) % points.length], bulge: start.bulge || 0 };
+  }
+
+  // Return { outline, index } of the visible outline edge nearest worldPt
+  // (within 12px), or null.
+  _findOutlineEdgeHit(worldPt) {
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    let bestD = (this._orthoHalfH * 2) / h * 12;
+    let best = null;
+    const outlines = this.state.boneyardActive ? this._activeBoneyardOutlines() : this._activeOutlines();
+    outlines.forEach(outline => {
+      if (outline.points.length < 3) return;
+      outline.points.forEach((point, index) => {
+        const { d } = this._distToLineSeg(worldPt, this._outlineSegment(outline, index));
+        if (d < bestD) { bestD = d; best = { outline, index }; }
+      });
+    });
+    return best;
+  }
+
+  // After an arc pull: an arced master segment curves every level copy; an
+  // arced inherited level segment becomes a local override the master no
+  // longer touches.
+  _afterOutlineArcDrag(drag) {
+    const outline = drag.outline;
+    if (outline.shelfId != null) {
+      this._propagateMasterOutline(outline);
+    } else if (outline.masterId != null) {
+      const point = outline.points[drag.index];
+      if (point?.srcId && !outline.overriddenSrcIds.includes(point.srcId)) {
+        outline.overriddenSrcIds.push(point.srcId);
+      }
+    }
+    this._markUnsaved();
   }
 
   _activeOutlines() {
@@ -4626,11 +4731,12 @@ class Component extends DCLogic {
     this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
     this._clearSelection(false);
     const shelf = this._activeBoneyardShelf();
-    const activeTool = ['outline', 'select'].includes(this.state.activeTool) ? this.state.activeTool : 'select';
+    // Shelf geometry draws at elevation 0 no matter which level was active.
+    if (this._ground) this._ground.position.y = 0;
+    this._drawElev = 0;
     this.setState({
       boneyardActive: true,
-      activeTool,
-      drawingMessage: `BONEYARD — ${shelf.name}. Stored geometry keeps its exact position; only the active shelf shows. Nothing here prints.`,
+      drawingMessage: `BONEYARD — ${shelf.name}. Every drawing tool stores to this shelf; only the active shelf shows. Nothing here prints.`,
       drawingMessageError: false,
     }, () => {
       if (this._orthoCam) this._setView('top');
@@ -4642,7 +4748,9 @@ class Component extends DCLogic {
     event?.stopPropagation();
     const shelf = this.state.boneyardShelves.find(s => s.id === shelfId);
     if (!shelf) return;
-    this._cancelOutline();
+    this._cancelFrozenLength();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof();
+    this._clearSelection(false);
     if (!this.state.boneyardActive) this._selectBoneyard();
     this.setState({ activeBoneyardShelfId: shelf.id, boneyardActive: true }, () => this._markUnsaved());
   }
@@ -4658,7 +4766,9 @@ class Component extends DCLogic {
   _addBoneyardShelf(event) {
     event?.stopPropagation();
     const id = this.state.nextBoneyardShelfId;
-    this._cancelOutline();
+    this._cancelFrozenLength();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof();
+    this._clearSelection(false);
     this.setState({
       boneyardShelves: [...this.state.boneyardShelves, { id, name: `SHELF ${id}` }],
       activeBoneyardShelfId: id,
@@ -4775,8 +4885,7 @@ class Component extends DCLogic {
   }
 
   _commitWall(start, end, wallType, baseHeight, topHeight, refLine) {
-    const level = this._activeLevel();
-    const levelId = level ? level.id : -1;
+    const levelId = this._activeLevelId();
     const activeView = this._activeLayerViewId(levelId);
     if (!this._contextAllowsTool('wall', activeView)) return false;
     const id = this._newDrawingItemId('wall');
@@ -5248,16 +5357,16 @@ class Component extends DCLogic {
   }
 
   _commitBasicRoof() {
-    const level = this._activeLevel();
+    const levelId = this._activeLevelId();
     const footprint = this._basicRoofFootprint();
-    if (!level || !footprint) {
+    if (levelId == null || !footprint) {
       this._cancelRoof();
       return false;
     }
     this._roofs.push({
       id: this._newDrawingItemId('roof'),
-      points: footprint.map(point => this._mergeVertex({ x: point.x, z: point.z }, level.id, 'roof')),
-      levelId: level.id,
+      points: footprint.map(point => this._mergeVertex({ x: point.x, z: point.z }, levelId, 'roof')),
+      levelId,
       sourceLevelId: null,
       sourceShapeId: null,
       // The drawn edge and its opposite start as eaves; the two sides as gables.
@@ -5286,9 +5395,9 @@ class Component extends DCLogic {
       this.setState({ drawingMessage: this._contextToolMessage('roof'), drawingMessageError: true });
       return false;
     }
-    const level = this._activeLevel();
+    const levelId = this._activeLevelId();
     const shapes = this._activeShapes();
-    if (!level || !shapes.length) {
+    if (levelId == null || !shapes.length) {
       this.setState({
         drawingMessage: 'No shape on this level — draw or CAPTURE one with the Shape tool first.',
         drawingMessageError: true,
@@ -5300,8 +5409,8 @@ class Component extends DCLogic {
     const points = this._offsetOutline(shape.points.map(pt => ({ x: pt.x, z: pt.z })), overhang);
     this._roofs.push({
       id: this._newDrawingItemId('roof'),
-      points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, level.id, 'roof')),
-      levelId: level.id,
+      points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, levelId, 'roof')),
+      levelId,
       sourceLevelId: shape.sourceLevelId ?? null,
       sourceShapeId: shape.id,
       edges: points.map(() => 'eave'),
@@ -6146,12 +6255,9 @@ class Component extends DCLogic {
   // ─── Snap helpers ────────────────────────────────────────────────────────────
   _collectActiveVertices() {
     const pts = [];
-    // On the BONEYARD only the active shelf's geometry snaps.
-    if (this.state.boneyardActive) {
-      this._activeBoneyardOutlines().forEach(outline => pts.push(...outline.points));
-      if (this._outlineDrawing) pts.push(...this._outlinePoints);
-      return pts;
-    }
+    // Masters on the active shelf snap like any other geometry there; every
+    // other _active* helper already scopes itself to the shelf's pseudo level.
+    this._activeBoneyardOutlines().forEach(outline => pts.push(...outline.points));
     this._activeLines().forEach(l => { pts.push(l.start, l.end); });
     this._pendingChain.forEach(s => { pts.push(s.start, s.end); });
     this._activeWalls().forEach(w => { pts.push(w.start, w.end); });
@@ -6280,24 +6386,6 @@ class Component extends DCLogic {
   _findVertexHit(worldPt) {
     const r = this._magnetRadius() * 1.5;
     let bestD = r, bestVtx = null;
-    // On the BONEYARD only shelf geometry can be grabbed; level geometry is
-    // neither visible nor editable there.
-    if (this.state.boneyardActive) {
-      const refs = [];
-      this._activeBoneyardOutlines().forEach(outline => {
-        outline.points.forEach(v => {
-          const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
-          if (d < bestD) { bestD = d; bestVtx = v; }
-        });
-      });
-      if (!bestVtx) return null;
-      this._activeBoneyardOutlines().forEach(outline => {
-        outline.points.forEach((point, index) => {
-          if (point === bestVtx) refs.push({ target: outline.points, prop: index, outline });
-        });
-      });
-      return refs.length ? refs : null;
-    }
     [...this._activeLines(), ...this._activeWalls()].forEach(seg => {
       [seg.start, seg.end].forEach(v => {
         const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
@@ -6305,7 +6393,7 @@ class Component extends DCLogic {
       });
     });
     [...this._activeFloors(), ...this._activeShapes(), ...this._activeRoofs(), ...this._activeSurfaceOpenings(),
-      ...this._activeOutlines()].forEach(outline => {
+      ...this._activeOutlines(), ...this._activeBoneyardOutlines()].forEach(outline => {
       outline.points.forEach(v => {
         const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
         if (d < bestD) { bestD = d; bestVtx = v; }
@@ -6325,7 +6413,7 @@ class Component extends DCLogic {
     });
     // Outline refs carry their outline so a drag can propagate a master edit
     // or record a level copy's local override.
-    this._activeOutlines().forEach(outline => {
+    [...this._activeOutlines(), ...this._activeBoneyardOutlines()].forEach(outline => {
       outline.points.forEach((point, index) => {
         if (point === bestVtx) refs.push({ target: outline.points, prop: index, outline });
       });
@@ -6784,9 +6872,12 @@ class Component extends DCLogic {
     const minZ = Math.min(start.z, end.z), maxZ = Math.max(start.z, end.z);
     const inside = point => point.x >= minX && point.x <= maxX && point.z >= minZ && point.z <= maxZ;
     const selectable = items => items.filter(item => !this._isCurrentContextReferenceItem(item));
-    const lines = mode === 'window-all' ? selectable(this._lines) : this._activeLines();
-    const walls = mode === 'window-all' ? selectable(this._walls) : this._activeWalls();
-    const floorsInScope = mode === 'window-all' ? selectable(this._floors) : this._activeFloors();
+    // On the BONEYARD an all-levels window still only reaches the active shelf
+    // — level geometry is neither visible nor editable there.
+    const allLevels = mode === 'window-all' && !this.state.boneyardActive;
+    const lines = allLevels ? selectable(this._lines) : this._activeLines();
+    const walls = allLevels ? selectable(this._walls) : this._activeWalls();
+    const floorsInScope = allLevels ? selectable(this._floors) : this._activeFloors();
     const segments = [...lines, ...walls]
       .filter(seg => inside(seg.start) && inside(seg.end));
     const floors = floorsInScope
@@ -6797,7 +6888,7 @@ class Component extends DCLogic {
 
   _extendScopeItems() {
     const movable = items => items.filter(item => !this._isCurrentContextReferenceItem(item));
-    return this.state.extendScope === 'all'
+    return this.state.extendScope === 'all' && !this.state.boneyardActive
       ? { lines: movable(this._lines), walls: movable(this._walls), floors: movable(this._floors) }
       : { lines: this._activeLines(), walls: this._activeWalls(), floors: this._activeFloors() };
   }
@@ -7139,8 +7230,7 @@ class Component extends DCLogic {
   }
 
   _commitLine(start, end) {
-    const level = this._activeLevel();
-    const levelId = level ? level.id : -1;
+    const levelId = this._activeLevelId();
     if (!this._contextAllowsTool('line')) return false;
     const view = this._activeLayerViewId(levelId) || 'plan';
     const layer = this._activeLineLayer();
@@ -7199,10 +7289,12 @@ class Component extends DCLogic {
       && this._extendSession && this.state.extendBase;
     const start = tool === 'line' ? this._lineStart
       : tool === 'wall' ? this._wallStart
+      : tool === 'outline' ? this._outlinePoints[this._outlinePoints.length - 1]
       : extendReady ? new THREE.Vector3(this.state.extendBase.x, this.state.extendBase.y, this.state.extendBase.z)
       : null;
     const drawing = tool === 'line' ? this._lineDrawing
       : tool === 'wall' ? this._wallDrawing
+      : tool === 'outline' ? this._outlineDrawing
       : Boolean(extendReady);
     if (!start || !drawing) return;
     const pt = this._snapPt;
@@ -7239,14 +7331,18 @@ class Component extends DCLogic {
       this._frozenStart.y,
       this._frozenStart.z + dirZ * total,
     );
-    const geo = this._frozenTool === 'line' ? this._linePreviewGeo : this._previewGeo;
+    // The outline preview lives on the 2D overlay, which reads _frozenEnd
+    // itself — it has no 3D preview line to move.
+    const geo = this._frozenTool === 'line' ? this._linePreviewGeo
+      : this._frozenTool === 'outline' ? null : this._previewGeo;
     if (geo) {
       const p = geo.attributes.position;
       p.setXYZ(0, this._frozenStart.x, this._frozenStart.y+0.02, this._frozenStart.z);
       p.setXYZ(1, end.x, end.y+0.02, end.z);
       p.needsUpdate = true;
     }
-    const obj = this._frozenTool === 'line' ? this._linePreviewObj : this._previewLine;
+    const obj = this._frozenTool === 'line' ? this._linePreviewObj
+      : this._frozenTool === 'outline' ? null : this._previewLine;
     const hasLength = Math.abs(total) > 0.001;
     if (obj) obj.visible = hasLength;
     // The 2D overlay ignores the cursor while a length is typed, so give it the
@@ -7263,8 +7359,29 @@ class Component extends DCLogic {
 
   _confirmFrozenLength() {
     const frozenTool = this._frozenTool;
-    if (!this.state.lengthFrozen || !this._frozenStart || !['line', 'wall', 'extend'].includes(frozenTool)) {
+    if (!this.state.lengthFrozen || !this._frozenStart || !['line', 'wall', 'extend', 'outline'].includes(frozenTool)) {
       this._cancelFrozenLength();
+      return;
+    }
+    if (frozenTool === 'outline') {
+      if (!this._outlineDrawing) { this._cancelFrozenLength(); return; }
+      const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
+      const total = parsed.ok ? parsed.inches / 12 : 0;
+      if (!parsed.ok || Math.abs(total) <= 0.001) {
+        this.setState({ frozenDimensionError: parsed.ok ? 'Length cannot be zero.' : parsed.error });
+        return;
+      }
+      const end = new THREE.Vector3(
+        this._frozenStart.x + Math.cos(this._frozenAngle) * total,
+        this._frozenStart.y,
+        this._frozenStart.z + Math.sin(this._frozenAngle) * total,
+      );
+      this._outlinePoints.push(end);
+      this._lockAngle = null;
+      this._frozenEnd = null;
+      this._frozenStart = null;
+      this._frozenTool = null;
+      this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true });
       return;
     }
     if (frozenTool === 'extend') {
@@ -7600,6 +7717,7 @@ class Component extends DCLogic {
     if (matches('freezeLength') || freezeLengthWhileShiftLocking) {
       const tool = this.state.activeTool;
       const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._wallDrawing)
+        || (tool === 'outline' && this._outlineDrawing)
         || (tool === 'extend' && this.state.extendPhase === 'destination');
       if (drawing && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
       return;
@@ -8566,7 +8684,7 @@ class Component extends DCLogic {
       addLevel: () => this._addLevel(),
       boneyard: {
         rowClass: 'level-row' + (this.state.boneyardActive ? ' active' : ''),
-        title: 'BONEYARD — shelf storage: geometry parks in its exact position, never prints, never shows in 3D',
+        title: 'BONEYARD — shelf storage: every drawing tool works here; geometry parks in its exact position, never prints, never shows in 3D',
         onSelect: () => this._selectBoneyard(),
         onAddShelf: e => this._addBoneyardShelf(e),
         shelves: this.state.boneyardShelves.map(shelf => ({
