@@ -241,6 +241,40 @@ if (!window.DraftDrawingFormat) {
     }).filter(Boolean);
   };
 
+  // A straight stair placed from the top nosing: start is the upper-floor
+  // nosing at the opening, end fixes the downhill direction, and the rise /
+  // riser count re-derive from the level heights on load. Handrail bars are
+  // stair metadata ('left' / 'right' going down, 'both', or 'none').
+  const stairs = (rawStairs, levelIds) => {
+    const seen = new Set();
+    return (Array.isArray(rawStairs) ? rawStairs : []).map(stair => {
+      const id = Number(stair?.id);
+      const start = point(stair?.start);
+      const end = point(stair?.end);
+      const stairLevelId = levelId(stair?.levelId, levelIds);
+      const view = oneOf(stair?.view, ['plan'], null);
+      const riseFt = positive(stair?.riseFt, null);
+      if (!Number.isInteger(id) || seen.has(id) || !start || !end || stairLevelId == null || !view) return null;
+      if (Math.hypot(end.x - start.x, end.z - start.z) < 0.001) return null;
+      if (riseFt === null) return null;
+      seen.add(id);
+      const risers = Number(stair?.risers);
+      return {
+        id,
+        start,
+        end,
+        levelId: stairLevelId,
+        view,
+        widthFt: positive(stair?.widthFt, 3),
+        riseFt,
+        risers: Number.isInteger(risers) && risers > 0 ? risers : 1,
+        treadRunIn: positive(stair?.treadRunIn, 10),
+        rail: oneOf(stair?.rail, ['left', 'right', 'both', 'none'], 'left'),
+        layer: 'A-STR',
+      };
+    }).filter(Boolean);
+  };
+
   // BONEYARD shelves are storage slots outside the level stack. Every drawing
   // has at least one shelf; drawings saved before the BONEYARD existed load
   // with the single default shelf.
@@ -326,6 +360,7 @@ if (!window.DraftDrawingFormat) {
     dimensions,
     columns,
     beams,
+    stairs,
     fenestrations,
     surfaceOpenings,
     shapes,

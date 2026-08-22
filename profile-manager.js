@@ -263,6 +263,8 @@ if (!window.DraftProfileManager) {
         Object.freeze({ id: 'A-FL-OPNG', name: 'A-FL-OPNG', use: 'Floor openings — stairwells, chases (Fenestration tool on a selected floor).', printable: true }),
         Object.freeze({ id: 'A-DOOR', name: 'A-DOOR', use: 'Door openings (Fenestration tool).', printable: true }),
         Object.freeze({ id: 'A-GLAZ', name: 'A-GLAZ', use: 'Window openings (Fenestration tool).', printable: true }),
+        Object.freeze({ id: 'A-STR', name: 'A-STR', use: 'Interior stairs with their handrails and guardrails (Stair tool).', printable: true }),
+        Object.freeze({ id: 'A-STR-DECK', name: 'A-STR-DECK', use: 'Exterior / deck stairs with their handrails and guardrails.', printable: true }),
         Object.freeze({ id: 'PLAN DIMENSIONS', name: 'PLAN DIMENSIONS', use: 'Dimension strings placed in PLAN.', printable: true }),
         Object.freeze({ id: 'ROOM IDS / AREA', name: 'ROOM IDS / AREA', use: 'Room tags and areas.', printable: true }),
       ]),

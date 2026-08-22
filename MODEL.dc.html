@@ -484,6 +484,28 @@
       </div>
     </sc-if>
 
+    <!-- STAIR PROPERTIES (shown when Stair tool is active) -->
+    <sc-if value="{{ stairToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Stair</div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Handrail</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-bottom:6px;">
+          <sc-for list="{{ stairRailBtns }}" as="sr" hint-placeholder-count="4">
+            <button onClick="{{ sr.onSelect }}" title="{{ sr.title }}" style="border:1px solid {{ sr.border }}; background:{{ sr.bg }}; color:{{ sr.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ sr.label }}</button>
+          </sc-for>
+        </div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Width</div>
+        <input type="text" value="{{ stairWidthInput }}" onInput="{{ onStairWidthInput }}" onBlur="{{ onStairWidthCommit }}" onKeyDown="{{ onStairWidthKey }}" placeholder="3'-0&quot;" aria-label="Stair width" style="width:100%; box-sizing:border-box; border:1px solid {{ stairWidthBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+        <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ stairLayoutNote }}</div>
+        <sc-if value="{{ hasStairWidthError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ stairWidthError }}</div>
+        </sc-if>
+        <sc-if value="{{ hasActiveStairs }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onStairDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST STAIR</button>
+        </sc-if>
+      </div>
+    </sc-if>
+
     <!-- ROOF PROPERTIES (shown when Roof tool is active) -->
     <sc-if value="{{ roofToolActive }}" hint-placeholder-val="{{ false }}">
       <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
@@ -1000,6 +1022,26 @@ const COLUMN_SIZE_IN = 3; // 3"ø adjustable steel telepost
 const STRUCT_SNAP_FT = 1; // columns and beam ends pull onto each other inside this
 const COLUMN_LAYER = 'S-COL/FOOTING';
 const BEAM_LAYER = 'S-BEAM';
+// A straight stair is placed from the TOP: the first click sets the top
+// nosing at the floor opening and the second the downhill direction. The
+// rise comes from the level heights — subfloor to subfloor, with the lowest
+// floor landing on the foundation slab — so the riser count and total run
+// are derived, never typed. One basic handrail bar is the default (pick the
+// side going down), with 2 bars or none as options; guardrails stay their
+// own future object that can link into the stair rail where they meet.
+// Interior stairs (and their handrail bars) live on A-STR; exterior deck
+// stairs will get their own A-STR-DECK layer later.
+const STAIR_LAYER = 'A-STR';
+const STAIR_COLOR = '#5d4a8a';
+const DEFAULT_STAIR_WIDTH_FT = 3;   // 36" between stringers
+const STAIR_MAX_RISER_IN = 7.875;   // 7 7/8" maximum riser
+const STAIR_TREAD_RUN_IN = 10;      // 10" run per tread
+const STAIR_RAIL_OPTIONS = [
+  { id: 'left',  label: 'LEFT BAR',  note: 'One basic handrail bar on the LEFT side going down.' },
+  { id: 'right', label: 'RIGHT BAR', note: 'One basic handrail bar on the RIGHT side going down.' },
+  { id: 'both',  label: '2 BARS',    note: 'A basic handrail bar on both sides.' },
+  { id: 'none',  label: 'OFF',       note: 'No handrail bars drawn with the stair.' },
+];
 // Shapes are closed construction outlines with no roof / floor semantics of
 // their own; the ROOF and FLOOR commands build their geometry from a shape.
 const SHAPE_LAYER = 'SHAPE';
@@ -1030,7 +1072,7 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
 });
 const FLOOR_LEVEL_VIEWS = Object.freeze([
   Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
-  Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
+  Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
   Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION'] }),
 ]);
 const LEVEL_LAYER_VIEWS = Object.freeze({
@@ -1148,6 +1190,10 @@ class Component extends DCLogic {
     floorStructure: 'floor',  // 'floor' framed assembly | 'slab' concrete slab
     beamMode: 'flush',        // 'flush' top flush with joists | 'dropped' joists rest on it
     columnFooting: 'pad36',   // pad under the next placed telepost
+    stairRail: 'left',        // handrail bars: 'left' | 'right' | 'both' | 'none'
+    stairWidth: DEFAULT_STAIR_WIDTH_FT,
+    stairWidthInput: formatArchitecturalInches(DEFAULT_STAIR_WIDTH_FT * 12),
+    stairWidthError: '',
     fenestrationType: 'door', // 'door' | 'window' — picks the CAD layer and defaults
     fenestrationWidths: { door: DEFAULT_DOOR_WIDTH_FT, window: DEFAULT_WINDOW_WIDTH_FT },
     fenestrationWidthInput: formatArchitecturalInches(DEFAULT_DOOR_WIDTH_FT * 12),
@@ -1272,6 +1318,7 @@ class Component extends DCLogic {
     if (!Array.isArray(this._dimensions)) this._dimensions = [];
     if (!Array.isArray(this._columns)) this._columns = [];
     if (!Array.isArray(this._beams)) this._beams = [];
+    if (!Array.isArray(this._stairs)) this._stairs = [];
     if (!Array.isArray(this._vertices)) this._vertices = [];
     if (!Array.isArray(this._groups)) this._groups = [];
   }
@@ -1393,6 +1440,23 @@ class Component extends DCLogic {
         layer: BEAM_LAYER,
       })),
       nextBeamId: this._nextBeamId || 1,
+      stairs: this._stairs.map(stair => {
+        const layout = this._stairCurrentLayout(stair);
+        return {
+          id: stair.id,
+          start: point(stair.start),
+          end: point(this._stairEndFor(stair, layout)),
+          levelId: stair.levelId,
+          view: stair.view,
+          widthFt: stair.widthFt,
+          riseFt: layout.riseFt,
+          risers: layout.risers,
+          treadRunIn: STAIR_TREAD_RUN_IN,
+          rail: stair.rail,
+          layer: STAIR_LAYER,
+        };
+      }),
+      nextStairId: this._nextStairId || 1,
       boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
       activeBoneyardShelfId: this.state.activeBoneyardShelfId,
       nextBoneyardShelfId: this.state.nextBoneyardShelfId,
@@ -2015,6 +2079,25 @@ class Component extends DCLogic {
         Number.isInteger(saved.nextBeamId) ? saved.nextBeamId : 1,
       );
       this._beamStart = null;
+      const storedStairs = Array.isArray(saved.stairs)
+        ? saved.stairs.map(stair => ({ ...stair, levelId: migrateLevelId(stair?.levelId) }))
+        : saved.stairs;
+      const stairs = format.stairs(storedStairs, ownerLevelIds);
+      skipped += (Array.isArray(saved.stairs) ? saved.stairs.length : 0) - stairs.length;
+      this._stairs = stairs.map(stair => {
+        const elevation = levelsById.get(stair.levelId)?.elev ?? 0;
+        return {
+          ...stair,
+          start: new THREE.Vector3(stair.start.x, elevation, stair.start.z),
+          end: new THREE.Vector3(stair.end.x, elevation, stair.end.z),
+        };
+      });
+      this._nextStairId = Math.max(
+        1,
+        ...stairs.map(stair => stair.id + 1),
+        Number.isInteger(saved.nextStairId) ? saved.nextStairId : 1,
+      );
+      this._stairStart = null;
       // Outlines restore as isolated points — they never join the shared
       // vertex pool, so a guide can sit on a wall corner without gluing to it.
       // Masters restore first so level copies can verify their masterId.
@@ -2443,6 +2526,7 @@ class Component extends DCLogic {
     this._dimensions = []; // two-point plan/floor dimensions
     this._columns    = []; // telepost + pad supports, centred on beam lines
     this._beams      = []; // one span between two supports, flush or dropped
+    this._stairs     = []; // straight stair runs placed from the top nosing
      this._groups     = [];
      this._nextGroupId = 1;
      this._nextDrawingItemId = 1;
@@ -2451,6 +2535,8 @@ class Component extends DCLogic {
     this._nextColumnId = 1;
     this._nextBeamId = 1;
     this._beamStart = null;
+    this._nextStairId = 1;
+    this._stairStart = null;
     this._pendingChain  = []; // in-progress chain (not yet committed)
     this._chainStart    = null; // first point of current chain
     this._chainSegments = 0;  // segments placed in this chain, committed or not
@@ -2897,6 +2983,18 @@ class Component extends DCLogic {
       ctx.restore();
     }
 
+    // Stairs of the active PLAN, plus the downhill-direction preview once the
+    // top nosing is set.
+    if (activeVisible) this._drawStairs2D(ctx, toS);
+    if (this._stairStart && dimensionPreviewEnd && !this._isPrinting) {
+      const a = toS(this._stairStart), b = toS(dimensionPreviewEnd);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(93,74,138,0.6)'; ctx.lineWidth = 2;
+      ctx.setLineDash([8, 5]);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.restore();
+    }
+
     const visibleSelectedSegments = new Set([
       ...this._activeLines(),
       ...activeWalls,
@@ -3304,6 +3402,83 @@ class Component extends DCLogic {
     }
   }
 
+  // Plan stair: stringers, a tread line at every 10" run increment, handrail
+  // bars inset on the picked side(s), and a DN arrow with the riser count.
+  // The drawn run always reflects the current level heights.
+  _drawStairs2D(ctx, toS) {
+    const std = this._layerStandard(STAIR_LAYER);
+    if (!std.visible || (this._isPrinting && !std.printable)) return;
+    const stairs = this._activeStairs();
+    if (!stairs.length) return;
+    const font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+    const elev = this._drawElev || 0;
+    const origin = toS({ x: 0, y: elev, z: 0 });
+    const unit = toS({ x: 1, y: elev, z: 0 });
+    const pxPerFt = Math.max(0.001, Math.hypot(unit.x - origin.x, unit.y - origin.y));
+    stairs.forEach(stair => {
+      const layout = this._stairCurrentLayout(stair);
+      const a = toS(stair.start);
+      const b = toS(this._stairEndFor(stair, layout));
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1) return;
+      const ux = dx / len, uy = dy / len;
+      const px = -uy, py = ux; // right side walking down, in screen space
+      const half = Math.max(2, (stair.widthFt / 2) * pxPerFt);
+      ctx.save();
+      ctx.strokeStyle = STAIR_COLOR;
+      ctx.fillStyle = STAIR_COLOR;
+      ctx.lineWidth = 1.5;
+      // Stringers
+      ctx.beginPath();
+      ctx.moveTo(a.x - px * half, a.y - py * half); ctx.lineTo(b.x - px * half, b.y - py * half);
+      ctx.moveTo(a.x + px * half, a.y + py * half); ctx.lineTo(b.x + px * half, b.y + py * half);
+      ctx.stroke();
+      // Tread lines at every run increment, top nosing included
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i <= layout.treads; i++) {
+        const t = (i * STAIR_TREAD_RUN_IN / 12) * pxPerFt;
+        const cx = a.x + ux * t, cy = a.y + uy * t;
+        ctx.moveTo(cx - px * half, cy - py * half);
+        ctx.lineTo(cx + px * half, cy + py * half);
+      }
+      ctx.stroke();
+      // Handrail bars inset from the stringers on the picked side(s)
+      if (stair.rail && stair.rail !== 'none') {
+        const inset = Math.min(half - 1, 0.25 * pxPerFt); // 3" inside the stringer
+        const sides = stair.rail === 'both' ? [-1, 1] : [stair.rail === 'right' ? 1 : -1];
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        sides.forEach(side => {
+          const off = side * (half - inset);
+          ctx.moveTo(a.x + px * off, a.y + py * off);
+          ctx.lineTo(b.x + px * off, b.y + py * off);
+        });
+        ctx.stroke();
+      }
+      // Downhill centreline arrow with the DN label and riser count
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      ctx.moveTo(b.x - ux * 8 - px * 4, b.y - uy * 8 - py * 4); ctx.lineTo(b.x, b.y);
+      ctx.lineTo(b.x - ux * 8 + px * 4, b.y - uy * 8 + py * 4);
+      ctx.stroke();
+      if (!this._isPrinting || std.printable) {
+        ctx.font = font;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.save();
+        ctx.translate((a.x + b.x) / 2, (a.y + b.y) / 2);
+        let angle = Math.atan2(uy, ux);
+        if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
+        ctx.rotate(angle);
+        ctx.fillText(`DN — ${layout.risers}R @ ${formatInchesOnly(layout.riserIn)}`, 0, -3);
+        ctx.restore();
+      }
+      ctx.restore();
+    });
+  }
+
   _drawDimension2D(ctx, toS, dimension, options = {}) {
     const a = toS(dimension.start);
     const b = toS(dimension.end);
@@ -3517,6 +3692,9 @@ class Component extends DCLogic {
     // Structure lives with the framing: beams and their columns are placed in
     // FLOOR (the framing they carry) or FOUNDATION (teleposts and pads below).
     if (tool === 'column' || tool === 'beam') return ['floor', 'foundation'].includes(viewId);
+    // Stairs are architectural plan objects placed from the top landing, so
+    // they live in the PLAN of the floor level they descend from.
+    if (tool === 'stair') return viewId === 'plan';
     return true;
   }
 
@@ -3524,7 +3702,7 @@ class Component extends DCLogic {
   // only decides where the geometry saves, never what the command is called.
   _contextToolLabel(tool, shortcut = '') {
     const suffix = shortcut ? `  [${shortcut}]` : '';
-    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', shape:'SHAPE', outline:'OUTLINE', roof:'ROOF', dimension:'DIMENSION', column:'COLUMN', beam:'BEAM' };
+    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', shape:'SHAPE', outline:'OUTLINE', roof:'ROOF', dimension:'DIMENSION', column:'COLUMN', beam:'BEAM', stair:'STAIR' };
     return `${names[tool] || tool.toUpperCase()}${suffix}`;
   }
 
@@ -3570,6 +3748,7 @@ class Component extends DCLogic {
     if (tool === 'roof') return 'A-ROOF';
     if (tool === 'column') return COLUMN_LAYER;
     if (tool === 'beam') return BEAM_LAYER;
+    if (tool === 'stair') return STAIR_LAYER;
     return this._draftingContextLabel(viewId);
   }
 
@@ -3585,6 +3764,7 @@ class Component extends DCLogic {
     if (tool === 'dimension') return `Dimensions are placed in any layer set and save with it. Current context: ${context}.`;
     if (tool === 'column') return `Columns are placed in FLOOR or FOUNDATION — teleposts on pad footings, centred onto a nearby beam line. Current context: ${context}.`;
     if (tool === 'beam') return `Beams are placed in FLOOR or FOUNDATION — two clicks span between supports, FLUSH or DROPPED. Current context: ${context}.`;
+    if (tool === 'stair') return `Stairs are placed in a floor level's PLAN — click the top nosing at the floor opening, then the downhill direction; the run is laid out from the level heights. Current context: ${context}.`;
     if (tool === 'line') {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
         return 'Turn on DRAFT or NO-DRAFT in the Company Standard Layers before drawing a generic line.';
@@ -3611,6 +3791,7 @@ class Component extends DCLogic {
     if (tool !== 'fenestration') this._cancelSurfaceOpening();
     if (tool !== 'dimension') this._cancelDimension();
     if (tool !== 'beam') this._cancelBeam();
+    if (tool !== 'stair') this._cancelStair();
     this._cancelRoof();
     this._cancelCut();
     this.setState({
@@ -3630,9 +3811,9 @@ class Component extends DCLogic {
     this._courtesyWallIds?.clear();
     this._courtesyFloorIds?.clear();
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof();
     this._applyLevelElevation(levelIndex);
-    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'outline', 'roof', 'dimension', 'column', 'beam'].includes(this.state.activeTool)
+    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'outline', 'roof', 'dimension', 'column', 'beam', 'stair'].includes(this.state.activeTool)
       && !this._contextAllowsTool(this.state.activeTool, viewId, false)
       ? 'select'
       : this.state.activeTool;
@@ -3645,10 +3826,10 @@ class Component extends DCLogic {
       levelLayerViews: { ...this.state.levelLayerViews, [levelId]: viewId },
       layerRevealKey: `${levelId}:${viewId}`,
       activeTool,
-      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension', 'column', 'beam'].includes(this.state.activeTool)
+      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension', 'column', 'beam', 'stair'].includes(this.state.activeTool)
         ? this._contextToolMessage(this.state.activeTool, viewId)
         : `Working in ${this._draftingContextLabel(viewId)}.`,
-      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension', 'column', 'beam'].includes(this.state.activeTool),
+      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension', 'column', 'beam', 'stair'].includes(this.state.activeTool),
     }, () => {
       if (this._orthoCam) this._setView('top');
       this._pruneContextReferenceSelection();
@@ -3955,7 +4136,7 @@ class Component extends DCLogic {
   _switchLevel(idx) {
     if (idx === this.state.activeLevelIdx && !this.state.boneyardActive) return;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this._cancelCut();
     this._applyLevelElevation(idx);
     // A level cannot also be one of its own references; the destination
     // context's remembered background is restored when it has one.
@@ -4387,6 +4568,7 @@ class Component extends DCLogic {
       else if (tool === 'dimension') this._handleDimensionClick();
       else if (tool === 'column') this._handleColumnClick();
       else if (tool === 'beam') this._handleBeamClick();
+      else if (tool === 'stair') this._handleStairClick();
       else if (tool === 'cut') this._handleCutClick();
       else if (tool === 'select') {
         const raw = this._getWorldPos(e.clientX, e.clientY);
@@ -5462,7 +5644,7 @@ class Component extends DCLogic {
   _selectBoneyard() {
     if (this.state.boneyardActive) return;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this._cancelCut();
     this._clearSelection(false);
     const shelf = this._activeBoneyardShelf();
     // Shelf geometry draws at elevation 0 no matter which level was active.
@@ -5483,7 +5665,7 @@ class Component extends DCLogic {
     const shelf = this.state.boneyardShelves.find(s => s.id === shelfId);
     if (!shelf) return;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof();
     this._clearSelection(false);
     if (!this.state.boneyardActive) this._selectBoneyard();
     this.setState({ activeBoneyardShelfId: shelf.id, boneyardActive: true }, () => this._markUnsaved());
@@ -5501,7 +5683,7 @@ class Component extends DCLogic {
     event?.stopPropagation();
     const id = this.state.nextBoneyardShelfId;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof();
     this._clearSelection(false);
     this.setState({
       boneyardShelves: [...this.state.boneyardShelves, { id, name: `SHELF ${id}` }],
@@ -7833,7 +8015,7 @@ class Component extends DCLogic {
 
   _activateExtendTool() {
     const seeded = this.state.activeTool === 'select' ? this._extendSessionFromSelection() : null;
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this._cancelCut(); this._cancelExtend();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this._cancelCut(); this._cancelExtend();
     if (seeded) {
       this._clearSelection();
       this._extendSession = seeded;
@@ -8296,6 +8478,162 @@ class Component extends DCLogic {
       if (bearing) pockets.push({ x: endPt.x, z: endPt.z });
     });
     return pockets;
+  }
+
+  _activeStairs() {
+    const levelId = this._activeLevelId();
+    const view = this._activeLayerViewId(levelId);
+    return this._stairs.filter(stair => stair.levelId === levelId
+      && (view == null || stair.view === view));
+  }
+
+  // What a stair placed on this level's PLAN descends to. The stair runs
+  // subfloor to subfloor: the rise to the floor below is that level's wall
+  // height plus this level's floor assembly; the lowest floor descends past
+  // the foundation wall onto the concrete slab instead.
+  _stairDescent(levelId = this._activeLevelId()) {
+    const floors = this._floorLevels();
+    const idx = floors.findIndex(level => level.id === levelId);
+    if (idx < 0) return null;
+    if (idx === 0) {
+      const assembly = this._levelAssembly(1);
+      const riseFt = this._levelFloorFt(levelId)
+        + this._levelWallTopFt(1, 'foundation')
+        - assembly.slabThicknessIn / 12;
+      return { riseFt, landing: 'the basement slab' };
+    }
+    const lower = floors[idx - 1];
+    const riseFt = this._levelAssembly(lower.id).wallHeightFt + this._levelFloorFt(levelId);
+    return { riseFt, landing: `the ${lower.name} subfloor` };
+  }
+
+  // Even risers under the 7 7/8" maximum at a 10" tread run; one fewer
+  // tread than risers because the upper floor itself is the top tread.
+  _stairLayout(riseFt) {
+    const riseIn = Math.max(0, (riseFt || 0) * 12);
+    const risers = Math.max(1, Math.ceil(riseIn / STAIR_MAX_RISER_IN));
+    const riserIn = riseIn / risers;
+    const treads = Math.max(1, risers - 1);
+    return { riseFt: riseIn / 12, risers, riserIn, treads, runFt: treads * STAIR_TREAD_RUN_IN / 12 };
+  }
+
+  // A stair keeps following the level heights after it is placed: edit a wall
+  // height or joist depth and the risers and total run re-derive, falling
+  // back to the rise captured at placement if its level goes away.
+  _stairCurrentLayout(stair) {
+    const descent = this._stairDescent(stair.levelId);
+    return this._stairLayout(descent && descent.riseFt > 0 ? descent.riseFt : stair.riseFt);
+  }
+
+  // Bottom nosing: the stored end only fixes the downhill direction, the
+  // distance always comes from the current layout's total run.
+  _stairEndFor(stair, layout = this._stairCurrentLayout(stair)) {
+    const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return new THREE.Vector3(
+      stair.start.x + (dx / len) * layout.runFt,
+      stair.start.y || 0,
+      stair.start.z + (dz / len) * layout.runFt,
+    );
+  }
+
+  _stairLayoutNote() {
+    const descent = this._stairDescent();
+    if (!descent || descent.riseFt <= 0) {
+      return 'Stairs are placed on a floor level\u2019s PLAN \u2014 no level below to descend to here.';
+    }
+    const layout = this._stairLayout(descent.riseFt);
+    return `${layout.risers} risers @ ${formatInchesOnly(layout.riserIn)} \u00b7 ${layout.treads} treads @ ${formatInchesOnly(STAIR_TREAD_RUN_IN)} \u00b7 run ${this._ftIn(layout.runFt)} \u2014 down ${this._ftIn(layout.riseFt)} to ${descent.landing}.`;
+  }
+
+  _stairRail() {
+    return STAIR_RAIL_OPTIONS.some(option => option.id === this.state.stairRail)
+      ? this.state.stairRail
+      : 'left';
+  }
+
+  _handleStairClick() {
+    if (this.state.activeView !== 'top') {
+      this.setState({ drawingMessage: 'Stairs are placed in TOP / PLAN view.', drawingMessageError: true });
+      return;
+    }
+    if (!this._contextAllowsTool('stair')) {
+      this.setState({ drawingMessage: this._contextToolMessage('stair'), drawingMessageError: true });
+      return;
+    }
+    const descent = this._stairDescent();
+    if (!descent || descent.riseFt <= 0) {
+      this.setState({ drawingMessage: this._stairLayoutNote(), drawingMessageError: true });
+      return;
+    }
+    const pt = this._snapPt;
+    if (!pt) return;
+    const layout = this._stairLayout(descent.riseFt);
+    if (!this._stairStart) {
+      this._stairStart = pt.clone();
+      this.setState({
+        drawingMessage: `Top nosing set at the floor opening. Click the downhill direction \u2014 ${layout.risers} risers land the run ${this._ftIn(layout.runFt)} away on ${descent.landing}.`,
+        drawingMessageError: false,
+      });
+      return;
+    }
+    if (Math.hypot(pt.x - this._stairStart.x, pt.z - this._stairStart.z) < 0.001) return;
+    const dx = pt.x - this._stairStart.x, dz = pt.z - this._stairStart.z;
+    const len = Math.hypot(dx, dz);
+    const start = this._stairStart;
+    const end = new THREE.Vector3(
+      start.x + (dx / len) * layout.runFt,
+      start.y || 0,
+      start.z + (dz / len) * layout.runFt,
+    );
+    this._stairs.push({
+      id: this._nextStairId++,
+      start,
+      end,
+      levelId: this._activeLevelId(),
+      view: 'plan',
+      widthFt: this.state.stairWidth,
+      riseFt: layout.riseFt,
+      rail: this._stairRail(),
+      layer: STAIR_LAYER,
+    });
+    this._stairStart = null;
+    this._lockAngle = null;
+    const rail = STAIR_RAIL_OPTIONS.find(option => option.id === this._stairRail());
+    this.setState({
+      drawingMessage: `Stair added \u2014 ${layout.risers} risers @ ${formatInchesOnly(layout.riserIn)}, ${layout.treads} treads @ ${formatInchesOnly(STAIR_TREAD_RUN_IN)}, down ${this._ftIn(layout.riseFt)} to ${descent.landing}. ${rail.note}`,
+      drawingMessageError: false,
+    });
+    this._markUnsaved();
+  }
+
+  _cancelStair() {
+    if (!this._stairStart) return;
+    this._stairStart = null;
+    this.setState({ drawingMessage: '', drawingMessageError: false });
+  }
+
+  _deleteLastStair() {
+    const active = this._activeStairs();
+    if (!active.length) return;
+    const stair = active[active.length - 1];
+    this._stairs = this._stairs.filter(item => item !== stair);
+    this.setState({ drawingMessage: 'Stair removed.', drawingMessageError: false });
+    this._markUnsaved();
+  }
+
+  _commitStairWidth() {
+    const parsed = parseArchitecturalLength(this.state.stairWidthInput);
+    if (!parsed.ok || parsed.inches <= 0) {
+      this.setState({ stairWidthError: parsed.ok ? 'Width must be greater than zero.' : parsed.error });
+      return false;
+    }
+    this.setState({
+      stairWidth: parsed.inches / 12,
+      stairWidthInput: formatArchitecturalInches(parsed.inches),
+      stairWidthError: '',
+    });
+    return true;
   }
 
   _handleLineClick() {
@@ -8810,7 +9148,7 @@ class Component extends DCLogic {
         return;
       }
       if (this._windowSelection) { this._windowSelection = null; return; }
-      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this._cancelCut();
+      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this._cancelCut();
       this._clearSelection();
       return;
     }
@@ -8881,14 +9219,14 @@ class Component extends DCLogic {
     if (matches('outline')) { e.preventDefault(); this._activateContextTool('outline'); return; }
     if (matches('roof')) { e.preventDefault(); this._activateContextTool('roof'); return; }
     if (matches('dimension')) { e.preventDefault(); this._activateContextTool('dimension'); return; }
-    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
+    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
     if (matches('extend') || matches('extendAlt')) {
       e.preventDefault();
       this._activateExtendTool();
       return;
     }
-    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
-    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
+    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
+    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
     if (matches('gridSnap') || matches('gridSnapAlt')) { e.preventDefault(); this._toggleGridSnap(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
@@ -9403,6 +9741,25 @@ class Component extends DCLogic {
         : 'FLUSH — beam top flush with the joists; bears on the sill plate at foundation walls.',
       hasActiveBeams: this._activeBeams().length > 0,
       onBeamDelete: () => this._deleteLastBeam(),
+      stairToolActive: activeTool === 'stair',
+      stairRailBtns: STAIR_RAIL_OPTIONS.map(option => ({
+        label: option.label,
+        title: option.note,
+        bg: this._stairRail() === option.id ? '#1d1f20' : '#fff',
+        color: this._stairRail() === option.id ? '#f2f2f3' : '#1d1f20',
+        border: this._stairRail() === option.id ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        onSelect: () => this.setState({ stairRail: option.id }),
+      })),
+      stairWidthInput: this.state.stairWidthInput,
+      stairWidthBorder: this.state.stairWidthError ? '#b04050' : 'rgba(29,31,32,0.2)',
+      hasStairWidthError: Boolean(this.state.stairWidthError),
+      stairWidthError: this.state.stairWidthError,
+      onStairWidthInput: event => this.setState({ stairWidthInput: event.target.value }),
+      onStairWidthCommit: () => this._commitStairWidth(),
+      onStairWidthKey: event => { if (event.key === 'Enter') { event.preventDefault(); this._commitStairWidth(); event.target.blur(); } },
+      stairLayoutNote: this._stairLayoutNote(),
+      hasActiveStairs: this._activeStairs().length > 0,
+      onStairDelete: () => this._deleteLastStair(),
       floorToolActive: activeTool === 'floor',
       fenestrationToolActive: fenestrating,
       fenestrationHoleMode: fenestrating && Boolean(holeHost),
@@ -9935,7 +10292,7 @@ class Component extends DCLogic {
       })),
 
       tools: [
-        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
+        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
         contextualTool('line'),
         contextualTool('node'),
         contextualTool('wall'),
@@ -9947,11 +10304,12 @@ class Component extends DCLogic {
         contextualTool('dimension'),
         contextualTool('column'),
         contextualTool('beam'),
+        contextualTool('stair'),
         standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._activateExtendTool(); }, activeTool==='extend'),
-        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
+        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
       ],
       cutShortcut: shortcut('cut'),
-      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelRoof(); this.setState({activeTool:'cut'}); },
+      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this.setState({activeTool:'cut'}); },
       cutToolBg:     isCutTool ? on.bg     : off.bg,
       cutToolColor:  isCutTool ? on.color  : off.color,
       cutToolBorder: isCutTool ? on.border : off.border,
