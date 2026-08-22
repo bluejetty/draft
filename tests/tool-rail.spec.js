@@ -70,7 +70,7 @@ test('Cut lives with the section views, not in the tool list', async ({ page }) 
   const railCut = page.locator('[data-model-left]').getByRole('button', { name: /\bCut\b/i });
   await expect(railCut).toHaveCount(0);
 
-  const sectionCut = page.getByRole('button', { name: /Cut\s+\[/i });
+  const sectionCut = page.getByRole('button', { name: /ELEV\.\/SEC\. CUT/i });
   await expect(sectionCut).toBeVisible();
   await sectionCut.click();
   const active = await h.activeToolLabels(page);

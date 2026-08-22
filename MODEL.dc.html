@@ -574,10 +574,7 @@
 
     <!-- ELEVATIONS / SECTIONS -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="display:flex; align-items:center; margin-bottom:8px;">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Elevations / Sections</div>
-      </div>
-      <button onClick="{{ activateCutTool }}" title="Cut a new section or elevation view" style="display:block; width:100%; text-align:left; border:1px solid {{ cutToolBorder }}; background:{{ cutToolBg }}; color:{{ cutToolColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:pointer; margin-bottom:6px;">Cut  [{{ cutShortcut }}]</button>
+      <button onClick="{{ activateCutTool }}" title="Cut a new section or elevation view" style="display:block; width:100%; text-align:left; border:1px solid {{ cutToolBorder }}; background:{{ cutToolBg }}; color:{{ cutToolColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:pointer; margin-bottom:6px;">"{{ cutShortcut }}" ELEV./SEC. CUT</button>
       <sc-if value="{{ noCuts }}" hint-placeholder-val="{{ true }}">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; color:rgba(29,31,32,0.35); padding:4px 2px;">Use Cut tool to add views</div>
       </sc-if>
@@ -1604,9 +1601,9 @@ class Component extends DCLogic {
           if (levelId == null || points.length < 3) return null;
           return {
              id: this._storedItemId(floor?.id, 'floor', usedIds),
-             points: points.map(point => this._mergeVertex(point, levelId, 'floor')),
+             points: points.map(point => this._mergeVertex(point, levelId, floor?.view === 'foundation' ? 'foundation' : 'floor')),
             levelId,
-             view: 'floor',
+             view: floor?.view === 'foundation' ? 'foundation' : 'floor',
             structure: floor.structure === 'slab' ? 'slab' : 'floor',
             thickness: format.positive(floor.thickness, this.state.floorThickness),
             assembly: { ...DEFAULT_FLOOR_ASSEMBLY, ...(floor.assembly || {}) },
@@ -2863,15 +2860,16 @@ class Component extends DCLogic {
       return (viewId == null || ['plan', 'floor', 'e-power', 'foundation'].includes(viewId))
         && this._lineLayerConfig(this._activeLineLayer()).visible;
     }
-    // The Roof tool only works on whole-level contexts (ROOF, SITE); it
-    // builds its footprint from a drawn edge or from a SHAPE outline.
-    if (tool === 'roof') return viewId == null;
+    // The Roof tool works on any level — dormers, roofs that incorporate a
+    // storey, and overhangs mix with wall plans; the footprint comes from a
+    // drawn edge or from a SHAPE outline.
+    if (tool === 'roof') return true;
     // Shapes are level-wide construction outlines: available everywhere.
     if (tool === 'shape') return true;
     if (viewId == null) return true;
     if (tool === 'node') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
     if (tool === 'wall') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
-    if (tool === 'floor') return ['floor', 'plan'].includes(viewId);
+    if (tool === 'floor') return ['floor', 'plan', 'foundation'].includes(viewId);
     if (tool === 'fenestration') return ['plan', 'foundation', 'floor'].includes(viewId);
     if (tool === 'dimension') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
     return true;
@@ -2891,11 +2889,21 @@ class Component extends DCLogic {
     return viewId === 'foundation' ? 'foundation' : 'plan';
   }
 
+  // Floor outlines drawn on a FOUNDATION context are concrete slabs on S-SLAB;
+  // everywhere else they are framed assemblies that save home to FLOOR.
+  _floorHomeView(viewId = this._activeLayerViewId()) {
+    if (viewId === 'foundation') return 'foundation';
+    const views = this._layerViewsForLevel(this._activeLevelId());
+    return views.some(view => view.id === 'foundation') ? 'foundation' : 'floor';
+  }
+
   // Where a tool's geometry saves: walls live in PLAN (or FOUNDATION when drawn
   // there) and floor outlines in FLOOR, no matter which layer set drew them.
   _contextToolSaveLabel(tool, viewId = this._activeLayerViewId()) {
     if (tool === 'wall') return this._draftingContextLabel(this._wallHomeView(viewId));
-    if (tool === 'floor') return this._draftingContextLabel('floor');
+    if (tool === 'floor') {
+      return this._floorHomeView(viewId) === 'foundation' ? 'S-SLAB' : this._draftingContextLabel('floor');
+    }
     if (tool === 'fenestration') return this._draftingContextLabel(viewId === 'foundation' ? 'foundation' : 'plan');
     if (tool === 'shape') return 'SHAPE';
     if (tool === 'roof') return 'A-ROOF';
@@ -2906,10 +2914,10 @@ class Component extends DCLogic {
     const context = this._draftingContextLabel(viewId);
     if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, ELECTRIC, or FOUNDATION. Current context: ${context}.`;
     if (tool === 'wall') return `Walls are drawn in any layer set: FOUNDATION walls save to S-FDN, all others save to PLAN. Current context: ${context}.`;
-    if (tool === 'floor') return `Floor outlines are drawn in FLOOR or PLAN and always save to FLOOR. Current context: ${context}.`;
+    if (tool === 'floor') return `Floor outlines are drawn in FLOOR, PLAN, or FOUNDATION — foundation floors are concrete slabs on S-SLAB. Current context: ${context}.`;
     if (tool === 'fenestration') return `Openings go on walls in PLAN or FOUNDATION, or into a selected floor or roof. Current context: ${context}.`;
     if (tool === 'shape') return `Shapes are closed construction outlines drawn or captured on any level. Current context: ${context}.`;
-    if (tool === 'roof') return `The Roof tool works on the ROOF level: draw a roof edge, or build the footprint from a SHAPE. Current context: ${context}.`;
+    if (tool === 'roof') return `The Roof tool works on any level: draw a roof edge, or build the footprint from a SHAPE. Current context: ${context}.`;
     if (tool === 'dimension') return `Dimensions are placed in any layer set and save with it. Current context: ${context}.`;
     if (tool === 'line') {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
@@ -2926,6 +2934,7 @@ class Component extends DCLogic {
       return false;
     }
     this._cancelExtend();
+    if (tool === 'floor' && this._floorHomeView() === 'foundation') this._setFloorStructure('slab');
     if (tool !== 'wall') this._cancelWall();
     if (tool !== 'line') this._cancelLine();
     if (tool !== 'floor') this._cancelFloor();
@@ -3050,11 +3059,10 @@ class Component extends DCLogic {
       || (!this._isPrinting && this._courtesyFloorIds?.has(floor.id))));
   }
 
-  // Roof footprints belong to whole-level contexts (viewId null): the ROOF
-  // level shows and edits them; layer-set contexts never do.
+  // Roof footprints are level-wide, like shapes: every context of the level
+  // shows and edits them, so dormers and overhangs mix with wall plans.
   _activeRoofs() {
     const levelId = this._activeLevelId();
-    if (this._activeLayerViewId(levelId) != null) return [];
     return this._roofs.filter(roof => roof.levelId === levelId);
   }
 
@@ -3068,9 +3076,11 @@ class Component extends DCLogic {
     return this._shapes.filter(shape => shape.levelId === levelId);
   }
 
+  // Roofs are level-wide, like shapes: a background reference shows the
+  // referenced level's roofs no matter which of its layer sets is scoped.
   _backgroundRoofs() {
     const ref = this._visibleBackgroundReference();
-    if (!ref || ref.view != null) return [];
+    if (!ref) return [];
     return this._roofs.filter(roof => roof.levelId === ref.levelId);
   }
 
@@ -3097,7 +3107,8 @@ class Component extends DCLogic {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
     if (view !== 'plan') return [];
-    return this._floors.filter(floor => floor.levelId === levelId && (floor.view || 'floor') === 'floor'
+    const home = this._floorHomeView('plan');
+    return this._floors.filter(floor => floor.levelId === levelId && (floor.view || 'floor') === home
       && !this._courtesyFloorIds?.has(floor.id));
   }
 
@@ -3984,18 +3995,23 @@ class Component extends DCLogic {
     const activeView = this._activeLayerViewId(levelId);
     if (!this._contextAllowsTool('floor', activeView)) return false;
     const id = this._newDrawingItemId('floor');
-    // Floor outlines always live in the FLOOR layer set; one drawn from PLAN
-    // stays visible there until the layer set changes.
+    // Floor outlines live in their home layer set — FLOOR, or FOUNDATION where
+    // they are concrete slabs on S-SLAB; one drawn from another set stays
+    // visible there until the layer set changes.
+    const homeView = this._floorHomeView(activeView);
+    const isSlab = homeView === 'foundation' || this.state.floorStructure === 'slab';
     this._floors.push({
       id,
-      points: points.map(point => this._mergeVertex(point, levelId, 'floor')),
+      points: points.map(point => this._mergeVertex(point, levelId, homeView)),
       levelId,
-      view: 'floor',
-      structure: this.state.floorStructure === 'slab' ? 'slab' : 'floor',
-      thickness: this.state.floorThickness,
+      view: homeView,
+      structure: isSlab ? 'slab' : 'floor',
+      thickness: homeView === 'foundation' && this.state.floorStructure !== 'slab'
+        ? DEFAULT_SLAB_THICKNESS_IN / 12
+        : this.state.floorThickness,
       assembly: { ...DEFAULT_FLOOR_ASSEMBLY },
     });
-    if (activeView !== 'floor') this._courtesyFloorIds?.add(id);
+    if (activeView !== homeView) this._courtesyFloorIds?.add(id);
     return true;
   }
 
@@ -4213,7 +4229,9 @@ class Component extends DCLogic {
     if (!this._commitFloor(shape.points.map(pt => ({ x: pt.x, z: pt.z })))) return false;
     this._markUnsaved();
     this.setState({
-      drawingMessage: 'Floor built from the shape — it saves to the FLOOR layer set; the shape itself is untouched.',
+      drawingMessage: this._floorHomeView() === 'foundation'
+        ? 'Slab built from the shape — it saves as a concrete slab on S-SLAB; the shape itself is untouched.'
+        : 'Floor built from the shape — it saves to the FLOOR layer set; the shape itself is untouched.',
       drawingMessageError: false,
     });
     return true;
