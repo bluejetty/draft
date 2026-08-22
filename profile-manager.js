@@ -132,6 +132,56 @@ if (!window.DraftProfileManager) {
     gridSnapAlt: '/',
   });
 
+  // Layout presets approximate the muscle memory of other drafting apps as
+  // closely as single keys allow. AutoCAD and MicroStation live on typed
+  // multi-letter aliases and Revit on two-letter shortcuts, so each preset is
+  // a nearest single-key match; picking one just fills the editable bindings.
+  const KEYBOARD_LAYOUTS = Object.freeze({
+    draft: Object.freeze({
+      label: 'DRAFT native',
+      note: 'The home layout — every command on its own mnemonic letter.',
+      bindings: DEFAULT_KEYBINDINGS,
+    }),
+    autocad: Object.freeze({
+      label: 'AutoCAD style',
+      note: 'Nearest single keys to the classic command aliases: A arc, T trim (TR), E extend (EX), I insert doors/windows, Space repeats/commits, Ctrl+Y redo.',
+      bindings: Object.freeze({
+        ...DEFAULT_KEYBINDINGS,
+        node: 'A',
+        fenestration: 'I',
+        extend: 'E',
+        redo: 'Ctrl+Y',
+      }),
+    }),
+    revit: Object.freeze({
+      label: 'Revit style',
+      note: 'First letters of the two-key shortcuts: W wall (WA), Shift+W window/door (WN/DR), D dimension (DI), T trim/extend (TR), Ctrl+Y redo.',
+      bindings: Object.freeze({
+        ...DEFAULT_KEYBINDINGS,
+        fenestration: 'Shift+W',
+        redo: 'Ctrl+Y',
+      }),
+    }),
+    microstation: Object.freeze({
+      label: 'MicroStation style',
+      note: 'Q element selection like the task list, P place shape, mnemonic letters elsewhere; Ctrl+Y stands in for Ctrl+R redo (the browser keeps Ctrl+R).',
+      bindings: Object.freeze({
+        ...DEFAULT_KEYBINDINGS,
+        select: 'Q',
+        redo: 'Ctrl+Y',
+      }),
+    }),
+    archicad: Object.freeze({
+      label: 'ArchiCAD style',
+      note: 'A arrow tool, W wall, Shift+D door/window pair, L line; undo/redo stay Ctrl+Z / Ctrl+Shift+Z as ArchiCAD ships them.',
+      bindings: Object.freeze({
+        ...DEFAULT_KEYBINDINGS,
+        select: 'A',
+        fenestration: 'Shift+D',
+      }),
+    }),
+  });
+
   // Snap magnetic pull: catch radius in screen pixels for each snap type, so
   // the feel stays the same at any zoom. Grid snap only rounds to a one-foot
   // increment when the cursor is within its pull of the grid point.
@@ -321,6 +371,7 @@ if (!window.DraftProfileManager) {
   };
   window.DraftKeyboard = {
     DEFAULT_KEYBINDINGS,
+    KEYBOARD_LAYOUTS,
     normaliseKeyBinding,
     eventBinding,
     eventMatchesBinding,
