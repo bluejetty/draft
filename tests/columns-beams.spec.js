@@ -75,6 +75,46 @@ test('columns first: a DROPPED beam snaps its ends onto the columns', async ({ p
   expect(Math.abs(saved.beams[0].end.z - 2)).toBeLessThan(0.01);
 });
 
+test('PLAN places and shows structure in the level\'s home set', async ({ page }) => {
+  await h.openModel(page);
+
+  // A floor level's PLAN saves structure home to FLOOR.
+  await levelRow(page, 'MAIN FL').locator('.level-body').click();
+  await levelRow(page, 'MAIN FL').locator('.level-layer', { hasText: 'PLAN' }).first().click();
+  await h.selectTool(page, 'Beam');
+  await h.clickWorld(page, -6, 0);
+  await h.clickWorld(page, 6, 0);
+  await h.waitForSaved(page);
+  await h.selectTool(page, 'Column');
+  await h.clickWorld(page, 0, 0.5);
+  await h.waitForSaved(page);
+
+  // The foundation level's PLAN saves home to FOUNDATION.
+  await levelRow(page, 'FOUNDATION').locator('.level-body').click();
+  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'PLAN' }).first().click();
+  await h.selectTool(page, 'Column');
+  await h.clickWorld(page, -8, -6);
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.beams).toHaveLength(1);
+  expect(saved.beams[0].view).toBe('floor');
+  expect(saved.beams[0].levelId).toBe(3);
+  expect(saved.columns).toHaveLength(2);
+  const floorColumn = saved.columns.find(column => column.levelId === 3);
+  const fdnColumn = saved.columns.find(column => column.levelId === 1);
+  expect(floorColumn.view).toBe('floor');
+  expect(fdnColumn.view).toBe('foundation');
+
+  // The beam renders full strength on the MAIN FL PLAN it was placed from.
+  await levelRow(page, 'MAIN FL').locator('.level-body').click();
+  await levelRow(page, 'MAIN FL').locator('.level-layer', { hasText: 'PLAN' }).first().click();
+  await page.waitForTimeout(400);
+  const at = await h.worldToClient(page, -3, 0);
+  const pixels = await h.overlayPixels(page, at.x, at.y, 10);
+  expect(h.countColor(pixels, [122, 74, 33])).toBeGreaterThan(0);
+});
+
 test('a dropped beam bearing on foundation walls marks BEAM POCKETs', async ({ page }) => {
   await h.openModel(page);
 

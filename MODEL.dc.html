@@ -4313,9 +4313,9 @@ class Component extends DCLogic {
     if (tool === 'floor') return ['floor', 'plan', 'foundation'].includes(viewId);
     if (tool === 'fenestration') return ['plan', 'foundation', 'floor'].includes(viewId);
     if (tool === 'dimension') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
-    // Structure lives with the framing: beams and their columns are placed in
-    // FLOOR (the framing they carry) or FOUNDATION (teleposts and pads below).
-    if (tool === 'column' || tool === 'beam') return ['floor', 'foundation'].includes(viewId);
+    // Structure lives with the framing — FLOOR or FOUNDATION — and the PLAN
+    // of a level places into the same home set; only SITE goes without it.
+    if (tool === 'column' || tool === 'beam') return ['plan', 'floor', 'foundation'].includes(viewId);
     // Stairs are architectural plan objects placed from the top landing, so
     // they live in the PLAN of the floor level they descend from.
     if (tool === 'stair') return viewId === 'plan';
@@ -4387,8 +4387,8 @@ class Component extends DCLogic {
     if (tool === 'shape') return `Shapes are closed construction outlines drawn or captured on any level. Current context: ${context}.`;
     if (tool === 'roof') return `The Roof tool works on any level: draw a roof edge, or build the footprint from a SHAPE. Current context: ${context}.`;
     if (tool === 'dimension') return `Dimensions are placed in any layer set and save with it. Current context: ${context}.`;
-    if (tool === 'column') return `Columns are placed in FLOOR or FOUNDATION — teleposts on pad footings, centred onto a nearby beam line. Current context: ${context}.`;
-    if (tool === 'beam') return `Beams are placed in FLOOR or FOUNDATION — two clicks span between supports, FLUSH or DROPPED. Current context: ${context}.`;
+    if (tool === 'column') return `Columns are placed in PLAN, FLOOR, or FOUNDATION — teleposts on pad footings, centred onto a nearby beam line. Current context: ${context}.`;
+    if (tool === 'beam') return `Beams are placed in PLAN, FLOOR, or FOUNDATION — two clicks span between supports, FLUSH or DROPPED. Current context: ${context}.`;
     if (tool === 'stair') return `Stairs are placed in a floor level's PLAN — click the top nosing at the floor opening, then the downhill direction; the run is laid out from the level heights. Current context: ${context}.`;
     if (tool === 'annotation') return `Annotations work in any context — click the object of interest, then where the note text goes, and type it. Current context: ${context}.`;
     if (tool === 'line') {
@@ -5701,15 +5701,27 @@ class Component extends DCLogic {
   _handleOutlineClick(e) {
     const pt = this._snapPt; if (!pt) return;
 
-    // With no outline in progress, a press on an existing outline edge pulls
-    // that segment into an arc instead of starting a new outline; presses on
+    // With no outline in progress, a press on an existing outline edge edits
+    // it instead of starting a new outline — dead-centre drops a new node
+    // there (draggable right away), a press beside the edge pulls the segment
+    // into an arc, the same feel as the Node / Arc tool on lines. Presses on
     // vertices keep starting a new outline so guides can snap-chain corners.
     if (!this._outlineDrawing && e) {
       const raw = this._getWorldPos(e.clientX, e.clientY);
       if (raw && !this._findVertexHit(raw)) {
         const hit = this._findOutlineEdgeHit(raw);
         if (hit) {
-          this._outlineArcDrag = { ...hit, startX: e.clientX, startY: e.clientY, active: false };
+          const h = this._canvas?.clientHeight || 600;
+          const fpx = (this._orthoHalfH * 2) / h;
+          if (hit.d <= fpx * 4) {
+            this._insertOutlineNode(hit);
+            this._selectDrag = {
+              refs: [{ target: hit.outline.points, prop: hit.index + 1, outline: hit.outline }],
+              startX: e.clientX, startY: e.clientY, active: false,
+            };
+          } else {
+            this._outlineArcDrag = { ...hit, startX: e.clientX, startY: e.clientY, active: false };
+          }
           e.preventDefault();
           return;
         }
@@ -5907,8 +5919,8 @@ class Component extends DCLogic {
     return { start, end: points[(index + 1) % points.length], bulge: start.bulge || 0 };
   }
 
-  // Return { outline, index } of the visible outline edge nearest worldPt
-  // (within 12px), or null.
+  // Return { outline, index, t, d } of the visible outline edge nearest
+  // worldPt (within 12px), or null.
   _findOutlineEdgeHit(worldPt) {
     const h = this._canvas ? this._canvas.clientHeight : 600;
     let bestD = (this._orthoHalfH * 2) / h * 12;
@@ -5917,11 +5929,45 @@ class Component extends DCLogic {
     outlines.forEach(outline => {
       if (outline.points.length < 3) return;
       outline.points.forEach((point, index) => {
-        const { d } = this._distToLineSeg(worldPt, this._outlineSegment(outline, index));
-        if (d < bestD) { bestD = d; best = { outline, index }; }
+        const { d, t } = this._distToLineSeg(worldPt, this._outlineSegment(outline, index));
+        if (d < bestD) { bestD = d; best = { outline, index, t, d }; }
       });
     });
     return best;
+  }
+
+  // Split an outline edge at t, inserting a new point after points[index].
+  // The edge's bulge relaxes across the two halves like _splitLine. A master
+  // insertion adds the point to every level copy; an insertion on an
+  // inherited copy edge stays local, its edge marked overridden so master
+  // edits leave the split shape alone.
+  _insertOutlineNode({ outline, index, t }) {
+    const seg = this._outlineSegment(outline, index);
+    const at = this._pointOnLineSeg(seg, t);
+    const bulge = seg.bulge || 0;
+    const isMaster = outline.shelfId != null;
+    const vtx = new THREE.Vector3(at.x, seg.start.y || 0, at.z);
+    vtx.bulge = bulge * t * 0.7;
+    if (isMaster) vtx.pointId = this._newDrawingItemId('op');
+    else vtx.srcId = null;
+    seg.start.bulge = bulge * (1 - t) * 0.7;
+    outline.points.splice(index + 1, 0, vtx);
+    if (isMaster) {
+      this._outlines.forEach(copy => {
+        if (copy.masterId !== outline.id) return;
+        const anchor = copy.points.findIndex(point => point.srcId === seg.start.pointId);
+        if (anchor < 0) return;
+        const cv = new THREE.Vector3(at.x, copy.points[anchor].y || 0, at.z);
+        cv.srcId = vtx.pointId;
+        cv.bulge = vtx.bulge;
+        copy.points.splice(anchor + 1, 0, cv);
+      });
+      this._propagateMasterOutline(outline);
+    } else if (outline.masterId != null && seg.start.srcId
+      && !outline.overriddenSrcIds.includes(seg.start.srcId)) {
+      outline.overriddenSrcIds.push(seg.start.srcId);
+    }
+    this._markUnsaved();
   }
 
   // After an arc pull: an arced master segment curves every level copy; an
@@ -9153,21 +9199,36 @@ class Component extends DCLogic {
   // beam line and a beam end pulls onto the nearest column, so posts and spans
   // line up whichever comes first. One beam is the span between two supports.
 
+  // Structure lives with the framing: the foundation level keeps its posts
+  // and pads on FOUNDATION, floor levels keep theirs on FLOOR. The PLAN of
+  // either level places into and shows that same home set at full strength —
+  // the SITE plan is the one context without structure.
+  _structuralHomeView(levelId = this._activeLevelId()) {
+    const views = this._layerViewsForLevel(levelId);
+    return views.some(view => view.id === 'foundation') ? 'foundation' : 'floor';
+  }
+
+  _structuralViewFor(levelId = this._activeLevelId()) {
+    const view = this._activeLayerViewId(levelId);
+    if (view === 'plan') return this._structuralHomeView(levelId);
+    return view;
+  }
+
   _structuralContext() {
-    const view = this._activeLayerViewId();
+    const view = this._structuralViewFor();
     return ['floor', 'foundation'].includes(view) ? view : null;
   }
 
   _activeColumns() {
     const levelId = this._activeLevelId();
-    const view = this._activeLayerViewId(levelId);
+    const view = this._structuralViewFor(levelId);
     return this._columns.filter(column => column.levelId === levelId
       && (view == null || column.view === view));
   }
 
   _activeBeams() {
     const levelId = this._activeLevelId();
-    const view = this._activeLayerViewId(levelId);
+    const view = this._structuralViewFor(levelId);
     return this._beams.filter(beam => beam.levelId === levelId
       && (view == null || beam.view === view));
   }
@@ -9606,17 +9667,20 @@ class Component extends DCLogic {
     }, () => this._focusNoteEditor());
   }
 
-  // The editor input mounts a frame or two after setState resolves, so focus
-  // retries across a few frames until the keyboard actually lands in it.
-  _focusNoteEditor(attempts = 10) {
+  // The editor input mounts a frame or two after setState resolves, and the
+  // render patch can detach and reattach it — stealing focus back in the same
+  // tick. Focus is only trusted once it survives into the next frame, so each
+  // attempt focuses and then re-checks a frame later before giving up retries.
+  _focusNoteEditor(attempts = 20) {
+    if (attempts <= 0 || !this.state.noteEditor) return;
     const input = document.querySelector('[data-note-editor-input]');
-    if (input) {
-      input.focus();
-      if (document.activeElement === input) return;
-    }
-    if (attempts > 0 && this.state.noteEditor) {
-      requestAnimationFrame(() => this._focusNoteEditor(attempts - 1));
-    }
+    if (input) input.focus();
+    requestAnimationFrame(() => {
+      if (!this.state.noteEditor) return;
+      const live = document.querySelector('[data-note-editor-input]');
+      if (live && document.activeElement === live) return;
+      this._focusNoteEditor(attempts - 1);
+    });
   }
 
   _commitNote() {
@@ -10188,6 +10252,21 @@ class Component extends DCLogic {
       return;
     }
     if (focusedControl === 'field') return;
+    // An open note editor owns the keyboard even when a render patch has
+    // stolen focus off its input: keystrokes land in the draft instead of
+    // firing drawing shortcuts, and focus is pulled back onto the box.
+    if (this.state.noteEditor) {
+      e.preventDefault();
+      if (e.key === 'Escape') { this._cancelNote(); return; }
+      if (e.key === 'Enter') { this._commitNote(); return; }
+      if (e.key === 'Backspace') {
+        this.setState({ noteDraft: this.state.noteDraft.slice(0, -1) });
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        this.setState({ noteDraft: this.state.noteDraft + e.key });
+      }
+      this._focusNoteEditor();
+      return;
+    }
     // A focused button or link already answers Space and Enter by activating
     // itself; running the drawing command too would fire it twice.
     if (focusedControl === 'widget' && (e.key === ' ' || e.key === 'Enter')) return;
