@@ -71,8 +71,8 @@ test('the Floor tool on FOUNDATION makes a concrete slab in that layer set', asy
   expect(slab.levelId).toBe(1);
   expect(slab.view).toBe('foundation');
   expect(slab.structure).toBe('slab');
-  // Slabs default to 4" of concrete, not the framed assembly depth.
-  expect(slab.thickness).toBeCloseTo(4 / 12, 5);
+  // Slabs default to the level's 3" concrete, not the framed assembly depth.
+  expect(slab.thickness).toBeCloseTo(3 / 12, 5);
 });
 
 test('a foundation slab survives a reload in the FOUNDATION layer set', async ({ page }) => {

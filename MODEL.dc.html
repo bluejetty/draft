@@ -47,6 +47,8 @@
     .level-heights { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; padding-top:1px; }
     .level-height { display:flex; justify-content:space-between; gap:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; line-height:1.25; letter-spacing:0.03em; color:rgba(29,31,32,0.5); text-transform:uppercase; white-space:nowrap; overflow:hidden; }
     .level-height-val { color:rgba(29,31,32,0.72); font-weight:600; }
+    .level-height-edit { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:0 3px; font:inherit; font-weight:600; line-height:1.25; }
+    .level-height-edit:hover { border-color:#5980a6; color:#5980a6; }
     .level-head .level-bg { margin-top:0; }
     .level-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:flex-start; margin-top:4px; }
     .level-edge { display:flex; align-items:center; gap:3px; min-height:9px; }
@@ -502,8 +504,27 @@
               <sc-if value="{{ level.hasHeights }}" hint-placeholder-val="{{ false }}">
                 <div class="level-heights">
                   <sc-for list="{{ level.heights }}" as="mark" hint-placeholder-count="2">
-                    <div class="level-height"><span>{{ mark.label }}</span><span class="level-height-val">{{ mark.value }}</span></div>
+                    <div class="level-height"><span>{{ mark.label }}</span>
+                      <sc-if value="{{ mark.editable }}" hint-placeholder-val="{{ false }}">
+                        <button type="button" class="level-height-val level-height-edit" onClick="{{ mark.onEdit }}" title="{{ mark.title }}">{{ mark.value }}</button>
+                      </sc-if>
+                      <sc-if value="{{ mark.plain }}" hint-placeholder-val="{{ true }}">
+                        <span class="level-height-val">{{ mark.value }}</span>
+                      </sc-if>
+                    </div>
                   </sc-for>
+                  <sc-if value="{{ level.hasSlabEditor }}" hint-placeholder-val="{{ false }}">
+                    <div class="level-assembly-editor" onClick="{{ level.slabEditor.onClick }}">
+                      <div class="assembly-row">
+                        <span class="assembly-label">SLAB</span>
+                        <input class="assembly-input" value="{{ level.slabEditor.input }}" onInput="{{ level.slabEditor.onInput }}" onKeyDown="{{ level.slabEditor.onKey }}" />
+                      </div>
+                      <sc-if value="{{ level.slabEditor.hasError }}" hint-placeholder-val="{{ false }}">
+                        <div class="assembly-error">{{ level.slabEditor.error }}</div>
+                      </sc-if>
+                      <button type="button" class="assembly-ok" onClick="{{ level.slabEditor.onAccept }}" title="Accept — Enter or Space">OK</button>
+                    </div>
+                  </sc-if>
                 </div>
               </sc-if>
             </div>
@@ -646,6 +667,10 @@ const FLOORING_TYPES = Object.freeze([
   Object.freeze({ id: 'carpet', label: 'CARPET' }),
 ]);
 const DEFAULT_FLOORING_THICKNESS_IN = 3 / 8;
+// Footings run 8" deep (typ), setting the bottom of excavation below the wall.
+const DEFAULT_FOOTING_DEPTH_IN = 8;
+// Basement slabs pour 3" (typ house; a garage runs 4").
+const DEFAULT_FDN_SLAB_THICKNESS_IN = 3;
 // Per-level wall + floor assembly: the WALL HEIGHT and FLOOR JOISTS boxes edit
 // these, and the sidebar's border heights derive from them.
 const defaultLevelAssembly = () => ({
@@ -654,6 +679,7 @@ const defaultLevelAssembly = () => ({
   joistDepthIn: DEFAULT_FLOOR_ASSEMBLY.joistDepthIn,
   joistSpacingIn: DEFAULT_FLOOR_ASSEMBLY.joistSpacingIn,
   sheathingIn: DEFAULT_FLOOR_ASSEMBLY.sheathingIn,
+  slabThicknessIn: DEFAULT_FDN_SLAB_THICKNESS_IN,
 });
 const normaliseLevelAssembly = raw => {
   const base = defaultLevelAssembly();
@@ -666,6 +692,7 @@ const normaliseLevelAssembly = raw => {
     joistDepthIn: positive(raw.joistDepthIn, base.joistDepthIn),
     joistSpacingIn: positive(raw.joistSpacingIn, base.joistSpacingIn),
     sheathingIn: positive(raw.sheathingIn, base.sheathingIn),
+    slabThicknessIn: positive(raw.slabThicknessIn, base.slabThicknessIn),
   };
 };
 const MODEL_STORAGE_BUCKET = 'model-drawing';
@@ -2934,7 +2961,9 @@ class Component extends DCLogic {
       return false;
     }
     this._cancelExtend();
-    if (tool === 'floor' && this._floorHomeView() === 'foundation') this._setFloorStructure('slab');
+    if (tool === 'floor' && this._floorHomeView() === 'foundation') {
+      this._setFloorStructure('slab', this._levelAssembly(this._activeLevelId()).slabThicknessIn);
+    }
     if (tool !== 'wall') this._cancelWall();
     if (tool !== 'line') this._cancelLine();
     if (tool !== 'floor') this._cancelFloor();
@@ -4007,7 +4036,7 @@ class Component extends DCLogic {
       view: homeView,
       structure: isSlab ? 'slab' : 'floor',
       thickness: homeView === 'foundation' && this.state.floorStructure !== 'slab'
-        ? DEFAULT_SLAB_THICKNESS_IN / 12
+        ? this._levelAssembly(levelId).slabThicknessIn / 12
         : this.state.floorThickness,
       assembly: { ...DEFAULT_FLOOR_ASSEMBLY },
     });
@@ -7114,10 +7143,12 @@ class Component extends DCLogic {
     });
   }
 
-  _setFloorStructure(structure) {
+  _setFloorStructure(structure, slabThicknessIn = null) {
     const value = structure === 'slab' ? 'slab' : 'floor';
     if (value === this.state.floorStructure) return;
-    const thicknessIn = value === 'slab' ? DEFAULT_SLAB_THICKNESS_IN : DEFAULT_FLOOR_THICKNESS_IN;
+    const thicknessIn = value === 'slab'
+      ? (slabThicknessIn ?? DEFAULT_SLAB_THICKNESS_IN)
+      : DEFAULT_FLOOR_THICKNESS_IN;
     this.setState({
       floorStructure: value,
       floorThickness: thicknessIn / 12,
@@ -7179,15 +7210,80 @@ class Component extends DCLogic {
 
   _levelHeightMarks(levelId) {
     const datum = this.state.elevationDatum;
-    const mark = (label, feet) => ({ label, value: this._elevLabel(feet + datum) });
+    const mark = (label, feet, extra = {}) => ({
+      label,
+      value: this._elevLabel(feet + datum),
+      editable: false,
+      plain: true,
+      title: '',
+      onEdit: () => {},
+      ...extra,
+    });
+    if (levelId === 7) {
+      // The roof's main number is the 2nd-floor top of wall — where the
+      // trusses bear.
+      const trussBearing = this._levelAssembly(3).wallHeightFt
+        + this._levelFloorFt(5) + this._levelAssembly(5).wallHeightFt;
+      return [mark('T.O. WALL / TRUSS BRG', trussBearing)];
+    }
     if (levelId === 1) {
-      const fdnWallTop = -this._levelFloorFt(3);
+      // The foundation's main number is the bottom of the wall (top of
+      // footing); the excavation runs a footing deeper. The unlabeled top
+      // number is the top of slab — where basement stairs land — and clicking
+      // it edits the slab thickness.
+      const wallBottom = -this._levelFloorFt(3) - this._levelWallTopFt(1, 'foundation');
+      const slabIn = this._levelAssembly(1).slabThicknessIn;
       return [
-        mark('T.O. FDN WALL', fdnWallTop),
-        mark('T.O. FOOTING', fdnWallTop - this._levelWallTopFt(1, 'foundation')),
+        mark('', wallBottom + slabIn / 12, {
+          editable: true,
+          plain: false,
+          title: `Top of slab — ${formatInchesOnly(slabIn)} thick, click to change`,
+          onEdit: event => this._openSlabEditor(levelId, event),
+        }),
+        mark('B.O. WALL / T.O. FTG', wallBottom),
+        mark('B.O. FTG / EXCAV', wallBottom - DEFAULT_FOOTING_DEPTH_IN / 12),
       ];
     }
     return [];
+  }
+
+  _openSlabEditor(levelId, event) {
+    event?.stopPropagation();
+    const current = this.state.slabEditor;
+    if (current && current.levelId === levelId) {
+      this.setState({ slabEditor: null, slabError: '' });
+      return;
+    }
+    this.setState({
+      slabEditor: { levelId },
+      slabInput: formatInchesOnly(this._levelAssembly(levelId).slabThicknessIn),
+      slabTyped: false,
+      slabError: '',
+    });
+  }
+
+  _commitSlabEditor() {
+    const editor = this.state.slabEditor;
+    if (!editor) return;
+    const parsed = parseAssemblyInches(this.state.slabInput);
+    if (!parsed.ok || parsed.inches <= 0) {
+      this.setState({ slabError: parsed.ok ? 'Slab thickness must be greater than zero.' : parsed.error });
+      return;
+    }
+    const assembly = { ...this._levelAssembly(editor.levelId), slabThicknessIn: parsed.inches };
+    // Editing the slab on the working level also drives the FLOOR tool's slab
+    // thickness, so newly drawn slabs match.
+    const syncSlab = editor.levelId === this._activeLevel()?.id && this.state.floorStructure === 'slab';
+    this.setState({
+      levelAssemblies: { ...this.state.levelAssemblies, [editor.levelId]: assembly },
+      slabEditor: null,
+      slabError: '',
+      ...(syncSlab ? {
+        floorThickness: parsed.inches / 12,
+        floorThicknessInput: formatArchitecturalInches(parsed.inches),
+        floorDimensionError: '',
+      } : {}),
+    }, () => this._markUnsaved());
   }
 
   _openAssemblyEditor(levelId, kind, event) {
@@ -7811,12 +7907,32 @@ class Component extends DCLogic {
           };
         });
         const heights = this._levelHeightMarks(l.id);
+        const slabEditor = this.state.slabEditor?.levelId === l.id
+          ? {
+              input: this.state.slabInput,
+              onInput: e => this.setState({ slabInput: e.target.value, slabTyped: true, slabError: '' }),
+              onKey: e => {
+                if (e.key === 'Enter' || (e.key === ' ' && !this.state.slabTyped)) {
+                  e.preventDefault();
+                  this._commitSlabEditor();
+                }
+                if (e.key === 'Escape') { e.preventDefault(); this.setState({ slabEditor: null, slabError: '' }); }
+                e.stopPropagation();
+              },
+              onClick: e => e.stopPropagation(),
+              onAccept: e => { e.stopPropagation(); this._commitSlabEditor(); },
+              hasError: Boolean(this.state.slabError),
+              error: this.state.slabError,
+            }
+          : null;
         return {
           name: l.name,
           layers,
           hasLayers: layers.length > 0,
           heights,
           hasHeights: heights.length > 0,
+          slabEditor,
+          hasSlabEditor: slabEditor != null,
           color: LEVEL_COLORS[i % LEVEL_COLORS.length],
           rowClass: 'level-row' + (i === activeLevelIdx ? ' active' : ''),
           ...bgSlotStyle(levelSlot),
