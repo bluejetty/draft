@@ -1,7 +1,8 @@
 // While an OUTLINE is being drawn, R freezes the segment so an exact length
-// can be typed — same flow as Line / Wall. A finished outline edge can be
-// pulled into an arc with the Outline tool: an arced master segment curves
-// every level copy, an arced level segment becomes a local override.
+// can be typed — same flow as Line / Wall. A finished outline edge edits like
+// Node / Arc: a dead-centre press drops a new node there, a press beside the
+// edge pulls the segment into an arc. Master edits reach every level copy,
+// level edits become local overrides.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -58,7 +59,7 @@ test('arcing a master edge on the BONEYARD curves every level copy and survives 
   await page.locator('.level-name', { hasText: 'BONEYARD' }).click();
   await page.waitForTimeout(300);
   await h.selectTool(page, 'Outline');
-  await dragWorld(page, 0, -6, 0, -2); // pull the bottom edge into an arc
+  await dragWorld(page, 0, -5.4, 0, -2); // grab beside the bottom edge → arc
 
   let saved = await h.savedDrawing(page);
   const master = saved.boneyardOutlines[0];
@@ -85,9 +86,9 @@ test('arcing a level edge stays local and survives a later master edit', async (
   await h.openModel(page);
   await drawOutlineRect(page); // drawn on MAIN FL
 
-  // Arc the level copy's bottom edge on MAIN FL.
+  // Arc the level copy's bottom edge on MAIN FL — grabbed beside the edge.
   await h.selectTool(page, 'Outline');
-  await dragWorld(page, 0, -6, 0, -2);
+  await dragWorld(page, 0, -5.4, 0, -2);
 
   let saved = await h.savedDrawing(page);
   // The master stays straight; only the MAIN FL copy is arced and overridden.
@@ -110,4 +111,48 @@ test('arcing a level edge stays local and survives a later master edit', async (
   const after = saved.outlines.find(o => o.levelId === 3);
   expect(after.points.some(p => h.near(p.x, 12) && h.near(p.z, 10))).toBe(true);
   expect(after.points.find(p => p.srcId === arced.srcId).bulge).toBeCloseTo(arced.bulge, 3);
+});
+
+test('a dead-centre press on a master edge drops a node onto every level copy', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page);
+
+  await page.locator('.level-name', { hasText: 'BONEYARD' }).click();
+  await page.waitForTimeout(300);
+  await h.selectTool(page, 'Outline');
+  await h.clickWorld(page, 0, -6); // dead-centre on the bottom edge
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  const master = saved.boneyardOutlines[0];
+  expect(master.points).toHaveLength(5);
+  const added = master.points.find(p => h.near(p.x, 0) && h.near(p.z, -6));
+  expect(added).toBeTruthy();
+  saved.outlines.forEach(outline => {
+    expect(outline.points).toHaveLength(5);
+    const copy = outline.points.find(p => p.srcId === added.id);
+    expect(copy).toBeTruthy();
+    expect(h.near(copy.x, 0) && h.near(copy.z, -6)).toBe(true);
+  });
+});
+
+test('a node dropped on a level edge is draggable right away and stays local', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page); // drawn on MAIN FL
+
+  // Press dead-centre on the bottom edge and drag: the new node follows.
+  await h.selectTool(page, 'Outline');
+  await dragWorld(page, 0, -6, 0, -3);
+
+  const saved = await h.savedDrawing(page);
+  // The master keeps its four corners; only the MAIN FL copy gained the node.
+  expect(saved.boneyardOutlines[0].points).toHaveLength(4);
+  const main = saved.outlines.find(o => o.levelId === 3);
+  expect(main.points).toHaveLength(5);
+  const added = main.points.find(p => h.near(p.x, 0) && h.near(p.z, -3));
+  expect(added).toBeTruthy();
+  expect(added.srcId).toBe(null);
+  saved.outlines.filter(o => o.levelId !== 3).forEach(outline => {
+    expect(outline.points).toHaveLength(4);
+  });
 });
