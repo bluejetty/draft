@@ -69,10 +69,41 @@ test('level cards draw the floor profile with heights on its border lines', asyn
   await expect(second.locator('.level-edge-val').nth(0)).toHaveText(`+9'-1 3/4"`);
   await expect(second.locator('.level-edge-val').nth(1)).toHaveText(`+8'-1 1/8"`);
 
-  // FOUNDATION keeps its wall-top and footing marks beside the title.
+  // FOUNDATION: the main number is the bottom of the wall (top of footing) —
+  // one default wall below the main-floor bottom — with the excavation a
+  // footing (8") deeper, and the unlabeled top-of-slab number 3" above.
   const fdn = levelRow(page, 'FOUNDATION');
-  await expect(fdn.locator('.level-height', { hasText: 'T.O. FDN WALL' })).toContainText(`-1'-0 5/8"`);
-  await expect(fdn.locator('.level-height', { hasText: 'T.O. FOOTING' })).toBeVisible();
+  await expect(fdn.locator('.level-height', { hasText: 'B.O. WALL / T.O. FTG' })).toContainText(`-9'-1 3/4"`);
+  await expect(fdn.locator('.level-height', { hasText: 'B.O. FTG / EXCAV' })).toContainText(`-9'-9 3/4"`);
+  await expect(fdn.locator('.level-height-edit')).toHaveText(`-8'-10 3/4"`);
+
+  // ROOF: the main number is the 2nd-floor top of wall, where trusses bear.
+  const roof = levelRow(page, 'ROOF');
+  await expect(roof.locator('.level-height', { hasText: 'T.O. WALL / TRUSS BRG' })).toContainText(`+17'-2 7/8"`);
+});
+
+test('clicking the top-of-slab number edits the slab thickness', async ({ page }) => {
+  await h.openModel(page);
+  const fdn = levelRow(page, 'FOUNDATION');
+
+  await fdn.locator('.level-height-edit').click();
+  const input = fdn.locator('.assembly-input');
+  await expect(input).toHaveValue('3"');
+  await input.fill('4');
+  await input.press('Enter');
+  await expect(fdn.locator('.level-assembly-editor')).toHaveCount(0);
+
+  // The slab top rides up an inch; the wall-bottom mark stays put.
+  await expect(fdn.locator('.level-height-edit')).toHaveText(`-8'-9 3/4"`);
+  await expect(fdn.locator('.level-height', { hasText: 'B.O. WALL / T.O. FTG' })).toContainText(`-9'-1 3/4"`);
+
+  await h.waitForSaved(page);
+  expect((await h.savedDrawing(page)).levelAssemblies['1'].slabThicknessIn).toBe(4);
+
+  await page.reload();
+  await expect(page.locator('[data-model-canvas]')).toBeVisible();
+  await page.waitForTimeout(500);
+  await expect(levelRow(page, 'FOUNDATION').locator('.level-height-edit')).toHaveText(`-8'-9 3/4"`);
 });
 
 test('the datum toggle shifts every mark by 100 feet and persists', async ({ page }) => {
@@ -84,7 +115,7 @@ test('the datum toggle shifts every mark by 100 feet and persists', async ({ pag
   const main = levelRow(page, 'MAIN FL');
   await expect(main.locator('.level-edge-val').nth(0)).toHaveText(`100'-0"`);
   const fdn = levelRow(page, 'FOUNDATION');
-  await expect(fdn.locator('.level-height', { hasText: 'T.O. FDN WALL' })).toContainText(`98'-11 3/8"`);
+  await expect(fdn.locator('.level-height', { hasText: 'B.O. WALL / T.O. FTG' })).toContainText(`90'-10 1/4"`);
 
   await h.waitForSaved(page);
   expect((await h.savedDrawing(page)).elevationDatum).toBe(100);
@@ -99,7 +130,7 @@ test('WALL HEIGHT edits the level wall height and moves the marks above', async 
   await h.openModel(page);
   const main = levelRow(page, 'MAIN FL');
 
-  await main.getByRole('button', { name: 'WALL HEIGHT' }).click();
+  await main.getByRole('button', { name: 'WALL HT' }).click();
   const wallInput = main.locator('.assembly-input');
   await expect(wallInput).toHaveValue(`8'-1 1/8"`);
   await wallInput.fill(`9'`);
@@ -125,7 +156,7 @@ test('FLOOR JOISTS edits the assembly and recomputes the foundation top', async 
   await h.openModel(page);
   const main = levelRow(page, 'MAIN FL');
 
-  await main.getByRole('button', { name: 'FLOOR JOISTS' }).click();
+  await main.getByRole('button', { name: 'FL JST' }).click();
   const editor = main.locator('.level-assembly-editor');
   await expect(editor.locator('.assembly-input').nth(0)).toHaveValue(`11 7/8"`);
   await expect(editor.locator('.assembly-input').nth(2)).toHaveValue(`3/4"`);
@@ -136,10 +167,11 @@ test('FLOOR JOISTS edits the assembly and recomputes the foundation top', async 
   await editor.locator('.assembly-input').nth(0).press('Enter');
   await expect(main.locator('.level-assembly-editor')).toHaveCount(0);
 
-  // Floor is now 10" total, so the bottom line and foundation top follow.
+  // Floor is now 10" total, so the bottom line and the foundation wall
+  // bottom (one default wall further down) follow.
   await expect(main.locator('.level-edge-val').nth(1)).toHaveText(`-0'-10"`);
   const fdn = levelRow(page, 'FOUNDATION');
-  await expect(fdn.locator('.level-height', { hasText: 'T.O. FDN WALL' })).toContainText(`-0'-10"`);
+  await expect(fdn.locator('.level-height', { hasText: 'B.O. WALL / T.O. FTG' })).toContainText(`-8'-11 1/8"`);
 
   await h.waitForSaved(page);
   const saved = (await h.savedDrawing(page)).levelAssemblies['3'];
@@ -152,14 +184,14 @@ test('Space accepts the offered floor values until the user starts typing', asyn
   await h.openModel(page);
   const main = levelRow(page, 'MAIN FL');
 
-  await main.getByRole('button', { name: 'FLOOR JOISTS' }).click();
+  await main.getByRole('button', { name: 'FL JST' }).click();
   const editor = main.locator('.level-assembly-editor');
   await editor.locator('.assembly-input').nth(2).press(' ');
   await expect(main.locator('.level-assembly-editor')).toHaveCount(0);
   await expect(main.locator('.level-edge-val').nth(1)).toHaveText(`-1'-0 5/8"`);
 
   // After typing, Space is a character again and Enter commits.
-  await main.getByRole('button', { name: 'FLOOR JOISTS' }).click();
+  await main.getByRole('button', { name: 'FL JST' }).click();
   const spacing = editor.locator('.assembly-input').nth(1);
   await spacing.fill('19.2');
   await spacing.press(' ');
