@@ -1,8 +1,9 @@
 // BUILD HOUSE turns the OUTLINE copies into a starter shell in one click:
 // 2×6 stud walls + framed floors on MAIN FL and 2ND FL, 8" concrete walls +
-// an S-SLAB slab on FOUNDATION, and an all-eave roof grown from the MAIN FL
-// outline by the roof overhang. Each piece only builds where the level is
-// still empty, so a second click never doubles up.
+// an S-SLAB slab + strip-footing linework on FOUNDATION, and an all-eave
+// roof grown from the ROOF level's outline by the roof overhang. Each piece
+// only builds where the level is still empty, so a second click never
+// doubles up.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -59,10 +60,25 @@ test('BUILD HOUSE generates walls, floors, slab, and roof from the outline', asy
   expect(slabs).toHaveLength(1);
   expect(slabs[0].structure).toBe('slab');
 
+  // Strip footings: two rings of linework on the foundation layer set — a
+  // 20" footing centered on the 8" wall, so 6" projection past each face.
+  const footings = saved.lines.filter(line => line.levelId === 1);
+  expect(footings).toHaveLength(8);
+  footings.forEach(line => expect(line.view).toBe('foundation'));
+  const hasCorner = (x, z) => footings.some(line =>
+    (Math.abs(line.start.x - x) < 0.05 && Math.abs(line.start.z - z) < 0.05)
+    || (Math.abs(line.end.x - x) < 0.05 && Math.abs(line.end.z - z) < 0.05));
+  expect(hasCorner(-8.5, -6.5)).toBe(true);
+  expect(hasCorner(8.5, 6.5)).toBe(true);
+  expect(hasCorner(-8 + 7 / 6, -6 + 7 / 6)).toBe(true);
+  expect(hasCorner(8 - 7 / 6, 6 - 7 / 6)).toBe(true);
+
   // ROOF: one all-eave 4:12 roof grown by the default 2' overhang.
   expect(saved.roofs).toHaveLength(1);
   const roof = saved.roofs[0];
   expect(roof.levelId).toBe(7);
+  // Grown from the ROOF level's own outline copy (brought in from the BONEYARD).
+  expect(roof.sourceLevelId).toBe(7);
   expect(roof.pitch).toBe(4);
   expect(roof.overhang).toBe(2);
   expect(roof.edges.every(edge => edge === 'eave')).toBe(true);
@@ -83,7 +99,37 @@ test('a second BUILD HOUSE click never doubles the shell', async ({ page }) => {
   const saved = await h.savedDrawing(page);
   expect(saved.walls).toHaveLength(12);
   expect(saved.floors).toHaveLength(3);
+  expect(saved.lines).toHaveLength(8);
   expect(saved.roofs).toHaveLength(1);
+});
+
+test('footing width edits on the level card and recenters the rings', async ({ page }) => {
+  await h.openModel(page);
+  const fdn = page.locator('.level-row').filter({ has: page.locator('.level-name', { hasText: 'FOUNDATION' }) });
+
+  // The width lives on the FOUNDATION card (never printed on plan).
+  await fdn.locator('.level-edge-edit[title^="Footing width"]').click();
+  await expect(fdn.locator('.assembly-label')).toHaveText('FTG W');
+  const input = fdn.locator('.assembly-input');
+  await expect(input).toHaveValue('20"');
+  await input.fill('24');
+  await input.press('Enter');
+  await expect(fdn.locator('.level-edge-edit[title^="Footing width"]')).toHaveText('24" W');
+  await h.waitForSaved(page);
+  expect((await h.savedDrawing(page)).levelAssemblies['1'].footingWidthIn).toBe(24);
+
+  // BUILD HOUSE draws the wider footing: 24" on the 8" wall = 8" each side.
+  await drawOutlineRect(page);
+  await buildHouse(page);
+  await h.waitForSaved(page);
+  const saved = await h.savedDrawing(page);
+  const footings = saved.lines.filter(line => line.levelId === 1);
+  expect(footings).toHaveLength(8);
+  const hasCorner = (x, z) => footings.some(line =>
+    (Math.abs(line.start.x - x) < 0.05 && Math.abs(line.start.z - z) < 0.05)
+    || (Math.abs(line.end.x - x) < 0.05 && Math.abs(line.end.z - z) < 0.05));
+  expect(hasCorner(-8 - 8 / 12, -6 - 8 / 12)).toBe(true);
+  expect(hasCorner(-8 + 8 / 12 + 8 / 12, -6 + 8 / 12 + 8 / 12)).toBe(true);
 });
 
 test('BUILD HOUSE only fills levels that are still empty', async ({ page }) => {
@@ -104,8 +150,9 @@ test('BUILD HOUSE only fills levels that are still empty', async ({ page }) => {
   expect(saved.walls.filter(wall => wall.levelId === 3)).toHaveLength(1);
   expect(saved.walls.filter(wall => wall.levelId === 5)).toHaveLength(4);
   expect(saved.walls.filter(wall => wall.levelId === 1)).toHaveLength(4);
-  // Floors and roof still build everywhere.
+  // Floors, footings, and roof still build everywhere.
   expect(saved.floors).toHaveLength(3);
+  expect(saved.lines.filter(line => line.levelId === 1)).toHaveLength(8);
   expect(saved.roofs).toHaveLength(1);
 });
 
@@ -132,6 +179,7 @@ test('one undo removes the whole generated house', async ({ page }) => {
   const saved = await h.savedDrawing(page);
   expect(saved.walls).toHaveLength(0);
   expect(saved.floors).toHaveLength(0);
+  expect(saved.lines).toHaveLength(0);
   expect(saved.roofs).toHaveLength(0);
   // The outline survives the undo.
   expect(saved.outlines).toHaveLength(saved.levels.length);

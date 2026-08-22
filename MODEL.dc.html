@@ -731,6 +731,10 @@ const FLOORING_TYPES = Object.freeze([
 const DEFAULT_FLOORING_THICKNESS_IN = 3 / 8;
 // Footings run 8" deep (typ), setting the bottom of excavation below the wall.
 const DEFAULT_FOOTING_DEPTH_IN = 8;
+// Strip footings are centered on the wall: an 8" concrete wall sits on a 20"
+// footing (6" projection each side); ICF walls default to a 24" footing.
+const DEFAULT_FOOTING_WIDTH_IN = 20;
+const ICF_FOOTING_WIDTH_IN = 24;
 // Basement slabs pour 3" (typ house; a garage runs 4").
 const DEFAULT_FDN_SLAB_THICKNESS_IN = 3;
 // Per-level wall + floor assembly: the WALL HEIGHT and FLOOR JOISTS boxes edit
@@ -743,6 +747,7 @@ const defaultLevelAssembly = () => ({
   sheathingIn: DEFAULT_FLOOR_ASSEMBLY.sheathingIn,
   slabThicknessIn: DEFAULT_FDN_SLAB_THICKNESS_IN,
   footingDepthIn: DEFAULT_FOOTING_DEPTH_IN,
+  footingWidthIn: null, // null → derived from the foundation wall type
 });
 const normaliseLevelAssembly = raw => {
   const base = defaultLevelAssembly();
@@ -757,6 +762,8 @@ const normaliseLevelAssembly = raw => {
     sheathingIn: positive(raw.sheathingIn, base.sheathingIn),
     slabThicknessIn: positive(raw.slabThicknessIn, base.slabThicknessIn),
     footingDepthIn: positive(raw.footingDepthIn, base.footingDepthIn),
+    footingWidthIn: Number.isFinite(Number(raw.footingWidthIn)) && Number(raw.footingWidthIn) > 0
+      ? Number(raw.footingWidthIn) : null,
   };
 };
 const MODEL_STORAGE_BUCKET = 'model-drawing';
@@ -4736,8 +4743,8 @@ class Component extends DCLogic {
   // ── BUILD HOUSE — the starter shell from each level's OUTLINE copy ────────
   // One command drops the default construction: 2×6 stud walls + a framed
   // floor on MAIN FL and 2ND FL, 8" concrete walls + an S-SLAB slab on
-  // FOUNDATION (footings ride on the level card's footing depth), and an
-  // all-eave roof grown from the MAIN FL outline by the roof overhang at the
+  // FOUNDATION with strip-footing linework centered on the wall, and an
+  // all-eave roof grown from the ROOF level's outline copy by the roof overhang at the
   // current pitch. Each piece only builds where the level is still empty, so
   // re-running fills gaps without doubling up, and everything generated is
   // ordinary editable geometry.
@@ -4807,9 +4814,40 @@ class Component extends DCLogic {
     return true;
   }
 
+  // Foundation strip footings drawn as two rings of ordinary linework, the
+  // footing centered on the wall: equal projection past the exterior and
+  // interior faces. No dimensions on plan — the contractor positions from the
+  // perimeter wall. Skips if the foundation layer set already has lines.
+  _buildHouseFootings() {
+    const levelId = 1;
+    if (this._lines.some(line => line.levelId === levelId && (line.view || 'plan') === 'foundation')) return false;
+    const outline = this._houseOutline(levelId);
+    if (!outline) return false;
+    const wallFt = (WALL_TYPES.find(type => type.id === 'concrete_8')?.totalIn || 8) / 12;
+    const projFt = Math.max(0, this._footingWidthIn(levelId) / 12 - wallFt) / 2;
+    const base = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
+    const rings = [
+      this._offsetOutline(base, projFt),
+      this._offsetOutline(base, -(wallFt + projFt)),
+    ];
+    rings.forEach(ring => ring.forEach((point, index) => {
+      const next = ring[(index + 1) % ring.length];
+      if (Math.hypot(next.x - point.x, next.z - point.z) < 0.01) return;
+      this._lines.push({
+        id: this._newDrawingItemId('line'),
+        start: this._mergeVertex({ x: point.x, z: point.z }, levelId, 'foundation'),
+        end: this._mergeVertex({ x: next.x, z: next.z }, levelId, 'foundation'),
+        levelId,
+        view: 'foundation',
+        layer: 'draft',
+      });
+    }));
+    return true;
+  }
+
   _buildHouseRoof() {
     if (this._roofs.some(roof => roof.levelId === 7)) return false;
-    const outline = this._houseOutline(3) || this._houseOutline(7);
+    const outline = this._houseOutline(7) || this._houseOutline(3);
     if (!outline) return false;
     const overhang = this.state.roofOverhang;
     const points = this._offsetOutline(outline.points.map(pt => ({ x: pt.x, z: pt.z })), overhang);
@@ -4817,7 +4855,7 @@ class Component extends DCLogic {
       id: this._newDrawingItemId('roof'),
       points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, 7, 'roof')),
       levelId: 7,
-      sourceLevelId: 3,
+      sourceLevelId: outline.levelId,
       sourceShapeId: null,
       edges: points.map(() => 'eave'),
       overhang,
@@ -4844,6 +4882,7 @@ class Component extends DCLogic {
     if (this._buildHouseFloor(5, 'floor')) built.push('2ND FL floor');
     if (this._buildHouseWalls(1, 'foundation', 'concrete_8')) built.push('FOUNDATION walls');
     if (this._buildHouseFloor(1, 'slab')) built.push('slab');
+    if (this._buildHouseFootings()) built.push('footings');
     if (this._buildHouseRoof()) built.push(`${this.state.roofPitch}:12 roof`);
     if (!built.length) {
       this.setState({
@@ -5645,7 +5684,7 @@ class Component extends DCLogic {
   // Offset a closed outline outward by a distance: each edge line shifts along
   // its outward normal and each corner is the intersection of its two shifted
   // edges, so angled footprints stay true. Orientation-agnostic — whichever
-  // normal direction grows the area is outward.
+  // normal direction grows the area is outward; a negative distance insets.
   _offsetOutline(points, distance) {
     if (!distance) return points.map(pt => ({ ...pt }));
     const count = points.length;
@@ -5669,8 +5708,8 @@ class Component extends DCLogic {
         return { x: prevEdge.ax + prevEdge.dx * t, z: prevEdge.az + prevEdge.dz * t };
       });
     };
-    const grown = offsetWith(1);
-    return polygonArea(grown) >= polygonArea(points) ? grown : offsetWith(-1);
+    const first = offsetWith(1);
+    return (polygonArea(first) >= polygonArea(points)) === (distance > 0) ? first : offsetWith(-1);
   }
 
   _findRoofEdgeAt(worldPt) {
@@ -8012,6 +8051,18 @@ class Component extends DCLogic {
   // (top of footing), the line below is the base of the footing / excavation,
   // and the top of slab — where basement stairs land — floats above without a
   // line. Slab thickness and footing depth change by clicking their numbers.
+  // Footing width is collected on the level card (it never prints on plan —
+  // the contractor centers the footing on the wall). Unset widths derive from
+  // the foundation wall type: ICF walls sit on 24", everything else on 20".
+  _footingWidthIn(levelId) {
+    const assembly = this._levelAssembly(levelId);
+    if (assembly.footingWidthIn) return assembly.footingWidthIn;
+    const icf = this._walls.some(wall => wall.levelId === levelId
+      && (wall.view || 'plan') === 'foundation'
+      && String(wall.wallType || '').startsWith('icf'));
+    return icf ? ICF_FOOTING_WIDTH_IN : DEFAULT_FOOTING_WIDTH_IN;
+  }
+
   _foundationHeights() {
     const datum = this.state.elevationDatum;
     const assembly = this._levelAssembly(1);
@@ -8019,6 +8070,7 @@ class Component extends DCLogic {
     return {
       slabIn: assembly.slabThicknessIn,
       footingIn: assembly.footingDepthIn,
+      footingWidthIn: this._footingWidthIn(1),
       slabTop: this._elevLabel(wallBottom + assembly.slabThicknessIn / 12 + datum),
       wallBottom: this._elevLabel(wallBottom + datum),
       footingBottom: this._elevLabel(wallBottom - assembly.footingDepthIn / 12 + datum),
@@ -8043,7 +8095,9 @@ class Component extends DCLogic {
     const assembly = this._levelAssembly(levelId);
     this.setState({
       depthEditor: { levelId, kind },
-      depthInput: formatInchesOnly(kind === 'footing' ? assembly.footingDepthIn : assembly.slabThicknessIn),
+      depthInput: formatInchesOnly(kind === 'footing' ? assembly.footingDepthIn
+        : kind === 'footingWidth' ? this._footingWidthIn(levelId)
+        : assembly.slabThicknessIn),
       depthTyped: false,
       depthError: '',
     });
@@ -8057,7 +8111,9 @@ class Component extends DCLogic {
       this.setState({ depthError: parsed.ok ? 'Depth must be greater than zero.' : parsed.error });
       return;
     }
-    const field = editor.kind === 'footing' ? 'footingDepthIn' : 'slabThicknessIn';
+    const field = editor.kind === 'footing' ? 'footingDepthIn'
+      : editor.kind === 'footingWidth' ? 'footingWidthIn'
+      : 'slabThicknessIn';
     const assembly = { ...this._levelAssembly(editor.levelId), [field]: parsed.inches };
     // Editing the slab on the working level also drives the FLOOR tool's slab
     // thickness, so newly drawn slabs match.
@@ -8387,7 +8443,7 @@ class Component extends DCLogic {
       shapeToolActive: shaping,
       outlineToolActive: activeTool === 'outline',
       onBuildHouse: () => this._buildHouse(),
-      buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on MAIN FL and 2ND FL, 8" concrete walls + slab on FOUNDATION (footings come from the level card), and a ${this.state.roofPitch}:12 all-eave roof grown by the roof overhang. Only levels still empty build, so re-running fills gaps without doubling up.`,
+      buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on MAIN FL and 2ND FL, 8" concrete walls + slab + ${formatInchesOnly(this._footingWidthIn(1))} centered strip-footing lines on FOUNDATION, and a ${this.state.roofPitch}:12 all-eave roof grown from the ROOF level's outline by the roof overhang. Only levels still empty build, so re-running fills gaps without doubling up.`,
       onShapeCapture: () => this._captureShape(),
       hasActiveShapes: this._activeShapes().length > 0,
       onShapeDelete: () => this._deleteLastShape(),
@@ -8722,7 +8778,9 @@ class Component extends DCLogic {
           const isFdnBox = fdn != null && view.id === 'foundation';
           const depthEditor = isFdnBox && this.state.depthEditor?.levelId === l.id
             ? {
-                label: this.state.depthEditor.kind === 'footing' ? 'FTG DP' : 'SLAB',
+                label: this.state.depthEditor.kind === 'footing' ? 'FTG DP'
+                  : this.state.depthEditor.kind === 'footingWidth' ? 'FTG W'
+                  : 'SLAB',
                 input: this.state.depthInput,
                 onInput: e => this.setState({ depthInput: e.target.value, depthTyped: true, depthError: '' }),
                 onKey: e => {
@@ -8788,7 +8846,10 @@ class Component extends DCLogic {
             edgesBottom: assemblyKind === 'floor'
               ? [plainEdge(borderHeights.floorBottom, 'Bottom of floor — top of wall or foundation below')]
               : isFdnBox
-                ? [editEdge(fdn.footingBottom, `Base of footing / excavation — ${formatInchesOnly(fdn.footingIn)} deep footing, click to change`, 'footing', true)]
+                ? [
+                    editEdge(fdn.footingBottom, `Base of footing / excavation — ${formatInchesOnly(fdn.footingIn)} deep footing, click to change`, 'footing', true),
+                    editEdge(`${formatInchesOnly(fdn.footingWidthIn)} W`, `Footing width — ${formatInchesOnly(fdn.footingWidthIn)} wide, centered on the wall (never prints), click to change`, 'footingWidth', false),
+                  ]
                 : [],
             depthEditor,
             hasDepthEditor: depthEditor != null,
