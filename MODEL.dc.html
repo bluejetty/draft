@@ -391,6 +391,15 @@
       </div>
     </sc-if>
 
+    <!-- OUTLINE / BUILD HOUSE (shown when Outline tool is active) -->
+    <sc-if value="{{ outlineToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Outline</div>
+        <button onClick="{{ onBuildHouse }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD HOUSE</button>
+        <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ buildHouseHint }}</div>
+      </div>
+    </sc-if>
+
     <!-- FENESTRATION PROPERTIES (shown when Fenestration tool is active) -->
     <sc-if value="{{ fenestrationToolActive }}" hint-placeholder-val="{{ false }}">
       <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
@@ -4724,6 +4733,133 @@ class Component extends DCLogic {
     return OUTLINE_COLORS[normaliseOutlineColor(this.state.outlineColor)].hex;
   }
 
+  // ── BUILD HOUSE — the starter shell from each level's OUTLINE copy ────────
+  // One command drops the default construction: 2×6 stud walls + a framed
+  // floor on MAIN FL and 2ND FL, 8" concrete walls + an S-SLAB slab on
+  // FOUNDATION (footings ride on the level card's footing depth), and an
+  // all-eave roof grown from the MAIN FL outline by the roof overhang at the
+  // current pitch. Each piece only builds where the level is still empty, so
+  // re-running fills gaps without doubling up, and everything generated is
+  // ordinary editable geometry.
+  _houseOutline(levelId) {
+    const outlines = this._outlines.filter(outline => outline.levelId === levelId && outline.points.length >= 3);
+    return outlines.length ? outlines[outlines.length - 1] : null;
+  }
+
+  // refLine that puts the wall body inside the ring, keeping the outline on
+  // the exterior face: 'left' for counter-clockwise rings, 'right' for
+  // clockwise ones.
+  _outlineInteriorRef(points) {
+    const area = points.reduce((sum, point, index) => {
+      const next = points[(index + 1) % points.length];
+      return sum + (point.x * next.z - next.x * point.z);
+    }, 0);
+    return area > 0 ? 'left' : 'right';
+  }
+
+  _buildHouseWalls(levelId, view, wallType) {
+    if (this._walls.some(wall => wall.levelId === levelId && (wall.view || 'plan') === view)) return false;
+    const outline = this._houseOutline(levelId);
+    if (!outline) return false;
+    const points = outline.points;
+    const refLine = this._outlineInteriorRef(points);
+    const topHeight = this._levelAssembly(levelId).wallHeightFt;
+    let built = false;
+    points.forEach((point, index) => {
+      const next = points[(index + 1) % points.length];
+      if (Math.hypot(next.x - point.x, next.z - point.z) < 0.01) return;
+      this._walls.push({
+        id: this._newDrawingItemId('wall'),
+        start: this._mergeVertex({ x: point.x, z: point.z }, levelId, view),
+        end: this._mergeVertex({ x: next.x, z: next.z }, levelId, view),
+        levelId,
+        view,
+        wallType,
+        baseHeight: 0,
+        topHeight,
+        refLine,
+      });
+      built = true;
+    });
+    return built;
+  }
+
+  _buildHouseFloor(levelId, structure) {
+    if (this._floors.some(floor => floor.levelId === levelId)) return false;
+    const outline = this._houseOutline(levelId);
+    if (!outline) return false;
+    const assembly = this._levelAssembly(levelId);
+    const view = structure === 'slab' ? 'foundation' : 'floor';
+    this._floors.push({
+      id: this._newDrawingItemId('floor'),
+      points: outline.points.map(point => this._mergeVertex({ x: point.x, z: point.z }, levelId, view)),
+      levelId,
+      view,
+      structure,
+      thickness: structure === 'slab' ? assembly.slabThicknessIn / 12 : this._levelFloorFt(levelId),
+      assembly: {
+        ...DEFAULT_FLOOR_ASSEMBLY,
+        joistDepthIn: assembly.joistDepthIn,
+        joistSpacingIn: assembly.joistSpacingIn,
+        sheathingIn: assembly.sheathingIn,
+      },
+    });
+    return true;
+  }
+
+  _buildHouseRoof() {
+    if (this._roofs.some(roof => roof.levelId === 7)) return false;
+    const outline = this._houseOutline(3) || this._houseOutline(7);
+    if (!outline) return false;
+    const overhang = this.state.roofOverhang;
+    const points = this._offsetOutline(outline.points.map(pt => ({ x: pt.x, z: pt.z })), overhang);
+    this._roofs.push({
+      id: this._newDrawingItemId('roof'),
+      points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, 7, 'roof')),
+      levelId: 7,
+      sourceLevelId: 3,
+      sourceShapeId: null,
+      edges: points.map(() => 'eave'),
+      overhang,
+      pitch: this.state.roofPitch,
+      fascia: ROOF_FASCIA_IN,
+      layer: ROOF_LAYER,
+    });
+    return true;
+  }
+
+  _buildHouse() {
+    this._ensureDrawingCollections();
+    if (![1, 3, 5].some(levelId => this._houseOutline(levelId))) {
+      this.setState({
+        drawingMessage: 'Nothing to build from — draw the building OUTLINE first; its copies land on every level.',
+        drawingMessageError: true,
+      });
+      return false;
+    }
+    const built = [];
+    if (this._buildHouseWalls(3, 'plan', 'stud_2x6')) built.push('MAIN FL walls');
+    if (this._buildHouseFloor(3, 'floor')) built.push('MAIN FL floor');
+    if (this._buildHouseWalls(5, 'plan', 'stud_2x6')) built.push('2ND FL walls');
+    if (this._buildHouseFloor(5, 'floor')) built.push('2ND FL floor');
+    if (this._buildHouseWalls(1, 'foundation', 'concrete_8')) built.push('FOUNDATION walls');
+    if (this._buildHouseFloor(1, 'slab')) built.push('slab');
+    if (this._buildHouseRoof()) built.push(`${this.state.roofPitch}:12 roof`);
+    if (!built.length) {
+      this.setState({
+        drawingMessage: 'Every level already has its shell — delete a piece (or its walls) and BUILD HOUSE again to redo it.',
+        drawingMessageError: false,
+      });
+      return false;
+    }
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `House built from the outline: ${built.join(', ')}. Everything is ordinary geometry — reshape, retype, or delete any piece.`,
+      drawingMessageError: false,
+    });
+    return true;
+  }
+
   // ── BONEYARD — shelf storage outside the level stack ──────────────────────
   _selectBoneyard() {
     if (this.state.boneyardActive) return;
@@ -8249,6 +8385,9 @@ class Component extends DCLogic {
         ? 'Saves on A-GLAZ · heights from the bottom of the wall'
         : 'Saves on A-DOOR · sill sits at the bottom of the wall',
       shapeToolActive: shaping,
+      outlineToolActive: activeTool === 'outline',
+      onBuildHouse: () => this._buildHouse(),
+      buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on MAIN FL and 2ND FL, 8" concrete walls + slab on FOUNDATION (footings come from the level card), and a ${this.state.roofPitch}:12 all-eave roof grown by the roof overhang. Only levels still empty build, so re-running fills gaps without doubling up.`,
       onShapeCapture: () => this._captureShape(),
       hasActiveShapes: this._activeShapes().length > 0,
       onShapeDelete: () => this._deleteLastShape(),
