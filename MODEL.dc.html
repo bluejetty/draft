@@ -1265,13 +1265,13 @@ class Component extends DCLogic {
         id: outline.id,
         shelfId: outline.shelfId,
         sourceLevelId: outline.sourceLevelId ?? null,
-        points: outline.points.map(p => ({ id: p.pointId, x: p.x, y: p.y || 0, z: p.z })),
+        points: outline.points.map(p => ({ id: p.pointId, x: p.x, y: p.y || 0, z: p.z, bulge: p.bulge || 0 })),
       })),
       outlines: this._outlines.map(outline => ({
         id: outline.id,
         masterId: outline.masterId ?? null,
         levelId: outline.levelId,
-        points: outline.points.map(p => ({ x: p.x, y: p.y || 0, z: p.z, srcId: p.srcId ?? null })),
+        points: outline.points.map(p => ({ x: p.x, y: p.y || 0, z: p.z, srcId: p.srcId ?? null, bulge: p.bulge || 0 })),
         overriddenSrcIds: [...(outline.overriddenSrcIds || [])],
         layer: OUTLINE_LAYER,
       })),
@@ -1852,6 +1852,7 @@ class Component extends DCLogic {
           points: outline.points.map(p => {
             const vtx = new THREE.Vector3(p.x, p.y, p.z);
             vtx.pointId = p.id;
+            vtx.bulge = p.bulge || 0;
             return vtx;
           }),
         };
@@ -1865,6 +1866,7 @@ class Component extends DCLogic {
           points: outline.points.map(p => {
             const vtx = new THREE.Vector3(p.x, levelsById.get(outline.levelId)?.elev ?? p.y, p.z);
             vtx.srcId = masterId != null ? p.srcId : null;
+            vtx.bulge = p.bulge || 0;
             return vtx;
           }),
           overriddenSrcIds: [...outline.overriddenSrcIds],
@@ -2311,6 +2313,7 @@ class Component extends DCLogic {
     // Select-tool state
     this._selectDrag     = null;       // { refs, startX, startY, active }  — node drag
     this._arcDrag        = null;       // { line, startX, startY, active }  — arc bulge drag
+    this._outlineArcDrag = null;       // { outline, index, startX, startY, active } — outline segment arc drag
     this._selectDownInfo = null;       // { worldPt, clientX, clientY, shiftHeld } — pending click
     this._windowSelection = null;      // { start, current, startX, startY, shiftHeld } — window drag
     this._selectedSegs   = new Set(); // line/wall segment objects currently selected
@@ -2362,13 +2365,16 @@ class Component extends DCLogic {
       this._panning2D = false;
       const sd   = this._selectDrag;
       const ad   = this._arcDrag;
+      const oad  = this._outlineArcDrag;
       const info = this._selectDownInfo;
       const windowSelection = this._windowSelection;
       this._selectDrag     = null;
       this._arcDrag        = null;
+      this._outlineArcDrag = null;
       this._selectDownInfo = null;
       this._windowSelection = null;
       if (ad?.active) this._markUnsaved();
+      if (oad?.active) this._afterOutlineArcDrag(oad);
       if (windowSelection) {
         const end = this._getWorldPos(e.clientX, e.clientY);
         if (end) windowSelection.current = end;
@@ -2929,10 +2935,16 @@ class Component extends DCLogic {
       ctx.setLineDash([9, 5]);
       ctx.beginPath();
       outline.points.forEach((point, index) => {
-        const s = toS(point);
-        if (index) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
+        const seg = this._outlineSegment(outline, index);
+        const a = toS(seg.start), b = toS(seg.end);
+        if (!index) ctx.moveTo(a.x, a.y);
+        if (seg.bulge) {
+          const c = toS(this._lineControlPoint(seg));
+          ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
+        } else {
+          ctx.lineTo(b.x, b.y);
+        }
       });
-      ctx.closePath();
       ctx.stroke();
       ctx.setLineDash([]);
       if (showHandles) {
@@ -2951,7 +2963,9 @@ class Component extends DCLogic {
         const s = toS(point);
         if (index) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
       });
-      if (this._snapPt) { const s = toS(this._snapPt); ctx.lineTo(s.x, s.y); }
+      const cursor = this.state.lengthFrozen && this._frozenTool === 'outline' && this._frozenEnd
+        ? this._frozenEnd : this._snapPt;
+      if (cursor) { const s = toS(cursor); ctx.lineTo(s.x, s.y); }
       ctx.stroke();
       ctx.setLineDash([]);
       this._outlinePoints.forEach(point => {
@@ -3204,7 +3218,7 @@ class Component extends DCLogic {
       return `${this._contextToolLabel(tool)} works on a floor level — the BONEYARD only stores geometry. Switch to a level first.`;
     }
     const context = this._draftingContextLabel(viewId);
-    if (tool === 'outline') return `The Outline guide is drawn on any level; the first one becomes the BONEYARD master. Current context: ${context}.`;
+    if (tool === 'outline') return `The Outline guide is drawn on any level; the first one becomes the BONEYARD master. ${keyBindingLabel(this.state.keybindings.freezeLength)} types an exact length; drag a finished edge to arc it. Current context: ${context}.`;
     if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, ELECTRIC, or FOUNDATION. Current context: ${context}.`;
     if (tool === 'wall') return `Walls are drawn in any layer set: FOUNDATION walls save to S-FDN, all others save to PLAN. Current context: ${context}.`;
     if (tool === 'floor') return `Floor outlines are drawn in FLOOR, PLAN, or FOUNDATION — foundation floors are concrete slabs on S-SLAB. Current context: ${context}.`;
@@ -3984,7 +3998,7 @@ class Component extends DCLogic {
       else if (tool === 'node') this._handleNodeArcDown(e);
       else if (tool === 'floor') this._handleFloorClick();
       else if (tool === 'shape') this._handleShapeClick();
-      else if (tool === 'outline') this._handleOutlineClick();
+      else if (tool === 'outline') this._handleOutlineClick(e);
       else if (tool === 'fenestration') this._handleFenestrationClick();
       else if (tool === 'roof') this._handleRoofClick(e);
       else if (tool === 'dimension') this._handleDimensionClick();
@@ -4110,6 +4124,28 @@ class Component extends DCLogic {
           const h = this._canvas?.clientHeight || 600;
           const flat = (this._orthoHalfH * 2) / h * 4; // within ~4px of straight → snap flat
           seg.bulge = Math.abs(bulge) < flat ? 0 : bulge;
+        }
+      }
+    }
+
+    // Outline tool — pulling an outline edge sideways sets that segment's bulge
+    if (this._outlineArcDrag) {
+      const ad = this._outlineArcDrag;
+      if (!ad.active) {
+        const ddx = e.clientX - ad.startX, ddy = e.clientY - ad.startY;
+        if (Math.sqrt(ddx*ddx + ddy*ddy) > 4) ad.active = true;
+      }
+      if (ad.active) {
+        const raw = this._getWorldPos(e.clientX, e.clientY);
+        if (raw) {
+          const seg = this._outlineSegment(ad.outline, ad.index);
+          const mx = (seg.start.x + seg.end.x) / 2, mz = (seg.start.z + seg.end.z) / 2;
+          const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
+          const len = Math.hypot(dx, dz) || 1;
+          const bulge = (raw.x - mx) * (-dz / len) + (raw.z - mz) * (dx / len);
+          const h = this._canvas?.clientHeight || 600;
+          const flat = (this._orthoHalfH * 2) / h * 4; // within ~4px of straight → snap flat
+          ad.outline.points[ad.index].bulge = Math.abs(bulge) < flat ? 0 : bulge;
         }
       }
     }
@@ -4445,8 +4481,23 @@ class Component extends DCLogic {
   // ── OUTLINE — the bright building-footprint guide ─────────────────────────
   // Outline points are isolated (never merged into the shared vertex pool) so
   // the guide can trace wall corners without gluing itself to them.
-  _handleOutlineClick() {
+  _handleOutlineClick(e) {
     const pt = this._snapPt; if (!pt) return;
+
+    // With no outline in progress, a press on an existing outline edge pulls
+    // that segment into an arc instead of starting a new outline; presses on
+    // vertices keep starting a new outline so guides can snap-chain corners.
+    if (!this._outlineDrawing && e) {
+      const raw = this._getWorldPos(e.clientX, e.clientY);
+      if (raw && !this._findVertexHit(raw)) {
+        const hit = this._findOutlineEdgeHit(raw);
+        if (hit) {
+          this._outlineArcDrag = { ...hit, startX: e.clientX, startY: e.clientY, active: false };
+          e.preventDefault();
+          return;
+        }
+      }
+    }
 
     if (!this._outlineDrawing) {
       this._outlineDrawing = true;
@@ -4471,6 +4522,7 @@ class Component extends DCLogic {
 
   _finishOutline() {
     if (!this._outlineDrawing) return;
+    if (this._frozenTool === 'outline') this._cancelFrozenLength();
     const points = this._outlinePoints.map(pt => ({ x: pt.x, z: pt.z }));
     this._outlinePoints = [];
     this._outlineDrawing = false;
@@ -4482,6 +4534,7 @@ class Component extends DCLogic {
 
   _cancelOutline() {
     if (!this._outlineDrawing) return;
+    if (this._frozenTool === 'outline') this._cancelFrozenLength();
     this._outlinePoints = [];
     this._outlineDrawing = false;
     this._outlineStart = null;
@@ -4555,6 +4608,7 @@ class Component extends DCLogic {
       points: master.points.map(point => {
         const vtx = new THREE.Vector3(point.x, level.elev, point.z);
         vtx.srcId = point.pointId;
+        vtx.bulge = point.bulge || 0;
         return vtx;
       }),
       overriddenSrcIds: [],
@@ -4572,7 +4626,7 @@ class Component extends DCLogic {
       outline.points.forEach(point => {
         if (!point.srcId || overridden.has(point.srcId)) return;
         const source = masterPoints.get(point.srcId);
-        if (source) { point.x = source.x; point.z = source.z; }
+        if (source) { point.x = source.x; point.z = source.z; point.bulge = source.bulge || 0; }
       });
     });
   }
@@ -4596,6 +4650,47 @@ class Component extends DCLogic {
       }
     });
     if (touched) this._markUnsaved();
+  }
+
+  // Outline segments are keyed to their starting point: points[index] carries
+  // the bulge of the edge running to the next point (wrapping at the close).
+  _outlineSegment(outline, index) {
+    const points = outline.points;
+    const start = points[index];
+    return { start, end: points[(index + 1) % points.length], bulge: start.bulge || 0 };
+  }
+
+  // Return { outline, index } of the visible outline edge nearest worldPt
+  // (within 12px), or null.
+  _findOutlineEdgeHit(worldPt) {
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    let bestD = (this._orthoHalfH * 2) / h * 12;
+    let best = null;
+    const outlines = this.state.boneyardActive ? this._activeBoneyardOutlines() : this._activeOutlines();
+    outlines.forEach(outline => {
+      if (outline.points.length < 3) return;
+      outline.points.forEach((point, index) => {
+        const { d } = this._distToLineSeg(worldPt, this._outlineSegment(outline, index));
+        if (d < bestD) { bestD = d; best = { outline, index }; }
+      });
+    });
+    return best;
+  }
+
+  // After an arc pull: an arced master segment curves every level copy; an
+  // arced inherited level segment becomes a local override the master no
+  // longer touches.
+  _afterOutlineArcDrag(drag) {
+    const outline = drag.outline;
+    if (outline.shelfId != null) {
+      this._propagateMasterOutline(outline);
+    } else if (outline.masterId != null) {
+      const point = outline.points[drag.index];
+      if (point?.srcId && !outline.overriddenSrcIds.includes(point.srcId)) {
+        outline.overriddenSrcIds.push(point.srcId);
+      }
+    }
+    this._markUnsaved();
   }
 
   _activeOutlines() {
@@ -7199,10 +7294,12 @@ class Component extends DCLogic {
       && this._extendSession && this.state.extendBase;
     const start = tool === 'line' ? this._lineStart
       : tool === 'wall' ? this._wallStart
+      : tool === 'outline' ? this._outlinePoints[this._outlinePoints.length - 1]
       : extendReady ? new THREE.Vector3(this.state.extendBase.x, this.state.extendBase.y, this.state.extendBase.z)
       : null;
     const drawing = tool === 'line' ? this._lineDrawing
       : tool === 'wall' ? this._wallDrawing
+      : tool === 'outline' ? this._outlineDrawing
       : Boolean(extendReady);
     if (!start || !drawing) return;
     const pt = this._snapPt;
@@ -7239,14 +7336,18 @@ class Component extends DCLogic {
       this._frozenStart.y,
       this._frozenStart.z + dirZ * total,
     );
-    const geo = this._frozenTool === 'line' ? this._linePreviewGeo : this._previewGeo;
+    // The outline preview lives on the 2D overlay, which reads _frozenEnd
+    // itself — it has no 3D preview line to move.
+    const geo = this._frozenTool === 'line' ? this._linePreviewGeo
+      : this._frozenTool === 'outline' ? null : this._previewGeo;
     if (geo) {
       const p = geo.attributes.position;
       p.setXYZ(0, this._frozenStart.x, this._frozenStart.y+0.02, this._frozenStart.z);
       p.setXYZ(1, end.x, end.y+0.02, end.z);
       p.needsUpdate = true;
     }
-    const obj = this._frozenTool === 'line' ? this._linePreviewObj : this._previewLine;
+    const obj = this._frozenTool === 'line' ? this._linePreviewObj
+      : this._frozenTool === 'outline' ? null : this._previewLine;
     const hasLength = Math.abs(total) > 0.001;
     if (obj) obj.visible = hasLength;
     // The 2D overlay ignores the cursor while a length is typed, so give it the
@@ -7263,8 +7364,29 @@ class Component extends DCLogic {
 
   _confirmFrozenLength() {
     const frozenTool = this._frozenTool;
-    if (!this.state.lengthFrozen || !this._frozenStart || !['line', 'wall', 'extend'].includes(frozenTool)) {
+    if (!this.state.lengthFrozen || !this._frozenStart || !['line', 'wall', 'extend', 'outline'].includes(frozenTool)) {
       this._cancelFrozenLength();
+      return;
+    }
+    if (frozenTool === 'outline') {
+      if (!this._outlineDrawing) { this._cancelFrozenLength(); return; }
+      const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
+      const total = parsed.ok ? parsed.inches / 12 : 0;
+      if (!parsed.ok || Math.abs(total) <= 0.001) {
+        this.setState({ frozenDimensionError: parsed.ok ? 'Length cannot be zero.' : parsed.error });
+        return;
+      }
+      const end = new THREE.Vector3(
+        this._frozenStart.x + Math.cos(this._frozenAngle) * total,
+        this._frozenStart.y,
+        this._frozenStart.z + Math.sin(this._frozenAngle) * total,
+      );
+      this._outlinePoints.push(end);
+      this._lockAngle = null;
+      this._frozenEnd = null;
+      this._frozenStart = null;
+      this._frozenTool = null;
+      this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true });
       return;
     }
     if (frozenTool === 'extend') {
@@ -7600,6 +7722,7 @@ class Component extends DCLogic {
     if (matches('freezeLength') || freezeLengthWhileShiftLocking) {
       const tool = this.state.activeTool;
       const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._wallDrawing)
+        || (tool === 'outline' && this._outlineDrawing)
         || (tool === 'extend' && this.state.extendPhase === 'destination');
       if (drawing && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
       return;
