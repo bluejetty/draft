@@ -2830,6 +2830,8 @@ class Component extends DCLogic {
         if (Math.sqrt(dx*dx + dy*dy) <= 4) this._handleSelectClick(info.worldPt, info.shiftHeld);
       }
       if (sd?.active) this._markUnsaved();
+      // A grabbed node that never travelled is a click: hand it to the tool.
+      else if (sd?.clickTool) this._dispatchToolClick(sd.clickTool, e);
     });
 
     this._ro = new ResizeObserver(() => this._onResize());
@@ -5205,17 +5207,11 @@ class Component extends DCLogic {
     }
     const tool = this.state.activeTool;
     if (e.button === 0 && !e.altKey) {
-      if (tool === 'wall') this._handleWallClick();
-      else if (tool === 'line') this._handleLineClick();
-      else if (tool === 'node') this._handleNodeArcDown(e);
-      else if (tool === 'floor') this._handleFloorClick();
-      else if (tool === 'shape') this._handleShapeClick();
-      else if (tool === 'outline') this._handleOutlineClick(e);
+      if (this._grabNodeForTool(e, tool)) { e.preventDefault(); return; }
+      if (this._dispatchToolClick(tool, e)) return;
+      if (tool === 'node') this._handleNodeArcDown(e);
       else if (tool === 'fenestration') this._handleFenestrationClick();
       else if (tool === 'roof') this._handleRoofClick(e);
-      else if (tool === 'dimension') this._handleDimensionClick();
-      else if (tool === 'column') this._handleColumnClick();
-      else if (tool === 'beam') this._handleBeamClick();
       else if (tool === 'stair') this._handleStairClick();
       else if (tool === 'annotation') this._handleNoteClick();
       else if (tool === 'cut') this._handleCutClick();
@@ -5296,6 +5292,49 @@ class Component extends DCLogic {
         this._pan2DPrevX = e.clientX; this._pan2DPrevY = e.clientY;
       }
     }
+  }
+
+  // ─── Universal node grab ──────────────────────────────────────────────────────
+  // Every drawing tool shares one gesture on an existing node: press-and-hold
+  // then move drags the node (the same refs Select and Node/Arc drag); a quick
+  // click falls through to the tool's normal action, so a new line can still
+  // chain off a corner. Mid-chain presses keep placing points.
+  _toolIdleForNodeGrab(tool) {
+    switch (tool) {
+      case 'wall': return !this._wallDrawing;
+      case 'line': return !this._lineDrawing;
+      case 'floor': return !this._floorDrawing;
+      case 'shape': return !this._shapeDrawing;
+      case 'outline': return !this._outlineDrawing;
+      case 'dimension': return !this._dimensionStart;
+      case 'beam': return !this._beamStart;
+      case 'column': return true;
+      default: return false;
+    }
+  }
+
+  _grabNodeForTool(e, tool) {
+    if (!this._toolIdleForNodeGrab(tool)) return false;
+    const raw = this._getWorldPos(e.clientX, e.clientY);
+    if (!raw) return false;
+    const refs = this._findVertexHit(raw);
+    if (!refs) return false;
+    if (!this._canReshapeItems(this._itemsFromVertexRefs(refs))) return false;
+    this._selectDrag = { refs, startX: e.clientX, startY: e.clientY, active: false, clickTool: tool };
+    return true;
+  }
+
+  _dispatchToolClick(tool, e) {
+    if (tool === 'wall') this._handleWallClick();
+    else if (tool === 'line') this._handleLineClick();
+    else if (tool === 'floor') this._handleFloorClick();
+    else if (tool === 'shape') this._handleShapeClick();
+    else if (tool === 'outline') this._handleOutlineClick(e);
+    else if (tool === 'dimension') this._handleDimensionClick();
+    else if (tool === 'column') this._handleColumnClick();
+    else if (tool === 'beam') this._handleBeamClick();
+    else return false;
+    return true;
   }
 
   // A window opened by press-and-drag in click mode follows the Shift key live:
