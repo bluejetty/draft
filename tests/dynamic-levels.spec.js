@@ -106,7 +106,7 @@ test('the insulation wall type is drawable on the foundation PLAN', async ({ pag
   await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'PLAN' }).click();
 
   await h.selectTool(page, 'Wall');
-  await page.getByRole('button', { name: 'Insul Wall  (6")' }).click();
+  await page.getByRole('button', { name: 'Insul Wall  (6½")' }).click();
   await h.clickWorld(page, -6, 0);
   await h.clickWorld(page, 6, 0);
   await page.keyboard.press('Enter');

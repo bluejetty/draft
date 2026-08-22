@@ -887,9 +887,9 @@ function parseAssemblyInches(value) {
 const WALL_TYPES = [
   { id:'stud_2x4',    label:'2×4 Stud  (3½")',   totalIn:3.5,   layers:[{in:3.5,   fill:'stud'}] },
   { id:'stud_2x6',    label:'2×6 Stud  (5½")',   totalIn:5.5,   layers:[{in:5.5,   fill:'stud'}] },
-  // Interior insulation wall — insulation faced with ½" drywall, lining the
-  // concrete on the foundation PLAN.
-  { id:'insulation_6', label:'Insul Wall  (6")',    totalIn:6,     layers:[{in:5.5,   fill:'insulation'},{in:0.5, fill:'stud'}] },
+  // Basement wall insul at concrete — ½" air space off the conc wall, 2×6 SPF
+  // w/ R22 batt, ½" drywall inside; lines the concrete on the foundation PLAN.
+  { id:'insulation_6', label:'Insul Wall  (6½")',   totalIn:6.5,   layers:[{in:0.5,   fill:'insulation'},{in:5.5, fill:'insulation'},{in:0.5, fill:'stud'}] },
   { id:'concrete_8',  label:'8" Concrete',         totalIn:8,     layers:[{in:8,     fill:'concrete'}] },
   { id:'icf',         label:'ICF  (11¼")',         totalIn:11.25, layers:[{in:2.625,fill:'insulation'},{in:6,fill:'concrete'},{in:2.625,fill:'insulation'}] },
   { id:'icf_13',      label:'ICF  (13¼")',         totalIn:13.25, layers:[{in:2.625,fill:'insulation'},{in:8,fill:'concrete'},{in:2.625,fill:'insulation'}] },
