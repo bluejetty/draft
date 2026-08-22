@@ -185,14 +185,14 @@ test('outlines draw in neon green on the overlay and survive a reload', async ({
   expect(saved.outlines).toHaveLength(saved.levels.length);
 });
 
-test('drawing tools are parked on the BONEYARD — only Outline works there', async ({ page }) => {
+test('every drawing tool is available on the BONEYARD; Outline still makes a master', async ({ page }) => {
   await h.openModel(page);
   await page.locator('.level-name', { hasText: 'BONEYARD' }).click();
   await page.waitForTimeout(300);
 
-  const wall = page.getByRole('button', { name: /\bWall\b/i }).first();
-  await expect(wall).toBeDisabled();
-  await expect(wall).toHaveAttribute('title', /works on a floor level/);
+  for (const name of ['Wall', 'Line', 'Floor', 'Shape', 'Roof', 'Dim']) {
+    await expect(page.getByRole('button', { name: new RegExp(`\\b${name}`, 'i') }).first()).toBeEnabled();
+  }
 
   // Outline drawn on the BONEYARD becomes a shelf master directly.
   await drawOutlineRect(page);
