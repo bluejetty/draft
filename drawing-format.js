@@ -275,6 +275,43 @@ if (!window.DraftDrawingFormat) {
     }).filter(Boolean);
   };
 
+  // A MODEL annotation: a leader anchored on the object of interest with the
+  // note text at its other end. Style rides on each note — leader end, an
+  // optional fill with its own opacity, OUTLINE / NO OUTLINE, and a CORNER
+  // BULLNOSE radius — so later styles extend without a format bump. Notes in
+  // the STAIR workspace ('stair' view) store pane-local coordinates: x is
+  // feet of run and z is feet of drop (section) or feet across (plan).
+  const notes = (rawNotes, levelIds) => {
+    const seen = new Set();
+    return (Array.isArray(rawNotes) ? rawNotes : []).map(note => {
+      const id = Number(note?.id);
+      const anchor = point(note?.anchor);
+      const text = point(note?.text);
+      const noteLevelId = levelId(note?.levelId, levelIds);
+      const view = oneOf(note?.view, ['plan', 'floor', 'e-power', 'foundation', 'stair'], null);
+      const body = String(note?.body ?? '').trim();
+      const end = oneOf(note?.end, ['arrow', 'line', 'none'], 'arrow');
+      if (!Number.isInteger(id) || seen.has(id) || !anchor || !text || noteLevelId == null || !view || !body) return null;
+      if (end !== 'none' && Math.hypot(text.x - anchor.x, text.z - anchor.z) < 0.001) return null;
+      seen.add(id);
+      return {
+        id,
+        anchor,
+        text,
+        levelId: noteLevelId,
+        view,
+        pane: view === 'stair' ? oneOf(note?.pane, ['section', 'plan'], 'section') : null,
+        body,
+        end,
+        fill: note?.fill === true,
+        fillOpacity: Math.min(1, Math.max(0, number(note?.fillOpacity, 0.85))),
+        outline: note?.outline === true,
+        bullnose: Math.min(30, Math.max(0, number(note?.bullnose, 0))),
+        layer: 'A-ANNO-NOTE',
+      };
+    }).filter(Boolean);
+  };
+
   // BONEYARD shelves are storage slots outside the level stack. Every drawing
   // has at least one shelf; drawings saved before the BONEYARD existed load
   // with the single default shelf.
@@ -361,6 +398,7 @@ if (!window.DraftDrawingFormat) {
     columns,
     beams,
     stairs,
+    notes,
     fenestrations,
     surfaceOpenings,
     shapes,

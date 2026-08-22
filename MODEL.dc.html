@@ -506,6 +506,42 @@
       </div>
     </sc-if>
 
+    <!-- ANNOTATION PROPERTIES (shown when Annotation tool is active) -->
+    <sc-if value="{{ noteToolActive }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Annotation</div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Leader End</div>
+        <div style="display:flex; gap:3px; margin-bottom:6px;">
+          <sc-for list="{{ noteEndBtns }}" as="ne" hint-placeholder-count="2">
+            <button onClick="{{ ne.onSelect }}" title="{{ ne.title }}" style="flex:1; border:1px solid {{ ne.border }}; background:{{ ne.bg }}; color:{{ ne.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ ne.label }}</button>
+          </sc-for>
+        </div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Text Box</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-bottom:6px;">
+          <sc-for list="{{ noteBoxBtns }}" as="nb" hint-placeholder-count="4">
+            <button onClick="{{ nb.onSelect }}" title="{{ nb.title }}" style="border:1px solid {{ nb.border }}; background:{{ nb.bg }}; color:{{ nb.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ nb.label }}</button>
+          </sc-for>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+          <div>
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Fill Opacity %</div>
+            <input data-note-fill-opacity type="text" value="{{ noteFillOpacityInput }}" onInput="{{ onNoteFillOpacityInput }}" onBlur="{{ onNoteFillOpacityCommit }}" onKeyDown="{{ onNoteStyleKey }}" placeholder="85" aria-label="Note fill opacity" style="width:100%; box-sizing:border-box; border:1px solid {{ noteStyleBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+          </div>
+          <div>
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Corner Bullnose</div>
+            <input data-note-bullnose type="text" value="{{ noteBullnoseInput }}" onInput="{{ onNoteBullnoseInput }}" onBlur="{{ onNoteBullnoseCommit }}" onKeyDown="{{ onNoteStyleKey }}" placeholder="0" aria-label="Note corner bullnose radius" style="width:100%; box-sizing:border-box; border:1px solid {{ noteStyleBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+          </div>
+        </div>
+        <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ noteStyleNote }}</div>
+        <sc-if value="{{ hasNoteStyleError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ noteStyleError }}</div>
+        </sc-if>
+        <sc-if value="{{ hasActiveNotes }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onNoteDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST NOTE</button>
+        </sc-if>
+      </div>
+    </sc-if>
+
     <!-- ROOF PROPERTIES (shown when Roof tool is active) -->
     <sc-if value="{{ roofToolActive }}" hint-placeholder-val="{{ false }}">
       <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
@@ -560,6 +596,15 @@
     <div data-model-gridsnap style="position:absolute; left:{{ gridSnapPtX }}px; top:{{ gridSnapPtY }}px; width:14px; height:14px; border-radius:50%; border:2px solid #557a46; transform:translate(-50%,-50%); pointer-events:none; display:{{ gridSnapPtDisplay }};"></div>
     <!-- Polar-tracking origin (orange glow on the acquired node) -->
     <div data-model-polar style="position:absolute; left:{{ polarOriginX }}px; top:{{ polarOriginY }}px; width:16px; height:16px; border-radius:50%; border:2px solid #e07a20; box-shadow:0 0 8px rgba(224,122,32,0.85); transform:translate(-50%,-50%); pointer-events:none; display:{{ polarOriginDisplay }};"></div>
+
+    <!-- Note text entry — opens where the second annotation click landed -->
+    <sc-if value="{{ noteEditorOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; left:{{ noteEditorX }}px; top:{{ noteEditorY }}px; transform:translate(0,-50%); display:flex; align-items:center; gap:4px; background:#fff; border:1px solid rgba(29,31,32,0.3); padding:4px 6px; box-shadow:0 2px 8px rgba(29,31,32,0.18); cursor:default; z-index:3;">
+        <input data-note-editor-input type="text" value="{{ noteDraft }}" onInput="{{ onNoteDraftInput }}" onKeyDown="{{ onNoteDraftKey }}" placeholder="NOTE TEXT" aria-label="Annotation text" style="width:180px; border:1px solid rgba(29,31,32,0.2); padding:4px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20; outline:none; cursor:text;" />
+        <button onClick="{{ onNoteCommit }}" style="border:none; background:#5980a6; color:#fff; padding:4px 10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">OK</button>
+        <button onClick="{{ onNoteCancel }}" style="border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.45); padding:4px 8px; font-size:12px; cursor:pointer;">✕</button>
+      </div>
+    </sc-if>
 
     <!-- Direction-choice overlay (shown while choosing cut direction) -->
     <sc-if value="{{ choosingDir }}" hint-placeholder-val="{{ false }}">
@@ -1051,6 +1096,20 @@ const STAIR_RAIL_OPTIONS = [
   { id: 'both',  label: '2 BARS',    note: 'A basic handrail bar on both sides.' },
   { id: 'none',  label: 'OFF',       note: 'No handrail bars drawn with the stair.' },
 ];
+// A MODEL annotation is a leader: the first click anchors it on the object
+// of interest, the second places the note text, typed in place. Default is
+// transparent text straight over the drawing; a paper fill (with its own
+// opacity), OUTLINE / NO OUTLINE, and a CORNER BULLNOSE radius are per-note
+// options. Two leader ends for now — ARROW and plain LINE — kept on a list
+// so more heads slot in later. Notes work in every plan context and in the
+// locked STAIR workspace, whose note room exists for exactly this.
+const NOTE_LAYER = 'A-ANNO-NOTE';
+const NOTE_COLOR = '#1d1f20';
+const NOTE_END_OPTIONS = [
+  { id: 'arrow', label: 'ARROW END', note: 'The leader ends in a filled arrowhead at the object of interest.' },
+  { id: 'line',  label: 'LINE END',  note: 'The leader ends as a plain line at the object of interest.' },
+  { id: 'none',  label: 'NO POINTER', note: 'A standalone note box with no leader — one click places the text.' },
+];
 // Shapes are closed construction outlines with no roof / floor semantics of
 // their own; the ROOF and FLOOR commands build their geometry from a shape.
 const SHAPE_LAYER = 'SHAPE';
@@ -1080,18 +1139,18 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
   1: 'FOUNDATION',
 });
 const FLOOR_LEVEL_VIEWS = Object.freeze([
-  Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
-  Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
-  Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION'] }),
-  Object.freeze({ id:'stair', label:'STAIR', contents:['A-STR', 'A-FL-OPNG', 'STAIR SECTION'] }),
+  Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
+  Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSIONS', 'ROOM IDS / AREA', 'A-ANNO-NOTE'] }),
+  Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION', 'A-ANNO-NOTE'] }),
+  Object.freeze({ id:'stair', label:'STAIR', contents:['A-STR', 'A-FL-OPNG', 'STAIR SECTION', 'A-ANNO-NOTE'] }),
 ]);
 const LEVEL_LAYER_VIEWS = Object.freeze({
   5: FLOOR_LEVEL_VIEWS,
   3: FLOOR_LEVEL_VIEWS,
   1: Object.freeze([
-    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
-    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ'] }),
-    Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL/FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION'] }),
+    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
+    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-ANNO-NOTE'] }),
+    Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL/FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION', 'A-ANNO-NOTE'] }),
   ]),
 });
 // SITE and ROOF are whole-level drafting contexts; every other positive level
@@ -1205,6 +1264,16 @@ class Component extends DCLogic {
     stairWidthInput: formatArchitecturalInches(DEFAULT_STAIR_WIDTH_FT * 12),
     stairWidthError: '',
     stairPane: 'split',       // STAIR workspace: 'split' | 'section' | 'plan'
+    noteEnd: 'arrow',         // leader end on the next note: 'arrow' | 'line'
+    noteFill: false,          // paper fill behind the note text (transparent default)
+    noteFillOpacity: 0.85,    // fill opacity 0–1 when the fill is on
+    noteFillOpacityInput: '85',
+    noteOutline: false,       // box outline around the note text
+    noteBullnose: 0,          // CORNER BULLNOSE radius in px (0 = square corners)
+    noteBullnoseInput: '0',
+    noteEditor: null,         // { x, y } canvas px where the note text entry is open
+    noteDraft: '',            // note text being typed
+    noteStyleError: '',       // fill-opacity / bullnose input validation message
     fenestrationType: 'door', // 'door' | 'window' — picks the CAD layer and defaults
     fenestrationWidths: { door: DEFAULT_DOOR_WIDTH_FT, window: DEFAULT_WINDOW_WIDTH_FT },
     fenestrationWidthInput: formatArchitecturalInches(DEFAULT_DOOR_WIDTH_FT * 12),
@@ -1330,6 +1399,7 @@ class Component extends DCLogic {
     if (!Array.isArray(this._columns)) this._columns = [];
     if (!Array.isArray(this._beams)) this._beams = [];
     if (!Array.isArray(this._stairs)) this._stairs = [];
+    if (!Array.isArray(this._notes)) this._notes = [];
     if (!Array.isArray(this._vertices)) this._vertices = [];
     if (!Array.isArray(this._groups)) this._groups = [];
   }
@@ -1468,6 +1538,22 @@ class Component extends DCLogic {
         };
       }),
       nextStairId: this._nextStairId || 1,
+      notes: this._notes.map(note => ({
+        id: note.id,
+        anchor: point(note.anchor),
+        text: point(note.text),
+        levelId: note.levelId,
+        view: note.view,
+        pane: note.pane,
+        body: note.body,
+        end: note.end,
+        fill: note.fill === true,
+        fillOpacity: note.fillOpacity,
+        outline: note.outline === true,
+        bullnose: note.bullnose,
+        layer: NOTE_LAYER,
+      })),
+      nextNoteId: this._nextNoteId || 1,
       boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
       activeBoneyardShelfId: this.state.activeBoneyardShelfId,
       nextBoneyardShelfId: this.state.nextBoneyardShelfId,
@@ -2109,6 +2195,29 @@ class Component extends DCLogic {
         Number.isInteger(saved.nextStairId) ? saved.nextStairId : 1,
       );
       this._stairStart = null;
+      const storedNotes = Array.isArray(saved.notes)
+        ? saved.notes.map(note => ({ ...note, levelId: migrateLevelId(note?.levelId) }))
+        : saved.notes;
+      const notes = format.notes(storedNotes, ownerLevelIds);
+      skipped += (Array.isArray(saved.notes) ? saved.notes.length : 0) - notes.length;
+      // STAIR-view notes keep pane-local coordinates; plan-view notes live in
+      // world space at their level's elevation like every other plan entity.
+      this._notes = notes.map(note => {
+        if (note.view === 'stair') return note;
+        const elevation = levelsById.get(note.levelId)?.elev ?? 0;
+        return {
+          ...note,
+          anchor: new THREE.Vector3(note.anchor.x, elevation, note.anchor.z),
+          text: new THREE.Vector3(note.text.x, elevation, note.text.z),
+        };
+      });
+      this._nextNoteId = Math.max(
+        1,
+        ...notes.map(note => note.id + 1),
+        Number.isInteger(saved.nextNoteId) ? saved.nextNoteId : 1,
+      );
+      this._noteAnchor = null;
+      this._notePending = null;
       // Outlines restore as isolated points — they never join the shared
       // vertex pool, so a guide can sit on a wall corner without gluing to it.
       // Masters restore first so level copies can verify their masterId.
@@ -2538,6 +2647,7 @@ class Component extends DCLogic {
     this._columns    = []; // telepost + pad supports, centred on beam lines
     this._beams      = []; // one span between two supports, flush or dropped
     this._stairs     = []; // straight stair runs placed from the top nosing
+    this._notes      = []; // leader annotations — anchor, text point, style
      this._groups     = [];
      this._nextGroupId = 1;
      this._nextDrawingItemId = 1;
@@ -2548,6 +2658,10 @@ class Component extends DCLogic {
     this._beamStart = null;
     this._nextStairId = 1;
     this._stairStart = null;
+    this._nextNoteId = 1;
+    this._noteAnchor = null;   // first click — { view, pane, pt } leader anchor
+    this._notePending = null;  // anchor + text point awaiting the typed note
+    this._noteStairHover = null; // canvas px cursor inside the STAIR workspace
     this._pendingChain  = []; // in-progress chain (not yet committed)
     this._chainStart    = null; // first point of current chain
     this._chainSegments = 0;  // segments placed in this chain, committed or not
@@ -2988,6 +3102,19 @@ class Component extends DCLogic {
     const dimensionPreviewEnd = this._previewEndPoint();
     if (this._dimensionStart && dimensionPreviewEnd) {
       this._drawDimension2D(ctx, toS, { start:this._dimensionStart, end:dimensionPreviewEnd }, { preview:true });
+    }
+
+    // Leader notes — committed, then the two in-progress stages: anchor set
+    // (leader follows the cursor) and text point set (text being typed).
+    if (activeVisible) this._activeNotes().filter(note => note.view !== 'stair')
+      .forEach(note => this._drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note));
+    const notePreviewEnd = this._previewEndPoint();
+    if (this._noteAnchor && this._noteAnchor.view !== 'stair' && notePreviewEnd) {
+      this._drawNoteScreen2D(ctx, toS(this._noteAnchor.pt), toS(notePreviewEnd), this._notePreviewStyle('…'), { preview:true });
+    }
+    if (this._notePending && this._notePending.view !== 'stair' && this.state.noteEditor) {
+      this._drawNoteScreen2D(ctx, toS(this._notePending.anchor), toS(this._notePending.text),
+        this._notePreviewStyle(this.state.noteDraft.trim() || '…'), { preview:true });
     }
 
     // Columns, beams, and beam-pocket notations of the active context.
@@ -3545,23 +3672,17 @@ class Component extends DCLogic {
     }
   }
 
-  _drawStairWorkspace2D(ctx, w, h) {
-    ctx.fillStyle = '#fafafa';
-    ctx.fillRect(0, 0, w, h);
+  // The shared frame both panes draw in: one locked horizontal scale so the
+  // whole run plus note room on either side always fits, the section's full
+  // rise fits its pane, and every nosing lines up vertically between panes.
+  // Exposes the forward and inverse transforms so pane-local feet round-trip
+  // to canvas pixels — annotations in this workspace store pane-local coords.
+  _stairWorkspaceFrame(w, h) {
     const stair = this._workspaceStair();
-    if (!stair) {
-      const level = this._activeLevel();
-      ctx.fillStyle = 'rgba(29,31,32,0.55)';
-      ctx.font = "600 13px 'Barlow Condensed', system-ui, sans-serif";
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(`No stair on ${level?.name || 'this level'} yet — place one with the STAIR tool in PLAN.`, w / 2, h / 2);
-      return;
-    }
+    if (!stair) return null;
     const layout = this._stairCurrentLayout(stair);
     const descent = this._stairDescent(stair.levelId);
     const rects = this._stairPaneRects(w, h);
-    // One locked horizontal scale for both panes: the whole run plus note room
-    // on either side always fits, and the section's full rise fits its pane.
     const noteFt = Math.max(4, layout.runFt * 0.45);
     const uMin = -noteFt, uMax = layout.runFt + noteFt;
     const spanFt = uMax - uMin;
@@ -3570,9 +3691,48 @@ class Component extends DCLogic {
     if (rects.section) pxPerFt = Math.min(pxPerFt, (rects.section.h - 46) / (layout.riseFt + 4));
     if (rects.plan) pxPerFt = Math.min(pxPerFt, (rects.plan.h - 46) / (stair.widthFt + 6));
     pxPerFt = Math.max(2, pxPerFt);
-    const uToX = u => 12 + ((paneW - 24) - spanFt * pxPerFt) / 2 + (u - uMin) * pxPerFt;
-    if (rects.section) this._drawStairSectionPane(ctx, rects.section, stair, layout, descent, uToX, pxPerFt);
-    if (rects.plan) this._drawStairPlanPane(ctx, rects.plan, stair, layout, uToX, pxPerFt);
+    const xAtU0 = 12 + ((paneW - 24) - spanFt * pxPerFt) / 2 - uMin * pxPerFt;
+    const uToX = u => xAtU0 + u * pxPerFt;
+    const uOfX = x => (x - xAtU0) / pxPerFt;
+    // Section vertical: elevation in feet, 0 at the upper floor surface,
+    // negative going down. Plan vertical: feet across the run, 0 on the
+    // stair centreline, positive to the right walking down.
+    const sectionY0 = rects.section
+      ? rects.section.y + 24 + Math.max(0, (rects.section.h - 46 - (layout.riseFt + 4) * pxPerFt) / 2) + 2 * pxPerFt
+      : null;
+    const sectionYOf = elevFt => sectionY0 - elevFt * pxPerFt;
+    const sectionElevOf = y => (sectionY0 - y) / pxPerFt;
+    const planYMid = rects.plan ? rects.plan.y + 24 + (rects.plan.h - 34) / 2 : null;
+    const planYOf = v => planYMid + v * pxPerFt;
+    const planVOf = y => (y - planYMid) / pxPerFt;
+    const paneAt = (x, y) => {
+      const inRect = r => r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+      return inRect(rects.section) ? 'section' : inRect(rects.plan) ? 'plan' : null;
+    };
+    const localAt = (x, y) => {
+      const pane = paneAt(x, y);
+      if (!pane) return null;
+      return { pane, x: uOfX(x), z: pane === 'section' ? sectionElevOf(y) : planVOf(y) };
+    };
+    const paneScreen = (pane, pt) => ({ x: uToX(pt.x), y: pane === 'section' ? sectionYOf(pt.z) : planYOf(pt.z) });
+    return { stair, layout, descent, rects, pxPerFt, uToX, uOfX, sectionYOf, planYOf, paneAt, localAt, paneScreen };
+  }
+
+  _drawStairWorkspace2D(ctx, w, h) {
+    ctx.fillStyle = '#fafafa';
+    ctx.fillRect(0, 0, w, h);
+    const frame = this._stairWorkspaceFrame(w, h);
+    if (!frame) {
+      const level = this._activeLevel();
+      ctx.fillStyle = 'rgba(29,31,32,0.55)';
+      ctx.font = "600 13px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(`No stair on ${level?.name || 'this level'} yet — place one with the STAIR tool in PLAN.`, w / 2, h / 2);
+      return;
+    }
+    const { stair, layout, descent, rects, pxPerFt, uToX } = frame;
+    if (rects.section) this._drawStairSectionPane(ctx, rects.section, stair, layout, descent, uToX, pxPerFt, frame.sectionYOf);
+    if (rects.plan) this._drawStairPlanPane(ctx, rects.plan, stair, layout, uToX, pxPerFt, frame.planYOf);
     if (rects.section && rects.plan) {
       ctx.strokeStyle = 'rgba(29,31,32,0.25)';
       ctx.lineWidth = 1;
@@ -3580,13 +3740,14 @@ class Component extends DCLogic {
       ctx.moveTo(0, rects.plan.y - 3); ctx.lineTo(w, rects.plan.y - 3);
       ctx.stroke();
     }
+    this._drawStairNotes2D(ctx, frame);
   }
 
   // Carpenter / site-built stair section: cut stringer, full 2x12 treads,
   // 3/4" ply risers standing ON TOP of the treads with the face 11" back from
   // the nosing. The floor opening edge and the landing surface — the two
   // points that matter — are emphasised; the floors read as faded bands.
-  _drawStairSectionPane(ctx, rect, stair, layout, descent, uToX, pxPerFt) {
+  _drawStairSectionPane(ctx, rect, stair, layout, descent, uToX, pxPerFt, yOf) {
     ctx.save();
     ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
     this._stairPaneHeader(ctx, rect,
@@ -3598,9 +3759,6 @@ class Component extends DCLogic {
     const riserThk = STAIR_RISER_THICK_IN / 12;
     const drop = STAIR_STRINGER_DROP_IN / 12;
     const faceU = j => j * runStep - STAIR_RISER_FACE_IN / 12; // riser j face, 11" back from the nosing of the tread it stands on
-    // Upper floor surface sits 2ft below the pane top framing margin.
-    const y0 = rect.y + 24 + Math.max(0, (rect.h - 46 - (layout.riseFt + 4) * pxPerFt) / 2) + 2 * pxPerFt;
-    const yOf = elevFt => y0 - elevFt * pxPerFt;
     const fadeFill = 'rgba(89,128,166,0.14)';
     const fadeLine = 'rgba(89,128,166,0.55)';
     const noteFont = "600 9px 'Barlow Condensed', system-ui, sans-serif";
@@ -3685,13 +3843,12 @@ class Component extends DCLogic {
   // Down-view plan of the stair in its own frame: the run goes left to right
   // so the nosings line up with the section above. Level walls and floors
   // (with their openings) read as faded, locked reference linework.
-  _drawStairPlanPane(ctx, rect, stair, layout, uToX, pxPerFt) {
+  _drawStairPlanPane(ctx, rect, stair, layout, uToX, pxPerFt, vToY) {
     ctx.save();
     ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
     this._stairPaneHeader(ctx, rect, `STAIR PLAN — DN ${layout.risers}R TO THE RIGHT · ${this._ftIn(stair.widthFt)} WIDE`);
     const runStep = STAIR_TREAD_RUN_IN / 12;
-    const vMid = rect.y + 24 + (rect.h - 34) / 2;
-    const vToY = v => vMid + v * pxPerFt;
+    const vMid = vToY(0);
     // Stair-local frame: u downhill along the run, v to the right walking down.
     const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
     const len = Math.hypot(dx, dz) || 1;
@@ -3831,6 +3988,102 @@ class Component extends DCLogic {
     ctx.textBaseline = 'middle';
     ctx.fillText(label, midX, midY);
     ctx.restore();
+  }
+
+  // Draws one note in screen space: the leader running from the text block to
+  // the anchor on the object of interest, the chosen leader end, and the text
+  // — transparent by default, with the optional fill (its own opacity),
+  // OUTLINE / NO OUTLINE, and CORNER BULLNOSE corners. The plan overlay and
+  // the STAIR workspace both feed their own screen points in.
+  _drawNoteScreen2D(ctx, anchor, text, note, options = {}) {
+    const preview = options.preview === true;
+    const alpha = preview ? 0.6 : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = NOTE_COLOR;
+    ctx.fillStyle = NOTE_COLOR;
+    ctx.lineWidth = 1;
+    ctx.font = "600 12px 'Barlow Condensed', system-ui, sans-serif";
+    const lines = String(note.body || '').split('\n');
+    const padX = 6, lineH = 14;
+    const boxW = Math.max(24, ...lines.map(line => ctx.measureText(line).width)) + padX * 2;
+    const boxH = lines.length * lineH + 8;
+    // The text block grows away from the anchor; the leader meets its near edge.
+    const left = text.x >= anchor.x ? text.x : text.x - boxW;
+    const top = text.y - boxH / 2;
+    const leaderX = text.x >= anchor.x ? left : left + boxW;
+    if (note.end !== 'none') {
+      if (preview) ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(leaderX, text.y);
+      ctx.lineTo(anchor.x, anchor.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (note.end === 'arrow') {
+      const angle = Math.atan2(anchor.y - text.y, anchor.x - leaderX);
+      ctx.beginPath();
+      ctx.moveTo(anchor.x, anchor.y);
+      ctx.lineTo(anchor.x - 9 * Math.cos(angle - 0.3), anchor.y - 9 * Math.sin(angle - 0.3));
+      ctx.lineTo(anchor.x - 9 * Math.cos(angle + 0.3), anchor.y - 9 * Math.sin(angle + 0.3));
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (note.fill || note.outline) {
+      const radius = Math.min(Math.max(0, Number(note.bullnose) || 0), boxH / 2, boxW / 2);
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') ctx.roundRect(left, top, boxW, boxH, radius);
+      else ctx.rect(left, top, boxW, boxH);
+      if (note.fill) {
+        ctx.save();
+        ctx.globalAlpha = alpha * Math.min(1, Math.max(0, note.fillOpacity ?? 0.85));
+        ctx.fillStyle = '#fafafa';
+        ctx.fill();
+        ctx.restore();
+      }
+      if (note.outline) ctx.stroke();
+    }
+    ctx.fillStyle = NOTE_COLOR;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    lines.forEach((line, i) => ctx.fillText(line, left + padX, top + 4 + lineH * i + lineH / 2));
+    ctx.restore();
+  }
+
+  // STAIR-workspace notes and in-progress previews, drawn over the pane
+  // framing from their pane-local coordinates.
+  _drawStairNotes2D(ctx, frame) {
+    this._notes
+      .filter(note => note.view === 'stair' && note.levelId === frame.stair.levelId)
+      .forEach(note => {
+        const pane = note.pane === 'plan' ? 'plan' : 'section';
+        if (!frame.rects[pane]) return;
+        this._drawNoteScreen2D(ctx, frame.paneScreen(pane, note.anchor), frame.paneScreen(pane, note.text), note);
+      });
+    const anchor = this._noteAnchor;
+    if (anchor && anchor.view === 'stair' && frame.rects[anchor.pane]) {
+      const a = frame.paneScreen(anchor.pane, anchor.pt);
+      const hover = this._noteStairHover;
+      if (hover && frame.paneAt(hover.x, hover.y) === anchor.pane
+        && Math.hypot(hover.x - a.x, hover.y - a.y) > 1) {
+        this._drawNoteScreen2D(ctx, a, hover, this._notePreviewStyle('…'), { preview: true });
+      } else {
+        ctx.save();
+        ctx.strokeStyle = NOTE_COLOR;
+        ctx.beginPath(); ctx.arc(a.x, a.y, 4, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+    }
+    const pending = this._notePending;
+    if (pending && pending.view === 'stair' && frame.rects[pending.pane] && this.state.noteEditor) {
+      this._drawNoteScreen2D(
+        ctx,
+        frame.paneScreen(pending.pane, pending.anchor),
+        frame.paneScreen(pending.pane, pending.text),
+        this._notePreviewStyle(this.state.noteDraft.trim() || '…'),
+        { preview: true },
+      );
+    }
   }
 
   _drawArrow2D(ctx, toS, from, to) {
@@ -3974,8 +4227,11 @@ class Component extends DCLogic {
     // A BONEYARD shelf is one whole-level drafting context, like ROOF or SITE:
     // every drawing tool works there and stores to the active shelf.
     if (boneyardActive) viewId = null;
+    // Notes work everywhere — every plan context and the STAIR workspace,
+    // whose note room exists exactly for leader annotations.
+    if (tool === 'annotation') return true;
     // The STAIR workspace is a locked review view: the stair is one semantic
-    // unit on A-STR, framed with its auto section — nothing draws here yet.
+    // unit on A-STR, framed with its auto section — nothing else draws here.
     if (viewId === 'stair') return false;
     // The Outline guide works on any level; the first one completed becomes
     // the master on the active BONEYARD shelf.
@@ -4009,7 +4265,7 @@ class Component extends DCLogic {
   // only decides where the geometry saves, never what the command is called.
   _contextToolLabel(tool, shortcut = '') {
     const suffix = shortcut ? `  [${shortcut}]` : '';
-    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', shape:'SHAPE', outline:'OUTLINE', roof:'ROOF', dimension:'DIMENSION', column:'COLUMN', beam:'BEAM', stair:'STAIR' };
+    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', shape:'SHAPE', outline:'OUTLINE', roof:'ROOF', dimension:'DIMENSION', column:'COLUMN', beam:'BEAM', stair:'STAIR', annotation:'ANNOTATION' };
     return `${names[tool] || tool.toUpperCase()}${suffix}`;
   }
 
@@ -4056,6 +4312,7 @@ class Component extends DCLogic {
     if (tool === 'column') return COLUMN_LAYER;
     if (tool === 'beam') return BEAM_LAYER;
     if (tool === 'stair') return STAIR_LAYER;
+    if (tool === 'annotation') return NOTE_LAYER;
     return this._draftingContextLabel(viewId);
   }
 
@@ -4072,6 +4329,7 @@ class Component extends DCLogic {
     if (tool === 'column') return `Columns are placed in FLOOR or FOUNDATION — teleposts on pad footings, centred onto a nearby beam line. Current context: ${context}.`;
     if (tool === 'beam') return `Beams are placed in FLOOR or FOUNDATION — two clicks span between supports, FLUSH or DROPPED. Current context: ${context}.`;
     if (tool === 'stair') return `Stairs are placed in a floor level's PLAN — click the top nosing at the floor opening, then the downhill direction; the run is laid out from the level heights. Current context: ${context}.`;
+    if (tool === 'annotation') return `Annotations work in any context — click the object of interest, then where the note text goes, and type it. Current context: ${context}.`;
     if (tool === 'line') {
       if (!this._lineLayerConfig(this._activeLineLayer()).visible) {
         return 'Turn on DRAFT or NO-DRAFT in the Company Standard Layers before drawing a generic line.';
@@ -4099,6 +4357,7 @@ class Component extends DCLogic {
     if (tool !== 'dimension') this._cancelDimension();
     if (tool !== 'beam') this._cancelBeam();
     if (tool !== 'stair') this._cancelStair();
+    if (tool !== 'annotation') this._cancelNote();
     this._cancelRoof();
     this._cancelCut();
     this.setState({
@@ -4118,9 +4377,9 @@ class Component extends DCLogic {
     this._courtesyWallIds?.clear();
     this._courtesyFloorIds?.clear();
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof();
     this._applyLevelElevation(levelIndex);
-    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'outline', 'roof', 'dimension', 'column', 'beam', 'stair'].includes(this.state.activeTool)
+    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'outline', 'roof', 'dimension', 'column', 'beam', 'stair', 'annotation'].includes(this.state.activeTool)
       && !this._contextAllowsTool(this.state.activeTool, viewId, false)
       ? 'select'
       : this.state.activeTool;
@@ -4444,7 +4703,7 @@ class Component extends DCLogic {
   _switchLevel(idx) {
     if (idx === this.state.activeLevelIdx && !this.state.boneyardActive) return;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._cancelCut();
     this._applyLevelElevation(idx);
     // A level cannot also be one of its own references; the destination
     // context's remembered background is restored when it has one.
@@ -4689,6 +4948,11 @@ class Component extends DCLogic {
   _onMouseMove(e) {
     if (this.state.lengthFrozen) return;
     if (this._stairWorkspaceActive()) {
+      // Pane-local cursor tracking so an in-progress note previews its leader.
+      const rect = this._canvas.getBoundingClientRect();
+      this._noteStairHover = this.state.activeTool === 'annotation'
+        ? { x: e.clientX - rect.left, y: e.clientY - rect.top }
+        : null;
       if (this.state.showCursor || this.state.showMagnet || this.state.showMidSnap || this.state.showGridSnapPt || this.state.showPolarOrigin) {
         this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false, showPolarOrigin: false });
       }
@@ -4860,6 +5124,7 @@ class Component extends DCLogic {
   }
 
   _onMouseLeave() {
+    this._noteStairHover = null;
     this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false, showPolarOrigin: false });
     ['[data-model-sx]','[data-model-sy]','[data-model-len]'].forEach((s, i) => {
       const el = document.querySelector(s); if (el) el.textContent = ['X: —','Y: —',''][i];
@@ -4869,9 +5134,12 @@ class Component extends DCLogic {
   _onMouseDown(e) {
     if (!this._drawingReady) return;
     if (this.state.lengthFrozen) return;
-    // The STAIR workspace is locked framing: a click only swaps the panes.
+    // The STAIR workspace is locked framing: a click swaps the panes — except
+    // for the ANNOTATION tool, which its note room exists for.
     if (this._stairWorkspaceActive()) {
-      if (e.button === 0) this._toggleStairPane(e);
+      if (e.button !== 0) return;
+      if (this.state.activeTool === 'annotation') this._handleNoteStairClick(e);
+      else this._toggleStairPane(e);
       return;
     }
     const tool = this.state.activeTool;
@@ -4888,6 +5156,7 @@ class Component extends DCLogic {
       else if (tool === 'column') this._handleColumnClick();
       else if (tool === 'beam') this._handleBeamClick();
       else if (tool === 'stair') this._handleStairClick();
+      else if (tool === 'annotation') this._handleNoteClick();
       else if (tool === 'cut') this._handleCutClick();
       else if (tool === 'select') {
         const raw = this._getWorldPos(e.clientX, e.clientY);
@@ -5965,7 +6234,7 @@ class Component extends DCLogic {
   _selectBoneyard() {
     if (this.state.boneyardActive) return;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._cancelCut();
     this._clearSelection(false);
     const shelf = this._activeBoneyardShelf();
     // Shelf geometry draws at elevation 0 no matter which level was active.
@@ -5986,7 +6255,7 @@ class Component extends DCLogic {
     const shelf = this.state.boneyardShelves.find(s => s.id === shelfId);
     if (!shelf) return;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof();
     this._clearSelection(false);
     if (!this.state.boneyardActive) this._selectBoneyard();
     this.setState({ activeBoneyardShelfId: shelf.id, boneyardActive: true }, () => this._markUnsaved());
@@ -6004,7 +6273,7 @@ class Component extends DCLogic {
     event?.stopPropagation();
     const id = this.state.nextBoneyardShelfId;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof();
     this._clearSelection(false);
     this.setState({
       boneyardShelves: [...this.state.boneyardShelves, { id, name: `SHELF ${id}` }],
@@ -8336,7 +8605,7 @@ class Component extends DCLogic {
 
   _activateExtendTool() {
     const seeded = this.state.activeTool === 'select' ? this._extendSessionFromSelection() : null;
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this._cancelCut(); this._cancelExtend();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._cancelCut(); this._cancelExtend();
     if (seeded) {
       this._clearSelection();
       this._extendSession = seeded;
@@ -8957,6 +9226,186 @@ class Component extends DCLogic {
     return true;
   }
 
+  // ─── Annotation notes ────────────────────────────────────────────────────────
+  _activeNotes() {
+    const levelId = this._activeLevelId();
+    const view = this._activeLayerViewId(levelId);
+    return this._notes.filter(note => note.levelId === levelId
+      && (view == null || note.view === view));
+  }
+
+  // Two clicks like a dimension — the anchor on the object of interest, then
+  // where the note text goes — and the text is typed in place.
+  _handleNoteClick() {
+    if (this.state.activeView !== 'top') {
+      this.setState({ drawingMessage: 'Annotations are placed in TOP / PLAN view.', drawingMessageError: true });
+      return;
+    }
+    if (this.state.noteEditor) return; // typing — commit with Enter or cancel with Escape first
+    const pt = this._snapPt;
+    if (!pt) return;
+    if (this.state.noteEnd === 'none') {
+      // NO POINTER — one click drops a standalone note box, no leader.
+      this._noteAnchor = null;
+      this._openNoteEditor({
+        anchor: pt.clone(),
+        text: pt.clone(),
+        view: this._activeLayerViewId() || 'plan',
+        pane: null,
+        levelId: this._activeLevelId(),
+      }, this._toScreen(pt));
+      return;
+    }
+    if (!this._noteAnchor) {
+      const view = this._activeLayerViewId() || 'plan';
+      this._noteAnchor = { view, pane: null, pt: pt.clone() };
+      this.setState({ drawingMessage: 'Leader anchored on the object of interest. Click where the note text goes.', drawingMessageError: false });
+      return;
+    }
+    if (Math.hypot(pt.x - this._noteAnchor.pt.x, pt.z - this._noteAnchor.pt.z) < 0.001) return;
+    this._openNoteEditor({
+      anchor: this._noteAnchor.pt.clone(),
+      text: pt.clone(),
+      view: this._noteAnchor.view,
+      pane: null,
+      levelId: this._activeLevelId(),
+    }, this._toScreen(pt));
+  }
+
+  // The STAIR workspace's notes anchor in one pane and store pane-local feet,
+  // so they stay put however the locked framing is resized or split.
+  _handleNoteStairClick(e) {
+    if (this.state.noteEditor) return;
+    const frame = this._stairWorkspaceFrame(this._canvas.clientWidth, this._canvas.clientHeight);
+    if (!frame) {
+      this.setState({ drawingMessage: 'Place a stair with the STAIR tool in PLAN before annotating this workspace.', drawingMessageError: true });
+      return;
+    }
+    const rect = this._canvas.getBoundingClientRect();
+    const local = frame.localAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (!local) return;
+    if (this.state.noteEnd === 'none') {
+      this._noteAnchor = null;
+      this._openNoteEditor({
+        anchor: { x: local.x, z: local.z },
+        text: { x: local.x, z: local.z },
+        view: 'stair',
+        pane: local.pane,
+        levelId: frame.stair.levelId,
+      }, frame.paneScreen(local.pane, local));
+      return;
+    }
+    if (!this._noteAnchor) {
+      this._noteAnchor = { view: 'stair', pane: local.pane, pt: { x: local.x, z: local.z } };
+      this.setState({ drawingMessage: `Leader anchored in the ${local.pane.toUpperCase()} pane. Click where the note text goes.`, drawingMessageError: false });
+      return;
+    }
+    if (local.pane !== this._noteAnchor.pane) {
+      this.setState({ drawingMessage: `The note stays in the pane it anchors in — click the ${this._noteAnchor.pane.toUpperCase()} pane for the text.`, drawingMessageError: true });
+      return;
+    }
+    if (Math.hypot(local.x - this._noteAnchor.pt.x, local.z - this._noteAnchor.pt.z) < 0.001) return;
+    this._openNoteEditor({
+      anchor: { ...this._noteAnchor.pt },
+      text: { x: local.x, z: local.z },
+      view: 'stair',
+      pane: local.pane,
+      levelId: frame.stair.levelId,
+    }, frame.paneScreen(local.pane, local));
+  }
+
+  _openNoteEditor(pending, screen) {
+    this._notePending = pending;
+    this._noteAnchor = null;
+    this._lockAngle = null;
+    this.setState({
+      noteEditor: { x: screen.x, y: screen.y },
+      noteDraft: '',
+      drawingMessage: 'Type the note — Enter commits, Escape cancels.',
+      drawingMessageError: false,
+    }, () => document.querySelector('[data-note-editor-input]')?.focus());
+  }
+
+  _commitNote() {
+    const pending = this._notePending;
+    if (!pending) return;
+    const body = this.state.noteDraft.trim();
+    if (!body) {
+      this.setState({ drawingMessage: 'The note needs text — Escape cancels it.', drawingMessageError: true });
+      return;
+    }
+    const toPoint = pt => pending.view === 'stair'
+      ? { x: pt.x, z: pt.z }
+      : new THREE.Vector3(pt.x, pt.y || 0, pt.z);
+    this._notes.push({
+      id: this._nextNoteId++,
+      anchor: toPoint(pending.anchor),
+      text: toPoint(pending.text),
+      levelId: pending.levelId,
+      view: pending.view,
+      pane: pending.pane,
+      body,
+      end: this.state.noteEnd,
+      fill: this.state.noteFill === true,
+      fillOpacity: this.state.noteFillOpacity,
+      outline: this.state.noteOutline === true,
+      bullnose: this.state.noteBullnose,
+      layer: NOTE_LAYER,
+    });
+    this._notePending = null;
+    this._markUnsaved();
+    this.setState({ noteEditor: null, noteDraft: '', drawingMessage: `Note added on ${this._layerStandard(NOTE_LAYER).name}.`, drawingMessageError: false });
+  }
+
+  _cancelNote() {
+    if (!this._noteAnchor && !this._notePending && !this.state.noteEditor) return;
+    this._noteAnchor = null;
+    this._notePending = null;
+    this.setState({ noteEditor: null, noteDraft: '', drawingMessage: '', drawingMessageError: false });
+  }
+
+  _deleteLastNote() {
+    const active = this._activeNotes();
+    if (!active.length) return;
+    const note = active[active.length - 1];
+    this._notes = this._notes.filter(item => item !== note);
+    this._markUnsaved();
+    this.setState({ drawingMessage: 'Note removed.', drawingMessageError: false });
+  }
+
+  _commitNoteFillOpacity() {
+    const parsed = Number(this.state.noteFillOpacityInput);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+      this.setState({ noteStyleError: 'Fill opacity is a percentage from 0 to 100.' });
+      return false;
+    }
+    this.setState({ noteFillOpacity: parsed / 100, noteFillOpacityInput: String(Math.round(parsed)), noteStyleError: '' });
+    return true;
+  }
+
+  _commitNoteBullnose() {
+    const parsed = Number(this.state.noteBullnoseInput);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 30) {
+      this.setState({ noteStyleError: 'CORNER BULLNOSE radius runs 0 (square) to 30.' });
+      return false;
+    }
+    this.setState({ noteBullnose: parsed, noteBullnoseInput: String(Math.round(parsed)), noteStyleError: '' });
+    return true;
+  }
+
+  // The note style an in-progress preview should carry — the panel's current
+  // settings, since that is what the committed note will get.
+  _notePreviewStyle(body) {
+    return {
+      body,
+      end: this.state.noteEnd,
+      fill: this.state.noteFill === true,
+      fillOpacity: this.state.noteFillOpacity,
+      outline: this.state.noteOutline === true,
+      bullnose: this.state.noteBullnose,
+    };
+  }
+
   _handleLineClick() {
     if (!this._contextAllowsTool('line')) {
       this.setState({ drawingMessage: this._contextToolMessage('line'), drawingMessageError: true });
@@ -9470,7 +9919,7 @@ class Component extends DCLogic {
         return;
       }
       if (this._windowSelection) { this._windowSelection = null; return; }
-      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this._cancelCut();
+      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._cancelCut();
       this._clearSelection();
       return;
     }
@@ -9541,14 +9990,14 @@ class Component extends DCLogic {
     if (matches('outline')) { e.preventDefault(); this._activateContextTool('outline'); return; }
     if (matches('roof')) { e.preventDefault(); this._activateContextTool('roof'); return; }
     if (matches('dimension')) { e.preventDefault(); this._activateContextTool('dimension'); return; }
-    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
+    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
     if (matches('extend') || matches('extendAlt')) {
       e.preventDefault();
       this._activateExtendTool();
       return;
     }
-    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
-    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
+    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
+    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
     if (matches('gridSnap') || matches('gridSnapAlt')) { e.preventDefault(); this._toggleGridSnap(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
@@ -10082,6 +10531,53 @@ class Component extends DCLogic {
       stairLayoutNote: this._stairLayoutNote(),
       hasActiveStairs: this._activeStairs().length > 0,
       onStairDelete: () => this._deleteLastStair(),
+      noteToolActive: activeTool === 'annotation',
+      noteEndBtns: NOTE_END_OPTIONS.map(option => ({
+        label: option.label,
+        title: option.note,
+        bg: this.state.noteEnd === option.id ? '#1d1f20' : '#fff',
+        color: this.state.noteEnd === option.id ? '#f2f2f3' : '#1d1f20',
+        border: this.state.noteEnd === option.id ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        onSelect: () => this.setState({ noteEnd: option.id }),
+      })),
+      noteBoxBtns: [
+        { label: 'FILL', title: 'Paper fill behind the text at the set opacity.', active: this.state.noteFill, onSelect: () => this.setState({ noteFill: true }) },
+        { label: 'NO FILL', title: 'Transparent — just the text over the drawing (default).', active: !this.state.noteFill, onSelect: () => this.setState({ noteFill: false }) },
+        { label: 'OUTLINE', title: 'Box outline drawn around the note text.', active: this.state.noteOutline, onSelect: () => this.setState({ noteOutline: true }) },
+        { label: 'NO OUTLINE', title: 'No box around the note text (default).', active: !this.state.noteOutline, onSelect: () => this.setState({ noteOutline: false }) },
+      ].map(button => ({
+        label: button.label,
+        title: button.title,
+        bg: button.active ? '#1d1f20' : '#fff',
+        color: button.active ? '#f2f2f3' : '#1d1f20',
+        border: button.active ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        onSelect: button.onSelect,
+      })),
+      noteFillOpacityInput: this.state.noteFillOpacityInput,
+      onNoteFillOpacityInput: event => this.setState({ noteFillOpacityInput: event.target.value }),
+      onNoteFillOpacityCommit: () => this._commitNoteFillOpacity(),
+      noteBullnoseInput: this.state.noteBullnoseInput,
+      onNoteBullnoseInput: event => this.setState({ noteBullnoseInput: event.target.value }),
+      onNoteBullnoseCommit: () => this._commitNoteBullnose(),
+      onNoteStyleKey: event => { if (event.key === 'Enter') { event.preventDefault(); event.target.blur(); } event.stopPropagation(); },
+      noteStyleBorder: this.state.noteStyleError ? '#b04050' : 'rgba(29,31,32,0.2)',
+      hasNoteStyleError: Boolean(this.state.noteStyleError),
+      noteStyleError: this.state.noteStyleError,
+      noteStyleNote: 'Click the object of interest, then where the text goes, and type the note. Default is transparent text — flip on FILL (opacity %) and OUTLINE over busy linework. CORNER BULLNOSE rounds the box corners (0 = square). Saves with the printable ' + this._layerStandard(NOTE_LAYER).name + ' linework.',
+      hasActiveNotes: this._activeNotes().length > 0,
+      onNoteDelete: () => this._deleteLastNote(),
+      noteEditorOpen: Boolean(this.state.noteEditor),
+      noteEditorX: this.state.noteEditor?.x ?? -100,
+      noteEditorY: this.state.noteEditor?.y ?? -100,
+      noteDraft: this.state.noteDraft,
+      onNoteDraftInput: event => this.setState({ noteDraft: event.target.value }),
+      onNoteDraftKey: event => {
+        if (event.key === 'Enter') { event.preventDefault(); this._commitNote(); }
+        else if (event.key === 'Escape') { event.preventDefault(); this._cancelNote(); }
+        event.stopPropagation();
+      },
+      onNoteCommit: () => this._commitNote(),
+      onNoteCancel: () => this._cancelNote(),
       floorToolActive: activeTool === 'floor',
       fenestrationToolActive: fenestrating,
       fenestrationHoleMode: fenestrating && Boolean(holeHost),
@@ -10614,7 +11110,7 @@ class Component extends DCLogic {
       })),
 
       tools: [
-        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
+        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
         contextualTool('line'),
         contextualTool('node'),
         contextualTool('wall'),
@@ -10627,11 +11123,12 @@ class Component extends DCLogic {
         contextualTool('column'),
         contextualTool('beam'),
         contextualTool('stair'),
+        contextualTool('annotation'),
         standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._activateExtendTool(); }, activeTool==='extend'),
-        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
+        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
       ],
       cutShortcut: shortcut('cut'),
-      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelRoof(); this.setState({activeTool:'cut'}); },
+      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({activeTool:'cut'}); },
       cutToolBg:     isCutTool ? on.bg     : off.bg,
       cutToolColor:  isCutTool ? on.color  : off.color,
       cutToolBorder: isCutTool ? on.border : off.border,

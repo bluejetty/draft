@@ -294,6 +294,12 @@ if (!window.DraftProfileManager) {
         Object.freeze({ id: 'E-POWER DIMENSION', name: 'E-POWER DIMENSION', use: 'Dimension strings placed in ELECTRIC.', printable: true }),
       ]),
     }),
+    Object.freeze({
+      group: 'Annotation',
+      layers: Object.freeze([
+        Object.freeze({ id: 'A-ANNO-NOTE', name: 'DRAFT', use: 'Leader notes on any plan or the stair section (Annotation tool). Named DRAFT in the house standard; an AIA-style standard renames it A-ANNO-NOTE.', printable: true }),
+      ]),
+    }),
   ]);
 
   const flatLayerStandards = () => DEFAULT_LAYER_STANDARDS.flatMap(group => group.layers);
