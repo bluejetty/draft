@@ -36,11 +36,12 @@
     .level-layer.active { background:#fff; border-color:#5980a6; color:#365e86; }
     .level-layer-contents { margin:1px 0 2px 7px; border-left:2px solid rgba(89,128,166,0.48); padding-left:4px; }
     .level-layer-content { min-height:12px; display:flex; align-items:center; color:rgba(29,31,32,0.58); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.05em; text-transform:uppercase; }
-    .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:flex-start; margin-top:5px; }
+    .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:0; width:16px; height:16px; display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:flex-start; margin-top:5px; }
     .level-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-layer-row { display:flex; align-items:stretch; gap:2px; }
-    .level-layer-row .level-layer { flex:1; min-width:0; }
-    .level-layer-bg { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:1px 3px; min-width:23px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.42); flex-shrink:0; }
+    .level-layer-row .level-layer { flex:1 1 0; min-width:0; }
+    .level-layer-row .level-assembly { flex:1 1 0; min-width:0; text-align:left; }
+    .level-layer-bg { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:0; width:15px; display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.42); flex-shrink:0; }
     .level-layer-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-head { display:flex; align-items:flex-start; gap:5px; }
     .level-title { flex-shrink:0; min-width:0; }
@@ -7889,7 +7890,7 @@ class Component extends DCLogic {
         const slot = l.id === activeLevel?.id ? -1 : backgroundLevelIds.indexOf(l.id);
         const scopedView = backgroundLevelViews[l.id] ?? null;
         const bgSlotStyle = s => ({
-          bgLabel: s === 0 ? 'BG1' : s === 1 ? 'BG2' : 'BG',
+          bgLabel: s === 0 ? 'B1' : s === 1 ? 'B2' : 'B',
           bgButtonBg: s === 0 ? 'rgba(82,151,218,0.12)' : s === 1 ? 'rgba(221,101,104,0.12)' : '#fff',
           bgButtonBorder: s === 0 ? '#5297da' : s === 1 ? '#dd6568' : 'rgba(29,31,32,0.2)',
           bgButtonColor: s === 0 ? '#5297da' : s === 1 ? '#dd6568' : 'rgba(29,31,32,0.45)',
