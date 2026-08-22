@@ -1036,6 +1036,15 @@ const STAIR_COLOR = '#5d4a8a';
 const DEFAULT_STAIR_WIDTH_FT = 3;   // 36" between stringers
 const STAIR_MAX_RISER_IN = 7.875;   // 7 7/8" maximum riser
 const STAIR_TREAD_RUN_IN = 10;      // 10" run per tread
+// Carpenter / site-built stair parts drawn in the STAIR workspace section:
+// full 2x12 treads on cut stringers, 3/4" plywood risers standing ON TOP of
+// the treads with the riser face 11" back from the nosing (~1" nosing
+// overhang at the 10" run), fastened down through the riser into the tread.
+const STAIR_TREAD_THICK_IN = 1.5;    // full 2x12 tread
+const STAIR_TREAD_BOARD_IN = 11.25;  // 2x12 actual width, left full
+const STAIR_RISER_THICK_IN = 0.75;   // 3/4" plywood riser
+const STAIR_RISER_FACE_IN = 11;      // nosing to riser face
+const STAIR_STRINGER_DROP_IN = 7;    // finished surface to stringer bottom, plumb
 const STAIR_RAIL_OPTIONS = [
   { id: 'left',  label: 'LEFT BAR',  note: 'One basic handrail bar on the LEFT side going down.' },
   { id: 'right', label: 'RIGHT BAR', note: 'One basic handrail bar on the RIGHT side going down.' },
@@ -1074,6 +1083,7 @@ const FLOOR_LEVEL_VIEWS = Object.freeze([
   Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
   Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
   Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION'] }),
+  Object.freeze({ id:'stair', label:'STAIR', contents:['A-STR', 'A-FL-OPNG', 'STAIR SECTION'] }),
 ]);
 const LEVEL_LAYER_VIEWS = Object.freeze({
   5: FLOOR_LEVEL_VIEWS,
@@ -1194,6 +1204,7 @@ class Component extends DCLogic {
     stairWidth: DEFAULT_STAIR_WIDTH_FT,
     stairWidthInput: formatArchitecturalInches(DEFAULT_STAIR_WIDTH_FT * 12),
     stairWidthError: '',
+    stairPane: 'split',       // STAIR workspace: 'split' | 'section' | 'plan'
     fenestrationType: 'door', // 'door' | 'window' — picks the CAD layer and defaults
     fenestrationWidths: { door: DEFAULT_DOOR_WIDTH_FT, window: DEFAULT_WINDOW_WIDTH_FT },
     fenestrationWidthInput: formatArchitecturalInches(DEFAULT_DOOR_WIDTH_FT * 12),
@@ -2752,6 +2763,13 @@ class Component extends DCLogic {
     ctx.clearRect(0, 0, w, h);
     if (this.state.activeView === 'perspective') return;
 
+    // The STAIR layer set replaces the free camera with a locked workspace
+    // framed around the level's stair: section over plan, nosings aligned.
+    if (this._stairWorkspaceActive()) {
+      this._drawStairWorkspace2D(ctx, w, h);
+      return;
+    }
+
     // Grid first (drawn beneath geometry)
     this._drawGrid2D(ctx, w, h);
 
@@ -3479,6 +3497,291 @@ class Component extends DCLogic {
     });
   }
 
+  // ─── STAIR workspace ──────────────────────────────────────────────────────
+  // The STAIR layer set is a locked, framed workspace around the level's
+  // stair: the auto-generated carpenter section on top and the down-view plan
+  // below share one horizontal scale, so every nosing lines up vertically
+  // between the panes. Both viewports frame the whole run with note room on
+  // either side — no panning or zooming. Clicking a pane fills the screen
+  // with it; clicking again returns to the split.
+  _stairWorkspaceActive() {
+    return !this.state.boneyardActive && this._activeLayerViewId() === 'stair';
+  }
+
+  // The stair being framed: the most recent stair placed on this level's PLAN.
+  _workspaceStair() {
+    const levelId = this._activeLevelId();
+    const stairs = this._stairs.filter(stair => stair.levelId === levelId && stair.view === 'plan');
+    return stairs.length ? stairs[stairs.length - 1] : null;
+  }
+
+  _stairPaneRects(w, h) {
+    const mode = this.state.stairPane;
+    if (mode === 'section') return { section: { x: 0, y: 0, w, h }, plan: null };
+    if (mode === 'plan') return { section: null, plan: { x: 0, y: 0, w, h } };
+    const gap = 6;
+    const half = (h - gap) / 2;
+    return { section: { x: 0, y: 0, w, h: half }, plan: { x: 0, y: half + gap, w, h: half } };
+  }
+
+  _toggleStairPane(e) {
+    if (this.state.stairPane !== 'split') {
+      this.setState({ stairPane: 'split' });
+      return;
+    }
+    const rect = this._canvas.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    this.setState({ stairPane: y < this._canvas.clientHeight / 2 ? 'section' : 'plan' });
+  }
+
+  _stairPaneHeader(ctx, rect, label) {
+    ctx.fillStyle = 'rgba(29,31,32,0.55)';
+    ctx.font = "600 10px 'Barlow Condensed', system-ui, sans-serif";
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(label, rect.x + 10, rect.y + 8);
+    if (!this._isPrinting) {
+      ctx.textAlign = 'right';
+      ctx.fillText(this.state.stairPane === 'split' ? 'CLICK TO ENLARGE' : 'CLICK TO SPLIT', rect.x + rect.w - 10, rect.y + 8);
+    }
+  }
+
+  _drawStairWorkspace2D(ctx, w, h) {
+    ctx.fillStyle = '#fafafa';
+    ctx.fillRect(0, 0, w, h);
+    const stair = this._workspaceStair();
+    if (!stair) {
+      const level = this._activeLevel();
+      ctx.fillStyle = 'rgba(29,31,32,0.55)';
+      ctx.font = "600 13px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(`No stair on ${level?.name || 'this level'} yet — place one with the STAIR tool in PLAN.`, w / 2, h / 2);
+      return;
+    }
+    const layout = this._stairCurrentLayout(stair);
+    const descent = this._stairDescent(stair.levelId);
+    const rects = this._stairPaneRects(w, h);
+    // One locked horizontal scale for both panes: the whole run plus note room
+    // on either side always fits, and the section's full rise fits its pane.
+    const noteFt = Math.max(4, layout.runFt * 0.45);
+    const uMin = -noteFt, uMax = layout.runFt + noteFt;
+    const spanFt = uMax - uMin;
+    const paneW = (rects.section || rects.plan).w;
+    let pxPerFt = (paneW - 24) / spanFt;
+    if (rects.section) pxPerFt = Math.min(pxPerFt, (rects.section.h - 46) / (layout.riseFt + 4));
+    if (rects.plan) pxPerFt = Math.min(pxPerFt, (rects.plan.h - 46) / (stair.widthFt + 6));
+    pxPerFt = Math.max(2, pxPerFt);
+    const uToX = u => 12 + ((paneW - 24) - spanFt * pxPerFt) / 2 + (u - uMin) * pxPerFt;
+    if (rects.section) this._drawStairSectionPane(ctx, rects.section, stair, layout, descent, uToX, pxPerFt);
+    if (rects.plan) this._drawStairPlanPane(ctx, rects.plan, stair, layout, uToX, pxPerFt);
+    if (rects.section && rects.plan) {
+      ctx.strokeStyle = 'rgba(29,31,32,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, rects.plan.y - 3); ctx.lineTo(w, rects.plan.y - 3);
+      ctx.stroke();
+    }
+  }
+
+  // Carpenter / site-built stair section: cut stringer, full 2x12 treads,
+  // 3/4" ply risers standing ON TOP of the treads with the face 11" back from
+  // the nosing. The floor opening edge and the landing surface — the two
+  // points that matter — are emphasised; the floors read as faded bands.
+  _drawStairSectionPane(ctx, rect, stair, layout, descent, uToX, pxPerFt) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
+    this._stairPaneHeader(ctx, rect,
+      `STAIR SECTION — ${layout.risers}R @ ${formatInchesOnly(layout.riserIn)} · TREADS FULL 2x12 · RISERS 3/4" PLY FACE @ ${formatInchesOnly(STAIR_RISER_FACE_IN)}`);
+    const riseStep = layout.riserIn / 12;
+    const runStep = STAIR_TREAD_RUN_IN / 12;
+    const treadThk = STAIR_TREAD_THICK_IN / 12;
+    const boardW = STAIR_TREAD_BOARD_IN / 12;
+    const riserThk = STAIR_RISER_THICK_IN / 12;
+    const drop = STAIR_STRINGER_DROP_IN / 12;
+    const faceU = j => j * runStep - STAIR_RISER_FACE_IN / 12; // riser j face, 11" back from the nosing of the tread it stands on
+    // Upper floor surface sits 2ft below the pane top framing margin.
+    const y0 = rect.y + 24 + Math.max(0, (rect.h - 46 - (layout.riseFt + 4) * pxPerFt) / 2) + 2 * pxPerFt;
+    const yOf = elevFt => y0 - elevFt * pxPerFt;
+    const fadeFill = 'rgba(89,128,166,0.14)';
+    const fadeLine = 'rgba(89,128,166,0.55)';
+    const noteFont = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+
+    // Faded upper floor band, cut at the opening edge (u = 0).
+    const floorFt = this._levelFloorFt(stair.levelId);
+    ctx.fillStyle = fadeFill;
+    ctx.strokeStyle = fadeLine;
+    ctx.lineWidth = 1;
+    ctx.fillRect(rect.x, yOf(0), uToX(0) - rect.x, floorFt * pxPerFt);
+    ctx.strokeRect(rect.x - 2, yOf(0), uToX(0) - rect.x + 2, floorFt * pxPerFt);
+    // Faded landing band under the run-out.
+    const landU = faceU(layout.risers);
+    ctx.fillRect(uToX(landU), yOf(-layout.riseFt), rect.x + rect.w - uToX(landU), (8 / 12) * pxPerFt);
+    ctx.strokeRect(uToX(landU), yOf(-layout.riseFt), rect.x + rect.w - uToX(landU) + 2, (8 / 12) * pxPerFt);
+
+    // Cut stringer: sawtooth at the finished profile (the boards draw over it),
+    // a plumb cut against the opening edge, and a level cut on the landing.
+    ctx.beginPath();
+    ctx.moveTo(uToX(faceU(1)), yOf(0));
+    for (let j = 1; j <= layout.risers; j++) {
+      ctx.lineTo(uToX(faceU(j)), yOf(-(j - 1) * riseStep));
+      ctx.lineTo(uToX(faceU(j)), yOf(-j * riseStep));
+      if (j < layout.risers) ctx.lineTo(uToX(faceU(j + 1)), yOf(-j * riseStep));
+    }
+    const slope = riseStep / runStep;
+    const uBottom = (layout.riseFt - drop) / slope;
+    ctx.lineTo(uToX(uBottom), yOf(-layout.riseFt));
+    ctx.lineTo(uToX(faceU(1)), yOf(-(slope * faceU(1) + drop)));
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(93,74,138,0.12)';
+    ctx.strokeStyle = STAIR_COLOR;
+    ctx.lineWidth = 1.25;
+    ctx.fill();
+    ctx.stroke();
+
+    // Treads: full 2x12 boards, 1.5" thick, nosing at every 10" run increment.
+    ctx.fillStyle = '#e8e2f2';
+    for (let k = 1; k <= layout.treads; k++) {
+      const x = uToX(k * runStep - boardW), y = yOf(-k * riseStep);
+      const bw = boardW * pxPerFt, bh = treadThk * pxPerFt;
+      ctx.fillRect(x, y, bw, bh);
+      ctx.strokeRect(x, y, bw, bh);
+    }
+    // Risers: 3/4" ply standing on the tread below (or the landing), closing
+    // up to the underside of the tread above — the horizontal joint bears on
+    // top of the tread, carpenter style.
+    ctx.fillStyle = '#ddd5ec';
+    for (let j = 1; j <= layout.risers; j++) {
+      const x = uToX(faceU(j) - riserThk);
+      const yTop = yOf(-(j - 1) * riseStep - treadThk);
+      const yBottom = yOf(-j * riseStep);
+      const bw = riserThk * pxPerFt;
+      ctx.fillRect(x, yTop, bw, yBottom - yTop);
+      ctx.strokeRect(x, yTop, bw, yBottom - yTop);
+    }
+
+    // The two points that matter: the floor opening edge and the landing.
+    ctx.strokeStyle = '#b04050';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(uToX(0), yOf(0)); ctx.lineTo(uToX(0), yOf(-floorFt));
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(uToX(landU), yOf(-layout.riseFt)); ctx.lineTo(rect.x + rect.w, yOf(-layout.riseFt));
+    ctx.stroke();
+    ctx.fillStyle = '#b04050';
+    ctx.font = noteFont;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    ctx.fillText('EDGE OF STAIR OPENING', uToX(0) - 4, yOf(0) - 3);
+    ctx.textAlign = 'left';
+    if (descent) ctx.fillText(`LANDS ON ${descent.landing.toUpperCase()}`, uToX(layout.runFt) + 8, yOf(-layout.riseFt) - 3);
+
+    // Rise / run figures in the note room on the left.
+    ctx.fillStyle = 'rgba(29,31,32,0.7)';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(`TOTAL RISE ${this._ftIn(layout.riseFt)}`, rect.x + 10, yOf(-layout.riseFt / 2));
+    ctx.fillText(`TOTAL RUN ${this._ftIn(layout.runFt)}`, rect.x + 10, yOf(-layout.riseFt / 2) + 13);
+    ctx.restore();
+  }
+
+  // Down-view plan of the stair in its own frame: the run goes left to right
+  // so the nosings line up with the section above. Level walls and floors
+  // (with their openings) read as faded, locked reference linework.
+  _drawStairPlanPane(ctx, rect, stair, layout, uToX, pxPerFt) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
+    this._stairPaneHeader(ctx, rect, `STAIR PLAN — DN ${layout.risers}R TO THE RIGHT · ${this._ftIn(stair.widthFt)} WIDE`);
+    const runStep = STAIR_TREAD_RUN_IN / 12;
+    const vMid = rect.y + 24 + (rect.h - 34) / 2;
+    const vToY = v => vMid + v * pxPerFt;
+    // Stair-local frame: u downhill along the run, v to the right walking down.
+    const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const du = { x: dx / len, z: dz / len };
+    const local = pt => ({
+      u: (pt.x - stair.start.x) * du.x + (pt.z - stair.start.z) * du.z,
+      v: (pt.x - stair.start.x) * -du.z + (pt.z - stair.start.z) * du.x,
+    });
+    const toPane = pt => { const l = local(pt); return { x: uToX(l.u), y: vToY(l.v) }; };
+
+    // Faded reference: the level's PLAN walls and FLOOR outlines with their
+    // openings, locked and non-editable in this workspace.
+    const levelId = stair.levelId;
+    const fade = 'rgba(89,128,166,0.4)';
+    ctx.strokeStyle = fade;
+    ctx.lineWidth = 1.25;
+    this._walls
+      .filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan')
+      .forEach(wall => {
+        const a = toPane(wall.start), b = toPane(wall.end);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      });
+    ctx.setLineDash([5, 4]);
+    this._floors
+      .filter(floor => floor.levelId === levelId)
+      .forEach(floor => {
+        const points = (floor.points || []).map(toPane);
+        if (points.length < 2) return;
+        ctx.beginPath();
+        points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        ctx.closePath(); ctx.stroke();
+        this._surfaceOpeningsFor('floor', floor.id).forEach(opening => {
+          const hole = opening.points.map(toPane);
+          if (hole.length < 2) return;
+          ctx.beginPath();
+          hole.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+          ctx.closePath(); ctx.stroke();
+        });
+      });
+    ctx.setLineDash([]);
+
+    // The stair itself, on A-STR: stringers, tread lines, rail bars, DN arrow.
+    const half = (stair.widthFt / 2) * pxPerFt;
+    const x0 = uToX(0), x1 = uToX(layout.runFt);
+    ctx.strokeStyle = STAIR_COLOR;
+    ctx.fillStyle = STAIR_COLOR;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x0, vMid - half); ctx.lineTo(x1, vMid - half);
+    ctx.moveTo(x0, vMid + half); ctx.lineTo(x1, vMid + half);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i <= layout.treads; i++) {
+      const x = uToX(i * runStep);
+      ctx.moveTo(x, vMid - half); ctx.lineTo(x, vMid + half);
+    }
+    ctx.stroke();
+    if (stair.rail && stair.rail !== 'none') {
+      const inset = Math.min(half - 1, 0.25 * pxPerFt);
+      const sides = stair.rail === 'both' ? [-1, 1] : [stair.rail === 'right' ? 1 : -1];
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      sides.forEach(side => {
+        const y = vMid + side * (half - inset);
+        ctx.moveTo(x0, y); ctx.lineTo(x1, y);
+      });
+      ctx.stroke();
+    }
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, vMid); ctx.lineTo(x1, vMid);
+    ctx.moveTo(x1 - 8, vMid - 4); ctx.lineTo(x1, vMid); ctx.lineTo(x1 - 8, vMid + 4);
+    ctx.stroke();
+    ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(`DN — ${layout.risers}R @ ${formatInchesOnly(layout.riserIn)}`, (x0 + x1) / 2, vMid - 3);
+
+    // Opening edge emphasised across the stair width at the top nosing.
+    ctx.strokeStyle = '#b04050';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(x0, vMid - half - 6); ctx.lineTo(x0, vMid + half + 6);
+    ctx.stroke();
+    ctx.fillStyle = '#b04050';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    ctx.fillText('EDGE OF STAIR OPENING', x0 - 4, vMid - half - 8);
+    ctx.restore();
+  }
+
   _drawDimension2D(ctx, toS, dimension, options = {}) {
     const a = toS(dimension.start);
     const b = toS(dimension.end);
@@ -3659,6 +3962,7 @@ class Component extends DCLogic {
       floor: 'FLOOR',
       'e-power': 'ELECTRIC',
       foundation: 'FOUNDATION',
+      stair: 'STAIR',
     }[viewId] || (viewId == null && this.state.boneyardActive
       ? `BONEYARD ${this._activeBoneyardShelf().name}`
       : 'LEVEL');
@@ -3670,6 +3974,9 @@ class Component extends DCLogic {
     // A BONEYARD shelf is one whole-level drafting context, like ROOF or SITE:
     // every drawing tool works there and stores to the active shelf.
     if (boneyardActive) viewId = null;
+    // The STAIR workspace is a locked review view: the stair is one semantic
+    // unit on A-STR, framed with its auto section — nothing draws here yet.
+    if (viewId === 'stair') return false;
     // The Outline guide works on any level; the first one completed becomes
     // the master on the active BONEYARD shelf.
     if (tool === 'outline') return true;
@@ -3825,6 +4132,7 @@ class Component extends DCLogic {
       backgroundLevelViews,
       levelLayerViews: { ...this.state.levelLayerViews, [levelId]: viewId },
       layerRevealKey: `${levelId}:${viewId}`,
+      stairPane: 'split',
       activeTool,
       drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension', 'column', 'beam', 'stair'].includes(this.state.activeTool)
         ? this._contextToolMessage(this.state.activeTool, viewId)
@@ -4380,6 +4688,12 @@ class Component extends DCLogic {
 
   _onMouseMove(e) {
     if (this.state.lengthFrozen) return;
+    if (this._stairWorkspaceActive()) {
+      if (this.state.showCursor || this.state.showMagnet || this.state.showMidSnap || this.state.showGridSnapPt || this.state.showPolarOrigin) {
+        this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false, showPolarOrigin: false });
+      }
+      return;
+    }
     const raw = this._getWorldPos(e.clientX, e.clientY);
     if (!raw) { this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false, showPolarOrigin: false }); return; }
 
@@ -4555,6 +4869,11 @@ class Component extends DCLogic {
   _onMouseDown(e) {
     if (!this._drawingReady) return;
     if (this.state.lengthFrozen) return;
+    // The STAIR workspace is locked framing: a click only swaps the panes.
+    if (this._stairWorkspaceActive()) {
+      if (e.button === 0) this._toggleStairPane(e);
+      return;
+    }
     const tool = this.state.activeTool;
     if (e.button === 0 && !e.altKey) {
       if (tool === 'wall') this._handleWallClick();
@@ -4765,6 +5084,8 @@ class Component extends DCLogic {
   _onWheel(e) {
     if (this.state.activeView === 'perspective') return;
     e.preventDefault();
+    // STAIR workspace framing is locked — no zooming.
+    if (this._stairWorkspaceActive()) return;
     // Zoom about the cursor: the plan point under it stays put on screen.
     const anchor = this.state.activeView === 'top' ? this._getWorldPos(e.clientX, e.clientY) : null;
     this._orthoHalfH = Math.max(1, Math.min(300, this._orthoHalfH * (e.deltaY < 0 ? 0.88 : 1.14)));
@@ -8728,6 +9049,7 @@ class Component extends DCLogic {
 
   _onDblClick(e) {
     e.preventDefault();
+    if (this._stairWorkspaceActive()) return;
     // Select tool: cancel any pending drag, then try to split a line at click point
     if (this.state.activeTool === 'select') {
       this._selectDrag = null;
