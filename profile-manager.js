@@ -108,6 +108,7 @@ if (!window.DraftProfileManager) {
     floor: 'F',
     fenestration: 'E',
     shape: 'P',
+    outline: 'U',
     roof: 'O',
     dimension: 'D',
     trim: 'T',
@@ -136,6 +137,17 @@ if (!window.DraftProfileManager) {
   // increment when the cursor is within its pull of the grid point.
   const DEFAULT_SNAP_STRENGTH = Object.freeze({ grid: 4, node: 4, midpoint: 4, polar: 4 });
   const SNAP_STRENGTH_RANGE = Object.freeze({ min: 1, max: 60 });
+
+  // The OUTLINE guide is deliberately louder than any architectural colour so
+  // it can never be mistaken for real linework. Neon green reads as a laser
+  // level; the alternates are there to try by eye.
+  const OUTLINE_COLORS = Object.freeze({
+    'neon-green': Object.freeze({ label: 'Neon green', hex: '#39ff14' }),
+    'neon-orange': Object.freeze({ label: 'Neon orange', hex: '#ff7a00' }),
+    'purply-blue': Object.freeze({ label: 'Purply blue', hex: '#7b5cff' }),
+  });
+  const DEFAULT_OUTLINE_COLOR = 'neon-green';
+  const normaliseOutlineColor = value => (OUTLINE_COLORS[value] ? value : DEFAULT_OUTLINE_COLOR);
 
   const normaliseSnapStrength = value => {
     const stored = value && typeof value === 'object' ? value : {};
@@ -187,6 +199,7 @@ if (!window.DraftProfileManager) {
         Object.freeze({ id: 'draft', name: 'DRAFT', use: 'Default layer for the Line and Node / Arc tools.', printable: true }),
         Object.freeze({ id: 'no-draft', name: 'NO-DRAFT', use: 'Construction / reference linework; drawing spaces only.', printable: false }),
         Object.freeze({ id: 'SHAPE', name: 'SHAPE', use: 'Closed construction outlines (Shape tool — drawn or captured); source geometry for ROOF and FLOOR.', printable: false }),
+        Object.freeze({ id: 'OUTLINE', name: 'OUTLINE', use: 'Building outline reference geometry (Outline tool); bright, never-printing guide with its master in the BONEYARD.', printable: false }),
       ]),
     }),
     Object.freeze({
@@ -317,6 +330,11 @@ if (!window.DraftProfileManager) {
     DEFAULT_SNAP_STRENGTH,
     SNAP_STRENGTH_RANGE,
     normaliseSnapStrength,
+  };
+  window.DraftOutlineColor = {
+    OUTLINE_COLORS,
+    DEFAULT_OUTLINE_COLOR,
+    normaliseOutlineColor,
   };
   window.DraftLineLayers = {
     DEFAULT_LINE_LAYERS,

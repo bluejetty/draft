@@ -621,9 +621,34 @@
       </sc-for>
     </div>
 
+    <!-- BONEYARD — never-printing shelf storage below the level stack -->
+    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="display:flex; align-items:center; margin-bottom:8px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Boneyard</div>
+        <button onClick="{{ boneyard.onAddShelf }}" title="Add a shelf — park geometry at the same spot on different shelves without overlap" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; padding:2px 8px; cursor:pointer; letter-spacing:0.04em;">+ SHELF</button>
+      </div>
+      <div class="{{ boneyard.rowClass }}">
+        <div class="level-bar" style="background:#6b7076;" onClick="{{ boneyard.onSelect }}"></div>
+        <div class="level-body" onClick="{{ boneyard.onSelect }}" title="{{ boneyard.title }}">
+          <div class="level-head">
+            <div class="level-title">
+              <div class="level-name">BONEYARD</div>
+            </div>
+          </div>
+          <div class="level-layer-stack">
+            <sc-for list="{{ boneyard.shelves }}" as="shelf" hint-placeholder-count="1">
+              <div class="level-layer-row">
+                <button type="button" class="{{ shelf.rowClass }}" onClick="{{ shelf.onSelect }}" title="{{ shelf.title }}">{{ shelf.label }}</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ELEVATIONS / SECTIONS -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <button onClick="{{ activateCutTool }}" title="Cut a new section or elevation view" style="display:block; width:100%; text-align:left; border:1px solid {{ cutToolBorder }}; background:{{ cutToolBg }}; color:{{ cutToolColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:pointer; margin-bottom:6px;">"{{ cutShortcut }}" ELEV./SEC. CUT</button>
+      <button onClick="{{ activateCutTool }}" title="Cut a new section or elevation view" style="display:block; width:100%; text-align:left; border:1px solid {{ cutToolBorder }}; background:{{ cutToolBg }}; color:{{ cutToolColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:pointer; margin-bottom:6px;">ELEV/SEC CUT [{{ cutShortcut }}]</button>
       <sc-if value="{{ noCuts }}" hint-placeholder-val="{{ true }}">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; color:rgba(29,31,32,0.35); padding:4px 2px;">Use Cut tool to add views</div>
       </sc-if>
@@ -879,6 +904,11 @@ const ROOF_LAYER = 'A-ROOF';
 // their own; the ROOF and FLOOR commands build their geometry from a shape.
 const SHAPE_LAYER = 'SHAPE';
 const SHAPE_COLOR = '#3f8f7a';
+// The OUTLINE is a bright, never-printing guide of the building footprint.
+// The first completed outline becomes the master on the active BONEYARD shelf
+// and copies to every level; master edits flow to each level's common points
+// while local per-level adjustments are preserved.
+const OUTLINE_LAYER = 'OUTLINE';
 const clampRoofOverhang = value => Math.min(MAX_ROOF_OVERHANG_FT, Math.max(0, value));
 const clampRoofPitch = value => Math.min(MAX_ROOF_PITCH, Math.max(0, value));
 // Stored-drawing readers and the format version live in drawing-format.js;
@@ -967,6 +997,7 @@ const {
 } = window.DraftLineLayers;
 const { normaliseLayerStandards } = window.DraftLayerStandards;
 const { normaliseSnapStrength } = window.DraftSnapStrength;
+const { OUTLINE_COLORS, DEFAULT_OUTLINE_COLOR, normaliseOutlineColor } = window.DraftOutlineColor;
 
 // Undo keeps whole serialized drawings, so it is bounded by count and by size.
 const HISTORY_LIMIT = 60;
@@ -1027,6 +1058,11 @@ class Component extends DCLogic {
     roofPitchInput: String(DEFAULT_ROOF_PITCH),
     roofDimensionError: '',
     levels:        DEFAULT_LEVELS.map(l => ({ ...l })),
+    boneyardShelves: [{ id: 1, name: 'SHELF 1' }],
+    activeBoneyardShelfId: 1,
+    nextBoneyardShelfId: 2,
+    boneyardActive: false,   // BONEYARD card selected instead of a level
+    outlineColor: DEFAULT_OUTLINE_COLOR,
     levelLayerViews: { ...DEFAULT_LEVEL_LAYER_VIEWS },
     levelAssemblies: {},        // levelId -> wall height + floor joist/sheathing assembly
     assemblyEditor: null,       // { levelId, kind:'wall'|'floor' } open in the level rail
@@ -1118,6 +1154,9 @@ class Component extends DCLogic {
     if (!Array.isArray(this._surfaceOpenings)) this._surfaceOpenings = [];
     if (!Array.isArray(this._shapes)) this._shapes = [];
     if (!Array.isArray(this._roofs)) this._roofs = [];
+    if (!Array.isArray(this._outlines)) this._outlines = [];
+    if (!Array.isArray(this._boneyardOutlines)) this._boneyardOutlines = [];
+    if (!(this._selectedOutlines instanceof Set)) this._selectedOutlines = new Set();
     if (!(this._selectedFenestrations instanceof Set)) this._selectedFenestrations = new Set();
     if (!(this._selectedRoofs instanceof Set)) this._selectedRoofs = new Set();
     if (!(this._selectedSurfaceOpenings instanceof Set)) this._selectedSurfaceOpenings = new Set();
@@ -1219,6 +1258,23 @@ class Component extends DCLogic {
         view: dimension.view,
       })),
       nextDimensionId: this._nextDimensionId || 1,
+      boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
+      activeBoneyardShelfId: this.state.activeBoneyardShelfId,
+      nextBoneyardShelfId: this.state.nextBoneyardShelfId,
+      boneyardOutlines: this._boneyardOutlines.map(outline => ({
+        id: outline.id,
+        shelfId: outline.shelfId,
+        sourceLevelId: outline.sourceLevelId ?? null,
+        points: outline.points.map(p => ({ id: p.pointId, x: p.x, y: p.y || 0, z: p.z })),
+      })),
+      outlines: this._outlines.map(outline => ({
+        id: outline.id,
+        masterId: outline.masterId ?? null,
+        levelId: outline.levelId,
+        points: outline.points.map(p => ({ x: p.x, y: p.y || 0, z: p.z, srcId: p.srcId ?? null })),
+        overriddenSrcIds: [...(outline.overriddenSrcIds || [])],
+        layer: OUTLINE_LAYER,
+      })),
       levels: this.state.levels.map(level => ({ ...level })),
       activeLevelIdx: this.state.activeLevelIdx,
       levelLayerViews: { ...this.state.levelLayerViews },
@@ -1365,6 +1421,7 @@ class Component extends DCLogic {
           units: this.state.units,
           gridSnapEnabled: this.state.gridSnapEnabled,
           snapStrength: { ...this.state.snapStrength },
+          outlineColor: this.state.outlineColor,
           keybindings: { ...this.state.keybindings },
         },
       };
@@ -1390,6 +1447,9 @@ class Component extends DCLogic {
         ...(typeof values.gridSnapEnabled === 'boolean' ? { gridSnapEnabled: values.gridSnapEnabled } : {}),
         ...(values.snapStrength && typeof values.snapStrength === 'object'
           ? { snapStrength: normaliseSnapStrength(values.snapStrength) }
+          : {}),
+        ...(typeof values.outlineColor === 'string'
+          ? { outlineColor: normaliseOutlineColor(values.outlineColor) }
           : {}),
         ...(values.keybindings && typeof values.keybindings === 'object'
           ? {
@@ -1618,6 +1678,16 @@ class Component extends DCLogic {
         ...cuts.map(cut => cut.id + 1),
         Number.isInteger(saved.nextCutId) ? saved.nextCutId : 1,
       );
+      // BONEYARD shelves live outside the level stack; drawings saved before
+      // the BONEYARD existed load with the single default shelf.
+      const boneyardShelves = format.boneyardShelves(saved.boneyardShelves);
+      const activeBoneyardShelfId = boneyardShelves.some(shelf => shelf.id === Number(saved.activeBoneyardShelfId))
+        ? Number(saved.activeBoneyardShelfId)
+        : boneyardShelves[0].id;
+      const nextBoneyardShelfId = Math.max(
+        Number.isInteger(saved.nextBoneyardShelfId) ? saved.nextBoneyardShelfId : 1,
+        ...boneyardShelves.map(shelf => shelf.id + 1),
+      );
 
       await new Promise(resolve => this.setState({
         levels,
@@ -1656,6 +1726,10 @@ class Component extends DCLogic {
         activeCutId: null,
         cutPhase: 'idle',
         choosingDir: false,
+        boneyardShelves,
+        activeBoneyardShelfId,
+        nextBoneyardShelfId,
+        boneyardActive: false,
       }, resolve));
 
       // Rebuild the pool as a single pass through every endpoint. This restores
@@ -1763,10 +1837,47 @@ class Component extends DCLogic {
         };
       });
       this._nextDimensionId = nextDimensionId;
-       const numericItemIds = [...this._lines, ...this._walls, ...this._floors, ...this._fenestrations, ...this._surfaceOpenings, ...this._shapes, ...this._roofs]
+      // Outlines restore as isolated points — they never join the shared
+      // vertex pool, so a guide can sit on a wall corner without gluing to it.
+      // Masters restore first so level copies can verify their masterId.
+      const shelfIds = new Set(boneyardShelves.map(shelf => shelf.id));
+      const masterIdRemap = new Map();
+      this._boneyardOutlines = format.boneyardOutlines(saved.boneyardOutlines, shelfIds).map(outline => {
+        const id = this._storedItemId(outline.id, 'outline', usedIds);
+        if (outline.id) masterIdRemap.set(outline.id, id);
+        return {
+          id,
+          shelfId: outline.shelfId,
+          sourceLevelId: outline.sourceLevelId != null && levelIds.has(outline.sourceLevelId) ? outline.sourceLevelId : null,
+          points: outline.points.map(p => {
+            const vtx = new THREE.Vector3(p.x, p.y, p.z);
+            vtx.pointId = p.id;
+            return vtx;
+          }),
+        };
+      });
+      this._outlines = format.outlines(saved.outlines, levelIds).map(outline => {
+        const masterId = outline.masterId != null ? (masterIdRemap.get(outline.masterId) ?? null) : null;
+        return {
+          id: this._storedItemId(outline.id, 'outline', usedIds),
+          masterId,
+          levelId: outline.levelId,
+          points: outline.points.map(p => {
+            const vtx = new THREE.Vector3(p.x, levelsById.get(outline.levelId)?.elev ?? p.y, p.z);
+            vtx.srcId = masterId != null ? p.srcId : null;
+            return vtx;
+          }),
+          overriddenSrcIds: [...outline.overriddenSrcIds],
+          layer: OUTLINE_LAYER,
+        };
+      });
+       const numericItemIds = [...this._lines, ...this._walls, ...this._floors, ...this._fenestrations, ...this._surfaceOpenings, ...this._shapes, ...this._roofs, ...this._outlines, ...this._boneyardOutlines]
          .map(item => Number(String(item.id).match(/-(\d+)$/)?.[1]))
          .filter(Number.isInteger);
-       this._nextDrawingItemId = Math.max(this._nextDrawingItemId, ...numericItemIds.map(id => id + 1), 1);
+       const numericPointIds = this._boneyardOutlines
+         .flatMap(outline => outline.points.map(p => Number(String(p.pointId).match(/-(\d+)$/)?.[1])))
+         .filter(Number.isInteger);
+       this._nextDrawingItemId = Math.max(this._nextDrawingItemId, ...numericItemIds.map(id => id + 1), ...numericPointIds.map(id => id + 1), 1);
        const itemForMember = member => {
          if (!member || !['line', 'wall', 'floor'].includes(member.type)) return null;
          const items = member.type === 'line' ? this._lines
@@ -2176,6 +2287,11 @@ class Component extends DCLogic {
     this._shapePoints  = [];
     this._shapeStart   = null;
 
+    // Outline drawing state — the bright never-printing footprint guide.
+    this._outlineDrawing = false;
+    this._outlinePoints  = [];
+    this._outlineStart   = null;
+
     // Surface-opening drawing state — a free-form hole in a floor or roof.
     this._surfaceOpeningDrawing = false;
     this._surfaceOpeningPoints  = [];
@@ -2407,8 +2523,10 @@ class Component extends DCLogic {
     };
 
     const activeLevel = this._activeLevel();
-    const activeVisible = activeLevel?.visible !== false;
-    const reference = this._visibleBackgroundReference();
+    // On the BONEYARD only shelf contents show: no level geometry, no
+    // background references — the shelves are storage, not a drafting context.
+    const activeVisible = activeLevel?.visible !== false && !this.state.boneyardActive;
+    const reference = this.state.boneyardActive ? null : this._visibleBackgroundReference();
 
     // ── Visible background (reference-only, deliberately beneath active geometry)
     // Walls appear as their centreline so material fills never obscure active work.
@@ -2792,6 +2910,62 @@ class Component extends DCLogic {
     }
 
     this._drawCuts2D(ctx, toS);
+    // The OUTLINE guide paints last so it sits on top of all other linework.
+    this._drawOutlines2D(ctx, toS);
+  }
+
+  // The OUTLINE guide never prints — it is drafting scaffolding, not linework.
+  _drawOutlines2D(ctx, toS) {
+    if (this._isPrinting) return;
+    const hex = this._outlineColorHex();
+    const outlines = this.state.boneyardActive ? this._activeBoneyardOutlines() : this._activeOutlines();
+    const showHandles = ['outline', 'select'].includes(this.state.activeTool);
+    ctx.save();
+    ctx.strokeStyle = hex;
+    ctx.fillStyle = hex;
+    ctx.lineWidth = 2;
+    outlines.forEach(outline => {
+      if (outline.points.length < 2) return;
+      ctx.setLineDash([9, 5]);
+      ctx.beginPath();
+      outline.points.forEach((point, index) => {
+        const s = toS(point);
+        if (index) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (showHandles) {
+        outline.points.forEach(point => {
+          const s = toS(point);
+          ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
+        });
+      }
+    });
+    // In-progress preview: placed corners plus a rubber band to the cursor,
+    // with a close ring on the start point once the outline can close.
+    if (this._outlineDrawing && this._outlinePoints.length) {
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      this._outlinePoints.forEach((point, index) => {
+        const s = toS(point);
+        if (index) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
+      });
+      if (this._snapPt) { const s = toS(this._snapPt); ctx.lineTo(s.x, s.y); }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      this._outlinePoints.forEach(point => {
+        const s = toS(point);
+        ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
+      });
+      if (this._outlineStart && this._outlinePoints.length >= 3) {
+        const sc = toS(this._outlineStart);
+        ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   _drawDimension2D(ctx, toS, dimension, options = {}) {
@@ -2963,7 +3137,13 @@ class Component extends DCLogic {
 
   // Levels without layer sets (ROOF, SITE) are one whole-level drafting
   // context (viewId null) where every command is available.
-  _contextAllowsTool(tool, viewId = this._activeLayerViewId()) {
+  _contextAllowsTool(tool, viewId = this._activeLayerViewId(), boneyardActive = this.state.boneyardActive) {
+    // On the BONEYARD only the Outline tool draws — shelves store geometry,
+    // they are not an architectural level.
+    if (boneyardActive) return tool === 'outline';
+    // The Outline guide works on any level; the first one completed becomes
+    // the master on the active BONEYARD shelf.
+    if (tool === 'outline') return true;
     if (tool === 'line') {
       return (viewId == null || ['plan', 'floor', 'e-power', 'foundation'].includes(viewId))
         && this._lineLayerConfig(this._activeLineLayer()).visible;
@@ -2987,7 +3167,7 @@ class Component extends DCLogic {
   // only decides where the geometry saves, never what the command is called.
   _contextToolLabel(tool, shortcut = '') {
     const suffix = shortcut ? `  [${shortcut}]` : '';
-    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', shape:'SHAPE', roof:'ROOF', dimension:'DIMENSION' };
+    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', shape:'SHAPE', outline:'OUTLINE', roof:'ROOF', dimension:'DIMENSION' };
     return `${names[tool] || tool.toUpperCase()}${suffix}`;
   }
 
@@ -3014,12 +3194,17 @@ class Component extends DCLogic {
     }
     if (tool === 'fenestration') return this._draftingContextLabel(viewId === 'foundation' ? 'foundation' : 'plan');
     if (tool === 'shape') return 'SHAPE';
+    if (tool === 'outline') return 'OUTLINE';
     if (tool === 'roof') return 'A-ROOF';
     return this._draftingContextLabel(viewId);
   }
 
   _contextToolMessage(tool, viewId = this._activeLayerViewId()) {
+    if (this.state.boneyardActive && tool !== 'outline') {
+      return `${this._contextToolLabel(tool)} works on a floor level — the BONEYARD only stores geometry. Switch to a level first.`;
+    }
     const context = this._draftingContextLabel(viewId);
+    if (tool === 'outline') return `The Outline guide is drawn on any level; the first one becomes the BONEYARD master. Current context: ${context}.`;
     if (tool === 'node') return `Node / Arc edits lines in PLAN, FLOOR, ELECTRIC, or FOUNDATION. Current context: ${context}.`;
     if (tool === 'wall') return `Walls are drawn in any layer set: FOUNDATION walls save to S-FDN, all others save to PLAN. Current context: ${context}.`;
     if (tool === 'floor') return `Floor outlines are drawn in FLOOR, PLAN, or FOUNDATION — foundation floors are concrete slabs on S-SLAB. Current context: ${context}.`;
@@ -3049,6 +3234,7 @@ class Component extends DCLogic {
     if (tool !== 'line') this._cancelLine();
     if (tool !== 'floor') this._cancelFloor();
     if (tool !== 'shape') this._cancelShape();
+    if (tool !== 'outline') this._cancelOutline();
     if (tool !== 'fenestration') this._cancelSurfaceOpening();
     if (tool !== 'dimension') this._cancelDimension();
     this._cancelRoof();
@@ -3070,15 +3256,16 @@ class Component extends DCLogic {
     this._courtesyWallIds?.clear();
     this._courtesyFloorIds?.clear();
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof();
     this._applyLevelElevation(levelIndex);
-    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension'].includes(this.state.activeTool)
-      && !this._contextAllowsTool(this.state.activeTool, viewId)
+    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'outline', 'roof', 'dimension'].includes(this.state.activeTool)
+      && !this._contextAllowsTool(this.state.activeTool, viewId, false)
       ? 'select'
       : this.state.activeTool;
     this._scheduleLayerRevealHide();
     this.setState({
       activeLevelIdx: levelIndex,
+      boneyardActive: false,
       backgroundLevelIds,
       backgroundLevelViews,
       levelLayerViews: { ...this.state.levelLayerViews, [levelId]: viewId },
@@ -3384,9 +3571,9 @@ class Component extends DCLogic {
   }
 
   _switchLevel(idx) {
-    if (idx === this.state.activeLevelIdx) return;
+    if (idx === this.state.activeLevelIdx && !this.state.boneyardActive) return;
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
     this._applyLevelElevation(idx);
     // A level cannot also be one of its own references; the destination
     // context's remembered background is restored when it has one.
@@ -3394,11 +3581,12 @@ class Component extends DCLogic {
     const targetView = this._activeLayerViewId(activeId);
     const { ids: backgroundLevelIds, views: backgroundLevelViews } = this._restoredBackgroundFor(activeId, targetView);
     const activeTool = ['line', 'wall', 'floor', 'dimension'].includes(this.state.activeTool)
-      && !this._contextAllowsTool(this.state.activeTool, targetView)
+      && !this._contextAllowsTool(this.state.activeTool, targetView, false)
       ? 'select'
       : this.state.activeTool;
     this.setState({
       activeLevelIdx: idx,
+      boneyardActive: false,
       backgroundLevelIds,
       backgroundLevelViews,
       activeTool,
@@ -3420,8 +3608,15 @@ class Component extends DCLogic {
     const elevRaw = window.prompt('Elevation in feet (negative = below grade):', '0'); if (elevRaw === null) return;
     const elev = parseFloat(elevRaw); if (isNaN(elev)) return;
     const id = this.state.nextLevelId;
+    // Every regular level carries a copy of each master outline; a freshly
+    // added level starts with the inherited (common) geometry.
+    const level = { id, name: name.toUpperCase().trim(), elev, visible: true };
+    this._ensureDrawingCollections();
+    this._boneyardOutlines.forEach(master => {
+      this._outlines.push(this._outlineCopyForLevel(master, level));
+    });
     this.setState({
-      levels: [...this.state.levels, { id, name: name.toUpperCase().trim(), elev, visible: true }],
+      levels: [...this.state.levels, level],
       nextLevelId: id + 1,
     }, () => this._markUnsaved());
   }
@@ -3432,13 +3627,16 @@ class Component extends DCLogic {
     if (!window.confirm(`Delete level "${levels[idx].name}"? Geometry on this level will be removed.`)) return;
     // Pending geometry belongs to the floor it was started on. Discard it before
     // changing the level collection so no chain can commit into another floor.
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelCut();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelCut();
     const levelId = levels[idx].id;
     this._lines = this._lines.filter(line => line.levelId !== levelId);
     this._walls = this._walls.filter(wall => wall.levelId !== levelId);
     this._floors = this._floors.filter(floor => floor.levelId !== levelId);
     this._shapes = this._shapes.filter(shape => shape.levelId !== levelId);
     this._roofs = this._roofs.filter(roof => roof.levelId !== levelId);
+    // Level outlines go with their level; the BONEYARD master is storage, not
+    // a level, so it is never touched by level deletion.
+    this._outlines = this._outlines.filter(outline => outline.levelId !== levelId);
     this._surfaceOpenings = this._surfaceOpenings.filter(opening => opening.levelId !== levelId);
     // Cuts are owned by a level id, not by elevation: two levels can sit at the
     // same height, so only the deleted level's own sections go with it.
@@ -3613,6 +3811,7 @@ class Component extends DCLogic {
     const start  = tool === 'line' ? this._lineStart
       : tool === 'wall' ? this._wallStart
       : tool === 'floor' ? this._floorPoints[this._floorPoints.length - 1]
+      : tool === 'outline' ? this._outlinePoints[this._outlinePoints.length - 1]
       : tool === 'dimension' ? this._dimensionStart
       : tool === 'cut' && this.state.cutPhase === 'placing' ? this._cutStart3
       : tool === 'extend' && this.state.extendPhase === 'destination' ? this.state.extendBase
@@ -3785,6 +3984,7 @@ class Component extends DCLogic {
       else if (tool === 'node') this._handleNodeArcDown(e);
       else if (tool === 'floor') this._handleFloorClick();
       else if (tool === 'shape') this._handleShapeClick();
+      else if (tool === 'outline') this._handleOutlineClick();
       else if (tool === 'fenestration') this._handleFenestrationClick();
       else if (tool === 'roof') this._handleRoofClick(e);
       else if (tool === 'dimension') this._handleDimensionClick();
@@ -3882,6 +4082,7 @@ class Component extends DCLogic {
     this._cancelWall();
     this._cancelLine();
     this._cancelFloor();
+    this._cancelOutline();
     this._cancelCut();
   }
 
@@ -3929,6 +4130,7 @@ class Component extends DCLogic {
             target[r.prop].x = pt.x;
             target[r.prop].z = pt.z;
           });
+          this._afterOutlineVertexDrag(sd.refs);
         }
       }
     }
@@ -4238,6 +4440,231 @@ class Component extends DCLogic {
       drawingMessageError: false,
     });
     return true;
+  }
+
+  // ── OUTLINE — the bright building-footprint guide ─────────────────────────
+  // Outline points are isolated (never merged into the shared vertex pool) so
+  // the guide can trace wall corners without gluing itself to them.
+  _handleOutlineClick() {
+    const pt = this._snapPt; if (!pt) return;
+
+    if (!this._outlineDrawing) {
+      this._outlineDrawing = true;
+      this._outlineStart = pt.clone();
+      this._outlinePoints = [pt.clone()];
+      this._lockAngle = null;
+      this.setState({ isDrawing: true });
+      return;
+    }
+
+    const last = this._outlinePoints[this._outlinePoints.length - 1];
+    if (last && Math.hypot(pt.x - last.x, pt.z - last.z) < 0.001) return;
+    const first = this._outlineStart;
+    if (this._outlinePoints.length >= 3 && first
+      && Math.hypot(pt.x - first.x, pt.z - first.z) < this._magnetRadius() * 2) {
+      this._finishOutline();
+      return;
+    }
+    this._outlinePoints.push(pt.clone());
+    this._lockAngle = null;
+  }
+
+  _finishOutline() {
+    if (!this._outlineDrawing) return;
+    const points = this._outlinePoints.map(pt => ({ x: pt.x, z: pt.z }));
+    this._outlinePoints = [];
+    this._outlineDrawing = false;
+    this._outlineStart = null;
+    this._lockAngle = null;
+    this.setState({ isDrawing: false });
+    if (points.length >= 3) this._commitOutline(points);
+  }
+
+  _cancelOutline() {
+    if (!this._outlineDrawing) return;
+    this._outlinePoints = [];
+    this._outlineDrawing = false;
+    this._outlineStart = null;
+    this._lockAngle = null;
+    this.setState({ isDrawing: false });
+  }
+
+  _activeBoneyardShelf() {
+    return this.state.boneyardShelves.find(shelf => shelf.id === this.state.activeBoneyardShelfId)
+      || this.state.boneyardShelves[0];
+  }
+
+  // The first outline completed on a shelf becomes that shelf's master: it is
+  // stored on the shelf and copied to every level, each copy linked back to
+  // the master's points by srcId. Later outlines are local to their level.
+  _commitOutline(points) {
+    this._ensureDrawingCollections();
+    if (points.length < 3) return null;
+    const shelf = this._activeBoneyardShelf();
+    const shelfHasMaster = this._boneyardOutlines.some(outline => outline.shelfId === shelf.id);
+    const level = this.state.boneyardActive ? null : this._activeLevel();
+    if (!this.state.boneyardActive && !level) return null;
+
+    if (this.state.boneyardActive || !shelfHasMaster) {
+      const master = {
+        id: this._newDrawingItemId('outline'),
+        shelfId: shelf.id,
+        sourceLevelId: level ? level.id : null,
+        points: points.map(point => {
+          const vtx = new THREE.Vector3(point.x, 0, point.z);
+          vtx.pointId = this._newDrawingItemId('op');
+          return vtx;
+        }),
+      };
+      this._boneyardOutlines.push(master);
+      this.state.levels.forEach(lvl => this._outlines.push(this._outlineCopyForLevel(master, lvl)));
+      this._markUnsaved();
+      this.setState({
+        drawingMessage: `Outline closed — master stored on ${shelf.name} in the BONEYARD, with a copy on every level. Edit the master to move the common points everywhere; level edits stay local.`,
+        drawingMessageError: false,
+      });
+      return master;
+    }
+
+    const outline = {
+      id: this._newDrawingItemId('outline'),
+      masterId: null,
+      levelId: level.id,
+      points: points.map(point => {
+        const vtx = new THREE.Vector3(point.x, level.elev, point.z);
+        vtx.srcId = null;
+        return vtx;
+      }),
+      overriddenSrcIds: [],
+      layer: OUTLINE_LAYER,
+    };
+    this._outlines.push(outline);
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `Outline closed on ${level.name} — local to this level (${shelf.name} already has its master).`,
+      drawingMessageError: false,
+    });
+    return outline;
+  }
+
+  _outlineCopyForLevel(master, level) {
+    return {
+      id: this._newDrawingItemId('outline'),
+      masterId: master.id,
+      levelId: level.id,
+      points: master.points.map(point => {
+        const vtx = new THREE.Vector3(point.x, level.elev, point.z);
+        vtx.srcId = point.pointId;
+        return vtx;
+      }),
+      overriddenSrcIds: [],
+      layer: OUTLINE_LAYER,
+    };
+  }
+
+  // Master edits move every level copy's common points; points a level has
+  // adjusted itself (listed in overriddenSrcIds) keep their local position.
+  _propagateMasterOutline(master) {
+    const masterPoints = new Map(master.points.map(point => [point.pointId, point]));
+    this._outlines.forEach(outline => {
+      if (outline.masterId !== master.id) return;
+      const overridden = new Set(outline.overriddenSrcIds);
+      outline.points.forEach(point => {
+        if (!point.srcId || overridden.has(point.srcId)) return;
+        const source = masterPoints.get(point.srcId);
+        if (source) { point.x = source.x; point.z = source.z; }
+      });
+    });
+  }
+
+  // After a Select drag: a moved master propagates to its level copies; a
+  // moved inherited level point becomes a local override the master no longer
+  // touches.
+  _afterOutlineVertexDrag(refs) {
+    let touched = false;
+    refs.forEach(ref => {
+      const outline = ref.outline;
+      if (!outline) return;
+      touched = true;
+      if (outline.shelfId != null) {
+        this._propagateMasterOutline(outline);
+      } else if (outline.masterId != null) {
+        const point = outline.points[ref.prop];
+        if (point?.srcId && !outline.overriddenSrcIds.includes(point.srcId)) {
+          outline.overriddenSrcIds.push(point.srcId);
+        }
+      }
+    });
+    if (touched) this._markUnsaved();
+  }
+
+  _activeOutlines() {
+    this._ensureDrawingCollections();
+    if (this.state.boneyardActive) return [];
+    const standard = this._layerStandard(OUTLINE_LAYER);
+    if (!standard.visible) return [];
+    const levelId = this._activeLevelId();
+    return this._outlines.filter(outline => outline.levelId === levelId);
+  }
+
+  // Only the active shelf's masters show; other shelves may hold geometry at
+  // the same coordinates without overlapping visually.
+  _activeBoneyardOutlines() {
+    this._ensureDrawingCollections();
+    if (!this.state.boneyardActive) return [];
+    return this._boneyardOutlines.filter(outline => outline.shelfId === this.state.activeBoneyardShelfId);
+  }
+
+  _outlineColorHex() {
+    return OUTLINE_COLORS[normaliseOutlineColor(this.state.outlineColor)].hex;
+  }
+
+  // ── BONEYARD — shelf storage outside the level stack ──────────────────────
+  _selectBoneyard() {
+    if (this.state.boneyardActive) return;
+    this._cancelFrozenLength();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
+    this._clearSelection(false);
+    const shelf = this._activeBoneyardShelf();
+    const activeTool = ['outline', 'select'].includes(this.state.activeTool) ? this.state.activeTool : 'select';
+    this.setState({
+      boneyardActive: true,
+      activeTool,
+      drawingMessage: `BONEYARD — ${shelf.name}. Stored geometry keeps its exact position; only the active shelf shows. Nothing here prints.`,
+      drawingMessageError: false,
+    }, () => {
+      if (this._orthoCam) this._setView('top');
+      this._notifySelectionChanged();
+    });
+  }
+
+  _selectBoneyardShelf(shelfId, event) {
+    event?.stopPropagation();
+    const shelf = this.state.boneyardShelves.find(s => s.id === shelfId);
+    if (!shelf) return;
+    this._cancelOutline();
+    if (!this.state.boneyardActive) this._selectBoneyard();
+    this.setState({ activeBoneyardShelfId: shelf.id, boneyardActive: true }, () => this._markUnsaved());
+  }
+
+  _cycleBoneyardShelf() {
+    const shelves = this.state.boneyardShelves;
+    if (shelves.length < 2) return;
+    const index = shelves.findIndex(shelf => shelf.id === this.state.activeBoneyardShelfId);
+    const next = shelves[(index + 1) % shelves.length];
+    this._selectBoneyardShelf(next.id);
+  }
+
+  _addBoneyardShelf(event) {
+    event?.stopPropagation();
+    const id = this.state.nextBoneyardShelfId;
+    this._cancelOutline();
+    this.setState({
+      boneyardShelves: [...this.state.boneyardShelves, { id, name: `SHELF ${id}` }],
+      activeBoneyardShelfId: id,
+      nextBoneyardShelfId: id + 1,
+      boneyardActive: true,
+    }, () => this._markUnsaved());
   }
 
   _deleteLastShape() {
@@ -5719,6 +6146,12 @@ class Component extends DCLogic {
   // ─── Snap helpers ────────────────────────────────────────────────────────────
   _collectActiveVertices() {
     const pts = [];
+    // On the BONEYARD only the active shelf's geometry snaps.
+    if (this.state.boneyardActive) {
+      this._activeBoneyardOutlines().forEach(outline => pts.push(...outline.points));
+      if (this._outlineDrawing) pts.push(...this._outlinePoints);
+      return pts;
+    }
     this._activeLines().forEach(l => { pts.push(l.start, l.end); });
     this._pendingChain.forEach(s => { pts.push(s.start, s.end); });
     this._activeWalls().forEach(w => { pts.push(w.start, w.end); });
@@ -5727,8 +6160,10 @@ class Component extends DCLogic {
     this._activeShapes().forEach(shape => pts.push(...shape.points));
     this._activeRoofs().forEach(roof => pts.push(...roof.points));
     this._activeSurfaceOpenings().forEach(opening => pts.push(...opening.points));
+    this._activeOutlines().forEach(outline => pts.push(...outline.points));
     if (this._floorDrawing) pts.push(...this._floorPoints);
     if (this._shapeDrawing) pts.push(...this._shapePoints);
+    if (this._outlineDrawing) pts.push(...this._outlinePoints);
     if (this._surfaceOpeningDrawing) pts.push(...this._surfaceOpeningPoints);
     // Opening centres are the fenestration grab / dimension anchors.
     this._activeFenestrations().forEach(opening => {
@@ -5776,6 +6211,7 @@ class Component extends DCLogic {
   }
 
   _collectVertices() {
+    if (this.state.boneyardActive) return this._collectActiveVertices();
     return [...this._collectActiveVertices(), ...this._collectBackgroundVertices()];
   }
 
@@ -5844,13 +6280,32 @@ class Component extends DCLogic {
   _findVertexHit(worldPt) {
     const r = this._magnetRadius() * 1.5;
     let bestD = r, bestVtx = null;
+    // On the BONEYARD only shelf geometry can be grabbed; level geometry is
+    // neither visible nor editable there.
+    if (this.state.boneyardActive) {
+      const refs = [];
+      this._activeBoneyardOutlines().forEach(outline => {
+        outline.points.forEach(v => {
+          const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
+          if (d < bestD) { bestD = d; bestVtx = v; }
+        });
+      });
+      if (!bestVtx) return null;
+      this._activeBoneyardOutlines().forEach(outline => {
+        outline.points.forEach((point, index) => {
+          if (point === bestVtx) refs.push({ target: outline.points, prop: index, outline });
+        });
+      });
+      return refs.length ? refs : null;
+    }
     [...this._activeLines(), ...this._activeWalls()].forEach(seg => {
       [seg.start, seg.end].forEach(v => {
         const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
         if (d < bestD) { bestD = d; bestVtx = v; }
       });
     });
-    [...this._activeFloors(), ...this._activeShapes(), ...this._activeRoofs(), ...this._activeSurfaceOpenings()].forEach(outline => {
+    [...this._activeFloors(), ...this._activeShapes(), ...this._activeRoofs(), ...this._activeSurfaceOpenings(),
+      ...this._activeOutlines()].forEach(outline => {
       outline.points.forEach(v => {
         const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
         if (d < bestD) { bestD = d; bestVtx = v; }
@@ -5866,6 +6321,13 @@ class Component extends DCLogic {
     [...this._activeFloors(), ...this._activeShapes(), ...this._activeRoofs(), ...this._activeSurfaceOpenings()].forEach(outline => {
       outline.points.forEach((point, index) => {
         if (point === bestVtx) refs.push({ target: outline.points, prop: index });
+      });
+    });
+    // Outline refs carry their outline so a drag can propagate a master edit
+    // or record a level copy's local override.
+    this._activeOutlines().forEach(outline => {
+      outline.points.forEach((point, index) => {
+        if (point === bestVtx) refs.push({ target: outline.points, prop: index, outline });
       });
     });
     return refs.length ? refs : null;
@@ -7088,7 +7550,7 @@ class Component extends DCLogic {
         return;
       }
       if (this._windowSelection) { this._windowSelection = null; return; }
-      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
+      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this._cancelCut();
       this._clearSelection();
       return;
     }
@@ -7124,6 +7586,7 @@ class Component extends DCLogic {
       if (this._wallDrawing) { e.preventDefault(); this._finishWall();  return; }
       if (this._floorDrawing) { e.preventDefault(); this._finishFloor(); return; }
       if (this._shapeDrawing) { e.preventDefault(); this._finishShape(); return; }
+      if (this._outlineDrawing) { e.preventDefault(); this._finishOutline(); return; }
       if (this._surfaceOpeningDrawing) { e.preventDefault(); this._finishSurfaceOpening(); return; }
       // BASIC roof: Enter / Space accepts the current overhang and drops the roof.
       if (this.state.activeTool === 'roof' && this.state.roofPhase === 'overhang') {
@@ -7154,16 +7617,17 @@ class Component extends DCLogic {
     if (matches('floor')) { e.preventDefault(); this._activateContextTool('floor'); return; }
     if (matches('fenestration')) { e.preventDefault(); this._activateContextTool('fenestration'); return; }
     if (matches('shape')) { e.preventDefault(); this._activateContextTool('shape'); return; }
+    if (matches('outline')) { e.preventDefault(); this._activateContextTool('outline'); return; }
     if (matches('roof')) { e.preventDefault(); this._activateContextTool('roof'); return; }
     if (matches('dimension')) { e.preventDefault(); this._activateContextTool('dimension'); return; }
-    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
+    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
     if (matches('extend') || matches('extendAlt')) {
       e.preventDefault();
       this._activateExtendTool();
       return;
     }
-    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
-    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
+    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
+    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
     if (matches('gridSnap') || matches('gridSnapAlt')) { e.preventDefault(); this._toggleGridSnap(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
@@ -8089,7 +8553,7 @@ class Component extends DCLogic {
           edges,
           hasEdges: edges.length > 0,
           color: LEVEL_COLORS[i % LEVEL_COLORS.length],
-          rowClass: 'level-row' + (i === activeLevelIdx ? ' active' : ''),
+          rowClass: 'level-row' + (i === activeLevelIdx && !this.state.boneyardActive ? ' active' : ''),
           ...bgSlotStyle(levelSlot),
           bgTitle: levelSlot === 0 ? 'Background 1 — blue, whole level shows'
             : levelSlot === 1 ? 'Background 2 — red, whole level shows'
@@ -8100,6 +8564,18 @@ class Component extends DCLogic {
         };
       }),
       addLevel: () => this._addLevel(),
+      boneyard: {
+        rowClass: 'level-row' + (this.state.boneyardActive ? ' active' : ''),
+        title: 'BONEYARD — shelf storage: geometry parks in its exact position, never prints, never shows in 3D',
+        onSelect: () => this._selectBoneyard(),
+        onAddShelf: e => this._addBoneyardShelf(e),
+        shelves: this.state.boneyardShelves.map(shelf => ({
+          label: shelf.name,
+          title: `Show only ${shelf.name} — each shelf keeps its own geometry`,
+          rowClass: 'level-layer' + (this.state.boneyardActive && shelf.id === this.state.activeBoneyardShelfId ? ' active' : ''),
+          onSelect: event => this._selectBoneyardShelf(shelf.id, event),
+        })),
+      },
       elevationDatumLabel: this.state.elevationDatum === 100 ? "DATUM 100'" : "DATUM 0'",
       elevationDatumTitle: this.state.elevationDatum === 100
         ? "Height marks measured from a 100' datum — switch back to 0' at top of main-floor sheathing"
@@ -8117,20 +8593,21 @@ class Component extends DCLogic {
       })),
 
       tools: [
-        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
+        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
         contextualTool('line'),
         contextualTool('node'),
         contextualTool('wall'),
         contextualTool('floor'),
         contextualTool('fenestration'),
         contextualTool('shape'),
+        contextualTool('outline'),
         contextualTool('roof'),
         contextualTool('dimension'),
         standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._activateExtendTool(); }, activeTool==='extend'),
-        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
+        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
       ],
       cutShortcut: shortcut('cut'),
-      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelDimension(); this._cancelRoof(); this.setState({activeTool:'cut'}); },
+      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelRoof(); this.setState({activeTool:'cut'}); },
       cutToolBg:     isCutTool ? on.bg     : off.bg,
       cutToolColor:  isCutTool ? on.color  : off.color,
       cutToolBorder: isCutTool ? on.border : off.border,
