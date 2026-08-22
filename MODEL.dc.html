@@ -396,6 +396,7 @@
       <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Outline</div>
         <button onClick="{{ onBuildHouse }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD HOUSE</button>
+        <button onClick="{{ onOutlineGarageToggle }}" style="width:100%; box-sizing:border-box; border:1px solid {{ outlineGarageBorder }}; background:{{ outlineGarageBg }}; color:{{ outlineGarageColor }}; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ outlineGarageLabel }}</button>
         <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ buildHouseHint }}</div>
       </div>
     </sc-if>
@@ -739,6 +740,9 @@ const SIXTEENTH_IN = 1 / 16;
 const DEFAULT_WALL_TOP_FT = (8 * 12 + 1 + 1 / 8) / 12;
 const DEFAULT_FLOOR_THICKNESS_IN = 12 + 5 / 8;
 const DEFAULT_SLAB_THICKNESS_IN = 4;
+// Garage slab: 4" pour sloping 1/8" per foot, over the grade beam at the doors.
+const GARAGE_SLAB_THICKNESS_IN = 4;
+const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;
 const DEFAULT_FLOOR_ASSEMBLY = {
   joistDepthIn: 11 + 7 / 8,
   joistSpacingIn: 16,
@@ -1143,6 +1147,7 @@ class Component extends DCLogic {
     nextBoneyardShelfId: 2,
     boneyardActive: false,   // BONEYARD card selected instead of a level
     outlineColor: DEFAULT_OUTLINE_COLOR,
+    outlineGarage: false,     // next outline drawn marks the GARAGE portion
     levelLayerViews: { 5:'plan', 3:'plan', 1:'plan' },
     levelAssemblies: {},        // levelId -> wall height + floor joist/sheathing assembly
     assemblyEditor: null,       // { levelId, kind:'wall'|'floor' } open in the level rail
@@ -1288,6 +1293,8 @@ class Component extends DCLogic {
         levelId: floor.levelId,
         view: floor.view || 'floor',
         structure: floor.structure === 'slab' ? 'slab' : 'floor',
+        garage: floor.garage === true,
+        slopeInPerFt: Number(floor.slopeInPerFt) || 0,
         thickness: floor.thickness,
         assembly: { ...floor.assembly },
       })),
@@ -1310,6 +1317,8 @@ class Component extends DCLogic {
         pitch: roof.pitch,
         fascia: roof.fascia,
         heel: this._roofHeelIn(roof.pitch, roof.overhang),
+        garage: roof.garage === true,
+        plateHeightFt: Number.isFinite(Number(roof.plateHeightFt)) ? Number(roof.plateHeightFt) : null,
         layer: ROOF_LAYER,
       })),
       fenestrations: this._fenestrations.map(opening => ({
@@ -1366,12 +1375,14 @@ class Component extends DCLogic {
         id: outline.id,
         shelfId: outline.shelfId,
         sourceLevelId: outline.sourceLevelId ?? null,
+        garage: outline.garage === true,
         points: outline.points.map(p => ({ id: p.pointId, x: p.x, y: p.y || 0, z: p.z, bulge: p.bulge || 0 })),
       })),
       outlines: this._outlines.map(outline => ({
         id: outline.id,
         masterId: outline.masterId ?? null,
         levelId: outline.levelId,
+        garage: outline.garage === true,
         points: outline.points.map(p => ({ x: p.x, y: p.y || 0, z: p.z, srcId: p.srcId ?? null, bulge: p.bulge || 0 })),
         overriddenSrcIds: [...(outline.overriddenSrcIds || [])],
         layer: OUTLINE_LAYER,
@@ -1888,6 +1899,8 @@ class Component extends DCLogic {
             levelId,
              view: floor?.view === 'foundation' ? 'foundation' : 'floor',
             structure: floor.structure === 'slab' ? 'slab' : 'floor',
+            garage: floor.garage === true,
+            slopeInPerFt: Number(floor.slopeInPerFt) || 0,
             thickness: format.positive(floor.thickness, this.state.floorThickness),
             assembly: { ...DEFAULT_FLOOR_ASSEMBLY, ...(floor.assembly || {}) },
           };
@@ -1989,6 +2002,7 @@ class Component extends DCLogic {
           id,
           shelfId: outline.shelfId,
           sourceLevelId: outline.sourceLevelId != null && levelIds.has(outline.sourceLevelId) ? outline.sourceLevelId : null,
+          garage: outline.garage === true,
           points: outline.points.map(p => {
             const vtx = new THREE.Vector3(p.x, p.y, p.z);
             vtx.pointId = p.id;
@@ -2003,6 +2017,7 @@ class Component extends DCLogic {
           id: this._storedItemId(outline.id, 'outline', usedIds),
           masterId,
           levelId: outline.levelId,
+          garage: outline.garage === true,
           points: outline.points.map(p => {
             const vtx = new THREE.Vector3(p.x, levelsById.get(outline.levelId)?.elev ?? p.y, p.z);
             vtx.srcId = masterId != null ? p.srcId : null;
@@ -2796,6 +2811,32 @@ class Component extends DCLogic {
           && this._layerStandard(opening.layer).visible
           && (!this._isPrinting || this._layerStandard(opening.layer).printable))
         .forEach(opening => drawOpening(opening, { selected: this._selectedFenestrations?.has(opening) }));
+      // Grade-beam cutout notations: a door through a concrete foundation wall
+      // (the garage door or man door in a grade beam) marks the pour cut on the
+      // FOUNDATION plan — cut down 12" the width of the door so the door bottom
+      // meets the concrete, with the 4" slab pouring over the top of the beam.
+      if (this._activeLayerViewId() === 'foundation') {
+        const concreteIds = new Set(this._walls
+          .filter(wall => wall.view === 'foundation'
+            && (WALL_TYPES.find(type => type.id === wall.wallType)?.layers || []).some(layer => layer.fill === 'concrete'))
+          .map(wall => wall.id));
+        const noteFont = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+        this._fenestrations
+          .filter(opening => opening.type === 'door' && concreteIds.has(opening.wallId)
+            && displayWallIds.has(opening.wallId)
+            && this._layerStandard(opening.layer).visible
+            && (!this._isPrinting || this._layerStandard(opening.layer).printable))
+          .forEach(opening => {
+            const geoInfo = this._openingGeometry(opening);
+            if (!geoInfo) return;
+            const c = toS(geoInfo.center);
+            ctx.save();
+            ctx.fillStyle = '#b04050'; ctx.font = noteFont;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+            ctx.fillText('CUT GRADE BEAM DN 12" — SLAB POURS OVER', c.x, c.y - 9);
+            ctx.restore();
+          });
+      }
     }
     if (activeVisible && this.state.activeTool === 'fenestration' && this._snapPt && !this._isPrinting
       && !this._surfaceOpeningDrawing && !this._selectedOpeningHost()) {
@@ -3105,6 +3146,17 @@ class Component extends DCLogic {
       });
       ctx.stroke();
       ctx.setLineDash([]);
+      if (outline.garage) {
+        const centroid = outline.points.reduce(
+          (sum, point) => ({ x: sum.x + point.x, z: sum.z + point.z }),
+          { x: 0, z: 0 },
+        );
+        const s = toS({ x: centroid.x / outline.points.length, z: centroid.z / outline.points.length });
+        ctx.font = '600 11px "Barlow Condensed", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('GARAGE', s.x, s.y);
+      }
       if (showHandles) {
         outline.points.forEach(point => {
           const s = toS(point);
@@ -4861,15 +4913,17 @@ class Component extends DCLogic {
     this._ensureDrawingCollections();
     if (points.length < 3) return null;
     const shelf = this._activeBoneyardShelf();
-    const shelfHasMaster = this._boneyardOutlines.some(outline => outline.shelfId === shelf.id);
+    const shelfHasMaster = this._boneyardOutlines.some(outline => outline.shelfId === shelf.id && !outline.garage);
     const level = this.state.boneyardActive ? null : this._activeLevel();
     if (!this.state.boneyardActive && !level) return null;
 
-    if (this.state.boneyardActive || !shelfHasMaster) {
+    const garage = this.state.outlineGarage === true;
+    if (!garage && (this.state.boneyardActive || !shelfHasMaster)) {
       const master = {
         id: this._newDrawingItemId('outline'),
         shelfId: shelf.id,
         sourceLevelId: level ? level.id : null,
+        garage: false,
         points: points.map(point => {
           const vtx = new THREE.Vector3(point.x, 0, point.z);
           vtx.pointId = this._newDrawingItemId('op');
@@ -4886,10 +4940,37 @@ class Component extends DCLogic {
       return master;
     }
 
+    // A GARAGE outline works like a master: stored on the shelf and copied to
+    // every level, so the grade beam, garage slab, and garage walls all build
+    // from the same attached footprint.
+    if (garage) {
+      const master = {
+        id: this._newDrawingItemId('outline'),
+        shelfId: shelf.id,
+        sourceLevelId: level ? level.id : null,
+        garage: true,
+        points: points.map(point => {
+          const vtx = new THREE.Vector3(point.x, 0, point.z);
+          vtx.pointId = this._newDrawingItemId('op');
+          return vtx;
+        }),
+      };
+      this._boneyardOutlines.push(master);
+      this.state.levels.forEach(lvl => this._outlines.push(this._outlineCopyForLevel(master, lvl)));
+      this._markUnsaved();
+      this.setState({
+        outlineGarage: false,
+        drawingMessage: `GARAGE outline closed — copied to every level. BUILD HOUSE grows an open-C grade beam on the sides away from the house, with a 4" sloped slab pouring over the beam.`,
+        drawingMessageError: false,
+      });
+      return master;
+    }
+
     const outline = {
       id: this._newDrawingItemId('outline'),
       masterId: null,
       levelId: level.id,
+      garage: false,
       points: points.map(point => {
         const vtx = new THREE.Vector3(point.x, level.elev, point.z);
         vtx.srcId = null;
@@ -4912,6 +4993,7 @@ class Component extends DCLogic {
       id: this._newDrawingItemId('outline'),
       masterId: master.id,
       levelId: level.id,
+      garage: master.garage === true,
       points: master.points.map(point => {
         const vtx = new THREE.Vector3(point.x, level.elev, point.z);
         vtx.srcId = point.pointId;
@@ -5030,7 +5112,12 @@ class Component extends DCLogic {
   // re-running fills gaps without doubling up, and everything generated is
   // ordinary editable geometry.
   _houseOutline(levelId) {
-    const outlines = this._outlines.filter(outline => outline.levelId === levelId && outline.points.length >= 3);
+    const outlines = this._outlines.filter(outline => outline.levelId === levelId && !outline.garage && outline.points.length >= 3);
+    return outlines.length ? outlines[outlines.length - 1] : null;
+  }
+
+  _garageOutline(levelId) {
+    const outlines = this._outlines.filter(outline => outline.levelId === levelId && outline.garage && outline.points.length >= 3);
     return outlines.length ? outlines[outlines.length - 1] : null;
   }
 
@@ -5126,6 +5213,132 @@ class Component extends DCLogic {
     return true;
   }
 
+  // True when both endpoints and the midpoint of the edge a→b sit on the
+  // house outline's boundary — the garage side shared with the house.
+  _edgeOnOutline(a, b, outline, eps = 0.1) {
+    if (!outline) return false;
+    const onBoundary = pt => outline.points.some((point, index) => {
+      const { d } = this._distToLineSeg(pt, this._outlineSegment(outline, index));
+      return d <= eps;
+    });
+    return onBoundary(a) && onBoundary(b)
+      && onBoundary({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+  }
+
+  // The garage grade beam is an open C: concrete walls on every garage edge
+  // except the side(s) shared with the house, whose foundation wall closes the
+  // ring. Each open edge builds independently, so re-running fills gaps.
+  _buildGarageGradeBeam() {
+    const levelId = 1;
+    const garage = this._garageOutline(levelId);
+    if (!garage) return false;
+    const house = this._houseOutline(levelId);
+    const points = garage.points;
+    const refLine = this._outlineInteriorRef(points);
+    const topHeight = this._levelAssembly(levelId).wallHeightFt;
+    const existing = this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'foundation');
+    const eps = 0.1;
+    const hasWall = (a, b) => existing.some(wall =>
+      (Math.hypot(wall.start.x - a.x, wall.start.z - a.z) <= eps && Math.hypot(wall.end.x - b.x, wall.end.z - b.z) <= eps)
+      || (Math.hypot(wall.start.x - b.x, wall.start.z - b.z) <= eps && Math.hypot(wall.end.x - a.x, wall.end.z - a.z) <= eps));
+    let built = false;
+    points.forEach((point, index) => {
+      const next = points[(index + 1) % points.length];
+      const a = { x: point.x, z: point.z };
+      const b = { x: next.x, z: next.z };
+      if (Math.hypot(b.x - a.x, b.z - a.z) < 0.01) return;
+      if (this._edgeOnOutline(a, b, house)) return;
+      if (hasWall(a, b)) return;
+      this._walls.push({
+        id: this._newDrawingItemId('wall'),
+        start: this._mergeVertex(a, levelId, 'foundation'),
+        end: this._mergeVertex(b, levelId, 'foundation'),
+        levelId,
+        view: 'foundation',
+        wallType: 'concrete_8',
+        baseHeight: 0,
+        topHeight,
+        refLine,
+      });
+      built = true;
+    });
+    return built;
+  }
+
+  // Garage slab: 4" pour sloping 1/8" per foot toward the garage door, poured
+  // over the top of the grade beam. Skips if the garage already has a floor.
+  _buildGarageSlab() {
+    const levelId = 1;
+    const garage = this._garageOutline(levelId);
+    if (!garage) return false;
+    const centroid = garage.points.reduce(
+      (sum, point) => ({ x: sum.x + point.x, z: sum.z + point.z }),
+      { x: 0, z: 0 },
+    );
+    const centre = { x: centroid.x / garage.points.length, z: centroid.z / garage.points.length };
+    const covered = this._floors.some(floor =>
+      floor.levelId === levelId && floor.points.length >= 3 && this._pointInOutline(floor.points, centre));
+    if (covered) return false;
+    const assembly = this._levelAssembly(levelId);
+    this._floors.push({
+      id: this._newDrawingItemId('floor'),
+      points: garage.points.map(point => this._mergeVertex({ x: point.x, z: point.z }, levelId, 'foundation')),
+      levelId,
+      view: 'foundation',
+      structure: 'slab',
+      garage: true,
+      slopeInPerFt: GARAGE_SLAB_SLOPE_IN_PER_FT,
+      thickness: GARAGE_SLAB_THICKNESS_IN / 12,
+      assembly: {
+        ...DEFAULT_FLOOR_ASSEMBLY,
+        joistDepthIn: assembly.joistDepthIn,
+        joistSpacingIn: assembly.joistSpacingIn,
+        sheathingIn: assembly.sheathingIn,
+      },
+    });
+    return true;
+  }
+
+  // Garage stud walls on the lowest floor level, along the open-C edges only —
+  // the shared side is the house's own exterior wall.
+  _buildGarageWalls() {
+    const level = this._floorLevels()[0];
+    if (!level) return false;
+    const garage = this._garageOutline(level.id);
+    if (!garage) return false;
+    const house = this._houseOutline(level.id);
+    const points = garage.points;
+    const refLine = this._outlineInteriorRef(points);
+    const topHeight = this._levelAssembly(level.id).wallHeightFt;
+    const existing = this._walls.filter(wall => wall.levelId === level.id && (wall.view || 'plan') === 'plan');
+    const eps = 0.1;
+    const hasWall = (a, b) => existing.some(wall =>
+      (Math.hypot(wall.start.x - a.x, wall.start.z - a.z) <= eps && Math.hypot(wall.end.x - b.x, wall.end.z - b.z) <= eps)
+      || (Math.hypot(wall.start.x - b.x, wall.start.z - b.z) <= eps && Math.hypot(wall.end.x - a.x, wall.end.z - a.z) <= eps));
+    let built = false;
+    points.forEach((point, index) => {
+      const next = points[(index + 1) % points.length];
+      const a = { x: point.x, z: point.z };
+      const b = { x: next.x, z: next.z };
+      if (Math.hypot(b.x - a.x, b.z - a.z) < 0.01) return;
+      if (this._edgeOnOutline(a, b, house)) return;
+      if (hasWall(a, b)) return;
+      this._walls.push({
+        id: this._newDrawingItemId('wall'),
+        start: this._mergeVertex(a, level.id, 'plan'),
+        end: this._mergeVertex(b, level.id, 'plan'),
+        levelId: level.id,
+        view: 'plan',
+        wallType: 'stud_2x6',
+        baseHeight: 0,
+        topHeight,
+        refLine,
+      });
+      built = true;
+    });
+    return built;
+  }
+
   _buildHouseRoof() {
     if (this._roofs.some(roof => roof.levelId === 7)) return false;
     let outline = this._houseOutline(7);
@@ -5149,10 +5362,43 @@ class Component extends DCLogic {
     return true;
   }
 
+  // The garage roof is its own editable roof so its plate height can differ
+  // from the house. The edge shared with the house is tagged GABLE so the
+  // planes run into the house roof at the open-C side; the join usually needs
+  // a manual touch, and every point stays draggable for it.
+  _buildGarageRoof() {
+    if (this._roofs.some(roof => roof.levelId === 7 && roof.garage)) return false;
+    const garage = this._garageOutline(7) || this._garageOutline(this._floorLevels()[0]?.id);
+    if (!garage) return false;
+    const house = this._houseOutline(garage.levelId);
+    const overhang = this.state.roofOverhang;
+    const base = garage.points.map(pt => ({ x: pt.x, z: pt.z }));
+    const points = this._offsetOutline(base, overhang);
+    const edges = base.map((point, index) => {
+      const next = base[(index + 1) % base.length];
+      return this._edgeOnOutline(point, next, house) ? 'gable' : 'eave';
+    });
+    this._roofs.push({
+      id: this._newDrawingItemId('roof'),
+      points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, 7, 'roof')),
+      levelId: 7,
+      sourceLevelId: garage.levelId,
+      sourceShapeId: null,
+      edges,
+      overhang,
+      pitch: this.state.roofPitch,
+      fascia: ROOF_FASCIA_IN,
+      garage: true,
+      plateHeightFt: this._levelAssembly(this._floorLevels()[0]?.id ?? 3).wallHeightFt,
+      layer: ROOF_LAYER,
+    });
+    return true;
+  }
+
   _buildHouse() {
     this._ensureDrawingCollections();
     const floors = this._floorLevels();
-    if (![1, ...floors.map(level => level.id)].some(levelId => this._houseOutline(levelId))) {
+    if (![1, ...floors.map(level => level.id)].some(levelId => this._houseOutline(levelId) || this._garageOutline(levelId))) {
       this.setState({
         drawingMessage: 'Nothing to build from — draw the building OUTLINE first; its copies land on every level.',
         drawingMessageError: true,
@@ -5167,7 +5413,11 @@ class Component extends DCLogic {
     if (this._buildHouseWalls(1, 'foundation', 'concrete_8')) built.push('FOUNDATION walls');
     if (this._buildHouseFloor(1, 'slab')) built.push('slab');
     if (this._buildHouseFootings()) built.push('footings');
+    if (this._buildGarageWalls()) built.push('garage walls');
+    if (this._buildGarageGradeBeam()) built.push('garage grade beam');
+    if (this._buildGarageSlab()) built.push('garage slab (4" @ 1/8"/ft)');
     if (this._buildHouseRoof()) built.push(`${this.state.roofPitch}:12 roof`);
+    if (this._buildGarageRoof()) built.push('garage roof (own height — tune the house join by hand)');
     if (!built.length) {
       this.setState({
         drawingMessage: 'Every level already has its shell — delete a piece (or its walls) and BUILD HOUSE again to redo it.',
@@ -6722,6 +6972,23 @@ class Component extends DCLogic {
       ctx.fillStyle = selected ? '#5980a6' : '#47779a';
       screenPoints.forEach(point => ctx.fillRect(point.x - 2.5, point.y - 2.5, 5, 5));
       holes.forEach(hole => hole.forEach(point => ctx.fillRect(point.x - 2, point.y - 2, 4, 4)));
+    }
+    // A garage slab carries its pour + slope note so the plan reads the spec.
+    if (floor?.garage && points.length >= 3) {
+      const centroid = screenPoints.reduce(
+        (sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }),
+        { x: 0, y: 0 },
+      );
+      ctx.fillStyle = '#47779a';
+      ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      const slope = Number(floor.slopeInPerFt) || GARAGE_SLAB_SLOPE_IN_PER_FT;
+      ctx.fillText(
+        `${formatInchesOnly(Math.round((floor.thickness || GARAGE_SLAB_THICKNESS_IN / 12) * 12))} GARAGE SLAB — SLOPE ${slope === 1 / 8 ? '1/8' : slope}"/FT`,
+        centroid.x / screenPoints.length,
+        centroid.y / screenPoints.length + 6,
+      );
     }
     ctx.restore();
   }
@@ -9044,7 +9311,18 @@ class Component extends DCLogic {
       shapeToolActive: shaping,
       outlineToolActive: activeTool === 'outline',
       onBuildHouse: () => this._buildHouse(),
-      buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on every floor level, 8" concrete walls + slab + ${formatInchesOnly(this._footingWidthIn(1))} centered strip-footing lines on FOUNDATION, and a ${this.state.roofPitch}:12 all-eave roof grown from the ROOF level's outline by the roof overhang. Only levels still empty build, so re-running fills gaps without doubling up.`,
+      onOutlineGarageToggle: () => this.setState(state => ({
+        outlineGarage: !state.outlineGarage,
+        drawingMessage: !state.outlineGarage
+          ? 'GARAGE marking on — the next outline you close is the garage footprint, attached along the house outline. BUILD HOUSE grows its open-C grade beam + 4" sloped slab + roof.'
+          : 'GARAGE marking off — outlines close as ordinary house outlines again.',
+        drawingMessageError: false,
+      })),
+      outlineGarageLabel: this.state.outlineGarage ? 'MARKING GARAGE — CLICK TO CANCEL' : 'MARK GARAGE',
+      outlineGarageBorder: this.state.outlineGarage ? '#7a4a21' : 'rgba(29,31,32,0.35)',
+      outlineGarageBg: this.state.outlineGarage ? 'rgba(122,74,33,0.14)' : '#fff',
+      outlineGarageColor: this.state.outlineGarage ? '#7a4a21' : 'rgba(29,31,32,0.75)',
+      buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on every floor level, 8" concrete walls + slab + ${formatInchesOnly(this._footingWidthIn(1))} centered strip-footing lines on FOUNDATION, and a ${this.state.roofPitch}:12 all-eave roof grown from the ROOF level's outline by the roof overhang. A marked GARAGE adds its open-C grade beam (sides away from the house), a 4" slab sloped 1/8"/ft, and its own roof linking into the house roof. Only levels still empty build, so re-running fills gaps without doubling up.`,
       onShapeCapture: () => this._captureShape(),
       hasActiveShapes: this._activeShapes().length > 0,
       onShapeDelete: () => this._deleteLastShape(),
