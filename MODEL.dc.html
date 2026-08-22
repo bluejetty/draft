@@ -228,7 +228,6 @@
 
     <!-- TOOLS -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Tools</div>
       <sc-for list="{{ tools }}" as="t" hint-placeholder-count="3">
         <button onClick="{{ t.onSelect }}" disabled="{{ t.disabled }}" title="{{ t.title }}" style="display:block; width:100%; text-align:left; border:1px solid {{ t.border }}; background:{{ t.bg }}; color:{{ t.color }}; opacity:{{ t.opacity }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:{{ t.cursor }}; margin-bottom:3px;">{{ t.label }}</button>
       </sc-for>
