@@ -186,6 +186,8 @@ if (!window.DraftDrawingFormat) {
         overhang: Math.min(6, Math.max(0, number(roof?.overhang, 2))),
         pitch: Math.min(24, Math.max(0, number(roof?.pitch, 4))),
         fascia: 5.5,
+        garage: roof?.garage === true,
+        plateHeightFt: Number.isFinite(Number(roof?.plateHeightFt)) ? Number(roof.plateHeightFt) : null,
         layer: 'A-ROOF',
       };
     }).filter(Boolean);
@@ -274,6 +276,7 @@ if (!window.DraftDrawingFormat) {
         id: String(outline?.id || '').trim(),
         shelfId,
         sourceLevelId: Number.isInteger(Number(outline?.sourceLevelId)) ? Number(outline.sourceLevelId) : null,
+        garage: outline?.garage === true,
         points,
       };
     }).filter(Boolean);
@@ -298,6 +301,7 @@ if (!window.DraftDrawingFormat) {
         id: String(outline?.id || '').trim(),
         masterId: String(outline?.masterId || '').trim() || null,
         levelId: outlineLevelId,
+        garage: outline?.garage === true,
         points,
         overriddenSrcIds: (Array.isArray(outline?.overriddenSrcIds) ? outline.overriddenSrcIds : [])
           .map(id => String(id || '').trim()).filter(Boolean),
