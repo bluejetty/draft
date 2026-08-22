@@ -1,0 +1,202 @@
+// The BONEYARD is shelf storage below the level stack — not a level. The
+// OUTLINE tool draws a bright, never-printing building outline: the first one
+// completed becomes the master on the active shelf and is copied to every
+// level. Master edits move the common points everywhere; a level's own edits
+// stay local and survive later master edits.
+const { test, expect } = require('@playwright/test');
+const h = require('./helpers');
+
+function levelRow(page, name) {
+  return page.locator('.level-row').filter({ has: page.locator('.level-name', { hasText: name }) });
+}
+
+async function switchLevel(page, name) {
+  await levelRow(page, name).locator('.level-name').click();
+  await page.waitForTimeout(300);
+}
+
+async function drawOutlineRect(page) {
+  await h.selectTool(page, 'Outline');
+  await h.clickWorld(page, -8, -6);
+  await h.clickWorld(page, 8, -6);
+  await h.clickWorld(page, 8, 6);
+  await h.clickWorld(page, -8, 6);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+}
+
+async function dragWorld(page, fromX, fromZ, toX, toZ) {
+  const from = await h.worldToClient(page, fromX, fromZ);
+  const to = await h.worldToClient(page, toX, toZ);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await page.mouse.up();
+  await h.waitForSaved(page);
+}
+
+test('the first outline becomes the shelf master with a copy on every level', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.boneyardShelves).toEqual([{ id: 1, name: 'SHELF 1' }]);
+  expect(saved.boneyardOutlines).toHaveLength(1);
+  const master = saved.boneyardOutlines[0];
+  expect(master.shelfId).toBe(1);
+  expect(master.sourceLevelId).toBe(3); // drawn on MAIN FL
+  expect(master.points).toHaveLength(4);
+  master.points.forEach(p => expect(p.id).toBeTruthy());
+
+  // One linked copy per level, on the OUTLINE layer, at exact coordinates.
+  expect(saved.outlines).toHaveLength(saved.levels.length);
+  saved.outlines.forEach(outline => {
+    expect(outline.masterId).toBe(master.id);
+    expect(outline.layer).toBe('OUTLINE');
+    expect(outline.points).toHaveLength(4);
+    expect(outline.points.some(p => h.near(p.x, -8) && h.near(p.z, -6))).toBe(true);
+    expect(outline.points.some(p => h.near(p.x, 8) && h.near(p.z, 6))).toBe(true);
+    outline.points.forEach(p => expect(master.points.some(mp => mp.id === p.srcId)).toBe(true));
+  });
+  expect(new Set(saved.outlines.map(o => o.levelId)).size).toBe(saved.levels.length);
+});
+
+test('a second outline on a level stays local to that level', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page);
+
+  await h.selectTool(page, 'Outline');
+  await h.clickWorld(page, 12, 8);
+  await h.clickWorld(page, 16, 8);
+  await h.clickWorld(page, 16, 12);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.boneyardOutlines).toHaveLength(1); // still one master
+  const locals = saved.outlines.filter(o => !o.masterId);
+  expect(locals).toHaveLength(1);
+  expect(locals[0].levelId).toBe(3);
+  expect(locals[0].points).toHaveLength(3);
+});
+
+test('editing the master on the BONEYARD moves the common points on every level', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page);
+
+  await page.locator('.level-name', { hasText: 'BONEYARD' }).click();
+  await page.waitForTimeout(300);
+  await h.selectTool(page, 'Select');
+  await dragWorld(page, 8, 6, 12, 10);
+
+  const saved = await h.savedDrawing(page);
+  const master = saved.boneyardOutlines[0];
+  expect(master.points.some(p => h.near(p.x, 12) && h.near(p.z, 10))).toBe(true);
+  saved.outlines.forEach(outline => {
+    expect(outline.points.some(p => h.near(p.x, 12) && h.near(p.z, 10))).toBe(true);
+    expect(outline.points.some(p => h.near(p.x, 8) && h.near(p.z, 6))).toBe(false);
+  });
+});
+
+test('a level edit stays local and survives a later master edit', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page);
+
+  // Local edit on 2ND FL: pull one corner out.
+  await switchLevel(page, '2ND FL');
+  await h.selectTool(page, 'Select');
+  await dragWorld(page, 8, 6, 14, 11);
+
+  let saved = await h.savedDrawing(page);
+  const master = saved.boneyardOutlines[0];
+  // The master did not move.
+  expect(master.points.some(p => h.near(p.x, 14) && h.near(p.z, 11))).toBe(false);
+  const second = saved.outlines.find(o => o.levelId === 5);
+  expect(second.points.some(p => h.near(p.x, 14) && h.near(p.z, 11))).toBe(true);
+  expect(second.overriddenSrcIds).toHaveLength(1);
+
+  // Master edit to a DIFFERENT corner still reaches 2ND FL...
+  await page.locator('.level-name', { hasText: 'BONEYARD' }).click();
+  await page.waitForTimeout(300);
+  await dragWorld(page, -8, -6, -12, -10);
+
+  saved = await h.savedDrawing(page);
+  const after = saved.outlines.find(o => o.levelId === 5);
+  expect(after.points.some(p => h.near(p.x, -12) && h.near(p.z, -10))).toBe(true);
+  // ...while the local override is untouched.
+  expect(after.points.some(p => h.near(p.x, 14) && h.near(p.z, 11))).toBe(true);
+
+  // Now drag the master's corner under the override: the override holds.
+  await dragWorld(page, 8, 6, 4, 2);
+  saved = await h.savedDrawing(page);
+  const final = saved.outlines.find(o => o.levelId === 5);
+  expect(final.points.some(p => h.near(p.x, 14) && h.near(p.z, 11))).toBe(true);
+  expect(final.points.some(p => h.near(p.x, 4) && h.near(p.z, 2))).toBe(false);
+  // Levels without a local edit follow the master everywhere.
+  const main = saved.outlines.find(o => o.levelId === 3);
+  expect(main.points.some(p => h.near(p.x, 4) && h.near(p.z, 2))).toBe(true);
+});
+
+test('the BONEYARD starts with one shelf and + SHELF adds and activates another', async ({ page }) => {
+  await h.openModel(page);
+
+  const shelves = page.locator('.level-layer', { hasText: 'SHELF' });
+  await expect(shelves).toHaveCount(1);
+  await page.getByRole('button', { name: '+ SHELF' }).click();
+  await page.waitForTimeout(300);
+  await expect(page.locator('.level-layer', { hasText: 'SHELF' })).toHaveCount(2);
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.boneyardShelves).toEqual([
+    { id: 1, name: 'SHELF 1' },
+    { id: 2, name: 'SHELF 2' },
+  ]);
+  expect(saved.activeBoneyardShelfId).toBe(2);
+});
+
+test('each shelf keeps its own master; only the active shelf gets the first outline', async ({ page }) => {
+  await h.openModel(page);
+  await page.getByRole('button', { name: '+ SHELF' }).click();
+  await page.waitForTimeout(300);
+  await switchLevel(page, 'MAIN FL');
+  await drawOutlineRect(page);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.boneyardOutlines).toHaveLength(1);
+  expect(saved.boneyardOutlines[0].shelfId).toBe(2);
+});
+
+test('outlines draw in neon green on the overlay and survive a reload', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page);
+
+  // Neon green #39ff14 on the outline's edge.
+  const edge = await h.worldToClient(page, 0, -6);
+  const pixels = await h.overlayPixels(page, edge.x, edge.y);
+  expect(h.countColor(pixels, [0x39, 0xff, 0x14])).toBeGreaterThan(0);
+
+  await page.reload();
+  await expect(page.locator('[data-model-canvas]')).toBeVisible();
+  await page.waitForTimeout(500);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.boneyardOutlines).toHaveLength(1);
+  expect(saved.outlines).toHaveLength(saved.levels.length);
+});
+
+test('drawing tools are parked on the BONEYARD — only Outline works there', async ({ page }) => {
+  await h.openModel(page);
+  await page.locator('.level-name', { hasText: 'BONEYARD' }).click();
+  await page.waitForTimeout(300);
+
+  const wall = page.getByRole('button', { name: /\bWall\b/i }).first();
+  await expect(wall).toBeDisabled();
+  await expect(wall).toHaveAttribute('title', /works on a floor level/);
+
+  // Outline drawn on the BONEYARD becomes a shelf master directly.
+  await drawOutlineRect(page);
+  const saved = await h.savedDrawing(page);
+  expect(saved.boneyardOutlines).toHaveLength(1);
+  expect(saved.boneyardOutlines[0].sourceLevelId).toBe(null);
+});

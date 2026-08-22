@@ -76,6 +76,8 @@
       <div class="snap-row"><label for="snap-midpoint">Midpoint snap</label><input type="number" id="snap-midpoint" data-snap="midpoint" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="midpoint"></span></div>
       <div class="snap-row"><label for="snap-polar">Polar tracking</label><input type="number" id="snap-polar" data-snap="polar" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="polar"></span></div>
       <button class="action" id="snap-reset" type="button">RESET SNAP DEFAULTS</button>
+      <p class="advanced-note" style="margin-top:16px;">Outline guide colour — the bright, never-printing building outline drawn with the Outline tool.</p>
+      <div class="snap-row"><label for="outline-color">Outline colour</label><select id="outline-color"></select><span class="outline-swatch" id="outline-swatch" style="display:inline-block; width:18px; height:18px; border:1px solid rgba(29,31,32,.28);"></span></div>
     </details>
     <section class="groups" id="groups" aria-label="Keyboard commands"></section>
     <div class="actions">
@@ -92,7 +94,7 @@
       const groups = [
         { title:'Drawing tools', commands:[
           ['select', 'Select'], ['line', 'Line'], ['node', 'Node / Arc'], ['wall', 'Wall'],
-          ['floor', 'Floor'], ['fenestration', 'Fenestration'], ['shape', 'Shape'], ['roof', 'Roof'], ['dimension', 'Dimension'], ['trim', 'Trim'], ['cut', 'Cut'], ['group', 'Group'], ['extend', 'Extend'], ['extendAlt', 'Alternate extend'],
+          ['floor', 'Floor'], ['fenestration', 'Fenestration'], ['shape', 'Shape'], ['outline', 'Outline'], ['roof', 'Roof'], ['dimension', 'Dimension'], ['trim', 'Trim'], ['cut', 'Cut'], ['group', 'Group'], ['extend', 'Extend'], ['extendAlt', 'Alternate extend'],
         ]},
         { title:'Views', commands:[
           ['perspective', '3D perspective'], ['top', 'Top / plan'],
@@ -115,6 +117,8 @@
         command in existing ? keyboard.normaliseKeyBinding(existing[command]) : fallback,
       ]));
       let snapStrength = snaps.normaliseSnapStrength(active?.content?.model?.snapStrength);
+      const outlineColors = window.DraftOutlineColor;
+      let outlineColor = outlineColors.normaliseOutlineColor(active?.content?.model?.outlineColor);
 
       // Combinations the browser answers itself: assigning them would either do
       // nothing or reload the drawing out from under the user.
@@ -187,11 +191,23 @@
       };
 
       const saveActive = message => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapStrength } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapStrength, outlineColor } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
       };
+
+      const outlineSelect = document.querySelector('#outline-color');
+      const renderOutlineColor = () => {
+        outlineSelect.innerHTML = Object.entries(outlineColors.OUTLINE_COLORS).map(([id, color]) =>
+          `<option value="${id}"${id === outlineColor ? ' selected' : ''}>${color.label}</option>`).join('');
+        document.querySelector('#outline-swatch').style.background = outlineColors.OUTLINE_COLORS[outlineColor].hex;
+      };
+      outlineSelect.addEventListener('change', () => {
+        outlineColor = outlineColors.normaliseOutlineColor(outlineSelect.value);
+        saveActive('Outline colour saved locally.');
+        renderOutlineColor();
+      });
 
       const renderSnaps = () => {
         document.querySelectorAll('[data-snap]').forEach(input => {
@@ -220,7 +236,7 @@
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapStrength } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapStrength, outlineColor } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
@@ -229,6 +245,7 @@
 
       render();
       renderSnaps();
+      renderOutlineColor();
       showStatus('');
     })();
   </script>

@@ -190,6 +190,70 @@ if (!window.DraftDrawingFormat) {
       };
     }).filter(Boolean);
 
+  // BONEYARD shelves are storage slots outside the level stack. Every drawing
+  // has at least one shelf; drawings saved before the BONEYARD existed load
+  // with the single default shelf.
+  const boneyardShelves = raw => {
+    const seen = new Set();
+    const shelves = (Array.isArray(raw) ? raw : []).map(shelf => {
+      const id = Number(shelf?.id);
+      if (!Number.isInteger(id) || id < 1 || seen.has(id)) return null;
+      seen.add(id);
+      return { id, name: String(shelf?.name || `SHELF ${id}`).toUpperCase() };
+    }).filter(Boolean);
+    return shelves.length ? shelves : [{ id: 1, name: 'SHELF 1' }];
+  };
+
+  // Master outlines live on a BONEYARD shelf. Each point carries a stable id
+  // that level copies reference, so master edits can find their inherited
+  // counterparts without merging vertices.
+  const boneyardOutlines = (raw, shelfIds) => {
+    const seenPointIds = new Set();
+    return (Array.isArray(raw) ? raw : []).map(outline => {
+      const shelfId = Number(outline?.shelfId);
+      if (!shelfIds.has(shelfId)) return null;
+      const points = (Array.isArray(outline?.points) ? outline.points : []).map(raw => {
+        const parsed = point(raw);
+        const id = String(raw?.id || '').trim();
+        if (!parsed || !id || seenPointIds.has(id)) return null;
+        seenPointIds.add(id);
+        return { ...parsed, id };
+      }).filter(Boolean);
+      if (points.length < 3) return null;
+      return {
+        id: String(outline?.id || '').trim(),
+        shelfId,
+        sourceLevelId: Number.isInteger(Number(outline?.sourceLevelId)) ? Number(outline.sourceLevelId) : null,
+        points,
+      };
+    }).filter(Boolean);
+  };
+
+  // Level outlines are per-level copies of a master (srcId links each point to
+  // its master point) or purely local outlines (masterId null). Points whose
+  // srcId is listed in overriddenSrcIds were adjusted locally, so master edits
+  // leave them alone.
+  const outlines = (raw, levelIds) => (Array.isArray(raw) ? raw : [])
+    .map(outline => {
+      const outlineLevelId = levelId(outline?.levelId, levelIds);
+      const points = (Array.isArray(outline?.points) ? outline.points : []).map(raw => {
+        const parsed = point(raw);
+        if (!parsed) return null;
+        const srcId = String(raw?.srcId || '').trim();
+        return { ...parsed, srcId: srcId || null };
+      }).filter(Boolean);
+      if (outlineLevelId == null || points.length < 3) return null;
+      return {
+        id: String(outline?.id || '').trim(),
+        masterId: String(outline?.masterId || '').trim() || null,
+        levelId: outlineLevelId,
+        points,
+        overriddenSrcIds: (Array.isArray(outline?.overriddenSrcIds) ? outline.overriddenSrcIds : [])
+          .map(id => String(id || '').trim()).filter(Boolean),
+        layer: 'OUTLINE',
+      };
+    }).filter(Boolean);
+
   // Backgrounds are at most two other levels, never the active one.
   const backgroundLevelIds = (rawIds, levelIds, activeLevelId) =>
     (Array.isArray(rawIds) ? rawIds : [])
@@ -209,6 +273,9 @@ if (!window.DraftDrawingFormat) {
     surfaceOpenings,
     shapes,
     roofs,
+    boneyardShelves,
+    boneyardOutlines,
+    outlines,
     backgroundLevelIds,
     oneOf,
     number,
