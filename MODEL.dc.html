@@ -8600,11 +8600,11 @@ class Component extends DCLogic {
     this._stairStart = null;
     this._lockAngle = null;
     const rail = STAIR_RAIL_OPTIONS.find(option => option.id === this._stairRail());
+    this._markUnsaved();
     this.setState({
       drawingMessage: `Stair added \u2014 ${layout.risers} risers @ ${formatInchesOnly(layout.riserIn)}, ${layout.treads} treads @ ${formatInchesOnly(STAIR_TREAD_RUN_IN)}, down ${this._ftIn(layout.riseFt)} to ${descent.landing}. ${rail.note}`,
       drawingMessageError: false,
     });
-    this._markUnsaved();
   }
 
   _cancelStair() {
@@ -8618,8 +8618,8 @@ class Component extends DCLogic {
     if (!active.length) return;
     const stair = active[active.length - 1];
     this._stairs = this._stairs.filter(item => item !== stair);
-    this.setState({ drawingMessage: 'Stair removed.', drawingMessageError: false });
     this._markUnsaved();
+    this.setState({ drawingMessage: 'Stair removed.', drawingMessageError: false });
   }
 
   _commitStairWidth() {
