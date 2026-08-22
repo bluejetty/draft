@@ -40,6 +40,20 @@
     button.action:hover { border-color:#5980a6; }
     #status { margin-left:auto; color:#557a46; font-size:12px; }
     #status.warning { color:#a06035; }
+    .layouts { margin-top:18px; }
+    .layouts-title { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#5980a6; margin-bottom:8px; }
+    .layout-row { display:flex; flex-wrap:wrap; gap:8px; }
+    .layout { border:1px solid rgba(29,31,32,.24); background:#fff; color:#1d1f20; padding:7px 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; }
+    .layout:hover, .layout:focus { border-color:#5980a6; }
+    .layout.active { border-color:#5980a6; background:#5980a6; color:#fff; }
+    .layout-note { margin:8px 0 0; color:rgba(29,31,32,.55); font-size:12px; line-height:1.45; max-width:640px; }
+    .report { margin-top:22px; border:1px solid rgba(29,31,32,.17); background:#fff; }
+    .report summary { padding:10px 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#5980a6; cursor:pointer; }
+    .report-body { padding:0 14px 14px; color:rgba(29,31,32,.75); font-size:13px; line-height:1.55; }
+    .report-body h3 { margin:16px 0 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#1d1f20; }
+    .report-body ul { margin:6px 0; padding-left:20px; }
+    .report-body li { margin:4px 0; }
+    .report-body .rank { color:#5980a6; font-weight:600; }
     .advanced { margin:14px 0 22px; border-bottom:1px solid rgba(29,31,32,.12); padding-bottom:10px; }
     .advanced summary { color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; cursor:pointer; }
     .advanced summary:hover { color:#5980a6; }
@@ -68,6 +82,11 @@
     <h1>Keyboard Settings</h1>
     <p class="intro">Choose shortcuts that feel natural to you; they are saved to this browser immediately. Layers live in <a href="./STANDARDS.html" style="color:#5980a6;">Company Standard Layers</a>, and the drawing layer for new lines is picked in Model Space.</p>
     <div class="notice">Commands are grouped by purpose. A key can include modifiers such as <strong>Shift+W</strong>, <strong>Ctrl+L</strong>, or <strong>Alt+1</strong>. Some shortcuts reserved by your browser or operating system may not be available.</div>
+    <div class="layouts">
+      <div class="layouts-title">Layout presets</div>
+      <div class="layout-row" id="layout-row"></div>
+      <p class="layout-note" id="layout-note">Pick a preset to fill the bindings below with the closest match to that application; every key stays editable afterwards.</p>
+    </div>
     <details class="advanced">
       <summary>Snap magnetic pull</summary>
       <p class="advanced-note">How close the cursor must be, in screen pixels, before each snap grabs it. Larger values catch from farther away; smaller values only snap when the cursor is nearly on the point. Saved with your keyboard settings.</p>
@@ -80,6 +99,37 @@
       <div class="snap-row"><label for="outline-color">Outline colour</label><select id="outline-color"></select><span class="outline-swatch" id="outline-swatch" style="display:inline-block; width:18px; height:18px; border:1px solid rgba(29,31,32,.28);"></span></div>
     </details>
     <section class="groups" id="groups" aria-label="Keyboard commands"></section>
+    <details class="report">
+      <summary>Layout notes &amp; missing-command report</summary>
+      <div class="report-body">
+        <h3>Why presets are approximations</h3>
+        <p>AutoCAD and MicroStation muscle memory is typed multi-letter command aliases (<strong>PL</strong> polyline, <strong>TR</strong> trim, <strong>EX</strong> extend), and Revit uses two-letter shortcuts (<strong>WA</strong> wall, <strong>DI</strong> dimension). Draft currently binds a single key plus optional modifiers, so each preset is the nearest single-key match — usually the first letter of the alias. Multi-letter key sequences are a possible future upgrade if a preset ever needs to be exact.</p>
+        <h3>How the presets map</h3>
+        <ul>
+          <li><strong>AutoCAD style</strong> — A arc (node tool), T trim (TR), E extend (EX), I insert for doors/windows (blocks), Space repeats/commits like the ACAD spacebar, Ctrl+Y redo.</li>
+          <li><strong>Revit style</strong> — W wall (WA), Shift+W window/door (WN / DR), D dimension (DI), T trim (TR), Ctrl+Y redo.</li>
+          <li><strong>MicroStation style</strong> — Q element selection (first tool in the task list), P place shape, mnemonic letters elsewhere; Ctrl+Y stands in for redo because the browser keeps Ctrl+R.</li>
+          <li><strong>ArchiCAD style</strong> — A arrow (select), W wall, Shift+D door/window pair, L line; Ctrl+Z / Ctrl+Shift+Z undo/redo as ArchiCAD ships them.</li>
+        </ul>
+        <h3>Commands other apps have that Draft doesn't (yet)</h3>
+        <p>Ranked by how often a drafter reaches for them:</p>
+        <ul>
+          <li><span class="rank">1. OFFSET</span> (ACAD O, Revit OF) — copy a line/wall parallel at an exact distance. Probably the single most-used AutoCAD command.</li>
+          <li><span class="rank">2. MIRROR</span> (ACAD MI, Revit MM) — flip a copy across an axis; half the fixtures in a house are mirrored pairs.</li>
+          <li><span class="rank">3. COPY / MOVE</span> (ACAD CO / M, Revit CO / MV) — explicit copy and move with a base point and typed distance.</li>
+          <li><span class="rank">4. FILLET</span> (ACAD F) — join two lines into a clean corner (radius 0) or a radiused one.</li>
+          <li><span class="rank">5. ROTATE</span> (ACAD RO, Revit RO) — spin around a base point by a typed angle.</li>
+          <li><span class="rank">6. ARRAY</span> (ACAD AR, Revit AR) — repeat at a spacing; ideal for joists, studs, piles.</li>
+          <li><span class="rank">7. STRETCH</span> (ACAD S) — window-select and pull geometry, keeping connections (Draft's Extend covers part of this).</li>
+          <li><span class="rank">8. MATCH PROPERTIES</span> (ACAD MA) — paint one object's layer/type onto another.</li>
+          <li><span class="rank">9. TEXT / LEADER</span> (ACAD T / LE, Revit TX) — notes with arrows; needed before construction sheets.</li>
+          <li><span class="rank">10. ALIGN</span> (Revit AL) — snap one element flush with another.</li>
+          <li><span class="rank">11. SPLIT</span> (Revit SL) — break a wall/line at a point.</li>
+          <li><span class="rank">12. PIN</span> (Revit PN) — lock an element so it can't be nudged accidentally.</li>
+          <li><span class="rank">13. TAPE MEASURE</span> (ArchiCAD M) — measure without placing a dimension.</li>
+        </ul>
+      </div>
+    </details>
     <div class="actions">
       <button class="action" id="reset" type="button">RESET DEFAULTS</button>
       <button class="action primary" id="download" type="button">DOWNLOAD .DRAFT.SETTINGS</button>
@@ -169,6 +219,7 @@
             render();
           });
         });
+        renderLayouts();
       };
 
       const duplicateMessage = () => {
@@ -229,6 +280,27 @@
         saveActive('Default snap pull restored.');
         renderSnaps();
       });
+
+      const layouts = keyboard.KEYBOARD_LAYOUTS;
+      const layoutNote = document.querySelector('#layout-note');
+      const defaultLayoutNote = layoutNote.textContent;
+      // The active preset is whichever layout the current bindings equal
+      // exactly; any manual edit drops the highlight without losing the keys.
+      const matchingLayout = () => Object.keys(layouts).find(id =>
+        Object.keys(defaults).every(command => layouts[id].bindings[command] === bindings[command])) || '';
+      const renderLayouts = () => {
+        const current = matchingLayout();
+        document.querySelector('#layout-row').innerHTML = Object.entries(layouts).map(([id, layout]) =>
+          `<button class="layout${id === current ? ' active' : ''}" type="button" data-layout="${id}">${layout.label}</button>`).join('');
+        layoutNote.textContent = current ? layouts[current].note : defaultLayoutNote;
+        document.querySelectorAll('[data-layout]').forEach(button => {
+          button.addEventListener('click', () => {
+            bindings = { ...layouts[button.dataset.layout].bindings };
+            saveActive(`${layouts[button.dataset.layout].label} layout applied.`);
+            render();
+          });
+        });
+      };
 
       document.querySelector('#reset').addEventListener('click', () => {
         bindings = { ...defaults };
