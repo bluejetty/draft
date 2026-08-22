@@ -429,20 +429,38 @@
             <button onClick="{{ ft.onSelect }}" title="{{ ft.title }}" style="flex:1; border:1px solid {{ ft.border }}; background:{{ ft.bg }}; color:{{ ft.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ ft.label }}</button>
           </sc-for>
         </div>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Width</div>
-        <input type="text" value="{{ fenestrationWidthInput }}" onInput="{{ onFenestrationWidthInput }}" onBlur="{{ onFenestrationWidthCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="3'-0&quot;" aria-label="Opening width" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-        <div style="margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-          <sc-if value="{{ fenestrationIsWindow }}" hint-placeholder-val="{{ false }}">
+        <sc-if value="{{ fenestrationIsWallType }}" hint-placeholder-val="{{ true }}">
+          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Width</div>
+          <input type="text" value="{{ fenestrationWidthInput }}" onInput="{{ onFenestrationWidthInput }}" onBlur="{{ onFenestrationWidthCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="3'-0&quot;" aria-label="Opening width" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+          <div style="margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <sc-if value="{{ fenestrationIsWindow }}" hint-placeholder-val="{{ false }}">
+              <div>
+                <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Sill Ht</div>
+                <input type="text" value="{{ fenestrationSillInput }}" onInput="{{ onFenestrationSillInput }}" onBlur="{{ onFenestrationSillCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="2'-6&quot;" aria-label="Window sill height" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+              </div>
+            </sc-if>
             <div>
-              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Sill Ht</div>
-              <input type="text" value="{{ fenestrationSillInput }}" onInput="{{ onFenestrationSillInput }}" onBlur="{{ onFenestrationSillCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="2'-6&quot;" aria-label="Window sill height" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Head Ht</div>
+              <input type="text" value="{{ fenestrationHeadInput }}" onInput="{{ onFenestrationHeadInput }}" onBlur="{{ onFenestrationHeadCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="6'-8&quot;" aria-label="Opening head height" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
             </div>
-          </sc-if>
-          <div>
-            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Head Ht</div>
-            <input type="text" value="{{ fenestrationHeadInput }}" onInput="{{ onFenestrationHeadInput }}" onBlur="{{ onFenestrationHeadCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="6'-8&quot;" aria-label="Opening head height" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
           </div>
-        </div>
+        </sc-if>
+        <sc-if value="{{ fenestrationIsStairs }}" hint-placeholder-val="{{ false }}">
+          <sc-if value="{{ hasStairOpeningReq }}" hint-placeholder-val="{{ false }}">
+            <div style="border:1px solid rgba(176,64,80,0.45); background:rgba(176,64,80,0.07); color:#b04050; padding:6px 8px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em;">{{ stairOpeningReq }}</div>
+          </sc-if>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <div>
+              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Stair Width</div>
+              <input type="text" value="{{ stairOpeningWidthInput }}" onInput="{{ onStairOpeningWidthInput }}" onBlur="{{ onStairOpeningWidthCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="3'-0&quot;" aria-label="Stair width" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+            </div>
+            <div>
+              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Headroom</div>
+              <input type="text" value="{{ stairHeadroomInput }}" onInput="{{ onStairHeadroomInput }}" onBlur="{{ onStairHeadroomCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="6'-10&quot;" aria-label="Stair headroom" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+            </div>
+          </div>
+          <div style="margin-top:5px; color:rgba(29,31,32,0.62); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.3;">{{ stairOpeningNote }}</div>
+        </sc-if>
         <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ fenestrationLayerNote }}</div>
         <sc-if value="{{ hasFenestrationDimensionError }}" hint-placeholder-val="{{ false }}">
           <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ fenestrationDimensionError }}</div>
@@ -1036,6 +1054,17 @@ const DEFAULT_WINDOW_WIDTH_FT = 4;
 const DEFAULT_WINDOW_SILL_FT = 2.5;
 const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
 const FENESTRATION_LAYERS = Object.freeze({ door: 'A-DOOR', window: 'A-GLAZ' });
+// STAIR OPENING — the rough opening cut into a floor for a stair to pass
+// through, placed from the FLOOR layer set. Width is the stair width plus a
+// 1" total finish allowance (drywall lining the opening sides); length runs
+// from the top nosing until the walking line clears the headroom under the
+// floor assembly (6'-10" default, a company standard later), rounded up to
+// the next whole inch. It is only offered when both floor surfaces are
+// measurable, and it keys to the interior face of whatever wall assembly
+// serves as the exterior wall there — 2x6, ICF, the insulated basement
+// wall — never a hard-coded thickness.
+const STAIR_OPENING_FINISH_IN = 1;
+const DEFAULT_STAIR_HEADROOM_FT = (6 * 12 + 10) / 12;
 // Surface openings — free-form closed outlines cut from a selected floor or
 // roof footprint (stairwells, skylights, chimneys). Any closed shape works;
 // the host keeps its own geometry and the opening renders as a hole in it.
@@ -1282,6 +1311,10 @@ class Component extends DCLogic {
     fenestrationHead: DEFAULT_OPENING_HEAD_FT,
     fenestrationHeadInput: formatArchitecturalInches(DEFAULT_OPENING_HEAD_FT * 12),
     fenestrationDimensionError: '',
+    stairOpeningWidthFt: DEFAULT_STAIR_WIDTH_FT,
+    stairOpeningWidthInput: formatArchitecturalInches(DEFAULT_STAIR_WIDTH_FT * 12),
+    stairHeadroomFt: DEFAULT_STAIR_HEADROOM_FT,
+    stairHeadroomInput: formatArchitecturalInches(DEFAULT_STAIR_HEADROOM_FT * 12),
     flooringThicknessInput: '',
     roofMode: 'basic',   // 'basic' edge-drawn roof | 'shape' built from a SHAPE outline
     roofPhase: 'idle',   // basic flow: 'idle' → 'edge' → 'direction' → 'overhang'
@@ -2690,6 +2723,10 @@ class Component extends DCLogic {
     this._outlinePoints  = [];
     this._outlineStart   = null;
 
+    // Stair-opening state — the anchored interior-face pick awaiting the
+    // direction click.
+    this._stairOpeningAnchor = null;
+
     // Surface-opening drawing state — a free-form hole in a floor or roof.
     this._surfaceOpeningDrawing = false;
     this._surfaceOpeningPoints  = [];
@@ -3082,6 +3119,7 @@ class Component extends DCLogic {
       }
     }
     if (activeVisible && this.state.activeTool === 'fenestration' && this._snapPt && !this._isPrinting
+      && this.state.fenestrationType !== 'stairs'
       && !this._surfaceOpeningDrawing && !this._selectedOpeningHost()) {
       const placement = this._fenestrationPlacement(this._snapPt);
       if (placement && !placement.error) {
@@ -3091,6 +3129,29 @@ class Component extends DCLogic {
           offset: placement.offset,
           width: placement.width,
         }, { preview: true });
+      }
+    }
+    // Stair opening ghost: once the interior face is anchored, the measured
+    // rectangle previews toward the cursor's side until the second click.
+    if (activeVisible && this.state.activeTool === 'fenestration' && !this._isPrinting
+      && this.state.fenestrationType === 'stairs' && this._stairOpeningAnchor && this._snapPt) {
+      const pick = this._stairOpeningAnchor;
+      const anchor = this._stairOpeningAnchorPt();
+      const dir = ((this._snapPt.x - anchor.x) * pick.ux + (this._snapPt.z - anchor.z) * pick.uz) >= 0 ? 1 : -1;
+      const rect = this._stairOpeningRect(dir);
+      if (rect) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(176,64,80,0.85)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        rect.forEach((pt, i) => {
+          const s = toS(pt);
+          if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+        });
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
       }
     }
 
@@ -6512,6 +6573,12 @@ class Component extends DCLogic {
       return;
     }
     const pt = this._snapPt; if (!pt) return;
+    // STAIRS cuts a measured rough opening into the floor — it takes priority
+    // over hole mode so the selected host floor doesn't hijack the clicks.
+    if (this.state.fenestrationType === 'stairs') {
+      this._handleStairOpeningClick();
+      return;
+    }
     // A selected floor or roof switches the tool to hole mode: the opening
     // outline is any closed shape drawn inside the host. With nothing
     // selected the tool hosts a door / window on a wall as usual.
@@ -6635,6 +6702,7 @@ class Component extends DCLogic {
   }
 
   _cancelSurfaceOpening() {
+    this._cancelStairOpening();
     if (!this._surfaceOpeningDrawing) return;
     this._surfaceOpeningPoints = [];
     this._surfaceOpeningDrawing = false;
@@ -6685,13 +6753,225 @@ class Component extends DCLogic {
   }
 
   _setFenestrationType(value) {
-    const type = value === 'window' ? 'window' : 'door';
+    const type = value === 'window' ? 'window' : value === 'stairs' ? 'stairs' : 'door';
     if (type === this.state.fenestrationType) return;
+    this._cancelSurfaceOpening();
     this.setState({
       fenestrationType: type,
-      fenestrationWidthInput: formatArchitecturalInches(this._fenestrationWidth(type) * 12),
+      fenestrationWidthInput: type === 'stairs'
+        ? this.state.fenestrationWidthInput
+        : formatArchitecturalInches(this._fenestrationWidth(type) * 12),
       fenestrationDimensionError: '',
     });
+  }
+
+  // ─── Stair opening (FENESTRATION · STAIRS) ───────────────────────────
+  // A stair opening is only offered when both floor surfaces the stair spans
+  // are measurable: the floor being cut and the surface it lands on below —
+  // the lower level's floor, or the foundation slab under the lowest level.
+  // Anything missing shades the option out with a REQ message naming it.
+  _stairOpeningRequirement(levelId = this._activeLevelId()) {
+    const floors = this._floorLevels();
+    const idx = floors.findIndex(level => level.id === levelId);
+    if (idx < 0) return 'REQ FLOOR LEVEL';
+    const missing = [];
+    const hasFloor = id => this._floors.some(floor => floor.levelId === id
+      && floor.structure !== 'slab' && floor.points.length >= 3);
+    if (!hasFloor(levelId)) missing.push(floors[idx].name);
+    if (idx === 0) {
+      const slab = this._floors.some(floor => floor.levelId === 1
+        && floor.structure === 'slab' && !floor.garage && floor.points.length >= 3);
+      if (!slab) missing.push('FDN SLAB');
+    } else if (!hasFloor(floors[idx - 1].id)) {
+      missing.push(floors[idx - 1].name);
+    }
+    if (missing.length) return `REQ ${missing.join(', ')}`;
+    const descent = this._stairDescent(levelId);
+    if (!descent || !(descent.riseFt > 0)) return 'REQ LEVEL HEIGHTS';
+    return '';
+  }
+
+  // Rough opening sizes. Width: the stair width plus the finish allowance.
+  // Length: descending from the top nosing, the head clears once the drop
+  // reaches the headroom plus the floor assembly depth — drop accrues one
+  // riser per tread of run — rounded up to the next whole inch.
+  _stairOpeningSize(levelId = this._activeLevelId()) {
+    const descent = this._stairDescent(levelId);
+    if (!descent || !(descent.riseFt > 0)) return null;
+    const layout = this._stairLayout(descent.riseFt);
+    const clearIn = this.state.stairHeadroomFt * 12 + this._levelFloorFt(levelId) * 12;
+    const lengthIn = Math.ceil(clearIn / layout.riserIn * STAIR_TREAD_RUN_IN);
+    const widthIn = this.state.stairOpeningWidthFt * 12 + STAIR_OPENING_FINISH_IN;
+    return { layout, descent, lengthIn, widthIn, lengthFt: lengthIn / 12, widthFt: widthIn / 12 };
+  }
+
+  // The wall the opening keys to: nearest PLAN wall on the level, with the
+  // interior face taken from its own assembly — the face on the side of the
+  // click, whatever the wall is (2x6 stud, ICF, the insulated basement wall).
+  _stairOpeningWallPick(worldPt) {
+    const levelId = this._activeLevelId();
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    const thresh = (this._orthoHalfH * 2) / h * 24;
+    let best = null, bestD = thresh;
+    this._walls
+      .filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan')
+      .forEach(wall => {
+        const { d, t } = this._distToLineSeg(worldPt, wall);
+        if (d < bestD) { bestD = d; best = { wall, t }; }
+      });
+    if (!best) return null;
+    const wall = best.wall;
+    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+    const len = Math.hypot(dx, dz);
+    if (!(len > 0)) return null;
+    const ux = dx / len, uz = dz / len;
+    const nx = -uz, nz = ux;
+    const def = WALL_TYPES.find(w => w.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
+    const totalFt = def.totalIn / 12;
+    const refLine = wall.refLine || 'center';
+    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
+    const endOff = startOff + totalFt;
+    const along = Math.min(Math.max(best.t * len, 0), len);
+    // Interior is the side of the wall the level's floor sits on: probe a
+    // point past each face and keep the side a floor contains. A click side
+    // only breaks the tie when the floor spans both.
+    const floors = this._floors.filter(floor => floor.levelId === levelId
+      && floor.structure !== 'slab' && floor.points.length >= 3);
+    const sideHasFloor = side => {
+      const off = (side > 0 ? endOff : startOff) + side * 1;
+      const probe = {
+        x: wall.start.x + ux * along + nx * off,
+        z: wall.start.z + uz * along + nz * off,
+      };
+      return floors.some(floor => this._pointInOutline(floor.points, probe));
+    };
+    const relX = worldPt.x - wall.start.x, relZ = worldPt.z - wall.start.z;
+    const across = relX * nx + relZ * nz;
+    const clickSide = across >= (startOff + endOff) / 2 ? 1 : -1;
+    const plus = sideHasFloor(1), minus = sideHasFloor(-1);
+    const inward = plus === minus ? clickSide : plus ? 1 : -1;
+    const faceOff = inward > 0 ? endOff : startOff;
+    return { wall, def, ux, uz, nx, nz, faceOff, inward, along, len };
+  }
+
+  _stairOpeningAnchorPt() {
+    const pick = this._stairOpeningAnchor;
+    if (!pick) return null;
+    return {
+      x: pick.wall.start.x + pick.ux * pick.along + pick.nx * pick.faceOff,
+      z: pick.wall.start.z + pick.uz * pick.along + pick.nz * pick.faceOff,
+    };
+  }
+
+  // The opening rectangle from the anchored interior face: length runs along
+  // the wall (dir picks which way), width comes into the room off the face.
+  _stairOpeningRect(dir, size = this._stairOpeningSize()) {
+    const pick = this._stairOpeningAnchor;
+    const anchor = this._stairOpeningAnchorPt();
+    if (!pick || !anchor || !size) return null;
+    const lx = pick.ux * dir * size.lengthFt, lz = pick.uz * dir * size.lengthFt;
+    const wx = pick.nx * pick.inward * size.widthFt, wz = pick.nz * pick.inward * size.widthFt;
+    return [
+      { x: anchor.x, z: anchor.z },
+      { x: anchor.x + lx, z: anchor.z + lz },
+      { x: anchor.x + lx + wx, z: anchor.z + lz + wz },
+      { x: anchor.x + wx, z: anchor.z + wz },
+    ];
+  }
+
+  _cancelStairOpening() {
+    if (!this._stairOpeningAnchor) return;
+    this._stairOpeningAnchor = null;
+    this.setState({ isDrawing: false });
+  }
+
+  // Two clicks: the first against a wall keys the opening to that wall's
+  // interior face, the second picks which way it runs along the wall. The
+  // rectangle must land inside a floor on the level, and cuts as an ordinary
+  // surface opening on A-FL-OPNG.
+  _handleStairOpeningClick() {
+    const pt = this._snapPt; if (!pt) return;
+    const req = this._stairOpeningRequirement();
+    if (req) {
+      this.setState({
+        drawingMessage: `${req} — the stair opening needs both floor surfaces before it can be measured.`,
+        drawingMessageError: true,
+      });
+      return;
+    }
+    const size = this._stairOpeningSize();
+    if (!size) return;
+    if (!this._stairOpeningAnchor) {
+      const pick = this._stairOpeningWallPick(pt);
+      if (!pick) {
+        this.setState({
+          drawingMessage: 'Click against a wall — the stair opening keys to the interior face of the wall it sits along.',
+          drawingMessageError: true,
+        });
+        return;
+      }
+      this._stairOpeningAnchor = pick;
+      this.setState({
+        isDrawing: true,
+        drawingMessage: `Keyed to the interior face of the ${pick.def.label} wall — click which way the opening runs along it.`,
+        drawingMessageError: false,
+      });
+      return;
+    }
+    const pick = this._stairOpeningAnchor;
+    const anchor = this._stairOpeningAnchorPt();
+    const dir = ((pt.x - anchor.x) * pick.ux + (pt.z - anchor.z) * pick.uz) >= 0 ? 1 : -1;
+    const points = this._stairOpeningRect(dir, size);
+    const centre = {
+      x: (points[0].x + points[2].x) / 2,
+      z: (points[0].z + points[2].z) / 2,
+    };
+    const levelId = this._activeLevelId();
+    const floor = this._floors.find(f => f.levelId === levelId && f.structure !== 'slab'
+      && f.points.length >= 3 && this._pointInOutline(f.points, centre));
+    if (!floor) {
+      this.setState({
+        drawingMessage: 'The opening must land inside this level\'s floor — click along a wall the floor reaches.',
+        drawingMessageError: true,
+      });
+      return;
+    }
+    this._stairOpeningAnchor = null;
+    this._commitSurfaceOpening({ type: 'floor', item: floor }, points);
+    this.setState({
+      isDrawing: false,
+      drawingMessage: `Stair opening cut on A-FL-OPNG — ${formatArchitecturalInches(size.widthIn)} × ${formatArchitecturalInches(size.lengthIn)}`
+        + ` (stair width + ${formatInchesOnly(STAIR_OPENING_FINISH_IN)} finish · length clears ${formatArchitecturalInches(this.state.stairHeadroomFt * 12)} headroom to ${size.descent.landing}).`,
+      drawingMessageError: false,
+    });
+  }
+
+  _commitStairOpeningWidth() {
+    const parsed = parseArchitecturalLength(this.state.stairOpeningWidthInput);
+    if (!parsed.ok || parsed.inches <= 0) {
+      this.setState({ fenestrationDimensionError: parsed.ok ? 'Stair width must be greater than zero.' : parsed.error });
+      return false;
+    }
+    this.setState({
+      stairOpeningWidthFt: parsed.inches / 12,
+      stairOpeningWidthInput: formatArchitecturalInches(parsed.inches),
+      fenestrationDimensionError: '',
+    });
+    return true;
+  }
+
+  _commitStairHeadroom() {
+    const parsed = parseArchitecturalLength(this.state.stairHeadroomInput);
+    if (!parsed.ok || parsed.inches <= 0) {
+      this.setState({ fenestrationDimensionError: parsed.ok ? 'Headroom must be greater than zero.' : parsed.error });
+      return false;
+    }
+    this.setState({
+      stairHeadroomFt: parsed.inches / 12,
+      stairHeadroomInput: formatArchitecturalInches(parsed.inches),
+      fenestrationDimensionError: '',
+    });
+    return true;
   }
 
   _commitFenestrationWidth() {
@@ -9323,7 +9603,20 @@ class Component extends DCLogic {
       noteDraft: '',
       drawingMessage: 'Type the note — Enter commits, Escape cancels.',
       drawingMessageError: false,
-    }, () => document.querySelector('[data-note-editor-input]')?.focus());
+    }, () => this._focusNoteEditor());
+  }
+
+  // The editor input mounts a frame or two after setState resolves, so focus
+  // retries across a few frames until the keyboard actually lands in it.
+  _focusNoteEditor(attempts = 10) {
+    const input = document.querySelector('[data-note-editor-input]');
+    if (input) {
+      input.focus();
+      if (document.activeElement === input) return;
+    }
+    if (attempts > 0 && this.state.noteEditor) {
+      requestAnimationFrame(() => this._focusNoteEditor(attempts - 1));
+    }
   }
 
   _commitNote() {
@@ -10396,6 +10689,11 @@ class Component extends DCLogic {
     const holeHost = fenestrating
       ? (this._surfaceOpeningDrawing ? this._surfaceOpeningHost : this._selectedOpeningHost())
       : null;
+    const stairOpeningReq = fenestrating ? this._stairOpeningRequirement() : '';
+    const stairOpeningSize = fenestrating && !stairOpeningReq ? this._stairOpeningSize() : null;
+    const stairOpeningNote = stairOpeningSize
+      ? `Rough opening ${formatArchitecturalInches(stairOpeningSize.widthIn)} × ${formatArchitecturalInches(stairOpeningSize.lengthIn)} — stair width + ${formatInchesOnly(STAIR_OPENING_FINISH_IN)} drywall finish; length clears the headroom under the floor, rounded up to 1". Click along a wall to key the interior face, then the direction it runs.`
+      : 'The stair opening is sized from the stair width and the headroom under the floor above the stair.';
     const shaping = activeTool === 'shape';
     const drawingShape = isDrawing && shaping;
     const roofing = activeTool === 'roof';
@@ -10585,19 +10883,35 @@ class Component extends DCLogic {
         ? `${holeHost.type === 'roof' ? 'ROOF' : 'FLOOR'} selected — click the opening's corners inside it (any shape), then the first corner again to close. Saves on ${SURFACE_OPENING_LAYERS[holeHost.type]}.`
         : '',
       fenestrationIsWindow: this.state.fenestrationType === 'window',
-      fenestrationTypeBtns: ['door', 'window'].map(value => {
+      fenestrationIsWallType: this.state.fenestrationType !== 'stairs',
+      fenestrationIsStairs: this.state.fenestrationType === 'stairs',
+      fenestrationTypeBtns: ['door', 'window', 'stairs'].map(value => {
         const isActive = this.state.fenestrationType === value;
+        const stairsMuted = value === 'stairs' && Boolean(stairOpeningReq);
         return {
-          label: value === 'window' ? 'WINDOW' : 'DOOR',
+          label: value === 'window' ? 'WINDOW' : value === 'stairs' ? 'STAIRS' : 'DOOR',
           title: value === 'window'
             ? 'Window opening — saves on A-GLAZ with a sill height'
-            : 'Door opening — saves on A-DOOR, sill at the bottom of the wall',
+            : value === 'stairs'
+              ? (stairOpeningReq
+                ? `${stairOpeningReq} — both floor surfaces must be measurable before a stair opening can be sized`
+                : 'Stair opening — cuts a measured rough opening into the floor on A-FL-OPNG')
+              : 'Door opening — saves on A-DOOR, sill at the bottom of the wall',
           border: isActive ? '#1d1f20' : 'rgba(29,31,32,0.2)',
           bg: isActive ? '#1d1f20' : '#fff',
-          color: isActive ? '#f2f2f3' : '#1d1f20',
+          color: isActive ? '#f2f2f3' : stairsMuted ? 'rgba(29,31,32,0.35)' : '#1d1f20',
           onSelect: () => this._setFenestrationType(value),
         };
       }),
+      hasStairOpeningReq: Boolean(stairOpeningReq),
+      stairOpeningReq,
+      stairOpeningNote,
+      stairOpeningWidthInput: this.state.stairOpeningWidthInput,
+      onStairOpeningWidthInput: e => this.setState({ stairOpeningWidthInput: e.target.value }),
+      onStairOpeningWidthCommit: () => this._commitStairOpeningWidth(),
+      stairHeadroomInput: this.state.stairHeadroomInput,
+      onStairHeadroomInput: e => this.setState({ stairHeadroomInput: e.target.value }),
+      onStairHeadroomCommit: () => this._commitStairHeadroom(),
       fenestrationWidthInput: this.state.fenestrationWidthInput,
       onFenestrationWidthInput: e => this.setState({ fenestrationWidthInput: e.target.value }),
       onFenestrationWidthCommit: () => this._commitFenestrationWidth(),
@@ -10613,7 +10927,9 @@ class Component extends DCLogic {
       fenestrationDimensionError: this.state.fenestrationDimensionError,
       fenestrationLayerNote: this.state.fenestrationType === 'window'
         ? 'Saves on A-GLAZ · heights from the bottom of the wall'
-        : 'Saves on A-DOOR · sill sits at the bottom of the wall',
+        : this.state.fenestrationType === 'stairs'
+          ? 'Saves on A-FL-OPNG · keyed to the interior face of the wall it sits along'
+          : 'Saves on A-DOOR · sill sits at the bottom of the wall',
       shapeToolActive: shaping,
       outlineToolActive: activeTool === 'outline',
       dimensionToolActive: dimensioning,
