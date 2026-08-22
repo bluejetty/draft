@@ -152,6 +152,39 @@ test('FROM SHAPE builds the footprint from the newest shape grown by the overhan
   });
 });
 
+test('an L-shaped footprint gets a ridge inside and no guide outside', async ({ page }) => {
+  await h.openModel(page);
+  await switchLevel(page, 'ROOF');
+
+  // L-shape: bar z∈[-8,0] × x∈[-10,10] plus wing x∈[-10,0] × z∈[0,8].
+  await h.selectTool(page, 'Shape');
+  await h.clickWorld(page, -10, -8);
+  await h.clickWorld(page, 10, -8);
+  await h.clickWorld(page, 10, 0);
+  await h.clickWorld(page, 0, 0);
+  await h.clickWorld(page, 0, 8);
+  await h.clickWorld(page, -10, 8);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  await h.selectTool(page, 'Roof');
+  await page.getByRole('button', { name: 'FROM SHAPE', exact: true }).click();
+  await page.getByRole('button', { name: 'BUILD FROM SHAPE' }).click();
+  await h.waitForSaved(page);
+  await page.waitForTimeout(400);
+
+  // The bar's ridge runs along z=-4 (all-eave inset of the 12'-wide grown bar).
+  const guideColor = [163, 112, 63];
+  const onRidge = await h.worldToClient(page, 4, -4);
+  expect(h.countColor(await h.overlayPixels(page, onRidge.x, onRidge.y), guideColor)).toBeGreaterThan(0);
+  // The wing's ridge runs along x=-4.
+  const onWingRidge = await h.worldToClient(page, -4, 4);
+  expect(h.countColor(await h.overlayPixels(page, onWingRidge.x, onWingRidge.y), guideColor)).toBeGreaterThan(0);
+  // The old skeleton shot a stray guide out past the footprint on L-shapes.
+  const outside = await h.worldToClient(page, 18, -4);
+  expect(h.countColor(await h.overlayPixels(page, outside.x, outside.y), guideColor)).toBe(0);
+});
+
 test('a roof survives a reload', async ({ page }) => {
   await h.openModel(page);
   await drawBasicRoof(page);

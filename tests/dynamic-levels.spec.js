@@ -104,6 +104,7 @@ test('the insulation wall type is drawable on the foundation PLAN', async ({ pag
   // Work on FOUNDATION's PLAN layer set.
   await levelRow(page, 'FOUNDATION').locator('.level-body').click();
   await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'PLAN' }).click();
+  await page.waitForTimeout(300);
 
   await h.selectTool(page, 'Wall');
   await page.getByRole('button', { name: 'Insul Wall  (6½")' }).click();
@@ -117,4 +118,67 @@ test('the insulation wall type is drawable on the foundation PLAN', async ({ pag
   expect(saved.walls[0].wallType).toBe('insulation_6');
   expect(saved.walls[0].levelId).toBe(1);
   expect(saved.walls[0].view).toBe('plan');
+});
+
+test('wall types follow the context: structural on FOUNDATION, stud walls on PLAN', async ({ page }) => {
+  await h.openModel(page);
+
+  await levelRow(page, 'FOUNDATION').locator('.level-body').click();
+  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'FOUNDATION' }).click();
+  await page.waitForTimeout(300);
+  await h.selectTool(page, 'Wall');
+
+  // The FOUNDATION layer set offers only the structural assemblies.
+  await expect(page.getByRole('button', { name: '8" Concrete' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Insul Wall  (6½")' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '2×4 Stud  (3½")' })).toHaveCount(0);
+
+  // The PLAN layer set on the FOUNDATION card offers the stud / insul walls.
+  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'PLAN' }).click();
+  await page.waitForTimeout(300);
+  await expect(page.getByRole('button', { name: 'Insul Wall  (6½")' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '2×4 Stud  (3½")' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '8" Concrete' })).toHaveCount(0);
+
+  // A wall drawn here is a plan wall even if a structural type was active.
+  await h.clickWorld(page, -6, 0);
+  await h.clickWorld(page, 6, 0);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  const saved = await h.savedDrawing(page);
+  expect(saved.walls).toHaveLength(1);
+  expect(saved.walls[0].view).toBe('plan');
+  expect(saved.walls[0].wallType).toBe('stud_2x6');
+});
+
+test('the foundation PLAN shows the concrete walls as a locked reference', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page);
+  await buildHouse(page);
+  await h.waitForSaved(page);
+
+  await levelRow(page, 'FOUNDATION').locator('.level-body').click();
+  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'PLAN' }).click();
+  await page.waitForTimeout(400);
+
+  // The concrete wall drawn on the FOUNDATION set renders on PLAN too.
+  const onWall = await h.worldToClient(page, 0, -6);
+  const pixels = await h.overlayPixels(page, onWall.x, onWall.y);
+  expect(h.countColor(pixels, [29, 31, 32])).toBeGreaterThan(0);
+
+  // But it stays locked: dragging its edge with Select moves nothing.
+  await h.selectTool(page, 'Select');
+  const from = await h.worldToClient(page, 0, -6);
+  const to = await h.worldToClient(page, 0, -12);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(400);
+  const saved = await h.savedDrawing(page);
+  const foundationWalls = saved.walls.filter(wall => wall.levelId === 1 && wall.view === 'foundation');
+  expect(foundationWalls).toHaveLength(4);
+  foundationWalls.forEach(wall => {
+    expect(Math.abs(wall.start.z) <= 6.5 && Math.abs(wall.end.z) <= 6.5).toBe(true);
+  });
 });
