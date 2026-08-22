@@ -88,7 +88,7 @@ if (!window.DraftDrawingFormat) {
       if (!Number.isInteger(id) || seen.has(id) || !start || !end || dimensionLevelId == null || !view) return null;
       if (Math.hypot(end.x - start.x, end.z - start.z) < 0.001) return null;
       seen.add(id);
-      return { id, start, end, levelId: dimensionLevelId, view };
+      return { id, start, end, levelId: dimensionLevelId, view, auto: dimension?.auto === true };
     }).filter(Boolean);
   };
 
