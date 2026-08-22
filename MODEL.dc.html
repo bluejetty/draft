@@ -44,11 +44,9 @@
     .level-layer-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-head { display:flex; align-items:flex-start; gap:5px; }
     .level-title { flex-shrink:0; min-width:0; }
-    .level-heights { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; padding-top:1px; }
-    .level-height { display:flex; justify-content:space-between; gap:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; line-height:1.25; letter-spacing:0.03em; color:rgba(29,31,32,0.5); text-transform:uppercase; white-space:nowrap; overflow:hidden; }
-    .level-height-val { color:rgba(29,31,32,0.72); font-weight:600; }
-    .level-height-edit { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:0 3px; font:inherit; font-weight:600; line-height:1.25; }
-    .level-height-edit:hover { border-color:#5980a6; color:#5980a6; }
+    .level-edge-space { flex:1; }
+    .level-edge-edit { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:1px 3px; font:inherit; }
+    .level-edge-edit:hover { border-color:#5980a6; color:#5980a6; }
     .level-head .level-bg { margin-top:0; }
     .level-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:flex-start; margin-top:4px; }
     .level-edge { display:flex; align-items:center; gap:3px; min-height:9px; }
@@ -501,39 +499,22 @@
               <div class="level-title">
                 <div class="level-name">{{ level.name }}</div>
               </div>
-              <sc-if value="{{ level.hasHeights }}" hint-placeholder-val="{{ false }}">
-                <div class="level-heights">
-                  <sc-for list="{{ level.heights }}" as="mark" hint-placeholder-count="2">
-                    <div class="level-height"><span>{{ mark.label }}</span>
-                      <sc-if value="{{ mark.editable }}" hint-placeholder-val="{{ false }}">
-                        <button type="button" class="level-height-val level-height-edit" onClick="{{ mark.onEdit }}" title="{{ mark.title }}">{{ mark.value }}</button>
-                      </sc-if>
-                      <sc-if value="{{ mark.plain }}" hint-placeholder-val="{{ true }}">
-                        <span class="level-height-val">{{ mark.value }}</span>
-                      </sc-if>
-                    </div>
-                  </sc-for>
-                  <sc-if value="{{ level.hasSlabEditor }}" hint-placeholder-val="{{ false }}">
-                    <div class="level-assembly-editor" onClick="{{ level.slabEditor.onClick }}">
-                      <div class="assembly-row">
-                        <span class="assembly-label">SLAB</span>
-                        <input class="assembly-input" value="{{ level.slabEditor.input }}" onInput="{{ level.slabEditor.onInput }}" onKeyDown="{{ level.slabEditor.onKey }}" />
-                      </div>
-                      <sc-if value="{{ level.slabEditor.hasError }}" hint-placeholder-val="{{ false }}">
-                        <div class="assembly-error">{{ level.slabEditor.error }}</div>
-                      </sc-if>
-                      <button type="button" class="assembly-ok" onClick="{{ level.slabEditor.onAccept }}" title="Accept — Enter or Space">OK</button>
-                    </div>
-                  </sc-if>
-                </div>
-              </sc-if>
             </div>
              <sc-if value="{{ level.hasLayers }}" hint-placeholder-val="{{ false }}">
                <div class="level-layer-stack">
                  <sc-for list="{{ level.layers }}" as="layer" hint-placeholder-count="3">
-                   <sc-if value="{{ layer.hasEdgeTop }}" hint-placeholder-val="{{ false }}">
-                     <div class="level-edge" title="Top of floor sheathing"><span class="level-edge-line"></span><span class="level-edge-val">{{ layer.edgeTop }}</span></div>
-                   </sc-if>
+                   <sc-for list="{{ layer.edgesTop }}" as="edge" hint-placeholder-count="1">
+                     <div class="level-edge" title="{{ edge.title }}">
+                       <sc-if value="{{ edge.hasLine }}" hint-placeholder-val="{{ true }}"><span class="level-edge-line"></span></sc-if>
+                       <sc-if value="{{ edge.noLine }}" hint-placeholder-val="{{ false }}"><span class="level-edge-space"></span></sc-if>
+                       <sc-if value="{{ edge.editable }}" hint-placeholder-val="{{ false }}">
+                         <button type="button" class="level-edge-val level-edge-edit" onClick="{{ edge.onEdit }}" title="{{ edge.title }}">{{ edge.value }}</button>
+                       </sc-if>
+                       <sc-if value="{{ edge.plain }}" hint-placeholder-val="{{ true }}">
+                         <span class="level-edge-val">{{ edge.value }}</span>
+                       </sc-if>
+                     </div>
+                   </sc-for>
                    <div class="level-layer-row">
                      <button type="button" class="level-layer-bg" onClick="{{ layer.onToggleBackground }}" title="{{ layer.bgTitle }}" style="background:{{ layer.bgButtonBg }}; border-color:{{ layer.bgButtonBorder }}; color:{{ layer.bgButtonColor }};">{{ layer.bgLabel }}</button>
                      <button type="button" class="{{ layer.rowClass }}" onClick="{{ layer.onSelect }}" title="{{ layer.title }}">{{ layer.label }}</button>
@@ -574,9 +555,30 @@
                        <button type="button" class="assembly-ok" onClick="{{ layer.assemblyEditor.onAccept }}" title="Accept — Enter or Space">OK</button>
                      </div>
                    </sc-if>
-                   <sc-if value="{{ layer.hasEdgeBottom }}" hint-placeholder-val="{{ false }}">
-                     <div class="level-edge" title="Bottom of floor — top of wall or foundation below"><span class="level-edge-line"></span><span class="level-edge-val">{{ layer.edgeBottom }}</span></div>
+                   <sc-if value="{{ layer.hasDepthEditor }}" hint-placeholder-val="{{ false }}">
+                     <div class="level-assembly-editor" onClick="{{ layer.depthEditor.onClick }}">
+                       <div class="assembly-row">
+                         <span class="assembly-label">{{ layer.depthEditor.label }}</span>
+                         <input class="assembly-input" value="{{ layer.depthEditor.input }}" onInput="{{ layer.depthEditor.onInput }}" onKeyDown="{{ layer.depthEditor.onKey }}" />
+                       </div>
+                       <sc-if value="{{ layer.depthEditor.hasError }}" hint-placeholder-val="{{ false }}">
+                         <div class="assembly-error">{{ layer.depthEditor.error }}</div>
+                       </sc-if>
+                       <button type="button" class="assembly-ok" onClick="{{ layer.depthEditor.onAccept }}" title="Accept — Enter or Space">OK</button>
+                     </div>
                    </sc-if>
+                   <sc-for list="{{ layer.edgesBottom }}" as="edge" hint-placeholder-count="1">
+                     <div class="level-edge" title="{{ edge.title }}">
+                       <sc-if value="{{ edge.hasLine }}" hint-placeholder-val="{{ true }}"><span class="level-edge-line"></span></sc-if>
+                       <sc-if value="{{ edge.noLine }}" hint-placeholder-val="{{ false }}"><span class="level-edge-space"></span></sc-if>
+                       <sc-if value="{{ edge.editable }}" hint-placeholder-val="{{ false }}">
+                         <button type="button" class="level-edge-val level-edge-edit" onClick="{{ edge.onEdit }}" title="{{ edge.title }}">{{ edge.value }}</button>
+                       </sc-if>
+                       <sc-if value="{{ edge.plain }}" hint-placeholder-val="{{ true }}">
+                         <span class="level-edge-val">{{ edge.value }}</span>
+                       </sc-if>
+                     </div>
+                   </sc-for>
                    <sc-if value="{{ layer.hasContents }}" hint-placeholder-val="{{ false }}">
                      <div class="level-layer-contents">
                        <sc-for list="{{ layer.contents }}" as="content" hint-placeholder-count="5">
@@ -584,6 +586,13 @@
                        </sc-for>
                      </div>
                    </sc-if>
+                 </sc-for>
+               </div>
+             </sc-if>
+             <sc-if value="{{ level.hasEdges }}" hint-placeholder-val="{{ false }}">
+               <div class="level-layer-stack">
+                 <sc-for list="{{ level.edges }}" as="edge" hint-placeholder-count="1">
+                   <div class="level-edge" title="{{ edge.title }}"><span class="level-edge-line"></span><span class="level-edge-val">{{ edge.value }}</span></div>
                  </sc-for>
                </div>
              </sc-if>
@@ -680,6 +689,7 @@ const defaultLevelAssembly = () => ({
   joistSpacingIn: DEFAULT_FLOOR_ASSEMBLY.joistSpacingIn,
   sheathingIn: DEFAULT_FLOOR_ASSEMBLY.sheathingIn,
   slabThicknessIn: DEFAULT_FDN_SLAB_THICKNESS_IN,
+  footingDepthIn: DEFAULT_FOOTING_DEPTH_IN,
 });
 const normaliseLevelAssembly = raw => {
   const base = defaultLevelAssembly();
@@ -693,6 +703,7 @@ const normaliseLevelAssembly = raw => {
     joistSpacingIn: positive(raw.joistSpacingIn, base.joistSpacingIn),
     sheathingIn: positive(raw.sheathingIn, base.sheathingIn),
     slabThicknessIn: positive(raw.slabThicknessIn, base.slabThicknessIn),
+    footingDepthIn: positive(raw.footingDepthIn, base.footingDepthIn),
   };
 };
 const MODEL_STORAGE_BUCKET = 'model-drawing';
@@ -7208,76 +7219,67 @@ class Component extends DCLogic {
     return null;
   }
 
-  _levelHeightMarks(levelId) {
+  // The FOUNDATION card carries its heights on border lines like the floor
+  // profiles: the line above the FOUNDATION box is the bottom of the wall
+  // (top of footing), the line below is the base of the footing / excavation,
+  // and the top of slab — where basement stairs land — floats above without a
+  // line. Slab thickness and footing depth change by clicking their numbers.
+  _foundationHeights() {
     const datum = this.state.elevationDatum;
-    const mark = (label, feet, extra = {}) => ({
-      label,
-      value: this._elevLabel(feet + datum),
-      editable: false,
-      plain: true,
-      title: '',
-      onEdit: () => {},
-      ...extra,
-    });
-    if (levelId === 7) {
-      // The roof's main number is the 2nd-floor top of wall — where the
-      // trusses bear.
-      const trussBearing = this._levelAssembly(3).wallHeightFt
-        + this._levelFloorFt(5) + this._levelAssembly(5).wallHeightFt;
-      return [mark('T.O. WALL / TRUSS BRG', trussBearing)];
-    }
-    if (levelId === 1) {
-      // The foundation's main number is the bottom of the wall (top of
-      // footing); the excavation runs a footing deeper. The unlabeled top
-      // number is the top of slab — where basement stairs land — and clicking
-      // it edits the slab thickness.
-      const wallBottom = -this._levelFloorFt(3) - this._levelWallTopFt(1, 'foundation');
-      const slabIn = this._levelAssembly(1).slabThicknessIn;
-      return [
-        mark('', wallBottom + slabIn / 12, {
-          editable: true,
-          plain: false,
-          title: `Top of slab — ${formatInchesOnly(slabIn)} thick, click to change`,
-          onEdit: event => this._openSlabEditor(levelId, event),
-        }),
-        mark('B.O. WALL / T.O. FTG', wallBottom),
-        mark('B.O. FTG / EXCAV', wallBottom - DEFAULT_FOOTING_DEPTH_IN / 12),
-      ];
-    }
-    return [];
+    const assembly = this._levelAssembly(1);
+    const wallBottom = -this._levelFloorFt(3) - this._levelWallTopFt(1, 'foundation');
+    return {
+      slabIn: assembly.slabThicknessIn,
+      footingIn: assembly.footingDepthIn,
+      slabTop: this._elevLabel(wallBottom + assembly.slabThicknessIn / 12 + datum),
+      wallBottom: this._elevLabel(wallBottom + datum),
+      footingBottom: this._elevLabel(wallBottom - assembly.footingDepthIn / 12 + datum),
+    };
   }
 
-  _openSlabEditor(levelId, event) {
+  // The roof card's number is the 2nd-floor top of wall — where the walls
+  // meet the truss bottoms.
+  _roofBearingHeight() {
+    const bearing = this._levelAssembly(3).wallHeightFt
+      + this._levelFloorFt(5) + this._levelAssembly(5).wallHeightFt;
+    return this._elevLabel(bearing + this.state.elevationDatum);
+  }
+
+  _openDepthEditor(levelId, kind, event) {
     event?.stopPropagation();
-    const current = this.state.slabEditor;
-    if (current && current.levelId === levelId) {
-      this.setState({ slabEditor: null, slabError: '' });
+    const current = this.state.depthEditor;
+    if (current && current.levelId === levelId && current.kind === kind) {
+      this.setState({ depthEditor: null, depthError: '' });
       return;
     }
+    const assembly = this._levelAssembly(levelId);
     this.setState({
-      slabEditor: { levelId },
-      slabInput: formatInchesOnly(this._levelAssembly(levelId).slabThicknessIn),
-      slabTyped: false,
-      slabError: '',
+      depthEditor: { levelId, kind },
+      depthInput: formatInchesOnly(kind === 'footing' ? assembly.footingDepthIn : assembly.slabThicknessIn),
+      depthTyped: false,
+      depthError: '',
     });
   }
 
-  _commitSlabEditor() {
-    const editor = this.state.slabEditor;
+  _commitDepthEditor() {
+    const editor = this.state.depthEditor;
     if (!editor) return;
-    const parsed = parseAssemblyInches(this.state.slabInput);
+    const parsed = parseAssemblyInches(this.state.depthInput);
     if (!parsed.ok || parsed.inches <= 0) {
-      this.setState({ slabError: parsed.ok ? 'Slab thickness must be greater than zero.' : parsed.error });
+      this.setState({ depthError: parsed.ok ? 'Depth must be greater than zero.' : parsed.error });
       return;
     }
-    const assembly = { ...this._levelAssembly(editor.levelId), slabThicknessIn: parsed.inches };
+    const field = editor.kind === 'footing' ? 'footingDepthIn' : 'slabThicknessIn';
+    const assembly = { ...this._levelAssembly(editor.levelId), [field]: parsed.inches };
     // Editing the slab on the working level also drives the FLOOR tool's slab
     // thickness, so newly drawn slabs match.
-    const syncSlab = editor.levelId === this._activeLevel()?.id && this.state.floorStructure === 'slab';
+    const syncSlab = editor.kind === 'slab'
+      && editor.levelId === this._activeLevel()?.id
+      && this.state.floorStructure === 'slab';
     this.setState({
       levelAssemblies: { ...this.state.levelAssemblies, [editor.levelId]: assembly },
-      slabEditor: null,
-      slabError: '',
+      depthEditor: null,
+      depthError: '',
       ...(syncSlab ? {
         floorThickness: parsed.inches / 12,
         floorThicknessInput: formatArchitecturalInches(parsed.inches),
@@ -7871,11 +7873,39 @@ class Component extends DCLogic {
               onAccept: e => { e.stopPropagation(); this._commitAssemblyEditor(); },
             }
           : null);
+        const plainEdge = (value, title) => ({
+          value, title, hasLine: true, noLine: false, plain: true, editable: false, onEdit: () => {},
+        });
+        const editEdge = (value, title, kind, withLine) => ({
+          value, title, hasLine: withLine, noLine: !withLine, plain: false, editable: true,
+          onEdit: event => this._openDepthEditor(l.id, kind, event),
+        });
+        const fdn = l.id === 1 ? this._foundationHeights() : null;
         const layers = this._layerViewsForLevel(l.id).map(view => {
           const viewSlot = scopedView === view.id ? slot : -1;
           const assemblyKind = borderHeights && view.id === 'plan' ? 'wall'
             : borderHeights && view.id === 'floor' ? 'floor' : null;
           const assemblyEditor = assemblyKind ? editorModel(assemblyKind) : null;
+          const isFdnBox = fdn != null && view.id === 'foundation';
+          const depthEditor = isFdnBox && this.state.depthEditor?.levelId === l.id
+            ? {
+                label: this.state.depthEditor.kind === 'footing' ? 'FTG DP' : 'SLAB',
+                input: this.state.depthInput,
+                onInput: e => this.setState({ depthInput: e.target.value, depthTyped: true, depthError: '' }),
+                onKey: e => {
+                  if (e.key === 'Enter' || (e.key === ' ' && !this.state.depthTyped)) {
+                    e.preventDefault();
+                    this._commitDepthEditor();
+                  }
+                  if (e.key === 'Escape') { e.preventDefault(); this.setState({ depthEditor: null, depthError: '' }); }
+                  e.stopPropagation();
+                },
+                onClick: e => e.stopPropagation(),
+                onAccept: e => { e.stopPropagation(); this._commitDepthEditor(); },
+                hasError: Boolean(this.state.depthError),
+                error: this.state.depthError,
+              }
+            : null;
           return {
             label: view.label,
             title: `Show ${view.label} items on ${l.name}`,
@@ -7894,10 +7924,21 @@ class Component extends DCLogic {
             onOpenAssembly: event => this._openAssemblyEditor(l.id, assemblyKind, event),
             assemblyEditor,
             hasAssemblyEditor: assemblyEditor != null,
-            edgeTop: assemblyKind === 'floor' ? borderHeights.sheathingTop : null,
-            hasEdgeTop: assemblyKind === 'floor',
-            edgeBottom: assemblyKind === 'floor' ? borderHeights.floorBottom : null,
-            hasEdgeBottom: assemblyKind === 'floor',
+            edgesTop: assemblyKind === 'floor'
+              ? [plainEdge(borderHeights.sheathingTop, 'Top of floor sheathing')]
+              : isFdnBox
+                ? [
+                    editEdge(fdn.slabTop, `Top of slab — ${formatInchesOnly(fdn.slabIn)} thick, click to change`, 'slab', false),
+                    plainEdge(fdn.wallBottom, 'Bottom of foundation wall — top of footing'),
+                  ]
+                : [],
+            edgesBottom: assemblyKind === 'floor'
+              ? [plainEdge(borderHeights.floorBottom, 'Bottom of floor — top of wall or foundation below')]
+              : isFdnBox
+                ? [editEdge(fdn.footingBottom, `Base of footing / excavation — ${formatInchesOnly(fdn.footingIn)} deep footing, click to change`, 'footing', true)]
+                : [],
+            depthEditor,
+            hasDepthEditor: depthEditor != null,
             ...bgSlotStyle(viewSlot),
             bgTitle: viewSlot === 0 ? `Background 1 — blue, only ${view.label} shows`
               : viewSlot === 1 ? `Background 2 — red, only ${view.label} shows`
@@ -7906,33 +7947,15 @@ class Component extends DCLogic {
             onToggleBackground: event => this._toggleBackgroundLayerView(l.id, view.id, event),
           };
         });
-        const heights = this._levelHeightMarks(l.id);
-        const slabEditor = this.state.slabEditor?.levelId === l.id
-          ? {
-              input: this.state.slabInput,
-              onInput: e => this.setState({ slabInput: e.target.value, slabTyped: true, slabError: '' }),
-              onKey: e => {
-                if (e.key === 'Enter' || (e.key === ' ' && !this.state.slabTyped)) {
-                  e.preventDefault();
-                  this._commitSlabEditor();
-                }
-                if (e.key === 'Escape') { e.preventDefault(); this.setState({ slabEditor: null, slabError: '' }); }
-                e.stopPropagation();
-              },
-              onClick: e => e.stopPropagation(),
-              onAccept: e => { e.stopPropagation(); this._commitSlabEditor(); },
-              hasError: Boolean(this.state.slabError),
-              error: this.state.slabError,
-            }
-          : null;
+        const edges = l.id === 7
+          ? [{ value: this._roofBearingHeight(), title: 'Top of 2nd floor walls — where the roof trusses bear' }]
+          : [];
         return {
           name: l.name,
           layers,
           hasLayers: layers.length > 0,
-          heights,
-          hasHeights: heights.length > 0,
-          slabEditor,
-          hasSlabEditor: slabEditor != null,
+          edges,
+          hasEdges: edges.length > 0,
           color: LEVEL_COLORS[i % LEVEL_COLORS.length],
           rowClass: 'level-row' + (i === activeLevelIdx ? ' active' : ''),
           ...bgSlotStyle(levelSlot),
