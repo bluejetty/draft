@@ -128,7 +128,8 @@
         <option value="model">.model</option>
         <option value="plan">.plan</option>
       </select>
-       <button onClick="{{ importDrawing }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">IMPORT</button>
+       <button onClick="{{ newDrawing }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">NEW</button>
+       <button onClick="{{ openDrawing }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">OPEN</button>
        <input data-drawing-import type="file" accept="application/json,.json,.draft,.model,.plan" onChange="{{ onDrawingFilePicked }}" style="display:none;" />
       <button onClick="{{ saveDrawingFile }}" style="height:24px; border:1px solid #5980a6; background:#5980a6; color:#fff; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE</button>
     </div>
@@ -142,6 +143,20 @@
     </div>
   </div>
 </div>
+
+<sc-if value="{{ fileGuardOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; inset:0; z-index:52; display:flex; align-items:flex-start; justify-content:center; padding-top:78px; background:rgba(29,31,32,0.18);">
+    <div data-file-guard role="dialog" aria-modal="true" aria-label="{{ fileGuardTitle }}" style="width:min(360px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">{{ fileGuardTitle }}</div>
+      <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">Save your current drawing to a file first?</div>
+      <div style="display:flex; gap:6px; margin-top:14px;">
+        <button onClick="{{ fileGuardSave }}" style="flex:1; height:28px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE FIRST</button>
+        <button onClick="{{ fileGuardSkip }}" style="flex:1; height:28px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">DON'T SAVE</button>
+        <button onClick="{{ fileGuardCancel }}" style="height:28px; border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.55); padding:0 10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">CANCEL</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
 
 <sc-if value="{{ profileDialogOpen }}" hint-placeholder-val="{{ false }}">
   <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:flex-start; justify-content:center; padding-top:78px; background:rgba(29,31,32,0.18);">
@@ -1044,6 +1059,7 @@ class Component extends DCLogic {
     profileDialogError: false,
     persistenceStatus: 'UNSAVED',
     persistenceError: '',
+    fileGuardAction: '',
     drawingMessage: '',
     drawingMessageError: false,
     webglUnavailable: false,
@@ -1269,10 +1285,56 @@ class Component extends DCLogic {
   _saveDrawingFile() {
     this._downloadDrawingFile();
     this._markUnsaved();
+    this._fileDirty = false;
   }
 
   _chooseDrawingImport() {
     document.querySelector('[data-drawing-import]')?.click();
+  }
+
+  // NEW and OPEN both replace the current drawing, so when it has changes not
+  // yet saved to a file they first ask whether to save it.
+  _requestFileAction(action) {
+    if (!this._fileDirty) {
+      this._runFileAction(action);
+      return;
+    }
+    this.setState({ fileGuardAction: action });
+  }
+
+  _runFileAction(action = this.state.fileGuardAction) {
+    if (this.state.fileGuardAction) this.setState({ fileGuardAction: '' });
+    if (action === 'new') this._newDrawing();
+    else if (action === 'open') this._chooseDrawingImport();
+  }
+
+  async _newDrawing() {
+    if (!this._blankDrawing) return;
+    this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelCut(); this._cancelRoof();
+    this._extendUndo = null;
+    this._loadingDrawing = true;
+    let result = { ok: false };
+    try {
+      result = await this._applyDrawingData(JSON.parse(this._blankDrawing));
+    } catch (error) {
+      console.warn('Unable to start a new drawing:', error);
+    } finally {
+      this._loadingDrawing = false;
+    }
+    if (!result.ok) return;
+    this.setState({
+      wallBaseInput: formatArchitecturalInches(this.state.wallBaseHeight * 12),
+      wallTopInput: formatArchitecturalInches(this.state.wallTopHeight * 12),
+      floorThicknessInput: formatArchitecturalInches(this.state.floorThickness * 12),
+      roofOverhangInput: formatArchitecturalInches(this.state.roofOverhang * 12),
+      roofPitchInput: String(this.state.roofPitch),
+    }, () => {
+      this._applyLevelElevation(this.state.activeLevelIdx);
+      if (this._orthoCam) this._setView('top');
+      this._markUnsaved();
+      this._fileDirty = false;
+      this.setState({ drawingMessage: 'New drawing started.', drawingMessageError: false });
+    });
   }
 
   async _importDrawingFile(file) {
@@ -1280,6 +1342,7 @@ class Component extends DCLogic {
     const result = await this._loadDrawing(file);
     if (result.ok) {
       this._markUnsaved();
+      this._fileDirty = false;
       const skipped = result.skipped || 0;
       this.setState({
         drawingMessage: skipped
@@ -1917,6 +1980,7 @@ class Component extends DCLogic {
   _markUnsaved() {
     if (this._loadingDrawing || !this._drawingReady) return;
     this._recordHistory();
+    this._fileDirty = true;
     this.setState({ persistenceStatus: 'UNSAVED', persistenceError: '', drawingMessage: '', drawingMessageError: false });
     if (!window.SharedFileStore) return;
 
@@ -2215,6 +2279,8 @@ class Component extends DCLogic {
     this._applyLevelElevation(this.state.activeLevelIdx);
     this._setView('top');
     this.setState({ webglUnavailable: !this._webglAvailable });
+    // The pristine startup drawing, kept so NEW can hand back a blank sheet.
+    this._blankDrawing = JSON.stringify(this._serializeDrawing());
     this._loadDrawing();
     this._invalidate();
     this._animate();
@@ -8101,13 +8167,19 @@ class Component extends DCLogic {
           .replace(/[^a-z0-9_-]/g, '') || 'json';
         this.setState({ saveExtension: extension }, () => this._markUnsaved());
       },
-       importDrawing: () => this._chooseDrawingImport(),
+       newDrawing: () => this._requestFileAction('new'),
+       openDrawing: () => this._requestFileAction('open'),
        onDrawingFilePicked: e => {
          const file = e.target.files?.[0];
          if (file) this._importDrawingFile(file);
          e.target.value = '';
        },
       saveDrawingFile: () => this._saveDrawingFile(),
+      fileGuardOpen: Boolean(this.state.fileGuardAction),
+      fileGuardTitle: this.state.fileGuardAction === 'new' ? 'NEW DRAWING' : 'OPEN DRAWING',
+      fileGuardSave: () => { this._saveDrawingFile(); this._runFileAction(); },
+      fileGuardSkip: () => this._runFileAction(),
+      fileGuardCancel: () => this.setState({ fileGuardAction: '' }),
       viewLabel: viewLabels[activeView] || 'TOP / PLAN',
       backgroundStatus,
       backgroundStatusColor,
