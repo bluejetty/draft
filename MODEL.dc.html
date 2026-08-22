@@ -887,6 +887,9 @@ function parseAssemblyInches(value) {
 const WALL_TYPES = [
   { id:'stud_2x4',    label:'2×4 Stud  (3½")',   totalIn:3.5,   layers:[{in:3.5,   fill:'stud'}] },
   { id:'stud_2x6',    label:'2×6 Stud  (5½")',   totalIn:5.5,   layers:[{in:5.5,   fill:'stud'}] },
+  // Basement wall insul at concrete — ½" air space off the conc wall, 2×6 SPF
+  // w/ R22 batt, ½" drywall inside; lines the concrete on the foundation PLAN.
+  { id:'insulation_6', label:'Insul Wall  (6½")',   totalIn:6.5,   layers:[{in:0.5,   fill:'insulation'},{in:5.5, fill:'insulation'},{in:0.5, fill:'stud'}] },
   { id:'concrete_8',  label:'8" Concrete',         totalIn:8,     layers:[{in:8,     fill:'concrete'}] },
   { id:'icf',         label:'ICF  (11¼")',         totalIn:11.25, layers:[{in:2.625,fill:'insulation'},{in:6,fill:'concrete'},{in:2.625,fill:'insulation'}] },
   { id:'icf_13',      label:'ICF  (13¼")',         totalIn:13.25, layers:[{in:2.625,fill:'insulation'},{in:8,fill:'concrete'},{in:2.625,fill:'insulation'}] },
@@ -944,24 +947,29 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
   3: 'MAIN FL',
   1: 'FOUNDATION',
 });
+const FLOOR_LEVEL_VIEWS = Object.freeze([
+  Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
+  Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
+  Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION'] }),
+]);
 const LEVEL_LAYER_VIEWS = Object.freeze({
-  5: Object.freeze([
-    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
-    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
-    Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION'] }),
-  ]),
-  3: Object.freeze([
-    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
-    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'PLAN DIMENSIONS', 'ROOM IDS / AREA'] }),
-    Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION'] }),
-  ]),
+  5: FLOOR_LEVEL_VIEWS,
+  3: FLOOR_LEVEL_VIEWS,
   1: Object.freeze([
     Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ'] }),
     Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL/FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION'] }),
   ]),
 });
-const DEFAULT_LEVEL_LAYER_VIEWS = Object.freeze({ 5:'plan', 3:'plan', 1:'plan' });
+// SITE and ROOF are whole-level drafting contexts; every other positive level
+// — including levels added with + ADD — is a floor with the standard sets.
+const WHOLE_LEVEL_IDS = Object.freeze([7, 8]);
+const layerViewsForLevelId = levelId => {
+  const id = Number(levelId);
+  return LEVEL_LAYER_VIEWS[id]
+    || (id > 0 && !WHOLE_LEVEL_IDS.includes(id) ? FLOOR_LEVEL_VIEWS : []);
+};
+const defaultLayerViewId = levelId => (layerViewsForLevelId(levelId).length ? 'plan' : null);
 // Layer standards revealed by a layer-set button collapse again after a minute.
 const LAYER_REVEAL_MS = 60000;
 const migrateLevelId = value => {
@@ -1079,7 +1087,7 @@ class Component extends DCLogic {
     nextBoneyardShelfId: 2,
     boneyardActive: false,   // BONEYARD card selected instead of a level
     outlineColor: DEFAULT_OUTLINE_COLOR,
-    levelLayerViews: { ...DEFAULT_LEVEL_LAYER_VIEWS },
+    levelLayerViews: { 5:'plan', 3:'plan', 1:'plan' },
     levelAssemblies: {},        // levelId -> wall height + floor joist/sheathing assembly
     assemblyEditor: null,       // { levelId, kind:'wall'|'floor' } open in the level rail
     assemblyWallInput: '',
@@ -1632,10 +1640,10 @@ class Component extends DCLogic {
       const activeLevelIdx = Math.max(0, levels.findIndex(level => level.id === activeLevelId));
       const levelLayerViews = {};
       levels.forEach(level => {
-        const availableViews = LEVEL_LAYER_VIEWS[level.id] || [];
+        const availableViews = layerViewsForLevelId(level.id);
         if (!availableViews.length) return;
         const savedView = saved.levelLayerViews?.[level.id];
-        const fallbackView = DEFAULT_LEVEL_LAYER_VIEWS[level.id] || availableViews[0].id;
+        const fallbackView = defaultLayerViewId(level.id) || availableViews[0].id;
         levelLayerViews[level.id] = availableViews.some(view => view.id === savedView)
           ? savedView
           : fallbackView;
@@ -1645,7 +1653,7 @@ class Component extends DCLogic {
         levelIds,
         levels[activeLevelIdx].id,
       );
-      const viewIdsFor = id => (LEVEL_LAYER_VIEWS[id] || []).map(view => view.id);
+      const viewIdsFor = id => layerViewsForLevelId(id).map(view => view.id);
       const storedBackgroundViews = saved.backgroundLevelViews && typeof saved.backgroundLevelViews === 'object'
         ? saved.backgroundLevelViews : {};
       const backgroundLevelViews = {};
@@ -3156,7 +3164,16 @@ class Component extends DCLogic {
   }
 
   _layerViewsForLevel(levelId = this._activeLevelId()) {
-    return LEVEL_LAYER_VIEWS[levelId] || [];
+    return layerViewsForLevelId(levelId);
+  }
+
+  // Floor levels carry the stacked construction profile — returned bottom-up
+  // (the levels rail lists top-down).
+  _floorLevels() {
+    return this.state.levels
+      .filter(level => layerViewsForLevelId(level.id).some(view => view.id === 'floor'))
+      .slice()
+      .reverse();
   }
 
   _activeLayerViewId(levelId = this._activeLevelId()) {
@@ -3165,7 +3182,7 @@ class Component extends DCLogic {
     const selected = this.state.levelLayerViews?.[levelId];
     return views.some(view => view.id === selected)
       ? selected
-      : (DEFAULT_LEVEL_LAYER_VIEWS[levelId] || views[0].id);
+      : (defaultLayerViewId(levelId) || views[0].id);
   }
 
   _draftingContextLabel(viewId = this._activeLayerViewId()) {
@@ -3645,8 +3662,13 @@ class Component extends DCLogic {
   }
 
   _addLevel() {
-    const name = window.prompt('Level name:', 'NEW LEVEL'); if (name === null) return;
-    const elevRaw = window.prompt('Elevation in feet (negative = below grade):', '0'); if (elevRaw === null) return;
+    const floors = this._floorLevels();
+    const count = floors.length + 1;
+    const suggestedName = `${count === 1 ? '1ST' : count === 2 ? '2ND' : count === 3 ? '3RD' : `${count}TH`} FL`;
+    const name = window.prompt('Level name:', suggestedName); if (name === null) return;
+    const topFloor = floors[floors.length - 1];
+    const suggestedElev = topFloor ? (Number(topFloor.elev) || 0) + 9 : 0;
+    const elevRaw = window.prompt('Elevation in feet (negative = below grade):', String(suggestedElev)); if (elevRaw === null) return;
     const elev = parseFloat(elevRaw); if (isNaN(elev)) return;
     const id = this.state.nextLevelId;
     // Every regular level carries a copy of each master outline; a freshly
@@ -3656,8 +3678,15 @@ class Component extends DCLogic {
     this._boneyardOutlines.forEach(master => {
       this._outlines.push(this._outlineCopyForLevel(master, level));
     });
+    // New floors stack above the current top floor in the rail (below ROOF).
+    const levels = [...this.state.levels];
+    const insertIdx = topFloor ? levels.findIndex(entry => entry.id === topFloor.id) : levels.length;
+    levels.splice(insertIdx, 0, level);
+    const activeLevelIdx = this.state.activeLevelIdx
+      + (insertIdx <= this.state.activeLevelIdx ? 1 : 0);
     this.setState({
-      levels: [...this.state.levels, level],
+      levels,
+      activeLevelIdx,
       nextLevelId: id + 1,
     }, () => this._markUnsaved());
   }
@@ -4742,7 +4771,7 @@ class Component extends DCLogic {
 
   // ── BUILD HOUSE — the starter shell from each level's OUTLINE copy ────────
   // One command drops the default construction: 2×6 stud walls + a framed
-  // floor on MAIN FL and 2ND FL, 8" concrete walls + an S-SLAB slab on
+  // floor on every floor level, 8" concrete walls + an S-SLAB slab on
   // FOUNDATION with strip-footing linework centered on the wall, and an
   // all-eave roof grown from the ROOF level's outline copy by the roof overhang at the
   // current pitch. Each piece only builds where the level is still empty, so
@@ -4847,7 +4876,9 @@ class Component extends DCLogic {
 
   _buildHouseRoof() {
     if (this._roofs.some(roof => roof.levelId === 7)) return false;
-    const outline = this._houseOutline(7) || this._houseOutline(3);
+    let outline = this._houseOutline(7);
+    const floors = this._floorLevels();
+    for (let i = floors.length - 1; i >= 0 && !outline; i--) outline = this._houseOutline(floors[i].id);
     if (!outline) return false;
     const overhang = this.state.roofOverhang;
     const points = this._offsetOutline(outline.points.map(pt => ({ x: pt.x, z: pt.z })), overhang);
@@ -4868,7 +4899,8 @@ class Component extends DCLogic {
 
   _buildHouse() {
     this._ensureDrawingCollections();
-    if (![1, 3, 5].some(levelId => this._houseOutline(levelId))) {
+    const floors = this._floorLevels();
+    if (![1, ...floors.map(level => level.id)].some(levelId => this._houseOutline(levelId))) {
       this.setState({
         drawingMessage: 'Nothing to build from — draw the building OUTLINE first; its copies land on every level.',
         drawingMessageError: true,
@@ -4876,10 +4908,10 @@ class Component extends DCLogic {
       return false;
     }
     const built = [];
-    if (this._buildHouseWalls(3, 'plan', 'stud_2x6')) built.push('MAIN FL walls');
-    if (this._buildHouseFloor(3, 'floor')) built.push('MAIN FL floor');
-    if (this._buildHouseWalls(5, 'plan', 'stud_2x6')) built.push('2ND FL walls');
-    if (this._buildHouseFloor(5, 'floor')) built.push('2ND FL floor');
+    floors.forEach(level => {
+      if (this._buildHouseWalls(level.id, 'plan', 'stud_2x6')) built.push(`${level.name} walls`);
+      if (this._buildHouseFloor(level.id, 'floor')) built.push(`${level.name} floor`);
+    });
     if (this._buildHouseWalls(1, 'foundation', 'concrete_8')) built.push('FOUNDATION walls');
     if (this._buildHouseFloor(1, 'slab')) built.push('slab');
     if (this._buildHouseFootings()) built.push('footings');
@@ -8030,20 +8062,20 @@ class Component extends DCLogic {
   _levelBorderHeights(levelId) {
     const datum = this.state.elevationDatum;
     const label = feet => this._elevLabel(feet + datum);
-    const mainWallTop = this._levelAssembly(3).wallHeightFt;
-    if (levelId === 3) {
-      return {
-        sheathingTop: label(0),
-        floorBottom: label(-this._levelFloorFt(3)),
-      };
+    const floors = this._floorLevels();
+    const idx = floors.findIndex(level => level.id === levelId);
+    if (idx < 0) return null;
+    // Floors stack: each sheathing top sits a wall height above the floor
+    // below, plus its own joists + sheathing. The lowest floor is the datum.
+    let sheathingTop = 0;
+    for (let i = 1; i <= idx; i++) {
+      sheathingTop += this._levelAssembly(floors[i - 1].id).wallHeightFt
+        + this._levelFloorFt(floors[i].id);
     }
-    if (levelId === 5) {
-      return {
-        sheathingTop: label(mainWallTop + this._levelFloorFt(5)),
-        floorBottom: label(mainWallTop),
-      };
-    }
-    return null;
+    return {
+      sheathingTop: label(sheathingTop),
+      floorBottom: label(sheathingTop - this._levelFloorFt(levelId)),
+    };
   }
 
   // The FOUNDATION card carries its heights on border lines like the floor
@@ -8077,11 +8109,14 @@ class Component extends DCLogic {
     };
   }
 
-  // The roof card's number is the 2nd-floor top of wall — where the walls
+  // The roof card's number is the top floor's top of wall — where the walls
   // meet the truss bottoms.
   _roofBearingHeight() {
-    const bearing = this._levelAssembly(3).wallHeightFt
-      + this._levelFloorFt(5) + this._levelAssembly(5).wallHeightFt;
+    let bearing = 0;
+    this._floorLevels().forEach((level, index) => {
+      if (index > 0) bearing += this._levelFloorFt(level.id);
+      bearing += this._levelAssembly(level.id).wallHeightFt;
+    });
     return this._elevLabel(bearing + this.state.elevationDatum);
   }
 
@@ -8443,7 +8478,7 @@ class Component extends DCLogic {
       shapeToolActive: shaping,
       outlineToolActive: activeTool === 'outline',
       onBuildHouse: () => this._buildHouse(),
-      buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on MAIN FL and 2ND FL, 8" concrete walls + slab + ${formatInchesOnly(this._footingWidthIn(1))} centered strip-footing lines on FOUNDATION, and a ${this.state.roofPitch}:12 all-eave roof grown from the ROOF level's outline by the roof overhang. Only levels still empty build, so re-running fills gaps without doubling up.`,
+      buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on every floor level, 8" concrete walls + slab + ${formatInchesOnly(this._footingWidthIn(1))} centered strip-footing lines on FOUNDATION, and a ${this.state.roofPitch}:12 all-eave roof grown from the ROOF level's outline by the roof overhang. Only levels still empty build, so re-running fills gaps without doubling up.`,
       onShapeCapture: () => this._captureShape(),
       hasActiveShapes: this._activeShapes().length > 0,
       onShapeDelete: () => this._deleteLastShape(),
