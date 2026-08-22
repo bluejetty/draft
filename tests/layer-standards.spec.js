@@ -9,7 +9,7 @@ const LINE_STROKE = [29, 31, 32]; // #1d1f20, committed generic line color
 const ALL_LAYER_IDS = [
   'draft', 'no-draft', 'SHAPE',
   'A-WALL-EXT', 'A-WALL-INT', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-DOOR', 'A-GLAZ', 'A-ROOF',
-  'A-FL-OPNG', 'A-ROOF-OPNG', 'A-STR', 'A-STR-DECK',
+  'A-FL-OPNG', 'A-ROOF-OPNG', 'A-STR', 'A-STR-DECK', 'A-ANNO-NOTE',
   'PLAN DIMENSIONS', 'ROOM IDS / AREA',
   'S-BEAM', 'S-SLAB', 'FLOOR DIMENSION', 'S-FDN', 'S-COL/FOOTING', 'FOUNDATION DIMENSION',
   'E-POWER', 'E-POWER DIMENSION',
@@ -23,7 +23,7 @@ async function openStandards(page) {
     localStorage.clear();
   });
   await page.goto('/STANDARDS.html');
-  await expect(page.locator('#groups .group')).toHaveCount(5);
+  await expect(page.locator('#groups .group')).toHaveCount(6);
 }
 
 async function drawLine(page, x1, z1, x2, z2) {
