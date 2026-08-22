@@ -137,9 +137,10 @@ test('a wall drawn on FOUNDATION is a foundation wall living in that layer set',
 
   expect(await wallStrokeCount(page, 5, 0)).toBeGreaterThan(0);
 
-  // A foundation wall belongs to S-FDN, not the PLAN wall layers.
+  // The foundation PLAN shows the concrete walls as a shared reference, so
+  // the int stud / insul walls draw against the poured structure.
   await switchLayerView(page, 'PLAN');
-  expect(await wallStrokeCount(page, 5, 0)).toBe(0);
+  expect(await wallStrokeCount(page, 5, 0)).toBeGreaterThan(0);
 });
 
 test('ROOF and SITE are whole-level contexts with every command available', async ({ page }) => {

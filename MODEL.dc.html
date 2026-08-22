@@ -921,9 +921,10 @@ function parseAssemblyInches(value) {
 const WALL_TYPES = [
   { id:'stud_2x4',    label:'2×4 Stud  (3½")',   totalIn:3.5,   layers:[{in:3.5,   fill:'stud'}] },
   { id:'stud_2x6',    label:'2×6 Stud  (5½")',   totalIn:5.5,   layers:[{in:5.5,   fill:'stud'}] },
-  // Basement wall insul at concrete — ½" air space off the conc wall, 2×6 SPF
-  // w/ R22 batt, ½" drywall inside; lines the concrete on the foundation PLAN.
-  { id:'insulation_6', label:'Insul Wall  (6½")',   totalIn:6.5,   layers:[{in:0.5,   fill:'insulation'},{in:5.5, fill:'insulation'},{in:0.5, fill:'stud'}] },
+  // Basement wall insul at concrete — 2×4 SPF @ 24" O.C. held 2½" off the conc
+  // wall, 5½" batt filling out to a ½" air space at the concrete, VB on the
+  // warm side under ½" drywall; lines the concrete on the foundation PLAN.
+  { id:'insulation_6', label:'Insul Wall  (6½")',   totalIn:6.5,   layers:[{in:2.5,   fill:'insulation'},{in:3.5, fill:'insulation'},{in:0.5, fill:'stud'}] },
   { id:'concrete_8',  label:'8" Concrete',         totalIn:8,     layers:[{in:8,     fill:'concrete'}] },
   { id:'icf',         label:'ICF  (11¼")',         totalIn:11.25, layers:[{in:2.625,fill:'insulation'},{in:6,fill:'concrete'},{in:2.625,fill:'insulation'}] },
   { id:'icf_13',      label:'ICF  (13¼")',         totalIn:13.25, layers:[{in:2.625,fill:'insulation'},{in:8,fill:'concrete'},{in:2.625,fill:'insulation'}] },
@@ -931,6 +932,9 @@ const WALL_TYPES = [
 ];
 // Retired wall types in saved drawings map to their closest current assembly.
 const LEGACY_WALL_TYPES = Object.freeze({ concrete_12: 'concrete_8' });
+// Structural assemblies live on the FOUNDATION layer set only; every other
+// context offers the stud / insul walls.
+const FOUNDATION_WALL_TYPE_IDS = Object.freeze(['concrete_8', 'icf', 'icf_13', 'pt_wood_fdn']);
 // Fenestration defaults — door and window openings hosted on a wall. Heights
 // are measured from the bottom of the host wall; doors sit on it (sill 0).
 const DEFAULT_DOOR_WIDTH_FT = 3;
@@ -2726,7 +2730,7 @@ class Component extends DCLogic {
     }
 
     // ── Walls (fills drawn beneath lines) ────────────────────────────────────
-    const pwType = this.state.activeWallType;
+    const pwType = this._contextWallType();
     const pwRef  = this.state.wallRefLine;
     const activeWalls = activeVisible ? this._activeWalls() : [];
     const displayWalls = activeVisible ? [...activeWalls, ...this._sharedContextWalls()] : [];
@@ -3453,6 +3457,21 @@ class Component extends DCLogic {
     return viewId === 'foundation' ? 'foundation' : 'plan';
   }
 
+  // The FOUNDATION layer set offers only the structural assemblies; every
+  // other context (incl. the foundation-level PLAN) offers the stud / insul
+  // walls. The BONEYARD offers everything.
+  _contextWallTypes(viewId = this._activeLayerViewId()) {
+    if (this.state.boneyardActive || viewId == null) return WALL_TYPES;
+    if (viewId === 'foundation') return WALL_TYPES.filter(type => FOUNDATION_WALL_TYPE_IDS.includes(type.id));
+    return WALL_TYPES.filter(type => !FOUNDATION_WALL_TYPE_IDS.includes(type.id));
+  }
+
+  _contextWallType() {
+    const choices = this._contextWallTypes();
+    if (choices.some(type => type.id === this.state.activeWallType)) return this.state.activeWallType;
+    return (choices.find(type => type.id === (this._activeLayerViewId() === 'foundation' ? 'concrete_8' : 'stud_2x6')) || choices[0]).id;
+  }
+
   // Floor outlines drawn on a FOUNDATION context are concrete slabs on S-SLAB;
   // everywhere else they are framed assemblies that save home to FLOOR.
   _floorHomeView(viewId = this._activeLayerViewId()) {
@@ -3671,11 +3690,18 @@ class Component extends DCLogic {
 
   // ELECTRIC shares the PLAN wall layers at full strength: walls render and print
   // exactly as they do in PLAN, but stay locked against selection and editing.
+  // The foundation-level PLAN shares the FOUNDATION concrete walls the same way,
+  // so the int stud / insul walls draw against the poured structure.
   _sharedContextWalls() {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
-    if (view !== 'e-power') return [];
-    return this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan');
+    if (view === 'e-power') {
+      return this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan');
+    }
+    if (view === 'plan') {
+      return this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'foundation');
+    }
+    return [];
   }
 
   _contextReferenceFloors() {
@@ -3691,6 +3717,7 @@ class Component extends DCLogic {
     if (!item || item.levelId !== this._activeLevelId()) return false;
     const view = this._activeLayerViewId(item.levelId);
     if (view === 'plan') {
+      if (this._walls.includes(item)) return (item.view || 'plan') === 'foundation';
       return this._floors.includes(item) && (item.view || 'floor') === 'floor'
         && !this._courtesyFloorIds?.has(item.id);
     }
@@ -4541,7 +4568,7 @@ class Component extends DCLogic {
 
   _finishWall() {
     if (!this._wallDrawing) return;
-    const wType = this.state.activeWallType;
+    const wType = this._contextWallType();
     const baseH = this.state.wallBaseHeight;
     const topH  = this.state.wallTopHeight;
     const refL  = this.state.wallRefLine;
@@ -5332,7 +5359,7 @@ class Component extends DCLogic {
       end:        this._mergeVertex(end, levelId, homeView),
       levelId,
       view: homeView,
-      wallType:   wallType   || this.state.activeWallType,
+      wallType:   wallType   || this._contextWallType(),
       baseHeight: baseHeight != null ? baseHeight : this.state.wallBaseHeight,
       topHeight:  topHeight  != null ? topHeight  : this.state.wallTopHeight,
       refLine:    refLine    || this.state.wallRefLine,
@@ -5986,8 +6013,8 @@ class Component extends DCLogic {
   // Straight-skeleton wavefront for the tagged footprint: eave edges advance
   // inward at a uniform rate while gable edges stay put, and the paths the
   // corners trace as edges collapse become the hip / valley / ridge lines.
-  // Handles rectangles and L-shapes cleanly; gnarlier footprints degrade to
-  // whatever guide lines the wavefront produces before it stops.
+  // Concave footprints (L / T / U) split the ring at reflex corners so each
+  // wing resolves to its own ridge, joined by valleys.
   _roofSkeleton(roof) {
     const initialCount = roof.points.length;
     if (initialCount < 3) return [];
@@ -6010,8 +6037,16 @@ class Component extends DCLogic {
     });
     const eps = 1e-6;
     const arcs = [];
-    let guard = initialCount * 3;
-    while (pts.length >= 3 && guard-- > 0) {
+    // Concave footprints split the shrinking ring in two when a reflex corner
+    // reaches an opposite edge (the valley), so the wavefront runs as a queue
+    // of independent loops.
+    const queue = [{ pts, kinds }];
+    let guard = initialCount * 8;
+    while (queue.length && guard-- > 0) {
+      const loop = queue.shift();
+      pts = loop.pts;
+      kinds = loop.kinds;
+      if (pts.length < 3 || Math.abs(signedArea(pts)) < eps) continue;
       const count = pts.length;
       const normals = pts.map((pt, index) => {
         const next = pts[(index + 1) % count];
@@ -6033,17 +6068,54 @@ class Component extends DCLogic {
         return { x: (sA * nB.z - sB * nA.z) / det, z: (sB * nA.x - sA * nB.x) / det };
       });
       // Earliest edge collapse: endpoints closing along the edge direction.
-      let bestT = Infinity;
+      let collapseT = Infinity;
       for (let index = 0; index < count; index++) {
         const next = (index + 1) % count;
         const dx = pts[next].x - pts[index].x, dz = pts[next].z - pts[index].z;
         const len = Math.hypot(dx, dz);
-        if (len < eps) { bestT = 0; break; }
+        if (len < eps) { collapseT = 0; break; }
         const closing = (velocities[index].x - velocities[next].x) * (dx / len)
           + (velocities[index].z - velocities[next].z) * (dz / len);
-        if (closing > eps) bestT = Math.min(bestT, len / closing);
+        if (closing > eps) collapseT = Math.min(collapseT, len / closing);
       }
-      if (!Number.isFinite(bestT)) break;
+      // Earliest split: a reflex corner catching a non-adjacent advancing edge —
+      // where the ring pinches in two and a valley forms.
+      let splitT = Infinity, splitVertex = -1, splitEdge = -1;
+      for (let index = 0; index < count; index++) {
+        const prev = pts[(index + count - 1) % count], next = pts[(index + 1) % count];
+        const cross = (pts[index].x - prev.x) * (next.z - pts[index].z)
+          - (pts[index].z - prev.z) * (next.x - pts[index].x);
+        if (cross >= -eps) continue; // convex corner
+        for (let edge = 0; edge < count; edge++) {
+          if (edge === index || (edge + 1) % count === index) continue;
+          const n = normals[edge];
+          const denom = n.x * velocities[index].x + n.z * velocities[index].z - speeds[edge];
+          if (Math.abs(denom) < 1e-9) continue;
+          const t = (n.x * (pts[edge].x - pts[index].x) + n.z * (pts[edge].z - pts[index].z)) / denom;
+          if (t < eps || t >= Math.min(splitT, collapseT) - eps) continue;
+          const hit = {
+            x: pts[index].x + velocities[index].x * t,
+            z: pts[index].z + velocities[index].z * t,
+          };
+          const a = {
+            x: pts[edge].x + velocities[edge].x * t,
+            z: pts[edge].z + velocities[edge].z * t,
+          };
+          const bIndex = (edge + 1) % count;
+          const b = {
+            x: pts[bIndex].x + velocities[bIndex].x * t,
+            z: pts[bIndex].z + velocities[bIndex].z * t,
+          };
+          const dx = b.x - a.x, dz = b.z - a.z;
+          const len2 = dx * dx + dz * dz;
+          if (len2 < eps) continue;
+          const u = ((hit.x - a.x) * dx + (hit.z - a.z) * dz) / len2;
+          if (u < -0.001 || u > 1.001) continue;
+          splitT = t; splitVertex = index; splitEdge = edge;
+        }
+      }
+      const bestT = Math.min(collapseT, splitT);
+      if (!Number.isFinite(bestT)) continue;
       const moved = pts.map((pt, index) => ({
         x: pt.x + velocities[index].x * bestT,
         z: pt.z + velocities[index].z * bestT,
@@ -6051,24 +6123,63 @@ class Component extends DCLogic {
       moved.forEach((pt, index) => {
         if (Math.hypot(pt.x - pts[index].x, pt.z - pts[index].z) > eps) arcs.push({ a: pts[index], b: pt });
       });
+      if (splitT < collapseT - eps) {
+        // Pinch the ring at the reflex corner: two loops share the split point.
+        const s = moved[splitVertex];
+        const loopA = { pts: [ { ...s } ], kinds: [kinds[splitVertex]] };
+        for (let index = (splitVertex + 1) % count; index !== (splitEdge + 1) % count; index = (index + 1) % count) {
+          loopA.pts.push(moved[index]);
+          loopA.kinds.push(kinds[index]);
+        }
+        loopA.kinds[loopA.kinds.length - 1] = kinds[splitEdge];
+        const loopB = { pts: [ { ...s } ], kinds: [kinds[splitEdge]] };
+        for (let index = (splitEdge + 1) % count; index !== splitVertex; index = (index + 1) % count) {
+          loopB.pts.push(moved[index]);
+          loopB.kinds.push(kinds[index]);
+        }
+        queue.push(loopA, loopB);
+        continue;
+      }
       // Drop collapsed edges; each surviving edge keeps its start vertex.
-      const nextPts = [];
-      const nextKinds = [];
+      let nextPts = [];
+      let nextKinds = [];
       for (let index = 0; index < count; index++) {
         const next = (index + 1) % count;
         if (Math.hypot(moved[next].x - moved[index].x, moved[next].z - moved[index].z) <= eps * 10) continue;
         nextPts.push(moved[index]);
         nextKinds.push(kinds[index]);
       }
-      if (nextPts.length === count) break; // no topological change — stop
+      if (nextPts.length === count && splitT >= collapseT) continue; // no topological change — stop this loop
+      // Simultaneous collapses can fold the ring back over itself: a zero-width
+      // spike is a finished ridge, so emit it and trim the ring.
+      let trimmed = true;
+      while (trimmed && nextPts.length >= 3) {
+        trimmed = false;
+        for (let index = 0; index < nextPts.length; index++) {
+          const size = nextPts.length;
+          const prev = nextPts[(index + size - 1) % size];
+          const pt = nextPts[index];
+          const next = nextPts[(index + 1) % size];
+          const lenA = Math.hypot(pt.x - prev.x, pt.z - prev.z) || 1;
+          const lenB = Math.hypot(next.x - pt.x, next.z - pt.z) || 1;
+          const ax = (pt.x - prev.x) / lenA, az = (pt.z - prev.z) / lenA;
+          const bx = (next.x - pt.x) / lenB, bz = (next.z - pt.z) / lenB;
+          if (Math.abs(ax * bz - az * bx) > 1e-4 || ax * bx + az * bz > -0.9999) continue;
+          const tail = lenA <= lenB ? prev : next;
+          if (Math.hypot(pt.x - tail.x, pt.z - tail.z) > eps) arcs.push({ a: pt, b: tail });
+          nextPts.splice(index, 1);
+          nextKinds.splice(index, 1);
+          trimmed = true;
+          break;
+        }
+      }
       if (nextPts.length === 2) {
         if (Math.hypot(nextPts[1].x - nextPts[0].x, nextPts[1].z - nextPts[0].z) > eps) {
           arcs.push({ a: nextPts[0], b: nextPts[1] }); // the ridge
         }
-        break;
+        continue;
       }
-      pts = nextPts;
-      kinds = nextKinds;
+      queue.push({ pts: nextPts, kinds: nextKinds });
     }
     // A gable corner slides along its own gable edge — that trace is the edge
     // itself, not a roof line, so drop arcs lying on a single gable edge.
@@ -8070,7 +8181,7 @@ class Component extends DCLogic {
       this._lineDrawing   = true;
       if (this._linePreviewObj) this._linePreviewObj.visible = false;
     } else {
-      const wallType = this.state.activeWallType;
+      const wallType = this._contextWallType();
       const baseHeight = this.state.wallBaseHeight;
       const topHeight = this.state.wallTopHeight;
       const refLine = this.state.wallRefLine;
@@ -9117,11 +9228,11 @@ class Component extends DCLogic {
         this._windowSelection = null;
         this.setState({ activeTool: 'select', selectionMode: 'window-all' });
       },
-      wallTypes: WALL_TYPES.map(wt => ({
+      wallTypes: this._contextWallTypes().map(wt => ({
         label: wt.label,
-        bg:     wt.id === this.state.activeWallType ? '#1d1f20' : '#fff',
-        color:  wt.id === this.state.activeWallType ? '#f2f2f3' : '#1d1f20',
-        border: wt.id === this.state.activeWallType ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        bg:     wt.id === this._contextWallType() ? '#1d1f20' : '#fff',
+        color:  wt.id === this._contextWallType() ? '#f2f2f3' : '#1d1f20',
+        border: wt.id === this._contextWallType() ? '#1d1f20' : 'rgba(29,31,32,0.16)',
         onSelect: () => this.setState({ activeWallType: wt.id }),
       })),
       wallBaseInput: this.state.wallBaseInput,
