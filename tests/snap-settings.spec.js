@@ -31,7 +31,7 @@ test('grid snap rings the snapped point while it has hold of the cursor', async 
   expect(Math.abs(box.y + box.height / 2 - target.y)).toBeLessThan(2);
 
   // Turning grid snap off hides the ring.
-  await page.keyboard.press('`');
+  await page.keyboard.press('#');
   await h.moveTo(page, 6.2, 6);
   await expect(gridRing(page)).toBeHidden();
 });

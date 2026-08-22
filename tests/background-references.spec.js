@@ -37,7 +37,7 @@ test('the level BG button backgrounds the whole level', async ({ page }) => {
   await h.openModel(page);
 
   await levelBg(page, '2ND FL').click();
-  await expect(levelBg(page, '2ND FL')).toHaveText('BG1');
+  await expect(levelBg(page, '2ND FL')).toHaveText('B1');
   await expect(page.locator('[data-model-background-status]'))
     .toContainText('BACKGROUND BLUE: 2ND FL');
 
@@ -51,8 +51,8 @@ test('a layer-set BG button narrows the reference to that set', async ({ page })
   await h.openModel(page);
 
   await layerBg(page, '2ND FL', 'FLOOR').click();
-  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('BG1');
-  await expect(levelBg(page, '2ND FL')).toHaveText('BG');
+  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('B1');
+  await expect(levelBg(page, '2ND FL')).toHaveText('B');
   await expect(page.locator('[data-model-background-status]'))
     .toContainText('BACKGROUND BLUE: 2ND FL / FLOOR');
 
@@ -63,14 +63,14 @@ test('a layer-set BG button narrows the reference to that set', async ({ page })
 
   // The level button widens the same reference back to the whole level.
   await levelBg(page, '2ND FL').click();
-  await expect(levelBg(page, '2ND FL')).toHaveText('BG1');
-  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('BG');
+  await expect(levelBg(page, '2ND FL')).toHaveText('B1');
+  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('B');
 
   // Selecting the set again scopes it; a second click removes the reference.
   await layerBg(page, '2ND FL', 'FLOOR').click();
-  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('BG1');
+  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('B1');
   await layerBg(page, '2ND FL', 'FLOOR').click();
-  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('BG');
+  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('B');
 
   await h.waitForSaved(page);
   saved = await h.savedDrawing(page);
@@ -120,22 +120,22 @@ test('background choices are remembered per working context', async ({ page }) =
 
   // MAIN FL wants only 2ND FL's FLOOR behind it.
   await layerBg(page, '2ND FL', 'FLOOR').click();
-  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('BG1');
+  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('B1');
 
   // FOUNDATION prefers the whole 2ND FL level.
   await switchLevel(page, 'FOUNDATION');
   await levelBg(page, '2ND FL').click();
-  await expect(levelBg(page, '2ND FL')).toHaveText('BG1');
-  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('BG');
+  await expect(levelBg(page, '2ND FL')).toHaveText('B1');
+  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('B');
 
   // Each context restores its own remembered pick.
   await switchLevel(page, 'MAIN FL');
-  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('BG1');
-  await expect(levelBg(page, '2ND FL')).toHaveText('BG');
+  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('B1');
+  await expect(levelBg(page, '2ND FL')).toHaveText('B');
 
   await switchLevel(page, 'FOUNDATION');
-  await expect(levelBg(page, '2ND FL')).toHaveText('BG1');
-  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('BG');
+  await expect(levelBg(page, '2ND FL')).toHaveText('B1');
+  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('B');
 });
 
 test('background scope and context memory persist through reload', async ({ page }) => {
@@ -151,10 +151,10 @@ test('background scope and context memory persist through reload', async ({ page
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
   await page.waitForTimeout(600);
 
-  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('BG1');
+  await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('B1');
   await expect(page.locator('[data-model-background-status]'))
     .toContainText('BACKGROUND BLUE: 2ND FL / FLOOR');
 
   await switchLevel(page, 'FOUNDATION');
-  await expect(levelBg(page, '2ND FL')).toHaveText('BG1');
+  await expect(levelBg(page, '2ND FL')).toHaveText('B1');
 });

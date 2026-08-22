@@ -62,13 +62,13 @@ test('Extend answers to X and Ctrl+H', async ({ page }) => {
   await expect(extendPanel).toBeVisible();
 });
 
-test('the ~ key and the square button toggle grid snap', async ({ page }) => {
+test('the # key and the square button toggle grid snap', async ({ page }) => {
   await openModel(page);
   const button = page.locator('[data-grid-snap]');
-  await expect(button).toHaveText('~');
+  await expect(button).toHaveText('#');
   await expect(button).toHaveCSS('background-color', 'rgb(29, 31, 32)');
 
-  await page.keyboard.press('`'); // The grave/tilde key works with or without Shift.
+  await page.keyboard.press('#'); // Shift+3 — the binding matches with or without Shift.
   await expect(button).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(button).toHaveCSS('box-shadow', 'none');
 

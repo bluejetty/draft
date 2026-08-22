@@ -33,14 +33,18 @@
     .level-layer-stack { display:flex; flex-direction:column; gap:1px; margin-top:3px; }
     .level-layer { width:100%; min-height:13px; display:flex; align-items:center; border:1px solid rgba(29,31,32,0.18); padding:1px 5px; background:rgba(255,255,255,0.72); color:rgba(29,31,32,0.68); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-align:left; text-transform:uppercase; cursor:pointer; }
     .level-layer:hover { border-color:#5980a6; color:#365e86; }
-    .level-layer.active { background:#fff; border-color:#5980a6; color:#365e86; }
+    .level-layer.active { background:#5980a6; border-color:#5980a6; color:#fff; box-shadow:0 0 0 1px #5980a6; }
     .level-layer-contents { margin:1px 0 2px 7px; border-left:2px solid rgba(89,128,166,0.48); padding-left:4px; }
     .level-layer-content { min-height:12px; display:flex; align-items:center; color:rgba(29,31,32,0.58); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.05em; text-transform:uppercase; }
-    .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:2px 4px; min-width:25px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:flex-start; margin-top:5px; }
+    .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:0; width:16px; height:16px; display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:flex-start; margin-top:5px; }
     .level-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-layer-row { display:flex; align-items:stretch; gap:2px; }
-    .level-layer-row .level-layer { flex:1; min-width:0; }
-    .level-layer-bg { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:1px 3px; min-width:23px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.42); flex-shrink:0; }
+    .level-layer-row .level-layer { flex:1 1 0; min-width:0; }
+    .level-assembly-pair { flex:1.6 1 0; min-width:0; display:flex; align-items:stretch; gap:2px; }
+    .level-assembly-pair .level-assembly { flex:0 0 auto; text-align:left; }
+    .level-assembly-val { flex:1 1 0; min-width:34px; width:100%; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:1px 3px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; text-align:right; }
+    .level-assembly-val:focus { outline:none; border-color:#5980a6; }
+    .level-layer-bg { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:0; width:15px; display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.42); flex-shrink:0; }
     .level-layer-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-head { display:flex; align-items:flex-start; gap:5px; }
     .level-title { flex-shrink:0; min-width:0; }
@@ -57,7 +61,7 @@
     .level-assembly-editor { display:flex; flex-direction:column; gap:3px; border:1px solid rgba(29,31,32,0.3); background:#fff; padding:5px 6px; margin:1px 0 2px; cursor:default; }
     .assembly-row { display:flex; align-items:center; gap:4px; }
     .assembly-label { width:48px; flex-shrink:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.05em; color:rgba(29,31,32,0.55); }
-    .assembly-input { flex:1; min-width:0; border:1px solid rgba(29,31,32,0.25); padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:#1d1f20; }
+    .assembly-input { flex:1; min-width:0; border:1px solid #1d1f20; background:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:#f2f2f3; }
     .assembly-input:focus { outline:none; border-color:#5980a6; }
     .assembly-joists { display:flex; gap:2px; }
     .assembly-joist { flex:1; border:1px solid; cursor:pointer; padding:2px 0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.04em; line-height:1; }
@@ -91,7 +95,7 @@
 
 <!-- TOP BAR -->
 <div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff; position:relative;">
-  <button data-grid-snap onClick="{{ toggleGridSnap }}" onKeyDown="{{ onGridSnapKeyDown }}" title="{{ gridSnapTitle }}" aria-label="Toggle grid snap" style="width:29px; height:29px; margin-right:12px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; color:{{ gridSnapColor }}; box-shadow:{{ gridSnapGlow }}; padding:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:600; line-height:1; cursor:pointer;">~</button>
+  <button data-grid-snap onClick="{{ toggleGridSnap }}" onKeyDown="{{ onGridSnapKeyDown }}" title="{{ gridSnapTitle }}" aria-label="Toggle grid snap" style="width:29px; height:29px; margin-right:12px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; color:{{ gridSnapColor }}; box-shadow:{{ gridSnapGlow }}; padding:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:600; line-height:1; cursor:pointer;">#</button>
   <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase; color:#1d1f20;">MODEL</div>
   <a data-model-nav href="./LAYOUT.dc.html" style="margin-left:10px;">LAYOUT</a>
   <div data-model-title-detail style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; color:rgba(29,31,32,0.35); margin:0 10px;">/</div>
@@ -121,6 +125,10 @@
   <div style="flex:1;"></div>
   <div data-top-actions style="display:flex; align-items:center; gap:8px; margin-left:18px;">
     <div data-save-controls style="display:flex; align-items:center; gap:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em;">
+       <button onClick="{{ newDrawing }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">NEW</button>
+       <button onClick="{{ openDrawing }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">OPEN</button>
+       <input data-drawing-import type="file" accept="application/json,.json,.draft,.model,.plan" onChange="{{ onDrawingFilePicked }}" style="display:none;" />
+      <button onClick="{{ saveDrawingFile }}" style="height:24px; border:1px solid #5980a6; background:#5980a6; color:#fff; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE</button>
       <span style="color:rgba(29,31,32,0.45);">SAVE AS</span>
       <select value="{{ saveExtension }}" onChange="{{ onSaveExtensionChange }}" aria-label="Save file extension" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; cursor:pointer;">
         <option value="json">.json</option>
@@ -128,10 +136,6 @@
         <option value="model">.model</option>
         <option value="plan">.plan</option>
       </select>
-       <button onClick="{{ newDrawing }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">NEW</button>
-       <button onClick="{{ openDrawing }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">OPEN</button>
-       <input data-drawing-import type="file" accept="application/json,.json,.draft,.model,.plan" onChange="{{ onDrawingFilePicked }}" style="display:none;" />
-      <button onClick="{{ saveDrawingFile }}" style="height:24px; border:1px solid #5980a6; background:#5980a6; color:#fff; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE</button>
     </div>
     <div data-profile-stack style="display:flex; flex-direction:column; gap:1px;">
       <button onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
@@ -224,8 +228,6 @@
 
     <!-- TOOLS -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Tools</div>
-      <div style="margin:-2px 0 8px; color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;">Working in: {{ workingContextLabel }}</div>
       <sc-for list="{{ tools }}" as="t" hint-placeholder-count="3">
         <button onClick="{{ t.onSelect }}" disabled="{{ t.disabled }}" title="{{ t.title }}" style="display:block; width:100%; text-align:left; border:1px solid {{ t.border }}; background:{{ t.bg }}; color:{{ t.color }}; opacity:{{ t.opacity }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:{{ t.cursor }}; margin-bottom:3px;">{{ t.label }}</button>
       </sc-for>
@@ -504,7 +506,6 @@
         <button onClick="{{ toggleElevationDatum }}" title="{{ elevationDatumTitle }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:rgba(29,31,32,0.55); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; padding:3px 6px; margin-right:4px; cursor:pointer; letter-spacing:0.04em;">{{ elevationDatumLabel }}</button>
         <button onClick="{{ addLevel }}" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; padding:2px 8px; cursor:pointer; letter-spacing:0.04em;">+ ADD</button>
       </div>
-       <div style="margin:-2px 0 7px; color:rgba(29,31,32,0.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.03em;">FLOOR ELEVATIONS · LAYERS NESTED WHERE DEFINED</div>
       <sc-for list="{{ levels }}" as="level" hint-placeholder-count="8">
         <div class="{{ level.rowClass }}">
           <div class="level-bar" style="background:{{ level.color }};" onClick="{{ level.onSelect }}"></div>
@@ -534,7 +535,10 @@
                      <button type="button" class="level-layer-bg" onClick="{{ layer.onToggleBackground }}" title="{{ layer.bgTitle }}" style="background:{{ layer.bgButtonBg }}; border-color:{{ layer.bgButtonBorder }}; color:{{ layer.bgButtonColor }};">{{ layer.bgLabel }}</button>
                      <button type="button" class="{{ layer.rowClass }}" onClick="{{ layer.onSelect }}" title="{{ layer.title }}">{{ layer.label }}</button>
                      <sc-if value="{{ layer.hasAssembly }}" hint-placeholder-val="{{ false }}">
-                       <button type="button" class="level-assembly" onClick="{{ layer.onOpenAssembly }}" title="{{ layer.assemblyTitle }}">{{ layer.assemblyLabel }}</button>
+                       <div class="level-assembly-pair">
+                         <button type="button" class="level-assembly" onClick="{{ layer.onOpenAssembly }}" title="{{ layer.assemblyTitle }}">{{ layer.assemblyLabel }}</button>
+                         <input class="level-assembly-val" value="{{ layer.assemblyValue }}" onClick="{{ layer.onAssemblyValClick }}" onFocus="{{ layer.onAssemblyValFocus }}" onInput="{{ layer.onAssemblyValInput }}" onKeyDown="{{ layer.onAssemblyValKey }}" onBlur="{{ layer.onAssemblyValBlur }}" title="{{ layer.assemblyTitle }}" />
+                       </div>
                      </sc-if>
                    </div>
                    <sc-if value="{{ layer.hasAssemblyEditor }}" hint-placeholder-val="{{ false }}">
@@ -7354,6 +7358,44 @@ class Component extends DCLogic {
     }, () => this._markUnsaved());
   }
 
+  // The black value box beside WALL HT / FL JST edits the number directly:
+  // wall height on the PLAN row, joist depth on the FLOOR row. Enter or
+  // clicking away commits; Escape puts the old number back.
+  _commitInlineAssembly() {
+    const inline = this.state.inlineAssembly;
+    if (!inline) return;
+    this.setState({ inlineAssembly: null });
+    const patch = { ...this._levelAssembly(inline.levelId) };
+    if (inline.kind === 'wall') {
+      const parsed = parseArchitecturalLength(inline.value);
+      if (!parsed.ok || parsed.inches <= 0) return;
+      patch.wallHeightFt = parsed.inches / 12;
+      if (inline.levelId === this._activeLevel()?.id) {
+        this.setState({
+          wallTopHeight: patch.wallHeightFt,
+          wallTopInput: formatArchitecturalInches(parsed.inches),
+          wallDimensionError: '',
+        });
+      }
+    } else {
+      const parsed = parseAssemblyInches(inline.value);
+      if (!parsed.ok || parsed.inches <= 0) return;
+      patch.joistDepthIn = parsed.inches;
+    }
+    const totalIn = patch.joistDepthIn + patch.sheathingIn;
+    const syncFloor = inline.kind === 'floor'
+      && inline.levelId === this._activeLevel()?.id
+      && this.state.floorStructure === 'floor';
+    this.setState({
+      levelAssemblies: { ...this.state.levelAssemblies, [inline.levelId]: patch },
+      ...(syncFloor ? {
+        floorThickness: totalIn / 12,
+        floorThicknessInput: formatArchitecturalInches(totalIn),
+        floorDimensionError: '',
+      } : {}),
+    }, () => this._markUnsaved());
+  }
+
   _openAssemblyEditor(levelId, kind, event) {
     event?.stopPropagation();
     const current = this.state.assemblyEditor;
@@ -7889,7 +7931,7 @@ class Component extends DCLogic {
         const slot = l.id === activeLevel?.id ? -1 : backgroundLevelIds.indexOf(l.id);
         const scopedView = backgroundLevelViews[l.id] ?? null;
         const bgSlotStyle = s => ({
-          bgLabel: s === 0 ? 'BG1' : s === 1 ? 'BG2' : 'BG',
+          bgLabel: s === 0 ? 'B1' : s === 1 ? 'B2' : 'B',
           bgButtonBg: s === 0 ? 'rgba(82,151,218,0.12)' : s === 1 ? 'rgba(221,101,104,0.12)' : '#fff',
           bgButtonBorder: s === 0 ? '#5297da' : s === 1 ? '#dd6568' : 'rgba(29,31,32,0.2)',
           bgButtonColor: s === 0 ? '#5297da' : s === 1 ? '#dd6568' : 'rgba(29,31,32,0.45)',
@@ -7939,6 +7981,10 @@ class Component extends DCLogic {
               onAccept: e => { e.stopPropagation(); this._commitAssemblyEditor(); },
             }
           : null);
+        const inlineFor = kind => {
+          const inline = this.state.inlineAssembly;
+          return inline && inline.levelId === l.id && inline.kind === kind ? inline : null;
+        };
         const plainEdge = (value, title) => ({
           value, title, hasLine: true, noLine: false, plain: true, editable: false, onEdit: () => {},
         });
@@ -7984,6 +8030,26 @@ class Component extends DCLogic {
             onSelect: event => this._selectLayerView(l.id, view.id, event),
             hasAssembly: assemblyKind != null,
             assemblyLabel: assemblyKind === 'wall' ? 'WALL HT' : 'FL JST',
+            assemblyValue: inlineFor(assemblyKind) != null ? inlineFor(assemblyKind).value
+              : assemblyKind === 'wall' ? formatArchitecturalInches(assembly.wallHeightFt * 12)
+              : assemblyKind === 'floor' ? formatInchesOnly(assembly.joistDepthIn)
+              : '',
+            onAssemblyValClick: e => e.stopPropagation(),
+            onAssemblyValFocus: e => {
+              e.stopPropagation();
+              this.setState({ inlineAssembly: { levelId: l.id, kind: assemblyKind, value: e.target.value } });
+            },
+            onAssemblyValInput: e => this.setState({ inlineAssembly: { levelId: l.id, kind: assemblyKind, value: e.target.value } }),
+            onAssemblyValKey: e => {
+              if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                const input = e.target;
+                this.setState({ inlineAssembly: null }, () => input.blur());
+              }
+              e.stopPropagation();
+            },
+            onAssemblyValBlur: () => this._commitInlineAssembly(),
             assemblyTitle: assemblyKind === 'wall'
               ? `Wall height on ${l.name}: ${this._ftIn(assembly.wallHeightFt)}`
               : `Floor: ${JOIST_TYPES.find(t => t.id === assembly.joistType)?.label} ${formatInchesOnly(assembly.joistDepthIn)} @ ${formatInchesOnly(assembly.joistSpacingIn)} O.C. + ${formatInchesOnly(assembly.sheathingIn)} sheathing`,
@@ -8088,8 +8154,8 @@ class Component extends DCLogic {
         if (e.key === ' ' || e.key === 'Enter') e.preventDefault();
       },
       gridSnapTitle: this.state.gridSnapEnabled
-        ? 'Grid snap is on: points round to 1-foot increments. Press ~ or click to turn it off.'
-        : 'Grid snap is off: points follow the cursor exactly. Press ~ or click to snap to 1-foot increments.',
+        ? 'Grid snap is on: points round to 1-foot increments. Press # or click to turn it off.'
+        : 'Grid snap is off: points follow the cursor exactly. Press # or click to snap to 1-foot increments.',
       gridSnapBg: this.state.gridSnapEnabled ? '#1d1f20' : '#fff',
       gridSnapColor: this.state.gridSnapEnabled ? '#f2f2f3' : '#1d1f20',
       gridSnapBorder: this.state.gridSnapEnabled ? '#1d1f20' : 'rgba(29,31,32,0.2)',
