@@ -127,7 +127,7 @@ if (!window.DraftProfileManager) {
     undo: 'Ctrl+Z',
     redo: 'Ctrl+Shift+Z',
     background: 'B',
-    gridSnap: '~',
+    gridSnap: '#',
     gridSnapAlt: '/',
   });
 
@@ -289,8 +289,8 @@ if (!window.DraftProfileManager) {
     const parts = normalised.split('+');
     const key = parts.pop();
     const has = modifier => parts.includes(modifier);
-    // The grave and tilde share a physical key, so '~' matches with or without Shift.
-    const shiftAgnostic = key === '~';
+    // Symbols that live on shifted keys ('~' on grave, '#' on 3) match with or without Shift.
+    const shiftAgnostic = key === '~' || key === '#';
     if (event.ctrlKey !== has('Ctrl') || event.altKey !== has('Alt')
       || (!shiftAgnostic && event.shiftKey !== has('Shift')) || event.metaKey !== has('Meta')) return false;
     return normaliseKeyBinding(event.key === ' ' ? 'Space' : event.key) === key;

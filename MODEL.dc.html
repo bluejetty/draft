@@ -95,7 +95,7 @@
 
 <!-- TOP BAR -->
 <div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff; position:relative;">
-  <button data-grid-snap onClick="{{ toggleGridSnap }}" onKeyDown="{{ onGridSnapKeyDown }}" title="{{ gridSnapTitle }}" aria-label="Toggle grid snap" style="width:29px; height:29px; margin-right:12px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; color:{{ gridSnapColor }}; box-shadow:{{ gridSnapGlow }}; padding:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:600; line-height:1; cursor:pointer;">~</button>
+  <button data-grid-snap onClick="{{ toggleGridSnap }}" onKeyDown="{{ onGridSnapKeyDown }}" title="{{ gridSnapTitle }}" aria-label="Toggle grid snap" style="width:29px; height:29px; margin-right:12px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; color:{{ gridSnapColor }}; box-shadow:{{ gridSnapGlow }}; padding:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:600; line-height:1; cursor:pointer;">#</button>
   <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase; color:#1d1f20;">MODEL</div>
   <a data-model-nav href="./LAYOUT.dc.html" style="margin-left:10px;">LAYOUT</a>
   <div data-model-title-detail style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; color:rgba(29,31,32,0.35); margin:0 10px;">/</div>
@@ -8154,8 +8154,8 @@ class Component extends DCLogic {
         if (e.key === ' ' || e.key === 'Enter') e.preventDefault();
       },
       gridSnapTitle: this.state.gridSnapEnabled
-        ? 'Grid snap is on: points round to 1-foot increments. Press ~ or click to turn it off.'
-        : 'Grid snap is off: points follow the cursor exactly. Press ~ or click to snap to 1-foot increments.',
+        ? 'Grid snap is on: points round to 1-foot increments. Press # or click to turn it off.'
+        : 'Grid snap is off: points follow the cursor exactly. Press # or click to snap to 1-foot increments.',
       gridSnapBg: this.state.gridSnapEnabled ? '#1d1f20' : '#fff',
       gridSnapColor: this.state.gridSnapEnabled ? '#f2f2f3' : '#1d1f20',
       gridSnapBorder: this.state.gridSnapEnabled ? '#1d1f20' : 'rgba(29,31,32,0.2)',
