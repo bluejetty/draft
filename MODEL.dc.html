@@ -267,6 +267,13 @@
           <button onClick="{{ setAllLevelsSelectionMode }}" style="grid-column:1 / -1; border:1px solid {{ allLevelsSelectionBorder }}; background:{{ allLevelsSelectionBg }}; color:{{ allLevelsSelectionColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">ALL LEVELS</button>
         </div>
         <div style="margin-top:6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:rgba(29,31,32,0.48);">{{ selectionModeHelp }}</div>
+        <div style="margin-top:9px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:6px;">Object Type</div>
+        <div data-select-filters style="display:flex; gap:3px;">
+          <sc-for list="{{ selectFilters }}" as="sf" hint-placeholder-count="5">
+            <button onClick="{{ sf.onSelect }}" title="{{ sf.title }}" style="flex:1; min-width:0; border:1px solid {{ sf.border }}; background:{{ sf.bg }}; color:{{ sf.color }}; padding:6px 1px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.03em; cursor:pointer;">{{ sf.label }}</button>
+          </sc-for>
+        </div>
+        <div style="margin-top:6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:{{ selectFilterHelpColor }};">{{ selectFilterHelp }}</div>
          <button onClick="{{ groupSelection }}" disabled="{{ groupDisabled }}" style="display:block; width:100%; margin-top:8px; border:1px solid {{ groupButtonBorder }}; background:{{ groupButtonBg }}; color:{{ groupButtonColor }}; padding:6px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; cursor:{{ groupButtonCursor }};">ASSEMBLY  [{{ groupShortcut }}]</button>
          <div style="margin-top:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.3; color:{{ groupHelpColor }};">{{ groupActionHelp }}</div>
          <sc-if value="{{ selectedGroup }}" hint-placeholder-val="{{ false }}">
@@ -1261,6 +1268,7 @@ class Component extends DCLogic {
   state = {
     activeTool:    'select',
     selectionMode: 'click',    // 'click' | 'window' | 'window-all'
+    selectFilter: 'all',       // 'all' | 'line' | 'wall' | 'outline' | 'floor'
     extendScope: 'current',
     extendPhase: 'idle',
     extendMessage: '',
@@ -5284,7 +5292,7 @@ class Component extends DCLogic {
             e.preventDefault();
             return;
           }
-          const refs = this._findVertexHit(raw);
+          const refs = this._findVertexHit(raw, this.state.selectFilter);
           if (refs) {
             const fixedAssembly = this._itemsFromVertexRefs(refs)
               .some(item => this._groupForItem(item)?.fixed === true);
@@ -8887,17 +8895,24 @@ class Component extends DCLogic {
   // Return all segment endpoint refs that share the vertex nearest to worldPt,
   // or null if nothing is within magnet radius.
   // Uses reference equality — segments and floors sharing a pooled vertex move together.
-  _findVertexHit(worldPt) {
+  // The optional filter restricts which object types can OWN the hit — the
+  // returned refs still cover every item touching the vertex, so a drag keeps
+  // the shared vertex pool welded together.
+  _findVertexHit(worldPt, filter = null) {
+    const allows = type => !filter || filter === 'all' || filter === type;
     const r = this._magnetRadius() * 1.5;
     let bestD = r, bestVtx = null;
-    [...this._activeLines(), ...this._activeWalls()].forEach(seg => {
+    [...(allows('line') ? this._activeLines() : []), ...(allows('wall') ? this._activeWalls() : [])].forEach(seg => {
       [seg.start, seg.end].forEach(v => {
         const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
         if (d < bestD) { bestD = d; bestVtx = v; }
       });
     });
-    [...this._activeFloors(), ...this._activeShapes(), ...this._activeRoofs(), ...this._activeSurfaceOpenings(),
-      ...this._activeOutlines(), ...this._activeBoneyardOutlines()].forEach(outline => {
+    [...(allows('floor') ? this._activeFloors() : []),
+      ...(allows('shape') ? this._activeShapes() : []),
+      ...(allows('roof') ? this._activeRoofs() : []),
+      ...(allows('opening') ? this._activeSurfaceOpenings() : []),
+      ...(allows('outline') ? [...this._activeOutlines(), ...this._activeBoneyardOutlines()] : [])].forEach(outline => {
       outline.points.forEach(v => {
         const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
         if (d < bestD) { bestD = d; bestVtx = v; }
@@ -9294,7 +9309,8 @@ class Component extends DCLogic {
   }
 
   // Return the nearest line or wall segment within a ~12px screen threshold, or null.
-  _findNearestSeg(worldPt) {
+  _findNearestSeg(worldPt, filter = null) {
+    const allows = type => !filter || filter === 'all' || filter === type;
     const h = this._canvas ? this._canvas.clientHeight : 600;
     const thresh = (this._orthoHalfH * 2) / h * 14;
     let bestD = thresh, bestSeg = null;
@@ -9304,8 +9320,8 @@ class Component extends DCLogic {
         if (d < bestD) { bestD = d; bestSeg = seg; }
       });
     };
-    check(this._activeLines());
-    check(this._activeWalls());
+    if (allows('line')) check(this._activeLines());
+    if (allows('wall')) check(this._activeWalls());
     return bestSeg;
   }
 
@@ -9354,17 +9370,27 @@ class Component extends DCLogic {
     return this._activeRoofs().find(roof => roof.points.length >= 3 && this._pointInOutline(roof.points, worldPt)) || null;
   }
 
+  // SELECT can engage one object type (the OBJECT TYPE chips); every pick
+  // path then ignores everything else until the filter returns to ALL.
+  _selectFilterAllows(type) {
+    const filter = this.state.selectFilter || 'all';
+    return filter === 'all' || filter === type;
+  }
+
   // Called on a clean click (no drag) in select mode.
   _handleSelectClick(worldPt, shiftHeld) {
+    const allows = type => this._selectFilterAllows(type);
     // A clean vertex click selects all touched items; a dragged vertex still uses
     // the same reference list to move geometry without changing group behavior.
-    const vertexRefs = this._findVertexHit(worldPt);
+    const vertexRefs = this._findVertexHit(worldPt, this.state.selectFilter);
     if (vertexRefs) {
-      this._addItemsAndTheirGroups(this._itemsFromVertexRefs(vertexRefs), !shiftHeld);
+      const items = this._itemsFromVertexRefs(vertexRefs)
+        .filter(item => allows(this._itemType(item)));
+      this._addItemsAndTheirGroups(items, !shiftHeld);
       return;
     }
     // A click inside an opening picks the opening, not the wall around it.
-    const opening = this._findFenestrationAt(worldPt);
+    const opening = allows('fenestration') ? this._findFenestrationAt(worldPt) : null;
     if (opening) {
       if (!shiftHeld) this._clearSelection(false);
       if (shiftHeld && this._selectedFenestrations.has(opening)) this._selectedFenestrations.delete(opening);
@@ -9373,7 +9399,7 @@ class Component extends DCLogic {
       return;
     }
     // Same for a hole cut in a floor or roof: the hole beats its host.
-    const surfaceOpening = this._findSurfaceOpeningAt(worldPt);
+    const surfaceOpening = allows('opening') ? this._findSurfaceOpeningAt(worldPt) : null;
     if (surfaceOpening) {
       if (!shiftHeld) this._clearSelection(false);
       if (shiftHeld && this._selectedSurfaceOpenings.has(surfaceOpening)) this._selectedSurfaceOpenings.delete(surfaceOpening);
@@ -9381,10 +9407,10 @@ class Component extends DCLogic {
       this._notifySelectionChanged();
       return;
     }
-    const hit = this._findNearestSeg(worldPt);
+    const hit = this._findNearestSeg(worldPt, this.state.selectFilter);
     if (!hit) {
       // Dimension strings are their own selectable objects (never grouped).
-      const dimension = this._findNearestDimension(worldPt);
+      const dimension = allows('dimension') ? this._findNearestDimension(worldPt) : null;
       if (dimension) {
         if (!shiftHeld) this._clearSelection(false);
         if (shiftHeld && this._selectedDimensions.has(dimension)) this._selectedDimensions.delete(dimension);
@@ -9392,12 +9418,12 @@ class Component extends DCLogic {
         this._notifySelectionChanged();
         return;
       }
-      const floor = this._findFloorAt(worldPt);
+      const floor = allows('floor') ? this._findFloorAt(worldPt) : null;
       if (floor) {
         this._selectItemOrGroup(floor, shiftHeld);
         return;
       }
-      const roof = this._findRoofAt(worldPt);
+      const roof = allows('roof') ? this._findRoofAt(worldPt) : null;
       if (!roof) {
         if (!shiftHeld) this._clearSelection();
         return;
@@ -9418,14 +9444,15 @@ class Component extends DCLogic {
     // On the BONEYARD an all-levels window still only reaches the active shelf
     // — level geometry is neither visible nor editable there.
     const allLevels = mode === 'window-all' && !this.state.boneyardActive;
-    const lines = allLevels ? selectable(this._lines) : this._activeLines();
-    const walls = allLevels ? selectable(this._walls) : this._activeWalls();
-    const floorsInScope = allLevels ? selectable(this._floors) : this._activeFloors();
+    const allows = type => this._selectFilterAllows(type);
+    const lines = allows('line') ? (allLevels ? selectable(this._lines) : this._activeLines()) : [];
+    const walls = allows('wall') ? (allLevels ? selectable(this._walls) : this._activeWalls()) : [];
+    const floorsInScope = allows('floor') ? (allLevels ? selectable(this._floors) : this._activeFloors()) : [];
     const segments = [...lines, ...walls]
       .filter(seg => inside(seg.start) && inside(seg.end));
     const floors = floorsInScope
       .filter(floor => floor.points.length >= 3 && floor.points.every(inside));
-    const dimensionsInScope = allLevels ? this._dimensions : this._activeDimensions();
+    const dimensionsInScope = allows('dimension') ? (allLevels ? this._dimensions : this._activeDimensions()) : [];
     const dimensions = dimensionsInScope
       .filter(dimension => inside(dimension.start) && inside(dimension.end));
 
@@ -10905,7 +10932,15 @@ class Component extends DCLogic {
       }
       if (this._windowSelection) { this._windowSelection = null; return; }
       this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._cancelCut();
+      // Esc with a live selection clears it; Esc on an empty selection releases
+      // an engaged Select object-type filter back to ALL.
+      const hadSelection = (this._selectedSegs?.size || 0) + (this._selectedFloors?.size || 0)
+        + (this._selectedRoofs?.size || 0) + (this._selectedFenestrations?.size || 0)
+        + (this._selectedSurfaceOpenings?.size || 0) + (this._selectedDimensions?.size || 0) > 0;
       this._clearSelection();
+      if (!hadSelection && this.state.activeTool === 'select' && (this.state.selectFilter || 'all') !== 'all') {
+        this.setState({ selectFilter: 'all' });
+      }
       return;
     }
     if (matches('delete')) {
@@ -10984,7 +11019,7 @@ class Component extends DCLogic {
     if (matches('outline')) { e.preventDefault(); this._activateContextTool('outline'); return; }
     if (matches('roof')) { e.preventDefault(); this._activateContextTool('roof'); return; }
     if (matches('dimension')) { e.preventDefault(); this._activateContextTool('dimension'); return; }
-    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click' }); return; }
+    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click', selectFilter: 'all' }); return; }
     if (matches('extend') || matches('extendAlt')) {
       e.preventDefault();
       this._activateExtendTool();
@@ -10996,7 +11031,14 @@ class Component extends DCLogic {
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
     if (matches('top')) { e.preventDefault(); this._setView('top'); return; }
     if (matches('front')) { e.preventDefault(); this._setView('front'); return; }
-    if (matches('side')) { e.preventDefault(); this._setView('side'); }
+    if (matches('side')) { e.preventDefault(); this._setView('side'); return; }
+    // A bare A returns the Select object-type filter to ALL. Presets that bind
+    // A to a command (AutoCAD node, ArchiCAD select) matched above and win.
+    if (this.state.activeTool === 'select' && !e.ctrlKey && !e.metaKey && !e.altKey
+      && typeof e.key === 'string' && e.key.toLowerCase() === 'a') {
+      e.preventDefault();
+      this.setState({ selectFilter: 'all' });
+    }
   }
 
   // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -11762,6 +11804,26 @@ class Component extends DCLogic {
         : (this.state.selectionMode === 'window-all'
           ? 'Drag a red box to select fully enclosed items on every level.'
           : 'Click items to select; Shift adds or removes. Press and drag for a blue window — hold Shift while dragging for a red all-levels window.'),
+      selectFilters: [
+        { id: 'all', label: 'ALL', title: 'Select any object type  [A]' },
+        { id: 'line', label: 'LINE', title: 'Only lines respond to Select' },
+        { id: 'wall', label: 'WALL', title: 'Only walls respond to Select' },
+        { id: 'outline', label: 'OUTLINE', title: 'Only outline nodes respond to Select' },
+        { id: 'floor', label: 'FLOOR', title: 'Only floors respond to Select' },
+      ].map(entry => {
+        const active = (this.state.selectFilter || 'all') === entry.id;
+        return {
+          ...entry,
+          bg: active ? (entry.id === 'all' ? '#1d1f20' : '#b04050') : '#fff',
+          color: active ? '#f2f2f3' : '#1d1f20',
+          border: active ? (entry.id === 'all' ? '#1d1f20' : '#b04050') : 'rgba(29,31,32,0.2)',
+          onSelect: () => this.setState({ selectFilter: entry.id }),
+        };
+      }),
+      selectFilterHelp: (this.state.selectFilter || 'all') === 'all'
+        ? 'Engage a type so Select only grabs that object — even under other geometry.'
+        : `${this.state.selectFilter.toUpperCase()} is engaged: nothing else responds. Click ALL — or press Esc with nothing selected — to release.`,
+      selectFilterHelpColor: (this.state.selectFilter || 'all') === 'all' ? 'rgba(29,31,32,0.48)' : '#b04050',
        groupShortcut: shortcut('group'),
        ungroupShortcut: shortcut('ungroup'),
        groupDisabled: selectedItems.length === 0,
@@ -12127,7 +12189,7 @@ class Component extends DCLogic {
       })),
 
       tools: [
-        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click'}); }, activeTool==='select'),
+        standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click', selectFilter:'all'}); }, activeTool==='select'),
         contextualTool('line'),
         contextualTool('node'),
         contextualTool('wall'),
