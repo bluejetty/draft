@@ -384,6 +384,7 @@
       <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:200px;">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Outline</div>
         <button onClick="{{ onBuildHouse }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD HOUSE</button>
+        <button data-build-garage onClick="{{ onBuildGarage }}" style="width:100%; box-sizing:border-box; border:1px solid #7a4a21; background:rgba(122,74,33,0.10); color:#7a4a21; padding:6px 4px; margin-bottom:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD GARAGE</button>
         <button onClick="{{ onOutlineGarageToggle }}" style="width:100%; box-sizing:border-box; border:1px solid {{ outlineGarageBorder }}; background:{{ outlineGarageBg }}; color:{{ outlineGarageColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ outlineGarageLabel }}</button>
       </div>
       <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:230px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ buildHouseHint }}</div>
@@ -644,7 +645,7 @@
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">CONNECT AT CORNER</div>
       <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">This garage wall continues the house wall from the far side — pick the offset; the run and its outside corner shift over square.</div>
       <div style="display:flex; gap:6px; margin-top:14px;">
-        <button data-garage-stub-beam onClick="{{ garageStubBeam }}" style="flex:1; height:28px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">GRADE BEAM THICKNESS ({{ garageStubBeamLabel }})</button>
+        <button data-garage-stub-beam onClick="{{ garageStubBeam }}" style="flex:1; height:28px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">FOUNDATION THICKNESS ({{ garageStubBeamLabel }})</button>
         <button data-garage-stub-foot onClick="{{ garageStubFoot }}" style="flex:1; height:28px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">1'-0&quot;</button>
       </div>
     </div>
@@ -3796,8 +3797,10 @@ class Component extends DCLogic {
     ctx.lineWidth = 2;
     outlines.forEach(outline => {
       if (outline.points.length < 2) return;
+      const selected = this._selectedOutlines?.has(outline) === true;
       ctx.strokeStyle = hex;
       ctx.fillStyle = hex;
+      ctx.lineWidth = selected ? 3.5 : 2;
       ctx.setLineDash([9, 5]);
       ctx.beginPath();
       const count = this._outlineSegmentCount(outline);
@@ -3881,7 +3884,7 @@ class Component extends DCLogic {
       }
       rings.forEach(ring => {
         const sc = toS(ring);
-        ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(sc.x, sc.y, 7.5, 0, Math.PI * 2);
         ctx.lineWidth = 1.5;
         ctx.stroke();
       });
@@ -5406,6 +5409,18 @@ class Component extends DCLogic {
     return this._originSnapPoint(pt) || pt.clone();
   }
 
+  // An engaged Ctrl/Shift angle lock owns the direction: node and midpoint
+  // snaps only take hold when they sit on the locked ray itself, so a nearby
+  // corner cannot yank the point sideways off the lock.
+  _snapOnLockedRay(origin, snap) {
+    if (this._lockAngle == null || !origin || !snap) return false;
+    const dirX = Math.cos(this._lockAngle), dirZ = Math.sin(this._lockAngle);
+    const along = (snap.x - origin.x) * dirX + (snap.z - origin.z) * dirZ;
+    if (along <= 0) return false;
+    const offRay = Math.hypot(snap.x - (origin.x + dirX * along), snap.z - (origin.z + dirZ * along));
+    return offRay <= this.state.snapStrength.node * this._worldPerPixel();
+  }
+
   // A dragged node snaps like a drawn point, in the same priority order as
   // the drawing pipeline: tracking > magnet > midpoint > Shift 45° T-square
   // from the grab point > polar rays from the armed origin > the 0,0 marker.
@@ -5420,10 +5435,11 @@ class Component extends DCLogic {
       const trackingHit = this._findTrackingSnap(raw, sd.origin, sd.vertices);
       if (trackingHit) return trackingHit.snapPt;
     }
+    const lockEngaged = angleLockHeld && this._lockAngle != null;
     const magnet = this._findMagnet(raw, sd.vertices);
-    if (magnet) return magnet;
+    if (magnet && (!lockEngaged || this._snapOnLockedRay(sd.origin, magnet))) return magnet;
     const midSnap = this._findMidpointSnap(raw, sd.vertices);
-    if (midSnap) return midSnap;
+    if (midSnap && (!lockEngaged || this._snapOnLockedRay(sd.origin, midSnap))) return midSnap;
     if (angleLockHeld && this._lockAngle != null) {
       // The same ray choice the cursor shows: the grab point's lock competes
       // with the polar node's T-square, and the closer ray takes the vertex —
@@ -5522,12 +5538,17 @@ class Component extends DCLogic {
       trackingHit = this._findTrackingSnap(raw, start, drag?.vertices);
     }
 
-    // Magnet snap (checked even when shift-locked; magnet overrides angle lock)
+    // Magnet snap — but an engaged angle lock owns the direction: a node only
+    // magnets when it sits on the locked ray, never sideways off it.
     // Vertex magnet uses the raw cursor position so grid rounding cannot make
     // a node feel magnetic beyond the one-pixel hit radius.
-    const magnet = !trackingHit ? this._findMagnet(raw, drag?.vertices) : null;
-    // Midpoint snap — only when no vertex magnet and not tracking
-    const midSnap = (!trackingHit && !magnet) ? this._findMidpointSnap(raw, drag?.vertices) : null;
+    const lockEngaged = angleLockHeld && start && this._lockAngle != null;
+    const magnetRaw = !trackingHit ? this._findMagnet(raw, drag?.vertices) : null;
+    const magnet = magnetRaw && (!lockEngaged || this._snapOnLockedRay(start, magnetRaw)) ? magnetRaw : null;
+    // Midpoint snap — only when no vertex magnet and not tracking, on the same
+    // locked-ray terms as the vertex magnet.
+    const midSnapRaw = (!trackingHit && !magnet) ? this._findMidpointSnap(raw, drag?.vertices) : null;
+    const midSnap = midSnapRaw && (!lockEngaged || this._snapOnLockedRay(start, midSnapRaw)) ? midSnapRaw : null;
 
     // Rolling over a node acquires it as the polar-tracking origin.
     if (magnet && (drag || POLAR_TRACKING_TOOLS.has(tool))) this._acquirePolarOrigin(magnet);
@@ -6369,6 +6390,15 @@ class Component extends DCLogic {
       || this.state.boneyardShelves[0];
   }
 
+  // Whether the active shelf already holds a house master — an attached
+  // garage run needs one to weld onto; without it only a detached loop works.
+  _shelfHasHouseMaster() {
+    this._ensureDrawingCollections();
+    const shelf = this._activeBoneyardShelf();
+    return shelf != null
+      && this._boneyardOutlines.some(outline => outline.shelfId === shelf.id && !outline.garage);
+  }
+
   // The first outline completed on a shelf becomes that shelf's master: it is
   // stored on the shelf and copied to every level, each copy linked back to
   // the master's points by srcId. Later outlines are local to their level.
@@ -6775,7 +6805,9 @@ class Component extends DCLogic {
       const wall = { x: (corner.x - other.x) / len, z: (corner.z - other.z) / len };
       const cross = leg.x * wall.z - leg.z * wall.x;
       const dot = leg.x * wall.x + leg.z * wall.z;
-      if (Math.abs(cross) > 0.05 || dot <= 0) return false;
+      // ~7° of slack: a hand-drawn leg that is meant to continue the wall
+      // still counts as in-line, so the corner prompt is never skipped.
+      if (Math.abs(cross) > 0.12 || dot <= 0) return false;
       const side = point => Math.sign(wall.x * (point.z - corner.z) - wall.z * (point.x - corner.x));
       const houseSide = side(centroid), garageSide = side(garage);
       return houseSide !== 0 && garageSide !== 0 && houseSide !== garageSide;
@@ -6904,11 +6936,74 @@ class Component extends DCLogic {
     return null;
   }
 
+  // BUILD GARAGE works after the fact: draw an ordinary closed outline, then
+  // turn it into a DETACHED garage — the selected outline if there is one,
+  // otherwise the newest closed outline in the active context. The foundation
+  // prompt picks its construction, then the garage builds right away.
+  _garageBuildTarget() {
+    const selected = [...(this._selectedOutlines || [])]
+      .find(outline => outline.open !== true && outline.points.length >= 3);
+    if (selected) return selected;
+    const pool = this.state.boneyardActive ? this._activeBoneyardOutlines() : this._activeOutlines();
+    const closed = pool.filter(outline => outline.open !== true && outline.points.length >= 3);
+    return closed.length ? closed[closed.length - 1] : null;
+  }
+
+  _buildGarage() {
+    this._ensureDrawingCollections();
+    const target = this._garageBuildTarget();
+    if (!target) {
+      this.setState({
+        drawingMessage: 'Draw a closed outline first — BUILD GARAGE turns it into a DETACHED garage (grade beam or thickened-edge slab).',
+        drawingMessageError: true,
+      });
+      return false;
+    }
+    const master = target.shelfId != null ? target
+      : (target.masterId != null
+        ? this._boneyardOutlines.find(candidate => candidate.id === target.masterId)
+        : null);
+    const source = master || target;
+    if (source.garage) {
+      this._buildHouse();
+      return true;
+    }
+    if (this._outlineCarriesBuild(source)) {
+      this.setState({
+        drawingMessage: 'This outline already carries built geometry — delete the built pieces before turning it into a garage.',
+        drawingMessageError: true,
+      });
+      return false;
+    }
+    const shelf = this._activeBoneyardShelf();
+    this._detachedPending = {
+      points: source.points.map(point => ({ x: point.x, z: point.z })),
+      shelfId: master ? master.shelfId : (shelf ? shelf.id : null),
+      sourceLevelId: master ? master.sourceLevelId : (target.levelId ?? null),
+      removeMasterId: master ? master.id : null,
+      removeLocal: master ? null : target,
+      buildAfter: true,
+    };
+    this.setState({ detachedFoundationPrompt: true });
+    return true;
+  }
+
   _chooseDetachedFoundation(foundation) {
     const pending = this._detachedPending;
     this._detachedPending = null;
     this.setState({ detachedFoundationPrompt: false });
     if (!pending) return null;
+    // BUILD GARAGE conversion: the outline the garage grows from goes away —
+    // a converted master takes its level copies with it; a local copy leaves
+    // just its own level.
+    if (pending.removeMasterId != null) {
+      this._boneyardOutlines = this._boneyardOutlines.filter(outline => outline.id !== pending.removeMasterId);
+      this._outlines = this._outlines.filter(outline => outline.masterId !== pending.removeMasterId);
+    }
+    if (pending.removeLocal) {
+      this._outlines = this._outlines.filter(outline => outline !== pending.removeLocal);
+    }
+    if (this._selectedOutlines) this._selectedOutlines.clear();
     const master = {
       id: this._newDrawingItemId('outline'),
       shelfId: pending.shelfId,
@@ -6935,6 +7030,7 @@ class Component extends DCLogic {
         : 'DETACHED GARAGE closed — grade beam all around; the 4" slab slopes 1/8"/ft to the door on graded fill. BUILD HOUSE raises its walls, beam, slab, doors, and roof.',
       drawingMessageError: false,
     });
+    if (pending.buildAfter) this._buildHouse();
     return master;
   }
 
@@ -6974,7 +7070,9 @@ class Component extends DCLogic {
         this._recordOutlineOverride(outline, outline.points[ref.prop]);
       }
     });
-    if (touched) this._markUnsaved();
+    // Mid-drag moves defer the save to mouseup: one history snapshot per
+    // drag, and messages set at grab time survive to be seen.
+    if (touched && !this._selectDrag?.active) this._markUnsaved();
   }
 
   // Outline segments are keyed to their starting point: points[index] carries
@@ -7091,6 +7189,74 @@ class Component extends DCLogic {
     }
     this._markUnsaved();
     this.setState({ drawingMessage: 'Outline node deleted.', drawingMessageError: false });
+    return true;
+  }
+
+  // A corner that generated geometry rides cannot be plucked out from under
+  // the build: walls, floors, slabs, footings and roofs link back to their
+  // BONEYARD master point by srcId, and deleting the point would orphan them.
+  _outlineNodeCarriesBuild(refs) {
+    const ref = (refs || []).find(r => r.outline);
+    if (!ref) return false;
+    const outline = ref.outline;
+    const point = outline.points[ref.prop];
+    if (!point) return false;
+    const masterPid = outline.shelfId != null ? point.pointId : point.srcId;
+    if (!masterPid) return false;
+    const linked = vtx => vtx?.srcId === masterPid;
+    return this._lines.some(seg => linked(seg.start) || linked(seg.end))
+      || this._walls.some(seg => linked(seg.start) || linked(seg.end))
+      || [...this._floors, ...this._shapes, ...this._roofs, ...this._surfaceOpenings]
+        .some(item => item.points.some(linked));
+  }
+
+  // Whether any point of the outline anchors generated geometry (via srcId
+  // links from BUILD HOUSE) — deleting such an outline would orphan the build.
+  _outlineCarriesBuild(outline) {
+    const pids = new Set(outline.points
+      .map(point => outline.shelfId != null ? point.pointId : point.srcId)
+      .filter(Boolean));
+    if (!pids.size) return false;
+    const linked = vtx => vtx?.srcId != null && pids.has(vtx.srcId);
+    return this._lines.some(seg => linked(seg.start) || linked(seg.end))
+      || this._walls.some(seg => linked(seg.start) || linked(seg.end))
+      || [...this._floors, ...this._shapes, ...this._roofs, ...this._surfaceOpenings]
+        .some(item => item.points.some(linked));
+  }
+
+  // Delete the outlines picked with Select, following the red/blue scope
+  // language: a BONEYARD master takes every level copy with it; a level copy
+  // (linked or local) only leaves its own level. An outline carrying built
+  // geometry refuses, so BUILD HOUSE output never loses its anchor points.
+  _deleteSelectedOutlines() {
+    const picked = [...this._selectedOutlines];
+    if (!picked.length) return false;
+    const masters = new Set();
+    const locals = new Set();
+    picked.forEach(outline => {
+      if (outline.shelfId != null) masters.add(outline);
+      else locals.add(outline);
+    });
+    const blocked = [...masters, ...locals].filter(outline => this._outlineCarriesBuild(outline));
+    if (blocked.length) {
+      this.setState({
+        drawingMessage: 'This outline carries built geometry — walls, slab, or roof are anchored to it. Delete the built pieces first.',
+        drawingMessageError: true,
+      });
+      return true;
+    }
+    const masterIds = new Set([...masters].map(master => master.id));
+    this._boneyardOutlines = this._boneyardOutlines.filter(outline => !masters.has(outline));
+    this._outlines = this._outlines.filter(outline => !locals.has(outline) && !masterIds.has(outline.masterId));
+    this._clearSelection(false);
+    this._notifySelectionChanged();
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: masterIds.size
+        ? 'Outline deleted — the master and its copies on every level are gone.'
+        : 'Outline deleted.',
+      drawingMessageError: false,
+    });
     return true;
   }
 
@@ -9196,7 +9362,7 @@ class Component extends DCLogic {
     });
     if (this._surfaceOpeningStart && this._surfaceOpeningPoints.length >= 3) {
       const sc = toS(this._surfaceOpeningStart);
-      ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(sc.x, sc.y, 7.5, 0, Math.PI * 2);
       ctx.lineWidth = 2; ctx.stroke();
     }
     ctx.restore();
@@ -10140,6 +10306,7 @@ class Component extends DCLogic {
     this._selectedFenestrations?.clear();
     this._selectedSurfaceOpenings?.clear();
     this._selectedDimensions?.clear();
+    this._selectedOutlines?.clear();
     if (notify) this._notifySelectionChanged();
   }
 
@@ -10382,6 +10549,17 @@ class Component extends DCLogic {
     if (vertexRefs) {
       const items = this._itemsFromVertexRefs(vertexRefs)
         .filter(item => allows(this._itemType(item)));
+      // A corner click with nothing else on the vertex picks the outline
+      // itself, same as a click on one of its edges.
+      const cornerOutline = allows('outline')
+        ? vertexRefs.find(ref => ref.outline)?.outline : null;
+      if (!items.length && cornerOutline) {
+        if (!shiftHeld) this._clearSelection(false);
+        if (shiftHeld && this._selectedOutlines.has(cornerOutline)) this._selectedOutlines.delete(cornerOutline);
+        else this._selectedOutlines.add(cornerOutline);
+        this._notifySelectionChanged();
+        return;
+      }
       this._addItemsAndTheirGroups(items, !shiftHeld);
       return;
     }
@@ -10411,6 +10589,16 @@ class Component extends DCLogic {
         if (!shiftHeld) this._clearSelection(false);
         if (shiftHeld && this._selectedDimensions.has(dimension)) this._selectedDimensions.delete(dimension);
         else this._selectedDimensions.add(dimension);
+        this._notifySelectionChanged();
+        return;
+      }
+      // Outline edges are their own selectable objects: a click on the dashed
+      // edge picks the whole outline so Select can delete or inspect it.
+      const outlineHit = allows('outline') ? this._findOutlineEdgeHit(worldPt) : null;
+      if (outlineHit) {
+        if (!shiftHeld) this._clearSelection(false);
+        if (shiftHeld && this._selectedOutlines.has(outlineHit.outline)) this._selectedOutlines.delete(outlineHit.outline);
+        else this._selectedOutlines.add(outlineHit.outline);
         this._notifySelectionChanged();
         return;
       }
@@ -12387,7 +12575,8 @@ class Component extends DCLogic {
       // an engaged Select object-type filter back to ALL.
       const hadSelection = (this._selectedSegs?.size || 0) + (this._selectedFloors?.size || 0)
         + (this._selectedRoofs?.size || 0) + (this._selectedFenestrations?.size || 0)
-        + (this._selectedSurfaceOpenings?.size || 0) + (this._selectedDimensions?.size || 0) > 0;
+        + (this._selectedSurfaceOpenings?.size || 0) + (this._selectedDimensions?.size || 0)
+        + (this._selectedOutlines?.size || 0) > 0;
       this._clearSelection();
       if (!hadSelection && this.state.activeTool === 'select' && (this.state.selectFilter || 'all') !== 'all') {
         this.setState({ selectFilter: 'all' });
@@ -12401,15 +12590,29 @@ class Component extends DCLogic {
       // then clears the selected objects as always.
       const hasSelection = this._selectedSegs.size > 0 || this._selectedFloors.size > 0
         || this._selectedRoofs.size > 0 || this._selectedFenestrations.size > 0
-        || this._selectedSurfaceOpenings.size > 0 || this._selectedDimensions.size > 0;
+        || this._selectedSurfaceOpenings.size > 0 || this._selectedDimensions.size > 0
+        || this._selectedOutlines.size > 0;
       if (!hasSelection && this._lastClient && !this._stairWorkspaceActive()) {
         const hoverPt = this._getWorldPos(this._lastClient.x, this._lastClient.y);
-        const refs = hoverPt ? this._findVertexHit(hoverPt) : null;
-        if (refs?.some(r => r.outline) && refs.every(r => r.outline)
-          && this._deleteOutlineNode(refs)) {
-          e.preventDefault();
-          return;
+        // Only outline points can own the hit, so a built corner's wall or
+        // roof vertex sitting on top never hides the outline node underneath.
+        const refs = hoverPt ? this._findVertexHit(hoverPt, 'outline') : null;
+        if (refs?.some(r => r.outline)) {
+          const outlineRefs = refs.filter(r => r.outline);
+          if (this._outlineNodeCarriesBuild(outlineRefs)) {
+            this.setState({
+              drawingMessage: 'This corner carries built geometry — walls, slab, or roof are anchored to it. Reshape it instead, or delete the built pieces first.',
+              drawingMessageError: true,
+            });
+            e.preventDefault();
+            return;
+          }
+          if (this._deleteOutlineNode(outlineRefs)) { e.preventDefault(); return; }
         }
+      }
+      if (this.state.activeTool === 'select' && this._selectedOutlines.size > 0) {
+        e.preventDefault();
+        if (this._deleteSelectedOutlines()) return;
       }
       if (this.state.activeTool === 'select'
         && (this._selectedSegs.size > 0 || this._selectedFloors.size > 0 || this._selectedRoofs.size > 0
@@ -13170,14 +13373,19 @@ class Component extends DCLogic {
       }),
       autoDimHint: 'AUTO DIMS strings the exterior on all four sides: openings closest, footprint jogs next, overall outside. Re-run to refresh after edits — every dim stays ordinary and editable.',
       onBuildHouse: () => this._buildHouse(),
+      onBuildGarage: () => this._buildGarage(),
       onOutlineGarageToggle: () => this.setState(state => ({
         outlineGarage: !state.outlineGarage,
         drawingMessage: !state.outlineGarage
-          ? 'GARAGE marking on — draw an OPEN run of 3+ legs that starts and ends on the house outline (double-click or Enter on the last point). BUILD HOUSE grows the grade beam + flat 4" slab + one roof over house + garage.'
+          ? (this._shelfHasHouseMaster()
+            ? 'GARAGE marking on — an OPEN run of 3+ legs starting and ending on the house outline attaches; a CLOSED loop is a DETACHED garage. BUILD HOUSE grows the beam, slab, doors and roof.'
+            : 'GARAGE marking on — close a loop to make a DETACHED garage (grade beam or thickened-edge slab). BUILD HOUSE grows its beam, slab, doors and roof.')
           : 'GARAGE marking off — outlines close as ordinary house outlines again.',
         drawingMessageError: false,
       })),
-      outlineGarageLabel: this.state.outlineGarage ? 'MARKING GARAGE — CLICK TO CANCEL' : 'MARK GARAGE',
+      outlineGarageLabel: this.state.outlineGarage
+        ? 'MARKING GARAGE — CLICK TO CANCEL'
+        : (this._shelfHasHouseMaster() ? 'MARK ATTACHED OR DETACHED GARAGE' : 'MARK DETACHED GARAGE'),
       outlineGarageBorder: this.state.outlineGarage ? '#7a4a21' : 'rgba(29,31,32,0.35)',
       outlineGarageBg: this.state.outlineGarage ? 'rgba(122,74,33,0.14)' : '#fff',
       outlineGarageColor: this.state.outlineGarage ? '#7a4a21' : 'rgba(29,31,32,0.75)',

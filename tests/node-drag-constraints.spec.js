@@ -72,6 +72,30 @@ test('Ctrl locks a dragged node the same way as Shift', async ({ page }) => {
   expect(h.near(moved.z, 8)).toBe(true);
 });
 
+test('an engaged Ctrl lock beats the vertex magnet: a node off the ray cannot yank the point', async ({ page }) => {
+  await h.openModel(page);
+  await drawLine(page, 10, 2, 14, 2); // leaves a node at (10,2) just off the east ray
+
+  await h.selectTool(page, 'Line');
+  await h.clickWorld(page, 0, 0);
+  await page.keyboard.down('Control');
+  const mid = await h.worldToClient(page, 8, 0);
+  await page.mouse.move(mid.x, mid.y); // aims the lock east
+  const near = await h.worldToClient(page, 10, 2);
+  await page.mouse.move(near.x, near.y); // cursor lands ON the off-ray node
+  await page.mouse.click(near.x, near.y);
+  await page.keyboard.up('Control');
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  const lines = h.allLines(await h.savedDrawing(page));
+  expect(lines).toHaveLength(2);
+  const drawn = lines.find(line => [line.start, line.end].some(p => h.near(p.x, 0) && h.near(p.z, 0)));
+  const endPt = [drawn.start, drawn.end].find(p => !(h.near(p.x, 0) && h.near(p.z, 0)));
+  // The locked east ray holds: the endpoint projects to (10,0), not the node at (10,2).
+  expect(h.near(endPt.z, 0, 0.1)).toBe(true);
+});
+
 test('R during a node drag types an exact distance from the grab point', async ({ page }) => {
   await h.openModel(page);
   await drawLine(page, -10, 0, 10, 0);
@@ -149,6 +173,46 @@ test('a dragged node follows the polar node ray the cursor shows', async ({ page
   const moved = [lines[0].start, lines[0].end].find(p => p.z > 3);
   expect(h.near(moved.x, 0)).toBe(true);
   expect(h.near(moved.z, 6)).toBe(true);
+});
+
+test('grabbing a BONEYARD master node shows the ripple warning while dragging', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page);
+
+  await page.locator('.level-name', { hasText: 'BONEYARD' }).click();
+  await page.waitForTimeout(300);
+  await h.selectTool(page, 'Outline');
+  await startDrag(page, 8, 6, 12, 8);
+
+  // The warning must stay on screen for the whole drag, not get wiped by the
+  // per-move save path.
+  await expect(page.locator('[data-model-drawing-message]')).toContainText('BONEYARD master point');
+  await page.mouse.up();
+  await h.waitForSaved(page);
+});
+
+test('a whole node drag is one history entry: a single undo puts it back', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page);
+
+  await h.selectTool(page, 'Outline');
+  await startDrag(page, 8, 6, 14, 10);
+  await page.mouse.up();
+  await h.waitForSaved(page);
+
+  // The dragged level-copy corner is a local override; the master stays put.
+  const moved = await h.savedDrawing(page);
+  const movedCopy = moved.outlines.find(o => o.levelId === 3);
+  expect(movedCopy.points.some(p => h.near(p.x, 8) && h.near(p.z, 6))).toBe(false);
+  expect(movedCopy.points.some(p => h.near(p.x, 14) && h.near(p.z, 10))).toBe(true);
+
+  await page.keyboard.press('Control+z');
+  await h.waitForSaved(page);
+
+  const undone = await h.savedDrawing(page);
+  const undoneCopy = undone.outlines.find(o => o.levelId === 3);
+  expect(undoneCopy.points.some(p => h.near(p.x, 8) && h.near(p.z, 6))).toBe(true);
+  expect(undoneCopy.points.some(p => h.near(p.x, 14) && h.near(p.z, 10))).toBe(false);
 });
 
 test('R types an exact distance while dragging an outline corner', async ({ page }) => {

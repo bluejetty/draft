@@ -24,7 +24,7 @@ async function drawHouseOutline(page) {
 
 async function drawGarageRun(page, points) {
   await h.selectTool(page, 'Outline');
-  await page.getByRole('button', { name: 'MARK GARAGE' }).click();
+  await page.getByRole('button', { name: /DETACHED GARAGE/ }).click();
   for (const [x, z] of points) await h.clickWorld(page, x, z);
   await page.keyboard.press('Enter');
 }

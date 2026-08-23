@@ -65,6 +65,21 @@ test('a closed outline keeps its minimum three points', async ({ page }) => {
   expect(saved.boneyardOutlines[0].points).toHaveLength(3);
 });
 
+test('Delete over a built corner explains itself instead of silently doing nothing', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutline(page, [[-8, -6], [8, -6], [8, 6], [-8, 6]]);
+  await h.selectTool(page, 'Outline');
+  await page.getByRole('button', { name: 'BUILD HOUSE' }).click();
+  await page.waitForTimeout(300);
+  await h.waitForSaved(page);
+
+  await deleteNodeAt(page, 8, 6);
+
+  await expect(page.locator('[data-model-drawing-message]')).toContainText('built geometry');
+  const saved = await h.savedDrawing(page);
+  expect(saved.boneyardOutlines[0].points).toHaveLength(4);
+});
+
 test('Delete with a selection still removes the selected objects, not the hovered node', async ({ page }) => {
   await h.openModel(page);
   await drawOutline(page, [[-8, -6], [8, -6], [8, 0], [8, 6], [-8, 6]]);
