@@ -270,7 +270,7 @@
         <div style="margin-top:9px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:6px;">Object Type</div>
         <div data-select-filters style="display:flex; gap:3px;">
           <sc-for list="{{ selectFilters }}" as="sf" hint-placeholder-count="5">
-            <button onClick="{{ sf.onSelect }}" title="{{ sf.title }}" style="flex:1; min-width:0; border:1px solid {{ sf.border }}; background:{{ sf.bg }}; color:{{ sf.color }}; padding:6px 1px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.03em; cursor:pointer;">{{ sf.label }}</button>
+            <button onClick="{{ sf.onSelect }}" title="{{ sf.title }}" aria-label="{{ sf.aria }}" style="flex:1; min-width:0; border:1px solid {{ sf.border }}; background:{{ sf.bg }}; color:{{ sf.color }}; padding:6px 1px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.03em; cursor:pointer;">{{ sf.label }}</button>
           </sc-for>
         </div>
         <div style="margin-top:6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:{{ selectFilterHelpColor }};">{{ selectFilterHelp }}</div>
@@ -11805,11 +11805,12 @@ class Component extends DCLogic {
           ? 'Drag a red box to select fully enclosed items on every level.'
           : 'Click items to select; Shift adds or removes. Press and drag for a blue window — hold Shift while dragging for a red all-levels window.'),
       selectFilters: [
-        { id: 'all', label: 'ALL', title: 'Select any object type  [A]' },
-        { id: 'line', label: 'LINE', title: 'Only lines respond to Select' },
-        { id: 'wall', label: 'WALL', title: 'Only walls respond to Select' },
-        { id: 'outline', label: 'OUTLINE', title: 'Only outline nodes respond to Select' },
-        { id: 'floor', label: 'FLOOR', title: 'Only floors respond to Select' },
+        // aria labels avoid the tool names so rail locators stay unambiguous
+        { id: 'all', label: 'ALL', aria: 'Grab any object type', title: 'Select any object type  [A]' },
+        { id: 'line', label: 'LINE', aria: 'Grab only lines', title: 'Only lines respond to Select' },
+        { id: 'wall', label: 'WALL', aria: 'Grab only walls', title: 'Only walls respond to Select' },
+        { id: 'outline', label: 'OUTLINE', aria: 'Grab only outlines', title: 'Only outline nodes respond to Select' },
+        { id: 'floor', label: 'FLOOR', aria: 'Grab only floors', title: 'Only floors respond to Select' },
       ].map(entry => {
         const active = (this.state.selectFilter || 'all') === entry.id;
         return {
