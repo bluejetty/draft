@@ -42,14 +42,13 @@ test('AUTO DIMS strings a rectangle: overalls everywhere, openings on the door s
 
   await runAutoDims(page);
   const saved = await h.savedDrawing(page);
-  const auto = saved.dimensions.filter(dimension => dimension.auto);
+  // BUILD HOUSE lays its own stack on every level; this test watches the
+  // active MAIN FL plan the AUTO DIMS button just restrung.
+  const auto = saved.dimensions.filter(dimension =>
+    dimension.auto && dimension.levelId === 3 && dimension.view === 'plan');
   // Rectangle: 3 plain sides get 1 overall each; the door side gets a
   // 2-piece openings string plus its overall.
   expect(auto).toHaveLength(6);
-  auto.forEach(dimension => {
-    expect(dimension.view).toBe('plan');
-    expect(dimension.levelId).toBe(3);
-  });
 
   // Openings string sits at the first offset (1'-6") off the door side and
   // breaks at the door centre.

@@ -1093,6 +1093,14 @@ const DEFAULT_WINDOW_WIDTH_FT = 4;
 const DEFAULT_WINDOW_SILL_FT = 2.5;
 const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
 const FENESTRATION_LAYERS = Object.freeze({ door: 'A-DOOR', window: 'A-GLAZ' });
+// Auto garage doors — BUILD HOUSE hangs the overhead door on the longest open
+// leg (16' × 7', dropping to 9' when the leg is short) and a 2'-8" man door
+// on another leg, cutting both the garage stud wall and the grade beam,
+// where a door through the concrete marks the pour cut on the FOUNDATION plan.
+const GARAGE_OVERHEAD_DOOR_FT = 16;
+const GARAGE_OVERHEAD_DOOR_NARROW_FT = 9;
+const GARAGE_OVERHEAD_HEAD_FT = 7;
+const GARAGE_MAN_DOOR_FT = (2 * 12 + 8) / 12;
 // STAIR OPENING — the rough opening cut into a floor for a stair to pass
 // through, placed from the FLOOR layer set. Width is the stair width plus a
 // 1" total finish allowance (drywall lining the opening sides); length runs
@@ -1652,6 +1660,7 @@ class Component extends DCLogic {
         garage: outline.garage === true,
         open: outline.open === true,
         cornerStubs: (outline.cornerStubs || []).map(stub => ({ ...stub })),
+        marks: (outline.marks || []).map(mark => ({ ...mark })),
         points: outline.points.map(p => ({ id: p.pointId, x: p.x, y: p.y || 0, z: p.z, bulge: p.bulge || 0, attach: p.attach || null })),
       })),
       outlines: this._outlines.map(outline => ({
@@ -2335,6 +2344,7 @@ class Component extends DCLogic {
           garage: outline.garage === true,
           open: outline.open === true,
           cornerStubs: outline.cornerStubs.map(stub => ({ ...stub })),
+          marks: outline.marks.map(mark => ({ ...mark, id: this._storedItemId(mark.id, 'mark', usedIds) })),
           points: outline.points.map(p => {
             const vtx = new THREE.Vector3(p.x, p.y, p.z);
             vtx.pointId = p.id;
@@ -2368,7 +2378,7 @@ class Component extends DCLogic {
       // Overridden points ride their master point at a stored offset; files
       // saved before offsets existed measure theirs from the loaded positions.
       this._deriveOverrideOffsets();
-       const numericItemIds = [...this._lines, ...this._walls, ...this._floors, ...this._fenestrations, ...this._surfaceOpenings, ...this._shapes, ...this._roofs, ...this._outlines, ...this._boneyardOutlines]
+       const numericItemIds = [...this._lines, ...this._walls, ...this._floors, ...this._fenestrations, ...this._surfaceOpenings, ...this._shapes, ...this._roofs, ...this._outlines, ...this._boneyardOutlines, ...this._boneyardOutlines.flatMap(outline => outline.marks || [])]
          .map(item => Number(String(item.id).match(/-(\d+)$/)?.[1]))
          .filter(Number.isInteger);
        const numericPointIds = this._boneyardOutlines
@@ -3618,7 +3628,26 @@ class Component extends DCLogic {
           ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
         });
       }
+      // Fenestration marks live on masters only, so they show on the BONEYARD.
+      (outline.marks || []).forEach(mark => this._drawBoneyardMark2D(ctx, toS, outline, mark, hex));
     });
+    // The FENESTRATION tool on the BONEYARD ghosts the mark it would place
+    // on the master edge under the cursor.
+    if (this.state.boneyardActive && this.state.activeTool === 'fenestration'
+        && this.state.fenestrationType !== 'stairs' && this._snapPt) {
+      const placement = this._boneyardMarkPlacement(this._snapPt);
+      if (placement && !placement.error) {
+        const ghost = {
+          edgeId: placement.edgeId,
+          offsetFt: placement.offsetFt,
+          widthFt: placement.widthFt,
+          type: this.state.fenestrationType === 'window' ? 'window' : 'door',
+        };
+        ctx.globalAlpha = 0.55;
+        this._drawBoneyardMark2D(ctx, toS, placement.outline, ghost, hex);
+        ctx.globalAlpha = 1;
+      }
+    }
     // In-progress preview: placed corners plus a rubber band to the cursor,
     // with a close ring on the start point once the outline can close.
     if (this._outlineDrawing && this._outlinePoints.length) {
@@ -3651,6 +3680,37 @@ class Component extends DCLogic {
         ctx.stroke();
       }
     }
+    ctx.restore();
+  }
+
+  // A mark draws as a heavy stroke across its opening width with jamb ticks
+  // and a D / W tag beside the centre.
+  _drawBoneyardMark2D(ctx, toS, outline, mark, hex) {
+    const at = this._boneyardMarkGeometry(outline, mark);
+    if (!at) return;
+    const half = mark.widthFt / 2;
+    const a = toS({ x: at.center.x - at.ux * half, z: at.center.z - at.uz * half });
+    const b = toS({ x: at.center.x + at.ux * half, z: at.center.z + at.uz * half });
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    ctx.save();
+    ctx.strokeStyle = hex;
+    ctx.fillStyle = hex;
+    ctx.setLineDash([]);
+    ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.lineWidth = 1.5;
+    [a, b].forEach(p => {
+      ctx.beginPath();
+      ctx.moveTo(p.x - nx * 6, p.y - ny * 6);
+      ctx.lineTo(p.x + nx * 6, p.y + ny * 6);
+      ctx.stroke();
+    });
+    const c = toS(at.center);
+    ctx.font = '600 10px "Barlow Condensed", system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(mark.type === 'door' ? 'D' : 'W', c.x + nx * 11, c.y + ny * 11);
     ctx.restore();
   }
 
@@ -6057,6 +6117,7 @@ class Component extends DCLogic {
         shelfId: shelf.id,
         sourceLevelId: level ? level.id : null,
         garage: false,
+        marks: [],
         points: points.map(point => {
           const vtx = new THREE.Vector3(point.x, 0, point.z);
           vtx.pointId = this._newDrawingItemId('op');
@@ -6534,6 +6595,7 @@ class Component extends DCLogic {
       garage: true,
       open: true,
       cornerStubs: pending.cornerStubs,
+      marks: [],
       points: pts.map((point, index) => {
         const vtx = new THREE.Vector3(point.x, 0, point.z);
         vtx.pointId = this._newDrawingItemId('op');
@@ -6995,6 +7057,123 @@ class Component extends DCLogic {
     return built;
   }
 
+  // BONEYARD fenestration marks become real wall openings: a door mark cuts
+  // the lowest floor level's generated wall, a window mark cuts every floor
+  // level's, so stacked storeys share aligned glazing. The host wall is the
+  // one whose end vertices ride the mark's edge points (srcId links), so the
+  // openings land right even on levels with local overrides.
+  _buildMarkOpenings() {
+    const floors = this._floorLevels();
+    if (!floors.length) return 0;
+    let added = 0;
+    this._boneyardOutlines.forEach(master => {
+      (master.marks || []).forEach(mark => {
+        const index = master.points.findIndex(point => point.pointId === mark.edgeId);
+        if (index < 0) return;
+        const nextIndex = master.open === true ? index + 1 : (index + 1) % master.points.length;
+        const nextId = master.points[nextIndex]?.pointId;
+        if (!nextId) return;
+        const levels = mark.type === 'door' ? [floors[0]] : floors;
+        levels.forEach(level => {
+          if (this._placeMarkOpening(mark, level.id, 'plan', mark.edgeId, nextId)) added++;
+        });
+      });
+    });
+    return added;
+  }
+
+  _placeMarkOpening(mark, levelId, view, startId, endId) {
+    const wall = this._walls.find(w => w.levelId === levelId && (w.view || 'plan') === view
+      && ((w.start.srcId === startId && w.end.srcId === endId)
+        || (w.start.srcId === endId && w.end.srcId === startId)));
+    if (!wall) return false;
+    const forward = wall.start.srcId === startId;
+    const len = this._wallLength(wall);
+    const clamped = this._clampOpeningToWall(wall, forward ? mark.offsetFt : len - mark.offsetFt, mark.widthFt);
+    if (!clamped) return false;
+    // An opening already sitting near the mark's spot wins — re-running BUILD
+    // HOUSE never doubles up or fights a hand-placed opening.
+    if (this._fenestrations.some(opening => opening.wallId === wall.id
+      && Math.abs(opening.offset - clamped.offset) < Math.max(0.25, mark.widthFt / 2))) return false;
+    this._fenestrations.push({
+      id: this._newDrawingItemId('fenestration'),
+      wallId: wall.id,
+      levelId,
+      view,
+      type: mark.type,
+      layer: FENESTRATION_LAYERS[mark.type],
+      offset: clamped.offset,
+      width: mark.widthFt,
+      sillHeight: mark.type === 'door' ? 0 : mark.sillFt,
+      headHeight: mark.headFt,
+    });
+    return true;
+  }
+
+  // Every attached garage gets its doors without marking: the overhead door
+  // centred on the longest open leg (the run facing the driveway) and a man
+  // door on another leg that fits one, cut into both the garage stud wall and
+  // the grade beam — the beam doors mark the pour cut on the FOUNDATION plan.
+  _buildGarageDoors() {
+    const level = this._floorLevels()[0];
+    if (!level) return 0;
+    const garage = this._garageOutline(level.id);
+    if (!garage || garage.open !== true) return 0;
+    const count = this._outlineSegmentCount(garage);
+    if (count < 2) return 0;
+    const legLen = index => {
+      const seg = this._outlineSegment(garage, index);
+      return Math.hypot(seg.end.x - seg.start.x, seg.end.z - seg.start.z);
+    };
+    let frontIndex = 0;
+    for (let index = 1; index < count; index++) if (legLen(index) > legLen(frontIndex)) frontIndex = index;
+    const overheadW = legLen(frontIndex) >= GARAGE_OVERHEAD_DOOR_FT + 2
+      ? GARAGE_OVERHEAD_DOOR_FT : GARAGE_OVERHEAD_DOOR_NARROW_FT;
+    let manIndex = -1;
+    for (let index = count - 1; index >= 0; index--) {
+      if (index !== frontIndex && legLen(index) >= GARAGE_MAN_DOOR_FT + 1) { manIndex = index; break; }
+    }
+    let added = 0;
+    [
+      { levelId: level.id, view: 'plan', copy: garage },
+      { levelId: 1, view: 'foundation', copy: this._garageOutline(1) },
+    ].forEach(({ levelId, view, copy }) => {
+      if (!copy || this._outlineSegmentCount(copy) !== count) return;
+      if (this._placeAutoDoor(levelId, view, this._outlineSegment(copy, frontIndex), overheadW, GARAGE_OVERHEAD_HEAD_FT)) added++;
+      if (manIndex >= 0
+        && this._placeAutoDoor(levelId, view, this._outlineSegment(copy, manIndex), GARAGE_MAN_DOOR_FT, DEFAULT_OPENING_HEAD_FT)) added++;
+    });
+    return added;
+  }
+
+  // Centre a door on the generated wall spanning seg's endpoints. A wall that
+  // already carries any opening is left alone, so re-runs never double up.
+  _placeAutoDoor(levelId, view, seg, widthFt, headFt) {
+    const a = { x: seg.start.x, z: seg.start.z };
+    const b = { x: seg.end.x, z: seg.end.z };
+    const eps = 0.1;
+    const wall = this._walls.find(w => w.levelId === levelId && (w.view || 'plan') === view
+      && ((Math.hypot(w.start.x - a.x, w.start.z - a.z) <= eps && Math.hypot(w.end.x - b.x, w.end.z - b.z) <= eps)
+        || (Math.hypot(w.start.x - b.x, w.start.z - b.z) <= eps && Math.hypot(w.end.x - a.x, w.end.z - a.z) <= eps)));
+    if (!wall) return false;
+    if (this._fenestrations.some(opening => opening.wallId === wall.id)) return false;
+    const clamped = this._clampOpeningToWall(wall, this._wallLength(wall) / 2, widthFt);
+    if (!clamped) return false;
+    this._fenestrations.push({
+      id: this._newDrawingItemId('fenestration'),
+      wallId: wall.id,
+      levelId,
+      view,
+      type: 'door',
+      layer: FENESTRATION_LAYERS.door,
+      offset: clamped.offset,
+      width: widthFt,
+      sillHeight: 0,
+      headHeight: headFt,
+    });
+    return true;
+  }
+
   _buildHouseRoof() {
     if (this._roofs.some(roof => roof.levelId === 7)) return false;
     let outline = this._houseOutline(7);
@@ -7107,6 +7286,20 @@ class Component extends DCLogic {
     if (this._buildGarageSlab()) built.push(openGarage ? 'garage slab (flat 4")' : 'garage slab (4" @ 1/8"/ft)');
     if (this._buildHouseRoof()) built.push(openGarage ? `${this.state.roofPitch}:12 roof over house + garage` : `${this.state.roofPitch}:12 roof`);
     if (this._buildGarageRoof()) built.push('garage roof (own height — tune the house join by hand)');
+    // Fenestration: BONEYARD marks cut into the generated walls, and an
+    // attached garage gets its overhead + man doors automatically.
+    const markOpenings = this._buildMarkOpenings();
+    if (markOpenings) built.push(`${markOpenings} marked opening${markOpenings === 1 ? '' : 's'}`);
+    const garageDoors = this._buildGarageDoors();
+    if (garageDoors) built.push('garage doors (overhead + man door)');
+    // The dimension stack refreshes on every build that changed something, so
+    // the strings pick up the new corners and opening centres.
+    if (built.length) {
+      let autoDims = 0;
+      floors.forEach(level => { autoDims += Math.max(0, this._placeAutoDims(level.id, 'plan')); });
+      autoDims += Math.max(0, this._placeAutoDims(1, 'foundation'));
+      if (autoDims) built.push(`${autoDims} auto dims`);
+    }
     if (!built.length) {
       this.setState({
         drawingMessage: 'Every level already has its shell — delete a piece (or its walls) and BUILD HOUSE again to redo it.',
@@ -7398,6 +7591,108 @@ class Component extends DCLogic {
     return { wall: best.wall, offset: clamped.offset, width };
   }
 
+  // ── BONEYARD fenestration marks ──────────────────────────────────────────
+  // A mark keys to the master edge that starts at edgeId and stores the
+  // opening centre offsetFt along it. BUILD HOUSE cuts marks into the
+  // generated walls: door marks on the lowest floor level, window marks on
+  // every floor level, so stacked storeys share aligned glazing.
+  _boneyardMarkGeometry(outline, mark) {
+    const index = outline.points.findIndex(point => point.pointId === mark.edgeId);
+    if (index < 0 || (outline.open === true && index >= outline.points.length - 1)) return null;
+    const seg = this._outlineSegment(outline, index);
+    const len = Math.hypot(seg.end.x - seg.start.x, seg.end.z - seg.start.z);
+    if (len < mark.widthFt + 0.02) return null;
+    const ux = (seg.end.x - seg.start.x) / len;
+    const uz = (seg.end.z - seg.start.z) / len;
+    const half = mark.widthFt / 2 + 0.01;
+    const offset = Math.min(Math.max(mark.offsetFt, half), len - half);
+    return {
+      center: { x: seg.start.x + ux * offset, z: seg.start.z + uz * offset },
+      ux, uz, len, offset,
+    };
+  }
+
+  _findBoneyardMarkAt(worldPt) {
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    const thresh = (this._orthoHalfH * 2) / h * 12;
+    for (const outline of this._activeBoneyardOutlines()) {
+      for (const mark of outline.marks || []) {
+        const at = this._boneyardMarkGeometry(outline, mark);
+        if (!at) continue;
+        const dx = worldPt.x - at.center.x, dz = worldPt.z - at.center.z;
+        const along = dx * at.ux + dz * at.uz;
+        const across = Math.abs(dx * -at.uz + dz * at.ux);
+        if (Math.abs(along) <= mark.widthFt / 2 + thresh / 2 && across <= thresh) return { outline, mark };
+      }
+    }
+    return null;
+  }
+
+  // Nearest master outline edge within the pick radius → placement or an
+  // error the click handler can explain. Marks skip arc edges — an opening
+  // in a curved wall is a hand-drafting job.
+  _boneyardMarkPlacement(worldPt) {
+    const hit = this._findOutlineEdgeHit(worldPt);
+    if (!hit || hit.outline.shelfId == null) return null;
+    const seg = this._outlineSegment(hit.outline, hit.index);
+    if (seg.bulge) return { error: 'arc' };
+    const len = Math.hypot(seg.end.x - seg.start.x, seg.end.z - seg.start.z);
+    const width = this._fenestrationWidth();
+    if (len < width + 0.02) return { error: 'too-short' };
+    const half = width / 2 + 0.01;
+    const offsetFt = Math.min(Math.max(hit.t * len, half), len - half);
+    return { outline: hit.outline, edgeId: seg.start.pointId, offsetFt, widthFt: width };
+  }
+
+  _handleBoneyardMarkClick(pt) {
+    // A click on an existing mark removes it — mark and unmark with one tool.
+    const existing = this._findBoneyardMarkAt(pt);
+    if (existing) {
+      existing.outline.marks = (existing.outline.marks || []).filter(mark => mark !== existing.mark);
+      this._markUnsaved();
+      this.setState({
+        drawingMessage: `${existing.mark.type === 'door' ? 'Door' : 'Window'} mark removed from the master outline.`,
+        drawingMessageError: false,
+      });
+      return;
+    }
+    const placement = this._boneyardMarkPlacement(pt);
+    if (!placement) {
+      this.setState({
+        drawingMessage: 'Click on a master outline edge to mark the opening — BUILD HOUSE cuts every mark into the generated walls.',
+        drawingMessageError: true,
+      });
+      return;
+    }
+    if (placement.error) {
+      this.setState({
+        drawingMessage: placement.error === 'arc'
+          ? 'Marks skip arc edges — place the opening on the generated wall by hand.'
+          : 'That outline edge is too short for this opening width.',
+        drawingMessageError: true,
+      });
+      return;
+    }
+    const type = this.state.fenestrationType === 'window' ? 'window' : 'door';
+    if (!Array.isArray(placement.outline.marks)) placement.outline.marks = [];
+    placement.outline.marks.push({
+      id: this._newDrawingItemId('mark'),
+      type,
+      edgeId: placement.edgeId,
+      offsetFt: placement.offsetFt,
+      widthFt: placement.widthFt,
+      sillFt: type === 'door' ? 0 : this.state.fenestrationSill,
+      headFt: this.state.fenestrationHead,
+    });
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: type === 'door'
+        ? 'Door mark set on the master — BUILD HOUSE cuts it into the lowest floor\u2019s generated wall. Click a mark to remove it.'
+        : 'Window mark set on the master — BUILD HOUSE cuts it into the generated walls on every floor level. Click a mark to remove it.',
+      drawingMessageError: false,
+    });
+  }
+
   _handleFenestrationClick() {
     if (!this._contextAllowsTool('fenestration')) {
       this.setState({ drawingMessage: this._contextToolMessage('fenestration'), drawingMessageError: true });
@@ -7408,6 +7703,13 @@ class Component extends DCLogic {
     // over hole mode so the selected host floor doesn't hijack the clicks.
     if (this.state.fenestrationType === 'stairs') {
       this._handleStairOpeningClick();
+      return;
+    }
+    // On the BONEYARD the tool places fenestration MARKS on the master
+    // outline edges instead of wall openings — BUILD HOUSE cuts them into
+    // the generated walls.
+    if (this.state.boneyardActive) {
+      this._handleBoneyardMarkClick(pt);
       return;
     }
     // A selected floor or roof switches the tool to hole mode: the opening
@@ -9998,6 +10300,23 @@ class Component extends DCLogic {
       this.setState({ drawingMessage: this._contextToolMessage('dimension', view), drawingMessageError: true });
       return false;
     }
+    const added = this._placeAutoDims(levelId, view);
+    if (added < 0) {
+      this.setState({ drawingMessage: 'AUTO DIMS needs walls or an outline with some size on this level first.', drawingMessageError: true });
+      return false;
+    }
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `AUTO DIMS placed ${added} dimensions around the ${this._draftingContextLabel(view)} plan — re-run after edits to refresh them.`,
+      drawingMessageError: false,
+    });
+    return true;
+  }
+
+  // The dimension-stack core: replaces the level+view's previous auto strings
+  // and lays fresh ones. Returns the count placed, or -1 when the level has
+  // nothing to dimension. BUILD HOUSE calls this for every level it touches.
+  _placeAutoDims(levelId, view) {
     const wallView = view === 'e-power' ? 'plan' : view;
     const walls = this._walls.filter(wall => wall.levelId === levelId
       && (wall.view || 'plan') === wallView);
@@ -10010,10 +10329,7 @@ class Component extends DCLogic {
         { x: wall.start.x, z: wall.start.z },
         { x: wall.end.x, z: wall.end.z },
       ]);
-    if (corners.length < 2) {
-      this.setState({ drawingMessage: 'AUTO DIMS needs walls or an outline on this level first.', drawingMessageError: true });
-      return false;
-    }
+    if (corners.length < 2) return -1;
     const uniqSorted = values => {
       const sorted = [...values].sort((a, b) => a - b);
       return sorted.filter((value, index) => index === 0 || value - sorted[index - 1] > 0.01);
@@ -10022,10 +10338,7 @@ class Component extends DCLogic {
     const zs = uniqSorted(corners.map(point => point.z));
     const minX = xs[0], maxX = xs[xs.length - 1];
     const minZ = zs[0], maxZ = zs[zs.length - 1];
-    if (maxX - minX < 0.01 || maxZ - minZ < 0.01) {
-      this.setState({ drawingMessage: 'AUTO DIMS needs a plan with some size to dimension.', drawingMessageError: true });
-      return false;
-    }
+    if (maxX - minX < 0.01 || maxZ - minZ < 0.01) return -1;
     // Fenestration centres, keyed to the side their host wall faces.
     const openings = { N: [], S: [], W: [], E: [] };
     const wallIds = new Set(walls.map(wall => wall.id));
@@ -10078,12 +10391,7 @@ class Component extends DCLogic {
       if (cornerCoords.length > 2) pushString(side, cornerCoords, stringIndex++);
       pushString(side, [lo, hi], stringIndex);
     });
-    this._markUnsaved();
-    this.setState({
-      drawingMessage: `AUTO DIMS placed ${added} dimensions around the ${this._draftingContextLabel(view)} plan — re-run after edits to refresh them.`,
-      drawingMessageError: false,
-    });
-    return true;
+    return added;
   }
 
   // ─── Columns and beams ──────────────────────────────────────────────────────

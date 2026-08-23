@@ -355,17 +355,36 @@ if (!window.DraftDrawingFormat) {
         return { ...parsed, id, bulge: Number.isFinite(bulge) ? bulge : 0, attach: attach || null };
       }).filter(Boolean);
       if (points.length < 3) return null;
+      const open = outline?.open === true;
+      // Fenestration marks live on the master: each keys to the edge starting
+      // at edgeId, with the opening centre offsetFt along it. An OPEN outline's
+      // last point owns no edge, so a mark keyed there is dropped.
+      const pointIds = new Set(points.map(p => p.id));
+      const lastPointId = points[points.length - 1].id;
+      const marks = (Array.isArray(outline?.marks) ? outline.marks : []).map(mark => {
+        const type = oneOf(mark?.type, ['door', 'window'], null);
+        const edgeId = String(mark?.edgeId || '').trim();
+        const offsetFt = num(mark?.offsetFt);
+        const widthFt = positive(mark?.widthFt, null);
+        if (!type || !edgeId || !pointIds.has(edgeId) || offsetFt === null || offsetFt < 0 || widthFt == null) return null;
+        if (open && edgeId === lastPointId) return null;
+        const sillFt = Math.max(0, number(mark?.sillFt, 0));
+        const headFt = positive(mark?.headFt, null);
+        if (headFt == null || headFt <= sillFt) return null;
+        return { id: String(mark?.id || '').trim(), type, edgeId, offsetFt, widthFt, sillFt, headFt };
+      }).filter(Boolean);
       return {
         id: String(outline?.id || '').trim(),
         shelfId,
         sourceLevelId: Number.isInteger(Number(outline?.sourceLevelId)) ? Number(outline.sourceLevelId) : null,
         garage: outline?.garage === true,
-        open: outline?.open === true,
+        open,
         cornerStubs: (Array.isArray(outline?.cornerStubs) ? outline.cornerStubs : []).map(stub => {
           const pointId = String(stub?.pointId || '').trim();
           const lengthIn = Number(stub?.lengthIn);
           return pointId && Number.isFinite(lengthIn) && lengthIn > 0 ? { pointId, lengthIn } : null;
         }).filter(Boolean),
+        marks,
         points,
       };
     }).filter(Boolean);
