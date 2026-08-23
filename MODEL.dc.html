@@ -164,9 +164,9 @@
   <div style="position:fixed; inset:0; z-index:51; display:flex; align-items:flex-start; justify-content:center; padding-top:78px; background:rgba(29,31,32,0.18);">
     <div data-garage-corner-prompt role="dialog" aria-modal="true" aria-label="Connect at corner" style="width:min(380px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">CONNECT AT CORNER</div>
-      <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">The garage end lands on a house corner — pick the connecting stub run along the house wall.</div>
+      <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">This garage wall continues the house wall from the far side — pick the offset; the run and its outside corner shift over square.</div>
       <div style="display:flex; gap:6px; margin-top:14px;">
-        <button data-garage-stub-beam onClick="{{ garageStubBeam }}" style="flex:1; height:28px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">GRADE BEAM THICKNESS (8&quot;)</button>
+        <button data-garage-stub-beam onClick="{{ garageStubBeam }}" style="flex:1; height:28px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">GRADE BEAM THICKNESS ({{ garageStubBeamLabel }})</button>
         <button data-garage-stub-foot onClick="{{ garageStubFoot }}" style="flex:1; height:28px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">1'-0&quot;</button>
       </div>
     </div>
@@ -1251,7 +1251,6 @@ const {
 } = window.DraftLineLayers;
 const { normaliseLayerStandards } = window.DraftLayerStandards;
 const { normaliseSnapStrength } = window.DraftSnapStrength;
-const { OUTLINE_COLORS, DEFAULT_OUTLINE_COLOR, normaliseOutlineColor } = window.DraftOutlineColor;
 const { normaliseDrafter } = window.DraftDrafter;
 
 // Undo keeps whole serialized drawings, so it is bounded by count and by size.
@@ -1338,7 +1337,6 @@ class Component extends DCLogic {
     activeBoneyardShelfId: 1,
     nextBoneyardShelfId: 2,
     boneyardActive: false,   // BONEYARD card selected instead of a level
-    outlineColor: DEFAULT_OUTLINE_COLOR,
     outlineGarage: false,     // next outline drawn is the attached GARAGE run
     garageCornerPrompt: false, // CONNECT AT CORNER stub choice pending
     autoDimFirstOffsetFt: 1.5, // gap between the plan and the closest auto string
@@ -1765,7 +1763,6 @@ class Component extends DCLogic {
         model: {
           units: this.state.units,
           snapStrength: { ...this.state.snapStrength },
-          outlineColor: this.state.outlineColor,
           drafter: { ...this.state.drafter },
           keybindings: { ...this.state.keybindings },
         },
@@ -1791,9 +1788,6 @@ class Component extends DCLogic {
         ...(values.units === 'metric' || values.units === 'imperial' ? { units: values.units } : {}),
         ...(values.snapStrength && typeof values.snapStrength === 'object'
           ? { snapStrength: normaliseSnapStrength(values.snapStrength) }
-          : {}),
-        ...(typeof values.outlineColor === 'string'
-          ? { outlineColor: normaliseOutlineColor(values.outlineColor) }
           : {}),
         ...(values.drafter && typeof values.drafter === 'object'
           ? { drafter: normaliseDrafter(values.drafter) }
@@ -3483,18 +3477,18 @@ class Component extends DCLogic {
   // The OUTLINE guide never prints — it is drafting scaffolding, not linework.
   _drawOutlines2D(ctx, toS) {
     if (this._isPrinting) return;
-    const hex = this._outlineColorHex();
+    // Scope colours: RED on the BONEYARD, where an edit moves every level;
+    // BLUE on a floor level, where an edit stays local — the app's red/blue
+    // all-levels language.
+    const hex = this.state.boneyardActive ? '#b04050' : '#5980a6';
     const outlines = this.state.boneyardActive ? this._activeBoneyardOutlines() : this._activeOutlines();
     const showHandles = ['outline', 'select'].includes(this.state.activeTool);
     ctx.save();
     ctx.lineWidth = 2;
     outlines.forEach(outline => {
       if (outline.points.length < 2) return;
-      // The garage guide draws in the alternate outline colour so the two
-      // footprints read apart at a glance.
-      const outlineHex = outline.garage ? this._outlineAltColorHex() : hex;
-      ctx.strokeStyle = outlineHex;
-      ctx.fillStyle = outlineHex;
+      ctx.strokeStyle = hex;
+      ctx.fillStyle = hex;
       ctx.setLineDash([9, 5]);
       ctx.beginPath();
       const count = this._outlineSegmentCount(outline);
@@ -3532,9 +3526,8 @@ class Component extends DCLogic {
     // In-progress preview: placed corners plus a rubber band to the cursor,
     // with a close ring on the start point once the outline can close.
     if (this._outlineDrawing && this._outlinePoints.length) {
-      const liveHex = this.state.outlineGarage ? this._outlineAltColorHex() : hex;
-      ctx.strokeStyle = liveHex;
-      ctx.fillStyle = liveHex;
+      ctx.strokeStyle = hex;
+      ctx.fillStyle = hex;
       ctx.setLineDash([5, 4]);
       ctx.beginPath();
       this._outlinePoints.forEach((point, index) => {
@@ -6185,12 +6178,15 @@ class Component extends DCLogic {
     return this._continueGarageCommit(pending);
   }
 
-  // An end landing on a true house corner pauses the commit for the
-  // corner-connect prompt; everything else finalizes straight through.
+  // A corner landing pauses the commit for the corner-connect prompt only in
+  // the in-line case — the garage leg continues a house wall with the garage
+  // on the opposite side of that wall from the house, so the runs would sit
+  // face to interior. Every other corner landing welds silently at the corner.
   _continueGarageCommit(pending) {
     const house = this._houseMasterOutline(pending.shelfId);
     const cornerKey = ['resStart', 'resEnd'].find(key =>
-      pending[key].type === 'point' && this._houseCornerAt(house, pending[key].index));
+      pending[key].type === 'point' && this._houseCornerAt(house, pending[key].index)
+      && !pending.stubbed?.[key] && this._garageCornerNeedsStub(pending, key, house));
     if (cornerKey) {
       this._garagePending = { ...pending, cornerKey };
       this.setState({ garageCornerPrompt: true });
@@ -6199,8 +6195,50 @@ class Component extends DCLogic {
     return this._finalizeGarageOutline(pending);
   }
 
-  // The chosen stub length slides the corner attachment along the house edge
-  // on the garage side, so the garage leg connects a short run off the corner.
+  // True when the end leg extends one of the corner's house walls beyond the
+  // corner with the garage body on the opposite side of that wall line from
+  // the house interior — the one arrangement where an offset stub is needed.
+  _garageCornerNeedsStub(pending, key, house) {
+    const corner = house.points[pending[key].index];
+    const neighbor = key === 'resStart' ? pending.points[1] : pending.points[pending.points.length - 2];
+    const legLen = Math.hypot(neighbor.x - corner.x, neighbor.z - corner.z);
+    if (legLen < 1e-6) return false;
+    const leg = { x: (neighbor.x - corner.x) / legLen, z: (neighbor.z - corner.z) / legLen };
+    const n = house.points.length;
+    const prev = house.points[(pending[key].index - 1 + n) % n];
+    const next = house.points[(pending[key].index + 1) % n];
+    const centroid = house.points.reduce(
+      (sum, point) => ({ x: sum.x + point.x / n, z: sum.z + point.z / n }), { x: 0, z: 0 });
+    const garage = this._garageInteriorRef(pending.points);
+    // Each house wall at the corner, as a direction pointing beyond the corner.
+    return [prev, next].some(other => {
+      const len = Math.hypot(corner.x - other.x, corner.z - other.z);
+      if (len < 1e-6) return false;
+      const wall = { x: (corner.x - other.x) / len, z: (corner.z - other.z) / len };
+      const cross = leg.x * wall.z - leg.z * wall.x;
+      const dot = leg.x * wall.x + leg.z * wall.z;
+      if (Math.abs(cross) > 0.05 || dot <= 0) return false;
+      const side = point => Math.sign(wall.x * (point.z - corner.z) - wall.z * (point.x - corner.x));
+      const houseSide = side(centroid), garageSide = side(garage);
+      return houseSide !== 0 && garageSide !== 0 && houseSide !== garageSide;
+    });
+  }
+
+  // The house foundation's wall assembly width — an ICF house offers the ICF
+  // thickness as its grade-beam stub. Falls back through the active wall type
+  // to the 8" concrete default when no foundation wall exists yet.
+  _foundationWallThicknessIn() {
+    const wall = this._walls.find(candidate => (candidate.view || 'plan') === 'foundation'
+      && FOUNDATION_WALL_TYPE_IDS.includes(candidate.wallType));
+    const id = wall ? wall.wallType
+      : (FOUNDATION_WALL_TYPE_IDS.includes(this.state.activeWallType) ? this.state.activeWallType : 'concrete_8');
+    return WALL_TYPES.find(type => type.id === id)?.totalIn || 8;
+  }
+
+  // The chosen stub shifts the corner leg over perpendicular — toward the
+  // garage — by the stub length: the leg's far node moves with it, and a
+  // short square stub joins the house corner to the shifted wall, so the two
+  // runs sit face to face instead of face to interior.
   _chooseGarageCornerStub(lengthIn) {
     const pending = this._garagePending;
     this._garagePending = null;
@@ -6209,19 +6247,23 @@ class Component extends DCLogic {
     const house = this._houseMasterOutline(pending.shelfId);
     const key = pending.cornerKey;
     delete pending.cornerKey;
-    const res = pending[key];
-    const otherRes = pending[key === 'resStart' ? 'resEnd' : 'resStart'];
-    const sCorner = res.index;
-    const sOther = otherRes.type === 'point' ? otherRes.index : otherRes.index + otherRes.t;
-    const interior = this._garageInteriorRef(pending.points);
-    const forward = this._garageClosureForward(house, sCorner, sOther, interior);
-    const s = this._offsetAlongParam(house, sCorner, forward, lengthIn / 12);
-    const n = house.points.length;
-    const index = Math.floor(s) % n;
-    const t = s - Math.floor(s);
-    pending.cornerStubs.push({ pointId: house.points[res.index].pointId, lengthIn });
-    pending[key] = t < 1e-9 ? { type: 'point', index } : { type: 'edge', index, t };
-    pending[`${key}Pos`] = this._garageAttachPosition(house, pending[key]);
+    const corner = house.points[pending[key].index];
+    const start = key === 'resStart';
+    const neighborIndex = start ? 1 : pending.points.length - 2;
+    const neighbor = pending.points[neighborIndex];
+    const legLen = Math.hypot(neighbor.x - corner.x, neighbor.z - corner.z) || 1;
+    const leg = { x: (neighbor.x - corner.x) / legLen, z: (neighbor.z - corner.z) / legLen };
+    let perp = { x: -leg.z, z: leg.x };
+    const garage = this._garageInteriorRef(pending.points);
+    if (perp.x * (garage.x - corner.x) + perp.z * (garage.z - corner.z) < 0) {
+      perp = { x: -perp.x, z: -perp.z };
+    }
+    const ft = lengthIn / 12;
+    pending.points[neighborIndex] = { x: neighbor.x + perp.x * ft, z: neighbor.z + perp.z * ft };
+    pending.points.splice(start ? 1 : pending.points.length - 1, 0,
+      { x: corner.x + perp.x * ft, z: corner.z + perp.z * ft });
+    pending.cornerStubs.push({ pointId: corner.pointId, lengthIn });
+    pending.stubbed = { ...pending.stubbed, [key]: true };
     this._continueGarageCommit(pending);
   }
 
@@ -6428,18 +6470,6 @@ class Component extends DCLogic {
     this._ensureDrawingCollections();
     if (!this.state.boneyardActive) return [];
     return this._boneyardOutlines.filter(outline => outline.shelfId === this.state.activeBoneyardShelfId);
-  }
-
-  _outlineColorHex() {
-    return OUTLINE_COLORS[normaliseOutlineColor(this.state.outlineColor)].hex;
-  }
-
-  // The GARAGE outline borrows the next colour in the existing outline
-  // palette, so no extra setting is needed to tell the footprints apart.
-  _outlineAltColorHex() {
-    const keys = Object.keys(OUTLINE_COLORS);
-    const active = normaliseOutlineColor(this.state.outlineColor);
-    return OUTLINE_COLORS[keys[(keys.indexOf(active) + 1) % keys.length]].hex;
   }
 
   // ── BUILD HOUSE — the starter shell from each level's OUTLINE copy ────────
@@ -12216,7 +12246,8 @@ class Component extends DCLogic {
        },
       saveDrawingFile: () => this._saveDrawingFile(),
       garageCornerPromptOpen: this.state.garageCornerPrompt === true,
-      garageStubBeam: () => this._chooseGarageCornerStub(8),
+      garageStubBeamLabel: formatInchesOnly(this._foundationWallThicknessIn()),
+      garageStubBeam: () => this._chooseGarageCornerStub(this._foundationWallThicknessIn()),
       garageStubFoot: () => this._chooseGarageCornerStub(12),
       fileGuardOpen: Boolean(this.state.fileGuardAction),
       fileGuardTitle: this.state.fileGuardAction === 'new' ? 'NEW DRAWING' : 'OPEN DRAWING',
