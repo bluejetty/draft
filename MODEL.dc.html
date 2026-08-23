@@ -5279,6 +5279,15 @@ class Component extends DCLogic {
       : tool === 'extend' && this.state.extendPhase === 'destination' ? this.state.extendBase
       : null;
     const angleLockHeld = this._shiftHeld || this._ctrlHeld;
+    // Shift with an acquired polar node acts as a T-square from that node: the
+    // point hard-locks onto the nearest of its 45° rays, even mid-draw, so a
+    // segment can land straight across / straight up / 45° from the rolled-over
+    // node. The segment start keeps its own lock; whichever ray sits closer to
+    // the cursor takes hold.
+    const polarLockOrigin = angleLockHeld && this._polarOrigin
+      && (drag || POLAR_TRACKING_TOOLS.has(tool))
+      && (!start || Math.hypot(start.x - this._polarOrigin.x, start.z - this._polarOrigin.z) > 0.001)
+      ? this._polarOrigin : null;
 
     // 45° angle lock — must establish lockAngle before tracking/magnet
     if (angleLockHeld && start) {
@@ -5309,7 +5318,7 @@ class Component extends DCLogic {
       ? this._findPolarSnap(raw) : null;
 
     // Final snap point and cursor position
-    let finalPt, cursorPt;
+    let finalPt, cursorPt, polarLocked = null;
     if (trackingHit) {
       // Projection tracking: cursor at reference node, endpoint at locked-ray intersection
       finalPt  = trackingHit.snapPt;
@@ -5322,10 +5331,17 @@ class Component extends DCLogic {
       // Midpoint snap — cursor and endpoint both jump to segment midpoint
       finalPt  = midSnap;
       cursorPt = midSnap;
-    } else if (angleLockHeld && start) {
-      // Angle lock: endpoint stays on locked ray, cursor roams freely with mouse
-      finalPt  = this._applyAngleLock(start, basePt);
-      cursorPt = basePt;
+    } else if (angleLockHeld && (start || polarLockOrigin)) {
+      // Angle lock: endpoint stays on a locked ray. The ray comes from the
+      // segment start or from the polar node's T-square — whichever the
+      // cursor sits closest to.
+      const fromStart = start ? this._applyAngleLock(start, basePt) : null;
+      const fromPolar = polarLockOrigin ? this._polarRayLock(basePt) : null;
+      const startDist = fromStart ? Math.hypot(basePt.x - fromStart.x, basePt.z - fromStart.z) : Infinity;
+      const polarDist = fromPolar ? Math.hypot(basePt.x - fromPolar.x, basePt.z - fromPolar.z) : Infinity;
+      polarLocked = fromPolar && polarDist <= startDist ? fromPolar : null;
+      finalPt  = polarLocked || fromStart || basePt;
+      cursorPt = polarLocked || basePt;
     } else if (polarHit) {
       // Polar tracking: cursor rides a 45° ray cast from the acquired node
       finalPt  = polarHit;
@@ -5338,7 +5354,7 @@ class Component extends DCLogic {
     this._snapPt = finalPt;
     this._trackingRef  = trackingHit ? trackingHit.refPt  : null;
     this._trackingSnap = trackingHit ? trackingHit.snapPt : null;
-    this._polarSnap    = polarHit;
+    this._polarSnap    = polarHit || polarLocked;
 
     const sc = this._toScreen(cursorPt);
     const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false, showMidSnap: false, showOriginSnapPt: false, showPolarOrigin: false };
@@ -5359,7 +5375,7 @@ class Component extends DCLogic {
     // The acquired polar origin glows orange while hovered or while its ray is engaged.
     const hoveringOrigin = magnet && this._polarOrigin
       && Math.hypot(magnet.x - this._polarOrigin.x, magnet.z - this._polarOrigin.z) < 0.001;
-    if (this._polarOrigin && (polarHit || hoveringOrigin)) {
+    if (this._polarOrigin && (polarHit || polarLocked || hoveringOrigin)) {
       const os = this._toScreen(this._polarOrigin);
       newState.polarOriginX = os.x; newState.polarOriginY = os.y; newState.showPolarOrigin = true;
     }
@@ -10228,6 +10244,19 @@ class Component extends DCLogic {
     const sz = origin.z + Math.sin(angle) * along;
     if (Math.hypot(pt.x - sx, pt.z - sz) > this.state.snapStrength.polar * this._worldPerPixel()) return null;
     return new THREE.Vector3(sx, pt.y, sz);
+  }
+
+  // Shift T-square from the polar node: project the cursor onto the nearest
+  // of the origin's 45° rays regardless of how far it sits from the ray.
+  _polarRayLock(pt) {
+    const origin = this._polarOrigin;
+    const dx = pt.x - origin.x, dz = pt.z - origin.z;
+    if (Math.hypot(dx, dz) < 0.001) return null;
+    const step = Math.PI / 4;
+    const angle = Math.round(Math.atan2(dz, dx) / step) * step;
+    const along = dx * Math.cos(angle) + dz * Math.sin(angle);
+    if (along <= 0) return null;
+    return new THREE.Vector3(origin.x + Math.cos(angle) * along, pt.y, origin.z + Math.sin(angle) * along);
   }
 
   _applyAngleLock(start, pt) {
