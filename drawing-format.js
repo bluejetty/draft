@@ -379,6 +379,8 @@ if (!window.DraftDrawingFormat) {
         sourceLevelId: Number.isInteger(Number(outline?.sourceLevelId)) ? Number(outline.sourceLevelId) : null,
         garage: outline?.garage === true,
         open,
+        detached: outline?.detached === true,
+        foundation: oneOf(outline?.foundation, ['gradebeam', 'thickened'], null),
         cornerStubs: (Array.isArray(outline?.cornerStubs) ? outline.cornerStubs : []).map(stub => {
           const pointId = String(stub?.pointId || '').trim();
           const lengthIn = Number(stub?.lengthIn);
@@ -419,6 +421,8 @@ if (!window.DraftDrawingFormat) {
         levelId: outlineLevelId,
         garage: outline?.garage === true,
         open: outline?.open === true,
+        detached: outline?.detached === true,
+        foundation: oneOf(outline?.foundation, ['gradebeam', 'thickened'], null),
         points,
         overriddenSrcIds: (Array.isArray(outline?.overriddenSrcIds) ? outline.overriddenSrcIds : [])
           .map(id => String(id || '').trim()).filter(Boolean),

@@ -9,6 +9,7 @@ async function dragWorld(page, fromX, fromZ, toX, toZ) {
   const to = await h.worldToClient(page, toX, toZ);
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
+  await page.waitForTimeout(150); // a drawing tool's grab arms after the hold delay
   await page.mouse.move(to.x, to.y, { steps: 8 });
   await page.mouse.up();
   await h.waitForSaved(page);
@@ -61,6 +62,40 @@ test('a quick Line click on a node still chains a new line off the corner', asyn
   const added = lines.find(seg => h.near(seg.start.z, 0) && h.near(seg.end.z, -8));
   expect(added).toBeTruthy();
   expect(h.near(added.start.x, 10) && h.near(added.end.x, 10)).toBe(true);
+});
+
+test('a quick flick over a node places a point instead of dragging the node', async ({ page }) => {
+  await h.openModel(page);
+  await drawLine(page, -10, 0, 10, 0);
+
+  // Down-move-up faster than the hold delay: even with travel past the drag
+  // threshold, the node stays put and the click chains a new line off it.
+  await h.selectTool(page, 'Line');
+  const from = await h.worldToClient(page, 10, 0);
+  await page.evaluate(pt => {
+    const canvas = document.querySelector('[data-model-canvas]');
+    const fire = (type, x, y) => canvas.dispatchEvent(new MouseEvent(type,
+      { bubbles: true, clientX: x, clientY: y, button: 0 }));
+    fire('mousemove', pt.x, pt.y);
+    fire('mousedown', pt.x, pt.y);
+    fire('mousemove', pt.x + 8, pt.y + 8);
+    fire('mouseup', pt.x + 8, pt.y + 8);
+  }, from);
+  await page.waitForTimeout(400); // clear the 350ms double-click window
+  await h.clickWorld(page, 10, -8);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  const lines = h.allLines(await h.savedDrawing(page));
+  expect(lines).toHaveLength(2);
+  // The original line never moved…
+  const original = lines.find(seg => h.near(seg.start.z, 0) && h.near(seg.end.z, 0));
+  expect(original).toBeTruthy();
+  expect([original.start.x, original.end.x].sort((a, b) => a - b)
+    .every((x, i) => h.near(x, [-10, 10][i]))).toBe(true);
+  // …and the flick's click started the chain that drew the new line.
+  const added = lines.find(seg => h.near(seg.start.z, -8) || h.near(seg.end.z, -8));
+  expect(added).toBeTruthy();
 });
 
 test('the Outline tool drags an existing corner without switching to Select', async ({ page }) => {
