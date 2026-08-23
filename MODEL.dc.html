@@ -161,6 +161,456 @@
   </div>
 </div>
 
+<!-- TOOL OPTIONS STRIP (contextual: shows the active tool's settings; self-contained so it can move) -->
+<div data-tool-strip style="height:104px; box-sizing:border-box; display:flex; align-items:stretch; overflow-x:auto; overflow-y:hidden; border-bottom:1px solid rgba(29,31,32,0.16); background:#fbfbfc; flex-shrink:0; user-select:none;">
+
+  <!-- NO OPTIONS (tools without settings) -->
+  <sc-if value="{{ toolStripEmpty }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:center; padding:8px 14px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.35); white-space:nowrap;">{{ toolStripLabel }} — no tool options</div>
+  </sc-if>
+
+  <!-- LINE LAYER -->
+  <sc-if value="{{ lineToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Line Layer</div>
+        <div style="display:flex; flex-wrap:wrap; gap:3px; max-width:460px;">
+          <sc-for list="{{ genericLineLayers }}" as="gl" hint-placeholder-count="2">
+            <button onClick="{{ gl.onSelect }}" title="{{ gl.title }}" style="border:1px solid {{ gl.border }}; background:{{ gl.bg }}; color:{{ gl.color }}; padding:6px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer; white-space:nowrap;">{{ gl.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:170px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:rgba(29,31,32,0.48);">Names and print rules live in <a href="./STANDARDS.html" style="color:#5980a6; text-decoration:none;">Company Standard Layers</a>.</div>
+    </div>
+  </sc-if>
+
+  <!-- SELECTION TOOLS -->
+  <sc-if value="{{ selectToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:200px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Selection</div>
+        <div style="display:flex; gap:3px;">
+          <button onClick="{{ setClickSelectionMode }}" style="flex:1; border:1px solid {{ clickSelectionBorder }}; background:{{ clickSelectionBg }}; color:{{ clickSelectionColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">ITEMS</button>
+          <button onClick="{{ setWindowSelectionMode }}" style="flex:1; border:1px solid {{ windowSelectionBorder }}; background:{{ windowSelectionBg }}; color:{{ windowSelectionColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">WINDOW</button>
+          <button onClick="{{ setAllLevelsSelectionMode }}" style="flex:1; border:1px solid {{ allLevelsSelectionBorder }}; background:{{ allLevelsSelectionBg }}; color:{{ allLevelsSelectionColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">ALL LEVELS</button>
+        </div>
+        <div style="margin-top:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:rgba(29,31,32,0.48);">{{ selectionModeHelp }}</div>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:220px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Object Type</div>
+        <div data-select-filters style="display:flex; gap:3px;">
+          <sc-for list="{{ selectFilters }}" as="sf" hint-placeholder-count="5">
+            <button onClick="{{ sf.onSelect }}" title="{{ sf.title }}" aria-label="{{ sf.aria }}" style="flex:1; min-width:0; border:1px solid {{ sf.border }}; background:{{ sf.bg }}; color:{{ sf.color }}; padding:6px 1px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.03em; cursor:pointer;">{{ sf.label }}</button>
+          </sc-for>
+        </div>
+        <div style="margin-top:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:{{ selectFilterHelpColor }};">{{ selectFilterHelp }}</div>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:180px;">
+        <button onClick="{{ groupSelection }}" disabled="{{ groupDisabled }}" style="display:block; width:100%; border:1px solid {{ groupButtonBorder }}; background:{{ groupButtonBg }}; color:{{ groupButtonColor }}; padding:6px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; cursor:{{ groupButtonCursor }};">ASSEMBLY  [{{ groupShortcut }}]</button>
+        <div style="margin-top:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.3; color:{{ groupHelpColor }};">{{ groupActionHelp }}</div>
+      </div>
+      <sc-if value="{{ selectedGroup }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:200px;">
+          <div style="border:1px solid {{ selectedGroupBorder }}; background:{{ selectedGroupBg }}; padding:6px 8px;">
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:{{ selectedGroupColor }};">{{ selectedGroupLabel }}</div>
+            <div style="margin-top:2px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.3; color:rgba(29,31,32,0.58);">{{ selectedGroupDetail }}</div>
+            <button onClick="{{ ungroupSelection }}" style="width:100%; margin-top:5px; border:1px solid rgba(176,64,80,0.45); background:#fff; color:#b04050; padding:4px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">UNGROUP  [{{ ungroupShortcut }}]</button>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ selectedGroupHasWalls }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
+          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Group Wall Assembly</div>
+          <div style="display:flex; flex-wrap:wrap; gap:2px; max-width:340px;">
+            <sc-for list="{{ groupWallTypes }}" as="gwt" hint-placeholder-count="5">
+              <button onClick="{{ gwt.onSelect }}" style="border:1px solid {{ gwt.border }}; background:{{ gwt.bg }}; color:{{ gwt.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:500; font-size:10px; letter-spacing:0.03em; padding:4px 8px; cursor:pointer; white-space:nowrap;">{{ gwt.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:190px;">
+          <div style="display:flex; gap:3px;">
+            <sc-for list="{{ groupWallRefBtns }}" as="grb" hint-placeholder-count="3">
+              <button onClick="{{ grb.onSelect }}" style="flex:1; border:1px solid {{ grb.border }}; background:{{ grb.bg }}; color:{{ grb.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:9px; letter-spacing:0.03em; padding:4px 1px; cursor:pointer;">{{ grb.label }}</button>
+            </sc-for>
+          </div>
+          <div style="margin-top:5px; display:grid; grid-template-columns:1fr 1fr; gap:5px;">
+            <input type="text" value="{{ groupWallBaseInput }}" onInput="{{ onGroupWallBaseInput }}" onBlur="{{ onGroupWallBaseCommit }}" onKeyDown="{{ onGroupWallBaseKey }}" aria-label="Group wall base height" style="width:100%; box-sizing:border-box; border:1px solid {{ groupWallDimensionBorder }}; padding:4px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; background:#fff; color:#1d1f20;" />
+            <input type="text" value="{{ groupWallTopInput }}" onInput="{{ onGroupWallTopInput }}" onBlur="{{ onGroupWallTopCommit }}" onKeyDown="{{ onGroupWallTopKey }}" aria-label="Group wall top height" style="width:100%; box-sizing:border-box; border:1px solid {{ groupWallDimensionBorder }}; padding:4px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; background:#fff; color:#1d1f20;" />
+          </div>
+          <div style="margin-top:2px; display:grid; grid-template-columns:1fr 1fr; gap:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; color:rgba(29,31,32,0.45);"><span>BASE HEIGHT</span><span>TOP HEIGHT</span></div>
+          <sc-if value="{{ hasGroupWallDimensionError }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:3px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; line-height:1.2;">{{ groupWallDimensionError }}</div>
+          </sc-if>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- EXTEND TOOLS -->
+  <sc-if value="{{ extendToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:200px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Extend</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px;">
+          <button onClick="{{ setExtendCurrentLevel }}" style="border:1px solid {{ extendCurrentBorder }}; background:{{ extendCurrentBg }}; color:{{ extendCurrentColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">CURRENT LEVEL</button>
+          <button onClick="{{ setExtendAllLevels }}" style="border:1px solid {{ extendAllBorder }}; background:{{ extendAllBg }}; color:{{ extendAllColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">ALL LEVELS</button>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:230px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:rgba(29,31,32,0.48);">{{ extendHelp }}</div>
+        <sc-if value="{{ hasExtendMessage }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:#b04050;">{{ extendMessage }}</div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- WALL PROPERTIES -->
+  <sc-if value="{{ wallToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Wall Type</div>
+        <div style="display:flex; flex-wrap:wrap; gap:2px; max-width:400px;">
+          <sc-for list="{{ wallTypes }}" as="wt" hint-placeholder-count="5">
+            <button onClick="{{ wt.onSelect }}" style="border:1px solid {{ wt.border }}; background:{{ wt.bg }}; color:{{ wt.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:500; font-size:10px; letter-spacing:0.03em; padding:5px 8px; cursor:pointer; white-space:nowrap;">{{ wt.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:170px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Ref Line (Exterior Face)</div>
+        <div style="display:flex; gap:3px; margin-bottom:5px;">
+          <sc-for list="{{ wallRefBtns }}" as="rb" hint-placeholder-count="3">
+            <button onClick="{{ rb.onSelect }}" style="flex:1; border:1px solid {{ rb.border }}; background:{{ rb.bg }}; color:{{ rb.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:10px; letter-spacing:0.04em; padding:5px 2px; cursor:pointer;">{{ rb.label }}</button>
+          </sc-for>
+        </div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:#5980a6; letter-spacing:0.04em; text-align:center;">{{ wallExtNote }}</div>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:200px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+          <div>
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Base Ht</div>
+            <input type="text" value="{{ wallBaseInput }}" onInput="{{ onWallBaseInput }}" onBlur="{{ onWallBaseCommit }}" onKeyDown="{{ onWallBaseKey }}" placeholder="0'-0&quot;" aria-label="Wall base height" style="width:100%; box-sizing:border-box; border:1px solid {{ wallDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+          </div>
+          <div>
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Top Ht</div>
+            <input type="text" value="{{ wallTopInput }}" onInput="{{ onWallTopInput }}" onBlur="{{ onWallTopCommit }}" onKeyDown="{{ onWallTopKey }}" placeholder="8'-1 1/8&quot;" aria-label="Wall top height" style="width:100%; box-sizing:border-box; border:1px solid {{ wallDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+          </div>
+        </div>
+        <div style="margin-top:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.48);">Use 8-1 1/8, 8'-1 1/8&quot;, or 97.125&quot;</div>
+        <sc-if value="{{ hasWallDimensionError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:3px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ wallDimensionError }}</div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- FLOOR PROPERTIES -->
+  <sc-if value="{{ floorToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:180px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Floor · Structure</div>
+        <div style="display:flex; gap:3px;">
+          <sc-for list="{{ floorStructureBtns }}" as="fs" hint-placeholder-count="2">
+            <button onClick="{{ fs.onSelect }}" title="{{ fs.title }}" style="flex:1; border:1px solid {{ fs.border }}; background:{{ fs.bg }}; color:{{ fs.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ fs.label }}</button>
+          </sc-for>
+        </div>
+        <sc-if value="{{ hasActiveShapes }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onFloorFromShape }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-top:6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">FLOOR FROM SHAPE</button>
+        </sc-if>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:190px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Total Thickness</div>
+        <input type="text" value="{{ floorThicknessInput }}" onInput="{{ onFloorThicknessInput }}" onBlur="{{ onFloorThicknessCommit }}" onKeyDown="{{ onFloorDimensionKey }}" placeholder="1'-0 5/8&quot;" aria-label="Floor thickness" style="width:100%; box-sizing:border-box; border:1px solid {{ floorDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+        <div style="margin-top:4px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ floorAssemblyLabel }}</div>
+        <sc-if value="{{ hasFloorDimensionError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:3px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ floorDimensionError }}</div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- SHAPE PROPERTIES -->
+  <sc-if value="{{ shapeToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:180px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Shape</div>
+        <button onClick="{{ onShapeCapture }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">CAPTURE WALL OUTLINE</button>
+        <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ shapeHint }}</div>
+      </div>
+      <sc-if value="{{ hasActiveShapes }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
+          <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:5px;">
+            <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5);">Flooring</span>
+            <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; color:#1d1f20;">{{ shapeAreaLabel }}</span>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:3px; max-width:340px;">
+            <sc-for list="{{ flooringBtns }}" as="veneer" hint-placeholder-count="5">
+              <button type="button" onClick="{{ veneer.onSelect }}" title="{{ veneer.title }}" style="border:1px solid {{ veneer.border }}; background:{{ veneer.bg }}; color:{{ veneer.color }}; padding:4px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer; white-space:nowrap;">{{ veneer.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <sc-if value="{{ hasShapeFlooring }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:190px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.55);">ABOVE SHEATHING</span>
+              <input value="{{ flooringThicknessInput }}" onInput="{{ onFlooringThicknessInput }}" onKeyDown="{{ onFlooringThicknessKey }}" onBlur="{{ onFlooringThicknessCommit }}" placeholder="{{ flooringThicknessPlaceholder }}" style="flex:1; min-width:0; border:1px solid rgba(29,31,32,0.2); padding:3px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px;" />
+            </div>
+            <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">Saves on A-FL-FLOORING · area + finish feed the future estimates</div>
+          </div>
+        </sc-if>
+        <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:150px;">
+          <button onClick="{{ onShapeDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST SHAPE</button>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- OUTLINE / BUILD HOUSE -->
+  <sc-if value="{{ outlineToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:200px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Outline</div>
+        <button onClick="{{ onBuildHouse }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD HOUSE</button>
+        <button onClick="{{ onOutlineGarageToggle }}" style="width:100%; box-sizing:border-box; border:1px solid {{ outlineGarageBorder }}; background:{{ outlineGarageBg }}; color:{{ outlineGarageColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ outlineGarageLabel }}</button>
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:230px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ buildHouseHint }}</div>
+    </div>
+  </sc-if>
+
+  <!-- DIMENSION / AUTO DIMS -->
+  <sc-if value="{{ dimensionToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:150px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Dimension</div>
+        <button onClick="{{ onAutoDims }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">AUTO DIMS</button>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:160px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">First string offset</div>
+        <div style="display:flex; gap:3px;">
+          <sc-for list="{{ autoDimOffsetBtns }}" as="od" hint-placeholder-count="2">
+            <button onClick="{{ od.onSelect }}" title="{{ od.title }}" style="flex:1; border:1px solid {{ od.border }}; background:{{ od.bg }}; color:{{ od.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ od.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:230px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ autoDimHint }}</div>
+    </div>
+  </sc-if>
+
+  <!-- FENESTRATION PROPERTIES -->
+  <sc-if value="{{ fenestrationToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <sc-if value="{{ fenestrationHoleMode }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:210px;">
+          <div style="border:1px solid rgba(122,74,33,0.4); background:rgba(122,74,33,0.06); color:#5d4a32; padding:5px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.35;">{{ fenestrationHoleNote }}</div>
+        </div>
+      </sc-if>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:190px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Fenestration · Type</div>
+        <div style="display:flex; gap:3px;">
+          <sc-for list="{{ fenestrationTypeBtns }}" as="ft" hint-placeholder-count="2">
+            <button onClick="{{ ft.onSelect }}" title="{{ ft.title }}" style="flex:1; border:1px solid {{ ft.border }}; background:{{ ft.bg }}; color:{{ ft.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ ft.label }}</button>
+          </sc-for>
+        </div>
+        <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ fenestrationLayerNote }}</div>
+      </div>
+      <sc-if value="{{ fenestrationIsWallType }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:250px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
+            <div>
+              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Width</div>
+              <input type="text" value="{{ fenestrationWidthInput }}" onInput="{{ onFenestrationWidthInput }}" onBlur="{{ onFenestrationWidthCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="3'-0&quot;" aria-label="Opening width" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+            </div>
+            <sc-if value="{{ fenestrationIsWindow }}" hint-placeholder-val="{{ false }}">
+              <div>
+                <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Sill Ht</div>
+                <input type="text" value="{{ fenestrationSillInput }}" onInput="{{ onFenestrationSillInput }}" onBlur="{{ onFenestrationSillCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="2'-6&quot;" aria-label="Window sill height" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+              </div>
+            </sc-if>
+            <div>
+              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Head Ht</div>
+              <input type="text" value="{{ fenestrationHeadInput }}" onInput="{{ onFenestrationHeadInput }}" onBlur="{{ onFenestrationHeadCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="6'-8&quot;" aria-label="Opening head height" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+            </div>
+          </div>
+          <sc-if value="{{ hasFenestrationDimensionError }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:4px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ fenestrationDimensionError }}</div>
+          </sc-if>
+        </div>
+      </sc-if>
+      <sc-if value="{{ fenestrationIsStairs }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:190px;">
+          <sc-if value="{{ hasStairOpeningReq }}" hint-placeholder-val="{{ false }}">
+            <div style="border:1px solid rgba(176,64,80,0.45); background:rgba(176,64,80,0.07); color:#b04050; padding:4px 8px; margin-bottom:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em;">{{ stairOpeningReq }}</div>
+          </sc-if>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <div>
+              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Stair Width</div>
+              <input type="text" value="{{ stairOpeningWidthInput }}" onInput="{{ onStairOpeningWidthInput }}" onBlur="{{ onStairOpeningWidthCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="3'-0&quot;" aria-label="Stair width" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+            </div>
+            <div>
+              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Headroom</div>
+              <input type="text" value="{{ stairHeadroomInput }}" onInput="{{ onStairHeadroomInput }}" onBlur="{{ onStairHeadroomCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="6'-10&quot;" aria-label="Stair headroom" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+            </div>
+          </div>
+          <sc-if value="{{ hasFenestrationDimensionError }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:4px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ fenestrationDimensionError }}</div>
+          </sc-if>
+        </div>
+        <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:230px; color:rgba(29,31,32,0.62); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.3;">{{ stairOpeningNote }}</div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- COLUMN PROPERTIES -->
+  <sc-if value="{{ columnToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:190px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Column · Pad Footing</div>
+        <div style="display:flex; gap:3px;">
+          <sc-for list="{{ columnFootingBtns }}" as="cf" hint-placeholder-count="2">
+            <button onClick="{{ cf.onSelect }}" title="{{ cf.title }}" style="flex:1; border:1px solid {{ cf.border }}; background:{{ cf.bg }}; color:{{ cf.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ cf.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:220px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ columnFootingNote }}</div>
+      <sc-if value="{{ hasActiveColumns }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:160px;">
+          <button onClick="{{ onColumnDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST COLUMN</button>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- BEAM PROPERTIES -->
+  <sc-if value="{{ beamToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:170px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Beam · Mode</div>
+        <div style="display:flex; gap:3px;">
+          <sc-for list="{{ beamModeBtns }}" as="bm" hint-placeholder-count="2">
+            <button onClick="{{ bm.onSelect }}" title="{{ bm.title }}" style="flex:1; border:1px solid {{ bm.border }}; background:{{ bm.bg }}; color:{{ bm.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ bm.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:240px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ beamModeNote }}</div>
+      <sc-if value="{{ hasActiveBeams }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:150px;">
+          <button onClick="{{ onBeamDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST BEAM</button>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- STAIR PROPERTIES -->
+  <sc-if value="{{ stairToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:190px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Stair · Handrail</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px;">
+          <sc-for list="{{ stairRailBtns }}" as="sr" hint-placeholder-count="4">
+            <button onClick="{{ sr.onSelect }}" title="{{ sr.title }}" style="border:1px solid {{ sr.border }}; background:{{ sr.bg }}; color:{{ sr.color }}; padding:5px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ sr.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:140px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Width</div>
+        <input type="text" value="{{ stairWidthInput }}" onInput="{{ onStairWidthInput }}" onBlur="{{ onStairWidthCommit }}" onKeyDown="{{ onStairWidthKey }}" placeholder="3'-0&quot;" aria-label="Stair width" style="width:100%; box-sizing:border-box; border:1px solid {{ stairWidthBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+        <sc-if value="{{ hasStairWidthError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:4px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ stairWidthError }}</div>
+        </sc-if>
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:230px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ stairLayoutNote }}</div>
+      <sc-if value="{{ hasActiveStairs }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:150px;">
+          <button onClick="{{ onStairDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST STAIR</button>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- ANNOTATION PROPERTIES -->
+  <sc-if value="{{ noteToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:180px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Annotation · Leader End</div>
+        <div style="display:flex; gap:3px;">
+          <sc-for list="{{ noteEndBtns }}" as="ne" hint-placeholder-count="2">
+            <button onClick="{{ ne.onSelect }}" title="{{ ne.title }}" style="flex:1; border:1px solid {{ ne.border }}; background:{{ ne.bg }}; color:{{ ne.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ ne.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:170px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Text Box</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px;">
+          <sc-for list="{{ noteBoxBtns }}" as="nb" hint-placeholder-count="4">
+            <button onClick="{{ nb.onSelect }}" title="{{ nb.title }}" style="border:1px solid {{ nb.border }}; background:{{ nb.bg }}; color:{{ nb.color }}; padding:5px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ nb.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:200px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+          <div>
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Fill Opacity %</div>
+            <input data-note-fill-opacity type="text" value="{{ noteFillOpacityInput }}" onInput="{{ onNoteFillOpacityInput }}" onBlur="{{ onNoteFillOpacityCommit }}" onKeyDown="{{ onNoteStyleKey }}" placeholder="85" aria-label="Note fill opacity" style="width:100%; box-sizing:border-box; border:1px solid {{ noteStyleBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+          </div>
+          <div>
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Corner Bullnose</div>
+            <input data-note-bullnose type="text" value="{{ noteBullnoseInput }}" onInput="{{ onNoteBullnoseInput }}" onBlur="{{ onNoteBullnoseCommit }}" onKeyDown="{{ onNoteStyleKey }}" placeholder="0" aria-label="Note corner bullnose radius" style="width:100%; box-sizing:border-box; border:1px solid {{ noteStyleBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+          </div>
+        </div>
+        <sc-if value="{{ hasNoteStyleError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:4px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ noteStyleError }}</div>
+        </sc-if>
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:200px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ noteStyleNote }}</div>
+      <sc-if value="{{ hasActiveNotes }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:150px;">
+          <button onClick="{{ onNoteDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST NOTE</button>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <!-- ROOF PROPERTIES -->
+  <sc-if value="{{ roofToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:170px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Roof · Mode</div>
+        <div style="display:flex; gap:3px;">
+          <sc-for list="{{ roofModeBtns }}" as="rm" hint-placeholder-count="2">
+            <button onClick="{{ rm.onSelect }}" title="{{ rm.title }}" style="flex:1; border:1px solid {{ rm.border }}; background:{{ rm.bg }}; color:{{ rm.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ rm.label }}</button>
+          </sc-for>
+        </div>
+        <sc-if value="{{ roofShapeMode }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ onRoofFromShape }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-top:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD FROM SHAPE</button>
+        </sc-if>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:210px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Eave Overhang</div>
+        <div style="display:flex; gap:3px; margin-bottom:4px;">
+          <sc-for list="{{ roofOverhangPresets }}" as="op" hint-placeholder-count="4">
+            <button onClick="{{ op.onSelect }}" style="flex:1; border:1px solid {{ op.border }}; background:{{ op.bg }}; color:{{ op.color }}; padding:5px 2px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.02em; cursor:pointer;">{{ op.label }}</button>
+          </sc-for>
+        </div>
+        <input type="text" value="{{ roofOverhangInput }}" onInput="{{ onRoofOverhangInput }}" onBlur="{{ onRoofOverhangCommit }}" onKeyDown="{{ onRoofDimensionKey }}" placeholder="2'-0&quot;" aria-label="Eave overhang" style="width:100%; box-sizing:border-box; border:1px solid {{ roofDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:150px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Pitch (rise : 12)</div>
+        <input type="text" value="{{ roofPitchInput }}" onInput="{{ onRoofPitchInput }}" onBlur="{{ onRoofPitchCommit }}" onKeyDown="{{ onRoofDimensionKey }}" placeholder="4" aria-label="Roof pitch" style="width:100%; box-sizing:border-box; border:1px solid {{ roofDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
+        <sc-if value="{{ hasRoofDimensionError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:4px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ roofDimensionError }}</div>
+        </sc-if>
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:200px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ roofHeelLabel }}</div>
+      <sc-if value="{{ hasActiveRoofs }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:150px;">
+          <button onClick="{{ onRoofDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.45); background:#fff; color:#b04050; padding:5px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST ROOF</button>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+</div>
+
 <sc-if value="{{ fileGuardOpen }}" hint-placeholder-val="{{ false }}">
   <div style="position:fixed; inset:0; z-index:52; display:flex; align-items:flex-start; justify-content:center; padding-top:78px; background:rgba(29,31,32,0.18);">
     <div data-file-guard role="dialog" aria-modal="true" aria-label="{{ fileGuardTitle }}" style="width:min(360px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
@@ -247,383 +697,22 @@
 </sc-if>
 
 <!-- BODY -->
-<div style="display:flex; height:calc(100vh - 72px);">
+<div style="display:flex; height:calc(100vh - 176px);">
 
   <!-- LEFT TOOL RAIL -->
   <div data-model-left style="width:200px; border-right:1px solid rgba(29,31,32,0.16); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff;">
 
     <!-- TOOLS -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <sc-for list="{{ tools }}" as="t" hint-placeholder-count="3">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:rgba(29,31,32,0.45); margin-bottom:5px;">Draw / Edit</div>
+      <sc-for list="{{ drawTools }}" as="t" hint-placeholder-count="3">
+        <button onClick="{{ t.onSelect }}" disabled="{{ t.disabled }}" title="{{ t.title }}" style="display:block; width:100%; text-align:left; border:1px solid {{ t.border }}; background:{{ t.bg }}; color:{{ t.color }}; opacity:{{ t.opacity }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:{{ t.cursor }}; margin-bottom:3px;">{{ t.label }}</button>
+      </sc-for>
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:rgba(29,31,32,0.45); margin:10px 0 5px;">Build</div>
+      <sc-for list="{{ buildTools }}" as="t" hint-placeholder-count="3">
         <button onClick="{{ t.onSelect }}" disabled="{{ t.disabled }}" title="{{ t.title }}" style="display:block; width:100%; text-align:left; border:1px solid {{ t.border }}; background:{{ t.bg }}; color:{{ t.color }}; opacity:{{ t.opacity }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:{{ t.cursor }}; margin-bottom:3px;">{{ t.label }}</button>
       </sc-for>
     </div>
-
-    <!-- LINE LAYER (shown only while Line is active) -->
-    <sc-if value="{{ lineToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Line Layer</div>
-        <div style="display:flex; gap:3px;">
-          <sc-for list="{{ genericLineLayers }}" as="gl" hint-placeholder-count="2">
-            <button onClick="{{ gl.onSelect }}" title="{{ gl.title }}" style="flex:1; min-width:0; border:1px solid {{ gl.border }}; background:{{ gl.bg }}; color:{{ gl.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ gl.label }}</button>
-          </sc-for>
-        </div>
-        <div style="margin-top:6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:rgba(29,31,32,0.48);">Names and print rules live in <a href="./STANDARDS.html" style="color:#5980a6; text-decoration:none;">Company Standard Layers</a>.</div>
-      </div>
-    </sc-if>
-
-    <!-- SELECTION TOOLS (shown only while Select is active) -->
-    <sc-if value="{{ selectToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Selection</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px;">
-          <button onClick="{{ setClickSelectionMode }}" style="flex:1; border:1px solid {{ clickSelectionBorder }}; background:{{ clickSelectionBg }}; color:{{ clickSelectionColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">ITEMS</button>
-          <button onClick="{{ setWindowSelectionMode }}" style="flex:1; border:1px solid {{ windowSelectionBorder }}; background:{{ windowSelectionBg }}; color:{{ windowSelectionColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">WINDOW</button>
-          <button onClick="{{ setAllLevelsSelectionMode }}" style="grid-column:1 / -1; border:1px solid {{ allLevelsSelectionBorder }}; background:{{ allLevelsSelectionBg }}; color:{{ allLevelsSelectionColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">ALL LEVELS</button>
-        </div>
-        <div style="margin-top:6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:rgba(29,31,32,0.48);">{{ selectionModeHelp }}</div>
-        <div style="margin-top:9px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:6px;">Object Type</div>
-        <div data-select-filters style="display:flex; gap:3px;">
-          <sc-for list="{{ selectFilters }}" as="sf" hint-placeholder-count="5">
-            <button onClick="{{ sf.onSelect }}" title="{{ sf.title }}" aria-label="{{ sf.aria }}" style="flex:1; min-width:0; border:1px solid {{ sf.border }}; background:{{ sf.bg }}; color:{{ sf.color }}; padding:6px 1px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.03em; cursor:pointer;">{{ sf.label }}</button>
-          </sc-for>
-        </div>
-        <div style="margin-top:6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:{{ selectFilterHelpColor }};">{{ selectFilterHelp }}</div>
-         <button onClick="{{ groupSelection }}" disabled="{{ groupDisabled }}" style="display:block; width:100%; margin-top:8px; border:1px solid {{ groupButtonBorder }}; background:{{ groupButtonBg }}; color:{{ groupButtonColor }}; padding:6px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; cursor:{{ groupButtonCursor }};">ASSEMBLY  [{{ groupShortcut }}]</button>
-         <div style="margin-top:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.3; color:{{ groupHelpColor }};">{{ groupActionHelp }}</div>
-         <sc-if value="{{ selectedGroup }}" hint-placeholder-val="{{ false }}">
-           <div style="margin-top:9px; border:1px solid {{ selectedGroupBorder }}; background:{{ selectedGroupBg }}; padding:7px 8px;">
-             <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:{{ selectedGroupColor }};">{{ selectedGroupLabel }}</div>
-             <div style="margin-top:3px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.3; color:rgba(29,31,32,0.58);">{{ selectedGroupDetail }}</div>
-             <button onClick="{{ ungroupSelection }}" style="width:100%; margin-top:7px; border:1px solid rgba(176,64,80,0.45); background:#fff; color:#b04050; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">UNGROUP  [{{ ungroupShortcut }}]</button>
-           </div>
-         </sc-if>
-         <sc-if value="{{ selectedGroupHasWalls }}" hint-placeholder-val="{{ false }}">
-           <div style="margin-top:9px; border-top:1px solid rgba(29,31,32,0.13); padding-top:8px;">
-             <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:6px;">Group Wall Assembly</div>
-             <sc-for list="{{ groupWallTypes }}" as="gwt" hint-placeholder-count="5">
-               <button onClick="{{ gwt.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid {{ gwt.border }}; background:{{ gwt.bg }}; color:{{ gwt.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:500; font-size:10px; letter-spacing:0.03em; padding:4px 8px; cursor:pointer; margin-bottom:2px;">{{ gwt.label }}</button>
-             </sc-for>
-             <div style="margin-top:7px; display:flex; gap:3px;">
-               <sc-for list="{{ groupWallRefBtns }}" as="grb" hint-placeholder-count="3">
-                 <button onClick="{{ grb.onSelect }}" style="flex:1; border:1px solid {{ grb.border }}; background:{{ grb.bg }}; color:{{ grb.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:9px; letter-spacing:0.03em; padding:4px 1px; cursor:pointer;">{{ grb.label }}</button>
-               </sc-for>
-             </div>
-             <div style="margin-top:6px; display:grid; grid-template-columns:1fr 1fr; gap:5px;">
-               <input type="text" value="{{ groupWallBaseInput }}" onInput="{{ onGroupWallBaseInput }}" onBlur="{{ onGroupWallBaseCommit }}" onKeyDown="{{ onGroupWallBaseKey }}" aria-label="Group wall base height" style="width:100%; box-sizing:border-box; border:1px solid {{ groupWallDimensionBorder }}; padding:4px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; background:#fff; color:#1d1f20;" />
-               <input type="text" value="{{ groupWallTopInput }}" onInput="{{ onGroupWallTopInput }}" onBlur="{{ onGroupWallTopCommit }}" onKeyDown="{{ onGroupWallTopKey }}" aria-label="Group wall top height" style="width:100%; box-sizing:border-box; border:1px solid {{ groupWallDimensionBorder }}; padding:4px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; background:#fff; color:#1d1f20;" />
-             </div>
-             <div style="margin-top:3px; display:grid; grid-template-columns:1fr 1fr; gap:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; color:rgba(29,31,32,0.45);"><span>BASE HEIGHT</span><span>TOP HEIGHT</span></div>
-             <sc-if value="{{ hasGroupWallDimensionError }}" hint-placeholder-val="{{ false }}">
-               <div style="margin-top:4px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; line-height:1.2;">{{ groupWallDimensionError }}</div>
-             </sc-if>
-           </div>
-         </sc-if>
-      </div>
-    </sc-if>
-
-    <!-- EXTEND TOOLS (shown only while Extend is active) -->
-    <sc-if value="{{ extendToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Extend</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px;">
-          <button onClick="{{ setExtendCurrentLevel }}" style="border:1px solid {{ extendCurrentBorder }}; background:{{ extendCurrentBg }}; color:{{ extendCurrentColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">CURRENT LEVEL</button>
-          <button onClick="{{ setExtendAllLevels }}" style="border:1px solid {{ extendAllBorder }}; background:{{ extendAllBg }}; color:{{ extendAllColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">ALL LEVELS</button>
-        </div>
-        <div style="margin-top:6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:rgba(29,31,32,0.48);">{{ extendHelp }}</div>
-        <sc-if value="{{ hasExtendMessage }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:#b04050;">{{ extendMessage }}</div>
-        </sc-if>
-      </div>
-    </sc-if>
-
-    <!-- WALL PROPERTIES (shown when Wall tool is active) -->
-    <sc-if value="{{ wallToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Wall Type</div>
-        <sc-for list="{{ wallTypes }}" as="wt" hint-placeholder-count="5">
-          <button onClick="{{ wt.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid {{ wt.border }}; background:{{ wt.bg }}; color:{{ wt.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:500; font-size:11px; letter-spacing:0.03em; padding:5px 10px; cursor:pointer; margin-bottom:2px;">{{ wt.label }}</button>
-        </sc-for>
-        <!-- Reference line position -->
-        <div style="margin-top:10px;">
-          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:4px;">Ref Line (Exterior Face)</div>
-          <div style="display:flex; gap:3px; margin-bottom:5px;">
-            <sc-for list="{{ wallRefBtns }}" as="rb" hint-placeholder-count="3">
-              <button onClick="{{ rb.onSelect }}" style="flex:1; border:1px solid {{ rb.border }}; background:{{ rb.bg }}; color:{{ rb.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:10px; letter-spacing:0.04em; padding:5px 2px; cursor:pointer;">{{ rb.label }}</button>
-            </sc-for>
-          </div>
-          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:#5980a6; letter-spacing:0.04em; text-align:center;">{{ wallExtNote }}</div>
-        </div>
-        <!-- Heights -->
-        <div style="margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-          <div>
-            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Base Ht</div>
-            <input type="text" value="{{ wallBaseInput }}" onInput="{{ onWallBaseInput }}" onBlur="{{ onWallBaseCommit }}" onKeyDown="{{ onWallBaseKey }}" placeholder="0'-0&quot;" aria-label="Wall base height" style="width:100%; box-sizing:border-box; border:1px solid {{ wallDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-          </div>
-          <div>
-            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Top Ht</div>
-            <input type="text" value="{{ wallTopInput }}" onInput="{{ onWallTopInput }}" onBlur="{{ onWallTopCommit }}" onKeyDown="{{ onWallTopKey }}" placeholder="8'-1 1/8&quot;" aria-label="Wall top height" style="width:100%; box-sizing:border-box; border:1px solid {{ wallDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-          </div>
-        </div>
-        <div style="margin-top:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.48);">Use 8-1 1/8, 8'-1 1/8&quot;, or 97.125&quot;</div>
-        <sc-if value="{{ hasWallDimensionError }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ wallDimensionError }}</div>
-        </sc-if>
-      </div>
-    </sc-if>
-
-    <!-- FLOOR PROPERTIES (shown when Floor tool is active) -->
-    <sc-if value="{{ floorToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Floor</div>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Structure</div>
-        <div style="display:flex; gap:3px; margin-bottom:8px;">
-          <sc-for list="{{ floorStructureBtns }}" as="fs" hint-placeholder-count="2">
-            <button onClick="{{ fs.onSelect }}" title="{{ fs.title }}" style="flex:1; border:1px solid {{ fs.border }}; background:{{ fs.bg }}; color:{{ fs.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ fs.label }}</button>
-          </sc-for>
-        </div>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Total Thickness</div>
-        <input type="text" value="{{ floorThicknessInput }}" onInput="{{ onFloorThicknessInput }}" onBlur="{{ onFloorThicknessCommit }}" onKeyDown="{{ onFloorDimensionKey }}" placeholder="1'-0 5/8&quot;" aria-label="Floor thickness" style="width:100%; box-sizing:border-box; border:1px solid {{ floorDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-        <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ floorAssemblyLabel }}</div>
-        <sc-if value="{{ hasActiveShapes }}" hint-placeholder-val="{{ false }}">
-          <button onClick="{{ onFloorFromShape }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">FLOOR FROM SHAPE</button>
-        </sc-if>
-        <sc-if value="{{ hasFloorDimensionError }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ floorDimensionError }}</div>
-        </sc-if>
-      </div>
-    </sc-if>
-
-    <!-- SHAPE PROPERTIES (shown when Shape tool is active) -->
-    <sc-if value="{{ shapeToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Shape</div>
-        <button onClick="{{ onShapeCapture }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">CAPTURE WALL OUTLINE</button>
-        <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ shapeHint }}</div>
-        <sc-if value="{{ hasActiveShapes }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top:10px; padding-top:8px; border-top:1px solid rgba(29,31,32,0.12);">
-            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
-              <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5);">Flooring</span>
-              <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; color:#1d1f20;">{{ shapeAreaLabel }}</span>
-            </div>
-            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px;">
-              <sc-for list="{{ flooringBtns }}" as="veneer" hint-placeholder-count="5">
-                <button type="button" onClick="{{ veneer.onSelect }}" title="{{ veneer.title }}" style="flex:1 1 auto; border:1px solid {{ veneer.border }}; background:{{ veneer.bg }}; color:{{ veneer.color }}; padding:4px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ veneer.label }}</button>
-              </sc-for>
-            </div>
-            <sc-if value="{{ hasShapeFlooring }}" hint-placeholder-val="{{ false }}">
-              <div style="display:flex; align-items:center; gap:6px;">
-                <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:rgba(29,31,32,0.55);">ABOVE SHEATHING</span>
-                <input value="{{ flooringThicknessInput }}" onInput="{{ onFlooringThicknessInput }}" onKeyDown="{{ onFlooringThicknessKey }}" onBlur="{{ onFlooringThicknessCommit }}" placeholder="{{ flooringThicknessPlaceholder }}" style="flex:1; min-width:0; border:1px solid rgba(29,31,32,0.2); padding:3px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px;" />
-              </div>
-              <div style="margin-top:6px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">Saves on A-FL-FLOORING · area + finish feed the future estimates</div>
-            </sc-if>
-          </div>
-          <button onClick="{{ onShapeDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST SHAPE</button>
-        </sc-if>
-      </div>
-    </sc-if>
-
-    <!-- OUTLINE / BUILD HOUSE (shown when Outline tool is active) -->
-    <sc-if value="{{ outlineToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Outline</div>
-        <button onClick="{{ onBuildHouse }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD HOUSE</button>
-        <button onClick="{{ onOutlineGarageToggle }}" style="width:100%; box-sizing:border-box; border:1px solid {{ outlineGarageBorder }}; background:{{ outlineGarageBg }}; color:{{ outlineGarageColor }}; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ outlineGarageLabel }}</button>
-        <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ buildHouseHint }}</div>
-      </div>
-    </sc-if>
-
-    <!-- DIMENSION / AUTO DIMS (shown when Dimension tool is active) -->
-    <sc-if value="{{ dimensionToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Dimension</div>
-        <button onClick="{{ onAutoDims }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">AUTO DIMS</button>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">First string offset</div>
-        <div style="display:flex; gap:3px; margin-bottom:8px;">
-          <sc-for list="{{ autoDimOffsetBtns }}" as="od" hint-placeholder-count="2">
-            <button onClick="{{ od.onSelect }}" title="{{ od.title }}" style="flex:1; border:1px solid {{ od.border }}; background:{{ od.bg }}; color:{{ od.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ od.label }}</button>
-          </sc-for>
-        </div>
-        <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ autoDimHint }}</div>
-      </div>
-    </sc-if>
-
-    <!-- FENESTRATION PROPERTIES (shown when Fenestration tool is active) -->
-    <sc-if value="{{ fenestrationToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Fenestration</div>
-        <sc-if value="{{ fenestrationHoleMode }}" hint-placeholder-val="{{ false }}">
-          <div style="border:1px solid rgba(122,74,33,0.4); background:rgba(122,74,33,0.06); color:#5d4a32; padding:6px 8px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.35;">{{ fenestrationHoleNote }}</div>
-        </sc-if>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Type</div>
-        <div style="display:flex; gap:3px; margin-bottom:8px;">
-          <sc-for list="{{ fenestrationTypeBtns }}" as="ft" hint-placeholder-count="2">
-            <button onClick="{{ ft.onSelect }}" title="{{ ft.title }}" style="flex:1; border:1px solid {{ ft.border }}; background:{{ ft.bg }}; color:{{ ft.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ ft.label }}</button>
-          </sc-for>
-        </div>
-        <sc-if value="{{ fenestrationIsWallType }}" hint-placeholder-val="{{ true }}">
-          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Width</div>
-          <input type="text" value="{{ fenestrationWidthInput }}" onInput="{{ onFenestrationWidthInput }}" onBlur="{{ onFenestrationWidthCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="3'-0&quot;" aria-label="Opening width" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-          <div style="margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-            <sc-if value="{{ fenestrationIsWindow }}" hint-placeholder-val="{{ false }}">
-              <div>
-                <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Sill Ht</div>
-                <input type="text" value="{{ fenestrationSillInput }}" onInput="{{ onFenestrationSillInput }}" onBlur="{{ onFenestrationSillCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="2'-6&quot;" aria-label="Window sill height" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-              </div>
-            </sc-if>
-            <div>
-              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Head Ht</div>
-              <input type="text" value="{{ fenestrationHeadInput }}" onInput="{{ onFenestrationHeadInput }}" onBlur="{{ onFenestrationHeadCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="6'-8&quot;" aria-label="Opening head height" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-            </div>
-          </div>
-        </sc-if>
-        <sc-if value="{{ fenestrationIsStairs }}" hint-placeholder-val="{{ false }}">
-          <sc-if value="{{ hasStairOpeningReq }}" hint-placeholder-val="{{ false }}">
-            <div style="border:1px solid rgba(176,64,80,0.45); background:rgba(176,64,80,0.07); color:#b04050; padding:6px 8px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em;">{{ stairOpeningReq }}</div>
-          </sc-if>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-            <div>
-              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Stair Width</div>
-              <input type="text" value="{{ stairOpeningWidthInput }}" onInput="{{ onStairOpeningWidthInput }}" onBlur="{{ onStairOpeningWidthCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="3'-0&quot;" aria-label="Stair width" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-            </div>
-            <div>
-              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Headroom</div>
-              <input type="text" value="{{ stairHeadroomInput }}" onInput="{{ onStairHeadroomInput }}" onBlur="{{ onStairHeadroomCommit }}" onKeyDown="{{ onFenestrationDimensionKey }}" placeholder="6'-10&quot;" aria-label="Stair headroom" style="width:100%; box-sizing:border-box; border:1px solid {{ fenestrationDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-            </div>
-          </div>
-          <div style="margin-top:5px; color:rgba(29,31,32,0.62); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.3;">{{ stairOpeningNote }}</div>
-        </sc-if>
-        <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ fenestrationLayerNote }}</div>
-        <sc-if value="{{ hasFenestrationDimensionError }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ fenestrationDimensionError }}</div>
-        </sc-if>
-      </div>
-    </sc-if>
-
-    <!-- COLUMN PROPERTIES (shown when Column tool is active) -->
-    <sc-if value="{{ columnToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Column</div>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Pad Footing</div>
-        <div style="display:flex; gap:3px; margin-bottom:6px;">
-          <sc-for list="{{ columnFootingBtns }}" as="cf" hint-placeholder-count="2">
-            <button onClick="{{ cf.onSelect }}" title="{{ cf.title }}" style="flex:1; border:1px solid {{ cf.border }}; background:{{ cf.bg }}; color:{{ cf.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ cf.label }}</button>
-          </sc-for>
-        </div>
-        <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ columnFootingNote }}</div>
-        <sc-if value="{{ hasActiveColumns }}" hint-placeholder-val="{{ false }}">
-          <button onClick="{{ onColumnDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST COLUMN</button>
-        </sc-if>
-      </div>
-    </sc-if>
-
-    <!-- BEAM PROPERTIES (shown when Beam tool is active) -->
-    <sc-if value="{{ beamToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Beam</div>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Mode</div>
-        <div style="display:flex; gap:3px; margin-bottom:6px;">
-          <sc-for list="{{ beamModeBtns }}" as="bm" hint-placeholder-count="2">
-            <button onClick="{{ bm.onSelect }}" title="{{ bm.title }}" style="flex:1; border:1px solid {{ bm.border }}; background:{{ bm.bg }}; color:{{ bm.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ bm.label }}</button>
-          </sc-for>
-        </div>
-        <div style="color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ beamModeNote }}</div>
-        <sc-if value="{{ hasActiveBeams }}" hint-placeholder-val="{{ false }}">
-          <button onClick="{{ onBeamDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST BEAM</button>
-        </sc-if>
-      </div>
-    </sc-if>
-
-    <!-- STAIR PROPERTIES (shown when Stair tool is active) -->
-    <sc-if value="{{ stairToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Stair</div>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Handrail</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-bottom:6px;">
-          <sc-for list="{{ stairRailBtns }}" as="sr" hint-placeholder-count="4">
-            <button onClick="{{ sr.onSelect }}" title="{{ sr.title }}" style="border:1px solid {{ sr.border }}; background:{{ sr.bg }}; color:{{ sr.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ sr.label }}</button>
-          </sc-for>
-        </div>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Width</div>
-        <input type="text" value="{{ stairWidthInput }}" onInput="{{ onStairWidthInput }}" onBlur="{{ onStairWidthCommit }}" onKeyDown="{{ onStairWidthKey }}" placeholder="3'-0&quot;" aria-label="Stair width" style="width:100%; box-sizing:border-box; border:1px solid {{ stairWidthBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-        <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ stairLayoutNote }}</div>
-        <sc-if value="{{ hasStairWidthError }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ stairWidthError }}</div>
-        </sc-if>
-        <sc-if value="{{ hasActiveStairs }}" hint-placeholder-val="{{ false }}">
-          <button onClick="{{ onStairDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST STAIR</button>
-        </sc-if>
-      </div>
-    </sc-if>
-
-    <!-- ANNOTATION PROPERTIES (shown when Annotation tool is active) -->
-    <sc-if value="{{ noteToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Annotation</div>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Leader End</div>
-        <div style="display:flex; gap:3px; margin-bottom:6px;">
-          <sc-for list="{{ noteEndBtns }}" as="ne" hint-placeholder-count="2">
-            <button onClick="{{ ne.onSelect }}" title="{{ ne.title }}" style="flex:1; border:1px solid {{ ne.border }}; background:{{ ne.bg }}; color:{{ ne.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ ne.label }}</button>
-          </sc-for>
-        </div>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Text Box</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-bottom:6px;">
-          <sc-for list="{{ noteBoxBtns }}" as="nb" hint-placeholder-count="4">
-            <button onClick="{{ nb.onSelect }}" title="{{ nb.title }}" style="border:1px solid {{ nb.border }}; background:{{ nb.bg }}; color:{{ nb.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ nb.label }}</button>
-          </sc-for>
-        </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-          <div>
-            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Fill Opacity %</div>
-            <input data-note-fill-opacity type="text" value="{{ noteFillOpacityInput }}" onInput="{{ onNoteFillOpacityInput }}" onBlur="{{ onNoteFillOpacityCommit }}" onKeyDown="{{ onNoteStyleKey }}" placeholder="85" aria-label="Note fill opacity" style="width:100%; box-sizing:border-box; border:1px solid {{ noteStyleBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-          </div>
-          <div>
-            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Corner Bullnose</div>
-            <input data-note-bullnose type="text" value="{{ noteBullnoseInput }}" onInput="{{ onNoteBullnoseInput }}" onBlur="{{ onNoteBullnoseCommit }}" onKeyDown="{{ onNoteStyleKey }}" placeholder="0" aria-label="Note corner bullnose radius" style="width:100%; box-sizing:border-box; border:1px solid {{ noteStyleBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-          </div>
-        </div>
-        <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ noteStyleNote }}</div>
-        <sc-if value="{{ hasNoteStyleError }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ noteStyleError }}</div>
-        </sc-if>
-        <sc-if value="{{ hasActiveNotes }}" hint-placeholder-val="{{ false }}">
-          <button onClick="{{ onNoteDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST NOTE</button>
-        </sc-if>
-      </div>
-    </sc-if>
-
-    <!-- ROOF PROPERTIES (shown when Roof tool is active) -->
-    <sc-if value="{{ roofToolActive }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Roof</div>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Mode</div>
-        <div style="display:flex; gap:3px; margin-bottom:8px;">
-          <sc-for list="{{ roofModeBtns }}" as="rm" hint-placeholder-count="2">
-            <button onClick="{{ rm.onSelect }}" title="{{ rm.title }}" style="flex:1; border:1px solid {{ rm.border }}; background:{{ rm.bg }}; color:{{ rm.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ rm.label }}</button>
-          </sc-for>
-        </div>
-        <sc-if value="{{ roofShapeMode }}" hint-placeholder-val="{{ false }}">
-          <button onClick="{{ onRoofFromShape }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD FROM SHAPE</button>
-        </sc-if>
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Eave Overhang</div>
-        <div style="display:flex; gap:3px; margin-bottom:5px;">
-          <sc-for list="{{ roofOverhangPresets }}" as="op" hint-placeholder-count="4">
-            <button onClick="{{ op.onSelect }}" style="flex:1; border:1px solid {{ op.border }}; background:{{ op.bg }}; color:{{ op.color }}; padding:5px 2px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.02em; cursor:pointer;">{{ op.label }}</button>
-          </sc-for>
-        </div>
-        <input type="text" value="{{ roofOverhangInput }}" onInput="{{ onRoofOverhangInput }}" onBlur="{{ onRoofOverhangCommit }}" onKeyDown="{{ onRoofDimensionKey }}" placeholder="2'-0&quot;" aria-label="Eave overhang" style="width:100%; box-sizing:border-box; border:1px solid {{ roofDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-        <div style="margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">Pitch (rise : 12)</div>
-        <input type="text" value="{{ roofPitchInput }}" onInput="{{ onRoofPitchInput }}" onBlur="{{ onRoofPitchCommit }}" onKeyDown="{{ onRoofDimensionKey }}" placeholder="4" aria-label="Roof pitch" style="width:100%; box-sizing:border-box; border:1px solid {{ roofDimensionBorder }}; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20;" />
-        <div style="margin-top:5px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ roofHeelLabel }}</div>
-        <sc-if value="{{ hasRoofDimensionError }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top:5px; color:#b04050; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.2;">{{ roofDimensionError }}</div>
-        </sc-if>
-        <sc-if value="{{ hasActiveRoofs }}" hint-placeholder-val="{{ false }}">
-          <button onClick="{{ onRoofDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.45); background:#fff; color:#b04050; padding:5px 4px; margin-top:8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST ROOF</button>
-        </sc-if>
-      </div>
-    </sc-if>
 
   </div>
 
@@ -818,9 +907,9 @@
 
     <!-- ELEVATIONS / SECTIONS -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <button onClick="{{ activateCutTool }}" title="Cut a new section or elevation view" style="display:block; width:100%; text-align:left; border:1px solid {{ cutToolBorder }}; background:{{ cutToolBg }}; color:{{ cutToolColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 10px; cursor:pointer; margin-bottom:6px;">ELEV/SEC CUT [{{ cutShortcut }}]</button>
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.55); margin-bottom:6px;">Elev / Sec Views</div>
       <sc-if value="{{ noCuts }}" hint-placeholder-val="{{ true }}">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; color:rgba(29,31,32,0.35); padding:4px 2px;">Use Cut tool to add views</div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; color:rgba(29,31,32,0.35); padding:4px 2px;">Press [{{ cutShortcut }}] to cut a view</div>
       </sc-if>
       <sc-for list="{{ cuts }}" as="cut" hint-placeholder-count="0">
         <div class="{{ cut.rowClass }}" onClick="{{ cut.onView }}">
@@ -5279,6 +5368,15 @@ class Component extends DCLogic {
       : tool === 'extend' && this.state.extendPhase === 'destination' ? this.state.extendBase
       : null;
     const angleLockHeld = this._shiftHeld || this._ctrlHeld;
+    // Shift with an acquired polar node acts as a T-square from that node: the
+    // point hard-locks onto the nearest of its 45° rays, even mid-draw, so a
+    // segment can land straight across / straight up / 45° from the rolled-over
+    // node. The segment start keeps its own lock; whichever ray sits closer to
+    // the cursor takes hold.
+    const polarLockOrigin = angleLockHeld && this._polarOrigin
+      && (drag || POLAR_TRACKING_TOOLS.has(tool))
+      && (!start || Math.hypot(start.x - this._polarOrigin.x, start.z - this._polarOrigin.z) > 0.001)
+      ? this._polarOrigin : null;
 
     // 45° angle lock — must establish lockAngle before tracking/magnet
     if (angleLockHeld && start) {
@@ -5309,7 +5407,7 @@ class Component extends DCLogic {
       ? this._findPolarSnap(raw) : null;
 
     // Final snap point and cursor position
-    let finalPt, cursorPt;
+    let finalPt, cursorPt, polarLocked = null;
     if (trackingHit) {
       // Projection tracking: cursor at reference node, endpoint at locked-ray intersection
       finalPt  = trackingHit.snapPt;
@@ -5322,10 +5420,17 @@ class Component extends DCLogic {
       // Midpoint snap — cursor and endpoint both jump to segment midpoint
       finalPt  = midSnap;
       cursorPt = midSnap;
-    } else if (angleLockHeld && start) {
-      // Angle lock: endpoint stays on locked ray, cursor roams freely with mouse
-      finalPt  = this._applyAngleLock(start, basePt);
-      cursorPt = basePt;
+    } else if (angleLockHeld && (start || polarLockOrigin)) {
+      // Angle lock: endpoint stays on a locked ray. The ray comes from the
+      // segment start or from the polar node's T-square — whichever the
+      // cursor sits closest to.
+      const fromStart = start ? this._applyAngleLock(start, basePt) : null;
+      const fromPolar = polarLockOrigin ? this._polarRayLock(basePt) : null;
+      const startDist = fromStart ? Math.hypot(basePt.x - fromStart.x, basePt.z - fromStart.z) : Infinity;
+      const polarDist = fromPolar ? Math.hypot(basePt.x - fromPolar.x, basePt.z - fromPolar.z) : Infinity;
+      polarLocked = fromPolar && polarDist <= startDist ? fromPolar : null;
+      finalPt  = polarLocked || fromStart || basePt;
+      cursorPt = polarLocked || basePt;
     } else if (polarHit) {
       // Polar tracking: cursor rides a 45° ray cast from the acquired node
       finalPt  = polarHit;
@@ -5338,7 +5443,7 @@ class Component extends DCLogic {
     this._snapPt = finalPt;
     this._trackingRef  = trackingHit ? trackingHit.refPt  : null;
     this._trackingSnap = trackingHit ? trackingHit.snapPt : null;
-    this._polarSnap    = polarHit;
+    this._polarSnap    = polarHit || polarLocked;
 
     const sc = this._toScreen(cursorPt);
     const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false, showMidSnap: false, showOriginSnapPt: false, showPolarOrigin: false };
@@ -5359,7 +5464,7 @@ class Component extends DCLogic {
     // The acquired polar origin glows orange while hovered or while its ray is engaged.
     const hoveringOrigin = magnet && this._polarOrigin
       && Math.hypot(magnet.x - this._polarOrigin.x, magnet.z - this._polarOrigin.z) < 0.001;
-    if (this._polarOrigin && (polarHit || hoveringOrigin)) {
+    if (this._polarOrigin && (polarHit || polarLocked || hoveringOrigin)) {
       const os = this._toScreen(this._polarOrigin);
       newState.polarOriginX = os.x; newState.polarOriginY = os.y; newState.showPolarOrigin = true;
     }
@@ -10230,6 +10335,19 @@ class Component extends DCLogic {
     return new THREE.Vector3(sx, pt.y, sz);
   }
 
+  // Shift T-square from the polar node: project the cursor onto the nearest
+  // of the origin's 45° rays regardless of how far it sits from the ray.
+  _polarRayLock(pt) {
+    const origin = this._polarOrigin;
+    const dx = pt.x - origin.x, dz = pt.z - origin.z;
+    if (Math.hypot(dx, dz) < 0.001) return null;
+    const step = Math.PI / 4;
+    const angle = Math.round(Math.atan2(dz, dx) / step) * step;
+    const along = dx * Math.cos(angle) + dz * Math.sin(angle);
+    if (along <= 0) return null;
+    return new THREE.Vector3(origin.x + Math.cos(angle) * along, pt.y, origin.z + Math.sin(angle) * along);
+  }
+
   _applyAngleLock(start, pt) {
     const angle = this._lockAngle ?? geo.lockAngleFor(start, pt);
     if (angle == null) return pt;
@@ -12173,6 +12291,7 @@ class Component extends DCLogic {
     const shaping = activeTool === 'shape';
     const drawingShape = isDrawing && shaping;
     const roofing = activeTool === 'roof';
+    const toolStripHasOptions = ['select','extend','line','wall','floor','shape','outline','dimension','fenestration','column','beam','stair','annotation','roof'].includes(activeTool);
     const roofPhase = this.state.roofPhase;
     const placingCut  = isCutTool && cutPhase === 'placing';
     const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending || nodeArcing || fenestrating || shaping || roofing;
@@ -12256,6 +12375,8 @@ class Component extends DCLogic {
       showHint, hintText, hintColor,
       choosingDir,
       noCuts: cuts.length === 0,
+      toolStripEmpty: !toolStripHasOptions,
+      toolStripLabel: activeTool === 'node' ? 'NODE / ARC' : (activeTool === 'cut' ? 'ELEV/SEC CUT' : String(activeTool || '').toUpperCase()),
       lineToolActive: activeTool === 'line',
       wallToolActive: activeTool === 'wall',
       columnToolActive: activeTool === 'column',
@@ -12923,29 +13044,27 @@ class Component extends DCLogic {
         onDelete: (e) => this._deleteCut(c.id, e),
       })),
 
-      tools: [
+      drawTools: [
         standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click', selectFilter:'all'}); }, activeTool==='select'),
-        contextualTool('line'),
+        standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._activateExtendTool(); }, activeTool==='extend'),
+        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
         contextualTool('node'),
-        contextualTool('wall'),
-        contextualTool('floor'),
-        contextualTool('fenestration'),
-        contextualTool('shape'),
+        contextualTool('line'),
         contextualTool('outline'),
-        contextualTool('roof'),
+        contextualTool('shape'),
         contextualTool('dimension'),
+        contextualTool('annotation'),
+      ],
+      buildTools: [
+        contextualTool('wall'),
+        contextualTool('fenestration'),
+        contextualTool('floor'),
+        contextualTool('roof'),
         contextualTool('column'),
         contextualTool('beam'),
         contextualTool('stair'),
-        contextualTool('annotation'),
-        standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._activateExtendTool(); }, activeTool==='extend'),
-        standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
       ],
       cutShortcut: shortcut('cut'),
-      activateCutTool: ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({activeTool:'cut'}); },
-      cutToolBg:     isCutTool ? on.bg     : off.bg,
-      cutToolColor:  isCutTool ? on.color  : off.color,
-      cutToolBorder: isCutTool ? on.border : off.border,
       enter3D:      ()=>this._setView('perspective'),
       webglUnavailable: this.state.webglUnavailable,
       view3DLabel:  this.state.webglUnavailable ? '3D VIEW — UNAVAILABLE' : '3D VIEW',

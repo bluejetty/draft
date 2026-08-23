@@ -65,16 +65,50 @@ test('tool names stay the same on every layer set', async ({ page }) => {
   }
 });
 
-test('Cut lives with the section views, not in the tool list', async ({ page }) => {
+test('Cut has no button anywhere; the [C] key still activates it', async ({ page }) => {
   await h.openModel(page);
   const railCut = page.locator('[data-model-left]').getByRole('button', { name: /\bCut\b/i });
   await expect(railCut).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /ELEV\/SEC CUT/i })).toHaveCount(0);
 
-  const sectionCut = page.getByRole('button', { name: /ELEV\/SEC CUT \[C\]/i });
-  await expect(sectionCut).toBeVisible();
-  await sectionCut.click();
-  const active = await h.activeToolLabels(page);
-  expect(active.some(label => /\bCut\b/i.test(label))).toBe(true);
+  await page.keyboard.press('c');
+  await expect(page.locator('[data-tool-strip]')).toContainText(/ELEV\/SEC CUT/i);
+});
+
+test('the rail groups tools under DRAW / EDIT and BUILD', async ({ page }) => {
+  await h.openModel(page);
+  const groups = await page.evaluate(() => {
+    const rail = document.querySelector('[data-model-left]');
+    const out = {}; let current = null;
+    rail.querySelectorAll('div, button').forEach(el => {
+      const text = (el.firstChild?.nodeValue || el.textContent || '').trim().toUpperCase();
+      if (el.tagName === 'DIV' && (text === 'DRAW / EDIT' || text === 'BUILD')) { current = text; out[current] = []; }
+      else if (el.tagName === 'BUTTON' && current) out[current].push(text.replace(/\s+\[[^\]]+\]$/, ''));
+    });
+    return out;
+  });
+  for (const name of ['SELECT', 'EXTEND', 'TRIM', 'NODE / ARC', 'LINE', 'OUTLINE', 'SHAPE', 'DIMENSION', 'ANNOTATION']) {
+    expect(groups['DRAW / EDIT']).toContain(name);
+  }
+  for (const name of ['WALL', 'FENESTRATION', 'FLOOR', 'ROOF', 'COLUMN', 'BEAM', 'STAIR']) {
+    expect(groups['BUILD']).toContain(name);
+  }
+});
+
+test('the tool strip shows only the active tool\'s options', async ({ page }) => {
+  await h.openModel(page);
+  const strip = page.locator('[data-tool-strip]');
+
+  await h.selectTool(page, 'Line');
+  await expect(strip.getByRole('button', { name: 'DRAFT', exact: true })).toBeVisible();
+  await expect(strip.getByRole('button', { name: /Wall Type/i })).toHaveCount(0);
+
+  await h.selectTool(page, 'Wall');
+  await expect(strip.getByText('Wall Type')).toBeVisible();
+  await expect(strip.getByRole('button', { name: 'DRAFT', exact: true })).toHaveCount(0);
+
+  await h.selectTool(page, 'Trim');
+  await expect(strip).toContainText(/no tool options/i);
 });
 
 test('the DRAFT / NO-DRAFT choice lives in the Line tool menu', async ({ page }) => {
