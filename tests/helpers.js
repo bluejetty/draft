@@ -76,6 +76,13 @@ async function activeToolLabels(page) {
 }
 
 async function waitForSaved(page) {
+  // An edit flips the status to UNSAVED a render after the input lands, so a
+  // check that polls too early can match the PREVIOUS save's SAVED and read
+  // stale storage. Give the flip a beat, then require SAVED to hold across a
+  // second look so multi-step commits have fully drained.
+  await page.waitForTimeout(300);
+  await expect(page.locator('[data-model-status]')).toContainText('SAVED', { timeout: 5000 });
+  await page.waitForTimeout(200);
   await expect(page.locator('[data-model-status]')).toContainText('SAVED', { timeout: 5000 });
 }
 
