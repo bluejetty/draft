@@ -328,7 +328,9 @@ if (!window.DraftDrawingFormat) {
 
   // Master outlines live on a BONEYARD shelf. Each point carries a stable id
   // that level copies reference, so master edits can find their inherited
-  // counterparts without merging vertices.
+  // counterparts without merging vertices. An OPEN outline (attached garage)
+  // never wraps its last point to its first; its end points may carry an
+  // attach id referencing a house master point they are welded to.
   const boneyardOutlines = (raw, shelfIds) => {
     const seenPointIds = new Set();
     return (Array.isArray(raw) ? raw : []).map(outline => {
@@ -340,7 +342,8 @@ if (!window.DraftDrawingFormat) {
         if (!parsed || !id || seenPointIds.has(id)) return null;
         seenPointIds.add(id);
         const bulge = Number(raw?.bulge);
-        return { ...parsed, id, bulge: Number.isFinite(bulge) ? bulge : 0 };
+        const attach = String(raw?.attach || '').trim();
+        return { ...parsed, id, bulge: Number.isFinite(bulge) ? bulge : 0, attach: attach || null };
       }).filter(Boolean);
       if (points.length < 3) return null;
       return {
@@ -348,6 +351,12 @@ if (!window.DraftDrawingFormat) {
         shelfId,
         sourceLevelId: Number.isInteger(Number(outline?.sourceLevelId)) ? Number(outline.sourceLevelId) : null,
         garage: outline?.garage === true,
+        open: outline?.open === true,
+        cornerStubs: (Array.isArray(outline?.cornerStubs) ? outline.cornerStubs : []).map(stub => {
+          const pointId = String(stub?.pointId || '').trim();
+          const lengthIn = Number(stub?.lengthIn);
+          return pointId && Number.isFinite(lengthIn) && lengthIn > 0 ? { pointId, lengthIn } : null;
+        }).filter(Boolean),
         points,
       };
     }).filter(Boolean);
@@ -373,6 +382,7 @@ if (!window.DraftDrawingFormat) {
         masterId: String(outline?.masterId || '').trim() || null,
         levelId: outlineLevelId,
         garage: outline?.garage === true,
+        open: outline?.open === true,
         points,
         overriddenSrcIds: (Array.isArray(outline?.overriddenSrcIds) ? outline.overriddenSrcIds : [])
           .map(id => String(id || '').trim()).filter(Boolean),

@@ -1,15 +1,16 @@
-// A GARAGE is a marked outline attached to the house: MARK GARAGE arms the
-// Outline tool so the next closed outline stores as the garage footprint
-// (copied to every level like a master). BUILD HOUSE then grows an open-C
-// grade beam — concrete walls only on the sides away from the house, since
-// the house foundation closes the fourth side — a 4" slab sloped 1/8"/ft,
-// garage stud walls on the open sides, and the garage's own roof whose
-// house-shared edge is tagged GABLE so it links into the house roof.
+// An attached GARAGE is an OPEN outline run: MARK GARAGE arms the Outline
+// tool so the next run of 3+ legs starts and ends ON the house outline,
+// welding its end points onto shared house master points (inserting mid-wall
+// points where needed, prompting for a connecting stub at corners). BUILD
+// HOUSE then grows the grade beam along the open legs only (32" concrete +
+// 1.5" plate, top of plate 1'-0" below the top of the house foundation), a
+// flat 4" slab closed against the house, garage stud walls flush with the
+// main-floor ceiling, and ONE roof over the combined house + garage loop.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
-// House: 16×12 rect. Garage: 12×8 attached to the house's right side —
-// its left edge (x=8, z from -4 to 4) rides the house outline.
+// House: 16×12 rect. Attached garage: an open 3-leg run off the house's
+// right side, both ends landing mid-wall on the x=8 edge.
 async function drawHouseOutline(page) {
   await h.selectTool(page, 'Outline');
   await h.clickWorld(page, -8, -6);
@@ -20,14 +21,15 @@ async function drawHouseOutline(page) {
   await h.waitForSaved(page);
 }
 
-async function drawGarageOutline(page) {
+async function drawGarageRun(page, points) {
   await h.selectTool(page, 'Outline');
   await page.getByRole('button', { name: 'MARK GARAGE' }).click();
-  await h.clickWorld(page, 8, -4);
-  await h.clickWorld(page, 20, -4);
-  await h.clickWorld(page, 20, 4);
-  await h.clickWorld(page, 8, 4);
+  for (const [x, z] of points) await h.clickWorld(page, x, z);
   await page.keyboard.press('Enter');
+}
+
+async function drawGarageOutline(page) {
+  await drawGarageRun(page, [[8, -4], [20, -4], [20, 4], [8, 4]]);
   await h.waitForSaved(page);
 }
 
@@ -37,21 +39,104 @@ async function buildHouse(page) {
   await page.waitForTimeout(300);
 }
 
-test('MARK GARAGE stores a garage outline on every level and persists', async ({ page }) => {
+async function dragWorld(page, fromX, fromZ, toX, toZ) {
+  const from = await h.worldToClient(page, fromX, fromZ);
+  const to = await h.worldToClient(page, toX, toZ);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await page.mouse.up();
+  await h.waitForSaved(page);
+}
+
+test('MARK GARAGE stores an OPEN run welded onto shared house points', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
   await drawGarageOutline(page);
 
   const saved = await h.savedDrawing(page);
-  // Two masters on the shelf: the house and the garage.
   expect(saved.boneyardOutlines).toHaveLength(2);
-  expect(saved.boneyardOutlines.filter(outline => outline.garage)).toHaveLength(1);
-  // Every level carries a copy of each, the garage copies flagged.
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster).toBeTruthy();
+  expect(garageMaster.open).toBe(true);
+  expect(garageMaster.points).toHaveLength(4);
+
+  // Mid-wall ends insert real points into the house master, and the garage
+  // end points carry those ids as their attachments.
+  const houseMaster = saved.boneyardOutlines.find(outline => !outline.garage);
+  expect(houseMaster.points).toHaveLength(6);
+  const houseIds = houseMaster.points.map(point => point.id);
+  expect(houseIds).toContain(garageMaster.points[0].attach);
+  expect(houseIds).toContain(garageMaster.points[3].attach);
+  expect(houseMaster.points.some(point => h.near(point.x, 8) && h.near(point.z, -4))).toBe(true);
+  expect(houseMaster.points.some(point => h.near(point.x, 8) && h.near(point.z, 4))).toBe(true);
+
+  // Every level carries a copy of each, the garage copies open + flagged.
   expect(saved.outlines).toHaveLength(saved.levels.length * 2);
-  expect(saved.outlines.filter(outline => outline.garage)).toHaveLength(saved.levels.length);
+  const garageCopies = saved.outlines.filter(outline => outline.garage);
+  expect(garageCopies).toHaveLength(saved.levels.length);
+  garageCopies.forEach(copy => expect(copy.open).toBe(true));
 });
 
-test('BUILD HOUSE grows the open-C grade beam, sloped slab, and garage roof', async ({ page }) => {
+test('a run whose end misses the house stays alive to fix and finish', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageRun(page, [[8, -4], [20, -4], [20, 4], [23, 10]]);
+  await page.waitForTimeout(300);
+
+  // Nothing committed — the house is still the only master.
+  let saved = await h.savedDrawing(page);
+  expect(saved.boneyardOutlines).toHaveLength(1);
+
+  // Pull the run onto the house and finish again: now it lands.
+  await h.clickWorld(page, 8, 4);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  saved = await h.savedDrawing(page);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster).toBeTruthy();
+  expect(garageMaster.open).toBe(true);
+  expect(garageMaster.points).toHaveLength(5);
+});
+
+test('a corner landing prompts CONNECT AT CORNER; the 8" stub slides the attach off the corner', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageRun(page, [[8, -6], [20, -6], [20, 4], [8, 4]]);
+
+  const prompt = page.locator('[data-garage-corner-prompt]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt).toContainText('CONNECT AT CORNER');
+  await page.locator('[data-garage-stub-beam]').click();
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster.cornerStubs).toHaveLength(1);
+  expect(garageMaster.cornerStubs[0].lengthIn).toBe(8);
+  // The attach slid 8" along the house wall on the garage side of the corner.
+  expect(h.near(garageMaster.points[0].x, 8, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[0].z, -6 + 8 / 12, 0.05)).toBe(true);
+});
+
+test("the 1'-0\" stub option lands the attach a foot off the corner", async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageRun(page, [[8, -6], [20, -6], [20, 4], [8, 4]]);
+
+  await expect(page.locator('[data-garage-corner-prompt]')).toBeVisible();
+  await page.locator('[data-garage-stub-foot]').click();
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster.cornerStubs).toHaveLength(1);
+  expect(garageMaster.cornerStubs[0].lengthIn).toBe(12);
+  expect(h.near(garageMaster.points[0].x, 8, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[0].z, -5, 0.05)).toBe(true);
+});
+
+test('BUILD HOUSE grows the open-leg beam, flat slab, flush walls, and one roof', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
   await drawGarageOutline(page);
@@ -60,49 +145,63 @@ test('BUILD HOUSE grows the open-C grade beam, sloped slab, and garage roof', as
 
   const saved = await h.savedDrawing(page);
 
-  // Grade beam: three concrete walls on the sides away from the house — the
-  // shared edge (x=8) builds nothing, the house foundation closes the C.
+  // Grade beam on the 3 open legs only; the inserted attach points split the
+  // house's right foundation wall, so the house builds 6 walls.
   const fdnWalls = saved.walls.filter(wall => wall.levelId === 1);
-  expect(fdnWalls).toHaveLength(7); // 4 house + 3 garage
+  expect(fdnWalls).toHaveLength(9); // 6 house + 3 garage
   fdnWalls.forEach(wall => {
     expect(wall.wallType).toBe('concrete_8');
     expect(wall.view).toBe('foundation');
   });
-  const garageBeam = fdnWalls.filter(wall =>
-    h.touchesPoint(wall, 20, -4) || h.touchesPoint(wall, 20, 4));
-  expect(garageBeam).toHaveLength(3);
-  // No foundation wall runs along the shared house edge inside the garage span.
-  const sharedEdgeWall = fdnWalls.find(wall =>
-    h.near(wall.start.x, 8) && h.near(wall.end.x, 8)
-    && Math.max(wall.start.z, wall.end.z) <= 4.05 && Math.min(wall.start.z, wall.end.z) >= -4.05);
-  expect(sharedEdgeWall).toBeUndefined();
+  const beams = fdnWalls.filter(wall => h.touchesPoint(wall, 20, -4) || h.touchesPoint(wall, 20, 4));
+  expect(beams).toHaveLength(3);
 
-  // Garage stud walls on MAIN FL follow the same open-C.
+  // The 33.5" stack: 32" concrete with the 1.5" plate on top, top of plate
+  // 1'-0" below the top of the house foundation wall.
+  const houseWall = fdnWalls.find(wall => !beams.includes(wall));
+  beams.forEach(beam => {
+    expect(beam.topHeight).toBeCloseTo(houseWall.topHeight - 1 - 1.5 / 12, 3);
+    expect(beam.topHeight - beam.baseHeight).toBeCloseTo(32 / 12, 3);
+  });
+
+  // The beam ties into the house foundation with REBAR TIE notes at both
+  // shared attachment nodes.
+  const ties = saved.notes.filter(note => note.body === 'REBAR TIE');
+  expect(ties).toHaveLength(2);
+  ties.forEach(note => {
+    expect(note.view).toBe('foundation');
+    expect(h.near(note.anchor.x, 8)).toBe(true);
+  });
+
+  // Garage stud walls on MAIN FL along the open legs, dropped to the beam
+  // plate so their ceiling lands flush with the main-floor ceiling.
   const mainWalls = saved.walls.filter(wall => wall.levelId === 3);
-  expect(mainWalls).toHaveLength(7); // 4 house + 3 garage
-  expect(mainWalls.filter(wall => h.touchesPoint(wall, 20, -4) || h.touchesPoint(wall, 20, 4)))
-    .toHaveLength(3);
+  expect(mainWalls).toHaveLength(9); // 6 house + 3 garage
+  const garageStud = mainWalls.filter(wall => h.touchesPoint(wall, 20, -4) || h.touchesPoint(wall, 20, 4));
+  expect(garageStud).toHaveLength(3);
+  const houseStud = mainWalls.find(wall => !garageStud.includes(wall));
+  garageStud.forEach(wall => {
+    expect(wall.topHeight).toBeCloseTo(houseStud.topHeight, 3);
+    expect(wall.baseHeight).toBeLessThan(-1);
+  });
 
-  // Garage slab: 4" pour sloped 1/8" per foot, flagged for sections/specs.
+  // Flat 4" slab closed against the house — no slope, no house-side line
+  // beyond the polygon closure (the straight span adds no extra points).
   const slabs = saved.floors.filter(floor => floor.levelId === 1);
   expect(slabs).toHaveLength(2); // house slab + garage slab
   const garageSlab = slabs.find(floor => floor.garage);
   expect(garageSlab).toBeTruthy();
   expect(garageSlab.structure).toBe('slab');
   expect(garageSlab.thickness * 12).toBeCloseTo(4, 5);
-  expect(garageSlab.slopeInPerFt).toBeCloseTo(1 / 8, 5);
+  expect(garageSlab.slopeInPerFt).toBe(0);
+  expect(garageSlab.points).toHaveLength(4);
 
-  // Garage roof: its own editable roof with an independent plate height, the
-  // house-shared edge tagged GABLE so the planes link into the house roof.
-  expect(saved.roofs).toHaveLength(2);
-  const garageRoof = saved.roofs.find(roof => roof.garage);
-  expect(garageRoof).toBeTruthy();
-  expect(garageRoof.levelId).toBe(7);
-  expect(Number.isFinite(garageRoof.plateHeightFt)).toBe(true);
-  expect(garageRoof.edges.filter(edge => edge === 'gable')).toHaveLength(1);
-  expect(garageRoof.edges.filter(edge => edge === 'eave')).toHaveLength(3);
-  const houseRoof = saved.roofs.find(roof => !roof.garage);
-  expect(houseRoof.edges.every(edge => edge === 'eave')).toBe(true);
+  // ONE roof over house + garage: no separate garage roof, and the combined
+  // footprint reaches past the garage's far wall by the overhang.
+  expect(saved.roofs).toHaveLength(1);
+  const roof = saved.roofs[0];
+  expect(roof.garage).toBeFalsy();
+  expect(Math.max(...roof.points.map(point => point.x))).toBeGreaterThan(20);
 });
 
 test('a second BUILD HOUSE click never doubles the garage', async ({ page }) => {
@@ -114,29 +213,87 @@ test('a second BUILD HOUSE click never doubles the garage', async ({ page }) => 
   await buildHouse(page);
 
   const saved = await h.savedDrawing(page);
-  expect(saved.walls.filter(wall => wall.levelId === 1)).toHaveLength(7);
-  expect(saved.walls.filter(wall => wall.levelId === 3)).toHaveLength(7);
+  expect(saved.walls.filter(wall => wall.levelId === 1)).toHaveLength(9);
+  expect(saved.walls.filter(wall => wall.levelId === 3)).toHaveLength(9);
   expect(saved.floors.filter(floor => floor.levelId === 1)).toHaveLength(2);
-  expect(saved.roofs).toHaveLength(2);
+  expect(saved.notes.filter(note => note.body === 'REBAR TIE')).toHaveLength(2);
+  expect(saved.roofs).toHaveLength(1);
 });
 
-test('a garage alone still builds its grade beam and slab', async ({ page }) => {
+test('an L-shaped run builds a beam member on every open leg', async ({ page }) => {
   await h.openModel(page);
-  await h.selectTool(page, 'Outline');
-  await page.getByRole('button', { name: 'MARK GARAGE' }).click();
-  await h.clickWorld(page, 0, 0);
-  await h.clickWorld(page, 12, 0);
-  await h.clickWorld(page, 12, 8);
-  await h.clickWorld(page, 0, 8);
-  await page.keyboard.press('Enter');
+  await drawHouseOutline(page);
+  await drawGarageRun(page, [[8, -4], [20, -4], [20, 8], [14, 8], [8, 4]]);
   await h.waitForSaved(page);
   await buildHouse(page);
   await h.waitForSaved(page);
 
   const saved = await h.savedDrawing(page);
-  // With no house outline every garage edge gets grade beam.
-  expect(saved.walls.filter(wall => wall.levelId === 1)).toHaveLength(4);
-  const garageSlab = saved.floors.find(floor => floor.garage);
-  expect(garageSlab).toBeTruthy();
-  expect(saved.roofs.filter(roof => roof.garage)).toHaveLength(1);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster.points).toHaveLength(5);
+  expect(saved.walls.filter(wall => wall.levelId === 1)).toHaveLength(10); // 6 house + 4 garage
+  expect(saved.roofs).toHaveLength(1);
+});
+
+test('the shared end node moves house and garage together on a level', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageOutline(page);
+
+  await h.selectTool(page, 'Select');
+  await dragWorld(page, 8, 4, 10, 5);
+
+  const saved = await h.savedDrawing(page);
+  const moved = saved.outlines.filter(outline =>
+    outline.points.some(point => h.near(point.x, 10) && h.near(point.z, 5)));
+  // The dragged level's house AND garage copies both follow the one node.
+  expect(moved).toHaveLength(2);
+  expect(moved.some(outline => outline.garage)).toBe(true);
+  expect(moved.some(outline => !outline.garage)).toBe(true);
+});
+
+test('the weld survives a save and reload', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageOutline(page);
+
+  await page.reload();
+  await expect(page.locator('[data-model-canvas]')).toBeVisible();
+  await page.waitForTimeout(700);
+
+  // The restored metadata is intact...
+  let saved = await h.savedDrawing(page);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster.open).toBe(true);
+  expect(garageMaster.points[0].attach).toBeTruthy();
+
+  // ...and the copies re-welded: one drag still moves house + garage together.
+  await h.selectTool(page, 'Select');
+  await dragWorld(page, 8, 4, 10, 5);
+  saved = await h.savedDrawing(page);
+  const moved = saved.outlines.filter(outline =>
+    outline.points.some(point => h.near(point.x, 10) && h.near(point.z, 5)));
+  expect(moved).toHaveLength(2);
+  expect(moved.some(outline => outline.garage)).toBe(true);
+});
+
+test('editing the house master carries the attached garage along', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageOutline(page);
+
+  // Drag the house master's attach point on the BONEYARD: the garage master's
+  // welded end follows, and every level copy of both moves with it.
+  await page.locator('.level-name', { hasText: 'BONEYARD' }).click();
+  await page.waitForTimeout(300);
+  await h.selectTool(page, 'Select');
+  await dragWorld(page, 8, -4, 10, -3);
+
+  const saved = await h.savedDrawing(page);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  const houseMaster = saved.boneyardOutlines.find(outline => !outline.garage);
+  const movedHouse = houseMaster.points.some(point => h.near(point.x, 10) && h.near(point.z, -3));
+  const movedGarage = garageMaster.points.some(point => h.near(point.x, 10) && h.near(point.z, -3));
+  expect(movedHouse || movedGarage).toBe(true);
+  if (movedHouse) expect(movedGarage).toBe(true);
 });
