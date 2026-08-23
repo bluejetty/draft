@@ -34,7 +34,7 @@ test('beam first: a column placed near the beam centres onto its line', async ({
   expect(saved.beams[0].levelId).toBe(3);
   expect(saved.beams[0].layer).toBe('S-BEAM');
   expect(saved.columns).toHaveLength(1);
-  expect(saved.columns[0].layer).toBe('S-COL/FOOTING');
+  expect(saved.columns[0].layer).toBe('S-COL-FOOTING');
   expect(saved.columns[0].footing).toBe('pad36');
   // Centred onto the beam line (z pulled from 0.5 to 0).
   expect(h.near(saved.columns[0].point.x, 0)).toBe(true);
@@ -51,7 +51,6 @@ test('beam first: a column placed near the beam centres onto its line', async ({
 
 test('columns first: a DROPPED beam snaps its ends onto the columns', async ({ page }) => {
   await h.openModel(page);
-  await page.keyboard.press('/'); // grid snap on so the columns land on exact feet
   await useFloorContext(page);
 
   await h.selectTool(page, 'Column');
@@ -70,10 +69,12 @@ test('columns first: a DROPPED beam snaps its ends onto the columns', async ({ p
   expect(saved.beams).toHaveLength(1);
   expect(saved.beams[0].mode).toBe('dropped');
   // Beam ends landed exactly on the column centres.
-  expect(Math.abs(saved.beams[0].start.x - -5)).toBeLessThan(0.01);
-  expect(Math.abs(saved.beams[0].start.z - 2)).toBeLessThan(0.01);
-  expect(Math.abs(saved.beams[0].end.x - 5)).toBeLessThan(0.01);
-  expect(Math.abs(saved.beams[0].end.z - 2)).toBeLessThan(0.01);
+  const centres = saved.columns.map(column => column.point)
+    .sort((a, b) => a.x - b.x);
+  expect(Math.abs(saved.beams[0].start.x - centres[0].x)).toBeLessThan(0.001);
+  expect(Math.abs(saved.beams[0].start.z - centres[0].z)).toBeLessThan(0.001);
+  expect(Math.abs(saved.beams[0].end.x - centres[1].x)).toBeLessThan(0.001);
+  expect(Math.abs(saved.beams[0].end.z - centres[1].z)).toBeLessThan(0.001);
 });
 
 test('PLAN places and shows structure in the level\'s home set', async ({ page }) => {

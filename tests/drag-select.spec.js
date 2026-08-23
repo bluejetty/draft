@@ -1,7 +1,7 @@
 // Press-and-drag with the Select tool opens a selection window without picking
 // a mode first: blue selects fully enclosed items on the current level, and
 // holding Shift while dragging widens it to every level (red). A short click
-// still selects single items, and the "/" key toggles grid snap in one press.
+// still selects single items.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -83,14 +83,3 @@ test('a single click on the first node closes a shape', async ({ page }) => {
   expect(h.allLines(await h.savedDrawing(page))).toHaveLength(3);
 });
 
-test('the "/" key toggles grid snap in a single press', async ({ page }) => {
-  await h.openModel(page);
-  const button = page.locator('[data-grid-snap]');
-  await expect(button).toHaveCSS('background-color', 'rgb(255, 255, 255)'); // off by default
-
-  await page.keyboard.press('/');
-  await expect(button).toHaveCSS('background-color', 'rgb(29, 31, 32)');
-
-  await page.keyboard.press('/');
-  await expect(button).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-});

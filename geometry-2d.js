@@ -14,12 +14,6 @@ if (!window.DraftGeometry2D) {
   const worldPerPixel = (orthoHalfHeight, canvasHeight) =>
     (orthoHalfHeight * 2) / (canvasHeight || 600);
 
-  const snapToGrid = (point, unit = 1) => ({
-    x: Math.round(point.x / unit) * unit,
-    y: point.y,
-    z: Math.round(point.z / unit) * unit,
-  });
-
   // Nearest vertex within radius, or null. Ties keep the earlier vertex, so a
   // stable input order gives a stable snap.
   const nearestVertex = (vertices, point, radius) => {
@@ -121,7 +115,6 @@ if (!window.DraftGeometry2D) {
   window.DraftGeometry2D = {
     distance,
     worldPerPixel,
-    snapToGrid,
     nearestVertex,
     midpoint,
     nearestMidpoint,

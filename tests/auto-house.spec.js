@@ -8,7 +8,6 @@ const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
 async function drawOutlineRect(page) {
-  await page.keyboard.press('/'); // grid snap on so corners land on exact feet
   await h.selectTool(page, 'Outline');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);

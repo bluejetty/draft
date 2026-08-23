@@ -140,26 +140,25 @@ test('openings survive a reload attached to their wall', async ({ page }) => {
 
 test('the opening centre is a snap point for dimensions', async ({ page }) => {
   await h.openModel(page);
-  await page.keyboard.press('/'); // grid snap on so the wall and door land on exact feet
   await drawWall(page);
   await h.selectTool(page, 'Fenestration');
   await h.clickWorld(page, 2, 0);
   await h.waitForSaved(page);
 
   await h.selectTool(page, 'Dimension');
-  await page.keyboard.press('/'); // grid snap off so only the vertex magnet can pull the click
-  await h.clickWorld(page, 2.05, 0.1);
+  await h.clickWorld(page, 2.05, 0.1); // only the vertex magnet pulls the click
+
   await h.clickWorld(page, -10, 0);
   await h.waitForSaved(page);
 
   const drawing = await h.savedDrawing(page);
   expect(drawing.dimensions).toHaveLength(1);
   const dimension = drawing.dimensions[0];
-  // The centre sits at the opening's midpoint: x = 2 exactly, z inside the wall.
+  // The centre sits at the opening's midpoint: x ≈ 2, z inside the wall.
   const centreEnd = [dimension.start, dimension.end]
-    .find(pt => Math.abs(pt.x - 2) < 0.01 && Math.abs(pt.z) < 0.5);
+    .find(pt => Math.abs(pt.x - 2) < 0.05 && Math.abs(pt.z) < 0.5);
   expect(centreEnd).toBeTruthy();
-  expect(dimension.view).toBe('plan'); // saves with the PLAN DIMENSIONS layer
+  expect(dimension.view).toBe('plan'); // saves with the PLAN DIMENSION layer
 });
 
 test('deleting a selected opening or its host wall removes the opening', async ({ page }) => {

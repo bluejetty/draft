@@ -95,7 +95,6 @@ test('the REQ message narrows to the one missing surface', async ({ page }) => {
 
 test('a stair opening cuts the measured rectangle keyed to the wall face', async ({ page }) => {
   await h.openModel(page);
-  await page.keyboard.press('/'); // grid snap on so the anchor click lands on exact feet
   await drawWall(page);
   await drawFloor(page);
   await drawFoundationSlab(page);

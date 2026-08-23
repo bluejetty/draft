@@ -5,7 +5,6 @@ const h = require('./helpers');
 
 test('wheel zoom keeps the plan point under the cursor fixed', async ({ page }) => {
   await h.openModel(page);
-  await page.keyboard.press('/'); // grid snap on: an anchored cursor lands exactly on (5,5)
   await h.selectTool(page, 'Line');
 
   const p = await h.worldToClient(page, 5, 5);
@@ -15,7 +14,7 @@ test('wheel zoom keeps the plan point under the cursor fixed', async ({ page }) 
     await page.waitForTimeout(50);
   }
 
-  // If (5,5) is still under the cursor, grid snap grabs it exactly.
+  // If (5,5) is still under the cursor, the click lands on it.
   await page.mouse.click(p.x, p.y);
   await page.waitForTimeout(400);
   await page.mouse.click(p.x, p.y - 80);
@@ -28,7 +27,6 @@ test('wheel zoom keeps the plan point under the cursor fixed', async ({ page }) 
 
 test('zooming out re-centers away from the cursor too', async ({ page }) => {
   await h.openModel(page);
-  await page.keyboard.press('/'); // grid snap on so the round-trip click lands exactly
   await h.selectTool(page, 'Line');
 
   const p = await h.worldToClient(page, -8, 6);

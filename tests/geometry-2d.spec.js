@@ -26,13 +26,6 @@ test('snap radii scale with zoom so they stay constant on screen', async ({ page
   expect(results.noCanvasHeight).toBeCloseTo(50 / 600, 6);
 });
 
-test('grid snapping rounds the plan axes and leaves elevation alone', async ({ page }) => {
-  const snapped = await page.evaluate(() =>
-    window.DraftGeometry2D.snapToGrid({ x: 3.4, y: 9.75, z: -2.6 }, 1));
-
-  expect(snapped).toEqual({ x: 3, y: 9.75, z: -3 });
-});
-
 test('the nearest vertex wins, and only inside the radius', async ({ page }) => {
   const results = await page.evaluate(() => {
     const g = window.DraftGeometry2D;

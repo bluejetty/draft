@@ -83,7 +83,6 @@
       [data-model-title-detail] { display:none; }
       [data-top-actions] { gap:3px !important; margin-left:auto !important; }
       [data-unit-toggle] button { min-width:54px !important; padding:1px 4px !important; font-size:8px !important; }
-      [data-grid-snap] { padding:3px 5px !important; font-size:8px !important; }
       [data-profile-stack] button { min-width:48px !important; padding:1px 4px !important; font-size:7px !important; }
       [data-save-controls] { margin-left:0 !important; }
       [data-save-controls] > span { display:none; }
@@ -136,7 +135,6 @@
         <option value="plan">.plan</option>
       </select>
     </div>
-    <button data-grid-snap onClick="{{ toggleGridSnap }}" onKeyDown="{{ onGridSnapKeyDown }}" title="{{ gridSnapTitle }}" aria-label="Toggle grid snap" style="width:29px; height:29px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; background-image:{{ gridSnapGridImage }}; background-size:7px 7px; background-position:50% 50%; color:{{ gridSnapColor }}; box-shadow:{{ gridSnapGlow }}; padding:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; line-height:1; cursor:pointer;">{{ gridSnapKeyLabel }}</button>
     <div data-profile-stack style="display:flex; flex-direction:column; gap:1px;">
       <button onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
       <button onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
@@ -610,8 +608,8 @@
     <div data-model-magnet style="position:absolute; left:{{ magnetX }}px; top:{{ magnetY }}px; width:18px; height:18px; border-radius:50%; border:2px solid #5980a6; transform:translate(-50%,-50%); pointer-events:none; display:{{ magnetDisplay }};"></div>
     <!-- Midpoint snap indicator (amber diamond) -->
     <div data-model-midsnap style="position:absolute; left:{{ midSnapX }}px; top:{{ midSnapY }}px; width:13px; height:13px; border:2px solid #e8a020; background:rgba(232,160,32,0.12); transform:translate(-50%,-50%) rotate(45deg); pointer-events:none; display:{{ midSnapDisplay }};"></div>
-    <!-- Grid snap indicator (green ring on the engaged grid point) -->
-    <div data-model-gridsnap style="position:absolute; left:{{ gridSnapPtX }}px; top:{{ gridSnapPtY }}px; width:14px; height:14px; border-radius:50%; border:2px solid #557a46; transform:translate(-50%,-50%); pointer-events:none; display:{{ gridSnapPtDisplay }};"></div>
+    <!-- Origin snap indicator (green ring on the engaged 0,0 origin) -->
+    <div data-model-originsnap style="position:absolute; left:{{ originSnapPtX }}px; top:{{ originSnapPtY }}px; width:14px; height:14px; border-radius:50%; border:2px solid #557a46; transform:translate(-50%,-50%); pointer-events:none; display:{{ originSnapPtDisplay }};"></div>
     <!-- Polar-tracking origin (orange glow on the acquired node) -->
     <div data-model-polar style="position:absolute; left:{{ polarOriginX }}px; top:{{ polarOriginY }}px; width:16px; height:16px; border-radius:50%; border:2px solid #e07a20; box-shadow:0 0 8px rgba(224,122,32,0.85); transform:translate(-50%,-50%); pointer-events:none; display:{{ polarOriginDisplay }};"></div>
 
@@ -1094,7 +1092,7 @@ const COLUMN_FOOTINGS = [
 ];
 const COLUMN_SIZE_IN = 3; // 3"ø adjustable steel telepost
 const STRUCT_SNAP_FT = 1; // columns and beam ends pull onto each other inside this
-const COLUMN_LAYER = 'S-COL/FOOTING';
+const COLUMN_LAYER = 'S-COL-FOOTING';
 const BEAM_LAYER = 'S-BEAM';
 // A straight stair is placed from the TOP: the first click sets the top
 // nosing at the floor opening and the second the downhill direction. The
@@ -1169,7 +1167,7 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
 });
 const FLOOR_LEVEL_VIEWS = Object.freeze([
   Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
-  Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSIONS', 'ROOM IDS / AREA', 'A-ANNO-NOTE'] }),
+  Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSION', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
   Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION', 'A-ANNO-NOTE'] }),
   Object.freeze({ id:'stair', label:'STAIR', contents:['A-STR', 'A-FL-OPNG', 'STAIR SECTION', 'A-ANNO-NOTE'] }),
 ]);
@@ -1179,7 +1177,7 @@ const LEVEL_LAYER_VIEWS = Object.freeze({
   1: Object.freeze([
     Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
     Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-ANNO-NOTE'] }),
-    Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL/FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION', 'A-ANNO-NOTE'] }),
+    Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL-FOOTING', 'S-FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION', 'A-ANNO-NOTE'] }),
   ]),
 });
 // SITE and ROOF are whole-level drafting contexts; every other positive level
@@ -1244,6 +1242,7 @@ const {
 const { normaliseLayerStandards } = window.DraftLayerStandards;
 const { normaliseSnapStrength } = window.DraftSnapStrength;
 const { OUTLINE_COLORS, DEFAULT_OUTLINE_COLOR, normaliseOutlineColor } = window.DraftOutlineColor;
+const { normaliseDrafter } = window.DraftDrafter;
 
 // Undo keeps whole serialized drawings, so it is bounded by count and by size.
 const HISTORY_LIMIT = 60;
@@ -1259,8 +1258,8 @@ class Component extends DCLogic {
     extendBase: null,
     units:         'imperial',
     activeView:    'top',      // 'top'|'front'|'side'|'perspective'|'cut'
-    gridSnapEnabled: false,
     snapStrength: normaliseSnapStrength(null),
+    drafter: normaliseDrafter(null),
     keybindings:   { ...DEFAULT_KEYBINDINGS },
     lineLayers: normaliseLineLayers(DEFAULT_LINE_LAYERS),
     activeLineLayer: 'draft',
@@ -1353,7 +1352,7 @@ class Component extends DCLogic {
     cursorX: -100, cursorY: -100, showCursor: false,
     magnetX: -100, magnetY: -100, showMagnet: false,
     midSnapX: -100, midSnapY: -100, showMidSnap: false,
-    gridSnapPtX: -100, gridSnapPtY: -100, showGridSnapPt: false,
+    originSnapPtX: -100, originSnapPtY: -100, showOriginSnapPt: false,
     polarOriginX: -100, polarOriginY: -100, showPolarOrigin: false,
     lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '',
     cuts:          [],
@@ -1429,6 +1428,7 @@ class Component extends DCLogic {
     if (!(this._selectedFenestrations instanceof Set)) this._selectedFenestrations = new Set();
     if (!(this._selectedRoofs instanceof Set)) this._selectedRoofs = new Set();
     if (!(this._selectedSurfaceOpenings instanceof Set)) this._selectedSurfaceOpenings = new Set();
+    if (!(this._selectedDimensions instanceof Set)) this._selectedDimensions = new Set();
     if (!Array.isArray(this._dimensions)) this._dimensions = [];
     if (!Array.isArray(this._columns)) this._columns = [];
     if (!Array.isArray(this._beams)) this._beams = [];
@@ -1618,7 +1618,6 @@ class Component extends DCLogic {
       )),
       backgroundMode: this.state.backgroundMode,
       units: this.state.units,
-      gridSnapEnabled: this.state.gridSnapEnabled,
       lineLayers: normaliseLineLayers(this.state.lineLayers),
       activeLineLayer: this._activeLineLayer(),
       activeWallType: this.state.activeWallType,
@@ -1751,9 +1750,9 @@ class Component extends DCLogic {
       return {
         model: {
           units: this.state.units,
-          gridSnapEnabled: this.state.gridSnapEnabled,
           snapStrength: { ...this.state.snapStrength },
           outlineColor: this.state.outlineColor,
+          drafter: { ...this.state.drafter },
           keybindings: { ...this.state.keybindings },
         },
       };
@@ -1776,12 +1775,14 @@ class Component extends DCLogic {
     if (pkg.kind === 'settings') {
       return {
         ...(values.units === 'metric' || values.units === 'imperial' ? { units: values.units } : {}),
-        ...(typeof values.gridSnapEnabled === 'boolean' ? { gridSnapEnabled: values.gridSnapEnabled } : {}),
         ...(values.snapStrength && typeof values.snapStrength === 'object'
           ? { snapStrength: normaliseSnapStrength(values.snapStrength) }
           : {}),
         ...(typeof values.outlineColor === 'string'
           ? { outlineColor: normaliseOutlineColor(values.outlineColor) }
+          : {}),
+        ...(values.drafter && typeof values.drafter === 'object'
+          ? { drafter: normaliseDrafter(values.drafter) }
           : {}),
         ...(values.keybindings && typeof values.keybindings === 'object'
           ? {
@@ -2038,7 +2039,6 @@ class Component extends DCLogic {
         contextBackgrounds,
         backgroundMode: format.oneOf(saved.backgroundMode, ['blue', 'red', 'none'], 'blue'),
         units: saved.units === 'metric' ? 'metric' : 'imperial',
-        gridSnapEnabled: saved.gridSnapEnabled === true,
         lineLayers: normaliseLineLayers(saved.lineLayers || this.state.lineLayers),
         activeLineLayer: normaliseActiveLineLayer(saved.activeLineLayer),
         activeWallType: WALL_TYPES.some(type => type.id === saved.activeWallType)
@@ -2093,6 +2093,7 @@ class Component extends DCLogic {
             return restoreSegment(line, 'line', {
               view,
               layer: line?.layer === 'no-draft' ? 'no-draft'
+                : line?.layer === 'S-FOOTING' ? 'S-FOOTING'
                 : (line?.layer === 'E-POWER' || view === 'e-power') ? 'E-POWER' : 'draft',
               bulge: Number.isFinite(Number(line?.bulge)) ? Number(line.bulge) : 0,
             });
@@ -2752,12 +2753,12 @@ class Component extends DCLogic {
     this._outlineArcDrag = null;       // { outline, index, startX, startY, active } — outline segment arc drag
     this._selectDownInfo = null;       // { worldPt, clientX, clientY, shiftHeld } — pending click
     this._lastClient     = null;       // { x, y } — last cursor position for cursor-side notices
-    this._gridSnapTapAt  = 0;          // timestamp of the first tap of a grid-snap double-tap
     this._windowSelection = null;      // { start, current, startX, startY, shiftHeld } — window drag
     this._selectedSegs   = new Set(); // line/wall segment objects currently selected
     this._selectedFloors = new Set(); // floor outline objects currently selected
     this._selectedRoofs  = new Set(); // roof footprint objects currently selected
     this._selectedSurfaceOpenings = new Set(); // floor/roof holes currently selected
+    this._selectedDimensions = new Set(); // dimension strings currently selected
     this._extendSession  = null;      // { vertices, scope } — captured Extend nodes
     this._extendUndo     = null;      // { changes } — last committed Extend move
 
@@ -3164,9 +3165,13 @@ class Component extends DCLogic {
 
     ctx.strokeStyle = LINE_COLOR; ctx.lineWidth = 2; ctx.fillStyle = LINE_COLOR;
 
+    // The 0,0 origin marker — the one always-snappable point on the paper.
+    if (!this._isPrinting) this._drawOrigin2D(ctx, toS);
+
     // Committed lines
     if (activeVisible) this._activeLines().forEach(l => { strokeLinePath(l); drawDot(l.start); drawDot(l.end); });
-    if (activeVisible) this._activeDimensions().forEach(dimension => this._drawDimension2D(ctx, toS, dimension));
+    if (activeVisible) this._activeDimensions().forEach(dimension =>
+      this._drawDimension2D(ctx, toS, dimension, { selected: this._selectedDimensions?.has(dimension) }));
     const dimensionPreviewEnd = this._previewEndPoint();
     if (this._dimensionStart && dimensionPreviewEnd) {
       this._drawDimension2D(ctx, toS, { start:this._dimensionStart, end:dimensionPreviewEnd }, { preview:true });
@@ -4007,6 +4012,23 @@ class Component extends DCLogic {
     ctx.restore();
   }
 
+  // The 0,0 origin: a small circle-and-crosshair target on the grid paper.
+  // Always snappable, never printed — a drafting datum, not linework.
+  _drawOrigin2D(ctx, toS) {
+    const o = toS(new THREE.Vector3(0, this._drawElev || 0, 0));
+    ctx.save();
+    ctx.strokeStyle = '#557a46';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(o.x, o.y, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(o.x - 12, o.y); ctx.lineTo(o.x + 12, o.y);
+    ctx.moveTo(o.x, o.y - 12); ctx.lineTo(o.x, o.y + 12);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   _drawDimension2D(ctx, toS, dimension, options = {}) {
     const a = toS(dimension.start);
     const b = toS(dimension.end);
@@ -4021,7 +4043,7 @@ class Component extends DCLogic {
     const db = { x:b.x + nx * offset, y:b.y + ny * offset };
     const value = Math.hypot(dimension.end.x - dimension.start.x, dimension.end.z - dimension.start.z);
     const label = this.state.units === 'imperial' ? this._ftIn(value) : this._metric(value);
-    const color = options.preview ? 'rgba(89,128,166,0.58)' : '#365e86';
+    const color = options.preview ? 'rgba(89,128,166,0.58)' : options.selected ? '#5980a6' : '#365e86';
     const arrow = (point, angle) => {
       const size = 5;
       ctx.beginPath();
@@ -4032,9 +4054,18 @@ class Component extends DCLogic {
       ctx.fill();
     };
     ctx.save();
+    if (options.selected) {
+      ctx.strokeStyle = 'rgba(89,128,166,0.35)';
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+    }
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
-    ctx.lineWidth = 1;
+    ctx.lineWidth = options.selected ? 2 : 1;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y); ctx.lineTo(da.x, da.y);
     ctx.moveTo(b.x, b.y); ctx.lineTo(db.x, db.y);
@@ -4480,7 +4511,8 @@ class Component extends DCLogic {
 
   _lineLayerConfig(layerId) {
     return this._layerStandard(
-      layerId === 'no-draft' ? 'no-draft' : layerId === 'E-POWER' ? 'E-POWER' : 'draft');
+      layerId === 'no-draft' ? 'no-draft' : layerId === 'E-POWER' ? 'E-POWER'
+        : layerId === 'S-FOOTING' ? 'S-FOOTING' : 'draft');
   }
 
   // Command-driven layers: generic lines drawn in the ELECTRIC layer set are
@@ -4754,34 +4786,6 @@ class Component extends DCLogic {
     this.setState({ backgroundMode: modes[(current + 1) % modes.length] }, () => this._markUnsaved());
   }
 
-  _toggleGridSnap() {
-    const next = !this.state.gridSnapEnabled;
-    this.setState({
-      gridSnapEnabled: next,
-    }, () => { this._rememberActiveProfile('settings'); this._markUnsaved(); });
-    this._flashGridSnapNotice(next);
-  }
-
-  // Brief cursor-side notice so a keyboard toggle never goes unseen.
-  _flashGridSnapNotice(on) {
-    const prior = document.querySelector('[data-grid-snap-flash]');
-    if (prior) prior.remove();
-    const el = document.createElement('div');
-    el.setAttribute('data-grid-snap-flash', on ? 'on' : 'off');
-    el.textContent = on ? 'GRID SNAP ON' : 'GRID SNAP OFF';
-    const at = this._lastClient;
-    const x = at ? at.x + 18 : Math.round(window.innerWidth / 2) - 44;
-    const y = at ? at.y - 16 : 64;
-    el.style.cssText = `position:fixed; left:${x}px; top:${y}px; z-index:99999; pointer-events:none;`
-      + `padding:3px 8px; border:1px solid ${on ? '#39ff88' : 'rgba(29,31,32,0.45)'};`
-      + `background:${on ? '#1d1f20' : '#fff'}; color:${on ? '#39ff88' : '#1d1f20'};`
-      + `font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.08em;`
-      + `opacity:1; transition:opacity 0.35s ease 1s;`;
-    document.body.appendChild(el);
-    requestAnimationFrame(() => { el.style.opacity = '0'; });
-    setTimeout(() => el.remove(), 1600);
-  }
-
   _applyLevelElevation(idx) {
     const level = this.state.levels[idx];
     if (!level) return;
@@ -5012,18 +5016,15 @@ class Component extends DCLogic {
   }
 
   _snap(pt) {
-    return this._gridSnapPoint(pt) || pt.clone();
+    return this._originSnapPoint(pt) || pt.clone();
   }
 
-  // The snapped one-foot grid point, or null when grid snap is off or the
-  // cursor is outside the grid's magnetic pull.
-  _gridSnapPoint(pt) {
-    if (!this.state.gridSnapEnabled) return null;
-    // GRID SNAP is intentionally limited to one-foot increments.
-    const snapped = geo.snapToGrid(pt, 1);
-    const pull = this._worldPerPixel() * this.state.snapStrength.grid;
-    if (Math.hypot(snapped.x - pt.x, snapped.z - pt.z) > pull) return null;
-    return new THREE.Vector3(snapped.x, snapped.y, snapped.z);
+  // The 0,0 origin marker is the one always-snappable grid point: any tool
+  // catches it when the cursor moves within its magnetic pull, no toggle.
+  _originSnapPoint(pt) {
+    const pull = this._worldPerPixel() * this.state.snapStrength.node;
+    if (Math.hypot(pt.x, pt.z) > pull) return null;
+    return new THREE.Vector3(0, pt.y || 0, 0);
   }
 
   // ─── Mouse ───────────────────────────────────────────────────────────────────
@@ -5044,16 +5045,16 @@ class Component extends DCLogic {
       this._noteStairHover = this.state.activeTool === 'annotation'
         ? { x: e.clientX - rect.left, y: e.clientY - rect.top }
         : null;
-      if (this.state.showCursor || this.state.showMagnet || this.state.showMidSnap || this.state.showGridSnapPt || this.state.showPolarOrigin) {
-        this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false, showPolarOrigin: false });
+      if (this.state.showCursor || this.state.showMagnet || this.state.showMidSnap || this.state.showOriginSnapPt || this.state.showPolarOrigin) {
+        this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showOriginSnapPt: false, showPolarOrigin: false });
       }
       return;
     }
     const raw = this._getWorldPos(e.clientX, e.clientY);
-    if (!raw) { this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false, showPolarOrigin: false }); return; }
+    if (!raw) { this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showOriginSnapPt: false, showPolarOrigin: false }); return; }
 
-    const gridHit = this._gridSnapPoint(raw);
-    const gridPt = gridHit ? gridHit.clone() : raw.clone();
+    const originHit = this._originSnapPoint(raw);
+    const basePt = originHit ? originHit.clone() : raw.clone();
     const tool   = this.state.activeTool;
     const start  = tool === 'line' ? this._lineStart
       : tool === 'wall' ? this._wallStart
@@ -5069,7 +5070,7 @@ class Component extends DCLogic {
     if (angleLockHeld && start) {
       // Establish angle from raw cursor if not yet locked. A cursor still sitting
       // on the start point has no direction yet, so the lock waits for one.
-      if (this._lockAngle == null) this._lockAngle = geo.lockAngleFor(start, gridPt);
+      if (this._lockAngle == null) this._lockAngle = geo.lockAngleFor(start, basePt);
     } else if (!angleLockHeld) {
       this._lockAngle = null;
     }
@@ -5109,15 +5110,15 @@ class Component extends DCLogic {
       cursorPt = midSnap;
     } else if (angleLockHeld && start) {
       // Angle lock: endpoint stays on locked ray, cursor roams freely with mouse
-      finalPt  = this._applyAngleLock(start, gridPt);
-      cursorPt = gridPt;
+      finalPt  = this._applyAngleLock(start, basePt);
+      cursorPt = basePt;
     } else if (polarHit) {
       // Polar tracking: cursor rides a 45° ray cast from the acquired node
       finalPt  = polarHit;
       cursorPt = polarHit;
     } else {
-      finalPt  = gridPt;
-      cursorPt = gridPt;
+      finalPt  = basePt;
+      cursorPt = basePt;
     }
 
     this._snapPt = finalPt;
@@ -5126,7 +5127,7 @@ class Component extends DCLogic {
     this._polarSnap    = polarHit;
 
     const sc = this._toScreen(cursorPt);
-    const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false, showMidSnap: false, showGridSnapPt: false, showPolarOrigin: false };
+    const newState = { cursorX: sc.x, cursorY: sc.y, showCursor: true, showMagnet: false, showMidSnap: false, showOriginSnapPt: false, showPolarOrigin: false };
     if (magnet) {
       const ms = this._toScreen(magnet);
       newState.magnetX = ms.x; newState.magnetY = ms.y; newState.showMagnet = true;
@@ -5135,11 +5136,11 @@ class Component extends DCLogic {
       const ms = this._toScreen(midSnap);
       newState.midSnapX = ms.x; newState.midSnapY = ms.y; newState.showMidSnap = true;
     }
-    // Ring the engaged grid point so it is obvious grid snap has hold of the
-    // cursor; higher-priority snaps (tracking, magnet, midpoint) replace it.
-    if (gridHit && !trackingHit && !magnet && !midSnap && !(angleLockHeld && start) && !polarHit) {
-      const gs = this._toScreen(gridHit);
-      newState.gridSnapPtX = gs.x; newState.gridSnapPtY = gs.y; newState.showGridSnapPt = true;
+    // Ring the origin so it is obvious the 0,0 point has hold of the cursor;
+    // higher-priority snaps (tracking, magnet, midpoint) replace it.
+    if (originHit && !trackingHit && !magnet && !midSnap && !(angleLockHeld && start) && !polarHit) {
+      const gs = this._toScreen(originHit);
+      newState.originSnapPtX = gs.x; newState.originSnapPtY = gs.y; newState.showOriginSnapPt = true;
     }
     // The acquired polar origin glows orange while hovered or while its ray is engaged.
     const hoveringOrigin = magnet && this._polarOrigin
@@ -5216,7 +5217,7 @@ class Component extends DCLogic {
 
   _onMouseLeave() {
     this._noteStairHover = null;
-    this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showGridSnapPt: false, showPolarOrigin: false });
+    this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showOriginSnapPt: false, showPolarOrigin: false });
     ['[data-model-sx]','[data-model-sy]','[data-model-len]'].forEach((s, i) => {
       const el = document.querySelector(s); if (el) el.textContent = ['X: —','Y: —',''][i];
     });
@@ -6178,7 +6179,7 @@ class Component extends DCLogic {
         end: this._mergeVertex({ x: next.x, z: next.z }, levelId, 'foundation'),
         levelId,
         view: 'foundation',
-        layer: 'draft',
+        layer: 'S-FOOTING',
       });
     }));
     return true;
@@ -8326,7 +8327,7 @@ class Component extends DCLogic {
   // drawing context, or create one at that level's elevation. Different views
   // must never share a mutable vertex: dragging a FLOOR point cannot edit PLAN.
   _mergeVertex(pt, levelId, viewId = this._activeLayerViewId(levelId) || 'plan') {
-    const THRESH = 0.001; // tight coordinate tolerance; grid snap is exact
+    const THRESH = 0.001; // tight coordinate tolerance; snapped points are exact
     for (const v of this._vertices) {
       if (v._draftLevelId === levelId
         && v._draftViewId === viewId
@@ -8356,13 +8357,13 @@ class Component extends DCLogic {
     return this._worldPerPixel() * this.state.snapStrength.node;
   }
 
-  _findMagnet(gridPt) {
+  _findMagnet(pt) {
     const r = this._nodeSnapRadius();
     // Active geometry always wins; same-level references then beat optional
     // cross-level backgrounds. References offer only nodes and midpoints.
-    return geo.nearestVertex(this._collectActiveVertices(), gridPt, r)
-      || geo.nearestVertex(this._collectContextReferenceVertices(), gridPt, r)
-      || geo.nearestVertex(this._collectBackgroundVertices(), gridPt, r);
+    return geo.nearestVertex(this._collectActiveVertices(), pt, r)
+      || geo.nearestVertex(this._collectContextReferenceVertices(), pt, r)
+      || geo.nearestVertex(this._collectBackgroundVertices(), pt, r);
   }
 
   // Return midpoint of the nearest line/wall segment if the cursor is within snap
@@ -8550,6 +8551,7 @@ class Component extends DCLogic {
   _itemType(item) {
     if ((this._lines || []).includes(item)) return 'line';
     if ((this._walls || []).includes(item)) return 'wall';
+    if ((this._dimensions || []).includes(item)) return 'dimension';
     if ((this._floors || []).includes(item)) return 'floor';
     if ((this._roofs || []).includes(item)) return 'roof';
     return null;
@@ -8589,7 +8591,8 @@ class Component extends DCLogic {
   }
 
   _isItemSelected(item) {
-    return Boolean(this._selectedFloors?.has(item) || this._selectedRoofs?.has(item) || this._selectedSegs?.has(item));
+    return Boolean(this._selectedFloors?.has(item) || this._selectedRoofs?.has(item)
+      || this._selectedSegs?.has(item) || this._selectedDimensions?.has(item));
   }
 
   _setItemSelected(item, selected) {
@@ -8597,7 +8600,8 @@ class Component extends DCLogic {
     if (selected && this._isCurrentContextReferenceItem(item)) return;
     const type = this._itemType(item);
     const target = type === 'floor' ? this._selectedFloors
-      : type === 'roof' ? this._selectedRoofs : this._selectedSegs;
+      : type === 'roof' ? this._selectedRoofs
+      : type === 'dimension' ? this._selectedDimensions : this._selectedSegs;
     if (selected) target.add(item);
     else target.delete(item);
   }
@@ -8621,6 +8625,7 @@ class Component extends DCLogic {
     this._selectedRoofs?.clear();
     this._selectedFenestrations?.clear();
     this._selectedSurfaceOpenings?.clear();
+    this._selectedDimensions?.clear();
     if (notify) this._notifySelectionChanged();
   }
 
@@ -8801,6 +8806,32 @@ class Component extends DCLogic {
     return bestSeg;
   }
 
+  // Nearest dimension string within the same click threshold — tested against
+  // the drawn dimension line (offset from the measured points) and both
+  // extension lines, so a click anywhere on the visible string lands.
+  _findNearestDimension(worldPt) {
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    const fpx = (this._orthoHalfH * 2) / h;
+    const thresh = fpx * 14;
+    const offset = fpx * 19;
+    let bestD = thresh, best = null;
+    this._activeDimensions().forEach(dimension => {
+      const dx = dimension.end.x - dimension.start.x, dz = dimension.end.z - dimension.start.z;
+      const len = Math.hypot(dx, dz);
+      if (len < 0.001) return;
+      const nx = -dz / len, nz = dx / len;
+      [offset, -offset, 0].forEach(off => {
+        const seg = {
+          start: { x: dimension.start.x + nx * off, z: dimension.start.z + nz * off },
+          end: { x: dimension.end.x + nx * off, z: dimension.end.z + nz * off },
+        };
+        const { d } = this._distToLineSeg(worldPt, seg);
+        if (d < bestD) { bestD = d; best = dimension; }
+      });
+    });
+    return best;
+  }
+
   _pointInOutline(points, worldPt) {
     let inside = false;
     for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
@@ -8849,6 +8880,15 @@ class Component extends DCLogic {
     }
     const hit = this._findNearestSeg(worldPt);
     if (!hit) {
+      // Dimension strings are their own selectable objects (never grouped).
+      const dimension = this._findNearestDimension(worldPt);
+      if (dimension) {
+        if (!shiftHeld) this._clearSelection(false);
+        if (shiftHeld && this._selectedDimensions.has(dimension)) this._selectedDimensions.delete(dimension);
+        else this._selectedDimensions.add(dimension);
+        this._notifySelectionChanged();
+        return;
+      }
       const floor = this._findFloorAt(worldPt);
       if (floor) {
         this._selectItemOrGroup(floor, shiftHeld);
@@ -8882,8 +8922,11 @@ class Component extends DCLogic {
       .filter(seg => inside(seg.start) && inside(seg.end));
     const floors = floorsInScope
       .filter(floor => floor.points.length >= 3 && floor.points.every(inside));
+    const dimensionsInScope = allLevels ? this._dimensions : this._activeDimensions();
+    const dimensions = dimensionsInScope
+      .filter(dimension => inside(dimension.start) && inside(dimension.end));
 
-    this._addItemsAndTheirGroups([...segments, ...floors], !shiftHeld);
+    this._addItemsAndTheirGroups([...segments, ...floors, ...dimensions], !shiftHeld);
   }
 
   _extendScopeItems() {
@@ -10365,12 +10408,14 @@ class Component extends DCLogic {
     if (matches('delete')) {
       if (this.state.activeTool === 'select'
         && (this._selectedSegs.size > 0 || this._selectedFloors.size > 0 || this._selectedRoofs.size > 0
-          || this._selectedFenestrations.size > 0 || this._selectedSurfaceOpenings.size > 0)) {
+          || this._selectedFenestrations.size > 0 || this._selectedSurfaceOpenings.size > 0
+          || this._selectedDimensions.size > 0)) {
         e.preventDefault();
         const selectedCount = this._selectedSegs.size + this._selectedFloors.size + this._selectedRoofs.size
-          + this._selectedFenestrations.size + this._selectedSurfaceOpenings.size;
+          + this._selectedFenestrations.size + this._selectedSurfaceOpenings.size + this._selectedDimensions.size;
         this._lines = this._lines.filter(l => !this._selectedSegs.has(l));
         this._walls = this._walls.filter(w => !this._selectedSegs.has(w));
+        this._dimensions = this._dimensions.filter(dimension => !this._selectedDimensions.has(dimension));
         this._floors = this._floors.filter(floor => !this._selectedFloors.has(floor));
         this._roofs = this._roofs.filter(roof => !this._selectedRoofs.has(roof));
         // Openings go with their own selection and with any deleted host wall.
@@ -10445,20 +10490,6 @@ class Component extends DCLogic {
     if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
     if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
-    if (matches('gridSnap')) {
-      // Deliberate double-tap so a stray key press never silently flips the grid.
-      e.preventDefault();
-      if (e.repeat) return;
-      const now = Date.now();
-      if (this._gridSnapTapAt && now - this._gridSnapTapAt < 600) {
-        this._gridSnapTapAt = 0;
-        this._toggleGridSnap();
-      } else {
-        this._gridSnapTapAt = now;
-      }
-      return;
-    }
-    if (matches('gridSnapAlt')) { e.preventDefault(); this._toggleGridSnap(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
     if (matches('top')) { e.preventDefault(); this._setView('top'); return; }
     if (matches('front')) { e.preventDefault(); this._setView('front'); return; }
@@ -11630,25 +11661,6 @@ class Component extends DCLogic {
       metricBg:   units==='metric'  ?'#1d1f20':'#fff', metricColor:   units==='metric'  ?'#f2f2f3':'#1d1f20',
       imperialBorder: units==='imperial'?'#1d1f20':'rgba(29,31,32,0.2)',
       metricBorder: units==='metric'?'#1d1f20':'rgba(29,31,32,0.2)',
-      toggleGridSnap: () => this._toggleGridSnap(),
-      onGridSnapKeyDown: e => {
-        if (e.key === ' ' || e.key === 'Enter') e.preventDefault();
-      },
-      gridSnapKeyLabel: (() => {
-        const k = keyBindingLabel(this.state.keybindings.gridSnap) || 'G';
-        return k.length === 1 ? k + k : k;
-      })(),
-      gridSnapTitle: this.state.gridSnapEnabled
-        ? `Grid snap is on: points round to 1-foot increments. Tap ${keyBindingLabel(this.state.keybindings.gridSnap) || 'the grid snap key'} twice or click to turn it off.`
-        : `Grid snap is off: points follow the cursor exactly. Tap ${keyBindingLabel(this.state.keybindings.gridSnap) || 'the grid snap key'} twice or click to snap to 1-foot increments.`,
-      gridSnapBg: this.state.gridSnapEnabled ? '#1d1f20' : '#fff',
-      gridSnapColor: this.state.gridSnapEnabled ? '#f2f2f3' : '#1d1f20',
-      gridSnapBorder: this.state.gridSnapEnabled ? '#1d1f20' : 'rgba(29,31,32,0.2)',
-      gridSnapGlow: this.state.gridSnapEnabled ? '0 0 8px rgba(89,128,166,0.85)' : 'none',
-      gridSnapGridImage: (() => {
-        const c = this.state.gridSnapEnabled ? 'rgba(242,242,243,0.3)' : 'rgba(29,31,32,0.14)';
-        return `linear-gradient(${c} 1px, transparent 1px), linear-gradient(90deg, ${c} 1px, transparent 1px)`;
-      })(),
       openSettingsDialog: () => this._openProfileDialog('settings'),
       openStandardsDialog: () => this._openProfileDialog('standards'),
       closeProfileDialog: () => this._closeProfileDialog(),
@@ -11689,9 +11701,9 @@ class Component extends DCLogic {
       midSnapX:       this.state.midSnapX,
       midSnapY:       this.state.midSnapY,
       midSnapDisplay: this.state.showMidSnap ? 'block' : 'none',
-      gridSnapPtX:    this.state.gridSnapPtX,
-      gridSnapPtY:    this.state.gridSnapPtY,
-      gridSnapPtDisplay: this.state.showGridSnapPt ? 'block' : 'none',
+      originSnapPtX:    this.state.originSnapPtX,
+      originSnapPtY:    this.state.originSnapPtY,
+      originSnapPtDisplay: this.state.showOriginSnapPt ? 'block' : 'none',
       polarOriginX:      this.state.polarOriginX,
       polarOriginY:      this.state.polarOriginY,
       polarOriginDisplay: this.state.showPolarOrigin ? 'block' : 'none',
