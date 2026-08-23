@@ -106,6 +106,21 @@
   <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; align-items:center; gap:10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em; pointer-events:none;">
     <span data-model-len style="color:#1d1f20; min-width:80px; text-align:right;"></span>
     <span data-model-ang style="color:rgba(29,31,32,0.4); min-width:52px;"></span>
+    <!-- Constraint chips: the T-square lights while the Shift 45° lock is engaged,
+         the ruler lights and glows while an R typed length is active -->
+    <span data-mode-tsquare title="T-SQUARE 45° lock (Shift)" style="display:inline-flex; color:{{ tsquareChipColor }};">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M1 3 H15"></path>
+        <path d="M8 3 V15"></path>
+        <path d="M8 6.5 H10.5 M8 9.5 H10.5 M8 12.5 H10.5" stroke-width="0.9"></path>
+      </svg>
+    </span>
+    <span data-mode-ruler title="RULER typed length (R)" style="display:inline-flex; color:{{ rulerChipColor }}; filter:{{ rulerChipGlow }};">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <rect x="1.5" y="6" width="13" height="5"></rect>
+        <path d="M4.5 6 V8.2 M7.5 6 V8.2 M10.5 6 V8.2 M13 6 V8.2" stroke-width="0.9"></path>
+      </svg>
+    </span>
      <!-- Architectural-length freeze input — pointer-events re-enabled when visible -->
     <sc-if value="{{ lengthFrozen }}" hint-placeholder-val="{{ false }}">
       <div style="display:flex; align-items:center; gap:6px; pointer-events:all;">
@@ -850,7 +865,12 @@ const LOCKED_NODE_SNAP_PX = 3;
 // length measures from it, and these tools can even place their first point
 // that way before any click.
 const POLAR_RULER_TOOLS = new Set(['line', 'wall', 'outline']);
-const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'dimension', 'cut', 'extend', 'outline']);
+const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'dimension', 'cut', 'extend']);
+// Polar-origin activation effect: the node pulses orange and shoots hairline
+// direction rays that hold for a second, then fade out over another.
+const POLAR_FX_HOLD_MS = 1000;
+const POLAR_FX_FADE_MS = 1000;
+const POLAR_FX_RAY_PX  = 140;
 const SIXTEENTH_IN = 1 / 16;
 const DEFAULT_WALL_TOP_FT = (8 * 12 + 1 + 1 / 8) / 12;
 const DEFAULT_FLOOR_THICKNESS_IN = 12 + 5 / 8;
@@ -1376,6 +1396,7 @@ class Component extends DCLogic {
     originSnapPtX: -100, originSnapPtY: -100, showOriginSnapPt: false,
     polarOriginX: -100, polarOriginY: -100, showPolarOrigin: false,
     lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '',
+    tsquareEngaged: false,
     cuts:          [],
     nextCutId:     1,
     activeCutId:   null,
@@ -1399,7 +1420,9 @@ class Component extends DCLogic {
     this._ensureDrawingCollections();
     requestAnimationFrame(() => requestAnimationFrame(() => this._init()));
     window.addEventListener('keydown', this._onKey  = e => { this._invalidate(); this._handleKey(e); });
-    window.addEventListener('keydown', this._onKdn  = e => { if (e.key === 'Shift') this._shiftHeld = true; });
+    window.addEventListener('keydown', this._onKdn  = e => {
+      if (e.key === 'Shift' && !this._shiftHeld) { this._shiftHeld = true; this.setState({ tsquareEngaged: true }); }
+    });
     window.addEventListener('keydown', this._onCtrlDown = e => { if (e.key === 'Control') this._ctrlHeld = true; });
     document.addEventListener('visibilitychange', this._onVis = () => {
       if (!document.hidden) {
@@ -1425,7 +1448,11 @@ class Component extends DCLogic {
       requestAnimationFrame(() => this._redrawOverlay());
     });
     window.addEventListener('keyup',   this._onKup  = e => {
-      if (e.key === 'Shift') { this._shiftHeld = false; if (this._windowSelection?.dynamic) this._invalidate(); }
+      if (e.key === 'Shift') {
+        this._shiftHeld = false;
+        this.setState({ tsquareEngaged: false });
+        if (this._windowSelection?.dynamic) this._invalidate();
+      }
       if (e.key === 'Control') this._ctrlHeld = false;
     });
   }
@@ -1466,7 +1493,13 @@ class Component extends DCLogic {
   }
 
   _pointForStorage(point) {
-    return { x: point.x, y: point.y || 0, z: point.z };
+    const stored = { x: point.x, y: point.y || 0, z: point.z };
+    if (point.srcId) {
+      stored.srcId = point.srcId;
+      stored.offX = Number.isFinite(point.offX) ? point.offX : 0;
+      stored.offZ = Number.isFinite(point.offZ) ? point.offZ : 0;
+    }
+    return stored;
   }
 
   _serializeDrawing() {
@@ -2094,6 +2127,18 @@ class Component extends DCLogic {
       this._vertices = [];
        const usedIds = new Set();
        this._nextDrawingItemId = Math.max(1, Number.isInteger(saved.nextDrawingItemId) ? saved.nextDrawingItemId : 1);
+       // Pooled vertices restore their BONEYARD master-point link (srcId +
+       // offset) so master edits keep rippling through generated geometry
+       // after a reload.
+       const restoreVertex = (pt, levelId, view) => {
+        const vtx = this._mergeVertex(pt, levelId, view);
+        if (pt.srcId && !vtx.srcId) {
+          vtx.srcId = pt.srcId;
+          vtx.offX = Number.isFinite(pt.offX) ? pt.offX : 0;
+          vtx.offZ = Number.isFinite(pt.offZ) ? pt.offZ : 0;
+        }
+        return vtx;
+       };
        const restoreSegment = (segment, type, extra = {}) => {
         const start = format.point(segment?.start);
         const end = format.point(segment?.end);
@@ -2101,8 +2146,8 @@ class Component extends DCLogic {
         if (!start || !end || levelId == null) return null;
         return {
            id: this._storedItemId(segment?.id, type, usedIds),
-          start: this._mergeVertex(start, levelId, extra.view),
-          end: this._mergeVertex(end, levelId, extra.view),
+          start: restoreVertex(start, levelId, extra.view),
+          end: restoreVertex(end, levelId, extra.view),
           levelId,
           ...extra,
         };
@@ -2138,7 +2183,7 @@ class Component extends DCLogic {
           if (levelId == null || points.length < 3) return null;
           return {
              id: this._storedItemId(floor?.id, 'floor', usedIds),
-             points: points.map(point => this._mergeVertex(point, levelId, floor?.view === 'foundation' ? 'foundation' : 'floor')),
+             points: points.map(point => restoreVertex(point, levelId, floor?.view === 'foundation' ? 'foundation' : 'floor')),
             levelId,
              view: floor?.view === 'foundation' ? 'foundation' : 'floor',
             structure: floor.structure === 'slab' ? 'slab' : 'floor',
@@ -2159,7 +2204,7 @@ class Component extends DCLogic {
       this._roofs = format.roofs(saved.roofs, ownerLevelIds).map(roof => ({
         ...roof,
         id: this._storedItemId(roof.id, 'roof', usedIds),
-        points: roof.points.map(point => this._mergeVertex(point, roof.levelId, 'roof')),
+        points: roof.points.map(point => restoreVertex(point, roof.levelId, 'roof')),
       }));
       skipped += (Array.isArray(saved.roofs) ? saved.roofs.length : 0) - this._roofs.length;
       const wallsById = new Map(this._walls.map(wall => [wall.id, wall]));
@@ -3434,6 +3479,33 @@ class Component extends DCLogic {
       ctx.beginPath(); ctx.arc(sc.x, sc.y, DOT_R + 5, 0, Math.PI * 2);
       ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2; ctx.stroke();
       ctx.restore();
+    }
+
+    // Polar-origin activation: an orange pulse plus 8 hairline blue rays
+    // (orthogonal + 45°) that hold for a second, then fade for another.
+    if (this._polarFx) {
+      const elapsed = performance.now() - this._polarFx.start;
+      const alpha = elapsed <= POLAR_FX_HOLD_MS
+        ? 1
+        : Math.max(0, 1 - (elapsed - POLAR_FX_HOLD_MS) / POLAR_FX_FADE_MS);
+      if (alpha > 0) {
+        const sc = toS(this._polarFx);
+        ctx.save();
+        ctx.strokeStyle = `rgba(89,128,166,${alpha})`;
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i < 8; i++) {
+          const a = i * Math.PI / 4;
+          ctx.beginPath();
+          ctx.moveTo(sc.x + Math.cos(a) * 10, sc.y + Math.sin(a) * 10);
+          ctx.lineTo(sc.x + Math.cos(a) * POLAR_FX_RAY_PX, sc.y + Math.sin(a) * POLAR_FX_RAY_PX);
+          ctx.stroke();
+        }
+        const pulse = (elapsed % 700) / 700;
+        ctx.strokeStyle = `rgba(224,122,32,${alpha * (1 - pulse)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(sc.x, sc.y, 8 + pulse * 14, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // Polar-tracking ruler: dashed orange ray from the acquired origin node.
@@ -5068,6 +5140,35 @@ class Component extends DCLogic {
     return this._originSnapPoint(pt) || pt.clone();
   }
 
+  // A dragged node snaps like a drawn point, in the same priority order as
+  // the drawing pipeline: tracking > magnet > midpoint > Shift 45° T-square
+  // from the grab point > polar rays from the armed origin > the 0,0 marker.
+  _dragSnapPoint(raw, sd) {
+    const angleLockHeld = this._shiftHeld || this._ctrlHeld;
+    if (angleLockHeld) {
+      if (this._lockAngle == null) this._lockAngle = geo.lockAngleFor(sd.origin, raw);
+    } else {
+      this._lockAngle = null;
+    }
+    if (angleLockHeld && this._lockAngle != null) {
+      const trackingHit = this._findTrackingSnap(raw, sd.origin, sd.vertices);
+      if (trackingHit) return trackingHit.snapPt;
+    }
+    const magnet = this._findMagnet(raw, sd.vertices);
+    if (magnet) return magnet;
+    const midSnap = this._findMidpointSnap(raw, sd.vertices);
+    if (midSnap) return midSnap;
+    if (angleLockHeld && this._lockAngle != null) {
+      const projected = geo.projectOntoRay(sd.origin, this._lockAngle, raw);
+      return new THREE.Vector3(projected.x, raw.y, projected.z);
+    }
+    if (this._polarOrigin) {
+      const polar = this._findPolarSnap(raw);
+      if (polar) return polar;
+    }
+    return this._snap(raw);
+  }
+
   // The 0,0 origin marker is the one always-snappable grid point: any tool
   // catches it when the cursor moves within its magnetic pull, no toggle.
   _originSnapPoint(pt) {
@@ -5105,7 +5206,11 @@ class Component extends DCLogic {
     const originHit = this._originSnapPoint(raw);
     const basePt = originHit ? originHit.clone() : raw.clone();
     const tool   = this.state.activeTool;
-    const start  = tool === 'line' ? this._lineStart
+    // A live node drag snaps like drawing does: its T-square start is the grab
+    // point, and the node being dragged never magnets to itself.
+    const drag   = this._selectDrag?.active ? this._selectDrag : null;
+    const start  = drag ? drag.origin
+      : tool === 'line' ? this._lineStart
       : tool === 'wall' ? this._wallStart
       : tool === 'floor' ? this._floorPoints[this._floorPoints.length - 1]
       : tool === 'outline' ? this._outlinePoints[this._outlinePoints.length - 1]
@@ -5127,20 +5232,20 @@ class Component extends DCLogic {
     // Projection tracking: cursor near perpendicular through a vertex → snap to intersection
     let trackingHit = null;
     if (angleLockHeld && start && this._lockAngle != null) {
-      trackingHit = this._findTrackingSnap(raw, start);
+      trackingHit = this._findTrackingSnap(raw, start, drag?.vertices);
     }
 
     // Magnet snap (checked even when shift-locked; magnet overrides angle lock)
     // Vertex magnet uses the raw cursor position so grid rounding cannot make
     // a node feel magnetic beyond the one-pixel hit radius.
-    const magnet = !trackingHit ? this._findMagnet(raw) : null;
+    const magnet = !trackingHit ? this._findMagnet(raw, drag?.vertices) : null;
     // Midpoint snap — only when no vertex magnet and not tracking
-    const midSnap = (!trackingHit && !magnet) ? this._findMidpointSnap(raw) : null;
+    const midSnap = (!trackingHit && !magnet) ? this._findMidpointSnap(raw, drag?.vertices) : null;
 
     // Rolling over a node acquires it as the polar-tracking origin.
-    if (magnet && POLAR_TRACKING_TOOLS.has(tool)) this._polarOrigin = magnet.clone();
+    if (magnet && (drag || POLAR_TRACKING_TOOLS.has(tool))) this._acquirePolarOrigin(magnet);
     const polarHit = (!trackingHit && !magnet && !midSnap && !(angleLockHeld && start)
-      && this._polarOrigin && POLAR_TRACKING_TOOLS.has(tool))
+      && this._polarOrigin && (drag || POLAR_TRACKING_TOOLS.has(tool)))
       ? this._findPolarSnap(raw) : null;
 
     // Final snap point and cursor position
@@ -5315,7 +5420,7 @@ class Component extends DCLogic {
             // Fixed assemblies are rigid: they can be selected, but their
             // individual nodes cannot be reshaped by the existing node drag.
             if (!fixedAssembly) {
-              this._selectDrag = { refs, startX: e.clientX, startY: e.clientY, active: false };
+              this._selectDrag = this._makeNodeDrag(refs, e);
             }
             e.preventDefault();
           } else {
@@ -5398,8 +5503,17 @@ class Component extends DCLogic {
     const refs = this._findVertexHit(raw);
     if (!refs) return false;
     if (!this._canReshapeItems(this._itemsFromVertexRefs(refs))) return false;
-    this._selectDrag = { refs, startX: e.clientX, startY: e.clientY, active: false, clickTool: tool };
+    this._selectDrag = this._makeNodeDrag(refs, e, tool);
     return true;
+  }
+
+  // A node drag remembers the grab point (its T-square start and default ruler
+  // zero) and the exact vertex objects riding the drag (never magnet targets).
+  _makeNodeDrag(refs, e, clickTool = null) {
+    const vertices = new Set(refs.map(ref => (ref.target || ref.seg)[ref.prop]));
+    const [first] = vertices;
+    const origin = new THREE.Vector3(first.x, first.y || 0, first.z);
+    return { refs, vertices, origin, startX: e.clientX, startY: e.clientY, active: false, clickTool };
   }
 
   _dispatchToolClick(tool, e) {
@@ -5484,21 +5598,30 @@ class Component extends DCLogic {
     }
 
     // Select-tool node drag
-    if (this._selectDrag) {
+    if (this._selectDrag && !this.state.lengthFrozen) {
       const sd = this._selectDrag;
       if (!sd.active) {
         const ddx = e.clientX - sd.startX, ddy = e.clientY - sd.startY;
-        if (Math.sqrt(ddx*ddx + ddy*ddy) > 4) sd.active = true;
+        if (Math.sqrt(ddx*ddx + ddy*ddy) > 4) {
+          sd.active = true;
+          // The grab point arms as the polar origin: rays and typed R lengths
+          // measure from where the node started.
+          this._acquirePolarOrigin(sd.origin);
+        }
       }
       if (sd.active) {
         const raw = this._getWorldPos(e.clientX, e.clientY);
         if (raw) {
-          const pt = this._snap(raw);
+          const pt = this._dragSnapPoint(raw, sd);
           sd.refs.forEach(r => {
             const target = r.target || r.seg;
             target[r.prop].x = pt.x;
             target[r.prop].z = pt.z;
           });
+          // A dragged linked vertex re-measures its master offset (after every
+          // ref has landed) so later master edits carry the adjustment along
+          // in its new position.
+          sd.refs.forEach(r => this._relinkVertex((r.target || r.seg)[r.prop]));
           this._afterOutlineVertexDrag(sd.refs);
         }
       }
@@ -5834,10 +5957,8 @@ class Component extends DCLogic {
           const fpx = (this._orthoHalfH * 2) / h;
           if (hit.d <= fpx * 4) {
             this._insertOutlineNode(hit);
-            this._selectDrag = {
-              refs: [{ target: hit.outline.points, prop: hit.index + 1, outline: hit.outline }],
-              startX: e.clientX, startY: e.clientY, active: false,
-            };
+            this._selectDrag = this._makeNodeDrag(
+              [{ target: hit.outline.points, prop: hit.index + 1, outline: hit.outline }], e);
           } else {
             this._outlineArcDrag = { ...hit, startX: e.clientX, startY: e.clientY, active: false };
           }
@@ -6032,6 +6153,15 @@ class Component extends DCLogic {
         point.x = source.x; point.z = source.z; point.bulge = source.bulge || 0;
       });
     });
+    // Generated geometry rides too: every pooled vertex linked to one of this
+    // master's points follows it at the offset measured when it was generated
+    // (or last dragged).
+    (this._vertices || []).forEach(vtx => {
+      const source = vtx.srcId ? masterPoints.get(vtx.srcId) : null;
+      if (!source) return;
+      vtx.x = source.x + (vtx.offX || 0);
+      vtx.z = source.z + (vtx.offZ || 0);
+    });
     // Attached-garage masters follow the house master points their end points
     // weld to, so a house edit keeps the garage attached.
     if (!master.garage) {
@@ -6045,6 +6175,36 @@ class Component extends DCLogic {
         if (moved) this._propagateMasterOutline(garage);
       });
     }
+  }
+
+  // ── BUILD HOUSE node links ────────────────────────────────────────────────
+  // Generated geometry remembers the BONEYARD master point each pooled vertex
+  // derived from (srcId) plus its offset when generated, so a master edit
+  // ripples through walls, floors, footings, beams, slabs and roofs on every
+  // level. Dragging a linked vertex afterwards re-measures its offset —
+  // locked relative, never left behind.
+  _masterPointById(srcId) {
+    for (const master of this._boneyardOutlines) {
+      const src = master.points.find(point => point.pointId === srcId);
+      if (src) return src;
+    }
+    return null;
+  }
+
+  _linkVertex(vtx, srcId) {
+    if (!srcId || vtx.srcId) return vtx;
+    const src = this._masterPointById(srcId);
+    if (!src) return vtx;
+    vtx.srcId = srcId;
+    vtx.offX = vtx.x - src.x;
+    vtx.offZ = vtx.z - src.z;
+    return vtx;
+  }
+
+  _relinkVertex(vtx) {
+    if (!vtx?.srcId) return;
+    const src = this._masterPointById(vtx.srcId);
+    if (src) { vtx.offX = vtx.x - src.x; vtx.offZ = vtx.z - src.z; }
   }
 
   // A local adjustment marks the point overridden and remembers its offset
@@ -6570,8 +6730,8 @@ class Component extends DCLogic {
       if (Math.hypot(next.x - point.x, next.z - point.z) < 0.01) return;
       this._walls.push({
         id: this._newDrawingItemId('wall'),
-        start: this._mergeVertex({ x: point.x, z: point.z }, levelId, view),
-        end: this._mergeVertex({ x: next.x, z: next.z }, levelId, view),
+        start: this._linkVertex(this._mergeVertex({ x: point.x, z: point.z }, levelId, view), point.srcId),
+        end: this._linkVertex(this._mergeVertex({ x: next.x, z: next.z }, levelId, view), next.srcId),
         levelId,
         view,
         wallType,
@@ -6592,7 +6752,7 @@ class Component extends DCLogic {
     const view = structure === 'slab' ? 'foundation' : 'floor';
     this._floors.push({
       id: this._newDrawingItemId('floor'),
-      points: outline.points.map(point => this._mergeVertex({ x: point.x, z: point.z }, levelId, view)),
+      points: outline.points.map(point => this._linkVertex(this._mergeVertex({ x: point.x, z: point.z }, levelId, view), point.srcId)),
       levelId,
       view,
       structure,
@@ -6623,13 +6783,15 @@ class Component extends DCLogic {
       this._offsetOutline(base, projFt),
       this._offsetOutline(base, -(wallFt + projFt)),
     ];
+    // Ring corners map 1:1 onto the outline corners they were offset from,
+    // so each footing vertex links to the same master point.
     rings.forEach(ring => ring.forEach((point, index) => {
       const next = ring[(index + 1) % ring.length];
       if (Math.hypot(next.x - point.x, next.z - point.z) < 0.01) return;
       this._lines.push({
         id: this._newDrawingItemId('line'),
-        start: this._mergeVertex({ x: point.x, z: point.z }, levelId, 'foundation'),
-        end: this._mergeVertex({ x: next.x, z: next.z }, levelId, 'foundation'),
+        start: this._linkVertex(this._mergeVertex({ x: point.x, z: point.z }, levelId, 'foundation'), outline.points[index]?.srcId),
+        end: this._linkVertex(this._mergeVertex({ x: next.x, z: next.z }, levelId, 'foundation'), outline.points[(index + 1) % ring.length]?.srcId),
         levelId,
         view: 'foundation',
         layer: 'S-FOOTING',
@@ -6685,8 +6847,8 @@ class Component extends DCLogic {
       if (hasWall(a, b)) continue;
       this._walls.push({
         id: this._newDrawingItemId('wall'),
-        start: this._mergeVertex(a, levelId, 'foundation'),
-        end: this._mergeVertex(b, levelId, 'foundation'),
+        start: this._linkVertex(this._mergeVertex(a, levelId, 'foundation'), seg.start.srcId),
+        end: this._linkVertex(this._mergeVertex(b, levelId, 'foundation'), seg.end.srcId),
         levelId,
         view: 'foundation',
         wallType: 'concrete_8',
@@ -6731,7 +6893,7 @@ class Component extends DCLogic {
   // boundary path between the two attachments on the garage side. The house
   // path exists only for area closure — no house-side line is ever drawn.
   _garageSlabPolygon(garage) {
-    const pts = garage.points.map(pt => ({ x: pt.x, z: pt.z }));
+    const pts = garage.points.map(pt => ({ x: pt.x, z: pt.z, srcId: pt.srcId ?? pt.pointId ?? null }));
     if (garage.open !== true) return pts;
     const master = garage.shelfId != null ? garage
       : this._boneyardOutlines.find(item => item.id === garage.masterId);
@@ -6746,7 +6908,7 @@ class Component extends DCLogic {
     const interior = this._garageInteriorRef(pts);
     const forward = this._garageClosureForward(house, sEnd, sStart, interior);
     const between = this._housePathIndices(house, sEnd, sStart, forward);
-    return [...pts, ...between.map(i => ({ x: house.points[i].x, z: house.points[i].z }))];
+    return [...pts, ...between.map(i => ({ x: house.points[i].x, z: house.points[i].z, srcId: house.points[i].pointId ?? null }))];
   }
 
   // Garage slab: a 4" pour. An open attached garage pours flat, its polygon
@@ -6770,7 +6932,7 @@ class Component extends DCLogic {
     const assembly = this._levelAssembly(levelId);
     this._floors.push({
       id: this._newDrawingItemId('floor'),
-      points: polygon.map(point => this._mergeVertex({ x: point.x, z: point.z }, levelId, 'foundation')),
+      points: polygon.map(point => this._linkVertex(this._mergeVertex({ x: point.x, z: point.z }, levelId, 'foundation'), point.srcId)),
       levelId,
       view: 'foundation',
       structure: 'slab',
@@ -6819,8 +6981,8 @@ class Component extends DCLogic {
       if (hasWall(a, b)) continue;
       this._walls.push({
         id: this._newDrawingItemId('wall'),
-        start: this._mergeVertex(a, level.id, 'plan'),
-        end: this._mergeVertex(b, level.id, 'plan'),
+        start: this._linkVertex(this._mergeVertex(a, level.id, 'plan'), seg.start.srcId),
+        end: this._linkVertex(this._mergeVertex(b, level.id, 'plan'), seg.end.srcId),
         levelId: level.id,
         view: 'plan',
         wallType: 'stud_2x6',
@@ -6840,10 +7002,13 @@ class Component extends DCLogic {
     for (let i = floors.length - 1; i >= 0 && !outline; i--) outline = this._houseOutline(floors[i].id);
     if (!outline) return false;
     const overhang = this.state.roofOverhang;
-    const points = this._offsetOutline(this._houseRoofLoop(outline), overhang);
+    // The offset loop maps 1:1 onto the source loop, so each eave corner
+    // links to the master point its outline corner rode from.
+    const loop = this._houseRoofLoop(outline);
+    const points = this._offsetOutline(loop, overhang);
     this._roofs.push({
       id: this._newDrawingItemId('roof'),
-      points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, 7, 'roof')),
+      points: points.map((point, index) => this._linkVertex(this._mergeVertex({ x: point.x, z: point.z }, 7, 'roof'), loop[index]?.srcId)),
       levelId: 7,
       sourceLevelId: outline.levelId,
       sourceShapeId: null,
@@ -6861,7 +7026,7 @@ class Component extends DCLogic {
   // nodes) is replaced by the garage's open legs, so one roof covers house +
   // garage and the shared boundary never reaches the roof.
   _houseRoofLoop(house) {
-    const base = house.points.map(pt => ({ x: pt.x, z: pt.z }));
+    const base = house.points.map(pt => ({ x: pt.x, z: pt.z, srcId: pt.srcId ?? null }));
     const garage = this._garageOutline(house.levelId);
     if (!garage || garage.open !== true) return base;
     const master = this._boneyardOutlines.find(item => item.id === garage.masterId);
@@ -6871,13 +7036,13 @@ class Component extends DCLogic {
     const iA = house.points.findIndex(point => point.srcId === startId);
     const iB = house.points.findIndex(point => point.srcId === endId);
     if (iA < 0 || iB < 0) return base;
-    const legs = garage.points.map(pt => ({ x: pt.x, z: pt.z }));
+    const legs = garage.points.map(pt => ({ x: pt.x, z: pt.z, srcId: pt.srcId ?? null }));
     const interior = this._garageInteriorRef(legs);
     // The garage-side house path from A to B is dropped; the kept remainder
     // continues in the same direction from B back around to A.
     const forward = this._garageClosureForward(house, iA, iB, interior);
     const kept = this._housePathIndices(house, iB, iA, forward);
-    return [...legs, ...kept.map(i => ({ x: house.points[i].x, z: house.points[i].z }))];
+    return [...legs, ...kept.map(i => ({ x: house.points[i].x, z: house.points[i].z, srcId: house.points[i].srcId ?? null }))];
   }
 
   // The garage roof is its own editable roof so its plate height can differ
@@ -6901,7 +7066,7 @@ class Component extends DCLogic {
     });
     this._roofs.push({
       id: this._newDrawingItemId('roof'),
-      points: points.map(point => this._mergeVertex({ x: point.x, z: point.z }, 7, 'roof')),
+      points: points.map((point, index) => this._linkVertex(this._mergeVertex({ x: point.x, z: point.z }, 7, 'roof'), garage.points[index]?.srcId)),
       levelId: 7,
       sourceLevelId: garage.levelId,
       sourceShapeId: null,
@@ -8916,20 +9081,38 @@ class Component extends DCLogic {
     return this._worldPerPixel() * this.state.snapStrength.node;
   }
 
-  _findMagnet(pt) {
+  // A node being dragged (and anything riding it, like level copies of a
+  // master point) is never its own snap target: excluded vertices are dropped
+  // by reference and by coincident position.
+  _withoutVertices(vertices, exclude) {
+    if (!exclude) return vertices;
+    return vertices.filter(vertex => {
+      if (exclude.has(vertex)) return false;
+      for (const ex of exclude) {
+        if (Math.abs(vertex.x - ex.x) < 0.001 && Math.abs(vertex.z - ex.z) < 0.001) return false;
+      }
+      return true;
+    });
+  }
+
+  _findMagnet(pt, exclude = null) {
     const r = this._nodeSnapRadius();
     // Active geometry always wins; same-level references then beat optional
     // cross-level backgrounds. References offer only nodes and midpoints.
-    return geo.nearestVertex(this._collectActiveVertices(), pt, r)
-      || geo.nearestVertex(this._collectContextReferenceVertices(), pt, r)
-      || geo.nearestVertex(this._collectBackgroundVertices(), pt, r);
+    return geo.nearestVertex(this._withoutVertices(this._collectActiveVertices(), exclude), pt, r)
+      || geo.nearestVertex(this._withoutVertices(this._collectContextReferenceVertices(), exclude), pt, r)
+      || geo.nearestVertex(this._withoutVertices(this._collectBackgroundVertices(), exclude), pt, r);
   }
 
   // Return midpoint of the nearest line/wall segment if the cursor is within snap
   // radius. Only called when vertex magnet is null (vertex takes priority).
-  _findMidpointSnap(cursorPt) {
+  _findMidpointSnap(cursorPt, exclude = null) {
     const r = this._worldPerPixel() * this.state.snapStrength.midpoint;
-    const nearest = segments => {
+    const nearest = raw => {
+      // Segments touching a dragged vertex chase the cursor — never midpoint-snap to them.
+      const segments = exclude
+        ? raw.filter(seg => !exclude.has(seg.start) && !exclude.has(seg.end))
+        : raw;
       const mid = geo.nearestMidpoint(segments, cursorPt, r);
       return mid ? new THREE.Vector3(mid.x, mid.y, mid.z) : null;
     };
@@ -9081,7 +9264,7 @@ class Component extends DCLogic {
     const vertexRefs = this._findVertexHit(raw);
     if (vertexRefs) {
       if (this._canReshapeItems(this._itemsFromVertexRefs(vertexRefs))) {
-        this._selectDrag = { refs: vertexRefs, startX: e.clientX, startY: e.clientY, active: false };
+        this._selectDrag = this._makeNodeDrag(vertexRefs, e);
         e.preventDefault();
       }
       return;
@@ -9098,13 +9281,10 @@ class Component extends DCLogic {
     if (hit.d <= fpx * 4) {
       // Cursor centre is on the line → insert a node at that point
       this._splitLine(hit.idx, this._pointOnLineSeg(line, hit.t), hit.t);
-      this._selectDrag = {
-        refs: [
-          { target: this._lines[hit.idx], prop: 'end' },
-          { target: this._lines[hit.idx + 1], prop: 'start' },
-        ],
-        startX: e.clientX, startY: e.clientY, active: false,
-      };
+      this._selectDrag = this._makeNodeDrag([
+        { target: this._lines[hit.idx], prop: 'end' },
+        { target: this._lines[hit.idx + 1], prop: 'start' },
+      ], e);
     } else {
       // Cursor edge is touching the line → pull the segment into an arc
       this._arcDrag = { line, startX: e.clientX, startY: e.clientY, active: false };
@@ -9571,6 +9751,7 @@ class Component extends DCLogic {
     this._extendSession.vertices.forEach(vertex => {
       vertex.x += dx;
       vertex.z += dz;
+      this._relinkVertex(vertex);
     });
     this._extendUndo = { changes };
     this._extendSession = null;
@@ -9587,6 +9768,7 @@ class Component extends DCLogic {
       vertex.x = x;
       vertex.y = y;
       vertex.z = z;
+      this._relinkVertex(vertex);
     });
     this._extendUndo = null;
     this._markUnsaved();
@@ -9690,14 +9872,15 @@ class Component extends DCLogic {
   // ─── Projection tracking ─────────────────────────────────────────────────────
   // When angle-locked, find a vertex whose perpendicular tracking line the cursor
   // is near and return the intersection of that perpendicular with the locked ray.
-  _findTrackingSnap(cursorPt, start) {
+  _findTrackingSnap(cursorPt, start, exclude = null) {
     if (this._lockAngle == null) return null;
     const threshWorld = LOCKED_NODE_SNAP_PX * this._worldPerPixel();
 
     const find = vertices => {
       // Require the cursor to be genuinely near the node center, and skip the
-      // chain tip so the ray cannot snap to its own start.
-      const candidates = vertices.filter(vertex => !start
+      // chain tip so the ray cannot snap to its own start. A dragged vertex
+      // (riding the cursor) can never be its own tracking reference either.
+      const candidates = this._withoutVertices(vertices, exclude).filter(vertex => !start
         || Math.abs(vertex.x - start.x) >= 0.001 || Math.abs(vertex.z - start.z) >= 0.001);
       const refPt = geo.nearestVertex(candidates, cursorPt, threshWorld);
       if (!refPt) return null;
@@ -9706,6 +9889,27 @@ class Component extends DCLogic {
       return { snapPt: new THREE.Vector3(projected.x, start.y, projected.z), refPt };
     };
     return find(this._collectActiveVertices()) || find(this._collectBackgroundVertices());
+  }
+
+  // Acquiring a polar origin announces itself: the node pulses orange and
+  // shoots 8 hairline direction rays (orthogonal + 45°) that hold for a second
+  // and fade for another, so the drafter sees the ruler zero the moment it arms.
+  _acquirePolarOrigin(pt) {
+    const prev = this._polarOrigin;
+    if (prev && Math.abs(prev.x - pt.x) < 0.001 && Math.abs(prev.z - pt.z) < 0.001) return;
+    this._polarOrigin = pt.clone();
+    this._polarFx = { x: pt.x, y: pt.y || 0, z: pt.z, start: performance.now() };
+    this._animatePolarFx();
+  }
+
+  _animatePolarFx() {
+    if (!this._polarFx) return;
+    this._invalidate();
+    if (performance.now() - this._polarFx.start > POLAR_FX_HOLD_MS + POLAR_FX_FADE_MS) {
+      this._polarFx = null;
+      return;
+    }
+    requestAnimationFrame(() => this._animatePolarFx());
   }
 
   // Polar tracking: snap the cursor onto the nearest 45° ray cast from the
@@ -10581,6 +10785,8 @@ class Component extends DCLogic {
   }
 
   _freezeLength() {
+    const sd = this._selectDrag;
+    if (sd?.active) { this._freezeNodeDrag(sd); return; }
     const tool = this.state.activeTool;
     const extendReady = tool === 'extend' && this.state.extendPhase === 'destination'
       && this._extendSession && this.state.extendBase;
@@ -10634,6 +10840,46 @@ class Component extends DCLogic {
     this._updateFrozenPreview();
   }
 
+  // R during a node drag: the ruler zero is the armed polar origin (normally
+  // the grab point), and the typed length lands the node exactly that far
+  // along the current direction — typed beats pointed, same as drawing.
+  _freezeNodeDrag(sd) {
+    const [vertex] = sd.vertices;
+    const start = this._polarOrigin ? this._polarOrigin.clone()
+      : new THREE.Vector3(sd.origin.x, sd.origin.y, sd.origin.z);
+    const dx = vertex.x - start.x, dz = vertex.z - start.z;
+    const len = Math.hypot(dx, dz);
+    this._frozenAngle = this._lockAngle ?? (len > 0.001 ? Math.atan2(dz, dx) : 0);
+    this._frozenStart = start;
+    this._frozenTool  = 'nodedrag';
+    this._frozenDrag  = {
+      refs: sd.refs,
+      restore: sd.refs.map(ref => {
+        const pt = (ref.target || ref.seg)[ref.prop];
+        return { pt, x: pt.x, z: pt.z };
+      }),
+    };
+    const frozenLengthInput = len > 0.001 ? formatArchitecturalInches(len * 12) : '';
+    this.setState({ lengthFrozen: true, frozenLengthInput, frozenDimensionError: '' }, () => {
+      const inp = document.querySelector('[data-frozen-length]');
+      if (inp) { inp.focus(); inp.select(); }
+    });
+    this._updateFrozenPreview();
+  }
+
+  // Land the frozen node drag at `end`, keeping shared vertices welded and
+  // outline overrides / master links up to date.
+  _placeFrozenDrag(end) {
+    const drag = this._frozenDrag;
+    if (!drag) return;
+    drag.refs.forEach(ref => {
+      const pt = (ref.target || ref.seg)[ref.prop];
+      pt.x = end.x; pt.z = end.z;
+    });
+    drag.refs.forEach(ref => this._relinkVertex((ref.target || ref.seg)[ref.prop]));
+    this._afterOutlineVertexDrag(drag.refs);
+  }
+
   _updateFrozenPreview() {
     const total = this._frozenTotalFt();
     const zero = this._frozenRuler ?? this._frozenStart;
@@ -10645,6 +10891,21 @@ class Component extends DCLogic {
       anchor.y,
       zero.z + dirZ * total,
     );
+    // A frozen node drag previews live: the node itself rides the typed length.
+    // An empty or unparsable box leaves the node where it is — only a real
+    // number (zero included) moves it.
+    if (this._frozenTool === 'nodedrag') {
+      const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
+      if (parsed.ok) this._placeFrozenDrag(end);
+      const imperial = this.state.units === 'imperial';
+      const lenEl = document.querySelector('[data-model-len]');
+      if (lenEl) lenEl.textContent = parsed.ok ? '↔ ' + (imperial ? this._ftIn(total) : this._metric(total)) : '';
+      const angEl = document.querySelector('[data-model-ang]');
+      const angDeg = Math.round(Math.atan2(-dirZ, dirX) * 180 / Math.PI);
+      if (angEl) angEl.textContent = '∠ ' + (angDeg < 0 ? angDeg + 360 : angDeg) + '°';
+      this._invalidate();
+      return;
+    }
     // The outline preview lives on the 2D overlay, which reads _frozenEnd
     // itself — it has no 3D preview line to move.
     const geo = this._frozenTool === 'line' ? this._linePreviewGeo
@@ -10674,7 +10935,7 @@ class Component extends DCLogic {
   _confirmFrozenLength() {
     const frozenTool = this._frozenTool;
     const zero = this._frozenRuler ?? this._frozenStart;
-    if (!this.state.lengthFrozen || !zero || !['line', 'wall', 'extend', 'outline'].includes(frozenTool)) {
+    if (!this.state.lengthFrozen || !zero || !['line', 'wall', 'extend', 'outline', 'nodedrag'].includes(frozenTool)) {
       this._cancelFrozenLength();
       return;
     }
@@ -10726,6 +10987,28 @@ class Component extends DCLogic {
       this._frozenFromPolar = false;
       this._frozenTool = null;
       this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true });
+      return;
+    }
+    if (frozenTool === 'nodedrag') {
+      const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
+      if (!parsed.ok) {
+        this.setState({ frozenDimensionError: parsed.error });
+        return;
+      }
+      // Zero is legal here: it lands the node exactly on the ruler zero.
+      const total = parsed.inches / 12;
+      this._placeFrozenDrag(new THREE.Vector3(
+        this._frozenStart.x + Math.cos(this._frozenAngle) * total,
+        this._frozenStart.y,
+        this._frozenStart.z + Math.sin(this._frozenAngle) * total,
+      ));
+      this._frozenDrag = null;
+      this._lockAngle = null;
+      this._frozenEnd = null;
+      this._frozenStart = null;
+      this._frozenTool = null;
+      this._markUnsaved();
+      this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '' });
       return;
     }
     if (frozenTool === 'outline') {
@@ -10837,6 +11120,13 @@ class Component extends DCLogic {
 
   _cancelFrozenLength() {
     const frozenTool = this._frozenTool;
+    // A cancelled node drag puts the node back where it was when R was pressed.
+    if (frozenTool === 'nodedrag' && this._frozenDrag) {
+      this._frozenDrag.restore.forEach(({ pt, x, z }) => { pt.x = x; pt.z = z; });
+      this._frozenDrag.refs.forEach(ref => this._relinkVertex((ref.target || ref.seg)[ref.prop]));
+      this._afterOutlineVertexDrag(this._frozenDrag.refs);
+      this._frozenDrag = null;
+    }
     this._lockAngle = null;
     this._frozenEnd = null;
     this._frozenStart = null;
@@ -11124,7 +11414,8 @@ class Component extends DCLogic {
       const tool = this.state.activeTool;
       const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._wallDrawing)
         || (tool === 'outline' && this._outlineDrawing)
-        || (tool === 'extend' && this.state.extendPhase === 'destination');
+        || (tool === 'extend' && this.state.extendPhase === 'destination')
+        || this._selectDrag?.active === true;
       // An engaged polar ray lets these tools type their first point from the
       // acquired node before any click.
       const polarReady = this._polarOrigin && this._polarSnap && POLAR_RULER_TOOLS.has(tool);
@@ -12408,6 +12699,9 @@ class Component extends DCLogic {
       polarOriginX:      this.state.polarOriginX,
       polarOriginY:      this.state.polarOriginY,
       polarOriginDisplay: this.state.showPolarOrigin ? 'block' : 'none',
+      tsquareChipColor: this.state.tsquareEngaged ? '#e07a20' : 'rgba(29,31,32,0.18)',
+      rulerChipColor: this.state.lengthFrozen ? '#e07a20' : 'rgba(29,31,32,0.18)',
+      rulerChipGlow: this.state.lengthFrozen ? 'drop-shadow(0 0 3px rgba(224,122,32,0.9))' : 'none',
       lengthFrozen: this.state.lengthFrozen,
       frozenLengthInput: this.state.frozenLengthInput,
       frozenDimensionBorder: this.state.frozenDimensionError ? '#b04050' : 'rgba(29,31,32,0.25)',
