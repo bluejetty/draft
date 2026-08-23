@@ -8,7 +8,7 @@ const PENDING_RED = [153, 68, 102];
 test.describe('Cut with WebGL unavailable', () => {
   test('placement preview and committed cut are drawn in 2D', async ({ page }) => {
     await h.openModel(page, { webgl: false });
-    await h.selectTool(page, 'Cut');
+    await page.keyboard.press('c');
 
     await h.clickWorld(page, -10, 6);
     await h.moveTo(page, 10, 6);
@@ -37,7 +37,7 @@ test.describe('Cut with WebGL unavailable', () => {
     page.on('dialog', dialog => dialog.accept(answers.shift() ?? ''));
 
     const placeCut = async (name, z) => {
-      await h.selectTool(page, 'Cut');
+      await page.keyboard.press('c');
       answers.push(name);
       await h.clickWorld(page, -10, z);
       await h.clickWorld(page, 10, z);

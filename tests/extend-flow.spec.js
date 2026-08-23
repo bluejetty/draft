@@ -76,8 +76,7 @@ test('hovering a node acquires an orange polar origin whose 45° rays snap the c
   await h.moveTo(page, 10, 0.2);   // near the horizontal ray, not on it
   await expect(page.locator('[data-model-polar]')).toBeVisible();
 
-  const p = await h.worldToClient(page, 10, 0.2);
-  await page.mouse.click(p.x, p.y);
+  await h.clickWorld(page, 10, 0.2);
   await page.waitForTimeout(400);
   await h.clickWorld(page, 10, 5);
   await page.keyboard.press('Enter');
