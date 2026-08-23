@@ -140,15 +140,15 @@ test('openings survive a reload attached to their wall', async ({ page }) => {
 
 test('the opening centre is a snap point for dimensions', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('/'); // grid snap on so the wall and door land on exact feet
   await drawWall(page);
   await h.selectTool(page, 'Fenestration');
   await h.clickWorld(page, 2, 0);
   await h.waitForSaved(page);
 
   await h.selectTool(page, 'Dimension');
-  // Grid snap off so only the vertex magnet can pull the click to the centre.
-  await page.keyboard.press('`');
-  await h.clickWorld(page, 2.1, 0.3);
+  await page.keyboard.press('/'); // grid snap off so only the vertex magnet can pull the click
+  await h.clickWorld(page, 2.05, 0.1);
   await h.clickWorld(page, -10, 0);
   await h.waitForSaved(page);
 

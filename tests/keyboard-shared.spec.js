@@ -31,7 +31,7 @@ test('the shared matcher honours modifiers', async ({ page }) => {
       extraShift:   eventMatchesBinding(ev('z', { ctrlKey: true, shiftKey: true }), 'Ctrl+Z'),
       redo:         eventMatchesBinding(ev('z', { ctrlKey: true, shiftKey: true }), 'Ctrl+Shift+Z'),
       space:        eventMatchesBinding(ev(' '), 'Space'),
-      unbound:      eventMatchesBinding(ev('g'), ''),
+      unbound:      eventMatchesBinding(ev('q'), ''),
       normalisedEsc: normaliseKeyBinding('esc'),
     };
   });
@@ -62,17 +62,28 @@ test('Extend answers to X and Ctrl+H', async ({ page }) => {
   await expect(extendPanel).toBeVisible();
 });
 
-test('the # key and the square button toggle grid snap', async ({ page }) => {
+test('double-tapping G and clicking the GG button toggle grid snap', async ({ page }) => {
   await openModel(page);
   const button = page.locator('[data-grid-snap]');
-  await expect(button).toHaveText('#');
-  await expect(button).toHaveCSS('background-color', 'rgb(29, 31, 32)');
-
-  await page.keyboard.press('#'); // Shift+3 — the binding matches with or without Shift.
+  await expect(button).toHaveText('GG');
+  // Off by default: drafters flip it on for the first point, then off again.
   await expect(button).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await expect(button).toHaveCSS('box-shadow', 'none');
 
-  await button.click();
+  // A single stray G does nothing.
+  await page.keyboard.press('g');
+  await page.waitForTimeout(700);
+  await expect(button).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+
+  // A deliberate double-tap toggles, and a notice flashes at the cursor.
+  await page.keyboard.press('g');
+  await page.keyboard.press('g');
   await expect(button).toHaveCSS('background-color', 'rgb(29, 31, 32)');
   await expect(button).not.toHaveCSS('box-shadow', 'none');
+  await expect(page.locator('[data-grid-snap-flash]')).toHaveText('GRID SNAP ON');
+
+  // The button stays a single click.
+  await button.click();
+  await expect(button).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.locator('[data-grid-snap-flash]')).toHaveText('GRID SNAP OFF');
 });

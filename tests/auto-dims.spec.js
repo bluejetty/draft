@@ -9,6 +9,7 @@ const h = require('./helpers');
 
 // House: 16×12 rect (x -8..8, z -6..6).
 async function drawHouseOutline(page) {
+  await page.keyboard.press('/'); // grid snap on so corners land on exact feet
   await h.selectTool(page, 'Outline');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);
@@ -69,6 +70,7 @@ test('AUTO DIMS strings a rectangle: overalls everywhere, openings on the door s
 
 test('an L-shape gets jog strings and overalls on every side', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('/'); // grid snap on so corners land on exact feet
   await h.selectTool(page, 'Outline');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);
