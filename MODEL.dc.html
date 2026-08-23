@@ -1623,7 +1623,7 @@ class Component extends DCLogic {
         levelId: outline.levelId,
         garage: outline.garage === true,
         open: outline.open === true,
-        points: outline.points.map(p => ({ x: p.x, y: p.y || 0, z: p.z, srcId: p.srcId ?? null, bulge: p.bulge || 0 })),
+        points: outline.points.map(p => ({ x: p.x, y: p.y || 0, z: p.z, srcId: p.srcId ?? null, bulge: p.bulge || 0, offX: Number.isFinite(p.offX) ? p.offX : null, offZ: Number.isFinite(p.offZ) ? p.offZ : null })),
         overriddenSrcIds: [...(outline.overriddenSrcIds || [])],
         layer: OUTLINE_LAYER,
       })),
@@ -2307,6 +2307,7 @@ class Component extends DCLogic {
             const vtx = new THREE.Vector3(p.x, levelsById.get(outline.levelId)?.elev ?? p.y, p.z);
             vtx.srcId = masterId != null ? p.srcId : null;
             vtx.bulge = p.bulge || 0;
+            if (Number.isFinite(p.offX) && Number.isFinite(p.offZ)) { vtx.offX = p.offX; vtx.offZ = p.offZ; }
             return vtx;
           }),
           overriddenSrcIds: [...outline.overriddenSrcIds],
@@ -2315,6 +2316,9 @@ class Component extends DCLogic {
       });
       // Attached-garage copies re-weld onto their house copy's shared points.
       this._weldGarageCopies();
+      // Overridden points ride their master point at a stored offset; files
+      // saved before offsets existed measure theirs from the loaded positions.
+      this._deriveOverrideOffsets();
        const numericItemIds = [...this._lines, ...this._walls, ...this._floors, ...this._fenestrations, ...this._surfaceOpenings, ...this._shapes, ...this._roofs, ...this._outlines, ...this._boneyardOutlines]
          .map(item => Number(String(item.id).match(/-(\d+)$/)?.[1]))
          .filter(Number.isInteger);
@@ -5993,17 +5997,27 @@ class Component extends DCLogic {
     };
   }
 
-  // Master edits move every level copy's common points; points a level has
-  // adjusted itself (listed in overriddenSrcIds) keep their local position.
+  // Master edits move every level copy's common points. Points a level has
+  // adjusted itself (listed in overriddenSrcIds) are locked RELATIVE: they
+  // ride their master point at the offset measured when they were adjusted,
+  // keeping their own bulge.
   _propagateMasterOutline(master) {
     const masterPoints = new Map(master.points.map(point => [point.pointId, point]));
     this._outlines.forEach(outline => {
       if (outline.masterId !== master.id) return;
       const overridden = new Set(outline.overriddenSrcIds);
       outline.points.forEach(point => {
-        if (!point.srcId || overridden.has(point.srcId)) return;
+        if (!point.srcId) return;
         const source = masterPoints.get(point.srcId);
-        if (source) { point.x = source.x; point.z = source.z; point.bulge = source.bulge || 0; }
+        if (!source) return;
+        if (overridden.has(point.srcId)) {
+          if (Number.isFinite(point.offX) && Number.isFinite(point.offZ)) {
+            point.x = source.x + point.offX;
+            point.z = source.z + point.offZ;
+          }
+          return;
+        }
+        point.x = source.x; point.z = source.z; point.bulge = source.bulge || 0;
       });
     });
     // Attached-garage masters follow the house master points their end points
@@ -6019,6 +6033,35 @@ class Component extends DCLogic {
         if (moved) this._propagateMasterOutline(garage);
       });
     }
+  }
+
+  // A local adjustment marks the point overridden and remembers its offset
+  // from the master point, so later master edits carry the adjustment along.
+  // Adjusting the point again re-measures the offset.
+  _recordOutlineOverride(outline, point) {
+    if (!point?.srcId || outline.masterId == null) return;
+    if (!outline.overriddenSrcIds.includes(point.srcId)) outline.overriddenSrcIds.push(point.srcId);
+    const master = this._boneyardOutlines.find(m => m.id === outline.masterId);
+    const src = master?.points.find(mp => mp.pointId === point.srcId);
+    if (src) { point.offX = point.x - src.x; point.offZ = point.z - src.z; }
+  }
+
+  // Overridden points that never had an offset measured (files saved before
+  // relative overrides) get one from their current distance to the master.
+  _deriveOverrideOffsets() {
+    const masters = new Map(this._boneyardOutlines.map(master => [master.id, master]));
+    this._outlines.forEach(outline => {
+      const master = outline.masterId ? masters.get(outline.masterId) : null;
+      if (!master) return;
+      const overridden = new Set(outline.overriddenSrcIds);
+      const masterPoints = new Map(master.points.map(point => [point.pointId, point]));
+      outline.points.forEach(point => {
+        if (!point.srcId || !overridden.has(point.srcId)) return;
+        if (Number.isFinite(point.offX) && Number.isFinite(point.offZ)) return;
+        const src = masterPoints.get(point.srcId);
+        if (src) { point.offX = point.x - src.x; point.offZ = point.z - src.z; }
+      });
+    });
   }
 
   // ── GARAGE attach — the open run welds onto the house outline ─────────────
@@ -6371,10 +6414,7 @@ class Component extends DCLogic {
       if (outline.shelfId != null) {
         this._propagateMasterOutline(outline);
       } else if (outline.masterId != null) {
-        const point = outline.points[ref.prop];
-        if (point?.srcId && !outline.overriddenSrcIds.includes(point.srcId)) {
-          outline.overriddenSrcIds.push(point.srcId);
-        }
+        this._recordOutlineOverride(outline, outline.points[ref.prop]);
       }
     });
     if (touched) this._markUnsaved();
@@ -6440,9 +6480,8 @@ class Component extends DCLogic {
         copy.points.splice(anchor + 1, 0, cv);
       });
       this._propagateMasterOutline(outline);
-    } else if (outline.masterId != null && seg.start.srcId
-      && !outline.overriddenSrcIds.includes(seg.start.srcId)) {
-      outline.overriddenSrcIds.push(seg.start.srcId);
+    } else if (outline.masterId != null) {
+      this._recordOutlineOverride(outline, seg.start);
     }
     this._markUnsaved();
   }
@@ -6455,10 +6494,7 @@ class Component extends DCLogic {
     if (outline.shelfId != null) {
       this._propagateMasterOutline(outline);
     } else if (outline.masterId != null) {
-      const point = outline.points[drag.index];
-      if (point?.srcId && !outline.overriddenSrcIds.includes(point.srcId)) {
-        outline.overriddenSrcIds.push(point.srcId);
-      }
+      this._recordOutlineOverride(outline, outline.points[drag.index]);
     }
     this._markUnsaved();
   }
