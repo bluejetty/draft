@@ -27,12 +27,21 @@ if (!window.DraftDrawingFormat) {
     return { ok: true, reason: 'loaded' };
   };
 
+  // A point may carry its BUILD HOUSE link: the BONEYARD master point it
+  // derived from (srcId) and its offset from that point at generation time.
   const point = value => {
     if (!value) return null;
     const x = num(value.x);
     const z = num(value.z);
     if (x === null || z === null) return null;
-    return { x, y: num(value.y) ?? 0, z };
+    const parsed = { x, y: num(value.y) ?? 0, z };
+    const srcId = typeof value.srcId === 'string' ? value.srcId.trim() : '';
+    if (srcId) {
+      parsed.srcId = srcId;
+      parsed.offX = num(value.offX) ?? 0;
+      parsed.offZ = num(value.offZ) ?? 0;
+    }
+    return parsed;
   };
 
   const levelId = (value, levelIds) => {
