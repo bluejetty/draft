@@ -2,7 +2,8 @@
 // OUTLINE tool draws a bright, never-printing building outline: the first one
 // completed becomes the master on the active shelf and is copied to every
 // level. Master edits move the common points everywhere; a level's own edits
-// stay local and survive later master edits.
+// are locked RELATIVE — they ride their master point at the offset measured
+// when they were adjusted, so master edits carry them along.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -126,15 +127,41 @@ test('a level edit stays local and survives a later master edit', async ({ page 
   // ...while the local override is untouched.
   expect(after.points.some(p => h.near(p.x, 14) && h.near(p.z, 11))).toBe(true);
 
-  // Now drag the master's corner under the override: the override holds.
+  // Now drag the master's corner under the override: the override rides
+  // along at its remembered offset (6, 5) — locked relative, not pinned.
   await dragWorld(page, 8, 6, 4, 2);
   saved = await h.savedDrawing(page);
   const final = saved.outlines.find(o => o.levelId === 5);
-  expect(final.points.some(p => h.near(p.x, 14) && h.near(p.z, 11))).toBe(true);
+  expect(final.points.some(p => h.near(p.x, 10) && h.near(p.z, 7))).toBe(true);
   expect(final.points.some(p => h.near(p.x, 4) && h.near(p.z, 2))).toBe(false);
   // Levels without a local edit follow the master everywhere.
   const main = saved.outlines.find(o => o.levelId === 3);
   expect(main.points.some(p => h.near(p.x, 4) && h.near(p.z, 2))).toBe(true);
+});
+
+test('a relative override survives a reload and keeps riding the master', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page);
+
+  // A 2' cantilever off the master corner on 2ND FL.
+  await switchLevel(page, '2ND FL');
+  await h.selectTool(page, 'Select');
+  await dragWorld(page, 8, 6, 10, 8);
+
+  await page.reload();
+  await expect(page.locator('[data-model-canvas]')).toBeVisible();
+  await page.waitForTimeout(500);
+
+  // Grow the master 4' east: the cantilever keeps its (2, 2) offset.
+  await switchLevel(page, 'BONEYARD');
+  await h.selectTool(page, 'Select');
+  await dragWorld(page, 8, 6, 12, 6);
+
+  const saved = await h.savedDrawing(page);
+  const second = saved.outlines.find(o => o.levelId === 5);
+  expect(second.points.some(p => h.near(p.x, 14) && h.near(p.z, 8))).toBe(true);
+  const main = saved.outlines.find(o => o.levelId === 3);
+  expect(main.points.some(p => h.near(p.x, 12) && h.near(p.z, 6))).toBe(true);
 });
 
 test('the BONEYARD starts with one shelf and + SHELF adds and activates another', async ({ page }) => {

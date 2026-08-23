@@ -364,8 +364,8 @@ if (!window.DraftDrawingFormat) {
 
   // Level outlines are per-level copies of a master (srcId links each point to
   // its master point) or purely local outlines (masterId null). Points whose
-  // srcId is listed in overriddenSrcIds were adjusted locally, so master edits
-  // leave them alone.
+  // srcId is listed in overriddenSrcIds were adjusted locally; offX/offZ hold
+  // their offset from the master point, so master edits carry them along.
   const outlines = (raw, levelIds) => (Array.isArray(raw) ? raw : [])
     .map(outline => {
       const outlineLevelId = levelId(outline?.levelId, levelIds);
@@ -374,7 +374,15 @@ if (!window.DraftDrawingFormat) {
         if (!parsed) return null;
         const srcId = String(raw?.srcId || '').trim();
         const bulge = Number(raw?.bulge);
-        return { ...parsed, srcId: srcId || null, bulge: Number.isFinite(bulge) ? bulge : 0 };
+        const offX = Number(raw?.offX);
+        const offZ = Number(raw?.offZ);
+        return {
+          ...parsed,
+          srcId: srcId || null,
+          bulge: Number.isFinite(bulge) ? bulge : 0,
+          offX: Number.isFinite(offX) ? offX : null,
+          offZ: Number.isFinite(offZ) ? offZ : null,
+        };
       }).filter(Boolean);
       if (outlineLevelId == null || points.length < 3) return null;
       return {
