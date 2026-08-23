@@ -861,6 +861,10 @@ const LEVEL_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a
 // Shift/angle-locked alignment catch distance from a node center.
 const LOCKED_NODE_SNAP_PX = 3;
 // Tools whose next click can ride a polar-tracking ray from an acquired node.
+// While the ray is engaged, the acquired node is also the ruler zero: a typed
+// length measures from it, and these tools can even place their first point
+// that way before any click.
+const POLAR_RULER_TOOLS = new Set(['line', 'wall', 'outline']);
 const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'dimension', 'cut', 'extend']);
 // Polar-origin activation effect: the node pulses orange and shoots hairline
 // direction rays that hold for a second, then fade out over another.
@@ -2834,9 +2838,12 @@ class Component extends DCLogic {
     this._extendUndo     = null;      // { changes } — last committed Extend move
 
     // Polar tracking — hovering a node acquires it as a temporary origin whose
-    // 45° rays the cursor can snap along while drawing.
+    // 45° rays the cursor can snap along while drawing. While a ray is engaged
+    // the origin doubles as the ruler zero for typed lengths (_frozenRuler).
     this._polarOrigin = null;
     this._polarSnap   = null;
+    this._frozenRuler = null;
+    this._frozenFromPolar = false;
 
     // Undo history — serialized drawings, oldest first
     this._history          = { past: [], future: [] };
@@ -3501,11 +3508,16 @@ class Component extends DCLogic {
       }
     }
 
-    // Polar-tracking ruler: dashed orange ray from the acquired origin node
-    if (this._polarOrigin && this._polarSnap) {
+    // Polar-tracking ruler: dashed orange ray from the acquired origin node.
+    // While a polar-measured length is being typed, the ray sticks to the
+    // frozen zero and endpoint so the ruler shows where the point will land.
+    const polarRay = this.state.lengthFrozen && this._frozenFromPolar && this._frozenRuler
+      ? (this._frozenEnd ? { from: this._frozenRuler, to: this._frozenEnd } : null)
+      : (this._polarOrigin && this._polarSnap ? { from: this._polarOrigin, to: this._polarSnap } : null);
+    if (polarRay) {
       ctx.save();
       ctx.strokeStyle = '#e07a20'; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
-      const so = toS(this._polarOrigin), sp = toS(this._polarSnap);
+      const so = toS(polarRay.from), sp = toS(polarRay.to);
       ctx.beginPath(); ctx.moveTo(so.x, so.y); ctx.lineTo(sp.x, sp.y); ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
@@ -10787,23 +10799,38 @@ class Component extends DCLogic {
       : tool === 'wall' ? this._wallDrawing
       : tool === 'outline' ? this._outlineDrawing
       : Boolean(extendReady);
-    if (!start || !drawing) return;
+    const polarReady = this._polarOrigin && this._polarSnap
+      && POLAR_TRACKING_TOOLS.has(tool);
+    if ((!start || !drawing) && !(polarReady && POLAR_RULER_TOOLS.has(tool))) return;
     const pt = this._snapPt;
-    if (this._lockAngle != null) {
+    if (polarReady) {
+      // An engaged polar ray makes its acquired node the ruler zero: the typed
+      // length measures from that node along the ray.
+      this._frozenRuler = this._polarOrigin.clone();
+      this._frozenAngle = Math.atan2(
+        this._polarSnap.z - this._polarOrigin.z,
+        this._polarSnap.x - this._polarOrigin.x,
+      );
+    } else if (this._lockAngle != null) {
+      this._frozenRuler = start.clone();
       this._frozenAngle = this._lockAngle;
     } else if (pt) {
+      this._frozenRuler = start.clone();
       const dx = pt.x - start.x, dz = pt.z - start.z;
       this._frozenAngle = Math.sqrt(dx*dx+dz*dz) > 0.001 ? Math.atan2(dz, dx) : 0;
     } else {
+      this._frozenRuler = start.clone();
       this._frozenAngle = 0;
     }
-    this._frozenStart = start.clone();
+    this._frozenFromPolar = Boolean(polarReady);
+    this._frozenStart = start && drawing ? start.clone() : null;
     this._frozenTool  = tool;
     // Pre-fill the current length using the same architectural notation as every
     // other imperial input in the editor.
     let frozenLengthInput = '';
     if (pt) {
-      const len = Math.sqrt((pt.x-start.x)**2+(pt.z-start.z)**2);
+      const zero = this._frozenRuler;
+      const len = Math.sqrt((pt.x-zero.x)**2+(pt.z-zero.z)**2);
       if (len > 0.001) frozenLengthInput = formatArchitecturalInches(len * 12);
     }
     this.setState({ lengthFrozen: true, frozenLengthInput, frozenDimensionError: '' }, () => {
@@ -10855,12 +10882,14 @@ class Component extends DCLogic {
 
   _updateFrozenPreview() {
     const total = this._frozenTotalFt();
-    if (this._frozenStart == null) return;
+    const zero = this._frozenRuler ?? this._frozenStart;
+    if (zero == null) return;
+    const anchor = this._frozenStart ?? zero;
     const dirX = Math.cos(this._frozenAngle), dirZ = Math.sin(this._frozenAngle);
     const end = new THREE.Vector3(
-      this._frozenStart.x + dirX * total,
-      this._frozenStart.y,
-      this._frozenStart.z + dirZ * total,
+      zero.x + dirX * total,
+      anchor.y,
+      zero.z + dirZ * total,
     );
     // A frozen node drag previews live: the node itself rides the typed length.
     // An empty or unparsable box leaves the node where it is — only a real
@@ -10883,7 +10912,7 @@ class Component extends DCLogic {
       : this._frozenTool === 'outline' ? null : this._previewGeo;
     if (geo) {
       const p = geo.attributes.position;
-      p.setXYZ(0, this._frozenStart.x, this._frozenStart.y+0.02, this._frozenStart.z);
+      p.setXYZ(0, anchor.x, anchor.y+0.02, anchor.z);
       p.setXYZ(1, end.x, end.y+0.02, end.z);
       p.needsUpdate = true;
     }
@@ -10905,8 +10934,59 @@ class Component extends DCLogic {
 
   _confirmFrozenLength() {
     const frozenTool = this._frozenTool;
-    if (!this.state.lengthFrozen || !this._frozenStart || !['line', 'wall', 'extend', 'outline', 'nodedrag'].includes(frozenTool)) {
+    const zero = this._frozenRuler ?? this._frozenStart;
+    if (!this.state.lengthFrozen || !zero || !['line', 'wall', 'extend', 'outline', 'nodedrag'].includes(frozenTool)) {
       this._cancelFrozenLength();
+      return;
+    }
+    // Ruler-zero placement: with no segment in progress, the typed length drops
+    // the tool's first point exactly that far from the acquired node.
+    if (!this._frozenStart) {
+      const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
+      const total = parsed.ok ? parsed.inches / 12 : 0;
+      if (!parsed.ok || Math.abs(total) <= 0.001) {
+        this.setState({ frozenDimensionError: parsed.ok ? 'Length cannot be zero.' : parsed.error });
+        return;
+      }
+      if (!this._contextAllowsTool(frozenTool)) {
+        const message = this._contextToolMessage(frozenTool);
+        this._cancelFrozenLength();
+        this.setState({ drawingMessage: message, drawingMessageError: true });
+        return;
+      }
+      const first = new THREE.Vector3(
+        zero.x + Math.cos(this._frozenAngle) * total,
+        zero.y,
+        zero.z + Math.sin(this._frozenAngle) * total,
+      );
+      if (frozenTool === 'line') {
+        this._lineDrawing   = true;
+        this._chainStart    = first.clone();
+        this._lineStart     = first.clone();
+        this._pendingChain  = [];
+        this._chainSegments = 0;
+        if (this._linePreviewObj) this._linePreviewObj.visible = false;
+      } else if (frozenTool === 'wall') {
+        this._wallDrawing       = true;
+        this._wallChainStart    = first.clone();
+        this._wallStart         = first.clone();
+        this._wallChain         = [];
+        this._wallChainSegments = 0;
+        if (this._previewLine) this._previewLine.visible = false;
+      } else if (frozenTool === 'outline') {
+        this._outlineDrawing = true;
+        this._outlineStart   = first.clone();
+        this._outlinePoints  = [first.clone()];
+      } else {
+        this._cancelFrozenLength();
+        return;
+      }
+      this._lockAngle = null;
+      this._frozenEnd = null;
+      this._frozenRuler = null;
+      this._frozenFromPolar = false;
+      this._frozenTool = null;
+      this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true });
       return;
     }
     if (frozenTool === 'nodedrag') {
@@ -10940,14 +11020,20 @@ class Component extends DCLogic {
         return;
       }
       const end = new THREE.Vector3(
-        this._frozenStart.x + Math.cos(this._frozenAngle) * total,
+        zero.x + Math.cos(this._frozenAngle) * total,
         this._frozenStart.y,
-        this._frozenStart.z + Math.sin(this._frozenAngle) * total,
+        zero.z + Math.sin(this._frozenAngle) * total,
       );
+      if (Math.hypot(end.x - this._frozenStart.x, end.z - this._frozenStart.z) < 0.001) {
+        this.setState({ frozenDimensionError: 'Point lands on the last point.' });
+        return;
+      }
       this._outlinePoints.push(end);
       this._lockAngle = null;
       this._frozenEnd = null;
       this._frozenStart = null;
+      this._frozenRuler = null;
+      this._frozenFromPolar = false;
       this._frozenTool = null;
       this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true });
       return;
@@ -10960,14 +11046,16 @@ class Component extends DCLogic {
         return;
       }
       const destination = {
-        x: this._frozenStart.x + Math.cos(this._frozenAngle) * total,
+        x: zero.x + Math.cos(this._frozenAngle) * total,
         y: this._frozenStart.y,
-        z: this._frozenStart.z + Math.sin(this._frozenAngle) * total,
+        z: zero.z + Math.sin(this._frozenAngle) * total,
       };
       this._commitExtend(destination);
       this._lockAngle = null;
       this._frozenEnd = null;
       this._frozenStart = null;
+      this._frozenRuler = null;
+      this._frozenFromPolar = false;
       this._frozenTool = null;
       if (this._previewLine) this._previewLine.visible = false;
       this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '' });
@@ -10989,10 +11077,14 @@ class Component extends DCLogic {
     }
     const dirX = Math.cos(this._frozenAngle), dirZ = Math.sin(this._frozenAngle);
     const end = new THREE.Vector3(
-      this._frozenStart.x + dirX * total,
+      zero.x + dirX * total,
       this._frozenStart.y,
-      this._frozenStart.z + dirZ * total,
+      zero.z + dirZ * total,
     );
+    if (Math.hypot(end.x - this._frozenStart.x, end.z - this._frozenStart.z) < 0.001) {
+      this.setState({ frozenDimensionError: 'Point lands on the segment start.' });
+      return;
+    }
     if (this._frozenTool === 'line') {
       // A typed length is an explicit commit. Preserve any earlier chain
       // segments too, so changing tools cannot discard measured geometry.
@@ -11020,6 +11112,8 @@ class Component extends DCLogic {
     }
     this._lockAngle = null;
     this._frozenEnd = null;
+    this._frozenRuler = null;
+    this._frozenFromPolar = false;
     this._markUnsaved();
     this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true });
   }
@@ -11036,6 +11130,8 @@ class Component extends DCLogic {
     this._lockAngle = null;
     this._frozenEnd = null;
     this._frozenStart = null;
+    this._frozenRuler = null;
+    this._frozenFromPolar = false;
     this._frozenTool = null;
     this._frozenAngle = 0;
     if (frozenTool === 'line' && this._linePreviewObj) this._linePreviewObj.visible = false;
@@ -11320,7 +11416,10 @@ class Component extends DCLogic {
         || (tool === 'outline' && this._outlineDrawing)
         || (tool === 'extend' && this.state.extendPhase === 'destination')
         || this._selectDrag?.active === true;
-      if (drawing && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
+      // An engaged polar ray lets these tools type their first point from the
+      // acquired node before any click.
+      const polarReady = this._polarOrigin && this._polarSnap && POLAR_RULER_TOOLS.has(tool);
+      if ((drawing || polarReady) && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
       return;
     }
     if (matches('ungroup')) {
