@@ -97,7 +97,8 @@ test('a scoped background draws only its own layer set', async ({ page }) => {
   await drawLine(page, -10, 0, 10, 0);
   await switchLevel(page, 'MAIN FL');
 
-  const mid = await h.worldToClient(page, 0, 0);
+  // Sample away from 0,0 so the origin marker never covers the blue stroke.
+  const mid = await h.worldToClient(page, 5, 0);
 
   // Scoped to ELECTRIC, the PLAN line stays out of the background.
   await layerBg(page, '2ND FL', 'ELECTRIC').click();

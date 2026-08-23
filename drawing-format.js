@@ -210,7 +210,7 @@ if (!window.DraftDrawingFormat) {
         levelId: columnLevelId,
         view,
         footing: oneOf(column?.footing, ['pad36', 'pad42'], 'pad36'),
-        layer: 'S-COL/FOOTING',
+        layer: 'S-COL-FOOTING',
       };
     }).filter(Boolean);
   };

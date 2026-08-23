@@ -64,6 +64,9 @@
     .snap-row input:focus { border-color:#5980a6; outline:2px solid rgba(89,128,166,.18); outline-offset:1px; }
     .snap-row .px { color:rgba(29,31,32,.5); font-size:11px; }
     .snap-default { color:rgba(29,31,32,.4); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; }
+    .drafter { margin-top:18px; padding:12px 14px; border:1px solid rgba(29,31,32,.17); background:#fff; }
+    .drafter-title { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#5980a6; margin-bottom:6px; }
+    .drafter-note { max-width:560px; color:rgba(29,31,32,.55); font-size:12px; line-height:1.45; margin:0 0 10px; }
     @media (max-width:720px) {
       .groups { grid-template-columns:1fr; }
       main { margin-top:24px; }
@@ -81,6 +84,12 @@
   <main>
     <h1>Keyboard Settings</h1>
     <p class="intro">Choose shortcuts that feel natural to you; they are saved to this browser immediately. Layers live in <a href="./STANDARDS.html" style="color:#5980a6;">Company Standard Layers</a>, and the drawing layer for new lines is picked in Model Space.</p>
+    <section class="drafter" aria-label="Drafter identity">
+      <div class="drafter-title">Drafter</div>
+      <p class="drafter-note">Your name and phone number, saved with these settings and used on titleblocks and sheets.</p>
+      <div class="snap-row"><label for="drafter-name">Name</label><input type="text" id="drafter-name" data-drafter="name" maxlength="80" placeholder="Drafter name" style="width:220px;"></div>
+      <div class="snap-row"><label for="drafter-phone">Phone</label><input type="text" id="drafter-phone" data-drafter="phone" maxlength="80" placeholder="(555) 555-5555" style="width:220px;"></div>
+    </section>
     <div class="notice">Commands are grouped by purpose. A key can include modifiers such as <strong>Shift+W</strong>, <strong>Ctrl+L</strong>, or <strong>Alt+1</strong>. Some shortcuts reserved by your browser or operating system may not be available.</div>
     <div class="layouts">
       <div class="layouts-title">Layout presets</div>
@@ -90,7 +99,6 @@
     <details class="advanced">
       <summary>Snap magnetic pull</summary>
       <p class="advanced-note">How close the cursor must be, in screen pixels, before each snap grabs it. Larger values catch from farther away; smaller values only snap when the cursor is nearly on the point. Saved with your keyboard settings.</p>
-      <div class="snap-row"><label for="snap-grid">Grid snap</label><input type="number" id="snap-grid" data-snap="grid" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="grid"></span></div>
       <div class="snap-row"><label for="snap-node">Node snap</label><input type="number" id="snap-node" data-snap="node" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="node"></span></div>
       <div class="snap-row"><label for="snap-midpoint">Midpoint snap</label><input type="number" id="snap-midpoint" data-snap="midpoint" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="midpoint"></span></div>
       <div class="snap-row"><label for="snap-polar">Polar tracking</label><input type="number" id="snap-polar" data-snap="polar" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="polar"></span></div>
@@ -153,7 +161,7 @@
         { title:'Drawing actions', commands:[
           ['freezeLength', 'Freeze length'], ['finish', 'Finish / commit'],
           ['finishAlt', 'Alternate finish / commit'], ['cancel', 'Cancel current command'],
-           ['delete', 'Delete selected'], ['undo', 'Undo'], ['redo', 'Redo'], ['background', 'Cycle background reference'], ['gridSnap', 'Toggle grid snap'], ['gridSnapAlt', 'Alternate grid snap toggle'],
+           ['delete', 'Delete selected'], ['undo', 'Undo'], ['redo', 'Redo'], ['background', 'Cycle background reference'],
         ]},
       ];
       const defaults = keyboard.DEFAULT_KEYBINDINGS;
@@ -171,6 +179,8 @@
       let snapStrength = snaps.normaliseSnapStrength(active?.content?.model?.snapStrength);
       const outlineColors = window.DraftOutlineColor;
       let outlineColor = outlineColors.normaliseOutlineColor(active?.content?.model?.outlineColor);
+      const drafterTools = window.DraftDrafter;
+      let drafter = drafterTools.normaliseDrafter(active?.content?.model?.drafter);
 
       // Combinations the browser answers itself: assigning them would either do
       // nothing or reload the drawing out from under the user.
@@ -244,11 +254,24 @@
       };
 
       const saveActive = message => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapStrength, outlineColor } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapStrength, outlineColor, drafter } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
       };
+
+      const renderDrafter = () => {
+        document.querySelectorAll('[data-drafter]').forEach(input => {
+          input.value = drafter[input.dataset.drafter];
+        });
+      };
+      document.querySelectorAll('[data-drafter]').forEach(input => {
+        input.addEventListener('change', () => {
+          drafter = drafterTools.normaliseDrafter({ ...drafter, [input.dataset.drafter]: input.value });
+          saveActive('Drafter identity saved locally.');
+          renderDrafter();
+        });
+      });
 
       const outlineSelect = document.querySelector('#outline-color');
       const renderOutlineColor = () => {
@@ -310,7 +333,7 @@
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapStrength, outlineColor } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapStrength, outlineColor, drafter } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
@@ -320,6 +343,7 @@
       render();
       renderSnaps();
       renderOutlineColor();
+      renderDrafter();
       showStatus('');
     })();
   </script>

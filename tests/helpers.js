@@ -47,7 +47,18 @@ async function moveTo(page, x, z) {
 async function clickWorld(page, x, z) {
   await moveTo(page, x, z);
   const p = await worldToClient(page, x, z);
-  await page.mouse.click(p.x, p.y);
+  // Synthetic pointer events keep the fractional client coordinates the
+  // hardware mouse rounds away, so a click on (5, 5) lands on exactly (5, 5).
+  await page.evaluate(({ cx, cy }) => {
+    // A real canvas press moves focus off the toolbar; without this the
+    // focused button would swallow the keyboard shortcuts that follow.
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    const canvas = document.querySelector('[data-model-canvas]');
+    const opts = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy, button: 0 };
+    canvas.dispatchEvent(new PointerEvent('mousemove', { ...opts, buttons: 0 }));
+    canvas.dispatchEvent(new PointerEvent('mousedown', { ...opts, buttons: 1 }));
+    window.dispatchEvent(new PointerEvent('mouseup', { ...opts, buttons: 0 }));
+  }, { cx: p.x, cy: p.y });
   // Two clicks inside 350ms read as a double click (finish chain).
   await page.waitForTimeout(400);
 }

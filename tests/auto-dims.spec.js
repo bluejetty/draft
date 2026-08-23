@@ -9,7 +9,6 @@ const h = require('./helpers');
 
 // House: 16×12 rect (x -8..8, z -6..6).
 async function drawHouseOutline(page) {
-  await page.keyboard.press('/'); // grid snap on so corners land on exact feet
   await h.selectTool(page, 'Outline');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);
@@ -70,7 +69,6 @@ test('AUTO DIMS strings a rectangle: overalls everywhere, openings on the door s
 
 test('an L-shape gets jog strings and overalls on every side', async ({ page }) => {
   await h.openModel(page);
-  await page.keyboard.press('/'); // grid snap on so corners land on exact feet
   await h.selectTool(page, 'Outline');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);
@@ -87,7 +85,7 @@ test('an L-shape gets jog strings and overalls on every side', async ({ page }) 
   // Per side: a 2-piece jog string (3 distinct coords) + the overall.
   expect(auto).toHaveLength(12);
   // Jog strings sit at the first offset, overalls one spacing further out.
-  const north = auto.filter(dimension => dimension.start.z < -6);
+  const north = auto.filter(dimension => dimension.start.z < -6.5);
   expect(north).toHaveLength(3);
   const northOverall = north.find(dimension => h.near(dimension.start.z, -9));
   expect(Math.abs(northOverall.end.x - northOverall.start.x)).toBeCloseTo(16, 3);
@@ -114,6 +112,6 @@ test('re-running replaces auto strings, keeps manual dims, honours the 3\'-0" of
   const auto = saved.dimensions.filter(dimension => dimension.auto);
   expect(auto).toHaveLength(4);
   expect(saved.dimensions.filter(dimension => !dimension.auto)).toHaveLength(1);
-  const west = auto.find(dimension => dimension.start.x < -8);
+  const west = auto.find(dimension => dimension.start.x < -8.5);
   expect(west.start.x).toBeCloseTo(-11, 3);
 });

@@ -1,10 +1,10 @@
-// Snap feedback and adjustable magnetic pull: grid snap rings the engaged
-// grid point, and the catch radii for grid / node / midpoint snaps come from
-// the shared snap-strength settings.
+// Snap feedback and adjustable magnetic pull: the 0,0 origin marker rings
+// when it has hold of the cursor, and the catch radii for node / midpoint
+// snaps come from the shared snap-strength settings.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
-const gridRing = page => page.locator('[data-model-gridsnap]');
+const originRing = page => page.locator('[data-model-originsnap]');
 
 async function setSnapStrength(page, strength) {
   await page.evaluate(value => {
@@ -19,43 +19,37 @@ async function setSnapStrength(page, strength) {
   await page.waitForTimeout(500);
 }
 
-test('grid snap rings the snapped point while it has hold of the cursor', async ({ page }) => {
+test('the 0,0 origin rings while it has hold of the cursor, with no toggle', async ({ page }) => {
   await h.openModel(page);
-  await page.keyboard.press('/'); // grid snap starts off; turn it on
 
-  // Slightly off the grid point: the pull grabs the cursor, the ring marks it.
-  await h.moveTo(page, 5.2, 5);
-  await expect(gridRing(page)).toBeVisible();
-  const box = await gridRing(page).boundingBox();
-  const target = await h.worldToClient(page, 5, 5);
+  // Slightly off the origin: the pull grabs the cursor, the ring marks it.
+  await h.moveTo(page, 0.2, 0);
+  await expect(originRing(page)).toBeVisible();
+  const box = await originRing(page).boundingBox();
+  const target = await h.worldToClient(page, 0, 0);
   expect(Math.abs(box.x + box.width / 2 - target.x)).toBeLessThan(2);
   expect(Math.abs(box.y + box.height / 2 - target.y)).toBeLessThan(2);
 
-  // Turning grid snap off hides the ring.
-  await page.keyboard.press('/');
-  await h.moveTo(page, 6.2, 6);
-  await expect(gridRing(page)).toBeHidden();
+  // Away from the origin nothing rings — there are no other grid points.
+  await h.moveTo(page, 5.2, 5);
+  await expect(originRing(page)).toBeHidden();
 });
 
-test('a weaker grid pull frees the cursor between grid points', async ({ page }) => {
+test('a click near the origin snaps exactly to 0,0', async ({ page }) => {
   await h.openModel(page);
-  await setSnapStrength(page, { grid: 2 });
-  await page.keyboard.press('/'); // grid snap starts off; turn it on
-
-  // 0.4 ft is a few pixels at default zoom — beyond a 2px pull, so no snap.
-  await h.moveTo(page, 5.4, 5);
-  await expect(gridRing(page)).toBeHidden();
 
   await h.selectTool(page, 'Line');
-  await h.clickWorld(page, 5.4, 5);
-  await h.clickWorld(page, 9, 5);
+  await h.clickWorld(page, 0.2, 0);
+  await h.clickWorld(page, 9, 5.4);
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
 
   const line = h.allLines(await h.savedDrawing(page))[0];
-  // The far click stays unsnapped; the click on the grid point still snaps.
-  expect(Math.abs(line.start.x - 5.4)).toBeLessThan(0.1);
-  expect(line.end.x).toBeCloseTo(9, 1);
+  // The origin click snaps exactly; the far click stays unsnapped.
+  expect(line.start.x).toBe(0);
+  expect(line.start.z).toBe(0);
+  expect(Math.abs(line.end.x - 9)).toBeLessThan(0.1);
+  expect(Math.abs(line.end.z - 5.4)).toBeLessThan(0.1);
 });
 
 test('node and midpoint pull follow the settings', async ({ page }) => {
@@ -85,20 +79,37 @@ test('the Settings page edits and saves the snap pull', async ({ page }) => {
 
   const defaults = await page.evaluate(() => window.DraftSnapStrength.DEFAULT_SNAP_STRENGTH);
   await page.locator('.advanced summary').click();
-  await expect(page.locator('#snap-grid')).toHaveValue(String(defaults.grid));
   await expect(page.locator('#snap-node')).toHaveValue(String(defaults.node));
   await expect(page.locator('#snap-midpoint')).toHaveValue(String(defaults.midpoint));
   await expect(page.locator('#snap-polar')).toHaveValue(String(defaults.polar));
 
-  await page.locator('#snap-grid').fill('9');
-  await page.locator('#snap-grid').blur();
+  await page.locator('#snap-midpoint').fill('9');
+  await page.locator('#snap-midpoint').blur();
 
   const stored = await page.evaluate(() =>
     window.DraftProfileManager.getActive('settings')?.content?.model?.snapStrength);
-  expect(stored.grid).toBe(9);
+  expect(stored.midpoint).toBe(9);
 
   // Out-of-range values clamp instead of saving nonsense.
   await page.locator('#snap-node').fill('500');
   await page.locator('#snap-node').blur();
   await expect(page.locator('#snap-node')).toHaveValue('60');
+});
+
+test('the Settings page saves the drafter name and phone', async ({ page }) => {
+  await page.goto('/SETTINGS.html');
+
+  await page.locator('#drafter-name').fill('Jane Draft');
+  await page.locator('#drafter-name').blur();
+  await page.locator('#drafter-phone').fill('(555) 555-5555');
+  await page.locator('#drafter-phone').blur();
+
+  const stored = await page.evaluate(() =>
+    window.DraftProfileManager.getActive('settings')?.content?.model?.drafter);
+  expect(stored).toEqual({ name: 'Jane Draft', phone: '(555) 555-5555' });
+
+  // Reload: the fields come back from the saved settings package.
+  await page.reload();
+  await expect(page.locator('#drafter-name')).toHaveValue('Jane Draft');
+  await expect(page.locator('#drafter-phone')).toHaveValue('(555) 555-5555');
 });
