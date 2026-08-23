@@ -30,6 +30,7 @@ async function startDrag(page, fromX, fromZ, toX, toZ) {
   const to = await h.worldToClient(page, toX, toZ);
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
+  await page.waitForTimeout(150); // a drawing tool's grab arms after the hold delay
   await page.mouse.move(to.x, to.y, { steps: 8 });
 }
 
