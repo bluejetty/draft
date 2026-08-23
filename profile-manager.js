@@ -193,17 +193,6 @@ if (!window.DraftProfileManager) {
   const DEFAULT_SNAP_STRENGTH = Object.freeze({ node: 4, midpoint: 4, polar: 4 });
   const SNAP_STRENGTH_RANGE = Object.freeze({ min: 1, max: 60 });
 
-  // The OUTLINE guide is deliberately louder than any architectural colour so
-  // it can never be mistaken for real linework. Neon green reads as a laser
-  // level; the alternates are there to try by eye.
-  const OUTLINE_COLORS = Object.freeze({
-    'neon-green': Object.freeze({ label: 'Neon green', hex: '#39ff14' }),
-    'neon-orange': Object.freeze({ label: 'Neon orange', hex: '#ff7a00' }),
-    'purply-blue': Object.freeze({ label: 'Purply blue', hex: '#7b5cff' }),
-  });
-  const DEFAULT_OUTLINE_COLOR = 'neon-green';
-  const normaliseOutlineColor = value => (OUTLINE_COLORS[value] ? value : DEFAULT_OUTLINE_COLOR);
-
   // Drafter identity: shown at the top of Settings and destined for the
   // titleblock on printed sheets. Free text, kept to a sane length.
   const normaliseDrafter = value => {
@@ -404,11 +393,6 @@ if (!window.DraftProfileManager) {
     DEFAULT_SNAP_STRENGTH,
     SNAP_STRENGTH_RANGE,
     normaliseSnapStrength,
-  };
-  window.DraftOutlineColor = {
-    OUTLINE_COLORS,
-    DEFAULT_OUTLINE_COLOR,
-    normaliseOutlineColor,
   };
   window.DraftDrafter = {
     normaliseDrafter,

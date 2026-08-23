@@ -167,14 +167,19 @@ test('each shelf keeps its own master; only the active shelf gets the first outl
   expect(saved.boneyardOutlines[0].shelfId).toBe(2);
 });
 
-test('outlines draw in neon green on the overlay and survive a reload', async ({ page }) => {
+test('outlines draw blue on a level, red on the BONEYARD, and survive a reload', async ({ page }) => {
   await h.openModel(page);
   await drawOutlineRect(page);
 
-  // Neon green #39ff14 on the outline's edge.
+  // Blue #5980a6 on a floor level — edits there stay local to the level.
   const edge = await h.worldToClient(page, 0, -6);
-  const pixels = await h.overlayPixels(page, edge.x, edge.y);
-  expect(h.countColor(pixels, [0x39, 0xff, 0x14])).toBeGreaterThan(0);
+  expect(h.countColor(await h.overlayPixels(page, edge.x, edge.y), [0x59, 0x80, 0xa6])).toBeGreaterThan(0);
+
+  // Red #b04050 on the BONEYARD — edits there change every level.
+  await switchLevel(page, 'BONEYARD');
+  const masterEdge = await h.worldToClient(page, 0, -6);
+  expect(h.countColor(await h.overlayPixels(page, masterEdge.x, masterEdge.y), [0xb0, 0x40, 0x50])).toBeGreaterThan(0);
+  await switchLevel(page, 'MAIN FL');
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();

@@ -1,7 +1,8 @@
 // An attached GARAGE is an OPEN outline run: MARK GARAGE arms the Outline
 // tool so the next run of 3+ legs starts and ends ON the house outline,
 // welding its end points onto shared house master points (inserting mid-wall
-// points where needed, prompting for a connecting stub at corners). BUILD
+// points where needed; a corner landing only prompts for a stub when the leg
+// continues a house wall with the garage on its far side). BUILD
 // HOUSE then grows the grade beam along the open legs only (32" concrete +
 // 1.5" plate, top of plate 1'-0" below the top of the house foundation), a
 // flat 4" slab closed against the house, garage stud walls flush with the
@@ -99,14 +100,41 @@ test('a run whose end misses the house stays alive to fix and finish', async ({ 
   expect(garageMaster.points).toHaveLength(5);
 });
 
-test('a corner landing prompts CONNECT AT CORNER; the 8" stub slides the attach off the corner', async ({ page }) => {
+test('a corner landing with the garage alongside the wall welds silently at the corner', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
+  // The first leg continues the front wall with the garage on the SAME side
+  // as the house — faces line up, so no stub question.
   await drawGarageRun(page, [[8, -6], [20, -6], [20, 4], [8, 4]]);
+  await h.waitForSaved(page);
+
+  await expect(page.locator('[data-garage-corner-prompt]')).toHaveCount(0);
+  const saved = await h.savedDrawing(page);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster).toBeTruthy();
+  expect(garageMaster.cornerStubs).toHaveLength(0);
+  expect(garageMaster.points).toHaveLength(4);
+  expect(h.near(garageMaster.points[0].x, 8, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[0].z, -6, 0.05)).toBe(true);
+  // Only the mid-wall end inserted a house point — the corner end reused it.
+  const houseMaster = saved.boneyardOutlines.find(outline => !outline.garage);
+  expect(houseMaster.points).toHaveLength(5);
+});
+
+// A run whose end leg extends the house's side wall southward with the garage
+// body EAST of that wall line — house interior is west, so the runs would sit
+// face to interior without an offset.
+const OPPOSITE_SIDE_RUN = [[8, -6], [8, -14], [20, -14], [20, -2], [8, -2]];
+
+test('an in-line corner landing prompts; the beam stub shifts the run over square', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageRun(page, OPPOSITE_SIDE_RUN);
 
   const prompt = page.locator('[data-garage-corner-prompt]');
   await expect(prompt).toBeVisible();
   await expect(prompt).toContainText('CONNECT AT CORNER');
+  await expect(page.locator('[data-garage-stub-beam]')).toContainText('8"');
   await page.locator('[data-garage-stub-beam]').click();
   await h.waitForSaved(page);
 
@@ -114,15 +142,21 @@ test('a corner landing prompts CONNECT AT CORNER; the 8" stub slides the attach 
   const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
   expect(garageMaster.cornerStubs).toHaveLength(1);
   expect(garageMaster.cornerStubs[0].lengthIn).toBe(8);
-  // The attach slid 8" along the house wall on the garage side of the corner.
+  // The end stays welded on the corner; a square 8" stub joins it to the
+  // shifted leg, whose outside corner moved the same 8" — no diagonal.
+  expect(garageMaster.points).toHaveLength(6);
   expect(h.near(garageMaster.points[0].x, 8, 0.05)).toBe(true);
-  expect(h.near(garageMaster.points[0].z, -6 + 8 / 12, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[0].z, -6, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[1].x, 8 + 8 / 12, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[1].z, -6, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[2].x, 8 + 8 / 12, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[2].z, -14, 0.05)).toBe(true);
 });
 
-test("the 1'-0\" stub option lands the attach a foot off the corner", async ({ page }) => {
+test("the 1'-0\" stub option shifts the wall and its outside corner a full foot", async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
-  await drawGarageRun(page, [[8, -6], [20, -6], [20, 4], [8, 4]]);
+  await drawGarageRun(page, OPPOSITE_SIDE_RUN);
 
   await expect(page.locator('[data-garage-corner-prompt]')).toBeVisible();
   await page.locator('[data-garage-stub-foot]').click();
@@ -132,8 +166,42 @@ test("the 1'-0\" stub option lands the attach a foot off the corner", async ({ p
   const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
   expect(garageMaster.cornerStubs).toHaveLength(1);
   expect(garageMaster.cornerStubs[0].lengthIn).toBe(12);
-  expect(h.near(garageMaster.points[0].x, 8, 0.05)).toBe(true);
-  expect(h.near(garageMaster.points[0].z, -5, 0.05)).toBe(true);
+  expect(garageMaster.points).toHaveLength(6);
+  expect(h.near(garageMaster.points[1].x, 9, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[1].z, -6, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[2].x, 9, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[2].z, -14, 0.05)).toBe(true);
+});
+
+test('an ICF foundation offers its own thickness as the grade-beam stub', async ({ page }) => {
+  await h.openModel(page);
+
+  // An ICF wall on the FOUNDATION layer set sets the house's assembly.
+  await page.locator('.level-row', { has: page.locator('.level-name', { hasText: 'FOUNDATION' }) })
+    .locator('.level-name').click();
+  await page.waitForTimeout(300);
+  await page.locator('.level-row', { has: page.locator('.level-name', { hasText: 'FOUNDATION' }) })
+    .locator('.level-layer', { hasText: 'FOUNDATION' }).click();
+  await page.waitForTimeout(300);
+  await h.selectTool(page, 'Wall');
+  await page.getByRole('button', { name: 'ICF  (11¼")' }).click();
+  await h.clickWorld(page, -20, -20);
+  await h.clickWorld(page, -14, -20);
+  await page.keyboard.press('Escape');
+  await h.waitForSaved(page);
+
+  await drawHouseOutline(page);
+  await drawGarageRun(page, OPPOSITE_SIDE_RUN);
+
+  await expect(page.locator('[data-garage-corner-prompt]')).toBeVisible();
+  await expect(page.locator('[data-garage-stub-beam]')).toContainText('11 1/4"');
+  await page.locator('[data-garage-stub-beam]').click();
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster.cornerStubs[0].lengthIn).toBeCloseTo(11.25, 5);
+  expect(h.near(garageMaster.points[1].x, 8 + 11.25 / 12, 0.05)).toBe(true);
 });
 
 test('BUILD HOUSE grows the open-leg beam, flat slab, flush walls, and one roof', async ({ page }) => {
