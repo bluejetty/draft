@@ -5308,8 +5308,19 @@ class Component extends DCLogic {
     const midSnap = this._findMidpointSnap(raw, sd.vertices);
     if (midSnap) return midSnap;
     if (angleLockHeld && this._lockAngle != null) {
+      // The same ray choice the cursor shows: the grab point's lock competes
+      // with the polar node's T-square, and the closer ray takes the vertex —
+      // the node must land exactly where the cursor says it will.
       const projected = geo.projectOntoRay(sd.origin, this._lockAngle, raw);
-      return new THREE.Vector3(projected.x, raw.y, projected.z);
+      const fromStart = new THREE.Vector3(projected.x, raw.y, projected.z);
+      const polarLockOrigin = this._polarOrigin
+        && Math.hypot(sd.origin.x - this._polarOrigin.x, sd.origin.z - this._polarOrigin.z) > 0.001
+        ? this._polarOrigin : null;
+      const fromPolar = polarLockOrigin ? this._polarRayLock(raw) : null;
+      if (!fromPolar) return fromStart;
+      const startDist = Math.hypot(raw.x - fromStart.x, raw.z - fromStart.z);
+      const polarDist = Math.hypot(raw.x - fromPolar.x, raw.z - fromPolar.z);
+      return polarDist <= startDist ? fromPolar : fromStart;
     }
     if (this._polarOrigin) {
       const polar = this._findPolarSnap(raw);
