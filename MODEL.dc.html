@@ -265,6 +265,19 @@
     </div>
   </sc-if>
 
+  <!-- COPY TOOL -->
+  <sc-if value="{{ copyToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:280px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:4px; white-space:nowrap;">Copy</div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:rgba(29,31,32,0.48);">{{ copyHelp }}</div>
+        <sc-if value="{{ hasCopyMessage }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:#5980a6;">{{ copyMessage }}</div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
   <!-- WALL PROPERTIES -->
   <sc-if value="{{ wallToolActive }}" hint-placeholder-val="{{ false }}">
     <div style="display:flex; align-items:stretch;">
@@ -954,7 +967,7 @@ const LOCKED_NODE_SNAP_PX = 3;
 // length measures from it, and these tools can even place their first point
 // that way before any click.
 const POLAR_RULER_TOOLS = new Set(['line', 'wall', 'outline']);
-const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'dimension', 'cut', 'extend']);
+const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'dimension', 'cut', 'extend', 'copy']);
 // Polar-origin activation effect: the node pulses orange and shoots hairline
 // direction rays that hold for a second, then fade out over another.
 const POLAR_FX_HOLD_MS = 1000;
@@ -1394,6 +1407,9 @@ class Component extends DCLogic {
     extendPhase: 'idle',
     extendMessage: '',
     extendBase: null,
+    copyPhase: 'idle',
+    copyMessage: '',
+    copyBase: null,
     units:         'imperial',
     activeView:    'top',      // 'top'|'front'|'side'|'perspective'|'cut'
     snapStrength: normaliseSnapStrength(null),
@@ -1518,9 +1534,11 @@ class Component extends DCLogic {
     requestAnimationFrame(() => requestAnimationFrame(() => this._init()));
     window.addEventListener('keydown', this._onKey  = e => { this._invalidate(); this._handleKey(e); });
     window.addEventListener('keydown', this._onKdn  = e => {
-      if (e.key === 'Shift' && !this._shiftHeld) { this._shiftHeld = true; this.setState({ tsquareEngaged: true }); }
+      if (e.key === 'Shift' && !this._shiftHeld) { this._shiftHeld = true; this._refreshAngleLockStep(); this.setState({ tsquareEngaged: true }); }
     });
-    window.addEventListener('keydown', this._onCtrlDown = e => { if (e.key === 'Control') this._ctrlHeld = true; });
+    window.addEventListener('keydown', this._onCtrlDown = e => {
+      if (e.key === 'Control' && !this._ctrlHeld) { this._ctrlHeld = true; this._refreshAngleLockStep(); this.setState({ tsquareEngaged: true }); }
+    });
     document.addEventListener('visibilitychange', this._onVis = () => {
       if (!document.hidden) {
         const settings = window.DraftProfileManager?.getActive('settings');
@@ -1547,10 +1565,15 @@ class Component extends DCLogic {
     window.addEventListener('keyup',   this._onKup  = e => {
       if (e.key === 'Shift') {
         this._shiftHeld = false;
-        this.setState({ tsquareEngaged: false });
+        this._refreshAngleLockStep();
+        this.setState({ tsquareEngaged: this._ctrlHeld === true });
         if (this._windowSelection?.dynamic) this._invalidate();
       }
-      if (e.key === 'Control') this._ctrlHeld = false;
+      if (e.key === 'Control') {
+        this._ctrlHeld = false;
+        this._refreshAngleLockStep();
+        this.setState({ tsquareEngaged: this._shiftHeld === true });
+      }
     });
   }
 
@@ -2998,6 +3021,8 @@ class Component extends DCLogic {
         if (Math.sqrt(dx * dx + dy * dy) > 4 && windowSelection.current) {
           if (windowSelection.kind === 'extend') {
             this._captureExtendWindow(windowSelection.start, windowSelection.current);
+          } else if (windowSelection.kind === 'copy') {
+            this._captureCopyWindow(windowSelection.start, windowSelection.current);
           } else {
             this._handleWindowSelection(windowSelection.start, windowSelection.current, windowSelection.shiftHeld,
               this._windowSelectionMode(windowSelection));
@@ -3553,6 +3578,62 @@ class Component extends DCLogic {
       });
 
       // Base marker and rubber band to the destination
+      if (base) {
+        const sb = toS(base);
+        ctx.strokeStyle = accent; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(sb.x, sb.y, 5, 0, Math.PI * 2); ctx.stroke();
+        if (moving) {
+          const sd = toS(dest);
+          ctx.setLineDash([6, 4]);
+          ctx.beginPath(); ctx.moveTo(sb.x, sb.y); ctx.lineTo(sd.x, sd.y); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+      ctx.restore();
+    }
+
+    // Copy capture preview: the rectangle and captured items stay put on the
+    // originals, and a dashed clone ghosts along with the cursor.
+    if (!this._isPrinting && this._copySession && this.state.activeTool === 'copy' && this.state.copyPhase !== 'idle') {
+      const session = this._copySession;
+      const accent = '#5980a6';
+      const base = this.state.copyBase;
+      const dest = this.state.copyPhase === 'destination' ? this._previewEndPoint() : null;
+      const dx = base && dest ? dest.x - base.x : 0;
+      const dz = base && dest ? dest.z - base.z : 0;
+      const moving = Boolean(base && dest) && Math.hypot(dx, dz) > 0.001;
+      ctx.save();
+
+      if (session.rect) {
+        const a = toS(session.rect.start);
+        const b = toS(session.rect.end);
+        ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+        ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+        ctx.setLineDash([]);
+      }
+
+      if (moving) {
+        ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+        session.items.forEach(item => {
+          const points = (item.points || [item.start, item.end]).filter(Boolean);
+          if (!points.length) return;
+          ctx.beginPath();
+          points.forEach((pt, i) => {
+            const s = toS({ x: pt.x + dx, y: pt.y, z: pt.z + dz });
+            if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+          });
+          if (item.points && points.length > 2) ctx.closePath();
+          ctx.stroke();
+        });
+        ctx.setLineDash([]);
+      }
+
+      ctx.fillStyle = accent;
+      session.vertices.forEach(pt => {
+        const s = toS(pt);
+        ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
+      });
+
       if (base) {
         const sb = toS(base);
         ctx.strokeStyle = accent; ctx.lineWidth = 1.5;
@@ -5295,7 +5376,7 @@ class Component extends DCLogic {
   _dragSnapPoint(raw, sd) {
     const angleLockHeld = this._shiftHeld || this._ctrlHeld;
     if (angleLockHeld) {
-      if (this._lockAngle == null) this._lockAngle = geo.lockAngleFor(sd.origin, raw);
+      if (this._lockAngle == null) this._lockAngle = geo.lockAngleFor(sd.origin, raw, this._angleLockStep());
     } else {
       this._lockAngle = null;
     }
@@ -5377,6 +5458,7 @@ class Component extends DCLogic {
       : tool === 'dimension' ? this._dimensionStart
       : tool === 'cut' && this.state.cutPhase === 'placing' ? this._cutStart3
       : tool === 'extend' && this.state.extendPhase === 'destination' ? this.state.extendBase
+      : tool === 'copy' && this.state.copyPhase === 'destination' ? this.state.copyBase
       : null;
     const angleLockHeld = this._shiftHeld || this._ctrlHeld;
     // Shift with an acquired polar node acts as a T-square from that node: the
@@ -5393,7 +5475,7 @@ class Component extends DCLogic {
     if (angleLockHeld && start) {
       // Establish angle from raw cursor if not yet locked. A cursor still sitting
       // on the start point has no direction yet, so the lock waits for one.
-      if (this._lockAngle == null) this._lockAngle = geo.lockAngleFor(start, basePt);
+      if (this._lockAngle == null) this._lockAngle = geo.lockAngleFor(start, basePt, this._angleLockStep());
     } else if (!angleLockHeld) {
       this._lockAngle = null;
     }
@@ -5638,6 +5720,31 @@ class Component extends DCLogic {
         }
         if (this.state.extendPhase === 'destination') {
           this._commitExtend(this._snapPt || this._snap(raw));
+          e.preventDefault();
+        }
+      }
+      else if (tool === 'copy') {
+        const raw = this._getWorldPos(e.clientX, e.clientY);
+        if (!raw) return;
+        if (this.state.activeView !== 'top') {
+          this.setState({ copyMessage: 'Copy works in TOP / PLAN view.' });
+          return;
+        }
+        if (this.state.copyPhase === 'idle') {
+          this._windowSelection = {
+            kind: 'copy', start: raw, current: raw, startX: e.clientX, startY: e.clientY,
+            mode: 'window',
+          };
+          e.preventDefault();
+          return;
+        }
+        if (this.state.copyPhase === 'base') {
+          this._setCopyBase(this._snapPt || this._snap(raw));
+          e.preventDefault();
+          return;
+        }
+        if (this.state.copyPhase === 'destination') {
+          this._commitCopy(this._snapPt || this._snap(raw));
           e.preventDefault();
         }
       }
@@ -10219,7 +10326,7 @@ class Component extends DCLogic {
 
   _activateExtendTool() {
     const seeded = this.state.activeTool === 'select' ? this._extendSessionFromSelection() : null;
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._cancelCut(); this._cancelExtend();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._cancelCut(); this._cancelExtend(); this._cancelCopy();
     if (seeded) {
       this._clearSelection();
       this._extendSession = seeded;
@@ -10229,6 +10336,200 @@ class Component extends DCLogic {
       });
     } else {
       this.setState({ activeTool: 'extend', extendScope: 'current', extendPhase: 'idle', extendMessage: '' });
+    }
+  }
+
+  // ─── Copy tool ───────────────────────────────────────────────────────────────
+  // COPY clones the captured items and drops the clones a base → destination
+  // offset away, leaving the originals untouched. Clones take fresh ids and
+  // fresh pooled vertices, so nothing the original shares can be reshaped
+  // through the copy. The session stays live after each placement, so repeats
+  // keep dropping from the same base point until Esc.
+
+  _makeCopySession(items, rect = null) {
+    const vertices = new Set();
+    items.forEach(item => (item.points || [item.start, item.end]).filter(Boolean)
+      .forEach(point => vertices.add(point)));
+    return { items, vertices, rect };
+  }
+
+  // Selection-first Copy: the selected items become the captured set, so a
+  // window selection followed by the Copy key skips the capture rectangle and
+  // goes straight to picking a base point.
+  _copySessionFromSelection() {
+    const items = [];
+    const add = item => { if (!items.includes(item)) items.push(item); };
+    const groups = new Set();
+    [...(this._selectedSegs || []), ...(this._selectedFloors || [])]
+      .filter(item => !this._isCurrentContextReferenceItem(item))
+      .forEach(item => {
+        const group = this._groupForItem(item);
+        if (group) groups.add(group); else add(item);
+      });
+    // An assembly travels whole: any selected member brings the full group.
+    groups.forEach(group => this._groupItems(group)
+      .filter(item => !this._isCurrentContextReferenceItem(item))
+      .forEach(add));
+    (this._selectedDimensions || []).forEach(add);
+    return items.length ? this._makeCopySession(items) : null;
+  }
+
+  _captureCopyWindow(start, end) {
+    const minX = Math.min(start.x, end.x), maxX = Math.max(start.x, end.x);
+    const minZ = Math.min(start.z, end.z), maxZ = Math.max(start.z, end.z);
+    const inside = point => point.x >= minX && point.x <= maxX && point.z >= minZ && point.z <= maxZ;
+    // A copy window takes whole items on the active level, like window select.
+    const whole = item => {
+      const points = (item.points || [item.start, item.end]).filter(Boolean);
+      return points.length > 0 && points.every(inside);
+    };
+    const items = [];
+    const add = item => { if (!items.includes(item)) items.push(item); };
+    const groups = new Set();
+    [...this._activeLines(), ...this._activeWalls(), ...this._activeFloors()].forEach(item => {
+      if (this._isCurrentContextReferenceItem(item) || !whole(item)) return;
+      const group = this._groupForItem(item);
+      if (group) groups.add(group); else add(item);
+    });
+    // An assembly travels whole: catching any member brings the full group.
+    groups.forEach(group => this._groupItems(group)
+      .filter(item => !this._isCurrentContextReferenceItem(item))
+      .forEach(add));
+    this._activeDimensions().forEach(dimension => { if (whole(dimension)) add(dimension); });
+    if (!items.length) {
+      this._copySession = null;
+      this.setState({ copyPhase: 'idle', copyBase: null, copyMessage: 'Drag the rectangle over the items to copy.' });
+      return;
+    }
+    this._copySession = this._makeCopySession(items, {
+      start: { x: start.x, y: start.y, z: start.z },
+      end: { x: end.x, y: end.y, z: end.z },
+    });
+    this.setState({
+      copyPhase: 'base',
+      copyBase: null,
+      copyMessage: `${items.length} item${items.length === 1 ? '' : 's'} captured. Pick a base point.`,
+    });
+  }
+
+  _setCopyBase(point) {
+    if (!this._copySession || !point) return;
+    this.setState({
+      copyPhase: 'destination',
+      copyBase: { x: point.x, y: point.y, z: point.z },
+      copyMessage: 'Click where the copy lands · every click drops another · Esc finishes.',
+    });
+  }
+
+  _commitCopy(destination) {
+    if (!this._copySession || !this.state.copyBase || !destination) return;
+    const base = this.state.copyBase;
+    const dx = destination.x - base.x, dz = destination.z - base.z;
+    if (Math.hypot(dx, dz) < 0.001) return;
+    const placed = this._cloneItemsShifted(this._copySession.items, dx, dz);
+    if (!placed) return;
+    this._markUnsaved();
+    this.setState({
+      copyMessage: `${placed} item${placed === 1 ? '' : 's'} copied. Click for another · Esc finishes.`,
+    });
+  }
+
+  _cloneItemsShifted(items, dx, dz) {
+    const vertexMap = new Map();
+    const idMap = new Map();
+    const shiftVertex = (point, levelId, view) => {
+      if (vertexMap.has(point)) return vertexMap.get(point);
+      const vertex = this._mergeVertex({ x: point.x + dx, z: point.z + dz }, levelId, view);
+      vertexMap.set(point, vertex);
+      return vertex;
+    };
+    let placed = 0;
+    items.forEach(item => {
+      const type = this._itemType(item);
+      if (type === 'line' || type === 'wall') {
+        const view = item.view || 'plan';
+        const clone = {
+          ...item,
+          id: this._newDrawingItemId(type),
+          start: shiftVertex(item.start, item.levelId, view),
+          end: shiftVertex(item.end, item.levelId, view),
+        };
+        idMap.set(`${type}:${item.id}`, clone.id);
+        (type === 'line' ? this._lines : this._walls).push(clone);
+        placed++;
+      } else if (type === 'floor') {
+        const view = item.view || 'floor';
+        const clone = {
+          ...item,
+          id: this._newDrawingItemId('floor'),
+          points: item.points.map(point => shiftVertex(point, item.levelId, view)),
+          assembly: item.assembly ? { ...item.assembly } : item.assembly,
+        };
+        idMap.set(`floor:${item.id}`, clone.id);
+        this._floors.push(clone);
+        placed++;
+      } else if (type === 'dimension') {
+        this._dimensions.push({
+          ...item,
+          id: this._nextDimensionId++,
+          start: new THREE.Vector3(item.start.x + dx, item.start.y, item.start.z + dz),
+          end: new THREE.Vector3(item.end.x + dx, item.end.y, item.end.z + dz),
+        });
+        placed++;
+      }
+    });
+    // Openings ride their copied host: wall fenestrations keep their offset
+    // along the new wall, floor holes shift with the surface.
+    this._fenestrations.filter(opening => idMap.has(`wall:${opening.wallId}`)).forEach(opening => {
+      this._fenestrations.push({
+        ...opening,
+        id: this._newDrawingItemId('fenestration'),
+        wallId: idMap.get(`wall:${opening.wallId}`),
+      });
+    });
+    this._surfaceOpenings.filter(opening => opening.hostType === 'floor' && idMap.has(`floor:${opening.hostId}`))
+      .forEach(opening => {
+        this._surfaceOpenings.push({
+          ...opening,
+          id: this._newDrawingItemId('opening'),
+          hostId: idMap.get(`floor:${opening.hostId}`),
+          points: opening.points.map(point => shiftVertex(point, opening.levelId, 'opening')),
+        });
+      });
+    // An assembly whose members all copied lands as a new independent assembly
+    // of the clones, keeping its name and fixed/rigid behaviour.
+    this._groups.filter(group => group.members.length
+      && group.members.every(member => idMap.has(`${member.type}:${member.id}`)))
+      .forEach(group => {
+        this._groups.push({
+          ...group,
+          id: `group-${this._nextGroupId || 1}`,
+          members: group.members.map(member => ({ type: member.type, id: idMap.get(`${member.type}:${member.id}`) })),
+          wallSettings: group.wallSettings ? { ...group.wallSettings } : null,
+        });
+        this._nextGroupId = (this._nextGroupId || 1) + 1;
+      });
+    return placed;
+  }
+
+  _cancelCopy() {
+    this._windowSelection = this._windowSelection?.kind === 'copy' ? null : this._windowSelection;
+    this._copySession = null;
+    this.setState({ copyPhase: 'idle', copyBase: null, copyMessage: '' });
+  }
+
+  _activateCopyTool() {
+    const seeded = this.state.activeTool === 'select' ? this._copySessionFromSelection() : null;
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._cancelCut(); this._cancelExtend(); this._cancelCopy();
+    if (seeded) {
+      this._clearSelection();
+      this._copySession = seeded;
+      this.setState({
+        activeTool: 'copy', copyPhase: 'base',
+        copyMessage: `${seeded.items.length} item${seeded.items.length === 1 ? '' : 's'} from the selection. Pick a base point.`,
+      });
+    } else {
+      this.setState({ activeTool: 'copy', copyPhase: 'idle', copyMessage: '' });
     }
   }
 
@@ -10346,13 +10647,13 @@ class Component extends DCLogic {
     return new THREE.Vector3(sx, pt.y, sz);
   }
 
-  // Shift T-square from the polar node: project the cursor onto the nearest
-  // of the origin's 45° rays regardless of how far it sits from the ray.
+  // Modifier T-square from the polar node: project the cursor onto the nearest
+  // of the origin's stepped rays regardless of how far it sits from the ray.
   _polarRayLock(pt) {
     const origin = this._polarOrigin;
     const dx = pt.x - origin.x, dz = pt.z - origin.z;
     if (Math.hypot(dx, dz) < 0.001) return null;
-    const step = Math.PI / 4;
+    const step = this._angleLockStep();
     const angle = Math.round(Math.atan2(dz, dx) / step) * step;
     const along = dx * Math.cos(angle) + dz * Math.sin(angle);
     if (along <= 0) return null;
@@ -10360,11 +10661,29 @@ class Component extends DCLogic {
   }
 
   _applyAngleLock(start, pt) {
-    const angle = this._lockAngle ?? geo.lockAngleFor(start, pt);
+    const angle = this._lockAngle ?? geo.lockAngleFor(start, pt, this._angleLockStep());
     if (angle == null) return pt;
     this._lockAngle = angle;
     const projected = geo.projectOntoRay(start, angle, pt);
     return new THREE.Vector3(projected.x, pt.y, projected.z);
+  }
+
+  // The angle-lock ladder: Ctrl squares to 90°, Shift keeps the classic 45°,
+  // Ctrl+Shift tightens to 30° for pitched work.
+  _angleLockStep() {
+    if (this._ctrlHeld && this._shiftHeld) return Math.PI / 6;
+    if (this._ctrlHeld) return Math.PI / 2;
+    return Math.PI / 4;
+  }
+
+  // Changing the modifier combo mid-hold releases the held angle so the lock
+  // re-aims on the new ladder step.
+  _refreshAngleLockStep() {
+    const step = this._angleLockStep();
+    if (this._lockStep !== step) {
+      this._lockStep = step;
+      this._lockAngle = null;
+    }
   }
 
   _angleDeg(start, end) {
@@ -11227,15 +11546,18 @@ class Component extends DCLogic {
     const tool = this.state.activeTool;
     const extendReady = tool === 'extend' && this.state.extendPhase === 'destination'
       && this._extendSession && this.state.extendBase;
+    const copyReady = tool === 'copy' && this.state.copyPhase === 'destination'
+      && this._copySession && this.state.copyBase;
     const start = tool === 'line' ? this._lineStart
       : tool === 'wall' ? this._wallStart
       : tool === 'outline' ? this._outlinePoints[this._outlinePoints.length - 1]
       : extendReady ? new THREE.Vector3(this.state.extendBase.x, this.state.extendBase.y, this.state.extendBase.z)
+      : copyReady ? new THREE.Vector3(this.state.copyBase.x, this.state.copyBase.y, this.state.copyBase.z)
       : null;
     const drawing = tool === 'line' ? this._lineDrawing
       : tool === 'wall' ? this._wallDrawing
       : tool === 'outline' ? this._outlineDrawing
-      : Boolean(extendReady);
+      : Boolean(extendReady || copyReady);
     const polarReady = this._polarOrigin && this._polarSnap
       && POLAR_TRACKING_TOOLS.has(tool);
     if ((!start || !drawing) && !(polarReady && POLAR_RULER_TOOLS.has(tool))) return;
@@ -11372,7 +11694,7 @@ class Component extends DCLogic {
   _confirmFrozenLength() {
     const frozenTool = this._frozenTool;
     const zero = this._frozenRuler ?? this._frozenStart;
-    if (!this.state.lengthFrozen || !zero || !['line', 'wall', 'extend', 'outline', 'nodedrag'].includes(frozenTool)) {
+    if (!this.state.lengthFrozen || !zero || !['line', 'wall', 'extend', 'copy', 'outline', 'nodedrag'].includes(frozenTool)) {
       this._cancelFrozenLength();
       return;
     }
@@ -11488,6 +11810,29 @@ class Component extends DCLogic {
         z: zero.z + Math.sin(this._frozenAngle) * total,
       };
       this._commitExtend(destination);
+      this._lockAngle = null;
+      this._frozenEnd = null;
+      this._frozenStart = null;
+      this._frozenRuler = null;
+      this._frozenFromPolar = false;
+      this._frozenTool = null;
+      if (this._previewLine) this._previewLine.visible = false;
+      this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '' });
+      return;
+    }
+    if (frozenTool === 'copy') {
+      const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
+      const total = parsed.ok ? parsed.inches / 12 : 0;
+      if (!parsed.ok || Math.abs(total) <= 0.001) {
+        this.setState({ frozenDimensionError: parsed.ok ? 'Length cannot be zero.' : parsed.error });
+        return;
+      }
+      const destination = {
+        x: zero.x + Math.cos(this._frozenAngle) * total,
+        y: this._frozenStart.y,
+        z: zero.z + Math.sin(this._frozenAngle) * total,
+      };
+      this._commitCopy(destination);
       this._lockAngle = null;
       this._frozenEnd = null;
       this._frozenStart = null;
@@ -11789,8 +12134,12 @@ class Component extends DCLogic {
         this._cancelExtend();
         return;
       }
+      if (this.state.activeTool === 'copy' && (this._copySession || this._windowSelection?.kind === 'copy')) {
+        this._cancelCopy();
+        return;
+      }
       if (this._windowSelection) { this._windowSelection = null; return; }
-      this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._cancelCut();
+      this._cancelExtend(); this._cancelCopy(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._cancelCut();
       // Esc with a live selection clears it; Esc on an empty selection releases
       // an engaged Select object-type filter back to ALL.
       const hadSelection = (this._selectedSegs?.size || 0) + (this._selectedFloors?.size || 0)
@@ -11852,6 +12201,7 @@ class Component extends DCLogic {
       const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._wallDrawing)
         || (tool === 'outline' && this._outlineDrawing)
         || (tool === 'extend' && this.state.extendPhase === 'destination')
+        || (tool === 'copy' && this.state.copyPhase === 'destination')
         || this._selectDrag?.active === true;
       // An engaged polar ray lets these tools type their first point from the
       // acquired node before any click.
@@ -11882,14 +12232,19 @@ class Component extends DCLogic {
     if (matches('outline')) { e.preventDefault(); this._activateContextTool('outline'); return; }
     if (matches('roof')) { e.preventDefault(); this._activateContextTool('roof'); return; }
     if (matches('dimension')) { e.preventDefault(); this._activateContextTool('dimension'); return; }
-    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click', selectFilter: 'all' }); return; }
+    if (matches('select')) { e.preventDefault(); this._cancelExtend(); this._cancelCopy(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._windowSelection = null; this.setState({ activeTool: 'select', selectionMode: 'click', selectFilter: 'all' }); return; }
     if (matches('extend') || matches('extendAlt')) {
       e.preventDefault();
       this._activateExtendTool();
       return;
     }
-    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
-    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
+    if (matches('copy')) {
+      e.preventDefault();
+      this._activateCopyTool();
+      return;
+    }
+    if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelCopy(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
+    if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelCopy(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
     if (matches('top')) { e.preventDefault(); this._setView('top'); return; }
@@ -12240,7 +12595,7 @@ class Component extends DCLogic {
     this._ensureDrawingCollections();
     const { activeTool, units, activeView, isDrawing,
             levels, activeLevelIdx, backgroundLevelIds, backgroundLevelViews, backgroundMode,
-            cuts, activeCutId, cutPhase, choosingDir, extendScope, extendPhase } = this.state;
+            cuts, activeCutId, cutPhase, choosingDir, extendScope, extendPhase, copyPhase } = this.state;
     const on  = { bg:'#1d1f20', color:'#f2f2f3', border:'#1d1f20' };
     const off = { bg:'#fff',    color:'#1d1f20', border:'rgba(29,31,32,0.16)' };
     const hi  = 'rgba(29,31,32,0.09)', lo = '#fff';
@@ -12289,6 +12644,7 @@ class Component extends DCLogic {
     const drawingFloor = isDrawing && activeTool === 'floor';
     const dimensioning = activeTool === 'dimension';
     const extending = activeTool === 'extend';
+    const copying = activeTool === 'copy';
     const nodeArcing = activeTool === 'node';
     const fenestrating = activeTool === 'fenestration';
     const holeHost = fenestrating
@@ -12302,7 +12658,7 @@ class Component extends DCLogic {
     const shaping = activeTool === 'shape';
     const drawingShape = isDrawing && shaping;
     const roofing = activeTool === 'roof';
-    const toolStripHasOptions = ['select','extend','line','wall','floor','shape','outline','dimension','fenestration','column','beam','stair','annotation','roof'].includes(activeTool);
+    const toolStripHasOptions = ['select','extend','copy','line','wall','floor','shape','outline','dimension','fenestration','column','beam','stair','annotation','roof'].includes(activeTool);
     const roofPhase = this.state.roofPhase;
     const placingCut  = isCutTool && cutPhase === 'placing';
     const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending || nodeArcing || fenestrating || shaping || roofing;
@@ -12645,9 +13001,17 @@ class Component extends DCLogic {
         ? `Drag a ${extendScope === 'all' ? 'red' : 'blue'} rectangle over the nodes to move — or window-select first, then press ${shortcut('extend')}.`
         : (extendPhase === 'base'
           ? 'Captured nodes are ready. Choose a base point.'
-          : `Click the destination · Shift locks 45° · ${shortcut('freezeLength')} to type a length.`),
+          : `Click the destination · Ctrl 90° / Shift 45° / Ctrl+Shift 30° · ${shortcut('freezeLength')} to type a length.`),
       hasExtendMessage: Boolean(this.state.extendMessage),
       extendMessage: this.state.extendMessage,
+      copyToolActive: copying,
+      copyHelp: copyPhase === 'idle'
+        ? `Drag a rectangle over the items to copy — or select first, then press ${shortcut('copy')}.`
+        : (copyPhase === 'base'
+          ? 'Captured items are ready. Choose a base point.'
+          : `Click destinations to drop copies · Ctrl 90° / Shift 45° / Ctrl+Shift 30° · ${shortcut('freezeLength')} to type a length.`),
+      hasCopyMessage: Boolean(this.state.copyMessage),
+      copyMessage: this.state.copyMessage,
       setExtendCurrentLevel: () => {
         this._cancelExtend();
         this.setState({ extendScope: 'current', extendPhase: 'idle', extendMessage: '' });
@@ -13058,6 +13422,7 @@ class Component extends DCLogic {
       drawTools: [
         standardTool(`Select  [${shortcut('select')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click', selectFilter:'all'}); }, activeTool==='select'),
         standardTool(`Extend  [${shortcut('extend')}]`, ()=>{ this._activateExtendTool(); }, activeTool==='extend'),
+        standardTool(`Copy  [${shortcut('copy')}]`, ()=>{ this._activateCopyTool(); }, activeTool==='copy'),
         standardTool(`Trim  [${shortcut('trim')}]`, ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
         contextualTool('node'),
         contextualTool('line'),

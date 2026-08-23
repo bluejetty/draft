@@ -118,6 +118,7 @@ if (!window.DraftProfileManager) {
     ungroup: 'Ctrl+Shift+G',
     extend: 'X',
     extendAlt: 'Ctrl+H',
+    copy: 'K',
     perspective: '1',
     top: '2',
     front: '3',

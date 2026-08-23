@@ -51,12 +51,12 @@ if (!window.DraftGeometry2D) {
     return { x: start.x + dirX * along, y: point.y ?? start.y, z: start.z + dirZ * along };
   };
 
-  // Nearest 45° multiple to the direction start → point, or null when the two
-  // points coincide and there is no meaningful direction yet.
-  const lockAngleFor = (start, point) => {
+  // Nearest step multiple (45° by default) to the direction start → point, or
+  // null when the two points coincide and there is no meaningful direction yet.
+  const lockAngleFor = (start, point, step = Math.PI / 4) => {
     if (distance(start, point) < 0.001) return null;
     const raw = Math.atan2(point.z - start.z, point.x - start.x);
-    return Math.round(raw / (Math.PI / 4)) * (Math.PI / 4);
+    return Math.round(raw / step) * step;
   };
 
   // Compass bearing in whole degrees with North at 90°, or null for a zero-length
