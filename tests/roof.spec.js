@@ -7,6 +7,18 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// Like h.countColor but only counts solid pixels: faint grid strokes read
+// back from the canvas with noisy unpremultiplied colors at low alpha.
+function countSolid(pixels, [r, g, b], tol = 26) {
+  let count = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (pixels[i + 3] < 200) continue;
+    if (Math.abs(pixels[i] - r) <= tol && Math.abs(pixels[i + 1] - g) <= tol
+      && Math.abs(pixels[i + 2] - b) <= tol) count += 1;
+  }
+  return count;
+}
+
 function levelRow(page, name) {
   return page.locator('.level-row').filter({ has: page.locator('.level-name', { hasText: name }) });
 }
@@ -92,6 +104,45 @@ test('clicking a roof edge with the Roof tool toggles EAVE / GABLE', async ({ pa
   await h.waitForSaved(page);
   roof = (await h.savedDrawing(page)).roofs[0];
   expect(roof.edges[0]).toBe('eave');
+});
+
+test('a gable edge draws its wall line one overhang inside the rake edge', async ({ page }) => {
+  await h.openModel(page);
+  await switchLevel(page, 'ROOF');
+
+  // Shape ±(8, 6) grows to a ±(10, 8) footprint with the 2' default overhang.
+  await h.selectTool(page, 'Shape');
+  await h.clickWorld(page, -8, -6);
+  await h.clickWorld(page, 8, -6);
+  await h.clickWorld(page, 8, 6);
+  await h.clickWorld(page, -8, 6);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  await h.selectTool(page, 'Roof');
+  await page.getByRole('button', { name: 'FROM SHAPE', exact: true }).click();
+  await page.getByRole('button', { name: 'BUILD FROM SHAPE' }).click();
+  await h.waitForSaved(page);
+  await page.waitForTimeout(400);
+
+  // Sample with Select active so the Roof tool's EAVE / GABLE tags stay clear.
+  const edgeColor = [122, 74, 33];
+  const atWall = await h.worldToClient(page, 8, 3);
+  await h.selectTool(page, 'Select');
+  await page.waitForTimeout(400);
+  // All-eave roof: no roof stroke back at the wall line x=8 (off the ridge).
+  expect(countSolid(await h.overlayPixels(page, atWall.x, atWall.y, 4), edgeColor)).toBe(0);
+
+  // Tag the x=10 edge GABLE: its wall line lands at x=8 — the outline the
+  // roof grew from, one overhang inside the rake edge.
+  await h.selectTool(page, 'Roof');
+  await h.clickWorld(page, 10, 0);
+  await h.waitForSaved(page);
+  const roof = (await h.savedDrawing(page)).roofs[0];
+  expect(roof.edges.filter(edge => edge === 'gable')).toHaveLength(1);
+  await h.selectTool(page, 'Select');
+  await page.waitForTimeout(400);
+  expect(countSolid(await h.overlayPixels(page, atWall.x, atWall.y, 4), edgeColor)).toBeGreaterThan(0);
 });
 
 test('roof corners drag independently with Select', async ({ page }) => {

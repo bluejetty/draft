@@ -629,13 +629,6 @@
       </div>
     </sc-if>
 
-    <!-- WebGL is optional: the 2D overlay remains the drafting surface. -->
-    <sc-if value="{{ webglUnavailable }}" hint-placeholder-val="{{ false }}">
-       <div data-model-webgl-fallback role="status" style="position:absolute; top:12px; left:50%; transform:translateX(-50%); max-width:calc(100% - 28px); padding:7px 12px; border:1px solid rgba(176,64,80,0.45); background:rgba(255,248,249,0.96); color:#8f3042; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; line-height:1.25; letter-spacing:0.05em; text-align:center; text-transform:uppercase; pointer-events:none; z-index:2;">
-        <strong style="font-weight:700;">3D PREVIEW UNAVAILABLE</strong>
-        <span style="display:block; margin-top:2px; color:rgba(29,31,32,0.62); letter-spacing:0.03em; text-transform:none;">2D drafting remains available. Use the plan, elevation, and snapping tools normally.</span>
-      </div>
-    </sc-if>
   </div>
 
   <!-- RIGHT LEVEL RAIL -->
@@ -7658,19 +7651,25 @@ class Component extends DCLogic {
     ctx.lineWidth = referenceColor ? 1.25 : (options.selected ? 3.5 : 2);
     ctx.stroke();
     ctx.lineWidth = referenceColor ? 1.25 : 2;
-    // Gable edges read as a double line; when the Roof tool is active every
-    // edge also carries its tag at the midpoint.
+    // Gable edges read as a double line: the footprint edge is the rake
+    // (overhang included) and the inner stroke is the exterior face of the
+    // gable wall — the footprint pulled back in by the overhang, which lands
+    // on the building outline the roof grew from.
+    const overhangFt = Number(roof.overhang) || 0;
+    const hasGable = (roof.edges || []).some(kind => kind === 'gable');
+    const wallRing = hasGable && overhangFt > 0
+      ? this._offsetOutline(roof.points.map(pt => ({ x: pt.x, z: pt.z })), -overhangFt).map(pt => toS(pt))
+      : null;
     const count = pts.length;
     for (let index = 0; index < count; index++) {
       const a = pts[index], b = pts[(index + 1) % count];
       const isGable = roof.edges[index] === 'gable';
       const dx = b.x - a.x, dy = b.y - a.y;
       const len = Math.hypot(dx, dy) || 1;
-      if (isGable) {
-        const off = 4;
-        const nx = -dy / len * off, ny = dx / len * off;
+      if (isGable && wallRing) {
+        const wa = wallRing[index], wb = wallRing[(index + 1) % count];
         ctx.beginPath();
-        ctx.moveTo(a.x + nx, a.y + ny); ctx.lineTo(b.x + nx, b.y + ny);
+        ctx.moveTo(wa.x, wa.y); ctx.lineTo(wb.x, wb.y);
         ctx.lineWidth = referenceColor ? 1 : 1.25;
         ctx.stroke();
       }
