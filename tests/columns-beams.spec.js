@@ -51,6 +51,7 @@ test('beam first: a column placed near the beam centres onto its line', async ({
 
 test('columns first: a DROPPED beam snaps its ends onto the columns', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('/'); // grid snap on so the columns land on exact feet
   await useFloorContext(page);
 
   await h.selectTool(page, 'Column');

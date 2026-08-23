@@ -67,8 +67,7 @@ test('R freezes the Extend move so an exact length can be typed', async ({ page 
 
 test('hovering a node acquires an orange polar origin whose 45° rays snap the cursor', async ({ page }) => {
   await h.openModel(page);
-  await drawLine(page, 0, 0, 5, -5);
-  await page.keyboard.press('/'); // grid snap off, so any snap must be polar
+  await drawLine(page, 0, 0, 5, -5); // grid snap is off by default, so any snap must be polar
 
   await h.selectTool(page, 'Line');
   await h.moveTo(page, 0, 0);      // acquire the node as origin

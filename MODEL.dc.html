@@ -95,7 +95,6 @@
 
 <!-- TOP BAR -->
 <div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff; position:relative;">
-  <button data-grid-snap onClick="{{ toggleGridSnap }}" onKeyDown="{{ onGridSnapKeyDown }}" title="{{ gridSnapTitle }}" aria-label="Toggle grid snap" style="width:29px; height:29px; margin-right:12px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; color:{{ gridSnapColor }}; box-shadow:{{ gridSnapGlow }}; padding:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:600; line-height:1; cursor:pointer;">#</button>
   <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase; color:#1d1f20;">MODEL</div>
   <a data-model-nav href="./LAYOUT.dc.html" style="margin-left:10px;">LAYOUT</a>
   <div data-model-title-detail style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; color:rgba(29,31,32,0.35); margin:0 10px;">/</div>
@@ -137,6 +136,7 @@
         <option value="plan">.plan</option>
       </select>
     </div>
+    <button data-grid-snap onClick="{{ toggleGridSnap }}" onKeyDown="{{ onGridSnapKeyDown }}" title="{{ gridSnapTitle }}" aria-label="Toggle grid snap" style="width:29px; height:29px; border:1px solid {{ gridSnapBorder }}; background:{{ gridSnapBg }}; background-image:{{ gridSnapGridImage }}; background-size:7px 7px; background-position:50% 50%; color:{{ gridSnapColor }}; box-shadow:{{ gridSnapGlow }}; padding:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; line-height:1; cursor:pointer;">{{ gridSnapKeyLabel }}</button>
     <div data-profile-stack style="display:flex; flex-direction:column; gap:1px;">
       <button onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
       <button onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
@@ -207,8 +207,8 @@
 
 <sc-if value="{{ groupDialogOpen }}" hint-placeholder-val="{{ false }}">
   <div style="position:fixed; inset:0; z-index:45; display:flex; align-items:flex-start; justify-content:center; padding-top:92px; background:rgba(29,31,32,0.16);">
-    <div data-group-dialog tabindex="0" role="dialog" aria-modal="true" aria-label="Create group" style="width:min(360px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:16px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
-      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">Create Group</div>
+    <div data-group-dialog tabindex="0" role="dialog" aria-modal="true" aria-label="Create assembly" style="width:min(360px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:16px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">Create Assembly</div>
       <div style="margin-top:5px; font-size:11px; line-height:1.4; color:rgba(29,31,32,0.62);">Name the selected drawing items, then choose whether this assembly stays rigid.</div>
       <input data-group-name value="{{ groupNameInput }}" onInput="{{ onGroupNameInput }}" onKeyDown="{{ onGroupNameKey }}" aria-label="Group name" style="width:100%; height:32px; margin-top:12px; border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none;" />
       <div style="margin-top:10px; padding:7px 8px; background:rgba(89,128,166,0.08); color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.35; letter-spacing:0.03em;">Y / ENTER / SPACE = FIXED · N / ESC = NOT FIXED</div>
@@ -256,13 +256,13 @@
           <button onClick="{{ setAllLevelsSelectionMode }}" style="grid-column:1 / -1; border:1px solid {{ allLevelsSelectionBorder }}; background:{{ allLevelsSelectionBg }}; color:{{ allLevelsSelectionColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">ALL LEVELS</button>
         </div>
         <div style="margin-top:6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25; color:rgba(29,31,32,0.48);">{{ selectionModeHelp }}</div>
-         <button onClick="{{ groupSelection }}" disabled="{{ groupDisabled }}" style="display:block; width:100%; margin-top:8px; border:1px solid {{ groupButtonBorder }}; background:{{ groupButtonBg }}; color:{{ groupButtonColor }}; padding:6px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; cursor:{{ groupButtonCursor }};">GROUP  [{{ groupShortcut }}]</button>
+         <button onClick="{{ groupSelection }}" disabled="{{ groupDisabled }}" style="display:block; width:100%; margin-top:8px; border:1px solid {{ groupButtonBorder }}; background:{{ groupButtonBg }}; color:{{ groupButtonColor }}; padding:6px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; cursor:{{ groupButtonCursor }};">ASSEMBLY  [{{ groupShortcut }}]</button>
          <div style="margin-top:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.3; color:{{ groupHelpColor }};">{{ groupActionHelp }}</div>
          <sc-if value="{{ selectedGroup }}" hint-placeholder-val="{{ false }}">
            <div style="margin-top:9px; border:1px solid {{ selectedGroupBorder }}; background:{{ selectedGroupBg }}; padding:7px 8px;">
              <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:{{ selectedGroupColor }};">{{ selectedGroupLabel }}</div>
              <div style="margin-top:3px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.3; color:rgba(29,31,32,0.58);">{{ selectedGroupDetail }}</div>
-             <button onClick="{{ ungroupSelection }}" style="width:100%; margin-top:7px; border:1px solid rgba(176,64,80,0.45); background:#fff; color:#b04050; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">UNGROUP</button>
+             <button onClick="{{ ungroupSelection }}" style="width:100%; margin-top:7px; border:1px solid rgba(176,64,80,0.45); background:#fff; color:#b04050; padding:5px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">UNGROUP  [{{ ungroupShortcut }}]</button>
            </div>
          </sc-if>
          <sc-if value="{{ selectedGroupHasWalls }}" hint-placeholder-val="{{ false }}">
@@ -1230,6 +1230,7 @@ const DEFAULT_LEVELS = [
 // Space and Settings cannot drift apart.
 const {
   DEFAULT_KEYBINDINGS,
+  RETIRED_KEYBINDINGS,
   normaliseKeyBinding,
   eventBinding,
   eventMatchesBinding,
@@ -1258,7 +1259,7 @@ class Component extends DCLogic {
     extendBase: null,
     units:         'imperial',
     activeView:    'top',      // 'top'|'front'|'side'|'perspective'|'cut'
-    gridSnapEnabled: true,
+    gridSnapEnabled: false,
     snapStrength: normaliseSnapStrength(null),
     keybindings:   { ...DEFAULT_KEYBINDINGS },
     lineLayers: normaliseLineLayers(DEFAULT_LINE_LAYERS),
@@ -1786,10 +1787,12 @@ class Component extends DCLogic {
           ? {
             // A stored empty string means the command was deliberately cleared;
             // only a command that was never stored falls back to its default.
-            keybindings: Object.fromEntries(Object.entries(DEFAULT_KEYBINDINGS).map(([command, fallback]) => [
-              command,
-              command in values.keybindings ? normaliseKeyBinding(values.keybindings[command]) : fallback,
-            ])),
+            // A command still stored on a retired default follows to the new one.
+            keybindings: Object.fromEntries(Object.entries(DEFAULT_KEYBINDINGS).map(([command, fallback]) => {
+              if (!(command in values.keybindings)) return [command, fallback];
+              const stored = normaliseKeyBinding(values.keybindings[command]);
+              return [command, stored === RETIRED_KEYBINDINGS[command] ? fallback : stored];
+            })),
           }
           : {}),
       };
@@ -2035,7 +2038,7 @@ class Component extends DCLogic {
         contextBackgrounds,
         backgroundMode: format.oneOf(saved.backgroundMode, ['blue', 'red', 'none'], 'blue'),
         units: saved.units === 'metric' ? 'metric' : 'imperial',
-        gridSnapEnabled: saved.gridSnapEnabled !== false,
+        gridSnapEnabled: saved.gridSnapEnabled === true,
         lineLayers: normaliseLineLayers(saved.lineLayers || this.state.lineLayers),
         activeLineLayer: normaliseActiveLineLayer(saved.activeLineLayer),
         activeWallType: WALL_TYPES.some(type => type.id === saved.activeWallType)
@@ -2325,7 +2328,7 @@ class Component extends DCLogic {
          const firstWall = walls[0];
          return {
            id,
-           name: String(rawGroup?.name || `GROUP ${id.replace(/^group-/, '')}`).trim().toUpperCase() || 'GROUP',
+           name: String(rawGroup?.name || `ASSEMBLY ${id.replace(/^group-/, '')}`).trim().toUpperCase() || 'ASSEMBLY',
            fixed: rawGroup?.fixed === true,
            stretchBehavior: rawGroup?.fixed === true ? 'rigid' : 'item-geometry',
            members,
@@ -2748,6 +2751,8 @@ class Component extends DCLogic {
     this._arcDrag        = null;       // { line, startX, startY, active }  — arc bulge drag
     this._outlineArcDrag = null;       // { outline, index, startX, startY, active } — outline segment arc drag
     this._selectDownInfo = null;       // { worldPt, clientX, clientY, shiftHeld } — pending click
+    this._lastClient     = null;       // { x, y } — last cursor position for cursor-side notices
+    this._gridSnapTapAt  = 0;          // timestamp of the first tap of a grid-snap double-tap
     this._windowSelection = null;      // { start, current, startX, startY, shiftHeld } — window drag
     this._selectedSegs   = new Set(); // line/wall segment objects currently selected
     this._selectedFloors = new Set(); // floor outline objects currently selected
@@ -4750,9 +4755,31 @@ class Component extends DCLogic {
   }
 
   _toggleGridSnap() {
+    const next = !this.state.gridSnapEnabled;
     this.setState({
-      gridSnapEnabled: !this.state.gridSnapEnabled,
+      gridSnapEnabled: next,
     }, () => { this._rememberActiveProfile('settings'); this._markUnsaved(); });
+    this._flashGridSnapNotice(next);
+  }
+
+  // Brief cursor-side notice so a keyboard toggle never goes unseen.
+  _flashGridSnapNotice(on) {
+    const prior = document.querySelector('[data-grid-snap-flash]');
+    if (prior) prior.remove();
+    const el = document.createElement('div');
+    el.setAttribute('data-grid-snap-flash', on ? 'on' : 'off');
+    el.textContent = on ? 'GRID SNAP ON' : 'GRID SNAP OFF';
+    const at = this._lastClient;
+    const x = at ? at.x + 18 : Math.round(window.innerWidth / 2) - 44;
+    const y = at ? at.y - 16 : 64;
+    el.style.cssText = `position:fixed; left:${x}px; top:${y}px; z-index:99999; pointer-events:none;`
+      + `padding:3px 8px; border:1px solid ${on ? '#39ff88' : 'rgba(29,31,32,0.45)'};`
+      + `background:${on ? '#1d1f20' : '#fff'}; color:${on ? '#39ff88' : '#1d1f20'};`
+      + `font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.08em;`
+      + `opacity:1; transition:opacity 0.35s ease 1s;`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => { el.style.opacity = '0'; });
+    setTimeout(() => el.remove(), 1600);
   }
 
   _applyLevelElevation(idx) {
@@ -5009,6 +5036,7 @@ class Component extends DCLogic {
   }
 
   _onMouseMove(e) {
+    this._lastClient = { x: e.clientX, y: e.clientY };
     if (this.state.lengthFrozen) return;
     if (this._stairWorkspaceActive()) {
       // Pane-local cursor tracking so an in-progress note previews its leader.
@@ -8670,7 +8698,7 @@ class Component extends DCLogic {
     }
     this.setState({
       groupDialog: true,
-      groupNameInput: `GROUP ${this._nextGroupId || 1}`,
+      groupNameInput: `ASSEMBLY ${this._nextGroupId || 1}`,
     }, () => document.querySelector('[data-group-dialog]')?.focus());
   }
 
@@ -8692,7 +8720,7 @@ class Component extends DCLogic {
     const firstWall = walls[0];
     const group = {
       id: `group-${this._nextGroupId || 1}`,
-      name: (this.state.groupNameInput || `GROUP ${this._nextGroupId || 1}`).trim().toUpperCase() || `GROUP ${this._nextGroupId || 1}`,
+      name: (this.state.groupNameInput || `ASSEMBLY ${this._nextGroupId || 1}`).trim().toUpperCase() || `ASSEMBLY ${this._nextGroupId || 1}`,
       fixed: fixed === true,
       stretchBehavior: fixed === true ? 'rigid' : 'item-geometry',
       members,
@@ -10385,7 +10413,14 @@ class Component extends DCLogic {
       if (drawing && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
       return;
     }
-    if (matches('group')) {
+    if (matches('ungroup')) {
+      if (this.state.activeTool === 'select' && this._selectedGroups().length) {
+        e.preventDefault();
+        this._ungroupSelected();
+      }
+      return;
+    }
+    if (matches('group') || matches('groupAlt')) {
       if (this.state.activeTool === 'select') {
         e.preventDefault();
         this._startGroupCommand();
@@ -10410,7 +10445,20 @@ class Component extends DCLogic {
     if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
     if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
-    if (matches('gridSnap') || matches('gridSnapAlt')) { e.preventDefault(); this._toggleGridSnap(); return; }
+    if (matches('gridSnap')) {
+      // Deliberate double-tap so a stray key press never silently flips the grid.
+      e.preventDefault();
+      if (e.repeat) return;
+      const now = Date.now();
+      if (this._gridSnapTapAt && now - this._gridSnapTapAt < 600) {
+        this._gridSnapTapAt = 0;
+        this._toggleGridSnap();
+      } else {
+        this._gridSnapTapAt = now;
+      }
+      return;
+    }
+    if (matches('gridSnapAlt')) { e.preventDefault(); this._toggleGridSnap(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
     if (matches('top')) { e.preventDefault(); this._setView('top'); return; }
     if (matches('front')) { e.preventDefault(); this._setView('front'); return; }
@@ -10792,7 +10840,7 @@ class Component extends DCLogic {
     const groupForWalls = this._selectedGroupForWallEditing();
     const selectedGroupLabel = selectedGroups.length === 1
       ? `${selectedGroups[0].name} · ${selectedGroups[0].fixed ? 'FIXED / RIGID' : 'NOT FIXED'}`
-      : `${selectedGroups.length} GROUPS SELECTED`;
+      : `${selectedGroups.length} ASSEMBLIES SELECTED`;
     const selectedGroupDetail = selectedGroups.length === 1
       ? `${this._groupItems(selectedGroups[0]).length} items · ${new Set(this._groupItems(selectedGroups[0]).map(item => item.levelId)).size} level(s)`
       : 'Ungroup removes every selected group while keeping its drawing items.';
@@ -11181,6 +11229,7 @@ class Component extends DCLogic {
           ? 'Drag a red box to select fully enclosed items on every level.'
           : 'Click items to select; Shift adds or removes. Press and drag for a blue window — hold Shift while dragging for a red all-levels window.'),
        groupShortcut: shortcut('group'),
+       ungroupShortcut: shortcut('ungroup'),
        groupDisabled: selectedItems.length === 0,
        groupButtonBg: selectedItems.length ? '#5980a6' : '#f4f4f4',
        groupButtonColor: selectedItems.length ? '#fff' : 'rgba(29,31,32,0.38)',
@@ -11189,7 +11238,7 @@ class Component extends DCLogic {
        groupHelpColor: selectedItems.length ? 'rgba(29,31,32,0.52)' : '#b04050',
        groupActionHelp: selectedItems.length
          ? `${selectedItems.length} selected item${selectedItems.length === 1 ? '' : 's'} · make a named assembly.`
-         : 'Select drawing items before grouping them.',
+         : 'Select drawing items before assembling them.',
        groupSelection: () => this._startGroupCommand(),
        selectedGroup: selectedGroups.length > 0,
        selectedGroupLabel,
@@ -11585,13 +11634,21 @@ class Component extends DCLogic {
       onGridSnapKeyDown: e => {
         if (e.key === ' ' || e.key === 'Enter') e.preventDefault();
       },
+      gridSnapKeyLabel: (() => {
+        const k = keyBindingLabel(this.state.keybindings.gridSnap) || 'G';
+        return k.length === 1 ? k + k : k;
+      })(),
       gridSnapTitle: this.state.gridSnapEnabled
-        ? 'Grid snap is on: points round to 1-foot increments. Press # or click to turn it off.'
-        : 'Grid snap is off: points follow the cursor exactly. Press # or click to snap to 1-foot increments.',
+        ? `Grid snap is on: points round to 1-foot increments. Tap ${keyBindingLabel(this.state.keybindings.gridSnap) || 'the grid snap key'} twice or click to turn it off.`
+        : `Grid snap is off: points follow the cursor exactly. Tap ${keyBindingLabel(this.state.keybindings.gridSnap) || 'the grid snap key'} twice or click to snap to 1-foot increments.`,
       gridSnapBg: this.state.gridSnapEnabled ? '#1d1f20' : '#fff',
       gridSnapColor: this.state.gridSnapEnabled ? '#f2f2f3' : '#1d1f20',
       gridSnapBorder: this.state.gridSnapEnabled ? '#1d1f20' : 'rgba(29,31,32,0.2)',
       gridSnapGlow: this.state.gridSnapEnabled ? '0 0 8px rgba(89,128,166,0.85)' : 'none',
+      gridSnapGridImage: (() => {
+        const c = this.state.gridSnapEnabled ? 'rgba(242,242,243,0.3)' : 'rgba(29,31,32,0.14)';
+        return `linear-gradient(${c} 1px, transparent 1px), linear-gradient(90deg, ${c} 1px, transparent 1px)`;
+      })(),
       openSettingsDialog: () => this._openProfileDialog('settings'),
       openStandardsDialog: () => this._openProfileDialog('standards'),
       closeProfileDialog: () => this._closeProfileDialog(),

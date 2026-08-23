@@ -7,6 +7,7 @@ const h = require('./helpers');
 
 async function drawShapeRect(page) {
   // 16' x 12' rectangle = 192 sq ft.
+  await page.keyboard.press('/'); // grid snap on so the rectangle measures exactly
   await h.selectTool(page, 'Shape');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);

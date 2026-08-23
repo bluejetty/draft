@@ -113,7 +113,9 @@ if (!window.DraftProfileManager) {
     dimension: 'D',
     trim: 'T',
     cut: 'C',
-    group: 'G',
+    group: 'Y',
+    groupAlt: 'Ctrl+G',
+    ungroup: 'Ctrl+Shift+G',
     extend: 'X',
     extendAlt: 'Ctrl+H',
     perspective: '1',
@@ -128,8 +130,15 @@ if (!window.DraftProfileManager) {
     undo: 'Ctrl+Z',
     redo: 'Ctrl+Shift+Z',
     background: 'B',
-    gridSnap: '#',
+    gridSnap: 'G',
     gridSnapAlt: '/',
+  });
+
+  // Old defaults these commands used to ship with. A stored binding still
+  // sitting on its retired default follows the command to the current one.
+  const RETIRED_KEYBINDINGS = Object.freeze({
+    gridSnap: '#',
+    group: 'G',
   });
 
   // Layout presets approximate the muscle memory of other drafting apps as
@@ -379,6 +388,7 @@ if (!window.DraftProfileManager) {
   };
   window.DraftKeyboard = {
     DEFAULT_KEYBINDINGS,
+    RETIRED_KEYBINDINGS,
     KEYBOARD_LAYOUTS,
     normaliseKeyBinding,
     eventBinding,

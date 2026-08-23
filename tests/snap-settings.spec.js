@@ -21,6 +21,7 @@ async function setSnapStrength(page, strength) {
 
 test('grid snap rings the snapped point while it has hold of the cursor', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('/'); // grid snap starts off; turn it on
 
   // Slightly off the grid point: the pull grabs the cursor, the ring marks it.
   await h.moveTo(page, 5.2, 5);
@@ -31,7 +32,7 @@ test('grid snap rings the snapped point while it has hold of the cursor', async 
   expect(Math.abs(box.y + box.height / 2 - target.y)).toBeLessThan(2);
 
   // Turning grid snap off hides the ring.
-  await page.keyboard.press('#');
+  await page.keyboard.press('/');
   await h.moveTo(page, 6.2, 6);
   await expect(gridRing(page)).toBeHidden();
 });
@@ -39,6 +40,7 @@ test('grid snap rings the snapped point while it has hold of the cursor', async 
 test('a weaker grid pull frees the cursor between grid points', async ({ page }) => {
   await h.openModel(page);
   await setSnapStrength(page, { grid: 2 });
+  await page.keyboard.press('/'); // grid snap starts off; turn it on
 
   // 0.4 ft is a few pixels at default zoom — beyond a 2px pull, so no snap.
   await h.moveTo(page, 5.4, 5);
