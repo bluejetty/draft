@@ -2522,12 +2522,23 @@ class Component extends DCLogic {
       }).filter(Boolean);
       skipped += (Array.isArray(saved.surfaceOpenings) ? saved.surfaceOpenings.length : 0) - this._surfaceOpenings.length;
       const levelsById = new Map(levels.map(level => [level.id, level]));
+      // Dimension ends restore their master-point link like pooled vertices,
+      // so auto strings keep riding footprint edits after a reload.
+      const reviveDimensionEnd = (pt, elevation) => {
+        const vtx = new THREE.Vector3(pt.x, elevation, pt.z);
+        if (pt.srcId) {
+          vtx.srcId = pt.srcId;
+          vtx.offX = Number.isFinite(pt.offX) ? pt.offX : 0;
+          vtx.offZ = Number.isFinite(pt.offZ) ? pt.offZ : 0;
+        }
+        return vtx;
+      };
       this._dimensions = dimensions.map(dimension => {
         const elevation = levelsById.get(dimension.levelId)?.elev ?? 0;
         return {
           ...dimension,
-          start: new THREE.Vector3(dimension.start.x, elevation, dimension.start.z),
-          end: new THREE.Vector3(dimension.end.x, elevation, dimension.end.z),
+          start: reviveDimensionEnd(dimension.start, elevation),
+          end: reviveDimensionEnd(dimension.end, elevation),
         };
       });
       this._nextDimensionId = nextDimensionId;
@@ -6765,6 +6776,16 @@ class Component extends DCLogic {
       if (!source) return;
       vtx.x = source.x + (vtx.offX || 0);
       vtx.z = source.z + (vtx.offZ || 0);
+    });
+    // Auto dimension strings ride the corner they were strung from, so a
+    // footprint edit keeps every string outside the moved plan.
+    (this._dimensions || []).forEach(dimension => {
+      [dimension.start, dimension.end].forEach(vtx => {
+        const source = vtx.srcId ? masterPoints.get(vtx.srcId) : null;
+        if (!source) return;
+        vtx.x = source.x + (vtx.offX || 0);
+        vtx.z = source.z + (vtx.offZ || 0);
+      });
     });
     // Attached-garage masters follow the house master points their end points
     // weld to, so a house edit keeps the garage attached.
@@ -12046,12 +12067,12 @@ class Component extends DCLogic {
       && (wall.view || 'plan') === wallView);
     const outlinePoints = this._outlines
       .filter(outline => outline.levelId === levelId && outline.points.length >= 3)
-      .flatMap(outline => outline.points.map(point => ({ x: point.x, z: point.z })));
+      .flatMap(outline => outline.points.map(point => ({ x: point.x, z: point.z, srcId: point.srcId || null })));
     const corners = outlinePoints.length
       ? outlinePoints
       : walls.flatMap(wall => [
-        { x: wall.start.x, z: wall.start.z },
-        { x: wall.end.x, z: wall.end.z },
+        { x: wall.start.x, z: wall.start.z, srcId: wall.start.srcId || null },
+        { x: wall.end.x, z: wall.end.z, srcId: wall.end.srcId || null },
       ]);
     if (corners.length < 2) return -1;
     const uniqSorted = values => {
@@ -12082,6 +12103,18 @@ class Component extends DCLogic {
       !(dimension.auto && dimension.levelId === levelId && dimension.view === view));
     const firstOffset = this.state.autoDimFirstOffsetFt;
     let added = 0;
+    // Each string end links to the nearest master-linked corner, so master
+    // edits carry the auto strings along with the footprint they measure.
+    const linkDimensionEnd = vtx => {
+      let best = null, bestD = Infinity;
+      corners.forEach(corner => {
+        if (!corner.srcId) return;
+        const d = (corner.x - vtx.x) ** 2 + (corner.z - vtx.z) ** 2;
+        if (d < bestD) { bestD = d; best = corner; }
+      });
+      if (best) this._linkVertex(vtx, best.srcId);
+      return vtx;
+    };
     const pushString = (side, coords, stringIndex) => {
       const lineOffset = firstOffset + stringIndex * AUTO_DIM_STRING_SPACING_FT;
       for (let i = 0; i < coords.length - 1; i++) {
@@ -12097,8 +12130,8 @@ class Component extends DCLogic {
           : { x: maxX + lineOffset, z: b };
         this._dimensions.push({
           id: this._nextDimensionId++,
-          start: new THREE.Vector3(start.x, elev, start.z),
-          end: new THREE.Vector3(end.x, elev, end.z),
+          start: linkDimensionEnd(new THREE.Vector3(start.x, elev, start.z)),
+          end: linkDimensionEnd(new THREE.Vector3(end.x, elev, end.z)),
           levelId,
           view,
           auto: true,
