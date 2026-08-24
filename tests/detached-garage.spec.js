@@ -64,6 +64,34 @@ test('closing a garage loop prompts for the foundation and stores a detached mas
   });
 });
 
+test('a detached loop touching the house stays detached — no welding, no guessing', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+
+  // Corners land right on the house's x=8 edge; DETACHED mode still keeps
+  // the loop independent instead of treating it as an attached run.
+  await h.selectTool(page, 'Outline');
+  await page.getByRole('button', { name: /DETACHED GARAGE/ }).click();
+  await h.clickWorld(page, 8, -4);
+  await h.clickWorld(page, 20, -4);
+  await h.clickWorld(page, 20, 4);
+  await h.clickWorld(page, 8, 4);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-detached-foundation-prompt]')).toBeVisible();
+  await page.locator('[data-detached-grade-beam]').click();
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster.detached).toBe(true);
+  expect(garageMaster.open).toBeFalsy();
+  expect(garageMaster.points).toHaveLength(4);
+  garageMaster.points.forEach(point => expect(point.attach).toBeFalsy());
+  // The house master keeps its own four corners — nothing was inserted.
+  const houseMaster = saved.boneyardOutlines.find(outline => !outline.garage);
+  expect(houseMaster.points).toHaveLength(4);
+});
+
 test('the thickened-edge choice lands on the master and its copies', async ({ page }) => {
   await h.openModel(page);
   await drawDetachedGarage(page, 'thickened');

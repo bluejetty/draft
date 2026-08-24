@@ -1,5 +1,5 @@
-// An attached GARAGE is an OPEN outline run: MARK GARAGE arms the Outline
-// tool so the next run of 3+ legs starts and ends ON the house outline,
+// An attached GARAGE is an OPEN outline run: MARK ATTACHED GARAGE arms the
+// Outline tool so the next run of 3+ legs starts and ends ON the house outline,
 // welding its end points onto shared house master points (inserting mid-wall
 // points where needed; a corner landing only prompts for a stub when the leg
 // continues a house wall with the garage on its far side). BUILD
@@ -24,7 +24,7 @@ async function drawHouseOutline(page) {
 
 async function drawGarageRun(page, points) {
   await h.selectTool(page, 'Outline');
-  await page.getByRole('button', { name: /DETACHED GARAGE/ }).click();
+  await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
   for (const [x, z] of points) await h.clickWorld(page, x, z);
   await page.keyboard.press('Enter');
 }
@@ -50,7 +50,7 @@ async function dragWorld(page, fromX, fromZ, toX, toZ) {
   await h.waitForSaved(page);
 }
 
-test('MARK GARAGE stores an OPEN run welded onto shared house points', async ({ page }) => {
+test('MARK ATTACHED GARAGE stores an OPEN run welded onto shared house points', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
   await drawGarageOutline(page);
@@ -171,6 +171,52 @@ test("the 1'-0\" stub option shifts the wall and its outside corner a full foot"
   expect(h.near(garageMaster.points[1].z, -6, 0.05)).toBe(true);
   expect(h.near(garageMaster.points[2].x, 9, 0.05)).toBe(true);
   expect(h.near(garageMaster.points[2].z, -14, 0.05)).toBe(true);
+});
+
+test('IN LINE keeps an aligned leg exactly where it was drawn — no stub, no shift', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageRun(page, OPPOSITE_SIDE_RUN);
+
+  const prompt = page.locator('[data-garage-corner-prompt]');
+  await expect(prompt).toBeVisible();
+  await page.locator('[data-garage-stub-none]').click();
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster.cornerStubs).toHaveLength(0);
+  expect(garageMaster.points).toHaveLength(5);
+  expect(h.near(garageMaster.points[0].x, 8, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[0].z, -6, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[1].x, 8, 0.05)).toBe(true);
+  expect(h.near(garageMaster.points[1].z, -14, 0.05)).toBe(true);
+});
+
+test('closing the loop under MARK ATTACHED GARAGE errors instead of committing', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+
+  await h.selectTool(page, 'Outline');
+  await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
+  await h.clickWorld(page, 8, -4);
+  await h.clickWorld(page, 20, -4);
+  await h.clickWorld(page, 20, 4);
+  await h.clickWorld(page, 8, 4);
+  await h.clickWorld(page, 8, -4);
+
+  await expect(page.locator('[data-model-drawing-message]')).toContainText('OPEN run');
+  const saved = await h.savedDrawing(page);
+  expect(saved.boneyardOutlines.filter(outline => outline.garage)).toHaveLength(0);
+});
+
+test('MARK ATTACHED GARAGE without a house explains itself and stays off', async ({ page }) => {
+  await h.openModel(page);
+  await h.selectTool(page, 'Outline');
+  await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
+
+  await expect(page.locator('[data-model-drawing-message]')).toContainText('Draw the house OUTLINE first');
+  await expect(page.getByRole('button', { name: /MARKING ATTACHED GARAGE/ })).toHaveCount(0);
 });
 
 test('an ICF foundation offers its own thickness as the grade-beam stub', async ({ page }) => {

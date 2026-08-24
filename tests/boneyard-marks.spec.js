@@ -29,7 +29,7 @@ async function drawOutlineRect(page) {
 
 async function drawGarageOutline(page) {
   await h.selectTool(page, 'Outline');
-  await page.getByRole('button', { name: /DETACHED GARAGE/ }).click();
+  await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
   for (const [x, z] of [[8, -4], [20, -4], [20, 4], [8, 4]]) await h.clickWorld(page, x, z);
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
