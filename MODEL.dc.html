@@ -1396,6 +1396,10 @@ const FIXTURE_KINDS = [
     note: 'Alcove tub — click the back wall, then the faucet-end wall; the tub fills the alcove.' },
   { id: 'toilet',  label: 'TOILET',  group: 'BATH',     widthFt: 5 / 3,  depthFt: 7 / 3,  casework: false, run: false,
     note: 'Toilet — tank against the wall, click it into place.' },
+  { id: 'shower',  label: 'SHOWER',  group: 'BATH',     widthFt: 3,      depthFt: 3,      casework: false, run: false,
+    note: '36" square shower — click it onto a wall.' },
+  { id: 'stall',   label: 'STALL',   group: 'BATH',     widthFt: 4,      depthFt: 8 / 3,  casework: false, run: false,
+    note: '48" x 32" shower stall — click it onto a wall.' },
   { id: 'vanity',  label: 'VANITY',  group: 'BATH',     widthFt: 2.5,    depthFt: 1.75,   casework: true,  run: true,
     note: 'Vanity run — two clicks along a wall set the run; 21" deep with a basin.' },
   { id: 'washer',  label: 'WASHER',  group: 'LAUNDRY',  widthFt: 2.25,   depthFt: 2.25,   casework: false, run: false,
@@ -9122,6 +9126,18 @@ class Component extends DCLogic {
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(kind === 'fridge' ? 'REF' : kind === 'washer' ? 'W' : 'D', c.x, c.y);
       }
+    } else if (kind === 'shower' || kind === 'stall') {
+      // Shower pan: inset curb, diagonals to a centered drain.
+      const p0 = a0 + inset, p1 = a1 - inset, q0 = cMin + inset, q1 = cMax - inset;
+      rect(p0, p1, q0, q1); ctx.stroke();
+      const da = (a0 + a1) / 2, dc = mid, r = 0.18;
+      [[p0, q0], [p1, q0], [p1, q1], [p0, q1]].forEach(([fa, fc]) => {
+        const dirA = fa < da ? 1 : -1, dirC = fc < dc ? 1 : -1;
+        const from = P(fa, fc);
+        const to = P(da - dirA * r * 0.7, dc - dirC * r * 0.7);
+        ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke();
+      });
+      oval(da, dc, r, r); ctx.stroke();
     } else if (kind === 'toilet') {
       // Tank against the wall, bowl beyond it.
       const tank = cBack + (cFront >= cBack ? 1 : -1) * 0.6;

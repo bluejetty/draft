@@ -36,7 +36,7 @@ test('FIXTURE is a rail command with KITCHEN / BATH / LAUNDRY catalog options', 
   await expect(rail).toBeVisible();
 
   await h.selectTool(page, 'Fixture');
-  for (const label of ['CABINET', 'SINK', 'FRIDGE', 'STOVE', 'TUB', 'TOILET', 'VANITY', 'WASHER', 'DRYER']) {
+  for (const label of ['CABINET', 'SINK', 'FRIDGE', 'STOVE', 'TUB', 'TOILET', 'SHOWER', 'STALL', 'VANITY', 'WASHER', 'DRYER']) {
     await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible();
   }
 });
@@ -152,6 +152,37 @@ test('dragging a fixture slides it along its host wall', async ({ page }) => {
   const fixture = (await h.savedDrawing(page)).fixtures[0];
   expect(fixture.offset).toBeCloseTo(5, 0); // centre now 5ft from the wall start
   expect(fixture.wallId).toBeTruthy();      // still hosted, never detached
+});
+
+test('a 36" square shower places from the BATH group on A-FIXT', async ({ page }) => {
+  await h.openModel(page);
+  await drawWall(page, -10, 0, 10, 0);
+  await h.selectTool(page, 'Fixture');
+  await pickKind(page, 'SHOWER');
+  await h.clickWorld(page, -2, 0.4);
+  await h.waitForSaved(page);
+
+  const fixture = (await h.savedDrawing(page)).fixtures[0];
+  expect(fixture.kind).toBe('shower');
+  expect(fixture.layer).toBe('A-FIXT');
+  expect(fixture.width).toBeCloseTo(3, 5);
+  expect(fixture.depth).toBeCloseTo(3, 5);
+});
+
+test('a 48x32 shower stall places from the BATH group', async ({ page }) => {
+  await h.openModel(page);
+  await drawWall(page, -10, 0, 10, 0);
+  await h.selectTool(page, 'Fixture');
+  await pickKind(page, 'STALL');
+  await h.clickWorld(page, 4, -0.4);
+  await h.waitForSaved(page);
+
+  const fixture = (await h.savedDrawing(page)).fixtures[0];
+  expect(fixture.kind).toBe('stall');
+  expect(fixture.layer).toBe('A-FIXT');
+  expect(fixture.width).toBeCloseTo(4, 5);
+  expect(fixture.depth).toBeCloseTo(8 / 3, 5);
+  expect(fixture.side).toBe(-1);
 });
 
 test('the tub spans its alcove and stores back and faucet-end walls', async ({ page }) => {
