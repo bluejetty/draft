@@ -47,6 +47,23 @@ test('the shared matcher honours modifiers', async ({ page }) => {
   });
 });
 
+test('number keys no longer switch views', async ({ page }) => {
+  await openModel(page);
+
+  const shared = await page.evaluate(() => window.DraftKeyboard.DEFAULT_KEYBINDINGS);
+  expect(shared).not.toHaveProperty('perspective');
+  expect(shared).not.toHaveProperty('top');
+  expect(shared).not.toHaveProperty('front');
+  expect(shared).not.toHaveProperty('side');
+
+  const viewChip = page.locator('text=TOP / PLAN').last();
+  await expect(viewChip).toBeVisible();
+  for (const key of ['1', '2', '3', '4']) {
+    await page.keyboard.press(key);
+    await expect(viewChip).toBeVisible();
+  }
+});
+
 test('Extend answers to X and Ctrl+H', async ({ page }) => {
   await openModel(page);
 

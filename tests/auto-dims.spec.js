@@ -82,7 +82,7 @@ test('AUTO DIMS strings a rectangle: overalls everywhere, openings on the door s
   expect(Math.abs(overall.end.x - overall.start.x)).toBeCloseTo(16, 3);
 });
 
-test('an L-shape gets jog strings and overalls on every side', async ({ page }) => {
+test('each side strings only its own facing corners: the notch stays off the flat sides', async ({ page }) => {
   await h.openModel(page);
   await h.selectTool(page, 'Outline');
   await h.clickWorld(page, -8, -6);
@@ -97,13 +97,24 @@ test('an L-shape gets jog strings and overalls on every side', async ({ page }) 
   await runAutoDims(page);
   const saved = await h.savedDrawing(page);
   const auto = saved.dimensions.filter(dimension => dimension.auto);
-  // Per side: a 2-piece jog string (3 distinct coords) + the overall.
-  expect(auto).toHaveLength(12);
-  // Jog strings sit at the first offset, overalls one spacing further out.
+  // The notch faces south and east, so only those sides get a 2-piece jog
+  // string + overall; the flat north and west sides string just the overall.
+  expect(auto).toHaveLength(8);
   const north = auto.filter(dimension => dimension.start.z < -6.5);
-  expect(north).toHaveLength(3);
-  const northOverall = north.find(dimension => h.near(dimension.start.z, -9));
-  expect(Math.abs(northOverall.end.x - northOverall.start.x)).toBeCloseTo(16, 3);
+  expect(north).toHaveLength(1);
+  expect(h.near(north[0].start.z, -7.5)).toBe(true);
+  expect(Math.abs(north[0].end.x - north[0].start.x)).toBeCloseTo(16, 3);
+  const west = auto.filter(dimension => dimension.start.x < -8.5);
+  expect(west).toHaveLength(1);
+  const south = auto.filter(dimension => dimension.start.z > 6.5);
+  expect(south).toHaveLength(3);
+  // The south jog string breaks at the notch corner x=0.
+  const southJogs = south.filter(dimension => h.near(dimension.start.z, 7.5));
+  expect(southJogs).toHaveLength(2);
+  expect(southJogs.some(dimension =>
+    h.near(dimension.start.x, 0) || h.near(dimension.end.x, 0))).toBe(true);
+  const east = auto.filter(dimension => dimension.start.x > 8.5);
+  expect(east).toHaveLength(3);
 });
 
 test('auto strings ride master outline edits, staying outside the moved plan', async ({ page }) => {
@@ -129,13 +140,14 @@ test('auto strings ride master outline edits, staying outside the moved plan', a
     expect(dimension.end.srcId).toBeTruthy();
   });
   // Mouse drops land within a pixel of the target, so compare loosely.
-  const east = auto.find(dimension => dimension.start.x > 9);
+  // N and E strings run reversed (ink outward), so match both ends.
+  const east = auto.find(dimension => dimension.start.x > 9 && dimension.end.x > 9);
   expect(east.start.x).toBeCloseTo(13.5, 0);
-  const west = auto.find(dimension => dimension.start.x < -5);
+  const west = auto.find(dimension => dimension.start.x < -5 && dimension.end.x < -5);
   expect(west.start.x).toBeCloseTo(-5.5, 0);
   const north = auto.find(dimension => dimension.start.z < -7);
-  expect(north.start.x).toBeCloseTo(-4, 0);
-  expect(north.end.x).toBeCloseTo(12, 0);
+  expect(Math.min(north.start.x, north.end.x)).toBeCloseTo(-4, 0);
+  expect(Math.max(north.start.x, north.end.x)).toBeCloseTo(12, 0);
 
   // The links survive a reload: a further master edit still carries them.
   await page.reload();
@@ -146,9 +158,10 @@ test('auto strings ride master outline edits, staying outside the moved plan', a
   await dragWorld(page, 12, -6, 12, -10);
   const reloaded = await h.savedDrawing(page);
   const northAfter = reloaded.dimensions.filter(dimension =>
-    dimension.auto && dimension.levelId === 3).find(dimension => dimension.end.z < -10.5);
+    dimension.auto && dimension.levelId === 3)
+    .find(dimension => Math.min(dimension.start.z, dimension.end.z) < -10.5);
   expect(northAfter).toBeTruthy();
-  expect(northAfter.end.z).toBeCloseTo(-11.5, 0);
+  expect(Math.min(northAfter.start.z, northAfter.end.z)).toBeCloseTo(-11.5, 0);
 });
 
 test('house strings clear the attached garage; the shared corridor stacks in order', async ({ page }) => {
@@ -212,6 +225,26 @@ test('an inch-scale jog strings straight: merged into the neighbouring corner', 
   expect(Math.abs(north.end.x - north.start.x)).toBeCloseTo(16, 1);
   // The first string still clears the LOWEST part of the skewed wall by 1'-6".
   expect(north.start.z).toBeLessThanOrEqual(-6.1 - 1.5 + 0.05);
+});
+
+test('N and E strings run reversed so the drawn line lands outward', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await runAutoDims(page);
+  const saved = await h.savedDrawing(page);
+  const auto = saved.dimensions.filter(dimension => dimension.auto && dimension.levelId === 3);
+  expect(auto).toHaveLength(4);
+  // The rendered dim line sits to the right of start→end, so top and right
+  // strings must run east→west / south→north to keep their ink off the plan.
+  const north = auto.find(dimension => h.near(dimension.start.z, -7.5));
+  expect(north.start.x).toBeGreaterThan(north.end.x);
+  const east = auto.find(dimension => h.near(dimension.start.x, 9.5));
+  expect(east.start.z).toBeGreaterThan(east.end.z);
+  // Bottom and left keep the ascending run — their ink already faces out.
+  const south = auto.find(dimension => h.near(dimension.start.z, 7.5));
+  expect(south.start.x).toBeLessThan(south.end.x);
+  const west = auto.find(dimension => h.near(dimension.start.x, -9.5));
+  expect(west.start.z).toBeLessThan(west.end.z);
 });
 
 test('re-running replaces auto strings, keeps manual dims, honours the 3\'-0" offset', async ({ page }) => {

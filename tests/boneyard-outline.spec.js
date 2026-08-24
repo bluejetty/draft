@@ -164,6 +164,16 @@ test('a relative override survives a reload and keeps riding the master', async 
   expect(main.points.some(p => h.near(p.x, 12) && h.near(p.z, 6))).toBe(true);
 });
 
+test('the BONEYARD card sits in the level stack with + SHELF in its head', async ({ page }) => {
+  await h.openModel(page);
+
+  // No standalone Boneyard heading outside the card — the card's own
+  // BONEYARD name is the only label, and + SHELF lives inside the head row.
+  await expect(page.locator('text=/^Boneyard$/')).toHaveCount(0);
+  const card = page.locator('.level-body', { has: page.locator('.level-name', { hasText: 'BONEYARD' }) });
+  await expect(card.locator('.level-head').getByRole('button', { name: '+ SHELF' })).toBeVisible();
+});
+
 test('the BONEYARD starts with one shelf and + SHELF adds and activates another', async ({ page }) => {
   await h.openModel(page);
 

@@ -118,6 +118,16 @@
         <path d="M8 6.5 H10.5 M8 9.5 H10.5 M8 12.5 H10.5" stroke-width="0.9"></path>
       </svg>
     </span>
+    <!-- The protractor lights while a modifier holds a blade against the board:
+         Ctrl 90°, Shift 45°, Ctrl+Shift 30° — degree label shows which -->
+    <span data-mode-protractor title="{{ protractorChipTitle }}" style="display:inline-flex; align-items:center; gap:2px; color:{{ protractorChipColor }}; filter:{{ protractorChipGlow }};">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M2 12.5 A6 6 0 0 1 14 12.5 Z"></path>
+        <path d="M8 12.5 L11.6 8.3" stroke-width="0.9"></path>
+        <path d="M4.2 9.9 L5.1 10.8 M8 6.5 V7.9 M11.8 9.9 L10.9 10.8" stroke-width="0.9"></path>
+      </svg>
+      <span data-protractor-angle style="font-size:10px; line-height:1; min-width:18px;">{{ protractorChipLabel }}</span>
+    </span>
     <span data-mode-ruler title="RULER typed length (R)" style="display:inline-flex; color:{{ rulerChipColor }}; filter:{{ rulerChipGlow }};">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <rect x="1.5" y="6" width="13" height="5"></rect>
@@ -1096,14 +1106,7 @@
           <button class="level-del" onClick="{{ level.onDelete }}" title="Delete level">×</button>
         </div>
       </sc-for>
-    </div>
-
-    <!-- BONEYARD — never-printing shelf storage below the level stack -->
-    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="display:flex; align-items:center; margin-bottom:8px;">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); flex:1;">Boneyard</div>
-        <button onClick="{{ boneyard.onAddShelf }}" title="Add a shelf — park geometry at the same spot on different shelves without overlap" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; padding:2px 8px; cursor:pointer; letter-spacing:0.04em;">+ SHELF</button>
-      </div>
+      <!-- BONEYARD — never-printing shelf storage snug under the level stack -->
       <div class="{{ boneyard.rowClass }}">
         <div class="level-bar" style="background:#6b7076;" onClick="{{ boneyard.onSelect }}"></div>
         <div class="level-body" onClick="{{ boneyard.onSelect }}" title="{{ boneyard.title }}">
@@ -1111,6 +1114,8 @@
             <div class="level-title">
               <div class="level-name">BONEYARD</div>
             </div>
+            <span style="flex:1;"></span>
+            <button onClick="{{ boneyard.onAddShelf }}" title="Add a shelf — park geometry at the same spot on different shelves without overlap" style="border:1px solid rgba(29,31,32,0.22); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; padding:1px 6px; cursor:pointer; letter-spacing:0.04em; flex-shrink:0;">+ SHELF</button>
           </div>
           <div class="level-layer-stack">
             <sc-for list="{{ boneyard.shelves }}" as="shelf" hint-placeholder-count="1">
@@ -1821,6 +1826,7 @@ class Component extends DCLogic {
     polarOriginX: -100, polarOriginY: -100, showPolarOrigin: false,
     lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '',
     tsquareEngaged: false,
+    protractorAngle: '',       // '' | '90' | '45' | '30' — which blade a held modifier grabbed
     tsquareOn: true,           // full-time 90° T-square while drawing; T toggles
     cuts:          [],
     nextCutId:     1,
@@ -1858,10 +1864,10 @@ class Component extends DCLogic {
     requestAnimationFrame(() => requestAnimationFrame(() => this._init()));
     window.addEventListener('keydown', this._onKey  = e => { this._invalidate(); this._handleKey(e); });
     window.addEventListener('keydown', this._onKdn  = e => {
-      if (e.key === 'Shift' && !this._shiftHeld) { this._shiftHeld = true; this._refreshAngleLockStep(); this.setState({ tsquareEngaged: true }); }
+      if (e.key === 'Shift' && !this._shiftHeld) { this._shiftHeld = true; this._refreshAngleLockStep(); this.setState({ tsquareEngaged: true, protractorAngle: this._protractorAngle() }); }
     });
     window.addEventListener('keydown', this._onCtrlDown = e => {
-      if (e.key === 'Control' && !this._ctrlHeld) { this._ctrlHeld = true; this._refreshAngleLockStep(); this.setState({ tsquareEngaged: true }); }
+      if (e.key === 'Control' && !this._ctrlHeld) { this._ctrlHeld = true; this._refreshAngleLockStep(); this.setState({ tsquareEngaged: true, protractorAngle: this._protractorAngle() }); }
     });
     document.addEventListener('visibilitychange', this._onVis = () => {
       if (!document.hidden) {
@@ -1893,13 +1899,13 @@ class Component extends DCLogic {
       if (e.key === 'Shift') {
         this._shiftHeld = false;
         this._refreshAngleLockStep();
-        this.setState({ tsquareEngaged: this._ctrlHeld === true });
+        this.setState({ tsquareEngaged: this._ctrlHeld === true, protractorAngle: this._protractorAngle() });
         if (this._windowSelection?.dynamic) this._invalidate();
       }
       if (e.key === 'Control') {
         this._ctrlHeld = false;
         this._refreshAngleLockStep();
-        this.setState({ tsquareEngaged: this._shiftHeld === true });
+        this.setState({ tsquareEngaged: this._shiftHeld === true, protractorAngle: this._protractorAngle() });
       }
     });
   }
@@ -5935,6 +5941,9 @@ class Component extends DCLogic {
     if (tool !== 'annotation') this._cancelNote();
     this._cancelRoof();
     this._cancelCut();
+    // Drawing happens on the canvas: a tool button left focused would swallow
+    // the Space keyboard click (and re-fire itself), so focus lets go here.
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
     this.setState({
       activeTool: tool,
       drawingMessage: `${this._contextToolLabel(tool).replace(/\s+\[[^\]]+\]$/, '')} active.`,
@@ -6977,8 +6986,8 @@ class Component extends DCLogic {
   _dispatchToolClick(tool, e) {
     if (tool === 'wall') this._handleWallClick();
     else if (tool === 'line') this._handleLineClick();
-    else if (tool === 'floor') this._handleFloorClick();
-    else if (tool === 'shape') this._handleShapeClick();
+    else if (tool === 'floor') this._handleFloorClick(e);
+    else if (tool === 'shape') this._handleShapeClick(e);
     else if (tool === 'outline') this._handleOutlineClick(e);
     else if (tool === 'dimension') this._handleDimensionClick();
     else if (tool === 'column') this._handleColumnClick();
@@ -7226,7 +7235,7 @@ class Component extends DCLogic {
   }
 
   // ─── Floor drawing ───────────────────────────────────────────────────────────
-  _handleFloorClick() {
+  _handleFloorClick(e) {
     if (!this._contextAllowsTool('floor')) {
       this.setState({ drawingMessage: this._contextToolMessage('floor'), drawingMessageError: true });
       return;
@@ -7247,6 +7256,11 @@ class Component extends DCLogic {
     const first = this._floorStart;
     if (this._floorPoints.length >= 3 && first
       && Math.hypot(pt.x - first.x, pt.z - first.z) < this._magnetRadius() * 2) {
+      this._finishFloor();
+      return;
+    }
+    if (first && this._closesOnFirstNode(e, first, pt, this._floorPoints.length)) {
+      this._floorPoints.push(pt.clone());
       this._finishFloor();
       return;
     }
@@ -7303,7 +7317,7 @@ class Component extends DCLogic {
   // A SHAPE is a closed construction outline with no roof / floor semantics:
   // draw one by hand, or CAPTURE it from the exterior wall outline. ROOF and
   // FLOOR then build their own geometry from a shape, leaving it untouched.
-  _handleShapeClick() {
+  _handleShapeClick(e) {
     const pt = this._snapPt; if (!pt) return;
 
     if (!this._shapeDrawing) {
@@ -7320,6 +7334,11 @@ class Component extends DCLogic {
     const first = this._shapeStart;
     if (this._shapePoints.length >= 3 && first
       && Math.hypot(pt.x - first.x, pt.z - first.z) < this._magnetRadius() * 2) {
+      this._finishShape();
+      return;
+    }
+    if (first && this._closesOnFirstNode(e, first, pt, this._shapePoints.length)) {
+      this._shapePoints.push(pt.clone());
       this._finishShape();
       return;
     }
@@ -7473,8 +7492,26 @@ class Component extends DCLogic {
       this._finishOutline(true);
       return;
     }
+    if (first && this._closesOnFirstNode(e, first, pt, this._outlinePoints.length)) {
+      this._outlinePoints.push(pt.clone());
+      this._finishOutline(true);
+      return;
+    }
     this._outlinePoints.push(pt.clone());
     this._lockAngle = null;
+  }
+
+  // Clicking ON the first node while an angle lock holds the snap point away
+  // from it (the T-square squaring the last corner) means "land this corner
+  // and close": the projected corner and the closing leg arrive together, so
+  // a rectangle finishes on the first-node click instead of needing a second.
+  _closesOnFirstNode(e, first, pt, placedCount) {
+    if (!e || placedCount < 3) return false;
+    const raw = this._getWorldPos(e.clientX, e.clientY);
+    if (!raw) return false;
+    const r = this._magnetRadius() * 2;
+    return Math.hypot(raw.x - first.x, raw.z - first.z) < r
+      && Math.hypot(pt.x - first.x, pt.z - first.z) >= r;
   }
 
   _finishOutline(closed = false) {
@@ -12989,6 +13026,15 @@ class Component extends DCLogic {
     }, () => this._rememberActiveProfile('settings'));
   }
 
+  // The protractor blade a held modifier combo grabs, as a degree label for
+  // the status chip: Ctrl 90°, Shift 45°, Ctrl+Shift 30°.
+  _protractorAngle() {
+    if (this._ctrlHeld && this._shiftHeld) return '30';
+    if (this._ctrlHeld) return '90';
+    if (this._shiftHeld) return '45';
+    return '';
+  }
+
   // Changing the modifier combo mid-hold releases the held angle so the lock
   // re-aims on the new ladder step.
   _refreshAngleLockStep() {
@@ -13082,24 +13128,51 @@ class Component extends DCLogic {
     const walls = this._walls.filter(wall => wall.levelId === levelId
       && (wall.view || 'plan') === wallView);
     const toCorner = point => ({ x: point.x, z: point.z, srcId: point.srcId || null });
+    // Which side each edge of a closed loop faces, and the coordinates its
+    // corners lend to that side's string: N/S edges contribute x, W/E z. A
+    // side only strings corners it can see, so a far-side notch never echoes.
+    const facingOf = pts => {
+      const facing = { N: [], S: [], W: [], E: [] };
+      const area2 = pts.reduce((sum, pt, index) => {
+        const next = pts[(index + 1) % pts.length];
+        return sum + (pt.x * next.z - next.x * pt.z);
+      }, 0);
+      pts.forEach((pt, index) => {
+        const next = pts[(index + 1) % pts.length];
+        const dx = next.x - pt.x, dz = next.z - pt.z;
+        const nx = area2 > 0 ? dz : -dz;
+        const nz = area2 > 0 ? -dx : dx;
+        const faces = Math.abs(nx) >= Math.abs(nz) ? (nx > 0 ? 'E' : 'W') : (nz > 0 ? 'S' : 'N');
+        if (faces === 'N' || faces === 'S') facing[faces].push(pt.x, next.x);
+        else facing[faces].push(pt.z, next.z);
+      });
+      return facing;
+    };
+    const mergeFacing = (into, from) =>
+      ['N', 'S', 'W', 'E'].forEach(side => into[side].push(...from[side]));
     const outlines = this._outlines.filter(outline =>
       outline.levelId === levelId && outline.points.length >= 3);
     // The house and each garage string their own stacks: every group's dims
     // hug that group's own edge instead of the combined extents, so a garage
     // never pushes the house strings out past itself.
     const groups = [];
-    const housePoints = outlines.filter(outline => !outline.garage)
-      .flatMap(outline => outline.points.map(toCorner));
-    if (housePoints.length) groups.push({ corners: housePoints, house: true });
+    const houseOutlines = outlines.filter(outline => !outline.garage);
+    const housePoints = houseOutlines.flatMap(outline => outline.points.map(toCorner));
+    if (housePoints.length) {
+      const facing = { N: [], S: [], W: [], E: [] };
+      houseOutlines.forEach(outline => mergeFacing(facing, facingOf(outline.points)));
+      groups.push({ corners: housePoints, house: true, facing });
+    }
     outlines.filter(outline => outline.garage)
-      .forEach(outline => groups.push({ corners: outline.points.map(toCorner), house: false }));
+      .forEach(outline => groups.push({
+        corners: outline.points.map(toCorner), house: false, facing: facingOf(outline.points) }));
     if (!groups.length) {
       const wallCorners = walls.flatMap(wall => [toCorner(wall.start), toCorner(wall.end)]);
       if (wallCorners.length >= 2) groups.push({ corners: wallCorners, house: true });
     }
     // The ROOF level dims its roof footprints for the truss designer: each
-    // roof strings its own stack, with the eave lines called out so every
-    // truss span reads straight off the plan.
+    // roof strings its own stack, broken at the bearing wall corners so every
+    // truss span and overhang reads straight off the plan.
     const roofs = levelId === 7
       ? this._roofs.filter(roof => roof.levelId === levelId && roof.points.length >= 3)
       : [];
@@ -13107,25 +13180,11 @@ class Component extends DCLogic {
       groups.length = 0;
       roofs.forEach(roof => {
         const pts = roof.points;
-        const area2 = pts.reduce((sum, pt, index) => {
-          const next = pts[(index + 1) % pts.length];
-          return sum + (pt.x * next.z - next.x * pt.z);
-        }, 0);
-        const group = { corners: pts.map(toCorner), house: !roof.garage, roof: true,
-          eaveX: [], eaveZ: [], facing: { N: [], S: [], W: [], E: [] } };
-        pts.forEach((pt, index) => {
-          const next = pts[(index + 1) % pts.length];
-          const dx = next.x - pt.x, dz = next.z - pt.z;
-          const nx = area2 > 0 ? dz : -dz;
-          const nz = area2 > 0 ? -dx : dx;
-          const faces = Math.abs(nx) >= Math.abs(nz) ? (nx > 0 ? 'E' : 'W') : (nz > 0 ? 'S' : 'N');
-          if (faces === 'N' || faces === 'S') group.facing[faces].push(pt.x, next.x);
-          else group.facing[faces].push(pt.z, next.z);
-          if ((roof.edges?.[index] || 'eave') !== 'eave') return;
-          if (Math.abs(dx) >= Math.abs(dz)) group.eaveZ.push((pt.z + next.z) / 2);
-          else group.eaveX.push((pt.x + next.x) / 2);
-        });
-        groups.push(group);
+        // The bearing line the trusses land on sits one overhang inside the
+        // roof edge — the exterior wall face the footprint was grown from.
+        const wallLoop = this._offsetOutline(pts.map(pt => ({ x: pt.x, z: pt.z })), -roof.overhang);
+        groups.push({ corners: pts.map(toCorner), house: !roof.garage, roof: true,
+          wallFacing: facingOf(wallLoop) });
       });
     }
     groups.forEach(group => {
@@ -13229,22 +13288,21 @@ class Component extends DCLogic {
         const lo = cornerCoords[0], hi = cornerCoords[cornerCoords.length - 1];
         const strings = [];
         if (group.roof) {
-          // Roof stack: the closest string breaks at the corners of the edges
-          // facing this side, the middle string catches eave lines that first
-          // string missed (the far eaves of an L — the truss bearing lines),
+          // Roof stack: the closest string runs roof edge → the wall corners
+          // facing this side → roof edge (the end pieces read the overhang),
           // and the overall runs eave to eave across the whole footprint.
-          const facingCoords = uniqSorted([lo, hi, ...mergeJogs(group.facing[side])]);
-          const missedEaves = (side === 'N' || side === 'S' ? group.eaveX : group.eaveZ)
-            .filter(value => value > lo + 0.01 && value < hi - 0.01)
-            .filter(value => !facingCoords.some(coord => Math.abs(coord - value) <= 0.05));
-          if (facingCoords.length > 2) strings.push(facingCoords);
-          if (missedEaves.length) strings.push(uniqSorted([lo, ...missedEaves, hi]));
+          const wallCoords = uniqSorted(mergeJogs(group.wallFacing[side]))
+            .filter(value => value > lo + 0.01 && value < hi - 0.01);
+          if (wallCoords.length) strings.push(uniqSorted([lo, ...wallCoords, hi]));
           strings.push([lo, hi]);
         } else {
           const centres = uniqSorted(openingsFor[groupIndex][side])
             .filter(value => value > lo + 0.01 && value < hi - 0.01);
           if (centres.length) strings.push(uniqSorted([lo, ...centres, hi]));
-          if (cornerCoords.length > 2) strings.push(cornerCoords);
+          const jogCoords = group.facing
+            ? uniqSorted(mergeJogs([lo, hi, ...group.facing[side]]))
+            : cornerCoords;
+          if (jogCoords.length > 2) strings.push(jogCoords);
           strings.push([lo, hi]);
         }
         const own = side === 'N' ? minZ : side === 'S' ? maxZ : side === 'W' ? minX : maxX;
@@ -13311,8 +13369,13 @@ class Component extends DCLogic {
         for (let i = 0; i < coords.length - 1; i++) {
           const a = coords[i], b = coords[i + 1];
           if (b - a < 0.05) continue;
-          const start = horizontal ? { x: a, z: fixed } : { x: fixed, z: a };
-          const end = horizontal ? { x: b, z: fixed } : { x: fixed, z: b };
+          // The rendered dim line offsets to the right of the start→end
+          // direction (south for west→east runs, west for north→south), so
+          // N and E strings run reversed to keep the ink on the outward side.
+          const flip = entry.side === 'N' || entry.side === 'E';
+          const [p, q] = flip ? [b, a] : [a, b];
+          const start = horizontal ? { x: p, z: fixed } : { x: fixed, z: p };
+          const end = horizontal ? { x: q, z: fixed } : { x: fixed, z: q };
           this._dimensions.push({
             id: this._nextDimensionId++,
             start: linkDimensionEnd(new THREE.Vector3(start.x, elev, start.z)),
@@ -14981,6 +15044,15 @@ class Component extends DCLogic {
       }
       return;
     }
+    // Space is a keyboard click mid-draw: it lands a corner on the live snap
+    // point, so the mouse hand aims and the off hand drops corners. Enter
+    // still finishes the run.
+    if (matches('finishAlt') && this._snapPt
+      && ['line', 'wall', 'floor', 'shape', 'outline'].includes(this.state.activeTool)) {
+      e.preventDefault();
+      this._dispatchToolClick(this.state.activeTool, null);
+      return;
+    }
     if (matches('finish') || matches('finishAlt')) {
       if (this._lineDrawing) { e.preventDefault(); this._finishChain(); return; }
       if (this._wallDrawing) { e.preventDefault(); this._finishWall();  return; }
@@ -15048,10 +15120,6 @@ class Component extends DCLogic {
     if (matches('tsquare')) { e.preventDefault(); this._toggleTsquare(); return; }
     if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelCopy(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
-    if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
-    if (matches('top')) { e.preventDefault(); this._setView('top'); return; }
-    if (matches('front')) { e.preventDefault(); this._setView('front'); return; }
-    if (matches('side')) { e.preventDefault(); this._setView('side'); return; }
     // A bare A returns the Select object-type filter to ALL. Presets that bind
     // A to a command (AutoCAD node, ArchiCAD select) matched above and win.
     if (this.state.activeTool === 'select' && !e.ctrlKey && !e.metaKey && !e.altKey
@@ -15487,7 +15555,7 @@ class Component extends DCLogic {
         : 'ROOF — Press Build from Shape in the panel · Click an existing edge to toggle EAVE / GABLE')
       : shaping
       ? (drawingShape
-        ? `Click shape corners · Click first point or ${shortcut('finish')} / ${shortcut('finishAlt')} to close · ${shortcut('cancel')} to cancel`
+        ? `Click shape corners · ${shortcut('finishAlt')} drops a corner · Click first point or ${shortcut('finish')} to close · ${shortcut('cancel')} to cancel`
         : 'SHAPE — Click to draw a closed outline · or press Capture in the panel')
       : fenestrating
       ? (holeHost
@@ -15506,9 +15574,9 @@ class Component extends DCLogic {
       : dimensioning
       ? (this._dimensionStart ? 'DIMENSION — Click end point · ESC to cancel' : 'DIMENSION — Click start point')
       : (drawingWall
-        ? `Click to place corners · ${shortcut('finish')} or ${shortcut('finishAlt')} to commit · ${shortcut('cancel')} to cancel`
+        ? `Click to place corners · ${shortcut('finishAlt')} drops a corner · ${shortcut('finish')} to commit · ${shortcut('cancel')} to cancel`
         : (drawingFloor
-          ? `Click floor corners · Click first point or ${shortcut('finish')} / ${shortcut('finishAlt')} to close · ${shortcut('cancel')} to cancel`
+          ? `Click floor corners · ${shortcut('finishAlt')} drops a corner · Click first point or ${shortcut('finish')} to close · ${shortcut('cancel')} to cancel`
           : 'CUT — Click end point · Right-click to cancel'));
     const hintColor   = choosingDir ? '#b04060' : '#5980a6';
 
@@ -16356,6 +16424,12 @@ class Component extends DCLogic {
       tsquareChipTitle: this.state.tsquareOn
         ? `T-SQUARE on — 90° [${shortcut('tsquare')}] · Ctrl 90° / Shift 45° / Ctrl+Shift 30° protractors`
         : `T-SQUARE off [${shortcut('tsquare')}] · Ctrl 90° / Shift 45° / Ctrl+Shift 30° protractors`,
+      protractorChipColor: this.state.protractorAngle ? '#e07a20' : 'rgba(29,31,32,0.18)',
+      protractorChipGlow: this.state.protractorAngle ? 'drop-shadow(0 0 3px rgba(224,122,32,0.9))' : 'none',
+      protractorChipLabel: this.state.protractorAngle ? `${this.state.protractorAngle}°` : '',
+      protractorChipTitle: this.state.protractorAngle
+        ? `PROTRACTOR — ${this.state.protractorAngle}° blade held`
+        : 'PROTRACTOR — hold Ctrl 90° / Shift 45° / Ctrl+Shift 30°',
       rulerChipColor: this.state.lengthFrozen ? '#e07a20' : 'rgba(29,31,32,0.18)',
       rulerChipGlow: this.state.lengthFrozen ? 'drop-shadow(0 0 3px rgba(224,122,32,0.9))' : 'none',
       lengthFrozen: this.state.lengthFrozen,

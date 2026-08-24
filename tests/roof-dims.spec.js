@@ -1,9 +1,9 @@
 // AUTO DIMS on the ROOF level strings the roof footprints for the truss
-// designer. Per side: the closest string breaks at the corners of the edges
-// facing that side, a middle string catches eave lines the first one missed
-// (the far eaves of an L — the truss bearing lines), and the outermost
-// string is the overall, eave to eave across the footprint. BUILD HOUSE
-// refreshes the roof stack along with the floor and foundation stacks.
+// designer. Per side: the closest string runs roof edge → the bearing wall
+// corners facing that side → roof edge (the end pieces read the overhang),
+// and the outermost string is the overall, eave to eave across the
+// footprint. The wall line sits one overhang inside the roof edge. BUILD
+// HOUSE refreshes the roof stack along with the floor and foundation stacks.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -45,7 +45,7 @@ function roofAutoDims(saved) {
     dimension.auto && dimension.levelId === 7 && dimension.view === 'plan');
 }
 
-test('a rectangular roof gets one overall per side at the first offset', async ({ page }) => {
+test('a rectangular roof strings overhang / span / overhang plus the overall per side', async ({ page }) => {
   await h.openModel(page);
   await switchLevel(page, 'ROOF');
   await h.selectTool(page, 'Roof');
@@ -57,62 +57,71 @@ test('a rectangular roof gets one overall per side at the first offset', async (
 
   await runAutoDims(page);
   const auto = roofAutoDims(await h.savedDrawing(page));
-  // Footprint (-6,0)…(6,12): no jogs, no interior eaves — 4 overalls only.
-  expect(auto).toHaveLength(4);
-  const north = auto.find(dimension => h.near(dimension.start.z, -1.5) && h.near(dimension.end.z, -1.5));
-  expect(north).toBeTruthy();
-  expect(Math.abs(north.end.x - north.start.x)).toBeCloseTo(12, 5);
-  const west = auto.find(dimension => h.near(dimension.start.x, -7.5) && h.near(dimension.end.x, -7.5));
-  expect(west).toBeTruthy();
-  expect(Math.abs(west.end.z - west.start.z)).toBeCloseTo(12, 5);
+  // Footprint (-6,0)…(6,12), 2' overhang → wall line (-4,2)…(4,10). Per
+  // side: overhang / wall span / overhang at the first offset + the overall.
+  expect(auto).toHaveLength(16);
+  const north = auto.filter(dimension => h.near(dimension.start.z, -1.5) && h.near(dimension.end.z, -1.5));
+  expect(north).toHaveLength(3);
+  const pieces = north.map(dimension => Math.abs(dimension.end.x - dimension.start.x)).sort((a, b) => a - b);
+  expect(pieces[0]).toBeCloseTo(2, 3);
+  expect(pieces[1]).toBeCloseTo(2, 3);
+  expect(pieces[2]).toBeCloseTo(8, 3);
+  const northOverall = auto.find(dimension => h.near(dimension.start.z, -3) && h.near(dimension.end.z, -3));
+  expect(northOverall).toBeTruthy();
+  expect(Math.abs(northOverall.end.x - northOverall.start.x)).toBeCloseTo(12, 5);
+  const west = auto.filter(dimension => h.near(dimension.start.x, -7.5) && h.near(dimension.end.x, -7.5));
+  expect(west).toHaveLength(3);
 });
 
-test('an L roof strings facing corners, missed eave lines, and overalls', async ({ page }) => {
+test('an L roof strings each side\'s own wall corners between the overhang ends', async ({ page }) => {
   await h.openModel(page);
   await buildLRoof(page);
   await runAutoDims(page);
 
   const auto = roofAutoDims(await h.savedDrawing(page));
-  // N and W: full-width facing eave, so the missed-eave string (broken at
-  // the far eave line) sits closest with the overall outside — 3 dims each.
-  // S and E: the facing corners jog at the notch — 2-piece string + overall.
-  expect(auto).toHaveLength(12);
+  // Wall line (-8,-6)(8,-6)(8,0)(0,0)(0,6)(-8,6) inside footprint ±2'.
+  // N and W face one flat wall: overhang / span / overhang + overall — 4.
+  // S and E face the notch: their string breaks at its wall corner too — 5.
+  expect(auto).toHaveLength(18);
 
-  // N side: middle string at z = -8 - 1'6" breaks at the x=2 eave line.
+  // N side first string: -10 → -8 → 8 → 10; the notch (x=0/2) stays off it.
   const northPieces = auto.filter(dimension =>
     h.near(dimension.start.z, -9.5) && h.near(dimension.end.z, -9.5));
-  expect(northPieces).toHaveLength(2);
+  expect(northPieces).toHaveLength(3);
   expect(northPieces.some(dimension =>
-    h.near(dimension.start.x, 2) || h.near(dimension.end.x, 2))).toBe(true);
+    h.near(dimension.start.x, 2) || h.near(dimension.end.x, 2)
+    || h.near(dimension.start.x, 0) || h.near(dimension.end.x, 0))).toBe(false);
   // N overall one spacing further out, eave to eave.
   const northOverall = auto.find(dimension =>
     h.near(dimension.start.z, -11) && h.near(dimension.end.z, -11));
   expect(Math.abs(northOverall.end.x - northOverall.start.x)).toBeCloseTo(20, 5);
 
-  // W side: middle string breaks at the z=2 eave line, overall spans 16'.
-  const westPieces = auto.filter(dimension =>
-    h.near(dimension.start.x, -11.5) && h.near(dimension.end.x, -11.5));
-  expect(westPieces).toHaveLength(2);
-  expect(westPieces.some(dimension =>
-    h.near(dimension.start.z, 2) || h.near(dimension.end.z, 2))).toBe(true);
-
-  // S side: facing string breaks at the notch corner x=2.
+  // S side first string breaks at the notch wall corner x=0:
+  // -10 → -8 → 0 → 8 → 10.
   const southPieces = auto.filter(dimension =>
     h.near(dimension.start.z, 9.5) && h.near(dimension.end.z, 9.5));
-  expect(southPieces).toHaveLength(2);
+  expect(southPieces).toHaveLength(4);
   expect(southPieces.some(dimension =>
-    h.near(dimension.start.x, 2) || h.near(dimension.end.x, 2))).toBe(true);
+    h.near(dimension.start.x, 0) || h.near(dimension.end.x, 0))).toBe(true);
+
+  // E side first string breaks at the notch wall corner z=0.
+  const eastPieces = auto.filter(dimension =>
+    h.near(dimension.start.x, 11.5) && h.near(dimension.end.x, 11.5));
+  expect(eastPieces).toHaveLength(4);
+  expect(eastPieces.some(dimension =>
+    h.near(dimension.start.z, 0) || h.near(dimension.end.z, 0))).toBe(true);
 
   // Re-running replaces the stack instead of doubling it.
   await runAutoDims(page);
-  expect(roofAutoDims(await h.savedDrawing(page))).toHaveLength(12);
+  expect(roofAutoDims(await h.savedDrawing(page))).toHaveLength(18);
 });
 
-test('tagging the notch edge GABLE drops its eave line from the north string', async ({ page }) => {
+test('tagging an edge GABLE leaves the wall-corner strings alone', async ({ page }) => {
   await h.openModel(page);
   await buildLRoof(page);
 
-  // The x=2 vertical edge stops being an eave, so no truss bears on it.
+  // The x=2 vertical edge stops being an eave; the strings still read the
+  // bearing wall corners the same way.
   await h.selectTool(page, 'Roof');
   await h.clickWorld(page, 2, 5);
   await h.waitForSaved(page);
@@ -121,11 +130,9 @@ test('tagging the notch edge GABLE drops its eave line from the north string', a
 
   await runAutoDims(page);
   const auto = roofAutoDims(await h.savedDrawing(page));
-  // N loses its middle string: just the overall at the first offset now.
+  expect(auto).toHaveLength(18);
   const north = auto.filter(dimension => dimension.start.z < -8 && dimension.end.z < -8);
-  expect(north).toHaveLength(1);
-  expect(h.near(north[0].start.z, -9.5)).toBe(true);
-  expect(Math.abs(north[0].end.x - north[0].start.x)).toBeCloseTo(20, 5);
+  expect(north).toHaveLength(4);
 });
 
 test('BUILD HOUSE refreshes the roof stack with the plan stacks', async ({ page }) => {
@@ -143,11 +150,12 @@ test('BUILD HOUSE refreshes the roof stack with the plan stacks', async ({ page 
 
   const saved = await h.savedDrawing(page);
   expect(saved.roofs.length).toBeGreaterThan(0);
-  // The generated rectangle roof (outline + overhang) strings 4 overalls.
+  // The generated rectangle roof (outline + overhang) strings overhang /
+  // span / overhang + the overall on each side.
   const auto = roofAutoDims(saved);
-  expect(auto).toHaveLength(4);
+  expect(auto).toHaveLength(16);
   const minX = Math.min(...saved.roofs[0].points.map(point => point.x));
-  const west = auto.find(dimension =>
+  const west = auto.filter(dimension =>
     h.near(dimension.start.x, minX - 1.5) && h.near(dimension.end.x, minX - 1.5));
-  expect(west).toBeTruthy();
+  expect(west).toHaveLength(3);
 });
