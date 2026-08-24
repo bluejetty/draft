@@ -13193,48 +13193,18 @@ class Component extends DCLogic {
       !(dimension.auto && dimension.levelId === levelId && dimension.view === view));
     const firstOffset = this.state.autoDimFirstOffsetFt;
     let added = 0;
+    // Strings never land on a building: each side's stack steps out from the
+    // furthest footprint edge in its way, so a house side with an attached
+    // garage beyond it strings outside the garage instead of across it, and
+    // stacks sharing that corridor continue each other instead of colliding.
+    const outward = { N: -1, S: 1, W: -1, E: 1 };
+    const entries = [];
     sized.forEach((group, groupIndex) => {
       const corners = group.corners;
       const xs = mergeJogs(corners.map(point => point.x));
       const zs = mergeJogs(corners.map(point => point.z));
       const minX = xs[0], maxX = xs[xs.length - 1];
       const minZ = zs[0], maxZ = zs[zs.length - 1];
-      // Each string end links to the nearest master-linked corner, so master
-      // edits carry the auto strings along with the footprint they measure.
-      const linkDimensionEnd = vtx => {
-        let best = null, bestD = Infinity;
-        corners.forEach(corner => {
-          if (!corner.srcId) return;
-          const d = (corner.x - vtx.x) ** 2 + (corner.z - vtx.z) ** 2;
-          if (d < bestD) { bestD = d; best = corner; }
-        });
-        if (best) this._linkVertex(vtx, best.srcId);
-        return vtx;
-      };
-      const pushString = (side, coords, stringIndex) => {
-        const lineOffset = firstOffset + stringIndex * AUTO_DIM_STRING_SPACING_FT;
-        for (let i = 0; i < coords.length - 1; i++) {
-          const a = coords[i], b = coords[i + 1];
-          if (b - a < 0.05) continue;
-          const start = side === 'N' ? { x: a, z: minZ - lineOffset }
-            : side === 'S' ? { x: a, z: maxZ + lineOffset }
-            : side === 'W' ? { x: minX - lineOffset, z: a }
-            : { x: maxX + lineOffset, z: a };
-          const end = side === 'N' ? { x: b, z: minZ - lineOffset }
-            : side === 'S' ? { x: b, z: maxZ + lineOffset }
-            : side === 'W' ? { x: minX - lineOffset, z: b }
-            : { x: maxX + lineOffset, z: b };
-          this._dimensions.push({
-            id: this._nextDimensionId++,
-            start: linkDimensionEnd(new THREE.Vector3(start.x, elev, start.z)),
-            end: linkDimensionEnd(new THREE.Vector3(end.x, elev, end.z)),
-            levelId,
-            view,
-            auto: true,
-          });
-          added++;
-        }
-      };
       // A garage side buried against the house gets no strings — that face
       // belongs to the house and its own stack already dims it.
       const sideClear = side => {
@@ -13257,7 +13227,7 @@ class Component extends DCLogic {
         if (!sideClear(side)) return;
         const cornerCoords = side === 'N' || side === 'S' ? xs : zs;
         const lo = cornerCoords[0], hi = cornerCoords[cornerCoords.length - 1];
-        let stringIndex = 0;
+        const strings = [];
         if (group.roof) {
           // Roof stack: the closest string breaks at the corners of the edges
           // facing this side, the middle string catches eave lines that first
@@ -13267,16 +13237,92 @@ class Component extends DCLogic {
           const missedEaves = (side === 'N' || side === 'S' ? group.eaveX : group.eaveZ)
             .filter(value => value > lo + 0.01 && value < hi - 0.01)
             .filter(value => !facingCoords.some(coord => Math.abs(coord - value) <= 0.05));
-          if (facingCoords.length > 2) pushString(side, facingCoords, stringIndex++);
-          if (missedEaves.length) pushString(side, uniqSorted([lo, ...missedEaves, hi]), stringIndex++);
-          pushString(side, [lo, hi], stringIndex);
-          return;
+          if (facingCoords.length > 2) strings.push(facingCoords);
+          if (missedEaves.length) strings.push(uniqSorted([lo, ...missedEaves, hi]));
+          strings.push([lo, hi]);
+        } else {
+          const centres = uniqSorted(openingsFor[groupIndex][side])
+            .filter(value => value > lo + 0.01 && value < hi - 0.01);
+          if (centres.length) strings.push(uniqSorted([lo, ...centres, hi]));
+          if (cornerCoords.length > 2) strings.push(cornerCoords);
+          strings.push([lo, hi]);
         }
-        const centres = uniqSorted(openingsFor[groupIndex][side])
-          .filter(value => value > lo + 0.01 && value < hi - 0.01);
-        if (centres.length) pushString(side, uniqSorted([lo, ...centres, hi]), stringIndex++);
-        if (cornerCoords.length > 2) pushString(side, cornerCoords, stringIndex++);
-        pushString(side, [lo, hi], stringIndex);
+        const own = side === 'N' ? minZ : side === 'S' ? maxZ : side === 'W' ? minX : maxX;
+        entries.push({ group, side, lo, hi, strings, own, edge: own, base: 0 });
+      });
+    });
+    // Push each stack's base edge past every footprint sitting in its path.
+    // A footprint is in the path when it overlaps the strings' run, reaches
+    // beyond the current edge, and leaves no room for the stack before it.
+    entries.forEach(entry => {
+      const dir = outward[entry.side];
+      const depth = firstOffset + entry.strings.length * AUTO_DIM_STRING_SPACING_FT;
+      for (let pass = 0; pass < sized.length; pass++) {
+        let moved = false;
+        sized.forEach(other => {
+          if (other === entry.group) return;
+          const box = other.bbox;
+          const [spanLo, spanHi] = entry.side === 'N' || entry.side === 'S'
+            ? [box.minX, box.maxX] : [box.minZ, box.maxZ];
+          if (Math.min(spanHi, entry.hi) - Math.max(spanLo, entry.lo) <= 0.01) return;
+          const [near, far] = entry.side === 'N' ? [box.maxZ, box.minZ]
+            : entry.side === 'S' ? [box.minZ, box.maxZ]
+            : entry.side === 'W' ? [box.maxX, box.minX]
+            : [box.minX, box.maxX];
+          if ((far - entry.edge) * dir <= 0.01) return;
+          if ((near - entry.edge) * dir > depth) return;
+          entry.edge = far;
+          moved = true;
+        });
+        if (!moved) break;
+      }
+    });
+    // Stacks that ended on the same corridor stack together: the footprint
+    // whose own face IS that edge strings closest, the pushed-out ones after.
+    ['N', 'S', 'W', 'E'].forEach(side => {
+      const stack = entries.filter(entry => entry.side === side)
+        .sort((a, b) => (b.own - a.own) * outward[side]);
+      stack.forEach((entry, index) => {
+        for (let i = 0; i < index; i++) {
+          const prev = stack[i];
+          if (Math.abs(prev.edge - entry.edge) > 0.01) continue;
+          if (Math.min(prev.hi, entry.hi) - Math.max(prev.lo, entry.lo) <= 0.01) continue;
+          entry.base += prev.strings.length;
+        }
+      });
+    });
+    entries.forEach(entry => {
+      // Each string end links to the nearest master-linked corner, so master
+      // edits carry the auto strings along with the footprint they measure.
+      const linkDimensionEnd = vtx => {
+        let best = null, bestD = Infinity;
+        entry.group.corners.forEach(corner => {
+          if (!corner.srcId) return;
+          const d = (corner.x - vtx.x) ** 2 + (corner.z - vtx.z) ** 2;
+          if (d < bestD) { bestD = d; best = corner; }
+        });
+        if (best) this._linkVertex(vtx, best.srcId);
+        return vtx;
+      };
+      const horizontal = entry.side === 'N' || entry.side === 'S';
+      entry.strings.forEach((coords, stringIndex) => {
+        const fixed = entry.edge + outward[entry.side]
+          * (firstOffset + (entry.base + stringIndex) * AUTO_DIM_STRING_SPACING_FT);
+        for (let i = 0; i < coords.length - 1; i++) {
+          const a = coords[i], b = coords[i + 1];
+          if (b - a < 0.05) continue;
+          const start = horizontal ? { x: a, z: fixed } : { x: fixed, z: a };
+          const end = horizontal ? { x: b, z: fixed } : { x: fixed, z: b };
+          this._dimensions.push({
+            id: this._nextDimensionId++,
+            start: linkDimensionEnd(new THREE.Vector3(start.x, elev, start.z)),
+            end: linkDimensionEnd(new THREE.Vector3(end.x, elev, end.z)),
+            levelId,
+            view,
+            auto: true,
+          });
+          added++;
+        }
       });
     });
     return added;

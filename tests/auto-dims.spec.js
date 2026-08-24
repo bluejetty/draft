@@ -151,7 +151,7 @@ test('auto strings ride master outline edits, staying outside the moved plan', a
   expect(northAfter.end.z).toBeCloseTo(-11.5, 0);
 });
 
-test('the house strings hug the house edge; the garage dims its own stack', async ({ page }) => {
+test('house strings clear the attached garage; the shared corridor stacks in order', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
   // Attached garage protruding east: open run from (8,-4) out to x=14 and back.
@@ -168,15 +168,18 @@ test('the house strings hug the house edge; the garage dims its own stack', asyn
   const saved = await h.savedDrawing(page);
   const auto = saved.dimensions.filter(dimension => dimension.auto);
   const vertical = auto.filter(dimension => h.near(dimension.start.x, dimension.end.x, 0.01));
-  // The house's east strings sit off the HOUSE edge (x=8), not out past the
-  // garage: the closest east string is at 8+1'-6" = 9.5.
-  const houseEast = vertical.filter(dimension => dimension.start.x > 8.5 && dimension.start.x < 12);
-  expect(houseEast.length).toBeGreaterThan(0);
-  expect(Math.min(...houseEast.map(dimension => dimension.start.x))).toBeCloseTo(9.5, 1);
-  // The garage gets its own east overall off its own far edge (14+1.5 = 15.5).
-  const garageEast = vertical.filter(dimension => dimension.start.x > 15);
+  // Nothing lands on the garage: the east corridor is clear from the house
+  // wall (x=8) out to the garage's far edge plus the first offset.
+  expect(vertical.some(dimension => dimension.start.x > 8.01 && dimension.start.x < 15.4)).toBe(false);
+  // The garage's own east overall strings closest, off its far edge (14+1.5).
+  const garageEast = vertical.filter(dimension => h.near(dimension.start.x, 15.5, 0.1));
   expect(garageEast.length).toBeGreaterThan(0);
-  expect(Math.min(...garageEast.map(dimension => dimension.start.x))).toBeCloseTo(15.5, 1);
+  // The house's east strings continue the same stack beyond the garage's:
+  // corners at 14+1.5+1.5 = 17, overall at 18.5 — outside everything.
+  const houseEast = vertical.filter(dimension => dimension.start.x > 16);
+  expect(houseEast.length).toBeGreaterThan(0);
+  expect(Math.min(...houseEast.map(dimension => dimension.start.x))).toBeCloseTo(17, 1);
+  expect(Math.max(...houseEast.map(dimension => dimension.start.x))).toBeCloseTo(18.5, 1);
   // The garage's buried west side (against the house) gets no string of its
   // own — nothing lands at 8-1.5 = 6.5, inside the plan.
   expect(vertical.some(dimension => Math.abs(dimension.start.x - 6.5) < 0.5)).toBe(false);
