@@ -477,8 +477,8 @@
   <!-- COLUMN PROPERTIES -->
   <sc-if value="{{ columnToolActive }}" hint-placeholder-val="{{ false }}">
     <div style="display:flex; align-items:stretch;">
-      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:190px;">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Column · Pad Footing</div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:400px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Column · Pad Footing / Pile</div>
         <div style="display:flex; gap:3px;">
           <sc-for list="{{ columnFootingBtns }}" as="cf" hint-placeholder-count="2">
             <button onClick="{{ cf.onSelect }}" title="{{ cf.title }}" style="flex:1; border:1px solid {{ cf.border }}; background:{{ cf.bg }}; color:{{ cf.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ cf.label }}</button>
@@ -1263,7 +1263,15 @@ const ROOF_LAYER = 'A-ROOF';
 const COLUMN_FOOTINGS = [
   { id:'pad36', label:'TYP 36×36 PAD', sizeIn:36, note:'36"×36"×8" DP PAD — 3-15M @ 10" O.C. E/W' },
   { id:'pad42', label:'MED 42×42 PAD', sizeIn:42, note:'42"×42"×10" DP PAD — 4-15M @ 9" O.C. E/W' },
+  // Drilled concrete piles carry the garage grade beam. BUILD HOUSE sets the
+  // two at the beam corners against the house; the drafter copies the rest
+  // along the beam. Depth comes from the soils report, so the plan marks
+  // diameter + centre only.
+  { id:'pile8',  label:'8"ø PILE',  sizeIn:8,  pile:true, note:'8"ø CONC PILE — DEPTH PER SOILS REPORT' },
+  { id:'pile10', label:'10"ø PILE', sizeIn:10, pile:true, note:'10"ø CONC PILE — DEPTH PER SOILS REPORT' },
+  { id:'pile12', label:'12"ø PILE', sizeIn:12, pile:true, note:'12"ø CONC PILE — DEPTH PER SOILS REPORT' },
 ];
+const GARAGE_PILE_DEFAULT = 'pile10';
 const COLUMN_SIZE_IN = 3; // 3"ø adjustable steel telepost
 const STRUCT_SNAP_FT = 1; // columns and beam ends pull onto each other inside this
 const COLUMN_LAYER = 'S-COL-FOOTING';
@@ -3659,6 +3667,14 @@ class Component extends DCLogic {
           if (item.points && points.length > 2) ctx.closePath();
           ctx.stroke();
         });
+        // Columns / piles ghost as a small circle at their landing centre.
+        session.items.forEach(item => {
+          if (!item.point) return;
+          const s = toS({ x: item.point.x + dx, y: item.point.y, z: item.point.z + dz });
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, 6, 0, Math.PI * 2);
+          ctx.stroke();
+        });
         ctx.setLineDash([]);
       }
 
@@ -3959,6 +3975,31 @@ class Component extends DCLogic {
     if (showColumns) {
       const drawColumn = (column, { centreOnly = false } = {}) => {
         const c = toS(column.point);
+        const footing = this._columnFooting(column);
+        // A pile IS the drawn shape: its circle at true diameter with a centre
+        // mark — no telepost square, no separate pad.
+        if (footing.pile) {
+          const radius = Math.max(2.5, (footing.sizeIn / 12) * pxPerFt / 2);
+          ctx.save();
+          ctx.strokeStyle = '#1d1f20'; ctx.lineWidth = 1.5;
+          if (!centreOnly) {
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          const cross = radius + 4;
+          ctx.beginPath();
+          ctx.moveTo(c.x - cross, c.y); ctx.lineTo(c.x + cross, c.y);
+          ctx.moveTo(c.x, c.y - cross); ctx.lineTo(c.x, c.y + cross);
+          ctx.stroke();
+          if (view === 'foundation') {
+            ctx.fillStyle = '#1d1f20'; ctx.font = font;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+            ctx.fillText(footing.label, c.x, c.y + radius + 3);
+          }
+          ctx.restore();
+          return;
+        }
         const half = Math.max(2.5, (COLUMN_SIZE_IN / 12) * pxPerFt / 2);
         ctx.save();
         ctx.strokeStyle = '#1d1f20'; ctx.lineWidth = 1.5;
@@ -3969,7 +4010,6 @@ class Component extends DCLogic {
         ctx.moveTo(c.x, c.y - cross); ctx.lineTo(c.x, c.y + cross);
         ctx.stroke();
         if (view === 'foundation') {
-          const footing = this._columnFooting(column);
           const padHalf = (footing.sizeIn / 12) * pxPerFt / 2;
           ctx.setLineDash([5, 4]);
           ctx.strokeRect(c.x - padHalf, c.y - padHalf, padHalf * 2, padHalf * 2);
@@ -7516,6 +7556,37 @@ class Component extends DCLogic {
     });
   }
 
+  // Grade-beam piles: the beam bears on drilled concrete piles, and BUILD
+  // HOUSE sets the two at the beam corners against the house — the shared
+  // attachment nodes carry the beam ends. The drafter copies/moves the rest
+  // along the beam; a thickened-edge slab needs none.
+  _buildGaragePiles() {
+    const levelId = 1;
+    const elevation = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
+    let builtAny = false;
+    this._garageOutlines(levelId).forEach(garage => {
+      if (garage.open !== true) return;
+      if (this._garageFoundation(garage) === 'thickened') return;
+      const ends = [garage.points[0], garage.points[garage.points.length - 1]];
+      ends.forEach(end => {
+        const exists = this._columns.some(column => column.levelId === levelId
+          && column.view === 'foundation'
+          && Math.hypot(column.point.x - end.x, column.point.z - end.z) < 0.1);
+        if (exists) return;
+        this._columns.push({
+          id: this._nextColumnId++,
+          point: new THREE.Vector3(end.x, elevation, end.z),
+          levelId,
+          view: 'foundation',
+          footing: GARAGE_PILE_DEFAULT,
+          layer: COLUMN_LAYER,
+        });
+        builtAny = true;
+      });
+    });
+    return builtAny;
+  }
+
   // The closed polygon an open garage covers: its legs plus the house
   // boundary path between the two attachments on the garage side. The house
   // path exists only for area closure — no house-side line is ever drawn.
@@ -7885,6 +7956,7 @@ class Component extends DCLogic {
       garage.open !== true && !this._garageDetached(garage));
     if (this._buildGarageWalls()) built.push('garage walls');
     if (this._buildGarageGradeBeam()) built.push(openGarage ? 'garage grade beam (32" + 1.5" plate)' : 'garage grade beam');
+    if (this._buildGaragePiles()) built.push('2 garage piles at the house — COLUMN or COPY places the rest along the beam');
     if (this._buildGarageSlab()) {
       const slabLabels = [];
       if (openGarage) slabLabels.push('flat 4"');
@@ -10083,6 +10155,13 @@ class Component extends DCLogic {
         if (d < bestD) { bestD = d; bestVtx = v; }
       });
     });
+    // Column / pile centres join the pool so a press-hold drags one into
+    // place; a shared corner vertex scanned above still wins the tie.
+    (allows('column') ? this._activeColumns() : []).forEach(column => {
+      const v = column.point;
+      const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
+      if (d < bestD) { bestD = d; bestVtx = v; }
+    });
     if (!bestVtx) return null;
     // Collect all segment props pointing at this exact vertex object
     const refs = [];
@@ -10101,6 +10180,9 @@ class Component extends DCLogic {
       outline.points.forEach((point, index) => {
         if (point === bestVtx) refs.push({ target: outline.points, prop: index, outline });
       });
+    });
+    this._activeColumns().forEach(column => {
+      if (column.point === bestVtx) refs.push({ target: column, prop: 'point' });
     });
     return refs.length ? refs : null;
   }
@@ -10234,6 +10316,7 @@ class Component extends DCLogic {
     if ((this._dimensions || []).includes(item)) return 'dimension';
     if ((this._floors || []).includes(item)) return 'floor';
     if ((this._roofs || []).includes(item)) return 'roof';
+    if ((this._columns || []).includes(item)) return 'column';
     return null;
   }
 
@@ -10779,7 +10862,7 @@ class Component extends DCLogic {
 
   _makeCopySession(items, rect = null) {
     const vertices = new Set();
-    items.forEach(item => (item.points || [item.start, item.end]).filter(Boolean)
+    items.forEach(item => (item.points || (item.point ? [item.point] : [item.start, item.end])).filter(Boolean)
       .forEach(point => vertices.add(point)));
     return { items, vertices, rect };
   }
@@ -10827,6 +10910,7 @@ class Component extends DCLogic {
       .filter(item => !this._isCurrentContextReferenceItem(item))
       .forEach(add));
     this._activeDimensions().forEach(dimension => { if (whole(dimension)) add(dimension); });
+    this._activeColumns().forEach(column => { if (inside(column.point)) add(column); });
     if (!items.length) {
       this._copySession = null;
       this.setState({ copyPhase: 'idle', copyBase: null, copyMessage: 'Drag the rectangle over the items to copy.' });
@@ -10905,6 +10989,13 @@ class Component extends DCLogic {
           id: this._nextDimensionId++,
           start: new THREE.Vector3(item.start.x + dx, item.start.y, item.start.z + dz),
           end: new THREE.Vector3(item.end.x + dx, item.end.y, item.end.z + dz),
+        });
+        placed++;
+      } else if (type === 'column') {
+        this._columns.push({
+          ...item,
+          id: this._nextColumnId++,
+          point: new THREE.Vector3(item.point.x + dx, item.point.y, item.point.z + dz),
         });
         placed++;
       }
@@ -11387,7 +11478,9 @@ class Component extends DCLogic {
       layer: COLUMN_LAYER,
     });
     this.setState({
-      drawingMessage: `Column added${onBeam ? ' — centred on the beam line' : ''}. ${footing.note}, 3"ø adjustable steel telepost.`,
+      drawingMessage: footing.pile
+        ? `Pile added${onBeam ? ' — centred on the beam line' : ''}. ${footing.note}.`
+        : `Column added${onBeam ? ' — centred on the beam line' : ''}. ${footing.note}, 3"ø adjustable steel telepost.`,
       drawingMessageError: false,
     });
     this._markUnsaved();
@@ -13212,13 +13305,15 @@ class Component extends DCLogic {
       beamToolActive: activeTool === 'beam',
       columnFootingBtns: COLUMN_FOOTINGS.map(footing => ({
         label: footing.label,
-        title: `${footing.note} — shown as a centre mark on the FOUNDATION plan; the contractor positions from the centre and pad type.`,
+        title: `${footing.note} — shown as a centre mark on the FOUNDATION plan; the contractor positions from the centre and pad / pile type.`,
         bg: this.state.columnFooting === footing.id ? '#1d1f20' : '#fff',
         color: this.state.columnFooting === footing.id ? '#f2f2f3' : '#1d1f20',
         border: this.state.columnFooting === footing.id ? '#1d1f20' : 'rgba(29,31,32,0.16)',
         onSelect: () => this.setState({ columnFooting: footing.id }),
       })),
-      columnFootingNote: `${this._columnFooting({ footing: this.state.columnFooting }).note} · 3"ø adjustable steel telepost`,
+      columnFootingNote: this._columnFooting({ footing: this.state.columnFooting }).pile
+        ? this._columnFooting({ footing: this.state.columnFooting }).note
+        : `${this._columnFooting({ footing: this.state.columnFooting }).note} · 3"ø adjustable steel telepost`,
       hasActiveColumns: this._activeColumns().length > 0,
       onColumnDelete: () => this._deleteLastColumn(),
       beamModeBtns: ['flush', 'dropped'].map(value => ({
@@ -13389,7 +13484,7 @@ class Component extends DCLogic {
       outlineGarageBorder: this.state.outlineGarage ? '#7a4a21' : 'rgba(29,31,32,0.35)',
       outlineGarageBg: this.state.outlineGarage ? 'rgba(122,74,33,0.14)' : '#fff',
       outlineGarageColor: this.state.outlineGarage ? '#7a4a21' : 'rgba(29,31,32,0.75)',
-      buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on every floor level, 8" concrete walls + slab + ${formatInchesOnly(this._footingWidthIn(1))} centered strip-footing lines on FOUNDATION, and a ${this.state.roofPitch}:12 all-eave roof grown from the ROOF level's outline by the roof overhang. An attached GARAGE adds its open-leg grade beam (32" + 1.5" plate, top of plate 1'-0" below the foundation top), a flat 4" slab closed against the house, garage walls flush with the main-floor ceiling, and one roof over house + garage. Only levels still empty build, so re-running fills gaps without doubling up.`,
+      buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on every floor level, 8" concrete walls + slab + ${formatInchesOnly(this._footingWidthIn(1))} centered strip-footing lines on FOUNDATION, and a ${this.state.roofPitch}:12 all-eave roof grown from the ROOF level's outline by the roof overhang. An attached GARAGE adds its open-leg grade beam (32" + 1.5" plate, top of plate 1'-0" below the foundation top), a flat 4" slab closed against the house, 10"\u00f8 piles at the two beam corners against the house (COLUMN or COPY places the rest along the beam), garage walls flush with the main-floor ceiling, and one roof over house + garage. Only levels still empty build, so re-running fills gaps without doubling up.`,
       onShapeCapture: () => this._captureShape(),
       hasActiveShapes: this._activeShapes().length > 0,
       onShapeDelete: () => this._deleteLastShape(),

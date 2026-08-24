@@ -218,7 +218,7 @@ if (!window.DraftDrawingFormat) {
         point: centre,
         levelId: columnLevelId,
         view,
-        footing: oneOf(column?.footing, ['pad36', 'pad42'], 'pad36'),
+        footing: oneOf(column?.footing, ['pad36', 'pad42', 'pile8', 'pile10', 'pile12'], 'pad36'),
         layer: 'S-COL-FOOTING',
       };
     }).filter(Boolean);
