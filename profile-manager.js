@@ -268,6 +268,8 @@ if (!window.DraftProfileManager) {
         Object.freeze({ id: 'A-GLAZ', name: 'A-GLAZ', use: 'Window openings (Fenestration tool).', printable: true }),
         Object.freeze({ id: 'A-STR', name: 'A-STR', use: 'Interior stairs with their handrails and guardrails (Stair tool).', printable: true }),
         Object.freeze({ id: 'A-STR-DECK', name: 'A-STR-DECK', use: 'Exterior / deck stairs with their handrails and guardrails.', printable: true }),
+        Object.freeze({ id: 'A-FIXT', name: 'A-FIXT', use: 'Plumbing fixtures and appliances — tub, toilet, sink, fridge, stove, washer/dryer (Fixture tool).', printable: true }),
+        Object.freeze({ id: 'A-CASE', name: 'A-CASE', use: 'Casework — base cabinets, vanities, and their countertops (Fixture tool).', printable: true }),
         Object.freeze({ id: 'PLAN DIMENSION', name: 'PLAN DIMENSION', use: 'Dimension strings placed in PLAN.', printable: true }),
         Object.freeze({ id: 'ROOM-IDS-AREA', name: 'ROOM-IDS-AREA', use: 'Room tags and areas.', printable: true }),
       ]),

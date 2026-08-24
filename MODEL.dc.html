@@ -541,6 +541,42 @@
     </div>
   </sc-if>
 
+  <!-- FIXTURE PROPERTIES -->
+  <sc-if value="{{ fixtureToolActive }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Kitchen</div>
+        <div style="display:flex; gap:3px;">
+          <sc-for list="{{ fixtureKitchenBtns }}" as="fk" hint-placeholder-count="4">
+            <button onClick="{{ fk.onSelect }}" title="{{ fk.title }}" style="border:1px solid {{ fk.border }}; background:{{ fk.bg }}; color:{{ fk.color }}; padding:5px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer; white-space:nowrap;">{{ fk.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Bath</div>
+        <div style="display:flex; gap:3px;">
+          <sc-for list="{{ fixtureBathBtns }}" as="fb" hint-placeholder-count="3">
+            <button onClick="{{ fb.onSelect }}" title="{{ fb.title }}" style="border:1px solid {{ fb.border }}; background:{{ fb.bg }}; color:{{ fb.color }}; padding:5px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer; white-space:nowrap;">{{ fb.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Laundry</div>
+        <div style="display:flex; gap:3px;">
+          <sc-for list="{{ fixtureLaundryBtns }}" as="fl" hint-placeholder-count="2">
+            <button onClick="{{ fl.onSelect }}" title="{{ fl.title }}" style="border:1px solid {{ fl.border }}; background:{{ fl.bg }}; color:{{ fl.color }}; padding:5px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer; white-space:nowrap;">{{ fl.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:230px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ fixtureNote }}</div>
+      <sc-if value="{{ hasActiveFixtures }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:160px;">
+          <button onClick="{{ onFixtureDelete }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">REMOVE LAST FIXTURE</button>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
   <!-- ANNOTATION PROPERTIES -->
   <sc-if value="{{ noteToolActive }}" hint-placeholder-val="{{ false }}">
     <div style="display:flex; align-items:stretch;">
@@ -1332,6 +1368,42 @@ const NOTE_END_OPTIONS = [
   { id: 'line',  label: 'LINE END',  note: 'The leader ends as a plain line at the object of interest.' },
   { id: 'none',  label: 'NO POINTER', note: 'A standalone note box with no leader — one click places the text.' },
 ];
+// Kitchen / bath / laundry fixtures are semantic 2D plan symbols hosted on a
+// wall: each stores WHICH wall and WHERE along it, and its footprint redraws
+// from the current wall geometry every frame, so moving or stretching the
+// wall carries the fixtures with it. Plumbing fixtures and appliances live on
+// A-FIXT; casework (base cabinets / vanities, drawn as two-click runs with a
+// countertop line) lives on A-CASE. The TUB is the alcove special case: it
+// also anchors to the faucet-end wall, fills the alcove, stretches up to 6"
+// past its standard length, and any remaining space draws as a deck strip —
+// slide the tub to pick which end the deck lands on.
+const FIXTURE_LAYER = 'A-FIXT';
+const CASEWORK_LAYER = 'A-CASE';
+const FIXTURE_COLOR = '#1d1f20';
+const TUB_STRETCH_MAX_FT = 0.5;    // the tub grows up to 6" past standard; the rest is deck
+const TUB_MIN_LENGTH_FT = 4;       // an alcove shorter than this can't take the tub
+const COUNTER_OVERHANG_FT = 1 / 12; // countertop edge past the cabinet face
+const FIXTURE_KINDS = [
+  { id: 'cabinet', label: 'CABINET', group: 'KITCHEN',  widthFt: 3,      depthFt: 2,      casework: true,  run: true,
+    note: 'Base cabinet run — two clicks along a wall set the run; 24" deep with a countertop line.' },
+  { id: 'sink',    label: 'SINK',    group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2,      casework: false, run: false,
+    note: 'Kitchen sink — click it onto a wall (usually over a cabinet run).' },
+  { id: 'fridge',  label: 'FRIDGE',  group: 'KITCHEN',  widthFt: 3,      depthFt: 2.5,    casework: false, run: false,
+    note: 'Refrigerator box — click it onto a wall.' },
+  { id: 'stove',   label: 'STOVE',   group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2.17,   casework: false, run: false,
+    note: 'Range with burners — click it onto a wall.' },
+  { id: 'tub',     label: 'TUB',     group: 'BATH',     widthFt: 5,      depthFt: 2.5,    casework: false, run: false,
+    note: 'Alcove tub — click the back wall, then the faucet-end wall; the tub fills the alcove.' },
+  { id: 'toilet',  label: 'TOILET',  group: 'BATH',     widthFt: 5 / 3,  depthFt: 7 / 3,  casework: false, run: false,
+    note: 'Toilet — tank against the wall, click it into place.' },
+  { id: 'vanity',  label: 'VANITY',  group: 'BATH',     widthFt: 2.5,    depthFt: 1.75,   casework: true,  run: true,
+    note: 'Vanity run — two clicks along a wall set the run; 21" deep with a basin.' },
+  { id: 'washer',  label: 'WASHER',  group: 'LAUNDRY',  widthFt: 2.25,   depthFt: 2.25,   casework: false, run: false,
+    note: 'Washer box — click it onto a wall.' },
+  { id: 'dryer',   label: 'DRYER',   group: 'LAUNDRY',  widthFt: 2.25,   depthFt: 2.25,   casework: false, run: false,
+    note: 'Dryer box — click it onto a wall.' },
+];
+const fixtureKindDef = id => FIXTURE_KINDS.find(kind => kind.id === id) || FIXTURE_KINDS[0];
 // Shapes are closed construction outlines with no roof / floor semantics of
 // their own; the ROOF and FLOOR commands build their geometry from a shape.
 const SHAPE_LAYER = 'SHAPE';
@@ -1506,6 +1578,7 @@ class Component extends DCLogic {
     padDraft: '',             // pad size being typed (inches)
     padError: '',
     noteStyleError: '',       // fill-opacity / bullnose input validation message
+    fixtureKind: 'cabinet',   // active FIXTURE catalog entry (see FIXTURE_KINDS)
     fenestrationType: 'door', // 'door' | 'window' — picks the CAD layer and defaults
     fenestrationWidths: { door: DEFAULT_DOOR_WIDTH_FT, window: DEFAULT_WINDOW_WIDTH_FT },
     fenestrationWidthInput: formatArchitecturalInches(DEFAULT_DOOR_WIDTH_FT * 12),
@@ -1640,6 +1713,7 @@ class Component extends DCLogic {
     if (!Array.isArray(this._walls)) this._walls = [];
     if (!Array.isArray(this._floors)) this._floors = [];
     if (!Array.isArray(this._fenestrations)) this._fenestrations = [];
+    if (!Array.isArray(this._fixtures)) this._fixtures = [];
     if (!Array.isArray(this._surfaceOpenings)) this._surfaceOpenings = [];
     if (!Array.isArray(this._shapes)) this._shapes = [];
     if (!Array.isArray(this._roofs)) this._roofs = [];
@@ -1647,6 +1721,7 @@ class Component extends DCLogic {
     if (!Array.isArray(this._boneyardOutlines)) this._boneyardOutlines = [];
     if (!(this._selectedOutlines instanceof Set)) this._selectedOutlines = new Set();
     if (!(this._selectedFenestrations instanceof Set)) this._selectedFenestrations = new Set();
+    if (!(this._selectedFixtures instanceof Set)) this._selectedFixtures = new Set();
     if (!(this._selectedRoofs instanceof Set)) this._selectedRoofs = new Set();
     if (!(this._selectedSurfaceOpenings instanceof Set)) this._selectedSurfaceOpenings = new Set();
     if (!(this._selectedDimensions instanceof Set)) this._selectedDimensions = new Set();
@@ -1746,6 +1821,19 @@ class Component extends DCLogic {
         width: opening.width,
         sillHeight: opening.sillHeight,
         headHeight: opening.headHeight,
+      })),
+      fixtures: this._fixtures.map(fixture => ({
+        id: fixture.id,
+        wallId: fixture.wallId,
+        levelId: fixture.levelId,
+        view: fixture.view || 'plan',
+        kind: fixture.kind,
+        layer: fixture.layer,
+        offset: fixture.offset,
+        width: fixture.width,
+        depth: fixture.depth,
+        side: fixture.side,
+        ...(fixture.endWallId ? { endWallId: fixture.endWallId, dir: fixture.dir } : {}),
       })),
       surfaceOpenings: this._surfaceOpenings.map(opening => ({
         id: opening.id,
@@ -2406,6 +2494,21 @@ class Component extends DCLogic {
         };
       }).filter(Boolean);
       skipped += (Array.isArray(saved.fenestrations) ? saved.fenestrations.length : 0) - this._fenestrations.length;
+      // Fixtures restore after walls so both host references resolve: the back
+      // wall must exist on the fixture's level, and a tub's faucet-end wall too.
+      this._fixtures = format.fixtures(saved.fixtures, ownerLevelIds).map(fixture => {
+        const wall = wallsById.get(fixture.wallId);
+        if (!wall || wall.levelId !== fixture.levelId) return null;
+        if (fixture.endWallId) {
+          const endWall = wallsById.get(fixture.endWallId);
+          if (!endWall || endWall.levelId !== fixture.levelId) return null;
+        }
+        return {
+          ...fixture,
+          id: this._storedItemId(fixture.id, 'fixture', usedIds),
+        };
+      }).filter(Boolean);
+      skipped += (Array.isArray(saved.fixtures) ? saved.fixtures.length : 0) - this._fixtures.length;
       const floorIds = new Set(this._floors.map(floor => floor.id));
       const roofIds = new Set(this._roofs.map(roof => roof.id));
       this._surfaceOpenings = format.surfaceOpenings(saved.surfaceOpenings, ownerLevelIds).map(opening => {
@@ -2944,6 +3047,7 @@ class Component extends DCLogic {
     this._lines      = []; // committed line segments
     this._floors     = []; // committed closed floor outlines
     this._fenestrations = []; // door/window openings hosted on walls
+    this._fixtures   = []; // kitchen / bath / laundry symbols hosted on walls
     this._surfaceOpenings = []; // free-form openings cut from a floor or roof
     this._roofs      = []; // roof footprints — edge-drawn or built from a shape
     this._dimensions = []; // two-point plan/floor dimensions
@@ -3018,6 +3122,9 @@ class Component extends DCLogic {
     this._arcDrag        = null;       // { line, startX, startY, active }  — arc bulge drag
     this._outlineArcDrag = null;       // { outline, index, startX, startY, active } — outline segment arc drag
     this._selectDownInfo = null;       // { worldPt, clientX, clientY, shiftHeld } — pending click
+    this._fixtureDrag    = null;       // { fixture, startX, startY, active } — fixture slide along its wall
+    this._fixtureRunStart = null;      // { wallId, along, side } — first click of a cabinet / vanity run
+    this._tubPending     = null;       // { wallId, along, side } — tub back wall, waiting on the faucet-end wall
     this._lastClient     = null;       // { x, y } — last cursor position for cursor-side notices
     this._windowSelection = null;      // { start, current, startX, startY, shiftHeld } — window drag
     this._selectedSegs   = new Set(); // line/wall segment objects currently selected
@@ -3074,14 +3181,17 @@ class Component extends DCLogic {
       const sd   = this._selectDrag;
       const ad   = this._arcDrag;
       const oad  = this._outlineArcDrag;
+      const fd   = this._fixtureDrag;
       const info = this._selectDownInfo;
       const windowSelection = this._windowSelection;
       this._selectDrag     = null;
       this._arcDrag        = null;
       this._outlineArcDrag = null;
+      this._fixtureDrag    = null;
       this._selectDownInfo = null;
       this._windowSelection = null;
       if (ad?.active) this._markUnsaved();
+      if (fd?.active) this._markUnsaved();
       if (oad?.active) this._afterOutlineArcDrag(oad);
       if (windowSelection) {
         const end = this._getWorldPos(e.clientX, e.clientY);
@@ -3102,7 +3212,7 @@ class Component extends DCLogic {
         if (!windowSelection.dynamic) return;
       }
       // If the mousedown was in select mode and the cursor never moved far → treat as click
-      if (info && this.state.activeTool === 'select' && !(sd && sd.active)) {
+      if (info && this.state.activeTool === 'select' && !(sd && sd.active) && !(fd && fd.active)) {
         const dx = e.clientX - info.clientX, dy = e.clientY - info.clientY;
         if (Math.sqrt(dx*dx + dy*dy) <= 4) {
           if (!this._handlePadLabelClick(e)) this._handleSelectClick(info.worldPt, info.shiftHeld);
@@ -3412,6 +3522,8 @@ class Component extends DCLogic {
         }, { preview: true });
       }
     }
+    // ── Fixtures (kitchen / bath / laundry symbols riding their host walls) ──
+    if (activeVisible) this._drawFixtures2D(ctx, toS);
     // Stair opening ghost: once the interior face is anchored, the measured
     // rectangle previews toward the cursor's side until the second click.
     if (activeVisible && this.state.activeTool === 'fenestration' && !this._isPrinting
@@ -4824,6 +4936,9 @@ class Component extends DCLogic {
     if (tool === 'roof') return true;
     // Shapes are level-wide construction outlines: available everywhere.
     if (tool === 'shape') return true;
+    // Fixtures dress the finished PLAN — they host on that level's walls, so
+    // the BONEYARD (outline-only) and the structural sets go without them.
+    if (tool === 'fixture') return viewId === 'plan';
     if (viewId == null) return true;
     if (tool === 'node') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
     if (tool === 'wall') return ['plan', 'floor', 'e-power', 'foundation'].includes(viewId);
@@ -4843,7 +4958,7 @@ class Component extends DCLogic {
   // only decides where the geometry saves, never what the command is called.
   _contextToolLabel(tool, shortcut = '') {
     const suffix = shortcut ? `  [${shortcut}]` : '';
-    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', shape:'SHAPE', outline:'OUTLINE', roof:'ROOF', dimension:'DIMENSION', column:'COLUMN', beam:'BEAM', stair:'STAIR', annotation:'ANNOTATION' };
+    const names = { line:'LINE', node:'NODE / ARC', wall:'WALL', floor:'FLOOR', fenestration:'FENESTRATION', shape:'SHAPE', outline:'OUTLINE', roof:'ROOF', dimension:'DIMENSION', column:'COLUMN', beam:'BEAM', stair:'STAIR', fixture:'FIXTURE', annotation:'ANNOTATION' };
     return `${names[tool] || tool.toUpperCase()}${suffix}`;
   }
 
@@ -4890,6 +5005,7 @@ class Component extends DCLogic {
     if (tool === 'column') return COLUMN_LAYER;
     if (tool === 'beam') return BEAM_LAYER;
     if (tool === 'stair') return STAIR_LAYER;
+    if (tool === 'fixture') return fixtureKindDef(this.state.fixtureKind).casework ? CASEWORK_LAYER : FIXTURE_LAYER;
     if (tool === 'annotation') return NOTE_LAYER;
     return this._draftingContextLabel(viewId);
   }
@@ -4906,6 +5022,7 @@ class Component extends DCLogic {
     if (tool === 'dimension') return `Dimensions are placed in any layer set and save with it. Current context: ${context}.`;
     if (tool === 'column') return `Columns are placed in PLAN, FLOOR, or FOUNDATION — teleposts on pad footings, centred onto a nearby beam line. Current context: ${context}.`;
     if (tool === 'beam') return `Beams are placed in PLAN, FLOOR, or FOUNDATION — two clicks span between supports, FLUSH or DROPPED. Current context: ${context}.`;
+    if (tool === 'fixture') return `Fixtures and cabinets are placed in a level's PLAN — click them onto the wall they sit against. Current context: ${context}.`;
     if (tool === 'stair') return `Stairs are placed in a floor level's PLAN — click the top nosing at the floor opening, then the downhill direction; the run is laid out from the level heights. Current context: ${context}.`;
     if (tool === 'annotation') return `Annotations work in any context — click the object of interest, then where the note text goes, and type it. Current context: ${context}.`;
     if (tool === 'line') {
@@ -4935,6 +5052,7 @@ class Component extends DCLogic {
     if (tool !== 'dimension') this._cancelDimension();
     if (tool !== 'beam') this._cancelBeam();
     if (tool !== 'stair') this._cancelStair();
+    if (tool !== 'fixture') this._cancelFixture();
     if (tool !== 'annotation') this._cancelNote();
     this._cancelRoof();
     this._cancelCut();
@@ -4955,9 +5073,9 @@ class Component extends DCLogic {
     this._courtesyWallIds?.clear();
     this._courtesyFloorIds?.clear();
     this._cancelFrozenLength();
-    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof();
+    this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelFixture(); this._cancelNote(); this._cancelRoof();
     this._applyLevelElevation(levelIndex);
-    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'outline', 'roof', 'dimension', 'column', 'beam', 'stair', 'annotation'].includes(this.state.activeTool)
+    const activeTool = ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'outline', 'roof', 'dimension', 'column', 'beam', 'stair', 'fixture', 'annotation'].includes(this.state.activeTool)
       && !this._contextAllowsTool(this.state.activeTool, viewId, false)
       ? 'select'
       : this.state.activeTool;
@@ -4971,10 +5089,10 @@ class Component extends DCLogic {
       layerRevealKey: `${levelId}:${viewId}`,
       stairPane: 'split',
       activeTool,
-      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension', 'column', 'beam', 'stair'].includes(this.state.activeTool)
+      drawingMessage: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension', 'column', 'beam', 'stair', 'fixture'].includes(this.state.activeTool)
         ? this._contextToolMessage(this.state.activeTool, viewId)
         : `Working in ${this._draftingContextLabel(viewId)}.`,
-      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension', 'column', 'beam', 'stair'].includes(this.state.activeTool),
+      drawingMessageError: activeTool === 'select' && ['line', 'node', 'wall', 'floor', 'fenestration', 'shape', 'roof', 'dimension', 'column', 'beam', 'stair', 'fixture'].includes(this.state.activeTool),
     }, () => {
       if (this._orthoCam) this._setView('top');
       this._pruneContextReferenceSelection();
@@ -5809,6 +5927,7 @@ class Component extends DCLogic {
       if (this._dispatchToolClick(tool, e)) return;
       if (tool === 'node') this._handleNodeArcDown(e);
       else if (tool === 'fenestration') this._handleFenestrationClick();
+      else if (tool === 'fixture') this._handleFixtureClick();
       else if (tool === 'roof') this._handleRoofClick(e);
       else if (tool === 'stair') this._handleStairClick();
       else if (tool === 'annotation') this._handleNoteClick();
@@ -5839,17 +5958,25 @@ class Component extends DCLogic {
             }
             e.preventDefault();
           } else {
-            // Press-and-drag away from any node opens a window; Shift while
-            // dragging widens it to all levels. A short click still selects.
-            this._windowSelection = {
-              start: raw,
-              current: raw,
-              startX: e.clientX,
-              startY: e.clientY,
-              shiftHeld: e.shiftKey,
-              mode: 'window',
-              dynamic: true,
-            };
+            const fixture = this._findFixtureAt(raw);
+            if (fixture) {
+              // Press-and-drag on a fixture slides it along its host wall; a
+              // clean click still selects it on mouseup.
+              this._fixtureDrag = { fixture, startX: e.clientX, startY: e.clientY, active: false };
+              e.preventDefault();
+            } else {
+              // Press-and-drag away from any node opens a window; Shift while
+              // dragging widens it to all levels. A short click still selects.
+              this._windowSelection = {
+                start: raw,
+                current: raw,
+                startX: e.clientX,
+                startY: e.clientY,
+                shiftHeld: e.shiftKey,
+                mode: 'window',
+                dynamic: true,
+              };
+            }
           }
           // Record for click-to-select detection on mouseup
           this._selectDownInfo = { worldPt: raw, clientX: e.clientX, clientY: e.clientY, shiftHeld: e.shiftKey };
@@ -5932,6 +6059,7 @@ class Component extends DCLogic {
       case 'dimension': return !this._dimensionStart;
       case 'beam': return !this._beamStart;
       case 'column': return true;
+      case 'fixture': return !this._fixtureRunStart && !this._tubPending;
       default: return false;
     }
   }
@@ -5991,6 +6119,17 @@ class Component extends DCLogic {
     if (this._windowSelection) {
       const raw = this._getWorldPos(e.clientX, e.clientY);
       if (raw) this._windowSelection.current = raw;
+    }
+
+    // Sliding a fixture drags it along its host wall (a tub slides inside
+    // its alcove, the deck strip following the leftover space).
+    if (this._fixtureDrag) {
+      const fd = this._fixtureDrag;
+      if (!fd.active && Math.hypot(e.clientX - fd.startX, e.clientY - fd.startY) > 4) fd.active = true;
+      if (fd.active) {
+        const raw = this._getWorldPos(e.clientX, e.clientY);
+        if (raw) { this._slideFixtureTo(fd.fixture, raw); this._invalidate(); }
+      }
     }
 
     // Node/Arc tool — pulling a segment sideways sets its bulge
@@ -8542,6 +8681,457 @@ class Component extends DCLogic {
     }) || null;
   }
 
+  // ─── Fixtures (kitchen / bath / laundry symbols hosted on walls) ───────────
+  // A fixture stores its host wall id, its centre offset along the wall, and
+  // which face of the wall the body projects from; the footprint derives from
+  // the current wall geometry on every frame, so wall edits carry the
+  // fixtures. The tub adds a faucet-end wall: it fills the alcove from that
+  // wall to the next crossing wall (or the back wall's end), stretching up to
+  // 6" past standard, and any leftover draws as a deck strip — sliding the
+  // tub picks which end the deck lands on.
+  _wallFrame(wall) {
+    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.01) return null;
+    const ux = dx / len, uz = dz / len;
+    const nx = -uz, nz = ux;
+    const def = WALL_TYPES.find(w => w.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
+    const totalFt = def.totalIn / 12;
+    const refLine = wall.refLine || 'center';
+    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
+    return {
+      ux, uz, nx, nz, len, totalFt, startOff, endOff: startOff + totalFt,
+      at: (along, across) => ({
+        x: wall.start.x + ux * along + nx * across,
+        y: wall.start.y || 0,
+        z: wall.start.z + uz * along + nz * across,
+      }),
+    };
+  }
+
+  _activeFixtures() {
+    const levelId = this._activeLevelId();
+    const wallIds = new Set([...this._activeWalls(), ...this._sharedContextWalls()].map(wall => wall.id));
+    return this._fixtures.filter(fixture => fixture.levelId === levelId && wallIds.has(fixture.wallId));
+  }
+
+  // Where another wall's centreline crosses this wall's axis: feet along the
+  // host wall, plus the crossing parameter on the other wall (0..1 inside it).
+  // Null when the walls are parallel.
+  _wallCross(wall, frame, other) {
+    const vx = other.end.x - other.start.x, vz = other.end.z - other.start.z;
+    const denom = frame.ux * vz - frame.uz * vx;
+    if (Math.abs(denom) < 1e-6) return null;
+    const rx = other.start.x - wall.start.x, rz = other.start.z - wall.start.z;
+    return {
+      along: (rx * vz - rz * vx) / denom,
+      s: (frame.uz * rx - frame.ux * rz) / denom,
+    };
+  }
+
+  _fixtureGeometry(fixture, wall = this._walls.find(w => w.id === fixture.wallId)) {
+    if (!wall) return null;
+    const frame = this._wallFrame(wall);
+    if (!frame) return null;
+    if (fixture.kind === 'tub' && fixture.endWallId) return this._tubGeometry(fixture, wall, frame);
+    const width = Math.min(fixture.width, Math.max(frame.len - 0.02, 0.5));
+    const half = width / 2;
+    const along = Math.min(Math.max(fixture.offset, half + 0.01), Math.max(frame.len - half - 0.01, half + 0.01));
+    const backOff = fixture.side === -1 ? frame.startOff : frame.endOff;
+    const frontOff = backOff + fixture.side * fixture.depth;
+    return {
+      wall, frame,
+      along, alongStart: along - half, alongEnd: along + half,
+      backOff, frontOff, width, side: fixture.side,
+      corners: [
+        frame.at(along - half, backOff),
+        frame.at(along + half, backOff),
+        frame.at(along + half, frontOff),
+        frame.at(along - half, frontOff),
+      ],
+      center: frame.at(along, (backOff + frontOff) / 2),
+    };
+  }
+
+  _tubGeometry(fixture, wall, frame) {
+    const endWall = this._walls.find(w => w.id === fixture.endWallId);
+    if (!endWall) return null;
+    const cross = this._wallCross(wall, frame, endWall);
+    if (!cross || cross.s < -0.2 || cross.s > 1.2) return null;
+    const dir = fixture.dir === -1 ? -1 : 1;
+    const face = cross.along + dir * ((this._wallFrame(endWall)?.totalFt || 0) / 2);
+    // The alcove's far bound: the nearest crossing wall past the faucet wall,
+    // or the end of the back wall itself.
+    let farFace = dir > 0 ? frame.len : 0;
+    this._walls.forEach(other => {
+      if (other === wall || other === endWall) return;
+      if (other.levelId !== wall.levelId || (other.view || 'plan') !== (wall.view || 'plan')) return;
+      const hit = this._wallCross(wall, frame, other);
+      if (!hit || hit.s < -0.05 || hit.s > 1.05) return;
+      const otherFace = hit.along - dir * ((this._wallFrame(other)?.totalFt || 0) / 2);
+      if (dir * (otherFace - face) > 0.5 && dir * (otherFace - face) < dir * (farFace - face)) farFace = otherFace;
+    });
+    const alcove = dir * (farFace - face);
+    if (alcove < TUB_MIN_LENGTH_FT) return null;
+    const tubLen = Math.min(alcove, fixture.width + TUB_STRETCH_MAX_FT);
+    const gap = Math.max(alcove - tubLen, 0);
+    const slide = Math.min(Math.max(fixture.offset, 0), gap);
+    const near = face + dir * slide;
+    const far = near + dir * tubLen;
+    const backOff = fixture.side === -1 ? frame.startOff : frame.endOff;
+    const frontOff = backOff + fixture.side * fixture.depth;
+    const rect = (a0, a1) => [
+      frame.at(a0, backOff), frame.at(a1, backOff), frame.at(a1, frontOff), frame.at(a0, frontOff),
+    ];
+    const decks = [];
+    if (slide > 0.04) decks.push(rect(Math.min(face, near), Math.max(face, near)));
+    if (gap - slide > 0.04) decks.push(rect(Math.min(far, farFace), Math.max(far, farFace)));
+    return {
+      wall, frame, tub: true, dir, face, farFace, alcove, tubLen, gap, slide,
+      faucetAlong: near,
+      along: (near + far) / 2,
+      alongStart: Math.min(face, farFace), alongEnd: Math.max(face, farFace),
+      tubAlongStart: Math.min(near, far), tubAlongEnd: Math.max(near, far),
+      backOff, frontOff, width: tubLen, side: fixture.side,
+      corners: rect(Math.min(near, far), Math.max(near, far)),
+      decks,
+      center: frame.at((near + far) / 2, (backOff + frontOff) / 2),
+    };
+  }
+
+  // Nearest editable wall within the pick radius → { wall, frame, along, side }
+  // with side read from which face of the wall the cursor sits on.
+  _fixturePlacement(worldPt) {
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    const thresh = (this._orthoHalfH * 2) / h * 30;
+    let best = null, bestD = thresh;
+    this._activeWalls().forEach(wall => {
+      const { d, t } = this._distToLineSeg(worldPt, wall);
+      if (d < bestD) { bestD = d; best = { wall, t }; }
+    });
+    if (!best) return null;
+    const frame = this._wallFrame(best.wall);
+    if (!frame) return null;
+    const relX = worldPt.x - best.wall.start.x, relZ = worldPt.z - best.wall.start.z;
+    const across = relX * frame.nx + relZ * frame.nz;
+    return {
+      wall: best.wall, frame,
+      along: best.t * frame.len,
+      side: across >= (frame.startOff + frame.endOff) / 2 ? 1 : -1,
+    };
+  }
+
+  _cancelFixture() {
+    this._fixtureRunStart = null;
+    this._tubPending = null;
+  }
+
+  _handleFixtureClick() {
+    if (!this._contextAllowsTool('fixture')) {
+      this.setState({ drawingMessage: this._contextToolMessage('fixture'), drawingMessageError: true });
+      return;
+    }
+    const pt = this._snapPt; if (!pt) return;
+    const kind = fixtureKindDef(this.state.fixtureKind);
+    const placement = this._fixturePlacement(pt);
+    if (!placement) {
+      this.setState({ drawingMessage: 'Click near a wall — fixtures and cabinets sit against the wall that carries them.', drawingMessageError: true });
+      return;
+    }
+    if (kind.id === 'tub') { this._handleTubClick(kind, placement); return; }
+    if (kind.run) { this._handleFixtureRunClick(kind, placement); return; }
+    const clamped = this._clampOpeningToWall(placement.wall, placement.along, kind.widthFt);
+    if (!clamped) {
+      this.setState({ drawingMessage: `That wall is too short for the ${kind.label.toLowerCase()}.`, drawingMessageError: true });
+      return;
+    }
+    this._addFixture(kind, placement.wall, { offset: clamped.offset, width: kind.widthFt, side: placement.side });
+  }
+
+  _addFixture(kind, wall, props) {
+    const layer = kind.casework ? CASEWORK_LAYER : FIXTURE_LAYER;
+    this._fixtures.push({
+      id: this._newDrawingItemId('fixture'),
+      wallId: wall.id,
+      levelId: wall.levelId,
+      view: 'plan',
+      kind: kind.id,
+      layer,
+      depth: kind.depthFt,
+      ...props,
+    });
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `${kind.label} placed on ${layer} — it rides the wall it sits against.`,
+      drawingMessageError: false,
+    });
+  }
+
+  // Base cabinet / vanity runs are two clicks along one wall: the clicks set
+  // the run's extents and the first click's cursor side picks the wall face.
+  _handleFixtureRunClick(kind, placement) {
+    const start = this._fixtureRunStart;
+    if (!start || start.wallId !== placement.wall.id) {
+      this._fixtureRunStart = { wallId: placement.wall.id, along: placement.along, side: placement.side };
+      this.setState({
+        drawingMessage: start
+          ? `New wall — the ${kind.label.toLowerCase()} run restarted: click the other end of the run along this wall.`
+          : `Click the other end of the ${kind.label.toLowerCase()} run along the wall.`,
+        drawingMessageError: false,
+      });
+      return;
+    }
+    const width = Math.abs(placement.along - start.along);
+    if (width < 0.5) {
+      this.setState({ drawingMessage: 'Runs need at least 6" — click the other end farther along the wall.', drawingMessageError: true });
+      return;
+    }
+    this._fixtureRunStart = null;
+    this._addFixture(kind, placement.wall, { offset: (placement.along + start.along) / 2, width, side: start.side });
+  }
+
+  // The tub takes two clicks on two walls: the back wall it lies along, then
+  // the faucet-end wall that closes the alcove.
+  _handleTubClick(kind, placement) {
+    const pending = this._tubPending;
+    if (!pending || placement.wall.id === pending.wallId) {
+      this._tubPending = { wallId: placement.wall.id, along: placement.along, side: placement.side };
+      this.setState({
+        drawingMessage: pending ? 'Back wall moved — now click the faucet-end wall.' : 'Back wall set — now click the faucet-end wall.',
+        drawingMessageError: false,
+      });
+      return;
+    }
+    const backWall = this._walls.find(w => w.id === pending.wallId);
+    const frame = backWall && this._wallFrame(backWall);
+    const cross = frame && this._wallCross(backWall, frame, placement.wall);
+    if (!cross || cross.s < -0.2 || cross.s > 1.2) {
+      this.setState({ drawingMessage: 'The faucet-end wall must cross the back wall — click a wall at the end of the alcove.', drawingMessageError: true });
+      return;
+    }
+    const fixture = {
+      id: this._newDrawingItemId('fixture'),
+      wallId: backWall.id,
+      levelId: backWall.levelId,
+      view: 'plan',
+      kind: 'tub',
+      layer: FIXTURE_LAYER,
+      offset: 0,
+      width: kind.widthFt,
+      depth: kind.depthFt,
+      side: pending.side,
+      endWallId: placement.wall.id,
+      dir: pending.along >= cross.along ? 1 : -1,
+    };
+    if (!this._tubGeometry(fixture, backWall, frame)) {
+      this.setState({
+        drawingMessage: `The alcove is too short for the tub — it needs at least ${TUB_MIN_LENGTH_FT}' clear along the back wall.`,
+        drawingMessageError: true,
+      });
+      return;
+    }
+    this._tubPending = null;
+    this._fixtures.push(fixture);
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: 'Tub set wall-to-wall — it stretches up to 6" past standard and the leftover draws as a deck. Drag the tub to slide it.',
+      drawingMessageError: false,
+    });
+  }
+
+  // Fixtures under a select click take priority over their host wall. The tub
+  // hit area covers its whole alcove strip so its deck ends pick it too.
+  _findFixtureAt(worldPt) {
+    const fixtures = this._activeFixtures();
+    for (let i = fixtures.length - 1; i >= 0; i -= 1) {
+      const fixture = fixtures[i];
+      if (!this._layerStandard(fixture.layer).visible) continue;
+      const wall = this._walls.find(w => w.id === fixture.wallId);
+      if (!wall || this._isCurrentContextReferenceItem(wall)) continue;
+      const geo = this._fixtureGeometry(fixture, wall);
+      if (!geo) continue;
+      const relX = worldPt.x - wall.start.x, relZ = worldPt.z - wall.start.z;
+      const along = relX * geo.frame.ux + relZ * geo.frame.uz;
+      const across = relX * geo.frame.nx + relZ * geo.frame.nz;
+      const acrossMin = Math.min(geo.backOff, geo.frontOff), acrossMax = Math.max(geo.backOff, geo.frontOff);
+      if (along >= geo.alongStart && along <= geo.alongEnd && across >= acrossMin && across <= acrossMax) return fixture;
+    }
+    return null;
+  }
+
+  // Dragging a fixture slides it along its host wall; the tub slides inside
+  // its alcove, moving the deck strip to whichever end has the leftover.
+  _slideFixtureTo(fixture, worldPt) {
+    const wall = this._walls.find(w => w.id === fixture.wallId);
+    const frame = wall && this._wallFrame(wall);
+    if (!frame) return;
+    const relX = worldPt.x - wall.start.x, relZ = worldPt.z - wall.start.z;
+    const along = relX * frame.ux + relZ * frame.uz;
+    if (fixture.kind === 'tub' && fixture.endWallId) {
+      const geo = this._tubGeometry(fixture, wall, frame);
+      if (!geo) return;
+      fixture.offset = Math.min(Math.max(geo.dir * (along - geo.face) - geo.tubLen / 2, 0), geo.gap);
+      return;
+    }
+    const half = Math.min(fixture.width, frame.len) / 2;
+    fixture.offset = Math.min(Math.max(along, half + 0.01), Math.max(frame.len - half - 0.01, half + 0.01));
+  }
+
+  _fixtureKindBtns(group) {
+    return FIXTURE_KINDS.filter(kind => kind.group === group).map(kind => ({
+      label: kind.label,
+      title: kind.note,
+      bg: this.state.fixtureKind === kind.id ? '#1d1f20' : '#fff',
+      color: this.state.fixtureKind === kind.id ? '#f2f2f3' : '#1d1f20',
+      border: this.state.fixtureKind === kind.id ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+      onSelect: () => { this._cancelFixture(); this.setState({ fixtureKind: kind.id }); },
+    }));
+  }
+
+  _deleteLastFixture() {
+    const fixtures = this._activeFixtures();
+    if (!fixtures.length) return;
+    const last = fixtures[fixtures.length - 1];
+    this._fixtures = this._fixtures.filter(fixture => fixture !== last);
+    this._selectedFixtures?.delete(last);
+    this._markUnsaved();
+    this.setState({ drawingMessage: `${fixtureKindDef(last.kind).label} removed.`, drawingMessageError: false });
+  }
+
+  // ── Fixture rendering ────────────────────────────────────────────────
+  _drawFixtures2D(ctx, toS) {
+    const printable = layer => !this._isPrinting || this._layerStandard(layer).printable;
+    this._activeFixtures()
+      .filter(fixture => this._layerStandard(fixture.layer).visible && printable(fixture.layer))
+      .forEach(fixture => this._drawFixture2D(ctx, toS, fixture, { selected: this._selectedFixtures?.has(fixture) }));
+    if (this._isPrinting || this.state.activeTool !== 'fixture' || !this._snapPt) return;
+    // Placement ghost: the active catalog entry previews on the nearest wall.
+    const kind = fixtureKindDef(this.state.fixtureKind);
+    const layer = kind.casework ? CASEWORK_LAYER : FIXTURE_LAYER;
+    if (kind.id === 'tub' && this._tubPending) {
+      const wall = this._walls.find(w => w.id === this._tubPending.wallId);
+      if (wall) {
+        this._drawFixture2D(ctx, toS, {
+          kind: 'tub', wallId: wall.id, layer,
+          offset: this._tubPending.along, width: kind.widthFt, depth: kind.depthFt, side: this._tubPending.side,
+        }, { preview: true }, wall);
+      }
+      return;
+    }
+    const placement = this._fixturePlacement(this._snapPt);
+    if (!placement) return;
+    const start = this._fixtureRunStart;
+    const ghost = kind.run && start && start.wallId === placement.wall.id
+      ? {
+        kind: kind.id, wallId: placement.wall.id, layer,
+        offset: (placement.along + start.along) / 2,
+        width: Math.max(Math.abs(placement.along - start.along), 0.5),
+        depth: kind.depthFt, side: start.side,
+      }
+      : {
+        kind: kind.id, wallId: placement.wall.id, layer,
+        offset: placement.along, width: kind.widthFt, depth: kind.depthFt, side: placement.side,
+      };
+    this._drawFixture2D(ctx, toS, ghost, { preview: true }, placement.wall);
+  }
+
+  _drawFixture2D(ctx, toS, fixture, options = {}, wall = this._walls.find(w => w.id === fixture.wallId)) {
+    const geo = this._fixtureGeometry(fixture, wall);
+    if (!geo) return;
+    const P = (along, across) => toS(geo.frame.at(along, across));
+    const poly = pts => {
+      ctx.beginPath();
+      pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.closePath();
+    };
+    const rect = (a0, a1, c0, c1) => poly([P(a0, c0), P(a1, c0), P(a1, c1), P(a0, c1)]);
+    const oval = (alongC, acrossC, ra, rc) => {
+      ctx.beginPath();
+      for (let i = 0; i <= 20; i += 1) {
+        const t = (i / 20) * Math.PI * 2;
+        const p = P(alongC + Math.cos(t) * ra, acrossC + Math.sin(t) * rc);
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      }
+      ctx.closePath();
+    };
+    const sa = P(0, 0), sb = P(1, 0);
+    const pxPerFt = Math.hypot(sb.x - sa.x, sb.y - sa.y);
+    const a0 = geo.tub ? geo.tubAlongStart : geo.alongStart;
+    const a1 = geo.tub ? geo.tubAlongEnd : geo.alongEnd;
+    const cBack = geo.backOff, cFront = geo.frontOff;
+    const cMin = Math.min(cBack, cFront), cMax = Math.max(cBack, cFront);
+    const mid = (cBack + cFront) / 2;
+    const inset = 0.15;
+    ctx.save();
+    ctx.globalAlpha = options.preview ? 0.55 : 1;
+    ctx.strokeStyle = FIXTURE_COLOR;
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.lineWidth = 1.2;
+    rect(a0, a1, cBack, cFront); ctx.fill(); ctx.stroke();
+    const kind = fixture.kind;
+    if (kind === 'cabinet' || kind === 'vanity') {
+      // Countertop edge — a parallel line just past the cabinet face.
+      const counter = cFront + (cFront >= cBack ? 1 : -1) * COUNTER_OVERHANG_FT;
+      const ca = P(a0, counter), cb = P(a1, counter);
+      ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
+      if (kind === 'vanity') {
+        oval((a0 + a1) / 2, mid, Math.max(Math.min((a1 - a0) / 2 - 0.2, 0.7), 0.2), Math.max((cMax - cMin) / 2 - 0.15, 0.2));
+        ctx.stroke();
+      }
+    } else if (kind === 'sink') {
+      const w = a1 - a0;
+      if (w > 2.2) {
+        rect(a0 + inset, a0 + w / 2 - 0.05, cMin + inset, cMax - inset); ctx.stroke();
+        rect(a0 + w / 2 + 0.05, a1 - inset, cMin + inset, cMax - inset); ctx.stroke();
+      } else {
+        rect(a0 + inset, a1 - inset, cMin + inset, cMax - inset); ctx.stroke();
+      }
+    } else if (kind === 'stove') {
+      const w = a1 - a0, d = cMax - cMin;
+      [[0.28, 0.3], [0.72, 0.3], [0.28, 0.7], [0.72, 0.7]].forEach(([fa, fc]) => {
+        oval(a0 + w * fa, cMin + d * fc, 0.28, 0.28);
+        ctx.stroke();
+      });
+    } else if (kind === 'fridge' || kind === 'washer' || kind === 'dryer') {
+      rect(a0 + inset, a1 - inset, cMin + inset, cMax - inset); ctx.stroke();
+      if (pxPerFt > 6) {
+        const c = toS(geo.center);
+        ctx.fillStyle = FIXTURE_COLOR;
+        ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(kind === 'fridge' ? 'REF' : kind === 'washer' ? 'W' : 'D', c.x, c.y);
+      }
+    } else if (kind === 'toilet') {
+      // Tank against the wall, bowl beyond it.
+      const tank = cBack + (cFront >= cBack ? 1 : -1) * 0.6;
+      rect(a0 + 0.05, a1 - 0.05, cBack, tank); ctx.stroke();
+      oval((a0 + a1) / 2, (tank + cFront) / 2,
+        Math.max(Math.min((a1 - a0) / 2 - 0.15, 0.62), 0.2), Math.max(Math.abs(cFront - tank) / 2 - 0.05, 0.2));
+      ctx.stroke();
+    } else if (kind === 'tub') {
+      // Basin inset, with extra room at the faucet end for the fittings.
+      const faucetAtStart = geo.faucetAlong != null
+        && Math.abs(geo.faucetAlong - a0) < Math.abs(geo.faucetAlong - a1);
+      const b0 = a0 + (faucetAtStart ? 0.55 : 0.25);
+      const b1 = a1 - (faucetAtStart ? 0.25 : 0.55);
+      if (b1 > b0 + 0.5) {
+        rect(b0, b1, cMin + 0.2, cMax - 0.2); ctx.stroke();
+        oval(faucetAtStart ? b0 + 0.35 : b1 - 0.35, mid, 0.15, 0.15); ctx.stroke();
+      }
+      // Deck strips fill any leftover alcove.
+      (geo.decks || []).forEach(deck => {
+        const pts = deck.map(toS);
+        poly(pts); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[2].x, pts[2].y); ctx.stroke();
+      });
+    }
+    if (options.selected) {
+      ctx.strokeStyle = '#5980a6'; ctx.lineWidth = 2;
+      rect(a0, a1, cBack, cFront); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // ─── Surface openings (holes cut from a selected floor or roof) ───────────
   // The FENESTRATION tool hole mode: select a floor or roof, then click the
   // opening's corners inside it — any closed shape, not just a rectangle.
@@ -10469,6 +11059,7 @@ class Component extends DCLogic {
     this._selectedFloors?.clear();
     this._selectedRoofs?.clear();
     this._selectedFenestrations?.clear();
+    this._selectedFixtures?.clear();
     this._selectedSurfaceOpenings?.clear();
     this._selectedDimensions?.clear();
     this._selectedOutlines?.clear();
@@ -10797,6 +11388,16 @@ class Component extends DCLogic {
       if (!shiftHeld) this._clearSelection(false);
       if (shiftHeld && this._selectedFenestrations.has(opening)) this._selectedFenestrations.delete(opening);
       else this._selectedFenestrations.add(opening);
+      this._notifySelectionChanged();
+      return;
+    }
+    // A fixture beats the wall it sits against, so it can be picked, slid,
+    // or deleted without grabbing its host.
+    const fixture = allows('fixture') ? this._findFixtureAt(worldPt) : null;
+    if (fixture) {
+      if (!shiftHeld) this._clearSelection(false);
+      if (shiftHeld && this._selectedFixtures.has(fixture)) this._selectedFixtures.delete(fixture);
+      else this._selectedFixtures.add(fixture);
       this._notifySelectionChanged();
       return;
     }
@@ -12886,13 +13487,13 @@ class Component extends DCLogic {
         return;
       }
       if (this._windowSelection) { this._windowSelection = null; return; }
-      this._cancelExtend(); this._cancelCopy(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._cancelCut();
+      this._cancelExtend(); this._cancelCopy(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelFixture(); this._cancelNote(); this._cancelRoof(); this._cancelCut();
       // Esc with a live selection clears it; Esc on an empty selection releases
       // an engaged Select object-type filter back to ALL.
       const hadSelection = (this._selectedSegs?.size || 0) + (this._selectedFloors?.size || 0)
         + (this._selectedRoofs?.size || 0) + (this._selectedFenestrations?.size || 0)
         + (this._selectedSurfaceOpenings?.size || 0) + (this._selectedDimensions?.size || 0)
-        + (this._selectedOutlines?.size || 0) > 0;
+        + (this._selectedOutlines?.size || 0) + (this._selectedFixtures?.size || 0) > 0;
       this._clearSelection();
       if (!hadSelection && this.state.activeTool === 'select' && (this.state.selectFilter || 'all') !== 'all') {
         this.setState({ selectFilter: 'all' });
@@ -12907,7 +13508,7 @@ class Component extends DCLogic {
       const hasSelection = this._selectedSegs.size > 0 || this._selectedFloors.size > 0
         || this._selectedRoofs.size > 0 || this._selectedFenestrations.size > 0
         || this._selectedSurfaceOpenings.size > 0 || this._selectedDimensions.size > 0
-        || this._selectedOutlines.size > 0;
+        || this._selectedOutlines.size > 0 || this._selectedFixtures.size > 0;
       if (!hasSelection && this._lastClient && !this._stairWorkspaceActive()) {
         const hoverPt = this._getWorldPos(this._lastClient.x, this._lastClient.y);
         // Only outline points can own the hit, so a built corner's wall or
@@ -12933,10 +13534,11 @@ class Component extends DCLogic {
       if (this.state.activeTool === 'select'
         && (this._selectedSegs.size > 0 || this._selectedFloors.size > 0 || this._selectedRoofs.size > 0
           || this._selectedFenestrations.size > 0 || this._selectedSurfaceOpenings.size > 0
-          || this._selectedDimensions.size > 0)) {
+          || this._selectedDimensions.size > 0 || this._selectedFixtures.size > 0)) {
         e.preventDefault();
         const selectedCount = this._selectedSegs.size + this._selectedFloors.size + this._selectedRoofs.size
-          + this._selectedFenestrations.size + this._selectedSurfaceOpenings.size + this._selectedDimensions.size;
+          + this._selectedFenestrations.size + this._selectedSurfaceOpenings.size + this._selectedDimensions.size
+          + this._selectedFixtures.size;
         this._lines = this._lines.filter(l => !this._selectedSegs.has(l));
         this._walls = this._walls.filter(w => !this._selectedSegs.has(w));
         this._dimensions = this._dimensions.filter(dimension => !this._selectedDimensions.has(dimension));
@@ -12946,6 +13548,11 @@ class Component extends DCLogic {
         const wallIds = new Set(this._walls.map(w => w.id));
         this._fenestrations = this._fenestrations.filter(opening =>
           !this._selectedFenestrations.has(opening) && wallIds.has(opening.wallId));
+        // Fixtures go with their own selection and with any deleted host wall —
+        // a tub also needs its faucet-end wall to survive.
+        this._fixtures = this._fixtures.filter(fixture =>
+          !this._selectedFixtures.has(fixture) && wallIds.has(fixture.wallId)
+          && (!fixture.endWallId || wallIds.has(fixture.endWallId)));
         // Holes go with their own selection and with any deleted host floor / roof.
         const floorIds = new Set(this._floors.map(floor => floor.id));
         const roofIds = new Set(this._roofs.map(roof => roof.id));
@@ -13436,11 +14043,22 @@ class Component extends DCLogic {
     const shaping = activeTool === 'shape';
     const drawingShape = isDrawing && shaping;
     const roofing = activeTool === 'roof';
-    const toolStripHasOptions = ['select','extend','copy','line','wall','floor','shape','outline','dimension','fenestration','column','beam','stair','annotation','roof'].includes(activeTool);
+    const fixturing = activeTool === 'fixture';
+    const toolStripHasOptions = ['select','extend','copy','line','wall','floor','shape','outline','dimension','fenestration','column','beam','stair','fixture','annotation','roof'].includes(activeTool);
     const roofPhase = this.state.roofPhase;
     const placingCut  = isCutTool && cutPhase === 'placing';
-    const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending || nodeArcing || fenestrating || shaping || roofing;
-    const hintText    = roofing
+    const showHint    = drawingWall || drawingFloor || dimensioning || placingCut || choosingDir || extending || nodeArcing || fenestrating || shaping || roofing || fixturing;
+    const hintText    = fixturing
+      ? (this._tubPending
+        ? 'FIXTURE — Click the faucet-end wall of the tub alcove · Esc to cancel'
+        : this._fixtureRunStart
+        ? 'FIXTURE — Click along the same wall to end the run · Esc to cancel'
+        : fixtureKindDef(this.state.fixtureKind).run
+        ? 'FIXTURE — Click a wall where the run starts'
+        : this.state.fixtureKind === 'tub'
+        ? 'FIXTURE — Click the wall the tub backs onto'
+        : 'FIXTURE — Click a wall to place it at the cursor')
+      : roofing
       ? (roofPhase === 'edge'
         ? 'ROOF — Click the other end of the roof edge · Esc to cancel'
         : roofPhase === 'direction'
@@ -13573,6 +14191,13 @@ class Component extends DCLogic {
       stairLayoutNote: this._stairLayoutNote(),
       hasActiveStairs: this._activeStairs().length > 0,
       onStairDelete: () => this._deleteLastStair(),
+      fixtureToolActive: activeTool === 'fixture',
+      fixtureKitchenBtns: this._fixtureKindBtns('KITCHEN'),
+      fixtureBathBtns: this._fixtureKindBtns('BATH'),
+      fixtureLaundryBtns: this._fixtureKindBtns('LAUNDRY'),
+      fixtureNote: fixtureKindDef(this.state.fixtureKind).note,
+      hasActiveFixtures: this._activeFixtures().length > 0,
+      onFixtureDelete: () => this._deleteLastFixture(),
       noteToolActive: activeTool === 'annotation',
       noteEndBtns: NOTE_END_OPTIONS.map(option => ({
         label: option.label,
@@ -14237,6 +14862,7 @@ class Component extends DCLogic {
         contextualTool('column'),
         contextualTool('beam'),
         contextualTool('stair'),
+        contextualTool('fixture'),
       ],
       cutShortcut: shortcut('cut'),
       enter3D:      ()=>this._setView('perspective'),
