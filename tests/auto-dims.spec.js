@@ -24,6 +24,22 @@ async function buildHouse(page) {
   await page.waitForTimeout(300);
 }
 
+async function switchLevel(page, name) {
+  await page.locator('.level-row').filter({ has: page.locator('.level-name', { hasText: name }) })
+    .locator('.level-name').click();
+  await page.waitForTimeout(300);
+}
+
+async function dragWorld(page, fromX, fromZ, toX, toZ) {
+  const from = await h.worldToClient(page, fromX, fromZ);
+  const to = await h.worldToClient(page, toX, toZ);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await page.mouse.up();
+  await h.waitForSaved(page);
+}
+
 async function runAutoDims(page) {
   await h.selectTool(page, 'Dimension');
   await page.getByRole('button', { name: 'AUTO DIMS' }).click();
@@ -88,6 +104,51 @@ test('an L-shape gets jog strings and overalls on every side', async ({ page }) 
   expect(north).toHaveLength(3);
   const northOverall = north.find(dimension => h.near(dimension.start.z, -9));
   expect(Math.abs(northOverall.end.x - northOverall.start.x)).toBeCloseTo(16, 3);
+});
+
+test('auto strings ride master outline edits, staying outside the moved plan', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await runAutoDims(page);
+
+  // Slide the whole footprint by dragging every master corner the same 4' east
+  // on the BONEYARD — the auto strings must ride along, never left inside.
+  await switchLevel(page, 'BONEYARD');
+  await h.selectTool(page, 'Select');
+  await dragWorld(page, 8, -6, 12, -6);
+  await dragWorld(page, 8, 6, 12, 6);
+  await dragWorld(page, -8, -6, -4, -6);
+  await dragWorld(page, -8, 6, -4, 6);
+
+  const saved = await h.savedDrawing(page);
+  const auto = saved.dimensions.filter(dimension => dimension.auto && dimension.levelId === 3);
+  expect(auto).toHaveLength(4);
+  // Every string end carries its master link and rode the 4' slide.
+  auto.forEach(dimension => {
+    expect(dimension.start.srcId).toBeTruthy();
+    expect(dimension.end.srcId).toBeTruthy();
+  });
+  // Mouse drops land within a pixel of the target, so compare loosely.
+  const east = auto.find(dimension => dimension.start.x > 9);
+  expect(east.start.x).toBeCloseTo(13.5, 0);
+  const west = auto.find(dimension => dimension.start.x < -5);
+  expect(west.start.x).toBeCloseTo(-5.5, 0);
+  const north = auto.find(dimension => dimension.start.z < -7);
+  expect(north.start.x).toBeCloseTo(-4, 0);
+  expect(north.end.x).toBeCloseTo(12, 0);
+
+  // The links survive a reload: a further master edit still carries them.
+  await page.reload();
+  await expect(page.locator('[data-model-canvas]')).toBeVisible();
+  await page.waitForTimeout(500);
+  await switchLevel(page, 'BONEYARD');
+  await h.selectTool(page, 'Select');
+  await dragWorld(page, 12, -6, 12, -10);
+  const reloaded = await h.savedDrawing(page);
+  const northAfter = reloaded.dimensions.filter(dimension =>
+    dimension.auto && dimension.levelId === 3).find(dimension => dimension.end.z < -10.5);
+  expect(northAfter).toBeTruthy();
+  expect(northAfter.end.z).toBeCloseTo(-11.5, 0);
 });
 
 test('re-running replaces auto strings, keeps manual dims, honours the 3\'-0" offset', async ({ page }) => {
