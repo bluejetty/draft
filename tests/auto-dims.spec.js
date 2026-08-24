@@ -151,6 +151,66 @@ test('auto strings ride master outline edits, staying outside the moved plan', a
   expect(northAfter.end.z).toBeCloseTo(-11.5, 0);
 });
 
+test('the house strings hug the house edge; the garage dims its own stack', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  // Attached garage protruding east: open run from (8,-4) out to x=14 and back.
+  await h.selectTool(page, 'Outline');
+  await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
+  await h.clickWorld(page, 8, -4);
+  await h.clickWorld(page, 14, -4);
+  await h.clickWorld(page, 14, 4);
+  await h.clickWorld(page, 8, 4);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  await runAutoDims(page);
+  const saved = await h.savedDrawing(page);
+  const auto = saved.dimensions.filter(dimension => dimension.auto);
+  const vertical = auto.filter(dimension => h.near(dimension.start.x, dimension.end.x, 0.01));
+  // The house's east strings sit off the HOUSE edge (x=8), not out past the
+  // garage: the closest east string is at 8+1'-6" = 9.5.
+  const houseEast = vertical.filter(dimension => dimension.start.x > 8.5 && dimension.start.x < 12);
+  expect(houseEast.length).toBeGreaterThan(0);
+  expect(Math.min(...houseEast.map(dimension => dimension.start.x))).toBeCloseTo(9.5, 1);
+  // The garage gets its own east overall off its own far edge (14+1.5 = 15.5).
+  const garageEast = vertical.filter(dimension => dimension.start.x > 15);
+  expect(garageEast.length).toBeGreaterThan(0);
+  expect(Math.min(...garageEast.map(dimension => dimension.start.x))).toBeCloseTo(15.5, 1);
+  // The garage's buried west side (against the house) gets no string of its
+  // own — nothing lands at 8-1.5 = 6.5, inside the plan.
+  expect(vertical.some(dimension => Math.abs(dimension.start.x - 6.5) < 0.5)).toBe(false);
+  // Flush against the house is a shared edge, not an overlap: the garage
+  // keeps its north overall at -4-1.5 = -5.5, out in the open beside the house.
+  const horizontal = auto.filter(dimension => h.near(dimension.start.z, dimension.end.z, 0.01));
+  const garageNorth = horizontal.find(dimension =>
+    h.near(dimension.start.z, -5.5, 0.3) && Math.min(dimension.start.x, dimension.end.x) > 7);
+  expect(garageNorth).toBeTruthy();
+});
+
+test('an inch-scale jog strings straight: merged into the neighbouring corner', async ({ page }) => {
+  await h.openModel(page);
+  // T off for the deliberately off-square corner: north-east dips 0'-1¼" low.
+  await h.selectTool(page, 'Outline');
+  await page.keyboard.press('t');
+  await h.clickWorld(page, -8, -6);
+  await h.clickWorld(page, 8, -6.1);
+  await h.clickWorld(page, 8, 6);
+  await h.clickWorld(page, -8, 6);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  await runAutoDims(page);
+  const saved = await h.savedDrawing(page);
+  const auto = saved.dimensions.filter(dimension => dimension.auto);
+  // The 0.1' jog merges away: one overall per side, no tiny jog strings.
+  expect(auto).toHaveLength(4);
+  const north = auto.find(dimension => dimension.start.z < -7);
+  expect(Math.abs(north.end.x - north.start.x)).toBeCloseTo(16, 1);
+  // The first string still clears the LOWEST part of the skewed wall by 1'-6".
+  expect(north.start.z).toBeLessThanOrEqual(-6.1 - 1.5 + 0.05);
+});
+
 test('re-running replaces auto strings, keeps manual dims, honours the 3\'-0" offset', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);

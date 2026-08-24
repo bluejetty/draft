@@ -1071,6 +1071,7 @@ const NODE_GRAB_HOLD_MS = 100;
 // string out, overall outside. The first string sits at an adjustable offset
 // from the plan and every further string steps out by the string spacing.
 const AUTO_DIM_STRING_SPACING_FT = 1.5;
+const AUTO_DIM_JOG_MERGE_FT = 2 / 12; // corners closer than this string as one coordinate
 const AUTO_DIM_FIRST_OFFSETS_FT = [
   { value: 1.5, label: '1\'-6"' },
   { value: 3, label: '3\'-0"' },
@@ -12254,27 +12255,58 @@ class Component extends DCLogic {
     const wallView = view === 'e-power' ? 'plan' : view;
     const walls = this._walls.filter(wall => wall.levelId === levelId
       && (wall.view || 'plan') === wallView);
-    const outlinePoints = this._outlines
-      .filter(outline => outline.levelId === levelId && outline.points.length >= 3)
-      .flatMap(outline => outline.points.map(point => ({ x: point.x, z: point.z, srcId: point.srcId || null })));
-    const corners = outlinePoints.length
-      ? outlinePoints
-      : walls.flatMap(wall => [
-        { x: wall.start.x, z: wall.start.z, srcId: wall.start.srcId || null },
-        { x: wall.end.x, z: wall.end.z, srcId: wall.end.srcId || null },
-      ]);
-    if (corners.length < 2) return -1;
+    const toCorner = point => ({ x: point.x, z: point.z, srcId: point.srcId || null });
+    const outlines = this._outlines.filter(outline =>
+      outline.levelId === levelId && outline.points.length >= 3);
+    // The house and each garage string their own stacks: every group's dims
+    // hug that group's own edge instead of the combined extents, so a garage
+    // never pushes the house strings out past itself.
+    const groups = [];
+    const housePoints = outlines.filter(outline => !outline.garage)
+      .flatMap(outline => outline.points.map(toCorner));
+    if (housePoints.length) groups.push({ corners: housePoints, house: true });
+    outlines.filter(outline => outline.garage)
+      .forEach(outline => groups.push({ corners: outline.points.map(toCorner), house: false }));
+    if (!groups.length) {
+      const wallCorners = walls.flatMap(wall => [toCorner(wall.start), toCorner(wall.end)]);
+      if (wallCorners.length >= 2) groups.push({ corners: wallCorners, house: true });
+    }
+    groups.forEach(group => {
+      group.bbox = {
+        minX: Math.min(...group.corners.map(point => point.x)),
+        maxX: Math.max(...group.corners.map(point => point.x)),
+        minZ: Math.min(...group.corners.map(point => point.z)),
+        maxZ: Math.max(...group.corners.map(point => point.z)),
+      };
+    });
+    const sized = groups.filter(group =>
+      group.bbox.maxX - group.bbox.minX >= 0.01 && group.bbox.maxZ - group.bbox.minZ >= 0.01);
+    if (!sized.length) return -1;
+    const houseBox = sized.find(group => group.house)?.bbox || null;
     const uniqSorted = values => {
       const sorted = [...values].sort((a, b) => a - b);
       return sorted.filter((value, index) => index === 0 || value - sorted[index - 1] > 0.01);
     };
-    const xs = uniqSorted(corners.map(point => point.x));
-    const zs = uniqSorted(corners.map(point => point.z));
-    const minX = xs[0], maxX = xs[xs.length - 1];
-    const minZ = zs[0], maxZ = zs[zs.length - 1];
-    if (maxX - minX < 0.01 || maxZ - minZ < 0.01) return -1;
-    // Fenestration centres, keyed to the side their host wall faces.
-    const openings = { N: [], S: [], W: [], E: [] };
+    // Near-coincident corners string as ONE coordinate: a slightly off-square
+    // outline gets straight strings instead of a pile of inch-scale jogs. The
+    // end clusters keep the true extremes so overalls measure the footprint.
+    const mergeJogs = values => {
+      const sorted = [...values].sort((a, b) => a - b);
+      const clusters = [];
+      sorted.forEach(value => {
+        const last = clusters[clusters.length - 1];
+        if (last && value - last[last.length - 1] <= AUTO_DIM_JOG_MERGE_FT) last.push(value);
+        else clusters.push([value]);
+      });
+      return clusters.map((cluster, index) => {
+        if (index === 0) return cluster[0];
+        if (index === clusters.length - 1) return cluster[cluster.length - 1];
+        return cluster.reduce((sum, value) => sum + value, 0) / cluster.length;
+      });
+    };
+    // Fenestration centres, keyed to the group whose footprint holds the host
+    // wall and to the side that wall faces within it.
+    const openingsFor = sized.map(() => ({ N: [], S: [], W: [], E: [] }));
     const wallIds = new Set(walls.map(wall => wall.id));
     this._fenestrations
       .filter(opening => opening.levelId === levelId && wallIds.has(opening.wallId))
@@ -12284,58 +12316,97 @@ class Component extends DCLogic {
         const wall = geoInfo.wall;
         const horizontal = Math.abs(wall.end.x - wall.start.x) >= Math.abs(wall.end.z - wall.start.z);
         const mid = { x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 };
-        if (horizontal) openings[mid.z - minZ <= maxZ - mid.z ? 'N' : 'S'].push(geoInfo.center.x);
-        else openings[mid.x - minX <= maxX - mid.x ? 'W' : 'E'].push(geoInfo.center.z);
+        let bestIndex = 0, bestScore = Infinity;
+        sized.forEach((group, index) => {
+          const box = group.bbox;
+          const dx = Math.max(box.minX - mid.x, 0, mid.x - box.maxX);
+          const dz = Math.max(box.minZ - mid.z, 0, mid.z - box.maxZ);
+          // The tiny area term hands a wall shared by both footprints to the
+          // smaller group — the garage's own doors dim with the garage.
+          const score = dx * dx + dz * dz
+            + (box.maxX - box.minX) * (box.maxZ - box.minZ) * 1e-6;
+          if (score < bestScore) { bestScore = score; bestIndex = index; }
+        });
+        const box = sized[bestIndex].bbox;
+        if (horizontal) openingsFor[bestIndex][mid.z - box.minZ <= box.maxZ - mid.z ? 'N' : 'S'].push(geoInfo.center.x);
+        else openingsFor[bestIndex][mid.x - box.minX <= box.maxX - mid.x ? 'W' : 'E'].push(geoInfo.center.z);
       });
     const elev = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
     this._dimensions = this._dimensions.filter(dimension =>
       !(dimension.auto && dimension.levelId === levelId && dimension.view === view));
     const firstOffset = this.state.autoDimFirstOffsetFt;
     let added = 0;
-    // Each string end links to the nearest master-linked corner, so master
-    // edits carry the auto strings along with the footprint they measure.
-    const linkDimensionEnd = vtx => {
-      let best = null, bestD = Infinity;
-      corners.forEach(corner => {
-        if (!corner.srcId) return;
-        const d = (corner.x - vtx.x) ** 2 + (corner.z - vtx.z) ** 2;
-        if (d < bestD) { bestD = d; best = corner; }
-      });
-      if (best) this._linkVertex(vtx, best.srcId);
-      return vtx;
-    };
-    const pushString = (side, coords, stringIndex) => {
-      const lineOffset = firstOffset + stringIndex * AUTO_DIM_STRING_SPACING_FT;
-      for (let i = 0; i < coords.length - 1; i++) {
-        const a = coords[i], b = coords[i + 1];
-        if (b - a < 0.05) continue;
-        const start = side === 'N' ? { x: a, z: minZ - lineOffset }
-          : side === 'S' ? { x: a, z: maxZ + lineOffset }
-          : side === 'W' ? { x: minX - lineOffset, z: a }
-          : { x: maxX + lineOffset, z: a };
-        const end = side === 'N' ? { x: b, z: minZ - lineOffset }
-          : side === 'S' ? { x: b, z: maxZ + lineOffset }
-          : side === 'W' ? { x: minX - lineOffset, z: b }
-          : { x: maxX + lineOffset, z: b };
-        this._dimensions.push({
-          id: this._nextDimensionId++,
-          start: linkDimensionEnd(new THREE.Vector3(start.x, elev, start.z)),
-          end: linkDimensionEnd(new THREE.Vector3(end.x, elev, end.z)),
-          levelId,
-          view,
-          auto: true,
+    sized.forEach((group, groupIndex) => {
+      const corners = group.corners;
+      const xs = mergeJogs(corners.map(point => point.x));
+      const zs = mergeJogs(corners.map(point => point.z));
+      const minX = xs[0], maxX = xs[xs.length - 1];
+      const minZ = zs[0], maxZ = zs[zs.length - 1];
+      // Each string end links to the nearest master-linked corner, so master
+      // edits carry the auto strings along with the footprint they measure.
+      const linkDimensionEnd = vtx => {
+        let best = null, bestD = Infinity;
+        corners.forEach(corner => {
+          if (!corner.srcId) return;
+          const d = (corner.x - vtx.x) ** 2 + (corner.z - vtx.z) ** 2;
+          if (d < bestD) { bestD = d; best = corner; }
         });
-        added++;
-      }
-    };
-    ['N', 'S', 'W', 'E'].forEach(side => {
-      const cornerCoords = side === 'N' || side === 'S' ? xs : zs;
-      const lo = cornerCoords[0], hi = cornerCoords[cornerCoords.length - 1];
-      let stringIndex = 0;
-      const centres = uniqSorted(openings[side]).filter(value => value > lo + 0.01 && value < hi - 0.01);
-      if (centres.length) pushString(side, uniqSorted([lo, ...centres, hi]), stringIndex++);
-      if (cornerCoords.length > 2) pushString(side, cornerCoords, stringIndex++);
-      pushString(side, [lo, hi], stringIndex);
+        if (best) this._linkVertex(vtx, best.srcId);
+        return vtx;
+      };
+      const pushString = (side, coords, stringIndex) => {
+        const lineOffset = firstOffset + stringIndex * AUTO_DIM_STRING_SPACING_FT;
+        for (let i = 0; i < coords.length - 1; i++) {
+          const a = coords[i], b = coords[i + 1];
+          if (b - a < 0.05) continue;
+          const start = side === 'N' ? { x: a, z: minZ - lineOffset }
+            : side === 'S' ? { x: a, z: maxZ + lineOffset }
+            : side === 'W' ? { x: minX - lineOffset, z: a }
+            : { x: maxX + lineOffset, z: a };
+          const end = side === 'N' ? { x: b, z: minZ - lineOffset }
+            : side === 'S' ? { x: b, z: maxZ + lineOffset }
+            : side === 'W' ? { x: minX - lineOffset, z: b }
+            : { x: maxX + lineOffset, z: b };
+          this._dimensions.push({
+            id: this._nextDimensionId++,
+            start: linkDimensionEnd(new THREE.Vector3(start.x, elev, start.z)),
+            end: linkDimensionEnd(new THREE.Vector3(end.x, elev, end.z)),
+            levelId,
+            view,
+            auto: true,
+          });
+          added++;
+        }
+      };
+      // A garage side buried against the house gets no strings — that face
+      // belongs to the house and its own stack already dims it.
+      const sideClear = side => {
+        if (group.house || !houseBox) return true;
+        const fixed = side === 'N' ? minZ - firstOffset
+          : side === 'S' ? maxZ + firstOffset
+          : side === 'W' ? minX - firstOffset
+          : maxX + firstOffset;
+        // Shared-edge tolerance: a garage welded flush shares a coordinate
+        // (to float dust) with the house — that is not an overlap.
+        const edge = 0.01;
+        if (side === 'N' || side === 'S') {
+          return !(fixed > houseBox.minZ && fixed < houseBox.maxZ
+            && minX < houseBox.maxX - edge && maxX > houseBox.minX + edge);
+        }
+        return !(fixed > houseBox.minX && fixed < houseBox.maxX
+          && minZ < houseBox.maxZ - edge && maxZ > houseBox.minZ + edge);
+      };
+      ['N', 'S', 'W', 'E'].forEach(side => {
+        if (!sideClear(side)) return;
+        const cornerCoords = side === 'N' || side === 'S' ? xs : zs;
+        const lo = cornerCoords[0], hi = cornerCoords[cornerCoords.length - 1];
+        let stringIndex = 0;
+        const centres = uniqSorted(openingsFor[groupIndex][side])
+          .filter(value => value > lo + 0.01 && value < hi - 0.01);
+        if (centres.length) pushString(side, uniqSorted([lo, ...centres, hi]), stringIndex++);
+        if (cornerCoords.length > 2) pushString(side, cornerCoords, stringIndex++);
+        pushString(side, [lo, hi], stringIndex);
+      });
     });
     return added;
   }
