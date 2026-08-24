@@ -186,6 +186,7 @@ test('Ctrl+Shift locks drawing to 30° increments', async ({ page }) => {
 
 test('Alt never engages the angle lock', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('t'); // set the T-square down — this test draws a free angle
   await h.selectTool(page, 'Line');
   await h.clickWorld(page, 0, 0);
   await page.keyboard.down('Alt');

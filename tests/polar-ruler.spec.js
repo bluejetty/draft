@@ -44,6 +44,7 @@ test('R types a line first point an exact distance from the rolled-over node', a
 
 test('mid-draw, R measures from the acquired node rather than the chain start', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('t'); // set the T-square down — acquiring an off-ray node mid-draw
   await drawLine(page, 0, 0, 5, -5);
 
   await h.selectTool(page, 'Line');
@@ -89,6 +90,7 @@ test('Shift T-squares a first point straight across from the acquired node', asy
 
 test('mid-draw, Shift locks onto the polar node ray when the cursor sits closer to it', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('t'); // set the T-square down — acquiring an off-ray node mid-draw
   await drawLine(page, 0, 0, 5, -5);
 
   await h.selectTool(page, 'Line');

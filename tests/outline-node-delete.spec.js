@@ -56,6 +56,7 @@ test('Delete works on the BONEYARD master directly', async ({ page }) => {
 
 test('a closed outline keeps its minimum three points', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('t'); // set the T-square down — the triangle needs free angles
   await drawOutline(page, [[-8, -6], [8, -6], [0, 6]]);
 
   await deleteNodeAt(page, 0, 6);

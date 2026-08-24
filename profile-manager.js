@@ -111,7 +111,8 @@ if (!window.DraftProfileManager) {
     outline: 'U',
     roof: 'O',
     dimension: 'D',
-    trim: 'T',
+    trim: 'Q',
+    tsquare: 'T',
     cut: 'C',
     group: 'Y',
     groupAlt: 'Ctrl+G',
@@ -137,6 +138,7 @@ if (!window.DraftProfileManager) {
   // sitting on its retired default follows the command to the current one.
   const RETIRED_KEYBINDINGS = Object.freeze({
     group: 'G',
+    trim: 'T',
   });
 
   // Layout presets approximate the muscle memory of other drafting apps as
@@ -151,7 +153,7 @@ if (!window.DraftProfileManager) {
     }),
     autocad: Object.freeze({
       label: 'AutoCAD style',
-      note: 'Nearest single keys to the classic command aliases: A arc, T trim (TR), E extend (EX), I insert doors/windows, Space repeats/commits, Ctrl+Y redo.',
+      note: 'Nearest single keys to the classic command aliases: A arc, Q trim (TR), E extend (EX), I insert doors/windows, T ortho like F8, Space repeats/commits, Ctrl+Y redo.',
       bindings: Object.freeze({
         ...DEFAULT_KEYBINDINGS,
         node: 'A',
@@ -162,7 +164,7 @@ if (!window.DraftProfileManager) {
     }),
     revit: Object.freeze({
       label: 'Revit style',
-      note: 'First letters of the two-key shortcuts: W wall (WA), Shift+W window/door (WN/DR), D dimension (DI), T trim/extend (TR), Ctrl+Y redo.',
+      note: 'First letters of the two-key shortcuts: W wall (WA), Shift+W window/door (WN/DR), D dimension (DI), Q trim (TR), Ctrl+Y redo.',
       bindings: Object.freeze({
         ...DEFAULT_KEYBINDINGS,
         fenestration: 'Shift+W',
@@ -171,10 +173,11 @@ if (!window.DraftProfileManager) {
     }),
     microstation: Object.freeze({
       label: 'MicroStation style',
-      note: 'Q element selection like the task list, P place shape, mnemonic letters elsewhere; Ctrl+Y stands in for Ctrl+R redo (the browser keeps Ctrl+R).',
+      note: 'Q element selection like the task list, P place shape, M trim, mnemonic letters elsewhere; Ctrl+Y stands in for Ctrl+R redo (the browser keeps Ctrl+R).',
       bindings: Object.freeze({
         ...DEFAULT_KEYBINDINGS,
         select: 'Q',
+        trim: 'M',
         redo: 'Ctrl+Y',
       }),
     }),
