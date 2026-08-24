@@ -180,6 +180,12 @@ test('the house strings hug the house edge; the garage dims its own stack', asyn
   // The garage's buried west side (against the house) gets no string of its
   // own — nothing lands at 8-1.5 = 6.5, inside the plan.
   expect(vertical.some(dimension => Math.abs(dimension.start.x - 6.5) < 0.5)).toBe(false);
+  // Flush against the house is a shared edge, not an overlap: the garage
+  // keeps its north overall at -4-1.5 = -5.5, out in the open beside the house.
+  const horizontal = auto.filter(dimension => h.near(dimension.start.z, dimension.end.z, 0.01));
+  const garageNorth = horizontal.find(dimension =>
+    h.near(dimension.start.z, -5.5, 0.3) && Math.min(dimension.start.x, dimension.end.x) > 7);
+  expect(garageNorth).toBeTruthy();
 });
 
 test('an inch-scale jog strings straight: merged into the neighbouring corner', async ({ page }) => {

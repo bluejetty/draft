@@ -12386,12 +12386,15 @@ class Component extends DCLogic {
           : side === 'S' ? maxZ + firstOffset
           : side === 'W' ? minX - firstOffset
           : maxX + firstOffset;
+        // Shared-edge tolerance: a garage welded flush shares a coordinate
+        // (to float dust) with the house — that is not an overlap.
+        const edge = 0.01;
         if (side === 'N' || side === 'S') {
           return !(fixed > houseBox.minZ && fixed < houseBox.maxZ
-            && minX < houseBox.maxX && maxX > houseBox.minX);
+            && minX < houseBox.maxX - edge && maxX > houseBox.minX + edge);
         }
         return !(fixed > houseBox.minX && fixed < houseBox.maxX
-          && minZ < houseBox.maxZ && maxZ > houseBox.minZ);
+          && minZ < houseBox.maxZ - edge && maxZ > houseBox.minZ + edge);
       };
       ['N', 'S', 'W', 'E'].forEach(side => {
         if (!sideClear(side)) return;
