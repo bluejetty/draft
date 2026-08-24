@@ -366,6 +366,32 @@ if (!window.DraftDrawingFormat) {
     }).filter(Boolean);
   };
 
+  // Room tags are the auto-placed room names (WC 1, KITCHEN, BEDROOM B2...)
+  // on ROOM-IDS-AREA, one per enclosed room found on a level's PLAN. Each
+  // carries its computed inside area so the MAIN FL area readout can toggle
+  // without re-running detection.
+  const roomTags = (rawTags, levelIds) => {
+    const seen = new Set();
+    return (Array.isArray(rawTags) ? rawTags : []).map(tag => {
+      const id = Number(tag?.id);
+      const at = point(tag?.at);
+      const tagLevelId = levelId(tag?.levelId, levelIds);
+      const name = String(tag?.name ?? '').trim().toUpperCase();
+      if (!Number.isInteger(id) || seen.has(id) || !at || tagLevelId == null || !name) return null;
+      seen.add(id);
+      const area = number(tag?.areaSqFt, 0);
+      return {
+        id,
+        at,
+        levelId: tagLevelId,
+        view: 'plan',
+        name,
+        areaSqFt: area > 0 ? area : 0,
+        layer: 'ROOM-IDS-AREA',
+      };
+    }).filter(Boolean);
+  };
+
   // BONEYARD shelves are storage slots outside the level stack. Every drawing
   // has at least one shelf; drawings saved before the BONEYARD existed load
   // with the single default shelf.
@@ -494,6 +520,7 @@ if (!window.DraftDrawingFormat) {
     beams,
     stairs,
     notes,
+    roomTags,
     fenestrations,
     fixtures,
     surfaceOpenings,

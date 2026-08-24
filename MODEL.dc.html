@@ -592,6 +592,14 @@
   <!-- ANNOTATION PROPERTIES -->
   <sc-if value="{{ noteToolActive }}" hint-placeholder-val="{{ false }}">
     <div style="display:flex; align-items:stretch;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:150px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Room Tags</div>
+        <button data-room-tags onClick="{{ onRoomTags }}" title="Finds each enclosed room in the PLAN walls and names it from its fixtures — WC by size, KITCHEN, LAUNDRY, BEDROOM where a closet sits. Re-run after edits." style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">ROOM TAGS</button>
+        <button data-room-areas onClick="{{ onRoomAreasToggle }}" title="Area readout under each MAIN FL room tag — off by default" style="width:100%; box-sizing:border-box; border:1px solid {{ roomAreasBorder }}; background:{{ roomAreasBg }}; color:{{ roomAreasColor }}; padding:6px 4px; margin-top:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ roomAreasLabel }}</button>
+        <sc-if value="{{ hasActiveRoomTags }}" hint-placeholder-val="{{ false }}">
+          <button data-room-tags-clear onClick="{{ onRoomTagsClear }}" style="width:100%; box-sizing:border-box; border:1px solid rgba(176,64,80,0.5); background:#fff; color:#b04050; padding:6px 4px; margin-top:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">CLEAR TAGS</button>
+        </sc-if>
+      </div>
       <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:180px;">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Annotation · Leader End</div>
         <div style="display:flex; gap:3px;">
@@ -1446,6 +1454,18 @@ const FIXTURE_KINDS = [
     note: 'Closet — two clicks along a wall set the width; 2\'-1" inside with 2x4 closet walls, rod + shelf, and the door picked from the DD/D ladder.' },
 ];
 const fixtureKindDef = id => FIXTURE_KINDS.find(kind => kind.id === id) || FIXTURE_KINDS[0];
+// Room tags: ROOM TAGS finds each enclosed room in the PLAN walls and names
+// it from the fixtures inside — every bathroom is a WC (short, and it sounds
+// cool), numbered biggest-first; a closet marks a bedroom. Basement rooms
+// take a B prefix (WC B1, BEDROOM B2), and BEDROOM spells out only where the
+// room has the space for it. The optional area readout is MAIN FL only.
+const ROOM_TAG_LAYER = 'ROOM-IDS-AREA';
+const ROOM_TAG_COLOR = '#1d1f20';
+const ROOM_TAG_MIN_AREA_SQFT = 12;  // smaller enclosures (chases, built closets) are skipped
+const ROOM_TAG_JOIN_FT = 0.7;       // wall ends within this bridge into one room corner
+const ROOM_TAG_TIGHT_FT = 8;        // rooms narrower than this shorten BEDROOM to BEDRM
+const MAIN_FLOOR_LEVEL_ID = 3;
+const BASEMENT_LEVEL_ID = 1;
 // Shapes are closed construction outlines with no roof / floor semantics of
 // their own; the ROOF and FLOOR commands build their geometry from a shape.
 const SHAPE_LAYER = 'SHAPE';
@@ -1485,7 +1505,7 @@ const LEVEL_LAYER_VIEWS = Object.freeze({
   3: FLOOR_LEVEL_VIEWS,
   1: Object.freeze([
     Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
-    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-ANNO-NOTE'] }),
+    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
     Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL-FOOTING', 'S-FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION', 'A-ANNO-NOTE'] }),
   ]),
 });
@@ -1620,6 +1640,7 @@ class Component extends DCLogic {
     padDraft: '',             // pad size being typed (inches)
     padError: '',
     noteStyleError: '',       // fill-opacity / bullnose input validation message
+    roomAreasOn: false,        // area readout under MAIN FL room tags (off by default)
     fixtureKind: 'cabinet',   // active FIXTURE catalog entry (see FIXTURE_KINDS)
     fenestrationType: 'door', // 'door' | 'window' — picks the CAD layer and defaults
     fenestrationWidths: { door: DEFAULT_DOOR_WIDTH_FT, window: DEFAULT_WINDOW_WIDTH_FT },
@@ -1773,6 +1794,7 @@ class Component extends DCLogic {
     if (!Array.isArray(this._beams)) this._beams = [];
     if (!Array.isArray(this._stairs)) this._stairs = [];
     if (!Array.isArray(this._notes)) this._notes = [];
+    if (!Array.isArray(this._roomTags)) this._roomTags = [];
     if (!Array.isArray(this._vertices)) this._vertices = [];
     if (!Array.isArray(this._groups)) this._groups = [];
   }
@@ -1949,6 +1971,17 @@ class Component extends DCLogic {
         layer: NOTE_LAYER,
       })),
       nextNoteId: this._nextNoteId || 1,
+      roomTags: this._roomTags.map(tag => ({
+        id: tag.id,
+        at: point(tag.at),
+        levelId: tag.levelId,
+        view: 'plan',
+        name: tag.name,
+        areaSqFt: tag.areaSqFt,
+        layer: ROOM_TAG_LAYER,
+      })),
+      nextRoomTagId: this._nextRoomTagId || 1,
+      roomAreasOn: this.state.roomAreasOn === true,
       boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
       activeBoneyardShelfId: this.state.activeBoneyardShelfId,
       nextBoneyardShelfId: this.state.nextBoneyardShelfId,
@@ -2438,6 +2471,7 @@ class Component extends DCLogic {
         activeBoneyardShelfId,
         nextBoneyardShelfId,
         boneyardActive: false,
+        roomAreasOn: saved.roomAreasOn === true,
       }, resolve));
 
       // Rebuild the pool as a single pass through every endpoint. This restores
@@ -2665,6 +2699,20 @@ class Component extends DCLogic {
       );
       this._noteAnchor = null;
       this._notePending = null;
+      const storedRoomTags = Array.isArray(saved.roomTags)
+        ? saved.roomTags.map(tag => ({ ...tag, levelId: migrateLevelId(tag?.levelId) }))
+        : saved.roomTags;
+      const roomTags = format.roomTags(storedRoomTags, ownerLevelIds);
+      skipped += (Array.isArray(saved.roomTags) ? saved.roomTags.length : 0) - roomTags.length;
+      this._roomTags = roomTags.map(tag => ({
+        ...tag,
+        at: new THREE.Vector3(tag.at.x, levelsById.get(tag.levelId)?.elev ?? 0, tag.at.z),
+      }));
+      this._nextRoomTagId = Math.max(
+        1,
+        ...roomTags.map(tag => tag.id + 1),
+        Number.isInteger(saved.nextRoomTagId) ? saved.nextRoomTagId : 1,
+      );
       // Outlines restore as isolated points — they never join the shared
       // vertex pool, so a guide can sit on a wall corner without gluing to it.
       // Masters restore first so level copies can verify their masterId.
@@ -3111,6 +3159,7 @@ class Component extends DCLogic {
     this._beams      = []; // one span between two supports, flush or dropped
     this._stairs     = []; // straight stair runs placed from the top nosing
     this._notes      = []; // leader annotations — anchor, text point, style
+    this._roomTags   = []; // auto room names (WC 1 / KITCHEN / BEDROOM B2) on ROOM-IDS-AREA
      this._groups     = [];
      this._nextGroupId = 1;
      this._nextDrawingItemId = 1;
@@ -3122,6 +3171,7 @@ class Component extends DCLogic {
     this._nextStairId = 1;
     this._stairStart = null;
     this._nextNoteId = 1;
+    this._nextRoomTagId = 1;
     this._noteAnchor = null;   // first click — { view, pane, pt } leader anchor
     this._notePending = null;  // anchor + text point awaiting the typed note
     this._noteStairHover = null; // canvas px cursor inside the STAIR workspace
@@ -3622,6 +3672,8 @@ class Component extends DCLogic {
     // (leader follows the cursor) and text point set (text being typed).
     if (activeVisible) this._activeNotes().filter(note => note.view !== 'stair')
       .forEach(note => this._drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note));
+    // Room tags — the auto room names, with the MAIN FL area readout when on.
+    if (activeVisible) this._drawRoomTags2D(ctx, toS);
     const notePreviewEnd = this._previewEndPoint();
     if (this._noteAnchor && this._noteAnchor.view !== 'stair' && notePreviewEnd) {
       this._drawNoteScreen2D(ctx, toS(this._noteAnchor.pt), toS(notePreviewEnd), this._notePreviewStyle('…'), { preview:true });
@@ -13004,6 +13056,203 @@ class Component extends DCLogic {
     this.setState({ drawingMessage: 'Note removed.', drawingMessageError: false });
   }
 
+  // ─── Room tags (auto room names on ROOM-IDS-AREA) ──────────────────────────
+  _activeRoomTags() {
+    const levelId = this._activeLevelId();
+    const view = this._activeLayerViewId(levelId);
+    return this._roomTags.filter(tag => tag.levelId === levelId
+      && (view == null || tag.view === view));
+  }
+
+  _polygonContains(points, x, z) {
+    let inside = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const a = points[i], b = points[j];
+      if ((a.z > z) !== (b.z > z)
+        && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) inside = !inside;
+    }
+    return inside;
+  }
+
+  // Where the tag text sits: the centroid when the room contains it, else the
+  // middle of the widest span on a few sample rows (L-shaped rooms).
+  _roomLabelPoint(points) {
+    let doubled = 0, cx = 0, cz = 0;
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i], b = points[(i + 1) % points.length];
+      const cross = a.x * b.z - b.x * a.z;
+      doubled += cross;
+      cx += (a.x + b.x) * cross;
+      cz += (a.z + b.z) * cross;
+    }
+    if (Math.abs(doubled) > 1e-6) {
+      const px = cx / (3 * doubled), pz = cz / (3 * doubled);
+      if (this._polygonContains(points, px, pz)) return { x: px, z: pz };
+    }
+    const minZ = Math.min(...points.map(point => point.z));
+    const maxZ = Math.max(...points.map(point => point.z));
+    let best = null;
+    for (let row = 1; row <= 7; row++) {
+      const z = minZ + (maxZ - minZ) * row / 8;
+      const hits = [];
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const a = points[i], b = points[j];
+        if ((a.z > z) !== (b.z > z)) hits.push((b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x);
+      }
+      hits.sort((p, q) => p - q);
+      for (let i = 0; i + 1 < hits.length; i += 2) {
+        const width = hits[i + 1] - hits[i];
+        if (!best || width > best.width) best = { width, x: (hits[i] + hits[i + 1]) / 2, z };
+      }
+    }
+    return best ? { x: best.x, z: best.z } : { x: points[0].x, z: points[0].z };
+  }
+
+  _generateRoomTags() {
+    if (this.state.activeView !== 'top') {
+      this.setState({ drawingMessage: 'Room tags are placed in TOP / PLAN view.', drawingMessageError: true });
+      return false;
+    }
+    const levelId = this._activeLevelId();
+    const view = this._activeLayerViewId(levelId) || 'plan';
+    if (view !== 'plan') {
+      this.setState({ drawingMessage: 'ROOM TAGS reads the PLAN walls — switch this level to its PLAN layer set first.', drawingMessageError: true });
+      return false;
+    }
+    const added = this._placeRoomTags(levelId);
+    if (added < 0) {
+      this.setState({ drawingMessage: 'ROOM TAGS needs an enclosed room — close a loop of PLAN walls first.', drawingMessageError: true });
+      return false;
+    }
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `ROOM TAGS named ${added} room${added === 1 ? '' : 's'} on ${ROOM_TAG_LAYER} — re-run after edits to refresh them.`,
+      drawingMessageError: false,
+    });
+    return true;
+  }
+
+  // The room-tag core: finds the enclosed rooms in the level's PLAN walls,
+  // names each from the fixtures inside, and replaces the level's previous
+  // tags. Returns the count placed, or -1 when no enclosed room exists.
+  _placeRoomTags(levelId) {
+    const walls = this._walls.filter(wall => wall.levelId === levelId
+      && (wall.view || 'plan') === 'plan');
+    const loops = geo.roomLoops(walls.map(wall => {
+      const def = WALL_TYPES.find(type => type.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
+      return {
+        start: { x: wall.start.x, z: wall.start.z },
+        end: { x: wall.end.x, z: wall.end.z },
+        halfFt: def.totalIn / 24,
+      };
+    }), ROOM_TAG_JOIN_FT);
+    const rooms = loops.map(loop => {
+      // Centerline area, less half a wall along each edge (plus the corner
+      // squares that subtraction doubles up) ≈ the inside face-to-face area.
+      let inside = loop.area;
+      loop.segments.forEach(segment => {
+        inside -= Math.hypot(segment.end.x - segment.start.x, segment.end.z - segment.start.z) * segment.halfFt;
+      });
+      const halfAvg = loop.segments.reduce((sum, segment) => sum + segment.halfFt, 0) / Math.max(1, loop.segments.length);
+      inside += loop.points.length * halfAvg * halfAvg;
+      const xs = loop.points.map(point => point.x), zs = loop.points.map(point => point.z);
+      return {
+        loop,
+        insideSqFt: Math.max(0, inside),
+        minSide: Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)),
+        kinds: new Set(),
+      };
+    }).filter(room => room.insideSqFt >= ROOM_TAG_MIN_AREA_SQFT);
+    if (!rooms.length) return -1;
+    // Every fixture votes for the room its footprint centre sits in.
+    this._fixtures.filter(fixture => fixture.levelId === levelId).forEach(fixture => {
+      const center = this._fixtureGeometry(fixture)?.center;
+      if (!center) return;
+      const room = rooms.find(candidate => this._polygonContains(candidate.loop.points, center.x, center.z));
+      if (room) room.kinds.add(fixture.kind);
+    });
+    rooms.forEach(room => {
+      const has = (...kinds) => kinds.some(kind => room.kinds.has(kind));
+      room.category = has('toilet', 'tub', 'shower', 'stall', 'vanity') ? 'wc'
+        : has('washer', 'dryer') ? 'laundry'
+        : has('sink', 'fridge', 'stove', 'cabinet') ? 'kitchen'
+        : has('closet') ? 'bedroom'
+        : 'room';
+    });
+    // WCs and bedrooms number biggest-first; basement rooms take a B prefix.
+    const prefix = levelId === BASEMENT_LEVEL_ID ? 'B' : '';
+    ['wc', 'bedroom'].forEach(category => {
+      rooms.filter(room => room.category === category)
+        .sort((a, b) => b.insideSqFt - a.insideSqFt)
+        .forEach((room, index) => { room.number = `${prefix}${index + 1}`; });
+    });
+    const elevation = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
+    this._roomTags = this._roomTags.filter(tag => tag.levelId !== levelId);
+    rooms.forEach(room => {
+      const name = room.category === 'wc' ? `WC ${room.number}`
+        : room.category === 'laundry' ? 'LAUNDRY'
+        : room.category === 'kitchen' ? 'KITCHEN'
+        : room.category === 'bedroom'
+          ? `${room.minSide < ROOM_TAG_TIGHT_FT ? 'BEDRM' : 'BEDROOM'} ${room.number}`
+          : 'ROOM';
+      const at = this._roomLabelPoint(room.loop.points);
+      this._roomTags.push({
+        id: this._nextRoomTagId++,
+        at: new THREE.Vector3(at.x, elevation, at.z),
+        levelId,
+        view: 'plan',
+        name,
+        areaSqFt: Math.round(room.insideSqFt * 10) / 10,
+        layer: ROOM_TAG_LAYER,
+      });
+    });
+    return rooms.length;
+  }
+
+  _clearRoomTags() {
+    const active = this._activeRoomTags();
+    if (!active.length) return;
+    this._roomTags = this._roomTags.filter(tag => !active.includes(tag));
+    this._markUnsaved();
+    this.setState({ drawingMessage: 'Room tags cleared from this plan.', drawingMessageError: false });
+  }
+
+  _toggleRoomAreas() {
+    const on = !this.state.roomAreasOn;
+    // The save reads state, so the flag must land before _markUnsaved runs.
+    this.setState({ roomAreasOn: on }, () => {
+      this._markUnsaved();
+      this.setState({
+        drawingMessage: on
+          ? 'Room areas on — MAIN FL tags show their inside square footage.'
+          : 'Room areas off.',
+        drawingMessageError: false,
+      });
+    });
+  }
+
+  _drawRoomTags2D(ctx, toS) {
+    const tags = this._activeRoomTags();
+    if (!tags.length) return;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = ROOM_TAG_COLOR;
+    tags.forEach(tag => {
+      const s = toS(tag.at);
+      const area = this.state.roomAreasOn && tag.levelId === MAIN_FLOOR_LEVEL_ID && tag.areaSqFt > 0
+        ? this._areaLabel(tag.areaSqFt) : '';
+      ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
+      ctx.textBaseline = area ? 'bottom' : 'middle';
+      ctx.fillText(tag.name, s.x, area ? s.y - 1 : s.y);
+      if (area) {
+        ctx.font = '500 10px "Barlow Condensed", system-ui, sans-serif';
+        ctx.textBaseline = 'top';
+        ctx.fillText(area, s.x, s.y + 1);
+      }
+    });
+    ctx.restore();
+  }
+
   _commitNoteFillOpacity() {
     const parsed = Number(this.state.noteFillOpacityInput);
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
@@ -14528,6 +14777,14 @@ class Component extends DCLogic {
       noteStyleNote: 'Click the object of interest, then where the text goes, and type the note. Default is transparent text — flip on FILL (opacity %) and OUTLINE over busy linework. CORNER BULLNOSE rounds the box corners (0 = square). Saves with the printable ' + this._layerStandard(NOTE_LAYER).name + ' linework.',
       hasActiveNotes: this._activeNotes().length > 0,
       onNoteDelete: () => this._deleteLastNote(),
+      onRoomTags: () => this._generateRoomTags(),
+      onRoomTagsClear: () => this._clearRoomTags(),
+      hasActiveRoomTags: this._activeRoomTags().length > 0,
+      onRoomAreasToggle: () => this._toggleRoomAreas(),
+      roomAreasLabel: this.state.roomAreasOn ? 'AREAS ON' : 'AREAS OFF',
+      roomAreasBorder: this.state.roomAreasOn ? '#5980a6' : 'rgba(29,31,32,0.2)',
+      roomAreasBg: this.state.roomAreasOn ? 'rgba(89,128,166,0.14)' : '#fff',
+      roomAreasColor: this.state.roomAreasOn ? '#3e6285' : '#1d1f20',
       padEditorOpen: Boolean(this.state.padEditor),
       padEditorX: this.state.padEditor?.x ?? -100,
       padEditorY: this.state.padEditor?.y ?? -100,
