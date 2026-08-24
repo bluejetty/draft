@@ -501,6 +501,41 @@ if (!window.DraftDrawingFormat) {
       };
     }).filter(Boolean);
 
+  // Underlays are reference images pinned under the plan: a vector PDF page
+  // kept in its original form, or a photo / scanned page converted once to a
+  // compressed image. The binary lives in the shared file store under the
+  // underlay id; only placement and scale metadata is stored here.
+  const underlays = (raw, levelIds) => (Array.isArray(raw) ? raw : [])
+    .map(underlay => {
+      const id = String(underlay?.id || '').trim();
+      const underlayLevelId = levelId(underlay?.levelId, levelIds);
+      const kind = oneOf(underlay?.kind, ['pdf', 'image'], null);
+      const x = num(underlay?.x);
+      const z = num(underlay?.z);
+      const widthFt = positive(underlay?.widthFt, null);
+      const heightFt = positive(underlay?.heightFt, null);
+      if (!id || underlayLevelId == null || !kind || x === null || z === null || !widthFt || !heightFt) return null;
+      const page = Number(underlay?.page);
+      const opacity = num(underlay?.opacity);
+      const scaleRatio = positive(underlay?.scaleRatio, null);
+      return {
+        id,
+        levelId: underlayLevelId,
+        kind,
+        name: String(underlay?.name || '').trim(),
+        page: Number.isInteger(page) && page >= 1 ? page : 1,
+        x,
+        z,
+        widthFt,
+        heightFt,
+        opacity: opacity !== null && opacity >= 0.05 && opacity <= 1 ? opacity : 0.7,
+        scaleRaw: String(underlay?.scaleRaw || '').trim() || null,
+        scaleRatio,
+        scaleUnit: scaleRatio ? oneOf(underlay?.scaleUnit, ['imperial', 'ratio'], null) : null,
+        layer: 'UNDERLAY',
+      };
+    }).filter(Boolean);
+
   // Backgrounds are at most two other levels, never the active one.
   const backgroundLevelIds = (rawIds, levelIds, activeLevelId) =>
     (Array.isArray(rawIds) ? rawIds : [])
@@ -529,6 +564,7 @@ if (!window.DraftDrawingFormat) {
     boneyardShelves,
     boneyardOutlines,
     outlines,
+    underlays,
     backgroundLevelIds,
     oneOf,
     number,

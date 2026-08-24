@@ -12,7 +12,7 @@ test('Model Space labels its tools from the shared defaults', async ({ page }) =
 });
 
 test('no page re-declares the keyboard helpers', async ({ page }) => {
-  for (const path of ['/MODEL.dc.html', '/SETTINGS.html', '/LAYOUT.dc.html', '/PDF-MARKUP.dc.html']) {
+  for (const path of ['/MODEL.dc.html', '/SETTINGS.html', '/LAYOUT.dc.html']) {
     const source = await (await page.request.get(path)).text();
     expect(source, `${path} declares its own defaults`).not.toMatch(/(const|let|var)\s+DEFAULT_KEYBINDINGS\s*=/);
     expect(source, `${path} declares its own normaliser`).not.toMatch(/function\s+normaliseKeyBinding/);

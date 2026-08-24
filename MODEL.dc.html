@@ -14,6 +14,8 @@
      would otherwise run here and be mounted again by the helmet runtime. -->
 <script src="./vendor/three-0.128.0.min.js"></script>
 <script src="./vendor/three-orbitcontrols-0.128.0.js"></script>
+<script src="./vendor/pdf-3.11.174.min.js"></script>
+<script>if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf-3.11.174.worker.min.js';</script>
 </head>
 <body>
 <x-dc>
@@ -142,6 +144,8 @@
        <button onClick="{{ newDrawing }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">NEW</button>
        <button onClick="{{ openDrawing }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">OPEN</button>
        <input data-drawing-import type="file" accept="application/json,.json,.draft,.model,.plan" onChange="{{ onDrawingFilePicked }}" style="display:none;" />
+       <button data-insert-underlay onClick="{{ openInsertDialog }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">INSERT</button>
+       <input data-underlay-import type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,image/gif,image/bmp,.png,.jpg,.jpeg,.webp,.gif,.bmp" onChange="{{ onUnderlayFilePicked }}" style="display:none;" />
       <button onClick="{{ saveDrawingFile }}" style="height:24px; border:1px solid #5980a6; background:#5980a6; color:#fff; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE</button>
       <span style="color:rgba(29,31,32,0.45);">SAVE AS</span>
       <select value="{{ saveExtension }}" onChange="{{ onSaveExtensionChange }}" aria-label="Save file extension" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; cursor:pointer;">
@@ -690,6 +694,127 @@
         <button onClick="{{ fileGuardSave }}" style="flex:1; height:28px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE FIRST</button>
         <button onClick="{{ fileGuardSkip }}" style="flex:1; height:28px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">DON'T SAVE</button>
         <button onClick="{{ fileGuardCancel }}" style="height:28px; border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.55); padding:0 10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">CANCEL</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ insertDialogOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; inset:0; z-index:53; display:flex; align-items:flex-start; justify-content:center; padding-top:58px; background:rgba(29,31,32,0.18);">
+    <div data-insert-dialog role="dialog" aria-modal="true" aria-label="Insert photo or PDF" style="width:min(460px, calc(100vw - 32px)); max-height:calc(100vh - 96px); overflow-y:auto; border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
+      <div style="display:flex; align-items:baseline; gap:10px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">INSERT PHOTO / PDF</div>
+        <div style="font-size:11px; color:rgba(29,31,32,0.45);">underlay on {{ insertLevelName }}</div>
+      </div>
+
+      <sc-if value="{{ insertPickPhase }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">Pick a PDF or image. It gets inspected first — vector PDFs are kept as-is, photos and scanned pages convert once to a compact image.</div>
+        <button data-insert-choose onClick="{{ insertChooseFile }}" style="margin-top:12px; width:100%; height:64px; border:1px dashed rgba(29,31,32,0.35); background:#fbfbfc; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.08em; cursor:pointer;">CHOOSE FILE…</button>
+      </sc-if>
+
+      <sc-if value="{{ insertInspectingPhase }}" hint-placeholder-val="{{ false }}">
+        <div data-insert-inspecting style="margin-top:14px; padding:14px; border:1px solid rgba(89,128,166,0.4); background:rgba(89,128,166,0.07); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#365e86;">INSPECTING — {{ insertFileName }}…</div>
+      </sc-if>
+
+      <sc-if value="{{ insertErrorPhase }}" hint-placeholder-val="{{ false }}">
+        <div data-insert-error style="margin-top:14px; padding:12px; border:1px solid rgba(176,64,80,0.45); background:rgba(176,64,80,0.06); font-size:12px; line-height:1.4; color:#b04050;">{{ insertError }}</div>
+      </sc-if>
+
+      <sc-if value="{{ insertReadyPhase }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:12px; display:flex; gap:12px; align-items:flex-start;">
+          <sc-if value="{{ insertHasPreview }}" hint-placeholder-val="{{ false }}">
+            <img data-insert-preview src="{{ insertPreviewUrl }}" alt="Preview" style="width:132px; max-height:170px; object-fit:contain; border:1px solid rgba(29,31,32,0.2); background:#fbfbfc; flex-shrink:0;" />
+          </sc-if>
+          <div data-insert-info style="flex:1; min-width:0;">
+            <sc-for list="{{ insertInfoRows }}" as="row" hint-placeholder-count="4">
+              <div style="display:flex; gap:8px; padding:2px 0; border-bottom:1px solid rgba(29,31,32,0.06);">
+                <span style="width:92px; flex-shrink:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.45);">{{ row.label }}</span>
+                <span style="flex:1; font-size:11px; color:#1d1f20; overflow-wrap:anywhere;">{{ row.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div data-insert-verdict style="margin-top:12px; padding:10px 12px; border:1px solid {{ insertVerdictBorder }}; background:{{ insertVerdictBg }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:{{ insertVerdictColor }};">{{ insertVerdict }}</div>
+
+        <sc-if value="{{ insertHasPages }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:10px; display:flex; align-items:center; gap:6px;">
+            <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.45);">PAGE</span>
+            <button data-insert-page-prev onClick="{{ insertPrevPage }}" style="width:24px; height:22px; border:1px solid rgba(29,31,32,0.25); background:#fff; cursor:pointer; font-size:11px;">‹</button>
+            <span data-insert-page-label style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600;">{{ insertPageLabel }}</span>
+            <button data-insert-page-next onClick="{{ insertNextPage }}" style="width:24px; height:22px; border:1px solid rgba(29,31,32,0.25); background:#fff; cursor:pointer; font-size:11px;">›</button>
+          </div>
+        </sc-if>
+
+        <div style="margin-top:12px;">
+          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.45);">SCALE ON PAPER</div>
+          <sc-if value="{{ insertHasScales }}" hint-placeholder-val="{{ false }}">
+            <div data-insert-scales style="margin-top:5px; display:flex; flex-wrap:wrap; gap:4px;">
+              <sc-for list="{{ insertScaleChips }}" as="chip" hint-placeholder-count="2">
+                <button onClick="{{ chip.onSelect }}" style="border:1px solid {{ chip.border }}; background:{{ chip.bg }}; color:{{ chip.color }}; padding:4px 9px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ chip.label }}</button>
+              </sc-for>
+            </div>
+          </sc-if>
+          <div style="margin-top:6px; display:flex; align-items:center; gap:6px;">
+            <input data-insert-scale-input value="{{ insertScaleInput }}" onChange="{{ onInsertScaleInput }}" placeholder="{{ insertScalePlaceholder }}" style="flex:1; height:26px; border:1px solid rgba(29,31,32,0.25); padding:2px 8px; font-size:12px; font-family:'Barlow',system-ui,sans-serif;" />
+          </div>
+          <sc-if value="{{ insertHasScaleError }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:4px; font-size:10px; color:#b04050;">{{ insertScaleError }}</div>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{ insertShowWidth }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:10px;">
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.45);">WIDTH ON PLAN</div>
+            <input data-insert-width-input value="{{ insertWidthInput }}" onChange="{{ onInsertWidthInput }}" placeholder="40'" style="margin-top:5px; width:120px; height:26px; border:1px solid rgba(29,31,32,0.25); padding:2px 8px; font-size:12px; font-family:'Barlow',system-ui,sans-serif;" />
+            <sc-if value="{{ insertHasWidthError }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:4px; font-size:10px; color:#b04050;">{{ insertWidthError }}</div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <div style="margin-top:10px;">
+          <button data-insert-calibrate onClick="{{ insertToggleCalibrate }}" style="width:100%; height:26px; border:1px solid rgba(29,31,32,0.25); background:{{ insertCalBg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">CALIBRATE — MARK A KNOWN DISTANCE</button>
+          <sc-if value="{{ insertCalOpen }}" hint-placeholder-val="{{ false }}">
+            <div data-insert-cal-hint style="margin-top:6px; font-size:11px; line-height:1.4; color:rgba(29,31,32,0.62);">{{ insertCalHint }}</div>
+            <div style="position:relative; margin-top:6px;">
+              <img data-insert-cal-img src="{{ insertPreviewUrl }}" alt="Calibrate" onClick="{{ onInsertCalClick }}" style="width:100%; display:block; border:1px solid rgba(29,31,32,0.2); background:#fbfbfc; cursor:crosshair;" />
+              <sc-for list="{{ insertCalMarks }}" as="mark" hint-placeholder-count="0">
+                <div style="position:absolute; left:{{ mark.left }}; top:{{ mark.top }}; width:10px; height:10px; margin:-5px 0 0 -5px; border:2px solid #b04050; border-radius:50%; background:rgba(176,64,80,0.25); pointer-events:none;"></div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ insertCalReady }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:6px; display:flex; align-items:center; gap:6px;">
+                <span style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.45);">REAL DISTANCE</span>
+                <input data-insert-cal-length value="{{ insertCalInput }}" onChange="{{ onInsertCalInput }}" placeholder="12'" style="width:100px; height:26px; border:1px solid rgba(29,31,32,0.25); padding:2px 8px; font-size:12px; font-family:'Barlow',system-ui,sans-serif;" />
+                <button data-insert-cal-apply onClick="{{ insertCalApply }}" style="height:26px; border:1px solid #5980a6; background:#5980a6; color:#fff; padding:0 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">APPLY</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ insertHasCalError }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:4px; font-size:10px; color:#b04050;">{{ insertCalError }}</div>
+            </sc-if>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ insertHasUnderlays }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:14px; border-top:1px solid rgba(29,31,32,0.12); padding-top:10px;">
+          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.45);">UNDERLAYS IN THIS DRAWING</div>
+          <sc-for list="{{ insertUnderlayRows }}" as="ur" hint-placeholder-count="1">
+            <div style="display:flex; align-items:center; gap:8px; padding:3px 0;">
+              <span style="flex:1; font-size:11px; overflow-wrap:anywhere;">{{ ur.label }}</span>
+              <button data-insert-remove onClick="{{ ur.onRemove }}" style="height:20px; border:1px solid rgba(176,64,80,0.45); background:#fff; color:#b04050; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">REMOVE</button>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <div style="display:flex; gap:6px; margin-top:16px;">
+        <sc-if value="{{ insertReadyPhase }}" hint-placeholder-val="{{ false }}">
+          <button data-insert-confirm onClick="{{ insertConfirm }}" style="flex:1; height:28px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">INSERT</button>
+          <button data-insert-repick onClick="{{ insertChooseFile }}" style="height:28px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; padding:0 10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">DIFFERENT FILE</button>
+        </sc-if>
+        <button data-insert-cancel onClick="{{ insertCancel }}" style="height:28px; border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.55); padding:0 10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">CLOSE</button>
       </div>
     </div>
   </div>
@@ -1713,6 +1838,18 @@ class Component extends DCLogic {
     drawingMessage: '',
     drawingMessageError: false,
     webglUnavailable: false,
+    insertOpen: false,
+    insertPhase: 'pick',       // 'pick'|'inspecting'|'ready'|'error'
+    insertError: '',
+    insertScaleInput: '',
+    insertScaleError: '',
+    insertWidthInput: '',
+    insertWidthError: '',
+    insertPage: 1,
+    insertCalOpen: false,
+    insertCalInput: '',
+    insertCalError: '',
+    insertRefresh: 0,
   };
 
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
@@ -1797,6 +1934,8 @@ class Component extends DCLogic {
     if (!Array.isArray(this._roomTags)) this._roomTags = [];
     if (!Array.isArray(this._vertices)) this._vertices = [];
     if (!Array.isArray(this._groups)) this._groups = [];
+    if (!Array.isArray(this._underlays)) this._underlays = [];
+    if (!(this._underlayImages instanceof Map)) this._underlayImages = new Map();
   }
 
   _newDrawingItemId(type) {
@@ -2053,6 +2192,24 @@ class Component extends DCLogic {
       })),
       nextGroupId: this._nextGroupId || 1,
       nextDrawingItemId: this._nextDrawingItemId || 1,
+      // Underlay binaries live in the shared file store keyed by underlay id;
+      // the drawing only carries their placement and scale metadata.
+      underlays: this._underlays.map(underlay => ({
+        id: underlay.id,
+        levelId: underlay.levelId,
+        kind: underlay.kind,
+        name: underlay.name,
+        page: underlay.page,
+        x: underlay.x,
+        z: underlay.z,
+        widthFt: underlay.widthFt,
+        heightFt: underlay.heightFt,
+        opacity: underlay.opacity,
+        scaleRaw: underlay.scaleRaw,
+        scaleRatio: underlay.scaleRatio,
+        scaleUnit: underlay.scaleUnit,
+        layer: 'UNDERLAY',
+      })),
     };
   }
 
@@ -2083,6 +2240,610 @@ class Component extends DCLogic {
 
   _chooseDrawingImport() {
     document.querySelector('[data-drawing-import]')?.click();
+  }
+
+  // ─── INSERT PHOTO / PDF underlays ───────────────────────────────────────────
+  // A picked file is inspected before anything commits: the card shows what the
+  // file is, whether the PDF is vector (kept as-is) or raster (converted once to
+  // a compressed image, like photos), the scales printed on the page, and only
+  // an explicit INSERT stores it. Binaries live in the shared file store bucket
+  // 'underlays' keyed by underlay id; the drawing JSON holds placement metadata.
+  _openInsertDialog() {
+    this._resetInsertCandidate();
+    this.setState({
+      insertOpen: true, insertPhase: 'pick', insertError: '',
+      insertScaleInput: '', insertScaleError: '', insertWidthInput: '', insertWidthError: '',
+      insertPage: 1, insertCalOpen: false, insertCalInput: '', insertCalError: '',
+      insertRefresh: this.state.insertRefresh + 1,
+    });
+  }
+
+  _closeInsertDialog() {
+    this._resetInsertCandidate();
+    this.setState({ insertOpen: false });
+  }
+
+  _resetInsertCandidate() {
+    const candidate = this._insertCandidate;
+    if (candidate?.previewUrl) URL.revokeObjectURL(candidate.previewUrl);
+    if (candidate?.pdfDoc) candidate.pdfDoc.destroy().catch(() => {});
+    this._insertCandidate = null;
+  }
+
+  _chooseUnderlayFile() {
+    document.querySelector('[data-underlay-import]')?.click();
+  }
+
+  async _onUnderlayFilePicked(file) {
+    if (!file) return;
+    this._resetInsertCandidate();
+    this.setState({
+      insertPhase: 'inspecting', insertError: '', insertScaleInput: '', insertScaleError: '',
+      insertWidthInput: '', insertWidthError: '', insertPage: 1,
+      insertCalOpen: false, insertCalInput: '', insertCalError: '',
+      insertRefresh: this.state.insertRefresh + 1,
+    });
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    const candidate = {
+      file, kind: isPdf ? 'pdf' : 'image', pageCount: 1,
+      scalesByPage: new Map(), selectedScale: null,
+      previewUrl: '', pageDims: null, imgWidth: 0, imgHeight: 0,
+      isVector: false, tier: '', textChars: 0, convertedBlob: null, pdfDoc: null,
+    };
+    try {
+      if (isPdf) await this._inspectPdf(candidate);
+      else await this._inspectImage(candidate);
+    } catch (error) {
+      console.warn('Underlay inspection failed:', error);
+      this._resetInsertCandidate();
+      this.setState({
+        insertPhase: 'error',
+        insertError: `Could not read ${file.name}: ${error instanceof Error ? error.message : 'unrecognized file.'}`,
+      });
+      return;
+    }
+    this._insertCandidate = candidate;
+    const detected = candidate.scalesByPage.get(1) || [];
+    candidate.selectedScale = detected[0] || null;
+    this.setState({
+      insertPhase: 'ready', insertPage: 1,
+      insertScaleInput: candidate.selectedScale ? candidate.selectedScale.raw : '',
+      insertRefresh: this.state.insertRefresh + 1,
+    });
+  }
+
+  async _inspectPdf(candidate) {
+    if (!window.pdfjsLib) throw new Error('the PDF library is unavailable');
+    const buf = await candidate.file.arrayBuffer();
+    candidate.pdfDoc = await window.pdfjsLib.getDocument({ data: buf }).promise;
+    candidate.pageCount = candidate.pdfDoc.numPages;
+    await this._inspectPdfPage(candidate, 1);
+  }
+
+  // Four page tiers, best to basement: VECTOR (pure CAD export — paths and
+  // live text, no images), HYBRID (real vector geometry with embedded
+  // images — most construction PDFs), OCR (a scan wearing an invisible
+  // searchable text layer; text rendering mode 3 gives it away), and IMAGE
+  // (just a photo). The first two keep the original bytes; the rest convert.
+  async _inspectPdfPage(candidate, pageNum) {
+    const page = await candidate.pdfDoc.getPage(pageNum);
+    const viewport1 = page.getViewport({ scale: 1 });
+    candidate.pageDims = { w: viewport1.width, h: viewport1.height };
+    const content = await page.getTextContent();
+    const text = content.items.map(item => item.str).join(' ');
+    candidate.textChars = text.replace(/\s+/g, '').length;
+    if (!candidate.scalesByPage.has(pageNum)) {
+      candidate.scalesByPage.set(pageNum, this._detectScalesInText(text));
+    }
+    const ops = await page.getOperatorList();
+    const OPS = window.pdfjsLib.OPS;
+    let pathOps = 0, imageOps = 0, textRenderMode = 0;
+    let visibleText = false, invisibleText = false;
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      const fn = ops.fnArray[i];
+      if (fn === OPS.constructPath) pathOps += 1;
+      else if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject
+        || fn === OPS.paintImageXObjectRepeat || fn === OPS.paintInlineImageXObject) imageOps += 1;
+      else if (fn === OPS.setTextRenderingMode) textRenderMode = ops.argsArray[i][0];
+      else if (fn === OPS.showText || fn === OPS.showSpacedText
+        || fn === OPS.nextLineShowText || fn === OPS.nextLineSetSpacingShowText) {
+        if (textRenderMode === 3) invisibleText = true;
+        else visibleText = true;
+      }
+    }
+    candidate.pathOps = pathOps;
+    candidate.imageOps = imageOps;
+    const liveChars = visibleText ? candidate.textChars : 0;
+    const drawn = pathOps + liveChars > 0 && (imageOps === 0 || pathOps >= imageOps * 4);
+    candidate.tier = drawn && imageOps === 0 ? 'vector'
+      : drawn || (imageOps > 0 && (visibleText || pathOps >= 8)) ? 'hybrid'
+      : invisibleText && !visibleText && imageOps > 0 ? 'ocr'
+      : imageOps > 0 ? 'image'
+      : 'vector';
+    candidate.isVector = candidate.tier === 'vector' || candidate.tier === 'hybrid';
+    const scale = Math.min(2.6, 2200 / viewport1.width);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    candidate.pageCanvas = canvas;
+    if (candidate.previewUrl) URL.revokeObjectURL(candidate.previewUrl);
+    candidate.previewUrl = '';
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.8));
+    candidate.convertedBlob = blob;
+    candidate.previewUrl = URL.createObjectURL(blob);
+  }
+
+  async _inspectImage(candidate) {
+    const bitmap = await createImageBitmap(candidate.file).catch(() => null);
+    if (!bitmap) throw new Error('unsupported image format');
+    candidate.imgWidth = bitmap.width;
+    candidate.imgHeight = bitmap.height;
+    // Photos convert once to the project's compressed image form: capped to
+    // 2200px on the long side and stored as quality-0.8 WEBP.
+    const cap = 2200;
+    const shrink = Math.min(1, cap / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * shrink));
+    canvas.height = Math.max(1, Math.round(bitmap.height * shrink));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    candidate.pageCanvas = canvas;
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.8));
+    if (!blob) throw new Error('image conversion failed');
+    candidate.convertedBlob = blob;
+    candidate.previewUrl = URL.createObjectURL(blob);
+  }
+
+  // Same scale notations PDF-MARKUP read off titleblocks: 1/4" = 1'-0" style
+  // imperial fractions and 1:100 style metric ratios. Ratio is real inches per
+  // paper inch for imperial; the bare ratio number for metric.
+  _detectScalesInText(text) {
+    const found = [];
+    const seen = new Set();
+    const fracRe = /(\d+\/\d+|\d+)\s*"\s*=\s*(\d+)\s*['\u2019]\s*-?\s*(\d+)?["\u201d]?/gi;
+    let m;
+    while ((m = fracRe.exec(text))) {
+      const val = m[1].includes('/')
+        ? (Number(m[1].split('/')[1]) ? Number(m[1].split('/')[0]) / Number(m[1].split('/')[1]) : 0)
+        : parseFloat(m[1]);
+      const feet = parseInt(m[2], 10) || 0;
+      const inches = m[3] ? parseInt(m[3], 10) : 0;
+      const totalInches = feet * 12 + inches;
+      if (!val || !totalInches) continue;
+      const raw = `${m[1]}" = ${feet}'-${inches}"`;
+      if (seen.has(raw)) continue;
+      seen.add(raw);
+      found.push({ raw, ratio: totalInches / val, unit: 'imperial' });
+    }
+    const ratioRe = /\b1\s*:\s*(\d{1,4})\b/g;
+    while ((m = ratioRe.exec(text))) {
+      const n = parseInt(m[1], 10);
+      if (!n || n === 1) continue;
+      const raw = `1:${n}`;
+      if (seen.has(raw)) continue;
+      seen.add(raw);
+      found.push({ raw, ratio: n, unit: 'ratio' });
+    }
+    return found;
+  }
+
+  _parseScaleEntry(value) {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return null;
+    const fm = trimmed.match(/(\d+\/\d+|\d+)\s*"\s*=\s*(\d+)\s*['\u2019]\s*-?\s*(\d+)?["\u201d]?/i);
+    if (fm) {
+      const val = fm[1].includes('/')
+        ? (Number(fm[1].split('/')[1]) ? Number(fm[1].split('/')[0]) / Number(fm[1].split('/')[1]) : 0)
+        : parseFloat(fm[1]);
+      const feet = parseInt(fm[2], 10) || 0;
+      const inches = fm[3] ? parseInt(fm[3], 10) : 0;
+      const totalInches = feet * 12 + inches;
+      if (val && totalInches) return { raw: `${fm[1]}" = ${feet}'-${inches}"`, ratio: totalInches / val, unit: 'imperial' };
+    }
+    const rm = trimmed.match(/1\s*:\s*(\d{1,4})/);
+    if (rm && parseInt(rm[1], 10) > 1) return { raw: `1:${rm[1]}`, ratio: parseInt(rm[1], 10), unit: 'ratio' };
+    return null;
+  }
+
+  async _setInsertPage(delta) {
+    const candidate = this._insertCandidate;
+    if (!candidate || candidate.kind !== 'pdf') return;
+    const page = Math.min(candidate.pageCount, Math.max(1, this.state.insertPage + delta));
+    if (page === this.state.insertPage) return;
+    this.setState({ insertPhase: 'inspecting', insertPage: page });
+    try {
+      await this._inspectPdfPage(candidate, page);
+    } catch (error) {
+      console.warn('Underlay page inspection failed:', error);
+      this.setState({ insertPhase: 'error', insertError: `Could not read page ${page}.` });
+      return;
+    }
+    const detected = candidate.scalesByPage.get(page) || [];
+    candidate.selectedScale = detected[0] || null;
+    candidate.calMarks = [];
+    this.setState({
+      insertPhase: 'ready',
+      insertScaleInput: candidate.selectedScale ? candidate.selectedScale.raw : '',
+      insertScaleError: '',
+      insertCalInput: '', insertCalError: '',
+      insertRefresh: this.state.insertRefresh + 1,
+    });
+  }
+
+  _onInsertScaleInput(value) {
+    const candidate = this._insertCandidate;
+    const trimmed = String(value || '').trim();
+    if (!candidate) return;
+    if (!trimmed) {
+      candidate.selectedScale = null;
+      this.setState({ insertScaleInput: value, insertScaleError: '', insertRefresh: this.state.insertRefresh + 1 });
+      return;
+    }
+    const parsed = this._parseScaleEntry(trimmed);
+    candidate.selectedScale = parsed;
+    this.setState({
+      insertScaleInput: value,
+      insertScaleError: parsed ? '' : `Use a scale like 1/4" = 1'-0" or 1:100.`,
+      insertRefresh: this.state.insertRefresh + 1,
+    });
+  }
+
+  _selectInsertScale(scale) {
+    const candidate = this._insertCandidate;
+    if (!candidate) return;
+    candidate.selectedScale = scale;
+    this.setState({ insertScaleInput: scale.raw, insertScaleError: '', insertRefresh: this.state.insertRefresh + 1 });
+  }
+
+  // CALIBRATE: no printed scale needed — mark the two ends of a distance the
+  // drafter knows on the preview, type the real length, and the scale (PDF)
+  // or plan width (photo) falls out of the pixel span between the marks.
+  _toggleInsertCalibrate() {
+    const candidate = this._insertCandidate;
+    if (!candidate) return;
+    candidate.calMarks = [];
+    this.setState({
+      insertCalOpen: !this.state.insertCalOpen,
+      insertCalInput: '', insertCalError: '',
+      insertRefresh: this.state.insertRefresh + 1,
+    });
+  }
+
+  _onInsertCalClick(e) {
+    const candidate = this._insertCandidate;
+    if (!candidate) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const mark = {
+      fx: (e.clientX - rect.left) / rect.width,
+      fy: (e.clientY - rect.top) / rect.height,
+    };
+    const marks = Array.isArray(candidate.calMarks) ? candidate.calMarks : [];
+    candidate.calMarks = marks.length >= 2 ? [mark] : [...marks, mark];
+    this.setState({ insertCalError: '', insertRefresh: this.state.insertRefresh + 1 });
+  }
+
+  _applyInsertCalibration() {
+    const candidate = this._insertCandidate;
+    const marks = candidate?.calMarks || [];
+    const canvas = candidate?.pageCanvas;
+    if (!candidate || !canvas || marks.length !== 2) return;
+    const parsed = parseArchitecturalLength(this.state.insertCalInput);
+    if (!parsed.ok || parsed.inches <= 0) {
+      this.setState({ insertCalError: parsed.ok ? 'The distance must be positive.' : parsed.error });
+      return;
+    }
+    const dx = (marks[1].fx - marks[0].fx) * canvas.width;
+    const dy = (marks[1].fy - marks[0].fy) * canvas.height;
+    const distPx = Math.hypot(dx, dy);
+    if (distPx < 4) {
+      this.setState({ insertCalError: 'The two marks are too close together.' });
+      return;
+    }
+    if (candidate.kind === 'pdf' && candidate.pageDims) {
+      const pxPerPaperInch = canvas.width / candidate.pageDims.w * 72;
+      const ratio = parsed.inches * pxPerPaperInch / distPx;
+      candidate.selectedScale = { raw: `calibrated ≈ 1:${Math.round(ratio)}`, ratio, unit: 'ratio' };
+      this.setState({
+        insertScaleInput: candidate.selectedScale.raw, insertScaleError: '',
+        insertCalOpen: false, insertCalError: '',
+        insertRefresh: this.state.insertRefresh + 1,
+      });
+      return;
+    }
+    const widthFt = canvas.width / distPx * parsed.inches / 12;
+    this.setState({
+      insertWidthInput: `${Math.round(widthFt * 100) / 100}'`, insertWidthError: '',
+      insertCalOpen: false, insertCalError: '',
+      insertRefresh: this.state.insertRefresh + 1,
+    });
+  }
+
+  // World footprint: with a scale, the paper size speaks for itself (paper
+  // inches × real inches per paper inch); without one, the typed plan width
+  // sets it and the height follows the aspect.
+  _insertWorldSize() {
+    const candidate = this._insertCandidate;
+    if (!candidate) return null;
+    const aspect = candidate.kind === 'pdf'
+      ? (candidate.pageDims ? candidate.pageDims.h / candidate.pageDims.w : 1)
+      : (candidate.imgWidth ? candidate.imgHeight / candidate.imgWidth : 1);
+    const scale = candidate.selectedScale;
+    if (candidate.kind === 'pdf' && scale && candidate.pageDims) {
+      // Both scale kinds boil down to real inches per paper inch: 1/4"=1'-0"
+      // stores 48, and 1:50 is unit-agnostic so the bare 50 works directly.
+      const paperInchesW = candidate.pageDims.w / 72;
+      const paperInchesH = candidate.pageDims.h / 72;
+      return { widthFt: paperInchesW * scale.ratio / 12, heightFt: paperInchesH * scale.ratio / 12 };
+    }
+    const parsed = parseArchitecturalLength(this.state.insertWidthInput || `40'`);
+    if (!parsed.ok || parsed.inches <= 0) return { error: parsed.ok ? 'Width must be positive.' : parsed.error };
+    const widthFt = parsed.inches / 12;
+    return { widthFt, heightFt: widthFt * aspect };
+  }
+
+  async _confirmInsertUnderlay() {
+    const candidate = this._insertCandidate;
+    if (!candidate || this.state.insertPhase !== 'ready') return;
+    const size = this._insertWorldSize();
+    if (!size || size.error) {
+      this.setState({ insertWidthError: size?.error || 'Enter a plan width.' });
+      return;
+    }
+    const keepVector = candidate.kind === 'pdf' && candidate.isVector;
+    const id = this._newDrawingItemId('underlay');
+    const stored = keepVector
+      ? new File([candidate.file], id, { type: 'application/pdf' })
+      : new File([candidate.convertedBlob], id, { type: 'image/webp' });
+    try {
+      await window.SharedFileStore.saveNamedFile(stored, 'underlays');
+    } catch (error) {
+      console.warn('Underlay store failed:', error);
+      this.setState({ insertError: 'Could not store the underlay in browser storage.', insertPhase: 'error' });
+      return;
+    }
+    const level = this.state.levels[this.state.activeLevelIdx];
+    const scale = candidate.selectedScale;
+    const underlay = {
+      id,
+      levelId: level?.id ?? 0,
+      kind: keepVector ? 'pdf' : 'image',
+      name: candidate.file.name,
+      page: candidate.kind === 'pdf' ? this.state.insertPage : 1,
+      x: this._orthoCamX || 0,
+      z: this._orthoCamZ || 0,
+      widthFt: size.widthFt,
+      heightFt: size.heightFt,
+      opacity: 0.7,
+      scaleRaw: scale ? scale.raw : null,
+      scaleRatio: scale ? scale.ratio : null,
+      scaleUnit: scale ? scale.unit : null,
+      layer: 'UNDERLAY',
+    };
+    this._ensureDrawingCollections();
+    this._underlays.push(underlay);
+    this._underlayImages.set(id, candidate.pageCanvas);
+    this._resetInsertCandidate();
+    this._markUnsaved();
+    this.setState({
+      insertOpen: false,
+      drawingMessage: keepVector
+        ? `${underlay.name} inserted as a vector PDF underlay.`
+        : `${underlay.name} converted and inserted as an image underlay.`,
+      drawingMessageError: false,
+    });
+    this._redrawOverlay?.();
+  }
+
+  async _removeUnderlay(id) {
+    this._ensureDrawingCollections();
+    this._underlays = this._underlays.filter(underlay => underlay.id !== id);
+    this._underlayImages.delete(id);
+    try {
+      await window.SharedFileStore.removeNamedFile(id, 'underlays');
+    } catch (error) {
+      console.warn('Underlay binary removal failed:', error);
+    }
+    this._markUnsaved();
+    this.setState({ insertRefresh: this.state.insertRefresh + 1 });
+    this._redrawOverlay?.();
+  }
+
+  // Restores draw-ready canvases for stored underlays: images decode straight
+  // from their compressed blob, vector PDFs re-render their page via pdf.js.
+  async _loadUnderlayImages() {
+    const underlays = [...(this._underlays || [])];
+    for (const underlay of underlays) {
+      if (this._underlayImages.has(underlay.id)) continue;
+      try {
+        const file = await window.SharedFileStore.loadNamedFile(underlay.id, 'underlays');
+        if (!file) continue;
+        let canvas = null;
+        if (underlay.kind === 'pdf') {
+          if (!window.pdfjsLib) continue;
+          const buf = await file.arrayBuffer();
+          const doc = await window.pdfjsLib.getDocument({ data: buf }).promise;
+          const page = await doc.getPage(Math.min(underlay.page, doc.numPages));
+          const viewport1 = page.getViewport({ scale: 1 });
+          const scale = Math.min(2.6, 2200 / viewport1.width);
+          const viewport = page.getViewport({ scale });
+          canvas = document.createElement('canvas');
+          canvas.width = Math.round(viewport.width);
+          canvas.height = Math.round(viewport.height);
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          doc.destroy().catch(() => {});
+        } else {
+          const bitmap = await createImageBitmap(file).catch(() => null);
+          if (!bitmap) continue;
+          canvas = document.createElement('canvas');
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          canvas.getContext('2d').drawImage(bitmap, 0, 0);
+          bitmap.close();
+        }
+        if (canvas && Array.isArray(this._underlays) && this._underlays.some(u => u.id === underlay.id)) {
+          this._underlayImages.set(underlay.id, canvas);
+          this._redrawOverlay?.();
+        }
+      } catch (error) {
+        console.warn(`Underlay ${underlay.id} failed to load:`, error);
+      }
+    }
+  }
+
+  // Reference-only: underlays sit under the plan on their level, never print,
+  // and never join selection.
+  _drawUnderlays2D(ctx, toS) {
+    if (this._isPrinting) return;
+    const underlays = this._underlays || [];
+    if (!underlays.length) return;
+    const level = this.state.levels[this.state.activeLevelIdx];
+    if (!level) return;
+    for (const underlay of underlays) {
+      if (underlay.levelId !== level.id) continue;
+      const image = this._underlayImages.get(underlay.id);
+      if (!image) continue;
+      const halfW = underlay.widthFt / 2, halfH = underlay.heightFt / 2;
+      const a = toS({ x: underlay.x - halfW, y: 0, z: underlay.z - halfH });
+      const b = toS({ x: underlay.x + halfW, y: 0, z: underlay.z + halfH });
+      const left = Math.min(a.x, b.x), top = Math.min(a.y, b.y);
+      const width = Math.abs(b.x - a.x), height = Math.abs(b.y - a.y);
+      if (width < 1 || height < 1) continue;
+      ctx.save();
+      ctx.globalAlpha = underlay.opacity;
+      ctx.drawImage(image, left, top, width, height);
+      ctx.restore();
+    }
+  }
+
+  _formatByteSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10240 ? 1 : 0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  _insertBindings() {
+    this._ensureDrawingCollections();
+    const candidate = this._insertCandidate;
+    const phase = this.state.insertPhase;
+    const level = this.state.levels[this.state.activeLevelIdx];
+    const infoRows = [];
+    if (candidate) {
+      infoRows.push({ label: 'FILE', value: candidate.file.name });
+      infoRows.push({ label: 'TYPE', value: candidate.kind === 'pdf' ? 'PDF' : (candidate.file.type || 'image') });
+      infoRows.push({ label: 'SIZE', value: this._formatByteSize(candidate.file.size) });
+      if (candidate.kind === 'pdf') {
+        infoRows.push({ label: 'PAGES', value: String(candidate.pageCount) });
+        if (candidate.pageDims) {
+          const inW = (candidate.pageDims.w / 72).toFixed(1).replace(/\.0$/, '');
+          const inH = (candidate.pageDims.h / 72).toFixed(1).replace(/\.0$/, '');
+          infoRows.push({ label: 'PAGE SIZE', value: `${inW}" × ${inH}"  (${Math.round(candidate.pageDims.w)} × ${Math.round(candidate.pageDims.h)} pt)` });
+        }
+        infoRows.push({ label: 'CONTENT', value: `${candidate.pathOps || 0} paths · ${candidate.imageOps || 0} images · ${candidate.textChars} text chars` });
+      } else {
+        infoRows.push({ label: 'PIXELS', value: `${candidate.imgWidth} × ${candidate.imgHeight}` });
+      }
+      if (candidate.convertedBlob && !(candidate.kind === 'pdf' && candidate.isVector)) {
+        infoRows.push({ label: 'STORED AS', value: `compressed image · ${this._formatByteSize(candidate.convertedBlob.size)}` });
+      }
+    }
+    const keepVector = candidate?.kind === 'pdf' && candidate.isVector;
+    const TIER_VERDICTS = {
+      vector: { label: '1 · VECTOR PDF — the ideal: kept as-is, small file, sharp lines, full info', color: '#3d6b4f', tint: '74,124,89' },
+      hybrid: { label: '2 · HYBRID PDF — vector linework with embedded images: kept as-is', color: '#7a5c1e', tint: '122,92,30' },
+      ocr: { label: '3 · OCR SCAN — searchable text over a photo: converts once to a compressed image', color: '#2c455d', tint: '44,69,93' },
+      image: { label: '4 · IMAGE-BASED PDF — just a photo: converts once to a compressed image', color: '#8a2c2c', tint: '138,44,44' },
+    };
+    const tierVerdict = candidate?.kind === 'pdf' ? TIER_VERDICTS[candidate.tier] : null;
+    const verdict = !candidate ? ''
+      : tierVerdict ? tierVerdict.label
+      : 'PHOTO / IMAGE — converts once to a compressed image';
+    const verdictColor = tierVerdict?.color || '#365e86';
+    const verdictTint = tierVerdict?.tint || '89,128,166';
+    const detectedScales = candidate?.kind === 'pdf'
+      ? (candidate.scalesByPage.get(this.state.insertPage) || [])
+      : [];
+    const selectedRaw = candidate?.selectedScale?.raw || '';
+    const hasScale = Boolean(candidate?.kind === 'pdf' && candidate.selectedScale && candidate.pageDims);
+    const underlayRows = this._underlays.map(underlay => ({
+      label: `${underlay.name || underlay.id} — ${LEVEL_BUTTON_NAMES[underlay.levelId] || `level ${underlay.levelId}`}${underlay.kind === 'pdf' ? ` · p${underlay.page}` : ''}`,
+      onRemove: () => this._removeUnderlay(underlay.id),
+    }));
+    return {
+      openInsertDialog: () => this._openInsertDialog(),
+      onUnderlayFilePicked: e => {
+        const file = e.target.files?.[0];
+        if (file) this._onUnderlayFilePicked(file);
+        e.target.value = '';
+      },
+      insertDialogOpen: this.state.insertOpen === true,
+      insertLevelName: LEVEL_BUTTON_NAMES[level?.id] || level?.name || '',
+      insertPickPhase: phase === 'pick',
+      insertInspectingPhase: phase === 'inspecting',
+      insertErrorPhase: phase === 'error',
+      insertReadyPhase: phase === 'ready' && Boolean(candidate),
+      insertFileName: candidate?.file.name || '',
+      insertError: this.state.insertError,
+      insertHasPreview: Boolean(candidate?.previewUrl),
+      insertPreviewUrl: candidate?.previewUrl || '',
+      insertInfoRows: infoRows,
+      insertVerdict: verdict,
+      insertVerdictBorder: `rgba(${verdictTint},0.5)`,
+      insertVerdictBg: `rgba(${verdictTint},0.07)`,
+      insertVerdictColor: verdictColor,
+      insertHasPages: Boolean(candidate?.kind === 'pdf' && candidate.pageCount > 1),
+      insertPageLabel: `${this.state.insertPage} / ${candidate?.pageCount || 1}`,
+      insertPrevPage: () => this._setInsertPage(-1),
+      insertNextPage: () => this._setInsertPage(1),
+      insertHasScales: detectedScales.length > 0,
+      insertScaleChips: detectedScales.map(scale => {
+        const selected = scale.raw === selectedRaw;
+        return {
+          label: scale.raw,
+          border: selected ? '#5980a6' : 'rgba(29,31,32,0.25)',
+          bg: selected ? 'rgba(89,128,166,0.12)' : '#fff',
+          color: selected ? '#365e86' : '#1d1f20',
+          onSelect: () => this._selectInsertScale(scale),
+        };
+      }),
+      insertScaleInput: this.state.insertScaleInput,
+      onInsertScaleInput: e => this._onInsertScaleInput(e.target.value),
+      insertScalePlaceholder: candidate?.kind === 'pdf'
+        ? `type a scale — 1/4" = 1'-0" or 1:100`
+        : 'no paper scale — set the plan width below',
+      insertHasScaleError: Boolean(this.state.insertScaleError),
+      insertScaleError: this.state.insertScaleError,
+      insertShowWidth: Boolean(candidate) && !hasScale,
+      insertWidthInput: this.state.insertWidthInput,
+      onInsertWidthInput: e => this.setState({ insertWidthInput: e.target.value, insertWidthError: '' }),
+      insertHasWidthError: Boolean(this.state.insertWidthError),
+      insertWidthError: this.state.insertWidthError,
+      insertToggleCalibrate: () => this._toggleInsertCalibrate(),
+      insertCalOpen: this.state.insertCalOpen === true,
+      insertCalBg: this.state.insertCalOpen ? 'rgba(89,128,166,0.12)' : '#fbfbfc',
+      insertCalHint: (candidate?.calMarks || []).length < 2
+        ? `Click the two ends of a distance you know on the preview — a dimensioned wall, a door, a scale bar.`
+        : `Marks set — type the real distance between them and APPLY.`,
+      insertCalMarks: (candidate?.calMarks || []).map(mark => ({
+        left: `${(mark.fx * 100).toFixed(2)}%`,
+        top: `${(mark.fy * 100).toFixed(2)}%`,
+      })),
+      insertCalReady: (candidate?.calMarks || []).length === 2,
+      onInsertCalClick: e => this._onInsertCalClick(e),
+      insertCalInput: this.state.insertCalInput,
+      onInsertCalInput: e => this.setState({ insertCalInput: e.target.value, insertCalError: '' }),
+      insertCalApply: () => this._applyInsertCalibration(),
+      insertHasCalError: Boolean(this.state.insertCalError),
+      insertCalError: this.state.insertCalError,
+      insertHasUnderlays: underlayRows.length > 0,
+      insertUnderlayRows: underlayRows,
+      insertChooseFile: () => this._chooseUnderlayFile(),
+      insertConfirm: () => this._confirmInsertUnderlay(),
+      insertCancel: () => this._closeInsertDialog(),
+    };
   }
 
   // NEW and OPEN both replace the current drawing, so when it has changes not
@@ -2713,6 +3474,13 @@ class Component extends DCLogic {
         ...roomTags.map(tag => tag.id + 1),
         Number.isInteger(saved.nextRoomTagId) ? saved.nextRoomTagId : 1,
       );
+      const storedUnderlays = Array.isArray(saved.underlays)
+        ? saved.underlays.map(underlay => ({ ...underlay, levelId: migrateLevelId(underlay?.levelId) }))
+        : saved.underlays;
+      this._underlays = format.underlays(storedUnderlays, ownerLevelIds);
+      skipped += (Array.isArray(saved.underlays) ? saved.underlays.length : 0) - this._underlays.length;
+      this._underlayImages = new Map();
+      this._loadUnderlayImages();
       // Outlines restore as isolated points — they never join the shared
       // vertex pool, so a guide can sit on a wall corner without gluing to it.
       // Masters restore first so level copies can verify their masterId.
@@ -3429,6 +4197,9 @@ class Component extends DCLogic {
       const v = new THREE.Vector3(pt.x, pt.y || 0, pt.z).project(cam);
       return { x: (v.x + 1) / 2 * w, y: (-v.y + 1) / 2 * h };
     };
+
+    // Underlays sit beneath everything drawn: over the grid, under geometry.
+    if (this.state.activeView === 'top') this._drawUnderlays2D(ctx, toS);
 
     const LINE_COLOR = '#1d1f20';
     const DOT_R = 2.5;
@@ -14016,6 +14787,15 @@ class Component extends DCLogic {
   _handleKey(e) {
     if (!this._drawingReady || this.state.profileDialog) return;
     const focusedControl = this._focusedControl();
+    // The INSERT card owns the keyboard while open: Escape closes it and tool
+    // shortcuts stay quiet under the modal.
+    if (this.state.insertOpen) {
+      if (e.key === 'Escape' && focusedControl !== 'field') {
+        e.preventDefault();
+        this._closeInsertDialog();
+      }
+      return;
+    }
     if (this.state.groupDialog && focusedControl !== 'field') {
       const key = e.key === ' ' ? 'Space' : e.key;
       if (key === 'y' || key === 'Y' || key === 'Enter' || key === 'Space') {
@@ -15580,6 +16360,7 @@ class Component extends DCLogic {
       fileGuardSave: () => { this._saveDrawingFile(); this._runFileAction(); },
       fileGuardSkip: () => this._runFileAction(),
       fileGuardCancel: () => this.setState({ fileGuardAction: '' }),
+      ...this._insertBindings(),
       viewLabel: viewLabels[activeView] || 'TOP / PLAN',
       backgroundStatus,
       backgroundStatusColor,
