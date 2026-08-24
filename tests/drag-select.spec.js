@@ -74,6 +74,7 @@ test('holding Shift while dragging selects across all levels', async ({ page }) 
 
 test('a single click on the first node closes a shape', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('t'); // set the T-square down — the triangle needs free angles
   await h.selectTool(page, 'Line');
   await h.clickWorld(page, -10, -10);
   await h.clickWorld(page, 10, -10);

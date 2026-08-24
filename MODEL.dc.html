@@ -106,9 +106,10 @@
   <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; align-items:center; gap:10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em; pointer-events:none;">
     <span data-model-len style="color:#1d1f20; min-width:80px; text-align:right;"></span>
     <span data-model-ang style="color:rgba(29,31,32,0.4); min-width:52px;"></span>
-    <!-- Constraint chips: the T-square lights while the Shift 45° lock is engaged,
-         the ruler lights and glows while an R typed length is active -->
-    <span data-mode-tsquare title="T-SQUARE 45° lock (Shift)" style="display:inline-flex; color:{{ tsquareChipColor }};">
+    <!-- Constraint chips: the T-square lights while its 90° lock is on (T) or a
+         Ctrl/Shift protractor lock is engaged, the ruler lights and glows while
+         an R typed length is active -->
+    <span data-mode-tsquare title="{{ tsquareChipTitle }}" style="display:inline-flex; color:{{ tsquareChipColor }};">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <path d="M1 3 H15"></path>
         <path d="M8 3 V15"></path>
@@ -1035,6 +1036,8 @@ const LOCKED_NODE_SNAP_PX = 3;
 // that way before any click.
 const POLAR_RULER_TOOLS = new Set(['line', 'wall', 'outline']);
 const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'dimension', 'cut', 'extend', 'copy']);
+// Segment-drawing tools the full-time T-square squares to 90° while it is on.
+const ORTHO_LOCK_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'shape']);
 // Polar-origin activation effect: the node pulses orange and shoots hairline
 // direction rays that hold for a second, then fade out over another.
 const POLAR_FX_HOLD_MS = 1000;
@@ -1667,6 +1670,7 @@ class Component extends DCLogic {
     polarOriginX: -100, polarOriginY: -100, showPolarOrigin: false,
     lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '',
     tsquareEngaged: false,
+    tsquareOn: true,           // full-time 90° T-square while drawing; T toggles
     cuts:          [],
     nextCutId:     1,
     activeCutId:   null,
@@ -2113,6 +2117,7 @@ class Component extends DCLogic {
           snapStrength: { ...this.state.snapStrength },
           drafter: { ...this.state.drafter },
           keybindings: { ...this.state.keybindings },
+          tsquareOn: this.state.tsquareOn,
         },
       };
     }
@@ -2141,6 +2146,7 @@ class Component extends DCLogic {
         ...(values.drafter && typeof values.drafter === 'object'
           ? { drafter: normaliseDrafter(values.drafter) }
           : {}),
+        ...(typeof values.tsquareOn === 'boolean' ? { tsquareOn: values.tsquareOn } : {}),
         ...(values.keybindings && typeof values.keybindings === 'object'
           ? {
             // A stored empty string means the command was deliberately cleared;
@@ -5770,24 +5776,36 @@ class Component extends DCLogic {
       : tool === 'wall' ? this._wallStart
       : tool === 'floor' ? this._floorPoints[this._floorPoints.length - 1]
       : tool === 'outline' ? this._outlinePoints[this._outlinePoints.length - 1]
+      : tool === 'shape' ? this._shapePoints[this._shapePoints.length - 1]
       : tool === 'dimension' ? this._dimensionStart
       : tool === 'cut' && this.state.cutPhase === 'placing' ? this._cutStart3
       : tool === 'extend' && this.state.extendPhase === 'destination' ? this.state.extendBase
       : tool === 'copy' && this.state.copyPhase === 'destination' ? this.state.copyBase
       : null;
-    const angleLockHeld = this._shiftHeld || this._ctrlHeld;
-    // Shift with an acquired polar node acts as a T-square from that node: the
-    // point hard-locks onto the nearest of its 45° rays, even mid-draw, so a
-    // segment can land straight across / straight up / 45° from the rolled-over
-    // node. The segment start keeps its own lock; whichever ray sits closer to
-    // the cursor takes hold.
-    const polarLockOrigin = angleLockHeld && this._polarOrigin
+    const modifierHeld = this._shiftHeld || this._ctrlHeld;
+    // The full-time T-square: while it is on, segment drawing locks to 90° with
+    // no modifier held. The cursor roams free — the endpoint is its projection
+    // onto the locked ray — and the ray re-aims as the cursor crosses quadrants.
+    // Held Ctrl/Shift protractors take over from the T-square while pressed.
+    const ortho = this.state.tsquareOn && !modifierHeld && !drag && !!start
+      && ORTHO_LOCK_TOOLS.has(tool);
+    const angleLockHeld = modifierHeld || ortho;
+    // Shift with an acquired polar node acts as a protractor from that node:
+    // the point hard-locks onto the nearest of its stepped rays, even mid-draw,
+    // so a segment can land straight across / straight up / 45° from the
+    // rolled-over node. The segment start keeps its own lock; whichever ray
+    // sits closer to the cursor takes hold.
+    const polarLockOrigin = modifierHeld && this._polarOrigin
       && (drag || POLAR_TRACKING_TOOLS.has(tool))
       && (!start || Math.hypot(start.x - this._polarOrigin.x, start.z - this._polarOrigin.z) > 0.001)
       ? this._polarOrigin : null;
 
-    // 45° angle lock — must establish lockAngle before tracking/magnet
-    if (angleLockHeld && start) {
+    // Angle lock — must establish lockAngle before tracking/magnet
+    if (ortho) {
+      // The T-square re-aims continuously: the locked ray follows the cursor
+      // around the quadrants instead of holding the first direction it saw.
+      this._lockAngle = geo.lockAngleFor(start, basePt, Math.PI / 2);
+    } else if (angleLockHeld && start) {
       // Establish angle from raw cursor if not yet locked. A cursor still sitting
       // on the start point has no direction yet, so the lock waits for one.
       if (this._lockAngle == null) this._lockAngle = geo.lockAngleFor(start, basePt, this._angleLockStep());
@@ -12076,6 +12094,20 @@ class Component extends DCLogic {
     return Math.PI / 4;
   }
 
+  // The T on the keyboard picks the T-square up or sets it down. The choice
+  // rides the personal settings package so it holds across sessions.
+  _toggleTsquare() {
+    const on = !this.state.tsquareOn;
+    this._lockAngle = null;
+    this.setState({
+      tsquareOn: on,
+      drawingMessage: on
+        ? 'T-SQUARE on — drawing squares to 90°. T sets it down.'
+        : 'T-SQUARE off — free angles. T picks it back up.',
+      drawingMessageError: false,
+    }, () => this._rememberActiveProfile('settings'));
+  }
+
   // Changing the modifier combo mid-hold releases the held angle so the lock
   // re-aims on the new ladder step.
   _refreshAngleLockStep() {
@@ -13765,6 +13797,7 @@ class Component extends DCLogic {
       return;
     }
     if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelCopy(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
+    if (matches('tsquare')) { e.preventDefault(); this._toggleTsquare(); return; }
     if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelCopy(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
     if (matches('perspective')) { e.preventDefault(); this._setView('perspective'); return; }
@@ -15063,7 +15096,11 @@ class Component extends DCLogic {
       polarOriginX:      this.state.polarOriginX,
       polarOriginY:      this.state.polarOriginY,
       polarOriginDisplay: this.state.showPolarOrigin ? 'block' : 'none',
-      tsquareChipColor: this.state.tsquareEngaged ? '#e07a20' : 'rgba(29,31,32,0.18)',
+      tsquareChipColor: this.state.tsquareEngaged ? '#e07a20'
+        : this.state.tsquareOn ? '#5980a6' : 'rgba(29,31,32,0.18)',
+      tsquareChipTitle: this.state.tsquareOn
+        ? `T-SQUARE on — 90° [${shortcut('tsquare')}] · Ctrl 90° / Shift 45° / Ctrl+Shift 30° protractors`
+        : `T-SQUARE off [${shortcut('tsquare')}] · Ctrl 90° / Shift 45° / Ctrl+Shift 30° protractors`,
       rulerChipColor: this.state.lengthFrozen ? '#e07a20' : 'rgba(29,31,32,0.18)',
       rulerChipGlow: this.state.lengthFrozen ? 'drop-shadow(0 0 3px rgba(224,122,32,0.9))' : 'none',
       lengthFrozen: this.state.lengthFrozen,

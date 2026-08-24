@@ -81,6 +81,7 @@ test('MARK GARAGE stores an OPEN run welded onto shared house points', async ({ 
 
 test('a run whose end misses the house stays alive to fix and finish', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('t'); // set the T-square down — the missing leg is deliberately angled
   await drawHouseOutline(page);
   await drawGarageRun(page, [[8, -4], [20, -4], [20, 4], [23, 10]]);
   await page.waitForTimeout(300);
@@ -290,6 +291,7 @@ test('a second BUILD HOUSE click never doubles the garage', async ({ page }) => 
 
 test('an L-shaped run builds a beam member on every open leg', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('t'); // set the T-square down — the closing leg runs at an angle
   await drawHouseOutline(page);
   await drawGarageRun(page, [[8, -4], [20, -4], [20, 8], [14, 8], [8, 4]]);
   await h.waitForSaved(page);

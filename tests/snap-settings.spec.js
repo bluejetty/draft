@@ -37,6 +37,7 @@ test('the 0,0 origin rings while it has hold of the cursor, with no toggle', asy
 
 test('a click near the origin snaps exactly to 0,0', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('t'); // set the T-square down — the far click stays unsnapped
 
   await h.selectTool(page, 'Line');
   await h.clickWorld(page, 0.2, 0);

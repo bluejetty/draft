@@ -112,9 +112,9 @@
         <p>AutoCAD and MicroStation muscle memory is typed multi-letter command aliases (<strong>PL</strong> polyline, <strong>TR</strong> trim, <strong>EX</strong> extend), and Revit uses two-letter shortcuts (<strong>WA</strong> wall, <strong>DI</strong> dimension). Draft currently binds a single key plus optional modifiers, so each preset is the nearest single-key match — usually the first letter of the alias. Multi-letter key sequences are a possible future upgrade if a preset ever needs to be exact.</p>
         <h3>How the presets map</h3>
         <ul>
-          <li><strong>AutoCAD style</strong> — A arc (node tool), T trim (TR), E extend (EX), I insert for doors/windows (blocks), Space repeats/commits like the ACAD spacebar, Ctrl+Y redo.</li>
-          <li><strong>Revit style</strong> — W wall (WA), Shift+W window/door (WN / DR), D dimension (DI), T trim (TR), Ctrl+Y redo.</li>
-          <li><strong>MicroStation style</strong> — Q element selection (first tool in the task list), P place shape, mnemonic letters elsewhere; Ctrl+Y stands in for redo because the browser keeps Ctrl+R.</li>
+          <li><strong>AutoCAD style</strong> — A arc (node tool), Q trim (TR), E extend (EX), I insert for doors/windows (blocks), T toggles the 90° T-square like F8 ortho, Space repeats/commits like the ACAD spacebar, Ctrl+Y redo.</li>
+          <li><strong>Revit style</strong> — W wall (WA), Shift+W window/door (WN / DR), D dimension (DI), Q trim (TR), Ctrl+Y redo.</li>
+          <li><strong>MicroStation style</strong> — Q element selection (first tool in the task list), P place shape, M trim, mnemonic letters elsewhere; Ctrl+Y stands in for redo because the browser keeps Ctrl+R.</li>
           <li><strong>ArchiCAD style</strong> — A arrow (select), W wall, Shift+D door/window pair, L line; Ctrl+Z / Ctrl+Shift+Z undo/redo as ArchiCAD ships them.</li>
         </ul>
         <h3>Commands other apps have that Draft doesn't (yet)</h3>
@@ -150,7 +150,7 @@
       const groups = [
         { title:'Drawing tools', commands:[
           ['select', 'Select'], ['line', 'Line'], ['node', 'Node / Arc'], ['wall', 'Wall'],
-          ['floor', 'Floor'], ['fenestration', 'Fenestration'], ['shape', 'Shape'], ['outline', 'Outline'], ['roof', 'Roof'], ['dimension', 'Dimension'], ['trim', 'Trim'], ['cut', 'Cut'], ['group', 'Assembly (group)'], ['groupAlt', 'Alternate assembly'], ['ungroup', 'Ungroup assembly'], ['extend', 'Extend'], ['extendAlt', 'Alternate extend'], ['copy', 'Copy'],
+          ['floor', 'Floor'], ['fenestration', 'Fenestration'], ['shape', 'Shape'], ['outline', 'Outline'], ['roof', 'Roof'], ['dimension', 'Dimension'], ['trim', 'Trim'], ['tsquare', 'T-square (90° lock)'], ['cut', 'Cut'], ['group', 'Assembly (group)'], ['groupAlt', 'Alternate assembly'], ['ungroup', 'Ungroup assembly'], ['extend', 'Extend'], ['extendAlt', 'Alternate extend'], ['copy', 'Copy'],
         ]},
         { title:'Views', commands:[
           ['perspective', '3D perspective'], ['top', 'Top / plan'],
