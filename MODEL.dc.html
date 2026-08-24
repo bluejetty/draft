@@ -382,11 +382,14 @@
   <!-- OUTLINE / BUILD HOUSE -->
   <sc-if value="{{ outlineToolActive }}" hint-placeholder-val="{{ false }}">
     <div style="display:flex; align-items:stretch;">
-      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:200px;">
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:400px;">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Outline</div>
-        <button onClick="{{ onBuildHouse }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; margin-bottom:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD HOUSE</button>
-        <button data-build-garage onClick="{{ onBuildGarage }}" style="width:100%; box-sizing:border-box; border:1px solid #7a4a21; background:rgba(122,74,33,0.10); color:#7a4a21; padding:6px 4px; margin-bottom:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD GARAGE</button>
-        <button onClick="{{ onOutlineGarageToggle }}" style="width:100%; box-sizing:border-box; border:1px solid {{ outlineGarageBorder }}; background:{{ outlineGarageBg }}; color:{{ outlineGarageColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ outlineGarageLabel }}</button>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; align-content:start;">
+          <button onClick="{{ onBuildHouse }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD HOUSE</button>
+          <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" style="width:100%; box-sizing:border-box; border:1px solid {{ attachedGarageBorder }}; background:{{ attachedGarageBg }}; color:{{ attachedGarageColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ attachedGarageLabel }}</button>
+          <button data-build-garage onClick="{{ onBuildGarage }}" style="width:100%; box-sizing:border-box; border:1px solid #7a4a21; background:rgba(122,74,33,0.10); color:#7a4a21; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD GARAGE</button>
+          <button data-mark-detached-garage onClick="{{ onMarkDetachedGarage }}" style="width:100%; box-sizing:border-box; border:1px solid {{ detachedGarageBorder }}; background:{{ detachedGarageBg }}; color:{{ detachedGarageColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ detachedGarageLabel }}</button>
+        </div>
       </div>
       <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:230px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ buildHouseHint }}</div>
     </div>
@@ -688,10 +691,11 @@
   <div style="position:fixed; inset:0; z-index:51; display:flex; align-items:flex-start; justify-content:center; padding-top:78px; background:rgba(29,31,32,0.18);">
     <div data-garage-corner-prompt role="dialog" aria-modal="true" aria-label="Connect at corner" style="width:min(380px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">CONNECT AT CORNER</div>
-      <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">This garage wall continues the house wall from the far side — pick the offset; the run and its outside corner shift over square.</div>
+      <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">This garage wall continues the house wall from the far side — pick the offset and the run shifts over square, or keep it IN LINE if the walls should align.</div>
       <div style="display:flex; gap:6px; margin-top:14px;">
         <button data-garage-stub-beam onClick="{{ garageStubBeam }}" style="flex:1; height:28px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">FOUNDATION THICKNESS ({{ garageStubBeamLabel }})</button>
         <button data-garage-stub-foot onClick="{{ garageStubFoot }}" style="flex:1; height:28px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">1'-0&quot;</button>
+        <button data-garage-stub-none onClick="{{ garageStubNone }}" style="flex:1; height:28px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">IN LINE — NO SHIFT</button>
       </div>
     </div>
   </div>
@@ -1641,7 +1645,7 @@ class Component extends DCLogic {
     activeBoneyardShelfId: 1,
     nextBoneyardShelfId: 2,
     boneyardActive: false,   // BONEYARD card selected instead of a level
-    outlineGarage: false,     // next outline drawn is the attached GARAGE run
+    outlineGarage: null,      // 'attached' | 'detached' — the next outline drawn is a garage
     garageCornerPrompt: false, // CONNECT AT CORNER stub choice pending
     detachedFoundationPrompt: false, // detached-garage foundation choice pending
     autoDimFirstOffsetFt: 1.5, // gap between the plan and the closest auto string
@@ -4086,12 +4090,12 @@ class Component extends DCLogic {
         const s = toS(point);
         ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
       });
-      // An attached GARAGE run finishes on its LAST point (double-click /
-      // Enter there); closing back on the START point instead makes a
-      // DETACHED garage loop. A house outline only rings the start.
+      // An ATTACHED garage run finishes on its LAST point (double-click /
+      // Enter there); a DETACHED garage and a house outline close back on
+      // the START point, so those only ring the start.
       const rings = [];
       if (this._outlinePoints.length >= 3 && this._outlineStart) rings.push(this._outlineStart);
-      if (this.state.outlineGarage && this._outlinePoints.length >= 4) {
+      if (this.state.outlineGarage === 'attached' && this._outlinePoints.length >= 4) {
         rings.push(this._outlinePoints[this._outlinePoints.length - 1]);
       }
       rings.forEach(ring => {
@@ -6630,9 +6634,11 @@ class Component extends DCLogic {
 
     const last = this._outlinePoints[this._outlinePoints.length - 1];
     if (last && Math.hypot(pt.x - last.x, pt.z - last.z) < 0.001) {
-      // A GARAGE run stays open: re-clicking the last point (a double-click)
-      // finishes the run on its house-snapped end instead of closing a loop.
-      if (this.state.outlineGarage && this._outlinePoints.length >= 4) this._finishOutline();
+      // An ATTACHED garage run stays open: re-clicking the last point (a
+      // double-click) finishes the run on its house-snapped end; a DETACHED
+      // garage double-click closes its loop from wherever it is.
+      if (this.state.outlineGarage === 'attached' && this._outlinePoints.length >= 4) this._finishOutline();
+      else if (this.state.outlineGarage === 'detached' && this._outlinePoints.length >= 3) this._finishOutline();
       return;
     }
     const first = this._outlineStart;
@@ -6649,10 +6655,24 @@ class Component extends DCLogic {
 
   _finishOutline(closed = false) {
     if (!this._outlineDrawing) return;
-    const garage = this.state.outlineGarage === true;
-    if (garage && !closed && this._outlinePoints.length < 4) {
+    const mode = this.state.outlineGarage;
+    if (mode === 'attached' && closed) {
+      this.setState({
+        drawingMessage: 'An ATTACHED garage stays an OPEN run — finish on its last point instead of closing the loop. MARK DETACHED GARAGE draws a loop of its own.',
+        drawingMessageError: true,
+      });
+      return;
+    }
+    if (mode === 'attached' && this._outlinePoints.length < 4) {
       this.setState({
         drawingMessage: 'A GARAGE run needs at least 3 open legs (4 points), starting and ending on the house outline.',
+        drawingMessageError: true,
+      });
+      return;
+    }
+    if (mode === 'detached' && this._outlinePoints.length < 3) {
+      this.setState({
+        drawingMessage: 'A DETACHED garage needs at least 3 corners to close its loop.',
         drawingMessageError: true,
       });
       return;
@@ -6666,10 +6686,10 @@ class Component extends DCLogic {
     this._lockAngle = null;
     this.setState({ isDrawing: false });
     if (points.length < 3) return;
-    const committed = this._commitOutline(points, garage && closed);
+    const committed = this._commitOutline(points, mode === 'detached');
     // A garage run whose ends missed the house outline stays alive so the
     // drafter can pull the offending end onto the house and finish again.
-    if (garage && !committed && !this._garagePending && !this._detachedPending) {
+    if (mode === 'attached' && !committed && !this._garagePending && !this._detachedPending) {
       this._outlinePoints = drawn;
       this._outlineDrawing = true;
       this._outlineStart = drawn[0];
@@ -6701,6 +6721,34 @@ class Component extends DCLogic {
       && this._boneyardOutlines.some(outline => outline.shelfId === shelf.id && !outline.garage);
   }
 
+  // The two garage buttons arm the Outline tool explicitly — ATTACHED draws
+  // an open run welded onto the house, DETACHED closes its own loop — so a
+  // run near the house never guesses which one was meant.
+  _toggleGarageMode(mode) {
+    if (this.state.outlineGarage === mode) {
+      this.setState({
+        outlineGarage: null,
+        drawingMessage: 'GARAGE marking off — outlines close as ordinary house outlines again.',
+        drawingMessageError: false,
+      });
+      return;
+    }
+    if (mode === 'attached' && !this._shelfHasHouseMaster()) {
+      this.setState({
+        drawingMessage: 'Draw the house OUTLINE first — an ATTACHED garage run welds onto it. A garage with no house is a DETACHED garage.',
+        drawingMessageError: true,
+      });
+      return;
+    }
+    this.setState({
+      outlineGarage: mode,
+      drawingMessage: mode === 'attached'
+        ? 'ATTACHED GARAGE — draw an OPEN run of 3+ legs starting and ending on the house outline; double-click or Enter finishes on the last point. BUILD HOUSE grows the beam, slab, doors and roof.'
+        : 'DETACHED GARAGE — draw its own loop and close it back on the first point (or press Enter); the prompt picks grade beam or thickened-edge slab. BUILD HOUSE grows its walls, slab, doors and roof.',
+      drawingMessageError: false,
+    });
+  }
+
   // The first outline completed on a shelf becomes that shelf's master: it is
   // stored on the shelf and copied to every level, each copy linked back to
   // the master's points by srcId. Later outlines are local to their level.
@@ -6712,7 +6760,7 @@ class Component extends DCLogic {
     const level = this.state.boneyardActive ? null : this._activeLevel();
     if (!this.state.boneyardActive && !level) return null;
 
-    const garage = this.state.outlineGarage === true;
+    const garage = !!this.state.outlineGarage;
     if (!garage && (this.state.boneyardActive || !shelfHasMaster)) {
       const master = {
         id: this._newDrawingItemId('outline'),
@@ -7140,7 +7188,8 @@ class Component extends DCLogic {
   // The chosen stub shifts the corner leg over perpendicular — toward the
   // garage — by the stub length: the leg's far node moves with it, and a
   // short square stub joins the house corner to the shifted wall, so the two
-  // runs sit face to face instead of face to interior.
+  // runs sit face to face instead of face to interior. A zero length keeps
+  // the drawn leg IN LINE with the house wall — no shift, no stub.
   _chooseGarageCornerStub(lengthIn) {
     const pending = this._garagePending;
     this._garagePending = null;
@@ -7149,6 +7198,11 @@ class Component extends DCLogic {
     const house = this._houseMasterOutline(pending.shelfId);
     const key = pending.cornerKey;
     delete pending.cornerKey;
+    if (!lengthIn) {
+      pending.stubbed = { ...pending.stubbed, [key]: true };
+      this._continueGarageCommit(pending);
+      return;
+    }
     const corner = house.points[pending[key].index];
     const start = key === 'resStart';
     const neighborIndex = start ? 1 : pending.points.length - 2;
@@ -7226,7 +7280,7 @@ class Component extends DCLogic {
     this.state.levels.forEach(lvl => this._outlines.push(this._outlineCopyForLevel(master, lvl)));
     this._markUnsaved();
     this.setState({
-      outlineGarage: false,
+      outlineGarage: null,
       drawingMessage: 'GARAGE attached — the open run shares its end nodes with the house outline on every level. BUILD HOUSE adds the grade beam, flat 4" slab, garage walls, and one roof over house + garage.',
       drawingMessageError: false,
     });
@@ -7336,7 +7390,7 @@ class Component extends DCLogic {
     this.state.levels.forEach(lvl => this._outlines.push(this._outlineCopyForLevel(master, lvl)));
     this._markUnsaved();
     this.setState({
-      outlineGarage: false,
+      outlineGarage: null,
       drawingMessage: master.foundation === 'thickened'
         ? 'DETACHED GARAGE closed — thickened-edge slab: one LEVEL monolithic pour, 4" field, 1\'-0" edge, 45° taper, on gravel. BUILD HOUSE raises its walls, slab, doors, and roof.'
         : 'DETACHED GARAGE closed — grade beam all around; the 4" slab slopes 1/8"/ft to the door on graded fill. BUILD HOUSE raises its walls, beam, slab, doors, and roof.',
@@ -14500,21 +14554,18 @@ class Component extends DCLogic {
       autoDimHint: 'AUTO DIMS strings the exterior on all four sides: openings closest, footprint jogs next, overall outside. Re-run to refresh after edits — every dim stays ordinary and editable.',
       onBuildHouse: () => this._buildHouse(),
       onBuildGarage: () => this._buildGarage(),
-      onOutlineGarageToggle: () => this.setState(state => ({
-        outlineGarage: !state.outlineGarage,
-        drawingMessage: !state.outlineGarage
-          ? (this._shelfHasHouseMaster()
-            ? 'GARAGE marking on — an OPEN run of 3+ legs starting and ending on the house outline attaches; a CLOSED loop is a DETACHED garage. BUILD HOUSE grows the beam, slab, doors and roof.'
-            : 'GARAGE marking on — close a loop to make a DETACHED garage (grade beam or thickened-edge slab). BUILD HOUSE grows its beam, slab, doors and roof.')
-          : 'GARAGE marking off — outlines close as ordinary house outlines again.',
-        drawingMessageError: false,
-      })),
-      outlineGarageLabel: this.state.outlineGarage
-        ? 'MARKING GARAGE — CLICK TO CANCEL'
-        : (this._shelfHasHouseMaster() ? 'MARK ATTACHED OR DETACHED GARAGE' : 'MARK DETACHED GARAGE'),
-      outlineGarageBorder: this.state.outlineGarage ? '#7a4a21' : 'rgba(29,31,32,0.35)',
-      outlineGarageBg: this.state.outlineGarage ? 'rgba(122,74,33,0.14)' : '#fff',
-      outlineGarageColor: this.state.outlineGarage ? '#7a4a21' : 'rgba(29,31,32,0.75)',
+      onMarkAttachedGarage: () => this._toggleGarageMode('attached'),
+      onMarkDetachedGarage: () => this._toggleGarageMode('detached'),
+      attachedGarageLabel: this.state.outlineGarage === 'attached'
+        ? 'MARKING ATTACHED GARAGE — CLICK TO CANCEL' : 'MARK ATTACHED GARAGE',
+      attachedGarageBorder: this.state.outlineGarage === 'attached' ? '#7a4a21' : 'rgba(29,31,32,0.35)',
+      attachedGarageBg: this.state.outlineGarage === 'attached' ? 'rgba(122,74,33,0.14)' : '#fff',
+      attachedGarageColor: this.state.outlineGarage === 'attached' ? '#7a4a21' : 'rgba(29,31,32,0.75)',
+      detachedGarageLabel: this.state.outlineGarage === 'detached'
+        ? 'MARKING DETACHED GARAGE — CLICK TO CANCEL' : 'MARK DETACHED GARAGE',
+      detachedGarageBorder: this.state.outlineGarage === 'detached' ? '#7a4a21' : 'rgba(29,31,32,0.35)',
+      detachedGarageBg: this.state.outlineGarage === 'detached' ? 'rgba(122,74,33,0.14)' : '#fff',
+      detachedGarageColor: this.state.outlineGarage === 'detached' ? '#7a4a21' : 'rgba(29,31,32,0.75)',
       buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on every floor level, 8" concrete walls + slab + ${formatInchesOnly(this._footingWidthIn(1))} centered strip-footing lines on FOUNDATION, and a ${this.state.roofPitch}:12 all-eave roof grown from the ROOF level's outline by the roof overhang. An attached GARAGE adds its open-leg grade beam (32" + 1.5" plate, top of plate 1'-0" below the foundation top), a flat 4" slab closed against the house, 10"\u00f8 piles at the two beam corners against the house (COLUMN or COPY places the rest along the beam), garage walls flush with the main-floor ceiling, and one roof over house + garage. Only levels still empty build, so re-running fills gaps without doubling up.`,
       onShapeCapture: () => this._captureShape(),
       hasActiveShapes: this._activeShapes().length > 0,
@@ -15142,6 +15193,7 @@ class Component extends DCLogic {
       garageStubBeamLabel: formatInchesOnly(this._foundationWallThicknessIn()),
       garageStubBeam: () => this._chooseGarageCornerStub(this._foundationWallThicknessIn()),
       garageStubFoot: () => this._chooseGarageCornerStub(12),
+      garageStubNone: () => this._chooseGarageCornerStub(0),
       detachedFoundationPromptOpen: this.state.detachedFoundationPrompt === true,
       detachedGradeBeam: () => this._chooseDetachedFoundation('gradebeam'),
       detachedThickenedEdge: () => this._chooseDetachedFoundation('thickened'),
