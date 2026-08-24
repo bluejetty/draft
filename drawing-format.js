@@ -140,7 +140,7 @@ if (!window.DraftDrawingFormat) {
   // the faucet-end wall face and the tub, and dir is which way along the back
   // wall the alcove runs from that face. Host-wall existence is the caller's
   // check.
-  const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'washer', 'dryer', 'toilet', 'tub', 'shower', 'stall'];
+  const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'washer', 'dryer', 'toilet', 'tub', 'shower', 'stall', 'closet'];
   const FIXTURE_CASEWORK = ['cabinet', 'vanity'];
   const fixtures = (rawFixtures, levelIds) => (Array.isArray(rawFixtures) ? rawFixtures : [])
     .map(fixture => {
