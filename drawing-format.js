@@ -129,6 +129,45 @@ if (!window.DraftDrawingFormat) {
       };
     }).filter(Boolean);
 
+  // Fixtures are semantic kitchen / bath / laundry plan symbols hosted on a
+  // wall: kind picks the symbol and CAD layer, offset is the distance from the
+  // wall start to the fixture centre along the wall, side is which face of the
+  // wall the body projects from. Geometry is never stored — it redraws from
+  // the current wall, so fixtures ride wall edits. The tub also records its
+  // faucet-end wall (endWallId): it fills the alcove between that wall and the
+  // next crossing wall, stretching up to 6" past standard before the leftover
+  // becomes a deck strip. For the tub, offset is instead the slide gap between
+  // the faucet-end wall face and the tub, and dir is which way along the back
+  // wall the alcove runs from that face. Host-wall existence is the caller's
+  // check.
+  const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'washer', 'dryer', 'toilet', 'tub'];
+  const FIXTURE_CASEWORK = ['cabinet', 'vanity'];
+  const fixtures = (rawFixtures, levelIds) => (Array.isArray(rawFixtures) ? rawFixtures : [])
+    .map(fixture => {
+      const wallId = String(fixture?.wallId || '').trim();
+      const fixtureLevelId = levelId(fixture?.levelId, levelIds);
+      const kind = oneOf(fixture?.kind, FIXTURE_KINDS, null);
+      const width = positive(fixture?.width, null);
+      const depth = positive(fixture?.depth, null);
+      const offset = num(fixture?.offset);
+      if (!wallId || fixtureLevelId == null || !kind || width == null || depth == null || offset === null || offset < 0) return null;
+      const endWallId = String(fixture?.endWallId || '').trim();
+      if (kind === 'tub' && !endWallId) return null;
+      return {
+        id: String(fixture?.id || '').trim(),
+        wallId,
+        levelId: fixtureLevelId,
+        view: 'plan',
+        kind,
+        layer: FIXTURE_CASEWORK.includes(kind) ? 'A-CASE' : 'A-FIXT',
+        offset,
+        width,
+        depth,
+        side: fixture?.side === -1 ? -1 : 1,
+        ...(endWallId ? { endWallId, dir: fixture?.dir === -1 ? -1 : 1 } : {}),
+      };
+    }).filter(Boolean);
+
   // Surface openings are free-form closed outlines cut from a host floor or
   // roof footprint (stairwells, skylights, chimneys). Host existence is the
   // caller's check — floors and roofs restore before openings resolve.
@@ -456,6 +495,7 @@ if (!window.DraftDrawingFormat) {
     stairs,
     notes,
     fenestrations,
+    fixtures,
     surfaceOpenings,
     shapes,
     roofs,
