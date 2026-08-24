@@ -569,6 +569,14 @@
           </sc-for>
         </div>
       </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Bedroom</div>
+        <div style="display:flex; gap:3px;">
+          <sc-for list="{{ fixtureBedroomBtns }}" as="fd" hint-placeholder-count="1">
+            <button onClick="{{ fd.onSelect }}" title="{{ fd.title }}" style="border:1px solid {{ fd.border }}; background:{{ fd.bg }}; color:{{ fd.color }}; padding:5px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer; white-space:nowrap;">{{ fd.label }}</button>
+          </sc-for>
+        </div>
+      </div>
       <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:230px; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ fixtureNote }}</div>
       <sc-if value="{{ hasActiveFixtures }}" hint-placeholder-val="{{ false }}">
         <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-right:1px solid rgba(29,31,32,0.12); flex-shrink:0; width:160px;">
@@ -1386,6 +1394,26 @@ const FIXTURE_COLOR = '#1d1f20';
 const TUB_STRETCH_MAX_FT = 0.5;    // the tub grows up to 6" past standard; the rest is deck
 const TUB_MIN_LENGTH_FT = 4;       // an alcove shorter than this can't take the tub
 const COUNTER_OVERHANG_FT = 1 / 12; // countertop edge past the cabinet face
+// Closets are small rooms drawn as a wall-hosted fixture: 2'-1" inside depth
+// behind 2x4 closet walls, a rod at 1'-0" off the back wall, the shelf edge at
+// 1'-6", hanging clothes as 1'-10" strokes centered on the rod, and a door
+// picked from the DD/D ladder by whatever width fits between the side walls.
+const CLOSET_INSIDE_DEPTH_FT = 2 + 1 / 12;
+const CLOSET_WALL_FT = 3.5 / 12;
+const CLOSET_ROD_FT = 1;
+const CLOSET_SHELF_FT = 1.5;
+const CLOSET_CLOTHES_FT = 22 / 12;
+const CLOSET_DOORS = [
+  { label: 'DD72', widthFt: 6 },
+  { label: 'DD60', widthFt: 5 },
+  { label: 'DD48', widthFt: 4 },
+  { label: 'D36',  widthFt: 3 },
+  { label: 'D30',  widthFt: 2.5 },
+  { label: 'D24',  widthFt: 2 },
+  { label: 'D18',  widthFt: 1.5 },
+];
+const closetDoorFor = insideWidthFt =>
+  CLOSET_DOORS.find(door => door.widthFt <= insideWidthFt - 4 / 12) || null;
 const FIXTURE_KINDS = [
   { id: 'cabinet', label: 'CABINET', group: 'KITCHEN',  widthFt: 3,      depthFt: 2,      casework: true,  run: true,
     note: 'Base cabinet run — two clicks along a wall set the run; 24" deep with a countertop line.' },
@@ -1409,6 +1437,8 @@ const FIXTURE_KINDS = [
     note: 'Washer box — click it onto a wall.' },
   { id: 'dryer',   label: 'DRYER',   group: 'LAUNDRY',  widthFt: 2.25,   depthFt: 2.25,   casework: false, run: false,
     note: 'Dryer box — click it onto a wall.' },
+  { id: 'closet',  label: 'CLOSET',  group: 'BEDROOM',  widthFt: 4,      depthFt: CLOSET_INSIDE_DEPTH_FT + CLOSET_WALL_FT, casework: false, run: true,
+    note: 'Closet — two clicks along a wall set the width; 2\'-1" inside with 2x4 closet walls, rod + shelf, and the door picked from the DD/D ladder.' },
 ];
 const fixtureKindDef = id => FIXTURE_KINDS.find(kind => kind.id === id) || FIXTURE_KINDS[0];
 // Shapes are closed construction outlines with no roof / floor semantics of
@@ -5960,7 +5990,6 @@ class Component extends DCLogic {
       if (this._dispatchToolClick(tool, e)) return;
       if (tool === 'node') this._handleNodeArcDown(e);
       else if (tool === 'fenestration') this._handleFenestrationClick();
-      else if (tool === 'fixture') this._handleFixtureClick();
       else if (tool === 'roof') this._handleRoofClick(e);
       else if (tool === 'stair') this._handleStairClick();
       else if (tool === 'annotation') this._handleNoteClick();
@@ -6126,6 +6155,7 @@ class Component extends DCLogic {
     else if (tool === 'dimension') this._handleDimensionClick();
     else if (tool === 'column') this._handleColumnClick();
     else if (tool === 'beam') this._handleBeamClick();
+    else if (tool === 'fixture') this._handleFixtureClick();
     else return false;
     return true;
   }
@@ -8914,17 +8944,21 @@ class Component extends DCLogic {
   // the run's extents and the first click's cursor side picks the wall face.
   _handleFixtureRunClick(kind, placement) {
     const start = this._fixtureRunStart;
-    if (!start || start.wallId !== placement.wall.id) {
+    if (!start || start.wallId !== placement.wall.id || start.side !== placement.side) {
       this._fixtureRunStart = { wallId: placement.wall.id, along: placement.along, side: placement.side };
       this.setState({
         drawingMessage: start
-          ? `New wall — the ${kind.label.toLowerCase()} run restarted: click the other end of the run along this wall.`
+          ? `New ${start.wallId !== placement.wall.id ? 'wall' : 'face'} — the ${kind.label.toLowerCase()} run restarted: click the other end of the run.`
           : `Click the other end of the ${kind.label.toLowerCase()} run along the wall.`,
         drawingMessageError: false,
       });
       return;
     }
     const width = Math.abs(placement.along - start.along);
+    if (kind.id === 'closet' && !closetDoorFor(width - 2 * CLOSET_WALL_FT)) {
+      this.setState({ drawingMessage: 'Too narrow for a closet — the smallest door is a D18: click the other end farther along the wall.', drawingMessageError: true });
+      return;
+    }
     if (width < 0.5) {
       this.setState({ drawingMessage: 'Runs need at least 6" — click the other end farther along the wall.', drawingMessageError: true });
       return;
@@ -9064,7 +9098,7 @@ class Component extends DCLogic {
     const placement = this._fixturePlacement(this._snapPt);
     if (!placement) return;
     const start = this._fixtureRunStart;
-    const ghost = kind.run && start && start.wallId === placement.wall.id
+    const ghost = kind.run && start && start.wallId === placement.wall.id && start.side === placement.side
       ? {
         kind: kind.id, wallId: placement.wall.id, layer,
         offset: (placement.along + start.along) / 2,
@@ -9143,6 +9177,59 @@ class Component extends DCLogic {
         ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(kind === 'fridge' ? 'REF' : kind === 'washer' ? 'W' : 'D', c.x, c.y);
+      }
+    } else if (kind === 'closet') {
+      // A small room off the host wall: 2x4 side walls (skipped where the run
+      // end snugs into an existing crossing wall), a 2x4 front wall carrying a
+      // door from the DD/D ladder, then rod / shelf / clothes inside.
+      const dir = cFront >= cBack ? 1 : -1;
+      const wallFt = CLOSET_WALL_FT;
+      const nearCross = along => (geo.wall ? this._walls.some(other => {
+        if (other === geo.wall) return false;
+        if (other.levelId !== geo.wall.levelId || (other.view || 'plan') !== (geo.wall.view || 'plan')) return false;
+        const hit = this._wallCross(geo.wall, geo.frame, other);
+        return hit && hit.s > -0.05 && hit.s < 1.05
+          && Math.abs(hit.along - along) < ((this._wallFrame(other)?.totalFt || 0) / 2) + 0.1;
+      }) : false);
+      const skip0 = nearCross(a0), skip1 = nearCross(a1);
+      const in0 = a0 + (skip0 ? 0 : wallFt);
+      const in1 = a1 - (skip1 ? 0 : wallFt);
+      if (!skip0) { rect(a0, a0 + wallFt, cBack, cFront); ctx.stroke(); }
+      if (!skip1) { rect(a1 - wallFt, a1, cBack, cFront); ctx.stroke(); }
+      const frontIn = cFront - dir * wallFt;
+      const door = closetDoorFor(in1 - in0);
+      const doorC = (in0 + in1) / 2;
+      if (door) {
+        const g0 = doorC - door.widthFt / 2, g1 = doorC + door.widthFt / 2;
+        if (g0 > in0 + 0.02) { rect(in0, g0, frontIn, cFront); ctx.stroke(); }
+        if (g1 < in1 - 0.02) { rect(g1, in1, frontIn, cFront); ctx.stroke(); }
+        const j0 = P(g0, frontIn), j1 = P(g0, cFront), k0 = P(g1, frontIn), k1 = P(g1, cFront);
+        ctx.beginPath(); ctx.moveTo(j0.x, j0.y); ctx.lineTo(j1.x, j1.y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(k0.x, k0.y); ctx.lineTo(k1.x, k1.y); ctx.stroke();
+      } else {
+        rect(in0, in1, frontIn, cFront); ctx.stroke();
+      }
+      // Rod at 1'-0" off the back wall, shelf edge dashed at 1'-6", and the
+      // clothes as 1'-10" hanger-direction strokes centered on the rod.
+      const rodC = cBack + dir * CLOSET_ROD_FT;
+      const r0 = P(in0 + 0.1, rodC), r1 = P(in1 - 0.1, rodC);
+      ctx.beginPath(); ctx.moveTo(r0.x, r0.y); ctx.lineTo(r1.x, r1.y); ctx.stroke();
+      const shelfC = cBack + dir * CLOSET_SHELF_FT;
+      ctx.save(); ctx.setLineDash([4, 3]);
+      const s0 = P(in0 + 0.1, shelfC), s1 = P(in1 - 0.1, shelfC);
+      ctx.beginPath(); ctx.moveTo(s0.x, s0.y); ctx.lineTo(s1.x, s1.y); ctx.stroke();
+      ctx.restore();
+      const c0 = rodC - dir * (CLOSET_CLOTHES_FT / 2), c1 = rodC + dir * (CLOSET_CLOTHES_FT / 2);
+      for (let a = in0 + 0.45; a < in1 - 0.35; a += 0.6) {
+        const h0 = P(a, c0), h1 = P(a, c1);
+        ctx.beginPath(); ctx.moveTo(h0.x, h0.y); ctx.lineTo(h1.x, h1.y); ctx.stroke();
+      }
+      if (door && pxPerFt > 6) {
+        const t = P(doorC, cFront + dir * 0.45);
+        ctx.fillStyle = FIXTURE_COLOR;
+        ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(door.label, t.x, t.y);
       }
     } else if (kind === 'shower' || kind === 'stall') {
       // Shower pan: inset curb, diagonals to a centered drain.
@@ -14277,6 +14364,7 @@ class Component extends DCLogic {
       fixtureKitchenBtns: this._fixtureKindBtns('KITCHEN'),
       fixtureBathBtns: this._fixtureKindBtns('BATH'),
       fixtureLaundryBtns: this._fixtureKindBtns('LAUNDRY'),
+      fixtureBedroomBtns: this._fixtureKindBtns('BEDROOM'),
       fixtureNote: fixtureKindDef(this.state.fixtureKind).note,
       hasActiveFixtures: this._activeFixtures().length > 0,
       onFixtureDelete: () => this._deleteLastFixture(),
