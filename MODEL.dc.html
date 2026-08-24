@@ -8380,6 +8380,9 @@ class Component extends DCLogic {
       let autoDims = 0;
       floors.forEach(level => { autoDims += Math.max(0, this._placeAutoDims(level.id, 'plan')); });
       autoDims += Math.max(0, this._placeAutoDims(1, 'foundation'));
+      if (this._roofs.some(roof => roof.levelId === 7)) {
+        autoDims += Math.max(0, this._placeAutoDims(7, 'plan'));
+      }
       if (autoDims) built.push(`${autoDims} auto dims`);
     }
     if (!built.length) {
@@ -12323,6 +12326,37 @@ class Component extends DCLogic {
       const wallCorners = walls.flatMap(wall => [toCorner(wall.start), toCorner(wall.end)]);
       if (wallCorners.length >= 2) groups.push({ corners: wallCorners, house: true });
     }
+    // The ROOF level dims its roof footprints for the truss designer: each
+    // roof strings its own stack, with the eave lines called out so every
+    // truss span reads straight off the plan.
+    const roofs = levelId === 7
+      ? this._roofs.filter(roof => roof.levelId === levelId && roof.points.length >= 3)
+      : [];
+    if (roofs.length) {
+      groups.length = 0;
+      roofs.forEach(roof => {
+        const pts = roof.points;
+        const area2 = pts.reduce((sum, pt, index) => {
+          const next = pts[(index + 1) % pts.length];
+          return sum + (pt.x * next.z - next.x * pt.z);
+        }, 0);
+        const group = { corners: pts.map(toCorner), house: !roof.garage, roof: true,
+          eaveX: [], eaveZ: [], facing: { N: [], S: [], W: [], E: [] } };
+        pts.forEach((pt, index) => {
+          const next = pts[(index + 1) % pts.length];
+          const dx = next.x - pt.x, dz = next.z - pt.z;
+          const nx = area2 > 0 ? dz : -dz;
+          const nz = area2 > 0 ? -dx : dx;
+          const faces = Math.abs(nx) >= Math.abs(nz) ? (nx > 0 ? 'E' : 'W') : (nz > 0 ? 'S' : 'N');
+          if (faces === 'N' || faces === 'S') group.facing[faces].push(pt.x, next.x);
+          else group.facing[faces].push(pt.z, next.z);
+          if ((roof.edges?.[index] || 'eave') !== 'eave') return;
+          if (Math.abs(dx) >= Math.abs(dz)) group.eaveZ.push((pt.z + next.z) / 2);
+          else group.eaveX.push((pt.x + next.x) / 2);
+        });
+        groups.push(group);
+      });
+    }
     groups.forEach(group => {
       group.bbox = {
         minX: Math.min(...group.corners.map(point => point.x)),
@@ -12453,6 +12487,20 @@ class Component extends DCLogic {
         const cornerCoords = side === 'N' || side === 'S' ? xs : zs;
         const lo = cornerCoords[0], hi = cornerCoords[cornerCoords.length - 1];
         let stringIndex = 0;
+        if (group.roof) {
+          // Roof stack: the closest string breaks at the corners of the edges
+          // facing this side, the middle string catches eave lines that first
+          // string missed (the far eaves of an L — the truss bearing lines),
+          // and the overall runs eave to eave across the whole footprint.
+          const facingCoords = uniqSorted([lo, hi, ...mergeJogs(group.facing[side])]);
+          const missedEaves = (side === 'N' || side === 'S' ? group.eaveX : group.eaveZ)
+            .filter(value => value > lo + 0.01 && value < hi - 0.01)
+            .filter(value => !facingCoords.some(coord => Math.abs(coord - value) <= 0.05));
+          if (facingCoords.length > 2) pushString(side, facingCoords, stringIndex++);
+          if (missedEaves.length) pushString(side, uniqSorted([lo, ...missedEaves, hi]), stringIndex++);
+          pushString(side, [lo, hi], stringIndex);
+          return;
+        }
         const centres = uniqSorted(openingsFor[groupIndex][side])
           .filter(value => value > lo + 0.01 && value < hi - 0.01);
         if (centres.length) pushString(side, uniqSorted([lo, ...centres, hi]), stringIndex++);
@@ -14879,7 +14927,9 @@ class Component extends DCLogic {
           onSelect: () => this.setState({ autoDimFirstOffsetFt: offset.value }),
         };
       }),
-      autoDimHint: 'AUTO DIMS strings the exterior on all four sides: openings closest, footprint jogs next, overall outside. Re-run to refresh after edits — every dim stays ordinary and editable.',
+      autoDimHint: this._activeLevelId() === 7
+        ? 'AUTO DIMS on ROOF strings the roof footprint for the truss designer: jogs closest, eave lines next, overall eave-to-eave outside. Re-run to refresh after edits.'
+        : 'AUTO DIMS strings the exterior on all four sides: openings closest, footprint jogs next, overall outside. Re-run to refresh after edits — every dim stays ordinary and editable.',
       onBuildHouse: () => this._buildHouse(),
       onBuildGarage: () => this._buildGarage(),
       onMarkAttachedGarage: () => this._toggleGarageMode('attached'),
