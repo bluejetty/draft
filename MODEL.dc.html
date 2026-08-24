@@ -773,6 +773,15 @@
       </div>
     </sc-if>
 
+    <!-- Pad size entry — opens on a clicked FOUNDATION pad label -->
+    <sc-if value="{{ padEditorOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; left:{{ padEditorX }}px; top:{{ padEditorY }}px; transform:translate(-50%,0); display:flex; align-items:center; gap:4px; background:#fff; border:1px solid {{ padEditorBorder }}; padding:4px 6px; box-shadow:0 2px 8px rgba(29,31,32,0.18); cursor:default; z-index:3;">
+        <input data-pad-editor-input type="text" value="{{ padDraft }}" onInput="{{ onPadDraftInput }}" onKeyDown="{{ onPadDraftKey }}" placeholder="PAD SIZE (IN)" aria-label="Pad size in inches" style="width:90px; border:1px solid rgba(29,31,32,0.2); padding:4px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20; outline:none; cursor:text;" />
+        <button onClick="{{ onPadCommit }}" style="border:none; background:#5980a6; color:#fff; padding:4px 10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">OK</button>
+        <button onClick="{{ onPadCancel }}" style="border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.45); padding:4px 8px; font-size:12px; cursor:pointer;">✕</button>
+      </div>
+    </sc-if>
+
     <!-- Direction-choice overlay (shown while choosing cut direction) -->
     <sc-if value="{{ choosingDir }}" hint-placeholder-val="{{ false }}">
       <div style="position:absolute; bottom:16px; left:50%; transform:translateX(-50%); background:#b04060; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; padding:7px 18px; pointer-events:none;">
@@ -1260,6 +1269,10 @@ const ROOF_LAYER = 'A-ROOF';
 // on a foundation wall). Columns are 3"ø adjustable steel teleposts on a pad
 // footing; the FOUNDATION plan marks centres only — the contractor sizes and
 // positions from the pad type, so no automatic dimensions.
+// Pads whose footprints touch or come within this gap of each other pour as
+// one combined footing on the FOUNDATION plan.
+const PAD_JOIN_GAP_FT = 0.5;
+
 const COLUMN_FOOTINGS = [
   { id:'pad36', label:'TYP 36×36 PAD', sizeIn:36, note:'36"×36"×8" DP PAD — 3-15M @ 10" O.C. E/W' },
   { id:'pad42', label:'MED 42×42 PAD', sizeIn:42, note:'42"×42"×10" DP PAD — 4-15M @ 9" O.C. E/W' },
@@ -1422,6 +1435,7 @@ const {
   normaliseActiveLineLayer,
 } = window.DraftLineLayers;
 const { normaliseLayerStandards } = window.DraftLayerStandards;
+const { normaliseStructureStandards } = window.DraftStructureStandards;
 const { normaliseSnapStrength } = window.DraftSnapStrength;
 const { normaliseDrafter } = window.DraftDrafter;
 
@@ -1449,6 +1463,7 @@ class Component extends DCLogic {
     lineLayers: normaliseLineLayers(DEFAULT_LINE_LAYERS),
     activeLineLayer: 'draft',
     layerStandards: normaliseLayerStandards(null),
+    structureStandards: normaliseStructureStandards(null),
     selectionVersion: 0,
     groupDialog:    false,
     groupNameInput: '',
@@ -1487,6 +1502,9 @@ class Component extends DCLogic {
     noteBullnoseInput: '0',
     noteEditor: null,         // { x, y } canvas px where the note text entry is open
     noteDraft: '',            // note text being typed
+    padEditor: null,          // { x, y } canvas px where the pad-size entry is open
+    padDraft: '',             // pad size being typed (inches)
+    padError: '',
     noteStyleError: '',       // fill-opacity / bullnose input validation message
     fenestrationType: 'door', // 'door' | 'window' — picks the CAD layer and defaults
     fenestrationWidths: { door: DEFAULT_DOOR_WIDTH_FT, window: DEFAULT_WINDOW_WIDTH_FT },
@@ -1580,6 +1598,9 @@ class Component extends DCLogic {
         const standards = window.DraftProfileManager?.getActive('standards');
         if (standards?.content?.model?.layerStandards) {
           this.setState({ layerStandards: normaliseLayerStandards(standards.content.model.layerStandards) });
+        }
+        if (standards?.content?.model?.structureStandards) {
+          this.setState({ structureStandards: normaliseStructureStandards(standards.content.model.structureStandards) });
         }
         this._invalidate();
       }
@@ -1749,6 +1770,8 @@ class Component extends DCLogic {
         levelId: column.levelId,
         view: column.view,
         footing: column.footing,
+        ...(Number.isFinite(Number(column.padIn)) && Number(column.padIn) > 0
+          ? { padIn: Number(column.padIn) } : {}),
         layer: COLUMN_LAYER,
       })),
       nextColumnId: this._nextColumnId || 1,
@@ -1979,6 +2002,7 @@ class Component extends DCLogic {
         wallTopHeight: this.state.wallTopHeight,
         floorThickness: this.state.floorThickness,
         layerStandards: normaliseLayerStandards(this.state.layerStandards),
+        structureStandards: normaliseStructureStandards(this.state.structureStandards),
       },
     };
   }
@@ -2020,6 +2044,9 @@ class Component extends DCLogic {
       }
       if (values.layerStandards && typeof values.layerStandards === 'object') {
         patch.layerStandards = normaliseLayerStandards(values.layerStandards);
+      }
+      if (values.structureStandards && typeof values.structureStandards === 'object') {
+        patch.structureStandards = normaliseStructureStandards(values.structureStandards);
       }
       if ('wallBaseHeight' in patch) patch.wallBaseInput = formatArchitecturalInches(patch.wallBaseHeight * 12);
       if ('wallTopHeight' in patch) patch.wallTopInput = formatArchitecturalInches(patch.wallTopHeight * 12);
@@ -3077,7 +3104,9 @@ class Component extends DCLogic {
       // If the mousedown was in select mode and the cursor never moved far → treat as click
       if (info && this.state.activeTool === 'select' && !(sd && sd.active)) {
         const dx = e.clientX - info.clientX, dy = e.clientY - info.clientY;
-        if (Math.sqrt(dx*dx + dy*dy) <= 4) this._handleSelectClick(info.worldPt, info.shiftHeld);
+        if (Math.sqrt(dx*dx + dy*dy) <= 4) {
+          if (!this._handlePadLabelClick(e)) this._handleSelectClick(info.worldPt, info.shiftHeld);
+        }
       }
       if (sd?.active) this._markUnsaved();
       // A grabbed node that never travelled is a click: hand it to the tool.
@@ -3805,8 +3834,10 @@ class Component extends DCLogic {
     if (this._isPrinting) return;
     // Scope colours: RED on the BONEYARD, where an edit moves every level;
     // BLUE on a floor level, where an edit stays local — the app's red/blue
-    // all-levels language.
+    // all-levels language. Garage outlines speak the same language one shade
+    // over: ORANGE on the BONEYARD, PURPLE on the levels.
     const hex = this.state.boneyardActive ? '#b04050' : '#5980a6';
+    const garageHex = this.state.boneyardActive ? '#cf7a1f' : '#7d5ba6';
     const outlines = this.state.boneyardActive ? this._activeBoneyardOutlines() : this._activeOutlines();
     const showHandles = ['outline', 'select'].includes(this.state.activeTool);
     ctx.save();
@@ -3814,8 +3845,9 @@ class Component extends DCLogic {
     outlines.forEach(outline => {
       if (outline.points.length < 2) return;
       const selected = this._selectedOutlines?.has(outline) === true;
-      ctx.strokeStyle = hex;
-      ctx.fillStyle = hex;
+      const colour = outline.garage ? garageHex : hex;
+      ctx.strokeStyle = colour;
+      ctx.fillStyle = colour;
       ctx.lineWidth = selected ? 3.5 : 2;
       ctx.setLineDash([9, 5]);
       ctx.beginPath();
@@ -3851,7 +3883,7 @@ class Component extends DCLogic {
         });
       }
       // Fenestration marks live on masters only, so they show on the BONEYARD.
-      (outline.marks || []).forEach(mark => this._drawBoneyardMark2D(ctx, toS, outline, mark, hex));
+      (outline.marks || []).forEach(mark => this._drawBoneyardMark2D(ctx, toS, outline, mark, colour));
     });
     // The FENESTRATION tool on the BONEYARD ghosts the mark it would place
     // on the master edge under the cursor.
@@ -3873,8 +3905,9 @@ class Component extends DCLogic {
     // In-progress preview: placed corners plus a rubber band to the cursor,
     // with a close ring on the start point once the outline can close.
     if (this._outlineDrawing && this._outlinePoints.length) {
-      ctx.strokeStyle = hex;
-      ctx.fillStyle = hex;
+      const drawHex = this.state.outlineGarage ? garageHex : hex;
+      ctx.strokeStyle = drawHex;
+      ctx.fillStyle = drawHex;
       ctx.setLineDash([5, 4]);
       ctx.beginPath();
       this._outlinePoints.forEach((point, index) => {
@@ -3972,6 +4005,7 @@ class Component extends DCLogic {
       });
     }
 
+    if (view === 'foundation') this._padLabelHits = [];
     if (showColumns) {
       const drawColumn = (column, { centreOnly = false } = {}) => {
         const c = toS(column.point);
@@ -4009,22 +4043,37 @@ class Component extends DCLogic {
         ctx.moveTo(c.x - cross, c.y); ctx.lineTo(c.x + cross, c.y);
         ctx.moveTo(c.x, c.y - cross); ctx.lineTo(c.x, c.y + cross);
         ctx.stroke();
-        if (view === 'foundation') {
-          const padHalf = (footing.sizeIn / 12) * pxPerFt / 2;
-          ctx.setLineDash([5, 4]);
-          ctx.strokeRect(c.x - padHalf, c.y - padHalf, padHalf * 2, padHalf * 2);
-          ctx.setLineDash([]);
-          ctx.fillStyle = '#1d1f20'; ctx.font = font;
-          ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-          ctx.fillText(footing.label, c.x, c.y + padHalf + 3);
-        }
         ctx.restore();
       };
-      this._activeColumns().forEach(column => drawColumn(column));
+      // On FOUNDATION, pads render per join-group: a lone pad keeps its own
+      // dashed square and label; touching pads pour as one combined rectangle.
+      const drawPadGroup = group => {
+        const a = toS({ x: group.minX, y: elev, z: group.minZ });
+        const b = toS({ x: group.maxX, y: elev, z: group.maxZ });
+        const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+        const w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
+        ctx.save();
+        ctx.strokeStyle = '#1d1f20'; ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(x, y, w, h);
+        ctx.setLineDash([]);
+        const label = group.columns.length === 1
+          ? this._padLabelText(group.columns[0])
+          : `COMBINED ${formatInchesOnly((group.maxX - group.minX) * 12)}×${formatInchesOnly((group.maxZ - group.minZ) * 12)} PAD`;
+        ctx.fillStyle = '#1d1f20'; ctx.font = font;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        const lx = x + w / 2, ly = y + h + 3;
+        ctx.fillText(label, lx, ly);
+        this._padLabelHits.push({ columns: group.columns, x: lx, y: ly, w: ctx.measureText(label).width });
+        ctx.restore();
+      };
+      const active = this._activeColumns();
+      active.forEach(column => drawColumn(column));
       if (view === 'foundation') {
-        const shown = new Set(this._activeColumns());
-        this._columns.filter(column => column.levelId > 0 && !shown.has(column))
-          .forEach(column => drawColumn(column));
+        const shown = new Set(active);
+        const upper = this._columns.filter(column => column.levelId > 0 && !shown.has(column));
+        upper.forEach(column => drawColumn(column));
+        this._padGroups([...active, ...upper]).forEach(drawPadGroup);
       }
     }
 
@@ -4955,6 +5004,17 @@ class Component extends DCLogic {
   _layerStandard(layerId) {
     const standards = normaliseLayerStandards(this.state.layerStandards);
     return standards[layerId] || { name: layerId, printable: true, visible: true };
+  }
+
+  // Footing linework rides BUILD HOUSE: unless the office standard allows
+  // freeform footing editing, S-FOOTING lines can't be selected, dragged,
+  // or deleted by hand.
+  _freeformFootings() {
+    return normaliseStructureStandards(this.state.structureStandards).freeformFootings;
+  }
+
+  _footingLocked(item) {
+    return item?.layer === 'S-FOOTING' && !this._freeformFootings();
   }
 
   _setActiveLineLayer(layerId) {
@@ -7379,10 +7439,29 @@ class Component extends DCLogic {
     return area > 0 ? 'left' : 'right';
   }
 
+  // BUILD HOUSE skips a level that already has geometry — but pieces the
+  // garage build generated must not count, or a house drawn after its garage
+  // could never build. Garage-generated vertices ride garage master points,
+  // so anything linked to one is filtered out of the emptiness checks.
+  _garageSrcIds() {
+    const ids = new Set();
+    this._boneyardOutlines.filter(outline => outline.garage)
+      .forEach(outline => outline.points.forEach(point => { if (point.pointId != null) ids.add(point.pointId); }));
+    return ids;
+  }
+
+  _nonGarageItems(items) {
+    const garageIds = this._garageSrcIds();
+    if (!garageIds.size) return items;
+    return items.filter(item => !(item.points || [item.start, item.end])
+      .some(vertex => vertex && vertex.srcId != null && garageIds.has(vertex.srcId)));
+  }
+
   _buildHouseWalls(levelId, view, wallType) {
-    if (this._walls.some(wall => wall.levelId === levelId && (wall.view || 'plan') === view)) return false;
     const outline = this._houseOutline(levelId);
     if (!outline) return false;
+    if (this._nonGarageItems(this._walls.filter(wall =>
+      wall.levelId === levelId && (wall.view || 'plan') === view)).length) return false;
     const points = outline.points;
     const refLine = this._outlineInteriorRef(points);
     const topHeight = this._levelAssembly(levelId).wallHeightFt;
@@ -7407,9 +7486,10 @@ class Component extends DCLogic {
   }
 
   _buildHouseFloor(levelId, structure) {
-    if (this._floors.some(floor => floor.levelId === levelId)) return false;
     const outline = this._houseOutline(levelId);
     if (!outline) return false;
+    if (this._nonGarageItems(this._floors.filter(floor =>
+      floor.levelId === levelId && floor.garage !== true)).length) return false;
     const assembly = this._levelAssembly(levelId);
     const view = structure === 'slab' ? 'foundation' : 'floor';
     this._floors.push({
@@ -7435,9 +7515,10 @@ class Component extends DCLogic {
   // perimeter wall. Skips if the foundation layer set already has lines.
   _buildHouseFootings() {
     const levelId = 1;
-    if (this._lines.some(line => line.levelId === levelId && (line.view || 'plan') === 'foundation')) return false;
     const outline = this._houseOutline(levelId);
     if (!outline) return false;
+    if (this._nonGarageItems(this._lines.filter(line =>
+      line.levelId === levelId && (line.view || 'plan') === 'foundation')).length) return false;
     const wallFt = (WALL_TYPES.find(type => type.id === 'concrete_8')?.totalIn || 8) / 12;
     const projFt = Math.max(0, this._footingWidthIn(levelId) / 12 - wallFt) / 2;
     const base = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
@@ -7826,7 +7907,7 @@ class Component extends DCLogic {
   }
 
   _buildHouseRoof() {
-    if (this._roofs.some(roof => roof.levelId === 7)) return false;
+    if (this._roofs.some(roof => roof.levelId === 7 && !roof.garage)) return false;
     let outline = this._houseOutline(7);
     const floors = this._floorLevels();
     for (let i = floors.length - 1; i >= 0 && !outline; i--) outline = this._houseOutline(floors[i].id);
@@ -10139,7 +10220,8 @@ class Component extends DCLogic {
     const allows = type => !filter || filter === 'all' || filter === type;
     const r = this._magnetRadius() * 1.5;
     let bestD = r, bestVtx = null;
-    [...(allows('line') ? this._activeLines() : []), ...(allows('wall') ? this._activeWalls() : [])].forEach(seg => {
+    [...(allows('line') ? this._activeLines().filter(line => !this._footingLocked(line)) : []),
+      ...(allows('wall') ? this._activeWalls() : [])].forEach(seg => {
       [seg.start, seg.end].forEach(v => {
         const d = Math.sqrt((v.x - worldPt.x) ** 2 + (v.z - worldPt.z) ** 2);
         if (d < bestD) { bestD = d; bestVtx = v; }
@@ -10566,9 +10648,72 @@ class Component extends DCLogic {
         if (d < bestD) { bestD = d; bestSeg = seg; }
       });
     };
-    if (allows('line')) check(this._activeLines());
+    if (allows('line')) check(this._activeLines().filter(line => !this._footingLocked(line)));
     if (allows('wall')) check(this._activeWalls());
     return bestSeg;
+  }
+
+  // A FOUNDATION pad label is a live control: clicking it opens the pad-size
+  // entry so the drafter types the pad square in inches right on the plan.
+  _handlePadLabelClick(e) {
+    if (this._activeLayerViewId() !== 'foundation' || this.state.padEditor) return false;
+    const hits = this._padLabelHits || [];
+    if (!hits.length || !this._canvas) return false;
+    const rect = this._canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const hit = hits.find(h => x >= h.x - h.w / 2 - 4 && x <= h.x + h.w / 2 + 4
+      && y >= h.y - 3 && y <= h.y + 14);
+    if (!hit) return false;
+    this._padPendingColumns = hit.columns;
+    this.setState({
+      padEditor: { x: hit.x, y: hit.y + 22 },
+      padDraft: formatInchesOnly(this._padSizeIn(hit.columns[0])),
+      padError: '',
+      drawingMessage: hit.columns.length > 1
+        ? 'Type the pad size in inches — it sets every pad in this combined footing. Enter commits, Escape cancels.'
+        : 'Type the pad size in inches — Enter commits, Escape cancels.',
+      drawingMessageError: false,
+    }, () => {
+      const inp = document.querySelector('[data-pad-editor-input]');
+      if (inp) { inp.focus(); inp.select(); }
+    });
+    return true;
+  }
+
+  _commitPadSize() {
+    const columns = this._padPendingColumns || [];
+    const parsed = parseAssemblyInches(this.state.padDraft);
+    if (!parsed.ok || parsed.inches <= 0) {
+      this.setState({ padError: parsed.ok ? 'Pad size must be greater than zero.' : parsed.error });
+      return;
+    }
+    columns.forEach(column => {
+      if (this._columnFooting(column).pile) return;
+      column.padIn = parsed.inches;
+    });
+    this._padPendingColumns = null;
+    this.setState({
+      padEditor: null, padDraft: '', padError: '',
+      drawingMessage: `${formatInchesOnly(parsed.inches)}×${formatInchesOnly(parsed.inches)} pad set${columns.length > 1 ? ` on ${columns.length} columns` : ''}.`,
+      drawingMessageError: false,
+    });
+    this._markUnsaved();
+    this._invalidate();
+  }
+
+  _cancelPadEditor() {
+    this._padPendingColumns = null;
+    this.setState({ padEditor: null, padDraft: '', padError: '' });
+  }
+
+  // A locked S-FOOTING line under the click threshold, so Select can explain
+  // why the footing didn't pick instead of silently clearing the selection.
+  _lockedFootingAt(worldPt) {
+    if (this._freeformFootings()) return null;
+    const h = this._canvas ? this._canvas.clientHeight : 600;
+    const thresh = (this._orthoHalfH * 2) / h * 14;
+    return this._activeLines().find(line => line.layer === 'S-FOOTING'
+      && this._distToLineSeg(worldPt, line).d < thresh) || null;
   }
 
   // Nearest dimension string within the same click threshold — tested against
@@ -10692,6 +10837,13 @@ class Component extends DCLogic {
       }
       const roof = allows('roof') ? this._findRoofAt(worldPt) : null;
       if (!roof) {
+        if (allows('line') && this._lockedFootingAt(worldPt)) {
+          this.setState({
+            drawingMessage: 'Footing lines ride BUILD HOUSE — turn on FREEFORM FOOTING EDITING in COMPANY STANDARDS to edit them by hand.',
+            drawingMessageError: true,
+          });
+          return;
+        }
         if (!shiftHeld) this._clearSelection();
         return;
       }
@@ -10712,7 +10864,8 @@ class Component extends DCLogic {
     // — level geometry is neither visible nor editable there.
     const allLevels = mode === 'window-all' && !this.state.boneyardActive;
     const allows = type => this._selectFilterAllows(type);
-    const lines = allows('line') ? (allLevels ? selectable(this._lines) : this._activeLines()) : [];
+    const lines = (allows('line') ? (allLevels ? selectable(this._lines) : this._activeLines()) : [])
+      .filter(line => !this._footingLocked(line));
     const walls = allows('wall') ? (allLevels ? selectable(this._walls) : this._activeWalls()) : [];
     const floorsInScope = allows('floor') ? (allLevels ? selectable(this._floors) : this._activeFloors()) : [];
     const segments = [...lines, ...walls]
@@ -10727,10 +10880,10 @@ class Component extends DCLogic {
   }
 
   _extendScopeItems() {
-    const movable = items => items.filter(item => !this._isCurrentContextReferenceItem(item));
+    const movable = items => items.filter(item => !this._isCurrentContextReferenceItem(item) && !this._footingLocked(item));
     return this.state.extendScope === 'all' && !this.state.boneyardActive
       ? { lines: movable(this._lines), walls: movable(this._walls), floors: movable(this._floors) }
-      : { lines: this._activeLines(), walls: this._activeWalls(), floors: this._activeFloors() };
+      : { lines: this._activeLines().filter(line => !this._footingLocked(line)), walls: this._activeWalls(), floors: this._activeFloors() };
   }
 
   _captureExtendWindow(start, end) {
@@ -10901,7 +11054,7 @@ class Component extends DCLogic {
     const add = item => { if (!items.includes(item)) items.push(item); };
     const groups = new Set();
     [...this._activeLines(), ...this._activeWalls(), ...this._activeFloors()].forEach(item => {
-      if (this._isCurrentContextReferenceItem(item) || !whole(item)) return;
+      if (this._isCurrentContextReferenceItem(item) || this._footingLocked(item) || !whole(item)) return;
       const group = this._groupForItem(item);
       if (group) groups.add(group); else add(item);
     });
@@ -11405,6 +11558,61 @@ class Component extends DCLogic {
 
   _columnFooting(column) {
     return COLUMN_FOOTINGS.find(footing => footing.id === column.footing) || COLUMN_FOOTINGS[0];
+  }
+
+  // A pad column can carry its own size (padIn, inches square) typed on the
+  // FOUNDATION plan; without one it uses the picked footing's standard size.
+  _padSizeIn(column) {
+    const footing = this._columnFooting(column);
+    const custom = Number(column.padIn);
+    return !footing.pile && Number.isFinite(custom) && custom > 0 ? custom : footing.sizeIn;
+  }
+
+  _padLabelText(column) {
+    const footing = this._columnFooting(column);
+    const custom = Number(column.padIn);
+    if (footing.pile || !(Number.isFinite(custom) && custom > 0)) return footing.label;
+    const size = formatInchesOnly(custom);
+    return `${size}×${size} PAD`;
+  }
+
+  _padRectFt(column) {
+    const half = this._padSizeIn(column) / 24;
+    return {
+      minX: column.point.x - half, maxX: column.point.x + half,
+      minZ: column.point.z - half, maxZ: column.point.z + half,
+    };
+  }
+
+  // Pads whose footprints touch (within PAD_JOIN_GAP_FT) pour as one footing:
+  // union-find clusters them and each cluster renders one combined rectangle.
+  _padGroups(columns) {
+    const pads = columns.filter(column => !this._columnFooting(column).pile);
+    const rects = pads.map(column => this._padRectFt(column));
+    const parent = pads.map((_, index) => index);
+    const find = index => (parent[index] === index ? index : (parent[index] = find(parent[index])));
+    for (let i = 0; i < pads.length; i++) {
+      for (let j = i + 1; j < pads.length; j++) {
+        const a = rects[i], b = rects[j];
+        if (a.minX <= b.maxX + PAD_JOIN_GAP_FT && b.minX <= a.maxX + PAD_JOIN_GAP_FT
+          && a.minZ <= b.maxZ + PAD_JOIN_GAP_FT && b.minZ <= a.maxZ + PAD_JOIN_GAP_FT) {
+          parent[find(i)] = find(j);
+        }
+      }
+    }
+    const groups = new Map();
+    pads.forEach((column, index) => {
+      const root = find(index);
+      if (!groups.has(root)) {
+        groups.set(root, { columns: [], minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+      }
+      const group = groups.get(root);
+      group.columns.push(column);
+      const rect = rects[index];
+      group.minX = Math.min(group.minX, rect.minX); group.maxX = Math.max(group.maxX, rect.maxX);
+      group.minZ = Math.min(group.minZ, rect.minZ); group.maxZ = Math.max(group.maxZ, rect.maxZ);
+    });
+    return [...groups.values()];
   }
 
   _closestPointOnSeg(pt, seg) {
@@ -12105,6 +12313,15 @@ class Component extends DCLogic {
       this._frozenRuler = start.clone();
       this._frozenAngle = 0;
     }
+    // The typed length always lands on the cursor's side of the ruler zero:
+    // if the frozen direction points away from the cursor, flip it 180°.
+    if (pt && this._frozenRuler) {
+      const dx = pt.x - this._frozenRuler.x, dz = pt.z - this._frozenRuler.z;
+      if (Math.hypot(dx, dz) > 0.001
+        && Math.cos(this._frozenAngle) * dx + Math.sin(this._frozenAngle) * dz < 0) {
+        this._frozenAngle += Math.PI;
+      }
+    }
     this._frozenFromPolar = Boolean(polarReady);
     this._frozenStart = start && drawing ? start.clone() : null;
     this._frozenTool  = tool;
@@ -12623,6 +12840,12 @@ class Component extends DCLogic {
     // An open note editor owns the keyboard even when a render patch has
     // stolen focus off its input: keystrokes land in the draft instead of
     // firing drawing shortcuts, and focus is pulled back onto the box.
+    // The pad-size editor owns the keyboard the same way the note editor does.
+    if (this.state.padEditor) {
+      if (e.key === 'Escape') { e.preventDefault(); this._cancelPadEditor(); }
+      else if (e.key === 'Enter') { e.preventDefault(); this._commitPadSize(); }
+      return;
+    }
     if (this.state.noteEditor) {
       e.preventDefault();
       if (e.key === 'Escape') { this._cancelNote(); return; }
@@ -13385,6 +13608,19 @@ class Component extends DCLogic {
       noteStyleNote: 'Click the object of interest, then where the text goes, and type the note. Default is transparent text — flip on FILL (opacity %) and OUTLINE over busy linework. CORNER BULLNOSE rounds the box corners (0 = square). Saves with the printable ' + this._layerStandard(NOTE_LAYER).name + ' linework.',
       hasActiveNotes: this._activeNotes().length > 0,
       onNoteDelete: () => this._deleteLastNote(),
+      padEditorOpen: Boolean(this.state.padEditor),
+      padEditorX: this.state.padEditor?.x ?? -100,
+      padEditorY: this.state.padEditor?.y ?? -100,
+      padEditorBorder: this.state.padError ? '#b04050' : 'rgba(29,31,32,0.3)',
+      padDraft: this.state.padDraft,
+      onPadDraftInput: event => this.setState({ padDraft: event.target.value, padError: '' }),
+      onPadDraftKey: event => {
+        if (event.key === 'Enter') { event.preventDefault(); this._commitPadSize(); }
+        else if (event.key === 'Escape') { event.preventDefault(); this._cancelPadEditor(); }
+        event.stopPropagation();
+      },
+      onPadCommit: () => this._commitPadSize(),
+      onPadCancel: () => this._cancelPadEditor(),
       noteEditorOpen: Boolean(this.state.noteEditor),
       noteEditorX: this.state.noteEditor?.x ?? -100,
       noteEditorY: this.state.noteEditor?.y ?? -100,

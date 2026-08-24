@@ -306,6 +306,14 @@ if (!window.DraftProfileManager) {
     }),
   ]);
 
+  // Structure rules: office standards controlling how generated structural
+  // geometry behaves. Footings ride BUILD HOUSE and stay locked against hand
+  // edits unless the office allows freeform footing editing.
+  const normaliseStructureStandards = value => {
+    const stored = value && typeof value === 'object' ? value : {};
+    return { freeformFootings: stored.freeformFootings === true };
+  };
+
   const flatLayerStandards = () => DEFAULT_LAYER_STANDARDS.flatMap(group => group.layers);
 
   const normaliseLayerStandards = value => {
@@ -406,6 +414,9 @@ if (!window.DraftProfileManager) {
   window.DraftLayerStandards = {
     DEFAULT_LAYER_STANDARDS,
     normaliseLayerStandards,
+  };
+  window.DraftStructureStandards = {
+    normaliseStructureStandards,
   };
 })();
 }

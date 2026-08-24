@@ -233,6 +233,44 @@ test('BUILD GARAGE converts a plain rectangle and builds it in one go', async ({
   expect(saved.roofs[0].garage).toBe(true);
 });
 
+// Garage first, house second: the garage's built pieces must not read as
+// "the shell is already built" — BUILD HOUSE raises the house next to them.
+test('a house drawn after a built garage still builds', async ({ page }) => {
+  await h.openModel(page);
+  await h.selectTool(page, 'Outline');
+  await h.clickWorld(page, 14, -5);
+  await h.clickWorld(page, 26, -5);
+  await h.clickWorld(page, 26, 5);
+  await h.clickWorld(page, 14, 5);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  await page.locator('[data-build-garage]').click();
+  await expect(page.locator('[data-detached-foundation-prompt]')).toBeVisible();
+  await page.locator('[data-detached-thickened-edge]').click();
+  await page.waitForTimeout(300);
+  await h.waitForSaved(page);
+
+  await drawHouseOutline(page);
+  await buildHouse(page);
+
+  const saved = await h.savedDrawing(page);
+  // House shell: foundation walls + main-floor walls beside the garage's.
+  expect(saved.walls.filter(wall => wall.levelId === 1)).toHaveLength(4);
+  expect(saved.walls.filter(wall => wall.levelId === 3).length).toBeGreaterThanOrEqual(8);
+  // House slab joins the garage slab; footings and the house roof appear.
+  expect(saved.floors.filter(floor => !floor.garage && floor.levelId === 1)).toHaveLength(1);
+  expect(saved.lines.filter(line => line.layer === 'S-FOOTING').length).toBeGreaterThan(0);
+  expect(saved.roofs.filter(roof => !roof.garage)).toHaveLength(1);
+  expect(saved.roofs.filter(roof => roof.garage)).toHaveLength(1);
+
+  // And a second BUILD HOUSE stays idempotent.
+  await buildHouse(page);
+  const again = await h.savedDrawing(page);
+  expect(again.walls.length).toBe(saved.walls.length);
+  expect(again.floors.length).toBe(saved.floors.length);
+  expect(again.roofs.length).toBe(saved.roofs.length);
+});
+
 test('BUILD GARAGE beside a house converts the newest rectangle, not the house', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);

@@ -213,12 +213,18 @@ if (!window.DraftDrawingFormat) {
       const view = oneOf(column?.view, ['plan', 'floor', 'foundation'], null);
       if (!Number.isInteger(id) || seen.has(id) || !centre || columnLevelId == null || !view) return null;
       seen.add(id);
+      const footing = oneOf(column?.footing, ['pad36', 'pad42', 'pile8', 'pile10', 'pile12'], 'pad36');
+      // A pad column can carry a custom square size (inches) typed on the
+      // FOUNDATION plan; piles keep their fixed diameters.
+      const padIn = Number(column?.padIn);
       return {
         id,
         point: centre,
         levelId: columnLevelId,
         view,
-        footing: oneOf(column?.footing, ['pad36', 'pad42', 'pile8', 'pile10', 'pile12'], 'pad36'),
+        footing,
+        ...(!footing.startsWith('pile') && Number.isFinite(padIn) && padIn > 0
+          ? { padIn } : {}),
         layer: 'S-COL-FOOTING',
       };
     }).filter(Boolean);
