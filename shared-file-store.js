@@ -87,8 +87,29 @@ async function loadSharedFile(bucket) {
 async function clearSharedFiles(bucket) { await writeRecords(bucket || DEFAULT_BUCKET, []); }
 async function clearSharedFile(bucket) { await clearSharedFiles(bucket); }
 
+// Named-record helpers: one bucket holds many files addressed by unique name
+// (used for underlay binaries, which live outside the drawing JSON).
+async function saveNamedFile(file, bucket) {
+  bucket = bucket || DEFAULT_BUCKET;
+  const records = (await readRecords(bucket)).filter((r) => r.name !== file.name);
+  records.push({ name: file.name, type: file.type, blob: file });
+  await writeRecords(bucket, records);
+}
+
+async function loadNamedFile(name, bucket) {
+  bucket = bucket || DEFAULT_BUCKET;
+  const record = (await readRecords(bucket)).find((r) => r.name === name);
+  return record ? new File([record.blob], record.name, { type: record.type }) : null;
+}
+
+async function removeNamedFile(name, bucket) {
+  bucket = bucket || DEFAULT_BUCKET;
+  await writeRecords(bucket, (await readRecords(bucket)).filter((r) => r.name !== name));
+}
+
 window.SharedFileStore = {
   addSharedFile, saveSharedFiles, loadSharedFiles, clearSharedFiles,
   saveSharedFile, loadSharedFile, clearSharedFile,
+  saveNamedFile, loadNamedFile, removeNamedFile,
 };
 }
