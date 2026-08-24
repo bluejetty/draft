@@ -58,6 +58,42 @@ function rasterPdf() {
   ]);
 }
 
+// A scan wearing an OCR layer: one page-filling image plus INVISIBLE text
+// (text rendering mode 3) carrying the titleblock scale note.
+function ocrPdf() {
+  const imgData = Buffer.alloc(3 * 4 * 4, 200).toString('binary');
+  const stream = 'q 612 0 0 792 0 0 cm /Im1 Do Q\n'
+    + 'BT 3 Tr /F1 14 Tf 72 700 Td (SCALE: 1/4\\" = 1\'-0\\") Tj ET';
+  return makePdf([
+    null,
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /XObject << /Im1 5 0 R >> /Font << /F1 6 0 R >> >> >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    `<< /Type /XObject /Subtype /Image /Width 4 /Height 4 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length ${imgData.length} >>\nstream\n${imgData}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ]);
+}
+
+// The construction-PDF reality: real vector linework and visible text with
+// an embedded raster image riding along.
+function hybridPdf() {
+  const imgData = Buffer.alloc(3 * 4 * 4, 200).toString('binary');
+  const stream = 'BT /F1 14 Tf 72 700 Td (SCALE: 1/4\\" = 1\'-0\\") Tj ET\n'
+    + '1 w 72 100 m 500 100 l S 72 120 m 500 120 l S 72 140 m 300 140 l S '
+    + '100 200 m 100 600 l S 200 200 m 200 600 l S\n'
+    + 'q 100 0 0 100 300 300 cm /Im1 Do Q';
+  return makePdf([
+    null,
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /XObject << /Im1 5 0 R >> /Font << /F1 6 0 R >> >> >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    `<< /Type /XObject /Subtype /Image /Width 4 /Height 4 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length ${imgData.length} >>\nstream\n${imgData}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ]);
+}
+
 async function pickFile(page, name, mimeType, buffer) {
   await page.locator('[data-insert-underlay]').click();
   await page.locator('[data-underlay-import]').setInputFiles({ name, mimeType, buffer });
@@ -112,11 +148,11 @@ test('vector PDF: inspect card reads the titleblock scale and keeps the original
   expect(files[0].type).toBe('application/pdf');
 });
 
-test('raster PDF converts once to a compressed image', async ({ page }) => {
+test('image-based PDF converts once to a compressed image', async ({ page }) => {
   await h.openModel(page);
   await pickFile(page, 'scan.pdf', 'application/pdf', rasterPdf());
 
-  await expect(page.locator('[data-insert-verdict]')).toContainText('RASTER');
+  await expect(page.locator('[data-insert-verdict]')).toContainText('IMAGE-BASED');
   // No titleblock scale to read, so the width fallback sizes the underlay.
   await page.locator('[data-insert-width-input]').fill(`30'`);
   await page.locator('[data-insert-confirm]').click();
@@ -130,6 +166,66 @@ test('raster PDF converts once to a compressed image', async ({ page }) => {
   const files = await storedUnderlayFiles(page);
   expect(files).toHaveLength(1);
   expect(files[0].type).toBe('image/webp');
+});
+
+test('OCR scan: invisible text layer is caught, scale still read, converts to an image', async ({ page }) => {
+  await h.openModel(page);
+  await pickFile(page, 'ocr-scan.pdf', 'application/pdf', ocrPdf());
+
+  // The invisible OCR text must not pass for live vector text…
+  await expect(page.locator('[data-insert-verdict]')).toContainText('OCR SCAN');
+  // …but its titleblock scale note is still read and pre-selected.
+  await expect(page.locator('[data-insert-scale-input]')).toHaveValue(`1/4" = 1'-0"`);
+
+  await page.locator('[data-insert-confirm]').click();
+  await h.waitForSaved(page);
+
+  const drawing = await h.savedDrawing(page);
+  expect(drawing.underlays).toHaveLength(1);
+  expect(drawing.underlays[0].kind).toBe('image');
+  expect(drawing.underlays[0].scaleRatio).toBe(48);
+  expect(h.near(drawing.underlays[0].widthFt, 34, 0.1)).toBe(true);
+
+  const files = await storedUnderlayFiles(page);
+  expect(files[0].type).toBe('image/webp');
+});
+
+test('hybrid PDF (vector linework + embedded image) keeps the original bytes', async ({ page }) => {
+  await h.openModel(page);
+  await pickFile(page, 'hybrid.pdf', 'application/pdf', hybridPdf());
+
+  await expect(page.locator('[data-insert-verdict]')).toContainText('HYBRID');
+  await page.locator('[data-insert-confirm]').click();
+  await h.waitForSaved(page);
+
+  const drawing = await h.savedDrawing(page);
+  expect(drawing.underlays[0].kind).toBe('pdf');
+  const files = await storedUnderlayFiles(page);
+  expect(files[0].type).toBe('application/pdf');
+});
+
+test('CALIBRATE: mark a known distance on an image-based PDF to compute the scale', async ({ page }) => {
+  await h.openModel(page);
+  await pickFile(page, 'scan.pdf', 'application/pdf', rasterPdf());
+
+  await page.locator('[data-insert-calibrate]').click();
+  const img = page.locator('[data-insert-cal-img]');
+  await expect(img).toBeVisible();
+  const box = await img.boundingBox();
+  // Marks a quarter in from each side: half the 8.5" page width apart.
+  await img.click({ position: { x: box.width * 0.25, y: box.height * 0.5 } });
+  await img.click({ position: { x: box.width * 0.75, y: box.height * 0.5 } });
+  // 4.25 paper inches representing 17' of building is exactly 1:48.
+  await page.locator('[data-insert-cal-length]').fill(`17'`);
+  await page.locator('[data-insert-cal-apply]').click();
+
+  await expect(page.locator('[data-insert-scale-input]')).toHaveValue(/calibrated/);
+  await page.locator('[data-insert-confirm]').click();
+  await h.waitForSaved(page);
+
+  const drawing = await h.savedDrawing(page);
+  expect(h.near(drawing.underlays[0].scaleRatio, 48, 0.5)).toBe(true);
+  expect(h.near(drawing.underlays[0].widthFt, 34, 0.4)).toBe(true);
 });
 
 test('photo converts to a compressed image, draws under the plan, and survives reload', async ({ page }) => {
