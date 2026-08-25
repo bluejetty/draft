@@ -11429,12 +11429,17 @@ class Component extends DCLogic {
     // Concave footprints split the shrinking ring in two when a reflex corner
     // reaches an opposite edge (the valley), so the wavefront runs as a queue
     // of independent loops.
-    const queue = [{ pts, kinds }];
+    // Each loop carries t0, its elapsed wavefront advance at entry: arc
+    // endpoints record their advance (ta/tb) so a roof plane's height can be
+    // read straight off an arc — height = t × pitch/12 above the eave line.
+    // 2D consumers read only a/b; the t fields are for the 3D lift.
+    const queue = [{ pts, kinds, t0: 0 }];
     let guard = initialCount * 8;
     while (queue.length && guard-- > 0) {
       const loop = queue.shift();
       pts = loop.pts;
       kinds = loop.kinds;
+      const t0 = loop.t0 || 0;
       if (pts.length < 3 || Math.abs(signedArea(pts)) < eps) continue;
       const count = pts.length;
       const normals = pts.map((pt, index) => {
@@ -11505,23 +11510,24 @@ class Component extends DCLogic {
       }
       const bestT = Math.min(collapseT, splitT);
       if (!Number.isFinite(bestT)) continue;
+      const t1 = t0 + bestT;
       const moved = pts.map((pt, index) => ({
         x: pt.x + velocities[index].x * bestT,
         z: pt.z + velocities[index].z * bestT,
       }));
       moved.forEach((pt, index) => {
-        if (Math.hypot(pt.x - pts[index].x, pt.z - pts[index].z) > eps) arcs.push({ a: pts[index], b: pt });
+        if (Math.hypot(pt.x - pts[index].x, pt.z - pts[index].z) > eps) arcs.push({ a: pts[index], b: pt, ta: t0, tb: t1 });
       });
       if (splitT < collapseT - eps) {
         // Pinch the ring at the reflex corner: two loops share the split point.
         const s = moved[splitVertex];
-        const loopA = { pts: [ { ...s } ], kinds: [kinds[splitVertex]] };
+        const loopA = { pts: [ { ...s } ], kinds: [kinds[splitVertex]], t0: t1 };
         for (let index = (splitVertex + 1) % count; index !== (splitEdge + 1) % count; index = (index + 1) % count) {
           loopA.pts.push(moved[index]);
           loopA.kinds.push(kinds[index]);
         }
         loopA.kinds[loopA.kinds.length - 1] = kinds[splitEdge];
-        const loopB = { pts: [ { ...s } ], kinds: [kinds[splitEdge]] };
+        const loopB = { pts: [ { ...s } ], kinds: [kinds[splitEdge]], t0: t1 };
         for (let index = (splitEdge + 1) % count; index !== splitVertex; index = (index + 1) % count) {
           loopB.pts.push(moved[index]);
           loopB.kinds.push(kinds[index]);
@@ -11555,7 +11561,7 @@ class Component extends DCLogic {
           const bx = (next.x - pt.x) / lenB, bz = (next.z - pt.z) / lenB;
           if (Math.abs(ax * bz - az * bx) > 1e-4 || ax * bx + az * bz > -0.9999) continue;
           const tail = lenA <= lenB ? prev : next;
-          if (Math.hypot(pt.x - tail.x, pt.z - tail.z) > eps) arcs.push({ a: pt, b: tail });
+          if (Math.hypot(pt.x - tail.x, pt.z - tail.z) > eps) arcs.push({ a: pt, b: tail, ta: t1, tb: t1 });
           nextPts.splice(index, 1);
           nextKinds.splice(index, 1);
           trimmed = true;
@@ -11564,11 +11570,11 @@ class Component extends DCLogic {
       }
       if (nextPts.length === 2) {
         if (Math.hypot(nextPts[1].x - nextPts[0].x, nextPts[1].z - nextPts[0].z) > eps) {
-          arcs.push({ a: nextPts[0], b: nextPts[1] }); // the ridge
+          arcs.push({ a: nextPts[0], b: nextPts[1], ta: t1, tb: t1 }); // the ridge
         }
         continue;
       }
-      queue.push({ pts: nextPts, kinds: nextKinds });
+      queue.push({ pts: nextPts, kinds: nextKinds, t0: t1 });
     }
     // A gable corner slides along its own gable edge — that trace is the edge
     // itself, not a roof line, so drop arcs lying on a single gable edge.
