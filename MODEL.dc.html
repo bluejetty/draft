@@ -43,6 +43,7 @@
     .level-layer-row { display:flex; align-items:stretch; gap:2px; }
     .level-layer-row .level-layer { flex:1 1 0; min-width:0; }
     .level-assembly-pair { flex:1.6 1 0; min-width:0; display:flex; align-items:stretch; gap:2px; }
+    .level-assembly-shtg { align-self:center; flex:0 0 auto; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; color:rgba(29,31,32,0.5); white-space:nowrap; }
     .level-assembly-pair .level-assembly { flex:0 0 auto; text-align:left; }
     .level-assembly-val { flex:1 1 0; min-width:34px; width:100%; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:1px 3px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; text-align:right; }
     .level-assembly-val:focus { outline:none; border-color:#5980a6; }
@@ -1024,6 +1025,9 @@
                      <sc-if value="{{ layer.hasAssembly }}" hint-placeholder-val="{{ false }}">
                        <div class="level-assembly-pair">
                          <button type="button" class="level-assembly" onClick="{{ layer.onOpenAssembly }}" title="{{ layer.assemblyTitle }}">{{ layer.assemblyLabel }}</button>
+                         <sc-if value="{{ layer.hasSheathingNote }}" hint-placeholder-val="{{ false }}">
+                           <span class="level-assembly-shtg" data-sheathing-note title="{{ layer.assemblyTitle }}">{{ layer.sheathingNote }}</span>
+                         </sc-if>
                          <input class="level-assembly-val" value="{{ layer.assemblyValue }}" onClick="{{ layer.onAssemblyValClick }}" onFocus="{{ layer.onAssemblyValFocus }}" onInput="{{ layer.onAssemblyValInput }}" onKeyDown="{{ layer.onAssemblyValKey }}" onBlur="{{ layer.onAssemblyValBlur }}" title="{{ layer.assemblyTitle }}" />
                        </div>
                      </sc-if>
@@ -3574,6 +3578,13 @@ class Component extends DCLogic {
          .filter(Number.isInteger);
        this._nextGroupId = Math.max(this._nextGroupId, ...numericGroupIds.map(id => id + 1), 1);
        this._clearSelection(false);
+      // A fresh drawing means fresh cursor helpers: the polar origin and its
+      // acquired ray point at nodes from the previous drawing, so drop them
+      // along with any typed-length ruler zero they were feeding.
+      this._polarOrigin = null;
+      this._polarSnap = null;
+      this._frozenRuler = null;
+      this._frozenFromPolar = false;
       // A restored drawing replaces the complete Cuts collection. Dispose the
       // old scene objects first so an import or history restore cannot leave
       // invisible/stale sections behind in 3D or accumulate duplicates.
@@ -6316,8 +6327,23 @@ class Component extends DCLogic {
     const suggestedName = `${count === 1 ? '1ST' : count === 2 ? '2ND' : count === 3 ? '3RD' : `${count}TH`} FL`;
     const name = window.prompt('Level name:', suggestedName); if (name === null) return;
     const topFloor = floors[floors.length - 1];
-    const suggestedElev = topFloor ? (Number(topFloor.elev) || 0) + 9 : 0;
-    const elevRaw = window.prompt('Elevation in feet (negative = below grade):', String(suggestedElev)); if (elevRaw === null) return;
+    // Stack the new floor on the real assembly below it — wall height plus the
+    // floor sandwich — instead of a round 9', so the suggested elevation
+    // matches the construction the level cards already show.
+    const suggestedElev = topFloor
+      ? Math.round(((Number(topFloor.elev) || 0)
+        + this._levelAssembly(topFloor.id).wallHeightFt
+        + this._levelFloorFt(topFloor.id)) * 10000) / 10000
+      : 0;
+    const elevRaw = window.prompt(
+      topFloor
+        ? `Elevation in feet, top of this floor (negative = below grade).\n`
+          + `Suggested: ${this._ftIn(suggestedElev)} — ${topFloor.name} wall `
+          + `${this._ftIn(this._levelAssembly(topFloor.id).wallHeightFt)} + floor `
+          + `${this._ftIn(this._levelFloorFt(topFloor.id))}.\n`
+          + `Wall height is set per level on the level card, not here.`
+        : 'Elevation in feet (negative = below grade):',
+      String(suggestedElev)); if (elevRaw === null) return;
     const elev = parseFloat(elevRaw); if (isNaN(elev)) return;
     const id = this.state.nextLevelId;
     // Every regular level carries a copy of each master outline; a freshly
@@ -16239,6 +16265,13 @@ class Component extends DCLogic {
             onSelect: event => this._selectLayerView(l.id, view.id, event),
             hasAssembly: assemblyKind != null,
             assemblyLabel: assemblyKind === 'wall' ? 'WALL HT' : 'FL JST',
+            // The floor row shows its sheathing on the card face so the whole
+            // sandwich reads at a glance; the thickness is edited with the
+            // joists in the FLOOR assembly editor.
+            hasSheathingNote: assemblyKind === 'floor',
+            sheathingNote: assemblyKind === 'floor'
+              ? `+${formatInchesOnly(assembly.sheathingIn)}`
+              : '',
             assemblyValue: inlineFor(assemblyKind) != null ? inlineFor(assemblyKind).value
               : assemblyKind === 'wall' ? formatArchitecturalInches(assembly.wallHeightFt * 12)
               : assemblyKind === 'floor' ? formatInchesOnly(assembly.joistDepthIn)
