@@ -18,6 +18,7 @@ The collected RoughDrafter LITE campaign lines. Real taglines carry the brand st
 
 - **(or it's free)** — small text under the main tagline on the standard end card. Pizza-guarantee DNA; honored in full by the free tier, which is everything.
 - **The Paw Knows.** — small script line under the logo. Born as a Grok accident, kept on merit.
+- **A FEW MISTAKES ARE EXPECTED.** (alternate: *A FEW MISTAKES ARE OK.*) — the human-side companion to ROUGHLY TRUE. NEVER PERFECT.: the tagline is the philosophy, this is the permission slip. "Expected" beats "ok" — the tool PLANS for your mistakes (undo, rough drafts, forgiving snaps), and we expect a few from ourselves too; that's why the glitches stay. Also the trap-street doctrine in five words — the coffee-cup-that-became-a-button clause. Everyone gets to draw when a few mistakes are expected.
 
 ## JOKE / SUB-TAGLINES
 
