@@ -128,7 +128,7 @@
       </svg>
       <span data-protractor-angle style="font-size:10px; line-height:1; min-width:18px;">{{ protractorChipLabel }}</span>
     </span>
-    <span data-mode-ruler title="RULER typed length (R)" style="display:inline-flex; color:{{ rulerChipColor }}; filter:{{ rulerChipGlow }};">
+    <span data-mode-ruler title="RULER typed length — R latches on/off" style="display:inline-flex; color:{{ rulerChipColor }}; filter:{{ rulerChipGlow }};">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <rect x="1.5" y="6" width="13" height="5"></rect>
         <path d="M4.5 6 V8.2 M7.5 6 V8.2 M10.5 6 V8.2 M13 6 V8.2" stroke-width="0.9"></path>
@@ -1823,7 +1823,7 @@ class Component extends DCLogic {
     midSnapX: -100, midSnapY: -100, showMidSnap: false,
     originSnapPtX: -100, originSnapPtY: -100, showOriginSnapPt: false,
     polarOriginX: -100, polarOriginY: -100, showPolarOrigin: false,
-    lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '',
+    lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', rulerMode: false,
     tsquareEngaged: false,
     protractorAngle: '',       // '' | '90' | '45' | '30' — which blade a held modifier grabbed
     tsquareOn: true,           // full-time 90° T-square while drawing; T toggles
@@ -6575,7 +6575,7 @@ class Component extends DCLogic {
 
   _onMouseMove(e) {
     this._lastClient = { x: e.clientX, y: e.clientY };
-    if (this.state.lengthFrozen) return;
+    if (this.state.lengthFrozen) { this._trackStickyRuler(e); return; }
     if (this._stairWorkspaceActive()) {
       // Pane-local cursor tracking so an in-progress note previews its leader.
       const rect = this._canvas.getBoundingClientRect();
@@ -6810,8 +6810,18 @@ class Component extends DCLogic {
         && Math.abs(this._frozenTotalFt()) > 0.001) {
         e.preventDefault();
         this._confirmFrozenLength();
+        return;
       }
-      return;
+      // Sticky RULER mode with nothing typed: the click is an ordinary drawing
+      // click — drop the corner at the cursor and keep the ruler armed.
+      if (this.state.rulerMode && e.button === 0
+        && ['line', 'wall', 'outline'].includes(this._frozenTool)) {
+        this._cancelFrozenLength();
+        this._onMouseMove(e);
+      } else {
+        return;
+      }
+      if (this.state.lengthFrozen) return;
     }
     // The STAIR workspace is locked framing: a click swaps the panes — except
     // for the ANNOTATION tool, which its note room exists for.
@@ -6994,6 +7004,9 @@ class Component extends DCLogic {
     else if (tool === 'beam') this._handleBeamClick();
     else if (tool === 'fixture') this._handleFixtureClick();
     else return false;
+    // Sticky RULER mode: any click that starts or continues a segment opens
+    // the box for the next typed length.
+    if (['line', 'wall', 'outline'].includes(tool)) this._rearmStickyRuler();
     return true;
   }
 
@@ -14301,6 +14314,38 @@ class Component extends DCLogic {
     return parsed.ok ? parsed.inches / 12 : 0;
   }
 
+  // Sticky RULER mode keeps the box open segment after segment, so the pointed
+  // direction has to stay live: re-aim the frozen ray at the cursor (T-squared
+  // to 90° while the T-square is on) and re-preview the typed length.
+  _trackStickyRuler(e) {
+    if (!this.state.rulerMode || !this._frozenStart
+      || !['line', 'wall', 'outline'].includes(this._frozenTool)) return;
+    const raw = this._getWorldPos(e.clientX, e.clientY);
+    if (!raw) return;
+    const zero = this._frozenRuler ?? this._frozenStart;
+    const dx = raw.x - zero.x, dz = raw.z - zero.z;
+    if (Math.hypot(dx, dz) <= 0.001) return;
+    let angle = Math.atan2(dz, dx);
+    if (this.state.tsquareOn && !this._shiftHeld && !this._ctrlHeld) {
+      const step = Math.PI / 2;
+      angle = Math.round(angle / step) * step;
+    }
+    if (Math.abs(angle - this._frozenAngle) < 1e-6) return;
+    this._frozenAngle = angle;
+    this._updateFrozenPreview();
+  }
+
+  // Sticky RULER mode: after a committed segment the box re-opens empty for the
+  // next one, so the drafter never presses R again — point, type, Enter.
+  _rearmStickyRuler() {
+    if (!this.state.rulerMode || this.state.lengthFrozen) return;
+    const tool = this.state.activeTool;
+    const drawing = (tool === 'line' && this._lineDrawing)
+      || (tool === 'wall' && this._wallDrawing)
+      || (tool === 'outline' && this._outlineDrawing);
+    if (drawing) this._freezeLength('');
+  }
+
   // `seed` is a typed first character: it becomes the whole input (type-ahead
   // ruler) instead of the pre-filled cursor length.
   _freezeLength(seed) {
@@ -14475,6 +14520,16 @@ class Component extends DCLogic {
   }
 
   _confirmFrozenLength() {
+    // Sticky RULER mode re-opens an empty box after every segment, so Enter on
+    // an empty box is the drafter's "done with this run" — finish the chain.
+    if (this.state.rulerMode && !this.state.frozenLengthInput.trim()) {
+      const tool = this._frozenTool;
+      this._cancelFrozenLength();
+      if (tool === 'line' && this._lineDrawing) this._finishChain();
+      else if (tool === 'wall' && this._wallDrawing) this._finishWall();
+      else if (tool === 'outline' && this._outlineDrawing) this._finishOutline();
+      return;
+    }
     const frozenTool = this._frozenTool;
     const zero = this._frozenRuler ?? this._frozenStart;
     if (!this.state.lengthFrozen || !zero || !['line', 'wall', 'extend', 'copy', 'outline', 'nodedrag'].includes(frozenTool)) {
@@ -14528,7 +14583,8 @@ class Component extends DCLogic {
       this._frozenRuler = null;
       this._frozenFromPolar = false;
       this._frozenTool = null;
-      this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true });
+      this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true },
+        () => this._rearmStickyRuler());
       return;
     }
     if (frozenTool === 'nodedrag') {
@@ -14577,7 +14633,8 @@ class Component extends DCLogic {
       this._frozenRuler = null;
       this._frozenFromPolar = false;
       this._frozenTool = null;
-      this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true });
+      this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true },
+        () => this._rearmStickyRuler());
       return;
     }
     if (frozenTool === 'extend') {
@@ -14680,7 +14737,8 @@ class Component extends DCLogic {
     this._frozenRuler = null;
     this._frozenFromPolar = false;
     this._markUnsaved();
-    this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true });
+    this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', isDrawing: true },
+      () => this._rearmStickyRuler());
   }
 
   _cancelFrozenLength() {
@@ -15057,7 +15115,23 @@ class Component extends DCLogic {
       // An engaged polar ray lets these tools type their first point from the
       // acquired node before any click.
       const polarReady = this._polarOrigin && this._polarSnap && POLAR_RULER_TOOLS.has(tool);
-      if ((drawing || polarReady) && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
+      e.preventDefault();
+      // R is a latch, not a one-shot: it turns RULER mode on and the box stays
+      // lit segment after segment (point, type, Enter, point, type) until R
+      // turns it back off.
+      if (this.state.rulerMode) {
+        this.setState({ rulerMode: false });
+        if (this.state.lengthFrozen) this._cancelFrozenLength();
+        return;
+      }
+      this.setState({ rulerMode: true });
+      // The latch opens an empty box on the drawing tools — the drafter is
+      // about to type. Only measuring contexts keep the cursor-length prefill.
+      const emptySeed = ['line', 'wall', 'outline'].includes(tool)
+        && !this._selectDrag?.active;
+      if ((drawing || polarReady) && !this.state.lengthFrozen) {
+        this._freezeLength(emptySeed ? '' : undefined);
+      }
       return;
     }
     // Type-ahead ruler: mid-draw (or on an engaged polar ray) a plain digit
@@ -16435,8 +16509,8 @@ class Component extends DCLogic {
       protractorChipTitle: this.state.protractorAngle
         ? `PROTRACTOR — ${this.state.protractorAngle}° blade held`
         : 'PROTRACTOR — hold Ctrl 90° / Shift 45° / Ctrl+Shift 30°',
-      rulerChipColor: this.state.lengthFrozen ? '#e07a20' : 'rgba(29,31,32,0.18)',
-      rulerChipGlow: this.state.lengthFrozen ? 'drop-shadow(0 0 3px rgba(224,122,32,0.9))' : 'none',
+      rulerChipColor: this.state.lengthFrozen || this.state.rulerMode ? '#e07a20' : 'rgba(29,31,32,0.18)',
+      rulerChipGlow: this.state.lengthFrozen || this.state.rulerMode ? 'drop-shadow(0 0 3px rgba(224,122,32,0.9))' : 'none',
       lengthFrozen: this.state.lengthFrozen,
       frozenLengthInput: this.state.frozenLengthInput,
       frozenDimensionBorder: this.state.frozenDimensionError ? '#b04050' : 'rgba(29,31,32,0.25)',
@@ -16457,6 +16531,18 @@ class Component extends DCLogic {
         if (e.key === ' ' && /^[+-]?\d+(?:\.\d+)?$/.test(e.target.value.trim())) {
           e.preventDefault();
           this._confirmFrozenLength();
+        }
+        // The RULER latch answers from inside its own box too — unless the
+        // bound key is one a dimension itself could need.
+        if (!/^[\d'"\-/. ]$/.test(e.key)
+          && eventMatchesBinding(e, this.state.keybindings.freezeLength)) {
+          e.preventDefault();
+          if (this.state.rulerMode) {
+            this.setState({ rulerMode: false });
+            this._cancelFrozenLength();
+          } else {
+            this.setState({ rulerMode: true });
+          }
         }
         e.stopPropagation();
       },
