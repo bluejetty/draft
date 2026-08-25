@@ -1689,7 +1689,6 @@ const {
   DEFAULT_KEYBINDINGS,
   RETIRED_KEYBINDINGS,
   normaliseKeyBinding,
-  eventBinding,
   eventMatchesBinding,
   keyBindingLabel,
 } = window.DraftKeyboard;
@@ -2402,7 +2401,7 @@ class Component extends DCLogic {
     candidate.previewUrl = URL.createObjectURL(blob);
   }
 
-  // Same scale notations PDF-MARKUP read off titleblocks: 1/4" = 1'-0" style
+  // Scale notations as printed on titleblocks: 1/4" = 1'-0" style
   // imperial fractions and 1:100 style metric ratios. Ratio is real inches per
   // paper inch for imperial; the bare ratio number for metric.
   _detectScalesInText(text) {
@@ -3030,25 +3029,6 @@ class Component extends DCLogic {
     const active = manager.getActive(kind);
     const pkg = manager.createPackage(kind, active?.name || manager.defaultName(), this._profileContent(kind));
     manager.saveActive(pkg);
-  }
-
-  _captureKeyBinding(command, event) {
-    event.preventDefault();
-    event.stopPropagation();
-    const binding = eventBinding(event);
-    if (!binding) return;
-    const keybindings = { ...this.state.keybindings, [command]: binding };
-    this.setState({ keybindings }, () => {
-      this._rememberActiveProfile('settings');
-      this._markUnsaved();
-    });
-  }
-
-  _resetKeyBindings() {
-    this.setState({ keybindings: { ...DEFAULT_KEYBINDINGS } }, () => {
-      this._rememberActiveProfile('settings');
-      this._markUnsaved();
-    });
   }
 
   _saveProfilePackage() {
@@ -7928,27 +7908,6 @@ class Component extends DCLogic {
 
   // Walk distFt feet along the house boundary from location s, forward or
   // backward, and return the landing location.
-  _offsetAlongParam(house, s, forward, distFt) {
-    const n = house.points.length;
-    let index = Math.floor(s) % n;
-    let t = s - Math.floor(s);
-    let remaining = distFt;
-    for (let k = 0; k <= n; k++) {
-      const seg = this._outlineSegment(house, index);
-      const len = Math.hypot(seg.end.x - seg.start.x, seg.end.z - seg.start.z);
-      if (len > 0.001) {
-        const avail = forward ? len * (1 - t) : len * t;
-        if (avail >= remaining) {
-          return index + (forward ? t + remaining / len : t - remaining / len);
-        }
-        remaining -= avail;
-      }
-      if (forward) { index = (index + 1) % n; t = 0; }
-      else { index = (index - 1 + n) % n; t = 1; }
-    }
-    return s;
-  }
-
   _commitGarageOutline(points, shelf, level) {
     const house = this._houseMasterOutline(shelf.id);
     if (!house) {
@@ -9237,14 +9196,6 @@ class Component extends DCLogic {
     this._clearSelection(false);
     if (!this.state.boneyardActive) this._selectBoneyard();
     this.setState({ activeBoneyardShelfId: shelf.id, boneyardActive: true }, () => this._markUnsaved());
-  }
-
-  _cycleBoneyardShelf() {
-    const shelves = this.state.boneyardShelves;
-    if (shelves.length < 2) return;
-    const index = shelves.findIndex(shelf => shelf.id === this.state.activeBoneyardShelfId);
-    const next = shelves[(index + 1) % shelves.length];
-    this._selectBoneyardShelf(next.id);
   }
 
   _addBoneyardShelf(event) {
@@ -11778,11 +11729,6 @@ class Component extends DCLogic {
     ];
   }
 
-  _collectVertices() {
-    if (this.state.boneyardActive) return this._collectActiveVertices();
-    return [...this._collectActiveVertices(), ...this._collectBackgroundVertices()];
-  }
-
   // ─── Vertex pool ─────────────────────────────────────────────────────────────
   // Return an existing pooled Vector3 at (pt.x, pt.z) in the SAME level and
   // drawing context, or create one at that level's elevation. Different views
@@ -12873,10 +12819,6 @@ class Component extends DCLogic {
 
   // 2D segment intersection. Returns { t, u, x, z } where t∈[0,1] is the param
   // on segment A and u∈[0,1] on segment B, or null if parallel / non-intersecting.
-  _segIntersect(a, b) {
-    return geo.segmentIntersection(a, b);
-  }
-
   // Click a segment in Trim mode → remove the clicked-side portion at the nearest
   // intersection, creating a shared vertex on both segments at the cut point.
   _doTrim(clickWorldPt) {
