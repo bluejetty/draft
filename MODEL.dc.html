@@ -7906,8 +7906,6 @@ class Component extends DCLogic {
     return { x: sum.x / inner.length, z: sum.z / inner.length };
   }
 
-  // Walk distFt feet along the house boundary from location s, forward or
-  // backward, and return the landing location.
   _commitGarageOutline(points, shelf, level) {
     const house = this._houseMasterOutline(shelf.id);
     if (!house) {
@@ -12817,8 +12815,6 @@ class Component extends DCLogic {
 
   // ─── Trim tool ───────────────────────────────────────────────────────────────
 
-  // 2D segment intersection. Returns { t, u, x, z } where t∈[0,1] is the param
-  // on segment A and u∈[0,1] on segment B, or null if parallel / non-intersecting.
   // Click a segment in Trim mode → remove the clicked-side portion at the nearest
   // intersection, creating a shared vertex on both segments at the cut point.
   _doTrim(clickWorldPt) {
