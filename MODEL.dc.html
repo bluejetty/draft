@@ -15125,7 +15125,7 @@ class Component extends DCLogic {
       const tx  = this._snapPt.x - this._cutStart3.x;
       const tz  = this._snapPt.z - this._cutStart3.z;
       const side = dx2 * tz - dz2 * tx;
-      const dirVec = side < 0 ? this._cutDirLeft : this._cutDirRight;
+      const dirVec = side > 0 ? this._cutDirLeft : this._cutDirRight;
       this._finalizeCut(dirVec);
     }
   }
