@@ -6823,7 +6823,16 @@ class Component extends DCLogic {
 
   _onMouseDown(e) {
     if (!this._drawingReady) return;
-    if (this.state.lengthFrozen) return;
+    if (this.state.lengthFrozen) {
+      // A canvas click while the ruler holds a valid typed length is the
+      // drafter's "done" — it commits the length just like Enter.
+      if (e.button === 0 && parseArchitecturalLength(this.state.frozenLengthInput).ok
+        && Math.abs(this._frozenTotalFt()) > 0.001) {
+        e.preventDefault();
+        this._confirmFrozenLength();
+      }
+      return;
+    }
     // The STAIR workspace is locked framing: a click swaps the panes — except
     // for the ANNOTATION tool, which its note room exists for.
     if (this._stairWorkspaceActive()) {
@@ -14354,9 +14363,11 @@ class Component extends DCLogic {
     return parsed.ok ? parsed.inches / 12 : 0;
   }
 
-  _freezeLength() {
+  // `seed` is a typed first character: it becomes the whole input (type-ahead
+  // ruler) instead of the pre-filled cursor length.
+  _freezeLength(seed) {
     const sd = this._selectDrag;
-    if (sd?.active) { this._freezeNodeDrag(sd); return; }
+    if (sd?.active) { this._freezeNodeDrag(sd, seed); return; }
     const tool = this.state.activeTool;
     const extendReady = tool === 'extend' && this.state.extendPhase === 'destination'
       && this._extendSession && this.state.extendBase;
@@ -14410,14 +14421,21 @@ class Component extends DCLogic {
     // Pre-fill the current length using the same architectural notation as every
     // other imperial input in the editor.
     let frozenLengthInput = '';
-    if (pt) {
+    if (seed != null) {
+      frozenLengthInput = seed;
+    } else if (pt) {
       const zero = this._frozenRuler;
       const len = Math.sqrt((pt.x-zero.x)**2+(pt.z-zero.z)**2);
       if (len > 0.001) frozenLengthInput = formatArchitecturalInches(len * 12);
     }
     this.setState({ lengthFrozen: true, frozenLengthInput, frozenDimensionError: '' }, () => {
       const inp = document.querySelector('[data-frozen-length]');
-      if (inp) { inp.focus(); inp.select(); }
+      if (!inp) return;
+      inp.focus();
+      // A typed seed keeps the caret at its end so the next digit continues
+      // the number; a pre-filled cursor length selects for overtyping.
+      if (seed != null) inp.setSelectionRange(inp.value.length, inp.value.length);
+      else inp.select();
     });
     this._updateFrozenPreview();
   }
@@ -14425,7 +14443,7 @@ class Component extends DCLogic {
   // R during a node drag: the ruler zero is the armed polar origin (normally
   // the grab point), and the typed length lands the node exactly that far
   // along the current direction — typed beats pointed, same as drawing.
-  _freezeNodeDrag(sd) {
+  _freezeNodeDrag(sd, seed) {
     const [vertex] = sd.vertices;
     const start = this._polarOrigin ? this._polarOrigin.clone()
       : new THREE.Vector3(sd.origin.x, sd.origin.y, sd.origin.z);
@@ -14441,10 +14459,14 @@ class Component extends DCLogic {
         return { pt, x: pt.x, z: pt.z };
       }),
     };
-    const frozenLengthInput = len > 0.001 ? formatArchitecturalInches(len * 12) : '';
+    const frozenLengthInput = seed != null ? seed
+      : len > 0.001 ? formatArchitecturalInches(len * 12) : '';
     this.setState({ lengthFrozen: true, frozenLengthInput, frozenDimensionError: '' }, () => {
       const inp = document.querySelector('[data-frozen-length]');
-      if (inp) { inp.focus(); inp.select(); }
+      if (!inp) return;
+      inp.focus();
+      if (seed != null) inp.setSelectionRange(inp.value.length, inp.value.length);
+      else inp.select();
     });
     this._updateFrozenPreview();
   }
@@ -15055,6 +15077,13 @@ class Component extends DCLogic {
       }
       return;
     }
+    // With the ruler open, Enter / Space commit the typed length even when
+    // the length box has lost focus — never a stale corner or a chain finish.
+    if (this.state.lengthFrozen && (matches('finish') || matches('finishAlt'))) {
+      e.preventDefault();
+      this._confirmFrozenLength();
+      return;
+    }
     // Space is a keyboard click mid-draw: it lands a corner on the live snap
     // point, so the mouse hand aims and the off hand drops corners. Enter
     // still finishes the run.
@@ -15092,6 +15121,33 @@ class Component extends DCLogic {
       const polarReady = this._polarOrigin && this._polarSnap && POLAR_RULER_TOOLS.has(tool);
       if ((drawing || polarReady) && !this.state.lengthFrozen) { e.preventDefault(); this._freezeLength(); }
       return;
+    }
+    // Type-ahead ruler: mid-draw (or on an engaged polar ray) a plain digit
+    // wakes the ruler exactly like Freeze Length and becomes the first
+    // character of the length — point the direction, type the distance.
+    if (/^\d$/.test(e.key) && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (this.state.lengthFrozen) {
+        // The box is open but hasn't taken focus yet (fast typing): collect
+        // the digit here so none drop between the wake-up and the focus.
+        e.preventDefault();
+        this.setState({
+          frozenLengthInput: this.state.frozenLengthInput + e.key,
+          frozenDimensionError: '',
+        }, () => this._updateFrozenPreview());
+        return;
+      }
+      const tool = this.state.activeTool;
+      const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._wallDrawing)
+        || (tool === 'outline' && this._outlineDrawing)
+        || (tool === 'extend' && this.state.extendPhase === 'destination')
+        || (tool === 'copy' && this.state.copyPhase === 'destination')
+        || this._selectDrag?.active === true;
+      const polarReady = this._polarOrigin && this._polarSnap && POLAR_RULER_TOOLS.has(tool);
+      if (drawing || polarReady) {
+        e.preventDefault();
+        this._freezeLength(e.key);
+        return;
+      }
     }
     if (matches('ungroup')) {
       if (this.state.activeTool === 'select' && this._selectedGroups().length) {
@@ -16458,6 +16514,12 @@ class Component extends DCLogic {
       onFrozenKeyDown: e => {
         if (e.key === 'Enter') { e.preventDefault(); this._confirmFrozenLength(); }
         if (e.key === 'Escape') { e.preventDefault(); this._cancelFrozenLength(); }
+        // Space commits a plain typed footage (15, 12.5); inside feet-inch
+        // forms like 8'-1 1/8 it stays a literal separator.
+        if (e.key === ' ' && /^[+-]?\d+(?:\.\d+)?$/.test(e.target.value.trim())) {
+          e.preventDefault();
+          this._confirmFrozenLength();
+        }
         e.stopPropagation();
       },
       confirmFrozenLength: () => this._confirmFrozenLength(),
