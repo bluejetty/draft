@@ -94,6 +94,25 @@ test('NEW is undoable: Ctrl+Z brings the old drawing back', async ({ page }) => 
   expect(h.allLines(await h.savedDrawing(page))).toHaveLength(1);
 });
 
+test('NEW drops the polar origin acquired from the old drawing', async ({ page }) => {
+  await h.openModel(page);
+  await drawOneLine(page);
+
+  // Roll over the old line's corner so its node becomes the polar origin.
+  await h.selectTool(page, 'Line');
+  await h.moveTo(page, 10, 0);
+  await expect(page.locator('[data-model-polar]')).toBeVisible();
+
+  await newButton(page).click();
+  await page.getByRole('button', { name: "DON'T SAVE" }).click();
+  await h.waitForSaved(page);
+
+  // The old node is gone with its drawing — nothing should attract the
+  // cursor or draw rays where it used to be.
+  await h.moveTo(page, 10, 0.2);
+  await expect(page.locator('[data-model-polar]')).toBeHidden();
+});
+
 test('OPEN with a clean sheet goes straight to the file picker and imports', async ({ page }) => {
   await h.openModel(page);
   await drawOneLine(page);
