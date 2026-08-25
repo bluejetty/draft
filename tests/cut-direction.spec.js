@@ -6,24 +6,20 @@ const h = require('./helpers');
 test('the cut arrow points to the side the drafter clicks', async ({ page }) => {
   await h.openModel(page);
 
-  const answers = [];
-  page.on('dialog', dialog => dialog.accept(answers.shift() ?? ''));
-
-  const placeCut = async (name, z, chooseZ) => {
+  const placeCut = async (z, chooseZ) => {
     await page.keyboard.press('c');
-    answers.push(name);
     await h.clickWorld(page, -10, z);
     await h.clickWorld(page, 10, z);
     await h.clickWorld(page, 0, chooseZ);
     await page.waitForTimeout(400);
   };
 
-  await placeCut('SECTION A-A', 6, 0);    // click below the line (smaller z)
-  await placeCut('SECTION B-B', -6, 0);   // click above the line (larger z)
+  await placeCut(6, 0);    // click below the line (smaller z)
+  await placeCut(-6, 0);   // click above the line (larger z)
   await h.waitForSaved(page);
 
   const saved = await h.savedDrawing(page);
   const byName = Object.fromEntries(saved.cuts.map(c => [c.name, c]));
-  expect(byName['SECTION A-A'].dirVec.z).toBeLessThan(0);
-  expect(byName['SECTION B-B'].dirVec.z).toBeGreaterThan(0);
+  expect(byName.S1.dirVec.z).toBeLessThan(0);
+  expect(byName.S2.dirVec.z).toBeGreaterThan(0);
 });

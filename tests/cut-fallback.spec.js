@@ -18,11 +18,10 @@ test.describe('Cut with WebGL unavailable', () => {
     const preview = await h.overlayPixels(page, mid.x, mid.y, 16);
     expect(h.countColor(preview, PENDING_RED)).toBeGreaterThan(0);
 
-    page.once('dialog', dialog => dialog.accept('SECTION A-A'));
     await h.clickWorld(page, 10, 6);       // end point → direction choice
     await h.moveTo(page, 0, 0);
     await page.waitForTimeout(200);
-    await h.clickWorld(page, 0, 0);        // choose direction, name the cut
+    await h.clickWorld(page, 0, 0);        // choose direction — cut names itself S1
     await page.waitForTimeout(500);
 
     const committed = await h.overlayPixels(page, mid.x, mid.y, 16);
@@ -36,16 +35,15 @@ test.describe('Cut with WebGL unavailable', () => {
     const answers = [];
     page.on('dialog', dialog => dialog.accept(answers.shift() ?? ''));
 
-    const placeCut = async (name, z) => {
+    const placeCut = async z => {
       await page.keyboard.press('c');
-      answers.push(name);
       await h.clickWorld(page, -10, z);
       await h.clickWorld(page, 10, z);
       await h.clickWorld(page, 0, z - 6);
       await page.waitForTimeout(400);
     };
 
-    await placeCut('SECTION A-A', 6);
+    await placeCut(6);
 
     answers.push('LEVEL 2', '10');
     await page.getByRole('button', { name: '+ ADD' }).click();
@@ -53,17 +51,17 @@ test.describe('Cut with WebGL unavailable', () => {
     await page.locator('.level-row').nth(1).locator('.level-body').click();
     await page.waitForTimeout(400);
 
-    await placeCut('SECTION B-B', 12);
+    await placeCut(12);
     await h.waitForSaved(page);
 
     const before = await h.savedDrawing(page);
-    expect(before.cuts.map(c => c.name)).toEqual(['SECTION A-A', 'SECTION B-B']);
+    expect(before.cuts.map(c => c.name)).toEqual(['S1', 'S2']);
     expect(new Set(before.cuts.map(c => c.levelId)).size).toBe(2);
 
     await page.locator('.level-row').nth(1).locator('.level-del').click();
     await h.waitForSaved(page);
 
     const after = await h.savedDrawing(page);
-    expect(after.cuts.map(c => c.name)).toEqual(['SECTION A-A']);
+    expect(after.cuts.map(c => c.name)).toEqual(['S1']);
   });
 });
