@@ -1,4 +1,4 @@
-# ROUGHDRAFTER — COMPANY ROEs & SOPs
+# ROUGHDRAFTER — SOPSROES
 
 The standing orders. Everything the company does — product, ads, lore, the BONEYARD — answers to this file. When a decision is unclear, read down the list until it isn't.
 
