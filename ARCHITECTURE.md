@@ -153,6 +153,15 @@ input (mouse/keyboard)
   **Binaries never go in it** — no base64. Underlay files live as
   separate records in the `underlays` bucket, keyed by underlay id;
   the JSON holds placement metadata pointing at them.
+- The INSERT PHOTO/PDF card classifies a picked PDF page into four tiers
+  by inspecting its operator list: **VECTOR** (paths + live text, no
+  images), **HYBRID** (real vector geometry with embedded images),
+  **OCR** (a scan wearing an invisible searchable text layer — text
+  rendering mode 3 gives it away), **IMAGE** (just pixels). Vector and
+  hybrid keep their original bytes; OCR and image convert once to a
+  capped-size quality-0.8 WebP. Titleblock scale notations are read off
+  the page text where present; CALIBRATE (mark a known distance)
+  computes the scale when they aren't.
 - **Loading** goes through `_applyDrawingData`, which runs every
   collection through its `drawing-format.js` validator: version checked
   up front (a newer format is refused outright, never partly applied),
@@ -179,6 +188,32 @@ generator should read: `_levelAssembly(levelId)` (wall height, joists,
 sheathing, slab, footing), `_levelFloorFt`, `_levelBorderHeights`
 (datum-aware stacked heights), `_foundationHeights`, and roof geometry
 validated with per-edge `eave|gable`, clamped `overhang` and `pitch`.
+
+## The BONEYARD → OUTLINE → BUILD HOUSE flow
+
+The footprint pipeline that most other geometry hangs off:
+
+1. **OUTLINE** — the never-printing footprint guide (`OUTLINE_LAYER`).
+   The first outline completed on the active BONEYARD shelf becomes that
+   shelf's **master** and copies to every level. Master edits flow to
+   each level copy's common points (via `srcId` links); per-level local
+   adjustments survive later master edits. Additional outlines stay
+   local to their level.
+2. **BONEYARD shelves** — shelf storage outside the level stack. Each
+   shelf keeps its own master; shelves are isolated from each other and
+   from levels. Marks placed on the master (FENESTRATION on the
+   BONEYARD) annotate the footprint for generation.
+3. **BUILD HOUSE** — reads the master outline + marks + level
+   assemblies and generates the building: exterior walls per level,
+   slab/foundation, doors and windows cut where marked, roof from the
+   footprint plus overhang, and the auto-dimension stacks on every level
+   it builds. Re-running regenerates instead of doubling. Attached
+   garages marked on the outline generate their own walls, doors, and
+   grade beam.
+
+Auto-dims (`_placeAutoDims`) reads the same outlines/roofs and strings
+each footprint's own stack per side; dimension ends carry `srcId` links
+so master edits move the strings with the footprint.
 
 ## Testing
 

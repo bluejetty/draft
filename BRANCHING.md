@@ -13,7 +13,8 @@ branches are called.
 - **The gate is the test suite**: the full Playwright suite (360 tests as
   of PR #81) green before merge. Tests land in the same PR as the
   behaviour they pin.
-- **No force-pushing** to shared branches. Fix forward with a new commit.
+- **No force-pushing and no amending after push** on shared branches —
+  no history rewriting. Fix forward with a new commit.
 - Small PRs — one coherent batch per PR, reviewable in one sitting.
 
 ## For the 3D phase

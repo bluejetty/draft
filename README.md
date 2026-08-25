@@ -27,4 +27,8 @@ Run one file with `npx playwright test tests/underlays.spec.js`; add `--headed` 
 
 The suite is configured **serial on one worker** (`fullyParallel: false, workers: 1`). Each test clears its own storage on the way in (`helpers.openModel`), but the config is deliberate — don't add `--workers` parallelism without verifying the whole suite still passes repeatedly.
 
+`tests/helpers.js` is the suite's vocabulary: `openModel` (boot + storage reset, optional `{ webgl: false }` for the 2D fallback), `worldToClient`/`clickWorld`/`moveTo` (world-feet in, real mouse events out), `selectTool`, `waitForSaved` (autosave settle), `savedDrawing` (reads the drawing JSON back out of IndexedDB — assert against this, not the DOM), and `overlayPixels`/`countColor` (pixel assertions on the overlay canvas).
+
+To poke at the app by hand, serve the repo root with any static server — `python3 -m http.server 8000` — and open `/MODEL.dc.html`. (The suite runs its own server on port 4173; the two don't conflict.)
+
 Every PR lands with the full suite green. Test files open with a prose header stating the behaviour they pin — read that before editing a test.
