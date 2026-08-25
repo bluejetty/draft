@@ -22,7 +22,7 @@ branches are called.
 plan:
 
 - **`main` stays 2D-stable and deployable** at all times. Nothing merges
-  to `main` that degrades the shipped 2D experience — the 353-strong 2D
+  to `main` that degrades the shipped 2D experience — the 360-strong 2D
   test baseline is the floor, and it only grows.
 - **`3d-dev` is the integration branch** for the 3D track. Feature
   branches for 3D steps target `3d-dev`; it absorbs churn, and merges to
