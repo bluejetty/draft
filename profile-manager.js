@@ -309,10 +309,14 @@ if (!window.DraftProfileManager) {
 
   // Structure rules: office standards controlling how generated structural
   // geometry behaves. Footings ride BUILD HOUSE and stay locked against hand
-  // edits unless the office allows freeform footing editing.
+  // edits unless the office allows freeform footing editing. The standard
+  // elevations E1-E4 place themselves around the plan unless turned off.
   const normaliseStructureStandards = value => {
     const stored = value && typeof value === 'object' ? value : {};
-    return { freeformFootings: stored.freeformFootings === true };
+    return {
+      freeformFootings: stored.freeformFootings === true,
+      autoElevations: stored.autoElevations !== false,
+    };
   };
 
   const flatLayerStandards = () => DEFAULT_LAYER_STANDARDS.flatMap(group => group.layers);
