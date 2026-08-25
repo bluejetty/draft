@@ -123,6 +123,7 @@
         <option value="plan">.plan</option>
       </select>
     </div>
+    <button data-project-open onClick="{{ openProjectDialog }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">PROJECT</button>
     <div data-profile-stack style="display:flex; flex-direction:column; gap:1px;">
       <button onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
       <button onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
@@ -857,6 +858,31 @@
       <sc-if value="{{ hasProfileDialogMessage }}" hint-placeholder-val="{{ false }}">
         <div style="margin-top:10px; color:{{ profileDialogMessageColor }}; font-size:11px; line-height:1.4;">{{ profileDialogMessage }}</div>
       </sc-if>
+    </div>
+  </div>
+</sc-if>
+
+<!-- PROJECT dialog: per-project information typed once and saved inside the
+     drawing file — sheets and the site plan's LEGAL LAND DESCRIPTION read it -->
+<sc-if value="{{ projectDialogOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:flex-start; justify-content:center; padding-top:78px; background:rgba(29,31,32,0.18);">
+    <div data-project-dialog role="dialog" aria-modal="true" aria-label="Project information" style="width:min(440px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
+      <div style="display:flex; align-items:flex-start; gap:16px;">
+        <div style="flex:1;">
+          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">Project</div>
+          <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">Project information saves with this drawing. The titleblock and the site plan's LEGAL LAND DESCRIPTION read from here.</div>
+        </div>
+        <button onClick="{{ closeProjectDialog }}" aria-label="Close" style="border:none; background:transparent; color:rgba(29,31,32,0.48); font-size:18px; line-height:1; cursor:pointer;">×</button>
+      </div>
+      <div style="margin-top:14px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">Project name</div>
+      <input data-project-name value="{{ projectName }}" onInput="{{ onProjectNameInput }}" aria-label="Project name" style="width:100%; box-sizing:border-box; height:32px; margin-top:5px; border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none;" />
+      <div style="margin-top:12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">Client</div>
+      <input data-project-client value="{{ projectClient }}" onInput="{{ onProjectClientInput }}" aria-label="Client" style="width:100%; box-sizing:border-box; height:32px; margin-top:5px; border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none;" />
+      <div style="margin-top:12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">Site address</div>
+      <input data-project-address value="{{ projectAddress }}" onInput="{{ onProjectAddressInput }}" aria-label="Site address" style="width:100%; box-sizing:border-box; height:32px; margin-top:5px; border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none;" />
+      <div style="margin-top:12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">Legal land description</div>
+      <textarea data-project-legal value="{{ projectLegal }}" onInput="{{ onProjectLegalInput }}" aria-label="Legal land description" rows="3" style="width:100%; box-sizing:border-box; margin-top:5px; border:1px solid rgba(29,31,32,0.25); padding:6px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; line-height:1.45; outline:none; resize:vertical;"></textarea>
+      <button onClick="{{ closeProjectDialog }}" style="width:100%; height:34px; margin-top:14px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">DONE</button>
     </div>
   </div>
 </sc-if>
@@ -1678,6 +1704,12 @@ class Component extends DCLogic {
     padError: '',
     noteStyleError: '',       // fill-opacity / bullnose input validation message
     roomAreasOn: false,        // area readout under MAIN FL room tags (off by default)
+    projectOpen: false,       // PROJECT dialog visibility
+    // Per-project information saved inside the drawing file. The titleblock
+    // and the site plan's LEGAL LAND DESCRIPTION block read from here; later
+    // per-project settings (model-space size, T-square angle set, filename
+    // slot) join this object.
+    projectInfo: { name: '', client: '', address: '', legal: '' },
     fixtureKind: 'cabinet',   // active FIXTURE catalog entry (see FIXTURE_KINDS)
     fenestrationType: 'door', // 'door' | 'window' — picks the CAD layer and defaults
     fenestrationWidths: { door: DEFAULT_DOOR_WIDTH_FT, window: DEFAULT_WINDOW_WIDTH_FT },
@@ -2052,6 +2084,7 @@ class Component extends DCLogic {
       })),
       nextRoomTagId: this._nextRoomTagId || 1,
       roomAreasOn: this.state.roomAreasOn === true,
+      projectInfo: { ...this.state.projectInfo },
       boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
       activeBoneyardShelfId: this.state.activeBoneyardShelfId,
       nextBoneyardShelfId: this.state.nextBoneyardShelfId,
@@ -2934,6 +2967,20 @@ class Component extends DCLogic {
     if (Object.keys(patch).length) this.setState(patch);
   }
 
+  _openProjectDialog() {
+    this.setState({ projectOpen: true });
+  }
+
+  _closeProjectDialog() {
+    this.setState({ projectOpen: false });
+  }
+
+  _setProjectField(field, value) {
+    this.setState({
+      projectInfo: { ...this.state.projectInfo, [field]: value },
+    }, () => this._markUnsaved());
+  }
+
   _openProfileDialog(kind) {
     const manager = window.DraftProfileManager;
     const defaultName = manager ? manager.defaultName() : 'draft-profile';
@@ -3145,6 +3192,8 @@ class Component extends DCLogic {
         nextBoneyardShelfId,
         boneyardActive: false,
         roomAreasOn: saved.roomAreasOn === true,
+        projectInfo: format.projectInfo(saved.projectInfo),
+        projectOpen: false,
       }, resolve));
 
       // Rebuild the pool as a single pass through every endpoint. This restores
@@ -15361,6 +15410,15 @@ class Component extends DCLogic {
       }
       return;
     }
+    // The PROJECT dialog owns the keyboard while open: Escape closes it and
+    // tool shortcuts stay quiet under the modal.
+    if (this.state.projectOpen) {
+      if (e.key === 'Escape' && focusedControl !== 'field') {
+        e.preventDefault();
+        this._closeProjectDialog();
+      }
+      return;
+    }
     if (this.state.groupDialog && focusedControl !== 'field') {
       const key = e.key === ' ' ? 'Space' : e.key;
       if (key === 'y' || key === 'Y' || key === 'Enter' || key === 'Space') {
@@ -16886,6 +16944,17 @@ class Component extends DCLogic {
       metricBg:   units==='metric'  ?'#1d1f20':'#fff', metricColor:   units==='metric'  ?'#f2f2f3':'#1d1f20',
       imperialBorder: units==='imperial'?'#1d1f20':'rgba(29,31,32,0.2)',
       metricBorder: units==='metric'?'#1d1f20':'rgba(29,31,32,0.2)',
+      openProjectDialog: () => this._openProjectDialog(),
+      closeProjectDialog: () => this._closeProjectDialog(),
+      projectDialogOpen: this.state.projectOpen === true,
+      projectName: this.state.projectInfo.name,
+      projectClient: this.state.projectInfo.client,
+      projectAddress: this.state.projectInfo.address,
+      projectLegal: this.state.projectInfo.legal,
+      onProjectNameInput: e => this._setProjectField('name', e.target.value),
+      onProjectClientInput: e => this._setProjectField('client', e.target.value),
+      onProjectAddressInput: e => this._setProjectField('address', e.target.value),
+      onProjectLegalInput: e => this._setProjectField('legal', e.target.value),
       openSettingsDialog: () => this._openProfileDialog('settings'),
       openStandardsDialog: () => this._openProfileDialog('standards'),
       closeProfileDialog: () => this._closeProfileDialog(),
