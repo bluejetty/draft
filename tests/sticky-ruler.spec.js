@@ -148,4 +148,17 @@ test.describe('sticky ruler mode', () => {
     await expect(box).toBeEnabled();
     expect(await chipColor(page)).toBe(LIT);
   });
+
+  test('the LENGTH box and dashboard chips live on the instrument strip', async ({ page }) => {
+    await h.openModel(page);
+    const strip = page.locator('[data-instrument-strip]');
+    await expect(strip.locator('[data-frozen-length]')).toHaveCount(1);
+    await expect(strip.locator('[data-mode-tsquare]')).toHaveCount(1);
+    await expect(strip.locator('[data-mode-protractor]')).toHaveCount(1);
+    await expect(strip.locator('[data-mode-ruler]')).toHaveCount(1);
+    await expect(strip.locator('[data-model-len]')).toHaveCount(1);
+    const topActions = page.locator('[data-top-actions]');
+    await expect(topActions.locator('[data-frozen-length]')).toHaveCount(0);
+    await expect(topActions.locator('[data-mode-ruler]')).toHaveCount(0);
+  });
 });
