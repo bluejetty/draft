@@ -106,54 +106,6 @@
     <div style="margin-left:18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }}; border:1px solid {{ hintColor }}; padding:3px 10px;">{{ hintText }}</div>
   </sc-if>
 
-  <!-- Centred measurement readout / freeze inputs -->
-  <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; align-items:center; gap:10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em; pointer-events:none;">
-    <span data-model-len style="color:#1d1f20; min-width:80px; text-align:right;"></span>
-    <span data-model-ang style="color:rgba(29,31,32,0.4); min-width:52px;"></span>
-    <!-- Constraint chips: the T-square lights while its 90° lock is on (T) or a
-         Shift protractor lock is engaged, the ruler lights and glows while
-         an R typed length is active -->
-    <span data-mode-tsquare title="{{ tsquareChipTitle }}" style="display:inline-flex; color:{{ tsquareChipColor }};">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-        <path d="M1 3 H15"></path>
-        <path d="M8 3 V15"></path>
-        <path d="M8 6.5 H10.5 M8 9.5 H10.5 M8 12.5 H10.5" stroke-width="0.9"></path>
-      </svg>
-    </span>
-    <!-- The protractor lights while a modifier holds a blade against the board:
-         Shift 45°, Ctrl+Shift 30° — degree label shows which. A bare Ctrl tap
-         toggles the T-square like T. -->
-    <span data-mode-protractor title="{{ protractorChipTitle }}" style="display:inline-flex; align-items:center; gap:2px; color:{{ protractorChipColor }}; filter:{{ protractorChipGlow }};">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-        <path d="M2 12.5 A6 6 0 0 1 14 12.5 Z"></path>
-        <path d="M8 12.5 L11.6 8.3" stroke-width="0.9"></path>
-        <path d="M4.2 9.9 L5.1 10.8 M8 6.5 V7.9 M11.8 9.9 L10.9 10.8" stroke-width="0.9"></path>
-      </svg>
-      <span data-protractor-angle style="font-size:10px; line-height:1; min-width:18px;">{{ protractorChipLabel }}</span>
-    </span>
-    <span data-mode-ruler title="RULER typed length — R latches on/off" style="display:inline-flex; color:{{ rulerChipColor }}; filter:{{ rulerChipGlow }};">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-        <rect x="1.5" y="6" width="13" height="5"></rect>
-        <path d="M4.5 6 V8.2 M7.5 6 V8.2 M10.5 6 V8.2 M13 6 V8.2" stroke-width="0.9"></path>
-      </svg>
-    </span>
-     <!-- Architectural-length box — a permanent instrument on the bar: sits
-          blank and disabled while idle, wakes when a typed length is active -->
-    <div style="display:flex; align-items:center; gap:6px; pointer-events:all;">
-      <span style="opacity:{{ lengthBoxLabelOpacity }}; font-size:11px;">LENGTH</span>
-        <input data-frozen-length type="text" value="{{ frozenLengthDisplay }}" disabled="{{ lengthBoxIdle }}" onInput="{{ onFrozenLengthInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="{{ lengthBoxPlaceholder }}" aria-label="Frozen length" style="width:112px; text-align:right; background:{{ lengthBoxBg }}; border:1px solid {{ frozenDimensionBorder }}; color:#1d1f20; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; outline:none;" />
-      <sc-if value="{{ lengthFrozen }}" hint-placeholder-val="{{ false }}">
-        <div style="display:flex; align-items:center; gap:6px;">
-          <button onClick="{{ confirmFrozenLength }}" style="border:none; background:#5980a6; color:#fff; padding:4px 12px; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer; font-family:'Barlow Condensed',system-ui,sans-serif;">CONFIRM</button>
-          <button onClick="{{ cancelFrozenLength }}" style="border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.45); padding:4px 8px; font-size:13px; cursor:pointer;">✕</button>
-           <sc-if value="{{ hasFrozenDimensionError }}" hint-placeholder-val="{{ false }}">
-             <span style="color:#b04050; font-size:10px; max-width:130px;">{{ frozenDimensionError }}</span>
-           </sc-if>
-        </div>
-      </sc-if>
-    </div>
-  </div>
-
   <div style="flex:1;"></div>
   <div data-top-actions style="display:flex; align-items:center; gap:8px; margin-left:18px;">
     <div data-save-controls style="display:flex; align-items:center; gap:5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em;">
@@ -1162,6 +1114,55 @@
 
   </div>
 
+</div>
+
+<!-- INSTRUMENT STRIP: measurement readout, dashboard lights, LENGTH box on
+     their own thin panel so the top bar stays clear for the file controls -->
+<div data-instrument-strip style="height:34px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; justify-content:center; gap:10px; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em; background:#fbfbfc; flex-shrink:0; user-select:none;">
+  <span data-model-len style="color:#1d1f20; min-width:80px; text-align:right;"></span>
+  <span data-model-ang style="color:rgba(29,31,32,0.4); min-width:52px;"></span>
+  <!-- Constraint chips: the T-square lights while its 90° lock is on (T) or a
+       Shift protractor lock is engaged, the ruler lights and glows while
+       an R typed length is active -->
+  <span data-mode-tsquare title="{{ tsquareChipTitle }}" style="display:inline-flex; color:{{ tsquareChipColor }};">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <path d="M1 3 H15"></path>
+      <path d="M8 3 V15"></path>
+      <path d="M8 6.5 H10.5 M8 9.5 H10.5 M8 12.5 H10.5" stroke-width="0.9"></path>
+    </svg>
+  </span>
+  <!-- The protractor lights while a modifier holds a blade against the board:
+       Shift 45°, Ctrl+Shift 30° — degree label shows which. A bare Ctrl tap
+       toggles the T-square like T. -->
+  <span data-mode-protractor title="{{ protractorChipTitle }}" style="display:inline-flex; align-items:center; gap:2px; color:{{ protractorChipColor }}; filter:{{ protractorChipGlow }};">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <path d="M2 12.5 A6 6 0 0 1 14 12.5 Z"></path>
+      <path d="M8 12.5 L11.6 8.3" stroke-width="0.9"></path>
+      <path d="M4.2 9.9 L5.1 10.8 M8 6.5 V7.9 M11.8 9.9 L10.9 10.8" stroke-width="0.9"></path>
+    </svg>
+    <span data-protractor-angle style="font-size:10px; line-height:1; min-width:18px;">{{ protractorChipLabel }}</span>
+  </span>
+  <span data-mode-ruler title="RULER typed length — R latches on/off" style="display:inline-flex; color:{{ rulerChipColor }}; filter:{{ rulerChipGlow }};">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <rect x="1.5" y="6" width="13" height="5"></rect>
+      <path d="M4.5 6 V8.2 M7.5 6 V8.2 M10.5 6 V8.2 M13 6 V8.2" stroke-width="0.9"></path>
+    </svg>
+  </span>
+   <!-- Architectural-length box — a permanent instrument on the strip: sits
+        blank and disabled while idle, wakes when a typed length is active -->
+  <div style="display:flex; align-items:center; gap:6px;">
+    <span style="opacity:{{ lengthBoxLabelOpacity }}; font-size:11px;">LENGTH</span>
+      <input data-frozen-length type="text" value="{{ frozenLengthDisplay }}" disabled="{{ lengthBoxIdle }}" onInput="{{ onFrozenLengthInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="{{ lengthBoxPlaceholder }}" aria-label="Frozen length" style="width:112px; text-align:right; background:{{ lengthBoxBg }}; border:1px solid {{ frozenDimensionBorder }}; color:#1d1f20; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; outline:none;" />
+    <sc-if value="{{ lengthFrozen }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <button onClick="{{ confirmFrozenLength }}" style="border:none; background:#5980a6; color:#fff; padding:4px 12px; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer; font-family:'Barlow Condensed',system-ui,sans-serif;">CONFIRM</button>
+        <button onClick="{{ cancelFrozenLength }}" style="border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.45); padding:4px 8px; font-size:13px; cursor:pointer;">✕</button>
+         <sc-if value="{{ hasFrozenDimensionError }}" hint-placeholder-val="{{ false }}">
+           <span style="color:#b04050; font-size:10px; max-width:130px;">{{ frozenDimensionError }}</span>
+         </sc-if>
+      </div>
+    </sc-if>
+  </div>
 </div>
 
 <!-- STATUS BAR -->
