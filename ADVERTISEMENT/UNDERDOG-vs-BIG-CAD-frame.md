@@ -37,6 +37,11 @@ archetype that the audience recognizes on their own.
   presses the paw, does it live.
 - SECRET DRAFTER: the brotherhood runs on the underdog's tools.
 
+## The line: "The underDOG of CAD."
+The user's coinage — the frame in one word. The dog IS the underdog: paw
+button, DOG MODE, BONEYARD dog, RUFF DRAFTERS all converge here.
+Capitalize the DOG. Also in TAGLINES.md as a support line.
+
 ## Tagline pairings
 - "ROUGHLY TRUE. NEVER PERFECT." (vs. their "perfection required")
 - "A FEW MISTAKES ARE EXPECTED." (the anti-corporate permission slip)

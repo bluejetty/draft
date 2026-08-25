@@ -21,6 +21,8 @@ The collected RoughDrafter LITE campaign lines. Real taglines carry the brand st
 - **A FEW MISTAKES ARE EXPECTED.** (alternate: *A FEW MISTAKES ARE OK.*) — the human-side companion to ROUGHLY TRUE. NEVER PERFECT.: the tagline is the philosophy, this is the permission slip. "Expected" beats "ok" — the tool PLANS for your mistakes (undo, rough drafts, forgiving snaps), and we expect a few from ourselves too; that's why the glitches stay. Also the trap-street doctrine in five words — the coffee-cup-that-became-a-button clause. Everyone gets to draw when a few mistakes are expected.
   And it cuts both ways — a two-way covenant: it lets THEM make mistakes and lets US be forgiven ours (the glitches, the rough edges). Most companies promise perfection and get crucified for every bug; we expect a few mistakes on both sides of the screen, so nobody has to pretend. Grace given, grace received.
 
+- **The underDOG of CAD.** — the campaign frame in one word: the dog IS the underdog. David-vs-BIG-CAD with the mascot built in; the paw button, DOG MODE, the BONEYARD dog, and RUFF DRAFTERS were all already pointing here. Capitalize the DOG.
+
 ## JOKE / SUB-TAGLINES
 
 - **Your boss will find out eventually.** — THE SECRET DRAFTER end card.
