@@ -12,7 +12,7 @@ test.describe('type-ahead ruler', () => {
 
     await page.keyboard.press('1');      // digit alone wakes the ruler
     const box = page.locator('[data-frozen-length]');
-    await expect(box).toBeVisible();
+    await expect(box).toBeEnabled();
     await expect(box).toHaveValue('1');
     await page.keyboard.type('0');       // following digits keep typing
     await expect(box).toHaveValue('10');
@@ -71,7 +71,7 @@ test.describe('type-ahead ruler', () => {
     await page.keyboard.type('8-1');
     await page.keyboard.press(' ');
     const box = page.locator('[data-frozen-length]');
-    await expect(box).toBeVisible();     // no commit — the ruler stays open
+    await expect(box).toBeEnabled();     // no commit — the ruler stays open
     await expect(box).toHaveValue('8-1 ');
     await page.keyboard.type('1/8');
     await expect(box).toHaveValue('8-1 1/8');
@@ -97,6 +97,8 @@ test.describe('type-ahead ruler', () => {
     await h.openModel(page);
     await h.selectTool(page, 'Line');
     await page.keyboard.press('5');
-    await expect(page.locator('[data-frozen-length]')).toHaveCount(0);
+    const box = page.locator('[data-frozen-length]');
+    await expect(box).toBeDisabled();    // the permanent box stays idle
+    await expect(box).toHaveValue('');
   });
 });
