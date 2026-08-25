@@ -19,19 +19,19 @@ test.describe('sticky ruler mode', () => {
 
     await page.keyboard.press('r');        // latch ON
     const box = page.locator('[data-frozen-length]');
-    await expect(box).toBeVisible();
+    await expect(box).toBeEnabled();
     expect(await chipColor(page)).toBe(LIT);
 
     await page.keyboard.type('10');
     await page.keyboard.press('Enter');    // commit — box re-opens empty
-    await expect(box).toBeVisible();
+    await expect(box).toBeEnabled();
     await expect(box).toHaveValue('');
     expect(await chipColor(page)).toBe(LIT);
 
     await h.moveTo(page, 10, -5);          // swing north — no R
     await page.keyboard.type('8');
     await page.keyboard.press('Enter');
-    await expect(box).toBeVisible();       // still armed for the next one
+    await expect(box).toBeEnabled();       // still armed for the next one
 
     await page.keyboard.press('Enter');    // empty box = finish the chain
     await h.waitForSaved(page);
@@ -50,10 +50,11 @@ test.describe('sticky ruler mode', () => {
 
     await page.keyboard.press('r');        // ON — box takes focus
     const box = page.locator('[data-frozen-length]');
-    await expect(box).toBeVisible();
+    await expect(box).toBeEnabled();
 
     await page.keyboard.press('r');        // OFF — typed into the focused box
-    await expect(box).toHaveCount(0);
+    await expect(box).toBeDisabled();      // the permanent box goes idle
+    await expect(box).toHaveValue('');
     expect(await chipColor(page)).not.toBe(LIT);
 
     await h.clickWorld(page, 6, 0);        // ordinary click-drawn segment
@@ -69,11 +70,11 @@ test.describe('sticky ruler mode', () => {
     await h.selectTool(page, 'Wall');
     await page.keyboard.press('r');        // latch ON before drawing
     expect(await chipColor(page)).toBe(LIT);
-    await expect(page.locator('[data-frozen-length]')).toHaveCount(0);
+    await expect(page.locator('[data-frozen-length]')).toBeDisabled();
 
-    await h.clickWorld(page, 0, 0);        // first corner opens the box
+    await h.clickWorld(page, 0, 0);        // first corner wakes the box
     const box = page.locator('[data-frozen-length]');
-    await expect(box).toBeVisible();
+    await expect(box).toBeEnabled();
 
     await h.moveTo(page, 5, 0);
     await page.keyboard.type('12');
@@ -94,7 +95,7 @@ test.describe('sticky ruler mode', () => {
 
     await h.clickWorld(page, 7, 0);        // ordinary corner at the cursor
     const box = page.locator('[data-frozen-length]');
-    await expect(box).toBeVisible();       // re-armed for the next segment
+    await expect(box).toBeEnabled();       // re-armed for the next segment
 
     await h.moveTo(page, 7, -5);
     await page.keyboard.type('9');
@@ -119,7 +120,7 @@ test.describe('sticky ruler mode', () => {
     // click chooses the east ray — but the typed 9 wins over the click point.
     await h.clickWorld(page, 5, -1);
     const box = page.locator('[data-frozen-length]');
-    await expect(box).toBeVisible();       // and the box is already re-armed
+    await expect(box).toBeEnabled();       // and the box is already re-armed
     await page.keyboard.press('Enter');    // empty box = finish
     await h.waitForSaved(page);
     const lines = h.allLines(await h.savedDrawing(page));
@@ -134,17 +135,17 @@ test.describe('sticky ruler mode', () => {
     await page.keyboard.press('r');
     await h.clickWorld(page, -5, 5);
     const box = page.locator('[data-frozen-length]');
-    await expect(box).toBeVisible();
+    await expect(box).toBeEnabled();
 
     await h.moveTo(page, 0, 5);            // east
     await page.keyboard.type('20');
     await page.keyboard.press('Enter');
-    await expect(box).toBeVisible();
+    await expect(box).toBeEnabled();
 
     await h.moveTo(page, 15, 0);           // north
     await page.keyboard.type('15');
     await page.keyboard.press('Enter');
-    await expect(box).toBeVisible();
+    await expect(box).toBeEnabled();
     expect(await chipColor(page)).toBe(LIT);
   });
 });
