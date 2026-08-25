@@ -6617,6 +6617,8 @@ class Component extends DCLogic {
     if (!stack) { header(cut.name); return; }
     const crossings = this._sectionWallCrossings(cut, axis);
     if (!crossings.length) {
+      // Standing outside the model looking at it: an elevation, not a section.
+      if (this._drawElevationWorkspace2D(ctx, w, h, cut, stack, axis, header)) return;
       header(cut.name);
       ctx.fillStyle = 'rgba(29,31,32,0.55)';
       ctx.font = "600 13px 'Barlow Condensed', system-ui, sans-serif";
@@ -6795,6 +6797,166 @@ class Component extends DCLogic {
     ctx.rotate(-Math.PI / 2);
     ctx.fillText(opening.type.toUpperCase(), 0, 0);
     ctx.restore();
+  }
+
+  // A cut that crosses nothing but faces the model is an elevation: wall
+  // faces projected onto the cut line (far to near, so close walls occlude),
+  // openings on each face, the roof silhouette, a grade line, and the
+  // below-grade foundation dashed. Returns false when nothing projects
+  // into the cut's span, so the caller can fall back to the guidance text.
+  _drawElevationWorkspace2D(ctx, w, h, cut, stack, axis, header) {
+    const dir = cut.dirVec;
+    const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
+    const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
+    const uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
+    const proj = pt => ({ u: pt.x * axis.x + pt.z * axis.z, d: pt.x * dir.x + pt.z * dir.z });
+
+    const levelById = {};
+    stack.floors.forEach(level => { levelById[level.id] = level; });
+    const faces = [];
+    const fdnUs = [];
+    this._walls.forEach(wall => {
+      const p1 = proj(wall.start), p2 = proj(wall.end);
+      if (Math.max(p1.u, p2.u) < uMin || Math.min(p1.u, p2.u) > uMax) return;
+      if ((wall.view || 'plan') === 'foundation') { fdnUs.push(p1.u, p2.u); return; }
+      const level = levelById[wall.levelId];
+      if (!level || Math.abs(p2.u - p1.u) < 0.5) return;
+      faces.push({ wall, u1: p1.u, u2: p2.u, depth: (p1.d + p2.d) / 2, level });
+    });
+    if (!faces.length) return false;
+    faces.sort((a, b) => a.depth - b.depth);   // viewer sits on +dir: far first
+
+    // Roof silhouette: at each spot along the cut, the tallest roof surface
+    // anywhere along the viewing depth — the ridge/hip outline from outside.
+    const roofs = this._roofs;
+    const silhouette = [];
+    if (roofs.length) {
+      let dLo = Infinity, dHi = -Infinity;
+      roofs.forEach(roof => (roof.points || []).forEach(pt => {
+        const d = pt.x * dir.x + pt.z * dir.z;
+        dLo = Math.min(dLo, d); dHi = Math.max(dHi, d);
+      }));
+      const steps = 240, depthSteps = 40;
+      for (let i = 0; i <= steps; i++) {
+        const s = i / steps;
+        const bx = cut.startPt.x + (cut.endPt.x - cut.startPt.x) * s;
+        const bz = cut.startPt.z + (cut.endPt.z - cut.startPt.z) * s;
+        const baseD = bx * dir.x + bz * dir.z;
+        let best = null;
+        for (let j = 0; j <= depthSteps; j++) {
+          const k = dLo + (dHi - dLo) * j / depthSteps;
+          const px = bx + dir.x * (k - baseD), pz = bz + dir.z * (k - baseD);
+          roofs.forEach(roof => {
+            const rise = this._sectionRoofHeightAt({ x: px, z: pz }, roof);
+            if (rise != null && (best === null || rise > best)) best = rise;
+          });
+        }
+        silhouette.push({
+          u: bx * axis.x + bz * axis.z,
+          elev: best === null ? null : stack.bearing + ROOF_FASCIA_IN / 12 + best,
+        });
+      }
+    }
+
+    const fdn = stack.foundation;
+    const lit = silhouette.filter(s => s.elev != null);
+    const yTop = Math.max(stack.bearing + 4, ...lit.map(s => s.elev + 2));
+    const yBottom = fdn.footingBottom - 2;
+    const marginL = 64, marginR = 24, marginT = 30, marginB = 16;
+    const pxPerFt = Math.max(2, Math.min(
+      (w - marginL - marginR) / Math.max(uMax - uMin, 4),
+      (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
+    const x0 = marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
+    const y0 = marginT + ((h - marginT - marginB) - (yTop - yBottom) * pxPerFt) / 2;
+    const X = u => x0 + (u - uMin) * pxPerFt;
+    const Y = e => y0 + (yTop - e) * pxPerFt;
+
+    const INK = '#1d1f20';
+    header(`${cut.name} — GENERATED ELEVATION`);
+
+    const datum = this.state.elevationDatum;
+    const mark = elevFt => {
+      ctx.strokeStyle = 'rgba(29,31,32,0.25)'; ctx.lineWidth = 0.75;
+      ctx.beginPath();
+      ctx.moveTo(marginL - 18, Y(elevFt)); ctx.lineTo(w - marginR, Y(elevFt));
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(29,31,32,0.6)';
+      ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(this._elevLabel(elevFt + datum), marginL - 22, Y(elevFt));
+    };
+    stack.floors.forEach(level => { mark(level.floorTop); mark(level.wallTop); });
+
+    // Below-grade foundation, dashed: the wall run and the footing under it.
+    if (fdnUs.length) {
+      const lo = Math.max(Math.min(...fdnUs), uMin), hi = Math.min(Math.max(...fdnUs), uMax);
+      if (hi - lo > 0.5) {
+        ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(X(lo), Y(fdn.wallTop), (hi - lo) * pxPerFt,
+          (fdn.wallTop - fdn.wallBottom) * pxPerFt);
+        ctx.strokeRect(X(lo), Y(fdn.wallBottom), (hi - lo) * pxPerFt,
+          (fdn.footingIn / 12) * pxPerFt);
+        ctx.setLineDash([]);
+      }
+    }
+
+    // Wall faces, far to near, each with the openings it hosts.
+    const HEAD_FT = 6 + 10 / 12, SILL_FT = 3;
+    faces.forEach(face => {
+      const { wall, u1, u2, level } = face;
+      const xa = X(Math.max(Math.min(u1, u2), uMin));
+      const xb = X(Math.min(Math.max(u1, u2), uMax));
+      ctx.fillStyle = '#f2f2f3';
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+      ctx.fillRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - level.floorTop) * pxPerFt);
+      ctx.strokeRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - level.floorTop) * pxPerFt);
+      const wallLen = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+      if (wallLen < 1e-6) return;
+      const du = (u2 - u1) / wallLen;
+      this._fenestrations.filter(f => f.wallId === wall.id).forEach(f => {
+        const uc = u1 + du * f.offset;
+        const half = Math.abs(du) * f.width / 2;
+        const ox = X(Math.max(uc - half, uMin)), ow = X(Math.min(uc + half, uMax)) - ox;
+        if (ow <= 0) return;
+        const top = Math.min(level.floorTop + HEAD_FT, level.wallTop);
+        const bottom = f.type === 'door' ? level.floorTop : level.floorTop + SILL_FT;
+        ctx.fillStyle = '#fafafa';
+        ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        ctx.fillRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
+        ctx.strokeRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
+      });
+    });
+
+    // Roof silhouette over the faces, with the fascia band along the eave.
+    if (lit.length > 1) {
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      let pen = false;
+      silhouette.forEach(s => {
+        if (s.elev == null) { pen = false; return; }
+        if (!pen) { ctx.moveTo(X(s.u), Y(stack.bearing)); ctx.lineTo(X(s.u), Y(s.elev)); pen = true; }
+        else ctx.lineTo(X(s.u), Y(s.elev));
+      });
+      const last = [...silhouette].reverse().find(s => s.elev != null);
+      if (last) ctx.lineTo(X(last.u), Y(stack.bearing));
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(X(lit[0].u), Y(stack.bearing + ROOF_FASCIA_IN / 12));
+      ctx.lineTo(X(lit[lit.length - 1].u), Y(stack.bearing + ROOF_FASCIA_IN / 12));
+      ctx.moveTo(X(lit[0].u), Y(stack.bearing));
+      ctx.lineTo(X(lit[lit.length - 1].u), Y(stack.bearing));
+      ctx.stroke();
+    }
+
+    // Grade at the top of the foundation wall, heavy, across the sheet.
+    ctx.strokeStyle = INK; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(marginL - 18, Y(fdn.wallTop));
+    ctx.lineTo(w - marginR, Y(fdn.wallTop));
+    ctx.stroke();
+    return true;
   }
 
   _disposeCutObjects(id) {
