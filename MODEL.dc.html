@@ -4213,6 +4213,13 @@ class Component extends DCLogic {
     ctx.clearRect(0, 0, w, h);
     if (this.state.activeView === 'perspective') return;
 
+    // A cut view is a generated drawing, not a camera angle: the section
+    // renders from the semantic model in its own locked workspace.
+    if (this.state.activeView === 'cut') {
+      const cut = this.state.cuts.find(c => c.id === this.state.activeCutId);
+      if (cut) { this._drawCutWorkspace2D(ctx, w, h, cut); return; }
+    }
+
     // The STAIR layer set replaces the free camera with a locked workspace
     // framed around the level's stair: section over plan, nosings aligned.
     if (this._stairWorkspaceActive()) {
@@ -6511,7 +6518,469 @@ class Component extends DCLogic {
     this._updateOrthoFrustum();
     this._orthoCam.updateProjectionMatrix();
 
+    this._invalidate();
     this.setState({ activeView: 'cut', activeCutId: cutId });
+  }
+
+  // ─── Generated section / elevation ──────────────────────────────────────────
+  // The cut view is a locked drafting workspace like the STAIR set: a 2D
+  // section generated from the semantic model — the level stack, walls the
+  // cut crosses, floor assemblies, foundation walls with footings and slab,
+  // and the roof planes — all projected onto the cut line.
+
+  // Construction elevations as numbers (the level cards format the same
+  // stack as labels): floor tops, wall tops, and the foundation depths.
+  _sectionLevelStack() {
+    const floors = this._floorLevels();
+    if (!floors.length) return null;
+    let floorTop = 0;
+    const stack = floors.map((level, index) => {
+      if (index > 0) {
+        floorTop += this._levelAssembly(floors[index - 1].id).wallHeightFt
+          + this._levelFloorFt(level.id);
+      }
+      const assembly = this._levelAssembly(level.id);
+      return {
+        id: level.id, name: level.name,
+        floorTop,
+        floorBottom: floorTop - this._levelFloorFt(level.id),
+        wallTop: floorTop + assembly.wallHeightFt,
+        joistDepthIn: assembly.joistDepthIn,
+        sheathingIn: assembly.sheathingIn,
+      };
+    });
+    const lowest = stack[0];
+    const foundationAssembly = this._levelAssembly(1);
+    const wallTop = lowest.floorBottom;
+    const wallBottom = wallTop - this._levelWallTopFt(1, 'foundation');
+    return {
+      floors: stack,
+      bearing: stack[stack.length - 1].wallTop,
+      foundation: {
+        wallTop, wallBottom,
+        slabTop: wallBottom + foundationAssembly.slabThicknessIn / 12,
+        slabIn: foundationAssembly.slabThicknessIn,
+        footingBottom: wallBottom - foundationAssembly.footingDepthIn / 12,
+        footingIn: foundationAssembly.footingDepthIn,
+        footingWidthIn: this._footingWidthIn(1),
+      },
+    };
+  }
+
+  // Where the cut segment crosses a wall centreline: the position along the
+  // viewer's horizontal axis, the wall, and how far along the wall it lands
+  // (for reading fenestrations at the crossing).
+  _sectionWallCrossings(cut, axis) {
+    const a = cut.startPt, b = cut.endPt;
+    const crossings = [];
+    this._walls.forEach(wall => {
+      const c = wall.start, d = wall.end;
+      const denom = (b.x - a.x) * (d.z - c.z) - (b.z - a.z) * (d.x - c.x);
+      if (Math.abs(denom) < 1e-9) return;   // parallel — an elevation face, not a cut
+      const s = ((c.x - a.x) * (d.z - c.z) - (c.z - a.z) * (d.x - c.x)) / denom;
+      const t = ((c.x - a.x) * (b.z - a.z) - (c.z - a.z) * (b.x - a.x)) / denom;
+      if (s < 0 || s > 1 || t < 0 || t > 1) return;
+      const px = a.x + (b.x - a.x) * s, pz = a.z + (b.z - a.z) * s;
+      const type = WALL_TYPES.find(w => w.id === wall.wallType);
+      const wallLen = Math.hypot(d.x - c.x, d.z - c.z);
+      // A skewed wall reads wider on the section — its thickness over the
+      // sine of the crossing angle, capped so near-parallel walls stay sane.
+      const cutLen = Math.hypot(b.x - a.x, b.z - a.z);
+      const sin = Math.abs(denom) / (cutLen * wallLen || 1);
+      const width = (type ? type.totalIn : 5.5) / 12 / Math.max(sin, 0.35);
+      crossings.push({
+        wall, u: px * axis.x + pz * axis.z,
+        width,
+        alongWall: t * wallLen,
+      });
+    });
+    return crossings;
+  }
+
+  // Roof surface height over a plan point: each roof plane rises from its
+  // EAVE edges at the pitch, so the surface is the lowest rise any eave
+  // gives — the same rule the skeleton generator uses for ridges and hips.
+  _sectionRoofHeightAt(pt, roof) {
+    const pts = roof.points;
+    if (!pts || pts.length < 3) return null;
+    // Point-in-polygon (footprint includes the overhang).
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const pi = pts[i], pj = pts[j];
+      if ((pi.z > pt.z) !== (pj.z > pt.z)
+        && pt.x < (pj.x - pi.x) * (pt.z - pi.z) / (pj.z - pi.z) + pi.x) inside = !inside;
+    }
+    if (!inside) return null;
+    let rise = Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      if ((roof.edges?.[i] || 'eave') === 'gable') continue;
+      const p1 = pts[i], p2 = pts[(i + 1) % pts.length];
+      const ex = p2.x - p1.x, ez = p2.z - p1.z;
+      const len = Math.hypot(ex, ez);
+      if (len < 1e-6) continue;
+      const dist = Math.abs((pt.x - p1.x) * ez - (pt.z - p1.z) * ex) / len;
+      rise = Math.min(rise, dist * (roof.pitch || 4) / 12);
+    }
+    return rise === Infinity ? 0 : rise;
+  }
+
+  _drawCutWorkspace2D(ctx, w, h, cut) {
+    ctx.fillStyle = '#fafafa';
+    ctx.fillRect(0, 0, w, h);
+    const stack = this._sectionLevelStack();
+    const dir = cut.dirVec;
+    // Screen-x in world terms: the viewer looks along -dir with +Y up, so
+    // right on the paper is (dir.z, -dir.x) — the cut line's own direction.
+    const axis = { x: dir.z, z: -dir.x };
+    const header = (label) => {
+      ctx.fillStyle = 'rgba(29,31,32,0.55)';
+      ctx.font = "600 10px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText(label, 10, 8);
+    };
+    if (!stack) { header(cut.name); return; }
+    const crossings = this._sectionWallCrossings(cut, axis);
+    if (!crossings.length) {
+      // Standing outside the model looking at it: an elevation, not a section.
+      if (this._drawElevationWorkspace2D(ctx, w, h, cut, stack, axis, header)) return;
+      header(cut.name);
+      ctx.fillStyle = 'rgba(29,31,32,0.55)';
+      ctx.font = "600 13px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('The cut line crosses no walls — draw it through the plan.', w / 2, h / 2);
+      return;
+    }
+
+    const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
+    const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
+    const uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
+
+    // Roof profile sampled along the cut on the world line it follows.
+    const roofSamples = [];
+    const roofs = this._roofs;
+    if (roofs.length) {
+      const steps = 240;
+      for (let i = 0; i <= steps; i++) {
+        const s = i / steps;
+        const px = cut.startPt.x + (cut.endPt.x - cut.startPt.x) * s;
+        const pz = cut.startPt.z + (cut.endPt.z - cut.startPt.z) * s;
+        let best = null;
+        roofs.forEach(roof => {
+          const rise = this._sectionRoofHeightAt({ x: px, z: pz }, roof);
+          if (rise != null && (best === null || rise > best)) best = rise;
+        });
+        roofSamples.push({
+          u: px * axis.x + pz * axis.z,
+          elev: best === null ? null : stack.bearing + ROOF_FASCIA_IN / 12 + best,
+        });
+      }
+    }
+
+    const yTop = Math.max(stack.bearing + 4,
+      ...roofSamples.filter(s => s.elev != null).map(s => s.elev + 2));
+    const yBottom = stack.foundation.footingBottom - 2;
+    const marginL = 64, marginR = 24, marginT = 30, marginB = 16;
+    const pxPerFt = Math.max(2, Math.min(
+      (w - marginL - marginR) / Math.max(uMax - uMin, 4),
+      (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
+    const x0 = marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
+    const y0 = marginT + ((h - marginT - marginB) - (yTop - yBottom) * pxPerFt) / 2;
+    const X = u => x0 + (u - uMin) * pxPerFt;
+    const Y = e => y0 + (yTop - e) * pxPerFt;
+
+    const INK = '#1d1f20';
+    header(`${cut.name} — GENERATED SECTION · ${this._ftIn(uMax - uMin)} CUT`);
+
+    // Elevation marks down the left margin, on the level-card datum.
+    const datum = this.state.elevationDatum;
+    const mark = (elevFt, label) => {
+      ctx.strokeStyle = 'rgba(29,31,32,0.25)'; ctx.lineWidth = 0.75;
+      ctx.beginPath();
+      ctx.moveTo(marginL - 18, Y(elevFt)); ctx.lineTo(w - marginR, Y(elevFt));
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(29,31,32,0.6)';
+      ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(label ?? this._elevLabel(elevFt + datum), marginL - 22, Y(elevFt));
+    };
+    stack.floors.forEach(level => { mark(level.floorTop); mark(level.wallTop); });
+    mark(stack.foundation.slabTop);
+    mark(stack.foundation.footingBottom);
+
+    // Level extents: each floor band spans the outermost walls it crosses.
+    const levelSpan = levelId => {
+      const us = crossings.filter(c => c.wall.levelId === levelId).map(c => c.u);
+      return us.length ? { min: Math.min(...us), max: Math.max(...us) } : null;
+    };
+
+    // Foundation first: walls, footings, and the slab between them.
+    const fdn = stack.foundation;
+    const fdnCrossings = crossings.filter(c => (c.wall.view || 'plan') === 'foundation');
+    fdnCrossings.forEach(c => {
+      ctx.fillStyle = 'rgba(150,150,155,0.5)';
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+      const x = X(c.u - c.width / 2), wid = c.width * pxPerFt;
+      ctx.fillRect(x, Y(fdn.wallTop), wid, (fdn.wallTop - fdn.wallBottom) * pxPerFt);
+      ctx.strokeRect(x, Y(fdn.wallTop), wid, (fdn.wallTop - fdn.wallBottom) * pxPerFt);
+      const fw = fdn.footingWidthIn / 12;
+      const fx = X(c.u - fw / 2), fwid = fw * pxPerFt;
+      ctx.fillRect(fx, Y(fdn.wallBottom), fwid, (fdn.footingIn / 12) * pxPerFt);
+      ctx.strokeRect(fx, Y(fdn.wallBottom), fwid, (fdn.footingIn / 12) * pxPerFt);
+    });
+    const fdnSpan = fdnCrossings.length
+      ? { min: Math.min(...fdnCrossings.map(c => c.u)), max: Math.max(...fdnCrossings.map(c => c.u)) }
+      : null;
+    if (fdnSpan && fdnSpan.max - fdnSpan.min > 1) {
+      ctx.fillStyle = 'rgba(150,150,155,0.35)';
+      ctx.strokeStyle = INK; ctx.lineWidth = 1;
+      const x = X(fdnSpan.min), wid = (fdnSpan.max - fdnSpan.min) * pxPerFt;
+      ctx.fillRect(x, Y(fdn.slabTop), wid, (fdn.slabIn / 12) * pxPerFt);
+      ctx.strokeRect(x, Y(fdn.slabTop), wid, (fdn.slabIn / 12) * pxPerFt);
+    }
+
+    // Floor levels: assembly band, then the crossed walls standing on it.
+    stack.floors.forEach(level => {
+      const span = levelSpan(level.id) || fdnSpan;
+      if (span && span.max - span.min > 0.5) {
+        ctx.fillStyle = 'rgba(89,128,166,0.15)';
+        ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        const x = X(span.min), wid = (span.max - span.min) * pxPerFt;
+        const depth = (level.floorTop - level.floorBottom) * pxPerFt;
+        ctx.fillRect(x, Y(level.floorTop), wid, depth);
+        ctx.strokeRect(x, Y(level.floorTop), wid, depth);
+        ctx.fillStyle = 'rgba(29,31,32,0.55)';
+        ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(
+          `${formatInchesOnly(level.joistDepthIn)} TJI + ${formatInchesOnly(level.sheathingIn)} SHTG`,
+          x + 4, Y((level.floorTop + level.floorBottom) / 2));
+      }
+      crossings.filter(c => c.wall.levelId === level.id && (c.wall.view || 'plan') === 'plan')
+        .forEach(c => this._drawSectionWall(ctx, X, Y, pxPerFt, c, level));
+    });
+
+    // Roof profile over everything: the sampled top chord plus fascia drops.
+    const lit = roofSamples.filter(s => s.elev != null);
+    if (lit.length > 1) {
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      let pen = false;
+      roofSamples.forEach(s => {
+        if (s.elev == null) { pen = false; return; }
+        if (!pen) {
+          ctx.moveTo(X(s.u), Y(stack.bearing));         // fascia drop at the edge
+          ctx.lineTo(X(s.u), Y(s.elev));
+          pen = true;
+        } else ctx.lineTo(X(s.u), Y(s.elev));
+      });
+      const last = [...roofSamples].reverse().find(s => s.elev != null);
+      if (last) ctx.lineTo(X(last.u), Y(stack.bearing));
+      ctx.stroke();
+      // Bottom chord: flat ceiling line at the bearing across the roof span.
+      ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(X(lit[0].u), Y(stack.bearing));
+      ctx.lineTo(X(lit[lit.length - 1].u), Y(stack.bearing));
+      ctx.stroke();
+    }
+  }
+
+  // One crossed wall on the section: the stud rectangle for its level, with
+  // any fenestration the cut happens to pass through read out of the wall —
+  // doors clear to the head, windows hang from it to a default sill.
+  _drawSectionWall(ctx, X, Y, pxPerFt, crossing, level) {
+    const INK = '#1d1f20';
+    const HEAD_FT = 6 + 10 / 12;          // default door / window head
+    const SILL_FT = 3;                    // default window sill
+    const { wall, u, width, alongWall } = crossing;
+    const x = X(u - width / 2), wid = width * pxPerFt;
+    const bottom = level.floorTop, top = level.wallTop;
+    const opening = this._fenestrations.find(f => f.wallId === wall.id
+      && Math.abs(alongWall - f.offset) < f.width / 2);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+    ctx.fillStyle = 'rgba(29,31,32,0.12)';
+    if (!opening) {
+      ctx.fillRect(x, Y(top), wid, (top - bottom) * pxPerFt);
+      ctx.strokeRect(x, Y(top), wid, (top - bottom) * pxPerFt);
+      return;
+    }
+    const gapBottom = opening.type === 'door' ? bottom : bottom + SILL_FT;
+    const gapTop = Math.min(bottom + HEAD_FT, top);
+    // Above the head (header + plates) and, for windows, below the sill.
+    ctx.fillRect(x, Y(top), wid, (top - gapTop) * pxPerFt);
+    ctx.strokeRect(x, Y(top), wid, (top - gapTop) * pxPerFt);
+    if (gapBottom > bottom) {
+      ctx.fillRect(x, Y(gapBottom), wid, (gapBottom - bottom) * pxPerFt);
+      ctx.strokeRect(x, Y(gapBottom), wid, (gapBottom - bottom) * pxPerFt);
+    }
+    ctx.fillStyle = 'rgba(29,31,32,0.55)';
+    ctx.font = "600 8px 'Barlow Condensed', system-ui, sans-serif";
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.save();
+    ctx.translate(x + wid / 2, Y((gapTop + gapBottom) / 2));
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(opening.type.toUpperCase(), 0, 0);
+    ctx.restore();
+  }
+
+  // A cut that crosses nothing but faces the model is an elevation: wall
+  // faces projected onto the cut line (far to near, so close walls occlude),
+  // openings on each face, the roof silhouette, a grade line, and the
+  // below-grade foundation dashed. Returns false when nothing projects
+  // into the cut's span, so the caller can fall back to the guidance text.
+  _drawElevationWorkspace2D(ctx, w, h, cut, stack, axis, header) {
+    const dir = cut.dirVec;
+    const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
+    const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
+    const uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
+    const proj = pt => ({ u: pt.x * axis.x + pt.z * axis.z, d: pt.x * dir.x + pt.z * dir.z });
+
+    const levelById = {};
+    stack.floors.forEach(level => { levelById[level.id] = level; });
+    const faces = [];
+    const fdnUs = [];
+    this._walls.forEach(wall => {
+      const p1 = proj(wall.start), p2 = proj(wall.end);
+      if (Math.max(p1.u, p2.u) < uMin || Math.min(p1.u, p2.u) > uMax) return;
+      if ((wall.view || 'plan') === 'foundation') { fdnUs.push(p1.u, p2.u); return; }
+      const level = levelById[wall.levelId];
+      if (!level || Math.abs(p2.u - p1.u) < 0.5) return;
+      faces.push({ wall, u1: p1.u, u2: p2.u, depth: (p1.d + p2.d) / 2, level });
+    });
+    if (!faces.length) return false;
+    faces.sort((a, b) => a.depth - b.depth);   // viewer sits on +dir: far first
+
+    // Roof silhouette: at each spot along the cut, the tallest roof surface
+    // anywhere along the viewing depth — the ridge/hip outline from outside.
+    const roofs = this._roofs;
+    const silhouette = [];
+    if (roofs.length) {
+      let dLo = Infinity, dHi = -Infinity;
+      roofs.forEach(roof => (roof.points || []).forEach(pt => {
+        const d = pt.x * dir.x + pt.z * dir.z;
+        dLo = Math.min(dLo, d); dHi = Math.max(dHi, d);
+      }));
+      const steps = 240, depthSteps = 40;
+      for (let i = 0; i <= steps; i++) {
+        const s = i / steps;
+        const bx = cut.startPt.x + (cut.endPt.x - cut.startPt.x) * s;
+        const bz = cut.startPt.z + (cut.endPt.z - cut.startPt.z) * s;
+        const baseD = bx * dir.x + bz * dir.z;
+        let best = null;
+        for (let j = 0; j <= depthSteps; j++) {
+          const k = dLo + (dHi - dLo) * j / depthSteps;
+          const px = bx + dir.x * (k - baseD), pz = bz + dir.z * (k - baseD);
+          roofs.forEach(roof => {
+            const rise = this._sectionRoofHeightAt({ x: px, z: pz }, roof);
+            if (rise != null && (best === null || rise > best)) best = rise;
+          });
+        }
+        silhouette.push({
+          u: bx * axis.x + bz * axis.z,
+          elev: best === null ? null : stack.bearing + ROOF_FASCIA_IN / 12 + best,
+        });
+      }
+    }
+
+    const fdn = stack.foundation;
+    const lit = silhouette.filter(s => s.elev != null);
+    const yTop = Math.max(stack.bearing + 4, ...lit.map(s => s.elev + 2));
+    const yBottom = fdn.footingBottom - 2;
+    const marginL = 64, marginR = 24, marginT = 30, marginB = 16;
+    const pxPerFt = Math.max(2, Math.min(
+      (w - marginL - marginR) / Math.max(uMax - uMin, 4),
+      (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
+    const x0 = marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
+    const y0 = marginT + ((h - marginT - marginB) - (yTop - yBottom) * pxPerFt) / 2;
+    const X = u => x0 + (u - uMin) * pxPerFt;
+    const Y = e => y0 + (yTop - e) * pxPerFt;
+
+    const INK = '#1d1f20';
+    header(`${cut.name} — GENERATED ELEVATION`);
+
+    const datum = this.state.elevationDatum;
+    const mark = elevFt => {
+      ctx.strokeStyle = 'rgba(29,31,32,0.25)'; ctx.lineWidth = 0.75;
+      ctx.beginPath();
+      ctx.moveTo(marginL - 18, Y(elevFt)); ctx.lineTo(w - marginR, Y(elevFt));
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(29,31,32,0.6)';
+      ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(this._elevLabel(elevFt + datum), marginL - 22, Y(elevFt));
+    };
+    stack.floors.forEach(level => { mark(level.floorTop); mark(level.wallTop); });
+
+    // Below-grade foundation, dashed: the wall run and the footing under it.
+    if (fdnUs.length) {
+      const lo = Math.max(Math.min(...fdnUs), uMin), hi = Math.min(Math.max(...fdnUs), uMax);
+      if (hi - lo > 0.5) {
+        ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(X(lo), Y(fdn.wallTop), (hi - lo) * pxPerFt,
+          (fdn.wallTop - fdn.wallBottom) * pxPerFt);
+        ctx.strokeRect(X(lo), Y(fdn.wallBottom), (hi - lo) * pxPerFt,
+          (fdn.footingIn / 12) * pxPerFt);
+        ctx.setLineDash([]);
+      }
+    }
+
+    // Wall faces, far to near, each with the openings it hosts.
+    const HEAD_FT = 6 + 10 / 12, SILL_FT = 3;
+    faces.forEach(face => {
+      const { wall, u1, u2, level } = face;
+      const xa = X(Math.max(Math.min(u1, u2), uMin));
+      const xb = X(Math.min(Math.max(u1, u2), uMax));
+      ctx.fillStyle = '#f2f2f3';
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+      ctx.fillRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - level.floorTop) * pxPerFt);
+      ctx.strokeRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - level.floorTop) * pxPerFt);
+      const wallLen = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+      if (wallLen < 1e-6) return;
+      const du = (u2 - u1) / wallLen;
+      this._fenestrations.filter(f => f.wallId === wall.id).forEach(f => {
+        const uc = u1 + du * f.offset;
+        const half = Math.abs(du) * f.width / 2;
+        const ox = X(Math.max(uc - half, uMin)), ow = X(Math.min(uc + half, uMax)) - ox;
+        if (ow <= 0) return;
+        const top = Math.min(level.floorTop + HEAD_FT, level.wallTop);
+        const bottom = f.type === 'door' ? level.floorTop : level.floorTop + SILL_FT;
+        ctx.fillStyle = '#fafafa';
+        ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        ctx.fillRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
+        ctx.strokeRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
+      });
+    });
+
+    // Roof silhouette over the faces, with the fascia band along the eave.
+    if (lit.length > 1) {
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      let pen = false;
+      silhouette.forEach(s => {
+        if (s.elev == null) { pen = false; return; }
+        if (!pen) { ctx.moveTo(X(s.u), Y(stack.bearing)); ctx.lineTo(X(s.u), Y(s.elev)); pen = true; }
+        else ctx.lineTo(X(s.u), Y(s.elev));
+      });
+      const last = [...silhouette].reverse().find(s => s.elev != null);
+      if (last) ctx.lineTo(X(last.u), Y(stack.bearing));
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(X(lit[0].u), Y(stack.bearing + ROOF_FASCIA_IN / 12));
+      ctx.lineTo(X(lit[lit.length - 1].u), Y(stack.bearing + ROOF_FASCIA_IN / 12));
+      ctx.moveTo(X(lit[0].u), Y(stack.bearing));
+      ctx.lineTo(X(lit[lit.length - 1].u), Y(stack.bearing));
+      ctx.stroke();
+    }
+
+    // Grade at the top of the foundation wall, heavy, across the sheet.
+    ctx.strokeStyle = INK; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(marginL - 18, Y(fdn.wallTop));
+    ctx.lineTo(w - marginR, Y(fdn.wallTop));
+    ctx.stroke();
+    return true;
   }
 
   _disposeCutObjects(id) {
