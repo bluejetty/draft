@@ -110,6 +110,30 @@ test('mid-draw, Shift locks onto the polar node ray when the cursor sits closer 
   expect(h.touchesPoint(added, 8, 0)).toBe(true); // straight across from the node
 });
 
+test('mid-draw, Shift keeps the start lock when the cursor is off the polar node rays', async ({ page }) => {
+  await h.openModel(page);
+  await page.keyboard.press('t'); // set the T-square down — acquiring an off-ray node mid-draw
+  await drawLine(page, 0, 0, 5, -5);
+
+  await h.selectTool(page, 'Line');
+  await h.clickWorld(page, -10, 10); // chain start elsewhere
+  await h.moveTo(page, 0, 0);        // acquire the node as the polar origin
+  await expect(page.locator('[data-model-polar]')).toBeVisible();
+
+  // The cursor sits well off every ray from the node (4' from its level ray),
+  // so the node cannot steal the point — the start's own lock holds it.
+  await page.keyboard.down('Shift');
+  await h.clickWorld(page, 10, 4);
+  await page.keyboard.up('Shift');
+  await page.keyboard.press('Enter'); // finish the chain
+  await h.waitForSaved(page);
+
+  const lines = h.allLines(await h.savedDrawing(page));
+  const added = lines.find(line => h.touchesPoint(line, -10, 10));
+  expect(added).toBeTruthy();
+  expect(h.touchesPoint(added, 10, 10)).toBe(true); // level with the chain start
+});
+
 test('an outline can start its first point a typed distance off an existing node', async ({ page }) => {
   await h.openModel(page);
   await drawLine(page, 0, 0, 5, -5);
