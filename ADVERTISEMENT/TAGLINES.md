@@ -8,6 +8,8 @@ The collected RoughDrafter LITE campaign lines. Real taglines carry the brand st
 
 - **ROUGHLY TRUE. NEVER PERFECT.**
   The company philosophy in four words. TRUE like plumb — the mason's word: a true wall, true to plumb, on the level. It's literally the name too — ROUGH Drafter: rough drafts, rough openings, the glitches we leave in, the trap streets. Perfect is the other guys' lie; roughly true is what actually gets houses built. Serious line — not a joke tagline. *Concept locked; exact wording still workable.*
+  Layers (multiple meanings = a good one): true like plumb; true like honest (the ad never lies); rough drafts true enough to build from; RUFF true — dog-loyal true. The reader picks whichever meaning they've earned.
+  And the inclusion principle: everyone gets to be involved when the expectation isn't perfection. Perfection is a gate, roughness is a door — but TRUE stays non-negotiable even when perfect isn't; your rough plan still has to stand up.
 
 - **ZERO → PLAN IN 5 MINUTES!**
   The main campaign line. The → is a fun cartoon chrome arrow (spoken: "zero to plan in five minutes"). Reads as a joke, becomes true at depth — the ad never lies, it just knows more than the viewer.
