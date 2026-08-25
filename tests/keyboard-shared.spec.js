@@ -7,8 +7,8 @@ test('Model Space labels its tools from the shared defaults', async ({ page }) =
   await openModel(page);
 
   const shared = await page.evaluate(() => window.DraftKeyboard.DEFAULT_KEYBINDINGS);
-  await expect(page.getByRole('button', { name: new RegExp(`Line\\s+\\[${shared.line}\\]`, 'i') })).toBeVisible();
-  await expect(page.getByRole('button', { name: new RegExp(`Wall\\s+\\[${shared.wall}\\]`, 'i') })).toBeVisible();
+  await expect(page.getByRole('button', { name: new RegExp(`^Line\\s+${shared.line}$`, 'i') })).toBeVisible();
+  await expect(page.getByRole('button', { name: new RegExp(`^Wall\\s+${shared.wall}$`, 'i') })).toBeVisible();
 });
 
 test('no page re-declares the keyboard helpers', async ({ page }) => {

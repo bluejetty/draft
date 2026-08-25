@@ -81,10 +81,10 @@ test('held Shift protractor takes over from the T-square at 45°', async ({ page
   expect(h.near(lines[0].end.z, 5.5)).toBe(true);
 });
 
-test('TRIM answers to Q and wears it on its label', async ({ page }) => {
+test('TRIM answers to Q and wears it on its keycap', async ({ page }) => {
   await h.openModel(page);
 
-  await expect(page.getByRole('button', { name: /Trim\s+\[Q\]/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Trim\s+Q/i })).toBeVisible();
   await page.keyboard.press('q');
   const labels = await h.activeToolLabels(page);
   expect(labels.some(label => /trim/i.test(label))).toBe(true);

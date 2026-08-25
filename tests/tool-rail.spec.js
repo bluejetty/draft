@@ -49,7 +49,7 @@ async function wallStrokeCount(page, x, z) {
 }
 
 async function toolRailLabels(page) {
-  return page.locator('[data-model-left] button').allTextContents();
+  return page.locator('[data-model-left] .tool-key .tool-key-name').allTextContents();
 }
 
 test('tool names stay the same on every layer set', async ({ page }) => {
@@ -58,7 +58,7 @@ test('tool names stay the same on every layer set', async ({ page }) => {
   for (const view of ['PLAN', 'FLOOR', 'ELECTRIC']) {
     await switchLayerView(page, view);
     const labels = (await toolRailLabels(page))
-      .map(label => label.replace(/\s+\[[^\]]+\]$/, '').trim().toUpperCase());
+      .map(label => label.trim().toUpperCase());
     for (const name of expected) expect(labels).toContain(name);
     // No context-prefixed variants anywhere in the rail.
     expect(labels.some(label => /^(PLAN|FLOOR|ELECTRIC|FOUNDATION) /.test(label))).toBe(false);
@@ -83,7 +83,9 @@ test('the rail groups tools under DRAW / EDIT and BUILD', async ({ page }) => {
     rail.querySelectorAll('div, button').forEach(el => {
       const text = (el.firstChild?.nodeValue || el.textContent || '').trim().toUpperCase();
       if (el.tagName === 'DIV' && (text === 'DRAW / EDIT' || text === 'BUILD')) { current = text; out[current] = []; }
-      else if (el.tagName === 'BUTTON' && current) out[current].push(text.replace(/\s+\[[^\]]+\]$/, ''));
+      else if (el.tagName === 'BUTTON' && el.classList.contains('tool-key') && current) {
+        out[current].push(el.querySelector('.tool-key-name').textContent.trim().toUpperCase());
+      }
     });
     return out;
   });
