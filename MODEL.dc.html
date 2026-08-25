@@ -109,7 +109,7 @@
     <span data-model-len style="color:#1d1f20; min-width:80px; text-align:right;"></span>
     <span data-model-ang style="color:rgba(29,31,32,0.4); min-width:52px;"></span>
     <!-- Constraint chips: the T-square lights while its 90° lock is on (T) or a
-         Ctrl/Shift protractor lock is engaged, the ruler lights and glows while
+         Shift protractor lock is engaged, the ruler lights and glows while
          an R typed length is active -->
     <span data-mode-tsquare title="{{ tsquareChipTitle }}" style="display:inline-flex; color:{{ tsquareChipColor }};">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
@@ -119,7 +119,8 @@
       </svg>
     </span>
     <!-- The protractor lights while a modifier holds a blade against the board:
-         Ctrl 90°, Shift 45°, Ctrl+Shift 30° — degree label shows which -->
+         Shift 45°, Ctrl+Shift 30° — degree label shows which. A bare Ctrl tap
+         toggles the T-square like T. -->
     <span data-mode-protractor title="{{ protractorChipTitle }}" style="display:inline-flex; align-items:center; gap:2px; color:{{ protractorChipColor }}; filter:{{ protractorChipGlow }};">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <path d="M2 12.5 A6 6 0 0 1 14 12.5 Z"></path>
@@ -1861,12 +1862,26 @@ class Component extends DCLogic {
   componentDidMount() {
     this._ensureDrawingCollections();
     requestAnimationFrame(() => requestAnimationFrame(() => this._init()));
-    window.addEventListener('keydown', this._onKey  = e => { this._invalidate(); this._handleKey(e); });
+    window.addEventListener('keydown', this._onKey  = e => {
+      this._invalidate();
+      // Any other key joining a held Ctrl makes it a combo (Ctrl+Z, Ctrl+Shift…),
+      // so the release no longer reads as a bare tap.
+      if (this._ctrlHeld && e.key !== 'Control') this._ctrlTapPending = false;
+      this._handleKey(e);
+    });
     window.addEventListener('keydown', this._onKdn  = e => {
       if (e.key === 'Shift' && !this._shiftHeld) { this._shiftHeld = true; this._refreshAngleLockStep(); this.setState({ tsquareEngaged: true, protractorAngle: this._protractorAngle() }); }
     });
     window.addEventListener('keydown', this._onCtrlDown = e => {
-      if (e.key === 'Control' && !this._ctrlHeld) { this._ctrlHeld = true; this._refreshAngleLockStep(); this.setState({ tsquareEngaged: true, protractorAngle: this._protractorAngle() }); }
+      if (e.key === 'Control' && !this._ctrlHeld) {
+        this._ctrlHeld = true;
+        // A bare Ctrl tap toggles the T-square like T; Ctrl already inside a
+        // combo (Shift held first) grabs the 30° blade instead.
+        this._ctrlTapPending = !this._shiftHeld;
+        this._ctrlDownAt = Date.now();
+        this._refreshAngleLockStep();
+        this.setState({ tsquareEngaged: this._shiftHeld === true, protractorAngle: this._protractorAngle() });
+      }
     });
     document.addEventListener('visibilitychange', this._onVis = () => {
       if (!document.hidden) {
@@ -1898,13 +1913,17 @@ class Component extends DCLogic {
       if (e.key === 'Shift') {
         this._shiftHeld = false;
         this._refreshAngleLockStep();
-        this.setState({ tsquareEngaged: this._ctrlHeld === true, protractorAngle: this._protractorAngle() });
+        this.setState({ tsquareEngaged: false, protractorAngle: this._protractorAngle() });
         if (this._windowSelection?.dynamic) this._invalidate();
       }
       if (e.key === 'Control') {
+        const tap = this._ctrlTapPending && Date.now() - (this._ctrlDownAt || 0) < 400;
         this._ctrlHeld = false;
+        this._ctrlTapPending = false;
         this._refreshAngleLockStep();
         this.setState({ tsquareEngaged: this._shiftHeld === true, protractorAngle: this._protractorAngle() });
+        if (tap && this._drawingReady && !this.state.profileDialog && !this.state.insertOpen
+          && this._focusedControl() !== 'field') this._toggleTsquare();
       }
     });
   }
@@ -4029,6 +4048,8 @@ class Component extends DCLogic {
     this._lastClickTime = 0;
     this._shiftHeld   = false;
     this._ctrlHeld    = false;
+    this._ctrlTapPending = false;
+    this._ctrlDownAt  = 0;
     this._cutStart3  = null; // THREE.Vector3
     this._cutEnd3    = null;
     this._cutArrowL  = null;
@@ -4042,10 +4063,10 @@ class Component extends DCLogic {
 
     // Events
     canvas.addEventListener('mousemove',   this._cmmv = e => { this._invalidate(); this._onMouseMove(e); });
-    canvas.addEventListener('mousedown',   this._cmdn = e => { this._invalidate(); this._onMouseDown(e); });
+    canvas.addEventListener('mousedown',   this._cmdn = e => { this._invalidate(); this._ctrlTapPending = false; this._onMouseDown(e); });
     canvas.addEventListener('dblclick',    this._cdbl = e => { this._invalidate(); this._onDblClick(e); });
     canvas.addEventListener('contextmenu', this._cctx = e => { e.preventDefault(); this._invalidate(); this._onRightClick(); });
-    canvas.addEventListener('wheel',       this._cwhl = e => { this._invalidate(); this._onWheel(e); }, { passive: false });
+    canvas.addEventListener('wheel',       this._cwhl = e => { this._invalidate(); this._ctrlTapPending = false; this._onWheel(e); }, { passive: false });
     canvas.addEventListener('mouseleave',  this._cmle = () => { this._invalidate(); this._onMouseLeave(); });
     window.addEventListener('mousemove',   this._wmmv = e => { this._invalidate(); this._onGlobalMouseMove(e); });
     window.addEventListener('mouseup',     this._wmup = e => {
@@ -6531,7 +6552,7 @@ class Component extends DCLogic {
   // the drawing pipeline: tracking > magnet > midpoint > Shift 45° T-square
   // from the grab point > polar rays from the armed origin > the 0,0 marker.
   _dragSnapPoint(raw, sd) {
-    const angleLockHeld = this._shiftHeld || this._ctrlHeld;
+    const angleLockHeld = this._shiftHeld;
     if (angleLockHeld) {
       if (this._lockAngle == null) this._lockAngle = geo.lockAngleFor(sd.origin, raw, this._angleLockStep());
     } else {
@@ -6620,11 +6641,11 @@ class Component extends DCLogic {
       : tool === 'extend' && this.state.extendPhase === 'destination' ? this.state.extendBase
       : tool === 'copy' && this.state.copyPhase === 'destination' ? this.state.copyBase
       : null;
-    const modifierHeld = this._shiftHeld || this._ctrlHeld;
+    const modifierHeld = this._shiftHeld;
     // The full-time T-square: while it is on, segment drawing locks to 90° with
     // no modifier held. The cursor roams free — the endpoint is its projection
     // onto the locked ray — and the ray re-aims as the cursor crosses quadrants.
-    // Held Ctrl/Shift protractors take over from the T-square while pressed.
+    // The held Shift protractor takes over from the T-square while pressed.
     const ortho = this.state.tsquareOn && !modifierHeld && !drag && !!start
       && ORTHO_LOCK_TOOLS.has(tool);
     const angleLockHeld = modifierHeld || ortho;
@@ -12988,11 +13009,10 @@ class Component extends DCLogic {
     return new THREE.Vector3(projected.x, pt.y, projected.z);
   }
 
-  // The angle-lock ladder: Ctrl squares to 90°, Shift keeps the classic 45°,
-  // Ctrl+Shift tightens to 30° for pitched work.
+  // The angle-lock ladder: Shift holds the classic 45° blade (which covers the
+  // 90s too), Ctrl+Shift tightens to 30° for pitched work.
   _angleLockStep() {
     if (this._ctrlHeld && this._shiftHeld) return Math.PI / 6;
-    if (this._ctrlHeld) return Math.PI / 2;
     return Math.PI / 4;
   }
 
@@ -13011,22 +13031,18 @@ class Component extends DCLogic {
   }
 
   // The protractor blade a held modifier combo grabs, as a degree label for
-  // the status chip: Ctrl 90°, Shift 45°, Ctrl+Shift 30°.
+  // the status chip: Shift 45°, Ctrl+Shift 30°.
   _protractorAngle() {
     if (this._ctrlHeld && this._shiftHeld) return '30';
-    if (this._ctrlHeld) return '90';
     if (this._shiftHeld) return '45';
     return '';
   }
 
-  // Changing the modifier combo mid-hold releases the held angle so the lock
-  // re-aims on the new ladder step.
+  // Any modifier transition releases the held angle so the lock re-aims at
+  // the cursor's current direction on the (possibly new) ladder step.
   _refreshAngleLockStep() {
-    const step = this._angleLockStep();
-    if (this._lockStep !== step) {
-      this._lockStep = step;
-      this._lockAngle = null;
-    }
+    this._lockStep = this._angleLockStep();
+    this._lockAngle = null;
   }
 
   _angleDeg(start, end) {
@@ -14339,7 +14355,7 @@ class Component extends DCLogic {
     const dx = raw.x - zero.x, dz = raw.z - zero.z;
     if (Math.hypot(dx, dz) <= 0.001) return;
     let angle = Math.atan2(dz, dx);
-    if (this.state.tsquareOn && !this._shiftHeld && !this._ctrlHeld) {
+    if (this.state.tsquareOn && !this._shiftHeld) {
       const step = Math.PI / 2;
       angle = Math.round(angle / step) * step;
     }
@@ -16009,7 +16025,7 @@ class Component extends DCLogic {
         ? `Drag a ${extendScope === 'all' ? 'red' : 'blue'} rectangle over the nodes to move — or window-select first, then press ${shortcut('extend')}.`
         : (extendPhase === 'base'
           ? 'Captured nodes are ready. Choose a base point.'
-          : `Click the destination · Ctrl 90° / Shift 45° / Ctrl+Shift 30° · ${shortcut('freezeLength')} to type a length.`),
+          : `Click the destination · Shift 45° / Ctrl+Shift 30° · ${shortcut('freezeLength')} to type a length.`),
       hasExtendMessage: Boolean(this.state.extendMessage),
       extendMessage: this.state.extendMessage,
       copyToolActive: copying,
@@ -16017,7 +16033,7 @@ class Component extends DCLogic {
         ? `Drag a rectangle over the items to copy — or select first, then press ${shortcut('copy')}.`
         : (copyPhase === 'base'
           ? 'Captured items are ready. Choose a base point.'
-          : `Click destinations to drop copies · Ctrl 90° / Shift 45° / Ctrl+Shift 30° · ${shortcut('freezeLength')} to type a length.`),
+          : `Click destinations to drop copies · Shift 45° / Ctrl+Shift 30° · ${shortcut('freezeLength')} to type a length.`),
       hasCopyMessage: Boolean(this.state.copyMessage),
       copyMessage: this.state.copyMessage,
       setExtendCurrentLevel: () => {
@@ -16514,14 +16530,14 @@ class Component extends DCLogic {
       tsquareChipColor: this.state.tsquareEngaged ? '#e07a20'
         : this.state.tsquareOn ? '#5980a6' : 'rgba(29,31,32,0.18)',
       tsquareChipTitle: this.state.tsquareOn
-        ? `T-SQUARE on — 90° [${shortcut('tsquare')}] · Ctrl 90° / Shift 45° / Ctrl+Shift 30° protractors`
-        : `T-SQUARE off [${shortcut('tsquare')}] · Ctrl 90° / Shift 45° / Ctrl+Shift 30° protractors`,
+        ? `T-SQUARE on — 90° [${shortcut('tsquare')} or Ctrl tap] · Shift 45° / Ctrl+Shift 30° protractors`
+        : `T-SQUARE off [${shortcut('tsquare')} or Ctrl tap] · Shift 45° / Ctrl+Shift 30° protractors`,
       protractorChipColor: this.state.protractorAngle ? '#e07a20' : 'rgba(29,31,32,0.18)',
       protractorChipGlow: this.state.protractorAngle ? 'drop-shadow(0 0 3px rgba(224,122,32,0.9))' : 'none',
       protractorChipLabel: this.state.protractorAngle ? `${this.state.protractorAngle}°` : '',
       protractorChipTitle: this.state.protractorAngle
         ? `PROTRACTOR — ${this.state.protractorAngle}° blade held`
-        : 'PROTRACTOR — hold Ctrl 90° / Shift 45° / Ctrl+Shift 30°',
+        : 'PROTRACTOR — hold Shift 45° / Ctrl+Shift 30°',
       rulerChipColor: this.state.lengthFrozen || this.state.rulerMode ? '#e07a20' : 'rgba(29,31,32,0.18)',
       rulerChipGlow: this.state.lengthFrozen || this.state.rulerMode ? 'drop-shadow(0 0 3px rgba(224,122,32,0.9))' : 'none',
       lengthFrozen: this.state.lengthFrozen,

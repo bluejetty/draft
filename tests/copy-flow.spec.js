@@ -147,14 +147,14 @@ test('a door opening rides its copied host wall', async ({ page }) => {
   expect(second.type).toBe(first.type);
 });
 
-test('Ctrl locks drawing to 90° increments', async ({ page }) => {
+test('Shift locks drawing to 45° increments, straight rays included', async ({ page }) => {
   await h.openModel(page);
   await h.selectTool(page, 'Line');
   await h.clickWorld(page, 0, 0);
-  await page.keyboard.down('Control');
-  await h.moveTo(page, 8, 5);
-  await h.clickWorld(page, 8, 5);   // 32° aim squares onto the horizontal ray
-  await page.keyboard.up('Control');
+  await page.keyboard.down('Shift');
+  await h.moveTo(page, 8, 0.6);
+  await h.clickWorld(page, 8, 0.6);   // a 4° aim squares onto the horizontal ray
+  await page.keyboard.up('Shift');
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
 
@@ -201,7 +201,7 @@ test('Alt never engages the angle lock', async ({ page }) => {
   expect(h.touchesPoint(lines[0], 8, 5)).toBe(true);
 });
 
-test('Ctrl squares the copy placement onto the base point rays', async ({ page }) => {
+test('Shift squares the copy placement onto the base point rays', async ({ page }) => {
   await h.openModel(page);
   await drawLine(page, -8, 0, -2, 0);
 
@@ -210,10 +210,10 @@ test('Ctrl squares the copy placement onto the base point rays', async ({ page }
   await dragWindow(page, -10, -2, 0, 2);
   await h.clickWorld(page, -8, 0);
 
-  await page.keyboard.down('Control');
+  await page.keyboard.down('Shift');
   await h.moveTo(page, 0, 0.8);
   await h.clickWorld(page, 0, 0.8);  // squares onto the horizontal ray → (0, 0)
-  await page.keyboard.up('Control');
+  await page.keyboard.up('Shift');
   await h.waitForSaved(page);
 
   const lines = h.allLines(await h.savedDrawing(page));
