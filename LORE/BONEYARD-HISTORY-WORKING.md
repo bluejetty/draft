@@ -21,3 +21,4 @@
 - Fire hydrant plan symbol with tiny leg-lifted dog silhouette easter egg. (#120)
 - No menu entry for BONEYARD; discovery-only, first-open ceremony, members-only vocabulary. (#142)
 - LITE marketing: full-version screenshots, captions only about LITE features, clues never explained. Voluntary is key — no funneling, no forcing.
+- **33 degrees of BONEYARD membership** (Scottish Rite echo — needs the real degree structure researched for the FINISHED file). Degree 1: pressed the paw. Degree 3: found the bone in the letterform — a Master Drafter; most stop here, like real lodges. Higher degrees honorary: drew a house in an actual 5 minutes, spotted a trap street in the DRAFT font, survived a client's spouse changing the kitchen 11 times. The 33rd is by invitation of the dog only; nobody knows what the 33rd degree gets you.
