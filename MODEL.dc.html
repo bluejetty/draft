@@ -733,7 +733,10 @@
       <sc-if value="{{ insertReadyPhase }}" hint-placeholder-val="{{ false }}">
         <div style="margin-top:12px; display:flex; gap:12px; align-items:flex-start;">
           <sc-if value="{{ insertHasPreview }}" hint-placeholder-val="{{ false }}">
-            <img data-insert-preview src="{{ insertPreviewUrl }}" alt="Preview" style="width:132px; max-height:170px; object-fit:contain; border:1px solid rgba(29,31,32,0.2); background:#fbfbfc; flex-shrink:0;" />
+            <!-- sc-camel-src, not src: the browser parses the raw template
+                 before the runtime hydrates it, so a literal src is fetched
+                 as the URL "{{ insertPreviewUrl }}" — a 404 on every load. -->
+            <img data-insert-preview sc-camel-src="{{ insertPreviewUrl }}" alt="Preview" style="width:132px; max-height:170px; object-fit:contain; border:1px solid rgba(29,31,32,0.2); background:#fbfbfc; flex-shrink:0;" />
           </sc-if>
           <div data-insert-info style="flex:1; min-width:0;">
             <sc-for list="{{ insertInfoRows }}" as="row" hint-placeholder-count="4">
@@ -788,7 +791,7 @@
           <sc-if value="{{ insertCalOpen }}" hint-placeholder-val="{{ false }}">
             <div data-insert-cal-hint style="margin-top:6px; font-size:11px; line-height:1.4; color:rgba(29,31,32,0.62);">{{ insertCalHint }}</div>
             <div style="position:relative; margin-top:6px;">
-              <img data-insert-cal-img src="{{ insertPreviewUrl }}" alt="Calibrate" onClick="{{ onInsertCalClick }}" style="width:100%; display:block; border:1px solid rgba(29,31,32,0.2); background:#fbfbfc; cursor:crosshair;" />
+              <img data-insert-cal-img sc-camel-src="{{ insertPreviewUrl }}" alt="Calibrate" onClick="{{ onInsertCalClick }}" style="width:100%; display:block; border:1px solid rgba(29,31,32,0.2); background:#fbfbfc; cursor:crosshair;" />
               <sc-for list="{{ insertCalMarks }}" as="mark" hint-placeholder-count="0">
                 <div style="position:absolute; left:{{ mark.left }}; top:{{ mark.top }}; width:10px; height:10px; margin:-5px 0 0 -5px; border:2px solid #b04050; border-radius:50%; background:rgba(176,64,80,0.25); pointer-events:none;"></div>
               </sc-for>
