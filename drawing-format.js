@@ -536,6 +536,21 @@ if (!window.DraftDrawingFormat) {
       };
     }).filter(Boolean);
 
+  // Project information typed on the PROJECT tab: plain descriptive strings
+  // carried with the drawing so the titleblock and the site plan's LEGAL LAND
+  // DESCRIPTION block can print them. Later per-project settings (model-space
+  // size, T-square angle set, filename slot) extend this object.
+  const projectInfo = raw => {
+    const line = value => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    const block = value => String(value ?? '').replace(/\r\n?/g, '\n').trim().slice(0, 1000);
+    return {
+      name: line(raw?.name),
+      client: line(raw?.client),
+      address: line(raw?.address),
+      legal: block(raw?.legal),
+    };
+  };
+
   // Backgrounds are at most two other levels, never the active one.
   const backgroundLevelIds = (rawIds, levelIds, activeLevelId) =>
     (Array.isArray(rawIds) ? rawIds : [])
@@ -565,6 +580,7 @@ if (!window.DraftDrawingFormat) {
     boneyardOutlines,
     outlines,
     underlays,
+    projectInfo,
     backgroundLevelIds,
     oneOf,
     number,
