@@ -1,4 +1,4 @@
-// A dragged node obeys the same constraints as a drawn point: Shift/Ctrl lock
+// A dragged node obeys the same constraints as a drawn point: Shift locks
 // it onto a 45° T-square ray from its grab point, R freezes the drag so an
 // exact distance can be typed (measured from the armed polar zero), Escape
 // puts the node back, and the magnet still welds it onto other nodes — while
@@ -53,16 +53,16 @@ test('Shift locks a dragged node onto a 45° ray from its grab point', async ({ 
   expect(h.near(moved.z, 0, 0.1)).toBe(true);
 });
 
-test('Ctrl locks a dragged node the same way as Shift', async ({ page }) => {
+test('Shift locks a dragged node onto the south ray too', async ({ page }) => {
   await h.openModel(page);
   await drawLine(page, -10, 0, 10, 0);
 
   await h.selectTool(page, 'Select');
-  await page.keyboard.down('Control');
+  await page.keyboard.down('Shift');
   await startDrag(page, 10, 0, 10, 8);
   await page.mouse.move((await h.worldToClient(page, 11.5, 8)).x, (await h.worldToClient(page, 11.5, 8)).y);
   await page.mouse.up();
-  await page.keyboard.up('Control');
+  await page.keyboard.up('Shift');
   await h.waitForSaved(page);
 
   const lines = h.allLines(await h.savedDrawing(page));
@@ -72,19 +72,19 @@ test('Ctrl locks a dragged node the same way as Shift', async ({ page }) => {
   expect(h.near(moved.z, 8)).toBe(true);
 });
 
-test('an engaged Ctrl lock beats the vertex magnet: a node off the ray cannot yank the point', async ({ page }) => {
+test('an engaged Shift lock beats the vertex magnet: a node off the ray cannot yank the point', async ({ page }) => {
   await h.openModel(page);
   await drawLine(page, 10, 2, 14, 2); // leaves a node at (10,2) just off the east ray
 
   await h.selectTool(page, 'Line');
   await h.clickWorld(page, 0, 0);
-  await page.keyboard.down('Control');
+  await page.keyboard.down('Shift');
   const mid = await h.worldToClient(page, 8, 0);
   await page.mouse.move(mid.x, mid.y); // aims the lock east
   const near = await h.worldToClient(page, 10, 2);
   await page.mouse.move(near.x, near.y); // cursor lands ON the off-ray node
   await page.mouse.click(near.x, near.y);
-  await page.keyboard.up('Control');
+  await page.keyboard.up('Shift');
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
 

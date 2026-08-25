@@ -176,8 +176,9 @@ test('the protractor chip lights with the blade the modifiers hold', async ({ pa
   await page.keyboard.down('Control');
   await expect(angle).toHaveText('30°');
 
+  // Ctrl alone holds no blade any more — it is the T-square toggle tap.
   await page.keyboard.up('Shift');
-  await expect(angle).toHaveText('90°');
+  await expect(angle).toHaveText('');
 
   await page.keyboard.up('Control');
   await expect(angle).toHaveText('');
