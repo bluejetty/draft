@@ -6716,22 +6716,29 @@ class Component extends DCLogic {
       return us.length ? { min: Math.min(...us), max: Math.max(...us) } : null;
     };
 
-    // Foundation first: walls, footings, and the slab between them.
+    // Foundation first: each crossed wall at its own heights — a basement
+    // wall runs grade to footing, a hung garage grade beam is just its band.
+    // Footings belong to walls that bear at the bottom of the excavation.
     const fdn = stack.foundation;
     const fdnCrossings = crossings.filter(c => (c.wall.view || 'plan') === 'foundation');
     fdnCrossings.forEach(c => {
+      const top = fdn.wallBottom + c.wall.topHeight;
+      const base = fdn.wallBottom + c.wall.baseHeight;
       ctx.fillStyle = 'rgba(150,150,155,0.5)';
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       const x = X(c.u - c.width / 2), wid = c.width * pxPerFt;
-      ctx.fillRect(x, Y(fdn.wallTop), wid, (fdn.wallTop - fdn.wallBottom) * pxPerFt);
-      ctx.strokeRect(x, Y(fdn.wallTop), wid, (fdn.wallTop - fdn.wallBottom) * pxPerFt);
-      const fw = fdn.footingWidthIn / 12;
-      const fx = X(c.u - fw / 2), fwid = fw * pxPerFt;
-      ctx.fillRect(fx, Y(fdn.wallBottom), fwid, (fdn.footingIn / 12) * pxPerFt);
-      ctx.strokeRect(fx, Y(fdn.wallBottom), fwid, (fdn.footingIn / 12) * pxPerFt);
+      ctx.fillRect(x, Y(top), wid, (top - base) * pxPerFt);
+      ctx.strokeRect(x, Y(top), wid, (top - base) * pxPerFt);
+      if (c.wall.baseHeight <= 0.01) {
+        const fw = fdn.footingWidthIn / 12;
+        const fx = X(c.u - fw / 2), fwid = fw * pxPerFt;
+        ctx.fillRect(fx, Y(base), fwid, (fdn.footingIn / 12) * pxPerFt);
+        ctx.strokeRect(fx, Y(base), fwid, (fdn.footingIn / 12) * pxPerFt);
+      }
     });
-    const fdnSpan = fdnCrossings.length
-      ? { min: Math.min(...fdnCrossings.map(c => c.u)), max: Math.max(...fdnCrossings.map(c => c.u)) }
+    const bearingCrossings = fdnCrossings.filter(c => c.wall.baseHeight <= 0.01);
+    const fdnSpan = bearingCrossings.length
+      ? { min: Math.min(...bearingCrossings.map(c => c.u)), max: Math.max(...bearingCrossings.map(c => c.u)) }
       : null;
     if (fdnSpan && fdnSpan.max - fdnSpan.min > 1) {
       ctx.fillStyle = 'rgba(150,150,155,0.35)';
@@ -6739,6 +6746,49 @@ class Component extends DCLogic {
       const x = X(fdnSpan.min), wid = (fdnSpan.max - fdnSpan.min) * pxPerFt;
       ctx.fillRect(x, Y(fdn.slabTop), wid, (fdn.slabIn / 12) * pxPerFt);
       ctx.strokeRect(x, Y(fdn.slabTop), wid, (fdn.slabIn / 12) * pxPerFt);
+    }
+
+    // Hung grade beams carry a slab poured over the plate on graded fill:
+    // the 4" garage slab, its under-slab line dashed, gravel dotted below —
+    // section detail only, elevations keep just the buried outline.
+    const beamCrossings = fdnCrossings.filter(c => c.wall.baseHeight > 0.01);
+    if (beamCrossings.length > 1) {
+      const lo = Math.min(...beamCrossings.map(c => c.u));
+      const hi = Math.max(...beamCrossings.map(c => c.u));
+      if (hi - lo > 1) {
+        const plateTop = fdn.wallBottom
+          + Math.max(...beamCrossings.map(c => c.wall.topHeight)) + GARAGE_BEAM_PLATE_IN / 12;
+        const slabTop = plateTop + GARAGE_SLAB_THICKNESS_IN / 12;
+        ctx.fillStyle = 'rgba(150,150,155,0.35)';
+        ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        ctx.fillRect(X(lo), Y(slabTop), (hi - lo) * pxPerFt, (GARAGE_SLAB_THICKNESS_IN / 12) * pxPerFt);
+        ctx.strokeRect(X(lo), Y(slabTop), (hi - lo) * pxPerFt, (GARAGE_SLAB_THICKNESS_IN / 12) * pxPerFt);
+        ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(X(lo), Y(plateTop - 0.5));
+        ctx.lineTo(X(hi), Y(plateTop - 0.5));
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(29,31,32,0.45)';
+        for (let g = lo + 0.5; g < hi - 0.25; g += 0.75) {
+          const j = (g * 7.3) % 1;   // deterministic jitter, no flicker on redraw
+          ctx.beginPath();
+          ctx.arc(X(g + j * 0.3), Y(plateTop - 0.1 - j * 0.32), 1.1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // Grade, heavy, running off the sheet on both sides of the building.
+    if (crossings.length) {
+      const uLo = Math.min(...crossings.map(c => c.u - c.width / 2));
+      const uHi = Math.max(...crossings.map(c => c.u + c.width / 2));
+      ctx.strokeStyle = INK; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(marginL - 18, Y(fdn.wallTop)); ctx.lineTo(X(uLo), Y(fdn.wallTop));
+      ctx.moveTo(X(uHi), Y(fdn.wallTop)); ctx.lineTo(w - marginR, Y(fdn.wallTop));
+      ctx.stroke();
     }
 
     // Floor levels: assembly band, then the crossed walls standing on it.
@@ -6841,11 +6891,21 @@ class Component extends DCLogic {
     const levelById = {};
     stack.floors.forEach(level => { levelById[level.id] = level; });
     const faces = [];
-    const fdnUs = [];
+    const fdnFaces = [];
     this._walls.forEach(wall => {
       const p1 = proj(wall.start), p2 = proj(wall.end);
       if (Math.max(p1.u, p2.u) < uMin || Math.min(p1.u, p2.u) > uMax) return;
-      if ((wall.view || 'plan') === 'foundation') { fdnUs.push(p1.u, p2.u); return; }
+      if ((wall.view || 'plan') === 'foundation') {
+        const type = WALL_TYPES.find(w => w.id === wall.wallType);
+        fdnFaces.push({
+          lo: Math.max(Math.min(p1.u, p2.u), uMin),
+          hi: Math.min(Math.max(p1.u, p2.u), uMax),
+          top: wall.topHeight, base: wall.baseHeight,
+          wallIn: type ? type.totalIn : 8,
+          bearing: wall.baseHeight <= 0.01,   // on a strip footing, not hung
+        });
+        return;
+      }
       const level = levelById[wall.levelId];
       if (!level || Math.abs(p2.u - p1.u) < 0.5) return;
       faces.push({ wall, u1: p1.u, u2: p2.u, depth: (p1.d + p2.d) / 2, level });
@@ -6869,14 +6929,34 @@ class Component extends DCLogic {
         const bx = cut.startPt.x + (cut.endPt.x - cut.startPt.x) * s;
         const bz = cut.startPt.z + (cut.endPt.z - cut.startPt.z) * s;
         const baseD = bx * dir.x + bz * dir.z;
-        let best = null;
-        for (let j = 0; j <= depthSteps; j++) {
-          const k = dLo + (dHi - dLo) * j / depthSteps;
+        const riseAt = k => {
           const px = bx + dir.x * (k - baseD), pz = bz + dir.z * (k - baseD);
+          let tallest = null;
           roofs.forEach(roof => {
             const rise = this._sectionRoofHeightAt({ x: px, z: pz }, roof);
-            if (rise != null && (best === null || rise > best)) best = rise;
+            if (rise != null && (tallest === null || rise > tallest)) tallest = rise;
           });
+          return tallest;
+        };
+        let best = null, bestK = null;
+        for (let j = 0; j <= depthSteps; j++) {
+          const k = dLo + (dHi - dLo) * j / depthSteps;
+          const rise = riseAt(k);
+          if (rise != null && (best === null || rise > best)) { best = rise; bestK = k; }
+        }
+        // The true peak (a ridge or hip) usually falls between the coarse
+        // samples; ternary-search the bracket around the best one so the
+        // silhouette reads the real ridge height at every step.
+        if (bestK != null) {
+          const dk = (dHi - dLo) / depthSteps;
+          let a = bestK - dk, b = bestK + dk;
+          for (let it = 0; it < 24; it++) {
+            const m1 = a + (b - a) / 3, m2 = b - (b - a) / 3;
+            if ((riseAt(m1) ?? -Infinity) < (riseAt(m2) ?? -Infinity)) a = m1;
+            else b = m2;
+          }
+          const refined = riseAt((a + b) / 2);
+          if (refined != null && refined > best) best = refined;
         }
         silhouette.push({
           u: bx * axis.x + bz * axis.z,
@@ -6914,19 +6994,33 @@ class Component extends DCLogic {
     };
     stack.floors.forEach(level => { mark(level.floorTop); mark(level.wallTop); });
 
-    // Below-grade foundation, dashed: the wall run and the footing under it.
-    if (fdnUs.length) {
-      const lo = Math.max(Math.min(...fdnUs), uMin), hi = Math.min(Math.max(...fdnUs), uMax);
+    // Below-grade foundation, dashed — every buried face at its own heights:
+    // a basement wall runs grade to footing with the footing projecting past
+    // the wall face; a hung garage grade beam shows just its buried band, no
+    // footing and no gravel (that detail belongs to the section).
+    ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
+    ctx.setLineDash([5, 4]);
+    fdnFaces.forEach(face => {
+      if (face.hi - face.lo < 0.5) return;
+      const top = fdn.wallBottom + face.top, base = fdn.wallBottom + face.base;
+      ctx.strokeRect(X(face.lo), Y(top), (face.hi - face.lo) * pxPerFt,
+        (top - base) * pxPerFt);
+      if (face.bearing) {
+        const projFt = Math.max(0, fdn.footingWidthIn - face.wallIn) / 2 / 12;
+        ctx.strokeRect(X(face.lo - projFt), Y(base),
+          (face.hi - face.lo + projFt * 2) * pxPerFt, (fdn.footingIn / 12) * pxPerFt);
+      }
+    });
+    const bearingFaces = fdnFaces.filter(face => face.bearing && face.hi - face.lo > 0.5);
+    if (bearingFaces.length) {
+      const lo = Math.min(...bearingFaces.map(f => f.lo));
+      const hi = Math.max(...bearingFaces.map(f => f.hi));
       if (hi - lo > 0.5) {
-        ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
-        ctx.setLineDash([5, 4]);
-        ctx.strokeRect(X(lo), Y(fdn.wallTop), (hi - lo) * pxPerFt,
-          (fdn.wallTop - fdn.wallBottom) * pxPerFt);
-        ctx.strokeRect(X(lo), Y(fdn.wallBottom), (hi - lo) * pxPerFt,
-          (fdn.footingIn / 12) * pxPerFt);
-        ctx.setLineDash([]);
+        ctx.strokeRect(X(lo), Y(fdn.slabTop), (hi - lo) * pxPerFt,
+          (fdn.slabIn / 12) * pxPerFt);
       }
     }
+    ctx.setLineDash([]);
 
     // Wall faces, far to near, each with the openings it hosts.
     const HEAD_FT = 6 + 10 / 12, SILL_FT = 3;
@@ -6955,6 +7049,26 @@ class Component extends DCLogic {
       });
     });
 
+    // Floor assembly bands: each floor's rim (joists + sheathing) reads on
+    // the face between the wall below and the wall above it.
+    const bandByLevel = {};
+    faces.forEach(face => {
+      const lo = Math.max(Math.min(face.u1, face.u2), uMin);
+      const hi = Math.min(Math.max(face.u1, face.u2), uMax);
+      const band = bandByLevel[face.level.id]
+        || (bandByLevel[face.level.id] = { lo: Infinity, hi: -Infinity });
+      band.lo = Math.min(band.lo, lo); band.hi = Math.max(band.hi, hi);
+    });
+    stack.floors.forEach(level => {
+      const band = bandByLevel[level.id];
+      if (!band || band.hi - band.lo < 0.5) return;
+      ctx.fillStyle = 'rgba(89,128,166,0.15)';
+      ctx.strokeStyle = INK; ctx.lineWidth = 1;
+      const depth = (level.floorTop - level.floorBottom) * pxPerFt;
+      ctx.fillRect(X(band.lo), Y(level.floorTop), (band.hi - band.lo) * pxPerFt, depth);
+      ctx.strokeRect(X(band.lo), Y(level.floorTop), (band.hi - band.lo) * pxPerFt, depth);
+    });
+
     // Roof silhouette over the faces, with the fascia band along the eave.
     if (lit.length > 1) {
       ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
@@ -6972,6 +7086,11 @@ class Component extends DCLogic {
       ctx.beginPath();
       ctx.moveTo(X(lit[0].u), Y(stack.bearing + ROOF_FASCIA_IN / 12));
       ctx.lineTo(X(lit[lit.length - 1].u), Y(stack.bearing + ROOF_FASCIA_IN / 12));
+      ctx.stroke();
+      // The fascia's lower edge carries the roof's shadow — the heaviest
+      // roof line on the sheet.
+      ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
+      ctx.beginPath();
       ctx.moveTo(X(lit[0].u), Y(stack.bearing));
       ctx.lineTo(X(lit[lit.length - 1].u), Y(stack.bearing));
       ctx.stroke();
