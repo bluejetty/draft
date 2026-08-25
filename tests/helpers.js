@@ -28,8 +28,16 @@ async function openModel(page, { webgl = true } = {}) {
   }
   await page.goto('/MODEL.dc.html');
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await waitForModelReady(page);
   return page.locator('[data-model-canvas]');
+}
+
+// The app stamps data-model-ready on <body> once init and the initial
+// drawing load finish — a condition wait instead of a fixed settle, so a
+// slow machine waits longer and a fast one doesn't wait at all. Use after
+// page.reload() too.
+async function waitForModelReady(page) {
+  await page.waitForFunction(() => document.body.dataset.modelReady === '1');
 }
 
 // Top view keeps the camera at the origin, so feet map to pixels linearly.
@@ -76,13 +84,14 @@ async function activeToolLabels(page) {
 }
 
 async function waitForSaved(page) {
-  // An edit flips the status to UNSAVED a render after the input lands, so a
-  // check that polls too early can match the PREVIOUS save's SAVED and read
-  // stale storage. Give the flip a beat, then require SAVED to hold across a
-  // second look so multi-step commits have fully drained.
-  await page.waitForTimeout(300);
-  await expect(page.locator('[data-model-status]')).toContainText('SAVED', { timeout: 5000 });
-  await page.waitForTimeout(200);
+  // _markUnsaved stamps data-save-dirty=1 on <body> synchronously with the
+  // edit and clears it only when the IndexedDB write lands, so "not dirty"
+  // means the drawing on disk is current. Commits that run in a setState
+  // callback mark dirty a frame after the input event — two rAFs let those
+  // land before the first read, replacing the old fixed 300ms guard.
+  await page.evaluate(() => new Promise(resolve =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.waitForFunction(() => document.body.dataset.saveDirty === '0', undefined, { timeout: 5000 });
   await expect(page.locator('[data-model-status]')).toContainText('SAVED', { timeout: 5000 });
 }
 
@@ -141,6 +150,7 @@ module.exports = {
   HALF_HEIGHT_FT,
   STORAGE_BUCKET,
   openModel,
+  waitForModelReady,
   worldToClient,
   moveTo,
   clickWorld,

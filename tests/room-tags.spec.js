@@ -131,7 +131,7 @@ test('areas are off by default; the toggle persists and tags survive a reload', 
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(800);
+  await h.waitForModelReady(page);
   drawing = await h.savedDrawing(page);
   expect(drawing.roomTags.length).toBe(2);
   expect(drawing.roomAreasOn).toBe(true);
@@ -162,7 +162,7 @@ test('CLEAR TAGS removes the plan level tags; broken stored tags are dropped on 
   });
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(800);
+  await h.waitForModelReady(page);
   // The load filters in memory; an areas toggle forces a re-save so the
   // cleaned list can be read back from storage.
   await h.selectTool(page, 'Annotation');

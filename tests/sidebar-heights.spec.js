@@ -104,7 +104,7 @@ test('clicking the top-of-slab number edits the slab thickness', async ({ page }
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   await expect(levelRow(page, 'FOUNDATION').locator('.level-edge-edit[title^="Top of slab"]')).toHaveText(`-8'-9 3/4"`);
 });
 
@@ -129,7 +129,7 @@ test('clicking the base-of-footing number edits the footing depth', async ({ pag
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   await expect(levelRow(page, 'FOUNDATION').locator('.level-edge-edit[title^="Base of footing"]')).toHaveText(`-9'-11 3/4"`);
 });
 
@@ -149,7 +149,7 @@ test('the datum toggle shifts every mark by 100 feet and persists', async ({ pag
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   await expect(page.getByRole('button', { name: "DATUM 100'" })).toBeVisible();
 });
 
@@ -175,7 +175,7 @@ test('WALL HEIGHT edits the level wall height and moves the marks above', async 
   // The assembly survives a reload.
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   await expect(levelRow(page, '2ND FL').locator('.level-edge-val').nth(1)).toHaveText(`+9'-0"`);
 });
 

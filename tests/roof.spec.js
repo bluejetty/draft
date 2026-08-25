@@ -242,7 +242,7 @@ test('a roof survives a reload', async ({ page }) => {
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 
   const roof = (await h.savedDrawing(page)).roofs[0];
   expect(roof.points).toHaveLength(4);

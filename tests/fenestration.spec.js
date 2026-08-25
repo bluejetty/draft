@@ -130,7 +130,7 @@ test('openings survive a reload attached to their wall', async ({ page }) => {
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 
   const drawing = await h.savedDrawing(page);
   expect(drawing.fenestrations).toHaveLength(1);

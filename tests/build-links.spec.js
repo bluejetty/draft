@@ -138,7 +138,7 @@ test('the links survive a reload: master edits still move the house', async ({ p
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 
   await switchLevel(page, 'BONEYARD');
   await h.selectTool(page, 'Select');

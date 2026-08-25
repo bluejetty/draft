@@ -143,7 +143,7 @@ test('openings survive a reload attached to their host', async ({ page }) => {
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 
   const saved = await h.savedDrawing(page);
   expect(saved.surfaceOpenings).toHaveLength(1);

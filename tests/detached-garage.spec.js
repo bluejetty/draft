@@ -179,7 +179,7 @@ test('detached construction survives a save and reload', async ({ page }) => {
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(700);
+  await h.waitForModelReady(page);
 
   const saved = await h.savedDrawing(page);
   const master = saved.boneyardOutlines[0];
