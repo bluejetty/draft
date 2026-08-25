@@ -152,7 +152,7 @@ test('auto strings ride master outline edits, staying outside the moved plan', a
   // The links survive a reload: a further master edit still carries them.
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   await switchLevel(page, 'BONEYARD');
   await h.selectTool(page, 'Select');
   await dragWorld(page, 12, -6, 12, -10);

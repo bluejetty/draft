@@ -16,7 +16,7 @@ async function setSnapStrength(page, strength) {
   }, strength);
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 }
 
 test('the 0,0 origin rings while it has hold of the cursor, with no toggle', async ({ page }) => {

@@ -119,7 +119,7 @@ test('arcs persist through save and reload', async ({ page }) => {
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(600);
+  await h.waitForModelReady(page);
 
   const lines = h.allLines(await h.savedDrawing(page));
   expect(lines).toHaveLength(1);

@@ -102,7 +102,7 @@ test.describe('undo history', () => {
 
     await page.reload();
     await expect(page.locator('[data-model-canvas]')).toBeVisible();
-    await page.waitForTimeout(600);
+    await h.waitForModelReady(page);
     expect(h.allLines(await h.savedDrawing(page))).toHaveLength(1);
 
     await page.keyboard.press(UNDO);

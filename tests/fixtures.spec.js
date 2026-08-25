@@ -253,7 +253,7 @@ test('fixtures survive a reload attached to their walls', async ({ page }) => {
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 
   const drawing = await h.savedDrawing(page);
   expect(drawing.fixtures).toHaveLength(1);

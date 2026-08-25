@@ -57,7 +57,7 @@ test('a MAIN FL stair runs from the top nosing down to the basement slab', async
   // The stair survives a reload.
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   const reloaded = await h.savedDrawing(page);
   expect(reloaded.stairs).toHaveLength(1);
   expect(reloaded.stairs[0].risers).toBe(RISERS);

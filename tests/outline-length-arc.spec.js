@@ -72,7 +72,7 @@ test('arcing a master edge on the BONEYARD curves every level copy and survives 
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 
   saved = await h.savedDrawing(page);
   const restored = saved.boneyardOutlines[0].points.find(p => p.id === arced.id);

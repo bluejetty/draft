@@ -75,7 +75,7 @@ test('a cleared drawing stays cleared after a reload', async ({ page }) => {
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   expect(h.allLines(await h.savedDrawing(page))).toHaveLength(0);
 });
 

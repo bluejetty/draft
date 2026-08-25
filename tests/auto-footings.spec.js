@@ -71,7 +71,7 @@ test('clicking a FOUNDATION pad label types a custom pad size that survives a re
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   saved = await h.savedDrawing(page);
   expect(saved.columns[0].padIn).toBe(40);
 });

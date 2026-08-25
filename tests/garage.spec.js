@@ -375,7 +375,7 @@ test('the weld survives a save and reload', async ({ page }) => {
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(700);
+  await h.waitForModelReady(page);
 
   // The restored metadata is intact...
   let saved = await h.savedDrawing(page);

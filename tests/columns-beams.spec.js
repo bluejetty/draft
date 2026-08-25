@@ -43,7 +43,7 @@ test('beam first: a column placed near the beam centres onto its line', async ({
   // Everything survives a reload.
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   const reloaded = await h.savedDrawing(page);
   expect(reloaded.beams).toHaveLength(1);
   expect(reloaded.columns).toHaveLength(1);

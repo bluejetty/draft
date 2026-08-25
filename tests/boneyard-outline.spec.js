@@ -150,7 +150,7 @@ test('a relative override survives a reload and keeps riding the master', async 
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 
   // Grow the master 4' east: the cantilever keeps its (2, 2) offset.
   await switchLevel(page, 'BONEYARD');
@@ -220,7 +220,7 @@ test('outlines draw blue on a level, red on the BONEYARD, and survive a reload',
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 
   const saved = await h.savedDrawing(page);
   expect(saved.boneyardOutlines).toHaveLength(1);

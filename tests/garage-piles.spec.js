@@ -93,7 +93,7 @@ test('COLUMN offers three pile sizes that place, persist, and reload', async ({ 
   // And survive a reload through the drawing format.
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   const reloaded = await h.savedDrawing(page);
   expect(reloaded.columns).toHaveLength(2);
   expect(reloaded.columns.map(column => column.footing).sort()).toEqual(['pile10', 'pile12']);

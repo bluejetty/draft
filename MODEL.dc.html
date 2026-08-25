@@ -3609,6 +3609,12 @@ class Component extends DCLogic {
     } finally {
       this._loadingDrawing = false;
       this._drawingReady = true;
+      // Readiness beacon for the test suite: set imperatively (not through
+      // renderVals) so it flips the moment loading ends, independent of
+      // render timing. data-save-seq / -dirty are kept by _markUnsaved.
+      document.body.dataset.modelReady = '1';
+      if (!document.body.dataset.saveSeq) document.body.dataset.saveSeq = '0';
+      document.body.dataset.saveDirty = '0';
       const failed = !outcome.ok && outcome.reason !== 'empty';
       const source = importedFile ? 'import' : 'store';
       const skipped = outcome.ok ? (outcome.skipped || 0) : 0;
@@ -3745,6 +3751,9 @@ class Component extends DCLogic {
     if (this._loadingDrawing || !this._drawingReady) return;
     this._recordHistory();
     this._fileDirty = true;
+    // The dirty beacon flips synchronously with the edit — the UNSAVED text
+    // renders a frame later, which is too late for a condition wait to see.
+    document.body.dataset.saveDirty = '1';
     this.setState({ persistenceStatus: 'UNSAVED', persistenceError: '', drawingMessage: '', drawingMessageError: false });
     if (!window.SharedFileStore) return;
 
@@ -3755,7 +3764,11 @@ class Component extends DCLogic {
       .catch(() => {})
       .then(() => window.SharedFileStore.saveSharedFile(file, MODEL_STORAGE_BUCKET))
       .then(() => {
-        if (generation === this._saveGeneration) this.setState({ persistenceStatus: 'SAVED' });
+        if (generation === this._saveGeneration) {
+          document.body.dataset.saveSeq = String(generation);
+          document.body.dataset.saveDirty = '0';
+          this.setState({ persistenceStatus: 'SAVED' });
+        }
       })
       .catch(error => {
         console.warn('Unable to save model drawing:', error);

@@ -55,7 +55,7 @@ test('two clicks anchor a leader note; the text persists across a reload', async
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   const reloaded = await h.savedDrawing(page);
   expect(reloaded.notes).toHaveLength(1);
   expect(reloaded.notes[0].body).toBe('BEAM POCKET HERE');
@@ -158,6 +158,6 @@ test('annotations work inside the locked STAIR workspace with pane-local points'
   // The note survives a reload and still renders in the section pane.
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   expect((await h.savedDrawing(page)).notes.filter(n => n.view === 'stair')).toHaveLength(1);
 });

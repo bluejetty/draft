@@ -177,7 +177,7 @@ test('the stair opening survives a reload on its floor', async ({ page }) => {
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 
   const drawing = await h.savedDrawing(page);
   expect(drawing.surfaceOpenings).toHaveLength(1);

@@ -150,7 +150,7 @@ test('background scope and context memory persist through reload', async ({ page
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(600);
+  await h.waitForModelReady(page);
 
   await expect(layerBg(page, '2ND FL', 'FLOOR')).toHaveText('B1');
   await expect(page.locator('[data-model-background-status]'))

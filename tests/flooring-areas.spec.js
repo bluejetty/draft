@@ -75,7 +75,7 @@ test('flooring areas survive a reload with finish and thickness intact', async (
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 
   const saved = await h.savedDrawing(page);
   expect(saved.shapes).toHaveLength(1);

@@ -50,7 +50,7 @@ test('deleting 2ND FL makes a bungalow: BUILD HOUSE skips it', async ({ page }) 
   // The bungalow survives a reload.
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   await expect(levelRow(page, '2ND FL')).toHaveCount(0);
   await expect(levelRow(page, 'MAIN FL')).toHaveCount(1);
 });
@@ -93,7 +93,7 @@ test('an added 3RD FL gets the floor layer sets and joins BUILD HOUSE', async ({
   // And it persists.
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   await expect(levelRow(page, '3RD FL')).toHaveCount(1);
   await expect(levelRow(page, '3RD FL').locator('.level-layer')).toHaveText(['ELECTRIC', 'PLAN', 'FLOOR', 'STAIR']);
 });

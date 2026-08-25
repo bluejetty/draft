@@ -83,7 +83,7 @@ test('a foundation slab survives a reload in the FOUNDATION layer set', async ({
 
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 
   const slab = (await h.savedDrawing(page)).floors[0];
   expect(slab.view).toBe('foundation');
