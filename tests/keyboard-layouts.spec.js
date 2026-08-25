@@ -62,7 +62,7 @@ test('the model space honours a preset binding', async ({ page }) => {
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
   await page.waitForTimeout(500);
 
-  await expect(page.getByRole('button', { name: /Fenestration\s+\[Shift\+W\]/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Fenestration\s+Shift\+W/i })).toBeVisible();
   await page.keyboard.press('Shift+W');
   await expect(page.getByRole('button', { name: 'DOOR' })).toBeVisible();
 });
