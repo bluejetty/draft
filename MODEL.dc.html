@@ -14,6 +14,7 @@
 <script src="./auto-dims.js"></script>
 <script src="./render-2d.js"></script>
 <script src="./build-house.js"></script>
+<script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
      would otherwise run here and be mounted again by the helmet runtime. -->
 <script src="./vendor/three-0.128.0.min.js"></script>
@@ -2351,7 +2352,7 @@ class Component extends DCLogic {
     const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
     const candidate = {
       file, kind: isPdf ? 'pdf' : 'image', pageCount: 1,
-      scalesByPage: new Map(), selectedScale: null,
+      scalesByPage: {}, selectedScale: null,
       previewUrl: '', pageDims: null, imgWidth: 0, imgHeight: 0,
       isVector: false, tier: '', textChars: 0, convertedBlob: null, pdfDoc: null,
     };
@@ -2368,7 +2369,7 @@ class Component extends DCLogic {
       return;
     }
     this._insertCandidate = candidate;
-    const detected = candidate.scalesByPage.get(1) || [];
+    const detected = candidate.scalesByPage[1] || [];
     candidate.selectedScale = detected[0] || null;
     this.setState({
       insertPhase: 'ready', insertPage: 1,
@@ -2377,12 +2378,11 @@ class Component extends DCLogic {
     });
   }
 
+  // The scan/convert machinery lives in pdf-scan.js (a standalone module —
+  // board #183); these delegates keep the call sites. The class keeps the
+  // dialog state machine, placement, and all persistence.
   async _inspectPdf(candidate) {
-    if (!window.pdfjsLib) throw new Error('the PDF library is unavailable');
-    const buf = await candidate.file.arrayBuffer();
-    candidate.pdfDoc = await window.pdfjsLib.getDocument({ data: buf }).promise;
-    candidate.pageCount = candidate.pdfDoc.numPages;
-    await this._inspectPdfPage(candidate, 1);
+    return window.DraftPdfScan.inspectPdf(candidate);
   }
 
   // Four page tiers, best to basement: VECTOR (pure CAD export — paths and
@@ -2391,125 +2391,19 @@ class Component extends DCLogic {
   // searchable text layer; text rendering mode 3 gives it away), and IMAGE
   // (just a photo). The first two keep the original bytes; the rest convert.
   async _inspectPdfPage(candidate, pageNum) {
-    const page = await candidate.pdfDoc.getPage(pageNum);
-    const viewport1 = page.getViewport({ scale: 1 });
-    candidate.pageDims = { w: viewport1.width, h: viewport1.height };
-    const content = await page.getTextContent();
-    const text = content.items.map(item => item.str).join(' ');
-    candidate.textChars = text.replace(/\s+/g, '').length;
-    if (!candidate.scalesByPage.has(pageNum)) {
-      candidate.scalesByPage.set(pageNum, this._detectScalesInText(text));
-    }
-    const ops = await page.getOperatorList();
-    const OPS = window.pdfjsLib.OPS;
-    let pathOps = 0, imageOps = 0, textRenderMode = 0;
-    let visibleText = false, invisibleText = false;
-    for (let i = 0; i < ops.fnArray.length; i++) {
-      const fn = ops.fnArray[i];
-      if (fn === OPS.constructPath) pathOps += 1;
-      else if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject
-        || fn === OPS.paintImageXObjectRepeat || fn === OPS.paintInlineImageXObject) imageOps += 1;
-      else if (fn === OPS.setTextRenderingMode) textRenderMode = ops.argsArray[i][0];
-      else if (fn === OPS.showText || fn === OPS.showSpacedText
-        || fn === OPS.nextLineShowText || fn === OPS.nextLineSetSpacingShowText) {
-        if (textRenderMode === 3) invisibleText = true;
-        else visibleText = true;
-      }
-    }
-    candidate.pathOps = pathOps;
-    candidate.imageOps = imageOps;
-    const liveChars = visibleText ? candidate.textChars : 0;
-    const drawn = pathOps + liveChars > 0 && (imageOps === 0 || pathOps >= imageOps * 4);
-    candidate.tier = drawn && imageOps === 0 ? 'vector'
-      : drawn || (imageOps > 0 && (visibleText || pathOps >= 8)) ? 'hybrid'
-      : invisibleText && !visibleText && imageOps > 0 ? 'ocr'
-      : imageOps > 0 ? 'image'
-      : 'vector';
-    candidate.isVector = candidate.tier === 'vector' || candidate.tier === 'hybrid';
-    const scale = Math.min(2.6, 2200 / viewport1.width);
-    const viewport = page.getViewport({ scale });
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(viewport.width);
-    canvas.height = Math.round(viewport.height);
-    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-    candidate.pageCanvas = canvas;
-    if (candidate.previewUrl) URL.revokeObjectURL(candidate.previewUrl);
-    candidate.previewUrl = '';
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.8));
-    candidate.convertedBlob = blob;
-    candidate.previewUrl = URL.createObjectURL(blob);
+    return window.DraftPdfScan.inspectPdfPage(candidate, pageNum);
   }
 
   async _inspectImage(candidate) {
-    const bitmap = await createImageBitmap(candidate.file).catch(() => null);
-    if (!bitmap) throw new Error('unsupported image format');
-    candidate.imgWidth = bitmap.width;
-    candidate.imgHeight = bitmap.height;
-    // Photos convert once to the project's compressed image form: capped to
-    // 2200px on the long side and stored as quality-0.8 WEBP.
-    const cap = 2200;
-    const shrink = Math.min(1, cap / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * shrink));
-    canvas.height = Math.max(1, Math.round(bitmap.height * shrink));
-    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
-    candidate.pageCanvas = canvas;
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.8));
-    if (!blob) throw new Error('image conversion failed');
-    candidate.convertedBlob = blob;
-    candidate.previewUrl = URL.createObjectURL(blob);
+    return window.DraftPdfScan.inspectImage(candidate);
   }
 
   // Scale notations as printed on titleblocks: 1/4" = 1'-0" style
   // imperial fractions and 1:100 style metric ratios. Ratio is real inches per
   // paper inch for imperial; the bare ratio number for metric.
-  _detectScalesInText(text) {
-    const found = [];
-    const seen = new Set();
-    const fracRe = /(\d+\/\d+|\d+)\s*"\s*=\s*(\d+)\s*['\u2019]\s*-?\s*(\d+)?["\u201d]?/gi;
-    let m;
-    while ((m = fracRe.exec(text))) {
-      const val = m[1].includes('/')
-        ? (Number(m[1].split('/')[1]) ? Number(m[1].split('/')[0]) / Number(m[1].split('/')[1]) : 0)
-        : parseFloat(m[1]);
-      const feet = parseInt(m[2], 10) || 0;
-      const inches = m[3] ? parseInt(m[3], 10) : 0;
-      const totalInches = feet * 12 + inches;
-      if (!val || !totalInches) continue;
-      const raw = `${m[1]}" = ${feet}'-${inches}"`;
-      if (seen.has(raw)) continue;
-      seen.add(raw);
-      found.push({ raw, ratio: totalInches / val, unit: 'imperial' });
-    }
-    const ratioRe = /\b1\s*:\s*(\d{1,4})\b/g;
-    while ((m = ratioRe.exec(text))) {
-      const n = parseInt(m[1], 10);
-      if (!n || n === 1) continue;
-      const raw = `1:${n}`;
-      if (seen.has(raw)) continue;
-      seen.add(raw);
-      found.push({ raw, ratio: n, unit: 'ratio' });
-    }
-    return found;
-  }
 
   _parseScaleEntry(value) {
-    const trimmed = String(value || '').trim();
-    if (!trimmed) return null;
-    const fm = trimmed.match(/(\d+\/\d+|\d+)\s*"\s*=\s*(\d+)\s*['\u2019]\s*-?\s*(\d+)?["\u201d]?/i);
-    if (fm) {
-      const val = fm[1].includes('/')
-        ? (Number(fm[1].split('/')[1]) ? Number(fm[1].split('/')[0]) / Number(fm[1].split('/')[1]) : 0)
-        : parseFloat(fm[1]);
-      const feet = parseInt(fm[2], 10) || 0;
-      const inches = fm[3] ? parseInt(fm[3], 10) : 0;
-      const totalInches = feet * 12 + inches;
-      if (val && totalInches) return { raw: `${fm[1]}" = ${feet}'-${inches}"`, ratio: totalInches / val, unit: 'imperial' };
-    }
-    const rm = trimmed.match(/1\s*:\s*(\d{1,4})/);
-    if (rm && parseInt(rm[1], 10) > 1) return { raw: `1:${rm[1]}`, ratio: parseInt(rm[1], 10), unit: 'ratio' };
-    return null;
+    return window.DraftPdfScan.parseScaleEntry(value);
   }
 
   async _setInsertPage(delta) {
@@ -2525,7 +2419,7 @@ class Component extends DCLogic {
       this.setState({ insertPhase: 'error', insertError: `Could not read page ${page}.` });
       return;
     }
-    const detected = candidate.scalesByPage.get(page) || [];
+    const detected = candidate.scalesByPage[page] || [];
     candidate.selectedScale = detected[0] || null;
     candidate.calMarks = [];
     this.setState({
@@ -2600,17 +2494,16 @@ class Component extends DCLogic {
       this.setState({ insertCalError: parsed.ok ? 'The distance must be positive.' : parsed.error });
       return;
     }
-    const dx = (marks[1].fx - marks[0].fx) * canvas.width;
-    const dy = (marks[1].fy - marks[0].fy) * canvas.height;
-    const distPx = Math.hypot(dx, dy);
-    if (distPx < 4) {
-      this.setState({ insertCalError: 'The two marks are too close together.' });
+    const result = window.DraftPdfScan.calibrateScale({
+      marks, canvasWidth: canvas.width, canvasHeight: canvas.height,
+      kind: candidate.kind, pageDims: candidate.pageDims, realInches: parsed.inches,
+    });
+    if (!result.ok) {
+      this.setState({ insertCalError: result.error });
       return;
     }
-    if (candidate.kind === 'pdf' && candidate.pageDims) {
-      const pxPerPaperInch = canvas.width / candidate.pageDims.w * 72;
-      const ratio = parsed.inches * pxPerPaperInch / distPx;
-      candidate.selectedScale = { raw: `calibrated ≈ 1:${Math.round(ratio)}`, ratio, unit: 'ratio' };
+    if (result.scale) {
+      candidate.selectedScale = result.scale;
       this.setState({
         insertScaleInput: candidate.selectedScale.raw, insertScaleError: '',
         insertCalOpen: false, insertCalError: '',
@@ -2618,9 +2511,8 @@ class Component extends DCLogic {
       });
       return;
     }
-    const widthFt = canvas.width / distPx * parsed.inches / 12;
     this.setState({
-      insertWidthInput: `${Math.round(widthFt * 100) / 100}'`, insertWidthError: '',
+      insertWidthInput: `${Math.round(result.widthFt * 100) / 100}'`, insertWidthError: '',
       insertCalOpen: false, insertCalError: '',
       insertRefresh: this.state.insertRefresh + 1,
     });
@@ -2632,21 +2524,20 @@ class Component extends DCLogic {
   _insertWorldSize() {
     const candidate = this._insertCandidate;
     if (!candidate) return null;
-    const aspect = candidate.kind === 'pdf'
-      ? (candidate.pageDims ? candidate.pageDims.h / candidate.pageDims.w : 1)
-      : (candidate.imgWidth ? candidate.imgHeight / candidate.imgWidth : 1);
-    const scale = candidate.selectedScale;
-    if (candidate.kind === 'pdf' && scale && candidate.pageDims) {
-      // Both scale kinds boil down to real inches per paper inch: 1/4"=1'-0"
-      // stores 48, and 1:50 is unit-agnostic so the bare 50 works directly.
-      const paperInchesW = candidate.pageDims.w / 72;
-      const paperInchesH = candidate.pageDims.h / 72;
-      return { widthFt: paperInchesW * scale.ratio / 12, heightFt: paperInchesH * scale.ratio / 12 };
+    if (!(candidate.kind === 'pdf' && candidate.selectedScale && candidate.pageDims)) {
+      const parsed = parseArchitecturalLength(this.state.insertWidthInput || `40'`);
+      if (!parsed.ok || parsed.inches <= 0) return { error: parsed.ok ? 'Width must be positive.' : parsed.error };
+      return window.DraftPdfScan.worldSizeFromScan({
+        kind: candidate.kind, pageDims: candidate.pageDims,
+        imgWidth: candidate.imgWidth, imgHeight: candidate.imgHeight,
+        selectedScale: null, typedWidthFt: parsed.inches / 12,
+      });
     }
-    const parsed = parseArchitecturalLength(this.state.insertWidthInput || `40'`);
-    if (!parsed.ok || parsed.inches <= 0) return { error: parsed.ok ? 'Width must be positive.' : parsed.error };
-    const widthFt = parsed.inches / 12;
-    return { widthFt, heightFt: widthFt * aspect };
+    return window.DraftPdfScan.worldSizeFromScan({
+      kind: candidate.kind, pageDims: candidate.pageDims,
+      imgWidth: candidate.imgWidth, imgHeight: candidate.imgHeight,
+      selectedScale: candidate.selectedScale, typedWidthFt: 0,
+    });
   }
 
   async _confirmInsertUnderlay() {
@@ -2829,7 +2720,7 @@ class Component extends DCLogic {
     const verdictColor = tierVerdict?.color || '#365e86';
     const verdictTint = tierVerdict?.tint || '89,128,166';
     const detectedScales = candidate?.kind === 'pdf'
-      ? (candidate.scalesByPage.get(this.state.insertPage) || [])
+      ? (candidate.scalesByPage[this.state.insertPage] || [])
       : [];
     const selectedRaw = candidate?.selectedScale?.raw || '';
     const hasScale = Boolean(candidate?.kind === 'pdf' && candidate.selectedScale && candidate.pageDims);
