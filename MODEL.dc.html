@@ -380,6 +380,46 @@
   </div>
 </sc-if>
 
+<!-- PROFESSOR RUFF's first-build callout: the bone was pressed on a blank
+     drawing, so the trace armed with the project defaults and the professor
+     points up at the PROJECT button. Escape heads into PROJECT; Enter, a
+     click, or just drawing carries on with the defaults. -->
+<sc-if value="{{ projectCalloutOpen }}" hint-placeholder-val="{{ false }}">
+  <div data-project-callout style="position:fixed; top:50px; right:96px; z-index:52; width:320px; border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 14px 38px rgba(29,31,32,0.22); padding:14px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
+    <div style="position:absolute; top:-8px; right:150px; width:14px; height:14px; background:#fff; border-left:1px solid rgba(29,31,32,0.3); border-top:1px solid rgba(29,31,32,0.3); transform:rotate(45deg);"></div>
+    <div style="display:flex; gap:12px; align-items:flex-start;">
+      <svg width="48" height="48" viewBox="0 0 44 44" fill="none" aria-hidden="true" style="flex-shrink:0;">
+        <path d="M22 5 L37 11.5 L22 18 L7 11.5 Z" fill="#1d1f20"></path>
+        <path d="M34 13 V19" stroke="#1d1f20" stroke-width="1.4"></path>
+        <circle cx="34" cy="20.5" r="1.6" fill="#c0392b"></circle>
+        <path d="M12 18 Q8.5 26 12 32 Q15.5 29.5 15.5 22 Z" fill="#8a5a33"></path>
+        <path d="M32 18 Q35.5 26 32 32 Q28.5 29.5 28.5 22 Z" fill="#8a5a33"></path>
+        <circle cx="22" cy="28" r="10" fill="#c89158"></circle>
+        <ellipse cx="22" cy="32" rx="5.5" ry="4.2" fill="#f0d9b8"></ellipse>
+        <circle cx="22" cy="30.5" r="1.8" fill="#1d1f20"></circle>
+        <path d="M22 32.5 V34.5 M22 34.5 Q20 36 18.6 34.8 M22 34.5 Q24 36 25.4 34.8" stroke="#1d1f20" stroke-width="1.1" fill="none"></path>
+        <circle cx="18.5" cy="26" r="2.4" stroke="#1d1f20" stroke-width="1" fill="#fff"></circle>
+        <circle cx="25.5" cy="26" r="2.4" stroke="#1d1f20" stroke-width="1" fill="#fff"></circle>
+        <path d="M20.9 26 H23.1" stroke="#1d1f20" stroke-width="1"></path>
+        <circle cx="18.5" cy="26" r="1" fill="#1d1f20"></circle>
+        <circle cx="25.5" cy="26" r="1" fill="#1d1f20"></circle>
+      </svg>
+      <div style="flex:1;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">Professor Ruff</div>
+        <div style="margin-top:4px; font-size:12px; line-height:1.5; color:rgba(29,31,32,0.72);">Automatically using the <b>default project settings</b> to build your house now — trace away! To update this project's specifications press <b>Escape</b>, or hit the <b>PROJECT</b> button right up there.</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:6px; margin-top:12px;">
+      <button data-callout-continue onClick="{{ dismissProjectCallout }}" style="flex:1; height:30px; border:1px solid #8f2a1d; background:#c0392b; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0.06em; cursor:pointer;">KEEP GOING — DEFAULTS (ENTER)</button>
+      <button data-callout-project onClick="{{ calloutOpenProject }}" style="height:30px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; padding:0 10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">PROJECT (ESC)</button>
+    </div>
+    <label style="display:flex; align-items:center; gap:6px; margin-top:10px; font-size:11px; color:rgba(29,31,32,0.55); cursor:pointer;">
+      <input data-callout-off type="checkbox" checked="{{ buildIntroOff }}" onChange="{{ onBuildIntroOffToggle }}" />
+      Don't show this again
+    </label>
+  </div>
+</sc-if>
+
 <!-- AREAS dialog: derived per-level and building areas for permit forms —
      recomputed on open, never saved with the drawing -->
 <sc-if value="{{ areasDialogOpen }}" hint-placeholder-val="{{ false }}">
@@ -672,17 +712,13 @@
     </div>
   </sc-if>
 
-  <!-- OUTLINE / BUILD HOUSE -->
+  <!-- OUTLINE trace: the tool arms from the red bone button (or the garage
+       marks / the keyboard shortcut) — the keypad key is gone, so this card
+       only coaches the trace. BUILD HOUSE lives on the instrument strip. -->
   <sc-if value="{{ outlineToolActive }}" hint-placeholder-val="{{ false }}">
     <div style="display:flex; flex-direction:column; align-items:stretch;">
       <div style="display:flex; flex-direction:column; padding:8px 12px; border-bottom:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Outline</div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; align-content:start;">
-          <button onClick="{{ onBuildHouse }}" style="width:100%; box-sizing:border-box; border:1px solid #3f8f7a; background:rgba(63,143,122,0.12); color:#2e6d5c; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD HOUSE</button>
-          <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" style="width:100%; box-sizing:border-box; border:1px solid {{ attachedGarageBorder }}; background:{{ attachedGarageBg }}; color:{{ attachedGarageColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ attachedGarageLabel }}</button>
-          <button data-build-garage onClick="{{ onBuildGarage }}" style="width:100%; box-sizing:border-box; border:1px solid #7a4a21; background:rgba(122,74,33,0.10); color:#7a4a21; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">BUILD GARAGE</button>
-          <button data-mark-detached-garage onClick="{{ onMarkDetachedGarage }}" style="width:100%; box-sizing:border-box; border:1px solid {{ detachedGarageBorder }}; background:{{ detachedGarageBg }}; color:{{ detachedGarageColor }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ detachedGarageLabel }}</button>
-        </div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); white-space:nowrap;">Outline</div>
       </div>
       <div style="display:flex; flex-direction:column; justify-content:center; padding:8px 12px; border-bottom:1px solid rgba(29,31,32,0.12); flex-shrink:0; color:rgba(29,31,32,0.48); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.25;">{{ buildHouseHint }}</div>
     </div>
@@ -1297,6 +1333,23 @@
       <path d="M3 13 C3 7 7 8.5 8.5 5.5 C9.5 3.5 13 3 13 6 C13 9 9 8.5 8 11 C7.4 12.5 5.5 13.5 3 13 Z"></path>
     </svg>
   </span>
+  <!-- BUILD cluster, center strip: the big red bone button is the product's
+       one action — blank shelf starts the outline trace, master on the shelf
+       grows the house. The garage marks arm the outline tool themselves. -->
+  <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" style="border:1px solid {{ attachedGarageBorder }}; background:{{ attachedGarageBg }}; color:{{ attachedGarageColor }}; padding:5px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.04em; cursor:pointer; max-width:130px; line-height:1.2;">{{ attachedGarageLabel }}</button>
+  <button data-build-house onClick="{{ onBuildHouse }}" title="{{ buildHouseHint }}" style="display:inline-flex; align-items:center; gap:8px; border:1px solid #8f2a1d; background:#c0392b; color:#fff; padding:4px 16px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:700; letter-spacing:0.12em; cursor:pointer; box-shadow:0 2px 6px rgba(140,40,28,0.35);">
+    <span>BUILD</span>
+    <svg data-build-house-bone width="26" height="13" viewBox="0 0 26 13" fill="currentColor" aria-hidden="true">
+      <circle cx="4.2" cy="4.2" r="3.2"></circle>
+      <circle cx="4.2" cy="8.8" r="3.2"></circle>
+      <circle cx="21.8" cy="4.2" r="3.2"></circle>
+      <circle cx="21.8" cy="8.8" r="3.2"></circle>
+      <rect x="4.2" y="4" width="17.6" height="5"></rect>
+    </svg>
+    <span>HOUSE</span>
+  </button>
+  <button data-mark-detached-garage onClick="{{ onMarkDetachedGarage }}" style="border:1px solid {{ detachedGarageBorder }}; background:{{ detachedGarageBg }}; color:{{ detachedGarageColor }}; padding:5px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.04em; cursor:pointer; max-width:130px; line-height:1.2;">{{ detachedGarageLabel }}</button>
+  <button data-build-garage onClick="{{ onBuildGarage }}" style="border:1px solid #7a4a21; background:rgba(122,74,33,0.10); color:#7a4a21; padding:5px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.04em; cursor:pointer; line-height:1.2;">BUILD GARAGE</button>
    <!-- Architectural-length box — a permanent instrument on the strip: sits
         blank and disabled while idle, wakes when a typed length is active -->
   <div style="display:flex; align-items:center; gap:6px;">
@@ -1889,6 +1942,8 @@ class Component extends DCLogic {
     noteStyleError: '',       // fill-opacity / bullnose input validation message
     roomAreasOn: false,        // area readout under MAIN FL room tags (off by default)
     projectOpen: false,       // PROJECT dialog visibility
+    projectCallout: false,    // PROFESSOR RUFF first-build callout visibility
+    buildIntroOff: false,     // "don't show this again" for the callout (settings profile)
     areasOpen: false,         // AREAS dialog visibility (report is derived on render)
     // Per-project information saved inside the drawing file. The titleblock
     // and the site plan's LEGAL LAND DESCRIPTION block read from here; later
@@ -2965,6 +3020,7 @@ class Component extends DCLogic {
           drafter: { ...this.state.drafter },
           keybindings: { ...this.state.keybindings },
           tsquareOn: this.state.tsquareOn,
+          buildIntroOff: this.state.buildIntroOff,
         },
       };
     }
@@ -2994,6 +3050,7 @@ class Component extends DCLogic {
           ? { drafter: normaliseDrafter(values.drafter) }
           : {}),
         ...(typeof values.tsquareOn === 'boolean' ? { tsquareOn: values.tsquareOn } : {}),
+        ...(typeof values.buildIntroOff === 'boolean' ? { buildIntroOff: values.buildIntroOff } : {}),
         ...(values.keybindings && typeof values.keybindings === 'object'
           ? {
             // A stored empty string means the command was deliberately cleared;
@@ -3052,7 +3109,16 @@ class Component extends DCLogic {
   }
 
   _openProjectDialog() {
-    this.setState({ projectOpen: true });
+    this.setState({ projectOpen: true, projectCallout: false });
+  }
+
+  _dismissProjectCallout(openProject = false) {
+    if (!this.state.projectCallout) return;
+    this.setState({ projectCallout: false, ...(openProject ? { projectOpen: true } : {}) });
+  }
+
+  _setBuildIntroOff(off) {
+    this.setState({ buildIntroOff: off === true }, () => this._rememberActiveProfile('settings'));
   }
 
   _closeProjectDialog() {
@@ -7864,6 +7930,8 @@ class Component extends DCLogic {
 
   _onMouseDown(e) {
     if (!this._drawingReady) return;
+    // A drawing click means the drafter is off tracing — the callout retires.
+    if (this.state.projectCallout) this._dismissProjectCallout(false);
     if (this.state.lengthFrozen) {
       // A canvas click while the ruler holds a valid typed length is the
       // drafter's "done" — it commits the length just like Enter.
@@ -8682,6 +8750,9 @@ class Component extends DCLogic {
       });
       return;
     }
+    // The marks live on the instrument strip and work from any tool: arming a
+    // garage arms the outline trace with it.
+    if (this.state.activeTool !== 'outline' && !this._activateContextTool('outline')) return;
     this.setState({
       outlineGarage: mode,
       drawingMessage: mode === 'attached'
@@ -10183,6 +10254,23 @@ class Component extends DCLogic {
       });
     });
     return builtAny;
+  }
+
+  // The red bone button is the product's one big action: with an outline on
+  // the shelf it builds; on a blank drawing it arms the outline trace using
+  // the project defaults, and PROFESSOR RUFF points at PROJECT the first time.
+  _pressBuildHouse() {
+    this._ensureDrawingCollections();
+    const floors = this._floorLevels();
+    const hasSource = [1, ...floors.map(level => level.id)]
+      .some(levelId => this._houseOutline(levelId) || this._garageOutline(levelId));
+    if (hasSource) { this._buildHouse(); return; }
+    if (!this._activateContextTool('outline')) return;
+    this.setState({
+      projectCallout: !this.state.buildIntroOff,
+      drawingMessage: 'Trace the house outline corner to corner — close it on the first point (or press Enter), then press the bone again to grow the shell.',
+      drawingMessageError: false,
+    });
   }
 
   _buildHouse() {
@@ -15591,6 +15679,12 @@ class Component extends DCLogic {
       }
       return;
     }
+    // PROFESSOR RUFF's callout borrows the keyboard: Escape heads into
+    // PROJECT, Enter or Space carries on tracing with the defaults.
+    if (this.state.projectCallout && focusedControl !== 'field') {
+      if (e.key === 'Escape') { e.preventDefault(); this._dismissProjectCallout(true); return; }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._dismissProjectCallout(false); return; }
+    }
     if (this.state.groupDialog && focusedControl !== 'field') {
       const key = e.key === ' ' ? 'Space' : e.key;
       if (key === 'y' || key === 'Y' || key === 'Enter' || key === 'Space') {
@@ -16620,7 +16714,12 @@ class Component extends DCLogic {
       autoDimHint: this._activeLevelId() === 7
         ? 'AUTO DIMS on ROOF strings the roof footprint for the truss designer: jogs closest, eave lines next, overall eave-to-eave outside. Re-run to refresh after edits.'
         : 'AUTO DIMS strings the exterior on all four sides: openings closest, footprint jogs next, overall outside. Re-run to refresh after edits — every dim stays ordinary and editable.',
-      onBuildHouse: () => this._buildHouse(),
+      onBuildHouse: () => this._pressBuildHouse(),
+      projectCalloutOpen: this.state.projectCallout === true,
+      dismissProjectCallout: () => this._dismissProjectCallout(false),
+      calloutOpenProject: () => this._dismissProjectCallout(true),
+      buildIntroOff: this.state.buildIntroOff === true,
+      onBuildIntroOffToggle: e => this._setBuildIntroOff(e.target.checked),
       onBuildGarage: () => this._buildGarage(),
       onMarkAttachedGarage: () => this._toggleGarageMode('attached'),
       onMarkDetachedGarage: () => this._toggleGarageMode('detached'),
@@ -17150,7 +17249,6 @@ class Component extends DCLogic {
         standardTool('Trim', shortcut('trim'), ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({activeTool:'trim'}); }, activeTool==='trim'),
         contextualTool('node'),
         contextualTool('line'),
-        contextualTool('outline'),
         contextualTool('shape'),
         contextualTool('dimension'),
         contextualTool('annotation'),
