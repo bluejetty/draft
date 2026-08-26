@@ -245,6 +245,37 @@ if (!window.DraftGeometry2D) {
     return faces;
   };
 
+  // Offset a closed outline outward by a distance: each edge line shifts along
+  // its outward normal and each corner is the intersection of its two shifted
+  // edges, so angled footprints stay true. Orientation-agnostic — whichever
+  // normal direction grows the area is outward; a negative distance insets.
+  const offsetOutline = (points, distance) => {
+    if (!distance) return points.map(pt => ({ ...pt }));
+    const count = points.length;
+    const polygonArea = pts => Math.abs(pts.reduce((sum, pt, index) => {
+      const next = pts[(index + 1) % pts.length];
+      return sum + (pt.x * next.z - next.x * pt.z);
+    }, 0) / 2);
+    const offsetWith = flip => {
+      const edges = points.map((pt, index) => {
+        const next = points[(index + 1) % count];
+        const dx = next.x - pt.x, dz = next.z - pt.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const nx = flip * dz / len, nz = -flip * dx / len;
+        return { ax: pt.x + nx * distance, az: pt.z + nz * distance, dx: dx / len, dz: dz / len, nx, nz };
+      });
+      return points.map((pt, index) => {
+        const prevEdge = edges[(index + count - 1) % count], edge = edges[index];
+        const cross = prevEdge.dx * edge.dz - prevEdge.dz * edge.dx;
+        if (Math.abs(cross) < 1e-9) return { x: pt.x + edge.nx * distance, z: pt.z + edge.nz * distance };
+        const t = ((edge.ax - prevEdge.ax) * edge.dz - (edge.az - prevEdge.az) * edge.dx) / cross;
+        return { x: prevEdge.ax + prevEdge.dx * t, z: prevEdge.az + prevEdge.dz * t };
+      });
+    };
+    const first = offsetWith(1);
+    return (polygonArea(first) >= polygonArea(points)) === (distance > 0) ? first : offsetWith(-1);
+  };
+
   window.DraftGeometry2D = {
     distance,
     worldPerPixel,
@@ -258,6 +289,7 @@ if (!window.DraftGeometry2D) {
     segmentIntersection,
     nearestIntersection,
     roomLoops,
+    offsetOutline,
   };
 })();
 }
