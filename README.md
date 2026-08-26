@@ -6,6 +6,8 @@ Built on the DC framework. Hosted on GitHub Pages.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the app is put together and [BRANCHING.md](BRANCHING.md) for the branch/merge rules.
 
+Copyright (c) 2026 bluejetty. All rights reserved. This code is publicly viewable but proprietary — see [LICENSE](LICENSE).
+
 ## Running the tests
 
 The suite is end-to-end Playwright: it serves the repo over plain HTTP and drives the real pages in Chromium. There is no unit-test layer and no build step.
