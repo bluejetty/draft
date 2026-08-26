@@ -3,11 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Draft — Architectural Workspace</title>
-    <meta name="description" content="Choose a Draft workspace for architectural drawing, layout, and PDF markup." />
+    <title>Rough Drafter — Architectural Workspace</title>
+    <meta name="description" content="Rough Drafter: draw the outline, stamp the rooms, build the house." />
     <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="Draft — Architectural Workspace" />
-    <meta property="og:description" content="Choose a Draft workspace for architectural drawing, layout, and PDF markup." />
+    <meta property="og:title" content="Rough Drafter — Architectural Workspace" />
+    <meta property="og:description" content="Rough Drafter: draw the outline, stamp the rooms, build the house." />
     <meta property="og:type" content="website" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -57,109 +57,62 @@
         padding: 48px 0;
       }
 
-      .site-link {
-        display: block;
-        width: fit-content;
-        margin: 0 auto 34px;
-        line-height: 1;
-        text-decoration: none;
-      }
-       .site-logo {
-         display: block;
-         width: clamp(190px, 22vw, 250px);
-         max-height: 100px;
-         object-fit: contain;
-         transition: opacity 160ms ease, transform 160ms ease;
-       }
-       .site-link:hover .site-logo,
-       .site-link:focus-visible .site-logo {
-         opacity: 0.78;
-         transform: translateY(-1px);
-       }
-       .site-link:focus-visible {
-         outline: 2px solid var(--blue-medium);
-         outline-offset: 8px;
-      }
-
-      .spaces {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 16px;
-      }
-      .space-card {
-        position: relative;
+      .enter-link {
         display: flex;
-         height: 76px;
-         min-height: 76px;
-         align-items: center;
-         justify-content: center;
-         padding: 0 22px;
-        border: 1px solid rgba(255, 255, 255, 0.52);
-        background: var(--accent);
-        color: #fff;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        width: fit-content;
+        margin: 0 auto;
         text-decoration: none;
-        box-shadow: 0 10px 22px rgba(22, 54, 83, 0.12);
-        transition: border-color 160ms ease, box-shadow 160ms ease, filter 160ms ease, transform 160ms ease;
+        color: var(--ink);
+        transition: transform 160ms ease;
       }
-      .space-card:hover,
-      .space-card:focus-visible {
-        border-color: #fff;
-        box-shadow: 0 16px 30px rgba(22, 54, 83, 0.22);
-        filter: brightness(1.08);
-        outline: none;
-        transform: translateY(-3px);
+      .enter-link:hover,
+      .enter-link:focus-visible {
+        transform: translateY(-4px);
       }
-      .space-card:focus-visible { box-shadow: 0 0 0 3px rgba(22, 54, 83, 0.28), 0 16px 30px rgba(22, 54, 83, 0.22); }
-      .space-code {
-         color: #fff;
-        font-family: "DM Mono", monospace;
-         font-size: 14px;
-        letter-spacing: 0.08em;
-         line-height: 1;
+      .enter-link:focus-visible {
+        outline: 2px solid var(--blue-medium);
+        outline-offset: 12px;
+      }
+      .enter-logo {
+        display: block;
+        width: clamp(320px, 52vw, 560px);
+        aspect-ratio: 1;
+        object-fit: contain;
+        filter: drop-shadow(0 18px 30px rgba(22, 54, 83, 0.2));
+        transition: filter 160ms ease;
+      }
+      .enter-link:hover .enter-logo,
+      .enter-link:focus-visible .enter-logo {
+        filter: drop-shadow(0 24px 38px rgba(22, 54, 83, 0.3));
+      }
+      .enter-name {
+        font-size: clamp(38px, 6vw, 58px);
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        line-height: 1;
+        text-transform: uppercase;
       }
 
       @media (max-width: 760px) {
         .shell { width: min(100% - 32px, 540px); }
         main { padding: 32px 0; }
-        .site-link { margin-bottom: 26px; }
-        .spaces { grid-template-columns: 1fr; }
-         .space-card { height: 68px; min-height: 68px; }
+        .enter-logo { width: min(86vw, 420px); }
       }
     </style>
   </head>
   <body>
     <div class="shell">
       <main>
-        <a class="site-link" href="https://bluejetty.ca" aria-label="Visit bluejetty.ca">
-          <img class="site-logo" src="https://bluejetty.ca/logo.png" alt="bluejetty.ca" />
+        <a class="enter-link" href="MODEL.dc.html" aria-label="Open Rough Drafter model space">
+          <img class="enter-logo" src="assets/rough-drafter-logo.png" alt="A white model house popping up from a house plan" />
+          <span class="enter-name">Rough Drafter</span>
         </a>
-        <nav class="spaces" aria-label="Draft workspaces" id="spaces"></nav>
       </main>
     </div>
 
-    <script>
-      // Add future workspaces here. Each entry becomes one launcher card.
-      const spaces = [
-        {
-          code: "01 / MODEL",
-          href: "MODEL.dc.html",
-          accent: "#1d4d78",
-        },
-        {
-          code: "02 / LAYOUT",
-          href: "LAYOUT.dc.html",
-          accent: "#3675a7",
-        },
-      ];
 
-      document.querySelector("#spaces").innerHTML = spaces.map((space) => `
-        <a class="space-card" href="${space.href}" style="--accent: ${space.accent}">
-          <div class="space-code">${space.code}</div>
-        </a>
-      `).join("");
-    </script>
-    <noscript>
-      <p>Please enable JavaScript to choose a Draft workspace.</p>
-    </noscript>
   </body>
 </html>
