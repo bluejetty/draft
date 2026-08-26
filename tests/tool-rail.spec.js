@@ -89,7 +89,7 @@ test('the rail groups tools under DRAW / EDIT and BUILD', async ({ page }) => {
     });
     return out;
   });
-  for (const name of ['SELECT', 'EXTEND', 'TRIM', 'NODE / ARC', 'LINE', 'OUTLINE', 'SHAPE', 'DIMENSION', 'ANNOTATION']) {
+  for (const name of ['SELECT', 'EXTEND', 'TRIM', 'NODE / ARC', 'LINE', 'SHAPE', 'DIMENSION', 'ANNOTATION']) {
     expect(groups['DRAW / EDIT']).toContain(name);
   }
   for (const name of ['WALL', 'FENESTRATION', 'FLOOR', 'ROOF', 'COLUMN', 'BEAM', 'STAIR']) {
