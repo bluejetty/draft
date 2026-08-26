@@ -13,6 +13,7 @@
 <script src="./formatters.js"></script>
 <script src="./auto-dims.js"></script>
 <script src="./render-2d.js"></script>
+<script src="./areas.js"></script>
 <script src="./build-house.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
@@ -134,6 +135,7 @@
       </select>
     </div>
     <button data-project-open onClick="{{ openProjectDialog }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">PROJECT</button>
+    <button data-areas-open onClick="{{ openAreasDialog }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">AREAS</button>
     <div data-profile-stack style="display:flex; flex-direction:column; gap:1px;">
       <button onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
       <button onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
@@ -374,6 +376,40 @@
       <div style="margin-top:12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">Legal land description</div>
       <textarea data-project-legal value="{{ projectLegal }}" onInput="{{ onProjectLegalInput }}" aria-label="Legal land description" rows="3" style="width:100%; box-sizing:border-box; margin-top:5px; border:1px solid rgba(29,31,32,0.25); padding:6px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; line-height:1.45; outline:none; resize:vertical;"></textarea>
       <button onClick="{{ closeProjectDialog }}" style="width:100%; height:34px; margin-top:14px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">DONE</button>
+    </div>
+  </div>
+</sc-if>
+
+<!-- AREAS dialog: derived per-level and building areas for permit forms —
+     recomputed on open, never saved with the drawing -->
+<sc-if value="{{ areasDialogOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:flex-start; justify-content:center; padding-top:78px; background:rgba(29,31,32,0.18);">
+    <div data-areas-dialog role="dialog" aria-modal="true" aria-label="Areas" style="width:min(480px, calc(100vw - 32px)); max-height:calc(100vh - 120px); overflow-y:auto; border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
+      <div style="display:flex; align-items:flex-start; gap:16px;">
+        <div style="flex:1;">
+          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">Areas</div>
+          <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">Developed area per level with the room roll-up, recomputed from the drawing each time this opens.</div>
+        </div>
+        <button onClick="{{ closeAreasDialog }}" aria-label="Close" style="border:none; background:transparent; color:rgba(29,31,32,0.48); font-size:18px; line-height:1; cursor:pointer;">&#215;</button>
+      </div>
+      <sc-for list="{{ areasReport.rows }}" as="row" hint-placeholder-count="3">
+        <div data-areas-level style="margin-top:12px; border:1px solid rgba(29,31,32,0.14); padding:9px 11px;">
+          <div style="display:flex; align-items:baseline; gap:8px;">
+            <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em;">{{ row.name }}</div>
+            <div style="font-size:10px; color:rgba(29,31,32,0.45);">{{ row.sourceNote }}</div>
+            <div data-areas-net style="margin-left:auto; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600;">{{ row.netLabel }}</div>
+          </div>
+          <div style="margin-top:3px; font-size:11px; color:rgba(29,31,32,0.62);">gross {{ row.grossLabel }} <span data-areas-less style="color:#b04050;">{{ row.lessLabel }}</span> <span style="color:rgba(29,31,32,0.45);">{{ row.garageLabel }}</span></div>
+          <div data-areas-rooms style="margin-top:4px; font-size:11px; line-height:1.5; color:rgba(29,31,32,0.72);">{{ row.roomsLine }}</div>
+        </div>
+      </sc-for>
+      <div data-areas-suite style="margin-top:12px; font-size:12px; font-weight:600; color:#365e86;">{{ areasReport.suiteLine }}</div>
+      <div style="margin-top:8px; display:flex; align-items:baseline; border-top:1px solid rgba(29,31,32,0.25); padding-top:8px;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">Building total</div>
+        <div data-areas-total style="margin-left:auto; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:600;">{{ areasReport.totalLabel }}</div>
+      </div>
+      <div data-areas-convention style="margin-top:9px; font-size:10px; line-height:1.5; color:rgba(29,31,32,0.55);">{{ areasReport.convention }}</div>
+      <button onClick="{{ closeAreasDialog }}" style="width:100%; height:34px; margin-top:14px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">DONE</button>
     </div>
   </div>
 </sc-if>
@@ -1851,6 +1887,7 @@ class Component extends DCLogic {
     noteStyleError: '',       // fill-opacity / bullnose input validation message
     roomAreasOn: false,        // area readout under MAIN FL room tags (off by default)
     projectOpen: false,       // PROJECT dialog visibility
+    areasOpen: false,         // AREAS dialog visibility (report is derived on render)
     // Per-project information saved inside the drawing file. The titleblock
     // and the site plan's LEGAL LAND DESCRIPTION block read from here; later
     // per-project settings (model-space size, T-square angle set, filename
@@ -3018,6 +3055,68 @@ class Component extends DCLogic {
 
   _closeProjectDialog() {
     this.setState({ projectOpen: false });
+  }
+
+  _openAreasDialog() {
+    this.setState({ areasOpen: true });
+  }
+
+  _closeAreasDialog() {
+    this.setState({ areasOpen: false });
+  }
+
+  // Gathers plain inputs for areas.js and shapes its report for the dialog.
+  // Areas are DERIVED: computed on every render while the dialog is open,
+  // never serialized into the drawing.
+  _areasReport() {
+    this._ensureDrawingCollections();
+    // Floor levels plus the basement (FOUNDATION carries the slab but has no
+    // 'floor' layer set, so _floorLevels excludes it); state order is already
+    // top-down for display.
+    const levels = this.state.levels
+      .filter(level => level.id === BASEMENT_LEVEL_ID
+        || layerViewsForLevelId(level.id).some(view => view.id === 'floor'))
+      .map(level => ({ id: level.id, name: level.name }));
+    const report = window.DraftAreas.computeAreas({
+      levels,
+      floors: this._floors.map(floor => ({
+        id: floor.id, levelId: floor.levelId,
+        points: floor.points.map(point => ({ x: point.x, z: point.z })),
+        garage: floor.garage === true,
+      })),
+      openings: this._surfaceOpenings
+        .filter(opening => opening.hostType === 'floor')
+        .map(opening => ({
+          hostId: opening.hostId,
+          points: opening.points.map(point => ({ x: point.x, z: point.z })),
+        })),
+      outlines: this._outlines.map(outline => ({
+        levelId: outline.levelId,
+        points: outline.points.map(point => ({ x: point.x, z: point.z })),
+      })),
+      roomTags: this._roomTags.map(tag => ({
+        levelId: tag.levelId, name: tag.name, areaSqFt: tag.areaSqFt,
+      })),
+      basementLevelId: BASEMENT_LEVEL_ID,
+    });
+    const sq = value => `${Math.round(value)} sq ft`;
+    return {
+      rows: report.levels.map(row => ({
+        name: row.name,
+        sourceNote: row.source === 'outline' ? 'from outline'
+          : row.source === 'rooms' ? 'rooms only, approx.' : '',
+        grossLabel: row.grossSqFt === null ? '\u2014' : sq(row.grossSqFt),
+        lessLabel: row.openingsSqFt > 0 ? `less floor openings ${sq(row.openingsSqFt)}` : '',
+        garageLabel: row.garageSqFt > 0 ? `incl. garage ${sq(row.garageSqFt)}` : '',
+        netLabel: row.netSqFt === null ? '\u2014' : sq(row.netSqFt),
+        roomsLine: row.rooms.map(room => `${room.name} ${room.areaSqFt}`).join(' \u00b7 '),
+      })),
+      suiteLine: report.suite
+        ? `${report.suite.name} (secondary suite figure): ${sq(report.suite.netSqFt)}`
+        : '',
+      totalLabel: report.totalSqFt === null ? '\u2014' : sq(report.totalSqFt),
+      convention: report.convention,
+    };
   }
 
   _setProjectField(field, value) {
@@ -17198,6 +17297,11 @@ class Component extends DCLogic {
       openProjectDialog: () => this._openProjectDialog(),
       closeProjectDialog: () => this._closeProjectDialog(),
       projectDialogOpen: this.state.projectOpen === true,
+      areasDialogOpen: this.state.areasOpen === true,
+      areasReport: this.state.areasOpen === true ? this._areasReport()
+        : { rows: [], suiteLine: '', totalLabel: '', convention: '' },
+      openAreasDialog: () => this._openAreasDialog(),
+      closeAreasDialog: () => this._closeAreasDialog(),
       projectName: this.state.projectInfo.name,
       projectClient: this.state.projectInfo.client,
       projectAddress: this.state.projectInfo.address,
