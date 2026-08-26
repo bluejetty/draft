@@ -52,16 +52,27 @@ test.describe('Standard E1-E4 elevations', () => {
     await h.waitForSaved(page);
 
     // E1's cut line runs along the bottom of the model area (larger z in
-    // world terms) with the viewer standing south of it. The marks tuck
-    // into the gap between the walls and the first dimension string —
-    // halfway across the default 1'-6" first offset.
-    const south = await h.worldToClient(page, 0, 6.75);
+    // world terms) with the viewer standing south of it. The marks stand
+    // outside the outermost dimension string on their side, half the first
+    // offset further out — clear of the strings, unlike the tucked S marks.
+    const saved = await h.savedDrawing(page);
+    const dimS = Math.max(...saved.dimensions.flatMap(d => [d.start.z, d.end.z]));
+    const dimE = Math.max(...saved.dimensions.flatMap(d => [d.start.x, d.end.x]));
+    expect(dimS).toBeGreaterThan(6);
+    expect(dimE).toBeGreaterThan(8);
+
+    const south = await h.worldToClient(page, 0, dimS + 0.75);
     const pixels = await h.overlayPixels(page, south.x, south.y, 20);
     expect(h.countColor(pixels, CUT_RED)).toBeGreaterThan(0);
 
-    const east = await h.worldToClient(page, 8.75, 0);
+    const east = await h.worldToClient(page, dimE + 0.75, 0);
     const eastPixels = await h.overlayPixels(page, east.x, east.y, 20);
     expect(h.countColor(eastPixels, CUT_RED)).toBeGreaterThan(0);
+
+    // And the old tucked spot inside the strings is clear of cut ink now.
+    const tucked = await h.worldToClient(page, 0, 6.75);
+    const tuckedPixels = await h.overlayPixels(page, tucked.x, tucked.y, 8);
+    expect(h.countColor(tuckedPixels, CUT_RED)).toBe(0);
 
     // Opening E1 renders a generated elevation with real ink.
     // Click the E1 designation itself — the side-name input beside it edits.
