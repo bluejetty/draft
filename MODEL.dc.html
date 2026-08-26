@@ -13,6 +13,7 @@
 <script src="./formatters.js"></script>
 <script src="./auto-dims.js"></script>
 <script src="./render-2d.js"></script>
+<script src="./build-house.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
      would otherwise run here and be mounted again by the helmet runtime. -->
 <script src="./vendor/three-0.128.0.min.js"></script>
@@ -9268,15 +9269,11 @@ class Component extends DCLogic {
     return garage?.detached === true || this._garageMaster(garage)?.detached === true;
   }
 
-  // refLine that puts the wall body inside the ring, keeping the outline on
-  // the exterior face: 'left' for counter-clockwise rings, 'right' for
-  // clockwise ones.
+  // The BUILD HOUSE derivations live in build-house.js; the class keeps the
+  // commit layer (vertex pool, srcId links, collection writes) and these
+  // delegates keep every call site.
   _outlineInteriorRef(points) {
-    const area = points.reduce((sum, point, index) => {
-      const next = points[(index + 1) % points.length];
-      return sum + (point.x * next.z - next.x * point.z);
-    }, 0);
-    return area > 0 ? 'left' : 'right';
+    return window.DraftBuildHouse.outlineInteriorRef(points);
   }
 
   // BUILD HOUSE skips a level that already has geometry — but pieces the
@@ -9305,14 +9302,15 @@ class Component extends DCLogic {
     const points = outline.points;
     const refLine = this._outlineInteriorRef(points);
     const topHeight = this._levelAssembly(levelId).wallHeightFt;
-    let built = false;
-    points.forEach((point, index) => {
-      const next = points[(index + 1) % points.length];
-      if (Math.hypot(next.x - point.x, next.z - point.z) < 0.01) return;
+    // The run derivation (edge walk, degenerate skip) is pure and lives in
+    // build-house.js; this side commits each run through the vertex pool in
+    // the same ring order.
+    const runs = window.DraftBuildHouse.houseWallRuns(points);
+    runs.forEach(run => {
       this._walls.push({
         id: this._newDrawingItemId('wall'),
-        start: this._linkVertex(this._mergeVertex({ x: point.x, z: point.z }, levelId, view), point.srcId),
-        end: this._linkVertex(this._mergeVertex({ x: next.x, z: next.z }, levelId, view), next.srcId),
+        start: this._linkVertex(this._mergeVertex({ x: run.start.x, z: run.start.z }, levelId, view), run.start.srcId),
+        end: this._linkVertex(this._mergeVertex({ x: run.end.x, z: run.end.z }, levelId, view), run.end.srcId),
         levelId,
         view,
         wallType,
@@ -9320,9 +9318,8 @@ class Component extends DCLogic {
         topHeight,
         refLine,
       });
-      built = true;
     });
-    return built;
+    return runs.length > 0;
   }
 
   _buildHouseFloor(levelId, structure) {
@@ -9361,11 +9358,7 @@ class Component extends DCLogic {
       line.levelId === levelId && (line.view || 'plan') === 'foundation')).length) return false;
     const wallFt = (WALL_TYPES.find(type => type.id === 'concrete_8')?.totalIn || 8) / 12;
     const projFt = Math.max(0, this._footingWidthIn(levelId) / 12 - wallFt) / 2;
-    const base = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
-    const rings = [
-      this._offsetOutline(base, projFt),
-      this._offsetOutline(base, -(wallFt + projFt)),
-    ];
+    const rings = window.DraftBuildHouse.footingRings(outline.points, wallFt, projFt);
     // Ring corners map 1:1 onto the outline corners they were offset from,
     // so each footing vertex links to the same master point.
     rings.forEach(ring => ring.forEach((point, index) => {
@@ -11393,35 +11386,10 @@ class Component extends DCLogic {
     return null;
   }
 
-  // Offset a closed outline outward by a distance: each edge line shifts along
-  // its outward normal and each corner is the intersection of its two shifted
-  // edges, so angled footprints stay true. Orientation-agnostic — whichever
-  // normal direction grows the area is outward; a negative distance insets.
+  // Outline offsetting lives in geometry-2d.js now (nine callers across
+  // footings, roofs, sections, dims); this delegate keeps every call site.
   _offsetOutline(points, distance) {
-    if (!distance) return points.map(pt => ({ ...pt }));
-    const count = points.length;
-    const polygonArea = pts => Math.abs(pts.reduce((sum, pt, index) => {
-      const next = pts[(index + 1) % pts.length];
-      return sum + (pt.x * next.z - next.x * pt.z);
-    }, 0) / 2);
-    const offsetWith = flip => {
-      const edges = points.map((pt, index) => {
-        const next = points[(index + 1) % count];
-        const dx = next.x - pt.x, dz = next.z - pt.z;
-        const len = Math.hypot(dx, dz) || 1;
-        const nx = flip * dz / len, nz = -flip * dx / len;
-        return { ax: pt.x + nx * distance, az: pt.z + nz * distance, dx: dx / len, dz: dz / len, nx, nz };
-      });
-      return points.map((pt, index) => {
-        const prevEdge = edges[(index + count - 1) % count], edge = edges[index];
-        const cross = prevEdge.dx * edge.dz - prevEdge.dz * edge.dx;
-        if (Math.abs(cross) < 1e-9) return { x: pt.x + edge.nx * distance, z: pt.z + edge.nz * distance };
-        const t = ((edge.ax - prevEdge.ax) * edge.dz - (edge.az - prevEdge.az) * edge.dx) / cross;
-        return { x: prevEdge.ax + prevEdge.dx * t, z: prevEdge.az + prevEdge.dz * t };
-      });
-    };
-    const first = offsetWith(1);
-    return (polygonArea(first) >= polygonArea(points)) === (distance > 0) ? first : offsetWith(-1);
+    return geo.offsetOutline(points, distance);
   }
 
   _findRoofEdgeAt(worldPt) {
