@@ -7599,6 +7599,18 @@ class Component extends DCLogic {
     return this._snap(raw);
   }
 
+  // House-outline nodes are the weld targets of an in-progress ATTACHED
+  // garage run. The run's own points don't pull — the start node would hold
+  // the cursor hostage on the very first leg.
+  _findHouseWeldMagnet(raw) {
+    if (this.state.outlineGarage !== 'attached' || !this._outlineDrawing) return null;
+    const pts = [];
+    [...this._activeOutlines(), ...this._activeBoneyardOutlines()]
+      .filter(outline => !outline.garage && !outline.open)
+      .forEach(outline => pts.push(...outline.points));
+    return geo.nearestVertex(this._withoutVertices(pts, new Set(this._outlinePoints)), raw, this._magnetRadius());
+  }
+
   // The 0,0 origin marker is the one always-snappable grid point: any tool
   // catches it when the cursor moves within its magnetic pull, no toggle.
   _originSnapPoint(pt) {
@@ -7693,8 +7705,14 @@ class Component extends DCLogic {
     // Vertex magnet uses the raw cursor position so grid rounding cannot make
     // a node feel magnetic beyond the one-pixel hit radius.
     const lockEngaged = angleLockHeld && start && this._lockAngle != null;
-    const magnetRaw = !trackingHit ? this._findMagnet(raw, drag?.vertices) : null;
-    const magnet = magnetRaw && (!lockEngaged || this._snapOnLockedRay(start, magnetRaw)) ? magnetRaw : null;
+    // An ATTACHED garage run must start and end welded ON the house outline,
+    // so while one draws, the house's own nodes pull at full magnet radius
+    // and outrank the T-square — the weld beats the locked ray.
+    const weldMagnet = this._findHouseWeldMagnet(raw);
+    if (weldMagnet) trackingHit = null;
+    const magnetRaw = !trackingHit && !weldMagnet ? this._findMagnet(raw, drag?.vertices) : null;
+    const magnet = weldMagnet
+      || (magnetRaw && (!lockEngaged || this._snapOnLockedRay(start, magnetRaw)) ? magnetRaw : null);
     // Midpoint snap — only when no vertex magnet and not tracking, on the same
     // locked-ray terms as the vertex magnet.
     const midSnapRaw = (!trackingHit && !magnet) ? this._findMidpointSnap(raw, drag?.vertices) : null;
@@ -8007,7 +8025,10 @@ class Component extends DCLogic {
       case 'line': return !this._lineDrawing;
       case 'floor': return !this._floorDrawing;
       case 'shape': return !this._shapeDrawing;
-      case 'outline': return !this._outlineDrawing;
+      // With a GARAGE armed the next press STARTS the run — often right on a
+      // house node, where an attached run is meant to begin; a grab there
+      // would silently drag the house corner instead of drawing the leg.
+      case 'outline': return !this._outlineDrawing && !this.state.outlineGarage;
       case 'dimension': return !this._dimensionStart;
       case 'beam': return !this._beamStart;
       case 'column': return true;
@@ -8542,13 +8563,17 @@ class Component extends DCLogic {
     }
     const first = this._outlineStart;
     // Closing back onto the first point finishes a loop; a GARAGE loop closed
-    // this way is a DETACHED garage, independent of the house outline.
+    // this way is a DETACHED garage, independent of the house outline. An
+    // ATTACHED run cannot close, so only a click landing exactly ON its first
+    // point reads as a close attempt — nearby clicks are ordinary corners.
+    const closeRadius = this.state.outlineGarage === 'attached' ? 0.001 : this._magnetRadius() * 2;
     if (this._outlinePoints.length >= 3 && first
-      && Math.hypot(pt.x - first.x, pt.z - first.z) < this._magnetRadius() * 2) {
+      && Math.hypot(pt.x - first.x, pt.z - first.z) < closeRadius) {
       this._finishOutline(true);
       return;
     }
-    if (first && this._closesOnFirstNode(e, first, pt, this._outlinePoints.length)) {
+    if (first && this.state.outlineGarage !== 'attached'
+      && this._closesOnFirstNode(e, first, pt, this._outlinePoints.length)) {
       this._outlinePoints.push(pt.clone());
       this._finishOutline(true);
       return;
