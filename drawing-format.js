@@ -403,6 +403,7 @@ if (!window.DraftDrawingFormat) {
         view: 'plan',
         name,
         areaSqFt: area > 0 ? area : 0,
+        underMin: tag?.underMin === true,
         layer: 'ROOM-IDS-AREA',
       };
     }).filter(Boolean);

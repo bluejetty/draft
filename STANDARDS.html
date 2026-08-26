@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Draft — Company Standard Layers</title>
   <script src="./profile-manager.js"></script>
+  <script src="./room-standards.js"></script>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap">
   <style>
     * { box-sizing:border-box; }
@@ -95,6 +96,58 @@
         </span>
       </div>
     </section>
+    <section class="group" style="margin-top:14px;" aria-label="Room minimums">
+      <div class="group-title">Room minimums</div>
+      <p class="intro" style="margin:6px 0 8px;">Preferred MINIMUM room sizes &mdash; office preference seeded from the code&#8217;s own constants, not a code engine. ROOM TAGS marks rooms under these numbers with a quiet UNDER MIN note; nothing blocks, nothing auto-fixes. AUTO-FURNISH will size against this table later.</p>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">BEDROOM</span>
+        <span class="layer-use">NBC-style habitable-room default: the flag fires when a bedroom&#8217;s inside area or least dimension drops below the office numbers.</span>
+        <span class="layer-print" style="justify-content:flex-start; gap:6px;">
+          <input class="layer-name-input" data-room-min-area="bedroom" aria-label="BEDROOM minimum area (sq ft)" style="width:58px;" /> sq ft &middot;
+          <input class="layer-name-input" data-room-min-dim="bedroom" aria-label="BEDROOM minimum least dimension (ft)" style="width:48px;" /> ft min
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">KITCHEN</span>
+        <span class="layer-use">Seeded from the auto-kitchen envelope the code already applies (8&#8242; long leg &times; 5&#8242; short leg).</span>
+        <span class="layer-print" style="justify-content:flex-start; gap:6px;">
+          <input class="layer-name-input" data-room-min-area="kitchen" aria-label="KITCHEN minimum area (sq ft)" style="width:58px;" /> sq ft &middot;
+          <input class="layer-name-input" data-room-min-dim="kitchen" aria-label="KITCHEN minimum least dimension (ft)" style="width:48px;" /> ft min
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">LIVING ROOM</span>
+        <span class="layer-use">Stored for AUTO-FURNISH; the detector has no LIVING category yet, so no tag flag rides on this row.</span>
+        <span class="layer-print" style="justify-content:flex-start; gap:6px;">
+          <input class="layer-name-input" data-room-min-area="living" aria-label="LIVING ROOM minimum area (sq ft)" style="width:58px;" /> sq ft &middot;
+          <input class="layer-name-input" data-room-min-dim="living" aria-label="LIVING ROOM minimum least dimension (ft)" style="width:48px;" /> ft min
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">WC / BATH</span>
+        <span class="layer-use">Office default: a 3&#8242; clear width and a small-bath floor.</span>
+        <span class="layer-print" style="justify-content:flex-start; gap:6px;">
+          <input class="layer-name-input" data-room-min-area="wc" aria-label="WC / BATH minimum area (sq ft)" style="width:58px;" /> sq ft &middot;
+          <input class="layer-name-input" data-room-min-dim="wc" aria-label="WC / BATH minimum least dimension (ft)" style="width:48px;" /> ft min
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">LAUNDRY</span>
+        <span class="layer-use">Office default: a washer + dryer pair wants about 4&#8242;-6&#8243; clear.</span>
+        <span class="layer-print" style="justify-content:flex-start; gap:6px;">
+          <input class="layer-name-input" data-room-min-area="laundry" aria-label="LAUNDRY minimum area (sq ft)" style="width:58px;" /> sq ft &middot;
+          <input class="layer-name-input" data-room-min-dim="laundry" aria-label="LAUNDRY minimum least dimension (ft)" style="width:48px;" /> ft min
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">DZ / MUD RM</span>
+        <span class="layer-use">Drop Zone (Jerry): bench + locker uppers, 2&#8242;-6&#8243; &times; 6&#8242;-0&#8243; core with a 36&#8243; clear strip; optional 60&#8243; washer/dryer run. Stamp belongs at a back or garage man door.</span>
+        <span class="layer-print" style="justify-content:flex-start; gap:6px;">
+          <input class="layer-name-input" data-room-min-area="dz" aria-label="DZ minimum area (sq ft)" style="width:58px;" /> sq ft &middot;
+          <input class="layer-name-input" data-room-min-dim="dz" aria-label="DZ minimum least dimension (ft)" style="width:48px;" /> ft min
+        </span>
+      </div>
+    </section>
     <div class="actions">
       <button class="action" id="reset" type="button">RESET DEFAULTS</button>
       <button class="action primary" id="download" type="button">DOWNLOAD .DRAFT.STANDARDS</button>
@@ -110,6 +163,7 @@
       let packageName = active?.name || manager.defaultName();
       let layerStandards = standardsApi.normaliseLayerStandards(active?.content?.model?.layerStandards);
       let structureStandards = window.DraftStructureStandards.normaliseStructureStandards(active?.content?.model?.structureStandards);
+      let roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(active?.content?.model?.roomMinimums);
 
       const defaults = standardsApi.normaliseLayerStandards(null);
       const status = document.querySelector('#status');
@@ -120,7 +174,7 @@
       };
 
       const saveActive = message => {
-        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards } });
+        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -229,6 +283,27 @@
         });
       });
 
+
+      const roomMinInputs = [...document.querySelectorAll('[data-room-min-area], [data-room-min-dim]')];
+      const fillRoomMinimums = () => roomMinInputs.forEach(input => {
+        const id = input.dataset.roomMinArea || input.dataset.roomMinDim;
+        const row = roomMinimums[id];
+        input.value = input.dataset.roomMinArea ? String(row.minAreaSqFt) : String(row.minDimensionFt);
+      });
+      fillRoomMinimums();
+      roomMinInputs.forEach(input => {
+        input.addEventListener('change', () => {
+          const id = input.dataset.roomMinArea || input.dataset.roomMinDim;
+          const key = input.dataset.roomMinArea ? 'minAreaSqFt' : 'minDimensionFt';
+          roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums({
+            ...roomMinimums,
+            [id]: { ...roomMinimums[id], [key]: Number(input.value) },
+          });
+          fillRoomMinimums();
+          saveActive(`${roomMinimums[id].label} minimum saved.`);
+        });
+      });
+
       document.querySelector('#reset').addEventListener('click', () => {
         layerStandards = standardsApi.normaliseLayerStandards(null);
         structureStandards = window.DraftStructureStandards.normaliseStructureStandards(null);
@@ -236,11 +311,13 @@
         autoElevInput.checked = structureStandards.autoElevations;
         bubbleStyleSelect.value = structureStandards.cutBubbleStyle;
         fillElevationNames();
+        roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(null);
+        fillRoomMinimums();
         saveActive('Default layer standards restored.');
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards } });
+        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
