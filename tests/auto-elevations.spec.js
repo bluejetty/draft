@@ -49,13 +49,14 @@ test.describe('Standard E1-E4 elevations', () => {
     await h.waitForSaved(page);
 
     // E1's cut line runs along the bottom of the model area (larger z in
-    // world terms) with the viewer standing south of it. Its bubble ink is
-    // on the plan, south of the walls.
-    const south = await h.worldToClient(page, 0, 16);
+    // world terms) with the viewer standing south of it. The marks tuck
+    // into the gap between the walls and the first dimension string —
+    // halfway across the default 1'-6" first offset.
+    const south = await h.worldToClient(page, 0, 6.75);
     const pixels = await h.overlayPixels(page, south.x, south.y, 20);
     expect(h.countColor(pixels, CUT_RED)).toBeGreaterThan(0);
 
-    const east = await h.worldToClient(page, 18, 0);
+    const east = await h.worldToClient(page, 8.75, 0);
     const eastPixels = await h.overlayPixels(page, east.x, east.y, 20);
     expect(h.countColor(eastPixels, CUT_RED)).toBeGreaterThan(0);
 

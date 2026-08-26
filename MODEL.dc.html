@@ -1440,9 +1440,6 @@ const DEFAULT_ROOF_PITCH = 4;   // rise in inches per 12" of run
 const MAX_ROOF_PITCH = 24;
 const ROOF_FASCIA_IN = 5.5;
 const ROOF_LAYER = 'A-ROOF';
-// The standard elevations stand this far outside the plan extents — clear
-// of the auto-dimension strings that stack against the walls.
-const AUTO_ELEVATION_OFFSET_FT = 10;
 // Structural point supports and spans, placed manually in either order —
 // columns centre onto a beam line and beam ends snap to columns, so they line
 // up whichever is placed first. A beam is one span between two supports:
@@ -5745,6 +5742,10 @@ class Component extends DCLogic {
 
     // Classic drafting marks: a labelled bubble at each end of the dashed
     // cut line, wearing a filled triangle that points the view direction.
+    // The office picks the triangle style: TUCKED slides it behind the
+    // bubble with its back edge on the cut line and just the point showing;
+    // PROUD wears the small triangle out on the bubble's rim.
+    const bubbleStyle = normaliseStructureStandards(this.state.structureStandards).cutBubbleStyle;
     const bubbleMark = cut => {
       const y = cut.elev + 0.02;
       const start = { x: cut.startPt.x, y, z: cut.startPt.z };
@@ -5763,28 +5764,50 @@ class Component extends DCLogic {
       const vLen = Math.hypot(vx, vy) || 1;
       vx /= vLen; vy /= vLen;
 
-      const R = 10;
+      const R = 8, ink = ctx.strokeStyle;
       [[a, -1], [b, 1]].forEach(([p, side]) => {
         const cx = p.x + ux * side * (R + 2), cy = p.y + uy * side * (R + 2);
+        if (bubbleStyle === 'tucked') {
+          // Triangle first, tucked behind the circle: its back edge lies on
+          // the cut line through the bubble centre, only the point shows.
+          ctx.beginPath();
+          ctx.moveTo(cx + vx * (R + 8), cy + vy * (R + 8));
+          ctx.lineTo(cx - ux * R, cy - uy * R);
+          ctx.lineTo(cx + ux * R, cy + uy * R);
+          ctx.closePath();
+          ctx.fillStyle = ink; ctx.fill();
+        }
         ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
         ctx.fillStyle = '#fff'; ctx.fill();
         ctx.stroke();
-        const tx = cx + vx * R, ty = cy + vy * R;
-        ctx.beginPath();
-        ctx.moveTo(tx + vx * 8, ty + vy * 8);
-        ctx.lineTo(tx - vy * 5.5, ty + vx * 5.5);
-        ctx.lineTo(tx + vy * 5.5, ty - vx * 5.5);
-        ctx.closePath();
-        ctx.fillStyle = ctx.strokeStyle; ctx.fill();
-        ctx.font = '600 10px "Barlow Condensed", system-ui, sans-serif';
+        if (bubbleStyle === 'proud') {
+          const tx = cx + vx * R, ty = cy + vy * R;
+          ctx.beginPath();
+          ctx.moveTo(tx + vx * 8, ty + vy * 8);
+          ctx.lineTo(tx - vy * 5.5, ty + vx * 5.5);
+          ctx.lineTo(tx + vy * 5.5, ty - vx * 5.5);
+          ctx.closePath();
+          ctx.fillStyle = ink; ctx.fill();
+        }
+        // The circle never grows: long names shrink their letters to fit.
+        const label = cut.name || '';
+        let fontPx = 10;
+        ctx.font = `600 ${fontPx}px "Barlow Condensed", system-ui, sans-serif`;
+        const maxW = (R - 1.5) * 2;
+        const w = ctx.measureText(label).width;
+        if (w > maxW) {
+          fontPx = Math.max(5, Math.floor(fontPx * maxW / w * 10) / 10);
+          ctx.font = `600 ${fontPx}px "Barlow Condensed", system-ui, sans-serif`;
+        }
+        ctx.fillStyle = ink;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(cut.name || '', cx, cy + 0.5);
+        ctx.fillText(label, cx, cy + 0.5);
       });
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     };
 
     ctx.save();
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1;
     ctx.strokeStyle = '#b04060';
     ctx.fillStyle = '#b04060';
     [...this._autoElevationCuts(), ...this.state.cuts].forEach(bubbleMark);
@@ -6108,7 +6131,9 @@ class Component extends DCLogic {
   // The four standard elevations place themselves just outside the plan
   // extents: E1 along the bottom looking up into the model, E2 left looking
   // right, E3 top looking down, E4 right looking left. Like hand-placed
-  // cuts, dirVec points to the side the viewer stands on.
+  // cuts, dirVec points to the side the viewer stands on. The marks tuck
+  // into the gap between the exterior walls and the first auto-dimension
+  // string — halfway across it — cozy against the plan.
   _autoElevationCuts() {
     if (!this._autoElevationsOn()) return [];
     // Level walls only — BONEYARD shelf geometry (negative pseudo levels)
@@ -6121,7 +6146,7 @@ class Component extends DCLogic {
       minZ = Math.min(minZ, pt.z); maxZ = Math.max(maxZ, pt.z);
     }));
     if (maxX - minX < 1 || maxZ - minZ < 1) return [];
-    const off = AUTO_ELEVATION_OFFSET_FT, pad = 2;
+    const off = (this.state.autoDimFirstOffsetFt || 1.5) / 2, pad = 2;
     return [
       { id: 'E1', name: 'E1', auto: true, elev: 0, levelId: null,
         startPt: { x: minX - pad, z: maxZ + off }, endPt: { x: maxX + pad, z: maxZ + off }, dirVec: { x: 0, z: 1 } },
