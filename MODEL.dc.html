@@ -470,7 +470,7 @@
 </sc-if>
 
 <!-- BODY -->
-<div style="display:flex; height:calc(100vh - 118px);">
+<div style="display:flex; height:calc(100vh - 106px);">
 
   <!-- LEFT TOOL RAIL -->
   <div data-model-left style="width:200px; border-right:1px solid rgba(29,31,32,0.16); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff;">
@@ -1263,7 +1263,7 @@
 
 <!-- INSTRUMENT STRIP: measurement readout, dashboard lights, LENGTH box on
      their own thin panel so the top bar stays clear for the file controls -->
-<div data-instrument-strip style="height:46px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; justify-content:center; gap:10px; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em; background:#fbfbfc; flex-shrink:0; user-select:none;">
+<div data-instrument-strip style="height:34px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; justify-content:center; gap:10px; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em; background:#fbfbfc; flex-shrink:0; user-select:none;">
   <span data-model-len style="color:#1d1f20; min-width:80px; text-align:right;"></span>
   <span data-model-ang style="color:rgba(29,31,32,0.4); min-width:52px;"></span>
   <!-- Constraint chips: the T-square lights while its 90° lock is on (T) or a
@@ -1337,7 +1337,7 @@
        one action — blank shelf starts the outline trace, master on the shelf
        grows the house. The garage marks arm the outline tool themselves. -->
   <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" style="border:1px solid {{ attachedGarageBorder }}; background:{{ attachedGarageBg }}; color:{{ attachedGarageColor }}; padding:5px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.04em; cursor:pointer; max-width:130px; line-height:1.2;">{{ attachedGarageLabel }}</button>
-  <button data-build-house onClick="{{ onBuildHouse }}" title="{{ buildHouseHint }}" style="display:inline-flex; align-items:center; gap:8px; border:1px solid #8f2a1d; background:#c0392b; color:#fff; padding:8px 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:700; letter-spacing:0.12em; cursor:pointer; box-shadow:0 2px 6px rgba(140,40,28,0.35);">
+  <button data-build-house onClick="{{ onBuildHouse }}" title="{{ buildHouseHint }}" style="display:inline-flex; align-items:center; gap:8px; border:1px solid #8f2a1d; background:#c0392b; color:#fff; padding:4px 16px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:700; letter-spacing:0.12em; cursor:pointer; box-shadow:0 2px 6px rgba(140,40,28,0.35);">
     <span>BUILD</span>
     <svg data-build-house-bone width="26" height="13" viewBox="0 0 26 13" fill="currentColor" aria-hidden="true">
       <circle cx="4.2" cy="4.2" r="3.2"></circle>
