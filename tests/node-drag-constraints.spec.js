@@ -153,26 +153,28 @@ test('a dragged node still magnets onto another node', async ({ page }) => {
   expect(Math.abs(moved.z - 8)).toBeLessThan(0.05);
 });
 
-test('a dragged node follows the polar node ray the cursor shows', async ({ page }) => {
+test('mid-drag, Shift keeps the grab-point lock even with an armed polar node', async ({ page }) => {
   await h.openModel(page);
   await drawLine(page, -10, 0, 10, 0);
   await drawLine(page, 2, 6, 8, 6);
 
   await h.selectTool(page, 'Select');
-  // Pull the endpoint over the other line's node so it re-arms the polar
-  // origin mid-drag, then Shift toward its west ray — the vertex must land
-  // on the polar ray the cursor rides, not the grab point's own lock.
+  // Pull the endpoint over the other line's node and pause there — the dwell
+  // arms it as the polar origin — then Shift back toward the grab point's
+  // west ray: the grab point owns the direction, so the vertex lands on ITS
+  // locked ray, not on a ray cast from the armed node.
   await startDrag(page, 10, 0, 8, 6);
+  await expect(page.locator('[data-model-polar]')).toBeVisible();
   await page.keyboard.down('Shift');
-  await h.moveTo(page, 0, 7);
+  await h.moveTo(page, 1, 0.5);
   await page.mouse.up();
   await page.keyboard.up('Shift');
   await h.waitForSaved(page);
 
   const lines = h.allLines(await h.savedDrawing(page));
-  const moved = [lines[0].start, lines[0].end].find(p => p.z > 3);
-  expect(h.near(moved.x, 0)).toBe(true);
-  expect(h.near(moved.z, 6)).toBe(true);
+  const moved = [lines[0].start, lines[0].end].find(p => p.x > -5);
+  expect(h.near(moved.x, 1)).toBe(true);
+  expect(h.near(moved.z, 0)).toBe(true);
 });
 
 test('grabbing a BONEYARD master node shows the ripple warning while dragging', async ({ page }) => {

@@ -421,6 +421,62 @@
   </div>
 </sc-if>
 
+<!-- PROFESSOR RUFF's attached-garage lesson: arming ATTACHED GARAGE shows
+     how the run connects — start ON a house corner, three legs out-around-
+     back, land the last click ON the house — with a right-vs-wrong sketch.
+     The cursor plays by the ordinary drawing rules; the professor teaches
+     the connection instead. -->
+<sc-if value="{{ garageCalloutOpen }}" hint-placeholder-val="{{ false }}">
+  <div data-garage-callout style="position:fixed; bottom:72px; left:50%; transform:translateX(-50%); z-index:52; width:360px; border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 14px 38px rgba(29,31,32,0.22); padding:14px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
+    <div style="position:absolute; bottom:-8px; left:172px; width:14px; height:14px; background:#fff; border-right:1px solid rgba(29,31,32,0.3); border-bottom:1px solid rgba(29,31,32,0.3); transform:rotate(45deg);"></div>
+    <div style="display:flex; gap:12px; align-items:flex-start;">
+      <svg width="48" height="48" viewBox="0 0 44 44" fill="none" aria-hidden="true" style="flex-shrink:0;">
+        <path d="M22 5 L37 11.5 L22 18 L7 11.5 Z" fill="#1d1f20"></path>
+        <path d="M34 13 V19" stroke="#1d1f20" stroke-width="1.4"></path>
+        <circle cx="34" cy="20.5" r="1.6" fill="#c0392b"></circle>
+        <path d="M12 18 Q8.5 26 12 32 Q15.5 29.5 15.5 22 Z" fill="#8a5a33"></path>
+        <path d="M32 18 Q35.5 26 32 32 Q28.5 29.5 28.5 22 Z" fill="#8a5a33"></path>
+        <circle cx="22" cy="28" r="10" fill="#c89158"></circle>
+        <ellipse cx="22" cy="32" rx="5.5" ry="4.2" fill="#f0d9b8"></ellipse>
+        <circle cx="22" cy="30.5" r="1.8" fill="#1d1f20"></circle>
+        <path d="M22 32.5 V34.5 M22 34.5 Q20 36 18.6 34.8 M22 34.5 Q24 36 25.4 34.8" stroke="#1d1f20" stroke-width="1.1" fill="none"></path>
+        <circle cx="18.5" cy="26" r="2.4" stroke="#1d1f20" stroke-width="1" fill="#fff"></circle>
+        <circle cx="25.5" cy="26" r="2.4" stroke="#1d1f20" stroke-width="1" fill="#fff"></circle>
+        <path d="M20.9 26 H23.1" stroke="#1d1f20" stroke-width="1"></path>
+        <circle cx="18.5" cy="26" r="1" fill="#1d1f20"></circle>
+        <circle cx="25.5" cy="26" r="1" fill="#1d1f20"></circle>
+      </svg>
+      <div style="flex:1;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">Professor Ruff</div>
+        <div style="margin-top:4px; font-size:12px; line-height:1.5; color:rgba(29,31,32,0.72);">An attached garage <b>hangs off the house</b>: click your first corner <b>ON the house outline</b>, draw the three legs out, around, and back, and land the last corner <b>ON the house</b> too. Missed it? No trouble — grab the corner and drag it onto the house.</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:14px; margin-top:12px; justify-content:center;">
+      <svg width="120" height="72" viewBox="0 0 120 72" aria-hidden="true">
+        <rect x="8" y="14" width="58" height="44" fill="none" stroke="#c0392b" stroke-width="2"></rect>
+        <path d="M66 22 H104 V50 H66" fill="none" stroke="#7a4a21" stroke-width="2"></path>
+        <circle cx="66" cy="22" r="3.4" fill="#2e7d32"></circle>
+        <circle cx="66" cy="50" r="3.4" fill="#2e7d32"></circle>
+        <path d="M50 62 l4 5 7 -9" stroke="#2e7d32" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+      <svg width="120" height="72" viewBox="0 0 120 72" aria-hidden="true">
+        <rect x="8" y="14" width="58" height="44" fill="none" stroke="#c0392b" stroke-width="2"></rect>
+        <path d="M74 20 H108 V48 H74" fill="none" stroke="#7a4a21" stroke-width="2"></path>
+        <circle cx="74" cy="20" r="3.4" fill="none" stroke="#c0392b" stroke-width="1.6"></circle>
+        <circle cx="74" cy="48" r="3.4" fill="none" stroke="#c0392b" stroke-width="1.6"></circle>
+        <path d="M50 58 l10 10 M60 58 l-10 10" stroke="#c0392b" stroke-width="2.4" stroke-linecap="round"></path>
+      </svg>
+    </div>
+    <div style="display:flex; gap:6px; margin-top:12px;">
+      <button data-garage-callout-continue onClick="{{ dismissGarageCallout }}" style="flex:1; height:30px; border:1px solid #5c3a1a; background:#7a4a21; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0.06em; cursor:pointer;">GOT IT — DRAW THE GARAGE (ENTER)</button>
+    </div>
+    <label style="display:flex; align-items:center; gap:6px; margin-top:10px; font-size:11px; color:rgba(29,31,32,0.55); cursor:pointer;">
+      <input data-garage-callout-off type="checkbox" checked="{{ garageIntroOff }}" onChange="{{ onGarageIntroOffToggle }}" />
+      Don't show this again
+    </label>
+  </div>
+</sc-if>
+
 <!-- AREAS dialog: derived per-level and building areas for permit forms —
      recomputed on open, never saved with the drawing -->
 <sc-if value="{{ areasDialogOpen }}" hint-placeholder-val="{{ false }}">
@@ -1396,6 +1452,9 @@ const POLAR_RULER_TOOLS = new Set(['line', 'wall', 'outline']);
 const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'dimension', 'cut', 'extend', 'copy']);
 // Segment-drawing tools the full-time T-square squares to 90° while it is on.
 const ORTHO_LOCK_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'shape']);
+// Arming a polar origin takes a deliberate pause on the node — a drive-by
+// hover on the way across the board never plants a ruler zero.
+const POLAR_DWELL_MS = 350;
 // Polar-origin activation effect: the node pulses orange and shoots hairline
 // direction rays that hold for a second, then fade out over another.
 const POLAR_FX_HOLD_MS = 1000;
@@ -1858,7 +1917,7 @@ const {
 } = window.DraftLineLayers;
 const { normaliseLayerStandards } = window.DraftLayerStandards;
 const { normaliseStructureStandards } = window.DraftStructureStandards;
-const { normaliseSnapStrength } = window.DraftSnapStrength;
+const { normaliseSnapZone } = window.DraftSnapZone;
 const { normaliseDrafter } = window.DraftDrafter;
 
 // Per-drawing side names for the standard elevations — only E1-E4 entries
@@ -1888,7 +1947,7 @@ class Component extends DCLogic {
     copyBase: null,
     units:         'imperial',
     activeView:    'top',      // 'top'|'front'|'side'|'perspective'|'cut'
-    snapStrength: normaliseSnapStrength(null),
+    snapZone: normaliseSnapZone(null),
     drafter: normaliseDrafter(null),
     keybindings:   { ...DEFAULT_KEYBINDINGS },
     lineLayers: normaliseLineLayers(DEFAULT_LINE_LAYERS),
@@ -1946,6 +2005,8 @@ class Component extends DCLogic {
     projectOpen: false,       // PROJECT dialog visibility
     projectCallout: false,    // PROFESSOR RUFF first-build callout visibility
     buildIntroOff: false,     // "don't show this again" for the callout (settings profile)
+    garageCallout: false,     // PROFESSOR RUFF attached-garage lesson visibility
+    garageIntroOff: false,    // "don't show this again" for the garage lesson (settings profile)
     areasOpen: false,         // AREAS dialog visibility (report is derived on render)
     // Per-project information saved inside the drawing file. The titleblock
     // and the site plan's LEGAL LAND DESCRIPTION block read from here; later
@@ -3022,11 +3083,12 @@ class Component extends DCLogic {
       return {
         model: {
           units: this.state.units,
-          snapStrength: { ...this.state.snapStrength },
+          snapZone: this.state.snapZone,
           drafter: { ...this.state.drafter },
           keybindings: { ...this.state.keybindings },
           tsquareOn: this.state.tsquareOn,
           buildIntroOff: this.state.buildIntroOff,
+          garageIntroOff: this.state.garageIntroOff,
         },
       };
     }
@@ -3050,14 +3112,15 @@ class Component extends DCLogic {
     if (pkg.kind === 'settings') {
       return {
         ...(values.units === 'metric' || values.units === 'imperial' ? { units: values.units } : {}),
-        ...(values.snapStrength && typeof values.snapStrength === 'object'
-          ? { snapStrength: normaliseSnapStrength(values.snapStrength) }
+        ...(values.snapZone != null || (values.snapStrength && typeof values.snapStrength === 'object')
+          ? { snapZone: normaliseSnapZone(values.snapZone ?? values.snapStrength) }
           : {}),
         ...(values.drafter && typeof values.drafter === 'object'
           ? { drafter: normaliseDrafter(values.drafter) }
           : {}),
         ...(typeof values.tsquareOn === 'boolean' ? { tsquareOn: values.tsquareOn } : {}),
         ...(typeof values.buildIntroOff === 'boolean' ? { buildIntroOff: values.buildIntroOff } : {}),
+        ...(typeof values.garageIntroOff === 'boolean' ? { garageIntroOff: values.garageIntroOff } : {}),
         ...(values.keybindings && typeof values.keybindings === 'object'
           ? {
             // A stored empty string means the command was deliberately cleared;
@@ -3125,6 +3188,15 @@ class Component extends DCLogic {
   _dismissProjectCallout(openProject = false) {
     if (!this.state.projectCallout) return;
     this.setState({ projectCallout: false, ...(openProject ? { projectOpen: true } : {}) });
+  }
+
+  _dismissGarageCallout() {
+    if (!this.state.garageCallout) return;
+    this.setState({ garageCallout: false });
+  }
+
+  _onGarageIntroOffToggle(off) {
+    this.setState({ garageIntroOff: off === true }, () => this._rememberActiveProfile('settings'));
   }
 
   _setBuildIntroOff(off) {
@@ -3778,6 +3850,7 @@ class Component extends DCLogic {
       this._polarOrigin = null;
       this._polarSnap = null;
       this._frozenRuler = null;
+      this._cancelPolarDwell();
       this._frozenFromPolar = false;
       // A restored drawing replaces the complete Cuts collection. Dispose the
       // old scene objects first so an import or history restore cannot leave
@@ -3986,6 +4059,7 @@ class Component extends DCLogic {
   componentWillUnmount() {
     cancelAnimationFrame(this._raf);
     clearTimeout(this._layerRevealTimer);
+    this._cancelPolarDwell();
     if (this._ro) this._ro.disconnect();
     if (this._controls && typeof this._controls.dispose === 'function') this._controls.dispose();
     this._clearCutObjects();
@@ -7634,16 +7708,18 @@ class Component extends DCLogic {
     return this._originSnapPoint(pt) || pt.clone();
   }
 
-  // An engaged Ctrl/Shift angle lock owns the direction: node and midpoint
-  // snaps only take hold when they sit on the locked ray itself, so a nearby
-  // corner cannot yank the point sideways off the lock.
+  // An engaged angle lock always owns the direction: a node or midpoint near
+  // the locked ray only donates its distance along it — the point returned is
+  // the ray's nearest spot to the snap, never the snap itself, so a corner
+  // can align the length of the line but can never bend it off the lock.
   _snapOnLockedRay(origin, snap) {
-    if (this._lockAngle == null || !origin || !snap) return false;
+    if (this._lockAngle == null || !origin || !snap) return null;
     const dirX = Math.cos(this._lockAngle), dirZ = Math.sin(this._lockAngle);
     const along = (snap.x - origin.x) * dirX + (snap.z - origin.z) * dirZ;
-    if (along <= 0) return false;
-    const offRay = Math.hypot(snap.x - (origin.x + dirX * along), snap.z - (origin.z + dirZ * along));
-    return offRay <= this.state.snapStrength.node * this._worldPerPixel();
+    if (along <= 0) return null;
+    const rx = origin.x + dirX * along, rz = origin.z + dirZ * along;
+    if (Math.hypot(snap.x - rx, snap.z - rz) > this._nodeSnapRadius()) return null;
+    return new THREE.Vector3(rx, snap.y, rz);
   }
 
   // A dragged node snaps like a drawn point, in the same priority order as
@@ -7662,24 +7738,21 @@ class Component extends DCLogic {
     }
     const lockEngaged = angleLockHeld && this._lockAngle != null;
     const magnet = this._findMagnet(raw, sd.vertices);
-    if (magnet && (!lockEngaged || this._snapOnLockedRay(sd.origin, magnet))) return magnet;
+    if (magnet) {
+      if (!lockEngaged) return magnet;
+      const onRay = this._snapOnLockedRay(sd.origin, magnet);
+      if (onRay) return onRay;
+    }
     const midSnap = this._findMidpointSnap(raw, sd.vertices);
-    if (midSnap && (!lockEngaged || this._snapOnLockedRay(sd.origin, midSnap))) return midSnap;
+    if (midSnap) {
+      if (!lockEngaged) return midSnap;
+      const onRay = this._snapOnLockedRay(sd.origin, midSnap);
+      if (onRay) return onRay;
+    }
     if (angleLockHeld && this._lockAngle != null) {
-      // The same ray choice the cursor shows: the grab point's lock holds the
-      // vertex, and the polar node's T-square takes it only while the cursor
-      // rides one of its rays within the magnet pull — the node must land
-      // exactly where the cursor says it will.
+      // The grab point's lock owns the direction — the vertex stays on its ray.
       const projected = geo.projectOntoRay(sd.origin, this._lockAngle, raw);
-      const fromStart = new THREE.Vector3(projected.x, raw.y, projected.z);
-      const polarLockOrigin = this._polarOrigin
-        && Math.hypot(sd.origin.x - this._polarOrigin.x, sd.origin.z - this._polarOrigin.z) > 0.001
-        ? this._polarOrigin : null;
-      const fromPolar = polarLockOrigin ? this._polarRayLock(raw) : null;
-      if (!fromPolar) return fromStart;
-      const startDist = Math.hypot(raw.x - fromStart.x, raw.z - fromStart.z);
-      const polarDist = Math.hypot(raw.x - fromPolar.x, raw.z - fromPolar.z);
-      return polarDist <= startDist && polarDist <= this._magnetRadius() ? fromPolar : fromStart;
+      return new THREE.Vector3(projected.x, raw.y, projected.z);
     }
     if (this._polarOrigin) {
       const polar = this._findPolarSnap(raw);
@@ -7688,22 +7761,10 @@ class Component extends DCLogic {
     return this._snap(raw);
   }
 
-  // House-outline nodes are the weld targets of an in-progress ATTACHED
-  // garage run. The run's own points don't pull — the start node would hold
-  // the cursor hostage on the very first leg.
-  _findHouseWeldMagnet(raw) {
-    if (this.state.outlineGarage !== 'attached' || !this._outlineDrawing) return null;
-    const pts = [];
-    [...this._activeOutlines(), ...this._activeBoneyardOutlines()]
-      .filter(outline => !outline.garage && !outline.open)
-      .forEach(outline => pts.push(...outline.points));
-    return geo.nearestVertex(this._withoutVertices(pts, new Set(this._outlinePoints)), raw, this._magnetRadius());
-  }
-
   // The 0,0 origin marker is the one always-snappable grid point: any tool
   // catches it when the cursor moves within its magnetic pull, no toggle.
   _originSnapPoint(pt) {
-    const pull = this._worldPerPixel() * this.state.snapStrength.node;
+    const pull = this._nodeSnapRadius();
     if (Math.hypot(pt.x, pt.z) > pull) return null;
     return new THREE.Vector3(0, pt.y || 0, 0);
   }
@@ -7759,15 +7820,11 @@ class Component extends DCLogic {
     const ortho = this.state.tsquareOn && !modifierHeld && !drag && !!start
       && ORTHO_LOCK_TOOLS.has(tool);
     const angleLockHeld = modifierHeld || ortho;
-    // Shift with an acquired polar node acts as a protractor from that node:
-    // the point hard-locks onto the nearest of its stepped rays, even mid-draw,
-    // so a segment can land straight across / straight up / 45° from the
-    // rolled-over node. The segment start keeps its own lock; the polar node
-    // only takes hold while the cursor rides one of its rays within the magnet
-    // pull, so it cannot steal the point from across the board.
-    const polarLockOrigin = modifierHeld && this._polarOrigin
-      && (drag || POLAR_TRACKING_TOOLS.has(tool))
-      && (!start || Math.hypot(start.x - this._polarOrigin.x, start.z - this._polarOrigin.z) > 0.001)
+    // Shift with an armed polar node acts as a protractor from that node, but
+    // only for a FIRST point — mid-draw the segment start owns the direction,
+    // and lining up with a reference node is projection tracking's job.
+    const polarLockOrigin = modifierHeld && !start && this._polarOrigin
+      && POLAR_TRACKING_TOOLS.has(tool)
       ? this._polarOrigin : null;
 
     // Angle lock — must establish lockAngle before tracking/magnet
@@ -7789,26 +7846,26 @@ class Component extends DCLogic {
       trackingHit = this._findTrackingSnap(raw, start, drag?.vertices);
     }
 
-    // Magnet snap — but an engaged angle lock owns the direction: a node only
-    // magnets when it sits on the locked ray, never sideways off it.
+    // Magnet snap — but an engaged angle lock owns the direction: a node near
+    // the locked ray only aligns the length, it never bends the line off it.
     // Vertex magnet uses the raw cursor position so grid rounding cannot make
     // a node feel magnetic beyond the one-pixel hit radius.
     const lockEngaged = angleLockHeld && start && this._lockAngle != null;
-    // An ATTACHED garage run must start and end welded ON the house outline,
-    // so while one draws, the house's own nodes pull at full magnet radius
-    // and outrank the T-square — the weld beats the locked ray.
-    const weldMagnet = this._findHouseWeldMagnet(raw);
-    if (weldMagnet) trackingHit = null;
-    const magnetRaw = !trackingHit && !weldMagnet ? this._findMagnet(raw, drag?.vertices) : null;
-    const magnet = weldMagnet
-      || (magnetRaw && (!lockEngaged || this._snapOnLockedRay(start, magnetRaw)) ? magnetRaw : null);
+    const magnetRaw = !trackingHit ? this._findMagnet(raw, drag?.vertices) : null;
+    const magnet = magnetRaw
+      ? (lockEngaged ? this._snapOnLockedRay(start, magnetRaw) : magnetRaw)
+      : null;
     // Midpoint snap — only when no vertex magnet and not tracking, on the same
     // locked-ray terms as the vertex magnet.
     const midSnapRaw = (!trackingHit && !magnet) ? this._findMidpointSnap(raw, drag?.vertices) : null;
-    const midSnap = midSnapRaw && (!lockEngaged || this._snapOnLockedRay(start, midSnapRaw)) ? midSnapRaw : null;
+    const midSnap = midSnapRaw
+      ? (lockEngaged ? this._snapOnLockedRay(start, midSnapRaw) : midSnapRaw)
+      : null;
 
-    // Rolling over a node acquires it as the polar-tracking origin.
-    if (magnet && (drag || POLAR_TRACKING_TOOLS.has(tool))) this._acquirePolarOrigin(magnet);
+    // A deliberate pause on a node arms it as the polar-tracking origin — the
+    // origin is the node itself, even when the lock kept the endpoint on ray.
+    if (magnet && (drag || POLAR_TRACKING_TOOLS.has(tool))) this._dwellPolarOrigin(magnetRaw);
+    else this._cancelPolarDwell();
     const polarHit = (!trackingHit && !magnet && !midSnap && !(angleLockHeld && start)
       && this._polarOrigin && (drag || POLAR_TRACKING_TOOLS.has(tool)))
       ? this._findPolarSnap(raw) : null;
@@ -7820,7 +7877,8 @@ class Component extends DCLogic {
       finalPt  = trackingHit.snapPt;
       cursorPt = trackingHit.refPt;
     } else if (magnet) {
-      // Magnet to existing node — overrides angle lock; cursor and endpoint both snap to node
+      // Magnet to existing node — already lock-projected when a lock is engaged;
+      // cursor and endpoint both land on the accepted point
       finalPt  = magnet;
       cursorPt = magnet;
     } else if (midSnap) {
@@ -7828,17 +7886,11 @@ class Component extends DCLogic {
       finalPt  = midSnap;
       cursorPt = midSnap;
     } else if (angleLockHeld && (start || polarLockOrigin)) {
-      // Angle lock: endpoint stays on a locked ray. The ray comes from the
-      // segment start or from the polar node's T-square — whichever the
-      // cursor sits closest to.
+      // Angle lock: endpoint stays on a locked ray — from the segment start
+      // mid-draw, or from the armed polar node when placing a first point.
       const fromStart = start ? this._applyAngleLock(start, basePt) : null;
-      const fromPolar = polarLockOrigin ? this._polarRayLock(basePt) : null;
-      const startDist = fromStart ? Math.hypot(basePt.x - fromStart.x, basePt.z - fromStart.z) : Infinity;
-      const polarDist = fromPolar ? Math.hypot(basePt.x - fromPolar.x, basePt.z - fromPolar.z) : Infinity;
-      const polarPull = this._magnetRadius();
-      polarLocked = fromPolar && polarDist <= startDist && (!fromStart || polarDist <= polarPull)
-        ? fromPolar : null;
-      finalPt  = polarLocked || fromStart || basePt;
+      polarLocked = !start && polarLockOrigin ? this._polarRayLock(basePt) : null;
+      finalPt  = fromStart || polarLocked || basePt;
       cursorPt = polarLocked || basePt;
     } else if (polarHit) {
       // Polar tracking: cursor rides a 45° ray cast from the acquired node
@@ -7871,8 +7923,8 @@ class Component extends DCLogic {
       newState.originSnapPtX = gs.x; newState.originSnapPtY = gs.y; newState.showOriginSnapPt = true;
     }
     // The acquired polar origin glows orange while hovered or while its ray is engaged.
-    const hoveringOrigin = magnet && this._polarOrigin
-      && Math.hypot(magnet.x - this._polarOrigin.x, magnet.z - this._polarOrigin.z) < 0.001;
+    const hoveringOrigin = magnet && magnetRaw && this._polarOrigin
+      && Math.hypot(magnetRaw.x - this._polarOrigin.x, magnetRaw.z - this._polarOrigin.z) < 0.001;
     if (this._polarOrigin && (polarHit || polarLocked || hoveringOrigin)) {
       const os = this._toScreen(this._polarOrigin);
       newState.polarOriginX = os.x; newState.polarOriginY = os.y; newState.showPolarOrigin = true;
@@ -7945,6 +7997,7 @@ class Component extends DCLogic {
 
   _onMouseLeave() {
     this._noteStairHover = null;
+    this._cancelPolarDwell();
     this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showOriginSnapPt: false, showPolarOrigin: false });
     ['[data-model-sx]','[data-model-sy]','[data-model-len]'].forEach((s, i) => {
       const el = document.querySelector(s); if (el) el.textContent = ['X: —','Y: —',''][i];
@@ -7953,8 +8006,9 @@ class Component extends DCLogic {
 
   _onMouseDown(e) {
     if (!this._drawingReady) return;
-    // A drawing click means the drafter is off tracing — the callout retires.
+    // A drawing click means the drafter is off tracing — the callouts retire.
     if (this.state.projectCallout) this._dismissProjectCallout(false);
+    if (this.state.garageCallout) this._dismissGarageCallout();
     if (this.state.lengthFrozen) {
       // A canvas click while the ruler holds a valid typed length is the
       // drafter's "done" — it commits the length just like Enter.
@@ -8761,6 +8815,7 @@ class Component extends DCLogic {
     if (this.state.outlineGarage === mode) {
       this.setState({
         outlineGarage: null,
+        garageCallout: false,
         drawingMessage: 'GARAGE marking off — outlines close as ordinary house outlines again.',
         drawingMessageError: false,
       });
@@ -8778,6 +8833,7 @@ class Component extends DCLogic {
     if (this.state.activeTool !== 'outline' && !this._activateContextTool('outline')) return;
     this.setState({
       outlineGarage: mode,
+      garageCallout: mode === 'attached' && !this.state.garageIntroOff,
       drawingMessage: mode === 'attached'
         ? 'ATTACHED GARAGE — draw an OPEN run of 3+ legs starting and ending on the house outline; double-click or Enter finishes on the last point. BUILD HOUSE grows the beam, slab, doors and roof.'
         : 'DETACHED GARAGE — draw its own loop and close it back on the first point (or press Enter); the prompt picks grade beam or thickened-edge slab. BUILD HOUSE grows its walls, slab, doors and roof.',
@@ -12623,12 +12679,19 @@ class Component extends DCLogic {
     return geo.worldPerPixel(this._orthoHalfH, this._canvas ? this._canvas.clientHeight : 600);
   }
 
+  // One SNAP ZONE number drives every catch radius: nodes, midpoints, and
+  // polar rays catch at the zone itself, the wide magnetic pull is 5x it,
+  // and the close-the-loop radius is 10x (2x the pull, as before).
+  _snapZonePx() {
+    return this.state.snapZone;
+  }
+
   _magnetRadius() {
-    return this._worldPerPixel() * 20;
+    return this._worldPerPixel() * this._snapZonePx() * 5;
   }
 
   _nodeSnapRadius() {
-    return this._worldPerPixel() * this.state.snapStrength.node;
+    return this._worldPerPixel() * this._snapZonePx();
   }
 
   // A node being dragged (and anything riding it, like level copies of a
@@ -12657,7 +12720,7 @@ class Component extends DCLogic {
   // Return midpoint of the nearest line/wall segment if the cursor is within snap
   // radius. Only called when vertex magnet is null (vertex takes priority).
   _findMidpointSnap(cursorPt, exclude = null) {
-    const r = this._worldPerPixel() * this.state.snapStrength.midpoint;
+    const r = this._nodeSnapRadius();
     const nearest = raw => {
       // Segments touching a dragged vertex chase the cursor — never midpoint-snap to them.
       const segments = exclude
@@ -13753,6 +13816,32 @@ class Component extends DCLogic {
     return find(this._collectActiveVertices()) || find(this._collectBackgroundVertices());
   }
 
+  // Arming happens on a deliberate dwell: the cursor has to rest on the node
+  // for a beat before it becomes the polar origin, so passing over corners on
+  // the way across the board never silently re-zeros the ruler.
+  _dwellPolarOrigin(pt) {
+    const same = (a, b) => Math.abs(a.x - b.x) < 0.001 && Math.abs(a.z - b.z) < 0.001;
+    if (this._polarOrigin && same(this._polarOrigin, pt)) { this._cancelPolarDwell(); return; }
+    if (this._polarDwell && same(this._polarDwell.pt, pt)) return;
+    this._cancelPolarDwell();
+    const dwellPt = pt.clone();
+    this._polarDwell = {
+      pt: dwellPt,
+      timer: setTimeout(() => {
+        this._polarDwell = null;
+        this._acquirePolarOrigin(dwellPt);
+        // Refresh the hover state so the origin glows without the cursor moving.
+        if (this._lastClient) this._onMouseMove({ clientX: this._lastClient.x, clientY: this._lastClient.y });
+      }, POLAR_DWELL_MS),
+    };
+  }
+
+  _cancelPolarDwell() {
+    if (!this._polarDwell) return;
+    clearTimeout(this._polarDwell.timer);
+    this._polarDwell = null;
+  }
+
   // Acquiring a polar origin announces itself: the node pulses orange and
   // shoots 8 hairline direction rays (orthogonal + 45°) that hold for a second
   // and fade for another, so the drafter sees the ruler zero the moment it arms.
@@ -13786,7 +13875,7 @@ class Component extends DCLogic {
     if (along <= 0) return null;
     const sx = origin.x + Math.cos(angle) * along;
     const sz = origin.z + Math.sin(angle) * along;
-    if (Math.hypot(pt.x - sx, pt.z - sz) > this.state.snapStrength.polar * this._worldPerPixel()) return null;
+    if (Math.hypot(pt.x - sx, pt.z - sz) > this._nodeSnapRadius()) return null;
     return new THREE.Vector3(sx, pt.y, sz);
   }
 
@@ -15728,6 +15817,14 @@ class Component extends DCLogic {
       if (e.key === 'Escape') { e.preventDefault(); this._dismissProjectCallout(true); return; }
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._dismissProjectCallout(false); return; }
     }
+    // The garage lesson steps aside on any of the same keys — the first house
+    // click dismisses it too, so it never blocks the draw.
+    if (this.state.garageCallout && focusedControl !== 'field'
+      && (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      this._dismissGarageCallout();
+      return;
+    }
     if (this.state.groupDialog && focusedControl !== 'field') {
       const key = e.key === ' ' ? 'Space' : e.key;
       if (key === 'y' || key === 'Y' || key === 'Enter' || key === 'Space') {
@@ -15780,6 +15877,7 @@ class Component extends DCLogic {
       if (this.state.lengthFrozen) { this._cancelFrozenLength(); return; }
       this._polarOrigin = null;
       this._polarSnap = null;
+      this._cancelPolarDwell();
       if (this.state.activeTool === 'extend' && (this._extendSession || this._windowSelection?.kind === 'extend')) {
         this._cancelExtend();
         return;
@@ -16763,6 +16861,10 @@ class Component extends DCLogic {
       calloutOpenProject: () => this._dismissProjectCallout(true),
       buildIntroOff: this.state.buildIntroOff === true,
       onBuildIntroOffToggle: e => this._setBuildIntroOff(e.target.checked),
+      garageCalloutOpen: this.state.garageCallout === true,
+      dismissGarageCallout: () => this._dismissGarageCallout(),
+      garageIntroOff: this.state.garageIntroOff === true,
+      onGarageIntroOffToggle: e => this._onGarageIntroOffToggle(e.target.checked),
       onBuildGarage: () => this._buildGarage(),
       onMarkAttachedGarage: () => this._toggleGarageMode('attached'),
       onMarkDetachedGarage: () => this._toggleGarageMode('detached'),

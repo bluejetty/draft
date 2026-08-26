@@ -188,10 +188,12 @@ if (!window.DraftProfileManager) {
     }),
   });
 
-  // Snap magnetic pull: catch radius in screen pixels for each snap type, so
-  // the feel stays the same at any zoom.
-  const DEFAULT_SNAP_STRENGTH = Object.freeze({ node: 4, midpoint: 4, polar: 4 });
-  const SNAP_STRENGTH_RANGE = Object.freeze({ min: 1, max: 60 });
+  // SNAP ZONE: the one catch-radius number, in screen pixels, so the feel
+  // stays the same at any zoom. Nodes, midpoints, and polar rays catch at the
+  // zone itself; the wide magnetic pull and the close-the-loop radius derive
+  // from it as fixed ratios in MODEL.
+  const DEFAULT_SNAP_ZONE = 4;
+  const SNAP_ZONE_RANGE = Object.freeze({ min: 1, max: 60 });
 
   // Drafter identity: shown at the top of Settings and destined for the
   // titleblock on printed sheets. Free text, kept to a sane length.
@@ -201,15 +203,15 @@ if (!window.DraftProfileManager) {
     return { name: text(stored.name), phone: text(stored.phone) };
   };
 
-  const normaliseSnapStrength = value => {
-    const stored = value && typeof value === 'object' ? value : {};
-    const px = key => {
-      const raw = Number(stored[key]);
-      return Number.isFinite(raw)
-        ? Math.min(SNAP_STRENGTH_RANGE.max, Math.max(SNAP_STRENGTH_RANGE.min, Math.round(raw)))
-        : DEFAULT_SNAP_STRENGTH[key];
-    };
-    return { node: px('node'), midpoint: px('midpoint'), polar: px('polar') };
+  // Accepts the plain number, or a legacy { node, midpoint, polar } object
+  // from profiles saved before the three settings merged — the node value
+  // carries over as the zone.
+  const normaliseSnapZone = value => {
+    const picked = value && typeof value === 'object' ? value.node : value;
+    const raw = picked == null || picked === '' ? NaN : Number(picked);
+    return Number.isFinite(raw)
+      ? Math.min(SNAP_ZONE_RANGE.max, Math.max(SNAP_ZONE_RANGE.min, Math.round(raw)))
+      : DEFAULT_SNAP_ZONE;
   };
 
   // Generic linework is deliberately separate from PLAN/FLOOR/ELECTRIC context.
@@ -419,10 +421,10 @@ if (!window.DraftProfileManager) {
     eventMatchesBinding,
     keyBindingLabel,
   };
-  window.DraftSnapStrength = {
-    DEFAULT_SNAP_STRENGTH,
-    SNAP_STRENGTH_RANGE,
-    normaliseSnapStrength,
+  window.DraftSnapZone = {
+    DEFAULT_SNAP_ZONE,
+    SNAP_ZONE_RANGE,
+    normaliseSnapZone,
   };
   window.DraftDrafter = {
     normaliseDrafter,

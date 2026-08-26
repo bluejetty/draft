@@ -170,6 +170,7 @@ test('house strings clear the attached garage; the shared corridor stacks in ord
   // Attached garage protruding east: open run from (8,-4) out to x=14 and back.
   await h.selectTool(page, 'Outline');
   await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
+  await page.keyboard.press('Enter'); // the professor's lesson steps aside
   await h.clickWorld(page, 8, -4);
   await h.clickWorld(page, 14, -4);
   await h.clickWorld(page, 14, 4);

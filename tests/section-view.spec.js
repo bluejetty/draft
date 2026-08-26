@@ -164,6 +164,7 @@ test.describe('Generated section view', () => {
     // foundation top) instead of running grade-to-footing.
     await h.selectTool(page, 'Outline');
     await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
+    await page.keyboard.press('Enter'); // the professor's lesson steps aside
     await h.clickWorld(page, 8, -4);
     await h.clickWorld(page, 20, -4);
     await h.clickWorld(page, 20, 4);
@@ -223,6 +224,7 @@ test.describe('Generated section view', () => {
     await drawOutlineRect(page);
     await h.selectTool(page, 'Outline');
     await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
+    await page.keyboard.press('Enter'); // the professor's lesson steps aside
     await h.clickWorld(page, 8, -4);
     await h.clickWorld(page, 20, -4);
     await h.clickWorld(page, 20, 4);

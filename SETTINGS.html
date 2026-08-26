@@ -97,12 +97,10 @@
       <p class="layout-note" id="layout-note">Pick a preset to fill the bindings below with the closest match to that application; every key stays editable afterwards.</p>
     </div>
     <details class="advanced">
-      <summary>Snap magnetic pull</summary>
-      <p class="advanced-note">How close the cursor must be, in screen pixels, before each snap grabs it. Larger values catch from farther away; smaller values only snap when the cursor is nearly on the point. Saved with your keyboard settings.</p>
-      <div class="snap-row"><label for="snap-node">Node snap</label><input type="number" id="snap-node" data-snap="node" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="node"></span></div>
-      <div class="snap-row"><label for="snap-midpoint">Midpoint snap</label><input type="number" id="snap-midpoint" data-snap="midpoint" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="midpoint"></span></div>
-      <div class="snap-row"><label for="snap-polar">Polar tracking</label><input type="number" id="snap-polar" data-snap="polar" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" data-snap-default="polar"></span></div>
-      <button class="action" id="snap-reset" type="button">RESET SNAP DEFAULTS</button>
+      <summary>Snap zone</summary>
+      <p class="advanced-note">One number rules every snap: how close the cursor must be, in screen pixels, before a node, midpoint, or polar ray catches it. The wider magnetic pull and the close-the-outline radius scale from the same number. Larger catches from farther away; smaller only snaps when the cursor is nearly on the point. Saved with your keyboard settings.</p>
+      <div class="snap-row"><label for="snap-zone">Snap zone</label><input type="number" id="snap-zone" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" id="snap-zone-default"></span></div>
+      <button class="action" id="snap-reset" type="button">RESET SNAP DEFAULT</button>
     </details>
     <section class="groups" id="groups" aria-label="Keyboard commands"></section>
     <details class="report">
@@ -146,7 +144,7 @@
     (() => {
       const manager = window.DraftProfileManager;
       const keyboard = window.DraftKeyboard;
-      const snaps = window.DraftSnapStrength;
+      const snaps = window.DraftSnapZone;
       const groups = [
         { title:'Drawing tools', commands:[
           ['select', 'Select'], ['line', 'Line'], ['node', 'Node / Arc'], ['wall', 'Wall'],
@@ -170,7 +168,10 @@
         const stored = keyboard.normaliseKeyBinding(existing[command]);
         return [command, stored === keyboard.RETIRED_KEYBINDINGS[command] ? fallback : stored];
       }));
-      let snapStrength = snaps.normaliseSnapStrength(active?.content?.model?.snapStrength);
+      // Old profiles stored three numbers as snapStrength; the node value
+      // carries over as the one snap zone.
+      let snapZone = snaps.normaliseSnapZone(
+        active?.content?.model?.snapZone ?? active?.content?.model?.snapStrength);
       const drafterTools = window.DraftDrafter;
       let drafter = drafterTools.normaliseDrafter(active?.content?.model?.drafter);
 
@@ -246,7 +247,7 @@
       };
 
       const saveActive = message => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapStrength, drafter } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -266,23 +267,17 @@
       });
 
       const renderSnaps = () => {
-        document.querySelectorAll('[data-snap]').forEach(input => {
-          input.value = snapStrength[input.dataset.snap];
-        });
-        document.querySelectorAll('[data-snap-default]').forEach(span => {
-          span.textContent = `default ${snaps.DEFAULT_SNAP_STRENGTH[span.dataset.snapDefault]}`;
-        });
+        document.querySelector('#snap-zone').value = snapZone;
+        document.querySelector('#snap-zone-default').textContent = `default ${snaps.DEFAULT_SNAP_ZONE}`;
       };
-      document.querySelectorAll('[data-snap]').forEach(input => {
-        input.addEventListener('change', () => {
-          snapStrength = snaps.normaliseSnapStrength({ ...snapStrength, [input.dataset.snap]: input.value });
-          saveActive('Snap pull saved locally.');
-          renderSnaps();
-        });
+      document.querySelector('#snap-zone').addEventListener('change', event => {
+        snapZone = snaps.normaliseSnapZone(event.target.value);
+        saveActive('Snap zone saved locally.');
+        renderSnaps();
       });
       document.querySelector('#snap-reset').addEventListener('click', () => {
-        snapStrength = snaps.normaliseSnapStrength(null);
-        saveActive('Default snap pull restored.');
+        snapZone = snaps.normaliseSnapZone(null);
+        saveActive('Default snap zone restored.');
         renderSnaps();
       });
 
@@ -313,7 +308,7 @@
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapStrength, drafter } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
