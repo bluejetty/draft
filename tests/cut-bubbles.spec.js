@@ -58,6 +58,37 @@ test.describe('Cut bubble styles', () => {
     expect(h.countColor(proudPixels, CUT_RED)).toBeGreaterThan(0);
   });
 
+  test('hand-placed cuts run clear through the house to the dims gap', async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+    await drawOutlineRect(page);
+    await buildHouse(page);
+    await h.waitForSaved(page);
+
+    // Cut a short section ending mid-house: (-6,0) to (0,0).
+    await page.keyboard.press('c');
+    await h.clickWorld(page, -6, 0);
+    await h.clickWorld(page, 0, 0);
+    await h.clickWorld(page, -3, -4);
+    await page.waitForTimeout(400);
+    await h.waitForSaved(page);
+
+    // The line never dies halfway through: ink shows well past the drawn
+    // end, still inside the house, where the infinite line carries on. The
+    // 1px dashes blend into the floor fill, so the match runs looser here.
+    const inside = await h.worldToClient(page, 6, 0);
+    const insidePixels = await h.overlayPixels(page, inside.x, inside.y, 12);
+    expect(h.countColor(insidePixels, CUT_RED, 60)).toBeGreaterThan(0);
+
+    // And the bubble lands in the wall-to-dims gap just outside the house,
+    // not tossed out past the dimension strings.
+    const gap = await h.worldToClient(page, 9, 0);
+    const gapPixels = await h.overlayPixels(page, gap.x, gap.y, 20);
+    expect(h.countColor(gapPixels, CUT_RED)).toBeGreaterThan(0);
+    const far = await h.worldToClient(page, 15, 0);
+    const farPixels = await h.overlayPixels(page, far.x, far.y, 12);
+    expect(h.countColor(farPixels, CUT_RED)).toBe(0);
+  });
+
   test('hand-placed cut bubbles toss out past the drawn ends', async ({ page }) => {
     await h.openModel(page, { webgl: false });
 

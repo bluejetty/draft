@@ -1515,8 +1515,10 @@ const DEFAULT_ROOF_PITCH = 4;   // rise in inches per 12" of run
 const MAX_ROOF_PITCH = 24;
 const ROOF_FASCIA_IN = 5.5;
 const ROOF_LAYER = 'A-ROOF';
-// Hand-placed cut bubbles push this far past their drawn ends — clear of a
-// typical exterior dimension stack — landing outside the strings.
+// Hand-placed cut lines run right through the plan and land their bubbles in
+// the gap between the exterior walls and the first dimension string, the same
+// cozy spot the standard elevations use. This is the least the line extends
+// past the drawn ends when there are no walls to measure against.
 const CUT_BUBBLE_PUSH_FT = 6;
 // Structural point supports and spans, placed manually in either order —
 // columns centre onto a beam line and beam ends snap to columns, so they line
@@ -5968,18 +5970,15 @@ class Component extends DCLogic {
       const y = cut.elev + 0.02;
       let start = { x: cut.startPt.x, y, z: cut.startPt.z };
       let end = { x: cut.endPt.x, y, z: cut.endPt.z };
-      // Hand-placed cuts wear their bubbles further out — past a typical
-      // dimension stack — so they land clear of the strings; the drafter
-      // slides the cut if a spot suits better. The standard elevations
-      // already tuck themselves, so they keep their drawn ends.
+      // A hand-placed cut draws as an infinite line: it runs clear across the
+      // plan whatever the drafter drew — never dying halfway through the
+      // house — and stops in the gap between the walls and the first
+      // dimension string, landing the bubbles there. The standard elevations
+      // already sit in that gap, so they keep their drawn ends.
       if (!cut.auto) {
-        const wLen = Math.hypot(end.x - start.x, end.z - start.z);
-        if (wLen > 0.001) {
-          const push = CUT_BUBBLE_PUSH_FT;
-          const wx = (end.x - start.x) / wLen, wz = (end.z - start.z) / wLen;
-          start = { x: start.x - wx * push, y, z: start.z - wz * push };
-          end = { x: end.x + wx * push, y, z: end.z + wz * push };
-        }
+        const span = this._cutLineSpan(start, end);
+        start = span.start;
+        end = span.end;
       }
       dashedSeg(start, end);
 
@@ -5999,12 +5998,15 @@ class Component extends DCLogic {
       [[a, -1], [b, 1]].forEach(([p, side]) => {
         const cx = p.x + ux * side * (R + 2), cy = p.y + uy * side * (R + 2);
         if (bubbleStyle === 'tucked') {
-          // Triangle first, tucked behind the circle: its back edge lies on
-          // the cut line through the bubble centre, only the point shows.
+          // Triangle first, tucked behind the circle — but wide enough that
+          // all three points clear the rim: the apex shows in the view
+          // direction and both back corners poke out either side, so the
+          // whole triangle reads instead of a lone spike.
+          const reach = R + 8, wing = R + 6, back = 2;
           ctx.beginPath();
-          ctx.moveTo(cx + vx * (R + 8), cy + vy * (R + 8));
-          ctx.lineTo(cx - ux * R, cy - uy * R);
-          ctx.lineTo(cx + ux * R, cy + uy * R);
+          ctx.moveTo(cx + vx * reach, cy + vy * reach);
+          ctx.lineTo(cx - ux * wing - vx * back, cy - uy * wing - vy * back);
+          ctx.lineTo(cx + ux * wing - vx * back, cy + uy * wing - vy * back);
           ctx.closePath();
           ctx.fillStyle = ink; ctx.fill();
         }
@@ -6376,6 +6378,60 @@ class Component extends DCLogic {
     this.setState({ elevationNames }, () => this._markUnsaved());
   }
 
+  // The plan's own footprint, from level walls only — BONEYARD shelf geometry
+  // (negative pseudo levels) never pulls the marks around.
+  _planWallExtents() {
+    const walls = this._walls.filter(wall => wall.levelId > 0);
+    if (!walls.length) return null;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    walls.forEach(wall => [wall.start, wall.end].forEach(pt => {
+      minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
+      minZ = Math.min(minZ, pt.z); maxZ = Math.max(maxZ, pt.z);
+    }));
+    if (maxX - minX < 1 || maxZ - minZ < 1) return null;
+    return { minX, maxX, minZ, maxZ };
+  }
+
+  // Half the first dimension offset: the middle of the gap between the
+  // exterior walls and the first string, where cut marks sit cozy.
+  _cutMarkGapFt() {
+    return (this.state.autoDimFirstOffsetFt || 1.5) / 2;
+  }
+
+  // A hand-placed cut reads as an infinite line: it runs clear through the
+  // plan whatever the drafter drew, ending in the wall-to-dimension gap on
+  // both sides so the bubbles land there instead of out past the strings.
+  // Without walls to measure against it just extends past the drawn ends.
+  _cutLineSpan(start, end) {
+    const dx = end.x - start.x, dz = end.z - start.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.001) return { start, end };
+    const ux = dx / len, uz = dz / len;
+    const along = t => ({ x: start.x + ux * t, y: start.y, z: start.z + uz * t });
+    const box = this._planWallExtents();
+    if (!box) {
+      return { start: along(-CUT_BUBBLE_PUSH_FT), end: along(len + CUT_BUBBLE_PUSH_FT) };
+    }
+    const gap = this._cutMarkGapFt();
+    const slab = (origin, dir, lo, hi) => {
+      if (Math.abs(dir) < 1e-9) {
+        return (origin >= lo && origin <= hi) ? [-Infinity, Infinity] : null;
+      }
+      const t0 = (lo - origin) / dir, t1 = (hi - origin) / dir;
+      return [Math.min(t0, t1), Math.max(t0, t1)];
+    };
+    const sx = slab(start.x, ux, box.minX - gap, box.maxX + gap);
+    const sz = slab(start.z, uz, box.minZ - gap, box.maxZ + gap);
+    if (!sx || !sz) {
+      return { start: along(-CUT_BUBBLE_PUSH_FT), end: along(len + CUT_BUBBLE_PUSH_FT) };
+    }
+    const tMin = Math.max(sx[0], sz[0]), tMax = Math.min(sx[1], sz[1]);
+    if (!(tMax - tMin > 0.5) || !Number.isFinite(tMin) || !Number.isFinite(tMax)) {
+      return { start: along(-CUT_BUBBLE_PUSH_FT), end: along(len + CUT_BUBBLE_PUSH_FT) };
+    }
+    return { start: along(tMin), end: along(tMax) };
+  }
+
   // The four standard elevations place themselves just outside the plan
   // extents: E1 along the bottom looking up into the model, E2 left looking
   // right, E3 top looking down, E4 right looking left. Like hand-placed
@@ -6384,17 +6440,10 @@ class Component extends DCLogic {
   // string — halfway across it — cozy against the plan.
   _autoElevationCuts() {
     if (!this._autoElevationsOn()) return [];
-    // Level walls only — BONEYARD shelf geometry (negative pseudo levels)
-    // never pulls the marks around.
-    const walls = this._walls.filter(wall => wall.levelId > 0);
-    if (!walls.length) return [];
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    walls.forEach(wall => [wall.start, wall.end].forEach(pt => {
-      minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
-      minZ = Math.min(minZ, pt.z); maxZ = Math.max(maxZ, pt.z);
-    }));
-    if (maxX - minX < 1 || maxZ - minZ < 1) return [];
-    const off = (this.state.autoDimFirstOffsetFt || 1.5) / 2, pad = 2;
+    const box = this._planWallExtents();
+    if (!box) return [];
+    const { minX, maxX, minZ, maxZ } = box;
+    const off = this._cutMarkGapFt(), pad = 2;
     return [
       { id: 'E1', name: 'E1', auto: true, elev: 0, levelId: null,
         startPt: { x: minX - pad, z: maxZ + off }, endPt: { x: maxX + pad, z: maxZ + off }, dirVec: { x: 0, z: 1 } },
