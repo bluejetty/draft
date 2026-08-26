@@ -211,6 +211,77 @@ test('closing the loop under MARK ATTACHED GARAGE errors instead of committing',
   expect(saved.boneyardOutlines.filter(outline => outline.garage)).toHaveLength(0);
 });
 
+test('a held press on a house corner starts the run instead of dragging the node', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+
+  await h.selectTool(page, 'Outline');
+  await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
+
+  // A drafter starting the first leg presses the corner, hesitates, and pulls
+  // away with the button still down — that must draw the leg, never grab and
+  // drag the house corner out from under the run.
+  const corner = await h.worldToClient(page, 8, -6);
+  const away = await h.worldToClient(page, 14, -6);
+  await page.mouse.move(corner.x, corner.y);
+  await page.mouse.down();
+  await page.waitForTimeout(200);
+  await page.mouse.move(away.x, away.y, { steps: 6 });
+  await page.mouse.up();
+
+  await h.clickWorld(page, 14, -6);
+  await h.clickWorld(page, 14, 0);
+  await h.clickWorld(page, 8, 0);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  const houseMaster = saved.boneyardOutlines.find(outline => !outline.garage);
+  expect(houseMaster.points.some(point => h.near(point.x, 8) && h.near(point.z, -6))).toBe(true);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster).toBeTruthy();
+  expect(garageMaster.points).toHaveLength(4);
+  expect(h.near(garageMaster.points[0].x, 8)).toBe(true);
+  expect(h.near(garageMaster.points[0].z, -6)).toBe(true);
+});
+
+test('a run ending near — not on — its first point commits as an open run', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  // The end lands 2'-6" from the start: close on screen, but a legitimate
+  // narrow run — only a click exactly ON the first point reads as a close.
+  await drawGarageRun(page, [[8, -4], [14, -4], [14, -1.5], [8, -1.5]]);
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster).toBeTruthy();
+  expect(garageMaster.open).toBe(true);
+  expect(garageMaster.points).toHaveLength(4);
+  expect(h.near(garageMaster.points[3].x, 8)).toBe(true);
+  expect(h.near(garageMaster.points[3].z, -1.5)).toBe(true);
+});
+
+test('the house corner takes the closing click even off the locked ray', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  // The third corner sits 6" shy of the house corner's row, so the T-square's
+  // ray misses the corner — hovering the corner must still weld the end there.
+  await drawGarageRun(page, [[8, -4], [20, -4], [20, 5.5], [8, 6]]);
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster).toBeTruthy();
+  expect(garageMaster.points).toHaveLength(4);
+  expect(h.near(garageMaster.points[3].x, 8)).toBe(true);
+  expect(h.near(garageMaster.points[3].z, 6)).toBe(true);
+  // The corner node was reused — only the mid-wall start inserted a point.
+  const houseMaster = saved.boneyardOutlines.find(outline => !outline.garage);
+  expect(houseMaster.points).toHaveLength(5);
+  expect(garageMaster.points[3].attach).toBe(houseMaster.points.find(point => h.near(point.x, 8) && h.near(point.z, 6)).id);
+});
+
 test('MARK ATTACHED GARAGE without a house explains itself and stays off', async ({ page }) => {
   await h.openModel(page);
   await h.selectTool(page, 'Outline');
