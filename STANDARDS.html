@@ -74,6 +74,26 @@
         <span class="layer-use">E1&ndash;E4 elevation marks place themselves around the plan &mdash; E1 at the bottom looking up, E2 left, E3 top, E4 right &mdash; so every drawing starts with its four elevations. Turn off for jobs that name or place their own.</span>
         <span class="layer-print" style="justify-content:flex-start;"><input type="checkbox" id="auto-elevations" data-auto-elevations aria-label="Generate standard E1-E4 elevations"> Standard E1&ndash;E4 elevations</span>
       </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">ELEV NAMES</span>
+        <span class="layer-use">The office words for the sides the standard elevations look at &mdash; E1 FRONT, E2 LEFT, E3 BACK, E4 RIGHT by default. These name the rows in the MODEL sidebar; a drawing can rename its own sides right on the row.</span>
+        <span class="layer-print" style="justify-content:flex-start; gap:4px; flex-wrap:wrap;">
+          <input class="layer-name-input" data-elevation-name="E1" aria-label="E1 side name" style="width:52px;" />
+          <input class="layer-name-input" data-elevation-name="E2" aria-label="E2 side name" style="width:52px;" />
+          <input class="layer-name-input" data-elevation-name="E3" aria-label="E3 side name" style="width:52px;" />
+          <input class="layer-name-input" data-elevation-name="E4" aria-label="E4 side name" style="width:52px;" />
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">CUT BUBBLES</span>
+        <span class="layer-use">Section and elevation bubbles wear their direction triangle in the office style. TUCKED slides the triangle behind the bubble with its back edge on the cut line and just the point showing; PROUD wears the small triangle out on the bubble's rim. More styles to come.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <select class="layer-name-input" id="cut-bubble-style" data-cut-bubble-style aria-label="Cut bubble triangle style" style="width:auto; min-width:170px;">
+            <option value="tucked">TUCKED TRIANGLE</option>
+            <option value="proud">PROUD TRIANGLE</option>
+          </select>
+        </span>
+      </div>
     </section>
     <div class="actions">
       <button class="action" id="reset" type="button">RESET DEFAULTS</button>
@@ -183,11 +203,39 @@
           : 'Standard elevations are off — cut elevations by hand.');
       });
 
+      const bubbleStyleSelect = document.querySelector('[data-cut-bubble-style]');
+      bubbleStyleSelect.value = structureStandards.cutBubbleStyle;
+      bubbleStyleSelect.addEventListener('change', () => {
+        structureStandards = { ...structureStandards, cutBubbleStyle: bubbleStyleSelect.value };
+        saveActive(bubbleStyleSelect.value === 'proud'
+          ? 'Cut bubbles wear the proud triangle on the rim.'
+          : 'Cut bubbles tuck the triangle behind the circle.');
+      });
+
+      const elevationNameInputs = [...document.querySelectorAll('[data-elevation-name]')];
+      const fillElevationNames = () => elevationNameInputs.forEach(input => {
+        input.value = structureStandards.elevationNames[input.dataset.elevationName];
+      });
+      fillElevationNames();
+      elevationNameInputs.forEach(input => {
+        input.addEventListener('change', () => {
+          const id = input.dataset.elevationName;
+          structureStandards = window.DraftStructureStandards.normaliseStructureStandards({
+            ...structureStandards,
+            elevationNames: { ...structureStandards.elevationNames, [id]: input.value },
+          });
+          input.value = structureStandards.elevationNames[id];
+          saveActive(`${id} is the ${structureStandards.elevationNames[id]} elevation.`);
+        });
+      });
+
       document.querySelector('#reset').addEventListener('click', () => {
         layerStandards = standardsApi.normaliseLayerStandards(null);
         structureStandards = window.DraftStructureStandards.normaliseStructureStandards(null);
         freeformInput.checked = structureStandards.freeformFootings;
         autoElevInput.checked = structureStandards.autoElevations;
+        bubbleStyleSelect.value = structureStandards.cutBubbleStyle;
+        fillElevationNames();
         saveActive('Default layer standards restored.');
         render();
       });

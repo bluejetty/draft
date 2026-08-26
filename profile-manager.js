@@ -311,11 +311,27 @@ if (!window.DraftProfileManager) {
   // geometry behaves. Footings ride BUILD HOUSE and stay locked against hand
   // edits unless the office allows freeform footing editing. The standard
   // elevations E1-E4 place themselves around the plan unless turned off.
+  // Cut bubbles wear their direction triangle in the office style: TUCKED
+  // hides the triangle behind the bubble with just the point showing;
+  // PROUD wears the small triangle on the bubble's rim. More styles later.
+  const CUT_BUBBLE_STYLES = ['tucked', 'proud'];
+  // The office names the sides the standard elevations look at — most call
+  // E1 the FRONT, but the words are theirs to change.
+  const DEFAULT_ELEVATION_NAMES = Object.freeze({ E1: 'FRONT', E2: 'LEFT', E3: 'BACK', E4: 'RIGHT' });
+  const normaliseElevationNames = value => {
+    const stored = value && typeof value === 'object' ? value : {};
+    return Object.fromEntries(Object.entries(DEFAULT_ELEVATION_NAMES).map(([id, fallback]) => [
+      id,
+      typeof stored[id] === 'string' && stored[id].trim() ? stored[id].trim().toUpperCase() : fallback,
+    ]));
+  };
   const normaliseStructureStandards = value => {
     const stored = value && typeof value === 'object' ? value : {};
     return {
       freeformFootings: stored.freeformFootings === true,
       autoElevations: stored.autoElevations !== false,
+      cutBubbleStyle: CUT_BUBBLE_STYLES.includes(stored.cutBubbleStyle) ? stored.cutBubbleStyle : 'tucked',
+      elevationNames: normaliseElevationNames(stored.elevationNames),
     };
   };
 
