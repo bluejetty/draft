@@ -14,6 +14,7 @@
 <script src="./auto-dims.js"></script>
 <script src="./render-2d.js"></script>
 <script src="./areas.js"></script>
+<script src="./room-standards.js"></script>
 <script src="./build-house.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
@@ -1839,6 +1840,7 @@ class Component extends DCLogic {
     activeLineLayer: 'draft',
     layerStandards: normaliseLayerStandards(null),
     structureStandards: normaliseStructureStandards(null),
+    roomMinimums: window.DraftRoomStandards.normaliseRoomMinimums(null),
     selectionVersion: 0,
     groupDialog:    false,
     groupNameInput: '',
@@ -2020,6 +2022,9 @@ class Component extends DCLogic {
         }
         if (standards?.content?.model?.structureStandards) {
           this.setState({ structureStandards: normaliseStructureStandards(standards.content.model.structureStandards) });
+        }
+        if (standards?.content?.model?.roomMinimums) {
+          this.setState({ roomMinimums: window.DraftRoomStandards.normaliseRoomMinimums(standards.content.model.roomMinimums) });
         }
         this._invalidate();
       }
@@ -2271,6 +2276,7 @@ class Component extends DCLogic {
         view: 'plan',
         name: tag.name,
         areaSqFt: tag.areaSqFt,
+        underMin: tag.underMin === true,
         layer: ROOM_TAG_LAYER,
       })),
       nextRoomTagId: this._nextRoomTagId || 1,
@@ -2975,6 +2981,7 @@ class Component extends DCLogic {
         floorThickness: this.state.floorThickness,
         layerStandards: normaliseLayerStandards(this.state.layerStandards),
         structureStandards: normaliseStructureStandards(this.state.structureStandards),
+        roomMinimums: window.DraftRoomStandards.normaliseRoomMinimums(this.state.roomMinimums),
       },
     };
   }
@@ -3020,6 +3027,9 @@ class Component extends DCLogic {
       }
       if (values.structureStandards && typeof values.structureStandards === 'object') {
         patch.structureStandards = normaliseStructureStandards(values.structureStandards);
+      }
+      if (values.roomMinimums && typeof values.roomMinimums === 'object') {
+        patch.roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(values.roomMinimums);
       }
       if ('wallBaseHeight' in patch) patch.wallBaseInput = formatArchitecturalInches(patch.wallBaseHeight * 12);
       if ('wallTopHeight' in patch) patch.wallTopInput = formatArchitecturalInches(patch.wallTopHeight * 12);
@@ -14684,6 +14694,14 @@ class Component extends DCLogic {
           ? `${room.minSide < ROOM_TAG_TIGHT_FT ? 'BEDRM' : 'BEDROOM'} ${room.number}`
           : 'ROOM';
       const at = this._roomLabelPoint(room.loop.points);
+      // Under-minimum flag from the COMPANY STANDARDS room-minimums table:
+      // quiet feedback only, using the same bounding-box short side the
+      // BEDRM/BEDROOM naming already reads. Nothing blocks or auto-fixes.
+      const verdict = window.DraftRoomStandards.evaluateRoom({
+        category: room.category,
+        insideSqFt: room.insideSqFt,
+        minDimensionFt: room.minSide,
+      }, this.state.roomMinimums);
       this._roomTags.push({
         id: this._nextRoomTagId++,
         at: new THREE.Vector3(at.x, elevation, at.z),
@@ -14691,6 +14709,7 @@ class Component extends DCLogic {
         view: 'plan',
         name,
         areaSqFt: Math.round(room.insideSqFt * 10) / 10,
+        underMin: !verdict.ok,
         layer: ROOM_TAG_LAYER,
       });
     });
@@ -14732,10 +14751,21 @@ class Component extends DCLogic {
       ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
       ctx.textBaseline = area ? 'bottom' : 'middle';
       ctx.fillText(tag.name, s.x, area ? s.y - 1 : s.y);
+      let subY = s.y + 1;
       if (area) {
         ctx.font = '500 10px "Barlow Condensed", system-ui, sans-serif';
         ctx.textBaseline = 'top';
-        ctx.fillText(area, s.x, s.y + 1);
+        ctx.fillText(area, s.x, subY);
+        subY += 11;
+      }
+      if (tag.underMin && !this._isPrinting) {
+        // Quiet compliance feedback, screen only: the room fails the office's
+        // ROOM MINIMUMS table (COMPANY STANDARDS).
+        ctx.font = '600 9px "Barlow Condensed", system-ui, sans-serif';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = 'rgba(176,64,80,0.85)';
+        ctx.fillText('UNDER MIN', s.x, area ? subY : s.y + 8);
+        ctx.fillStyle = ROOM_TAG_COLOR;
       }
     });
     ctx.restore();
