@@ -1457,6 +1457,13 @@ const GARAGE_MAN_DOOR_FT = (2 * 12 + 8) / 12;
 // wall — never a hard-coded thickness.
 const STAIR_OPENING_FINISH_IN = 1;
 const DEFAULT_STAIR_HEADROOM_FT = (6 * 12 + 10) / 12;
+// BUILD HOUSE cuts each placed stair's opening itself: the stair is treated
+// as rough intent and gets a nudge first — at least this clear of any beam
+// carrying the floor, and one real wall assembly inside the exterior (the
+// basement descent measures the foundation wall plus the insulation wall
+// lining it). Beams are centrelines on the plan, so the clearance is
+// measured to the line.
+const STAIR_BEAM_CLEAR_IN = 2;
 // Surface openings — free-form closed outlines cut from a selected floor or
 // roof footprint (stairwells, skylights, chimneys). Any closed shape works;
 // the host keeps its own geometry and the opening renders as a hole in it.
@@ -2152,6 +2159,7 @@ class Component extends DCLogic {
         points: opening.points.map(point),
         levelId: opening.levelId,
         layer: opening.layer,
+        ...(Number.isInteger(opening.stairId) ? { stairId: opening.stairId } : {}),
       })),
       dimensions: this._dimensions.map(dimension => ({
         id: dimension.id,
@@ -10054,6 +10062,12 @@ class Component extends DCLogic {
     if (markOpenings) built.push(`${markOpenings} marked opening${markOpenings === 1 ? '' : 's'}`);
     const garageDoors = this._buildGarageDoors();
     if (garageDoors) built.push('garage doors (overhead + man door)');
+    // Stairs cut their own rough openings, nudged clear of beams and walls.
+    const stairCut = this._buildStairOpenings();
+    if (stairCut.cut) {
+      built.push(`${stairCut.cut} stair opening${stairCut.cut === 1 ? '' : 's'}`);
+      if (stairCut.nudges.length) built.push(`stair nudged ${stairCut.nudges.join(', ')} clear of beams / walls`);
+    }
     // The dimension stack refreshes on every build that changed something, so
     // the strings pick up the new corners and opening centres.
     if (built.length) {
@@ -11323,6 +11337,234 @@ class Component extends DCLogic {
         + ` (stair width + ${formatInchesOnly(STAIR_OPENING_FINISH_IN)} finish · length clears ${formatArchitecturalInches(this.state.stairHeadroomFt * 12)} headroom to ${size.descent.landing}).`,
       drawingMessageError: false,
     });
+  }
+
+  // ─── BUILD HOUSE stair openings ────────────────────────────────────────
+  // Each placed stair cuts its own rough opening: the stair is rough intent,
+  // so it gets a nudge first — clear of the beams carrying the floor and one
+  // real wall assembly inside the exterior — then the hole follows the
+  // walking line down until the head clears the headroom under the floor.
+  // A stair that already has its opening keeps it untouched — delete the
+  // opening and BUILD HOUSE again to re-derive it at the stair's spot.
+  _buildStairOpenings() {
+    const result = { cut: 0, nudges: [] };
+    this._stairs.filter(stair => (stair.view || 'plan') === 'plan').forEach(stair => {
+      if (this._surfaceOpenings.some(opening => opening.stairId === stair.id)) return;
+      const descent = this._stairDescent(stair.levelId);
+      if (!descent || !(descent.riseFt > 0)) return;
+      const nudgedIn = this._stairAutoFit(stair);
+      const points = this._stairOpeningFootprint(stair);
+      if (!points || points.length < 3) return;
+      const centre = points.reduce((sum, pt) => ({
+        x: sum.x + pt.x / points.length,
+        z: sum.z + pt.z / points.length,
+      }), { x: 0, z: 0 });
+      const floor = this._floors.find(f => f.levelId === stair.levelId && f.structure !== 'slab'
+        && f.points.length >= 3 && this._pointInOutline(f.points, centre));
+      if (!floor) return;
+      this._surfaceOpenings.push({
+        id: this._newDrawingItemId('opening'),
+        hostType: 'floor',
+        hostId: floor.id,
+        points: points.map(pt => this._mergeVertex({ x: pt.x, z: pt.z }, stair.levelId, 'opening')),
+        levelId: stair.levelId,
+        layer: SURFACE_OPENING_LAYERS.floor,
+        stairId: stair.id,
+      });
+      result.cut += 1;
+      if (nudgedIn > 0.05) result.nudges.push(formatInchesOnly(nudgedIn));
+    });
+    return result;
+  }
+
+  // The opening footprint in world space. Length spends tread slots down the
+  // walking line until the drop reaches the headroom plus the floor assembly
+  // — a flat landing spends one slot, winders their tread count — so the
+  // covered parts (first run, landing, the used stretch of the second run)
+  // union into one well, carrying half the finish allowance on every side.
+  _stairOpeningFootprint(stair) {
+    const layout = this._stairCurrentLayout(stair);
+    const split = this._stairShapeSplit(stair, layout);
+    const clearIn = this.state.stairHeadroomFt * 12 + this._levelFloorFt(stair.levelId) * 12;
+    const slots = clearIn / layout.riserIn;
+    const runStep = STAIR_TREAD_RUN_IN / 12;
+    const inchUp = ft => Math.ceil(ft * 12 - 0.0001) / 12;
+    const w = stair.widthFt;
+    let uv;
+    if (!split || slots <= split.t1) {
+      const capFt = split ? split.t1 * runStep : layout.runFt;
+      const lenFt = Math.min(inchUp(slots * runStep), capFt);
+      if (!(lenFt > 0)) return null;
+      uv = [{ u: 0, v: -w / 2 }, { u: lenFt, v: -w / 2 }, { u: lenFt, v: w / 2 }, { u: 0, v: w / 2 }];
+    } else {
+      const run1 = split.t1 * runStep;
+      const run2 = split.t2 * runStep;
+      const L = split.landFt;
+      const landSlots = split.winders || 1;
+      const past = Math.max(0, slots - split.t1 - landSlots);
+      const r2c = Math.min(inchUp(past * runStep), run2);
+      if (split.shape === 'L') {
+        const v1 = -w / 2 + L;
+        const u2a = run1 + L / 2 - w / 2;
+        const u2b = run1 + L / 2 + w / 2;
+        uv = r2c <= 0
+          ? [{ u: 0, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: v1 },
+             { u: run1, v: v1 }, { u: run1, v: w / 2 }, { u: 0, v: w / 2 }]
+          : [{ u: 0, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: v1 },
+             { u: u2b, v: v1 }, { u: u2b, v: v1 + r2c }, { u: u2a, v: v1 + r2c },
+             { u: u2a, v: v1 }, { u: run1, v: v1 }, { u: run1, v: w / 2 }, { u: 0, v: w / 2 }];
+      } else {
+        const vTop = w + STAIR_U_GAP_IN / 12 + w / 2;
+        const vLow = w / 2 + STAIR_U_GAP_IN / 12;
+        uv = r2c <= 0
+          ? [{ u: 0, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: vTop },
+             { u: run1, v: vTop }, { u: run1, v: w / 2 }, { u: 0, v: w / 2 }]
+          : [{ u: 0, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: vTop },
+             { u: run1 - r2c, v: vTop }, { u: run1 - r2c, v: vLow }, { u: run1, v: vLow },
+             { u: run1, v: w / 2 }, { u: 0, v: w / 2 }];
+      }
+    }
+    const dedup = uv.filter((pt, index) => {
+      const prev = uv[(index + uv.length - 1) % uv.length];
+      return Math.hypot(pt.u - prev.u, pt.v - prev.v) > 0.001;
+    });
+    if (dedup.length < 3) return null;
+    const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const d = { x: dx / len, z: dz / len };
+    const s = split && split.turn === 'left' ? -1 : 1;
+    const perp = { x: -d.z * s, z: d.x * s };
+    const ring = window.DraftGeometry2D.offsetOutline(
+      dedup.map(pt => ({ x: pt.u, z: pt.v })), STAIR_OPENING_FINISH_IN / 24);
+    return ring.map(pt => ({
+      x: stair.start.x + d.x * pt.x + perp.x * pt.z,
+      z: stair.start.z + d.z * pt.x + perp.z * pt.z,
+    }));
+  }
+
+  // Nudge the stair until its opening sits legal, alternating the wall and
+  // beam pushes a few times in case one fix opens the other rule. Returns
+  // the total move in inches.
+  _stairAutoFit(stair) {
+    const from = { x: stair.start.x, z: stair.start.z };
+    for (let pass = 0; pass < 4; pass++) {
+      let moved = this._stairNudgeInsideWalls(stair);
+      moved = this._stairNudgeOffBeams(stair) || moved;
+      if (!moved) break;
+    }
+    return Math.hypot(stair.start.x - from.x, stair.start.z - from.z) * 12;
+  }
+
+  _stairShift(stair, dx, dz) {
+    stair.start.x += dx; stair.start.z += dz;
+    stair.end.x += dx; stair.end.z += dz;
+  }
+
+  // One wall assembly of setback off the exterior: the interior ring insets
+  // the house outline by the thickest wall standing along it — never a
+  // hard-coded thickness — and the lowest floor's descent adds the
+  // insulation wall lining the foundation to the foundation wall itself.
+  _stairOpeningSetbackFt(levelId) {
+    const floors = this._floorLevels();
+    const idx = floors.findIndex(level => level.id === levelId);
+    const outline = this._houseOutline(levelId);
+    const thickest = (walls, fallbackIn) => walls.reduce((most, wall) => {
+      const def = WALL_TYPES.find(type => type.id === (wall.wallType || 'stud_2x6'));
+      return Math.max(most, def ? def.totalIn : 0);
+    }, fallbackIn);
+    const exterior = this._walls.filter(wall => wall.levelId === levelId
+      && (wall.view || 'plan') === 'plan' && this._edgeOnOutline(wall.start, wall.end, outline));
+    const planIn = thickest(exterior, WALL_TYPES.find(type => type.id === 'stud_2x6').totalIn);
+    if (idx !== 0) return planIn / 12;
+    const fdnIn = thickest(this._walls.filter(wall => wall.view === 'foundation'),
+      WALL_TYPES.find(type => type.id === 'concrete_8').totalIn);
+    const insulIn = WALL_TYPES.find(type => type.id === 'insulation_6').totalIn;
+    return Math.max(planIn, fdnIn + insulIn) / 12;
+  }
+
+  // Push the stair inward until every opening corner sits inside the
+  // interior ring — the outline inset by the real wall assembly.
+  _stairNudgeInsideWalls(stair) {
+    const outline = this._houseOutline(stair.levelId);
+    if (!outline || outline.points.length < 3) return false;
+    const ring = window.DraftGeometry2D.offsetOutline(
+      outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      -this._stairOpeningSetbackFt(stair.levelId));
+    let moved = false;
+    for (let step = 0; step < 6; step++) {
+      const poly = this._stairOpeningFootprint(stair);
+      if (!poly) break;
+      let worst = null;
+      poly.forEach(pt => {
+        if (this._pointInOutline(ring, pt)) return;
+        let best = null;
+        ring.forEach((rp, index) => {
+          const seg = { start: rp, end: ring[(index + 1) % ring.length] };
+          const { d } = this._distToLineSeg(pt, seg);
+          if (!best || d < best.d) best = { d, seg };
+        });
+        if (best && (!worst || best.d > worst.d)) worst = best;
+      });
+      if (!worst) break;
+      const ex = worst.seg.end.x - worst.seg.start.x, ez = worst.seg.end.z - worst.seg.start.z;
+      const el = Math.hypot(ex, ez) || 1;
+      let n = { x: -ez / el, z: ex / el };
+      const mid = { x: (worst.seg.start.x + worst.seg.end.x) / 2, z: (worst.seg.start.z + worst.seg.end.z) / 2 };
+      if (!this._pointInOutline(ring, { x: mid.x + n.x * 0.05, z: mid.z + n.z * 0.05 })) n = { x: -n.x, z: -n.z };
+      this._stairShift(stair, n.x * (worst.d + 0.002), n.z * (worst.d + 0.002));
+      moved = true;
+    }
+    return moved;
+  }
+
+  // The beams carrying the floor a stair cuts through — structure lives with
+  // the framing, so they sit on the level's own FLOOR view.
+  _stairFloorBeams(levelId) {
+    return this._beams.filter(beam => beam.levelId === levelId && beam.view === 'floor');
+  }
+
+  // Closest approach between a beam's centreline and the opening boundary —
+  // zero when the beam reaches into the well.
+  _stairBeamGapFt(beam, poly) {
+    const geo = window.DraftGeometry2D;
+    let gap = Infinity;
+    for (let index = 0; index < poly.length; index++) {
+      const edge = { start: poly[index], end: poly[(index + 1) % poly.length] };
+      if (geo.segmentIntersection(beam, edge)) return 0;
+      gap = Math.min(gap,
+        this._distToLineSeg(beam.start, edge).d,
+        this._distToLineSeg(beam.end, edge).d,
+        this._distToLineSeg(edge.start, beam).d,
+        this._distToLineSeg(edge.end, beam).d);
+    }
+    if (this._pointInOutline(poly, beam.start) || this._pointInOutline(poly, beam.end)) return 0;
+    return gap;
+  }
+
+  // Push the stair sideways off any beam its opening crowds: perpendicular
+  // to the beam line, whichever way is the shorter move to the clearance.
+  _stairNudgeOffBeams(stair) {
+    const beams = this._stairFloorBeams(stair.levelId);
+    if (!beams.length) return false;
+    const clearFt = STAIR_BEAM_CLEAR_IN / 12;
+    let moved = false;
+    for (let step = 0; step < 4; step++) {
+      const poly = this._stairOpeningFootprint(stair);
+      if (!poly) break;
+      const beam = beams.find(item => this._stairBeamGapFt(item, poly) < clearFt - 0.0001);
+      if (!beam) break;
+      const bx = beam.end.x - beam.start.x, bz = beam.end.z - beam.start.z;
+      const bl = Math.hypot(bx, bz) || 1;
+      const n = { x: -bz / bl, z: bx / bl };
+      const base = beam.start.x * n.x + beam.start.z * n.z;
+      const projs = poly.map(pt => pt.x * n.x + pt.z * n.z);
+      const pushPlus = (base + clearFt) - Math.min(...projs);
+      const pushMinus = Math.max(...projs) - (base - clearFt);
+      const t = pushPlus <= pushMinus ? pushPlus + 0.002 : -(pushMinus + 0.002);
+      this._stairShift(stair, n.x * t, n.z * t);
+      moved = true;
+    }
+    return moved;
   }
 
   _commitStairOpeningWidth() {
