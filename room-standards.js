@@ -14,6 +14,18 @@ if (!window.DraftRoomStandards) {
   // - living: office default (stored for AUTO-FURNISH #135; the detector
   //   has no LIVING category yet, so no flag rides on it — see evaluateRoom).
   // - laundry: office default — a washer+dryer pair wants ~4'-6" clear.
+  // - dz: Drop Zone / Mud Room — name credit Jerry (Jerry's House Design,
+  //   facebook.com/photo/?fbid=2021137635491962: mudroom + drop zone +
+  //   stacked W/D off the garage door). Seeded from the REQUIRED core
+  //   only: a 2'-6" x 6'-0" bench-with-locker-uppers unit against one
+  //   wall plus a 36" clear circulation strip → least dimension
+  //   2.5 + 3 = 5.5', area 6 x 5.5 = 33 sq ft. The OPTIONAL washer/dryer
+  //   adds 60" of wall width ("with laundry" seed: 11 x 5.5 = 60.5 sq ft
+  //   — tune the row up if the office standardises on laundry-in-DZ), and
+  //   extra counter between/beside bench and W/D is a nice-to-have, not a
+  //   minimum. Future stamp slice (#198/#210): the DZ stamp may only sit
+  //   at a back door (exterior, non-front) or the garage-to-house man
+  //   door — recorded here so the constraint travels with the row.
   // ROOM_TAG_MIN_AREA_SQFT (12) stays the detector's own floor and is not
   // part of this table.
   const DEFAULT_ROOM_MINIMUMS = Object.freeze({
@@ -22,6 +34,7 @@ if (!window.DraftRoomStandards) {
     living: Object.freeze({ label: 'LIVING ROOM', minAreaSqFt: 145, minDimensionFt: 10 }),
     wc: Object.freeze({ label: 'WC / BATH', minAreaSqFt: 18, minDimensionFt: 3 }),
     laundry: Object.freeze({ label: 'LAUNDRY', minAreaSqFt: 15, minDimensionFt: 4.5 }),
+    dz: Object.freeze({ label: 'DZ / MUD ROOM', minAreaSqFt: 33, minDimensionFt: 5.5 }),
   });
 
   const positive = (value, fallback) => {

@@ -56,8 +56,12 @@ test('the default table carries the stated seeds', async ({ page }) => {
   // Bedroom row is the NBC-style default the order names.
   expect(table.bedroom.minAreaSqFt).toBe(97);
   expect(table.bedroom.minDimensionFt).toBeCloseTo(9 + 8 / 12, 5);
-  // All five categories present, living stored for AUTO-FURNISH.
-  expect(Object.keys(table).sort()).toEqual(['bedroom', 'kitchen', 'laundry', 'living', 'wc']);
+  // DZ row (board #210): required-core derivation — 2'-6" bench depth plus
+  // a 36" clear strip by the 6' bench run.
+  expect(table.dz.minAreaSqFt).toBe(33);
+  expect(table.dz.minDimensionFt).toBe(5.5);
+  // All six categories present, living stored for AUTO-FURNISH.
+  expect(Object.keys(table).sort()).toEqual(['bedroom', 'dz', 'kitchen', 'laundry', 'living', 'wc']);
 });
 
 test('STANDARDS edits persist through a reload and reset restores the defaults', async ({ page }) => {
