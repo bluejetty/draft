@@ -427,14 +427,57 @@ if (!window.DraftRender2D) {
         oval(a0 + w * fa, cMin + d * fc, 0.28, 0.28);
         ctx.stroke();
       });
-    } else if (kind === 'fridge' || kind === 'washer' || kind === 'dryer') {
+    } else if (kind === 'fridge' || kind === 'washer' || kind === 'dryer' || kind === 'dish') {
       rect(a0 + inset, a1 - inset, cMin + inset, cMax - inset); ctx.stroke();
       if (pxPerFt > 6) {
         const c = toS(geo.center);
         ctx.fillStyle = env.FIXTURE_COLOR;
         ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(kind === 'fridge' ? 'REF' : kind === 'washer' ? 'W' : 'D', c.x, c.y);
+        ctx.fillText(kind === 'fridge' ? 'REF' : kind === 'washer' ? 'W' : kind === 'dryer' ? 'D' : 'DW', c.x, c.y);
+      }
+    } else if (kind === 'island') {
+      // Freestanding island: counter overhang line on the seating side (away
+      // from the host wall) and a label when zoomed in.
+      const dir = cFront >= cBack ? 1 : -1;
+      const counter = cFront + dir * env.COUNTER_OVERHANG_FT;
+      const ca = P(a0, counter), cb = P(a1, counter);
+      ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
+      if (pxPerFt > 6) {
+        const c = toS(geo.center);
+        ctx.fillStyle = env.FIXTURE_COLOR;
+        ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('ISLAND', c.x, c.y);
+      }
+    } else if (kind === 'pantry') {
+      // Corner walk-in pantry: shelves dashed along the back, and the classic
+      // 45° angled door across the open front corner — the end away from the
+      // crossing wall that closes the corner.
+      const dir = cFront >= cBack ? 1 : -1;
+      const nearCross = along => (geo.wall ? env.walls.some(other => {
+        if (other === geo.wall) return false;
+        if (other.levelId !== geo.wall.levelId || (other.view || 'plan') !== (geo.wall.view || 'plan')) return false;
+        const hit = env.wallCross(geo.wall, geo.frame, other);
+        return hit && hit.s > -0.05 && hit.s < 1.05
+          && Math.abs(hit.along - along) < ((env.wallFrame(other)?.totalFt || 0) / 2) + 0.3;
+      }) : false);
+      const openAtEnd = nearCross(a0) || !nearCross(a1);
+      const cut = Math.min(2.5, (a1 - a0) * 0.6);
+      const doorA = openAtEnd ? a1 - cut : a0 + cut;
+      const openA = openAtEnd ? a1 : a0;
+      const d0 = P(doorA, cFront), d1 = P(openA, cFront - dir * cut);
+      ctx.beginPath(); ctx.moveTo(d0.x, d0.y); ctx.lineTo(d1.x, d1.y); ctx.stroke();
+      ctx.save(); ctx.setLineDash([4, 3]);
+      const s0 = P(a0 + 0.15, cBack + dir * 1), s1 = P(a1 - 0.15, cBack + dir * 1);
+      ctx.beginPath(); ctx.moveTo(s0.x, s0.y); ctx.lineTo(s1.x, s1.y); ctx.stroke();
+      ctx.restore();
+      if (pxPerFt > 6) {
+        const c = toS(geo.center);
+        ctx.fillStyle = env.FIXTURE_COLOR;
+        ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('PANTRY', c.x, c.y);
       }
     } else if (kind === 'closet') {
       // A small room off the host wall: 2x4 side walls (skipped where the run

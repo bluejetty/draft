@@ -140,7 +140,9 @@ if (!window.DraftDrawingFormat) {
   // the faucet-end wall face and the tub, and dir is which way along the back
   // wall the alcove runs from that face. Host-wall existence is the caller's
   // check.
-  const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'washer', 'dryer', 'toilet', 'tub', 'shower', 'stall', 'closet'];
+  // island records a standoff: the clear distance from the host wall face to
+  // the island's near edge, so it stands free of the wall but still rides it.
+  const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'dish', 'island', 'pantry', 'washer', 'dryer', 'toilet', 'tub', 'shower', 'stall', 'closet'];
   const FIXTURE_CASEWORK = ['cabinet', 'vanity'];
   const fixtures = (rawFixtures, levelIds) => (Array.isArray(rawFixtures) ? rawFixtures : [])
     .map(fixture => {
@@ -153,6 +155,7 @@ if (!window.DraftDrawingFormat) {
       if (!wallId || fixtureLevelId == null || !kind || width == null || depth == null || offset === null || offset < 0) return null;
       const endWallId = String(fixture?.endWallId || '').trim();
       if (kind === 'tub' && !endWallId) return null;
+      const standoff = num(fixture?.standoff);
       return {
         id: String(fixture?.id || '').trim(),
         wallId,
@@ -164,6 +167,7 @@ if (!window.DraftDrawingFormat) {
         width,
         depth,
         side: fixture?.side === -1 ? -1 : 1,
+        ...(standoff !== null && standoff > 0 ? { standoff } : {}),
         ...(endWallId ? { endWallId, dir: fixture?.dir === -1 ? -1 : 1 } : {}),
       };
     }).filter(Boolean);

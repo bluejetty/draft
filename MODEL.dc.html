@@ -809,6 +809,13 @@
             <button onClick="{{ fk.onSelect }}" title="{{ fk.title }}" style="border:1px solid {{ fk.border }}; background:{{ fk.bg }}; color:{{ fk.color }}; padding:5px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer; white-space:nowrap;">{{ fk.label }}</button>
           </sc-for>
         </div>
+        <sc-if value="{{ kitchenPresetActive }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; gap:3px; margin-top:4px;">
+            <sc-for list="{{ kitchenToggleBtns }}" as="kt" hint-placeholder-count="2">
+              <button onClick="{{ kt.onSelect }}" title="{{ kt.title }}" style="border:1px solid {{ kt.border }}; background:{{ kt.bg }}; color:{{ kt.color }}; padding:5px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer; white-space:nowrap;">{{ kt.label }}</button>
+            </sc-for>
+          </div>
+        </sc-if>
       </div>
       <div style="display:flex; flex-direction:column; padding:8px 12px; border-bottom:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Bath</div>
@@ -1549,6 +1556,18 @@ const CLOSET_DOORS = [
 ];
 const closetDoorFor = insideWidthFt =>
   CLOSET_DOORS.find(door => door.widthFt <= insideWidthFt - 4 / 12) || null;
+// The corner-L kitchen preset drops a whole kitchen off one corner click:
+// cabinets along both legs, sink + DW centered on the long leg, fridge at the
+// open end, range on the short leg — NKBA-standard bays (36" fridge, 30"
+// range, 24" DW) with a 42" working aisle to the optional island. The corner
+// pantry is the classic 48" x 48" walk-in that keeps every cabinet run
+// straight.
+const KITCHEN_AISLE_FT = 3.5;        // 42" working aisle, NKBA minimum
+const KITCHEN_PANTRY_FT = 4;         // 48" x 48" corner walk-in pantry
+const KITCHEN_FRIDGE_BAY_FT = 3;     // 36" refrigerator bay
+const KITCHEN_LANDING_FT = 1.25;     // 15" landing counter beside the range
+const KITCHEN_MIN_LONG_FT = 8;       // long leg: sink + DW + fridge bay + landings
+const KITCHEN_MIN_SHORT_FT = 5;      // short leg: range + a landing each side
 const FIXTURE_KINDS = [
   { id: 'cabinet', label: 'CABINET', group: 'KITCHEN',  widthFt: 3,      depthFt: 2,      casework: true,  run: true,
     note: 'Base cabinet run — two clicks along a wall set the run; 24" deep with a countertop line.' },
@@ -1558,6 +1577,14 @@ const FIXTURE_KINDS = [
     note: 'Refrigerator box — click it onto a wall.' },
   { id: 'stove',   label: 'STOVE',   group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2.17,   casework: false, run: false,
     note: 'Range with burners — click it onto a wall.' },
+  { id: 'dish',    label: 'DW',      group: 'KITCHEN',  widthFt: 2,      depthFt: 2,      casework: false, run: false,
+    note: '24" dishwasher — click it onto a wall, usually beside the sink.' },
+  { id: 'island',  label: 'ISLAND',  group: 'KITCHEN',  widthFt: 6,      depthFt: 3,      casework: false, run: false,
+    note: '36" x 72" island — click it onto a wall; it stands 42" clear of the counter and slides along the run.' },
+  { id: 'pantry',  label: 'PANTRY',  group: 'KITCHEN',  widthFt: 4,      depthFt: 4,      casework: false, run: false,
+    note: '48" x 48" corner walk-in pantry with a 45° angled door — click it into a corner.' },
+  { id: 'kitchenL', label: 'L PRESET', group: 'KITCHEN', widthFt: 4,     depthFt: 2,      casework: false, run: false, preset: true,
+    note: 'Corner-L kitchen — click the inside corner where two walls meet: cabinets, sink, DW, fridge, and stove drop in at the proven spots; every piece stays movable.' },
   { id: 'tub',     label: 'TUB',     group: 'BATH',     widthFt: 5,      depthFt: 2.5,    casework: false, run: false,
     note: 'Alcove tub — click the back wall, then the faucet-end wall; the tub fills the alcove.' },
   { id: 'toilet',  label: 'TOILET',  group: 'BATH',     widthFt: 5 / 3,  depthFt: 7 / 3,  casework: false, run: false,
@@ -1769,6 +1796,8 @@ class Component extends DCLogic {
     // slot) join this object.
     projectInfo: { name: '', client: '', address: '', legal: '' },
     fixtureKind: 'cabinet',   // active FIXTURE catalog entry (see FIXTURE_KINDS)
+    kitchenPantry: false,     // L PRESET toggle: corner walk-in pantry in the dead corner
+    kitchenIsland: false,     // L PRESET toggle: island 42" off the long counter
     fenestrationType: 'door', // 'door' | 'window' — picks the CAD layer and defaults
     fenestrationWidths: { door: DEFAULT_DOOR_WIDTH_FT, window: DEFAULT_WINDOW_WIDTH_FT },
     fenestrationWidthInput: formatArchitecturalInches(DEFAULT_DOOR_WIDTH_FT * 12),
@@ -2058,6 +2087,7 @@ class Component extends DCLogic {
         width: fixture.width,
         depth: fixture.depth,
         side: fixture.side,
+        ...(fixture.standoff ? { standoff: fixture.standoff } : {}),
         ...(fixture.endWallId ? { endWallId: fixture.endWallId, dir: fixture.dir } : {}),
       })),
       surfaceOpenings: this._surfaceOpenings.map(opening => ({
@@ -10426,7 +10456,8 @@ class Component extends DCLogic {
     const width = Math.min(fixture.width, Math.max(frame.len - 0.02, 0.5));
     const half = width / 2;
     const along = Math.min(Math.max(fixture.offset, half + 0.01), Math.max(frame.len - half - 0.01, half + 0.01));
-    const backOff = fixture.side === -1 ? frame.startOff : frame.endOff;
+    // A standoff floats the body clear of the wall face (the island's aisle).
+    const backOff = (fixture.side === -1 ? frame.startOff : frame.endOff) + fixture.side * (fixture.standoff || 0);
     const frontOff = backOff + fixture.side * fixture.depth;
     return {
       wall, frame,
@@ -10528,6 +10559,7 @@ class Component extends DCLogic {
       return;
     }
     if (kind.id === 'tub') { this._handleTubClick(kind, placement); return; }
+    if (kind.preset) { this._handleKitchenPresetClick(placement, pt); return; }
     if (kind.run) { this._handleFixtureRunClick(kind, placement); return; }
     const clamped = this._clampOpeningToWall(placement.wall, placement.along, kind.widthFt);
     if (!clamped) {
@@ -10581,6 +10613,122 @@ class Component extends DCLogic {
     }
     this._fixtureRunStart = null;
     this._addFixture(kind, placement.wall, { offset: (placement.along + start.along) / 2, width, side: start.side });
+  }
+
+  // ── Corner-L kitchen preset ────────────────────────────────────────
+  // One click near an inside corner drops the whole kitchen: base cabinets
+  // along both legs, sink + DW on the long leg, fridge at the open end, range
+  // centered on the short leg — plus the corner pantry and island toggles.
+  // Everything lands as ordinary fixtures, so each piece stays individually
+  // movable afterward.
+
+  // Clear run along a wall from the corner face outward: to the wall end or
+  // the nearest crossing wall, whichever comes first.
+  _kitchenLeg(wall, frame, cornerAlong, dir, cornerWall) {
+    const face = cornerAlong + dir * ((this._wallFrame(cornerWall)?.totalFt || 0) / 2);
+    let far = dir > 0 ? frame.len : 0;
+    this._activeWalls().forEach(other => {
+      if (other === wall || other === cornerWall) return;
+      const hit = this._wallCross(wall, frame, other);
+      if (!hit || hit.s < -0.05 || hit.s > 1.05) return;
+      const otherFace = hit.along - dir * ((this._wallFrame(other)?.totalFt || 0) / 2);
+      if (dir * (otherFace - face) > 0.5 && dir * (otherFace - face) < dir * (far - face)) far = otherFace;
+    });
+    return { face, dir, len: Math.max(dir * (far - face), 0) };
+  }
+
+  _handleKitchenPresetClick(placement, pt) {
+    const wallA = placement.wall, frameA = placement.frame;
+    // The other leg of the L: the crossing wall nearest the click.
+    let best = null;
+    this._activeWalls().forEach(other => {
+      if (other === wallA) return;
+      const hit = this._wallCross(wallA, frameA, other);
+      if (!hit || hit.s < -0.05 || hit.s > 1.05) return;
+      if (hit.along < -0.5 || hit.along > frameA.len + 0.5) return;
+      if (!best || Math.abs(hit.along - placement.along) < Math.abs(best.hit.along - placement.along)) best = { wall: other, hit };
+    });
+    const frameB = best && this._wallFrame(best.wall);
+    if (!frameB) {
+      this.setState({ drawingMessage: 'Click near an inside corner — the L preset builds off two walls that meet.', drawingMessageError: true });
+      return;
+    }
+    const wallB = best.wall;
+    const cornerA = best.hit.along;
+    const cornerB = Math.min(Math.max(best.hit.s, 0), 1) * frameB.len;
+    // Legs run away from the corner: on the clicked wall toward the click; on
+    // the crossing wall toward its longer clear side. Faces point at the click.
+    const legA = this._kitchenLeg(wallA, frameA, cornerA, placement.along >= cornerA ? 1 : -1, wallB);
+    const legB1 = this._kitchenLeg(wallB, frameB, cornerB, 1, wallA);
+    const legB2 = this._kitchenLeg(wallB, frameB, cornerB, -1, wallA);
+    const legB = legB1.len >= legB2.len ? legB1 : legB2;
+    const acrossB = (pt.x - wallB.start.x) * frameB.nx + (pt.z - wallB.start.z) * frameB.nz;
+    const sideA = placement.side;
+    const sideB = acrossB >= (frameB.startOff + frameB.endOff) / 2 ? 1 : -1;
+    const a = { wall: wallA, leg: legA, side: sideA };
+    const b = { wall: wallB, leg: legB, side: sideB };
+    const long = a.leg.len >= b.leg.len ? a : b;
+    const short = long === a ? b : a;
+    const pantry = this.state.kitchenPantry;
+    const island = this.state.kitchenIsland;
+    const pant = pantry ? KITCHEN_PANTRY_FT : 0;
+    const needLong = KITCHEN_MIN_LONG_FT + pant, needShort = KITCHEN_MIN_SHORT_FT + pant;
+    if (long.leg.len < needLong || short.leg.len < needShort) {
+      this.setState({
+        drawingMessage: `Not enough wall for the corner-L kitchen${pantry ? ' with the pantry' : ''} — it needs ${needLong}' along one leg and ${needShort}' along the other clear of other walls.`,
+        drawingMessageError: true,
+      });
+      return;
+    }
+    const at = (leg, d) => leg.face + leg.dir * d;
+    const cabinet = fixtureKindDef('cabinet');
+    const pieces = [];
+    const add = (kindId, host, props) => pieces.push({ kind: fixtureKindDef(kindId), wall: host.wall, props: { side: host.side, ...props } });
+    if (pantry) {
+      add('pantry', long, { offset: at(long.leg, KITCHEN_PANTRY_FT / 2), width: KITCHEN_PANTRY_FT, depth: KITCHEN_PANTRY_FT });
+    }
+    // Long leg: cabinets from the pantry (or corner) to the fridge bay, sink
+    // centered on the run with the DW tucked beside it toward the corner,
+    // fridge in its 36" bay at the open end.
+    const cabStart = pant, cabEnd = long.leg.len - KITCHEN_FRIDGE_BAY_FT;
+    add('cabinet', long, { offset: at(long.leg, (cabStart + cabEnd) / 2), width: cabEnd - cabStart, depth: cabinet.depthFt });
+    const sink = fixtureKindDef('sink'), dish = fixtureKindDef('dish');
+    const sinkD = Math.min(
+      Math.max((cabStart + cabEnd) / 2, cabStart + dish.widthFt + sink.widthFt / 2),
+      cabEnd - sink.widthFt / 2,
+    );
+    add('sink', long, { offset: at(long.leg, sinkD), width: sink.widthFt, depth: sink.depthFt });
+    add('dish', long, { offset: at(long.leg, sinkD - sink.widthFt / 2 - dish.widthFt / 2), width: dish.widthFt, depth: dish.depthFt });
+    const fridge = fixtureKindDef('fridge');
+    add('fridge', long, { offset: at(long.leg, long.leg.len - KITCHEN_FRIDGE_BAY_FT / 2), width: fridge.widthFt, depth: fridge.depthFt });
+    // Short leg: cabinets the full clear run, range centered with landing
+    // counter both sides.
+    add('cabinet', short, { offset: at(short.leg, (pant + short.leg.len) / 2), width: short.leg.len - pant, depth: cabinet.depthFt });
+    const stove = fixtureKindDef('stove');
+    add('stove', short, { offset: at(short.leg, (pant + short.leg.len) / 2), width: stove.widthFt, depth: stove.depthFt });
+    if (island) {
+      const islandDef = fixtureKindDef('island');
+      const width = Math.min(islandDef.widthFt, cabEnd - cabStart - 0.5);
+      add('island', long, {
+        offset: at(long.leg, (cabStart + cabEnd) / 2),
+        width, depth: islandDef.depthFt,
+        standoff: cabinet.depthFt + COUNTER_OVERHANG_FT + KITCHEN_AISLE_FT,
+      });
+    }
+    pieces.forEach(piece => this._fixtures.push({
+      id: this._newDrawingItemId('fixture'),
+      wallId: piece.wall.id,
+      levelId: piece.wall.levelId,
+      view: 'plan',
+      kind: piece.kind.id,
+      layer: piece.kind.casework ? CASEWORK_LAYER : FIXTURE_LAYER,
+      ...piece.props,
+    }));
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `Corner-L kitchen placed${pantry ? ' with the corner pantry' : ''}${island ? ` — island stands 42" off the counter` : ''} — every piece is a fixture: select and slide anything.`,
+      drawingMessageError: false,
+    });
   }
 
   // The tub takes two clicks on two walls: the back wall it lies along, then
@@ -10700,6 +10848,7 @@ class Component extends DCLogic {
     if (this._isPrinting || this.state.activeTool !== 'fixture' || !this._snapPt) return;
     // Placement ghost: the active catalog entry previews on the nearest wall.
     const kind = fixtureKindDef(this.state.fixtureKind);
+    if (kind.preset) return; // the preset drops many pieces — no single ghost
     const layer = kind.casework ? CASEWORK_LAYER : FIXTURE_LAYER;
     if (kind.id === 'tub' && this._tubPending) {
       const wall = this._walls.find(w => w.id === this._tubPending.wallId);
@@ -15602,6 +15751,8 @@ class Component extends DCLogic {
         ? 'FIXTURE — Click the faucet-end wall of the tub alcove · Esc to cancel'
         : this._fixtureRunStart
         ? 'FIXTURE — Click along the same wall to end the run · Esc to cancel'
+        : fixtureKindDef(this.state.fixtureKind).preset
+        ? 'FIXTURE — Click the inside corner where the two kitchen walls meet'
         : fixtureKindDef(this.state.fixtureKind).run
         ? 'FIXTURE — Click a wall where the run starts'
         : this.state.fixtureKind === 'tub'
@@ -15746,6 +15897,18 @@ class Component extends DCLogic {
       fixtureLaundryBtns: this._fixtureKindBtns('LAUNDRY'),
       fixtureBedroomBtns: this._fixtureKindBtns('BEDROOM'),
       fixtureNote: fixtureKindDef(this.state.fixtureKind).note,
+      kitchenPresetActive: Boolean(fixtureKindDef(this.state.fixtureKind).preset),
+      kitchenToggleBtns: [
+        { label: '+ PANTRY', key: 'kitchenPantry', title: 'Corner walk-in pantry — the classic 48" x 48" angled-door pantry in the dead corner; keeps every cabinet run straight.' },
+        { label: '+ ISLAND', key: 'kitchenIsland', title: '36" x 72" island standing 42" (NKBA working aisle) off the long counter.' },
+      ].map(toggle => ({
+        label: toggle.label,
+        title: toggle.title,
+        bg: this.state[toggle.key] ? '#1d1f20' : '#fff',
+        color: this.state[toggle.key] ? '#f2f2f3' : '#1d1f20',
+        border: this.state[toggle.key] ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        onSelect: () => this.setState({ [toggle.key]: !this.state[toggle.key] }),
+      })),
       hasActiveFixtures: this._activeFixtures().length > 0,
       onFixtureDelete: () => this._deleteLastFixture(),
       noteToolActive: activeTool === 'annotation',
