@@ -30,9 +30,12 @@ test.describe('Standard E1-E4 elevations', () => {
     await buildHouse(page);
     await h.waitForSaved(page);
 
-    for (const name of ['E1', 'E2', 'E3', 'E4']) {
-      const row = page.locator('.cut-row', { hasText: `${name} · ELEVATION` });
+    const sides = { E1: 'FRONT', E2: 'LEFT', E3: 'BACK', E4: 'RIGHT' };
+    for (const [name, side] of Object.entries(sides)) {
+      const row = page.locator('.cut-row', { hasText: name });
       await expect(row).toHaveCount(1);
+      // Each row wears its office side name, editable right there.
+      await expect(row.locator('.cut-side')).toHaveValue(side);
       // Standard elevations aren't deletable — the × stays hidden.
       await expect(row.locator('.cut-del')).toBeHidden();
     }
@@ -61,7 +64,8 @@ test.describe('Standard E1-E4 elevations', () => {
     expect(h.countColor(eastPixels, CUT_RED)).toBeGreaterThan(0);
 
     // Opening E1 renders a generated elevation with real ink.
-    await page.locator('.cut-row', { hasText: 'E1 · ELEVATION' }).click();
+    // Click the E1 designation itself — the side-name input beside it edits.
+    await page.locator('.cut-row', { hasText: 'E1' }).click({ position: { x: 18, y: 8 } });
     await page.waitForTimeout(400);
     await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
     const census = await page.evaluate(() => {
@@ -94,5 +98,42 @@ test.describe('Standard E1-E4 elevations', () => {
     await expect(page.locator('[data-model-canvas]')).toBeVisible();
     await page.waitForTimeout(500);
     await expect(page.locator('.cut-row')).toHaveCount(0);
+  });
+
+  test('a drawing renames its own sides on the sidebar row and remembers them', async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+    await drawOutlineRect(page);
+    await buildHouse(page);
+    await h.waitForSaved(page);
+
+    const e1Side = page.locator('.cut-row', { hasText: 'E1' }).locator('.cut-side');
+    await expect(e1Side).toHaveValue('FRONT');
+    await e1Side.fill('STREET');
+    await e1Side.press('Enter');
+    await h.waitForSaved(page);
+
+    const saved = await h.savedDrawing(page);
+    expect(saved.elevationNames).toEqual({ E1: 'STREET' });
+
+    await page.reload();
+    await expect(page.locator('[data-model-canvas]')).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(page.locator('.cut-row', { hasText: 'E1' }).locator('.cut-side')).toHaveValue('STREET');
+    await expect(page.locator('.cut-row', { hasText: 'E2' }).locator('.cut-side')).toHaveValue('LEFT');
+  });
+
+  test('STANDARDS sets the office default side names', async ({ page }) => {
+    await page.goto('/STANDARDS.html');
+    const e1 = page.locator('[data-elevation-name="E1"]');
+    await expect(e1).toHaveValue('FRONT');
+    await e1.fill('SOUTH');
+    await e1.press('Enter');
+    await expect(page.locator('#status')).toContainText('E1 is the SOUTH elevation');
+
+    await page.reload();
+    await expect(page.locator('[data-elevation-name="E1"]')).toHaveValue('SOUTH');
+
+    await page.locator('#reset').click();
+    await expect(page.locator('[data-elevation-name="E1"]')).toHaveValue('FRONT');
   });
 });

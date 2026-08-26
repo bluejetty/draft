@@ -83,6 +83,8 @@
     .cut-body { flex:1; padding:5px 7px 5px 8px; min-width:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .cut-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; }
     .cut-del:hover { color:#c04040; }
+    .cut-side { flex:1; min-width:0; border:none; background:none; padding:0 0 0 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:rgba(29,31,32,0.72); outline:none; }
+    .cut-side:focus { color:#1d1f20; background:rgba(89,128,166,0.08); }
     .tool-keypad { display:grid; grid-template-columns:repeat(4, 1fr); gap:3px; }
     .tool-key { position:relative; aspect-ratio:1 / 1; min-width:0; border:1px solid; padding:2px 1px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; font-family:'Barlow Condensed',system-ui,sans-serif; text-transform:uppercase; }
     .tool-key-letter { position:absolute; top:2px; left:3px; font-weight:700; line-height:1; }
@@ -1142,7 +1144,7 @@
       <sc-for list="{{ cuts }}" as="cut" hint-placeholder-count="0">
         <div class="{{ cut.rowClass }}" onClick="{{ cut.onView }}">
           <div class="cut-bar"></div>
-          <div class="cut-body">{{ cut.name }}</div>
+          <div class="cut-body" style="display:flex; align-items:center;">{{ cut.name }}<input class="cut-side" style="{{ cut.sideStyle }}" value="{{ cut.sideName }}" onClick="{{ cut.onSideClick }}" onChange="{{ cut.onSideChange }}" aria-label="Elevation side name" title="Name this elevation's side — FRONT, LEFT... — defaults set in COMPANY STANDARDS" /></div>
           <button class="cut-del" style="{{ cut.delStyle }}" onClick="{{ cut.onDelete }}" title="Delete">×</button>
         </div>
       </sc-for>
@@ -1694,6 +1696,15 @@ const { normaliseStructureStandards } = window.DraftStructureStandards;
 const { normaliseSnapStrength } = window.DraftSnapStrength;
 const { normaliseDrafter } = window.DraftDrafter;
 
+// Per-drawing side names for the standard elevations — only E1-E4 entries
+// with real text survive; anything missing falls back to COMPANY STANDARDS.
+const normaliseSavedElevationNames = value => {
+  const stored = value && typeof value === 'object' ? value : {};
+  return Object.fromEntries(['E1', 'E2', 'E3', 'E4']
+    .filter(id => typeof stored[id] === 'string' && stored[id].trim())
+    .map(id => [id, stored[id].trim().toUpperCase()]));
+};
+
 // Undo keeps whole serialized drawings, so it is bounded by count and by size.
 const HISTORY_LIMIT = 60;
 const HISTORY_MAX_CHARS = 8000000;
@@ -1826,6 +1837,7 @@ class Component extends DCLogic {
     protractorAngle: '',       // '' | '90' | '45' | '30' — which blade a held modifier grabbed
     tsquareOn: true,           // full-time 90° T-square while drawing; T toggles
     cuts:          [],
+    elevationNames: {},         // per-drawing side names for E1-E4 (FRONT/LEFT...), defaults from COMPANY STANDARDS
     nextCutId:     1,
     activeCutId:   null,
     cutPhase:      'idle',     // 'idle'|'placing'|'choosing'
@@ -2194,6 +2206,7 @@ class Component extends DCLogic {
       roofOverhang: this.state.roofOverhang,
       roofPitch: this.state.roofPitch,
       elevationDatum: this.state.elevationDatum,
+      elevationNames: { ...this.state.elevationNames },
       cuts: this.state.cuts.map(cut => ({
         id: cut.id,
         name: cut.name,
@@ -3239,6 +3252,7 @@ class Component extends DCLogic {
         roofOverhang: clampRoofOverhang(format.number(saved.roofOverhang, DEFAULT_ROOF_OVERHANG_FT)),
         roofPitch: clampRoofPitch(format.number(saved.roofPitch, DEFAULT_ROOF_PITCH)),
         elevationDatum: format.number(saved.elevationDatum, 0) === 100 ? 100 : 0,
+        elevationNames: normaliseSavedElevationNames(saved.elevationNames),
         roofDimensionError: '',
         cuts,
         nextCutId,
@@ -6142,6 +6156,23 @@ class Component extends DCLogic {
 
   _autoElevationsOn() {
     return normaliseStructureStandards(this.state.structureStandards).autoElevations;
+  }
+
+  // The office's side name for a standard elevation — E1 FRONT, E2 LEFT,
+  // E3 BACK, E4 RIGHT unless COMPANY STANDARDS says otherwise. A drawing
+  // can rename its own sides right on the sidebar row.
+  _elevationName(id) {
+    return this.state.elevationNames[id]
+      || normaliseStructureStandards(this.state.structureStandards).elevationNames[id]
+      || 'ELEVATION';
+  }
+
+  _setElevationName(id, value) {
+    const name = String(value || '').trim().toUpperCase();
+    const elevationNames = { ...this.state.elevationNames };
+    if (name) elevationNames[id] = name;
+    else delete elevationNames[id];
+    this.setState({ elevationNames }, () => this._markUnsaved());
   }
 
   // The four standard elevations place themselves just outside the plan
@@ -16441,7 +16472,11 @@ class Component extends DCLogic {
       ),
 
       cuts: [...this._autoElevationCuts(), ...cuts].map(c => ({
-        name: c.auto ? `${c.name} · ELEVATION` : c.name,
+        name: c.name,
+        sideStyle: c.auto ? '' : 'display:none;',
+        sideName: c.auto ? this._elevationName(c.id) : '',
+        onSideClick: e => e.stopPropagation(),
+        onSideChange: e => this._setElevationName(c.id, e.target.value),
         rowClass: 'cut-row' + (activeCutId === c.id ? ' active' : ''),
         delStyle: c.auto ? 'display:none;' : '',
         onView:   () => this._enterCutView(c.id),
