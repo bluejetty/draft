@@ -276,6 +276,401 @@ if (!window.DraftGeometry2D) {
     return (polygonArea(first) >= polygonArea(points)) === (distance > 0) ? first : offsetWith(-1);
   };
 
+  // Straight-skeleton wavefront for the tagged footprint: eave edges advance
+  // inward at a uniform rate while gable edges stay put, and the paths the
+  // corners trace as edges collapse become the hip / valley / ridge lines.
+  // Concave footprints (L / T / U) split the ring at reflex corners so each
+  // wing resolves to its own ridge, joined by valleys.
+  const roofSkeleton = (roof) => {
+    const initialCount = roof.points.length;
+    if (initialCount < 3) return [];
+    let pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
+    let kinds = pts.map((_, index) => (roof.edges[index] === 'gable' ? 'gable' : 'eave'));
+    const signedArea = list => list.reduce((sum, pt, index) => {
+      const next = list[(index + 1) % list.length];
+      return sum + (pt.x * next.z - next.x * pt.z);
+    }, 0);
+    // Work on a CCW copy so the inward normals are consistent. Edge i runs
+    // point i → i+1, so reversing the points remaps edge kinds too.
+    if (signedArea(pts) < 0) {
+      const original = kinds;
+      pts = pts.slice().reverse();
+      kinds = pts.map((_, index) => original[(initialCount * 2 - 2 - index) % initialCount]);
+    }
+    const gableEdges = [];
+    pts.forEach((pt, index) => {
+      if (kinds[index] === 'gable') gableEdges.push({ a: pt, b: pts[(index + 1) % pts.length] });
+    });
+    const eps = 1e-6;
+    const arcs = [];
+    // Concave footprints split the shrinking ring in two when a reflex corner
+    // reaches an opposite edge (the valley), so the wavefront runs as a queue
+    // of independent loops.
+    // Each loop carries t0, its elapsed wavefront advance at entry: arc
+    // endpoints record their advance (ta/tb) so a roof plane's height can be
+    // read straight off an arc — height = t × pitch/12 above the eave line.
+    // 2D consumers read only a/b; the t fields are for the 3D lift.
+    const queue = [{ pts, kinds, t0: 0 }];
+    let guard = initialCount * 8;
+    while (queue.length && guard-- > 0) {
+      const loop = queue.shift();
+      pts = loop.pts;
+      kinds = loop.kinds;
+      const t0 = loop.t0 || 0;
+      if (pts.length < 3 || Math.abs(signedArea(pts)) < eps) continue;
+      const count = pts.length;
+      const normals = pts.map((pt, index) => {
+        const next = pts[(index + 1) % count];
+        const dx = next.x - pt.x, dz = next.z - pt.z;
+        const len = Math.hypot(dx, dz) || 1;
+        return { x: -dz / len, z: dx / len };
+      });
+      const speeds = kinds.map(kind => (kind === 'gable' ? 0 : 1));
+      // Each vertex moves so both adjacent offset edges stay in contact:
+      // v · nA = speedA and v · nB = speedB.
+      const velocities = pts.map((pt, index) => {
+        const nA = normals[(index + count - 1) % count], nB = normals[index];
+        const sA = speeds[(index + count - 1) % count], sB = speeds[index];
+        const det = nA.x * nB.z - nA.z * nB.x;
+        if (Math.abs(det) < 1e-9) {
+          const speed = Math.max(sA, sB);
+          return { x: nB.x * speed, z: nB.z * speed };
+        }
+        return { x: (sA * nB.z - sB * nA.z) / det, z: (sB * nA.x - sA * nB.x) / det };
+      });
+      // Earliest edge collapse: endpoints closing along the edge direction.
+      let collapseT = Infinity;
+      for (let index = 0; index < count; index++) {
+        const next = (index + 1) % count;
+        const dx = pts[next].x - pts[index].x, dz = pts[next].z - pts[index].z;
+        const len = Math.hypot(dx, dz);
+        if (len < eps) { collapseT = 0; break; }
+        const closing = (velocities[index].x - velocities[next].x) * (dx / len)
+          + (velocities[index].z - velocities[next].z) * (dz / len);
+        if (closing > eps) collapseT = Math.min(collapseT, len / closing);
+      }
+      // Earliest split: a reflex corner catching a non-adjacent advancing edge —
+      // where the ring pinches in two and a valley forms.
+      let splitT = Infinity, splitVertex = -1, splitEdge = -1;
+      for (let index = 0; index < count; index++) {
+        const prev = pts[(index + count - 1) % count], next = pts[(index + 1) % count];
+        const cross = (pts[index].x - prev.x) * (next.z - pts[index].z)
+          - (pts[index].z - prev.z) * (next.x - pts[index].x);
+        if (cross >= -eps) continue; // convex corner
+        for (let edge = 0; edge < count; edge++) {
+          if (edge === index || (edge + 1) % count === index) continue;
+          const n = normals[edge];
+          const denom = n.x * velocities[index].x + n.z * velocities[index].z - speeds[edge];
+          if (Math.abs(denom) < 1e-9) continue;
+          const t = (n.x * (pts[edge].x - pts[index].x) + n.z * (pts[edge].z - pts[index].z)) / denom;
+          if (t < eps || t >= Math.min(splitT, collapseT) - eps) continue;
+          const hit = {
+            x: pts[index].x + velocities[index].x * t,
+            z: pts[index].z + velocities[index].z * t,
+          };
+          const a = {
+            x: pts[edge].x + velocities[edge].x * t,
+            z: pts[edge].z + velocities[edge].z * t,
+          };
+          const bIndex = (edge + 1) % count;
+          const b = {
+            x: pts[bIndex].x + velocities[bIndex].x * t,
+            z: pts[bIndex].z + velocities[bIndex].z * t,
+          };
+          const dx = b.x - a.x, dz = b.z - a.z;
+          const len2 = dx * dx + dz * dz;
+          if (len2 < eps) continue;
+          const u = ((hit.x - a.x) * dx + (hit.z - a.z) * dz) / len2;
+          if (u < -0.001 || u > 1.001) continue;
+          splitT = t; splitVertex = index; splitEdge = edge;
+        }
+      }
+      const bestT = Math.min(collapseT, splitT);
+      if (!Number.isFinite(bestT)) continue;
+      const t1 = t0 + bestT;
+      const moved = pts.map((pt, index) => ({
+        x: pt.x + velocities[index].x * bestT,
+        z: pt.z + velocities[index].z * bestT,
+      }));
+      moved.forEach((pt, index) => {
+        if (Math.hypot(pt.x - pts[index].x, pt.z - pts[index].z) > eps) arcs.push({ a: pts[index], b: pt, ta: t0, tb: t1 });
+      });
+      if (splitT < collapseT - eps) {
+        // Pinch the ring at the reflex corner: two loops share the split point.
+        const s = moved[splitVertex];
+        const loopA = { pts: [ { ...s } ], kinds: [kinds[splitVertex]], t0: t1 };
+        for (let index = (splitVertex + 1) % count; index !== (splitEdge + 1) % count; index = (index + 1) % count) {
+          loopA.pts.push(moved[index]);
+          loopA.kinds.push(kinds[index]);
+        }
+        loopA.kinds[loopA.kinds.length - 1] = kinds[splitEdge];
+        const loopB = { pts: [ { ...s } ], kinds: [kinds[splitEdge]], t0: t1 };
+        for (let index = (splitEdge + 1) % count; index !== splitVertex; index = (index + 1) % count) {
+          loopB.pts.push(moved[index]);
+          loopB.kinds.push(kinds[index]);
+        }
+        queue.push(loopA, loopB);
+        continue;
+      }
+      // Drop collapsed edges; each surviving edge keeps its start vertex.
+      let nextPts = [];
+      let nextKinds = [];
+      for (let index = 0; index < count; index++) {
+        const next = (index + 1) % count;
+        if (Math.hypot(moved[next].x - moved[index].x, moved[next].z - moved[index].z) <= eps * 10) continue;
+        nextPts.push(moved[index]);
+        nextKinds.push(kinds[index]);
+      }
+      if (nextPts.length === count && splitT >= collapseT) continue; // no topological change — stop this loop
+      // Simultaneous collapses can fold the ring back over itself: a zero-width
+      // spike is a finished ridge, so emit it and trim the ring.
+      let trimmed = true;
+      while (trimmed && nextPts.length >= 3) {
+        trimmed = false;
+        for (let index = 0; index < nextPts.length; index++) {
+          const size = nextPts.length;
+          const prev = nextPts[(index + size - 1) % size];
+          const pt = nextPts[index];
+          const next = nextPts[(index + 1) % size];
+          const lenA = Math.hypot(pt.x - prev.x, pt.z - prev.z) || 1;
+          const lenB = Math.hypot(next.x - pt.x, next.z - pt.z) || 1;
+          const ax = (pt.x - prev.x) / lenA, az = (pt.z - prev.z) / lenA;
+          const bx = (next.x - pt.x) / lenB, bz = (next.z - pt.z) / lenB;
+          if (Math.abs(ax * bz - az * bx) > 1e-4 || ax * bx + az * bz > -0.9999) continue;
+          const tail = lenA <= lenB ? prev : next;
+          if (Math.hypot(pt.x - tail.x, pt.z - tail.z) > eps) arcs.push({ a: pt, b: tail, ta: t1, tb: t1 });
+          nextPts.splice(index, 1);
+          nextKinds.splice(index, 1);
+          trimmed = true;
+          break;
+        }
+      }
+      if (nextPts.length === 2) {
+        if (Math.hypot(nextPts[1].x - nextPts[0].x, nextPts[1].z - nextPts[0].z) > eps) {
+          arcs.push({ a: nextPts[0], b: nextPts[1], ta: t1, tb: t1 }); // the ridge
+        }
+        continue;
+      }
+      queue.push({ pts: nextPts, kinds: nextKinds, t0: t1 });
+    }
+    // A gable corner slides along its own gable edge — that trace is the edge
+    // itself, not a roof line, so drop arcs lying on a single gable edge.
+    const onSegment = (pt, seg) => {
+      const dx = seg.b.x - seg.a.x, dz = seg.b.z - seg.a.z;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < eps) return false;
+      const t = ((pt.x - seg.a.x) * dx + (pt.z - seg.a.z) * dz) / len2;
+      if (t < -0.01 || t > 1.01) return false;
+      const px = seg.a.x + dx * t, pz = seg.a.z + dz * t;
+      return Math.hypot(pt.x - px, pt.z - pz) < 0.01;
+    };
+    return arcs.filter(arc => !gableEdges.some(edge => onSegment(arc.a, edge) && onSegment(arc.b, edge)));
+  };
+
+
+// Planar face tracing over footprint edges + skeleton arcs: standard
+// half-edge walk taking the sharpest counter-clockwise turn, keeping
+// bounded faces. Each bounded face names the one EAVE footprint edge on
+// its boundary — that edge's line plus the pitch is the face's plane.
+const roofFaces = (roof, arcs) => {
+  const pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
+  const kinds = pts.map((_, i) => (roof.edges?.[i] === 'gable' ? 'gable' : 'eave'));
+  // Arc endpoints can land mid-edge on the footprint (the skeleton drops
+  // arcs that slide along a gable, leaving a ridge end sitting on it), so
+  // each footprint edge splits at any such point. Sub-segments keep the
+  // PARENT edge as the face's eave line — the plane uses the infinite line,
+  // so the distance is identical.
+  const arcEnds = [];
+  arcs.forEach(arc => { arcEnds.push(arc.a, arc.b); });
+  const segments = [];
+  pts.forEach((pt, i) => {
+    const a = pt, b = pts[(i + 1) % pts.length];
+    const ex = b.x - a.x, ez = b.z - a.z;
+    const len2 = ex * ex + ez * ez;
+    const cuts = [0, 1];
+    arcEnds.forEach(p => {
+      const t = ((p.x - a.x) * ex + (p.z - a.z) * ez) / len2;
+      if (t <= 1e-6 || t >= 1 - 1e-6) return;
+      const px = a.x + ex * t, pz = a.z + ez * t;
+      if (Math.hypot(p.x - px, p.z - pz) < 1e-4) cuts.push(t);
+    });
+    cuts.sort((p, q) => p - q);
+    for (let c = 0; c < cuts.length - 1; c++) {
+      if (cuts[c + 1] - cuts[c] < 1e-9) continue;
+      segments.push({
+        a: { x: a.x + ex * cuts[c], z: a.z + ez * cuts[c] },
+        b: { x: a.x + ex * cuts[c + 1], z: a.z + ez * cuts[c + 1] },
+        boundary: true, kind: kinds[i], parent: { a, b }, index: i,
+      });
+    }
+  });
+  arcs.forEach(arc => segments.push({ a: arc.a, b: arc.b, boundary: false }));
+
+  // Node pool with epsilon dedup.
+  const nodes = [];
+  const nodeAt = p => {
+    for (let i = 0; i < nodes.length; i++) {
+      if (Math.abs(nodes[i].x - p.x) < 1e-4 && Math.abs(nodes[i].z - p.z) < 1e-4) return i;
+    }
+    nodes.push({ x: p.x, z: p.z });
+    return nodes.length - 1;
+  };
+  // Half-edges.
+  const half = [];
+  segments.forEach(segment => {
+    const na = nodeAt(segment.a), nb = nodeAt(segment.b);
+    if (na === nb) return;
+    const fwd = { from: na, to: nb, seg: segment, twin: null, next: null, used: false };
+    const rev = { from: nb, to: na, seg: segment, twin: fwd, next: null, used: false };
+    fwd.twin = rev;
+    half.push(fwd, rev);
+  });
+  // Angular order of outgoing half-edges per node.
+  const out = new Map();
+  half.forEach(h => {
+    if (!out.has(h.from)) out.set(h.from, []);
+    out.get(h.from).push(h);
+  });
+  const angleOf = h => Math.atan2(nodes[h.to].z - nodes[h.from].z, nodes[h.to].x - nodes[h.from].x);
+  out.forEach(list => list.sort((p, q) => angleOf(p) - angleOf(q)));
+  // next(h): at h.to, the outgoing edge one step clockwise from h.twin.
+  half.forEach(h => {
+    const list = out.get(h.to);
+    const i = list.indexOf(h.twin);
+    h.next = list[(i - 1 + list.length) % list.length];
+  });
+  // Trace faces.
+  const faces = [];
+  half.forEach(start => {
+    if (start.used) return;
+    const ring = [];
+    let h = start;
+    let guard = half.length + 1;
+    while (!h.used && guard-- > 0) {
+      h.used = true;
+      ring.push(h);
+      h = h.next;
+    }
+    if (h !== start) return; // open walk (shouldn't happen on a tiled graph)
+    const poly = ring.map(e => nodes[e.from]);
+    const area2 = poly.reduce((sum, pt, i) => {
+      const nxt = poly[(i + 1) % poly.length];
+      return sum + (pt.x * nxt.z - nxt.x * pt.z);
+    }, 0);
+    if (area2 <= 1e-6) return; // outer face or degenerate
+    const eaves = ring.filter(e => e.seg.boundary && e.seg.kind === 'eave');
+    if (!eaves.length) return; // gable-only sliver: no roof plane
+    const edge = eaves[0].seg;
+    const line = edge.parent || { a: edge.a, b: edge.b };
+    faces.push({ points: poly, area: area2 / 2, eave: { a: line.a, b: line.b } });
+  });
+  return faces;
+};
+
+const roofFaceRise = (face, p, pitch) => {
+  const ex = face.eave.b.x - face.eave.a.x, ez = face.eave.b.z - face.eave.a.z;
+  const len = Math.hypot(ex, ez) || 1;
+  return Math.abs((p.x - face.eave.a.x) * ez - (p.z - face.eave.a.z) * ex) / len * (pitch || 4) / 12;
+};
+
+// Exact section profile: the cut segment clipped to each face, crossing
+// points lifted by that face's plane. Returns u-sorted breakpoints only —
+// straight lines between them at any cut angle.
+const roofProfile = (roof, faces, cutA, cutB, axis) => {
+  const pitch = roof.pitch || 4;
+  const dx = cutB.x - cutA.x, dz = cutB.z - cutA.z;
+  const pieces = [];
+  faces.forEach(face => {
+    const ts = [0, 1];
+    const poly = face.points;
+    for (let i = 0; i < poly.length; i++) {
+      const p1 = poly[i], p2 = poly[(i + 1) % poly.length];
+      const ex = p2.x - p1.x, ez = p2.z - p1.z;
+      const den = dx * ez - dz * ex;
+      if (Math.abs(den) < 1e-6) continue;
+      const t = ((p1.x - cutA.x) * ez - (p1.z - cutA.z) * ex) / den;
+      const s = ((p1.x - cutA.x) * dz - (p1.z - cutA.z) * dx) / den;
+      if (t > -1e-6 && t < 1 + 1e-6 && s > -1e-6 && s < 1 + 1e-6) ts.push(Math.min(1, Math.max(0, t)));
+    }
+    ts.sort((a, b) => a - b);
+    const inside = p => {
+      let inPoly = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const pi = poly[i], pj = poly[j];
+        if ((pi.z > p.z) !== (pj.z > p.z)
+          && p.x < (pj.x - pi.x) * (p.z - pi.z) / (pj.z - pi.z) + pi.x) inPoly = !inPoly;
+      }
+      return inPoly;
+    };
+    for (let i = 0; i < ts.length - 1; i++) {
+      const t0 = ts[i], t1 = ts[i + 1];
+      if (t1 - t0 < 1e-6) continue;
+      const mid = { x: cutA.x + dx * (t0 + t1) / 2, z: cutA.z + dz * (t0 + t1) / 2 };
+      if (!inside(mid)) continue;
+      const p0 = { x: cutA.x + dx * t0, z: cutA.z + dz * t0 };
+      const p1 = { x: cutA.x + dx * t1, z: cutA.z + dz * t1 };
+      pieces.push({
+        u0: p0.x * axis.x + p0.z * axis.z, rise0: roofFaceRise(face, p0, pitch),
+        u1: p1.x * axis.x + p1.z * axis.z, rise1: roofFaceRise(face, p1, pitch),
+      });
+    }
+  });
+  pieces.sort((a, b) => Math.min(a.u0, a.u1) - Math.min(b.u0, b.u1));
+  const points = [];
+  pieces.forEach(piece => {
+    const lo = piece.u0 <= piece.u1
+      ? [{ u: piece.u0, rise: piece.rise0 }, { u: piece.u1, rise: piece.rise1 }]
+      : [{ u: piece.u1, rise: piece.rise1 }, { u: piece.u0, rise: piece.rise0 }];
+    lo.forEach(pt => {
+      const last = points[points.length - 1];
+      if (last && Math.abs(last.u - pt.u) < 1e-4 && Math.abs(last.rise - pt.rise) < 1e-4) return;
+      points.push(pt);
+    });
+  });
+  return points;
+};
+
+
+  // Upper envelope across several roofs' profiles: piecewise-linear max over
+  // the union of breakpoints PLUS pairwise segment crossings — an envelope
+  // vertexes where one roof passes another, not only at either one's kinks.
+  const profileEnvelope = (profiles) => {
+    const events = new Set(profiles.flat().map(p => +p.u.toFixed(5)));
+    const segs = profiles.map(profile => {
+      const list = [];
+      for (let i = 0; i < profile.length - 1; i++) list.push([profile[i], profile[i + 1]]);
+      return list;
+    });
+    for (let a = 0; a < segs.length; a++) for (let b = a + 1; b < segs.length; b++) {
+      segs[a].forEach(([p1, p2]) => segs[b].forEach(([q1, q2]) => {
+        const lo = Math.max(p1.u, q1.u), hi = Math.min(p2.u, q2.u);
+        if (hi - lo < 1e-9) return;
+        const mP = (p2.rise - p1.rise) / (p2.u - p1.u), mQ = (q2.rise - q1.rise) / (q2.u - q1.u);
+        if (Math.abs(mP - mQ) < 1e-12) return;
+        const u = (q1.rise - mQ * q1.u - p1.rise + mP * p1.u) / (mP - mQ);
+        if (u > lo + 1e-9 && u < hi - 1e-9) events.add(+u.toFixed(5));
+      }));
+    }
+    const sorted = [...events].sort((x, y) => x - y);
+    const valueAt = (profile, u) => {
+      for (let i = 0; i < profile.length - 1; i++) {
+        const a = profile[i], b = profile[i + 1];
+        if (u >= a.u - 1e-6 && u <= b.u + 1e-6 && b.u - a.u > 1e-9) {
+          return a.rise + (b.rise - a.rise) * (u - a.u) / (b.u - a.u);
+        }
+      }
+      return null;
+    };
+    return sorted.map(u => {
+      let best = null;
+      profiles.forEach(profile => {
+        const v = valueAt(profile, u);
+        if (v != null && (best === null || v > best)) best = v;
+      });
+      return { u, rise: best };
+    }).filter(pt => pt.rise != null);
+  };
+
   window.DraftGeometry2D = {
     distance,
     worldPerPixel,
@@ -290,6 +685,11 @@ if (!window.DraftGeometry2D) {
     nearestIntersection,
     roomLoops,
     offsetOutline,
+    roofSkeleton,
+    roofFaces,
+    roofFaceRise,
+    roofProfile,
+    profileEnvelope,
   };
 })();
 }
