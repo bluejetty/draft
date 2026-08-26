@@ -6435,24 +6435,37 @@ class Component extends DCLogic {
   // The four standard elevations place themselves just outside the plan
   // extents: E1 along the bottom looking up into the model, E2 left looking
   // right, E3 top looking down, E4 right looking left. Like hand-placed
-  // cuts, dirVec points to the side the viewer stands on. The marks tuck
-  // into the gap between the exterior walls and the first auto-dimension
-  // string — halfway across it — cozy against the plan.
+  // cuts, dirVec points to the side the viewer stands on. Each side's mark
+  // stands clear of the drawing ink: past the outermost dimension string in
+  // its corridor (any level), then the usual half-gap further out.
   _autoElevationCuts() {
     if (!this._autoElevationsOn()) return [];
     const box = this._planWallExtents();
     if (!box) return [];
     const { minX, maxX, minZ, maxZ } = box;
     const off = this._cutMarkGapFt(), pad = 2;
+    const edge = { N: minZ, S: maxZ, W: minX, E: maxX };
+    this._dimensions.filter(dimension => dimension.levelId > 0).forEach(dimension => {
+      [dimension.start, dimension.end].forEach(pt => {
+        if (pt.x >= minX - pad && pt.x <= maxX + pad) {
+          if (pt.z > edge.S) edge.S = pt.z;
+          if (pt.z < edge.N) edge.N = pt.z;
+        }
+        if (pt.z >= minZ - pad && pt.z <= maxZ + pad) {
+          if (pt.x > edge.E) edge.E = pt.x;
+          if (pt.x < edge.W) edge.W = pt.x;
+        }
+      });
+    });
     return [
       { id: 'E1', name: 'E1', auto: true, elev: 0, levelId: null,
-        startPt: { x: minX - pad, z: maxZ + off }, endPt: { x: maxX + pad, z: maxZ + off }, dirVec: { x: 0, z: 1 } },
+        startPt: { x: minX - pad, z: edge.S + off }, endPt: { x: maxX + pad, z: edge.S + off }, dirVec: { x: 0, z: 1 } },
       { id: 'E2', name: 'E2', auto: true, elev: 0, levelId: null,
-        startPt: { x: minX - off, z: minZ - pad }, endPt: { x: minX - off, z: maxZ + pad }, dirVec: { x: -1, z: 0 } },
+        startPt: { x: edge.W - off, z: minZ - pad }, endPt: { x: edge.W - off, z: maxZ + pad }, dirVec: { x: -1, z: 0 } },
       { id: 'E3', name: 'E3', auto: true, elev: 0, levelId: null,
-        startPt: { x: minX - pad, z: minZ - off }, endPt: { x: maxX + pad, z: minZ - off }, dirVec: { x: 0, z: -1 } },
+        startPt: { x: minX - pad, z: edge.N - off }, endPt: { x: maxX + pad, z: edge.N - off }, dirVec: { x: 0, z: -1 } },
       { id: 'E4', name: 'E4', auto: true, elev: 0, levelId: null,
-        startPt: { x: maxX + off, z: minZ - pad }, endPt: { x: maxX + off, z: maxZ + pad }, dirVec: { x: 1, z: 0 } },
+        startPt: { x: edge.E + off, z: minZ - pad }, endPt: { x: edge.E + off, z: maxZ + pad }, dirVec: { x: 1, z: 0 } },
     ];
   }
 

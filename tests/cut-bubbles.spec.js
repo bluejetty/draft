@@ -41,8 +41,11 @@ test.describe('Cut bubble styles', () => {
     await buildHouse(page);
     await h.waitForSaved(page);
 
-    // Tucked (default): the E1 mark inks its line in the wall-to-dims gap.
-    const south = await h.worldToClient(page, 0, 6.75);
+    // Tucked (default): the E1 mark inks its line just past the outermost
+    // dimension string on its side.
+    const saved = await h.savedDrawing(page);
+    const dimS = Math.max(...saved.dimensions.flatMap(d => [d.start.z, d.end.z]));
+    const south = await h.worldToClient(page, 0, dimS + 0.75);
     const pixels = await h.overlayPixels(page, south.x, south.y, 20);
     expect(h.countColor(pixels, CUT_RED)).toBeGreaterThan(0);
 
