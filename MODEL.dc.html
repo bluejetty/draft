@@ -1440,6 +1440,9 @@ const DEFAULT_ROOF_PITCH = 4;   // rise in inches per 12" of run
 const MAX_ROOF_PITCH = 24;
 const ROOF_FASCIA_IN = 5.5;
 const ROOF_LAYER = 'A-ROOF';
+// Hand-placed cut bubbles push this far past their drawn ends — clear of a
+// typical exterior dimension stack — landing outside the strings.
+const CUT_BUBBLE_PUSH_FT = 6;
 // Structural point supports and spans, placed manually in either order —
 // columns centre onto a beam line and beam ends snap to columns, so they line
 // up whichever is placed first. A beam is one span between two supports:
@@ -5748,8 +5751,21 @@ class Component extends DCLogic {
     const bubbleStyle = normaliseStructureStandards(this.state.structureStandards).cutBubbleStyle;
     const bubbleMark = cut => {
       const y = cut.elev + 0.02;
-      const start = { x: cut.startPt.x, y, z: cut.startPt.z };
-      const end = { x: cut.endPt.x, y, z: cut.endPt.z };
+      let start = { x: cut.startPt.x, y, z: cut.startPt.z };
+      let end = { x: cut.endPt.x, y, z: cut.endPt.z };
+      // Hand-placed cuts wear their bubbles further out — past a typical
+      // dimension stack — so they land clear of the strings; the drafter
+      // slides the cut if a spot suits better. The standard elevations
+      // already tuck themselves, so they keep their drawn ends.
+      if (!cut.auto) {
+        const wLen = Math.hypot(end.x - start.x, end.z - start.z);
+        if (wLen > 0.001) {
+          const push = CUT_BUBBLE_PUSH_FT;
+          const wx = (end.x - start.x) / wLen, wz = (end.z - start.z) / wLen;
+          start = { x: start.x - wx * push, y, z: start.z - wz * push };
+          end = { x: end.x + wx * push, y, z: end.z + wz * push };
+        }
+      }
       dashedSeg(start, end);
 
       const a = toS(start), b = toS(end);

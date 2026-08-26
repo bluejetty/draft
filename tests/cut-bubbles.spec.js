@@ -57,4 +57,21 @@ test.describe('Cut bubble styles', () => {
     const proudPixels = await h.overlayPixels(page, south.x, south.y, 20);
     expect(h.countColor(proudPixels, CUT_RED)).toBeGreaterThan(0);
   });
+
+  test('hand-placed cut bubbles toss out past the drawn ends', async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+
+    // Cut a section from (-6,0) to (6,0); its bubbles push ~6' further out.
+    await page.keyboard.press('c');
+    await h.clickWorld(page, -6, 0);
+    await h.clickWorld(page, 6, 0);
+    await h.clickWorld(page, 0, -4);
+    await page.waitForTimeout(400);
+    await h.waitForSaved(page);
+
+    // Ink lives well outside the drawn end, where the pushed bubble sits.
+    const out = await h.worldToClient(page, 11, 0);
+    const pixels = await h.overlayPixels(page, out.x, out.y, 20);
+    expect(h.countColor(pixels, CUT_RED)).toBeGreaterThan(0);
+  });
 });
