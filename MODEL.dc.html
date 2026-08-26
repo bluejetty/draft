@@ -11955,6 +11955,10 @@ class Component extends DCLogic {
     if (this._shapeDrawing) pts.push(...this._shapePoints);
     if (this._outlineDrawing) pts.push(...this._outlinePoints);
     if (this._surfaceOpeningDrawing) pts.push(...this._surfaceOpeningPoints);
+    // Beam ends and column / pile centres are reference points for lines,
+    // dimensions, and the polar origin.
+    this._activeBeams().forEach(beam => { pts.push(beam.start, beam.end); });
+    this._activeColumns().forEach(column => pts.push(column.point));
     // Opening centres are the fenestration grab / dimension anchors.
     this._activeFenestrations().forEach(opening => {
       const center = this._openingGeometry(opening)?.center;
@@ -12070,7 +12074,7 @@ class Component extends DCLogic {
       const mid = geo.nearestMidpoint(segments, cursorPt, r);
       return mid ? new THREE.Vector3(mid.x, mid.y, mid.z) : null;
     };
-    return nearest([...this._activeLines(), ...this._activeWalls()])
+    return nearest([...this._activeLines(), ...this._activeWalls(), ...this._activeBeams()])
       || nearest(this._contextReferenceSegments())
       || nearest([...this._backgroundLines(), ...this._backgroundWalls()]);
   }

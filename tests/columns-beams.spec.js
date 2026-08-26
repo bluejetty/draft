@@ -117,6 +117,42 @@ test('PLAN places and shows structure in the level\'s home set', async ({ page }
   expect(h.countColor(pixels, [122, 74, 33])).toBeGreaterThan(0);
 });
 
+test('beam ends and column centres are magnet targets for other tools', async ({ page }) => {
+  await h.openModel(page);
+  await useFloorContext(page);
+
+  await h.selectTool(page, 'Beam');
+  await h.clickWorld(page, -6, 0);
+  await h.clickWorld(page, 6, 0);
+  await h.waitForSaved(page);
+
+  await h.selectTool(page, 'Column');
+  await h.clickWorld(page, 0, 3);
+  await h.waitForSaved(page);
+
+  // A LINE started near the beam end magnets onto it exactly.
+  await h.selectTool(page, 'Line');
+  await h.clickWorld(page, 6.2, 0.2);
+  await h.clickWorld(page, 6.2, 4.8);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  // A LINE started near the column magnets onto its centre.
+  await h.clickWorld(page, 0.2, 3.2);
+  await h.clickWorld(page, -4.8, 3.2);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.beams).toHaveLength(1);
+  expect(saved.lines).toHaveLength(2);
+  expect(Math.abs(saved.lines[0].start.x - saved.beams[0].end.x)).toBeLessThan(0.001);
+  expect(Math.abs(saved.lines[0].start.z - saved.beams[0].end.z)).toBeLessThan(0.001);
+  const column = saved.columns[0];
+  expect(Math.abs(saved.lines[1].start.x - column.point.x)).toBeLessThan(0.001);
+  expect(Math.abs(saved.lines[1].start.z - column.point.z)).toBeLessThan(0.001);
+});
+
 test('a dropped beam bearing on foundation walls marks BEAM POCKETs', async ({ page }) => {
   await h.openModel(page);
 
