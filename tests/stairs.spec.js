@@ -103,6 +103,94 @@ test('handrail bars: both sides or off, picked before placing', async ({ page })
   expect(saved.stairs[1].rail).toBe('none');
 });
 
+// Turned shapes: 14 risers = 13 treads; the turn eats tread slots (1 for a
+// flat landing, 2-3 for winders) and the straight runs split evenly around
+// it. The stored end is the FIRST run's bottom nosing.
+const L_T1 = 6;                      // floor((13 - 1) / 2)
+const L_END_FT = L_T1 * 10 / 12;     // 5'-0"
+const WINDER_T1 = 5;                 // floor((13 - 2) / 2)
+const WINDER_END_FT = WINDER_T1 * 10 / 12;
+
+test('an L stair turns over a flat landing; straight stays the default', async ({ page }) => {
+  await h.openModel(page);
+  await usePlanContext(page);
+  await h.selectTool(page, 'Stair');
+
+  // Straight is the pre-selected shape — the first stair saves as straight.
+  await h.clickWorld(page, -20, 0);
+  await h.clickWorld(page, -15, 0);
+  await h.waitForSaved(page);
+
+  await page.getByRole('button', { name: 'L', exact: true }).click();
+  await page.getByRole('button', { name: 'TURN LEFT', exact: true }).click();
+  await h.clickWorld(page, 0, 0);
+  await h.clickWorld(page, 5, 0);
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.stairs).toHaveLength(2);
+  expect(saved.stairs[0]).toMatchObject({ shape: 'straight', turn: 'right', winders: 0 });
+  const lStair = saved.stairs[1];
+  expect(lStair.shape).toBe('L');
+  expect(lStair.turn).toBe('left');
+  expect(lStair.winders).toBe(0);
+  expect(lStair.risers).toBe(RISERS);
+  // The stored end is the first run's bottom nosing, not the whole descent.
+  expect(Math.abs(lStair.end.x - L_END_FT)).toBeLessThan(0.01);
+  expect(Math.abs(lStair.end.z)).toBeLessThan(0.01);
+});
+
+test('a U stair switches back and survives a reload', async ({ page }) => {
+  await h.openModel(page);
+  await usePlanContext(page);
+  await h.selectTool(page, 'Stair');
+
+  await page.getByRole('button', { name: 'U', exact: true }).click();
+  await h.clickWorld(page, 0, 0);
+  await h.clickWorld(page, 5, 0);
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.stairs).toHaveLength(1);
+  expect(saved.stairs[0]).toMatchObject({ shape: 'U', turn: 'right', winders: 0 });
+  expect(Math.abs(saved.stairs[0].end.x - L_END_FT)).toBeLessThan(0.01);
+
+  await page.reload();
+  await expect(page.locator('[data-model-canvas]')).toBeVisible();
+  await h.waitForModelReady(page);
+  const reloaded = await h.savedDrawing(page);
+  expect(reloaded.stairs[0]).toMatchObject({ shape: 'U', turn: 'right', winders: 0 });
+});
+
+test('winders hide behind a double-click on L and never follow a U', async ({ page }) => {
+  await h.openModel(page);
+  await usePlanContext(page);
+  await h.selectTool(page, 'Stair');
+
+  // No winder buttons anywhere until the hidden row is revealed.
+  await page.getByRole('button', { name: 'L', exact: true }).click();
+  await expect(page.getByRole('button', { name: '2 WINDERS', exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'L', exact: true }).dblclick();
+  await page.getByRole('button', { name: '2 WINDERS', exact: true }).click();
+  await h.clickWorld(page, 0, 0);
+  await h.clickWorld(page, 5, 0);
+  await h.waitForSaved(page);
+
+  // Switching to U drops the winders — a U landing stays flat.
+  await page.getByRole('button', { name: 'U', exact: true }).click();
+  await expect(page.getByRole('button', { name: '2 WINDERS', exact: true })).toHaveCount(0);
+  await h.clickWorld(page, 0, 10);
+  await h.clickWorld(page, 5, 10);
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.stairs).toHaveLength(2);
+  expect(saved.stairs[0]).toMatchObject({ shape: 'L', winders: 2 });
+  expect(Math.abs(saved.stairs[0].end.x - WINDER_END_FT)).toBeLessThan(0.01);
+  expect(saved.stairs[1]).toMatchObject({ shape: 'U', winders: 0 });
+});
+
 test('stairs only place in PLAN; FLOOR keeps the tool disabled', async ({ page }) => {
   await h.openModel(page);
   await levelRow(page, 'MAIN FL').locator('.level-body').click();

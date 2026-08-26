@@ -299,10 +299,14 @@ if (!window.DraftDrawingFormat) {
     }).filter(Boolean);
   };
 
-  // A straight stair placed from the top nosing: start is the upper-floor
-  // nosing at the opening, end fixes the downhill direction, and the rise /
-  // riser count re-derive from the level heights on load. Handrail bars are
-  // stair metadata ('left' / 'right' going down, 'both', or 'none').
+  // A stair placed from the top nosing: start is the upper-floor nosing at
+  // the opening, end fixes the downhill direction of the first run, and the
+  // rise / riser count re-derive from the level heights on load. Handrail
+  // bars are stair metadata ('left' / 'right' going down, 'both', or 'none').
+  // Shape: 'straight' (default), 'L' (one 90° landing, min 36"x36"), or 'U'
+  // (switchback landing, runs 4.5" apart for a rail or wall). The turn
+  // ('left' / 'right' walking down) orients L and U. Winders convert the one
+  // landing into 2 or 3 pie treads — at most one winder landing per stair.
   const stairs = (rawStairs, levelIds) => {
     const seen = new Set();
     return (Array.isArray(rawStairs) ? rawStairs : []).map(stair => {
@@ -317,6 +321,7 @@ if (!window.DraftDrawingFormat) {
       if (riseFt === null) return null;
       seen.add(id);
       const risers = Number(stair?.risers);
+      const shape = oneOf(stair?.shape, ['straight', 'L', 'U'], 'straight');
       return {
         id,
         start,
@@ -328,6 +333,9 @@ if (!window.DraftDrawingFormat) {
         risers: Number.isInteger(risers) && risers > 0 ? risers : 1,
         treadRunIn: positive(stair?.treadRunIn, 10),
         rail: oneOf(stair?.rail, ['left', 'right', 'both', 'none'], 'left'),
+        shape,
+        turn: oneOf(stair?.turn, ['left', 'right'], 'right'),
+        winders: shape === 'L' ? oneOf(Number(stair?.winders), [0, 2, 3], 0) : 0,
         layer: 'A-STR',
       };
     }).filter(Boolean);

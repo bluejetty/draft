@@ -779,6 +779,28 @@
   <sc-if value="{{ stairToolActive }}" hint-placeholder-val="{{ false }}">
     <div style="display:flex; flex-direction:column; align-items:stretch;">
       <div style="display:flex; flex-direction:column; padding:8px 12px; border-bottom:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Stair · Shape</div>
+        <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:3px;">
+          <sc-for list="{{ stairShapeBtns }}" as="ss" hint-placeholder-count="3">
+            <button onClick="{{ ss.onSelect }}" title="{{ ss.title }}" onDoubleClick="{{ ss.onReveal }}" style="border:1px solid {{ ss.border }}; background:{{ ss.bg }}; color:{{ ss.color }}; padding:5px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ ss.label }}</button>
+          </sc-for>
+        </div>
+        <sc-if value="{{ stairTurnVisible }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-top:4px;">
+            <sc-for list="{{ stairTurnBtns }}" as="st" hint-placeholder-count="2">
+              <button onClick="{{ st.onSelect }}" title="{{ st.title }}" style="border:1px solid {{ st.border }}; background:{{ st.bg }}; color:{{ st.color }}; padding:5px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ st.label }}</button>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ stairWindersVisible }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:3px; margin-top:4px;">
+            <sc-for list="{{ stairWinderBtns }}" as="sw" hint-placeholder-count="3">
+              <button onClick="{{ sw.onSelect }}" title="{{ sw.title }}" style="border:1px solid {{ sw.border }}; background:{{ sw.bg }}; color:{{ sw.color }}; padding:5px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ sw.label }}</button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+      <div style="display:flex; flex-direction:column; padding:8px 12px; border-bottom:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Stair · Handrail</div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px;">
           <sc-for list="{{ stairRailBtns }}" as="sr" hint-placeholder-count="4">
@@ -1510,6 +1532,22 @@ const STAIR_RAIL_OPTIONS = [
   { id: 'both',  label: '2 BARS',    note: 'A basic handrail bar on both sides.' },
   { id: 'none',  label: 'OFF',       note: 'No handrail bars drawn with the stair.' },
 ];
+// Stair shapes: STRAIGHT is the default and the preferred stair — the turned
+// shapes trade floor space for footprint. L turns 90° over one landing
+// (minimum 36" x 36"); U switches back 180° over one landing with the runs
+// held 4.5" apart for a handrail or wall between them. A landing can convert
+// to 2 or 3 winder treads (pie steps pivoting the inside corner), but at
+// most ONE landing per stair may be winders — the rest stay flat.
+const STAIR_SHAPE_OPTIONS = [
+  { id: 'straight', label: 'STRAIGHT', note: 'One straight run — the default and the preferred stair.' },
+  { id: 'L',        label: 'L',        note: 'Two runs turning 90° over a landing (min 36" x 36").' },
+  { id: 'U',        label: 'U',        note: 'Switchback: two runs 4.5" apart (rail or wall between) over one landing.' },
+];
+const STAIR_LANDING_MIN_FT = 3;      // 36" x 36" minimum CLEAR landing
+const STAIR_LANDING_DRYWALL_IN = 0.5; // finish allowance at a walled landing edge
+const STAIR_U_GAP_IN = 4.5;          // between U runs, for the rail or wall
+const STAIR_WINDER_OPTIONS = [0, 2, 3]; // flat landing, 2 winders, 3 winders
+const STAIR_RAIL_INSET_FT = 0.25;    // bar 3" inside the stringer, 36" high throughout
 // A MODEL annotation is a leader: the first click anchors it on the object
 // of interest, the second places the note text, typed in place. Default is
 // transparent text straight over the drawing; a paper fill (with its own
@@ -1786,6 +1824,10 @@ class Component extends DCLogic {
     stairWidth: DEFAULT_STAIR_WIDTH_FT,
     stairWidthInput: formatArchitecturalInches(DEFAULT_STAIR_WIDTH_FT * 12),
     stairWidthError: '',
+    stairShape: 'straight',   // 'straight' (default) | 'L' | 'U'
+    stairTurn: 'right',       // turn direction walking down, for L and U
+    stairWinders: 0,          // 0 flat landing | 2 | 3 winders (L only)
+    stairWindersOpen: false,  // the hidden winder row — revealed by double-clicking L
     stairPane: 'split',       // STAIR workspace: 'split' | 'section' | 'plan'
     noteEnd: 'arrow',         // leader end on the next note: 'arrow' | 'line'
     noteFill: false,          // paper fill behind the note text (transparent default)
@@ -2154,6 +2196,9 @@ class Component extends DCLogic {
           risers: layout.risers,
           treadRunIn: STAIR_TREAD_RUN_IN,
           rail: stair.rail,
+          shape: stair.shape || 'straight',
+          turn: stair.turn || 'right',
+          winders: stair.winders || 0,
           layer: STAIR_LAYER,
         };
       }),
@@ -5075,7 +5120,9 @@ class Component extends DCLogic {
 
   // Plan stair: stringers, a tread line at every 10" run increment, handrail
   // bars inset on the picked side(s), and a DN arrow with the riser count.
-  // The drawn run always reflects the current level heights.
+  // The drawn run always reflects the current level heights. Turned shapes
+  // add the landing square (winder division lines fan from the inside corner
+  // of the turn) and, on a U, the 4.5" rail/wall line between the runs.
   _drawStairs2D(ctx, toS) {
     const std = this._layerStandard(STAIR_LAYER);
     if (!std.visible || (this._isPrinting && !std.printable)) return;
@@ -5088,59 +5135,91 @@ class Component extends DCLogic {
     const pxPerFt = Math.max(0.001, Math.hypot(unit.x - origin.x, unit.y - origin.y));
     stairs.forEach(stair => {
       const layout = this._stairCurrentLayout(stair);
-      const a = toS(stair.start);
-      const b = toS(this._stairEndFor(stair, layout));
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const len = Math.hypot(dx, dy);
-      if (len < 1) return;
-      const ux = dx / len, uy = dy / len;
-      const px = -uy, py = ux; // right side walking down, in screen space
+      const parts = this._stairPlanParts(stair, layout);
+      const y = stair.start.y || 0;
+      const pt = p => toS({ x: p.x, y, z: p.z });
       const half = Math.max(2, (stair.widthFt / 2) * pxPerFt);
       ctx.save();
       ctx.strokeStyle = STAIR_COLOR;
       ctx.fillStyle = STAIR_COLOR;
-      ctx.lineWidth = 1.5;
-      // Stringers
-      ctx.beginPath();
-      ctx.moveTo(a.x - px * half, a.y - py * half); ctx.lineTo(b.x - px * half, b.y - py * half);
-      ctx.moveTo(a.x + px * half, a.y + py * half); ctx.lineTo(b.x + px * half, b.y + py * half);
-      ctx.stroke();
-      // Tread lines at every run increment, top nosing included
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let i = 0; i <= layout.treads; i++) {
-        const t = (i * STAIR_TREAD_RUN_IN / 12) * pxPerFt;
-        const cx = a.x + ux * t, cy = a.y + uy * t;
-        ctx.moveTo(cx - px * half, cy - py * half);
-        ctx.lineTo(cx + px * half, cy + py * half);
-      }
-      ctx.stroke();
-      // Handrail bars inset from the stringers on the picked side(s)
-      if (stair.rail && stair.rail !== 'none') {
-        const inset = Math.min(half - 1, 0.25 * pxPerFt); // 3" inside the stringer
-        const sides = stair.rail === 'both' ? [-1, 1] : [stair.rail === 'right' ? 1 : -1];
+      parts.runs.forEach(run => {
+        const a = pt(run.start);
+        const b = pt({ x: run.start.x + run.dir.x * run.lenFt, z: run.start.z + run.dir.z * run.lenFt });
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 1) return;
+        const ux = dx / len, uy = dy / len;
+        const px = -uy, py = ux; // right side walking down, in screen space
+        ctx.lineWidth = 1.5;
+        // Stringers
+        ctx.beginPath();
+        ctx.moveTo(a.x - px * half, a.y - py * half); ctx.lineTo(b.x - px * half, b.y - py * half);
+        ctx.moveTo(a.x + px * half, a.y + py * half); ctx.lineTo(b.x + px * half, b.y + py * half);
+        ctx.stroke();
+        // Tread lines at every run increment, top nosing included
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i <= run.treads; i++) {
+          const t = (i * STAIR_TREAD_RUN_IN / 12) * pxPerFt;
+          const cx = a.x + ux * t, cy = a.y + uy * t;
+          ctx.moveTo(cx - px * half, cy - py * half);
+          ctx.lineTo(cx + px * half, cy + py * half);
+        }
+        ctx.stroke();
+      });
+      // Handrail bars, 3" inside the stringer on the picked side(s), running
+      // continuously through a turn: level along the landing edge between the
+      // flights, and 36" above the walking surface the whole way.
+      if (parts.rails && parts.rails.length) {
         ctx.lineWidth = 2.5;
         ctx.beginPath();
-        sides.forEach(side => {
-          const off = side * (half - inset);
-          ctx.moveTo(a.x + px * off, a.y + py * off);
-          ctx.lineTo(b.x + px * off, b.y + py * off);
+        parts.rails.forEach(path => {
+          path.map(pt).forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
         });
         ctx.stroke();
       }
-      // Downhill centreline arrow with the DN label and riser count
+      // Landing square, with winder division lines fanning from the inside
+      // corner when the landing converts to 2 or 3 winders.
+      if (parts.landing) {
+        const poly = parts.landing.poly.map(pt);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        poly.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        ctx.closePath();
+        ctx.stroke();
+        ctx.lineWidth = 1;
+        parts.landing.winderLines.forEach(line => {
+          const a = pt(line[0]), b = pt(line[1]);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        });
+      }
+      // The U gap line: the rail or wall the 4.5" between the runs is for.
+      if (parts.gap) {
+        const a = pt(parts.gap[0]), b = pt(parts.gap[1]);
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+      // Downhill walk-line arrow with the DN label and riser count
+      const walk = parts.walk.map(pt);
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-      ctx.moveTo(b.x - ux * 8 - px * 4, b.y - uy * 8 - py * 4); ctx.lineTo(b.x, b.y);
-      ctx.lineTo(b.x - ux * 8 + px * 4, b.y - uy * 8 + py * 4);
+      walk.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.stroke();
+      const wa = walk[walk.length - 2], wb = walk[walk.length - 1];
+      const wd = Math.hypot(wb.x - wa.x, wb.y - wa.y) || 1;
+      const wux = (wb.x - wa.x) / wd, wuy = (wb.y - wa.y) / wd;
+      const wpx = -wuy, wpy = wux;
+      ctx.beginPath();
+      ctx.moveTo(wb.x - wux * 8 - wpx * 4, wb.y - wuy * 8 - wpy * 4); ctx.lineTo(wb.x, wb.y);
+      ctx.lineTo(wb.x - wux * 8 + wpx * 4, wb.y - wuy * 8 + wpy * 4);
       ctx.stroke();
       if (!this._isPrinting || std.printable) {
+        const a = walk[0], b = walk[1];
         ctx.font = font;
         ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
         ctx.save();
         ctx.translate((a.x + b.x) / 2, (a.y + b.y) / 2);
-        let angle = Math.atan2(uy, ux);
+        let angle = Math.atan2(b.y - a.y, b.x - a.x);
         if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
         ctx.rotate(angle);
         ctx.fillText(`DN — ${layout.risers}R @ ${formatInchesOnly(layout.riserIn)}`, 0, -3);
@@ -5208,9 +5287,12 @@ class Component extends DCLogic {
     if (!stair) return null;
     const layout = this._stairCurrentLayout(stair);
     const descent = this._stairDescent(stair.levelId);
+    // Turned shapes draw UNFOLDED along the walk line: a flat landing adds
+    // its depth to the developed run; winders unfold to the straight length.
+    const dev = this._stairDevRun(stair, layout);
     const rects = this._stairPaneRects(w, h);
-    const noteFt = Math.max(4, layout.runFt * 0.45);
-    const uMin = -noteFt, uMax = layout.runFt + noteFt;
+    const noteFt = Math.max(4, dev.runFt * 0.45);
+    const uMin = -noteFt, uMax = dev.runFt + noteFt;
     const spanFt = uMax - uMin;
     const paneW = (rects.section || rects.plan).w;
     let pxPerFt = (paneW - 24) / spanFt;
@@ -5241,7 +5323,7 @@ class Component extends DCLogic {
       return { pane, x: uOfX(x), z: pane === 'section' ? sectionElevOf(y) : planVOf(y) };
     };
     const paneScreen = (pane, pt) => ({ x: uToX(pt.x), y: pane === 'section' ? sectionYOf(pt.z) : planYOf(pt.z) });
-    return { stair, layout, descent, rects, pxPerFt, uToX, uOfX, sectionYOf, planYOf, paneAt, localAt, paneScreen };
+    return { stair, layout, descent, dev, rects, pxPerFt, uToX, uOfX, sectionYOf, planYOf, paneAt, localAt, paneScreen };
   }
 
   _drawStairWorkspace2D(ctx, w, h) {
@@ -5256,9 +5338,9 @@ class Component extends DCLogic {
       ctx.fillText(`No stair on ${level?.name || 'this level'} yet — place one with the STAIR tool in PLAN.`, w / 2, h / 2);
       return;
     }
-    const { stair, layout, descent, rects, pxPerFt, uToX } = frame;
-    if (rects.section) this._drawStairSectionPane(ctx, rects.section, stair, layout, descent, uToX, pxPerFt, frame.sectionYOf);
-    if (rects.plan) this._drawStairPlanPane(ctx, rects.plan, stair, layout, uToX, pxPerFt, frame.planYOf);
+    const { stair, layout, descent, dev, rects, pxPerFt, uToX } = frame;
+    if (rects.section) this._drawStairSectionPane(ctx, rects.section, stair, layout, descent, dev, uToX, pxPerFt, frame.sectionYOf);
+    if (rects.plan) this._drawStairPlanPane(ctx, rects.plan, stair, layout, dev, uToX, pxPerFt, frame.planYOf);
     if (rects.section && rects.plan) {
       ctx.strokeStyle = 'rgba(29,31,32,0.25)';
       ctx.lineWidth = 1;
@@ -5273,21 +5355,39 @@ class Component extends DCLogic {
   // 3/4" ply risers standing ON TOP of the treads with the face 11" back from
   // the nosing. The floor opening edge and the landing surface — the two
   // points that matter — are emphasised; the floors read as faded bands.
-  _drawStairSectionPane(ctx, rect, stair, layout, descent, uToX, pxPerFt, yOf) {
+  // Turned shapes draw UNFOLDED along the walk line: a flat landing shows as
+  // its level band mid-flight; winders keep climbing straight through.
+  _drawStairSectionPane(ctx, rect, stair, layout, descent, dev, uToX, pxPerFt, yOf) {
     ctx.save();
     ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
+    const split = dev.split;
+    const shapeNote = split
+      ? ` · ${split.shape} SHAPE UNFOLDED${split.winders ? ` (${split.winders} WINDERS)` : ' (LANDING)'}`
+      : '';
     this._stairPaneHeader(ctx, rect,
-      `STAIR SECTION — ${layout.risers}R @ ${formatInchesOnly(layout.riserIn)} · TREADS FULL 2x12 · RISERS 3/4" PLY FACE @ ${formatInchesOnly(STAIR_RISER_FACE_IN)}`);
+      `STAIR SECTION — ${layout.risers}R @ ${formatInchesOnly(layout.riserIn)} · TREADS FULL 2x12 · RISERS 3/4" PLY FACE @ ${formatInchesOnly(STAIR_RISER_FACE_IN)}${shapeNote}`);
     const riseStep = layout.riserIn / 12;
     const runStep = STAIR_TREAD_RUN_IN / 12;
     const treadThk = STAIR_TREAD_THICK_IN / 12;
     const boardW = STAIR_TREAD_BOARD_IN / 12;
     const riserThk = STAIR_RISER_THICK_IN / 12;
     const drop = STAIR_STRINGER_DROP_IN / 12;
-    const faceU = j => j * runStep - STAIR_RISER_FACE_IN / 12; // riser j face, 11" back from the nosing of the tread it stands on
+    const slope = riseStep / runStep;
     const fadeFill = 'rgba(89,128,166,0.14)';
     const fadeLine = 'rgba(89,128,166,0.55)';
     const noteFont = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+
+    // The flights to draw: one for a straight stair (or winders, which
+    // unfold straight), two around the flat landing for an L or U.
+    const flat = split && !split.winders ? split : null;
+    const flights = flat
+      ? [
+        { u0: 0, e0: 0, risers: flat.t1 + 1 },
+        { u0: flat.t1 * runStep + flat.landFt, e0: -(flat.t1 + 1) * riseStep, risers: layout.risers - flat.t1 - 1 },
+      ]
+      : [{ u0: 0, e0: 0, risers: layout.risers }];
+    const last = flights[flights.length - 1];
+    const landU = last.u0 + last.risers * runStep - STAIR_RISER_FACE_IN / 12;
 
     // Faded upper floor band, cut at the opening edge (u = 0).
     const floorFt = this._levelFloorFt(stair.levelId);
@@ -5297,49 +5397,95 @@ class Component extends DCLogic {
     ctx.fillRect(rect.x, yOf(0), uToX(0) - rect.x, floorFt * pxPerFt);
     ctx.strokeRect(rect.x - 2, yOf(0), uToX(0) - rect.x + 2, floorFt * pxPerFt);
     // Faded landing band under the run-out.
-    const landU = faceU(layout.risers);
     ctx.fillRect(uToX(landU), yOf(-layout.riseFt), rect.x + rect.w - uToX(landU), (8 / 12) * pxPerFt);
     ctx.strokeRect(uToX(landU), yOf(-layout.riseFt), rect.x + rect.w - uToX(landU) + 2, (8 / 12) * pxPerFt);
 
-    // Cut stringer: sawtooth at the finished profile (the boards draw over it),
-    // a plumb cut against the opening edge, and a level cut on the landing.
-    ctx.beginPath();
-    ctx.moveTo(uToX(faceU(1)), yOf(0));
-    for (let j = 1; j <= layout.risers; j++) {
-      ctx.lineTo(uToX(faceU(j)), yOf(-(j - 1) * riseStep));
-      ctx.lineTo(uToX(faceU(j)), yOf(-j * riseStep));
-      if (j < layout.risers) ctx.lineTo(uToX(faceU(j + 1)), yOf(-j * riseStep));
-    }
-    const slope = riseStep / runStep;
-    const uBottom = (layout.riseFt - drop) / slope;
-    ctx.lineTo(uToX(uBottom), yOf(-layout.riseFt));
-    ctx.lineTo(uToX(faceU(1)), yOf(-(slope * faceU(1) + drop)));
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(93,74,138,0.12)';
-    ctx.strokeStyle = STAIR_COLOR;
-    ctx.lineWidth = 1.25;
-    ctx.fill();
-    ctx.stroke();
+    flights.forEach(flight => {
+      // Riser j face within this flight, 11" back from the nosing of the
+      // tread it stands on, in workspace u.
+      const faceU = j => flight.u0 + j * runStep - STAIR_RISER_FACE_IN / 12;
+      const elevAt = j => flight.e0 - j * riseStep;
+      // Cut stringer: sawtooth at the finished profile (the boards draw over
+      // it), a plumb cut against the top edge, and a level cut at the bottom.
+      ctx.beginPath();
+      ctx.moveTo(uToX(faceU(1)), yOf(flight.e0));
+      for (let j = 1; j <= flight.risers; j++) {
+        ctx.lineTo(uToX(faceU(j)), yOf(elevAt(j - 1)));
+        ctx.lineTo(uToX(faceU(j)), yOf(elevAt(j)));
+        if (j < flight.risers) ctx.lineTo(uToX(faceU(j + 1)), yOf(elevAt(j)));
+      }
+      const flightRise = flight.risers * riseStep;
+      const uBottom = flight.u0 + (flightRise - drop) / slope;
+      ctx.lineTo(uToX(uBottom), yOf(flight.e0 - flightRise));
+      ctx.lineTo(uToX(faceU(1)), yOf(flight.e0 - (slope * (faceU(1) - flight.u0) + drop)));
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(93,74,138,0.12)';
+      ctx.strokeStyle = STAIR_COLOR;
+      ctx.lineWidth = 1.25;
+      ctx.fill();
+      ctx.stroke();
 
-    // Treads: full 2x12 boards, 1.5" thick, nosing at every 10" run increment.
-    ctx.fillStyle = '#e8e2f2';
-    for (let k = 1; k <= layout.treads; k++) {
-      const x = uToX(k * runStep - boardW), y = yOf(-k * riseStep);
-      const bw = boardW * pxPerFt, bh = treadThk * pxPerFt;
-      ctx.fillRect(x, y, bw, bh);
-      ctx.strokeRect(x, y, bw, bh);
+      // Treads: full 2x12 boards, 1.5" thick, nosing at every 10" run increment.
+      ctx.fillStyle = '#e8e2f2';
+      for (let k = 1; k < flight.risers; k++) {
+        const x = uToX(flight.u0 + k * runStep - boardW), y = yOf(elevAt(k));
+        const bw = boardW * pxPerFt, bh = treadThk * pxPerFt;
+        ctx.fillRect(x, y, bw, bh);
+        ctx.strokeRect(x, y, bw, bh);
+      }
+      // Risers: 3/4" ply standing on the tread below (or the landing), closing
+      // up to the underside of the tread above — the horizontal joint bears on
+      // top of the tread, carpenter style.
+      ctx.fillStyle = '#ddd5ec';
+      for (let j = 1; j <= flight.risers; j++) {
+        const x = uToX(faceU(j) - riserThk);
+        const yTop = yOf(elevAt(j - 1) - treadThk);
+        const yBottom = yOf(elevAt(j));
+        const bw = riserThk * pxPerFt;
+        ctx.fillRect(x, yTop, bw, yBottom - yTop);
+        ctx.strokeRect(x, yTop, bw, yBottom - yTop);
+      }
+    });
+
+    // The mid-flight landing on a turned stair: a level structural band
+    // between the two flights, labelled with its clear size rule.
+    if (flat) {
+      const uL0 = flights[1].u0 - flat.landFt;
+      const eL = flights[1].e0;
+      const x = uToX(uL0), w = flat.landFt * pxPerFt;
+      ctx.fillStyle = 'rgba(93,74,138,0.12)';
+      ctx.strokeStyle = STAIR_COLOR;
+      ctx.lineWidth = 1.25;
+      ctx.fillRect(x, yOf(eL), w, (8 / 12) * pxPerFt);
+      ctx.strokeRect(x, yOf(eL), w, (8 / 12) * pxPerFt);
+      ctx.fillStyle = 'rgba(29,31,32,0.7)';
+      ctx.font = noteFont;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText(`LANDING — 36" CLEAR${flat.shape === 'U' ? ' · RUNS 4.5" APART' : ''}`, x + w / 2, yOf(eL) - 3);
     }
-    // Risers: 3/4" ply standing on the tread below (or the landing), closing
-    // up to the underside of the tread above — the horizontal joint bears on
-    // top of the tread, carpenter style.
-    ctx.fillStyle = '#ddd5ec';
-    for (let j = 1; j <= layout.risers; j++) {
-      const x = uToX(faceU(j) - riserThk);
-      const yTop = yOf(-(j - 1) * riseStep - treadThk);
-      const yBottom = yOf(-j * riseStep);
-      const bw = riserThk * pxPerFt;
-      ctx.fillRect(x, yTop, bw, yBottom - yTop);
-      ctx.strokeRect(x, yTop, bw, yBottom - yTop);
+
+    // The handrail, one constant 36" above the nosing line: sloped along
+    // each flight, LEVEL across the landing, connected through the turn.
+    if (stair.rail && stair.rail !== 'none') {
+      const railFt = 3;
+      const railPts = [{ u: 0, e: railFt }];
+      if (flat) {
+        const eL = flights[1].e0;
+        railPts.push({ u: flights[1].u0 - flat.landFt, e: eL + railFt });
+        railPts.push({ u: flights[1].u0, e: eL + railFt });
+      }
+      railPts.push({ u: landU, e: -layout.riseFt + railFt });
+      ctx.strokeStyle = STAIR_COLOR;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      railPts.forEach((p, i) => (i === 0
+        ? ctx.moveTo(uToX(p.u), yOf(p.e))
+        : ctx.lineTo(uToX(p.u), yOf(p.e))));
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(29,31,32,0.7)';
+      ctx.font = noteFont;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.fillText('RAIL @ 36"', uToX(0) + 4, yOf(railFt) - 2);
     }
 
     // The two points that matter: the floor opening edge and the landing.
@@ -5356,23 +5502,30 @@ class Component extends DCLogic {
     ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
     ctx.fillText('EDGE OF STAIR OPENING', uToX(0) - 4, yOf(0) - 3);
     ctx.textAlign = 'left';
-    if (descent) ctx.fillText(`LANDS ON ${descent.landing.toUpperCase()}`, uToX(layout.runFt) + 8, yOf(-layout.riseFt) - 3);
+    if (descent) ctx.fillText(`LANDS ON ${descent.landing.toUpperCase()}`, uToX(dev.runFt) + 8, yOf(-layout.riseFt) - 3);
 
     // Rise / run figures in the note room on the left.
     ctx.fillStyle = 'rgba(29,31,32,0.7)';
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.fillText(`TOTAL RISE ${this._ftIn(layout.riseFt)}`, rect.x + 10, yOf(-layout.riseFt / 2));
-    ctx.fillText(`TOTAL RUN ${this._ftIn(layout.runFt)}`, rect.x + 10, yOf(-layout.riseFt / 2) + 13);
+    ctx.fillText(`TOTAL RUN ${this._ftIn(dev.runFt)}${split ? ' UNFOLDED' : ''}`, rect.x + 10, yOf(-layout.riseFt / 2) + 13);
     ctx.restore();
   }
 
   // Down-view plan of the stair in its own frame: the run goes left to right
   // so the nosings line up with the section above. Level walls and floors
-  // (with their openings) read as faded, locked reference linework.
-  _drawStairPlanPane(ctx, rect, stair, layout, uToX, pxPerFt, vToY) {
+  // (with their openings) read as faded, locked reference linework. Turned
+  // shapes draw UNFOLDED along the walk line — the landing reads as a level
+  // band mid-run — so the faded world reference only draws for a straight
+  // stair, whose pane frame still matches the world.
+  _drawStairPlanPane(ctx, rect, stair, layout, dev, uToX, pxPerFt, vToY) {
     ctx.save();
     ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
-    this._stairPaneHeader(ctx, rect, `STAIR PLAN — DN ${layout.risers}R TO THE RIGHT · ${this._ftIn(stair.widthFt)} WIDE`);
+    const split = dev.split;
+    const shapeNote = split
+      ? ` · ${split.shape} SHAPE UNFOLDED${split.winders ? ` (${split.winders} WINDERS)` : ''}`
+      : '';
+    this._stairPaneHeader(ctx, rect, `STAIR PLAN — DN ${layout.risers}R TO THE RIGHT · ${this._ftIn(stair.widthFt)} WIDE${shapeNote}`);
     const runStep = STAIR_TREAD_RUN_IN / 12;
     const vMid = vToY(0);
     // Stair-local frame: u downhill along the run, v to the right walking down.
@@ -5387,38 +5540,49 @@ class Component extends DCLogic {
 
     // Faded reference: the level's PLAN walls and FLOOR outlines with their
     // openings, locked and non-editable in this workspace.
-    const levelId = stair.levelId;
-    const fade = 'rgba(89,128,166,0.4)';
-    ctx.strokeStyle = fade;
-    ctx.lineWidth = 1.25;
-    this._walls
-      .filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan')
-      .forEach(wall => {
-        const a = toPane(wall.start), b = toPane(wall.end);
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      });
-    ctx.setLineDash([5, 4]);
-    this._floors
-      .filter(floor => floor.levelId === levelId)
-      .forEach(floor => {
-        const points = (floor.points || []).map(toPane);
-        if (points.length < 2) return;
-        ctx.beginPath();
-        points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-        ctx.closePath(); ctx.stroke();
-        this._surfaceOpeningsFor('floor', floor.id).forEach(opening => {
-          const hole = opening.points.map(toPane);
-          if (hole.length < 2) return;
-          ctx.beginPath();
-          hole.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-          ctx.closePath(); ctx.stroke();
+    if (!split) {
+      const levelId = stair.levelId;
+      const fade = 'rgba(89,128,166,0.4)';
+      ctx.strokeStyle = fade;
+      ctx.lineWidth = 1.25;
+      this._walls
+        .filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan')
+        .forEach(wall => {
+          const a = toPane(wall.start), b = toPane(wall.end);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         });
-      });
-    ctx.setLineDash([]);
+      ctx.setLineDash([5, 4]);
+      this._floors
+        .filter(floor => floor.levelId === levelId)
+        .forEach(floor => {
+          const points = (floor.points || []).map(toPane);
+          if (points.length < 2) return;
+          ctx.beginPath();
+          points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+          ctx.closePath(); ctx.stroke();
+          this._surfaceOpeningsFor('floor', floor.id).forEach(opening => {
+            const hole = opening.points.map(toPane);
+            if (hole.length < 2) return;
+            ctx.beginPath();
+            hole.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+            ctx.closePath(); ctx.stroke();
+          });
+        });
+      ctx.setLineDash([]);
+    }
 
-    // The stair itself, on A-STR: stringers, tread lines, rail bars, DN arrow.
+    // The stair itself, on A-STR: stringers, tread lines, rail bars, DN
+    // arrow. Unfolded, the tread segments to draw: either the whole run, or
+    // the two runs around the flat landing band.
     const half = (stair.widthFt / 2) * pxPerFt;
-    const x0 = uToX(0), x1 = uToX(layout.runFt);
+    const flat = split && !split.winders ? split : null;
+    const segs = flat
+      ? [
+        { u0: 0, treads: flat.t1 },
+        { u0: flat.t1 * runStep + flat.landFt, treads: flat.t2 },
+      ]
+      : [{ u0: 0, treads: layout.treads }];
+    const x0 = uToX(0), x1 = uToX(dev.runFt);
     ctx.strokeStyle = STAIR_COLOR;
     ctx.fillStyle = STAIR_COLOR;
     ctx.lineWidth = 1.5;
@@ -5428,11 +5592,20 @@ class Component extends DCLogic {
     ctx.stroke();
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let i = 0; i <= layout.treads; i++) {
-      const x = uToX(i * runStep);
-      ctx.moveTo(x, vMid - half); ctx.lineTo(x, vMid + half);
-    }
+    segs.forEach(seg => {
+      for (let i = 0; i <= seg.treads; i++) {
+        const x = uToX(seg.u0 + i * runStep);
+        ctx.moveTo(x, vMid - half); ctx.lineTo(x, vMid + half);
+      }
+    });
     ctx.stroke();
+    // The flat landing band, labelled with its clear-size rule.
+    if (flat) {
+      const lx0 = uToX(flat.t1 * runStep), lx1 = uToX(flat.t1 * runStep + flat.landFt);
+      ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('LANDING', (lx0 + lx1) / 2, vMid + half / 2);
+    }
     if (stair.rail && stair.rail !== 'none') {
       const inset = Math.min(half - 1, 0.25 * pxPerFt);
       const sides = stair.rail === 'both' ? [-1, 1] : [stair.rail === 'right' ? 1 : -1];
@@ -13776,15 +13949,146 @@ class Component extends DCLogic {
     return this._stairLayout(descent && descent.riseFt > 0 ? descent.riseFt : stair.riseFt);
   }
 
-  // Bottom nosing: the stored end only fixes the downhill direction, the
-  // distance always comes from the current layout's total run.
+  // How a turned shape spends its treads. The one landing (flat, or 2-3
+  // winders on an L) sits near the middle of the descent and the straight
+  // treads split as evenly as possible around it; too few treads to turn
+  // falls back to a straight run. At most ONE landing per stair may be
+  // winders — with a single landing the rule holds by construction; a
+  // future double-landing stair must keep its other landing flat.
+  _stairShapeSplit(stair, layout) {
+    const shape = STAIR_SHAPE_OPTIONS.some(option => option.id === stair.shape) ? stair.shape : 'straight';
+    if (shape === 'straight' || layout.treads < 3) return null;
+    const winders = shape === 'L' && STAIR_WINDER_OPTIONS.includes(stair.winders) ? stair.winders : 0;
+    const landTreads = winders || 1; // the turn eats this many tread slots
+    const t1 = Math.max(1, Math.floor((layout.treads - landTreads) / 2));
+    const t2 = Math.max(1, layout.treads - landTreads - t1);
+    // The 36" landing is CLEAR: measured to the nosing of the run above
+    // (which projects ~1" over it) with 1/2" of drywall at a walled edge.
+    const clearFt = STAIR_LANDING_MIN_FT
+      + (STAIR_RISER_FACE_IN - STAIR_TREAD_RUN_IN + STAIR_LANDING_DRYWALL_IN) / 12;
+    const landFt = Math.max(clearFt, stair.widthFt);
+    return { shape, winders, t1, t2, landFt, turn: stair.turn === 'left' ? 'left' : 'right' };
+  }
+
+  // The stair's plan parts in world space: one straight run, or two runs
+  // joined by the landing square — L turns 90° (min 36" clear each way,
+  // winder division lines fanning from the inside corner of the turn);
+  // U switches back 180° with the runs held 4.5" apart for a rail or wall.
+  // The walk polyline traces the descent for the DN arrow.
+  _stairPlanParts(stair, layout = this._stairCurrentLayout(stair)) {
+    const split = this._stairShapeSplit(stair, layout);
+    const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const d = { x: dx / len, z: dz / len };
+    const runStep = STAIR_TREAD_RUN_IN / 12;
+    const S = { x: stair.start.x, z: stair.start.z };
+    // Rail bars sit STAIR_RAIL_INSET_FT inside the stringer on the picked
+    // side(s), and stay continuous through a turn: on the run edges they
+    // follow the flights, and across the landing they run level along the
+    // landing edge to meet the next flight's bar.
+    const railSides = stair.rail === 'both' ? [-1, 1]
+      : stair.rail === 'none' || !stair.rail ? []
+      : [stair.rail === 'right' ? 1 : -1];
+    const railOff = Math.max(0.05, stair.widthFt / 2 - STAIR_RAIL_INSET_FT);
+    if (!split) {
+      const end = { x: S.x + d.x * layout.runFt, z: S.z + d.z * layout.runFt };
+      const rp = { x: -d.z, z: d.x }; // right side walking down
+      return { shape: 'straight', split: null, landing: null, gap: null,
+        runs: [{ start: S, dir: d, treads: layout.treads, lenFt: layout.runFt }],
+        rails: railSides.map(side => [
+          { x: S.x + rp.x * side * railOff, z: S.z + rp.z * side * railOff },
+          { x: end.x + rp.x * side * railOff, z: end.z + rp.z * side * railOff },
+        ]),
+        walk: [S, end] };
+    }
+    const s = split.turn === 'right' ? 1 : -1;
+    const perp = { x: -d.z * s, z: d.x * s }; // toward the turn side, walking down
+    const at = (u, v) => ({ x: S.x + d.x * u + perp.x * v, z: S.z + d.z * u + perp.z * v });
+    const w = stair.widthFt;
+    const run1Len = split.t1 * runStep;
+    const run2Len = split.t2 * runStep;
+    const L = split.landFt;
+    if (split.shape === 'L') {
+      // Landing square: spans the run width and grows toward the turn side.
+      const v0 = -w / 2, v1 = -w / 2 + L;
+      const run2Start = at(run1Len + L / 2, v1);
+      const run2End = { x: run2Start.x + perp.x * run2Len, z: run2Start.z + perp.z * run2Len };
+      // Winder treads pivot the inside corner of the turn — the corner the
+      // entry face and the exit face share. Division lines fan across the
+      // square at 45° (2 winders) or 30°/60° (3 winders).
+      const pivot = at(run1Len, v1);
+      const angles = split.winders === 2 ? [45] : split.winders === 3 ? [30, 60] : [];
+      const winderLines = angles.map(deg => {
+        const rad = deg * Math.PI / 180;
+        const rx = Math.sin(rad), ry = Math.cos(rad);
+        const t = Math.min(rx > 0 ? L / rx : Infinity, ry > 0 ? L / ry : Infinity);
+        return [pivot, at(run1Len + rx * t, v1 - ry * t)];
+      });
+      // A rail on one hand stays on that hand through the turn: the bar runs
+      // the first flight at v = ±railOff, corners over the landing, and
+      // carries down the second flight at the matching offset.
+      const lRails = railSides.map(side => {
+        const v = side * s * railOff;                       // offset on run 1
+        const u = run1Len + L / 2 - side * s * railOff;     // offset on run 2
+        return [at(0, v), at(u, v), at(u, v1 + run2Len)];
+      });
+      return { shape: 'L', split, gap: null,
+        runs: [
+          { start: S, dir: d, treads: split.t1, lenFt: run1Len },
+          { start: run2Start, dir: perp, treads: split.t2, lenFt: run2Len },
+        ],
+        landing: { poly: [at(run1Len, v0), at(run1Len + L, v0), at(run1Len + L, v1), at(run1Len, v1)], winderLines },
+        rails: lRails,
+        walk: [S, at(run1Len + L / 2, 0), run2Start, run2End] };
+    }
+    // U: switchback — the landing spans both runs plus the 4.5" gap.
+    const gapFt = STAIR_U_GAP_IN / 12;
+    const off = w + gapFt; // centreline to centreline
+    const v0 = -w / 2, v1 = off + w / 2;
+    const back = { x: -d.x, z: -d.z };
+    const run2Start = at(run1Len, off);
+    const run2End = { x: run2Start.x + back.x * run2Len, z: run2Start.z + back.z * run2Len };
+    // The two flights are antiparallel, so a rail on one hand can't corner
+    // straight across: it runs out to the far landing edge, turns level along
+    // it, and comes back on the matching offset of the second flight.
+    const uRails = railSides.map(side => {
+      const v = side * s * railOff;            // offset on run 1
+      const v2 = off - side * s * railOff;     // matching hand on run 2
+      const uEdge = run1Len + L - STAIR_RAIL_INSET_FT;
+      return [at(0, v), at(uEdge, v), at(uEdge, v2), at(run1Len - run2Len, v2)];
+    });
+    return { shape: 'U', split,
+      runs: [
+        { start: S, dir: d, treads: split.t1, lenFt: run1Len },
+        { start: run2Start, dir: back, treads: split.t2, lenFt: run2Len },
+      ],
+      landing: { poly: [at(run1Len, v0), at(run1Len + L, v0), at(run1Len + L, v1), at(run1Len, v1)], winderLines: [] },
+      rails: uRails,
+      gap: [at(run1Len, w / 2 + gapFt / 2), at(Math.max(0, run1Len - run2Len), w / 2 + gapFt / 2)],
+      walk: [S, at(run1Len + L / 2, 0), at(run1Len + L / 2, off), run2End] };
+  }
+
+  // Developed (unfolded) run length along the walk line: a flat landing adds
+  // its full depth; winders keep climbing at the tread run, so they unfold
+  // to the straight-run length.
+  _stairDevRun(stair, layout = this._stairCurrentLayout(stair)) {
+    const split = this._stairShapeSplit(stair, layout);
+    if (!split || split.winders) return { runFt: layout.runFt, split };
+    return { runFt: (split.t1 + split.t2) * STAIR_TREAD_RUN_IN / 12 + split.landFt, split };
+  }
+
+  // Bottom nosing of the FIRST run: the stored end only fixes the downhill
+  // direction — the distance always comes from the current layout (the whole
+  // run for a straight stair, the first run for an L or U).
   _stairEndFor(stair, layout = this._stairCurrentLayout(stair)) {
+    const split = this._stairShapeSplit(stair, layout);
+    const lenFt = split ? split.t1 * STAIR_TREAD_RUN_IN / 12 : layout.runFt;
     const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
     const len = Math.hypot(dx, dz) || 1;
     return new THREE.Vector3(
-      stair.start.x + (dx / len) * layout.runFt,
+      stair.start.x + (dx / len) * lenFt,
       stair.start.y || 0,
-      stair.start.z + (dz / len) * layout.runFt,
+      stair.start.z + (dz / len) * lenFt,
     );
   }
 
@@ -13794,6 +14098,19 @@ class Component extends DCLogic {
       return 'Stairs are placed on a floor level\u2019s PLAN \u2014 no level below to descend to here.';
     }
     const layout = this._stairLayout(descent.riseFt);
+    const split = this._stairShapeSplit({
+      shape: this._stairShape(),
+      turn: this._stairTurn(),
+      winders: this._stairWinders(),
+      widthFt: this.state.stairWidth,
+    }, layout);
+    if (split) {
+      const turnNote = split.winders
+        ? `${split.winders} winders through the turn`
+        : `${this._ftIn(split.landFt)} landing (36" clear to the nosing)`;
+      const uNote = split.shape === 'U' ? ` \u00b7 runs 4\u00bd" apart` : '';
+      return `${layout.risers} risers @ ${formatInchesOnly(layout.riserIn)} \u00b7 ${split.shape} shape: ${split.t1} + ${split.t2} treads, ${turnNote}${uNote} \u2014 down ${this._ftIn(layout.riseFt)} to ${descent.landing}.`;
+    }
     return `${layout.risers} risers @ ${formatInchesOnly(layout.riserIn)} \u00b7 ${layout.treads} treads @ ${formatInchesOnly(STAIR_TREAD_RUN_IN)} \u00b7 run ${this._ftIn(layout.runFt)} \u2014 down ${this._ftIn(layout.riseFt)} to ${descent.landing}.`;
   }
 
@@ -13801,6 +14118,20 @@ class Component extends DCLogic {
     return STAIR_RAIL_OPTIONS.some(option => option.id === this.state.stairRail)
       ? this.state.stairRail
       : 'left';
+  }
+
+  _stairShape() {
+    return STAIR_SHAPE_OPTIONS.some(option => option.id === this.state.stairShape)
+      ? this.state.stairShape
+      : 'straight';
+  }
+
+  _stairTurn() {
+    return this.state.stairTurn === 'left' ? 'left' : 'right';
+  }
+
+  _stairWinders() {
+    return STAIR_WINDER_OPTIONS.includes(this.state.stairWinders) ? this.state.stairWinders : 0;
   }
 
   _handleStairClick() {
@@ -13837,6 +14168,8 @@ class Component extends DCLogic {
       start.y || 0,
       start.z + (dz / len) * layout.runFt,
     );
+    const shape = this._stairShape();
+    const winders = shape === 'L' ? this._stairWinders() : 0;
     this._stairs.push({
       id: this._nextStairId++,
       start,
@@ -13846,14 +14179,21 @@ class Component extends DCLogic {
       widthFt: this.state.stairWidth,
       riseFt: layout.riseFt,
       rail: this._stairRail(),
+      shape,
+      turn: this._stairTurn(),
+      winders,
       layer: STAIR_LAYER,
     });
     this._stairStart = null;
     this._lockAngle = null;
     const rail = STAIR_RAIL_OPTIONS.find(option => option.id === this._stairRail());
+    const shapeMsg = shape === 'U' ? ' U switchback \u2014 runs 4.5" apart over the landing.'
+      : shape === 'L' && winders ? ` L turn on ${winders} winders.`
+      : shape === 'L' ? ' L turn over a 36" clear landing.'
+      : '';
     this._markUnsaved();
     this.setState({
-      drawingMessage: `Stair added \u2014 ${layout.risers} risers @ ${formatInchesOnly(layout.riserIn)}, ${layout.treads} treads @ ${formatInchesOnly(STAIR_TREAD_RUN_IN)}, down ${this._ftIn(layout.riseFt)} to ${descent.landing}. ${rail.note}`,
+      drawingMessage: `Stair added \u2014 ${layout.risers} risers @ ${formatInchesOnly(layout.riserIn)}, ${layout.treads} treads @ ${formatInchesOnly(STAIR_TREAD_RUN_IN)}, down ${this._ftIn(layout.riseFt)} to ${descent.landing}.${shapeMsg} ${rail.note}`,
       drawingMessageError: false,
     });
   }
@@ -15836,6 +16176,44 @@ class Component extends DCLogic {
       hasActiveBeams: this._activeBeams().length > 0,
       onBeamDelete: () => this._deleteLastBeam(),
       stairToolActive: activeTool === 'stair',
+      stairShapeBtns: STAIR_SHAPE_OPTIONS.map(option => ({
+        label: option.label,
+        title: option.note,
+        bg: this._stairShape() === option.id ? '#1d1f20' : '#fff',
+        color: this._stairShape() === option.id ? '#f2f2f3' : '#1d1f20',
+        border: this._stairShape() === option.id ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        onSelect: () => this.setState(option.id === 'L'
+          ? { stairShape: 'L' }
+          : { stairShape: option.id, stairWinders: 0, stairWindersOpen: false }),
+        // The hidden door: double-click L to reveal the winder row. Winders
+        // are never the default and never advertised.
+        onReveal: option.id === 'L'
+          ? () => this.setState({ stairShape: 'L', stairWindersOpen: true })
+          : () => {},
+      })),
+      stairTurnVisible: this._stairShape() !== 'straight',
+      stairTurnBtns: [
+        { id: 'left', label: 'TURN LEFT', note: 'The stair turns to the LEFT walking down.' },
+        { id: 'right', label: 'TURN RIGHT', note: 'The stair turns to the RIGHT walking down.' },
+      ].map(option => ({
+        label: option.label,
+        title: option.note,
+        bg: this._stairTurn() === option.id ? '#1d1f20' : '#fff',
+        color: this._stairTurn() === option.id ? '#f2f2f3' : '#1d1f20',
+        border: this._stairTurn() === option.id ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        onSelect: () => this.setState({ stairTurn: option.id }),
+      })),
+      stairWindersVisible: this._stairShape() === 'L' && (this.state.stairWindersOpen || this._stairWinders() > 0),
+      stairWinderBtns: STAIR_WINDER_OPTIONS.map(count => ({
+        label: count === 0 ? 'FLAT' : `${count} WINDERS`,
+        title: count === 0
+          ? 'Flat landing — the preferred turn. Min 36" x 36" clear to the nosing.'
+          : `${count} winder treads climb through the turn to save floor space. One winder landing per stair, never the default.`,
+        bg: this._stairWinders() === count ? '#1d1f20' : '#fff',
+        color: this._stairWinders() === count ? '#f2f2f3' : '#1d1f20',
+        border: this._stairWinders() === count ? '#1d1f20' : 'rgba(29,31,32,0.16)',
+        onSelect: () => this.setState({ stairWinders: count }),
+      })),
       stairRailBtns: STAIR_RAIL_OPTIONS.map(option => ({
         label: option.label,
         title: option.note,
