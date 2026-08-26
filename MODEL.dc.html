@@ -16553,7 +16553,7 @@ class Component extends DCLogic {
       // active so it never swallows focus or tool keys, live while one is.
       lengthBoxIdle: !this.state.lengthFrozen,
       frozenLengthDisplay: this.state.lengthFrozen ? this.state.frozenLengthInput : '',
-      lengthBoxPlaceholder: this.state.lengthFrozen ? "15 or 8'-1 1/8\"" : '',
+      lengthBoxPlaceholder: this.state.lengthFrozen ? "e.g. 15 · 8'-1 1/8\"" : '',
       lengthBoxBg: this.state.lengthFrozen ? '#f2f2f3' : 'rgba(242,242,243,0.4)',
       lengthBoxLabelOpacity: this.state.lengthFrozen ? '0.45' : '0.2',
       frozenDimensionBorder: this.state.frozenDimensionError ? '#b04050'
