@@ -50,8 +50,8 @@ PANEL 6 — THROUGH THE BROKEN WINDOW. Out in the brown field, HOUSES START
 POPPING UP one after another like toast — whole finished photoreal houses
 springing out of the dirt with cartoon boing energy, dust rings, a whole
 street filling in seconds. The dog platoon salutes. The baby claps. End
-card over the final frame: chrome logo "ROUGHDRAFTER — ZERO → PLAN IN
-5 MINUTES!" with the standard endcard treatment.
+card over the final frame: chrome logo "ROUGHDRAFTER — ZERO TO HOUSE
+IN 5 MINUTES!" with the standard endcard treatment.
 
 IMPORTANT — keep the panels clean:
 - No timestamps, timecodes, or date stamps in the frames.

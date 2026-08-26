@@ -11,8 +11,9 @@ The collected RoughDrafter LITE campaign lines. Real taglines carry the brand st
   Layers (multiple meanings = a good one): true like plumb; true like honest (the ad never lies); rough drafts true enough to build from; RUFF true — dog-loyal true. The reader picks whichever meaning they've earned.
   And the inclusion principle: everyone gets to be involved when the expectation isn't perfection. Perfection is a gate, roughness is a door — but TRUE stays non-negotiable even when perfect isn't; your rough plan still has to stand up.
 
-- **ZERO → PLAN IN 5 MINUTES!**
-  The main campaign line. The → is a fun cartoon chrome arrow (spoken: "zero to plan in five minutes"). Reads as a joke, becomes true at depth — the ad never lies, it just knows more than the viewer.
+- **ZERO TO HOUSE IN 5 MINUTES!**
+  The main campaign line. TO is spelled out — image/video generators kept dropping the old chrome → and rendering "ZERO PLAN", so the word goes in the art where it can't be lost. HOUSE beats PLAN too: the house is the promise, the plan is the paperwork. Reads as a joke, becomes true at depth — the ad never lies, it just knows more than the viewer.
+  (Retired form: **ZERO → PLAN IN 5 MINUTES!** — the arrow lives on in spoken reads.)
 
 ## SUPPORT LINES
 

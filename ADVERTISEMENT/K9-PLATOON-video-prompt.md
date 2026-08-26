@@ -36,7 +36,7 @@ baby's tiny hand and guides it to the button; the baby SLAMS it, thrilled.
 Out the broken window, finished photoreal houses pop up out of the dirt
 one after another like toast — boing, boing, boing — filling the whole
 street in seconds while the dog platoon salutes and the baby claps. End on
-a chrome logo card: "ROUGHDRAFTER — ZERO → PLAN IN 5 MINUTES!" with "Skip
+a chrome logo card: "ROUGHDRAFTER — ZERO TO HOUSE IN 5 MINUTES!" with "Skip
 the pitch." in small text beneath.
 
 IMPORTANT — keep the picture clean:
@@ -49,7 +49,7 @@ IMPORTANT — keep the picture clean:
   subtitles, captions, or sound-effect words (no BOING, POOF, or BOP
   lettering in the frame — the sounds live on the audio track).
 - The ONLY text allowed on screen is the final chrome logo card:
-  ROUGHDRAFTER — ZERO → PLAN IN 5 MINUTES! and "Skip the pitch." beneath
+  ROUGHDRAFTER — ZERO TO HOUSE IN 5 MINUTES! and "Skip the pitch." beneath
   it (the word GO! on the button face is fine if natural).
 - Exactly one salesman, one husband, one wife, one baby — never duplicate
   the humans; the dog platoon is many dogs by design.
