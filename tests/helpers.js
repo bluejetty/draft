@@ -74,6 +74,15 @@ async function clickWorld(page, x, z) {
 // Tool labels stay stable across contexts (e.g. "WALL [W]"); tools are
 // matched by word so shortcut suffixes don't matter.
 async function selectTool(page, name) {
+  if (/^outline$/i.test(name)) {
+    // The OUTLINE key left the keypad (#211): the red bone button or the U
+    // shortcut arms the trace now. Tests arm it the keyboard way.
+    await page.evaluate(() => {
+      if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    });
+    await page.keyboard.press('u');
+    return;
+  }
   await page.getByRole('button', { name: new RegExp(`\\b${name}\\b`, 'i') }).first().click();
 }
 
