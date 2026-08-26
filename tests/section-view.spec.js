@@ -21,9 +21,9 @@ async function buildHouse(page) {
   await page.waitForTimeout(300);
 }
 
-async function placeCut(page, name, z, viewerZ) {
+// Cuts name themselves S1, S2, ... — no naming prompt.
+async function placeCut(page, z, viewerZ) {
   await page.keyboard.press('c');
-  page.once('dialog', dialog => dialog.accept(name));
   await h.clickWorld(page, -12, z);
   await h.clickWorld(page, 12, z);
   await h.clickWorld(page, 0, viewerZ ?? z - 6);
@@ -62,12 +62,12 @@ test.describe('Generated section view', () => {
     await buildHouse(page);
     await h.waitForSaved(page);
 
-    await placeCut(page, 'SECTION A-A', 0);
-    await page.locator('.cut-row').click();
+    await placeCut(page, 0);
+    await page.locator('.cut-row', { hasText: 'S1' }).click();
     await page.waitForTimeout(400);
 
     // The top bar carries the cut name while the section is open.
-    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('SECTION A-A');
+    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('S1');
 
     // The drawing has real section ink — walls, floor bands, roof profile,
     // elevation marks — and concrete grays from the foundation stack.
@@ -77,7 +77,7 @@ test.describe('Generated section view', () => {
 
     // Back to plan: picking a level card restores the level label.
     await page.locator('.level-row').first().locator('.level-body').click();
-    await expect(page.locator('[data-model-title-detail]').last()).not.toHaveText('SECTION A-A');
+    await expect(page.locator('[data-model-title-detail]').last()).not.toHaveText('S1');
   });
 
   test('a cut standing outside the house renders the elevation', async ({ page }) => {
@@ -87,11 +87,11 @@ test.describe('Generated section view', () => {
     await h.waitForSaved(page);
 
     // The line sits clear of the plan; the viewer looks back at the house.
-    await placeCut(page, 'REAR ELEVATION', 12, 18);
-    await page.locator('.cut-row').click();
+    await placeCut(page, 12, 18);
+    await page.locator('.cut-row', { hasText: 'S1' }).click();
     await page.waitForTimeout(400);
 
-    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('REAR ELEVATION');
+    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('S1');
     const census = await overlayCensus(page);
     // Wall faces, roof silhouette, grade line, dashed foundation — real ink,
     // but no cut-through concrete fills.
@@ -105,8 +105,8 @@ test.describe('Generated section view', () => {
     await buildHouse(page);
     await h.waitForSaved(page);
 
-    await placeCut(page, 'REAR ELEVATION', 12, 18);
-    await page.locator('.cut-row').click();
+    await placeCut(page, 12, 18);
+    await page.locator('.cut-row', { hasText: 'S1' }).click();
     await page.waitForTimeout(400);
 
     const scan = await page.evaluate(() => {
@@ -175,12 +175,11 @@ test.describe('Generated section view', () => {
 
     // A vertical cut through the garage only: it crosses the two beam legs.
     await page.keyboard.press('c');
-    page.once('dialog', dialog => dialog.accept('GARAGE SECTION'));
     await h.clickWorld(page, 14, -7);
     await h.clickWorld(page, 14, 7);
     await h.clickWorld(page, 20, 0);
     await page.waitForTimeout(400);
-    await page.locator('.cut-row').click();
+    await page.locator('.cut-row', { hasText: 'S1' }).click();
     await page.waitForTimeout(400);
 
     const scan = await page.evaluate(() => {
@@ -235,12 +234,11 @@ test.describe('Generated section view', () => {
 
     // The cut spans the garage only, standing south of it looking back.
     await page.keyboard.press('c');
-    page.once('dialog', dialog => dialog.accept('GARAGE ELEVATION'));
     await h.clickWorld(page, 9, 8);
     await h.clickWorld(page, 22, 8);
     await h.clickWorld(page, 14, 14);
     await page.waitForTimeout(400);
-    await page.locator('.cut-row').click();
+    await page.locator('.cut-row', { hasText: 'S1' }).click();
     await page.waitForTimeout(400);
 
     const scan = await page.evaluate(() => {
@@ -294,12 +292,11 @@ test.describe('Generated section view', () => {
 
     // The cut runs at a slant past the house; the viewer looks back at it.
     await page.keyboard.press('c');
-    page.once('dialog', dialog => dialog.accept('ANGLED ELEVATION'));
     await h.clickWorld(page, -14, 10);
     await h.clickWorld(page, 14, 16);
     await h.clickWorld(page, 0, 22);
     await page.waitForTimeout(400);
-    await page.locator('.cut-row').click();
+    await page.locator('.cut-row', { hasText: 'S1' }).click();
     await page.waitForTimeout(400);
 
     const profile = await page.evaluate(() => {
@@ -337,11 +334,11 @@ test.describe('Generated section view', () => {
 
   test('a cut across empty space explains itself instead of drawing', async ({ page }) => {
     await h.openModel(page, { webgl: false });
-    await placeCut(page, 'SECTION B-B', 0);
-    await page.locator('.cut-row').click();
+    await placeCut(page, 0);
+    await page.locator('.cut-row', { hasText: 'S1' }).click();
     await page.waitForTimeout(400);
 
-    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('SECTION B-B');
+    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('S1');
     const census = await overlayCensus(page);
     // Only the header and the guidance line — no walls, no concrete fills.
     expect(census.concrete).toBeLessThan(500);

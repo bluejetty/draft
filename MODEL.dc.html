@@ -1142,7 +1142,7 @@
         <div class="{{ cut.rowClass }}" onClick="{{ cut.onView }}">
           <div class="cut-bar"></div>
           <div class="cut-body">{{ cut.name }}</div>
-          <button class="cut-del" onClick="{{ cut.onDelete }}" title="Delete">×</button>
+          <button class="cut-del" style="{{ cut.delStyle }}" onClick="{{ cut.onDelete }}" title="Delete">×</button>
         </div>
       </sc-for>
     </div>
@@ -1439,6 +1439,9 @@ const DEFAULT_ROOF_PITCH = 4;   // rise in inches per 12" of run
 const MAX_ROOF_PITCH = 24;
 const ROOF_FASCIA_IN = 5.5;
 const ROOF_LAYER = 'A-ROOF';
+// The standard elevations stand this far outside the plan extents — clear
+// of the auto-dimension strings that stack against the walls.
+const AUTO_ELEVATION_OFFSET_FT = 10;
 // Structural point supports and spans, placed manually in either order —
 // columns centre onto a beam line and beam ends snap to columns, so they line
 // up whichever is placed first. A beam is one span between two supports:
@@ -4219,7 +4222,7 @@ class Component extends DCLogic {
     // A cut view is a generated drawing, not a camera angle: the section
     // renders from the semantic model in its own locked workspace.
     if (this.state.activeView === 'cut') {
-      const cut = this.state.cuts.find(c => c.id === this.state.activeCutId);
+      const cut = this._cutById(this.state.activeCutId);
       if (cut) { this._drawCutWorkspace2D(ctx, w, h, cut); return; }
     }
 
@@ -5739,22 +5742,51 @@ class Component extends DCLogic {
       });
     };
 
-    ctx.save();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#b04060';
-    ctx.fillStyle = '#b04060';
-    this.state.cuts.forEach(cut => {
+    // Classic drafting marks: a labelled bubble at each end of the dashed
+    // cut line, wearing a filled triangle that points the view direction.
+    const bubbleMark = cut => {
       const y = cut.elev + 0.02;
       const start = { x: cut.startPt.x, y, z: cut.startPt.z };
       const end = { x: cut.endPt.x, y, z: cut.endPt.z };
       dashedSeg(start, end);
-      arrowFromMid(start, end, cut.dirVec);
-      if (cut.name) {
-        const a = toS(start);
-        ctx.font = '10px "Barlow Condensed", system-ui, sans-serif';
-        ctx.fillText(cut.name, a.x + 5, a.y - 5);
-      }
-    });
+
+      const a = toS(start), b = toS(end);
+      const lineLen = Math.hypot(b.x - a.x, b.y - a.y);
+      if (lineLen < 2) return;
+      const ux = (b.x - a.x) / lineLen, uy = (b.y - a.y) / lineLen;
+      // The viewer stands on +dirVec, so the sight line is the opposite way.
+      const mid = { x: (start.x + end.x) / 2, y, z: (start.z + end.z) / 2 };
+      const mS = toS(mid);
+      const vS = toS({ x: mid.x - cut.dirVec.x, y, z: mid.z - cut.dirVec.z });
+      let vx = vS.x - mS.x, vy = vS.y - mS.y;
+      const vLen = Math.hypot(vx, vy) || 1;
+      vx /= vLen; vy /= vLen;
+
+      const R = 10;
+      [[a, -1], [b, 1]].forEach(([p, side]) => {
+        const cx = p.x + ux * side * (R + 2), cy = p.y + uy * side * (R + 2);
+        ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.stroke();
+        const tx = cx + vx * R, ty = cy + vy * R;
+        ctx.beginPath();
+        ctx.moveTo(tx + vx * 8, ty + vy * 8);
+        ctx.lineTo(tx - vy * 5.5, ty + vx * 5.5);
+        ctx.lineTo(tx + vy * 5.5, ty - vx * 5.5);
+        ctx.closePath();
+        ctx.fillStyle = ctx.strokeStyle; ctx.fill();
+        ctx.font = '600 10px "Barlow Condensed", system-ui, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(cut.name || '', cx, cy + 0.5);
+      });
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    };
+
+    ctx.save();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#b04060';
+    ctx.fillStyle = '#b04060';
+    [...this._autoElevationCuts(), ...this.state.cuts].forEach(bubbleMark);
 
     const phase = this.state.cutPhase;
     if (phase !== 'idle' && this._cutStart3) {
@@ -6066,6 +6098,43 @@ class Component extends DCLogic {
 
   _footingLocked(item) {
     return item?.layer === 'S-FOOTING' && !this._freeformFootings();
+  }
+
+  _autoElevationsOn() {
+    return normaliseStructureStandards(this.state.structureStandards).autoElevations;
+  }
+
+  // The four standard elevations place themselves just outside the plan
+  // extents: E1 along the bottom looking up into the model, E2 left looking
+  // right, E3 top looking down, E4 right looking left. Like hand-placed
+  // cuts, dirVec points to the side the viewer stands on.
+  _autoElevationCuts() {
+    if (!this._autoElevationsOn()) return [];
+    // Level walls only — BONEYARD shelf geometry (negative pseudo levels)
+    // never pulls the marks around.
+    const walls = this._walls.filter(wall => wall.levelId > 0);
+    if (!walls.length) return [];
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    walls.forEach(wall => [wall.start, wall.end].forEach(pt => {
+      minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
+      minZ = Math.min(minZ, pt.z); maxZ = Math.max(maxZ, pt.z);
+    }));
+    if (maxX - minX < 1 || maxZ - minZ < 1) return [];
+    const off = AUTO_ELEVATION_OFFSET_FT, pad = 2;
+    return [
+      { id: 'E1', name: 'E1', auto: true, elev: 0, levelId: null,
+        startPt: { x: minX - pad, z: maxZ + off }, endPt: { x: maxX + pad, z: maxZ + off }, dirVec: { x: 0, z: 1 } },
+      { id: 'E2', name: 'E2', auto: true, elev: 0, levelId: null,
+        startPt: { x: minX - off, z: minZ - pad }, endPt: { x: minX - off, z: maxZ + pad }, dirVec: { x: -1, z: 0 } },
+      { id: 'E3', name: 'E3', auto: true, elev: 0, levelId: null,
+        startPt: { x: minX - pad, z: minZ - off }, endPt: { x: maxX + pad, z: minZ - off }, dirVec: { x: 0, z: -1 } },
+      { id: 'E4', name: 'E4', auto: true, elev: 0, levelId: null,
+        startPt: { x: maxX + off, z: minZ - pad }, endPt: { x: maxX + off, z: maxZ + pad }, dirVec: { x: 1, z: 0 } },
+    ];
+  }
+
+  _cutById(id) {
+    return [...this._autoElevationCuts(), ...this.state.cuts].find(c => c.id === id) || null;
   }
 
   _setActiveLineLayer(layerId) {
@@ -6496,7 +6565,7 @@ class Component extends DCLogic {
   }
 
   _enterCutView(cutId) {
-    const cut = this.state.cuts.find(c => c.id === cutId);
+    const cut = this._cutById(cutId);
     if (!cut) return;
     // Line midpoint and perpendicular direction = view direction
     const mx = (cut.startPt.x + cut.endPt.x) / 2;
@@ -14762,8 +14831,12 @@ class Component extends DCLogic {
   }
 
   _finalizeCut(dirVec) {
-    const name = window.prompt('Name this elevation / section:', 'SECTION A-A');
-    if (!name) { this._cancelCut(); return; }
+    // Hand-cut sections number themselves S1, S2, ... after the standard
+    // E1-E4 elevations; a rename can come later from the cut's properties.
+    const used = new Set(this.state.cuts.map(c => c.name));
+    let n = 1;
+    while (used.has(`S${n}`)) n += 1;
+    const name = `S${n}`;
 
     const id    = this.state.nextCutId;
     const start = { x: this._cutStart3.x, z: this._cutStart3.z };
@@ -14781,21 +14854,14 @@ class Component extends DCLogic {
     cutLine.computeLineDistances();
     this._scene.add(cutLine);
 
-    const dx = end.x - start.x, dz = end.z - start.z, len = Math.sqrt(dx*dx + dz*dz);
-    const mx = (start.x + end.x) / 2, mz = (start.z + end.z) / 2;
-    const arrowLen = Math.max(3, len * 0.25);
-    const arrDir = new THREE.Vector3(dirVec.x, 0, dirVec.z).normalize();
-    const arrow = new THREE.ArrowHelper(arrDir, new THREE.Vector3(mx, y, mz), arrowLen, 0xb04060, arrowLen*0.35, arrowLen*0.25);
-    this._scene.add(arrow);
-
-    this._cutObjects[id] = [cutLine, arrow];
+    this._cutObjects[id] = [cutLine];
 
     // Remove temp arrows and preview
     this._removeCutArrows();
     this._cutPreviewLine.visible = false;
 
     const cut = {
-      id, name: name.toUpperCase().trim(),
+      id, name,
       startPt: start, endPt: end,
       dirVec: { x: dirVec.x, z: dirVec.z },
       elev,
@@ -14813,7 +14879,7 @@ class Component extends DCLogic {
 
   _restoreCutObjects(cut) {
     if (!this._scene || !cut) return;
-    const { id, startPt: start, endPt: end, dirVec, elev } = cut;
+    const { id, startPt: start, endPt: end, elev } = cut;
     const y = elev + 0.02;
     const lineMat = new THREE.LineDashedMaterial({ color: 0xb04060, dashSize: 1, gapSize: 0.5 });
     const lineGeo = new THREE.BufferGeometry().setFromPoints([
@@ -14824,19 +14890,7 @@ class Component extends DCLogic {
     cutLine.computeLineDistances();
     this._scene.add(cutLine);
 
-    const dx = end.x - start.x, dz = end.z - start.z;
-    const length = Math.hypot(dx, dz);
-    const arrowLength = Math.max(3, length * 0.25);
-    const arrow = new THREE.ArrowHelper(
-      new THREE.Vector3(dirVec.x, 0, dirVec.z).normalize(),
-      new THREE.Vector3((start.x + end.x) / 2, y, (start.z + end.z) / 2),
-      arrowLength,
-      0xb04060,
-      arrowLength * 0.35,
-      arrowLength * 0.25,
-    );
-    this._scene.add(arrow);
-    this._cutObjects[id] = [cutLine, arrow];
+    this._cutObjects[id] = [cutLine];
   }
 
   _cancelCut() {
@@ -15500,7 +15554,7 @@ class Component extends DCLogic {
     const off = { bg:'#fff',    color:'#1d1f20', border:'rgba(29,31,32,0.16)' };
     const hi  = 'rgba(29,31,32,0.09)', lo = '#fff';
     const activeLevel = levels[activeLevelIdx] || levels[0];
-    const activeCut   = cuts.find(c => c.id === activeCutId);
+    const activeCut   = this._cutById(activeCutId);
     const keybindings = { ...DEFAULT_KEYBINDINGS, ...(this.state.keybindings || {}) };
     const shortcut = command => keyBindingLabel(keybindings[command]);
     const activeLayerViewId = this._activeLayerViewId(activeLevel?.id);
@@ -15660,7 +15714,7 @@ class Component extends DCLogic {
       }),
       showHint, hintText, hintColor,
       choosingDir,
-      noCuts: cuts.length === 0,
+      noCuts: cuts.length === 0 && this._autoElevationCuts().length === 0,
       toolStripEmpty: !toolStripHasOptions,
       toolStripLabel: activeTool === 'node' ? 'NODE / ARC' : (activeTool === 'cut' ? 'ELEV/SEC CUT' : String(activeTool || '').toUpperCase()),
       lineToolActive: activeTool === 'line',
@@ -16373,9 +16427,10 @@ class Component extends DCLogic {
         () => this._markUnsaved(),
       ),
 
-      cuts: cuts.map(c => ({
-        name: c.name,
+      cuts: [...this._autoElevationCuts(), ...cuts].map(c => ({
+        name: c.auto ? `${c.name} · ELEVATION` : c.name,
         rowClass: 'cut-row' + (activeCutId === c.id ? ' active' : ''),
+        delStyle: c.auto ? 'display:none;' : '',
         onView:   () => this._enterCutView(c.id),
         onDelete: (e) => this._deleteCut(c.id, e),
       })),
