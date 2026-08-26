@@ -174,7 +174,9 @@ if (!window.DraftDrawingFormat) {
 
   // Surface openings are free-form closed outlines cut from a host floor or
   // roof footprint (stairwells, skylights, chimneys). Host existence is the
-  // caller's check — floors and roofs restore before openings resolve.
+  // caller's check — floors and roofs restore before openings resolve. An
+  // opening BUILD HOUSE cut for a stair carries that stair's id, so a
+  // rebuild knows the stair already has its hole.
   const surfaceOpenings = (rawOpenings, levelIds) => (Array.isArray(rawOpenings) ? rawOpenings : [])
     .map(opening => {
       const openingLevelId = levelId(opening?.levelId, levelIds);
@@ -182,6 +184,7 @@ if (!window.DraftDrawingFormat) {
       const hostId = String(opening?.hostId || '').trim();
       const points = (Array.isArray(opening?.points) ? opening.points : []).map(point).filter(Boolean);
       if (openingLevelId == null || !hostType || !hostId || points.length < 3) return null;
+      const stairId = Number(opening?.stairId);
       return {
         id: String(opening?.id || '').trim(),
         hostType,
@@ -189,6 +192,7 @@ if (!window.DraftDrawingFormat) {
         points,
         levelId: openingLevelId,
         layer: hostType === 'roof' ? 'A-ROOF-OPNG' : 'A-FL-OPNG',
+        ...(hostType === 'floor' && Number.isInteger(stairId) && stairId > 0 ? { stairId } : {}),
       };
     }).filter(Boolean);
 
