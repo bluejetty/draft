@@ -114,7 +114,7 @@
      pick the type, draw its outline in that colour, the bone builds it),
      and the file controls sit on the far right. -->
 <div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff; position:relative;">
-  <button data-project-open onClick="{{ openProjectDialog }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">PROJECT</button>
+  <button data-project-open onClick="{{ openProjectDialog }}" style="height:35px; min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">PROJECT</button>
   <div data-profile-stack style="display:flex; flex-direction:column; gap:1px; margin-left:8px;">
     <button onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
     <button onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
@@ -123,10 +123,6 @@
     <button onClick="{{ setImperial }}" style="min-width:64px; border:1px solid {{ imperialBorder }}; background:{{ imperialBg }}; color:{{ imperialColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">IMPERIAL</button>
     <button onClick="{{ setMetric }}" style="min-width:64px; border:1px solid {{ metricBorder }}; background:{{ metricBg }}; color:{{ metricColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">METRIC</button>
   </div>
-  <div data-model-title-detail style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:{{ topBarColor }}; margin-left:12px;">{{ topBarLabel }}</div>
-  <sc-if value="{{ showHint }}" hint-placeholder-val="{{ false }}">
-    <div style="margin-left:18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }}; border:1px solid {{ hintColor }}; padding:3px 10px;">{{ hintText }}</div>
-  </sc-if>
 
   <div data-build-cluster style="position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; align-items:center; gap:8px; z-index:6;">
     <button data-select-house onClick="{{ onSelectHouse }}" aria-label="HOUSE OUTLINE" title="{{ houseButtonHint }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ houseButtonGlow }};">
@@ -1456,10 +1452,6 @@
       <path d="M3 13 C3 7 7 8.5 8.5 5.5 C9.5 3.5 13 3 13 6 C13 9 9 8.5 8 11 C7.4 12.5 5.5 13.5 3 13 Z"></path>
     </svg>
   </span>
-  <!-- The building buttons live on the top bar now (select the type, draw,
-       the bone builds it). BUILD GARAGE stays here as the retag escape
-       hatch: a plain closed outline becomes a garage after the fact. -->
-  <button data-build-garage onClick="{{ onBuildGarage }}" style="border:1px solid #7a4a21; background:rgba(122,74,33,0.10); color:#7a4a21; padding:5px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.04em; cursor:pointer; line-height:1.2;">BUILD GARAGE</button>
    <!-- Architectural-length box — a permanent instrument on the strip: sits
         blank and disabled while idle, wakes when a typed length is active -->
   <div style="display:flex; align-items:center; gap:6px;">
@@ -1479,7 +1471,11 @@
 
 <!-- STATUS BAR -->
 <div style="height:28px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em; color:rgba(29,31,32,0.55); background:#fff; flex-shrink:0; user-select:none;">
-  <span data-model-sx>X: —</span>
+  <span data-model-title-detail style="font-size:12px; font-weight:600; text-transform:uppercase; color:{{ topBarColor }};">{{ topBarLabel }}</span>
+  <sc-if value="{{ showHint }}" hint-placeholder-val="{{ false }}">
+    <span style="margin-left:18px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }};">{{ hintText }}</span>
+  </sc-if>
+  <span style="margin-left:24px;" data-model-sx>X: —</span>
   <span style="margin-left:24px;" data-model-sy>Y: —</span>
    <span data-model-background-status style="margin-left:24px; color:{{ backgroundStatusColor }};">{{ backgroundStatus }}</span>
   <span data-model-status style="margin-left:24px; color:{{ persistenceStatusColor }};">{{ persistenceStatus }}</span>
@@ -9589,73 +9585,11 @@ class Component extends DCLogic {
     return null;
   }
 
-  // BUILD GARAGE works after the fact: draw an ordinary closed outline, then
-  // turn it into a DETACHED garage — the selected outline if there is one,
-  // otherwise the newest closed outline in the active context. The foundation
-  // prompt picks its construction, then the garage builds right away.
-  _garageBuildTarget() {
-    const selected = [...(this._selectedOutlines || [])]
-      .find(outline => outline.open !== true && outline.points.length >= 3);
-    if (selected) return selected;
-    const pool = this.state.boneyardActive ? this._activeBoneyardOutlines() : this._activeOutlines();
-    const closed = pool.filter(outline => outline.open !== true && outline.points.length >= 3);
-    return closed.length ? closed[closed.length - 1] : null;
-  }
-
-  _buildGarage() {
-    this._ensureDrawingCollections();
-    const target = this._garageBuildTarget();
-    if (!target) {
-      this.setState({
-        drawingMessage: 'Draw a closed outline first — BUILD GARAGE turns it into a DETACHED garage (grade beam or thickened-edge slab).',
-        drawingMessageError: true,
-      });
-      return false;
-    }
-    const master = target.shelfId != null ? target
-      : (target.masterId != null
-        ? this._boneyardOutlines.find(candidate => candidate.id === target.masterId)
-        : null);
-    const source = master || target;
-    if (source.garage) {
-      this._buildHouse();
-      return true;
-    }
-    if (this._outlineCarriesBuild(source)) {
-      this.setState({
-        drawingMessage: 'This outline already carries built geometry — delete the built pieces before turning it into a garage.',
-        drawingMessageError: true,
-      });
-      return false;
-    }
-    const shelf = this._activeBoneyardShelf();
-    this._detachedPending = {
-      points: source.points.map(point => ({ x: point.x, z: point.z })),
-      shelfId: master ? master.shelfId : (shelf ? shelf.id : null),
-      sourceLevelId: master ? master.sourceLevelId : (target.levelId ?? null),
-      removeMasterId: master ? master.id : null,
-      removeLocal: master ? null : target,
-      buildAfter: true,
-    };
-    this.setState({ detachedFoundationPrompt: true });
-    return true;
-  }
-
   _chooseDetachedFoundation(foundation) {
     const pending = this._detachedPending;
     this._detachedPending = null;
     this.setState({ detachedFoundationPrompt: false });
     if (!pending) return null;
-    // BUILD GARAGE conversion: the outline the garage grows from goes away —
-    // a converted master takes its level copies with it; a local copy leaves
-    // just its own level.
-    if (pending.removeMasterId != null) {
-      this._boneyardOutlines = this._boneyardOutlines.filter(outline => outline.id !== pending.removeMasterId);
-      this._outlines = this._outlines.filter(outline => outline.masterId !== pending.removeMasterId);
-    }
-    if (pending.removeLocal) {
-      this._outlines = this._outlines.filter(outline => outline !== pending.removeLocal);
-    }
     if (this._selectedOutlines) this._selectedOutlines.clear();
     const master = {
       id: this._newDrawingItemId('outline'),
@@ -9683,7 +9617,6 @@ class Component extends DCLogic {
         : 'DETACHED GARAGE closed — grade beam all around; the 4" slab slopes 1/8"/ft to the door on graded fill. BUILD HOUSE raises its walls, beam, slab, doors, and roof.',
       drawingMessageError: false,
     });
-    if (pending.buildAfter) this._buildHouse();
     return master;
   }
 
@@ -17131,7 +17064,6 @@ class Component extends DCLogic {
       dismissGarageCallout: () => this._dismissGarageCallout(),
       garageIntroOff: this.state.garageIntroOff === true,
       onGarageIntroOffToggle: e => this._onGarageIntroOffToggle(e.target.checked),
-      onBuildGarage: () => this._buildGarage(),
       onMarkAttachedGarage: () => this._toggleGarageMode('attached'),
       onMarkDetachedGarage: () => this._toggleGarageMode('detached'),
       onSelectHouse: () => this._toggleHouseMode(),

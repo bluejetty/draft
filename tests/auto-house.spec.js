@@ -156,11 +156,10 @@ test('BUILD HOUSE only fills levels that are still empty', async ({ page }) => {
   expect(saved.roofs).toHaveLength(1);
 });
 
-test('BUILD HOUSE without an outline arms the trace and builds nothing', async ({ page }) => {
+test('BUILD HOUSE without an outline explains the select-first flow and builds nothing', async ({ page }) => {
   await h.openModel(page);
   await page.getByRole('button', { name: 'BUILD HOUSE' }).click();
-  await expect(page.getByText('Trace the house outline')).toBeVisible();
-  await expect(page.locator('[data-project-callout]')).toBeVisible();
+  await expect(page.locator('[data-model-drawing-message]')).toContainText('Nothing to build yet');
 
   const saved = await h.savedDrawing(page);
   expect(saved?.walls || []).toHaveLength(0);

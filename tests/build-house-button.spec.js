@@ -28,8 +28,8 @@ test('strip starts as HOUSE · BONE · DETACHED; SPLIT and ATTACHED wait for a h
   // No OUTLINE key on the keypad — the type buttons arm the trace.
   await expect(page.locator('.tool-key', { hasText: /outline/i })).toHaveCount(0);
 
-  // The retag escape hatch stays on the lower instrument strip.
-  await expect(page.locator('[data-instrument-strip] [data-build-garage]')).toBeVisible();
+  // No BUILD GARAGE below — the strip carries only drafting instruments.
+  await expect(page.locator('[data-build-garage]')).toHaveCount(0);
 });
 
 test('a house outline unlocks SPLIT and ATTACHED, and they survive a reload', async ({ page }) => {

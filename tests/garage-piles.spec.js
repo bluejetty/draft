@@ -128,15 +128,15 @@ test('BUILD HOUSE sets 2 piles at the beam corners against the house — never d
 
 test('a detached garage gets no automatic piles', async ({ page }) => {
   await h.openModel(page);
-  // A lone rectangle converted by BUILD GARAGE (grade beam) is detached —
-  // its supports are the drafter's call, so BUILD HOUSE places none.
+  // A DETACHED garage (grade beam) stands on its own — its supports are the
+  // drafter's call, so BUILD HOUSE places none.
   await h.selectTool(page, 'Outline');
+  await page.getByRole('button', { name: /DETACHED GARAGE/ }).click();
   for (const [x, z] of [[-6, -5], [6, -5], [6, 5], [-6, 5]]) await h.clickWorld(page, x, z);
   await page.keyboard.press('Enter');
-  await h.waitForSaved(page);
-  await page.locator('[data-build-garage]').click();
   await page.locator('[data-detached-grade-beam]').click();
-  await page.waitForTimeout(300);
+  await h.waitForSaved(page);
+  await buildHouse(page);
   await h.waitForSaved(page);
 
   const saved = await h.savedDrawing(page);
