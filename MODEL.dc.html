@@ -87,8 +87,7 @@
     .cut-body { flex:1; padding:5px 7px 5px 8px; min-width:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .cut-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; }
     .cut-del:hover { color:#c04040; }
-    .cut-side { flex:1; min-width:0; border:none; background:none; padding:0 0 0 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:rgba(29,31,32,0.72); outline:none; }
-    .cut-side:focus { color:#1d1f20; background:rgba(89,128,166,0.08); }
+    .cut-side { flex:1; min-width:0; padding:0 0 0 4px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:rgba(29,31,32,0.72); overflow:hidden; text-overflow:ellipsis; }
     .tool-keypad { display:grid; grid-template-columns:repeat(4, 1fr); gap:3px; }
     .tool-key { position:relative; aspect-ratio:1 / 1; min-width:0; border:1px solid; padding:2px 1px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; font-family:'Barlow Condensed',system-ui,sans-serif; text-transform:uppercase; }
     .tool-key-letter { position:absolute; top:2px; left:3px; font-weight:700; line-height:1; }
@@ -1304,7 +1303,7 @@
       <sc-for list="{{ cuts }}" as="cut" hint-placeholder-count="0">
         <div class="{{ cut.rowClass }}" onClick="{{ cut.onView }}">
           <div class="cut-bar"></div>
-          <div class="cut-body" style="display:flex; align-items:center;">{{ cut.name }}<input class="cut-side" style="{{ cut.sideStyle }}" value="{{ cut.sideName }}" onClick="{{ cut.onSideClick }}" onChange="{{ cut.onSideChange }}" aria-label="Elevation side name" title="Name this elevation's side — FRONT, LEFT... — defaults set in COMPANY STANDARDS" /></div>
+          <div class="cut-body" style="display:flex; align-items:center;">{{ cut.name }}<span class="cut-side" style="{{ cut.sideStyle }}" title="The side this elevation faces — rename E1-E4 in COMPANY STANDARDS">{{ cut.sideName }}</span></div>
           <button class="cut-del" style="{{ cut.delStyle }}" onClick="{{ cut.onDelete }}" title="Delete">×</button>
         </div>
       </sc-for>
@@ -6569,20 +6568,12 @@ class Component extends DCLogic {
   }
 
   // The office's side name for a standard elevation — E1 FRONT, E2 LEFT,
-  // E3 BACK, E4 RIGHT unless COMPANY STANDARDS says otherwise. A drawing
-  // can rename its own sides right on the sidebar row.
+  // E3 BACK, E4 RIGHT unless COMPANY STANDARDS says otherwise. Drawings
+  // saved with their own side names keep them.
   _elevationName(id) {
     return this.state.elevationNames[id]
       || normaliseStructureStandards(this.state.structureStandards).elevationNames[id]
       || 'ELEVATION';
-  }
-
-  _setElevationName(id, value) {
-    const name = String(value || '').trim().toUpperCase();
-    const elevationNames = { ...this.state.elevationNames };
-    if (name) elevationNames[id] = name;
-    else delete elevationNames[id];
-    this.setState({ elevationNames }, () => this._markUnsaved());
   }
 
   // The plan's own footprint, from level walls only — BONEYARD shelf geometry
@@ -7216,6 +7207,18 @@ class Component extends DCLogic {
     return crossings;
   }
 
+  // The elevation a roof bears on: a garage roof carries its own plate
+  // height over the main-floor line, so a garage beside a two-storey house
+  // keeps a one-storey roof; every other roof sits on top of the full wall
+  // stack.
+  _roofBaseElev(roof, stack) {
+    const plate = Number(roof.plateHeightFt);
+    if (roof.garage === true && Number.isFinite(plate) && stack.floors.length) {
+      return stack.floors[0].floorTop + plate;
+    }
+    return stack.bearing;
+  }
+
   // Roof surface height over a plan point, from the roof's REAL face
   // polygons (geometry-2d builds them off the straight skeleton): locate the
   // containing face, evaluate its plane. The old rule — min over every eave
@@ -7274,16 +7277,25 @@ class Component extends DCLogic {
     // cut angle), the roofs merged as an upper envelope. No sampling, so a
     // diagonal cut is as clean as an axis-aligned one.
     const roofSamples = [];
+    const roofChords = [];
     const roofs = this._roofs;
+    const fasciaFt = ROOF_FASCIA_IN / 12;
     if (roofs.length) {
-      const profiles = roofs
+      const profiles = [];
+      roofs
         .filter(roof => roof.points && roof.points.length >= 3)
-        .map(roof => geo.roofProfile(
-          roof, geo.roofFaces(roof, geo.roofSkeleton(roof)),
-          cut.startPt, cut.endPt, axis))
-        .filter(profile => profile.length > 1);
+        .forEach(roof => {
+          const base = this._roofBaseElev(roof, stack);
+          const profile = geo.roofProfile(
+            roof, geo.roofFaces(roof, geo.roofSkeleton(roof)),
+            cut.startPt, cut.endPt, axis)
+            .map(pt => ({ u: pt.u, rise: base + fasciaFt + pt.rise }));
+          if (profile.length < 2) return;
+          profiles.push(profile);
+          roofChords.push({ u0: profile[0].u, u1: profile[profile.length - 1].u, elev: base });
+        });
       geo.profileEnvelope(profiles).forEach(pt => {
-        roofSamples.push({ u: pt.u, elev: stack.bearing + ROOF_FASCIA_IN / 12 + pt.rise });
+        roofSamples.push({ u: pt.u, elev: pt.rise });
       });
     }
 
@@ -7425,23 +7437,28 @@ class Component extends DCLogic {
     if (lit.length > 1) {
       ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
       ctx.beginPath();
-      let pen = false;
+      let pen = null;
       roofSamples.forEach(s => {
-        if (s.elev == null) { pen = false; return; }
+        if (s.elev == null) {
+          if (pen) ctx.lineTo(X(pen.u), Y(pen.elev - fasciaFt));
+          pen = null;
+          return;
+        }
         if (!pen) {
-          ctx.moveTo(X(s.u), Y(stack.bearing));         // fascia drop at the edge
+          ctx.moveTo(X(s.u), Y(s.elev - fasciaFt));     // fascia drop at the edge
           ctx.lineTo(X(s.u), Y(s.elev));
-          pen = true;
         } else ctx.lineTo(X(s.u), Y(s.elev));
+        pen = s;
       });
-      const last = [...roofSamples].reverse().find(s => s.elev != null);
-      if (last) ctx.lineTo(X(last.u), Y(stack.bearing));
+      if (pen) ctx.lineTo(X(pen.u), Y(pen.elev - fasciaFt));
       ctx.stroke();
-      // Bottom chord: flat ceiling line at the bearing across the roof span.
+      // Bottom chord: each roof's flat ceiling line at its own plate.
       ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(X(lit[0].u), Y(stack.bearing));
-      ctx.lineTo(X(lit[lit.length - 1].u), Y(stack.bearing));
+      roofChords.forEach(chord => {
+        ctx.moveTo(X(chord.u0), Y(chord.elev));
+        ctx.lineTo(X(chord.u1), Y(chord.elev));
+      });
       ctx.stroke();
     }
   }
@@ -7542,20 +7559,23 @@ class Component extends DCLogic {
         const bx = cut.startPt.x + (cut.endPt.x - cut.startPt.x) * s;
         const bz = cut.startPt.z + (cut.endPt.z - cut.startPt.z) * s;
         const baseD = bx * dir.x + bz * dir.z;
-        const riseAt = k => {
+        const elevAt = k => {
           const px = bx + dir.x * (k - baseD), pz = bz + dir.z * (k - baseD);
           let tallest = null;
           facesByRoof.forEach((faces, roof) => {
             const rise = this._sectionRoofHeightAt({ x: px, z: pz }, roof, faces);
-            if (rise != null && (tallest === null || rise > tallest)) tallest = rise;
+            if (rise == null) return;
+            const base = this._roofBaseElev(roof, stack);
+            const elev = base + ROOF_FASCIA_IN / 12 + rise;
+            if (tallest === null || elev > tallest.elev) tallest = { elev, base };
           });
           return tallest;
         };
         let best = null, bestK = null;
         for (let j = 0; j <= depthSteps; j++) {
           const k = dLo + (dHi - dLo) * j / depthSteps;
-          const rise = riseAt(k);
-          if (rise != null && (best === null || rise > best)) { best = rise; bestK = k; }
+          const sample = elevAt(k);
+          if (sample && (best === null || sample.elev > best.elev)) { best = sample; bestK = k; }
         }
         // The true peak (a ridge or hip) usually falls between the coarse
         // samples; ternary-search the bracket around the best one so the
@@ -7565,15 +7585,16 @@ class Component extends DCLogic {
           let a = bestK - dk, b = bestK + dk;
           for (let it = 0; it < 24; it++) {
             const m1 = a + (b - a) / 3, m2 = b - (b - a) / 3;
-            if ((riseAt(m1) ?? -Infinity) < (riseAt(m2) ?? -Infinity)) a = m1;
+            if ((elevAt(m1)?.elev ?? -Infinity) < (elevAt(m2)?.elev ?? -Infinity)) a = m1;
             else b = m2;
           }
-          const refined = riseAt((a + b) / 2);
-          if (refined != null && refined > best) best = refined;
+          const refined = elevAt((a + b) / 2);
+          if (refined && refined.elev > best.elev) best = refined;
         }
         silhouette.push({
           u: bx * axis.x + bz * axis.z,
-          elev: best === null ? null : stack.bearing + ROOF_FASCIA_IN / 12 + best,
+          elev: best === null ? null : best.elev,
+          base: best === null ? null : best.base,
         });
       }
     }
@@ -7686,27 +7707,43 @@ class Component extends DCLogic {
     if (lit.length > 1) {
       ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
       ctx.beginPath();
-      let pen = false;
+      let pen = null;
       silhouette.forEach(s => {
-        if (s.elev == null) { pen = false; return; }
-        if (!pen) { ctx.moveTo(X(s.u), Y(stack.bearing)); ctx.lineTo(X(s.u), Y(s.elev)); pen = true; }
+        if (s.elev == null) {
+          if (pen) ctx.lineTo(X(pen.u), Y(pen.base));
+          pen = null;
+          return;
+        }
+        if (!pen) { ctx.moveTo(X(s.u), Y(s.base)); ctx.lineTo(X(s.u), Y(s.elev)); }
         else ctx.lineTo(X(s.u), Y(s.elev));
+        pen = s;
       });
-      const last = [...silhouette].reverse().find(s => s.elev != null);
-      if (last) ctx.lineTo(X(last.u), Y(stack.bearing));
+      if (pen) ctx.lineTo(X(pen.u), Y(pen.base));
       ctx.stroke();
-      ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(X(lit[0].u), Y(stack.bearing + ROOF_FASCIA_IN / 12));
-      ctx.lineTo(X(lit[lit.length - 1].u), Y(stack.bearing + ROOF_FASCIA_IN / 12));
-      ctx.stroke();
+      // Fascia band per eave run — a run breaks where the roof drops out or
+      // where a differently-based roof (the garage) takes over the front.
       // The fascia's lower edge carries the roof's shadow — the heaviest
       // roof line on the sheet.
-      ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
-      ctx.beginPath();
-      ctx.moveTo(X(lit[0].u), Y(stack.bearing));
-      ctx.lineTo(X(lit[lit.length - 1].u), Y(stack.bearing));
-      ctx.stroke();
+      const runs = [];
+      let run = null;
+      silhouette.forEach(s => {
+        if (s.elev == null || (run && run.base !== s.base)) run = null;
+        if (s.elev == null) return;
+        if (!run) { run = { base: s.base, u0: s.u, u1: s.u }; runs.push(run); }
+        else run.u1 = s.u;
+      });
+      runs.filter(r => r.u1 - r.u0 > 0.5).forEach(r => {
+        ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(X(r.u0), Y(r.base + ROOF_FASCIA_IN / 12));
+        ctx.lineTo(X(r.u1), Y(r.base + ROOF_FASCIA_IN / 12));
+        ctx.stroke();
+        ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
+        ctx.beginPath();
+        ctx.moveTo(X(r.u0), Y(r.base));
+        ctx.lineTo(X(r.u1), Y(r.base));
+        ctx.stroke();
+      });
     }
 
     // Grade at the top of the foundation wall, heavy, across the sheet.
@@ -17441,13 +17478,6 @@ class Component extends DCLogic {
         name: c.name,
         sideStyle: c.auto ? '' : 'display:none;',
         sideName: c.auto ? this._elevationName(c.id) : '',
-        onSideClick: e => {
-          e.stopPropagation();
-          // The name box covers most of the row; a click on it opens the view
-          // like the rest of the row. Renaming happens once the view is open.
-          if (this.state.activeCutId !== c.id) { e.target.blur(); this._enterCutView(c.id); }
-        },
-        onSideChange: e => this._setElevationName(c.id, e.target.value),
         rowClass: 'cut-row' + (activeCutId === c.id ? ' active' : ''),
         delStyle: c.auto ? 'display:none;' : '',
         onView:   () => this._enterCutView(c.id),

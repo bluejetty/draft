@@ -299,6 +299,77 @@ test('a house drawn after a built garage still builds', async ({ page }) => {
   expect(again.roofs.length).toBe(saved.roofs.length);
 });
 
+// A detached garage is single-storey no matter how many floors the house
+// stacks: its roof bears on the MAIN-floor ceiling (the plate height stored
+// on the garage roof), never on the full two-storey wall stack.
+test('the garage roof sits at the main-floor ceiling, not the second-storey bearing', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  await drawHouseOutline(page);
+  await drawDetachedGarage(page, 'gradebeam');
+  await buildHouse(page);
+
+  const saved = await h.savedDrawing(page);
+  const garageRoof = saved.roofs.find(roof => roof.garage);
+  expect(garageRoof.plateHeightFt).toBeGreaterThan(0);
+
+  // FRONT elevation: house (left) and garage (right) side by side.
+  await page.locator('.cut-row', { hasText: 'E1' }).click({ position: { x: 18, y: 8 } });
+  await page.waitForTimeout(400);
+  await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
+
+  const scan = await page.evaluate(() => {
+    const canvas = document.querySelector('[data-model-overlay]');
+    const W = canvas.width, H = canvas.height;
+    const { data } = canvas.getContext('2d').getImageData(0, 0, W, H);
+    // Opaque ink only: the translucent elevation-mark grid lines cross the
+    // whole sheet and would bridge the house-to-garage gap.
+    const dark = (x, y) => {
+      const i = (y * W + x) * 4;
+      return data[i + 3] > 200 && data[i] < 120 && data[i + 1] < 120 && data[i + 2] < 120;
+    };
+    // Grade: the lowest row where a dark run crosses most of the sheet.
+    let gradeY = 0;
+    for (let y = 0; y < H; y++) {
+      let run = 0, best = 0;
+      for (let x = 0; x < W; x++) {
+        run = dark(x, y) ? run + 1 : 0;
+        best = Math.max(best, run);
+      }
+      if (best > W * 0.6) gradeY = y;
+    }
+    // Topmost ink per column, well above grade — the roofline of whatever
+    // stands there. The floor band hugging the grade line spans the
+    // house-to-garage gap, so ink within ~4' of grade doesn't count.
+    const tops = [];
+    for (let x = 0; x < W; x++) {
+      let top = null;
+      for (let y = 24; y < gradeY - 60; y++) {
+        if (dark(x, y)) { top = y; break; }
+      }
+      tops.push(top);
+    }
+    // Clusters of adjacent inked columns: house and garage stand apart.
+    const clusters = [];
+    let cluster = null;
+    tops.forEach((top, x) => {
+      if (top == null) { cluster = null; return; }
+      if (!cluster) { cluster = { x0: x, x1: x, top }; clusters.push(cluster); }
+      else { cluster.x1 = x; cluster.top = Math.min(cluster.top, top); }
+    });
+    return { gradeY, clusters: clusters.filter(c => c.x1 - c.x0 > 60) };
+  });
+
+  expect(scan.clusters.length).toBe(2);
+  const [house, garage] = scan.clusters;
+  const houseRise = scan.gradeY - house.top;
+  const garageRise = scan.gradeY - garage.top;
+  // Two-storey house ridge ≈ 21' above grade; a single-storey garage roof
+  // peaks near 11'. Riding the full stack would put it at ≈ 20' — well
+  // over the 75% line this pins.
+  expect(garageRise).toBeGreaterThan(houseRise * 0.3);
+  expect(garageRise).toBeLessThan(houseRise * 0.75);
+});
+
 test('BUILD GARAGE beside a house converts the newest rectangle, not the house', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
