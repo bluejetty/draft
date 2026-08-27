@@ -161,6 +161,23 @@ function countColor(pixels, [r, g, b], tol = 26) {
   return count;
 }
 
+// The guided tour (board #230) pulls every closed HOUSE outline down to
+// FOUNDATION and offers the FOUNDATION DONE popup. Specs that trace a house
+// as SETUP climb straight back to MAIN the way a drafter does — one press on
+// the popup. Only for house outlines closed on a LEVEL: garage loops and
+// boneyard-drawn masters never start the tour.
+async function climbTourToMain(page) {
+  const popup = page.locator('[data-tour-popup]');
+  // Tolerant: a second outline on the shelf, a garage loop, or a boneyard
+  // master never fires the tour — no popup within the reveal window means
+  // nothing to climb. house-tour.spec.js asserts the firing cases loudly.
+  try { await popup.waitFor({ state: 'visible', timeout: 4000 }); }
+  catch (e) { return; }
+  await popup.click();
+  await popup.waitFor({ state: 'hidden' });
+  await waitForSaved(page);
+}
+
 module.exports = {
   HALF_HEIGHT_FT,
   STORAGE_BUCKET,
@@ -172,6 +189,7 @@ module.exports = {
   selectTool,
   activeToolLabels,
   waitForSaved,
+  climbTourToMain,
   savedDrawing,
   allLines,
   allWalls,

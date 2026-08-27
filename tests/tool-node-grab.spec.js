@@ -31,6 +31,7 @@ async function drawOutlineRect(page) {
   await h.clickWorld(page, -8, 6);
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
+  await h.climbTourToMain(page);
 }
 
 test('the Line tool drags an existing endpoint by press-and-hold', async ({ page }) => {

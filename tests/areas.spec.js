@@ -28,6 +28,7 @@ async function drawOutline(page, points) {
   for (const [x, z] of points) await h.clickWorld(page, x, z);
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
+  await h.climbTourToMain(page);
 }
 
 async function buildHouse(page) {

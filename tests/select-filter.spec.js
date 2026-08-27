@@ -100,6 +100,7 @@ test('OUTLINE keeps a floor from stealing the pick; Esc on empty releases it', a
   await h.clickWorld(page, -8, 6);
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
+  await h.climbTourToMain(page);
   await h.selectTool(page, 'Floor');
   await h.clickWorld(page, -6, -4);
   await h.clickWorld(page, 6, -4);
