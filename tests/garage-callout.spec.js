@@ -1,4 +1,4 @@
-// PROFESSOR RUFF's attached-garage lesson: arming ATTACHED GARAGE opens a
+// PROFESSOR GRUFF's attached-garage lesson: arming ATTACHED GARAGE opens a
 // dismissible callout teaching the connection — start ON the house, three
 // legs out-around-back, land ON the house — instead of bending the live line
 // mechanics. The first drawing click retires it, "don't show this again"

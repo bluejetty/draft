@@ -38,6 +38,12 @@ async function openModel(page, { webgl = true } = {}) {
 // page.reload() too.
 async function waitForModelReady(page) {
   await page.waitForFunction(() => document.body.dataset.modelReady === '1');
+  // The entry performance notice pops right after the profile restore that
+  // follows model-ready; put it away so it never covers the top-bar build
+  // cluster mid-test. perf-notice.spec.js exercises the notice itself with
+  // its own inline waits instead of this helper.
+  const gotIt = page.locator('[data-perf-notice-continue]');
+  try { await gotIt.click({ timeout: 2000 }); } catch { /* opted out or already gone */ }
 }
 
 // Top view keeps the camera at the origin, so feet map to pixels linearly.
