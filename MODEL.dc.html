@@ -15851,7 +15851,10 @@ class Component extends DCLogic {
       const tx  = this._snapPt.x - this._cutStart3.x;
       const tz  = this._snapPt.z - this._cutStart3.z;
       const side = dx2 * tz - dz2 * tx;
-      const dirVec = side > 0 ? this._cutDirLeft : this._cutDirRight;
+      // The clicked arrow is the way the view LOOKS; dirVec records where the
+      // viewer STANDS (the marks and workspaces read it that way), so the
+      // stored direction is the opposite perpendicular.
+      const dirVec = side > 0 ? this._cutDirRight : this._cutDirLeft;
       this._finalizeCut(dirVec);
     }
   }
