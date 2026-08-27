@@ -2323,6 +2323,7 @@ class Component extends DCLogic {
         end: point(wall.end),
         levelId: wall.levelId,
         view: wall.view || 'plan',
+        body: wall.body === 'garage' ? 'garage' : undefined,
         wallType: wall.wallType,
         baseHeight: wall.baseHeight,
         topHeight: wall.topHeight,
@@ -3792,8 +3793,8 @@ class Component extends DCLogic {
        // Pooled vertices restore their BONEYARD master-point link (srcId +
        // offset) so master edits keep rippling through generated geometry
        // after a reload.
-       const restoreVertex = (pt, levelId, view) => {
-        const vtx = this._mergeVertex(pt, levelId, view);
+       const restoreVertex = (pt, levelId, view, body) => {
+        const vtx = this._mergeVertex(pt, levelId, view, body || 'house');
         if (pt.srcId && !vtx.srcId) {
           vtx.srcId = pt.srcId;
           vtx.offX = Number.isFinite(pt.offX) ? pt.offX : 0;
@@ -3808,8 +3809,8 @@ class Component extends DCLogic {
         if (!start || !end || levelId == null) return null;
         return {
            id: this._storedItemId(segment?.id, type, usedIds),
-          start: restoreVertex(start, levelId, extra.view),
-          end: restoreVertex(end, levelId, extra.view),
+          start: restoreVertex(start, levelId, extra.view, extra.body),
+          end: restoreVertex(end, levelId, extra.view, extra.body),
           levelId,
           ...extra,
         };
@@ -3830,6 +3831,7 @@ class Component extends DCLogic {
       this._walls = Array.isArray(saved.walls)
          ? saved.walls.map(wall => restoreSegment(wall, 'wall', {
           view: wall?.view === 'foundation' ? 'foundation' : 'plan',
+          body: wall?.body === 'garage' ? 'garage' : undefined,
           wallType: WALL_TYPES.some(type => type.id === wall.wallType) ? wall.wallType
             : (LEGACY_WALL_TYPES[wall.wallType] || 'stud_2x6'),
           baseHeight: format.number(wall.baseHeight, 0),
@@ -10422,10 +10424,11 @@ class Component extends DCLogic {
         if (hasWall(a, b)) continue;
         this._walls.push({
           id: this._newDrawingItemId('wall'),
-          start: this._linkVertex(this._mergeVertex(a, levelId, 'foundation'), seg.start.srcId),
-          end: this._linkVertex(this._mergeVertex(b, levelId, 'foundation'), seg.end.srcId),
+          start: this._linkVertex(this._mergeVertex(a, levelId, 'foundation', 'garage'), seg.start.srcId),
+          end: this._linkVertex(this._mergeVertex(b, levelId, 'foundation', 'garage'), seg.end.srcId),
           levelId,
           view: 'foundation',
+          body: 'garage',
           wallType: 'concrete_8',
           baseHeight,
           topHeight,
@@ -10596,10 +10599,11 @@ class Component extends DCLogic {
         if (hasWall(a, b)) continue;
         this._walls.push({
           id: this._newDrawingItemId('wall'),
-          start: this._linkVertex(this._mergeVertex(a, level.id, 'plan'), seg.start.srcId),
-          end: this._linkVertex(this._mergeVertex(b, level.id, 'plan'), seg.end.srcId),
+          start: this._linkVertex(this._mergeVertex(a, level.id, 'plan', 'garage'), seg.start.srcId),
+          end: this._linkVertex(this._mergeVertex(b, level.id, 'plan', 'garage'), seg.end.srcId),
           levelId: level.id,
           view: 'plan',
+          body: 'garage',
           wallType: 'stud_2x6',
           baseHeight,
           topHeight,
@@ -13186,14 +13190,18 @@ class Component extends DCLogic {
   }
 
   // ─── Vertex pool ─────────────────────────────────────────────────────────────
-  // Return an existing pooled Vector3 at (pt.x, pt.z) in the SAME level and
-  // drawing context, or create one at that level's elevation. Different views
-  // must never share a mutable vertex: dragging a FLOOR point cannot edit PLAN.
-  _mergeVertex(pt, levelId, viewId = this._activeLayerViewId(levelId) || 'plan') {
+  // Return an existing pooled Vector3 at (pt.x, pt.z) in the SAME level,
+  // drawing context, and body, or create one at that level's elevation.
+  // Different views must never share a mutable vertex: dragging a FLOOR point
+  // cannot edit PLAN. Bodies keep separate structures separate: a garage wall
+  // endpoint sitting exactly on a house corner stays its own vertex, so the
+  // two never splice and the meeting line always draws between them.
+  _mergeVertex(pt, levelId, viewId = this._activeLayerViewId(levelId) || 'plan', body = 'house') {
     const THRESH = 0.001; // tight coordinate tolerance; snapped points are exact
     for (const v of this._vertices) {
       if (v._draftLevelId === levelId
         && v._draftViewId === viewId
+        && (v._draftBody || 'house') === body
         && Math.abs(v.x - pt.x) < THRESH
         && Math.abs(v.z - pt.z) < THRESH) return v;
     }
@@ -13202,6 +13210,7 @@ class Component extends DCLogic {
     const v = new THREE.Vector3(pt.x, elevation, pt.z);
     v._draftLevelId = levelId;
     v._draftViewId = viewId;
+    if (body !== 'house') v._draftBody = body;
     this._vertices.push(v);
     return v;
   }
@@ -13304,11 +13313,20 @@ class Component extends DCLogic {
       if (d < bestD) { bestD = d; bestVtx = v; }
     });
     if (!bestVtx) return null;
-    // Collect all segment props pointing at this exact vertex object
+    // Collect all segment props pointing at this exact vertex object. A
+    // separate-body twin — a garage wall end pooled apart from the house
+    // vertex it sits exactly on — rides the same drag, so the two bodies
+    // stay coincident under a direct node pull.
     const refs = [];
+    const twin = v => v === bestVtx
+      || (v._draftLevelId === bestVtx._draftLevelId
+        && v._draftViewId === bestVtx._draftViewId
+        && (v._draftBody || 'house') !== (bestVtx._draftBody || 'house')
+        && Math.abs(v.x - bestVtx.x) < 0.001
+        && Math.abs(v.z - bestVtx.z) < 0.001);
     [...this._activeLines(), ...this._activeWalls()].forEach(seg => {
-      if (seg.start === bestVtx) refs.push({ target: seg, prop: 'start' });
-      if (seg.end   === bestVtx) refs.push({ target: seg, prop: 'end' });
+      if (twin(seg.start)) refs.push({ target: seg, prop: 'start' });
+      if (twin(seg.end))   refs.push({ target: seg, prop: 'end' });
     });
     [...this._activeFloors(), ...this._activeShapes(), ...this._activeRoofs(), ...this._activeSurfaceOpenings()].forEach(outline => {
       outline.points.forEach((point, index) => {
