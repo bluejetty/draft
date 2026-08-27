@@ -8918,6 +8918,16 @@ class Component extends DCLogic {
       this._finishOutline(true);
       return;
     }
+    // An ATTACHED garage run ends where it meets the house again: a click that
+    // lands back on the house outline — a corner or anywhere along a wall — is
+    // the closing connection, so it drops that point and finishes the run
+    // instead of rubber-banding another leg.
+    if (this.state.outlineGarage === 'attached' && this._outlinePoints.length >= 3
+      && this._landsOnHouseOutline(pt)) {
+      this._outlinePoints.push(pt.clone());
+      this._finishOutline();
+      return;
+    }
     this._outlinePoints.push(pt.clone());
     this._lockAngle = null;
   }
@@ -9249,10 +9259,48 @@ class Component extends DCLogic {
   }
 
   // ── GARAGE attach — the open run welds onto the house outline ─────────────
-  _houseMasterOutline(shelfId) {
-    const masters = this._boneyardOutlines.filter(outline =>
+  _houseMasterOutlines(shelfId) {
+    return this._boneyardOutlines.filter(outline =>
       outline.shelfId === shelfId && !outline.garage && outline.open !== true);
+  }
+
+  _houseMasterOutline(shelfId) {
+    const masters = this._houseMasterOutlines(shelfId);
     return masters.length ? masters[masters.length - 1] : null;
+  }
+
+  // The house a garage run welds onto: whichever closed master both ends of
+  // the run actually land on (nearest reach when several qualify), so a shelf
+  // holding more than one house outline still takes a garage.
+  _garageHouseOutline(shelfId, points) {
+    const masters = this._houseMasterOutlines(shelfId);
+    let best = null, bestReach = Infinity;
+    masters.forEach(house => {
+      const start = this._resolveGarageAttach(points[0], house);
+      const end = this._resolveGarageAttach(points[points.length - 1], house);
+      if (!start || !end) return;
+      const at = (res, pt) => {
+        const pos = this._garageAttachPosition(house, res);
+        return Math.hypot(pos.x - pt.x, pos.z - pt.z);
+      };
+      const reach = at(start, points[0]) + at(end, points[points.length - 1]);
+      if (reach < bestReach) { bestReach = reach; best = house; }
+    });
+    return best || (masters.length ? masters[masters.length - 1] : null);
+  }
+
+  // True when a point sits on any closed house master of the active shelf —
+  // the test an attached garage run uses to know it has met the house again.
+  _landsOnHouseOutline(pt) {
+    const shelf = this._activeBoneyardShelf();
+    if (!shelf) return false;
+    return this._houseMasterOutlines(shelf.id).some(house =>
+      !!this._resolveGarageAttach(pt, house));
+  }
+
+  _pendingGarageHouse(pending) {
+    return this._boneyardOutlines.find(outline => outline.id === pending.houseId)
+      || this._houseMasterOutline(pending.shelfId);
   }
 
   // Resolve a garage end point onto the house master outline within the
@@ -9353,7 +9401,7 @@ class Component extends DCLogic {
   }
 
   _commitGarageOutline(points, shelf, level) {
-    const house = this._houseMasterOutline(shelf.id);
+    const house = this._garageHouseOutline(shelf.id, points);
     if (!house) {
       this.setState({
         drawingMessage: 'Draw the house OUTLINE first — the GARAGE run attaches onto it.',
@@ -9380,6 +9428,7 @@ class Component extends DCLogic {
     const pending = {
       points,
       shelfId: shelf.id,
+      houseId: house.id,
       sourceLevelId: level ? level.id : null,
       resStart,
       resEnd,
@@ -9395,7 +9444,7 @@ class Component extends DCLogic {
   // on the opposite side of that wall from the house, so the runs would sit
   // face to interior. Every other corner landing welds silently at the corner.
   _continueGarageCommit(pending) {
-    const house = this._houseMasterOutline(pending.shelfId);
+    const house = this._pendingGarageHouse(pending);
     const cornerKey = ['resStart', 'resEnd'].find(key =>
       pending[key].type === 'point' && this._houseCornerAt(house, pending[key].index)
       && !pending.stubbed?.[key] && this._garageCornerNeedsStub(pending, key, house));
@@ -9459,7 +9508,7 @@ class Component extends DCLogic {
     this._garagePending = null;
     this.setState({ garageCornerPrompt: false });
     if (!pending) return;
-    const house = this._houseMasterOutline(pending.shelfId);
+    const house = this._pendingGarageHouse(pending);
     const key = pending.cornerKey;
     delete pending.cornerKey;
     if (!lengthIn) {
@@ -9507,7 +9556,7 @@ class Component extends DCLogic {
   }
 
   _finalizeGarageOutline(pending) {
-    const house = this._houseMasterOutline(pending.shelfId);
+    const house = this._pendingGarageHouse(pending);
     const attachIds = {};
     ['resStart', 'resEnd'].forEach(key => {
       const pos = pending[`${key}Pos`];

@@ -195,7 +195,7 @@ test('IN LINE keeps an aligned leg exactly where it was drawn — no stub, no sh
   expect(h.near(garageMaster.points[1].z, -14, 0.05)).toBe(true);
 });
 
-test('closing the loop under MARK ATTACHED GARAGE errors instead of committing', async ({ page }) => {
+test('the click that meets the house again ends the run — no extra leg, no loop', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
 
@@ -205,12 +205,17 @@ test('closing the loop under MARK ATTACHED GARAGE errors instead of committing',
   await h.clickWorld(page, 8, -4);
   await h.clickWorld(page, 20, -4);
   await h.clickWorld(page, 20, 4);
-  await h.clickWorld(page, 8, 4);
-  await h.clickWorld(page, 8, -4);
+  await h.clickWorld(page, 8, 4); // lands mid-wall on the house: the run is done
+  await h.waitForSaved(page);
 
-  await expect(page.locator('[data-model-drawing-message]')).toContainText('OPEN run');
+  // Committed on that click alone — no Enter, no double-click.
   const saved = await h.savedDrawing(page);
-  expect(saved.boneyardOutlines.filter(outline => outline.garage)).toHaveLength(0);
+  const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
+  expect(garageMaster).toBeTruthy();
+  expect(garageMaster.open).toBe(true);
+  expect(garageMaster.points).toHaveLength(4);
+  // The run is no longer live, so a later click starts nothing on the shelf.
+  expect(await page.locator('[data-model-drawing]').count()).toBe(0);
 });
 
 test('a held press on a house corner starts the run instead of dragging the node', async ({ page }) => {
