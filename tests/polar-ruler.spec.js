@@ -14,11 +14,27 @@ async function drawLine(page, x1, z1, x2, z2) {
 }
 
 async function engagePolarRay(page, nodeX, nodeZ, rayX, rayZ) {
-  await h.moveTo(page, nodeX, nodeZ); // roll over the node to acquire it
+  // A deliberate pause on the node arms it — the orange glow reports it.
+  await h.moveTo(page, nodeX, nodeZ);
   await expect(page.locator('[data-model-polar]')).toBeVisible();
   await h.moveTo(page, rayX, rayZ);   // near a 45° ray, engaging it
   await expect(page.locator('[data-model-polar]')).toBeVisible();
 }
+
+test('a drive-by over a node does not arm the polar origin', async ({ page }) => {
+  await h.openModel(page);
+  await drawLine(page, 0, 0, 5, -5);
+
+  await h.selectTool(page, 'Line');
+  // Sweep across the node without pausing: hover, then leave immediately.
+  await h.moveTo(page, 0, 0);
+  await h.moveTo(page, 10, 0.2);
+  // No origin armed — no glow now, and none after the dwell delay passes.
+  await expect(page.locator('[data-model-polar]')).toBeHidden();
+  await page.waitForTimeout(600);
+  await h.moveTo(page, 10, 0.3);
+  await expect(page.locator('[data-model-polar]')).toBeHidden();
+});
 
 test('R types a line first point an exact distance from the rolled-over node', async ({ page }) => {
   await h.openModel(page);
@@ -88,7 +104,7 @@ test('Shift T-squares a first point straight across from the acquired node', asy
   expect(h.touchesPoint(added, 10, 0)).toBe(true); // level with the node
 });
 
-test('mid-draw, Shift locks onto the polar node ray when the cursor sits closer to it', async ({ page }) => {
+test('mid-draw, Shift keeps the start lock even with an armed polar node nearby', async ({ page }) => {
   await h.openModel(page);
   await page.keyboard.press('t'); // set the T-square down — acquiring an off-ray node mid-draw
   await drawLine(page, 0, 0, 5, -5);
@@ -98,8 +114,10 @@ test('mid-draw, Shift locks onto the polar node ray when the cursor sits closer 
   await h.moveTo(page, 0, 0);       // acquire the node as the polar origin
   await expect(page.locator('[data-model-polar]')).toBeVisible();
 
+  // The segment start owns the direction: even sitting nearer the node's
+  // level ray, the point stays on the start's own locked ray.
   await page.keyboard.down('Shift');
-  await h.clickWorld(page, 8, 0.8); // nearer the node's level ray than the start's
+  await h.clickWorld(page, 8, 0.8);
   await page.keyboard.up('Shift');
   await page.keyboard.press('Enter'); // finish the chain
   await h.waitForSaved(page);
@@ -107,7 +125,7 @@ test('mid-draw, Shift locks onto the polar node ray when the cursor sits closer 
   const lines = h.allLines(await h.savedDrawing(page));
   const added = lines.find(line => h.touchesPoint(line, -10, 3));
   expect(added).toBeTruthy();
-  expect(h.touchesPoint(added, 8, 0)).toBe(true); // straight across from the node
+  expect(h.touchesPoint(added, 8, 3)).toBe(true); // level with the chain start
 });
 
 test('mid-draw, Shift keeps the start lock when the cursor is off the polar node rays', async ({ page }) => {

@@ -1,19 +1,19 @@
-// Snap feedback and adjustable magnetic pull: the 0,0 origin marker rings
-// when it has hold of the cursor, and the catch radii for node / midpoint
-// snaps come from the shared snap-strength settings.
+// Snap feedback and the one SNAP ZONE setting: the 0,0 origin marker rings
+// when it has hold of the cursor, and every catch radius — node, midpoint,
+// polar — derives from the single snap-zone number.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
 const originRing = page => page.locator('[data-model-originsnap]');
 
-async function setSnapStrength(page, strength) {
+async function setSnapZone(page, zone) {
   await page.evaluate(value => {
     const active = window.DraftProfileManager.getActive('settings');
     const pkg = window.DraftProfileManager.createPackage(
-      'settings', active?.name || 'test', { model: { snapStrength: value } },
+      'settings', active?.name || 'test', { model: { snapZone: value } },
     );
     window.DraftProfileManager.saveActive(pkg);
-  }, strength);
+  }, zone);
   await page.reload();
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
   await h.waitForModelReady(page);
@@ -61,13 +61,13 @@ test('node and midpoint pull follow the settings', async ({ page }) => {
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
 
-  // Default 3px pull: ~8px away catches neither the midpoint nor the node.
+  // Default 4px zone: ~8px away catches neither the midpoint nor the node.
   await h.moveTo(page, 5, 0.6);
   await expect(page.locator('[data-model-midsnap]')).toBeHidden();
   await h.moveTo(page, 10.4, 0.4);
   await expect(page.locator('[data-model-magnet]')).toBeHidden();
 
-  await setSnapStrength(page, { node: 30, midpoint: 30 });
+  await setSnapZone(page, 30);
   await h.selectTool(page, 'Line');
   await h.moveTo(page, 5, 0.6);
   await expect(page.locator('[data-model-midsnap]')).toBeVisible();
@@ -75,26 +75,46 @@ test('node and midpoint pull follow the settings', async ({ page }) => {
   await expect(page.locator('[data-model-magnet]')).toBeVisible();
 });
 
-test('the Settings page edits and saves the snap pull', async ({ page }) => {
+test('the Settings page edits and saves the one snap zone', async ({ page }) => {
   await page.goto('/SETTINGS.html');
 
-  const defaults = await page.evaluate(() => window.DraftSnapStrength.DEFAULT_SNAP_STRENGTH);
+  const dflt = await page.evaluate(() => window.DraftSnapZone.DEFAULT_SNAP_ZONE);
   await page.locator('.advanced summary').click();
-  await expect(page.locator('#snap-node')).toHaveValue(String(defaults.node));
-  await expect(page.locator('#snap-midpoint')).toHaveValue(String(defaults.midpoint));
-  await expect(page.locator('#snap-polar')).toHaveValue(String(defaults.polar));
+  await expect(page.locator('#snap-zone')).toHaveValue(String(dflt));
+  // The old per-snap inputs are gone — one number rules them all.
+  await expect(page.locator('#snap-node')).toHaveCount(0);
+  await expect(page.locator('#snap-midpoint')).toHaveCount(0);
+  await expect(page.locator('#snap-polar')).toHaveCount(0);
 
-  await page.locator('#snap-midpoint').fill('9');
-  await page.locator('#snap-midpoint').blur();
+  await page.locator('#snap-zone').fill('9');
+  await page.locator('#snap-zone').blur();
 
   const stored = await page.evaluate(() =>
-    window.DraftProfileManager.getActive('settings')?.content?.model?.snapStrength);
-  expect(stored.midpoint).toBe(9);
+    window.DraftProfileManager.getActive('settings')?.content?.model?.snapZone);
+  expect(stored).toBe(9);
 
   // Out-of-range values clamp instead of saving nonsense.
-  await page.locator('#snap-node').fill('500');
-  await page.locator('#snap-node').blur();
-  await expect(page.locator('#snap-node')).toHaveValue('60');
+  await page.locator('#snap-zone').fill('500');
+  await page.locator('#snap-zone').blur();
+  await expect(page.locator('#snap-zone')).toHaveValue('60');
+});
+
+test('a legacy snap-strength profile migrates to the snap zone', async ({ page }) => {
+  await page.goto('/SETTINGS.html');
+
+  await page.evaluate(() => {
+    const active = window.DraftProfileManager.getActive('settings');
+    const pkg = window.DraftProfileManager.createPackage(
+      'settings', active?.name || 'test',
+      { model: { snapStrength: { node: 12, midpoint: 3, polar: 7 } } },
+    );
+    window.DraftProfileManager.saveActive(pkg);
+  });
+  await page.reload();
+
+  // The legacy node value carries over as the one zone.
+  await page.locator('.advanced summary').click();
+  await expect(page.locator('#snap-zone')).toHaveValue('12');
 });
 
 test('the Settings page saves the drafter name and phone', async ({ page }) => {
