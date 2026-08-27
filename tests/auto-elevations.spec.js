@@ -92,6 +92,43 @@ test.describe('Standard E1-E4 elevations', () => {
     expect(census).toBeGreaterThan(1200);
   });
 
+  test('a click anywhere on the row opens the view — even on the side name', async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+    await drawOutlineRect(page);
+    await buildHouse(page);
+    await h.waitForSaved(page);
+
+    // The name box covers most of the row; a click on it opens the view
+    // like the rest of the row does.
+    const side = page.locator('.cut-row', { hasText: 'E2' }).locator('.cut-side');
+    await side.click();
+    await page.waitForTimeout(400);
+    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E2');
+
+    // With the view open, the same box edits the side name in place.
+    await side.click();
+    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E2');
+    await side.fill('STREET');
+    await side.press('Enter');
+    await h.waitForSaved(page);
+    const saved = await h.savedDrawing(page);
+    expect(saved.elevationNames).toEqual({ E2: 'STREET' });
+  });
+
+  test('clicking the active level card leaves a cut view back to plan', async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+    await drawOutlineRect(page);
+    await buildHouse(page);
+    await h.waitForSaved(page);
+
+    await page.locator('.cut-row', { hasText: 'E1' }).click({ position: { x: 18, y: 8 } });
+    await page.waitForTimeout(400);
+    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
+
+    await page.locator('.level-row.active').locator('.level-body').click();
+    await expect(page.locator('[data-model-title-detail]').last()).not.toHaveText('E1');
+  });
+
   test('turning the standard off in COMPANY STANDARDS removes the marks', async ({ page }) => {
     await h.openModel(page, { webgl: false });
     await drawOutlineRect(page);
