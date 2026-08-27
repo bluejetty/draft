@@ -3369,9 +3369,13 @@ class Component extends DCLogic {
     }, () => this._markUnsaved());
     const idx = this.state.levels.findIndex(lvl => lvl.id === targets[step]);
     if (idx >= 0) this._switchLevel(idx);
-    // _switchLevel writes its own context message — the tour's step message
-    // is the one the drafter needs here, so it lands after.
-    if (messages[step]) this.setState({ drawingMessage: messages[step], drawingMessageError: false });
+    // _switchLevel writes its own context message and _markUnsaved clears the
+    // strip when its callback settles — the tour's step message is the one the
+    // drafter needs here, so it lands again after both.
+    if (messages[step]) this.setState(
+      { drawingMessage: messages[step], drawingMessageError: false },
+      () => this.setState({ drawingMessage: messages[step], drawingMessageError: false }),
+    );
   }
 
   // One gate, two lights (the answer sheet's BOTH): the active level card
