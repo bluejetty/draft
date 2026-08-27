@@ -110,10 +110,10 @@
         <p>AutoCAD and MicroStation muscle memory is typed multi-letter command aliases (<strong>PL</strong> polyline, <strong>TR</strong> trim, <strong>EX</strong> extend), and Revit uses two-letter shortcuts (<strong>WA</strong> wall, <strong>DI</strong> dimension). Draft currently binds a single key plus optional modifiers, so each preset is the nearest single-key match — usually the first letter of the alias. Multi-letter key sequences are a possible future upgrade if a preset ever needs to be exact.</p>
         <h3>How the presets map</h3>
         <ul>
-          <li><strong>AutoCAD style</strong> — A arc (node tool), Q trim (TR), E extend (EX), I insert for doors/windows (blocks), T toggles the 90° T-square like F8 ortho, Space repeats/commits like the ACAD spacebar, Ctrl+Y redo.</li>
+          <li><strong>AutoCAD style</strong> — A arc (node tool), Q trim (TR), E extend (EX), I insert for doors/windows (blocks), T toggles the 90° T-square like F8 ortho, Space repeats/commits like the ACAD spacebar, Ctrl+Y redo. Shape keeps P, compass moves to V.</li>
           <li><strong>Revit style</strong> — W wall (WA), Shift+W window/door (WN / DR), D dimension (DI), Q trim (TR), Ctrl+Y redo.</li>
-          <li><strong>MicroStation style</strong> — Q element selection (first tool in the task list), P place shape, M trim, mnemonic letters elsewhere; Ctrl+Y stands in for redo because the browser keeps Ctrl+R.</li>
-          <li><strong>ArchiCAD style</strong> — A arrow (select), W wall, Shift+D door/window pair, L line; Ctrl+Z / Ctrl+Shift+Z undo/redo as ArchiCAD ships them.</li>
+          <li><strong>MicroStation style</strong> — Q element selection (first tool in the task list), P place shape, M trim, mnemonic letters elsewhere; Ctrl+Y stands in for redo because the browser keeps Ctrl+R. Compass moves to V.</li>
+          <li><strong>ArchiCAD style</strong> — A arrow (select), W wall, Shift+D door/window pair, L line; Ctrl+Z / Ctrl+Shift+Z undo/redo as ArchiCAD ships them. Shape keeps P, compass moves to V.</li>
         </ul>
         <h3>Commands other apps have that Draft doesn't (yet)</h3>
         <p>Ranked by how often a drafter reaches for them:</p>
@@ -148,7 +148,7 @@
       const groups = [
         { title:'Drawing tools', commands:[
           ['select', 'Select'], ['line', 'Line'], ['node', 'Node / Arc'], ['wall', 'Wall'],
-          ['floor', 'Floor'], ['fenestration', 'Fenestration'], ['shape', 'Shape'], ['outline', 'Outline'], ['roof', 'Roof'], ['dimension', 'Dimension'], ['trim', 'Trim'], ['tsquare', 'T-square (90° lock)'], ['cut', 'Cut'], ['group', 'Assembly (group)'], ['groupAlt', 'Alternate assembly'], ['ungroup', 'Ungroup assembly'], ['extend', 'Extend'], ['extendAlt', 'Alternate extend'], ['copy', 'Copy'],
+          ['floor', 'Floor'], ['fenestration', 'Fenestration'], ['shape', 'Shape (area)'], ['outline', 'Outline'], ['roof', 'Roof'], ['dimension', 'Dimension'], ['trim', 'Trim'], ['tsquare', 'T-square (90° lock)'], ['compass', 'Compass (polar tracking)'], ['cut', 'Cut'], ['group', 'Assembly (group)'], ['groupAlt', 'Alternate assembly'], ['ungroup', 'Ungroup assembly'], ['extend', 'Extend'], ['extendAlt', 'Alternate extend'], ['copy', 'Copy'],
         ]},
         { title:'Drawing actions', commands:[
           ['freezeLength', 'Freeze length'], ['finish', 'Finish / commit'],
@@ -160,14 +160,7 @@
       const active = manager.getActive('settings');
       const existing = active?.content?.model?.keybindings || {};
       let packageName = active?.name || manager.defaultName();
-      // A stored empty string means the user deliberately cleared the command,
-      // so only a command that was never stored falls back to its default.
-      // A command still stored on a retired default follows to the new one.
-      let bindings = Object.fromEntries(Object.entries(defaults).map(([command, fallback]) => {
-        if (!(command in existing)) return [command, fallback];
-        const stored = keyboard.normaliseKeyBinding(existing[command]);
-        return [command, stored === keyboard.RETIRED_KEYBINDINGS[command] ? fallback : stored];
-      }));
+      let bindings = keyboard.resolveKeybindings(existing);
       // Old profiles stored three numbers as snapStrength; the node value
       // carries over as the one snap zone.
       let snapZone = snaps.normaliseSnapZone(

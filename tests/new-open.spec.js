@@ -96,6 +96,7 @@ test('NEW is undoable: Ctrl+Z brings the old drawing back', async ({ page }) => 
 
 test('NEW drops the polar origin acquired from the old drawing', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('p'); // pick the compass up — polar is off by default
   await drawOneLine(page);
 
   // Roll over the old line's corner so its node becomes the polar origin.

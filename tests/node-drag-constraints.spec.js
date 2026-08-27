@@ -155,6 +155,7 @@ test('a dragged node still magnets onto another node', async ({ page }) => {
 
 test('mid-drag, Shift keeps the grab-point lock even with an armed polar node', async ({ page }) => {
   await h.openModel(page);
+  await page.keyboard.press('p'); // pick the compass up — polar is off by default
   await drawLine(page, -10, 0, 10, 0);
   await drawLine(page, 2, 6, 8, 6);
 

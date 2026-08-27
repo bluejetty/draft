@@ -1361,8 +1361,9 @@
   <span data-model-ang style="color:rgba(29,31,32,0.4); min-width:52px;"></span>
   <!-- Constraint chips: the T-square lights while its 90° lock is on (T) or a
        Shift protractor lock is engaged, the ruler lights and glows while
-       an R typed length is active -->
-  <span data-mode-tsquare title="{{ tsquareChipTitle }}" style="display:inline-flex; color:{{ tsquareChipColor }};">
+       an R typed length is active. Each live chip is also its instrument's
+       tap-toggle — same as pressing its key — with the key in its title. -->
+  <span data-mode-tsquare title="{{ tsquareChipTitle }}" onClick="{{ toggleTsquare }}" style="display:inline-flex; color:{{ tsquareChipColor }}; cursor:pointer;">
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
       <path d="M1 3 H15"></path>
       <path d="M8 3 V15"></path>
@@ -1380,10 +1381,19 @@
     </svg>
     <span data-protractor-angle style="font-size:10px; line-height:1; min-width:18px;">{{ protractorChipLabel }}</span>
   </span>
-  <span data-mode-ruler title="RULER typed length — R latches on/off" style="display:inline-flex; color:{{ rulerChipColor }}; filter:{{ rulerChipGlow }};">
+  <span data-mode-ruler title="{{ rulerChipTitle }}" onClick="{{ toggleRuler }}" style="display:inline-flex; color:{{ rulerChipColor }}; filter:{{ rulerChipGlow }}; cursor:pointer;">
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
       <rect x="1.5" y="6" width="13" height="5"></rect>
       <path d="M4.5 6 V8.2 M7.5 6 V8.2 M10.5 6 V8.2 M13 6 V8.2" stroke-width="0.9"></path>
+    </svg>
+  </span>
+  <!-- The compass is the polar-tracking instrument: up, a dwell on a node
+       casts measuring rays from it; down, the arms stay off the board. -->
+  <span data-mode-compass title="{{ compassChipTitle }}" onClick="{{ toggleCompass }}" style="display:inline-flex; color:{{ compassChipColor }}; filter:{{ compassChipGlow }}; cursor:pointer;">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <path d="M8 2 L3.5 13.5 M8 2 L12.5 13.5"></path>
+      <circle cx="8" cy="2.5" r="1.2" stroke-width="0.9"></circle>
+      <path d="M4.5 11 A7 7 0 0 0 11.5 11" stroke-width="0.9"></path>
     </svg>
   </span>
   <!-- Dormant instruments: every drafting tool keeps its light on the strip as
@@ -1392,13 +1402,6 @@
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
       <path d="M2.5 13.5 L13.5 13.5 L2.5 2.5 Z"></path>
       <path d="M5 11.5 L8.5 11.5 L5 8 Z" stroke-width="0.9"></path>
-    </svg>
-  </span>
-  <span data-mode-compass title="COMPASS arcs and circles" style="display:inline-flex; color:rgba(29,31,32,0.18);">
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-      <path d="M8 2 L3.5 13.5 M8 2 L12.5 13.5"></path>
-      <circle cx="8" cy="2.5" r="1.2" stroke-width="0.9"></circle>
-      <path d="M4.5 11 A7 7 0 0 0 11.5 11" stroke-width="0.9"></path>
     </svg>
   </span>
   <span data-mode-brush title="DRAFTING BRUSH" style="display:inline-flex; color:rgba(29,31,32,0.18);">
@@ -1936,7 +1939,7 @@ const DEFAULT_LEVELS = [
 // Space and Settings cannot drift apart.
 const {
   DEFAULT_KEYBINDINGS,
-  RETIRED_KEYBINDINGS,
+  resolveKeybindings,
   normaliseKeyBinding,
   eventMatchesBinding,
   keyBindingLabel,
@@ -2106,6 +2109,7 @@ class Component extends DCLogic {
     tsquareEngaged: false,
     protractorAngle: '',       // '' | '90' | '45' | '30' — which blade a held modifier grabbed
     tsquareOn: true,           // full-time 90° T-square while drawing; T toggles
+    compassOn: false,          // polar tracking instrument — down by default; P picks it up
     cuts:          [],
     elevationNames: {},         // per-drawing side names for E1-E4 (FRONT/LEFT...), defaults from COMPANY STANDARDS
     nextCutId:     1,
@@ -3165,16 +3169,7 @@ class Component extends DCLogic {
         ...(typeof values.garageIntroOff === 'boolean' ? { garageIntroOff: values.garageIntroOff } : {}),
         ...(typeof values.perfIntroOff === 'boolean' ? { perfIntroOff: values.perfIntroOff } : {}),
         ...(values.keybindings && typeof values.keybindings === 'object'
-          ? {
-            // A stored empty string means the command was deliberately cleared;
-            // only a command that was never stored falls back to its default.
-            // A command still stored on a retired default follows to the new one.
-            keybindings: Object.fromEntries(Object.entries(DEFAULT_KEYBINDINGS).map(([command, fallback]) => {
-              if (!(command in values.keybindings)) return [command, fallback];
-              const stored = normaliseKeyBinding(values.keybindings[command]);
-              return [command, stored === RETIRED_KEYBINDINGS[command] ? fallback : stored];
-            })),
-          }
+          ? { keybindings: resolveKeybindings(values.keybindings) }
           : {}),
       };
     }
@@ -8058,7 +8053,9 @@ class Component extends DCLogic {
 
     // A deliberate pause on a node arms it as the polar-tracking origin — the
     // origin is the node itself, even when the lock kept the endpoint on ray.
-    if (magnet && (drag || POLAR_TRACKING_TOOLS.has(tool))) this._dwellPolarOrigin(magnetRaw);
+    // The compass instrument owns polar tracking: while it is down, no dwell
+    // ever arms a node and the arms stay off the board.
+    if (this.state.compassOn && magnet && (drag || POLAR_TRACKING_TOOLS.has(tool))) this._dwellPolarOrigin(magnetRaw);
     else this._cancelPolarDwell();
     const polarHit = (!trackingHit && !magnet && !midSnap && !(angleLockHeld && start)
       && this._polarOrigin && (drag || POLAR_TRACKING_TOOLS.has(tool)))
@@ -14124,6 +14121,53 @@ class Component extends DCLogic {
     return Math.PI / 4;
   }
 
+  // The compass picks polar tracking up or sets it down: while it is up, a
+  // dwell on a node casts measuring rays from it; down, no arms appear.
+  _toggleCompass() {
+    const on = !this.state.compassOn;
+    if (!on) {
+      this._polarOrigin = null;
+      this._polarSnap = null;
+      this._cancelPolarDwell();
+    }
+    this.setState({
+      compassOn: on,
+      ...(on ? {} : { showPolarOrigin: false }),
+      drawingMessage: on
+        ? 'COMPASS up — rest on a node to cast polar rays from it. P sets it down.'
+        : 'COMPASS down — no polar rays. P picks it back up.',
+      drawingMessageError: false,
+    });
+  }
+
+  // R is a latch, not a one-shot: it turns RULER mode on and the box stays
+  // lit segment after segment (point, type, Enter, point, type) until R
+  // turns it back off. The ruler chip taps the same latch.
+  _toggleRulerLatch() {
+    const tool = this.state.activeTool;
+    const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._wallDrawing)
+      || (tool === 'outline' && this._outlineDrawing)
+      || (tool === 'extend' && this.state.extendPhase === 'destination')
+      || (tool === 'copy' && this.state.copyPhase === 'destination')
+      || this._selectDrag?.active === true;
+    // An engaged polar ray lets these tools type their first point from the
+    // acquired node before any click.
+    const polarReady = this._polarOrigin && this._polarSnap && POLAR_RULER_TOOLS.has(tool);
+    if (this.state.rulerMode) {
+      this.setState({ rulerMode: false });
+      if (this.state.lengthFrozen) this._cancelFrozenLength();
+      return;
+    }
+    this.setState({ rulerMode: true });
+    // The latch opens an empty box on the drawing tools — the drafter is
+    // about to type. Only measuring contexts keep the cursor-length prefill.
+    const emptySeed = ['line', 'wall', 'outline'].includes(tool)
+      && !this._selectDrag?.active;
+    if ((drawing || polarReady) && !this.state.lengthFrozen) {
+      this._freezeLength(emptySeed ? '' : undefined);
+    }
+  }
+
   // The T on the keyboard picks the T-square up or sets it down. The choice
   // rides the personal settings package so it holds across sessions.
   _toggleTsquare() {
@@ -16206,32 +16250,8 @@ class Component extends DCLogic {
     const freezeLengthWhileShiftLocking = e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
       && normaliseKeyBinding(this.state.keybindings.freezeLength) === normaliseKeyBinding(e.key);
     if (matches('freezeLength') || freezeLengthWhileShiftLocking) {
-      const tool = this.state.activeTool;
-      const drawing = (tool === 'line' && this._lineDrawing) || (tool === 'wall' && this._wallDrawing)
-        || (tool === 'outline' && this._outlineDrawing)
-        || (tool === 'extend' && this.state.extendPhase === 'destination')
-        || (tool === 'copy' && this.state.copyPhase === 'destination')
-        || this._selectDrag?.active === true;
-      // An engaged polar ray lets these tools type their first point from the
-      // acquired node before any click.
-      const polarReady = this._polarOrigin && this._polarSnap && POLAR_RULER_TOOLS.has(tool);
       e.preventDefault();
-      // R is a latch, not a one-shot: it turns RULER mode on and the box stays
-      // lit segment after segment (point, type, Enter, point, type) until R
-      // turns it back off.
-      if (this.state.rulerMode) {
-        this.setState({ rulerMode: false });
-        if (this.state.lengthFrozen) this._cancelFrozenLength();
-        return;
-      }
-      this.setState({ rulerMode: true });
-      // The latch opens an empty box on the drawing tools — the drafter is
-      // about to type. Only measuring contexts keep the cursor-length prefill.
-      const emptySeed = ['line', 'wall', 'outline'].includes(tool)
-        && !this._selectDrag?.active;
-      if ((drawing || polarReady) && !this.state.lengthFrozen) {
-        this._freezeLength(emptySeed ? '' : undefined);
-      }
+      this._toggleRulerLatch();
       return;
     }
     // Type-ahead ruler: mid-draw (or on an engaged polar ray) a plain digit
@@ -16297,10 +16317,12 @@ class Component extends DCLogic {
     }
     if (matches('trim')) { e.preventDefault(); this._cancelExtend(); this._cancelCopy(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'trim' }); return; }
     if (matches('tsquare')) { e.preventDefault(); this._toggleTsquare(); return; }
+    if (matches('compass')) { e.preventDefault(); this._toggleCompass(); return; }
     if (matches('cut')) { e.preventDefault(); this._cancelExtend(); this._cancelCopy(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelSurfaceOpening(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this.setState({ activeTool: 'cut' }); return; }
     if (matches('background')) { e.preventDefault(); this._cycleBackground(); return; }
-    // A bare A returns the Select object-type filter to ALL. Presets that bind
-    // A to a command (AutoCAD node, ArchiCAD select) matched above and win.
+    // A bare A returns the Select object-type filter to ALL. Bindings that put
+    // A on a command (SHAPE by default, AutoCAD node, ArchiCAD select) matched
+    // above and win; Esc with nothing selected and the ALL chip still release.
     if (this.state.activeTool === 'select' && !e.ctrlKey && !e.metaKey && !e.altKey
       && typeof e.key === 'string' && e.key.toLowerCase() === 'a') {
       e.preventDefault();
@@ -17704,6 +17726,15 @@ class Component extends DCLogic {
         : 'PROTRACTOR — hold Shift 45° / Ctrl+Shift 30°',
       rulerChipColor: this.state.lengthFrozen || this.state.rulerMode ? '#e07a20' : 'rgba(29,31,32,0.18)',
       rulerChipGlow: this.state.lengthFrozen || this.state.rulerMode ? 'drop-shadow(0 0 3px rgba(224,122,32,0.9))' : 'none',
+      rulerChipTitle: `RULER typed length — [${shortcut('freezeLength')}] or tap latches on/off`,
+      compassChipColor: this.state.compassOn ? '#e07a20' : 'rgba(29,31,32,0.18)',
+      compassChipGlow: this.state.compassOn ? 'drop-shadow(0 0 3px rgba(224,122,32,0.9))' : 'none',
+      compassChipTitle: this.state.compassOn
+        ? `COMPASS up — rest on a node to cast polar rays [${shortcut('compass')} or tap sets it down]`
+        : `COMPASS down — no polar rays [${shortcut('compass')} or tap picks it up]`,
+      toggleTsquare: () => this._toggleTsquare(),
+      toggleCompass: () => this._toggleCompass(),
+      toggleRuler: () => this._toggleRulerLatch(),
       lengthFrozen: this.state.lengthFrozen,
       frozenLengthInput: this.state.frozenLengthInput,
       // The permanent LENGTH box: disabled and blank while no typed length is

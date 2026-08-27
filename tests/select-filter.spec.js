@@ -130,7 +130,7 @@ test('OUTLINE keeps a floor from stealing the pick; Esc on empty releases it', a
   expect(saved.floors).toHaveLength(0);
 });
 
-test('the A key and re-activating Select both return the filter to ALL', async ({ page }) => {
+test('A picks up the SHAPE tool; re-activating Select returns the filter to ALL', async ({ page }) => {
   await h.openModel(page);
   await h.selectTool(page, 'Select');
 
@@ -138,8 +138,10 @@ test('the A key and re-activating Select both return the filter to ALL', async (
   expect(await engagedFilter(page)).toBe('FLOOR');
   await h.clickWorld(page, 15, 15); // blur the chip so the key reaches the canvas
   await page.keyboard.press('a');
-  expect(await engagedFilter(page)).toBe('ALL');
+  const labels = await h.activeToolLabels(page);
+  expect(labels.some(label => /shape/i.test(label))).toBe(true);
 
+  await h.selectTool(page, 'Select');
   await filterChip(page, 'WALL').click();
   expect(await engagedFilter(page)).toBe('WALL');
   await h.selectTool(page, 'Line');
