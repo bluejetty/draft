@@ -37,6 +37,7 @@
     .level-row { display:flex; align-items:stretch; border:1px solid rgba(29,31,32,0.16); margin-bottom:2px; cursor:pointer; background:#fff; }
     .level-row:hover { background:rgba(29,31,32,0.03); }
     .level-row.active { border-color:#5980a6; background:rgba(89,128,166,0.09); }
+    .level-tour-next { border:1px solid #557a46; background:#557a46; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:700; letter-spacing:0.05em; padding:2px 6px; cursor:pointer; }
     .level-bar { width:3px; flex-shrink:0; }
     .level-body { flex:1; min-width:0; padding:3px 7px 4px 8px; border:none; background:transparent; text-align:left; cursor:pointer; }
     .level-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; color:#1d1f20; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -142,6 +143,9 @@
     <button data-build-house onClick="{{ onBuildHouse }}" aria-label="BUILD HOUSE" title="{{ buildHouseHint }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0;">
       <img src="./assets/btn-bone.png" alt="" style="height:44px; display:block;" />
     </button>
+    <sc-if value="{{ tourNextReady }}" hint-placeholder-val="{{ false }}">
+      <button data-tour-next onClick="{{ onTourNext }}" aria-label="NEXT FLOOR" title="NEXT FLOOR — the tour climbs (Enter / Space)" style="height:32px; border:1px solid #557a46; background:#557a46; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.05em; padding:0 10px; cursor:pointer;">NEXT FLOOR &#9650;</button>
+    </sc-if>
     <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
       <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" aria-label="{{ attachedGarageLabel }}" title="{{ attachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ attachedButtonGlow }};">
         <img src="./assets/btn-attached.png" alt="" style="height:38px; display:block;" />
@@ -467,10 +471,25 @@
      or a click/tap anywhere on it — and Escape leaves the tour. -->
 <sc-if value="{{ tourPopupOpen }}" hint-placeholder-val="{{ false }}">
   <div data-tour-popup onClick="{{ advanceTour }}" role="dialog" aria-label="Foundation done" style="position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:52; width:min(380px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 14px 38px rgba(29,31,32,0.22); padding:14px 16px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20; cursor:pointer; text-align:center;">
-    <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:700; letter-spacing:0.06em;">FOUNDATION DONE, GOING TO MAIN FLOOR</div>
+    <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:700; letter-spacing:0.06em;">{{ tourPopupTitle }}</div>
     <div style="margin-top:6px; font-size:12px; color:rgba(29,31,32,0.62); line-height:1.45;">{{ tourPopupNote }}</div>
-    <div style="margin-top:10px; display:inline-block; border:1px solid #8f2a1d; background:#c0392b; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0.06em; padding:6px 14px;">CLIMB &mdash; ENTER / SPACE / TAP</div>
+    <sc-if value="{{ tourPopupChoice }}" hint-placeholder-val="{{ false }}">
+      <div style="margin-top:10px; display:flex; gap:8px;">
+        <button data-tour-next-second onClick="{{ tourNextSecond }}" style="flex:1; height:32px; border:1px solid #8f2a1d; background:#c0392b; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0.06em; cursor:pointer;">NEXT: 2ND FLOOR (ENTER)</button>
+        <button data-tour-next-roof onClick="{{ tourNextRoof }}" style="flex:1; height:32px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">STRAIGHT TO ROOF</button>
+      </div>
+    </sc-if>
+    <sc-if value="{{ tourPopupSingle }}" hint-placeholder-val="{{ true }}">
+      <div style="margin-top:10px; display:inline-block; border:1px solid #8f2a1d; background:#c0392b; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0.06em; padding:6px 14px;">CLIMB &mdash; ENTER / SPACE / TAP</div>
+    </sc-if>
   </div>
+</sc-if>
+
+<!-- The tour's standing chip: while a tour is parked on a floor it names the
+     step (PLACE STAIRS / NEXT FLOOR) — pressing it arms the stair tool or
+     fires the gate. This is also the RESUME affordance after a reload. -->
+<sc-if value="{{ tourChipOpen }}" hint-placeholder-val="{{ false }}">
+  <button data-tour-chip onClick="{{ onTourChip }}" style="position:fixed; top:56px; left:50%; transform:translateX(-50%); z-index:51; border:1px solid #557a46; background:rgba(85,122,70,0.1); color:#3c5c30; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; padding:5px 12px; cursor:pointer;">{{ tourChipLabel }}</button>
 </sc-if>
 
 <sc-if value="{{ garageCalloutOpen }}" hint-placeholder-val="{{ false }}">
@@ -1212,6 +1231,9 @@
               <div class="level-title">
                 <div class="level-name">{{ level.name }}</div>
               </div>
+              <sc-if value="{{ level.tourNext }}" hint-placeholder-val="{{ false }}">
+                <button class="level-tour-next" data-tour-next-card onClick="{{ level.onTourNext }}" title="NEXT FLOOR — the tour climbs (Enter / Space)">NEXT &#9650;</button>
+              </sc-if>
             </div>
              <sc-if value="{{ level.hasLayers }}" hint-placeholder-val="{{ false }}">
                <div class="level-layer-stack">
@@ -2394,6 +2416,7 @@ class Component extends DCLogic {
         footing: column.footing,
         ...(Number.isFinite(Number(column.padIn)) && Number(column.padIn) > 0
           ? { padIn: Number(column.padIn) } : {}),
+        auto: column.auto === true,
         layer: COLUMN_LAYER,
       })),
       nextColumnId: this._nextColumnId || 1,
@@ -2404,6 +2427,7 @@ class Component extends DCLogic {
         levelId: beam.levelId,
         view: beam.view,
         mode: beam.mode,
+        auto: beam.auto === true,
         layer: BEAM_LAYER,
       })),
       nextBeamId: this._nextBeamId || 1,
@@ -3274,7 +3298,7 @@ class Component extends DCLogic {
     const fdnLevel = this.state.levels[fdnIdx];
     const points = master.points.map(pt => ({ x: pt.x, z: pt.z }));
     const plan = window.DraftBuildHouse.midSpanBeams(points);
-    const showPopup = note => this.setState({ tourPopup: true, tourPopupNote: note });
+    const showPopup = note => this.setState({ tourPopup: 'foundation', tourPopupNote: note });
     if (!plan.beams.length) {
       this._tourTimers = [setTimeout(() => showPopup(
         'Every span is under 19\' — no mid-span beam needed. Press ENTER, SPACE, or tap to climb.'), 450)];
@@ -3292,6 +3316,7 @@ class Component extends DCLogic {
           levelId: BASEMENT_LEVEL_ID,
           view: 'foundation',
           mode: 'flush',
+          auto: true,
           layer: BEAM_LAYER,
         }));
         this._markUnsaved();
@@ -3304,6 +3329,7 @@ class Component extends DCLogic {
           levelId: BASEMENT_LEVEL_ID,
           view: 'foundation',
           footing: 'pad36',
+          auto: true,
           layer: COLUMN_LAYER,
         }));
         this._markUnsaved();
@@ -3318,12 +3344,136 @@ class Component extends DCLogic {
     this._tourTimers = [];
   }
 
-  _advanceTourFromFoundation() {
-    if (!this.state.tourPopup) return;
-    this.setState({ tour: { step: 'main' }, tourPopup: false, tourPopupNote: '' },
-      () => this._markUnsaved());
-    const mainIdx = this.state.levels.findIndex(lvl => lvl.id === 3);
-    if (mainIdx >= 0) this._switchLevel(mainIdx);
+  // The popup ladder (slice 2): every floor transition is the same popup
+  // pattern. 'foundation' and 'second' advance as one card; 'main' offers
+  // the two-button choice (NEXT: 2ND FLOOR / STRAIGHT TO ROOF) so a
+  // one-storey house answers by pressing the button it means — no
+  // inference, no setting. Enter/Space fire the primary.
+  _tourPopupPrimary() {
+    const popup = this.state.tourPopup;
+    if (popup === 'foundation') this._advanceTour('main');
+    else if (popup === 'main') this._advanceTour('second');
+    else if (popup === 'second') this._advanceTour('roof');
+  }
+
+  _advanceTour(step) {
+    const targets = { main: 3, second: 5, roof: 7 };
+    const messages = {
+      main: 'MAIN FLOOR — PLACE STAIRS first: they cut the opening for every floor above and can shift the beam below. Walls and rooms are free-form after that.',
+      second: '2ND FLOOR — stairs stack over the run below: start them in the opening. Then walls and rooms, and NEXT: ROOF when you are ready.',
+      roof: 'ROOF — pitch and overhang come from the PROJECT page; the roof step of the tour lands in a coming update. The bone builds whenever you are ready.',
+    };
+    this.setState({
+      tour: { step }, tourPopup: false, tourPopupNote: '',
+      drawingMessage: messages[step] || '', drawingMessageError: false,
+    }, () => this._markUnsaved());
+    const idx = this.state.levels.findIndex(lvl => lvl.id === targets[step]);
+    if (idx >= 0) this._switchLevel(idx);
+    // _switchLevel writes its own context message and _markUnsaved clears the
+    // strip when its callback settles — the tour's step message is the one the
+    // drafter needs here, so it lands again after both.
+    if (messages[step]) this.setState(
+      { drawingMessage: messages[step], drawingMessageError: false },
+      () => this.setState({ drawingMessage: messages[step], drawingMessageError: false }),
+    );
+  }
+
+  // One gate, two lights (the answer sheet's BOTH): the active level card
+  // and the strip beside the bone read this single flag.
+  _tourGateReady() {
+    if (this.state.tourPopup) return false;
+    const step = this.state.tour.step;
+    if (step === 'main') return this._stairs.some(stair => stair.levelId === 3);
+    if (step === 'second') return this._stairs.some(stair => stair.levelId === 5);
+    return false;
+  }
+
+  _pressTourNext() {
+    if (!this._tourGateReady()) return;
+    const step = this.state.tour.step;
+    this.setState({
+      tourPopup: step,
+      tourPopupNote: step === 'main'
+        ? 'Stairs are in. Climb to the 2ND FLOOR, or go straight to the ROOF for a one-storey house.'
+        : 'Stairs stack over the run below — headroom holds and the beam layout stays valid.',
+    });
+  }
+
+  // Stacked stairs (slice 2): on the 2ND FLOOR the tour snaps the top
+  // nosing into the run below's zone — guiding, not scolding. Within the
+  // zone the point stands; near it, it snaps to the zone edge; far away
+  // the click is refused with the reason.
+  _tourStairSnap(pt) {
+    const below = this._stairs.filter(stair => stair.levelId === 3);
+    if (!below.length) return { pt, snapped: false };
+    let best = null;
+    below.forEach(stair => {
+      const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+      const len = Math.hypot(dx, dz) || 1;
+      const ux = dx / len, uz = dz / len;
+      const half = (stair.widthFt || 3) / 2 + 1; // the landing zone: run + 1' margin
+      const relX = pt.x - stair.start.x, relZ = pt.z - stair.start.z;
+      const along = Math.max(0, Math.min(len, relX * ux + relZ * uz));
+      const across = Math.max(-half, Math.min(half, -relX * uz + relZ * ux));
+      const zx = stair.start.x + ux * along - uz * across;
+      const zz = stair.start.z + uz * along + ux * across;
+      const dist = Math.hypot(pt.x - zx, pt.z - zz);
+      if (!best || dist < best.dist) best = { x: zx, z: zz, dist };
+    });
+    if (best.dist < 0.05) return { pt, snapped: false };          // already inside
+    if (best.dist <= 6) {
+      const snapped = pt.clone(); snapped.x = best.x; snapped.z = best.z;
+      return { pt: snapped, snapped: true };
+    }
+    return null;
+  }
+
+  // Q3, confirmed: a stair on MAIN re-runs the span rule with the stair's
+  // footprint as a boundary along the short axis — the beam re-lands
+  // mid-span of the LARGER remaining clear strip. Only the tour's own
+  // auto-tagged beams and teleposts are replaced; hand-placed structure is
+  // never touched.
+  _rederiveTourBeam() {
+    const master = this._boneyardOutlines.find(outline => !outline.garage);
+    if (!master || !this._beams.some(beam => beam.auto)) return;
+    const points = master.points.map(pt => ({ x: pt.x, z: pt.z }));
+    const xs = points.map(p => p.x), zs = points.map(p => p.z);
+    const axisIsX = (Math.max(...xs) - Math.min(...xs)) >= (Math.max(...zs) - Math.min(...zs));
+    const holes = this._stairs.filter(stair => stair.levelId === 3).map(stair => {
+      const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+      const len = Math.hypot(dx, dz) || 1;
+      const half = (stair.widthFt || 3) / 2;
+      const nx = -dz / len * half, nz = dx / len * half;
+      const corners = [
+        { x: stair.start.x + nx, z: stair.start.z + nz },
+        { x: stair.start.x - nx, z: stair.start.z - nz },
+        { x: stair.end.x + nx, z: stair.end.z + nz },
+        { x: stair.end.x - nx, z: stair.end.z - nz },
+      ];
+      const coords = corners.map(corner => (axisIsX ? corner.z : corner.x));
+      return { min: Math.min(...coords), max: Math.max(...coords) };
+    });
+    this._beams = this._beams.filter(beam => !beam.auto);
+    this._columns = this._columns.filter(column => !column.auto);
+    const fdnLevel = this.state.levels.find(lvl => lvl.id === BASEMENT_LEVEL_ID);
+    const elev = fdnLevel ? fdnLevel.elev : 0;
+    const plan = window.DraftBuildHouse.midSpanBeams(points, { holes });
+    plan.beams.forEach(beam => this._beams.push({
+      id: this._nextBeamId++,
+      start: new THREE.Vector3(beam.start.x, elev, beam.start.z),
+      end: new THREE.Vector3(beam.end.x, elev, beam.end.z),
+      levelId: BASEMENT_LEVEL_ID, view: 'foundation', mode: 'flush', auto: true, layer: BEAM_LAYER,
+    }));
+    plan.columns.forEach(column => this._columns.push({
+      id: this._nextColumnId++,
+      point: new THREE.Vector3(column.x, elev, column.z),
+      levelId: BASEMENT_LEVEL_ID, view: 'foundation', footing: 'pad36', auto: true, layer: COLUMN_LAYER,
+    }));
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: 'The stair opening moved the beam — it re-landed mid-span of the larger clear strip on the FOUNDATION plan.',
+      drawingMessageError: false,
+    });
   }
 
   _exitTour() {
@@ -3629,7 +3779,7 @@ class Component extends DCLogic {
         projectInfo: format.projectInfo(saved.projectInfo),
         zoneHeights: format.zoneHeights(saved.zoneHeights),
         tour: format.tour(saved.tour),
-        tourPopup: format.tour(saved.tour).step === 'foundation',
+        tourPopup: format.tour(saved.tour).step === 'foundation' ? 'foundation' : false,
         tourPopupNote: format.tour(saved.tour).step === 'foundation'
           ? 'The foundation structure is in — press ENTER, SPACE, or tap to climb.' : '',
       }, resolve));
@@ -14987,8 +15137,22 @@ class Component extends DCLogic {
       this.setState({ drawingMessage: this._stairLayoutNote(), drawingMessageError: true });
       return;
     }
-    const pt = this._snapPt;
+    let pt = this._snapPt;
     if (!pt) return;
+    // Stacked stairs (board #230): while the tour walks the 2ND FLOOR, the
+    // top nosing must launch from the run below's zone — inside it the
+    // click stands, near it the point snaps in, far away it is refused.
+    if (!this._stairStart && this.state.tour.step === 'second' && this._activeLevelId() === 5) {
+      const zone = this._tourStairSnap(pt);
+      if (!zone) {
+        this.setState({
+          drawingMessage: 'Stairs stack over the run below — start the top nosing in the MAIN FLOOR stair opening (or just beside it for a return run).',
+          drawingMessageError: true,
+        });
+        return;
+      }
+      pt = zone.pt;
+    }
     const layout = this._stairLayout(descent.riseFt);
     if (!this._stairStart) {
       this._stairStart = pt.clone();
@@ -15035,6 +15199,9 @@ class Component extends DCLogic {
       drawingMessage: `Stair added \u2014 ${layout.risers} risers @ ${formatInchesOnly(layout.riserIn)}, ${layout.treads} treads @ ${formatInchesOnly(STAIR_TREAD_RUN_IN)}, down ${this._ftIn(layout.riseFt)} to ${descent.landing}.${shapeMsg} ${rail.note}`,
       drawingMessageError: false,
     });
+    // Q3, confirmed: a MAIN FLOOR stair placed during the tour re-derives
+    // the auto beam with the stair opening as a boundary.
+    if (this.state.tour.step === 'main' && this._activeLevelId() === 3) this._rederiveTourBeam();
   }
 
   _cancelStair() {
@@ -16216,8 +16383,16 @@ class Component extends DCLogic {
     // The tour's floor popup borrows the keyboard: Enter or Space climbs,
     // Escape leaves the tour (the level cards stay free either way).
     if (this.state.tourPopup && focusedControl !== 'field') {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._advanceTourFromFoundation(); return; }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._tourPopupPrimary(); return; }
       if (e.key === 'Escape') { e.preventDefault(); this._exitTour(); return; }
+    }
+    // The lit NEXT FLOOR gate also answers Enter/Space — but never while a
+    // draw is mid-flight or a stair has its first click down.
+    if (focusedControl !== 'field' && !this.state.isDrawing && !this._stairStart
+      && (e.key === 'Enter' || e.key === ' ') && this._tourGateReady()) {
+      e.preventDefault();
+      this._pressTourNext();
+      return;
     }
     // PROFESSOR GRUFF's callout borrows the keyboard: Escape heads into
     // PROJECT, Enter or Space carries on tracing with the defaults.
@@ -17244,9 +17419,25 @@ class Component extends DCLogic {
       onBuildHouse: () => this._pressBuildHouse(),
       projectCalloutOpen: this.state.projectCallout === true,
       dismissProjectCallout: () => this._dismissProjectCallout(false),
-      tourPopupOpen: this.state.tourPopup === true,
+      tourPopupOpen: !!this.state.tourPopup,
+      tourPopupTitle: this.state.tourPopup === 'main' ? 'MAIN FLOOR DONE'
+        : this.state.tourPopup === 'second' ? '2ND FLOOR DONE, GOING TO ROOF'
+        : 'FOUNDATION DONE, GOING TO MAIN FLOOR',
+      tourPopupChoice: this.state.tourPopup === 'main',
+      tourPopupSingle: this.state.tourPopup !== 'main',
       tourPopupNote: this.state.tourPopupNote,
-      advanceTour: () => this._advanceTourFromFoundation(),
+      advanceTour: () => { if (this.state.tourPopup !== 'main') this._tourPopupPrimary(); },
+      tourNextSecond: e => { e.stopPropagation(); this._advanceTour('second'); },
+      tourNextRoof: e => { e.stopPropagation(); this._advanceTour('roof'); },
+      tourNextReady: this._tourGateReady(),
+      onTourNext: () => this._pressTourNext(),
+      tourChipOpen: ['main', 'second'].includes(this.state.tour.step) && !this.state.tourPopup,
+      tourChipLabel: this._tourGateReady() ? 'NEXT FLOOR \u25B2'
+        : `TOUR \u2014 PLACE STAIRS ON ${this.state.tour.step === 'second' ? '2ND FL' : 'MAIN FL'}`,
+      onTourChip: () => {
+        if (this._tourGateReady()) this._pressTourNext();
+        else this._activateContextTool('stair');
+      },
       perfNoticeOpen: this.state.perfNotice === true,
       dismissPerfNotice: () => this._dismissPerfNotice(),
       perfIntroOff: this.state.perfIntroOff === true,
@@ -17742,6 +17933,8 @@ class Component extends DCLogic {
           hasEdges: edges.length > 0,
           color: LEVEL_COLORS[i % LEVEL_COLORS.length],
           rowClass: 'level-row' + (i === activeLevelIdx && !this.state.boneyardActive ? ' active' : ''),
+          tourNext: i === activeLevelIdx && !this.state.boneyardActive && this._tourGateReady(),
+          onTourNext: e => { e.stopPropagation(); this._pressTourNext(); },
           ...bgSlotStyle(levelSlot),
           bgTitle: levelSlot === 0 ? 'Background 1 — blue, whole level shows'
             : levelSlot === 1 ? 'Background 2 — red, whole level shows'

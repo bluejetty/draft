@@ -107,3 +107,102 @@ test('a parked tour resumes across a reload without duplicating the reveal', asy
   await expect(page.locator('[data-tour-popup]')).toBeHidden();
   await expect(activeLevel(page)).toHaveText(/MAIN FL/);
 });
+
+// ── Slice 2: the floor tour ─────────────────────────────────────────────
+
+async function placeStairs(page, x, z, dx, dz) {
+  await h.selectTool(page, 'Stair');
+  await h.clickWorld(page, x, z);
+  await h.clickWorld(page, x + dx, z + dz);
+  await h.waitForSaved(page);
+}
+
+test('MAIN gates on stairs, both NEXT lights fire, and the choice popup climbs to 2ND', async ({ page }) => {
+  await h.openModel(page);
+  await traceHouse(page, 28, 24);
+  await page.locator('[data-tour-popup]').click(); // FOUNDATION DONE → MAIN
+
+  // Parked on MAIN: the chip prompts stairs, the gate is dark.
+  await expect(page.locator('[data-tour-chip]')).toContainText(/PLACE STAIRS/);
+  await expect(page.locator('[data-tour-next]')).toHaveCount(0);
+  await expect(page.locator('[data-tour-next-card]')).toHaveCount(0);
+
+  await placeStairs(page, 0, -2, 0, 6);
+
+  // One gate, two lights — the strip and the active level card.
+  await expect(page.locator('[data-tour-next]')).toBeVisible();
+  await expect(page.locator('[data-tour-next-card]')).toBeVisible();
+  await expect(page.locator('[data-tour-chip]')).toContainText(/NEXT FLOOR/);
+
+  await page.locator('[data-tour-next]').click();
+  const popup = page.locator('[data-tour-popup]');
+  await expect(popup).toContainText('MAIN FLOOR DONE');
+  await expect(popup.locator('[data-tour-next-second]')).toBeVisible();
+  await expect(popup.locator('[data-tour-next-roof]')).toBeVisible();
+
+  await popup.locator('[data-tour-next-second]').click();
+  await expect(activeLevel(page)).toHaveText(/2ND FL/);
+  await expect(page.locator('[data-model-drawing-message]')).toContainText(/stairs stack over the run below/i);
+  await h.waitForSaved(page);
+  expect((await h.savedDrawing(page)).tour.step).toBe('second');
+});
+
+test('a one-storey house presses STRAIGHT TO ROOF and the tour parks there', async ({ page }) => {
+  await h.openModel(page);
+  await traceHouse(page, 16, 12);
+  await page.locator('[data-tour-popup]').click();
+  await placeStairs(page, 0, -2, 0, 6);
+
+  await page.keyboard.press('Enter'); // the lit gate answers the keyboard too
+  await page.locator('[data-tour-popup] [data-tour-next-roof]').click();
+  await expect(activeLevel(page)).toHaveText(/ROOF/);
+  await expect(page.locator('[data-model-drawing-message]')).toContainText(/roof step of the tour lands in a coming update/i);
+  await h.waitForSaved(page);
+  expect((await h.savedDrawing(page)).tour.step).toBe('roof');
+});
+
+test('a MAIN stair re-lands the auto beam mid-span of the larger clear strip', async ({ page }) => {
+  await h.openModel(page);
+  await traceHouse(page, 28, 24);
+  await page.locator('[data-tour-popup]').click();
+
+  // Beam starts on the 24' axis midline (z = 0). The stair runs right
+  // through it: its footprint blocks roughly z -3..+9, leaving strips
+  // -12..-3 and ~9..12 — the larger is the south strip, mid at z = -7.5.
+  await placeStairs(page, 0, -3, 0, 6);
+  await expect(page.locator('[data-model-drawing-message]')).toContainText(/re-landed mid-span/);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.beams.length).toBeGreaterThan(0);
+  saved.beams.forEach(beam => {
+    expect(beam.auto).toBe(true);
+    expect(beam.start.z).toBeLessThan(-5); // moved off the stair, into the south strip
+  });
+  expect(saved.columns.every(column => column.auto)).toBe(true);
+});
+
+test('2ND FLOOR stairs must launch from the run below: far clicks refuse, near ones snap', async ({ page }) => {
+  await h.openModel(page);
+  await traceHouse(page, 28, 24);
+  await page.locator('[data-tour-popup]').click();
+  await placeStairs(page, 0, -2, 0, 6);
+  await page.locator('[data-tour-next]').click();
+  await page.locator('[data-tour-popup] [data-tour-next-second]').click();
+  await expect(activeLevel(page)).toHaveText(/2ND FL/);
+
+  // Far from the opening: refused with the reason, nothing placed.
+  await h.selectTool(page, 'Stair');
+  await h.clickWorld(page, 10, -10);
+  await expect(page.locator('[data-model-drawing-message]')).toContainText(/stack over the run below/i);
+  let saved = await h.savedDrawing(page);
+  expect(saved.stairs.filter(stair => stair.levelId === 5)).toHaveLength(0);
+
+  // Beside the run below: the nosing snaps into the zone and the stair lands.
+  await h.clickWorld(page, 1, 0);
+  await h.clickWorld(page, 1, 6);
+  await h.waitForSaved(page);
+  saved = await h.savedDrawing(page);
+  expect(saved.stairs.filter(stair => stair.levelId === 5)).toHaveLength(1);
+  // The gate lights again for the climb to the roof.
+  await expect(page.locator('[data-tour-next]')).toBeVisible();
+});
