@@ -103,20 +103,48 @@
       [data-save-controls] { margin-left:0 !important; }
       [data-save-controls] > span { display:none; }
       [data-save-controls] select { max-width:58px; }
-      [data-model-nav] { margin-left:0 !important; font-size:10px !important; }
+      [data-build-cluster] img { height:30px !important; }
+      [data-build-cluster] [data-build-house] img { height:36px !important; }
     }
   </style>
 </helmet>
 
-<!-- TOP BAR -->
+<!-- TOP BAR: PROJECT and the profile stacks park on the left, the building
+     buttons own the center (HOUSE · SPLIT · BONE · ATTACHED · DETACHED —
+     pick the type, draw its outline in that colour, the bone builds it),
+     and the file controls sit on the far right. -->
 <div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff; position:relative;">
-  <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase; color:#1d1f20;">MODEL</div>
-  <a data-model-nav href="./LAYOUT.dc.html" style="margin-left:10px;">LAYOUT</a>
-  <div data-model-title-detail style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; color:rgba(29,31,32,0.35); margin:0 10px;">/</div>
-  <div data-model-title-detail style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:{{ topBarColor }};">{{ topBarLabel }}</div>
-  <sc-if value="{{ showHint }}" hint-placeholder-val="{{ false }}">
-    <div style="margin-left:18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }}; border:1px solid {{ hintColor }}; padding:3px 10px;">{{ hintText }}</div>
-  </sc-if>
+  <button data-project-open onClick="{{ openProjectDialog }}" style="height:35px; min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">PROJECT</button>
+  <div data-profile-stack style="display:flex; flex-direction:column; gap:1px; margin-left:8px;">
+    <button onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
+    <button onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
+  </div>
+  <div data-unit-toggle style="display:flex; flex-direction:column; gap:1px; margin-left:8px;">
+    <button onClick="{{ setImperial }}" style="min-width:64px; border:1px solid {{ imperialBorder }}; background:{{ imperialBg }}; color:{{ imperialColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">IMPERIAL</button>
+    <button onClick="{{ setMetric }}" style="min-width:64px; border:1px solid {{ metricBorder }}; background:{{ metricBg }}; color:{{ metricColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">METRIC</button>
+  </div>
+
+  <div data-build-cluster style="position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; align-items:center; gap:8px; z-index:6;">
+    <button data-select-house onClick="{{ onSelectHouse }}" aria-label="HOUSE OUTLINE" title="{{ houseButtonHint }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ houseButtonGlow }};">
+      <img src="./assets/btn-house.png" alt="" style="height:38px; display:block;" />
+    </button>
+    <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
+      <button data-select-split onClick="{{ onSelectSplit }}" aria-label="SPLIT LEVEL" title="SPLIT LEVEL — mark a split-level zone (coming soon)" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ splitButtonGlow }};">
+        <img src="./assets/btn-split.png" alt="" style="height:38px; display:block;" />
+      </button>
+    </sc-if>
+    <button data-build-house onClick="{{ onBuildHouse }}" aria-label="BUILD HOUSE" title="{{ buildHouseHint }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0;">
+      <img src="./assets/btn-bone.png" alt="" style="height:44px; display:block;" />
+    </button>
+    <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
+      <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" aria-label="{{ attachedGarageLabel }}" title="{{ attachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ attachedButtonGlow }};">
+        <img src="./assets/btn-attached.png" alt="" style="height:38px; display:block;" />
+      </button>
+    </sc-if>
+    <button data-mark-detached-garage onClick="{{ onMarkDetachedGarage }}" aria-label="{{ detachedGarageLabel }}" title="{{ detachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ detachedButtonGlow }};">
+      <img src="./assets/btn-detached.png" alt="" style="height:38px; display:block;" />
+    </button>
+  </div>
 
   <div style="flex:1;"></div>
   <div data-top-actions style="display:flex; align-items:center; gap:8px; margin-left:18px;">
@@ -124,7 +152,6 @@
        <button onClick="{{ newDrawing }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">NEW</button>
        <button onClick="{{ openDrawing }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">OPEN</button>
        <input data-drawing-import type="file" accept="application/json,.json,.draft,.model,.plan" onChange="{{ onDrawingFilePicked }}" style="display:none;" />
-       <button data-insert-underlay onClick="{{ openInsertDialog }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">INSERT</button>
        <input data-underlay-import type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,image/gif,image/bmp,.png,.jpg,.jpeg,.webp,.gif,.bmp" onChange="{{ onUnderlayFilePicked }}" style="display:none;" />
       <button onClick="{{ saveDrawingFile }}" style="height:24px; border:1px solid #5980a6; background:#5980a6; color:#fff; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE</button>
       <span style="color:rgba(29,31,32,0.45);">SAVE AS</span>
@@ -134,16 +161,6 @@
         <option value="model">.model</option>
         <option value="plan">.plan</option>
       </select>
-    </div>
-    <button data-project-open onClick="{{ openProjectDialog }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">PROJECT</button>
-    <button data-areas-open onClick="{{ openAreasDialog }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">AREAS</button>
-    <div data-profile-stack style="display:flex; flex-direction:column; gap:1px;">
-      <button onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
-      <button onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
-    </div>
-    <div data-unit-toggle style="display:flex; flex-direction:column; gap:1px;">
-      <button onClick="{{ setImperial }}" style="min-width:64px; border:1px solid {{ imperialBorder }}; background:{{ imperialBg }}; color:{{ imperialColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">IMPERIAL</button>
-      <button onClick="{{ setMetric }}" style="min-width:64px; border:1px solid {{ metricBorder }}; background:{{ metricBg }}; color:{{ metricColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">METRIC</button>
     </div>
   </div>
 </div>
@@ -376,12 +393,57 @@
       <input data-project-address value="{{ projectAddress }}" onInput="{{ onProjectAddressInput }}" aria-label="Site address" style="width:100%; box-sizing:border-box; height:32px; margin-top:5px; border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none;" />
       <div style="margin-top:12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">Legal land description</div>
       <textarea data-project-legal value="{{ projectLegal }}" onInput="{{ onProjectLegalInput }}" aria-label="Legal land description" rows="3" style="width:100%; box-sizing:border-box; margin-top:5px; border:1px solid rgba(29,31,32,0.25); padding:6px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; line-height:1.45; outline:none; resize:vertical;"></textarea>
+      <!-- PROJECT is the project's home base: areas and the underlay/file
+           imports live here now (the full PROJECT page grows from this). -->
+      <div style="margin-top:12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">Project tools</div>
+      <div style="display:flex; gap:6px; margin-top:5px;">
+        <button data-areas-open onClick="{{ openAreasDialog }}" style="flex:1; height:30px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">AREAS</button>
+        <button data-insert-underlay onClick="{{ openInsertDialog }}" style="flex:1; height:30px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">INSERT PHOTO / PDF</button>
+      </div>
       <button onClick="{{ closeProjectDialog }}" style="width:100%; height:34px; margin-top:14px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">DONE</button>
     </div>
   </div>
 </sc-if>
 
-<!-- PROFESSOR RUFF's first-build callout: the bone was pressed on a blank
+<!-- PROFESSOR GRUFF's entry performance notice: the drafting engine wants
+     the whole browser to itself, so the professor asks visitors to close
+     other windows and tabs before they start. Shows once per visit unless
+     switched off; any dismissal (button, Enter, a drawing click) clears it. -->
+<sc-if value="{{ perfNoticeOpen }}" hint-placeholder-val="{{ false }}">
+  <div data-perf-notice style="position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:53; width:340px; border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 14px 38px rgba(29,31,32,0.22); padding:14px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
+    <div style="display:flex; gap:12px; align-items:flex-start;">
+      <svg width="48" height="48" viewBox="0 0 44 44" fill="none" aria-hidden="true" style="flex-shrink:0;">
+        <path d="M22 5 L37 11.5 L22 18 L7 11.5 Z" fill="#1d1f20"></path>
+        <path d="M34 13 V19" stroke="#1d1f20" stroke-width="1.4"></path>
+        <circle cx="34" cy="20.5" r="1.6" fill="#c0392b"></circle>
+        <path d="M12 18 Q8.5 26 12 32 Q15.5 29.5 15.5 22 Z" fill="#8a5a33"></path>
+        <path d="M32 18 Q35.5 26 32 32 Q28.5 29.5 28.5 22 Z" fill="#8a5a33"></path>
+        <circle cx="22" cy="28" r="10" fill="#c89158"></circle>
+        <ellipse cx="22" cy="32" rx="5.5" ry="4.2" fill="#f0d9b8"></ellipse>
+        <circle cx="22" cy="30.5" r="1.8" fill="#1d1f20"></circle>
+        <path d="M22 32.5 V34.5 M22 34.5 Q20 36 18.6 34.8 M22 34.5 Q24 36 25.4 34.8" stroke="#1d1f20" stroke-width="1.1" fill="none"></path>
+        <circle cx="18.5" cy="26" r="2.4" stroke="#1d1f20" stroke-width="1" fill="#fff"></circle>
+        <circle cx="25.5" cy="26" r="2.4" stroke="#1d1f20" stroke-width="1" fill="#fff"></circle>
+        <path d="M20.9 26 H23.1" stroke="#1d1f20" stroke-width="1"></path>
+        <circle cx="18.5" cy="26" r="1" fill="#1d1f20"></circle>
+        <circle cx="25.5" cy="26" r="1" fill="#1d1f20"></circle>
+      </svg>
+      <div style="flex:1;">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">Professor Gruff</div>
+        <div style="margin-top:4px; font-size:12px; line-height:1.5; color:rgba(29,31,32,0.72);"><b>CLOSE ALL OTHER BROWSER WINDOWS AND TABS FOR OPTIMAL PERFORMANCE.</b> The drafting engine runs entirely on your machine — videos and busy tabs in the background can slow the cursor down.</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:6px; margin-top:12px;">
+      <button data-perf-notice-continue onClick="{{ dismissPerfNotice }}" style="flex:1; height:30px; border:1px solid #8f2a1d; background:#c0392b; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0.06em; cursor:pointer;">GOT IT (ENTER)</button>
+    </div>
+    <label style="display:flex; align-items:center; gap:6px; margin-top:10px; font-size:11px; color:rgba(29,31,32,0.55); cursor:pointer;">
+      <input data-perf-notice-off type="checkbox" checked="{{ perfIntroOff }}" onChange="{{ onPerfIntroOffToggle }}" />
+      Don't show this again
+    </label>
+  </div>
+</sc-if>
+
+<!-- PROFESSOR GRUFF's first-build callout: the bone was pressed on a blank
      drawing, so the trace armed with the project defaults and the professor
      points up at the PROJECT button. Escape heads into PROJECT; Enter, a
      click, or just drawing carries on with the defaults. -->
@@ -406,7 +468,7 @@
         <circle cx="25.5" cy="26" r="1" fill="#1d1f20"></circle>
       </svg>
       <div style="flex:1;">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">Professor Ruff</div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">Professor Gruff</div>
         <div style="margin-top:4px; font-size:12px; line-height:1.5; color:rgba(29,31,32,0.72);">Automatically using the <b>default project settings</b> to build your house now — trace away! To update this project's specifications press <b>Escape</b>, or hit the <b>PROJECT</b> button right up there.</div>
       </div>
     </div>
@@ -421,7 +483,7 @@
   </div>
 </sc-if>
 
-<!-- PROFESSOR RUFF's attached-garage lesson: arming ATTACHED GARAGE shows
+<!-- PROFESSOR GRUFF's attached-garage lesson: arming ATTACHED GARAGE shows
      how the run connects — start ON a house corner, three legs out-around-
      back, land the last click ON the house — with a right-vs-wrong sketch.
      The cursor plays by the ordinary drawing rules; the professor teaches
@@ -447,7 +509,7 @@
         <circle cx="25.5" cy="26" r="1" fill="#1d1f20"></circle>
       </svg>
       <div style="flex:1;">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">Professor Ruff</div>
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;">Professor Gruff</div>
         <div style="margin-top:4px; font-size:12px; line-height:1.5; color:rgba(29,31,32,0.72);">An attached garage <b>hangs off the house</b>: click your first corner <b>ON the house outline</b>, draw the three legs out, around, and back, and land the last corner <b>ON the house</b> too. Missed it? No trouble — grab the corner and drag it onto the house.</div>
       </div>
     </div>
@@ -769,9 +831,9 @@
     </div>
   </sc-if>
 
-  <!-- OUTLINE trace: the tool arms from the red bone button (or the garage
-       marks / the keyboard shortcut) — the keypad key is gone, so this card
-       only coaches the trace. BUILD HOUSE lives on the instrument strip. -->
+  <!-- OUTLINE trace: the tool arms from the top-bar type buttons (HOUSE /
+       ATTACHED / DETACHED, or the keyboard shortcut) — the keypad key is
+       gone, so this card only coaches the trace. The bone builds it. -->
   <sc-if value="{{ outlineToolActive }}" hint-placeholder-val="{{ false }}">
     <div style="display:flex; flex-direction:column; align-items:stretch;">
       <div style="display:flex; flex-direction:column; padding:8px 12px; border-bottom:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
@@ -1390,23 +1452,6 @@
       <path d="M3 13 C3 7 7 8.5 8.5 5.5 C9.5 3.5 13 3 13 6 C13 9 9 8.5 8 11 C7.4 12.5 5.5 13.5 3 13 Z"></path>
     </svg>
   </span>
-  <!-- BUILD cluster, center strip: the big red bone button is the product's
-       one action — blank shelf starts the outline trace, master on the shelf
-       grows the house. The garage marks arm the outline tool themselves. -->
-  <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" style="border:1px solid {{ attachedGarageBorder }}; background:{{ attachedGarageBg }}; color:{{ attachedGarageColor }}; padding:5px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.04em; cursor:pointer; max-width:130px; line-height:1.2;">{{ attachedGarageLabel }}</button>
-  <button data-build-house onClick="{{ onBuildHouse }}" title="{{ buildHouseHint }}" style="display:inline-flex; align-items:center; gap:8px; border:1px solid #8f2a1d; background:#c0392b; color:#fff; padding:4px 16px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:700; letter-spacing:0.12em; cursor:pointer; box-shadow:0 2px 6px rgba(140,40,28,0.35);">
-    <span>BUILD</span>
-    <svg data-build-house-bone width="26" height="13" viewBox="0 0 26 13" fill="currentColor" aria-hidden="true">
-      <circle cx="4.2" cy="4.2" r="3.2"></circle>
-      <circle cx="4.2" cy="8.8" r="3.2"></circle>
-      <circle cx="21.8" cy="4.2" r="3.2"></circle>
-      <circle cx="21.8" cy="8.8" r="3.2"></circle>
-      <rect x="4.2" y="4" width="17.6" height="5"></rect>
-    </svg>
-    <span>HOUSE</span>
-  </button>
-  <button data-mark-detached-garage onClick="{{ onMarkDetachedGarage }}" style="border:1px solid {{ detachedGarageBorder }}; background:{{ detachedGarageBg }}; color:{{ detachedGarageColor }}; padding:5px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.04em; cursor:pointer; max-width:130px; line-height:1.2;">{{ detachedGarageLabel }}</button>
-  <button data-build-garage onClick="{{ onBuildGarage }}" style="border:1px solid #7a4a21; background:rgba(122,74,33,0.10); color:#7a4a21; padding:5px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.04em; cursor:pointer; line-height:1.2;">BUILD GARAGE</button>
    <!-- Architectural-length box — a permanent instrument on the strip: sits
         blank and disabled while idle, wakes when a typed length is active -->
   <div style="display:flex; align-items:center; gap:6px;">
@@ -1426,7 +1471,11 @@
 
 <!-- STATUS BAR -->
 <div style="height:28px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em; color:rgba(29,31,32,0.55); background:#fff; flex-shrink:0; user-select:none;">
-  <span data-model-sx>X: —</span>
+  <span data-model-title-detail style="font-size:12px; font-weight:600; text-transform:uppercase; color:{{ topBarColor }};">{{ topBarLabel }}</span>
+  <sc-if value="{{ showHint }}" hint-placeholder-val="{{ false }}">
+    <span style="margin-left:18px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }};">{{ hintText }}</span>
+  </sc-if>
+  <span style="margin-left:24px;" data-model-sx>X: —</span>
   <span style="margin-left:24px;" data-model-sy>Y: —</span>
    <span data-model-background-status style="margin-left:24px; color:{{ backgroundStatusColor }};">{{ backgroundStatus }}</span>
   <span data-model-status style="margin-left:24px; color:{{ persistenceStatusColor }};">{{ persistenceStatus }}</span>
@@ -2012,9 +2061,11 @@ class Component extends DCLogic {
     noteStyleError: '',       // fill-opacity / bullnose input validation message
     roomAreasOn: false,        // area readout under MAIN FL room tags (off by default)
     projectOpen: false,       // PROJECT dialog visibility
-    projectCallout: false,    // PROFESSOR RUFF first-build callout visibility
+    projectCallout: false,    // PROFESSOR GRUFF first-build callout visibility
     buildIntroOff: false,     // "don't show this again" for the callout (settings profile)
-    garageCallout: false,     // PROFESSOR RUFF attached-garage lesson visibility
+    perfNotice: false,        // entry close-other-windows performance notice visibility
+    perfIntroOff: false,      // "don't show this again" for the perf notice (settings profile)
+    garageCallout: false,     // PROFESSOR GRUFF attached-garage lesson visibility
     garageIntroOff: false,    // "don't show this again" for the garage lesson (settings profile)
     areasOpen: false,         // AREAS dialog visibility (report is derived on render)
     // Per-project information saved inside the drawing file. The titleblock
@@ -2543,8 +2594,9 @@ class Component extends DCLogic {
   // 'underlays' keyed by underlay id; the drawing JSON holds placement metadata.
   _openInsertDialog() {
     this._resetInsertCandidate();
+    // INSERT opens from inside PROJECT; the sub-dialog takes the stage.
     this.setState({
-      insertOpen: true, insertPhase: 'pick', insertError: '',
+      insertOpen: true, projectOpen: false, insertPhase: 'pick', insertError: '',
       insertScaleInput: '', insertScaleError: '', insertWidthInput: '', insertWidthError: '',
       insertPage: 1, insertCalOpen: false, insertCalInput: '', insertCalError: '',
       insertRefresh: this.state.insertRefresh + 1,
@@ -3102,6 +3154,7 @@ class Component extends DCLogic {
           tsquareOn: this.state.tsquareOn,
           buildIntroOff: this.state.buildIntroOff,
           garageIntroOff: this.state.garageIntroOff,
+          perfIntroOff: this.state.perfIntroOff,
         },
       };
     }
@@ -3135,6 +3188,7 @@ class Component extends DCLogic {
         ...(typeof values.tsquareOn === 'boolean' ? { tsquareOn: values.tsquareOn } : {}),
         ...(typeof values.buildIntroOff === 'boolean' ? { buildIntroOff: values.buildIntroOff } : {}),
         ...(typeof values.garageIntroOff === 'boolean' ? { garageIntroOff: values.garageIntroOff } : {}),
+        ...(typeof values.perfIntroOff === 'boolean' ? { perfIntroOff: values.perfIntroOff } : {}),
         ...(values.keybindings && typeof values.keybindings === 'object'
           ? {
             // A stored empty string means the command was deliberately cleared;
@@ -3188,14 +3242,19 @@ class Component extends DCLogic {
 
   _restoreActiveProfilePackages() {
     const manager = window.DraftProfileManager;
-    if (!manager) return;
-    const settings = manager.getActive('settings');
-    const standards = manager.getActive('standards');
-    const patch = {
-      ...this._profileStatePatch(settings),
-      ...this._profileStatePatch(standards),
-    };
-    if (Object.keys(patch).length) this.setState(patch);
+    const patch = manager ? {
+      ...this._profileStatePatch(manager.getActive('settings')),
+      ...this._profileStatePatch(manager.getActive('standards')),
+    } : {};
+    // Entry performance notice: shows once per visit, right after the stored
+    // profile says whether the drafter has switched it off. Later restores
+    // (OPENing a file re-runs this) leave it alone.
+    if (!this._perfNoticeChecked) {
+      this._perfNoticeChecked = true;
+      const perfOff = typeof patch.perfIntroOff === 'boolean' ? patch.perfIntroOff : this.state.perfIntroOff;
+      patch.perfNotice = !perfOff;
+    }
+    this.setState(patch);
   }
 
   _openProjectDialog() {
@@ -3220,12 +3279,22 @@ class Component extends DCLogic {
     this.setState({ buildIntroOff: off === true }, () => this._rememberActiveProfile('settings'));
   }
 
+  _dismissPerfNotice() {
+    if (!this.state.perfNotice) return;
+    this.setState({ perfNotice: false });
+  }
+
+  _setPerfIntroOff(off) {
+    this.setState({ perfIntroOff: off === true }, () => this._rememberActiveProfile('settings'));
+  }
+
   _closeProjectDialog() {
     this.setState({ projectOpen: false });
   }
 
   _openAreasDialog() {
-    this.setState({ areasOpen: true });
+    // AREAS opens from inside PROJECT; the sub-dialog takes the stage.
+    this.setState({ areasOpen: true, projectOpen: false });
   }
 
   _closeAreasDialog() {
@@ -5247,7 +5316,13 @@ class Component extends DCLogic {
     // In-progress preview: placed corners plus a rubber band to the cursor,
     // with a close ring on the start point once the outline can close.
     if (this._outlineDrawing && this._outlinePoints.length) {
-      const drawHex = this.state.outlineGarage ? garageHex : hex;
+      // The live trace wears its top-bar button's colour so the drafter
+      // always knows what they are drawing: HOUSE red, ATTACHED garage
+      // blue, DETACHED garage purple. Committed outlines fall back to the
+      // red/blue edit-scope language above.
+      const drawHex = this.state.outlineGarage === 'attached' ? '#3f7fd6'
+        : this.state.outlineGarage === 'detached' ? '#7d5ba6'
+        : '#c0392b';
       ctx.strokeStyle = drawHex;
       ctx.fillStyle = drawHex;
       ctx.setLineDash([5, 4]);
@@ -8147,6 +8222,7 @@ class Component extends DCLogic {
     // A drawing click means the drafter is off tracing — the callouts retire.
     if (this.state.projectCallout) this._dismissProjectCallout(false);
     if (this.state.garageCallout) this._dismissGarageCallout();
+    if (this.state.perfNotice) this._dismissPerfNotice();
     if (this.state.lengthFrozen) {
       // A canvas click while the ruler holds a valid typed length is the
       // drafter's "done" — it commits the length just like Enter.
@@ -9509,73 +9585,11 @@ class Component extends DCLogic {
     return null;
   }
 
-  // BUILD GARAGE works after the fact: draw an ordinary closed outline, then
-  // turn it into a DETACHED garage — the selected outline if there is one,
-  // otherwise the newest closed outline in the active context. The foundation
-  // prompt picks its construction, then the garage builds right away.
-  _garageBuildTarget() {
-    const selected = [...(this._selectedOutlines || [])]
-      .find(outline => outline.open !== true && outline.points.length >= 3);
-    if (selected) return selected;
-    const pool = this.state.boneyardActive ? this._activeBoneyardOutlines() : this._activeOutlines();
-    const closed = pool.filter(outline => outline.open !== true && outline.points.length >= 3);
-    return closed.length ? closed[closed.length - 1] : null;
-  }
-
-  _buildGarage() {
-    this._ensureDrawingCollections();
-    const target = this._garageBuildTarget();
-    if (!target) {
-      this.setState({
-        drawingMessage: 'Draw a closed outline first — BUILD GARAGE turns it into a DETACHED garage (grade beam or thickened-edge slab).',
-        drawingMessageError: true,
-      });
-      return false;
-    }
-    const master = target.shelfId != null ? target
-      : (target.masterId != null
-        ? this._boneyardOutlines.find(candidate => candidate.id === target.masterId)
-        : null);
-    const source = master || target;
-    if (source.garage) {
-      this._buildHouse();
-      return true;
-    }
-    if (this._outlineCarriesBuild(source)) {
-      this.setState({
-        drawingMessage: 'This outline already carries built geometry — delete the built pieces before turning it into a garage.',
-        drawingMessageError: true,
-      });
-      return false;
-    }
-    const shelf = this._activeBoneyardShelf();
-    this._detachedPending = {
-      points: source.points.map(point => ({ x: point.x, z: point.z })),
-      shelfId: master ? master.shelfId : (shelf ? shelf.id : null),
-      sourceLevelId: master ? master.sourceLevelId : (target.levelId ?? null),
-      removeMasterId: master ? master.id : null,
-      removeLocal: master ? null : target,
-      buildAfter: true,
-    };
-    this.setState({ detachedFoundationPrompt: true });
-    return true;
-  }
-
   _chooseDetachedFoundation(foundation) {
     const pending = this._detachedPending;
     this._detachedPending = null;
     this.setState({ detachedFoundationPrompt: false });
     if (!pending) return null;
-    // BUILD GARAGE conversion: the outline the garage grows from goes away —
-    // a converted master takes its level copies with it; a local copy leaves
-    // just its own level.
-    if (pending.removeMasterId != null) {
-      this._boneyardOutlines = this._boneyardOutlines.filter(outline => outline.id !== pending.removeMasterId);
-      this._outlines = this._outlines.filter(outline => outline.masterId !== pending.removeMasterId);
-    }
-    if (pending.removeLocal) {
-      this._outlines = this._outlines.filter(outline => outline !== pending.removeLocal);
-    }
     if (this._selectedOutlines) this._selectedOutlines.clear();
     const master = {
       id: this._newDrawingItemId('outline'),
@@ -9603,7 +9617,6 @@ class Component extends DCLogic {
         : 'DETACHED GARAGE closed — grade beam all around; the 4" slab slopes 1/8"/ft to the door on graded fill. BUILD HOUSE raises its walls, beam, slab, doors, and roof.',
       drawingMessageError: false,
     });
-    if (pending.buildAfter) this._buildHouse();
     return master;
   }
 
@@ -10479,20 +10492,50 @@ class Component extends DCLogic {
     return builtAny;
   }
 
-  // The red bone button is the product's one big action: with an outline on
-  // the shelf it builds; on a blank drawing it arms the outline trace using
-  // the project defaults, and PROFESSOR RUFF points at PROJECT the first time.
+  // The red bone is the pure BUILD verb: the type buttons declare what the
+  // outline is, the trace draws it, and the bone grows it. With no outline
+  // yet, the bone points at the type buttons instead of arming a trace.
   _pressBuildHouse() {
     this._ensureDrawingCollections();
     const floors = this._floorLevels();
     const hasSource = [1, ...floors.map(level => level.id)]
       .some(levelId => this._houseOutline(levelId) || this._garageOutline(levelId));
     if (hasSource) { this._buildHouse(); return; }
+    this.setState({
+      drawingMessage: 'Nothing to build yet — press HOUSE (or a GARAGE button), trace the outline, then press the bone.',
+      drawingMessageError: true,
+    });
+  }
+
+  // HOUSE on the top bar: select-first — arm the outline trace for an
+  // ordinary house outline (PROFESSOR GRUFF points at PROJECT the first
+  // time). Pressing it again while armed stands the trace down.
+  _toggleHouseMode() {
+    if (this.state.activeTool === 'outline' && !this.state.outlineGarage) {
+      this._cancelOutline();
+      this.setState({
+        activeTool: 'select',
+        drawingMessage: 'HOUSE trace off.',
+        drawingMessageError: false,
+      });
+      return;
+    }
     if (!this._activateContextTool('outline')) return;
     this.setState({
+      outlineGarage: null,
       projectCallout: !this.state.buildIntroOff,
-      drawingMessage: 'Trace the house outline corner to corner — close it on the first point (or press Enter), then press the bone again to grow the shell.',
+      drawingMessage: 'HOUSE — trace the outline corner to corner and close it on the first point (or press Enter), then press the bone to grow the shell.',
       drawingMessageError: false,
+    });
+  }
+
+  // SPLIT LEVEL is a declared-but-not-built zone for now: the button holds
+  // its place in the strip (it only appears once a house exists) and says
+  // what is coming instead of silently doing nothing.
+  _pressSplitLevel() {
+    this.setState({
+      drawingMessage: 'SPLIT LEVEL zones are coming soon — they mark a stepped area of the house with its own floor heights.',
+      drawingMessageError: true,
     });
   }
 
@@ -15955,7 +15998,15 @@ class Component extends DCLogic {
       }
       return;
     }
-    // PROFESSOR RUFF's callout borrows the keyboard: Escape heads into
+    // The entry performance notice steps aside on Enter, Space, or Escape —
+    // and any drawing click clears it too, so it never blocks the work.
+    if (this.state.perfNotice && focusedControl !== 'field'
+      && (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      this._dismissPerfNotice();
+      return;
+    }
+    // PROFESSOR GRUFF's callout borrows the keyboard: Escape heads into
     // PROJECT, Enter or Space carries on tracing with the defaults.
     if (this.state.projectCallout && focusedControl !== 'field') {
       if (e.key === 'Escape') { e.preventDefault(); this._dismissProjectCallout(true); return; }
@@ -17002,6 +17053,10 @@ class Component extends DCLogic {
       onBuildHouse: () => this._pressBuildHouse(),
       projectCalloutOpen: this.state.projectCallout === true,
       dismissProjectCallout: () => this._dismissProjectCallout(false),
+      perfNoticeOpen: this.state.perfNotice === true,
+      dismissPerfNotice: () => this._dismissPerfNotice(),
+      perfIntroOff: this.state.perfIntroOff === true,
+      onPerfIntroOffToggle: e => this._setPerfIntroOff(e.target.checked),
       calloutOpenProject: () => this._dismissProjectCallout(true),
       buildIntroOff: this.state.buildIntroOff === true,
       onBuildIntroOffToggle: e => this._setBuildIntroOff(e.target.checked),
@@ -17009,19 +17064,24 @@ class Component extends DCLogic {
       dismissGarageCallout: () => this._dismissGarageCallout(),
       garageIntroOff: this.state.garageIntroOff === true,
       onGarageIntroOffToggle: e => this._onGarageIntroOffToggle(e.target.checked),
-      onBuildGarage: () => this._buildGarage(),
       onMarkAttachedGarage: () => this._toggleGarageMode('attached'),
       onMarkDetachedGarage: () => this._toggleGarageMode('detached'),
+      onSelectHouse: () => this._toggleHouseMode(),
+      onSelectSplit: () => this._pressSplitLevel(),
+      hasHouseMaster: this._shelfHasHouseMaster(),
+      houseButtonHint: this.state.activeTool === 'outline' && !this.state.outlineGarage
+        ? 'HOUSE — tracing; click to cancel' : 'HOUSE — press, then trace the outline; the bone builds it',
+      houseButtonGlow: this.state.activeTool === 'outline' && !this.state.outlineGarage
+        ? 'drop-shadow(0 0 5px rgba(192,57,43,0.9))' : 'none',
+      splitButtonGlow: 'none',
+      attachedButtonGlow: this.state.outlineGarage === 'attached'
+        ? 'drop-shadow(0 0 5px rgba(63,127,214,0.9))' : 'none',
+      detachedButtonGlow: this.state.outlineGarage === 'detached'
+        ? 'drop-shadow(0 0 5px rgba(125,91,166,0.95))' : 'none',
       attachedGarageLabel: this.state.outlineGarage === 'attached'
         ? 'MARKING ATTACHED GARAGE — CLICK TO CANCEL' : 'MARK ATTACHED GARAGE',
-      attachedGarageBorder: this.state.outlineGarage === 'attached' ? '#7a4a21' : 'rgba(29,31,32,0.35)',
-      attachedGarageBg: this.state.outlineGarage === 'attached' ? 'rgba(122,74,33,0.14)' : '#fff',
-      attachedGarageColor: this.state.outlineGarage === 'attached' ? '#7a4a21' : 'rgba(29,31,32,0.75)',
       detachedGarageLabel: this.state.outlineGarage === 'detached'
         ? 'MARKING DETACHED GARAGE — CLICK TO CANCEL' : 'MARK DETACHED GARAGE',
-      detachedGarageBorder: this.state.outlineGarage === 'detached' ? '#7a4a21' : 'rgba(29,31,32,0.35)',
-      detachedGarageBg: this.state.outlineGarage === 'detached' ? 'rgba(122,74,33,0.14)' : '#fff',
-      detachedGarageColor: this.state.outlineGarage === 'detached' ? '#7a4a21' : 'rgba(29,31,32,0.75)',
       buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on every floor level, 8" concrete walls + slab + ${formatInchesOnly(this._footingWidthIn(1))} centered strip-footing lines on FOUNDATION, and a ${this.state.roofPitch}:12 all-eave roof grown from the ROOF level's outline by the roof overhang. An attached GARAGE adds its open-leg grade beam (32" + 1.5" plate, concrete top 1'-0" above grade), a flat 4" slab closed against the house, 10"\u00f8 piles at the two beam corners against the house (COLUMN or COPY places the rest along the beam), garage walls flush with the main-floor ceiling, and one roof over house + garage. Only levels still empty build, so re-running fills gaps without doubling up.`,
       onShapeCapture: () => this._captureShape(),
       hasActiveShapes: this._activeShapes().length > 0,

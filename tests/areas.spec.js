@@ -45,6 +45,8 @@ async function drawWall(page, x1, z1, x2, z2) {
 }
 
 async function openAreas(page) {
+  // AREAS lives inside the PROJECT dialog now (the project's home base).
+  await page.locator('[data-project-open]').click();
   await page.locator('[data-areas-open]').click();
   await expect(page.locator('[data-areas-dialog]')).toBeVisible();
 }

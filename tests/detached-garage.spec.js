@@ -235,57 +235,12 @@ test('a second BUILD HOUSE never doubles the detached garage', async ({ page }) 
   expect(saved.roofs).toHaveLength(1);
 });
 
-// BUILD GARAGE after the fact: an ordinary closed outline (no MARK GARAGE)
-// converts into a detached garage — the prompt picks the foundation, and the
-// garage builds right away.
-test('BUILD GARAGE converts a plain rectangle and builds it in one go', async ({ page }) => {
-  await h.openModel(page);
-  await h.selectTool(page, 'Outline');
-  await h.clickWorld(page, 14, -5);
-  await h.clickWorld(page, 26, -5);
-  await h.clickWorld(page, 26, 5);
-  await h.clickWorld(page, 14, 5);
-  await page.keyboard.press('Enter');
-  await h.waitForSaved(page);
-
-  await page.locator('[data-build-garage]').click();
-  await expect(page.locator('[data-detached-foundation-prompt]')).toBeVisible();
-  await page.locator('[data-detached-thickened-edge]').click();
-  await page.waitForTimeout(300);
-  await h.waitForSaved(page);
-
-  const saved = await h.savedDrawing(page);
-  expect(saved.boneyardOutlines).toHaveLength(1);
-  const master = saved.boneyardOutlines[0];
-  expect(master.garage).toBe(true);
-  expect(master.detached).toBe(true);
-  expect(master.foundation).toBe('thickened');
-  // The house-master rectangle is gone — only garage copies remain.
-  expect(saved.outlines.every(outline => outline.garage)).toBe(true);
-  // And the garage built without a separate BUILD HOUSE click.
-  expect(saved.walls.filter(wall => wall.levelId === 3)).toHaveLength(4);
-  const slab = saved.floors.find(floor => floor.garage);
-  expect(slab.thickenedEdge).toBe(true);
-  expect(saved.roofs).toHaveLength(1);
-  expect(saved.roofs[0].garage).toBe(true);
-});
-
 // Garage first, house second: the garage's built pieces must not read as
 // "the shell is already built" — BUILD HOUSE raises the house next to them.
 test('a house drawn after a built garage still builds', async ({ page }) => {
   await h.openModel(page);
-  await h.selectTool(page, 'Outline');
-  await h.clickWorld(page, 14, -5);
-  await h.clickWorld(page, 26, -5);
-  await h.clickWorld(page, 26, 5);
-  await h.clickWorld(page, 14, 5);
-  await page.keyboard.press('Enter');
-  await h.waitForSaved(page);
-  await page.locator('[data-build-garage]').click();
-  await expect(page.locator('[data-detached-foundation-prompt]')).toBeVisible();
-  await page.locator('[data-detached-thickened-edge]').click();
-  await page.waitForTimeout(300);
-  await h.waitForSaved(page);
+  await drawDetachedGarage(page, 'thickened');
+  await buildHouse(page);
 
   await drawHouseOutline(page);
   await buildHouse(page);
@@ -379,22 +334,11 @@ test('the garage roof sits at the main-floor ceiling, not the second-storey bear
   expect(garageRise).toBeLessThan(houseRise * 0.75);
 });
 
-test('BUILD GARAGE beside a house converts the newest rectangle, not the house', async ({ page }) => {
+test('a detached garage beside a house keeps both masters on the shelf', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
-  await h.selectTool(page, 'Outline');
-  await h.clickWorld(page, 14, -5);
-  await h.clickWorld(page, 26, -5);
-  await h.clickWorld(page, 26, 5);
-  await h.clickWorld(page, 14, 5);
-  await page.keyboard.press('Enter');
-  await h.waitForSaved(page);
-
-  await page.locator('[data-build-garage]').click();
-  await expect(page.locator('[data-detached-foundation-prompt]')).toBeVisible();
-  await page.locator('[data-detached-grade-beam]').click();
-  await page.waitForTimeout(300);
-  await h.waitForSaved(page);
+  await drawDetachedGarage(page, 'gradebeam');
+  await buildHouse(page);
 
   const saved = await h.savedDrawing(page);
   // House master untouched; the garage master joined it on the shelf.
