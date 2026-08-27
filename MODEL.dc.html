@@ -6948,7 +6948,11 @@ class Component extends DCLogic {
   }
 
   _switchLevel(idx) {
-    if (idx === this.state.activeLevelIdx && !this.state.boneyardActive) return;
+    if (idx === this.state.activeLevelIdx && !this.state.boneyardActive) {
+      // Clicking the level you're already on leaves a cut view back to plan.
+      if (this.state.activeView === 'cut') this._setView('top');
+      return;
+    }
     this._cancelFrozenLength();
     this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._cancelCut();
     this._applyLevelElevation(idx);
@@ -17437,7 +17441,12 @@ class Component extends DCLogic {
         name: c.name,
         sideStyle: c.auto ? '' : 'display:none;',
         sideName: c.auto ? this._elevationName(c.id) : '',
-        onSideClick: e => e.stopPropagation(),
+        onSideClick: e => {
+          e.stopPropagation();
+          // The name box covers most of the row; a click on it opens the view
+          // like the rest of the row. Renaming happens once the view is open.
+          if (this.state.activeCutId !== c.id) { e.target.blur(); this._enterCutView(c.id); }
+        },
         onSideChange: e => this._setElevationName(c.id, e.target.value),
         rowClass: 'cut-row' + (activeCutId === c.id ? ' active' : ''),
         delStyle: c.auto ? 'display:none;' : '',
