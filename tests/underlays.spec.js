@@ -95,8 +95,8 @@ function hybridPdf() {
 }
 
 async function openInsert(page) {
-  // INSERT PHOTO / PDF lives inside the PROJECT dialog now.
-  await page.locator('[data-project-open]').click();
+  // INSERT keeps its own top-bar button: the underlay machinery lives in
+  // MODEL, so it can't move to the static PROJECT page.
   await page.locator('[data-insert-underlay]').click();
 }
 

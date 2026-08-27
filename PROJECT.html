@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Draft — Project</title>
+  <script src="./shared-file-store.js"></script>
+  <script src="./formatters.js"></script>
+  <script src="./drawing-format.js"></script>
+  <script src="./project-page.js"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap">
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:#f5f5f4; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; }
+    .topbar { height:52px; display:flex; align-items:center; gap:14px; padding:0 20px; border-bottom:1px solid rgba(29,31,32,.16); background:#fff; }
+    .brand { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:21px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    .slash { color:rgba(29,31,32,.32); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:18px; }
+    .section { color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
+    .back { margin-left:auto; color:rgba(29,31,32,.56); text-decoration:none; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
+    .back:hover { color:#5980a6; }
+    main { width:min(1180px, calc(100vw - 32px)); margin:30px auto 48px; }
+    h1 { margin:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:27px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+    .intro { max-width:720px; margin:7px 0 0; color:rgba(29,31,32,.63); font-size:14px; line-height:1.5; }
+    .notice { display:none; margin-top:18px; padding:10px 12px; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:rgba(29,31,32,.68); font-size:12px; line-height:1.45; }
+    .notice.visible { display:block; }
+    .columns { display:grid; grid-template-columns:300px minmax(0,1fr) 300px; gap:16px; align-items:start; margin-top:22px; }
+    .card { border:1px solid rgba(29,31,32,.17); background:#fff; }
+    .card-title { padding:9px 12px; border-bottom:1px solid rgba(29,31,32,.12); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#5980a6; }
+    .card-body { padding:12px; }
+    .field-label { margin-top:11px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:rgba(29,31,32,.55); }
+    .field-label:first-child { margin-top:0; }
+    .field { width:100%; height:30px; margin-top:4px; border:1px solid rgba(29,31,32,.25); background:#fafafa; padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none; }
+    .field:hover, .field:focus { border-color:#5980a6; background:rgba(89,128,166,.07); }
+    textarea.field { height:auto; resize:vertical; line-height:1.45; }
+    .legal-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:4px; }
+    .legal-grid input { margin-top:0; }
+    .detail-wrap { position:relative; margin:10px auto 4px; }
+    .detail-wrap canvas { display:block; }
+    .detail-input { position:absolute; transform:translate(-50%,-50%); width:64px; height:22px; border:1px solid rgba(29,31,32,.3); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
+    .detail-input:hover, .detail-input:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
+    .detail-chip { position:absolute; transform:translate(-50%,-50%); padding:2px 5px; background:rgba(245,245,244,.92); border:1px solid rgba(29,31,32,.14); color:rgba(29,31,32,.62); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; white-space:nowrap; }
+    .detail-tag { position:absolute; transform:translate(-50%,-130%); color:rgba(29,31,32,.5); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; pointer-events:none; }
+    .zone-row { display:grid; grid-template-columns:minmax(0,1fr) 84px 84px; gap:6px; align-items:center; padding:7px 0; border-bottom:1px solid rgba(29,31,32,.08); }
+    .zone-row:last-child { border-bottom:0; }
+    .zone-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.04em; }
+    .zone-name .reserved { display:block; color:rgba(29,31,32,.4); font-size:8px; letter-spacing:.06em; }
+    .zone-head { display:grid; grid-template-columns:minmax(0,1fr) 84px 84px; gap:6px; padding-bottom:4px; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    .zone-input { width:100%; height:26px; border:1px solid rgba(29,31,32,.28); background:#fafafa; color:#1d1f20; padding:3px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
+    .zone-input:hover, .zone-input:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
+    .zone-note { margin-top:9px; color:rgba(29,31,32,.5); font-size:11px; line-height:1.4; }
+    .drop-slot { margin-top:16px; border:1.5px dashed rgba(29,31,32,.28); background:rgba(29,31,32,.02); padding:26px 16px; text-align:center; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    .drop-slot small { display:block; margin-top:5px; text-transform:none; letter-spacing:0; font-family:'Barlow',system-ui,sans-serif; font-weight:400; font-size:11px; }
+    #status { margin-top:14px; min-height:16px; color:#557a46; font-size:12px; }
+    @media (max-width:980px) { .columns { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Draft</div>
+    <div class="slash">/</div>
+    <div class="section">Project</div>
+    <a class="back" href="./MODEL.dc.html">&larr; Back to Model</a>
+  </header>
+  <main>
+    <h1>Project</h1>
+    <p class="intro">The project&#8217;s home base. Identity and build defaults save with this drawing &mdash; the office-wide numbers live in COMPANY STANDARDS. The wall-section detail is drawn from the same assembly values the sidebar level cards edit: change a number here and the level cards show it too.</p>
+    <div class="notice" id="no-drawing-notice">Browser storage is unavailable &mdash; showing the office defaults, read-only.</div>
+
+    <div class="columns">
+      <section class="card" aria-label="Project identity">
+        <div class="card-title">Identity</div>
+        <div class="card-body">
+          <div class="field-label">Project name</div>
+          <input class="field" data-project-name aria-label="Project name" />
+          <div class="field-label">Owner</div>
+          <input class="field" data-project-owner aria-label="Owner" />
+          <div class="field-label">Contractor</div>
+          <input class="field" data-project-contractor aria-label="Contractor" />
+          <div class="field-label">Civic address</div>
+          <input class="field" data-project-civic aria-label="Civic address" />
+          <div class="field-label">Legal land description</div>
+          <div class="legal-grid">
+            <input class="field" data-legal-block placeholder="BLOCK" aria-label="Legal block" />
+            <input class="field" data-legal-lot placeholder="LOT" aria-label="Legal lot" />
+            <input class="field" data-legal-plan placeholder="PLAN" aria-label="Legal plan" />
+            <input class="field" data-legal-parcel placeholder="PARCEL" aria-label="Legal parcel" />
+          </div>
+          <input class="field" data-legal-other placeholder="OTHER ID" aria-label="Legal other id" style="margin-top:6px;" />
+          <textarea class="field" data-project-legal rows="2" placeholder="Freeform description, if the lot needs one" aria-label="Legal land description freeform" style="margin-top:6px;"></textarea>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Typical wall section">
+        <div class="card-title">Typical wall section &mdash; first 4 ft, cut inward</div>
+        <div class="card-body">
+          <div class="detail-wrap" id="detail-wrap">
+            <canvas id="detail-canvas" width="520" height="640" aria-label="Live typical wall section"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Zone heights">
+        <div class="card-title">Zone heights</div>
+        <div class="card-body">
+          <div class="zone-head"><span></span><span>Local elev</span><span>Off main fl</span></div>
+          <div id="zone-rows"></div>
+          <div class="zone-note" id="zone-datum-note"></div>
+          <div class="zone-note">Zones are areas whose floors do not sit at MAIN FL. The garage rows feed BUILD HOUSE&#8217;s garage generation in a follow-up; the bilevel rows wait on the split-level feature.</div>
+        </div>
+      </section>
+    </div>
+
+    <div class="drop-slot" id="drop-slot">
+      Photos &middot; PDFs &middot; site plans
+      <small>The project drop zone lands here in a coming update &mdash; drop, upload, or paste, and it files with the project.</small>
+    </div>
+    <div id="status" role="status"></div>
+  </main>
+
+  <script>
+    (async () => {
+      const format = window.DraftDrawingFormat;
+      const fmt = window.DraftFormatters;
+      const projectPage = window.DraftProjectPage;
+      const BUCKET = 'model-drawing';
+
+      // Display mirror of MODEL's WALL_TYPES — visual thickness and labels
+      // only. The STORED value stays the id, which MODEL validates against
+      // the real table on load; an id this map doesn't know draws at the
+      // 2x6 default. If WALL_TYPES ever moves to a shared module, read it
+      // from there instead of here.
+      const WALL_TYPE_VIEW = {
+        stud_2x4: { label: '2×4 STUD', totalIn: 3.5 },
+        stud_2x6: { label: '2×6 STUD', totalIn: 5.5 },
+        insulation_6: { label: 'INSUL WALL', totalIn: 6.5 },
+        concrete_8: { label: '8" CONCRETE', totalIn: 8 },
+        icf: { label: 'ICF 11¼"', totalIn: 11.25 },
+        icf_13: { label: 'ICF 13¼"', totalIn: 13.25 },
+        pt_wood_fdn: { label: '2×8 PT WOOD FDN', totalIn: 8 },
+      };
+      const EXTERIOR_CHOICES = ['stud_2x4', 'stud_2x6', 'icf', 'icf_13'];
+      const FOUNDATION_TYPE_IDS = ['concrete_8', 'icf', 'icf_13', 'pt_wood_fdn', 'insulation_6'];
+      const ROOF_FASCIA_IN = 5.5;
+
+      // Same defaults the level cards fall back to (normaliseLevelAssembly
+      // in the Model Space) — display safety only: MODEL re-normalises on
+      // its own load, so a number that slips past here cannot corrupt it.
+      const assemblyDefaults = () => ({
+        wallHeightFt: (8 * 12 + 1 + 1 / 8) / 12,
+        joistDepthIn: 11 + 7 / 8,
+        sheathingIn: 3 / 4,
+        slabThicknessIn: 3,
+        footingDepthIn: 8,
+        footingWidthIn: null,
+      });
+      const positive = (value, fallback) =>
+        Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
+      const normaliseAssembly = raw => {
+        const base = assemblyDefaults();
+        if (!raw || typeof raw !== 'object') return base;
+        return {
+          ...raw,
+          wallHeightFt: positive(raw.wallHeightFt, base.wallHeightFt),
+          joistDepthIn: positive(raw.joistDepthIn, base.joistDepthIn),
+          sheathingIn: positive(raw.sheathingIn, base.sheathingIn),
+          slabThicknessIn: positive(raw.slabThicknessIn, base.slabThicknessIn),
+          footingDepthIn: positive(raw.footingDepthIn, base.footingDepthIn),
+          footingWidthIn: positive(raw.footingWidthIn, null),
+        };
+      };
+
+      // ── Load the drawing ────────────────────────────────────────────────
+      // A fresh browser has no stored drawing yet — the Model only writes
+      // one on its first edit. PROJECT is often the FIRST stop on a new
+      // job (the professor callout sends people here), so instead of going
+      // read-only the page starts a minimal valid drawing skeleton and
+      // writes it on the first save; the Model restores it like any other
+      // save, with everything else defaulting.
+      const DEFAULT_LEVEL_LIST = [
+        { id: 8, name: 'SITE', elev: 0 }, { id: 7, name: 'ROOF', elev: 18 },
+        { id: 5, name: '2ND FL', elev: 9 }, { id: 3, name: 'MAIN FL', elev: 0 },
+        { id: 1, name: 'FOUNDATION', elev: -10 },
+      ];
+      let drawing = null, fileName = 'model-drawing.json';
+      try {
+        const file = await window.SharedFileStore.loadSharedFile(BUCKET);
+        if (file) { drawing = JSON.parse(await file.text()); fileName = file.name || fileName; }
+      } catch (e) { drawing = null; }
+      if (!drawing) drawing = { version: format.VERSION, levels: DEFAULT_LEVEL_LIST.map(l => ({ ...l })) };
+      const readOnly = !window.SharedFileStore;
+      if (readOnly) document.querySelector('#no-drawing-notice').classList.add('visible');
+
+      let projectInfo = format.projectInfo(drawing?.projectInfo);
+      let zoneHeights = format.zoneHeights(drawing?.zoneHeights);
+      const levelAssemblies = drawing?.levelAssemblies && typeof drawing.levelAssemblies === 'object'
+        ? drawing.levelAssemblies : {};
+      const levels = format.levels(drawing.levels || DEFAULT_LEVEL_LIST);
+      // Floor levels climb the detail bottom-up; SITE, ROOF and FOUNDATION
+      // have their own parts.
+      const floorLevels = levels.filter(level => ![1, 7, 8].includes(level.id))
+        .sort((a, b) => a.elev - b.elev);
+      let roofPitch = positive(drawing?.roofPitch, 4);
+      let roofOverhang = positive(drawing?.roofOverhang, 2);
+      let activeWallType = WALL_TYPE_VIEW[drawing?.activeWallType] ? drawing.activeWallType : 'stud_2x6';
+      const datumFt = Number(drawing?.elevationDatum) === 100 ? 100 : 0;
+
+      const assembly = levelId => normaliseAssembly(levelAssemblies[levelId]);
+      const setAssembly = (levelId, field, value) => {
+        levelAssemblies[levelId] = { ...assembly(levelId), [field]: value };
+      };
+      // The foundation wall's thickness reads from the drawn foundation
+      // walls when there are any — the same derivation the Model uses.
+      const fdnThicknessIn = () => {
+        const wall = (drawing?.walls || []).find(candidate =>
+          candidate?.view === 'foundation' && WALL_TYPE_VIEW[candidate?.wallType]
+          && FOUNDATION_TYPE_IDS.includes(candidate.wallType));
+        return WALL_TYPE_VIEW[wall ? wall.wallType : 'concrete_8'].totalIn;
+      };
+      const fdnIsIcf = () => {
+        const wall = (drawing?.walls || []).find(candidate =>
+          candidate?.view === 'foundation' && String(candidate?.wallType || '').startsWith('icf'));
+        return !!wall;
+      };
+
+      const statusEl = document.querySelector('#status');
+      let statusTimer = null;
+      const showStatus = text => {
+        statusEl.textContent = text;
+        clearTimeout(statusTimer);
+        if (text) statusTimer = setTimeout(() => { statusEl.textContent = ''; }, 4000);
+      };
+
+      let saveQueue = Promise.resolve();
+      const save = note => {
+        if (readOnly) return;
+        drawing.projectInfo = projectInfo;
+        drawing.zoneHeights = zoneHeights;
+        drawing.levelAssemblies = levelAssemblies;
+        drawing.roofPitch = roofPitch;
+        drawing.roofOverhang = roofOverhang;
+        drawing.activeWallType = activeWallType;
+        const file = new File([JSON.stringify(drawing)], fileName, { type: 'application/json' });
+        saveQueue = saveQueue.catch(() => {})
+          .then(() => window.SharedFileStore.saveSharedFile(file, BUCKET))
+          .then(() => showStatus(note || 'Saved with the drawing.'))
+          .catch(() => showStatus('Could not save — is browser storage available?'));
+      };
+
+      // ── Identity ────────────────────────────────────────────────────────
+      // Stored keys predate the labels: OWNER lives in `client`, CIVIC
+      // ADDRESS in `address` — the titleblock and site plan keep reading
+      // them, and old drawings open with their values in the right boxes.
+      const identity = [
+        ['[data-project-name]', 'name'],
+        ['[data-project-owner]', 'client'],
+        ['[data-project-contractor]', 'contractor'],
+        ['[data-project-civic]', 'address'],
+        ['[data-legal-block]', 'legalBlock'],
+        ['[data-legal-lot]', 'legalLot'],
+        ['[data-legal-plan]', 'legalPlan'],
+        ['[data-legal-parcel]', 'legalParcel'],
+        ['[data-legal-other]', 'legalOther'],
+        ['[data-project-legal]', 'legal'],
+      ];
+      identity.forEach(([selector, field]) => {
+        const input = document.querySelector(selector);
+        input.value = projectInfo[field];
+        input.disabled = readOnly;
+        input.addEventListener('input', () => {
+          projectInfo = { ...projectInfo, [field]: input.value };
+        });
+        input.addEventListener('change', () => {
+          projectInfo = format.projectInfo(projectInfo);
+          input.value = projectInfo[field];
+          save('Project information saved.');
+        });
+      });
+
+      // ── The live detail ─────────────────────────────────────────────────
+      const canvas = document.querySelector('#detail-canvas');
+      const wrap = document.querySelector('#detail-wrap');
+      wrap.style.width = canvas.width + 'px';
+      const ftIn = ft => fmt.formatArchitecturalInches(ft * 12);
+      const inchesOnly = inches => fmt.formatInchesOnly(inches);
+
+      const detailValues = () => ({
+        floors: floorLevels.map(level => {
+          const asm = assembly(level.id);
+          return { id: level.id, name: level.name, wallHeightFt: asm.wallHeightFt,
+            joistDepthIn: asm.joistDepthIn, sheathingIn: asm.sheathingIn };
+        }),
+        foundation: (() => {
+          const asm = assembly(1);
+          return {
+            wallHeightFt: asm.wallHeightFt,
+            thicknessIn: fdnThicknessIn(),
+            slabIn: asm.slabThicknessIn,
+            footingWidthIn: asm.footingWidthIn ?? (fdnIsIcf() ? 24 : 20),
+            footingDepthIn: asm.footingDepthIn,
+            gradeOffsetFt: zoneHeights.gradeOffsetFt,
+          };
+        })(),
+        roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN },
+        wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
+      });
+
+      // One control per anchor. get/set/text describe the value; commit
+      // parses, clamps softly, saves, and repaints — repainting is what
+      // moves every control to its part's new home.
+      const signedFtIn = ft => (ft < 0 ? '-' : ft > 0 ? '+' : '')
+        + fmt.formatArchitecturalInches(Math.abs(ft) * 12);
+      const parseSignedFtIn = text => {
+        const trimmed = String(text || '').trim();
+        const negative = trimmed.startsWith('-');
+        const parsed = fmt.parseArchitecturalLength(trimmed.replace(/^[+-]/, ''));
+        if (!parsed.ok) return null;
+        return (negative ? -1 : 1) * parsed.inches / 12;
+      };
+      const parseFtIn = text => {
+        const parsed = fmt.parseArchitecturalLength(text);
+        return parsed.ok && parsed.inches > 0 ? parsed.inches / 12 : null;
+      };
+      const parseInches = text => {
+        const parsed = fmt.parseAssemblyInches(text);
+        return parsed.ok && parsed.inches > 0 ? parsed.inches : null;
+      };
+      const controls = [];
+      const addInput = (key, tag, opts) => controls.push({ key, tag, kind: 'input', ...opts });
+      const addChip = (key, text) => controls.push({ key, kind: 'chip', text });
+
+      addInput('pitch', 'PITCH :12', {
+        name: 'pitch',
+        get: () => String(roofPitch),
+        set: text => {
+          const value = Number(text);
+          if (Number.isFinite(value) && value > 0 && value <= 24) { roofPitch = value; return true; }
+          return false;
+        },
+      });
+      addInput('overhang', 'OVERHANG', {
+        name: 'overhang',
+        get: () => ftIn(roofOverhang),
+        set: text => {
+          const value = parseFtIn(text);
+          if (value != null && value <= 6) { roofOverhang = value; return true; }
+          return false;
+        },
+      });
+      floorLevels.forEach(level => {
+        addInput(`wallHeight-${level.id}`, `${level.name} WALL HT`, {
+          name: `wallHeight-${level.id}`,
+          get: () => ftIn(assembly(level.id).wallHeightFt),
+          set: text => {
+            const value = parseFtIn(text);
+            if (value != null) { setAssembly(level.id, 'wallHeightFt', value); return true; }
+            return false;
+          },
+        });
+        addInput(`floor-${level.id}`, `${level.name} FL JST`, {
+          name: `floor-${level.id}`,
+          get: () => inchesOnly(assembly(level.id).joistDepthIn),
+          set: text => {
+            const value = parseInches(text);
+            if (value != null) { setAssembly(level.id, 'joistDepthIn', value); return true; }
+            return false;
+          },
+        });
+      });
+      addInput('fdnHeight', 'FDN WALL HT', {
+        name: 'fdnHeight',
+        get: () => ftIn(assembly(1).wallHeightFt),
+        set: text => {
+          const value = parseFtIn(text);
+          if (value != null) { setAssembly(1, 'wallHeightFt', value); return true; }
+          return false;
+        },
+      });
+      addInput('slab', 'SLAB', {
+        name: 'slab',
+        get: () => inchesOnly(assembly(1).slabThicknessIn),
+        set: text => {
+          const value = parseInches(text);
+          if (value != null) { setAssembly(1, 'slabThicknessIn', value); return true; }
+          return false;
+        },
+      });
+      addInput('footingWidth', 'FTG WIDTH', {
+        name: 'footingWidth',
+        get: () => inchesOnly(assembly(1).footingWidthIn ?? (fdnIsIcf() ? 24 : 20)),
+        set: text => {
+          const value = parseInches(text);
+          if (value != null) { setAssembly(1, 'footingWidthIn', value); return true; }
+          return false;
+        },
+      });
+      addInput('footingDepth', 'FTG DEPTH', {
+        name: 'footingDepth',
+        get: () => inchesOnly(assembly(1).footingDepthIn),
+        set: text => {
+          const value = parseInches(text);
+          if (value != null) { setAssembly(1, 'footingDepthIn', value); return true; }
+          return false;
+        },
+      });
+      addChip('fascia', () => `FASCIA ${inchesOnly(ROOF_FASCIA_IN)}`);
+      addChip('heel', () => `HEEL ${fmt.formatArchitecturalInches(ROOF_FASCIA_IN + roofOverhang * roofPitch)}`);
+      addChip('fdnThickness', () => `${inchesOnly(fdnThicknessIn())} FDN`);
+      addInput('grade', 'GRADE OFF FDN TOP', {
+        name: 'grade',
+        get: () => signedFtIn(zoneHeights.gradeOffsetFt),
+        set: text => {
+          const value = parseSignedFtIn(text);
+          if (value == null) return false;
+          zoneHeights = format.zoneHeights({ ...zoneHeights, gradeOffsetFt: value });
+          return true;
+        },
+      });
+
+      // The exterior wall type select sits on the wall body.
+      const wallTypeSelect = document.createElement('select');
+      wallTypeSelect.className = 'detail-input';
+      wallTypeSelect.style.width = '96px';
+      wallTypeSelect.dataset.detailInput = 'wallType';
+      wallTypeSelect.setAttribute('aria-label', 'Exterior wall type');
+      EXTERIOR_CHOICES.forEach(id => {
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = WALL_TYPE_VIEW[id].label;
+        wallTypeSelect.appendChild(option);
+      });
+      if (!EXTERIOR_CHOICES.includes(activeWallType)) {
+        const option = document.createElement('option');
+        option.value = activeWallType;
+        option.textContent = WALL_TYPE_VIEW[activeWallType].label;
+        wallTypeSelect.appendChild(option);
+      }
+      wallTypeSelect.value = activeWallType;
+      wallTypeSelect.disabled = readOnly;
+      wallTypeSelect.addEventListener('change', () => {
+        activeWallType = wallTypeSelect.value;
+        save('Exterior wall type saved.');
+        repaint();
+      });
+
+      const controlEls = new Map();
+      controls.forEach(control => {
+        if (control.kind === 'input') {
+          const input = document.createElement('input');
+          input.className = 'detail-input';
+          input.dataset.detailInput = control.name;
+          input.setAttribute('aria-label', control.tag);
+          input.disabled = readOnly;
+          const tag = document.createElement('span');
+          tag.className = 'detail-tag';
+          tag.textContent = control.tag;
+          input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+          input.addEventListener('change', () => {
+            if (control.set(input.value)) {
+              save('Build default saved.');
+            }
+            repaint();
+            fillZones(); // grade + assemblies feed the zone readouts too
+            // repaint skips the focused box, so a rejected edit snaps back here
+            input.value = control.get();
+          });
+          wrap.appendChild(input); wrap.appendChild(tag);
+          controlEls.set(control.key, { control, el: input, tag });
+        } else {
+          const chip = document.createElement('span');
+          chip.className = 'detail-chip';
+          chip.dataset.detailChip = control.key;
+          wrap.appendChild(chip);
+          controlEls.set(control.key, { control, el: chip });
+        }
+      });
+      wrap.appendChild(wallTypeSelect);
+
+      const repaint = () => {
+        const painted = projectPage.paintWallSection(canvas, detailValues());
+        controlEls.forEach(({ control, el, tag }, key) => {
+          const at = painted.anchors[key];
+          if (!at) { el.style.display = 'none'; if (tag) tag.style.display = 'none'; return; }
+          el.style.display = '';
+          el.style.left = `${at.x}px`; el.style.top = `${at.y}px`;
+          if (tag) { tag.style.display = ''; tag.style.left = `${at.x}px`; tag.style.top = `${at.y - 13}px`; }
+          if (control.kind === 'input' && document.activeElement !== el) el.value = control.get();
+          if (control.kind === 'chip') el.textContent = control.text();
+        });
+        const wallAt = painted.anchors.wallType;
+        if (wallAt) {
+          wallTypeSelect.style.left = `${wallAt.x - 62}px`;
+          wallTypeSelect.style.top = `${wallAt.y}px`;
+        }
+      };
+
+      // ── Zone heights + grade ────────────────────────────────────────────
+      const zoneRowsEl = document.querySelector('#zone-rows');
+      document.querySelector('#zone-datum-note').textContent =
+        `MAIN FL reads ${fmt.formatArchitecturalInches(datumFt * 12)} — the drawing's elevation datum. Local = datum + offset; edit either box. GRADE LEVEL's offset reads from the top of the foundation wall instead.`;
+      // Grade's second reference: the top of the foundation wall sits one
+      // main-floor assembly below MAIN FL.
+      const fdnTopLocalFt = () => {
+        const asm = assembly(floorLevels[0]?.id ?? 3);
+        return datumFt - (asm.joistDepthIn + asm.sheathingIn) / 12;
+      };
+      // The detached garage derives from grade until overridden: beam top
+      // ~8" above grade at the house (offset from MAIN FL).
+      const derivedDetachedOffsetFt = () =>
+        fdnTopLocalFt() - datumFt + zoneHeights.gradeOffsetFt
+        + projectPage.GARAGE_BEAM_ABOVE_GRADE_IN / 12;
+      const zoneOffsetFt = zone => zone.id === 'detachedGarage'
+        ? (zoneHeights.zones.detachedGarage.offsetFt ?? derivedDetachedOffsetFt())
+        : zoneHeights.zones[zone.id].offsetFt;
+      let gradeInputs = null;
+
+      // GRADE LEVEL row rides on top of the zones — same two-way editing,
+      // its offset referenced to the top of the foundation wall.
+      {
+        const row = document.createElement('div');
+        row.className = 'zone-row';
+        const name = document.createElement('span');
+        name.className = 'zone-name';
+        name.innerHTML = 'GRADE LEVEL<span class="reserved">OFF TOP OF FDN</span>';
+        const local = document.createElement('input');
+        local.className = 'zone-input';
+        local.dataset.gradeLocal = '1';
+        local.setAttribute('aria-label', 'Grade level local elevation');
+        const offset = document.createElement('input');
+        offset.className = 'zone-input';
+        offset.dataset.gradeOffset = '1';
+        offset.setAttribute('aria-label', 'Grade level offset from top of foundation');
+        local.disabled = offset.disabled = readOnly;
+        const commitGrade = (input, toOffset) => {
+          const value = parseSignedFtIn(input.value);
+          if (value != null) {
+            zoneHeights = format.zoneHeights({ ...zoneHeights, gradeOffsetFt: toOffset(value) });
+            save('Grade level saved.');
+          }
+          fillZones();
+          repaint();
+        };
+        local.addEventListener('change', () => commitGrade(local, value => value - fdnTopLocalFt()));
+        offset.addEventListener('change', () => commitGrade(offset, value => value));
+        [local, offset].forEach(input =>
+          input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); }));
+        row.appendChild(name); row.appendChild(local); row.appendChild(offset);
+        zoneRowsEl.appendChild(row);
+        gradeInputs = { local, offset };
+      }
+      const zoneInputs = [];
+      projectPage.ZONE_ROWS.forEach(zone => {
+        const row = document.createElement('div');
+        row.className = 'zone-row';
+        const name = document.createElement('span');
+        name.className = 'zone-name';
+        name.innerHTML = zone.label + (zone.reserved ? '<span class="reserved">RESERVED</span>' : '');
+        const local = document.createElement('input');
+        local.className = 'zone-input';
+        local.dataset.zoneLocal = zone.id;
+        local.setAttribute('aria-label', `${zone.label} local floor elevation`);
+        const offset = document.createElement('input');
+        offset.className = 'zone-input';
+        offset.dataset.zoneOffset = zone.id;
+        offset.setAttribute('aria-label', `${zone.label} offset from MAIN FL`);
+        local.disabled = offset.disabled = readOnly;
+        const commit = (input, toOffset) => {
+          const value = parseSignedFtIn(input.value);
+          if (value != null) {
+            zoneHeights = format.zoneHeights({ zones: {
+              ...zoneHeights.zones, [zone.id]: { offsetFt: toOffset(value) },
+            } });
+            save(`${zone.label} height saved.`);
+          }
+          fillZones();
+        };
+        local.addEventListener('change', () => commit(local, value => value - datumFt));
+        offset.addEventListener('change', () => commit(offset, value => value));
+        [local, offset].forEach(input =>
+          input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); }));
+        row.appendChild(name); row.appendChild(local); row.appendChild(offset);
+        zoneRowsEl.appendChild(row);
+        zoneInputs.push({ zone, local, offset });
+      });
+      const fillZones = () => {
+        zoneInputs.forEach(({ zone, local, offset }) => {
+          const offsetFt = zoneOffsetFt(zone);
+          local.value = signedFtIn(datumFt + offsetFt).replace(/^\+/, '');
+          offset.value = signedFtIn(offsetFt);
+          const derived = zone.id === 'detachedGarage'
+            && zoneHeights.zones.detachedGarage.offsetFt == null;
+          const title = derived ? 'Derived from GRADE LEVEL — edit to override.' : '';
+          local.title = title; offset.title = title;
+        });
+        if (gradeInputs) {
+          gradeInputs.local.value =
+            signedFtIn(fdnTopLocalFt() + zoneHeights.gradeOffsetFt).replace(/^\+/, '');
+          gradeInputs.offset.value = signedFtIn(zoneHeights.gradeOffsetFt);
+        }
+      };
+
+      fillZones();
+      repaint();
+    })();
+  </script>
+</body>
+</html>

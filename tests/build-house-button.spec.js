@@ -67,9 +67,10 @@ test('HOUSE press arms the trace and PROFESSOR GRUFF points at PROJECT; Escape o
   await expect(page.getByText('Professor Gruff')).toBeVisible();
   await expect(page.getByText(/HOUSE — trace the outline/)).toBeVisible();
 
+  // PROJECT lives on its own page now — Escape heads there.
   await page.keyboard.press('Escape');
-  await expect(page.locator('[data-project-callout]')).toBeHidden();
-  await expect(page.locator('[data-project-dialog]')).toBeVisible();
+  await page.waitForURL(/PROJECT\.html/);
+  await expect(page.locator('[data-project-name]')).toBeVisible();
 });
 
 test('select HOUSE, trace, bone builds the house', async ({ page }) => {

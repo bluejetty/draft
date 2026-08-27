@@ -561,11 +561,56 @@ if (!window.DraftDrawingFormat) {
   const projectInfo = raw => {
     const line = value => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
     const block = value => String(value ?? '').replace(/\r\n?/g, '\n').trim().slice(0, 1000);
+    // The stored keys predate the PROJECT page's labels and stay put so the
+    // titleblock and site plan keep reading them: `client` is the OWNER box,
+    // `address` is CIVIC ADDRESS, `legal` the freeform legal line. The
+    // structured legal fields and CONTRACTOR are additive — old drawings
+    // load with them empty.
     return {
       name: line(raw?.name),
       client: line(raw?.client),
+      contractor: line(raw?.contractor),
       address: line(raw?.address),
       legal: block(raw?.legal),
+      legalBlock: line(raw?.legalBlock),
+      legalLot: line(raw?.legalLot),
+      legalPlan: line(raw?.legalPlan),
+      legalParcel: line(raw?.legalParcel),
+      legalOther: line(raw?.legalOther),
+    };
+  };
+
+  // ZONE HEIGHTS (board #221): areas whose floors do not sit at MAIN FL 0 —
+  // the garages, and the bilevel rows reserved for the split-level feature.
+  // Only the signed offset from MAIN FL persists; the "local elevation" the
+  // PROJECT page also shows is offset + the drawing's elevationDatum, so the
+  // two readings can never disagree in storage. BUILD HOUSE's garage
+  // generation consumes the garage rows in a follow-up.
+  const zoneHeights = raw => {
+    const zones = raw && typeof raw.zones === 'object' && raw.zones ? raw.zones : {};
+    const offset = value => (Number.isFinite(Number(value)) ? Number(value) : 0);
+    return {
+      // GRADE LEVEL: the drawn grade line, stored relative to the TOP OF THE
+      // FOUNDATION WALL. Defaults a deliberate 1'-0" below — the drawn grade
+      // is the conservative LOW case and the site crew fills up to it, which
+      // leaves fill to play with for drainage. Old saves carry no value and
+      // land here.
+      gradeOffsetFt: Number.isFinite(Number(raw?.gradeOffsetFt)) ? Number(raw.gradeOffsetFt) : -1,
+      zones: {
+        attachedGarage: { offsetFt: offset(zones.attachedGarage?.offsetFt) },
+        // The detached garage DERIVES from grade until overridden — null
+        // means derive (top of the garage grade beam sits ~8" above grade
+        // at the house); a stored number is the drafter's override.
+        detachedGarage: {
+          // Number(null) is 0, so the null/absent check comes first — a
+          // re-normalise must never turn "derive" into an explicit 0.
+          offsetFt: zones.detachedGarage?.offsetFt == null ? null
+            : Number.isFinite(Number(zones.detachedGarage.offsetFt))
+              ? Number(zones.detachedGarage.offsetFt) : null,
+        },
+        bilevel: { offsetFt: offset(zones.bilevel?.offsetFt) },
+        modifiedBilevel: { offsetFt: offset(zones.modifiedBilevel?.offsetFt) },
+      },
     };
   };
 
@@ -599,6 +644,7 @@ if (!window.DraftDrawingFormat) {
     outlines,
     underlays,
     projectInfo,
+    zoneHeights,
     backgroundLevelIds,
     oneOf,
     number,
