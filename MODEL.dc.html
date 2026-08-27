@@ -1467,9 +1467,17 @@ const DEFAULT_SLAB_THICKNESS_IN = 4;
 const GARAGE_SLAB_THICKNESS_IN = 4;
 const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;
 // Attached-garage grade beam stack: 32" concrete + 1.5" sill plate = 33.5",
-// hung with the top of plate 1'-0" below the top of the house foundation wall.
+// hung with the top of concrete 1'-0" above grade — level with the top of
+// the house foundation wall at the default grade.
 const GARAGE_BEAM_CONCRETE_IN = 32;
 const GARAGE_BEAM_PLATE_IN = 1.5;
+// GRADE: drawn 1'-0" below the top of the foundation wall — the conservative
+// LOW case, so the site fills UP to the drawn grade (real grade usually sits
+// 6"-8" below the foundation top). Garages hang off grade, not the house:
+// an attached beam tops out 1'-0" above it, a detached grade beam 8".
+const GRADE_BELOW_FOUNDATION_TOP_FT = 1;
+const GARAGE_BEAM_ABOVE_GRADE_FT = 1;
+const DETACHED_BEAM_ABOVE_GRADE_IN = 8;
 // Detached-garage thickened-edge slab: a LEVEL FLAT monolithic pour on
 // gravel — 4" field, 1'-0" deep perimeter edge, 45° taper from the edge back
 // up to the field. At 45° the taper runs (edge − field) inches in plan.
@@ -5824,6 +5832,15 @@ class Component extends DCLogic {
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.fillText(`TOTAL RISE ${this._ftIn(layout.riseFt)}`, rect.x + 10, yOf(-layout.riseFt / 2));
     ctx.fillText(`TOTAL RUN ${this._ftIn(dev.runFt)}${split ? ' UNFOLDED' : ''}`, rect.x + 10, yOf(-layout.riseFt / 2) + 13);
+
+    // The site rule: grade only ever fills UP to the drawn datum, so risers
+    // are only ever adjusted shorter — never taller than drawn.
+    ctx.fillStyle = 'rgba(29,31,32,0.6)';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('VERIFY ACTUAL HEIGHT CHANGE ON SITE — ADJUST RISER HEIGHT DOWN ONLY;',
+      rect.x + 10, rect.y + rect.h - 16);
+    ctx.fillText('IF MORE HEIGHT IS NEEDED, ADD A RISER AND EQUALIZE ALL RISERS.',
+      rect.x + 10, rect.y + rect.h - 5);
     ctx.restore();
   }
 
@@ -7168,6 +7185,7 @@ class Component extends DCLogic {
       bearing: stack[stack.length - 1].wallTop,
       foundation: {
         wallTop, wallBottom,
+        grade: wallTop - GRADE_BELOW_FOUNDATION_TOP_FT,
         slabTop: wallBottom + foundationAssembly.slabThicknessIn / 12,
         slabIn: foundationAssembly.slabThicknessIn,
         footingBottom: wallBottom - foundationAssembly.footingDepthIn / 12,
@@ -7327,6 +7345,7 @@ class Component extends DCLogic {
       ctx.fillText(label ?? this._elevLabel(elevFt + datum), marginL - 22, Y(elevFt));
     };
     stack.floors.forEach(level => { mark(level.floorTop); mark(level.wallTop); });
+    mark(stack.foundation.grade, 'GRADE');
     mark(stack.foundation.slabTop);
     mark(stack.foundation.footingBottom);
 
@@ -7406,8 +7425,8 @@ class Component extends DCLogic {
       const uHi = Math.max(...crossings.map(c => c.u + c.width / 2));
       ctx.strokeStyle = INK; ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(marginL - 18, Y(fdn.wallTop)); ctx.lineTo(X(uLo), Y(fdn.wallTop));
-      ctx.moveTo(X(uHi), Y(fdn.wallTop)); ctx.lineTo(w - marginR, Y(fdn.wallTop));
+      ctx.moveTo(marginL - 18, Y(fdn.grade)); ctx.lineTo(X(uLo), Y(fdn.grade));
+      ctx.moveTo(X(uHi), Y(fdn.grade)); ctx.lineTo(w - marginR, Y(fdn.grade));
       ctx.stroke();
     }
 
@@ -7627,24 +7646,39 @@ class Component extends DCLogic {
       ctx.fillText(this._elevLabel(elevFt + datum), marginL - 22, Y(elevFt));
     };
     stack.floors.forEach(level => { mark(level.floorTop); mark(level.wallTop); });
+    mark(fdn.grade);
 
-    // Below-grade foundation, dashed — every buried face at its own heights:
-    // a basement wall runs grade to footing with the footing projecting past
-    // the wall face; a hung garage grade beam shows just its buried band, no
-    // footing and no gravel (that detail belongs to the section).
-    ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
-    ctx.setLineDash([5, 4]);
+    // Foundation faces split at grade: the exposed concrete above grade reads
+    // as a light grey face; the buried part is dashed — a basement wall runs
+    // grade to footing with the footing projecting past the wall face; a hung
+    // garage grade beam shows just its buried band, no footing and no gravel
+    // (that detail belongs to the section).
     fdnFaces.forEach(face => {
       if (face.hi - face.lo < 0.5) return;
       const top = fdn.wallBottom + face.top, base = fdn.wallBottom + face.base;
-      ctx.strokeRect(X(face.lo), Y(top), (face.hi - face.lo) * pxPerFt,
-        (top - base) * pxPerFt);
+      const x = X(face.lo), wid = (face.hi - face.lo) * pxPerFt;
+      if (top > fdn.grade) {
+        const shownBase = Math.max(base, fdn.grade);
+        ctx.fillStyle = '#e8e8ea';
+        ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        ctx.fillRect(x, Y(top), wid, (top - shownBase) * pxPerFt);
+        ctx.strokeRect(x, Y(top), wid, (top - shownBase) * pxPerFt);
+      }
+      ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]);
+      if (base < fdn.grade) {
+        const buriedTop = Math.min(top, fdn.grade);
+        ctx.strokeRect(x, Y(buriedTop), wid, (buriedTop - base) * pxPerFt);
+      }
       if (face.bearing) {
         const projFt = Math.max(0, fdn.footingWidthIn - face.wallIn) / 2 / 12;
         ctx.strokeRect(X(face.lo - projFt), Y(base),
           (face.hi - face.lo + projFt * 2) * pxPerFt, (fdn.footingIn / 12) * pxPerFt);
       }
+      ctx.setLineDash([]);
     });
+    ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
+    ctx.setLineDash([5, 4]);
     const bearingFaces = fdnFaces.filter(face => face.bearing && face.hi - face.lo > 0.5);
     if (bearingFaces.length) {
       const lo = Math.min(...bearingFaces.map(f => f.lo));
@@ -7662,7 +7696,7 @@ class Component extends DCLogic {
       const { wall, u1, u2, level } = face;
       const xa = X(Math.max(Math.min(u1, u2), uMin));
       const xb = X(Math.min(Math.max(u1, u2), uMax));
-      ctx.fillStyle = '#f2f2f3';
+      ctx.fillStyle = '#fff';
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       ctx.fillRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - level.floorTop) * pxPerFt);
       ctx.strokeRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - level.floorTop) * pxPerFt);
@@ -7683,8 +7717,9 @@ class Component extends DCLogic {
       });
     });
 
-    // Floor assembly bands: each floor's rim (joists + sheathing) reads on
-    // the face between the wall below and the wall above it.
+    // Floor assembly bands: each floor's rim (joists + sheathing) is part of
+    // the house face — white like the walls, no banding line, keeping only
+    // the silhouette's vertical edges through the band.
     const bandByLevel = {};
     faces.forEach(face => {
       const lo = Math.max(Math.min(face.u1, face.u2), uMin);
@@ -7696,11 +7731,15 @@ class Component extends DCLogic {
     stack.floors.forEach(level => {
       const band = bandByLevel[level.id];
       if (!band || band.hi - band.lo < 0.5) return;
-      ctx.fillStyle = 'rgba(89,128,166,0.15)';
-      ctx.strokeStyle = INK; ctx.lineWidth = 1;
+      const x = X(band.lo), wid = (band.hi - band.lo) * pxPerFt;
       const depth = (level.floorTop - level.floorBottom) * pxPerFt;
-      ctx.fillRect(X(band.lo), Y(level.floorTop), (band.hi - band.lo) * pxPerFt, depth);
-      ctx.strokeRect(X(band.lo), Y(level.floorTop), (band.hi - band.lo) * pxPerFt, depth);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(x - 1, Y(level.floorTop) - 1, wid + 2, depth + 2);
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(x, Y(level.floorTop) - 1); ctx.lineTo(x, Y(level.floorBottom) + 1);
+      ctx.moveTo(x + wid, Y(level.floorTop) - 1); ctx.lineTo(x + wid, Y(level.floorBottom) + 1);
+      ctx.stroke();
     });
 
     // Roof silhouette over the faces, with the fascia band along the eave.
@@ -7746,11 +7785,12 @@ class Component extends DCLogic {
       });
     }
 
-    // Grade at the top of the foundation wall, heavy, across the sheet.
+    // Grade, heavy, straight across the sheet — the exposed concrete stands
+    // on it and everything below it reads dashed.
     ctx.strokeStyle = INK; ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(marginL - 18, Y(fdn.wallTop));
-    ctx.lineTo(w - marginR, Y(fdn.wallTop));
+    ctx.moveTo(marginL - 18, Y(fdn.grade));
+    ctx.lineTo(w - marginR, Y(fdn.grade));
     ctx.stroke();
     return true;
   }
@@ -9984,11 +10024,13 @@ class Component extends DCLogic {
 
   // The garage grade beam walks the OPEN garage legs only — the house side
   // has no member of its own; the house foundation wall closes that side. The
-  // beam is the 33.5" stack (32" concrete + 1.5" sill plate) hung with the
-  // top of plate 1'-0" below the top of the house foundation wall, ending at
-  // the shared attachment nodes with a REBAR TIE note at each. A DETACHED
-  // grade-beam garage gets the full perimeter beam around its closed loop; a
-  // thickened-edge one builds no beam — its slab's perimeter IS the footing.
+  // beam is the 33.5" stack (32" concrete + 1.5" sill plate) hung off GRADE:
+  // concrete top 1'-0" above grade (level with the top of the house
+  // foundation wall at the default grade), ending at the shared attachment
+  // nodes with a REBAR TIE note at each. A DETACHED grade-beam garage gets
+  // the full perimeter beam around its closed loop with its top 8" above
+  // grade; a thickened-edge one builds no beam — its slab rests right on
+  // grade and its perimeter IS the footing.
   _buildGarageGradeBeam() {
     const levelId = 1;
     const house = this._houseOutline(levelId);
@@ -10001,7 +10043,10 @@ class Component extends DCLogic {
       const detached = this._garageDetached(garage);
       const points = garage.points;
       const refLine = this._outlineInteriorRef(open ? this._garageSlabPolygon(garage) : points);
-      const topHeight = open ? houseTop - 1 - GARAGE_BEAM_PLATE_IN / 12 : houseTop;
+      const grade = houseTop - GRADE_BELOW_FOUNDATION_TOP_FT;
+      const topHeight = open ? grade + GARAGE_BEAM_ABOVE_GRADE_FT
+        : detached ? grade + DETACHED_BEAM_ABOVE_GRADE_IN / 12
+        : houseTop;
       const baseHeight = open ? topHeight - GARAGE_BEAM_CONCRETE_IN / 12 : 0;
       const existing = this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'foundation');
       const hasWall = (a, b) => existing.some(wall =>
@@ -16977,7 +17022,7 @@ class Component extends DCLogic {
       detachedGarageBorder: this.state.outlineGarage === 'detached' ? '#7a4a21' : 'rgba(29,31,32,0.35)',
       detachedGarageBg: this.state.outlineGarage === 'detached' ? 'rgba(122,74,33,0.14)' : '#fff',
       detachedGarageColor: this.state.outlineGarage === 'detached' ? '#7a4a21' : 'rgba(29,31,32,0.75)',
-      buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on every floor level, 8" concrete walls + slab + ${formatInchesOnly(this._footingWidthIn(1))} centered strip-footing lines on FOUNDATION, and a ${this.state.roofPitch}:12 all-eave roof grown from the ROOF level's outline by the roof overhang. An attached GARAGE adds its open-leg grade beam (32" + 1.5" plate, top of plate 1'-0" below the foundation top), a flat 4" slab closed against the house, 10"\u00f8 piles at the two beam corners against the house (COLUMN or COPY places the rest along the beam), garage walls flush with the main-floor ceiling, and one roof over house + garage. Only levels still empty build, so re-running fills gaps without doubling up.`,
+      buildHouseHint: `One click builds the starter shell from each level's outline: 2\u00d76 walls + floors on every floor level, 8" concrete walls + slab + ${formatInchesOnly(this._footingWidthIn(1))} centered strip-footing lines on FOUNDATION, and a ${this.state.roofPitch}:12 all-eave roof grown from the ROOF level's outline by the roof overhang. An attached GARAGE adds its open-leg grade beam (32" + 1.5" plate, concrete top 1'-0" above grade), a flat 4" slab closed against the house, 10"\u00f8 piles at the two beam corners against the house (COLUMN or COPY places the rest along the beam), garage walls flush with the main-floor ceiling, and one roof over house + garage. Only levels still empty build, so re-running fills gaps without doubling up.`,
       onShapeCapture: () => this._captureShape(),
       hasActiveShapes: this._activeShapes().length > 0,
       onShapeDelete: () => this._deleteLastShape(),

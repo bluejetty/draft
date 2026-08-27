@@ -346,11 +346,12 @@ test('BUILD HOUSE grows the open-leg beam, flat slab, flush walls, and one roof'
   const beams = fdnWalls.filter(wall => h.touchesPoint(wall, 20, -4) || h.touchesPoint(wall, 20, 4));
   expect(beams).toHaveLength(3);
 
-  // The 33.5" stack: 32" concrete with the 1.5" plate on top, top of plate
-  // 1'-0" below the top of the house foundation wall.
+  // The 33.5" stack: 32" concrete with the 1.5" plate on top, hung off
+  // grade — the concrete top 1'-0" above grade, which is level with the top
+  // of the house foundation wall at the drawn grade (foundation top − 1').
   const houseWall = fdnWalls.find(wall => !beams.includes(wall));
   beams.forEach(beam => {
-    expect(beam.topHeight).toBeCloseTo(houseWall.topHeight - 1 - 1.5 / 12, 3);
+    expect(beam.topHeight).toBeCloseTo(houseWall.topHeight, 3);
     expect(beam.topHeight - beam.baseHeight).toBeCloseTo(32 / 12, 3);
   });
 

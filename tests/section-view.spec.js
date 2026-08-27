@@ -149,8 +149,8 @@ test.describe('Generated section view', () => {
       const median = sorted[Math.floor(sorted.length / 2)];
       return { band, gradeY, overallMin, median };
     });
-    // Both storeys band between the wall faces.
-    expect(scan.band).toBeGreaterThan(400);
+    // Floor rims read white like the walls on an elevation — no tinted band.
+    expect(scan.band).toBe(0);
     expect(scan.gradeY).toBeGreaterThan(0);
     // The dashed footing pops past the foundation wall face.
     expect(scan.median - scan.overallMin).toBeGreaterThanOrEqual(2);
