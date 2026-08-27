@@ -334,6 +334,127 @@ test.describe('Generated section view', () => {
     expect(dirChanges).toBeLessThanOrEqual(4);
   });
 
+  // House + detached garage, then an elevation looking at both from the
+  // south. Returns a census split at the gap between the two buildings:
+  // the deepest buried ink under each, exposed concrete-face pixels and
+  // buried dashed ink over the garage, and any faint datum-line pixels
+  // crossing the gap above grade (the house level lines must stop home).
+  async function detachedElevationScan(page, foundation) {
+    await h.openModel(page, { webgl: false });
+    await drawOutlineRect(page);
+    await h.selectTool(page, 'Outline');
+    await page.getByRole('button', { name: /DETACHED GARAGE/ }).click();
+    await h.clickWorld(page, 14, -5);
+    await h.clickWorld(page, 26, -5);
+    await h.clickWorld(page, 26, 5);
+    await h.clickWorld(page, 14, 5);
+    await h.clickWorld(page, 14, -5);
+    await expect(page.locator('[data-detached-foundation-prompt]')).toBeVisible();
+    await page.locator(foundation === 'thickened'
+      ? '[data-detached-thickened-edge]' : '[data-detached-grade-beam]').click();
+    await h.waitForSaved(page);
+    await buildHouse(page);
+    await h.waitForSaved(page);
+
+    // The cut spans house and garage, the viewer south of both looking back.
+    await page.keyboard.press('c');
+    await h.clickWorld(page, -12, 10);
+    await h.clickWorld(page, 30, 10);
+    await h.clickWorld(page, 9, 16);
+    await page.waitForTimeout(400);
+    await page.locator('.cut-row', { hasText: 'S1' }).click();
+    await page.waitForTimeout(400);
+
+    return page.evaluate(() => {
+      const canvas = document.querySelector('[data-model-overlay]');
+      const W = canvas.width, H = canvas.height;
+      const { data } = canvas.getContext('2d').getImageData(0, 0, W, H);
+      const at = (x, y) => (y * W + x) * 4;
+      const dark = i => data[i + 3] > 150
+        && data[i] < 120 && data[i + 1] < 120 && data[i + 2] < 120;
+      const inked = i => data[i + 3] > 0
+        && data[i] < 200 && data[i + 1] < 200 && data[i + 2] < 200;
+      // Datum lines stroke at 0.25 alpha; buried dashes at 0.5; faces solid.
+      const faint = i => data[i + 3] > 0 && data[i + 3] < 100;
+      // The exposed concrete face fill (#e8e8ea).
+      const face = i => data[i + 3] > 200
+        && data[i] > 225 && data[i] < 240 && data[i + 2] > 227 && data[i + 2] < 242;
+      // Grade: the lowest row where a dark run crosses most of the sheet.
+      let gradeY = 0;
+      for (let y = 0; y < H; y++) {
+        let run = 0, best = 0;
+        for (let x = 0; x < W; x++) {
+          run = dark(at(x, y)) ? run + 1 : 0;
+          best = Math.max(best, run);
+        }
+        if (best > W * 0.6) gradeY = y;
+      }
+      // Buildings: columns carrying dark ink above grade. The widest break
+      // between them is the gap between the house and the garage.
+      const cols = [];
+      for (let x = Math.floor(W * 0.1); x < W; x++) {
+        for (let y = 24; y < gradeY - 4; y++) {
+          if (dark(at(x, y))) { cols.push(x); break; }
+        }
+      }
+      let gapLo = 0, gapHi = 0;
+      for (let k = 1; k < cols.length; k++) {
+        if (cols[k] - cols[k - 1] > gapHi - gapLo) {
+          gapLo = cols[k - 1]; gapHi = cols[k];
+        }
+      }
+      // Census each side of the gap below grade, the gap above grade, and
+      // the garage band pixels.
+      let houseDeepest = gradeY, garageDeepest = gradeY;
+      let garageBuried = 0, garageFace = 0, gapFaint = 0;
+      for (let y = 24; y < H; y++) {
+        for (let x = Math.floor(W * 0.1); x < W; x++) {
+          const i = at(x, y);
+          if (y > gradeY + 2 && inked(i)) {
+            if (x <= gapLo) houseDeepest = Math.max(houseDeepest, y);
+            if (x >= gapHi) {
+              garageDeepest = Math.max(garageDeepest, y);
+              garageBuried += 1;
+            }
+          }
+          if (x >= gapHi && y > gradeY - 14 && y <= gradeY && face(i)) garageFace += 1;
+          if (x > gapLo + 6 && x < gapHi - 6 && y < gradeY - 3 && faint(i)) gapFaint += 1;
+        }
+      }
+      return {
+        gradeY, gapLo, gapHi, houseDeepest, garageDeepest,
+        garageBuried, garageFace, gapFaint, H,
+      };
+    });
+  }
+
+  test('a detached grade-beam garage elevation hangs its band; level lines stop at the house', async ({ page }) => {
+    const scan = await detachedElevationScan(page, 'gradebeam');
+    expect(scan.gradeY).toBeGreaterThan(0);
+    expect(scan.gapHi - scan.gapLo).toBeGreaterThan(20);
+    // The garage band exists but hangs shallow, never basement-deep.
+    expect(scan.garageBuried).toBeGreaterThan(50);
+    expect(scan.garageDeepest - scan.gradeY)
+      .toBeLessThan((scan.houseDeepest - scan.gradeY) * 0.5);
+    // The beam's exposed face stands on grade.
+    expect(scan.garageFace).toBeGreaterThan(50);
+    // No house level line runs across the gap to the garage.
+    expect(scan.gapFaint).toBeLessThan(10);
+  });
+
+  test('a detached thickened-edge garage elevation shows its slab band', async ({ page }) => {
+    const scan = await detachedElevationScan(page, 'thickened');
+    expect(scan.gradeY).toBeGreaterThan(0);
+    expect(scan.gapHi - scan.gapLo).toBeGreaterThan(20);
+    // The buried edge is the 1'-0" monolithic edge — barely below grade.
+    expect(scan.garageBuried).toBeGreaterThan(30);
+    expect(scan.garageDeepest - scan.gradeY)
+      .toBeLessThan((scan.houseDeepest - scan.gradeY) * 0.35);
+    // The slab face sits proud of grade under the walls.
+    expect(scan.garageFace).toBeGreaterThan(30);
+    expect(scan.gapFaint).toBeLessThan(10);
+  });
+
   test('a cut across empty space explains itself instead of drawing', async ({ page }) => {
     await h.openModel(page, { webgl: false });
     await placeCut(page, 0);

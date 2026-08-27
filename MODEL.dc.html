@@ -7576,6 +7576,14 @@ class Component extends DCLogic {
 
     const levelById = {};
     stack.floors.forEach(level => { levelById[level.id] = level; });
+    // A plan wall lying on a garage outline belongs to that garage: it
+    // stands on the garage's beam plate or slab, off the house floor stack.
+    const garagesByLevel = {};
+    const garageFor = wall => {
+      const list = garagesByLevel[wall.levelId]
+        || (garagesByLevel[wall.levelId] = this._garageOutlines(wall.levelId));
+      return list.find(g => this._edgeOnOutline(wall.start, wall.end, g)) || null;
+    };
     const faces = [];
     const fdnFaces = [];
     this._walls.forEach(wall => {
@@ -7594,7 +7602,10 @@ class Component extends DCLogic {
       }
       const level = levelById[wall.levelId];
       if (!level || Math.abs(p2.u - p1.u) < 0.5) return;
-      faces.push({ wall, u1: p1.u, u2: p2.u, depth: (p1.d + p2.d) / 2, level });
+      faces.push({
+        wall, u1: p1.u, u2: p2.u, depth: (p1.d + p2.d) / 2, level,
+        garage: garageFor(wall),
+      });
     });
     if (!faces.length) return false;
     faces.sort((a, b) => a.depth - b.depth);   // viewer sits on +dir: far first
@@ -7677,17 +7688,24 @@ class Component extends DCLogic {
     header(`${cut.name} — GENERATED ELEVATION`);
 
     const datum = this.state.elevationDatum;
-    const mark = elevFt => {
+    const mark = (elevFt, uEnd) => {
       ctx.strokeStyle = 'rgba(29,31,32,0.25)'; ctx.lineWidth = 0.75;
       ctx.beginPath();
-      ctx.moveTo(marginL - 18, Y(elevFt)); ctx.lineTo(w - marginR, Y(elevFt));
+      ctx.moveTo(marginL - 18, Y(elevFt));
+      ctx.lineTo(uEnd == null ? w - marginR : X(uEnd), Y(elevFt));
       ctx.stroke();
       ctx.fillStyle = 'rgba(29,31,32,0.6)';
       ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
       ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
       ctx.fillText(this._elevLabel(elevFt + datum), marginL - 22, Y(elevFt));
     };
-    stack.floors.forEach(level => { mark(level.floorTop); mark(level.wallTop); });
+    // House level lines stop at the house face — a garage hangs off grade
+    // and never carries the house datums across its front.
+    const houseFaces = faces.filter(face => !face.garage);
+    const houseHi = houseFaces.length
+      ? Math.max(...houseFaces.map(face => Math.min(Math.max(face.u1, face.u2), uMax)))
+      : uMax;
+    stack.floors.forEach(level => { mark(level.floorTop, houseHi); mark(level.wallTop, houseHi); });
     mark(fdn.grade);
 
     // Foundation faces split at grade: the exposed concrete above grade reads
@@ -7732,16 +7750,48 @@ class Component extends DCLogic {
     }
     ctx.setLineDash([]);
 
-    // Wall faces, far to near, each with the openings it hosts.
+    // A thickened-edge detached slab has no foundation walls: its band is
+    // the monolithic pour itself — the 4" face proud of grade, the 1'-0"
+    // perimeter edge buried and dashed.
+    this._floors
+      .filter(floor => (floor.view || 'plan') === 'foundation'
+        && floor.garage && floor.thickenedEdge && floor.points.length >= 3)
+      .forEach(slab => {
+        const us = slab.points.map(pt => pt.x * axis.x + pt.z * axis.z);
+        const lo = Math.max(Math.min(...us), uMin);
+        const hi = Math.min(Math.max(...us), uMax);
+        if (hi - lo < 0.5) return;
+        const top = fdn.grade + GARAGE_SLAB_THICKNESS_IN / 12;
+        const x = X(lo), wid = (hi - lo) * pxPerFt;
+        ctx.fillStyle = '#e8e8ea';
+        ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        ctx.fillRect(x, Y(top), wid, (top - fdn.grade) * pxPerFt);
+        ctx.strokeRect(x, Y(top), wid, (top - fdn.grade) * pxPerFt);
+        ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(x, Y(fdn.grade), wid,
+          (GARAGE_EDGE_DEPTH_IN / 12 - (top - fdn.grade)) * pxPerFt);
+        ctx.setLineDash([]);
+      });
+
+    // Wall faces, far to near, each with the openings it hosts. A garage
+    // face stands on its own bearing — the beam plate or the slab — so its
+    // face and its doors run down to that, not to the house floor.
+    const garageBase = garage => garage.open === true
+      ? fdn.grade + GARAGE_BEAM_ABOVE_GRADE_FT + GARAGE_BEAM_PLATE_IN / 12
+      : this._garageFoundation(garage) === 'thickened'
+        ? fdn.grade + GARAGE_SLAB_THICKNESS_IN / 12
+        : fdn.grade + (DETACHED_BEAM_ABOVE_GRADE_IN + GARAGE_BEAM_PLATE_IN) / 12;
     const HEAD_FT = 6 + 10 / 12, SILL_FT = 3;
     faces.forEach(face => {
       const { wall, u1, u2, level } = face;
       const xa = X(Math.max(Math.min(u1, u2), uMin));
       const xb = X(Math.min(Math.max(u1, u2), uMax));
+      const floor = face.garage ? garageBase(face.garage) : level.floorTop;
       ctx.fillStyle = '#fff';
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
-      ctx.fillRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - level.floorTop) * pxPerFt);
-      ctx.strokeRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - level.floorTop) * pxPerFt);
+      ctx.fillRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - floor) * pxPerFt);
+      ctx.strokeRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - floor) * pxPerFt);
       const wallLen = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
       if (wallLen < 1e-6) return;
       const du = (u2 - u1) / wallLen;
@@ -7750,8 +7800,8 @@ class Component extends DCLogic {
         const half = Math.abs(du) * f.width / 2;
         const ox = X(Math.max(uc - half, uMin)), ow = X(Math.min(uc + half, uMax)) - ox;
         if (ow <= 0) return;
-        const top = Math.min(level.floorTop + HEAD_FT, level.wallTop);
-        const bottom = f.type === 'door' ? level.floorTop : level.floorTop + SILL_FT;
+        const top = Math.min(floor + HEAD_FT, level.wallTop);
+        const bottom = f.type === 'door' ? floor : floor + SILL_FT;
         ctx.fillStyle = '#fafafa';
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
@@ -7763,7 +7813,7 @@ class Component extends DCLogic {
     // the house face — white like the walls, no banding line, keeping only
     // the silhouette's vertical edges through the band.
     const bandByLevel = {};
-    faces.forEach(face => {
+    faces.filter(face => !face.garage).forEach(face => {
       const lo = Math.max(Math.min(face.u1, face.u2), uMin);
       const hi = Math.min(Math.max(face.u1, face.u2), uMax);
       const band = bandByLevel[face.level.id]
@@ -10027,7 +10077,9 @@ class Component extends DCLogic {
       const topHeight = open ? grade + GARAGE_BEAM_ABOVE_GRADE_FT
         : detached ? grade + DETACHED_BEAM_ABOVE_GRADE_IN / 12
         : houseTop;
-      const baseHeight = open ? topHeight - GARAGE_BEAM_CONCRETE_IN / 12 : 0;
+      // Attached and detached grade beams alike HANG off grade — the 32"
+      // concrete band, never a basement wall down to a strip footing.
+      const baseHeight = open || detached ? topHeight - GARAGE_BEAM_CONCRETE_IN / 12 : 0;
       const existing = this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'foundation');
       const hasWall = (a, b) => existing.some(wall =>
         (Math.hypot(wall.start.x - a.x, wall.start.z - a.z) <= eps && Math.hypot(wall.end.x - b.x, wall.end.z - b.z) <= eps)
