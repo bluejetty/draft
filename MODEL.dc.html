@@ -4365,8 +4365,7 @@ class Component extends DCLogic {
     this._ctrlDownAt  = 0;
     this._cutStart3  = null; // THREE.Vector3
     this._cutEnd3    = null;
-    this._cutArrowL  = null;
-    this._cutArrowR  = null;
+    this._cutHoverSide = null;
     this._panning2D  = false;
     this._snapPt     = null;
 
@@ -6214,15 +6213,29 @@ class Component extends DCLogic {
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       ctx.setLineDash([]);
     };
-    const arrowFromMid = (start, end, dir) => {
-      const len = Math.hypot(end.x - start.x, end.z - start.z);
-      const arrowLen = Math.max(3, len * 0.25);
-      const mid = { x: (start.x + end.x) / 2, y: start.y, z: (start.z + end.z) / 2 };
-      this._drawArrow2D(ctx, toS, mid, {
-        x: mid.x + dir.x * arrowLen,
-        y: start.y,
-        z: mid.z + dir.z * arrowLen,
-      });
+    // Direction choice previews as the mark itself: a small blank bubble
+    // wearing the tucked triangle, one per side, each pointing the way
+    // that side's view would look. The cursor's side glows.
+    const choiceMark = (mid, dir, hot) => {
+      const mS = toS(mid);
+      const dS = toS({ x: mid.x + dir.x, y: mid.y, z: mid.z + dir.z });
+      let vx = dS.x - mS.x, vy = dS.y - mS.y;
+      const vLen = Math.hypot(vx, vy) || 1;
+      vx /= vLen; vy /= vLen;
+      const ux = -vy, uy = vx;
+      const R = 6, ink = hot ? '#ff3366' : '#994466';
+      const cx = mS.x + vx * 18, cy = mS.y + vy * 18;
+      const reach = R + 6, wing = R + 4, back = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx + vx * reach, cy + vy * reach);
+      ctx.lineTo(cx - ux * wing - vx * back, cy - uy * wing - vy * back);
+      ctx.lineTo(cx + ux * wing - vx * back, cy + uy * wing - vy * back);
+      ctx.closePath();
+      ctx.fillStyle = ink; ctx.fill();
+      ctx.strokeStyle = ink;
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.stroke();
     };
 
     // Classic drafting marks: a labelled bubble at each end of the dashed
@@ -6321,8 +6334,9 @@ class Component extends DCLogic {
         ctx.fillStyle = '#994466';
         dashedSeg(start, end);
         if (phase === 'choosing' && this._cutDirLeft && this._cutDirRight) {
-          arrowFromMid(start, end, this._cutDirLeft);
-          arrowFromMid(start, end, this._cutDirRight);
+          const mid = { x: (start.x + end.x) / 2, y, z: (start.z + end.z) / 2 };
+          choiceMark(mid, this._cutDirLeft,  this._cutHoverSide === 'left');
+          choiceMark(mid, this._cutDirRight, this._cutHoverSide === 'right');
         }
       }
     }
@@ -8158,9 +8172,9 @@ class Component extends DCLogic {
       const dz = this._cutEnd3.z - this._cutStart3.z;
       const tx = finalPt.x - this._cutStart3.x;
       const tz = finalPt.z - this._cutStart3.z;
-      const side = dx * tz - dz * tx; // positive = right of A→B, negative = left
-      if (this._cutArrowL) this._cutArrowL.setColor(new THREE.Color(side < 0 ? 0xff3366 : 0x994466));
-      if (this._cutArrowR) this._cutArrowR.setColor(new THREE.Color(side > 0 ? 0xff3366 : 0x994466));
+      const side = dx * tz - dz * tx;
+      const hover = side > 0 ? 'left' : 'right';
+      if (hover !== this._cutHoverSide) { this._cutHoverSide = hover; this._invalidate(); }
     }
 
     if ((tool !== 'wall' || !this._wallDrawing)
@@ -15827,19 +15841,9 @@ class Component extends DCLogic {
       const nx = dx/len, nz = dz/len;               // line direction (normalized)
       const lx = -nz,   lz =  nx;                   // left perpendicular
       const rx =  nz,   rz = -nx;                   // right perpendicular
-      const mx = (this._cutStart3.x + this._cutEnd3.x) / 2;
-      const mz = (this._cutStart3.z + this._cutEnd3.z) / 2;
-      const ey = (this._drawElev || 0) + 0.05;
-      const arrowLen = Math.max(3, len * 0.25);
-
       this._cutDirLeft  = new THREE.Vector3(lx, 0, lz);
       this._cutDirRight = new THREE.Vector3(rx, 0, rz);
-
-      const midPt = new THREE.Vector3(mx, ey, mz);
-      this._cutArrowL = new THREE.ArrowHelper(this._cutDirLeft,  midPt, arrowLen, 0x994466, arrowLen*0.35, arrowLen*0.25);
-      this._cutArrowR = new THREE.ArrowHelper(this._cutDirRight, midPt, arrowLen, 0x994466, arrowLen*0.35, arrowLen*0.25);
-      this._scene.add(this._cutArrowL);
-      this._scene.add(this._cutArrowR);
+      this._cutHoverSide = null;
 
       this.setState({ cutPhase: 'choosing', choosingDir: true });
 
@@ -15931,8 +15935,7 @@ class Component extends DCLogic {
   }
 
   _removeCutArrows() {
-    if (this._cutArrowL) { this._scene.remove(this._cutArrowL); this._cutArrowL = null; }
-    if (this._cutArrowR) { this._scene.remove(this._cutArrowR); this._cutArrowR = null; }
+    this._cutHoverSide = null;
   }
 
   // ─── Keyboard ────────────────────────────────────────────────────────────────
