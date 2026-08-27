@@ -265,6 +265,11 @@ if (!window.DraftDrawingFormat) {
       // A pad column can carry a custom square size (inches) typed on the
       // FOUNDATION plan; piles keep their fixed diameters.
       const padIn = Number(column?.padIn);
+      // MOVE FLOOR pile stubs key to the pulled corner (a master point id)
+      // and the level that pulled it, so a later pull of the same corner
+      // re-lands exactly its own piles. Both halves or neither.
+      const pullSrcId = String(column?.pullSrcId ?? '').trim();
+      const pullLevelId = levelId(column?.pullLevelId, levelIds);
       return {
         id,
         point: centre,
@@ -274,6 +279,8 @@ if (!window.DraftDrawingFormat) {
         ...(!footing.startsWith('pile') && Number.isFinite(padIn) && padIn > 0
           ? { padIn } : {}),
         auto: column?.auto === true, // tour-placed; the stair re-derive may replace it
+        ...(pullSrcId && pullLevelId != null
+          ? { pullSrcId, pullLevelId } : {}),
         layer: 'S-COL-FOOTING',
       };
     }).filter(Boolean);
