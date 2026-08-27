@@ -416,6 +416,64 @@ test('a second BUILD HOUSE click never doubles the garage', async ({ page }) => 
   expect(saved.roofs).toHaveLength(1);
 });
 
+test('the garage is its own body: coincident ends, no splice, master edits carry both', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageOutline(page);
+  await buildHouse(page);
+  await h.waitForSaved(page);
+
+  let saved = await h.savedDrawing(page);
+
+  // The generated garage members carry the garage body on BOTH plans; the
+  // house's members stay untagged.
+  expect(saved.walls.filter(wall => wall.levelId === 3 && wall.body === 'garage')).toHaveLength(3);
+  expect(saved.walls.filter(wall => wall.levelId === 1 && wall.body === 'garage')).toHaveLength(3);
+  saved.walls.filter(wall => wall.body !== 'garage')
+    .forEach(wall => expect(wall.body).toBeUndefined());
+
+  // At each attachment the garage end sits EXACTLY on the house corner — a
+  // separate node at zero offset, riding the same BONEYARD master point.
+  const ends = walls => walls.flatMap(wall => [wall.start, wall.end]);
+  const at = (points, x, z) => points.find(point => h.near(point.x, x) && h.near(point.z, z));
+  const mainGarage = ends(saved.walls.filter(wall => wall.levelId === 3 && wall.body === 'garage'));
+  const mainHouse = ends(saved.walls.filter(wall => wall.levelId === 3 && !wall.body));
+  [[8, -4], [8, 4]].forEach(([x, z]) => {
+    const garageEnd = at(mainGarage, x, z);
+    const houseEnd = at(mainHouse, x, z);
+    expect(garageEnd).toBeTruthy();
+    expect(houseEnd).toBeTruthy();
+    expect(garageEnd.x).toBeCloseTo(houseEnd.x, 6);
+    expect(garageEnd.z).toBeCloseTo(houseEnd.z, 6);
+    expect(garageEnd.srcId).toBeTruthy();
+    expect(garageEnd.srcId).toBe(houseEnd.srcId);
+  });
+
+  // The body split survives a reload, and a re-BUILD never doubles the walls.
+  await page.reload();
+  await expect(page.locator('[data-model-canvas]')).toBeVisible();
+  await h.waitForModelReady(page);
+  await buildHouse(page);
+  await h.waitForSaved(page);
+  saved = await h.savedDrawing(page);
+  expect(saved.walls.filter(wall => wall.levelId === 3)).toHaveLength(9);
+  expect(saved.walls.filter(wall => wall.levelId === 3 && wall.body === 'garage')).toHaveLength(3);
+
+  // A BONEYARD master edit still carries BOTH bodies: the coincident house
+  // and garage wall ends land together on the new spot — no crack opens.
+  await page.locator('.level-name', { hasText: 'BONEYARD' }).click();
+  await page.waitForTimeout(300);
+  await h.selectTool(page, 'Select');
+  await dragWorld(page, 8, -4, 10, -3);
+  saved = await h.savedDrawing(page);
+  const movedGarage = at(ends(saved.walls.filter(wall => wall.levelId === 3 && wall.body === 'garage')), 10, -3);
+  const movedHouse = at(ends(saved.walls.filter(wall => wall.levelId === 3 && !wall.body)), 10, -3);
+  expect(movedGarage).toBeTruthy();
+  expect(movedHouse).toBeTruthy();
+  expect(movedGarage.x).toBeCloseTo(movedHouse.x, 6);
+  expect(movedGarage.z).toBeCloseTo(movedHouse.z, 6);
+});
+
 test('an L-shaped run builds a beam member on every open leg', async ({ page }) => {
   await h.openModel(page);
   await page.keyboard.press('t'); // set the T-square down — the closing leg runs at an angle
