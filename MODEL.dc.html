@@ -15,6 +15,7 @@
 <script src="./render-2d.js"></script>
 <script src="./areas.js"></script>
 <script src="./room-standards.js"></script>
+<script src="./fen-labels.js"></script>
 <script src="./build-house.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
@@ -1955,6 +1956,7 @@ class Component extends DCLogic {
     layerStandards: normaliseLayerStandards(null),
     structureStandards: normaliseStructureStandards(null),
     roomMinimums: window.DraftRoomStandards.normaliseRoomMinimums(null),
+    fenestrationStandards: window.DraftFenLabels.normaliseFenStandards(null),
     selectionVersion: 0,
     groupDialog:    false,
     groupNameInput: '',
@@ -2144,6 +2146,9 @@ class Component extends DCLogic {
         if (standards?.content?.model?.roomMinimums) {
           this.setState({ roomMinimums: window.DraftRoomStandards.normaliseRoomMinimums(standards.content.model.roomMinimums) });
         }
+        if (standards?.content?.model?.fenestrationStandards) {
+          this.setState({ fenestrationStandards: window.DraftFenLabels.normaliseFenStandards(standards.content.model.fenestrationStandards) });
+        }
         this._invalidate();
       }
     });
@@ -2297,6 +2302,7 @@ class Component extends DCLogic {
         width: opening.width,
         sillHeight: opening.sillHeight,
         headHeight: opening.headHeight,
+        garage: opening.garage === true,
       })),
       fixtures: this._fixtures.map(fixture => ({
         id: fixture.id,
@@ -3102,6 +3108,7 @@ class Component extends DCLogic {
         layerStandards: normaliseLayerStandards(this.state.layerStandards),
         structureStandards: normaliseStructureStandards(this.state.structureStandards),
         roomMinimums: window.DraftRoomStandards.normaliseRoomMinimums(this.state.roomMinimums),
+        fenestrationStandards: window.DraftFenLabels.normaliseFenStandards(this.state.fenestrationStandards),
       },
     };
   }
@@ -3152,6 +3159,9 @@ class Component extends DCLogic {
       }
       if (values.roomMinimums && typeof values.roomMinimums === 'object') {
         patch.roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(values.roomMinimums);
+      }
+      if (values.fenestrationStandards && typeof values.fenestrationStandards === 'object') {
+        patch.fenestrationStandards = window.DraftFenLabels.normaliseFenStandards(values.fenestrationStandards);
       }
       if ('wallBaseHeight' in patch) patch.wallBaseInput = formatArchitecturalInches(patch.wallBaseHeight * 12);
       if ('wallTopHeight' in patch) patch.wallTopInput = formatArchitecturalInches(patch.wallTopHeight * 12);
@@ -4646,6 +4656,53 @@ class Component extends DCLogic {
           && this._layerStandard(opening.layer).visible
           && (!this._isPrinting || this._layerStandard(opening.layer).printable))
         .forEach(opening => drawOpening(opening, { selected: this._selectedFenestrations?.has(opening) }));
+      // Fenestration labels (board #141): the office's naming ladder beside
+      // each opening — G 8x16 / ED36 / D32 / DD72 / W 24x36 — behind the
+      // COMPANY STANDARDS toggle (default off, so nothing changes until the
+      // office opts in). Rides the opening's own layer visibility above, and
+      // prints when on: labels are drafting product, not desk furniture.
+      if (this.state.fenestrationStandards.showLabels) {
+        // One outline lookup per level, not per opening — and each opening is
+        // tested against ITS OWN level's outline, since shared-context walls
+        // can put another storey's openings on this draw.
+        const outlineByLevel = new Map();
+        const levelOutline = levelId => {
+          if (!outlineByLevel.has(levelId)) outlineByLevel.set(levelId, this._houseOutline(levelId));
+          return outlineByLevel.get(levelId);
+        };
+        const labelFont = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+        this._fenestrations
+          .filter(opening => displayWallIds.has(opening.wallId)
+            && this._layerStandard(opening.layer).visible
+            && (!this._isPrinting || this._layerStandard(opening.layer).printable))
+          .forEach(opening => {
+            const wall = this._walls.find(w => w.id === opening.wallId);
+            const geoInfo = wall && this._openingGeometry(opening);
+            if (!geoInfo) return;
+            const outline = levelOutline(opening.levelId);
+            const label = window.DraftFenLabels.fenLabelForOpening(opening, {
+              exteriorWall: !!(outline && this._edgeOnOutline(wall.start, wall.end, outline)),
+            });
+            if (!label) return;
+            // Beside the symbol: offset off the wall face along its normal —
+            // glazing runs along the wall, so its perpendicular is the normal,
+            // and the corners bound the assembly's half thickness.
+            const [ga, gb] = geoInfo.glazing;
+            const run = Math.hypot(gb.x - ga.x, gb.z - ga.z) || 1;
+            const nx = -(gb.z - ga.z) / run, nz = (gb.x - ga.x) / run;
+            const half = Math.max(...geoInfo.corners.map(corner =>
+              Math.abs((corner.x - geoInfo.center.x) * nx + (corner.z - geoInfo.center.z) * nz)));
+            const at = toS({
+              x: geoInfo.center.x + nx * (half + 0.55),
+              z: geoInfo.center.z + nz * (half + 0.55),
+            });
+            ctx.save();
+            ctx.fillStyle = '#1d1f20'; ctx.font = labelFont;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(label, at.x, at.y);
+            ctx.restore();
+          });
+      }
       // Grade-beam cutout notations: a door through a concrete foundation wall
       // (the garage door or man door in a grade beam) marks the pour cut on the
       // FOUNDATION plan — cut down 12" the width of the door so the door bottom
@@ -10197,7 +10254,7 @@ class Component extends DCLogic {
         { levelId: 1, view: 'foundation', copy: foundationCopy },
       ].forEach(({ levelId, view, copy }) => {
         if (!copy || this._outlineSegmentCount(copy) !== count) return;
-        if (this._placeAutoDoor(levelId, view, this._outlineSegment(copy, frontIndex), overheadW, GARAGE_OVERHEAD_HEAD_FT)) added++;
+        if (this._placeAutoDoor(levelId, view, this._outlineSegment(copy, frontIndex), overheadW, GARAGE_OVERHEAD_HEAD_FT, { garage: true })) added++;
         if (manIndex >= 0
           && this._placeAutoDoor(levelId, view, this._outlineSegment(copy, manIndex), GARAGE_MAN_DOOR_FT, DEFAULT_OPENING_HEAD_FT)) added++;
       });
@@ -10207,7 +10264,7 @@ class Component extends DCLogic {
 
   // Centre a door on the generated wall spanning seg's endpoints. A wall that
   // already carries any opening is left alone, so re-runs never double up.
-  _placeAutoDoor(levelId, view, seg, widthFt, headFt) {
+  _placeAutoDoor(levelId, view, seg, widthFt, headFt, extra = {}) {
     const a = { x: seg.start.x, z: seg.start.z };
     const b = { x: seg.end.x, z: seg.end.z };
     const eps = 0.1;
@@ -10229,6 +10286,7 @@ class Component extends DCLogic {
       width: widthFt,
       sillHeight: 0,
       headHeight: headFt,
+      ...extra,
     });
     return true;
   }

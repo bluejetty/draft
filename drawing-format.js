@@ -126,6 +126,7 @@ if (!window.DraftDrawingFormat) {
         width,
         sillHeight,
         headHeight,
+        garage: opening?.garage === true,
       };
     }).filter(Boolean);
 

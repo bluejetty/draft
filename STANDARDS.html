@@ -6,6 +6,7 @@
   <title>Draft — Company Standard Layers</title>
   <script src="./profile-manager.js"></script>
   <script src="./room-standards.js"></script>
+  <script src="./fen-labels.js"></script>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap">
   <style>
     * { box-sizing:border-box; }
@@ -148,6 +149,52 @@
         </span>
       </div>
     </section>
+    <section class="group" style="margin-top:14px;" aria-label="Fenestration labels">
+      <div class="group-title">Fenestration labels</div>
+      <p class="intro" style="margin:6px 0 8px;">The office&#8217;s naming ladder for plan labels beside each opening &mdash; G 8x16 garage doors in FEET height&times;width, ED36 / D32 / DD72 doors in inches of width, W 24x36 windows in INCHES width&times;height. The stock lists are which sizes the office orders; schedules and auto-fenestration will pick from them later.</p>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">PLAN LABELS</span>
+        <span class="layer-use">Paint each opening&#8217;s label beside its symbol on the plan. OFF by default &mdash; current drawings do not change until the office opts in.</span>
+        <span class="layer-print" style="justify-content:flex-start; gap:6px;">
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="fen-show-labels" data-fen-show-labels aria-label="Show fenestration labels on plans" /> SHOW ON PLANS</label>
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">G &mdash; GARAGE</span>
+        <span class="layer-use">Overhead doors, FEET, height first: 8x16 is the 8&#8242; high double, 8x9 the single.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <input class="layer-name-input" data-fen-stock="garage" aria-label="Garage door stock sizes (feet, height x width)" style="width:100%;" />
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">ED &mdash; EXTERIOR</span>
+        <span class="layer-use">Man doors, inches wide: the 2&#8242;-8&#8243; man door is ED32.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <input class="layer-name-input" data-fen-stock="ed" aria-label="Exterior door stock widths (inches)" style="width:100%;" />
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">D &mdash; INTERIOR</span>
+        <span class="layer-use">Swing doors, inches wide &mdash; one family down through the closet run (D36&ndash;D18).</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <input class="layer-name-input" data-fen-stock="d" aria-label="Interior door stock widths (inches)" style="width:100%;" />
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">DD &mdash; DOUBLE</span>
+        <span class="layer-use">Double doors, inches of total width: DD72 / DD60 / DD48, then the D ladder for smaller closets.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <input class="layer-name-input" data-fen-stock="dd" aria-label="Double door stock widths (inches)" style="width:100%;" />
+        </span>
+      </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">W &mdash; WINDOWS</span>
+        <span class="layer-use">Windows, INCHES, width first: W 24x36 is 24&#8243; wide by 36&#8243; tall.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <input class="layer-name-input" data-fen-stock="w" aria-label="Window stock sizes (inches, width x height)" style="width:100%;" />
+        </span>
+      </div>
+    </section>
     <div class="actions">
       <button class="action" id="reset" type="button">RESET DEFAULTS</button>
       <button class="action primary" id="download" type="button">DOWNLOAD .DRAFT.STANDARDS</button>
@@ -164,6 +211,7 @@
       let layerStandards = standardsApi.normaliseLayerStandards(active?.content?.model?.layerStandards);
       let structureStandards = window.DraftStructureStandards.normaliseStructureStandards(active?.content?.model?.structureStandards);
       let roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(active?.content?.model?.roomMinimums);
+      let fenestrationStandards = window.DraftFenLabels.normaliseFenStandards(active?.content?.model?.fenestrationStandards);
 
       const defaults = standardsApi.normaliseLayerStandards(null);
       const status = document.querySelector('#status');
@@ -174,7 +222,7 @@
       };
 
       const saveActive = message => {
-        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums } });
+        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, fenestrationStandards } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -304,6 +352,34 @@
         });
       });
 
+      const fenShowInput = document.querySelector('[data-fen-show-labels]');
+      const fenStockInputs = [...document.querySelectorAll('[data-fen-stock]')];
+      const fillFenStandards = () => {
+        fenShowInput.checked = fenestrationStandards.showLabels;
+        fenStockInputs.forEach(input => {
+          input.value = fenestrationStandards.stock[input.dataset.fenStock].join(', ');
+        });
+      };
+      fillFenStandards();
+      fenShowInput.addEventListener('change', () => {
+        fenestrationStandards = window.DraftFenLabels.normaliseFenStandards({
+          ...fenestrationStandards, showLabels: fenShowInput.checked,
+        });
+        fillFenStandards();
+        saveActive(`Fenestration labels ${fenestrationStandards.showLabels ? 'ON' : 'OFF'}.`);
+      });
+      fenStockInputs.forEach(input => {
+        input.addEventListener('change', () => {
+          const family = input.dataset.fenStock;
+          fenestrationStandards = window.DraftFenLabels.normaliseFenStandards({
+            ...fenestrationStandards,
+            stock: { ...fenestrationStandards.stock, [family]: window.DraftFenLabels.stockListFromText(input.value) },
+          });
+          fillFenStandards();
+          saveActive(`${family.toUpperCase()} stock ladder saved.`);
+        });
+      });
+
       document.querySelector('#reset').addEventListener('click', () => {
         layerStandards = standardsApi.normaliseLayerStandards(null);
         structureStandards = window.DraftStructureStandards.normaliseStructureStandards(null);
@@ -313,11 +389,13 @@
         fillElevationNames();
         roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(null);
         fillRoomMinimums();
+        fenestrationStandards = window.DraftFenLabels.normaliseFenStandards(null);
+        fillFenStandards();
         saveActive('Default layer standards restored.');
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums } });
+        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, fenestrationStandards } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
