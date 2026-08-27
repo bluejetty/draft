@@ -94,8 +94,14 @@ function hybridPdf() {
   ]);
 }
 
-async function pickFile(page, name, mimeType, buffer) {
+async function openInsert(page) {
+  // INSERT PHOTO / PDF lives inside the PROJECT dialog now.
+  await page.locator('[data-project-open]').click();
   await page.locator('[data-insert-underlay]').click();
+}
+
+async function pickFile(page, name, mimeType, buffer) {
+  await openInsert(page);
   await page.locator('[data-underlay-import]').setInputFiles({ name, mimeType, buffer });
   await expect(page.locator('[data-insert-verdict]')).toBeVisible({ timeout: 15000 });
 }
@@ -270,7 +276,7 @@ test('manual scale entry overrides sizing and REMOVE deletes the underlay and it
   expect(h.near(drawing.underlays[0].widthFt, 68, 0.1)).toBe(true);
 
   // The card lists placed underlays; REMOVE clears metadata and binary.
-  await page.locator('[data-insert-underlay]').click();
+  await openInsert(page);
   await page.locator('[data-insert-remove]').click();
   await h.waitForSaved(page);
 

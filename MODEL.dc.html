@@ -2598,8 +2598,9 @@ class Component extends DCLogic {
   // 'underlays' keyed by underlay id; the drawing JSON holds placement metadata.
   _openInsertDialog() {
     this._resetInsertCandidate();
+    // INSERT opens from inside PROJECT; the sub-dialog takes the stage.
     this.setState({
-      insertOpen: true, insertPhase: 'pick', insertError: '',
+      insertOpen: true, projectOpen: false, insertPhase: 'pick', insertError: '',
       insertScaleInput: '', insertScaleError: '', insertWidthInput: '', insertWidthError: '',
       insertPage: 1, insertCalOpen: false, insertCalInput: '', insertCalError: '',
       insertRefresh: this.state.insertRefresh + 1,
@@ -3296,7 +3297,8 @@ class Component extends DCLogic {
   }
 
   _openAreasDialog() {
-    this.setState({ areasOpen: true });
+    // AREAS opens from inside PROJECT; the sub-dialog takes the stage.
+    this.setState({ areasOpen: true, projectOpen: false });
   }
 
   _closeAreasDialog() {
