@@ -22,6 +22,7 @@ async function drawOutlineRect(page) {
   await h.clickWorld(page, -8, 6);
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
+  await h.climbTourToMain(page);
 }
 
 // Press on a node and pull it, leaving the mouse button down for the caller.

@@ -23,6 +23,7 @@ async function drawHouseOutline(page) {
   await h.clickWorld(page, -8, 6);
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
+  await h.climbTourToMain(page);
 }
 
 async function drawGarageOutline(page) {

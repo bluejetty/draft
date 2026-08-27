@@ -586,6 +586,13 @@ if (!window.DraftDrawingFormat) {
   // PROJECT page also shows is offset + the drawing's elevationDatum, so the
   // two readings can never disagree in storage. BUILD HOUSE's garage
   // generation consumes the garage rows in a follow-up.
+  // The guided full-house tour (board #230): one persisted ladder step so a
+  // reload resumes where the tour parked. Absent or unknown = no tour
+  // running; later slices extend the ladder without changing old saves.
+  const tour = raw => ({
+    step: oneOf(raw?.step, ['foundation', 'main', 'second', 'roof'], null),
+  });
+
   const zoneHeights = raw => {
     const zones = raw && typeof raw.zones === 'object' && raw.zones ? raw.zones : {};
     const offset = value => (Number.isFinite(Number(value)) ? Number(value) : 0);
@@ -645,6 +652,7 @@ if (!window.DraftDrawingFormat) {
     underlays,
     projectInfo,
     zoneHeights,
+    tour,
     backgroundLevelIds,
     oneOf,
     number,

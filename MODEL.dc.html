@@ -462,6 +462,17 @@
      back, land the last click ON the house — with a right-vs-wrong sketch.
      The cursor plays by the ordinary drawing rules; the professor teaches
      the connection instead. -->
+<!-- The tour's floor popup (board #230): the same visual family as the
+     professor callouts. The whole card advances the tour — Enter, Space,
+     or a click/tap anywhere on it — and Escape leaves the tour. -->
+<sc-if value="{{ tourPopupOpen }}" hint-placeholder-val="{{ false }}">
+  <div data-tour-popup onClick="{{ advanceTour }}" role="dialog" aria-label="Foundation done" style="position:fixed; top:64px; left:50%; transform:translateX(-50%); z-index:52; width:min(380px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 14px 38px rgba(29,31,32,0.22); padding:14px 16px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20; cursor:pointer; text-align:center;">
+    <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:700; letter-spacing:0.06em;">FOUNDATION DONE, GOING TO MAIN FLOOR</div>
+    <div style="margin-top:6px; font-size:12px; color:rgba(29,31,32,0.62); line-height:1.45;">{{ tourPopupNote }}</div>
+    <div style="margin-top:10px; display:inline-block; border:1px solid #8f2a1d; background:#c0392b; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0.06em; padding:6px 14px;">CLIMB &mdash; ENTER / SPACE / TAP</div>
+  </div>
+</sc-if>
+
 <sc-if value="{{ garageCalloutOpen }}" hint-placeholder-val="{{ false }}">
   <div data-garage-callout style="position:fixed; bottom:72px; left:50%; transform:translateX(-50%); z-index:52; width:360px; border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 14px 38px rgba(29,31,32,0.22); padding:14px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
     <div style="position:absolute; bottom:-8px; left:172px; width:14px; height:14px; background:#fff; border-right:1px solid rgba(29,31,32,0.3); border-bottom:1px solid rgba(29,31,32,0.3); transform:rotate(45deg);"></div>
@@ -2050,6 +2061,9 @@ class Component extends DCLogic {
     // slot) join this object.
     projectInfo: format.projectInfo(null),
     zoneHeights: format.zoneHeights(null), // board #221 — PROJECT page zone rows
+    tour: format.tour(null),  // board #230 — the guided full-house flow's parked step
+    tourPopup: false,         // the floor popup (transient; re-shown on resume)
+    tourPopupNote: '',
     fixtureKind: 'cabinet',   // active FIXTURE catalog entry (see FIXTURE_KINDS)
     kitchenPantry: false,     // L PRESET toggle: corner walk-in pantry in the dead corner
     kitchenIsland: false,     // L PRESET toggle: island 42" off the long counter
@@ -2442,6 +2456,7 @@ class Component extends DCLogic {
       nextRoomTagId: this._nextRoomTagId || 1,
       roomAreasOn: this.state.roomAreasOn === true,
       projectInfo: { ...this.state.projectInfo },
+      tour: { ...this.state.tour },
       zoneHeights: { zones: Object.fromEntries(Object.entries(this.state.zoneHeights.zones)
         .map(([id, zone]) => [id, { ...zone }])) },
       boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
@@ -3244,6 +3259,82 @@ class Component extends DCLogic {
     this.setState({ garageCallout: false });
   }
 
+  // ── The guided full-house flow (board #230, slice 1) ─────────────────────
+  // Closing a house outline pulls the drafter to FOUNDATION, grows the
+  // mid-span beam + teleposts where a span needs them (>19' joist span —
+  // the rule lives pure in build-house.js), then offers the FOUNDATION DONE
+  // popup. The tour is the escorted path, never a cage: level cards stay
+  // free, Esc leaves, and the parked step persists so a reload resumes.
+  _startHouseTour(master) {
+    this._clearTourTimers();
+    this.setState({ tour: { step: 'foundation' }, tourPopup: false, tourPopupNote: '' },
+      () => this._markUnsaved());
+    const fdnIdx = this.state.levels.findIndex(lvl => lvl.id === BASEMENT_LEVEL_ID);
+    if (fdnIdx >= 0) this._switchLevel(fdnIdx);
+    const fdnLevel = this.state.levels[fdnIdx];
+    const points = master.points.map(pt => ({ x: pt.x, z: pt.z }));
+    const plan = window.DraftBuildHouse.midSpanBeams(points);
+    const showPopup = note => this.setState({ tourPopup: true, tourPopupNote: note });
+    if (!plan.beams.length) {
+      this._tourTimers = [setTimeout(() => showPopup(
+        'Every span is under 19\' — no mid-span beam needed. Press ENTER, SPACE, or tap to climb.'), 450)];
+      return;
+    }
+    // The mini reveal, three staged frames: the beam lands, the teleposts
+    // follow, then the popup — "the tool is working for you."
+    const elev = fdnLevel ? fdnLevel.elev : 0;
+    this._tourTimers = [
+      setTimeout(() => {
+        plan.beams.forEach(beam => this._beams.push({
+          id: this._nextBeamId++,
+          start: new THREE.Vector3(beam.start.x, elev, beam.start.z),
+          end: new THREE.Vector3(beam.end.x, elev, beam.end.z),
+          levelId: BASEMENT_LEVEL_ID,
+          view: 'foundation',
+          mode: 'flush',
+          layer: BEAM_LAYER,
+        }));
+        this._markUnsaved();
+        this.setState({ drawingMessage: 'The clear span passes 19\' — a beam lands mid-span.', drawingMessageError: false });
+      }, 400),
+      setTimeout(() => {
+        plan.columns.forEach(column => this._columns.push({
+          id: this._nextColumnId++,
+          point: new THREE.Vector3(column.x, elev, column.z),
+          levelId: BASEMENT_LEVEL_ID,
+          view: 'foundation',
+          footing: 'pad36',
+          layer: COLUMN_LAYER,
+        }));
+        this._markUnsaved();
+        this.setState({ drawingMessage: 'Teleposts on pad footings split the beam into working spans.', drawingMessageError: false });
+      }, 800),
+      setTimeout(() => showPopup('Beam and teleposts are in — press ENTER, SPACE, or tap to climb.'), 1200),
+    ];
+  }
+
+  _clearTourTimers() {
+    (this._tourTimers || []).forEach(clearTimeout);
+    this._tourTimers = [];
+  }
+
+  _advanceTourFromFoundation() {
+    if (!this.state.tourPopup) return;
+    this.setState({ tour: { step: 'main' }, tourPopup: false, tourPopupNote: '' },
+      () => this._markUnsaved());
+    const mainIdx = this.state.levels.findIndex(lvl => lvl.id === 3);
+    if (mainIdx >= 0) this._switchLevel(mainIdx);
+  }
+
+  _exitTour() {
+    this._clearTourTimers();
+    this.setState({
+      tour: format.tour(null), tourPopup: false, tourPopupNote: '',
+      drawingMessage: 'Tour ended — the level cards take you anywhere, and the bone builds whenever you are ready.',
+      drawingMessageError: false,
+    }, () => this._markUnsaved());
+  }
+
   _onGarageIntroOffToggle(off) {
     this.setState({ garageIntroOff: off === true }, () => this._rememberActiveProfile('settings'));
   }
@@ -3537,6 +3628,10 @@ class Component extends DCLogic {
         roomAreasOn: saved.roomAreasOn === true,
         projectInfo: format.projectInfo(saved.projectInfo),
         zoneHeights: format.zoneHeights(saved.zoneHeights),
+        tour: format.tour(saved.tour),
+        tourPopup: format.tour(saved.tour).step === 'foundation',
+        tourPopupNote: format.tour(saved.tour).step === 'foundation'
+          ? 'The foundation structure is in — press ENTER, SPACE, or tap to climb.' : '',
       }, resolve));
 
       // Rebuild the pool as a single pass through every endpoint. This restores
@@ -9125,6 +9220,9 @@ class Component extends DCLogic {
         drawingMessage: `Outline closed — master stored on ${shelf.name} in the BONEYARD, with a copy on every level. Edit the master to move the common points everywhere; level edits stay local.`,
         drawingMessageError: false,
       });
+      // The guided flow (board #230): a house outline closed on a LEVEL
+      // starts the tour — pull to FOUNDATION and let the structure appear.
+      if (level) this._startHouseTour(master);
       return master;
     }
 
@@ -16115,6 +16213,12 @@ class Component extends DCLogic {
       this._dismissPerfNotice();
       return;
     }
+    // The tour's floor popup borrows the keyboard: Enter or Space climbs,
+    // Escape leaves the tour (the level cards stay free either way).
+    if (this.state.tourPopup && focusedControl !== 'field') {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._advanceTourFromFoundation(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); this._exitTour(); return; }
+    }
     // PROFESSOR GRUFF's callout borrows the keyboard: Escape heads into
     // PROJECT, Enter or Space carries on tracing with the defaults.
     if (this.state.projectCallout && focusedControl !== 'field') {
@@ -17140,6 +17244,9 @@ class Component extends DCLogic {
       onBuildHouse: () => this._pressBuildHouse(),
       projectCalloutOpen: this.state.projectCallout === true,
       dismissProjectCallout: () => this._dismissProjectCallout(false),
+      tourPopupOpen: this.state.tourPopup === true,
+      tourPopupNote: this.state.tourPopupNote,
+      advanceTour: () => this._advanceTourFromFoundation(),
       perfNoticeOpen: this.state.perfNotice === true,
       dismissPerfNotice: () => this._dismissPerfNotice(),
       perfIntroOff: this.state.perfIntroOff === true,
