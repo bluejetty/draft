@@ -114,6 +114,15 @@ test('BUILD HOUSE grade beam: full perimeter beam, sloped 4" slab, walls, doors,
   expect(fdnWalls).toHaveLength(4);
   fdnWalls.forEach(wall => expect(wall.wallType).toBe('concrete_8'));
 
+  // The detached beam hangs off GRADE, not the house: its top sits 8" above
+  // the drawn grade (foundation top − 1'), i.e. 4" below the foundation top,
+  // and it drops with the grade if the grade drops.
+  const wallHeightFt = (8 * 12 + 1 + 1 / 8) / 12;
+  fdnWalls.forEach(wall => {
+    expect(wall.topHeight).toBeCloseTo(wallHeightFt - 1 + 8 / 12, 3);
+    expect(wall.baseHeight).toBe(0);
+  });
+
   // Uniform 4" slab sloping 1/8"/ft to the door — the fill carries the fall.
   const slab = saved.floors.find(floor => floor.garage);
   expect(slab).toBeTruthy();
