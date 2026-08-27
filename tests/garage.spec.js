@@ -286,12 +286,11 @@ test('the lock owns the closing click; the finish still lands the end on the hou
   expect(garageMaster.points[3].attach).toBe(houseMaster.points.find(point => h.near(point.x, 8) && h.near(point.z, 5.5)).id);
 });
 
-test('MARK ATTACHED GARAGE without a house explains itself and stays off', async ({ page }) => {
+test('ATTACHED GARAGE stays off the strip until a house exists', async ({ page }) => {
   await h.openModel(page);
   await h.selectTool(page, 'Outline');
-  await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
 
-  await expect(page.locator('[data-model-drawing-message]')).toContainText('Draw the house OUTLINE first');
+  await expect(page.locator('[data-mark-attached-garage]')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /MARKING ATTACHED GARAGE/ })).toHaveCount(0);
 });
 
