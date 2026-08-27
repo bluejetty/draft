@@ -17,6 +17,7 @@
 <script src="./room-standards.js"></script>
 <script src="./fen-labels.js"></script>
 <script src="./build-house.js"></script>
+<script src="./tour.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
      would otherwise run here and be mounted again by the helmet runtime. -->
@@ -140,7 +141,7 @@
         <img src="./assets/btn-split.png" alt="" style="height:38px; display:block;" />
       </button>
     </sc-if>
-    <button data-build-house onClick="{{ onBuildHouse }}" aria-label="BUILD HOUSE" title="{{ buildHouseHint }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0;">
+    <button data-build-house onClick="{{ onBuildHouse }}" aria-label="BUILD HOUSE" title="{{ buildHouseHint }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ buildHouseGlow }};">
       <img src="./assets/btn-bone.png" alt="" style="height:44px; display:block;" />
     </button>
     <sc-if value="{{ tourNextReady }}" hint-placeholder-val="{{ false }}">
@@ -488,6 +489,14 @@
 <!-- The tour's standing chip: while a tour is parked on a floor it names the
      step (PLACE STAIRS / NEXT FLOOR) — pressing it arms the stair tool or
      fires the gate. This is also the RESUME affordance after a reload. -->
+<sc-if value="{{ tourRoofRowOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed; top:56px; left:50%; transform:translateX(-50%); z-index:51; display:flex; gap:6px;">
+    <button data-tour-gable onClick="{{ onTourGable }}" title="Arm GABLE placement — anchors from the floors below light up; the readout speaks in wall-lengthens" style="border:1px solid #b04050; background:{{ tourGableBg }}; color:{{ tourGableColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; padding:5px 12px; cursor:pointer;">GABLE</button>
+    <button data-tour-increment onClick="{{ onTourIncrement }}" title="Placement grid, counted from the building corner — Shift / Ctrl+Shift override momentarily" style="border:1px solid rgba(29,31,32,0.3); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; padding:5px 10px; cursor:pointer;">{{ tourIncrementLabel }}</button>
+    <button data-tour-chip onClick="{{ onTourChip }}" style="border:1px solid #557a46; background:rgba(85,122,70,0.1); color:#3c5c30; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; padding:5px 12px; cursor:pointer;">ROOF DONE &#9650;</button>
+  </div>
+</sc-if>
+
 <sc-if value="{{ tourChipOpen }}" hint-placeholder-val="{{ false }}">
   <button data-tour-chip onClick="{{ onTourChip }}" style="position:fixed; top:56px; left:50%; transform:translateX(-50%); z-index:51; border:1px solid #557a46; background:rgba(85,122,70,0.1); color:#3c5c30; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; padding:5px 12px; cursor:pointer;">{{ tourChipLabel }}</button>
 </sc-if>
@@ -2084,6 +2093,10 @@ class Component extends DCLogic {
     projectInfo: format.projectInfo(null),
     zoneHeights: format.zoneHeights(null), // board #221 — PROJECT page zone rows
     tour: format.tour(null),  // board #230 — the guided full-house flow's parked step
+    roofIntent: format.roofIntent(null), // board #238 — the roof pause edits intent, the bone builds it
+    tourRoofIncrements: window.DraftTour.normaliseTourRoofIncrements(null),
+    tourRoofIncrementIdx: 0,  // which increment the chip rests on (0 base / 1 shift / 2 ctrlShift)
+    tourGableArmed: false,    // the GABLE button — intent is explicit, never inferred
     tourPopup: false,         // the floor popup (transient; re-shown on resume)
     tourPopupNote: '',
     fixtureKind: 'cabinet',   // active FIXTURE catalog entry (see FIXTURE_KINDS)
@@ -2482,6 +2495,10 @@ class Component extends DCLogic {
       roomAreasOn: this.state.roomAreasOn === true,
       projectInfo: { ...this.state.projectInfo },
       tour: { ...this.state.tour },
+      roofIntent: {
+        edges: this.state.roofIntent.edges.map(edge => ({ ...edge })),
+        gables: this.state.roofIntent.gables.map(gable => ({ ...gable })),
+      },
       zoneHeights: { zones: Object.fromEntries(Object.entries(this.state.zoneHeights.zones)
         .map(([id, zone]) => [id, { ...zone }])) },
       boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
@@ -3174,6 +3191,7 @@ class Component extends DCLogic {
           buildIntroOff: this.state.buildIntroOff,
           garageIntroOff: this.state.garageIntroOff,
           perfIntroOff: this.state.perfIntroOff,
+          tourRoofIncrements: { ...this.state.tourRoofIncrements },
         },
       };
     }
@@ -3210,6 +3228,9 @@ class Component extends DCLogic {
         ...(typeof values.perfIntroOff === 'boolean' ? { perfIntroOff: values.perfIntroOff } : {}),
         ...(values.keybindings && typeof values.keybindings === 'object'
           ? { keybindings: resolveKeybindings(values.keybindings) }
+          : {}),
+        ...(values.tourRoofIncrements && typeof values.tourRoofIncrements === 'object'
+          ? { tourRoofIncrements: window.DraftTour.normaliseTourRoofIncrements(values.tourRoofIncrements) }
           : {}),
       };
     }
@@ -3355,6 +3376,16 @@ class Component extends DCLogic {
     if (popup === 'foundation') this._advanceTour('main');
     else if (popup === 'main') this._advanceTour('second');
     else if (popup === 'second') this._advanceTour('roof');
+    else if (popup === 'roof') {
+      // ROOF DONE only HINTS (the drafter's finish): the tour parks at
+      // 'finale', the bone glows, and the drafter's own press plays the
+      // grow-from-the-ground reveal.
+      this.setState({
+        tour: { step: 'finale' }, tourPopup: false, tourPopupNote: '', tourGableArmed: false,
+        drawingMessage: 'The house is ready — press the BONE and watch it grow.',
+        drawingMessageError: false,
+      }, () => this._markUnsaved());
+    }
   }
 
   _advanceTour(step) {
@@ -3386,6 +3417,7 @@ class Component extends DCLogic {
     const step = this.state.tour.step;
     if (step === 'main') return this._stairs.some(stair => stair.levelId === 3);
     if (step === 'second') return this._stairs.some(stair => stair.levelId === 5);
+    if (step === 'roof') return true; // the pause ends when the drafter says so
     return false;
   }
 
@@ -3396,7 +3428,9 @@ class Component extends DCLogic {
       tourPopup: step,
       tourPopupNote: step === 'main'
         ? 'Stairs are in. Climb to the 2ND FLOOR, or go straight to the ROOF for a one-storey house.'
-        : 'Stairs stack over the run below — headroom holds and the beam layout stays valid.',
+        : step === 'roof'
+          ? 'The roof is set — the house is ready. Press the BONE and watch it grow from the ground up.'
+          : 'Stairs stack over the run below — headroom holds and the beam layout stays valid.',
     });
   }
 
@@ -3477,10 +3511,442 @@ class Component extends DCLogic {
     });
   }
 
+  // ── The roof pause (board #238): the adjust step edits roof INTENT — the
+  // preview footprint, per-edge eave/gable choices, pulled overhangs, and
+  // mid-edge gable features — and the bone builds the real roof from it.
+  _tourRoofActive() {
+    return ['roof', 'finale'].includes(this.state.tour.step) && this._activeLevelId() === 7;
+  }
+
+  _tourRoofModel() {
+    let outline = this._houseOutline(7);
+    const floors = this._floorLevels();
+    for (let i = floors.length - 1; i >= 0 && !outline; i--) outline = this._houseOutline(floors[i].id);
+    if (!outline) return null;
+    const loop = this._houseRoofLoop(outline);
+    const intent = this.state.roofIntent;
+    const base = this.state.roofOverhang;
+    const edges = loop.map((pt, index) => {
+      const next = loop[(index + 1) % loop.length];
+      const keyed = pt.srcId && next.srcId;
+      const override = keyed
+        ? intent.edges.find(edge => edge.fromSrc === pt.srcId && edge.toSrc === next.srcId) || null
+        : null;
+      const dx = next.x - pt.x, dz = next.z - pt.z;
+      const len = Math.hypot(dx, dz) || 1;
+      return {
+        index, a: { x: pt.x, z: pt.z }, b: { x: next.x, z: next.z }, len,
+        ux: dx / len, uz: dz / len,
+        fromSrc: keyed ? pt.srcId : null, toSrc: keyed ? next.srcId : null,
+        kind: override?.kind || 'eave',
+        overhang: override && override.overhangFt != null ? Math.max(override.overhangFt, base) : base,
+        gables: keyed
+          ? intent.gables.filter(gable => gable.fromSrc === pt.srcId && gable.toSrc === next.srcId) : [],
+      };
+    });
+    const offset = window.DraftGeometry2D.offsetOutlineVariable(
+      loop.map(pt => ({ x: pt.x, z: pt.z })), edges.map(edge => edge.overhang));
+    edges.forEach((edge, index) => {
+      const offA = offset[index];
+      let nx = offA.x - edge.a.x, nz = offA.z - edge.a.z;
+      const along = nx * edge.ux + nz * edge.uz;
+      nx -= along * edge.ux; nz -= along * edge.uz;
+      const nlen = Math.hypot(nx, nz) || 1;
+      edge.nx = nx / nlen; edge.nz = nz / nlen;
+      edge.offA = offset[index];
+      edge.offB = offset[(index + 1) % offset.length];
+    });
+    return { loop, edges, offset, base };
+  }
+
+  _tourRoofTagPos(edge) {
+    const mid = edge.len / 2;
+    return {
+      x: edge.a.x + edge.ux * mid + edge.nx * (edge.overhang + 1.4),
+      z: edge.a.z + edge.uz * mid + edge.nz * (edge.overhang + 1.4),
+    };
+  }
+
+  _tourRoofEdgeAt(pt, model, maxDistFt = 1.2) {
+    let best = null;
+    model.edges.forEach(edge => {
+      const relX = pt.x - edge.a.x, relZ = pt.z - edge.a.z;
+      const t = Math.max(0, Math.min(edge.len, relX * edge.ux + relZ * edge.uz));
+      const px = edge.a.x + edge.ux * t + edge.nx * edge.overhang;
+      const pz = edge.a.z + edge.uz * t + edge.nz * edge.overhang;
+      const dist = Math.hypot(pt.x - px, pt.z - pz);
+      if (dist <= maxDistFt && (!best || dist < best.dist)) best = { edge, t, dist };
+    });
+    return best;
+  }
+
+  // Anchor candidates from the floors below (answers Q4): opening centers,
+  // EXTERIOR runs parallel under the working edge (midpoints), and
+  // adjacent column pairs near the edge. Floor label 1 = MAIN, 2 = 2ND.
+  _tourRoofCandidates(edge) {
+    const floors = [{ levelId: 3, floor: 1 }, { levelId: 5, floor: 2 }];
+    const out = [];
+    // Pre-bone, the master's door/window MARKS are the openings the floors
+    // below will get — they anchor exactly like placed fenestrations.
+    this._boneyardOutlines.filter(outline => !outline.garage).forEach(master => {
+      (master.marks || []).forEach(mark => {
+        if (mark.type !== 'door' && mark.type !== 'window') return;
+        const at = this._boneyardMarkGeometry(master, mark);
+        if (!at) return;
+        out.push({
+          x: at.center.x, z: at.center.z,
+          kind: mark.type === 'window' ? 'W' : 'D', floor: 1, widthFt: mark.widthFt,
+        });
+      });
+    });
+    floors.forEach(({ levelId, floor }) => {
+      this._fenestrations
+        .filter(opening => opening.levelId === levelId && (opening.view || 'plan') === 'plan')
+        .forEach(opening => {
+          const geoInfo = this._openingGeometry(opening);
+          if (!geoInfo) return;
+          out.push({
+            x: geoInfo.center.x, z: geoInfo.center.z,
+            kind: opening.type === 'window' ? 'W' : 'D', floor, widthFt: opening.width,
+          });
+        });
+      this._walls
+        .filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan')
+        .forEach(wall => {
+          const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+          const len = Math.hypot(dx, dz) || 1;
+          if (Math.abs((dx / len) * edge.uz - (dz / len) * edge.ux) > 0.05) return;
+          const mid = { x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 };
+          const perp = Math.abs((mid.x - edge.a.x) * edge.nx + (mid.z - edge.a.z) * edge.nz);
+          if (perp > 1.5) return;
+          out.push({ x: mid.x, z: mid.z, kind: 'WALL', floor });
+        });
+      const columns = this._columns
+        .filter(column => column.levelId === levelId)
+        .map(column => ({
+          x: column.point.x, z: column.point.z,
+          t: (column.point.x - edge.a.x) * edge.ux + (column.point.z - edge.a.z) * edge.uz,
+          perp: Math.abs((column.point.x - edge.a.x) * edge.nx + (column.point.z - edge.a.z) * edge.nz),
+        }))
+        .filter(column => column.t > 0 && column.t < edge.len && column.perp <= 6)
+        .sort((a, b) => a.t - b.t);
+      for (let i = 0; i + 1 < columns.length; i++) {
+        out.push({
+          x: (columns[i].x + columns[i + 1].x) / 2,
+          z: (columns[i].z + columns[i + 1].z) / 2,
+          kind: 'COL', floor,
+        });
+      }
+    });
+    return out;
+  }
+
+  _tourRoofIncrementFt(e) {
+    const inc = this.state.tourRoofIncrements;
+    const values = [inc.baseIn, inc.shiftIn, inc.ctrlShiftIn];
+    if (e && e.ctrlKey && e.shiftKey) return inc.ctrlShiftIn / 12;
+    if (e && e.shiftKey) return inc.shiftIn / 12;
+    return values[this.state.tourRoofIncrementIdx % 3] / 12;
+  }
+
+  _tourRoofSetEdgeIntent(edge, patch) {
+    if (!edge.fromSrc || !edge.toSrc) return;
+    const rest = this.state.roofIntent.edges
+      .filter(entry => !(entry.fromSrc === edge.fromSrc && entry.toSrc === edge.toSrc));
+    const existing = this.state.roofIntent.edges
+      .find(entry => entry.fromSrc === edge.fromSrc && entry.toSrc === edge.toSrc) || {};
+    const merged = { ...existing, fromSrc: edge.fromSrc, toSrc: edge.toSrc, ...patch };
+    if (merged.kind || merged.overhangFt != null) rest.push(merged);
+    this.setState({ roofIntent: format.roofIntent({ ...this.state.roofIntent, edges: rest }) });
+    this._markUnsaved();
+  }
+
+  _handleTourRoofPress(e) {
+    if (!this._tourRoofActive() || e.button !== 0) return false;
+    const raw = this._getWorldPos(e.clientX, e.clientY);
+    if (!raw) return false;
+    const model = this._tourRoofModel();
+    if (!model) return false;
+    const pt = { x: raw.x, z: raw.z };
+    const distToSegment = (p, a, b) => {
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2));
+      return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t));
+    };
+    // E/G tag: the whole-edge eave-vs-gable choice.
+    for (const edge of model.edges) {
+      if (!edge.fromSrc) continue;
+      const tag = this._tourRoofTagPos(edge);
+      if (Math.hypot(pt.x - tag.x, pt.z - tag.z) <= 1.0) {
+        const kind = edge.kind === 'gable' ? 'eave' : 'gable';
+        this._tourRoofSetEdgeIntent(edge, { kind });
+        this.setState({
+          drawingMessage: kind === 'gable'
+            ? 'Edge set GABLE — the wall below lengthens up into the peak; the bone frames it.'
+            : 'Edge back to EAVE.',
+          drawingMessageError: false,
+        });
+        return true;
+      }
+    }
+    if (this.state.tourGableArmed) {
+      // Existing gables first: the centerline break, then the width ticks.
+      for (const edge of model.edges) {
+        for (const gable of edge.gables) {
+          const split = window.DraftTour.gableSplit(edge.len, gable.centerFt, gable.widthFt);
+          const centerFt = (split.fromFt + split.toFt) / 2;
+          const cWall = { x: edge.a.x + edge.ux * centerFt, z: edge.a.z + edge.uz * centerFt };
+          const cOut = {
+            x: cWall.x + edge.nx * (edge.overhang + 1),
+            z: cWall.z + edge.nz * (edge.overhang + 1),
+          };
+          if (distToSegment(pt, cWall, cOut) <= 0.6) {
+            this._tourGableBreak(edge, gable, split);
+            return true;
+          }
+          for (const ft of [split.fromFt, split.toFt]) {
+            const sx = edge.a.x + edge.ux * ft + edge.nx * edge.overhang;
+            const sz = edge.a.z + edge.uz * ft + edge.nz * edge.overhang;
+            if (Math.hypot(pt.x - sx, pt.z - sz) <= 0.7) {
+              this._tourRoofDrag = { type: 'gable-width', edge, gable };
+              return true;
+            }
+          }
+        }
+      }
+      // Place a gable at the snapped spot on the nearest edge.
+      const hit = this._tourRoofEdgeAt(pt, model, 2.5);
+      if (hit && hit.edge.fromSrc) {
+        const anchors = window.DraftTour.gableAnchors(hit.edge.a, hit.edge.b, this._tourRoofCandidates(hit.edge));
+        const snap = window.DraftTour.snapAlongEdge(hit.t, hit.edge.len, this._tourRoofIncrementFt(e), anchors);
+        const widthFt = snap.anchor && snap.anchor.widthFt
+          ? Math.min(Math.max(snap.anchor.widthFt + 2, 4), Math.max(hit.edge.len - 2, 4))
+          : 8;
+        const gables = [...this.state.roofIntent.gables, {
+          fromSrc: hit.edge.fromSrc, toSrc: hit.edge.toSrc, centerFt: snap.t, widthFt,
+        }];
+        this.setState({ roofIntent: format.roofIntent({ ...this.state.roofIntent, gables }) });
+        this._markUnsaved();
+        const rise = window.DraftTour.gablePeakRiseFt(widthFt, this.state.roofPitch);
+        this.setState({
+          drawingMessage: `GABLE ${formatArchitecturalInches(widthFt * 12)} wide, `
+            + `${formatArchitecturalInches(snap.t * 12)} from the corner`
+            + `${snap.anchor ? ` — centered on ${snap.anchor.kind} ${snap.anchor.floor}` : ''}. `
+            + `Wall lengthens ${formatArchitecturalInches(rise * 12)} at the peak.`,
+          drawingMessageError: false,
+        });
+        return true;
+      }
+      return true; // armed presses never fall through to other tools
+    }
+    // Not armed: pressing the dashed eave starts a pull-out drag.
+    const hit = this._tourRoofEdgeAt(pt, model, 1.0);
+    if (hit && hit.edge.fromSrc) {
+      this._tourRoofDrag = { type: 'overhang', edge: hit.edge };
+      return true;
+    }
+    // The tour keeps roof node-editing parked: the dashed eave is the handle.
+    for (const edge of model.edges) {
+      if (distToSegment(pt, edge.a, edge.b) <= 0.8) {
+        this.setState({
+          drawingMessage: 'During the tour the roof only pulls OUT — drag the dashed eave line, or arm GABLE to place one.',
+          drawingMessageError: true,
+        });
+        return true;
+      }
+    }
+    return false;
+  }
+
+  _updateTourRoofDrag(e) {
+    const drag = this._tourRoofDrag;
+    const raw = this._getWorldPos(e.clientX, e.clientY);
+    if (!drag || !raw) return;
+    const incrementFt = this._tourRoofIncrementFt(e);
+    const edge = drag.edge;
+    if (drag.type === 'overhang') {
+      const perp = (raw.x - edge.a.x) * edge.nx + (raw.z - edge.a.z) * edge.nz;
+      const snapped = Math.round(perp / incrementFt) * incrementFt;
+      const overhangFt = Math.max(this.state.roofOverhang, snapped); // pull-out only
+      this._tourRoofSetEdgeIntent(edge, { overhangFt });
+      this.setState({
+        drawingMessage: `Overhang ${formatArchitecturalInches(overhangFt * 12)} on this edge (pull-out only).`,
+        drawingMessageError: false,
+      });
+    } else if (drag.type === 'gable-width') {
+      const t = (raw.x - edge.a.x) * edge.ux + (raw.z - edge.a.z) * edge.uz;
+      const width = Math.abs(t - drag.gable.centerFt) * 2;
+      const snapped = Math.max(2, Math.round(width / incrementFt) * incrementFt);
+      const gables = this.state.roofIntent.gables.map(entry => entry === drag.gable
+        || (entry.fromSrc === drag.gable.fromSrc && entry.toSrc === drag.gable.toSrc
+          && entry.centerFt === drag.gable.centerFt && entry.widthFt === drag.gable.widthFt)
+        ? { ...entry, widthFt: snapped } : entry);
+      drag.gable = gables.find(entry => entry.fromSrc === drag.gable.fromSrc
+        && entry.centerFt === drag.gable.centerFt) || drag.gable;
+      this.setState({ roofIntent: format.roofIntent({ ...this.state.roofIntent, gables }) });
+      const rise = window.DraftTour.gablePeakRiseFt(snapped, this.state.roofPitch);
+      this.setState({
+        drawingMessage: `GABLE ${formatArchitecturalInches(snapped * 12)} wide — wall lengthens `
+          + `${formatArchitecturalInches(rise * 12)} at the peak.`,
+        drawingMessageError: false,
+      });
+    }
+    this._invalidate();
+  }
+
+  _endTourRoofDrag() {
+    if (!this._tourRoofDrag) return;
+    this._tourRoofDrag = null;
+    this._markUnsaved();
+  }
+
+  // The one and only break gesture (answers Q8): breaking a gable's
+  // centerline sets two gable-bump marks on the MASTER at the gable's side
+  // positions — where perpendicular walls would land if the wall moved
+  // forward. Markers only; nothing moves until the drafter moves it.
+  _tourGableBreak(edge, gable, split) {
+    const master = this._boneyardOutlines.find(outline => !outline.garage);
+    if (!master) return;
+    [split.fromFt, split.toFt].forEach(offsetFt => {
+      master.marks.push({
+        id: this._newDrawingItemId('mark'),
+        type: 'gable-bump',
+        edgeId: gable.fromSrc,
+        offsetFt,
+        widthFt: 0.5,
+      });
+    });
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: 'Gable centerline broken — bump-out wall markers set on the plan below. The wall stays exactly where it is until you move it.',
+      drawingMessageError: false,
+    });
+  }
+
+  // The finale (Q10, the drafter's finish): ROOF DONE only HINTS — the
+  // drafter presses the real bone, the view jumps to the front elevation,
+  // and the house grows out of the ground under a rising mask.
+  _afterTourBone() {
+    if (this.state.tour.step !== 'finale') return;
+    this._clearTourTimers();
+    this.setState({ tour: format.tour(null), tourPopup: false, tourPopupNote: '', tourGableArmed: false },
+      () => this._markUnsaved());
+    const front = this._autoElevationCuts().find(cut => cut.id === 'E1');
+    if (!front) return; // no auto elevations to jump to — the build stands
+    this._revealStart = performance.now();
+    this._revealActive = true;
+    this.setState({ activeView: 'cut', activeCutId: 'E1', drawingMessage: '', drawingMessageError: false });
+    this._invalidate();
+  }
+
+  // The roof pause's overlay: dashed preview footprint (per-edge kind and
+  // overhang), E/G tags, gable features, and — while GABLE is armed — the
+  // anchor cut lines (floor-1 labels INSIDE the roof plane, floor-2 outside
+  // under the eave, one shared line per spot) plus the snapped hover ghost.
+  _drawTourRoof2D(ctx, toS) {
+    if (!this._tourRoofActive()) return;
+    const model = this._tourRoofModel();
+    if (!model) return;
+    ctx.save();
+    model.edges.forEach(edge => {
+      const a = toS(edge.offA), b = toS(edge.offB);
+      ctx.strokeStyle = edge.kind === 'gable' ? '#b04050' : '#5980a6';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 5]);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    ctx.font = "700 10px 'Barlow Condensed', system-ui, sans-serif";
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    model.edges.forEach(edge => {
+      if (!edge.fromSrc) return;
+      const tag = toS(this._tourRoofTagPos(edge));
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = edge.kind === 'gable' ? '#b04050' : 'rgba(29,31,32,0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(tag.x, tag.y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = edge.kind === 'gable' ? '#b04050' : '#1d1f20';
+      ctx.fillText(edge.kind === 'gable' ? 'G' : 'E', tag.x, tag.y);
+    });
+    model.edges.forEach(edge => {
+      edge.gables.forEach(gable => {
+        const split = window.DraftTour.gableSplit(edge.len, gable.centerFt, gable.widthFt);
+        const eaveAt = ft => toS({
+          x: edge.a.x + edge.ux * ft + edge.nx * edge.overhang,
+          z: edge.a.z + edge.uz * ft + edge.nz * edge.overhang,
+        });
+        ctx.strokeStyle = '#b04050'; ctx.fillStyle = '#b04050';
+        [split.fromFt, split.toFt].forEach(ft => {
+          const p = eaveAt(ft);
+          ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
+        });
+        const centerFt = (split.fromFt + split.toFt) / 2;
+        const c0 = toS({ x: edge.a.x + edge.ux * centerFt, z: edge.a.z + edge.uz * centerFt });
+        const c1 = toS({
+          x: edge.a.x + edge.ux * centerFt + edge.nx * (edge.overhang + 1),
+          z: edge.a.z + edge.uz * centerFt + edge.nz * (edge.overhang + 1),
+        });
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(c0.x, c0.y); ctx.lineTo(c1.x, c1.y); ctx.stroke();
+      });
+    });
+    if (this.state.tourGableArmed) {
+      ctx.font = "700 9px 'Barlow Condensed', system-ui, sans-serif";
+      model.edges.forEach(edge => {
+        if (!edge.fromSrc) return;
+        const anchors = window.DraftTour.gableAnchors(edge.a, edge.b, this._tourRoofCandidates(edge));
+        const groups = [];
+        anchors.forEach(anchor => {
+          const host = groups.find(group => Math.abs(group.t - anchor.t) <= 0.25);
+          if (host) host.list.push(anchor); else groups.push({ t: anchor.t, list: [anchor] });
+        });
+        groups.forEach(group => {
+          const inner = toS({
+            x: edge.a.x + edge.ux * group.t - edge.nx * 1.2,
+            z: edge.a.z + edge.uz * group.t - edge.nz * 1.2,
+          });
+          const outer = toS({
+            x: edge.a.x + edge.ux * group.t + edge.nx * (edge.overhang + 1.2),
+            z: edge.a.z + edge.uz * group.t + edge.nz * (edge.overhang + 1.2),
+          });
+          ctx.strokeStyle = 'rgba(29,31,32,0.55)'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(inner.x, inner.y); ctx.lineTo(outer.x, outer.y); ctx.stroke();
+          group.list.forEach(anchor => {
+            const at = anchor.floor === 1 ? inner : outer;
+            ctx.fillStyle = '#1d1f20';
+            ctx.fillText(`${anchor.kind} ${anchor.floor}`, at.x, at.y + (anchor.floor === 1 ? 10 : -8));
+          });
+        });
+      });
+      const cursor = this._snapPt;
+      if (cursor && !this._tourRoofDrag) {
+        const hit = this._tourRoofEdgeAt({ x: cursor.x, z: cursor.z }, model, 2.5);
+        if (hit && hit.edge.fromSrc) {
+          const anchors = window.DraftTour.gableAnchors(hit.edge.a, hit.edge.b, this._tourRoofCandidates(hit.edge));
+          const snap = window.DraftTour.snapAlongEdge(hit.t, hit.edge.len, this._tourRoofIncrementFt(null), anchors);
+          const g0 = toS({
+            x: hit.edge.a.x + hit.edge.ux * snap.t - hit.edge.nx * 1.2,
+            z: hit.edge.a.z + hit.edge.uz * snap.t - hit.edge.nz * 1.2,
+          });
+          const g1 = toS({
+            x: hit.edge.a.x + hit.edge.ux * snap.t + hit.edge.nx * (hit.edge.overhang + 1.2),
+            z: hit.edge.a.z + hit.edge.uz * snap.t + hit.edge.nz * (hit.edge.overhang + 1.2),
+          });
+          ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.moveTo(g0.x, g0.y); ctx.lineTo(g1.x, g1.y); ctx.stroke();
+          ctx.fillStyle = '#c0392b';
+          ctx.fillText(formatArchitecturalInches(snap.t * 12), g1.x, g1.y - 10);
+        }
+      }
+    }
+    ctx.restore();
+  }
+
   _exitTour() {
     this._clearTourTimers();
     this.setState({
-      tour: format.tour(null), tourPopup: false, tourPopupNote: '',
+      tour: format.tour(null), tourPopup: false, tourPopupNote: '', tourGableArmed: false,
       drawingMessage: 'Tour ended — the level cards take you anywhere, and the bone builds whenever you are ready.',
       drawingMessageError: false,
     }, () => this._markUnsaved());
@@ -3780,6 +4246,7 @@ class Component extends DCLogic {
         projectInfo: format.projectInfo(saved.projectInfo),
         zoneHeights: format.zoneHeights(saved.zoneHeights),
         tour: format.tour(saved.tour),
+        roofIntent: format.roofIntent(saved.roofIntent),
         tourPopup: format.tour(saved.tour).step === 'foundation' ? 'foundation' : false,
         tourPopupNote: format.tour(saved.tour).step === 'foundation'
           ? 'The foundation structure is in — press ENTER, SPACE, or tap to climb.' : '',
@@ -4625,6 +5092,7 @@ class Component extends DCLogic {
     window.addEventListener('mousemove',   this._wmmv = e => { this._invalidate(); this._onGlobalMouseMove(e); });
     window.addEventListener('mouseup',     this._wmup = e => {
       this._invalidate();
+      if (this._tourRoofDrag) this._endTourRoofDrag();
       this._panning2D = false;
       const sd   = this._selectDrag;
       const ad   = this._arcDrag;
@@ -4757,7 +5225,24 @@ class Component extends DCLogic {
     // renders from the semantic model in its own locked workspace.
     if (this.state.activeView === 'cut') {
       const cut = this._cutById(this.state.activeCutId);
-      if (cut) { this._drawCutWorkspace2D(ctx, w, h, cut); return; }
+      if (cut) {
+        this._drawCutWorkspace2D(ctx, w, h, cut);
+        // The finale's rising reveal (board #238): a mask over the finished
+        // elevation, climbing bottom-to-top — dotted underground first,
+        // footing to ridge — the same choreography a 3D clip plane plays
+        // later. Self-driving: each frame invalidates until done.
+        if (this._revealActive) {
+          const elapsed = performance.now() - (this._revealStart || 0);
+          const clipY = window.DraftTour.revealClipY(elapsed, window.DraftTour.REVEAL_MS, h + 10, -10);
+          ctx.save();
+          ctx.fillStyle = '#fafafa';
+          ctx.fillRect(0, 0, w, Math.max(0, clipY));
+          ctx.restore();
+          if (elapsed <= window.DraftTour.REVEAL_MS) this._invalidate();
+          else this._revealActive = false;
+        }
+        return;
+      }
     }
 
     // The STAIR layer set replaces the free camera with a locked workspace
@@ -5446,6 +5931,7 @@ class Component extends DCLogic {
     this._drawCuts2D(ctx, toS);
     // The OUTLINE guide paints last so it sits on top of all other linework.
     this._drawOutlines2D(ctx, toS);
+    this._drawTourRoof2D(ctx, toS);
   }
 
   // The OUTLINE guide never prints — it is drafting scaffolding, not linework.
@@ -5593,7 +6079,7 @@ class Component extends DCLogic {
     const c = toS(at.center);
     ctx.font = '600 10px "Barlow Condensed", system-ui, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(mark.type === 'door' ? 'D' : 'W', c.x + nx * 11, c.y + ny * 11);
+    ctx.fillText(mark.type === 'door' ? 'D' : mark.type === 'gable-bump' ? 'G' : 'W', c.x + nx * 11, c.y + ny * 11);
     ctx.restore();
   }
 
@@ -8284,6 +8770,7 @@ class Component extends DCLogic {
   }
 
   _onMouseMove(e) {
+    if (this._tourRoofDrag) { this._updateTourRoofDrag(e); return; }
     this._lastClient = { x: e.clientX, y: e.clientY };
     if (this.state.lengthFrozen) { this._trackStickyRuler(e); return; }
     if (this._stairWorkspaceActive()) {
@@ -8545,6 +9032,9 @@ class Component extends DCLogic {
       else this._toggleStairPane(e);
       return;
     }
+    // The tour's roof pause owns its own gestures (board #238) — tags,
+    // gable placement, pull-out drags — and parks free node-editing there.
+    if (e.button === 0 && !e.altKey && this._handleTourRoofPress(e)) { e.preventDefault(); return; }
     const tool = this.state.activeTool;
     if (e.button === 0 && !e.altKey) {
       if (this._grabNodeForTool(e, tool)) { e.preventDefault(); return; }
@@ -10632,6 +11122,7 @@ class Component extends DCLogic {
         const nextIndex = master.open === true ? index + 1 : (index + 1) % master.points.length;
         const nextId = master.points[nextIndex]?.pointId;
         if (!nextId) return;
+        if (mark.type === 'gable-bump') return; // wall markers, never openings
         const levels = mark.type === 'door' ? [floors[0]] : floors;
         levels.forEach(level => {
           if (this._placeMarkOpening(mark, level.id, 'plan', mark.edgeId, nextId)) added++;
@@ -10748,16 +11239,63 @@ class Component extends DCLogic {
     if (!outline) return false;
     const overhang = this.state.roofOverhang;
     // The offset loop maps 1:1 onto the source loop, so each eave corner
-    // links to the master point its outline corner rode from.
+    // links to the master point its outline corner rode from. Roof INTENT
+    // (board #238) rides in here: per-edge kinds and pulled overhangs, and
+    // mid-edge gable features that split their edge into eave|gable|eave —
+    // all keyed by the master point ids the loop already carries.
     const loop = this._houseRoofLoop(outline);
-    const points = this._offsetOutline(loop, overhang);
+    const intent = this.state.roofIntent;
+    const edgeIntent = index => {
+      const a = loop[index], b = loop[(index + 1) % loop.length];
+      if (!a.srcId || !b.srcId) return null;
+      return intent.edges.find(edge => edge.fromSrc === a.srcId && edge.toSrc === b.srcId) || null;
+    };
+    const distances = loop.map((pt, index) => {
+      const override = edgeIntent(index);
+      // Pull-out only: an override can widen an edge's overhang, never
+      // tuck it under the house default.
+      return override && override.overhangFt != null
+        ? Math.max(override.overhangFt, overhang) : overhang;
+    });
+    const offset = window.DraftGeometry2D.offsetOutlineVariable(loop, distances);
+    const outPoints = [];
+    const outEdges = [];
+    loop.forEach((pt, index) => {
+      const next = loop[(index + 1) % loop.length];
+      const offA = offset[index];
+      outPoints.push({ x: offA.x, z: offA.z, srcId: pt.srcId ?? null });
+      const kind = edgeIntent(index)?.kind || 'eave';
+      const features = (pt.srcId && next.srcId)
+        ? intent.gables.filter(gable => gable.fromSrc === pt.srcId && gable.toSrc === next.srcId)
+            .sort((a, b) => a.centerFt - b.centerFt)
+        : [];
+      if (!features.length) { outEdges.push(kind); return; }
+      // Splits are measured on the WALL edge (the drafter's dimension) and
+      // displaced onto the offset line by this edge's own overhang normal.
+      const dx = next.x - pt.x, dz = next.z - pt.z;
+      const len = Math.hypot(dx, dz) || 1;
+      const ux = dx / len, uz = dz / len;
+      let nx = offA.x - pt.x, nz = offA.z - pt.z;
+      const along = nx * ux + nz * uz;
+      nx -= along * ux; nz -= along * uz;
+      const nlen = Math.hypot(nx, nz) || 1;
+      nx = nx / nlen * distances[index]; nz = nz / nlen * distances[index];
+      features.forEach(gable => {
+        const split = window.DraftTour.gableSplit(len, gable.centerFt, gable.widthFt);
+        outPoints.push({ x: pt.x + ux * split.fromFt + nx, z: pt.z + uz * split.fromFt + nz, srcId: null });
+        outEdges.push(kind);
+        outPoints.push({ x: pt.x + ux * split.toFt + nx, z: pt.z + uz * split.toFt + nz, srcId: null });
+        outEdges.push('gable');
+      });
+      outEdges.push(kind);
+    });
     this._roofs.push({
       id: this._newDrawingItemId('roof'),
-      points: points.map((point, index) => this._linkVertex(this._mergeVertex({ x: point.x, z: point.z }, 7, 'roof'), loop[index]?.srcId)),
+      points: outPoints.map(point => this._linkVertex(this._mergeVertex({ x: point.x, z: point.z }, 7, 'roof'), point.srcId)),
       levelId: 7,
       sourceLevelId: outline.levelId,
       sourceShapeId: null,
-      edges: points.map(() => 'eave'),
+      edges: outEdges,
       overhang,
       pitch: this.state.roofPitch,
       fascia: ROOF_FASCIA_IN,
@@ -10850,7 +11388,21 @@ class Component extends DCLogic {
     const floors = this._floorLevels();
     const hasSource = [1, ...floors.map(level => level.id)]
       .some(levelId => this._houseOutline(levelId) || this._garageOutline(levelId));
-    if (hasSource) { this._buildHouse(); return; }
+    if (hasSource) {
+      const step = this.state.tour.step;
+      if (step && step !== 'finale') {
+        // A mid-tour bone press: the drafter overrode the escort. The
+        // build and the tour's end are ONE action — clear the tour first
+        // (setState applies synchronously) so the build's own history entry
+        // and save carry it, and a single undo still removes the whole
+        // house. No reveal on this path.
+        this._clearTourTimers();
+        this.setState({ tour: format.tour(null), tourPopup: false, tourPopupNote: '', tourGableArmed: false });
+      }
+      this._buildHouse();
+      if (step === 'finale') this._afterTourBone();
+      return;
+    }
     this.setState({
       drawingMessage: 'Nothing to build yet — press HOUSE (or a GARAGE button), trace the outline, then press the bone.',
       drawingMessageError: true,
@@ -16423,6 +16975,19 @@ class Component extends DCLogic {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._tourPopupPrimary(); return; }
       if (e.key === 'Escape') { e.preventDefault(); this._exitTour(); return; }
     }
+    if (this.state.tourGableArmed && e.key === 'Escape' && focusedControl !== 'field') {
+      e.preventDefault();
+      this.setState({ tourGableArmed: false, drawingMessage: 'GABLE off.', drawingMessageError: false });
+      return;
+    }
+    // At the finale, Enter or Space presses the bone too — the hint's
+    // keyboard twin.
+    if (this.state.tour.step === 'finale' && focusedControl !== 'field'
+      && !this.state.isDrawing && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      this._pressBuildHouse();
+      return;
+    }
     // The lit NEXT FLOOR gate also answers Enter/Space — but never while a
     // draw is mid-flight or a stair has its first click down.
     if (focusedControl !== 'field' && !this.state.isDrawing && !this._stairStart
@@ -17459,6 +18024,7 @@ class Component extends DCLogic {
       tourPopupOpen: !!this.state.tourPopup,
       tourPopupTitle: this.state.tourPopup === 'main' ? 'MAIN FLOOR DONE'
         : this.state.tourPopup === 'second' ? '2ND FLOOR DONE, GOING TO ROOF'
+        : this.state.tourPopup === 'roof' ? 'ROOF DONE'
         : 'FOUNDATION DONE, GOING TO MAIN FLOOR',
       tourPopupChoice: this.state.tourPopup === 'main',
       tourPopupSingle: this.state.tourPopup !== 'main',
@@ -17468,13 +18034,29 @@ class Component extends DCLogic {
       tourNextRoof: e => { e.stopPropagation(); this._advanceTour('roof'); },
       tourNextReady: this._tourGateReady(),
       onTourNext: () => this._pressTourNext(),
-      tourChipOpen: ['main', 'second'].includes(this.state.tour.step) && !this.state.tourPopup,
-      tourChipLabel: this._tourGateReady() ? 'NEXT FLOOR \u25B2'
+      tourChipOpen: ['main', 'second', 'finale'].includes(this.state.tour.step) && !this.state.tourPopup,
+      tourChipLabel: this.state.tour.step === 'finale' ? 'PRESS THE BONE'
+        : this._tourGateReady() ? 'NEXT FLOOR \u25B2'
         : `TOUR \u2014 PLACE STAIRS ON ${this.state.tour.step === 'second' ? '2ND FL' : 'MAIN FL'}`,
       onTourChip: () => {
-        if (this._tourGateReady()) this._pressTourNext();
+        if (this.state.tour.step === 'finale') this._pressBuildHouse();
+        else if (this._tourGateReady()) this._pressTourNext();
         else this._activateContextTool('stair');
       },
+      tourRoofRowOpen: this.state.tour.step === 'roof' && !this.state.tourPopup,
+      onTourGable: () => this.setState({ tourGableArmed: !this.state.tourGableArmed }, () => this._invalidate()),
+      tourGableBg: this.state.tourGableArmed ? '#b04050' : '#fff',
+      tourGableColor: this.state.tourGableArmed ? '#fff' : '#b04050',
+      tourIncrementLabel: (() => {
+        const inc = this.state.tourRoofIncrements;
+        const value = [inc.baseIn, inc.shiftIn, inc.ctrlShiftIn][this.state.tourRoofIncrementIdx % 3];
+        return value % 12 === 0 ? `${value / 12}'` : `${value}"`;
+      })(),
+      onTourIncrement: () => this.setState({
+        tourRoofIncrementIdx: (this.state.tourRoofIncrementIdx + 1) % 3,
+      }),
+      buildHouseGlow: this.state.tour.step === 'finale'
+        ? 'drop-shadow(0 0 7px rgba(192,57,43,0.95))' : 'none',
       perfNoticeOpen: this.state.perfNotice === true,
       dismissPerfNotice: () => this._dismissPerfNotice(),
       perfIntroOff: this.state.perfIntroOff === true,
