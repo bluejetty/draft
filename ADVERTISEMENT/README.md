@@ -17,6 +17,7 @@ Tagline everywhere: **ZERO → PLAN IN 5 MINUTES!** (spoken: "zero to plan in fi
 | `SECRET-DRAFTER-script.md` | THE SECRET DRAFTER — office espionage, DXF cover story |
 | `STANDARD-ENDCARD.md` | Reusable end clip: 10s chrome logo card + the legal scroll (real and funny at the same time) |
 | `TAGLINES.md` | The collected campaign lines — real taglines, support lines, joke sub-taglines |
+| `SHARE-YOUR-HOUSE.md` | The built-in marketing loop — bone-cooldown SHARE moment, one-page feature sheet, logo stamp |
 
 ## Folders
 
