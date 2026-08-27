@@ -249,6 +249,39 @@ if (!window.DraftGeometry2D) {
   // its outward normal and each corner is the intersection of its two shifted
   // edges, so angled footprints stay true. Orientation-agnostic — whichever
   // normal direction grows the area is outward; a negative distance insets.
+  // Per-edge offset (board #238): like offsetOutline — line displacement plus
+  // corner re-intersection — but each edge carries its own distance, so one
+  // roof edge can be pulled further out than its neighbours. Outward
+  // orientation is resolved once with a uniform unit probe, so zero or mixed
+  // distances cannot fool the area test.
+  const offsetOutlineVariable = (points, distances) => {
+    const count = points.length;
+    const area = pts => Math.abs(pts.reduce((sum, pt, index) => {
+      const next = pts[(index + 1) % pts.length];
+      return sum + (pt.x * next.z - next.x * pt.z);
+    }, 0) / 2);
+    const offsetWith = (flip, dists) => {
+      const edges = points.map((pt, index) => {
+        const next = points[(index + 1) % count];
+        const dx = next.x - pt.x, dz = next.z - pt.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const d = dists[index] || 0;
+        const nx = flip * dz / len, nz = -flip * dx / len;
+        return { ax: pt.x + nx * d, az: pt.z + nz * d, dx: dx / len, dz: dz / len, nx, nz, d };
+      });
+      return points.map((pt, index) => {
+        const prev = edges[(index + count - 1) % count], edge = edges[index];
+        const cross = prev.dx * edge.dz - prev.dz * edge.dx;
+        if (Math.abs(cross) < 1e-9) return { x: pt.x + edge.nx * edge.d, z: pt.z + edge.nz * edge.d };
+        const t = ((edge.ax - prev.ax) * edge.dz - (edge.az - prev.az) * edge.dx) / cross;
+        return { x: prev.ax + prev.dx * t, z: prev.az + prev.dz * t };
+      });
+    };
+    const unit = offsetWith(1, points.map(() => 1));
+    const flip = area(unit) >= area(points) ? 1 : -1;
+    return offsetWith(flip, distances);
+  };
+
   const offsetOutline = (points, distance) => {
     if (!distance) return points.map(pt => ({ ...pt }));
     const count = points.length;
@@ -685,6 +718,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     nearestIntersection,
     roomLoops,
     offsetOutline,
+    offsetOutlineVariable,
     roofSkeleton,
     roofFaces,
     roofFaceRise,

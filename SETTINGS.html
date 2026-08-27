@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Draft — Keyboard Settings</title>
   <script src="./profile-manager.js"></script>
+  <script src="./tour.js"></script>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap">
   <style>
     * { box-sizing:border-box; }
@@ -89,6 +90,13 @@
       <p class="drafter-note">Your name and phone number, saved with these settings and used on titleblocks and sheets.</p>
       <div class="snap-row"><label for="drafter-name">Name</label><input type="text" id="drafter-name" data-drafter="name" maxlength="80" placeholder="Drafter name" style="width:220px;"></div>
       <div class="snap-row"><label for="drafter-phone">Phone</label><input type="text" id="drafter-phone" data-drafter="phone" maxlength="80" placeholder="(555) 555-5555" style="width:220px;"></div>
+    </section>
+    <section class="drafter" aria-label="Tour roof increments">
+      <div class="drafter-title">Tour roof — placement increments</div>
+      <p class="drafter-note">The guided tour&#8217;s roof step snaps gable placement and edge pulls to these grids, counted from the building corner. The chip beside GABLE cycles the resting grid; Shift and Ctrl+Shift are momentary overrides.</p>
+      <div class="snap-row"><label for="tour-inc-base">Resting</label><input type="number" id="tour-inc-base" data-tour-inc="baseIn" min="1" max="48" step="1" style="width:80px;"><span class="px">in</span></div>
+      <div class="snap-row"><label for="tour-inc-shift">Shift</label><input type="number" id="tour-inc-shift" data-tour-inc="shiftIn" min="1" max="48" step="1" style="width:80px;"><span class="px">in</span></div>
+      <div class="snap-row"><label for="tour-inc-ctrl">Ctrl+Shift</label><input type="number" id="tour-inc-ctrl" data-tour-inc="ctrlShiftIn" min="1" max="48" step="1" style="width:80px;"><span class="px">in</span></div>
     </section>
     <div class="notice">Commands are grouped by purpose. A key can include modifiers such as <strong>Shift+W</strong>, <strong>Ctrl+L</strong>, or <strong>Alt+1</strong>. Some shortcuts reserved by your browser or operating system may not be available.</div>
     <div class="layouts">
@@ -239,8 +247,24 @@
         status.classList.toggle('warning', warning || Boolean(duplicateMessage()));
       };
 
+      let tourRoofIncrements = window.DraftTour.normaliseTourRoofIncrements(active?.content?.model?.tourRoofIncrements);
+      const tourIncInputs = [...document.querySelectorAll('[data-tour-inc]')];
+      const fillTourIncrements = () => tourIncInputs.forEach(input => {
+        input.value = String(tourRoofIncrements[input.dataset.tourInc]);
+      });
+      fillTourIncrements();
+      tourIncInputs.forEach(input => {
+        input.addEventListener('change', () => {
+          tourRoofIncrements = window.DraftTour.normaliseTourRoofIncrements({
+            ...tourRoofIncrements, [input.dataset.tourInc]: Number(input.value),
+          });
+          fillTourIncrements();
+          saveActive('Tour roof increments saved.');
+        });
+      });
+
       const saveActive = message => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -301,7 +325,7 @@
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
