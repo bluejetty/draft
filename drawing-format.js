@@ -273,6 +273,7 @@ if (!window.DraftDrawingFormat) {
         footing,
         ...(!footing.startsWith('pile') && Number.isFinite(padIn) && padIn > 0
           ? { padIn } : {}),
+        auto: column?.auto === true, // tour-placed; the stair re-derive may replace it
         layer: 'S-COL-FOOTING',
       };
     }).filter(Boolean);
@@ -299,6 +300,7 @@ if (!window.DraftDrawingFormat) {
         levelId: beamLevelId,
         view,
         mode: oneOf(beam?.mode, ['flush', 'dropped'], 'flush'),
+        auto: beam?.auto === true, // tour-placed; the stair re-derive may replace it
         layer: 'S-BEAM',
       };
     }).filter(Boolean);
