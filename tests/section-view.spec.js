@@ -358,11 +358,12 @@ test.describe('Generated section view', () => {
     await buildHouse(page);
     await h.waitForSaved(page);
 
-    // The cut spans house and garage, the viewer south of both looking back.
+    // The cut spans house and garage; the side click picks the faces the
+    // view looks toward, so the north side keeps the house on the left.
     await page.keyboard.press('c');
     await h.clickWorld(page, -12, 10);
     await h.clickWorld(page, 30, 10);
-    await h.clickWorld(page, 9, 16);
+    await h.clickWorld(page, 9, 4);
     await page.waitForTimeout(400);
     await page.locator('.cut-row', { hasText: 'S1' }).click();
     await page.waitForTimeout(400);
