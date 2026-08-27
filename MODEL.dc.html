@@ -114,7 +114,7 @@
      pick the type, draw its outline in that colour, the bone builds it),
      and the file controls sit on the far right. -->
 <div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff; position:relative;">
-  <button data-project-open onClick="{{ openProjectDialog }}" style="height:35px; min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">PROJECT</button>
+  <button data-project-open onClick="{{ openProjectPage }}" style="height:35px; min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">PROJECT</button>
   <div data-profile-stack style="display:flex; flex-direction:column; gap:1px; margin-left:8px;">
     <button onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
     <button onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
@@ -122,6 +122,12 @@
   <div data-unit-toggle style="display:flex; flex-direction:column; gap:1px; margin-left:8px;">
     <button onClick="{{ setImperial }}" style="min-width:64px; border:1px solid {{ imperialBorder }}; background:{{ imperialBg }}; color:{{ imperialColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">IMPERIAL</button>
     <button onClick="{{ setMetric }}" style="min-width:64px; border:1px solid {{ metricBorder }}; background:{{ metricBg }}; color:{{ metricColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">METRIC</button>
+  </div>
+  <!-- AREAS reports and the underlay INSERT both compute against the live
+       model, so they keep working buttons here while PROJECT is a page. -->
+  <div data-model-tools-stack style="display:flex; flex-direction:column; gap:1px; margin-left:8px;">
+    <button data-areas-open onClick="{{ openAreasDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">AREAS</button>
+    <button data-insert-underlay onClick="{{ openInsertDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">INSERT</button>
   </div>
 
   <div data-build-cluster style="position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; align-items:center; gap:8px; z-index:6;">
@@ -369,38 +375,6 @@
       <sc-if value="{{ hasProfileDialogMessage }}" hint-placeholder-val="{{ false }}">
         <div style="margin-top:10px; color:{{ profileDialogMessageColor }}; font-size:11px; line-height:1.4;">{{ profileDialogMessage }}</div>
       </sc-if>
-    </div>
-  </div>
-</sc-if>
-
-<!-- PROJECT dialog: per-project information typed once and saved inside the
-     drawing file — sheets and the site plan's LEGAL LAND DESCRIPTION read it -->
-<sc-if value="{{ projectDialogOpen }}" hint-placeholder-val="{{ false }}">
-  <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:flex-start; justify-content:center; padding-top:78px; background:rgba(29,31,32,0.18);">
-    <div data-project-dialog role="dialog" aria-modal="true" aria-label="Project information" style="width:min(440px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
-      <div style="display:flex; align-items:flex-start; gap:16px;">
-        <div style="flex:1;">
-          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">Project</div>
-          <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">Project information saves with this drawing. The titleblock and the site plan's LEGAL LAND DESCRIPTION read from here.</div>
-        </div>
-        <button onClick="{{ closeProjectDialog }}" aria-label="Close" style="border:none; background:transparent; color:rgba(29,31,32,0.48); font-size:18px; line-height:1; cursor:pointer;">×</button>
-      </div>
-      <div style="margin-top:14px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">Project name</div>
-      <input data-project-name value="{{ projectName }}" onInput="{{ onProjectNameInput }}" aria-label="Project name" style="width:100%; box-sizing:border-box; height:32px; margin-top:5px; border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none;" />
-      <div style="margin-top:12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">Client</div>
-      <input data-project-client value="{{ projectClient }}" onInput="{{ onProjectClientInput }}" aria-label="Client" style="width:100%; box-sizing:border-box; height:32px; margin-top:5px; border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none;" />
-      <div style="margin-top:12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">Site address</div>
-      <input data-project-address value="{{ projectAddress }}" onInput="{{ onProjectAddressInput }}" aria-label="Site address" style="width:100%; box-sizing:border-box; height:32px; margin-top:5px; border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none;" />
-      <div style="margin-top:12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">Legal land description</div>
-      <textarea data-project-legal value="{{ projectLegal }}" onInput="{{ onProjectLegalInput }}" aria-label="Legal land description" rows="3" style="width:100%; box-sizing:border-box; margin-top:5px; border:1px solid rgba(29,31,32,0.25); padding:6px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; line-height:1.45; outline:none; resize:vertical;"></textarea>
-      <!-- PROJECT is the project's home base: areas and the underlay/file
-           imports live here now (the full PROJECT page grows from this). -->
-      <div style="margin-top:12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">Project tools</div>
-      <div style="display:flex; gap:6px; margin-top:5px;">
-        <button data-areas-open onClick="{{ openAreasDialog }}" style="flex:1; height:30px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">AREAS</button>
-        <button data-insert-underlay onClick="{{ openInsertDialog }}" style="flex:1; height:30px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">INSERT PHOTO / PDF</button>
-      </div>
-      <button onClick="{{ closeProjectDialog }}" style="width:100%; height:34px; margin-top:14px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">DONE</button>
     </div>
   </div>
 </sc-if>
@@ -2060,7 +2034,6 @@ class Component extends DCLogic {
     padError: '',
     noteStyleError: '',       // fill-opacity / bullnose input validation message
     roomAreasOn: false,        // area readout under MAIN FL room tags (off by default)
-    projectOpen: false,       // PROJECT dialog visibility
     projectCallout: false,    // PROFESSOR GRUFF first-build callout visibility
     buildIntroOff: false,     // "don't show this again" for the callout (settings profile)
     perfNotice: false,        // entry close-other-windows performance notice visibility
@@ -2072,7 +2045,8 @@ class Component extends DCLogic {
     // and the site plan's LEGAL LAND DESCRIPTION block read from here; later
     // per-project settings (model-space size, T-square angle set, filename
     // slot) join this object.
-    projectInfo: { name: '', client: '', address: '', legal: '' },
+    projectInfo: format.projectInfo(null),
+    zoneHeights: format.zoneHeights(null), // board #221 — PROJECT page zone rows
     fixtureKind: 'cabinet',   // active FIXTURE catalog entry (see FIXTURE_KINDS)
     kitchenPantry: false,     // L PRESET toggle: corner walk-in pantry in the dead corner
     kitchenIsland: false,     // L PRESET toggle: island 42" off the long counter
@@ -2464,6 +2438,8 @@ class Component extends DCLogic {
       nextRoomTagId: this._nextRoomTagId || 1,
       roomAreasOn: this.state.roomAreasOn === true,
       projectInfo: { ...this.state.projectInfo },
+      zoneHeights: { zones: Object.fromEntries(Object.entries(this.state.zoneHeights.zones)
+        .map(([id, zone]) => [id, { ...zone }])) },
       boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
       activeBoneyardShelfId: this.state.activeBoneyardShelfId,
       nextBoneyardShelfId: this.state.nextBoneyardShelfId,
@@ -2594,9 +2570,8 @@ class Component extends DCLogic {
   // 'underlays' keyed by underlay id; the drawing JSON holds placement metadata.
   _openInsertDialog() {
     this._resetInsertCandidate();
-    // INSERT opens from inside PROJECT; the sub-dialog takes the stage.
     this.setState({
-      insertOpen: true, projectOpen: false, insertPhase: 'pick', insertError: '',
+      insertOpen: true, insertPhase: 'pick', insertError: '',
       insertScaleInput: '', insertScaleError: '', insertWidthInput: '', insertWidthError: '',
       insertPage: 1, insertCalOpen: false, insertCalInput: '', insertCalError: '',
       insertRefresh: this.state.insertRefresh + 1,
@@ -3257,13 +3232,16 @@ class Component extends DCLogic {
     this.setState(patch);
   }
 
-  _openProjectDialog() {
-    this.setState({ projectOpen: true, projectCallout: false });
+  // PROJECT lives on its own page now (boards #158/#187) — the top-bar
+  // button and the professor callout's Escape both navigate there.
+  _openProjectPage() {
+    window.location.href = './PROJECT.html';
   }
 
   _dismissProjectCallout(openProject = false) {
     if (!this.state.projectCallout) return;
-    this.setState({ projectCallout: false, ...(openProject ? { projectOpen: true } : {}) });
+    this.setState({ projectCallout: false });
+    if (openProject) this._openProjectPage();
   }
 
   _dismissGarageCallout() {
@@ -3288,13 +3266,8 @@ class Component extends DCLogic {
     this.setState({ perfIntroOff: off === true }, () => this._rememberActiveProfile('settings'));
   }
 
-  _closeProjectDialog() {
-    this.setState({ projectOpen: false });
-  }
-
   _openAreasDialog() {
-    // AREAS opens from inside PROJECT; the sub-dialog takes the stage.
-    this.setState({ areasOpen: true, projectOpen: false });
+    this.setState({ areasOpen: true });
   }
 
   _closeAreasDialog() {
@@ -3353,12 +3326,6 @@ class Component extends DCLogic {
       totalLabel: report.totalSqFt === null ? '\u2014' : sq(report.totalSqFt),
       convention: report.convention,
     };
-  }
-
-  _setProjectField(field, value) {
-    this.setState({
-      projectInfo: { ...this.state.projectInfo, [field]: value },
-    }, () => this._markUnsaved());
   }
 
   _openProfileDialog(kind) {
@@ -3574,7 +3541,7 @@ class Component extends DCLogic {
         boneyardActive: false,
         roomAreasOn: saved.roomAreasOn === true,
         projectInfo: format.projectInfo(saved.projectInfo),
-        projectOpen: false,
+        zoneHeights: format.zoneHeights(saved.zoneHeights),
       }, resolve));
 
       // Rebuild the pool as a single pass through every endpoint. This restores
@@ -15989,15 +15956,6 @@ class Component extends DCLogic {
       }
       return;
     }
-    // The PROJECT dialog owns the keyboard while open: Escape closes it and
-    // tool shortcuts stay quiet under the modal.
-    if (this.state.projectOpen) {
-      if (e.key === 'Escape' && focusedControl !== 'field') {
-        e.preventDefault();
-        this._closeProjectDialog();
-      }
-      return;
-    }
     // The entry performance notice steps aside on Enter, Space, or Escape —
     // and any drawing click clears it too, so it never blocks the work.
     if (this.state.perfNotice && focusedControl !== 'field'
@@ -17626,22 +17584,12 @@ class Component extends DCLogic {
       metricBg:   units==='metric'  ?'#1d1f20':'#fff', metricColor:   units==='metric'  ?'#f2f2f3':'#1d1f20',
       imperialBorder: units==='imperial'?'#1d1f20':'rgba(29,31,32,0.2)',
       metricBorder: units==='metric'?'#1d1f20':'rgba(29,31,32,0.2)',
-      openProjectDialog: () => this._openProjectDialog(),
-      closeProjectDialog: () => this._closeProjectDialog(),
-      projectDialogOpen: this.state.projectOpen === true,
+      openProjectPage: () => this._openProjectPage(),
       areasDialogOpen: this.state.areasOpen === true,
       areasReport: this.state.areasOpen === true ? this._areasReport()
         : { rows: [], suiteLine: '', totalLabel: '', convention: '' },
       openAreasDialog: () => this._openAreasDialog(),
       closeAreasDialog: () => this._closeAreasDialog(),
-      projectName: this.state.projectInfo.name,
-      projectClient: this.state.projectInfo.client,
-      projectAddress: this.state.projectInfo.address,
-      projectLegal: this.state.projectInfo.legal,
-      onProjectNameInput: e => this._setProjectField('name', e.target.value),
-      onProjectClientInput: e => this._setProjectField('client', e.target.value),
-      onProjectAddressInput: e => this._setProjectField('address', e.target.value),
-      onProjectLegalInput: e => this._setProjectField('legal', e.target.value),
       openSettingsDialog: () => this._openProfileDialog('settings'),
       openStandardsDialog: () => this._openProfileDialog('standards'),
       closeProfileDialog: () => this._closeProfileDialog(),
