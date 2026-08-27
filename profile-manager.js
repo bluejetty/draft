@@ -107,12 +107,13 @@ if (!window.DraftProfileManager) {
     wall: 'W',
     floor: 'F',
     fenestration: 'E',
-    shape: 'P',
+    shape: 'A',
     outline: 'U',
     roof: 'O',
     dimension: 'D',
     trim: 'Q',
     tsquare: 'T',
+    compass: 'P',
     cut: 'C',
     group: 'Y',
     groupAlt: 'Ctrl+G',
@@ -131,11 +132,32 @@ if (!window.DraftProfileManager) {
   });
 
   // Old defaults these commands used to ship with. A stored binding still
-  // sitting on its retired default follows the command to the current one.
+  // sitting on its retired default follows the command to the current one,
+  // but only when staying would collide — with a reserved key, or with
+  // another command's resolved binding (an old SHAPE on P meets the compass;
+  // a preset that parks SHAPE back on P with the compass on V keeps it).
   const RETIRED_KEYBINDINGS = Object.freeze({
     group: 'G',
     trim: 'T',
+    shape: 'P',
   });
+  // G belongs to the grid-snap double-tap, so nothing may sit on it.
+  const RESERVED_KEYS = Object.freeze(['G']);
+
+  const resolveKeybindings = stored => {
+    const source = stored && typeof stored === 'object' ? stored : {};
+    // A stored empty string means the command was deliberately cleared;
+    // only a command that was never stored falls back to its default.
+    const resolved = Object.fromEntries(Object.entries(DEFAULT_KEYBINDINGS).map(([command, fallback]) =>
+      command in source ? [command, normaliseKeyBinding(source[command])] : [command, fallback]));
+    Object.entries(RETIRED_KEYBINDINGS).forEach(([command, retired]) => {
+      if (!(command in source) || resolved[command] !== retired) return;
+      const taken = RESERVED_KEYS.includes(retired)
+        || Object.entries(resolved).some(([other, key]) => other !== command && key === retired);
+      if (taken) resolved[command] = DEFAULT_KEYBINDINGS[command];
+    });
+    return resolved;
+  };
 
   // Layout presets approximate the muscle memory of other drafting apps as
   // closely as single keys allow. AutoCAD and MicroStation live on typed
@@ -149,10 +171,12 @@ if (!window.DraftProfileManager) {
     }),
     autocad: Object.freeze({
       label: 'AutoCAD style',
-      note: 'Nearest single keys to the classic command aliases: A arc, Q trim (TR), E extend (EX), I insert doors/windows, T ortho like F8, Space repeats/commits, Ctrl+Y redo.',
+      note: 'Nearest single keys to the classic command aliases: A arc, Q trim (TR), E extend (EX), I insert doors/windows, T ortho like F8, Space repeats/commits, Ctrl+Y redo. Shape keeps P, compass on V.',
       bindings: Object.freeze({
         ...DEFAULT_KEYBINDINGS,
         node: 'A',
+        shape: 'P',
+        compass: 'V',
         fenestration: 'I',
         extend: 'E',
         redo: 'Ctrl+Y',
@@ -169,20 +193,24 @@ if (!window.DraftProfileManager) {
     }),
     microstation: Object.freeze({
       label: 'MicroStation style',
-      note: 'Q element selection like the task list, P place shape, M trim, mnemonic letters elsewhere; Ctrl+Y stands in for Ctrl+R redo (the browser keeps Ctrl+R).',
+      note: 'Q element selection like the task list, P place shape, M trim, mnemonic letters elsewhere; Ctrl+Y stands in for Ctrl+R redo (the browser keeps Ctrl+R). Compass on V.',
       bindings: Object.freeze({
         ...DEFAULT_KEYBINDINGS,
         select: 'Q',
+        shape: 'P',
+        compass: 'V',
         trim: 'M',
         redo: 'Ctrl+Y',
       }),
     }),
     archicad: Object.freeze({
       label: 'ArchiCAD style',
-      note: 'A arrow tool, W wall, Shift+D door/window pair, L line; undo/redo stay Ctrl+Z / Ctrl+Shift+Z as ArchiCAD ships them.',
+      note: 'A arrow tool, W wall, Shift+D door/window pair, L line; undo/redo stay Ctrl+Z / Ctrl+Shift+Z as ArchiCAD ships them. Shape keeps P, compass on V.',
       bindings: Object.freeze({
         ...DEFAULT_KEYBINDINGS,
         select: 'A',
+        shape: 'P',
+        compass: 'V',
         fenestration: 'Shift+D',
       }),
     }),
@@ -416,6 +444,7 @@ if (!window.DraftProfileManager) {
     DEFAULT_KEYBINDINGS,
     RETIRED_KEYBINDINGS,
     KEYBOARD_LAYOUTS,
+    resolveKeybindings,
     normaliseKeyBinding,
     eventBinding,
     eventMatchesBinding,
