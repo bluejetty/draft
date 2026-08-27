@@ -8064,27 +8064,46 @@ class Component extends DCLogic {
     });
 
     // Floor assembly bands: each floor's rim (joists + sheathing) is part of
-    // the house face — white like the walls, no banding line, keeping only
-    // the silhouette's vertical edges through the band.
-    const bandByLevel = {};
-    faces.filter(face => !face.garage).forEach(face => {
-      const lo = Math.max(Math.min(face.u1, face.u2), uMin);
-      const hi = Math.min(Math.max(face.u1, face.u2), uMax);
-      const band = bandByLevel[face.level.id]
-        || (bandByLevel[face.level.id] = { lo: Infinity, hi: -Infinity });
-      band.lo = Math.min(band.lo, lo); band.hi = Math.max(band.hi, hi);
-    });
+    // the house face — white like the walls, no banding line, keeping the
+    // vertical edges of every visible face corner through the band.
+    const houseSpans = houseFaces.map(face => ({
+      lo: Math.max(Math.min(face.u1, face.u2), uMin),
+      hi: Math.min(Math.max(face.u1, face.u2), uMax),
+      depth: face.depth,
+      levelId: face.level.id,
+    })).filter(span => span.hi - span.lo >= 0.5);
+    const edgeVisible = (u, depth) => !houseSpans.some(other =>
+      other.depth > depth + 1e-6 && other.lo < u - 0.05 && other.hi > u + 0.05);
     stack.floors.forEach(level => {
-      const band = bandByLevel[level.id];
-      if (!band || band.hi - band.lo < 0.5) return;
-      const x = X(band.lo), wid = (band.hi - band.lo) * pxPerFt;
-      const depth = (level.floorTop - level.floorBottom) * pxPerFt;
+      const spans = houseSpans.filter(span => span.levelId === level.id);
+      if (!spans.length) return;
+      // Contiguous runs of face coverage — a level with two separate wings
+      // wears two rim bands, not one across the gap between them.
+      const runs = [];
+      spans.slice().sort((a, b) => a.lo - b.lo).forEach(span => {
+        const last = runs[runs.length - 1];
+        if (last && span.lo <= last.hi + 0.5) last.hi = Math.max(last.hi, span.hi);
+        else runs.push({ lo: span.lo, hi: span.hi });
+      });
+      const yTopPx = Y(level.floorTop) - 1, yBotPx = Y(level.floorBottom) + 1;
       ctx.fillStyle = '#fff';
-      ctx.fillRect(x - 1, Y(level.floorTop) - 1, wid + 2, depth + 2);
+      runs.forEach(run => {
+        if (run.hi - run.lo < 0.5) return;
+        ctx.fillRect(X(run.lo) - 1, yTopPx, (run.hi - run.lo) * pxPerFt + 2, yBotPx - yTopPx);
+      });
+      // Vertical edges through the band: the run boundaries plus any face
+      // corner inside a run that isn't hidden behind a nearer face — a jog
+      // in the facade keeps its corner line crossing the floor.
+      const edges = new Set();
+      runs.filter(run => run.hi - run.lo >= 0.5).forEach(run => {
+        edges.add(run.lo); edges.add(run.hi);
+        spans.forEach(span => [span.lo, span.hi].forEach(u => {
+          if (u > run.lo + 0.05 && u < run.hi - 0.05 && edgeVisible(u, span.depth)) edges.add(u);
+        }));
+      });
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       ctx.beginPath();
-      ctx.moveTo(x, Y(level.floorTop) - 1); ctx.lineTo(x, Y(level.floorBottom) + 1);
-      ctx.moveTo(x + wid, Y(level.floorTop) - 1); ctx.lineTo(x + wid, Y(level.floorBottom) + 1);
+      edges.forEach(u => { ctx.moveTo(X(u), yTopPx); ctx.lineTo(X(u), yBotPx); });
       ctx.stroke();
     });
 

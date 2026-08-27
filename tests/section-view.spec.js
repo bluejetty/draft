@@ -458,6 +458,91 @@ test.describe('Generated section view', () => {
     expect(scan.gapFaint).toBeLessThan(10);
   });
 
+  test('an L-house elevation keeps its jog corner line through the floor bands', async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+    // An L outline whose jog shows from the south: the near wing (x 0..8)
+    // stands 6' closer than the far wing (x -8..0), corner at x = 0.
+    await h.selectTool(page, 'Outline');
+    await h.clickWorld(page, -8, -6);
+    await h.clickWorld(page, 8, -6);
+    await h.clickWorld(page, 8, 6);
+    await h.clickWorld(page, 0, 6);
+    await h.clickWorld(page, 0, 0);
+    await h.clickWorld(page, -8, 0);
+    await page.keyboard.press('Enter');
+    await h.waitForSaved(page);
+    await h.climbTourToMain(page);
+    await buildHouse(page);
+    await h.waitForSaved(page);
+
+    await page.locator('.cut-row', { hasText: 'E1' }).click({ position: { x: 18, y: 8 } });
+    await page.waitForTimeout(400);
+    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
+
+    const scan = await page.evaluate(() => {
+      const canvas = document.querySelector('[data-model-overlay]');
+      const W = canvas.width, H = canvas.height;
+      const { data } = canvas.getContext('2d').getImageData(0, 0, W, H);
+      const at = (x, y) => (y * W + x) * 4;
+      const dark = i => data[i + 3] > 150
+        && data[i] < 120 && data[i + 1] < 120 && data[i + 2] < 120;
+      // Grade: the lowest row where a dark run crosses most of the sheet.
+      let gradeY = 0;
+      for (let y = 0; y < H; y++) {
+        let run = 0, best = 0;
+        for (let x = 0; x < W; x++) {
+          run = dark(at(x, y)) ? run + 1 : 0;
+          best = Math.max(best, run);
+        }
+        if (best > W * 0.6) gradeY = y;
+      }
+      // Vertical edge columns: columns whose dark ink covers most of the
+      // wall height above grade. Each must be continuous — the floor rim
+      // bands may not cut a corner line.
+      const columns = [];
+      for (let x = Math.floor(W * 0.1); x < W * 0.95; x++) {
+        let top = null, bottom = null, count = 0;
+        for (let y = 24; y < gradeY - 2; y++) {
+          if (!dark(at(x, y))) continue;
+          if (top === null) top = y;
+          bottom = y; count += 1;
+        }
+        if (top === null || bottom - top < (gradeY - 24) * 0.5) continue;
+        if (count < (bottom - top) * 0.6) continue;
+        // The corner line proper starts at the wall top — the first solid
+        // dark run — below the roof silhouette hovering over the overhang.
+        let wallTop = null;
+        for (let y = top, runStart = null; y <= bottom; y++) {
+          if (!dark(at(x, y))) { runStart = null; continue; }
+          if (runStart === null) runStart = y;
+          if (y - runStart >= 20) { wallTop = runStart; break; }
+        }
+        if (wallTop === null) continue;
+        let gap = 0, run = 0;
+        for (let y = wallTop; y <= bottom; y++) {
+          run = dark(at(x, y)) ? 0 : run + 1;
+          gap = Math.max(gap, run);
+        }
+        columns.push({ x, gap });
+      }
+      // Cluster adjacent columns into edges, keeping each edge's best
+      // (smallest) gap so antialiased neighbours don't count against it.
+      const edges = [];
+      columns.forEach(col => {
+        const last = edges[edges.length - 1];
+        if (last && col.x - last.x <= 3) {
+          last.x = col.x; last.gap = Math.min(last.gap, col.gap);
+        } else edges.push({ x: col.x, gap: col.gap });
+      });
+      return { gradeY, edges };
+    });
+    expect(scan.gradeY).toBeGreaterThan(0);
+    // Left edge, jog corner, right edge — three tall verticals.
+    expect(scan.edges.length).toBeGreaterThanOrEqual(3);
+    // And every one runs unbroken through the floor bands.
+    scan.edges.forEach(edge => expect(edge.gap).toBeLessThanOrEqual(3));
+  });
+
   test('a cut across empty space explains itself instead of drawing', async ({ page }) => {
     await h.openModel(page, { webgl: false });
     await placeCut(page, 0);
