@@ -436,8 +436,8 @@
      points up at the PROJECT button. Escape heads into PROJECT; Enter, a
      click, or just drawing carries on with the defaults. -->
 <sc-if value="{{ projectCalloutOpen }}" hint-placeholder-val="{{ false }}">
-  <div data-project-callout style="position:fixed; top:50px; right:96px; z-index:52; width:320px; border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 14px 38px rgba(29,31,32,0.22); padding:14px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
-    <div style="position:absolute; top:-8px; right:150px; width:14px; height:14px; background:#fff; border-left:1px solid rgba(29,31,32,0.3); border-top:1px solid rgba(29,31,32,0.3); transform:rotate(45deg);"></div>
+  <div data-project-callout style="position:fixed; top:50px; left:16px; z-index:52; width:320px; border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 14px 38px rgba(29,31,32,0.22); padding:14px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
+    <div style="position:absolute; top:-8px; left:27px; width:14px; height:14px; background:#fff; border-left:1px solid rgba(29,31,32,0.3); border-top:1px solid rgba(29,31,32,0.3); transform:rotate(45deg);"></div>
     <div style="display:flex; gap:12px; align-items:flex-start;">
       <svg width="48" height="48" viewBox="0 0 44 44" fill="none" aria-hidden="true" style="flex-shrink:0;">
         <path d="M22 5 L37 11.5 L22 18 L7 11.5 Z" fill="#1d1f20"></path>
@@ -1529,9 +1529,9 @@ const LOCKED_NODE_SNAP_PX = 3;
 // length measures from it, and these tools can even place their first point
 // that way before any click.
 const POLAR_RULER_TOOLS = new Set(['line', 'wall', 'outline']);
-const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'dimension', 'cut', 'extend', 'copy']);
+const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'dimension', 'cut', 'extend', 'copy', 'stair']);
 // Segment-drawing tools the full-time T-square squares to 90° while it is on.
-const ORTHO_LOCK_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'shape']);
+const ORTHO_LOCK_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'shape', 'stair']);
 // Arming a polar origin takes a deliberate pause on the node — a drive-by
 // hover on the way across the board never plants a ruler zero.
 const POLAR_DWELL_MS = 350;
@@ -3423,6 +3423,10 @@ class Component extends DCLogic {
     }, () => this._markUnsaved());
     const idx = this.state.levels.findIndex(lvl => lvl.id === targets[step]);
     if (idx >= 0) this._switchLevel(idx);
+    // The floor steps start with stairs, so the tour arms the STAIR tool
+    // itself — the drafter lands ready to place the top nosing instead of
+    // drawing walls with whatever tool was left active.
+    if (step === 'main' || step === 'second') this._activateContextTool('stair');
     // _switchLevel writes its own context message and _markUnsaved clears the
     // strip when its callback settles — the tour's step message is the one the
     // drafter needs here, so it lands again after both.
@@ -9022,6 +9026,7 @@ class Component extends DCLogic {
       : tool === 'outline' ? this._outlinePoints[this._outlinePoints.length - 1]
       : tool === 'shape' ? this._shapePoints[this._shapePoints.length - 1]
       : tool === 'dimension' ? this._dimensionStart
+      : tool === 'stair' ? this._stairStart
       : tool === 'cut' && this.state.cutPhase === 'placing' ? this._cutStart3
       : tool === 'extend' && this.state.extendPhase === 'destination' ? this.state.extendBase
       : tool === 'copy' && this.state.copyPhase === 'destination' ? this.state.copyBase
@@ -16039,6 +16044,7 @@ class Component extends DCLogic {
   _cancelStair() {
     if (!this._stairStart) return;
     this._stairStart = null;
+    this._lockAngle = null;
     this.setState({ drawingMessage: '', drawingMessageError: false });
   }
 
