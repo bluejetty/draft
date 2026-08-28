@@ -141,12 +141,21 @@
         <img src="./assets/btn-split.png" alt="" style="height:38px; display:block;" />
       </button>
     </sc-if>
-    <button data-build-house onClick="{{ onBuildHouse }}" aria-label="BUILD HOUSE" title="{{ buildHouseHint }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ buildHouseGlow }};">
-      <img src="./assets/btn-bone.png" alt="" style="height:44px; display:block;" />
-    </button>
-    <sc-if value="{{ tourNextReady }}" hint-placeholder-val="{{ false }}">
-      <button data-tour-next onClick="{{ onTourNext }}" aria-label="NEXT FLOOR" title="NEXT FLOOR — the tour climbs (Enter / Space)" style="height:32px; border:1px solid #557a46; background:#557a46; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.05em; padding:0 10px; cursor:pointer;">NEXT FLOOR &#9650;</button>
-    </sc-if>
+    <div style="position:relative; line-height:0;">
+      <button data-build-house onClick="{{ onBuildHouse }}" aria-label="BUILD HOUSE" title="{{ buildHouseHint }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ buildHouseGlow }};">
+        <img src="./assets/btn-bone.png" alt="" style="height:44px; display:block;" />
+      </button>
+      <!-- The tour's climb button stands directly under the bone — NEXT ▲ FLOOR
+           on the floors, PRESS ▲ BONE once the roof reads right — the arrow
+           between the words points at what it means. -->
+      <sc-if value="{{ tourUnderBoneOpen }}" hint-placeholder-val="{{ false }}">
+        <button data-tour-next onClick="{{ onTourUnderBone }}" aria-label="{{ tourUnderBoneAria }}" title="{{ tourUnderBoneTitle }}" style="position:absolute; top:100%; left:50%; transform:translateX(-50%); margin-top:6px; display:flex; flex-direction:column; align-items:center; border:1px solid #557a46; background:#557a46; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; line-height:1.2; padding:4px 12px; cursor:pointer;">
+          <span>{{ tourUnderBoneTop }}</span>
+          <span style="font-size:9px; line-height:1;">&#9650;</span>
+          <span>{{ tourUnderBoneBottom }}</span>
+        </button>
+      </sc-if>
+    </div>
     <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
       <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" aria-label="{{ attachedGarageLabel }}" title="{{ attachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ attachedButtonGlow }};">
         <img src="./assets/btn-attached.png" alt="" style="height:38px; display:block;" />
@@ -486,17 +495,10 @@
   </div>
 </sc-if>
 
-<!-- The tour's standing chip: while a tour is parked on a floor it names the
-     step (PLACE STAIRS / NEXT FLOOR) — pressing it arms the stair tool or
-     fires the gate. This is also the RESUME affordance after a reload. -->
-<sc-if value="{{ tourRoofRowOpen }}" hint-placeholder-val="{{ false }}">
-  <div style="position:fixed; top:56px; left:50%; transform:translateX(-50%); z-index:51; display:flex; gap:6px;">
-    <button data-tour-gable onClick="{{ onTourGable }}" title="Arm GABLE placement — anchors from the floors below light up; the readout speaks in wall-lengthens" style="border:1px solid #b04050; background:{{ tourGableBg }}; color:{{ tourGableColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; padding:5px 12px; cursor:pointer;">GABLE</button>
-    <button data-tour-increment onClick="{{ onTourIncrement }}" title="Placement grid, counted from the building corner — Shift / Ctrl+Shift override momentarily" style="border:1px solid rgba(29,31,32,0.3); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; padding:5px 10px; cursor:pointer;">{{ tourIncrementLabel }}</button>
-    <button data-tour-chip onClick="{{ onTourChip }}" style="border:1px solid #557a46; background:rgba(85,122,70,0.1); color:#3c5c30; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; padding:5px 12px; cursor:pointer;">ROOF DONE &#9650;</button>
-  </div>
-</sc-if>
-
+<!-- The tour's standing chip: while a tour is parked on a floor with its
+     stairs still unplaced it names the step (PLACE STAIRS) — pressing it
+     arms the stair tool. This is also the RESUME affordance after a reload;
+     once the gate is lit the under-bone button takes over. -->
 <sc-if value="{{ tourChipOpen }}" hint-placeholder-val="{{ false }}">
   <button data-tour-chip onClick="{{ onTourChip }}" style="position:fixed; top:56px; left:50%; transform:translateX(-50%); z-index:51; border:1px solid #557a46; background:rgba(85,122,70,0.1); color:#3c5c30; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; padding:5px 12px; cursor:pointer;">{{ tourChipLabel }}</button>
 </sc-if>
@@ -1399,11 +1401,42 @@
 <!-- INSTRUMENT STRIP: measurement readout, dashboard lights, LENGTH box on
      their own thin panel so the top bar stays clear for the file controls -->
 <div data-instrument-strip style="height:34px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; justify-content:center; gap:10px; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em; background:#fbfbfc; flex-shrink:0; user-select:none;">
+  <!-- The roof tour's controls park at the left end of the strip while the
+       roof pause is on: GABLE arms placement, the number box cycles the
+       placement increment. -->
+  <sc-if value="{{ tourRoofRowOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex; align-items:center; gap:6px;">
+      <button data-tour-gable onClick="{{ onTourGable }}" title="Arm GABLE placement — anchors from the floors below light up; the readout speaks in wall-lengthens" style="border:1px solid #b04050; background:{{ tourGableBg }}; color:{{ tourGableColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; padding:4px 12px; cursor:pointer;">GABLE</button>
+      <button data-tour-increment onClick="{{ onTourIncrement }}" title="Placement grid, counted from the building corner — Shift / Ctrl+Shift override momentarily" style="border:1px solid rgba(29,31,32,0.3); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; padding:4px 10px; cursor:pointer;">{{ tourIncrementLabel }}</button>
+    </div>
+  </sc-if>
   <span data-model-len style="color:#1d1f20; min-width:80px; text-align:right;"></span>
   <span data-model-ang style="color:rgba(29,31,32,0.4); min-width:52px;"></span>
+  <!-- The working instruments sit left: the ruler lights and glows while an
+       R typed length is active, with its LENGTH box right beside it. -->
+  <span data-mode-ruler title="{{ rulerChipTitle }}" onClick="{{ toggleRuler }}" style="display:inline-flex; color:{{ rulerChipColor }}; filter:{{ rulerChipGlow }}; cursor:pointer;">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <rect x="1.5" y="6" width="13" height="5"></rect>
+      <path d="M4.5 6 V8.2 M7.5 6 V8.2 M10.5 6 V8.2 M13 6 V8.2" stroke-width="0.9"></path>
+    </svg>
+  </span>
+   <!-- Architectural-length box — a permanent instrument on the strip: sits
+        blank and disabled while idle, wakes when a typed length is active -->
+  <div style="display:flex; align-items:center; gap:6px;">
+    <span style="opacity:{{ lengthBoxLabelOpacity }}; font-size:11px;">LENGTH</span>
+      <input data-frozen-length type="text" value="{{ frozenLengthDisplay }}" disabled="{{ lengthBoxIdle }}" onInput="{{ onFrozenLengthInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="{{ lengthBoxPlaceholder }}" aria-label="Frozen length" style="width:112px; text-align:right; background:{{ lengthBoxBg }}; border:1px solid {{ frozenDimensionBorder }}; color:#1d1f20; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; outline:none;" />
+    <sc-if value="{{ lengthFrozen }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <button onClick="{{ confirmFrozenLength }}" style="border:none; background:#5980a6; color:#fff; padding:4px 12px; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer; font-family:'Barlow Condensed',system-ui,sans-serif;">CONFIRM</button>
+        <button onClick="{{ cancelFrozenLength }}" style="border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.45); padding:4px 8px; font-size:13px; cursor:pointer;">✕</button>
+         <sc-if value="{{ hasFrozenDimensionError }}" hint-placeholder-val="{{ false }}">
+           <span style="color:#b04050; font-size:10px; max-width:130px;">{{ frozenDimensionError }}</span>
+         </sc-if>
+      </div>
+    </sc-if>
+  </div>
   <!-- Constraint chips: the T-square lights while its 90° lock is on (T) or a
-       Shift protractor lock is engaged, the ruler lights and glows while
-       an R typed length is active. Each live chip is also its instrument's
+       Shift protractor lock is engaged. Each live chip is also its instrument's
        tap-toggle — same as pressing its key — with the key in its title. -->
   <span data-mode-tsquare title="{{ tsquareChipTitle }}" onClick="{{ toggleTsquare }}" style="display:inline-flex; color:{{ tsquareChipColor }}; cursor:pointer;">
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
@@ -1422,12 +1455,6 @@
       <path d="M4.2 9.9 L5.1 10.8 M8 6.5 V7.9 M11.8 9.9 L10.9 10.8" stroke-width="0.9"></path>
     </svg>
     <span data-protractor-angle style="font-size:10px; line-height:1; min-width:18px;">{{ protractorChipLabel }}</span>
-  </span>
-  <span data-mode-ruler title="{{ rulerChipTitle }}" onClick="{{ toggleRuler }}" style="display:inline-flex; color:{{ rulerChipColor }}; filter:{{ rulerChipGlow }}; cursor:pointer;">
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-      <rect x="1.5" y="6" width="13" height="5"></rect>
-      <path d="M4.5 6 V8.2 M7.5 6 V8.2 M10.5 6 V8.2 M13 6 V8.2" stroke-width="0.9"></path>
-    </svg>
   </span>
   <!-- The compass is the polar-tracking instrument: up, a dwell on a node
        casts measuring rays from it; down, the arms stay off the board. -->
@@ -1471,21 +1498,6 @@
       <path d="M3 13 C3 7 7 8.5 8.5 5.5 C9.5 3.5 13 3 13 6 C13 9 9 8.5 8 11 C7.4 12.5 5.5 13.5 3 13 Z"></path>
     </svg>
   </span>
-   <!-- Architectural-length box — a permanent instrument on the strip: sits
-        blank and disabled while idle, wakes when a typed length is active -->
-  <div style="display:flex; align-items:center; gap:6px;">
-    <span style="opacity:{{ lengthBoxLabelOpacity }}; font-size:11px;">LENGTH</span>
-      <input data-frozen-length type="text" value="{{ frozenLengthDisplay }}" disabled="{{ lengthBoxIdle }}" onInput="{{ onFrozenLengthInput }}" onKeyDown="{{ onFrozenKeyDown }}" placeholder="{{ lengthBoxPlaceholder }}" aria-label="Frozen length" style="width:112px; text-align:right; background:{{ lengthBoxBg }}; border:1px solid {{ frozenDimensionBorder }}; color:#1d1f20; padding:4px 6px; font-size:13px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; outline:none;" />
-    <sc-if value="{{ lengthFrozen }}" hint-placeholder-val="{{ false }}">
-      <div style="display:flex; align-items:center; gap:6px;">
-        <button onClick="{{ confirmFrozenLength }}" style="border:none; background:#5980a6; color:#fff; padding:4px 12px; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer; font-family:'Barlow Condensed',system-ui,sans-serif;">CONFIRM</button>
-        <button onClick="{{ cancelFrozenLength }}" style="border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.45); padding:4px 8px; font-size:13px; cursor:pointer;">✕</button>
-         <sc-if value="{{ hasFrozenDimensionError }}" hint-placeholder-val="{{ false }}">
-           <span style="color:#b04050; font-size:10px; max-width:130px;">{{ frozenDimensionError }}</span>
-         </sc-if>
-      </div>
-    </sc-if>
-  </div>
 </div>
 
 <!-- STATUS BAR -->
@@ -18263,17 +18275,27 @@ class Component extends DCLogic {
       advanceTour: () => { if (this.state.tourPopup !== 'main') this._tourPopupPrimary(); },
       tourNextSecond: e => { e.stopPropagation(); this._advanceTour('second'); },
       tourNextRoof: e => { e.stopPropagation(); this._advanceTour('roof'); },
-      tourNextReady: this._tourGateReady(),
-      onTourNext: () => this._pressTourNext(),
-      tourChipOpen: ['main', 'second', 'finale'].includes(this.state.tour.step) && !this.state.tourPopup,
-      tourChipLabel: this.state.tour.step === 'finale' ? 'PRESS THE BONE'
-        : this._tourGateReady() ? 'NEXT FLOOR \u25B2'
-        : `TOUR \u2014 PLACE STAIRS ON ${this.state.tour.step === 'second' ? '2ND FL' : 'MAIN FL'}`,
-      onTourChip: () => {
+      // The under-bone climb button: NEXT ▲ FLOOR while a floor's gate is
+      // lit, PRESS ▲ BONE from the roof pause on — the arrow points at the
+      // bone above. At the finale it presses the bone itself.
+      tourUnderBoneOpen: !this.state.tourPopup
+        && (this.state.tour.step === 'finale' || this._tourGateReady()),
+      tourUnderBoneTop: ['roof', 'finale'].includes(this.state.tour.step) ? 'PRESS' : 'NEXT',
+      tourUnderBoneBottom: ['roof', 'finale'].includes(this.state.tour.step) ? 'BONE' : 'FLOOR',
+      tourUnderBoneAria: ['roof', 'finale'].includes(this.state.tour.step) ? 'PRESS BONE' : 'NEXT FLOOR',
+      tourUnderBoneTitle: this.state.tour.step === 'finale'
+        ? 'PRESS BONE \u2014 the house is ready; press it and watch it grow'
+        : this.state.tour.step === 'roof'
+          ? 'PRESS BONE \u2014 the roof reads right; the bone above builds the house (Enter / Space)'
+          : 'NEXT FLOOR \u2014 the tour climbs (Enter / Space)',
+      onTourUnderBone: () => {
         if (this.state.tour.step === 'finale') this._pressBuildHouse();
-        else if (this._tourGateReady()) this._pressTourNext();
-        else this._activateContextTool('stair');
+        else this._pressTourNext();
       },
+      tourChipOpen: ['main', 'second'].includes(this.state.tour.step)
+        && !this.state.tourPopup && !this._tourGateReady(),
+      tourChipLabel: `TOUR \u2014 PLACE STAIRS ON ${this.state.tour.step === 'second' ? '2ND FL' : 'MAIN FL'}`,
+      onTourChip: () => this._activateContextTool('stair'),
       tourRoofRowOpen: this.state.tour.step === 'roof' && !this.state.tourPopup,
       onTourGable: () => this.setState({ tourGableArmed: !this.state.tourGableArmed }, () => this._invalidate()),
       tourGableBg: this.state.tourGableArmed ? '#b04050' : '#fff',
