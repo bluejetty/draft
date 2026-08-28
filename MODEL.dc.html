@@ -8752,15 +8752,61 @@ class Component extends DCLogic {
         ? fdn.grade + GARAGE_SLAB_THICKNESS_IN / 12
         : fdn.grade + (DETACHED_BEAM_ABOVE_GRADE_IN + GARAGE_BEAM_PLATE_IN) / 12;
     const HEAD_FT = 6 + 10 / 12, SILL_FT = 3;
+    // A gable-end wall climbs to the roof: where a roof bearing on this
+    // wall's plate runs a GABLE edge just past the face, the top of the
+    // wall follows the underside of the rakes — the triangle between the
+    // plate and the ridge is wall, not sky.
+    const distToSegment = (p, a, b) => {
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2));
+      return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t));
+    };
+    const gableTopAt = (pt, plateTop) => {
+      let top = plateTop;
+      if (!facesByRoof) return top;
+      facesByRoof.forEach((roofFaces, roof) => {
+        const base = this._roofBaseElev(roof, stack);
+        if (Math.abs(base - plateTop) > 0.6) return;   // bears on another storey
+        const reach = (Number(roof.overhang) || 0) + 1;
+        const pts = roof.points || [];
+        const nearGable = pts.some((a, i) => roof.edges?.[i] === 'gable'
+          && distToSegment(pt, a, pts[(i + 1) % pts.length]) <= reach);
+        if (!nearGable) return;
+        const rise = this._sectionRoofHeightAt(pt, roof, roofFaces);
+        if (rise == null) return;
+        top = Math.max(top, base + ROOF_FASCIA_IN / 12 + rise);
+      });
+      return top;
+    };
     faces.forEach(face => {
       const { wall, u1, u2, level } = face;
-      const xa = X(Math.max(Math.min(u1, u2), uMin));
-      const xb = X(Math.min(Math.max(u1, u2), uMax));
+      const loU = Math.max(Math.min(u1, u2), uMin);
+      const hiU = Math.min(Math.max(u1, u2), uMax);
+      const xa = X(loU), xb = X(hiU);
       const floor = face.garage ? garageBase(face.garage) : level.floorTop;
+      const worldAt = u => {
+        const t = (u - u1) / (u2 - u1);
+        return {
+          x: wall.start.x + (wall.end.x - wall.start.x) * t,
+          z: wall.start.z + (wall.end.z - wall.start.z) * t,
+        };
+      };
+      const samples = Math.min(64, Math.max(2, Math.ceil((hiU - loU) / 0.5)));
+      const tops = [];
+      for (let s = 0; s <= samples; s++) {
+        const u = loU + (hiU - loU) * s / samples;
+        tops.push({ u, top: gableTopAt(worldAt(u), level.wallTop) });
+      }
       ctx.fillStyle = '#fff';
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
-      ctx.fillRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - floor) * pxPerFt);
-      ctx.strokeRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - floor) * pxPerFt);
+      ctx.beginPath();
+      ctx.moveTo(xa, Y(floor));
+      tops.forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
+      ctx.lineTo(xb, Y(floor));
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
       const wallLen = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
       if (wallLen < 1e-6) return;
       const du = (u2 - u1) / wallLen;

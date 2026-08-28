@@ -92,6 +92,54 @@ test.describe('Standard E1-E4 elevations', () => {
     expect(census).toBeGreaterThan(1200);
   });
 
+  test('E4 fills the gable-end wall up to the rakes', async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+    await drawOutlineRect(page);
+    await buildHouse(page);
+    await page.waitForTimeout(1200);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    await h.waitForSaved(page);
+
+    // Tag the RIGHT roof edge GABLE — the rectangle's roof edge stands one
+    // 2' overhang past the x=8 wall.
+    await page.locator('.level-row', { hasText: 'ROOF' }).locator('.level-name').click();
+    await page.waitForTimeout(300);
+    await h.selectTool(page, 'Roof');
+    await h.clickWorld(page, 10, 0);
+    await h.waitForSaved(page);
+
+    await page.locator('.cut-row', { hasText: 'E4' }).click({ position: { x: 18, y: 8 } });
+    await page.waitForTimeout(600);
+    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E4');
+
+    // The gable-end wall climbs to the roof: the pure-white face (#fff,
+    // apart from the #fafafa sheet) peaks just under the ridge instead of
+    // stopping at the plate and leaving sky beneath the rakes.
+    const tops = await page.evaluate(() => {
+      const canvas = document.querySelector('[data-model-overlay]');
+      const { width, height } = canvas;
+      const { data } = canvas.getContext('2d').getImageData(0, 0, width, height);
+      let inkTop = null, whiteTop = null;
+      // Start below the header text; ink is the ridge, white the wall peak.
+      for (let y = 30; y < height && (inkTop === null || whiteTop === null); y++) {
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          if (data[i + 3] === 0) continue;
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          if (inkTop === null && r < 120 && g < 120 && b < 120) inkTop = y;
+          if (whiteTop === null && r >= 253 && g >= 253 && b >= 253) whiteTop = y;
+        }
+      }
+      return { inkTop, whiteTop };
+    });
+    expect(tops.inkTop).not.toBeNull();
+    expect(tops.whiteTop).not.toBeNull();
+    // Before the fix the wall stopped a whole gable rise below the ridge —
+    // roughly 70px of bare sheet; the filled gable leaves only line widths.
+    expect(tops.whiteTop - tops.inkTop).toBeLessThan(25);
+  });
+
   test('a click anywhere on the row opens the view — even on the side name', async ({ page }) => {
     await h.openModel(page, { webgl: false });
     await drawOutlineRect(page);
