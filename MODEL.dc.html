@@ -8806,6 +8806,16 @@ class Component extends DCLogic {
       ctx.lineTo(xb, Y(floor));
       ctx.closePath();
       ctx.fill();
+      // The wall finish runs into the soffit triangle: end verticals stop
+      // at the plate, only the top profile follows the roof underside.
+      ctx.beginPath();
+      ctx.moveTo(xa, Y(floor));
+      ctx.lineTo(xa, Y(Math.min(tops[0].top, level.wallTop)));
+      ctx.moveTo(X(tops[0].u), Y(tops[0].top));
+      tops.slice(1).forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
+      ctx.moveTo(xb, Y(Math.min(tops[tops.length - 1].top, level.wallTop)));
+      ctx.lineTo(xb, Y(floor));
+      ctx.lineTo(xa, Y(floor));
       ctx.stroke();
       const wallLen = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
       if (wallLen < 1e-6) return;
