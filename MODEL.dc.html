@@ -9042,6 +9042,28 @@ class Component extends DCLogic {
             }
           }
         });
+        // The fascia creases at every plan corner: where the roof edge
+        // changes direction (an outside corner, or a valley landing on a
+        // re-entrant one) a thin vertical seam crosses the 5.5" band.
+        rpts.forEach((pt, i) => {
+          const prev = rpts[(i + rpts.length - 1) % rpts.length];
+          const next = rpts[(i + 1) % rpts.length];
+          const kindPrev = roof.edges?.[(i + rpts.length - 1) % rpts.length];
+          const kindNext = roof.edges?.[i];
+          if (kindPrev === 'gable' && kindNext === 'gable') return;
+          const d1 = { x: pt.x - prev.x, z: pt.z - prev.z };
+          const d2 = { x: next.x - pt.x, z: next.z - pt.z };
+          const cross = d1.x * d2.z - d1.z * d2.x;
+          const l1 = Math.hypot(d1.x, d1.z), l2 = Math.hypot(d2.x, d2.z);
+          if (l1 < 0.05 || l2 < 0.05 || Math.abs(cross) < 0.02 * l1 * l2) return;
+          const u = pt.x * axis.x + pt.z * axis.z;
+          if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, eaveTop)) return;
+          ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+          ctx.beginPath();
+          ctx.moveTo(X(u), Y(eaveTop));
+          ctx.lineTo(X(u), Y(eaveTop - ROOF_FASCIA_IN / 12));
+          ctx.stroke();
+        });
       });
     }
 
