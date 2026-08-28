@@ -149,6 +149,17 @@
         </span>
       </div>
     </section>
+    <section class="group" style="margin-top:14px;" aria-label="Room tray">
+      <div class="group-title">Room tray</div>
+      <p class="intro" style="margin:6px 0 8px;">The room-name chips the guided tour offers for stamping each floor (board #198) &mdash; one name per line, in tray order. Grow it from real plans; names are uppercased and deduplicated on save. An emptied list falls back to the office default.</p>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">TRAY CHIPS</span>
+        <span class="layer-use">Stamped names feed the room program &mdash; ROOM TAGS naming, UNDER MIN checks where a name maps to a minimums row, and the PROJECT page&#8217;s room counts at build time.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <textarea class="layer-name-input" data-room-tray-list aria-label="Room tray chips, one per line" rows="8" style="width:200px; resize:vertical; font-family:inherit;"></textarea>
+        </span>
+      </div>
+    </section>
     <section class="group" style="margin-top:14px;" aria-label="Fenestration labels">
       <div class="group-title">Fenestration labels</div>
       <p class="intro" style="margin:6px 0 8px;">The office&#8217;s naming ladder for plan labels beside each opening &mdash; G 8x16 garage doors in FEET height&times;width, ED36 / D32 / DD72 doors in inches of width, W 24x36 windows in INCHES width&times;height. The stock lists are which sizes the office orders; schedules and auto-fenestration will pick from them later.</p>
@@ -211,6 +222,7 @@
       let layerStandards = standardsApi.normaliseLayerStandards(active?.content?.model?.layerStandards);
       let structureStandards = window.DraftStructureStandards.normaliseStructureStandards(active?.content?.model?.structureStandards);
       let roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(active?.content?.model?.roomMinimums);
+      let roomTray = window.DraftRoomStandards.normaliseRoomTray(active?.content?.model?.roomTray);
       let fenestrationStandards = window.DraftFenLabels.normaliseFenStandards(active?.content?.model?.fenestrationStandards);
 
       const defaults = standardsApi.normaliseLayerStandards(null);
@@ -222,7 +234,7 @@
       };
 
       const saveActive = message => {
-        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, fenestrationStandards } });
+        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, roomTray, fenestrationStandards } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -352,6 +364,15 @@
         });
       });
 
+      const trayInput = document.querySelector('[data-room-tray-list]');
+      const fillRoomTray = () => { trayInput.value = roomTray.join('\n'); };
+      fillRoomTray();
+      trayInput.addEventListener('change', () => {
+        roomTray = window.DraftRoomStandards.normaliseRoomTray(trayInput.value.split('\n'));
+        fillRoomTray();
+        saveActive('Room tray saved.');
+      });
+
       const fenShowInput = document.querySelector('[data-fen-show-labels]');
       const fenStockInputs = [...document.querySelectorAll('[data-fen-stock]')];
       const fillFenStandards = () => {
@@ -389,13 +410,15 @@
         fillElevationNames();
         roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(null);
         fillRoomMinimums();
+        roomTray = window.DraftRoomStandards.normaliseRoomTray(null);
+        fillRoomTray();
         fenestrationStandards = window.DraftFenLabels.normaliseFenStandards(null);
         fillFenStandards();
         saveActive('Default layer standards restored.');
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, fenestrationStandards } });
+        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, roomTray, fenestrationStandards } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
