@@ -54,10 +54,17 @@
     .level-layer-row .level-layer { flex:1 1 0; min-width:0; }
     .level-assembly-summary { flex:1 1 0; min-width:0; border:1px solid rgba(29,31,32,0.14); background:rgba(29,31,32,0.04); color:rgba(29,31,32,0.45); cursor:pointer; padding:1px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; text-align:right; white-space:nowrap; }
     .level-assembly-summary:hover { border-color:#5980a6; color:#365e86; }
-    .rail-tab { position:absolute; top:50%; transform:translateY(-50%); z-index:6; border:1px solid rgba(29,31,32,0.25); background:#fff; cursor:pointer; padding:10px 3px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.1em; color:rgba(29,31,32,0.55); writing-mode:vertical-rl; text-transform:uppercase; box-shadow:0 1px 6px rgba(29,31,32,0.14); }
+    .rail-tab { position:absolute; top:0; bottom:0; z-index:6; display:flex; align-items:center; justify-content:center; border:1px solid rgba(29,31,32,0.25); background:#fff; cursor:pointer; padding:0 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:18px; font-weight:600; line-height:1; letter-spacing:0.14em; color:rgba(29,31,32,0.8); writing-mode:vertical-rl; text-transform:uppercase; box-shadow:0 1px 6px rgba(29,31,32,0.14); }
     .rail-tab:hover { border-color:#5980a6; color:#365e86; }
-    .rail-tab-left { left:0; border-left:none; border-radius:0 4px 4px 0; }
+    .rail-tab-left { left:0; border-right:none; border-radius:4px 0 0 4px; transform:rotate(180deg); }
     .rail-tab-right { right:0; border-right:none; border-radius:4px 0 0 4px; }
+    .strip-chip { display:inline-flex; transition:color 120ms ease, filter 120ms ease; }
+    .strip-chip-compass:hover { color:#d97e2f !important; filter:drop-shadow(0 0 4px rgba(217,126,47,0.7)) !important; }
+    .strip-chip-triangle:hover { color:#3f9f9f !important; filter:drop-shadow(0 0 4px rgba(63,159,159,0.7)) !important; }
+    .strip-chip-brush:hover { color:#8a63b8 !important; filter:drop-shadow(0 0 4px rgba(138,99,184,0.7)) !important; }
+    .strip-chip-scale:hover { color:#6a9a4a !important; filter:drop-shadow(0 0 4px rgba(106,154,74,0.7)) !important; }
+    .strip-chip-shield:hover { color:#c05050 !important; filter:drop-shadow(0 0 4px rgba(192,80,80,0.7)) !important; }
+    .strip-chip-frenchcurve:hover { color:#4a7fc0 !important; filter:drop-shadow(0 0 4px rgba(74,127,192,0.7)) !important; }
     .level-layer-bg { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:0; width:15px; display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.42); flex-shrink:0; }
     .level-layer-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-head { display:flex; align-items:flex-start; gap:5px; }
@@ -92,8 +99,8 @@
     .tool-key-letter { position:absolute; top:2px; left:3px; font-weight:700; line-height:1; }
     .tool-key-name { max-width:100%; font-size:6.5px; font-weight:600; letter-spacing:0.03em; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     @media (max-width: 760px) {
-      [data-model-left] { width:176px !important; }
-      [data-model-right] { width:140px !important; }
+      [data-model-left] { width:160px !important; }
+      [data-model-right] { width:160px !important; }
       [data-model-right] { position:absolute; right:0; top:44px; bottom:28px; z-index:5; box-shadow:-5px 0 14px rgba(29,31,32,0.08); }
       [data-model-container] { min-width:0; }
       [data-model-title-detail] { display:none; }
@@ -172,6 +179,7 @@
        <input data-drawing-import type="file" accept="application/json,.json,.draft,.model,.plan" onChange="{{ onDrawingFilePicked }}" style="display:none;" />
        <input data-underlay-import type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,image/gif,image/bmp,.png,.jpg,.jpeg,.webp,.gif,.bmp" onChange="{{ onUnderlayFilePicked }}" style="display:none;" />
       <button onClick="{{ saveDrawingFile }}" style="height:24px; border:1px solid #5980a6; background:#5980a6; color:#fff; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE</button>
+      <span data-model-status style="color:{{ persistenceStatusColor }};">{{ persistenceStatus }}</span>
       <span style="color:rgba(29,31,32,0.45);">SAVE AS</span>
       <select value="{{ saveExtension }}" onChange="{{ onSaveExtensionChange }}" aria-label="Save file extension" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; cursor:pointer;">
         <option value="json">.json</option>
@@ -180,6 +188,7 @@
         <option value="plan">.plan</option>
       </select>
     </div>
+    <button data-project-corner-tr onClick="{{ openProjectPage }}" style="height:24px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">PROJECT</button>
   </div>
 </div>
 
@@ -618,7 +627,7 @@
 <div style="display:flex; height:calc(100vh - 106px);">
 
   <!-- LEFT TOOL RAIL — starts hidden; the TOOLS pull tab on the canvas edge opens it -->
-  <div data-model-left style="width:200px; border-right:1px solid rgba(29,31,32,0.16); flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff; display:{{ leftRailDisplay }};">
+  <div data-model-left style="width:190px; border-right:1px solid rgba(29,31,32,0.16); flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff; display:{{ leftRailDisplay }};">
 
     <!-- TOOLS — keypad grid: 4 square keys per row, the command letter in the
          upper-left corner (it re-reads from SETTINGS remaps) and the tool name
@@ -1190,8 +1199,8 @@
   <div style="flex:1; position:relative; overflow:hidden;" data-model-container>
     <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:none;"></canvas>
     <canvas data-model-overlay style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
-    <button type="button" class="rail-tab rail-tab-left" data-left-rail-tab onClick="{{ onToggleLeftRail }}" title="{{ leftRailTabTitle }}">TOOLS</button>
-    <button type="button" class="rail-tab rail-tab-right" data-right-rail-tab onClick="{{ onToggleRightRail }}" title="{{ rightRailTabTitle }}">LEVELS</button>
+    <button type="button" class="rail-tab rail-tab-left" data-left-rail-tab onClick="{{ onToggleLeftRail }}" title="{{ leftRailTabTitle }}">ROUGHDRAFTER - LITE - DRAFTING TOOLS</button>
+    <button type="button" class="rail-tab rail-tab-right" data-right-rail-tab onClick="{{ onToggleRightRail }}" title="{{ rightRailTabTitle }}">LEVELS - LAYERS</button>
     <!-- HTML crosshair cursor -->
     <div style="position:absolute; left:{{ cursorX }}px; top:{{ cursorY }}px; width:36px; height:36px; transform:translate(-50%,-50%); pointer-events:none; display:{{ cursorDisplay }};">
       <div style="position:absolute; top:50%; left:0; width:calc(50% - 7px); height:1px; background:#1d1f20; transform:translateY(-50%);"></div>
@@ -1247,7 +1256,7 @@
   </div>
 
   <!-- RIGHT LEVEL RAIL — starts hidden; the LEVELS pull tab on the canvas edge opens it -->
-  <div data-model-right style="width:140px; border-left:1px solid rgba(29,31,32,0.16); flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff; display:{{ rightRailDisplay }};">
+  <div data-model-right style="width:190px; border-left:1px solid rgba(29,31,32,0.16); flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff; display:{{ rightRailDisplay }};">
 
      <!-- LEVELS — floor elevations with compact layer rows where defined -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
@@ -1382,9 +1391,12 @@
 
 </div>
 
-<!-- INSTRUMENT STRIP: measurement readout, dashboard lights, LENGTH box on
-     their own thin panel so the top bar stays clear for the file controls -->
-<div data-instrument-strip style="height:34px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; justify-content:center; gap:10px; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em; background:#fbfbfc; flex-shrink:0; user-select:none;">
+<!-- INSTRUMENT STRIP: the one bottom panel. The drafting instruments hold the
+     center — ruler / LENGTH / T-square / protractor — with three dormant
+     tools on each side; working messages read from the left, and the nav
+     cluster keeps the bottom-right corner. -->
+<div data-instrument-strip style="position:relative; height:34px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; gap:10px; padding:0 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.04em; background:#fbfbfc; flex-shrink:0; user-select:none;">
+  <a data-project-corner-bl href="./PROJECT.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none; flex-shrink:0;">PROJECT</a>
   <!-- The roof tour's controls park at the left end of the strip while the
        roof pause is on: GABLE arms placement, the number box cycles the
        placement increment. -->
@@ -1394,6 +1406,41 @@
       <button data-tour-increment onClick="{{ onTourIncrement }}" title="Placement grid, counted from the building corner — Shift / Ctrl+Shift override momentarily" style="border:1px solid rgba(29,31,32,0.3); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; padding:4px 10px; cursor:pointer;">{{ tourIncrementLabel }}</button>
     </div>
   </sc-if>
+  <!-- Working messages read from the left: the cut-view name while a section
+       or elevation is open, the active tool's hint, the engaged background
+       reference, and the drawing message. -->
+  <span data-model-title-detail style="font-size:12px; font-weight:600; text-transform:uppercase; color:{{ topBarColor }}; flex-shrink:0;">{{ topBarLabel }}</span>
+  <sc-if value="{{ showHint }}" hint-placeholder-val="{{ false }}">
+    <span style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:24vw;">{{ hintText }}</span>
+  </sc-if>
+  <sc-if value="{{ backgroundEngaged }}" hint-placeholder-val="{{ false }}">
+    <span data-model-background-status style="font-size:11px; color:{{ backgroundStatusColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:18vw;">{{ backgroundStatus }}</span>
+  </sc-if>
+  <span data-model-drawing-message style="font-size:11px; color:{{ drawingMessageColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:24vw;">{{ drawingMessage }}</span>
+  <div style="flex:1;"></div>
+  <!-- The centered instrument cluster: three dormant tools, the working
+       ruler / LENGTH / T-square / protractor, three more dormant tools.
+       Every chip lights its own colour under the cursor. -->
+  <div data-strip-center style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; align-items:center; gap:10px; background:#fbfbfc; padding:0 8px; z-index:2;">
+  <span data-mode-compass class="strip-chip strip-chip-compass" title="{{ compassChipTitle }}" onClick="{{ toggleCompass }}" style="display:inline-flex; color:{{ compassChipColor }}; filter:{{ compassChipGlow }}; cursor:pointer;">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <path d="M8 2 L3.5 13.5 M8 2 L12.5 13.5"></path>
+      <circle cx="8" cy="2.5" r="1.2" stroke-width="0.9"></circle>
+      <path d="M4.5 11 A7 7 0 0 0 11.5 11" stroke-width="0.9"></path>
+    </svg>
+  </span>
+  <span data-mode-triangle class="strip-chip strip-chip-triangle" title="TRIANGLE set square" style="display:inline-flex; color:rgba(29,31,32,0.18);">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <path d="M2.5 13.5 L13.5 13.5 L2.5 2.5 Z"></path>
+      <path d="M5 11.5 L8.5 11.5 L5 8 Z" stroke-width="0.9"></path>
+    </svg>
+  </span>
+  <span data-mode-brush class="strip-chip strip-chip-brush" title="DRAFTING BRUSH" style="display:inline-flex; color:rgba(29,31,32,0.18);">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <path d="M2.5 8.5 Q8 5 13.5 8.5 L13.5 10.5 Q8 7 2.5 10.5 Z"></path>
+      <path d="M4 10.7 V12.6 M6.5 9.6 V11.8 M9.5 9.6 V11.8 M12 10.7 V12.6" stroke-width="0.9"></path>
+    </svg>
+  </span>
   <span data-model-len style="color:#1d1f20; min-width:80px; text-align:right;"></span>
   <span data-model-ang style="color:rgba(29,31,32,0.4); min-width:52px;"></span>
   <!-- The working instruments sit left: the ruler lights and glows while an
@@ -1440,36 +1487,15 @@
     </svg>
     <span data-protractor-angle style="font-size:10px; line-height:1; min-width:18px;">{{ protractorChipLabel }}</span>
   </span>
-  <!-- The compass is the polar-tracking instrument: up, a dwell on a node
-       casts measuring rays from it; down, the arms stay off the board. -->
-  <span data-mode-compass title="{{ compassChipTitle }}" onClick="{{ toggleCompass }}" style="display:inline-flex; color:{{ compassChipColor }}; filter:{{ compassChipGlow }}; cursor:pointer;">
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-      <path d="M8 2 L3.5 13.5 M8 2 L12.5 13.5"></path>
-      <circle cx="8" cy="2.5" r="1.2" stroke-width="0.9"></circle>
-      <path d="M4.5 11 A7 7 0 0 0 11.5 11" stroke-width="0.9"></path>
-    </svg>
-  </span>
   <!-- Dormant instruments: every drafting tool keeps its light on the strip as
        a dim outline, waking up when its tool exists and engages -->
-  <span data-mode-triangle title="TRIANGLE set square" style="display:inline-flex; color:rgba(29,31,32,0.18);">
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-      <path d="M2.5 13.5 L13.5 13.5 L2.5 2.5 Z"></path>
-      <path d="M5 11.5 L8.5 11.5 L5 8 Z" stroke-width="0.9"></path>
-    </svg>
-  </span>
-  <span data-mode-brush title="DRAFTING BRUSH" style="display:inline-flex; color:rgba(29,31,32,0.18);">
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-      <path d="M2.5 8.5 Q8 5 13.5 8.5 L13.5 10.5 Q8 7 2.5 10.5 Z"></path>
-      <path d="M4 10.7 V12.6 M6.5 9.6 V11.8 M9.5 9.6 V11.8 M12 10.7 V12.6" stroke-width="0.9"></path>
-    </svg>
-  </span>
-  <span data-mode-scale title="SCALE — three-sided architect's rule" style="display:inline-flex; color:rgba(29,31,32,0.18);">
+  <span data-mode-scale class="strip-chip strip-chip-scale" title="SCALE — three-sided architect's rule" style="display:inline-flex; color:rgba(29,31,32,0.18);">
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
       <path d="M2 11 L8 4 L14 11 Z"></path>
       <path d="M5.5 11 L8 8 L10.5 11" stroke-width="0.9"></path>
     </svg>
   </span>
-  <span data-mode-shield title="ERASING SHIELD" style="display:inline-flex; color:rgba(29,31,32,0.18);">
+  <span data-mode-shield class="strip-chip strip-chip-shield" title="ERASING SHIELD" style="display:inline-flex; color:rgba(29,31,32,0.18);">
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
       <rect x="2.5" y="3.5" width="11" height="9" rx="1"></rect>
       <circle cx="6" cy="6.5" r="0.9" stroke-width="0.9"></circle>
@@ -1477,29 +1503,15 @@
       <path d="M9.5 6 L11.5 7.5" stroke-width="0.9"></path>
     </svg>
   </span>
-  <span data-mode-frenchcurve title="FRENCH CURVE" style="display:inline-flex; color:rgba(29,31,32,0.18);">
+  <span data-mode-frenchcurve class="strip-chip strip-chip-frenchcurve" title="FRENCH CURVE" style="display:inline-flex; color:rgba(29,31,32,0.18);">
     <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
       <path d="M3 13 C3 7 7 8.5 8.5 5.5 C9.5 3.5 13 3 13 6 C13 9 9 8.5 8 11 C7.4 12.5 5.5 13.5 3 13 Z"></path>
     </svg>
   </span>
-</div>
-
-<!-- STATUS BAR -->
-<div style="height:28px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em; color:rgba(29,31,32,0.55); background:#fff; flex-shrink:0; user-select:none;">
-  <span data-model-title-detail style="font-size:12px; font-weight:600; text-transform:uppercase; color:{{ topBarColor }};">{{ topBarLabel }}</span>
-  <sc-if value="{{ showHint }}" hint-placeholder-val="{{ false }}">
-    <span style="margin-left:18px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }};">{{ hintText }}</span>
-  </sc-if>
-  <span style="margin-left:24px;" data-model-sx>X: —</span>
-  <span style="margin-left:24px;" data-model-sy>Y: —</span>
-   <span data-model-background-status style="margin-left:24px; color:{{ backgroundStatusColor }};">{{ backgroundStatus }}</span>
-  <span data-model-status style="margin-left:24px; color:{{ persistenceStatusColor }};">{{ persistenceStatus }}</span>
-  <span data-model-drawing-message style="margin-left:24px; color:{{ drawingMessageColor }};">{{ drawingMessage }}</span>
-  <div style="flex:1;"></div>
-  <span>{{ viewLabel }}</span>
+  </div>
   <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT, and the logo
        walks back out to the main page. The current page wears the dark face. -->
-  <div data-nav-cluster style="display:flex; align-items:center; gap:4px; margin-left:18px;">
+  <div data-nav-cluster style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
     <a data-nav-model href="./MODEL.dc.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">MODEL</a>
     <a data-nav-layout href="./LAYOUT.dc.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">LAYOUT</a>
     <a data-nav-project href="./PROJECT.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">PROJECT</a>
@@ -9320,17 +9332,14 @@ class Component extends DCLogic {
       if (tool !== 'cut' || this.state.cutPhase === 'idle') if (lenEl) lenEl.textContent = '';
     }
 
-    if (el('[data-model-sx]')) el('[data-model-sx]').textContent = 'X: ' + (imp ? this._ftIn(finalPt.x) : this._metric(finalPt.x));
-    if (el('[data-model-sy]')) el('[data-model-sy]').textContent = 'Y: ' + (imp ? this._ftIn(finalPt.z) : this._metric(finalPt.z));
   }
 
   _onMouseLeave() {
     this._noteStairHover = null;
     this._cancelPolarDwell();
     this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showOriginSnapPt: false, showPolarOrigin: false });
-    ['[data-model-sx]','[data-model-sy]','[data-model-len]'].forEach((s, i) => {
-      const el = document.querySelector(s); if (el) el.textContent = ['X: —','Y: —',''][i];
-    });
+    const lenEl = document.querySelector('[data-model-len]');
+    if (lenEl) lenEl.textContent = '';
   }
 
   _onMouseDown(e) {
@@ -18192,19 +18201,12 @@ class Component extends DCLogic {
           : 'CUT — Click end point · Right-click to cancel'));
     const hintColor   = choosingDir ? '#b04060' : '#5980a6';
 
-    const viewLabels = { perspective:'PERSPECTIVE', top:'TOP / PLAN', front:'FRONT ELEV', side:'SIDE ELEV', cut: activeCut?.name || 'SECTION' };
-    const activeLayerView = this._layerViewsForLevel(activeLevel?.id)
-      .find(view => view.id === activeLayerViewId);
-    const topBarLabel = activeView === 'cut' && activeCut
-      ? activeCut.name
-      : `${activeLevel?.name || '—'}${activeLayerView ? ` / ${activeLayerView.label}` : ''}`;
+    const topBarLabel = activeView === 'cut' && activeCut ? activeCut.name : '';
     const topBarColor = activeView === 'cut' ? '#b04060' : '#5980a6';
     const visibleBackground = this._visibleBackgroundReference();
-    const backgroundStatus = backgroundMode === 'none'
-      ? `BACKGROUND: OFF  [${shortcut('background')}]`
-      : visibleBackground
-        ? `BACKGROUND ${visibleBackground.label}: ${visibleBackground.level.name}${visibleBackground.viewLabel ? ` / ${visibleBackground.viewLabel}` : ''}  [${shortcut('background')}]`
-        : `BACKGROUND ${backgroundMode.toUpperCase()}: NONE SELECTED  [${shortcut('background')}]`;
+    const backgroundStatus = visibleBackground
+      ? `BACKGROUND ${visibleBackground.label}: ${visibleBackground.level.name}${visibleBackground.viewLabel ? ` / ${visibleBackground.viewLabel}` : ''}  [${shortcut('background')}]`
+      : '';
     const backgroundStatusColor = backgroundMode === 'blue' ? '#5297da'
       : backgroundMode === 'red' ? '#dd6568' : 'rgba(29,31,32,0.42)';
     const persistenceStatusColor = this.state.persistenceStatus === 'SAVED'
@@ -19225,7 +19227,7 @@ class Component extends DCLogic {
       fileGuardSkip: () => this._runFileAction(),
       fileGuardCancel: () => this.setState({ fileGuardAction: '' }),
       ...this._insertBindings(),
-      viewLabel: viewLabels[activeView] || 'TOP / PLAN',
+      backgroundEngaged: backgroundMode !== 'none' && !!visibleBackground,
       backgroundStatus,
       backgroundStatusColor,
       persistenceStatus: this.state.persistenceStatus,
