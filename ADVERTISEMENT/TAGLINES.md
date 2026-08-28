@@ -25,6 +25,7 @@ The collected RoughDrafter LITE campaign lines. Real taglines carry the brand st
 - **VECTOR BIM.** — the category coinage (drafter's, Aug 2026): ArchiCAD and Revit are **RASTER BIM** — you hand-place every element and the model is millions of baked-in objects, heavier the bigger it gets. Rough Drafter is **VECTOR BIM** — it stores the SOURCE (outline + stamps + your standards) and DERIVES the building, so edits ripple and the file stays tiny for the same reason an SVG does. Teaches a civilian the whole differentiator in one borrowed pair of words.
   The line under it: **"They model the building. We model the rules that build it."**
   Honesty asterisk (the ad never lies): Revit walls are parametric too — but their formulas describe one wall at a time; ours describe the whole house. Roughly true; true where it counts.
+  FILED AD CONCEPT (a keeper — not to be produced yet; too many ads lately): the insider wink. Pro at the counter, dead casual: *"Of course I know what Vector BIM is — doesn't everybody?"* The Revit guy nods like he knows. Cut to the paw. The category has existed since this afternoon; the bewildered google it and the only result is us.
 
 - **The underDOG of CAD.** — the campaign frame in one word: the dog IS the underdog. David-vs-BIG-CAD with the mascot built in; the paw button, DOG MODE, the BONEYARD dog, and RUFF DRAFTERS were all already pointing here. Capitalize the DOG.
 
