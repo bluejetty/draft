@@ -87,6 +87,8 @@
           </div>
           <input class="field" data-legal-other placeholder="OTHER ID" aria-label="Legal other id" style="margin-top:6px;" />
           <textarea class="field" data-project-legal rows="2" placeholder="Freeform description, if the lot needs one" aria-label="Legal land description freeform" style="margin-top:6px;"></textarea>
+          <div class="field-label">Rooms &mdash; from the plan&#8217;s stamps</div>
+          <div class="zone-note" data-room-counts>Counted when the bone builds &mdash; the room stamps are the latest word.</div>
         </div>
       </section>
 
@@ -275,6 +277,18 @@
           save('Project information saved.');
         });
       });
+
+      // Room counts (board #198): read-only — the MODEL writes them at BONE
+      // time from the room-tag program, and the stamps win over anything
+      // typed earlier, so there is nothing to edit here.
+      const roomCountsEl = document.querySelector('[data-room-counts]');
+      if (projectInfo.bedrooms != null || projectInfo.bathrooms != null) {
+        const part = (count, one, many) => count == null ? null : `${count} ${count === 1 ? one : many}`;
+        roomCountsEl.textContent = [
+          part(projectInfo.bedrooms, 'bedroom', 'bedrooms'),
+          part(projectInfo.bathrooms, 'bathroom', 'bathrooms'),
+        ].filter(Boolean).join(' · ');
+      }
 
       // ── The live detail ─────────────────────────────────────────────────
       const canvas = document.querySelector('#detail-canvas');

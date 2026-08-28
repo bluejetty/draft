@@ -139,6 +139,9 @@ test('MAIN gates on stairs, both NEXT lights fire, and the choice popup climbs t
   await page.locator('[data-tour-next]').click();
   const popup = page.locator('[data-tour-popup]');
   await expect(popup).toContainText('MAIN FLOOR DONE');
+  await popup.click(); // → the rooms pause (board #198); the choice moved there
+  await page.keyboard.press('Enter'); // the always-lit rooms gate
+  await expect(popup).toContainText('MAIN ROOMS DONE');
   await expect(popup.locator('[data-tour-next-second]')).toBeVisible();
   await expect(popup.locator('[data-tour-next-roof]')).toBeVisible();
 
@@ -156,6 +159,8 @@ test('a one-storey house presses STRAIGHT TO ROOF and the tour parks there', asy
   await placeStairs(page, 0, -2, 0, 6);
 
   await page.keyboard.press('Enter'); // the lit gate answers the keyboard too
+  await page.locator('[data-tour-popup]').click(); // → the rooms pause
+  await page.keyboard.press('Enter');
   await page.locator('[data-tour-popup] [data-tour-next-roof]').click();
   await expect(activeLevel(page)).toHaveText(/ROOF/);
   await expect(page.locator('[data-model-drawing-message]')).toContainText(/dashed footprint is live/i);
@@ -189,6 +194,8 @@ test('2ND FLOOR stairs must launch from the run below: far clicks refuse, near o
   await page.locator('[data-tour-popup]').click();
   await placeStairs(page, 0, -2, 0, 6);
   await page.locator('[data-tour-next]').click();
+  await page.locator('[data-tour-popup]').click(); // → the rooms pause
+  await page.keyboard.press('Enter');
   await page.locator('[data-tour-popup] [data-tour-next-second]').click();
   await expect(activeLevel(page)).toHaveText(/2ND FL/);
 

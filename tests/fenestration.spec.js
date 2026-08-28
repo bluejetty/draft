@@ -193,10 +193,10 @@ test('FENESTRATION works in PLAN, FOUNDATION, and FLOOR (floor / roof holes)', a
   await h.openModel(page);
   await drawWall(page);
   const tool = page.locator('[data-model-left]').getByRole('button', { name: /\bFenestration\b/i });
-  await switchLayerView(page, 'FLOOR');
+  await switchLayerView(page, 'FLOOR PLAN');
   await expect(tool).toBeEnabled();
 
-  await switchLayerView(page, 'PLAN');
+  await switchLayerView(page, 'WALL PLAN');
   await expect(tool).toBeEnabled();
 
   await switchLevel(page, 'FOUNDATION');
@@ -226,7 +226,7 @@ test('a door opening hosts on an S-FDN foundation wall', async ({ page }) => {
 test('interior 2x4 and 2x6 stud walls stay available on the foundation level PLAN', async ({ page }) => {
   await h.openModel(page);
   await switchLevel(page, 'FOUNDATION');
-  await switchLayerView(page, 'PLAN');
+  await switchLayerView(page, 'WALL PLAN');
   await h.selectTool(page, 'Wall');
   await expect(page.getByRole('button', { name: /2×4 Stud/ })).toBeVisible();
   await page.getByRole('button', { name: /2×4 Stud/ }).click();

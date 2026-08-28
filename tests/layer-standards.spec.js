@@ -60,7 +60,7 @@ test('renaming a layer in the standards shows in the Model Space layer views', a
 
   await h.openModel(page);
   // Clicking a layer set reveals its layers, named after the standards.
-  await page.locator('.level-row.active').getByRole('button', { name: 'PLAN', exact: true }).click();
+  await page.locator('.level-row.active').getByRole('button', { name: 'WALL PLAN', exact: true }).click();
   await expect(page.locator('.level-layer-content', { hasText: 'X-WALL-CUSTOM' }).first()).toBeVisible();
 });
 

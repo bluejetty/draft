@@ -32,7 +32,7 @@ async function drawWall(page) {
 
 // A 20×12 floor north of the wall on the active level's FLOOR layer set.
 async function drawFloor(page) {
-  await switchLayerView(page, 'FLOOR');
+  await switchLayerView(page, 'FLOOR PLAN');
   await h.selectTool(page, 'Floor');
   await h.clickWorld(page, -10, 0);
   await h.clickWorld(page, 10, 0);
@@ -70,7 +70,7 @@ const WALL_IN_FACE_Z = 5.5 / 12; // 2×6 drawn refLine left: interior face north
 
 test('STAIRS is a fenestration option, shaded with REQ until measurable', async ({ page }) => {
   await h.openModel(page);
-  await switchLayerView(page, 'FLOOR');
+  await switchLayerView(page, 'FLOOR PLAN');
   await h.selectTool(page, 'Fenestration');
 
   const stairsBtn = page.getByRole('button', { name: 'STAIRS', exact: true });
@@ -98,7 +98,7 @@ test('a stair opening cuts the measured rectangle keyed to the wall face', async
   await drawWall(page);
   await drawFloor(page);
   await drawFoundationSlab(page);
-  await switchLayerView(page, 'FLOOR');
+  await switchLayerView(page, 'FLOOR PLAN');
 
   await h.selectTool(page, 'Fenestration');
   await page.getByRole('button', { name: 'STAIRS', exact: true }).click();
@@ -136,7 +136,7 @@ test('typed stair width and headroom resize the opening', async ({ page }) => {
   await drawWall(page);
   await drawFloor(page);
   await drawFoundationSlab(page);
-  await switchLayerView(page, 'FLOOR');
+  await switchLayerView(page, 'FLOOR PLAN');
 
   await h.selectTool(page, 'Fenestration');
   await page.getByRole('button', { name: 'STAIRS', exact: true }).click();
@@ -166,7 +166,7 @@ test('the stair opening survives a reload on its floor', async ({ page }) => {
   await drawWall(page);
   await drawFloor(page);
   await drawFoundationSlab(page);
-  await switchLayerView(page, 'FLOOR');
+  await switchLayerView(page, 'FLOOR PLAN');
 
   await h.selectTool(page, 'Fenestration');
   await page.getByRole('button', { name: 'STAIRS', exact: true }).click();
