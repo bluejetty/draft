@@ -8566,15 +8566,16 @@ class Component extends DCLogic {
     // anywhere along the viewing depth — the ridge/hip outline from outside.
     const roofs = this._roofs;
     const silhouette = [];
+    let facesByRoof = null;
+    let dLo = Infinity, dHi = -Infinity;
     if (roofs.length) {
-      let dLo = Infinity, dHi = -Infinity;
       roofs.forEach(roof => (roof.points || []).forEach(pt => {
         const d = pt.x * dir.x + pt.z * dir.z;
         dLo = Math.min(dLo, d); dHi = Math.max(dHi, d);
       }));
       // Silhouette stays sampled (it also feeds shading), but samples the
       // REAL faces — built once here, thousands of queries after.
-      const facesByRoof = new Map(roofs
+      facesByRoof = new Map(roofs
         .filter(roof => roof.points && roof.points.length >= 3)
         .map(roof => [roof, geo.roofFaces(roof, geo.roofSkeleton(roof))]));
       const steps = 240, depthSteps = 40;
@@ -8845,6 +8846,91 @@ class Component extends DCLogic {
         ctx.moveTo(X(r.u0), Y(r.base));
         ctx.lineTo(X(r.u1), Y(r.base));
         ctx.stroke();
+      });
+    }
+
+    // Visible roof edges — eaves, rakes, ridges, hips and valleys — from the
+    // real face polygons, drawn wherever no nearer roof surface stands in
+    // front. The silhouette only ever answers with the tallest surface at
+    // each spot, so a near wing's eave and a viewer-facing gable's rakes
+    // stayed invisible behind a taller wing; this pass walks every face edge
+    // and hides only the truly hidden stretches.
+    if (facesByRoof && facesByRoof.size) {
+      const tallestAt = pt => {
+        let tallest = null;
+        facesByRoof.forEach((roofFaces, roof) => {
+          const rise = this._sectionRoofHeightAt(pt, roof, roofFaces);
+          if (rise == null) return;
+          const elev = this._roofBaseElev(roof, stack) + ROOF_FASCIA_IN / 12 + rise;
+          if (tallest === null || elev > tallest) tallest = elev;
+        });
+        return tallest;
+      };
+      // Hidden when any roof surface nearer to the viewer covers the point:
+      // march the view ray from the point toward the viewer (+dir).
+      const hidden = (pt, elev) => {
+        const span = dHi - (pt.x * dir.x + pt.z * dir.z);
+        if (span < 0.1) return false;
+        const steps = Math.min(32, Math.max(4, Math.ceil(span / 1.5)));
+        for (let j = 1; j <= steps; j++) {
+          const m = span * j / steps;
+          const cover = tallestAt({ x: pt.x + dir.x * m, z: pt.z + dir.z * m });
+          if (cover != null && cover > elev + 0.05) return true;
+        }
+        return false;
+      };
+      const seen = new Set();
+      facesByRoof.forEach((roofFaces, roof) => {
+        const eaveTop = this._roofBaseElev(roof, stack) + ROOF_FASCIA_IN / 12;
+        const pitch = roof.pitch || 4;
+        roofFaces.forEach(face => {
+          const poly = face.points;
+          for (let i = 0; i < poly.length; i++) {
+            const a = poly[i], b = poly[(i + 1) % poly.length];
+            const key = [a, b].map(p => `${p.x.toFixed(2)},${p.z.toFixed(2)}`).sort().join('|');
+            if (seen.has(key)) continue;   // shared ridge/hip/valley: once is enough
+            seen.add(key);
+            const ea = eaveTop + geo.roofFaceRise(face, a, pitch);
+            const eb = eaveTop + geo.roofFaceRise(face, b, pitch);
+            const ua = a.x * axis.x + a.z * axis.z;
+            const ub = b.x * axis.x + b.z * axis.z;
+            if (Math.abs(ub - ua) < 0.05 && Math.abs(eb - ea) < 0.05) continue; // end-on: a point
+            const samples = Math.min(48, Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 1.5)));
+            const runs = [];
+            let run = null;
+            for (let s = 0; s <= samples; s++) {
+              const t = s / samples;
+              const pt = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+              const u = ua + (ub - ua) * t;
+              const elev = ea + (eb - ea) * t;
+              if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, elev)) { run = null; continue; }
+              if (!run) { run = { u0: u, e0: elev, u1: u, e1: elev }; runs.push(run); }
+              else { run.u1 = u; run.e1 = elev; }
+            }
+            const eave = Math.abs(ea - eaveTop) < 0.01 && Math.abs(eb - eaveTop) < 0.01;
+            runs.forEach(r => {
+              if (Math.abs(r.u1 - r.u0) < 0.05 && Math.abs(r.e1 - r.e0) < 0.05) return;
+              if (eave) {
+                // An eave wears the fascia band: the light top line and the
+                // heavy shadow along its bottom, same inks as the silhouette's.
+                ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(X(r.u0), Y(eaveTop)); ctx.lineTo(X(r.u1), Y(eaveTop));
+                ctx.stroke();
+                ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
+                ctx.beginPath();
+                ctx.moveTo(X(r.u0), Y(eaveTop - ROOF_FASCIA_IN / 12));
+                ctx.lineTo(X(r.u1), Y(eaveTop - ROOF_FASCIA_IN / 12));
+                ctx.stroke();
+              } else {
+                ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(X(r.u0), Y(r.e0)); ctx.lineTo(X(r.u1), Y(r.e1));
+                ctx.stroke();
+              }
+            });
+          }
+        });
       });
     }
 
