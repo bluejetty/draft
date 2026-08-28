@@ -4,6 +4,21 @@
 
 ---
 
+## THE PREHISTORY — WENDEL AND THE DRAFTING DRIVE-THRU
+
+Years before a line of Rough Drafter existed, the founder worked a drafting stall at an architects' office. In the next stall sat a drafter named **Wendel**. The two of them had a running joke: a **drafting drive-thru** — pull up to the window, order a house like a combo meal, drive off with the plans.
+
+It was a joke about the gap everyone in the trade knows: home-improvement TV taught clients to expect a finished house in a 22-minute episode, while real drafting took weeks of back-and-forth. The drive-thru was the absurd answer — service at the speed people actually wanted it.
+
+The joke turned out to be the correct product spec. The drive-thru became:
+
+- **The flagship ad universe** — THE DRIVE-THRU, THE MANAGER, the McRuffDrafter counter, the deadpan dogs in paper visors working the window (`ADVERTISEMENT/THE-MANAGER-script.md` and family).
+- **The actual product promise** — outline in, bone press, plans out: "ZERO → PLAN IN 5 MINUTES!" The only drafting tool that can make the TV-show promise and mostly keep it (see the standard end-card's legal scroll for the "possibly the afternoon" honesty clause).
+
+So when the ads show a family collecting a rolled-up house plan in a takeout bag: that's Wendel's window. The joke just needed twenty-odd years and a dog to run it.
+
+---
+
 ## AUGUST 27, 2026 — THE COINING OF VECTOR-BIM
 
 ### What happened
@@ -43,4 +58,4 @@ Web searches run the next day (`"Vector BIM"`, `"VECTOR-BIM" software`, `"raster
 
 The term isn't just an ad joke — it's the product thesis said out loud. Rough Drafter has always worked this way (the BONEYARD master outline, BUILD HOUSE derivation, live re-derivation when the source moves); the coinage gave that architecture a name a viewer can get in ten seconds. The ads carry it (the printer room, the deadpan dog), and the codebase proves it.
 
-*First entry. More history as it happens.*
+*More history as it happens.*
