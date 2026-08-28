@@ -135,17 +135,20 @@ test('edges pull OUT on the grid and refuse to tuck back under the house', async
   expect(saved.roofIntent.edges[0].overhangFt).toBeCloseTo(2, 5);
 });
 
-test('ROOF DONE hints, the bone glows, and the press grows the house in the front elevation', async ({ page }) => {
+test('PRESS ▲ BONE hints, the bone glows, and the press grows the house in the front elevation', async ({ page }) => {
   await h.openModel(page);
   await reachRoof(page, 16, 12);
 
-  await page.locator('[data-tour-chip]').click(); // ROOF DONE ▲
+  // The under-bone button reads PRESS ▲ BONE from the roof pause on.
+  await expect(page.locator('[data-tour-next]')).toContainText('PRESS');
+  await expect(page.locator('[data-tour-next]')).toContainText('BONE');
+  await page.locator('[data-tour-next]').click();
   const popup = page.locator('[data-tour-popup]');
   await expect(popup).toContainText('ROOF DONE');
   await expect(popup).toContainText(/press the BONE/i);
   await page.keyboard.press('Enter');
   await expect(popup).toBeHidden();
-  await expect(page.locator('[data-tour-chip]')).toContainText('PRESS THE BONE');
+  await expect(page.locator('[data-tour-next]')).toContainText('BONE');
   const boneStyle = await page.locator('[data-build-house]').getAttribute('style');
   expect(boneStyle).toContain('drop-shadow');
 

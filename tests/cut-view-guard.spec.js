@@ -118,7 +118,7 @@ test('the finale reveal stands the drawing tool down before parking in E1', asyn
 
   // The drafter's last tool before the finish is WALL — the classic trap.
   await h.selectTool(page, 'Wall');
-  await page.locator('[data-tour-chip]').click(); // ROOF DONE ▲
+  await page.locator('[data-tour-next]').click(); // PRESS ▲ BONE
   await page.keyboard.press('Enter');
   await page.locator('[data-build-house]').click();
   await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
