@@ -5,8 +5,10 @@
 // continues a house wall with the garage on its far side). BUILD
 // HOUSE then grows the grade beam along the open legs only (32" concrete +
 // 1.5" plate, top of plate 1'-0" below the top of the house foundation), a
-// flat 4" slab closed against the house, garage stud walls flush with the
-// main-floor ceiling, and ONE roof over the combined house + garage loop.
+// flat 4" slab closed against the house, and garage stud walls flush with
+// the main-floor ceiling. The roof depends on the stack (board #245): a
+// single-storey house splices ONE roof over the combined loop; a taller
+// house drops the garage to its own roof, flush at the upper wall face.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -331,7 +333,7 @@ test('an ICF foundation offers its own thickness as the grade-beam stub', async 
   expect(h.near(garageMaster.points[1].x, 8 + 11.25 / 12, 0.05)).toBe(true);
 });
 
-test('BUILD HOUSE grows the open-leg beam, flat slab, flush walls, and one roof', async ({ page }) => {
+test('BUILD HOUSE grows the open-leg beam, flat slab, flush walls, and the dropped garage roof', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
   await drawGarageOutline(page);
@@ -392,12 +394,16 @@ test('BUILD HOUSE grows the open-leg beam, flat slab, flush walls, and one roof'
   expect(garageSlab.slopeInPerFt).toBe(0);
   expect(garageSlab.points).toHaveLength(4);
 
-  // ONE roof over house + garage: no separate garage roof, and the combined
-  // footprint reaches past the garage's far wall by the overhang.
-  expect(saved.roofs).toHaveLength(1);
-  const roof = saved.roofs[0];
-  expect(roof.garage).toBeFalsy();
-  expect(Math.max(...roof.points.map(point => point.x))).toBeGreaterThan(20);
+  // The default stack is two floors, so the house stands taller than the
+  // garage zone and the DROP rule (board #245) fires: the house roof stops
+  // at its own overhang and the garage carries its own single-storey roof,
+  // flush-cut at the upper wall face. (garage-roof-drop.spec.js pins the
+  // geometry; the bungalow case keeps the old spliced roof.)
+  expect(saved.roofs).toHaveLength(2);
+  const houseRoof = saved.roofs.find(roof => !roof.garage);
+  expect(Math.max(...houseRoof.points.map(point => point.x))).toBeLessThan(11);
+  const garageRoof = saved.roofs.find(roof => roof.garage);
+  expect(Math.max(...garageRoof.points.map(point => point.x))).toBeGreaterThan(20);
 });
 
 test('a second BUILD HOUSE click never doubles the garage', async ({ page }) => {
@@ -413,7 +419,7 @@ test('a second BUILD HOUSE click never doubles the garage', async ({ page }) => 
   expect(saved.walls.filter(wall => wall.levelId === 3)).toHaveLength(9);
   expect(saved.floors.filter(floor => floor.levelId === 1)).toHaveLength(2);
   expect(saved.notes.filter(note => note.body === 'REBAR TIE')).toHaveLength(2);
-  expect(saved.roofs).toHaveLength(1);
+  expect(saved.roofs).toHaveLength(2); // house + dropped garage roof, neither doubled
 });
 
 test('the garage is its own body: coincident ends, no splice, master edits carry both', async ({ page }) => {
@@ -487,7 +493,7 @@ test('an L-shaped run builds a beam member on every open leg', async ({ page }) 
   const garageMaster = saved.boneyardOutlines.find(outline => outline.garage);
   expect(garageMaster.points).toHaveLength(5);
   expect(saved.walls.filter(wall => wall.levelId === 1)).toHaveLength(10); // 6 house + 4 garage
-  expect(saved.roofs).toHaveLength(1);
+  expect(saved.roofs).toHaveLength(2); // the drop rule holds for an L-shaped run too
 });
 
 test('the shared end node moves house and garage together on a level', async ({ page }) => {
