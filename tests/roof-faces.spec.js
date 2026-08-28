@@ -125,3 +125,25 @@ test('faces tile the footprint and agree on heights along shared edges', async (
   expect(results.faceSum).toBeCloseTo(results.footprint, 4);
   expect(results.worst).toBeLessThan(1e-6);
 });
+
+test('gableOverhangFt halves gable edges only under the boxed corner treatments', async ({ page }) => {
+  const verdicts = await page.evaluate(() => {
+    const g = window.DraftGeometry2D;
+    return {
+      flatGable: g.gableOverhangFt('gable', 2, 'flat'),
+      returnGable: g.gableOverhangFt('gable', 2, 'return'),
+      porkchopGable: g.gableOverhangFt('gable', 2, 'porkchop'),
+      boxedGable: g.gableOverhangFt('gable', 1.5, 'boxed'),
+      porkchopEave: g.gableOverhangFt('eave', 2, 'porkchop'),
+      boxedEave: g.gableOverhangFt('eave', 2, 'boxed'),
+    };
+  });
+  // The overhang rule (board #252): 2' eaves → 1' rake for the boxed
+  // treatments; flat and return keep the full overhang, and eaves always do.
+  expect(verdicts.flatGable).toBe(2);
+  expect(verdicts.returnGable).toBe(2);
+  expect(verdicts.porkchopGable).toBe(1);
+  expect(verdicts.boxedGable).toBe(0.75);
+  expect(verdicts.porkchopEave).toBe(2);
+  expect(verdicts.boxedEave).toBe(2);
+});

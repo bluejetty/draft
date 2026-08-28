@@ -248,3 +248,54 @@ test('a roof survives a reload', async ({ page }) => {
   expect(roof.points).toHaveLength(4);
   expect(roof.layer).toBe('A-ROOF');
 });
+
+test('PORK CHOP builds gable edges at half the eave overhang (board #252)', async ({ page }) => {
+  await h.openModel(page);
+  await page.evaluate(() => {
+    const m = window.DraftProfileManager;
+    m.saveActive(m.createPackage('standards', 'test', { model: { structureStandards: { gableCorner: 'porkchop' } } }));
+  });
+  await page.reload();
+  await h.waitForModelReady(page);
+
+  // The tour authors the gable as roof INTENT, so the bone derives the
+  // footprint with the halved gable offset.
+  await page.locator('[data-select-house]').click();
+  await page.keyboard.press('Enter');
+  await h.clickWorld(page, -8, -6);
+  await h.clickWorld(page, 8, -6);
+  await h.clickWorld(page, 8, 6);
+  await h.clickWorld(page, -8, 6);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  await page.locator('[data-tour-popup]').click(); // FOUNDATION DONE → MAIN
+  await h.selectTool(page, 'Stair');
+  await h.clickWorld(page, 2, -2);
+  await h.clickWorld(page, 2, 4);
+  await h.waitForSaved(page);
+  await page.keyboard.press('Enter'); // the lit gate opens the climb popup
+  // Tolerant of the rooms pause (#198): older flows offer STRAIGHT TO ROOF
+  // on this popup, newer ones one popup later.
+  const nextRoof = page.locator('[data-tour-popup] [data-tour-next-roof]');
+  if (!(await nextRoof.count())) {
+    await page.locator('[data-tour-popup]').click();
+    await page.keyboard.press('Enter');
+  }
+  await nextRoof.click();
+  await expect(page.locator('[data-tour-gable]')).toBeVisible();
+
+  // Flip the south edge GABLE (its tag floats outside the preview line),
+  // then the bone builds the roof.
+  await h.clickWorld(page, 0, -9.4);
+  await h.waitForSaved(page);
+  await page.locator('[data-build-house]').click();
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  const roof = saved.roofs[0];
+  // South gable edge: 1' out (half the 2' eaves) — every eave keeps 2'.
+  expect(Math.min(...roof.points.map(point => point.z))).toBeCloseTo(-7, 1);
+  expect(Math.max(...roof.points.map(point => point.z))).toBeCloseTo(8, 1);
+  expect(Math.min(...roof.points.map(point => point.x))).toBeCloseTo(-10, 1);
+  expect(Math.max(...roof.points.map(point => point.x))).toBeCloseTo(10, 1);
+});

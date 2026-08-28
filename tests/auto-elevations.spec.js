@@ -202,3 +202,50 @@ test.describe('Standard E1-E4 elevations', () => {
     await expect(page.locator('[data-elevation-name="E1"]')).toHaveValue('FRONT');
   });
 });
+
+test('GABLE CORNER treatments add their metal linework to the E4 corners (board #252)', async ({ page }) => {
+  // One scenario, three finishes: build the E4 gable once, then re-open it
+  // under each corner standard and census the drawing ink. FLAT CLOSE is
+  // the baseline; PORK CHOP adds the two wall seams; FULL BOXED RAKE adds
+  // the inner soffit lines running the whole rake — each strictly more ink.
+  await h.openModel(page, { webgl: false });
+  await drawOutlineRect(page);
+  await buildHouse(page);
+  await page.waitForTimeout(1200);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  await h.waitForSaved(page);
+  await page.locator('.level-row', { hasText: 'ROOF' }).locator('.level-name').click();
+  await page.waitForTimeout(300);
+  await h.selectTool(page, 'Roof');
+  await h.clickWorld(page, 10, 0);
+  await h.waitForSaved(page);
+
+  const inkFor = async style => {
+    await page.evaluate(s => {
+      const m = window.DraftProfileManager;
+      m.saveActive(m.createPackage('standards', 'test', { model: { structureStandards: { gableCorner: s } } }));
+    }, style);
+    await page.reload();
+    await h.waitForModelReady(page);
+    await page.locator('.cut-row', { hasText: 'E4' }).click({ position: { x: 18, y: 8 } });
+    await page.waitForTimeout(700);
+    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E4');
+    return page.evaluate(() => {
+      const canvas = document.querySelector('[data-model-overlay]');
+      const { width, height } = canvas;
+      const { data } = canvas.getContext('2d').getImageData(0, 0, width, height);
+      let ink = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] > 0 && data[i] < 120 && data[i + 1] < 120 && data[i + 2] < 120) ink += 1;
+      }
+      return ink;
+    });
+  };
+
+  const flat = await inkFor('flat');
+  const porkchop = await inkFor('porkchop');
+  const boxed = await inkFor('boxed');
+  expect(porkchop).toBeGreaterThan(flat + 10);   // the two wall seams
+  expect(boxed).toBeGreaterThan(porkchop + 100); // the full inner rake lines
+});

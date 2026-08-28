@@ -249,6 +249,18 @@ if (!window.DraftGeometry2D) {
   // its outward normal and each corner is the intersection of its two shifted
   // edges, so angled footprints stay true. Orientation-agnostic — whichever
   // normal direction grows the area is outward; a negative distance insets.
+  // GABLE CORNER (board #252): the overhang a roof edge is BUILT with, given
+  // its kind and the office's gable-corner style. The boxed treatments
+  // ('porkchop', 'boxed') halve the gable-edge overhang for proportion —
+  // 2' eaves → 1' rake; 'flat' and 'return' keep the full overhang, and
+  // eave edges always do. Pure rule: every footprint derivation (bone,
+  // garage roof, tour preview) reads it so plan, faces, and auto-dims all
+  // see one geometry.
+  const gableOverhangFt = (kind, overhangFt, cornerStyle) => (
+    kind === 'gable' && (cornerStyle === 'porkchop' || cornerStyle === 'boxed')
+      ? overhangFt / 2 : overhangFt
+  );
+
   // Per-edge offset (board #238): like offsetOutline — line displacement plus
   // corner re-intersection — but each edge carries its own distance, so one
   // roof edge can be pulled further out than its neighbours. Outward
@@ -719,6 +731,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     roomLoops,
     offsetOutline,
     offsetOutlineVariable,
+    gableOverhangFt,
     roofSkeleton,
     roofFaces,
     roofFaceRise,

@@ -3732,12 +3732,17 @@ class Component extends DCLogic {
         : null;
       const dx = next.x - pt.x, dz = next.z - pt.z;
       const len = Math.hypot(dx, dz) || 1;
+      const kind = override?.kind || 'eave';
+      // The GABLE CORNER style shapes the default (board #252): the boxed
+      // treatments build gable edges at half the eave overhang. Pull-outs
+      // still floor at that per-kind default, never under it.
+      const kindBase = window.DraftGeometry2D.gableOverhangFt(kind, base, this._gableCornerStyle());
       return {
         index, a: { x: pt.x, z: pt.z }, b: { x: next.x, z: next.z }, len,
         ux: dx / len, uz: dz / len,
         fromSrc: keyed ? pt.srcId : null, toSrc: keyed ? next.srcId : null,
-        kind: override?.kind || 'eave',
-        overhang: override && override.overhangFt != null ? Math.max(override.overhangFt, base) : base,
+        kind,
+        overhang: override && override.overhangFt != null ? Math.max(override.overhangFt, kindBase) : kindBase,
         gables: keyed
           ? intent.gables.filter(gable => gable.fromSrc === pt.srcId && gable.toSrc === next.srcId) : [],
       };
@@ -7586,6 +7591,13 @@ class Component extends DCLogic {
     return normaliseStructureStandards(this.state.structureStandards).freeformFootings;
   }
 
+  // GABLE CORNER (board #252): the office's corner treatment — 'flat' |
+  // 'return' | 'porkchop' | 'boxed'. Footprint derivations read it through
+  // geometry-2d's gableOverhangFt; the elevation pass draws its linework.
+  _gableCornerStyle() {
+    return normaliseStructureStandards(this.state.structureStandards).gableCorner;
+  }
+
   _footingLocked(item) {
     return item?.layer === 'S-FOOTING' && !this._freeformFootings();
   }
@@ -9023,21 +9035,88 @@ class Component extends DCLogic {
               // The metal soffit closes the corner: a line from the low
               // point of the rake fascia straight back to the house wall,
               // the flat soffit plane under the eave-overhang triangle.
+              // The reach back to the wall runs ALONG the rake's plan
+              // direction — the EAVE-side offset at the corner — so it is
+              // measured by projecting the corner's BONEYARD master point
+              // (the wall corner it was offset from) onto that direction.
+              // Halved-gable builds (board #252) and intent-pulled edges
+              // both land the line exactly on the wall face this way;
+              // roof.overhang stays the fallback for unlinked roofs.
               const drop = ROOF_FASCIA_IN / 12;
               const lo = ea <= eb ? { p: a, u: ua, e: ea } : { p: b, u: ub, e: eb };
-              const hi = ea <= eb ? { p: b } : { p: a };
+              const hi = ea <= eb ? { p: b, u: ub, e: eb } : { p: a, u: ua, e: ea };
               const len = Math.hypot(hi.p.x - lo.p.x, hi.p.z - lo.p.z) || 1;
-              const wallU = (lo.p.x + (hi.p.x - lo.p.x) / len * overhang) * axis.x
-                + (lo.p.z + (hi.p.z - lo.p.z) / len * overhang) * axis.z;
+              const rux = (hi.p.x - lo.p.x) / len, ruz = (hi.p.z - lo.p.z) / len;
+              const srcPt = rpts.find(rp => Math.hypot(rp.x - lo.p.x, rp.z - lo.p.z) < 0.05);
+              const masterPt = srcPt?.srcId ? this._masterPointById(srcPt.srcId) : null;
+              const along = masterPt
+                ? (masterPt.x - lo.p.x) * rux + (masterPt.z - lo.p.z) * ruz : NaN;
+              const reach = Number.isFinite(along) && along > 0.05 ? along : overhang;
+              const wallU = (lo.p.x + rux * reach) * axis.x + (lo.p.z + ruz * reach) * axis.z;
               const shown = runs.some(r => Math.min(r.u0, r.u1) - 0.1 <= lo.u
                 && lo.u <= Math.max(r.u0, r.u1) + 0.1);
-              if (shown && Math.abs(wallU - lo.u) > 0.2
+              if (shown && reach > 0.05 && Math.abs(wallU - lo.u) > 0.2
                 && lo.u >= uMin - 0.01 && lo.u <= uMax + 0.01) {
+                const wallUc = Math.max(uMin, Math.min(uMax, wallU));
                 ctx.strokeStyle = INK; ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(X(lo.u), Y(lo.e - drop));
-                ctx.lineTo(X(Math.max(uMin, Math.min(uMax, wallU))), Y(lo.e - drop));
+                ctx.lineTo(X(wallUc), Y(lo.e - drop));
                 ctx.stroke();
+                // GABLE CORNER treatments (board #252). Everything below is
+                // metal matching the fascia — one blended family, drawn in
+                // the soffit/crease inks, never the heavy silhouette.
+                const style = this._gableCornerStyle();
+                const du = hi.u - lo.u;
+                if (Math.abs(du) > 0.3) {
+                  const undersideAt = u => lo.e + (u - lo.u) / du * (hi.e - lo.e) - drop;
+                  if (style === 'return') {
+                    // SOFFIT RETURN: the eave soffit wraps the corner — a
+                    // short cornice-return band continuing the eave fascia
+                    // across the gable face, capped with a vertical seam.
+                    const dirIn = Math.sign(wallU - lo.u) || 1;
+                    const retLen = Math.min(Math.abs(wallU - lo.u), 1.25);
+                    const uEnd = lo.u + dirIn * retLen;
+                    ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(X(lo.u), Y(lo.e)); ctx.lineTo(X(uEnd), Y(lo.e));
+                    ctx.stroke();
+                    ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
+                    ctx.beginPath();
+                    ctx.moveTo(X(lo.u), Y(lo.e - drop)); ctx.lineTo(X(uEnd), Y(lo.e - drop));
+                    ctx.stroke();
+                    ctx.lineWidth = 1.25;
+                    ctx.beginPath();
+                    ctx.moveTo(X(uEnd), Y(lo.e));
+                    ctx.lineTo(X(uEnd), Y(lo.e - drop));
+                    ctx.stroke();
+                  } else if (style === 'porkchop' || style === 'boxed') {
+                    // PORK CHOP: the boxed corner return — the little
+                    // pyramid between the rake underside, the soffit line,
+                    // and this inner vertical face at the wall. (The
+                    // vertical the owner removed from FLAT CLOSE returns
+                    // here on purpose: this corner is metal, not wall
+                    // finish, so the seam against the wall exists.)
+                    ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+                    ctx.beginPath();
+                    ctx.moveTo(X(wallUc), Y(lo.e - drop));
+                    ctx.lineTo(X(wallUc), Y(undersideAt(wallU)));
+                    ctx.stroke();
+                    if (style === 'boxed') {
+                      // FULL BOXED RAKE: the pork chop soffit runs end to
+                      // end — the box's wall-side edge parallels the rake
+                      // underside the whole way up, stopping under the
+                      // apex where it meets its twin from the other slope
+                      // in a single peak vertex.
+                      const peakE = lo.e - drop + (hi.u - wallU) / du * (hi.e - lo.e);
+                      ctx.lineWidth = 1;
+                      ctx.beginPath();
+                      ctx.moveTo(X(wallUc), Y(lo.e - drop));
+                      ctx.lineTo(X(Math.max(uMin, Math.min(uMax, hi.u))), Y(peakE));
+                      ctx.stroke();
+                    }
+                  }
+                }
               }
             }
           }
@@ -11701,12 +11780,16 @@ class Component extends DCLogic {
       if (!a.srcId || !b.srcId) return null;
       return intent.edges.find(edge => edge.fromSrc === a.srcId && edge.toSrc === b.srcId) || null;
     };
+    const cornerStyle = this._gableCornerStyle();
     const distances = loop.map((pt, index) => {
       const override = edgeIntent(index);
       // Pull-out only: an override can widen an edge's overhang, never
-      // tuck it under the house default.
+      // tuck it under the house default — which the GABLE CORNER style
+      // shapes per kind (board #252: the boxed treatments halve gables).
+      const kindBase = window.DraftGeometry2D.gableOverhangFt(
+        edgeIntent(index)?.kind || 'eave', overhang, cornerStyle);
       return override && override.overhangFt != null
-        ? Math.max(override.overhangFt, overhang) : overhang;
+        ? Math.max(override.overhangFt, kindBase) : kindBase;
     });
     const offset = window.DraftGeometry2D.offsetOutlineVariable(loop, distances);
     const outPoints = [];
