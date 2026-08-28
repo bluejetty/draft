@@ -8774,15 +8774,71 @@ class Component extends DCLogic {
         ? fdn.grade + GARAGE_SLAB_THICKNESS_IN / 12
         : fdn.grade + (DETACHED_BEAM_ABOVE_GRADE_IN + GARAGE_BEAM_PLATE_IN) / 12;
     const HEAD_FT = 6 + 10 / 12, SILL_FT = 3;
+    // A gable-end wall climbs to the roof: where a roof bearing on this
+    // wall's plate runs a GABLE edge just past the face, the top of the
+    // wall follows the underside of the rakes — the triangle between the
+    // plate and the ridge is wall, not sky.
+    const distToSegment = (p, a, b) => {
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2));
+      return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t));
+    };
+    const gableTopAt = (pt, plateTop) => {
+      let top = plateTop;
+      if (!facesByRoof) return top;
+      facesByRoof.forEach((roofFaces, roof) => {
+        const base = this._roofBaseElev(roof, stack);
+        if (Math.abs(base - plateTop) > 0.6) return;   // bears on another storey
+        const reach = (Number(roof.overhang) || 0) + 1;
+        const pts = roof.points || [];
+        const nearGable = pts.some((a, i) => roof.edges?.[i] === 'gable'
+          && distToSegment(pt, a, pts[(i + 1) % pts.length]) <= reach);
+        if (!nearGable) return;
+        const rise = this._sectionRoofHeightAt(pt, roof, roofFaces);
+        if (rise == null) return;
+        top = Math.max(top, base + rise);   // wall stops under the fascia
+      });
+      return top;
+    };
     faces.forEach(face => {
       const { wall, u1, u2, level } = face;
-      const xa = X(Math.max(Math.min(u1, u2), uMin));
-      const xb = X(Math.min(Math.max(u1, u2), uMax));
+      const loU = Math.max(Math.min(u1, u2), uMin);
+      const hiU = Math.min(Math.max(u1, u2), uMax);
+      const xa = X(loU), xb = X(hiU);
       const floor = face.garage ? garageBase(face.garage) : level.floorTop;
+      const worldAt = u => {
+        const t = (u - u1) / (u2 - u1);
+        return {
+          x: wall.start.x + (wall.end.x - wall.start.x) * t,
+          z: wall.start.z + (wall.end.z - wall.start.z) * t,
+        };
+      };
+      const samples = Math.min(64, Math.max(2, Math.ceil((hiU - loU) / 0.5)));
+      const tops = [];
+      for (let s = 0; s <= samples; s++) {
+        const u = loU + (hiU - loU) * s / samples;
+        tops.push({ u, top: gableTopAt(worldAt(u), level.wallTop) });
+      }
       ctx.fillStyle = '#fff';
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
-      ctx.fillRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - floor) * pxPerFt);
-      ctx.strokeRect(xa, Y(level.wallTop), xb - xa, (level.wallTop - floor) * pxPerFt);
+      ctx.beginPath();
+      ctx.moveTo(xa, Y(floor));
+      tops.forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
+      ctx.lineTo(xb, Y(floor));
+      ctx.closePath();
+      ctx.fill();
+      // The wall finish runs into the soffit triangle: end verticals stop
+      // at the plate, only the top profile follows the roof underside.
+      ctx.beginPath();
+      ctx.moveTo(xa, Y(floor));
+      ctx.lineTo(xa, Y(Math.min(tops[0].top, level.wallTop)));
+      ctx.moveTo(X(tops[0].u), Y(tops[0].top));
+      tops.slice(1).forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
+      ctx.moveTo(xb, Y(Math.min(tops[tops.length - 1].top, level.wallTop)));
+      ctx.lineTo(xb, Y(floor));
+      ctx.lineTo(xa, Y(floor));
+      ctx.stroke();
       const wallLen = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
       if (wallLen < 1e-6) return;
       const du = (u2 - u1) / wallLen;
@@ -8921,6 +8977,10 @@ class Component extends DCLogic {
       facesByRoof.forEach((roofFaces, roof) => {
         const eaveTop = this._roofBaseElev(roof, stack) + ROOF_FASCIA_IN / 12;
         const pitch = roof.pitch || 4;
+        const rpts = roof.points || [];
+        const gableSegs = rpts.flatMap((a, i) => (roof.edges?.[i] === 'gable'
+          ? [{ a, b: rpts[(i + 1) % rpts.length] }] : []));
+        const onGable = p => gableSegs.some(s => distToSegment(p, s.a, s.b) < 0.1);
         roofFaces.forEach(face => {
           const poly = face.points;
           for (let i = 0; i < poly.length; i++) {
@@ -8946,6 +9006,7 @@ class Component extends DCLogic {
               else { run.u1 = u; run.e1 = elev; }
             }
             const eave = Math.abs(ea - eaveTop) < 0.01 && Math.abs(eb - eaveTop) < 0.01;
+            const rake = !eave && onGable(a) && onGable(b);
             runs.forEach(r => {
               if (Math.abs(r.u1 - r.u0) < 0.05 && Math.abs(r.e1 - r.e0) < 0.05) return;
               if (eave) {
@@ -8960,6 +9021,18 @@ class Component extends DCLogic {
                 ctx.moveTo(X(r.u0), Y(eaveTop - ROOF_FASCIA_IN / 12));
                 ctx.lineTo(X(r.u1), Y(eaveTop - ROOF_FASCIA_IN / 12));
                 ctx.stroke();
+              } else if (rake && Math.abs(r.u1 - r.u0) > 0.2) {
+                // A rake wears its fascia too: the sloped board along the
+                // gable edge, top line light, heavy shadow 5.5" under it.
+                const drop = ROOF_FASCIA_IN / 12;
+                ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(X(r.u0), Y(r.e0)); ctx.lineTo(X(r.u1), Y(r.e1));
+                ctx.stroke();
+                ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
+                ctx.beginPath();
+                ctx.moveTo(X(r.u0), Y(r.e0 - drop)); ctx.lineTo(X(r.u1), Y(r.e1 - drop));
+                ctx.stroke();
               } else {
                 ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
                 ctx.beginPath();
@@ -8967,7 +9040,51 @@ class Component extends DCLogic {
                 ctx.stroke();
               }
             });
+            const overhang = Number(roof.overhang) || 0;
+            if (rake && runs.length && overhang > 0.05) {
+              // The metal soffit closes the corner: a line from the low
+              // point of the rake fascia straight back to the house wall,
+              // the flat soffit plane under the eave-overhang triangle.
+              const drop = ROOF_FASCIA_IN / 12;
+              const lo = ea <= eb ? { p: a, u: ua, e: ea } : { p: b, u: ub, e: eb };
+              const hi = ea <= eb ? { p: b } : { p: a };
+              const len = Math.hypot(hi.p.x - lo.p.x, hi.p.z - lo.p.z) || 1;
+              const wallU = (lo.p.x + (hi.p.x - lo.p.x) / len * overhang) * axis.x
+                + (lo.p.z + (hi.p.z - lo.p.z) / len * overhang) * axis.z;
+              const shown = runs.some(r => Math.min(r.u0, r.u1) - 0.1 <= lo.u
+                && lo.u <= Math.max(r.u0, r.u1) + 0.1);
+              if (shown && Math.abs(wallU - lo.u) > 0.2
+                && lo.u >= uMin - 0.01 && lo.u <= uMax + 0.01) {
+                ctx.strokeStyle = INK; ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(X(lo.u), Y(lo.e - drop));
+                ctx.lineTo(X(Math.max(uMin, Math.min(uMax, wallU))), Y(lo.e - drop));
+                ctx.stroke();
+              }
+            }
           }
+        });
+        // The fascia creases at every plan corner: where the roof edge
+        // changes direction (an outside corner, or a valley landing on a
+        // re-entrant one) a thin vertical seam crosses the 5.5" band.
+        rpts.forEach((pt, i) => {
+          const prev = rpts[(i + rpts.length - 1) % rpts.length];
+          const next = rpts[(i + 1) % rpts.length];
+          const kindPrev = roof.edges?.[(i + rpts.length - 1) % rpts.length];
+          const kindNext = roof.edges?.[i];
+          if (kindPrev === 'gable' && kindNext === 'gable') return;
+          const d1 = { x: pt.x - prev.x, z: pt.z - prev.z };
+          const d2 = { x: next.x - pt.x, z: next.z - pt.z };
+          const cross = d1.x * d2.z - d1.z * d2.x;
+          const l1 = Math.hypot(d1.x, d1.z), l2 = Math.hypot(d2.x, d2.z);
+          if (l1 < 0.05 || l2 < 0.05 || Math.abs(cross) < 0.02 * l1 * l2) return;
+          const u = pt.x * axis.x + pt.z * axis.z;
+          if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, eaveTop)) return;
+          ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+          ctx.beginPath();
+          ctx.moveTo(X(u), Y(eaveTop));
+          ctx.lineTo(X(u), Y(eaveTop - ROOF_FASCIA_IN / 12));
+          ctx.stroke();
         });
       });
     }
