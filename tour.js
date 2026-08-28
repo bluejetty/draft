@@ -122,6 +122,35 @@ if (!window.DraftTour) {
   };
   const REVEAL_MS = 2500;
 
+  // ── Room stamps (board #198, slice 4) ───────────────────────────────────
+  // A stamp: { id, levelId, base, name } — base is the tray chip it came
+  // from; a renamed stamp has base:null and its custom name is forever.
+  // Numbering is DERIVED per floor from placement order (id order), so
+  // deleting a stamp renumbers the rest with no stored counter. BEDROOM
+  // always numbers from the first stamp (the companion rule keys off
+  // BEDROOM 1); every other base is bare until a second lands.
+  const STAMP_ALWAYS_NUMBERED = ['BEDROOM'];
+  const stampDisplayName = (stamps, stamp) => {
+    if (!stamp.base) return stamp.name; // renamed — custom forever
+    const pool = stamps
+      .filter(other => other.base === stamp.base && other.levelId === stamp.levelId)
+      .sort((a, b) => a.id - b.id);
+    if (!STAMP_ALWAYS_NUMBERED.includes(stamp.base) && pool.length === 1) return stamp.base;
+    return `${stamp.base} ${pool.indexOf(stamp) + 1}`;
+  };
+
+  // Companion bases to drop when a tray-stamped bedroom lands, given the
+  // same-floor stamped bedrooms that existed BEFORE this placement: the
+  // floor's first bedroom brings its ENSUITE + WALK-IN (the 98% case,
+  // deletable for the 2%), every later one a CLOSET.
+  const bedroomCompanions = priorBedroomsOnFloor =>
+    priorBedroomsOnFloor === 0 ? ['ENSUITE', 'WALK-IN'] : ['CLOSET'];
+
+  // Where the detector starts numbering a base on a floor (1-based), so a
+  // stamped BEDROOM 1 and a detected bedroom can never share a name.
+  const detectorNumberStart = (stamps, base, levelId) =>
+    stamps.filter(stamp => stamp.base === base && stamp.levelId === levelId).length + 1;
+
   // Free-placement increments (office standard, personal SETTINGS): the
   // resting grid plus the two momentary modifier grids, all in inches.
   const normaliseTourRoofIncrements = value => {
@@ -142,6 +171,9 @@ if (!window.DraftTour) {
     FLOOR_PULL_MAX_FT,
     FLOOR_CANTILEVER_FT,
     stairSnapZone,
+    stampDisplayName,
+    bedroomCompanions,
+    detectorNumberStart,
     normaliseTourRoofIncrements,
     gableAnchors,
     snapAlongEdge,

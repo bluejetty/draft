@@ -406,6 +406,15 @@ if (!window.DraftDrawingFormat) {
       if (!Number.isInteger(id) || seen.has(id) || !at || tagLevelId == null || !name) return null;
       seen.add(id);
       const area = number(tag?.areaSqFt, 0);
+      // Stamps (board #198): a tag the drafter placed from the room tray
+      // (or promoted by touching a detected tag). `base` is the tray chip
+      // it still numbers under — null once renamed; `companionOf` ties an
+      // auto-dropped ENSUITE/WALK-IN/CLOSET to its bedroom until the
+      // drafter claims it by moving or renaming it. All additive: old
+      // drawings load with plain detector tags.
+      const stamped = tag?.stamped === true;
+      const base = String(tag?.base ?? '').replace(/\s+/g, ' ').trim().toUpperCase();
+      const companionOf = Number(tag?.companionOf);
       return {
         id,
         at,
@@ -414,6 +423,10 @@ if (!window.DraftDrawingFormat) {
         name,
         areaSqFt: area > 0 ? area : 0,
         underMin: tag?.underMin === true,
+        stamped,
+        ...(stamped && base ? { base } : {}),
+        ...(stamped && Number.isInteger(companionOf) && companionOf !== id
+          ? { companionOf } : {}),
         layer: 'ROOM-IDS-AREA',
       };
     }).filter(Boolean);
@@ -581,6 +594,13 @@ if (!window.DraftDrawingFormat) {
     // `address` is CIVIC ADDRESS, `legal` the freeform legal line. The
     // structured legal fields and CONTRACTOR are additive — old drawings
     // load with them empty.
+    // Room counts (board #198): written at BONE time from the room-tag
+    // program — the stamps are the drafter's latest word, so they win over
+    // anything typed earlier. null = never counted (old drawings).
+    const count = value => {
+      const n = Number(value);
+      return Number.isInteger(n) && n >= 0 ? n : null;
+    };
     return {
       name: line(raw?.name),
       client: line(raw?.client),
@@ -592,6 +612,8 @@ if (!window.DraftDrawingFormat) {
       legalPlan: line(raw?.legalPlan),
       legalParcel: line(raw?.legalParcel),
       legalOther: line(raw?.legalOther),
+      bedrooms: count(raw?.bedrooms),
+      bathrooms: count(raw?.bathrooms),
     };
   };
 
@@ -605,7 +627,10 @@ if (!window.DraftDrawingFormat) {
   // reload resumes where the tour parked. Absent or unknown = no tour
   // running; later slices extend the ladder without changing old saves.
   const tour = raw => ({
-    step: oneOf(raw?.step, ['foundation', 'main', 'second', 'roof', 'finale'], null),
+    // rooms-main / rooms-second: the per-floor ROOM TRAY pauses (board
+    // #198) — each floor stamps its rooms right after its stair/wall leg.
+    step: oneOf(raw?.step,
+      ['foundation', 'main', 'rooms-main', 'second', 'rooms-second', 'roof', 'finale'], null),
   });
 
   // Roof INTENT (board #238): the tour's roof pause edits intent, not

@@ -71,10 +71,46 @@ if (!window.DraftRoomStandards) {
     return { ok: failures.length === 0, failures };
   };
 
+  // ── The ROOM TRAY (board #198) ────────────────────────────────────────
+  // The tray's chip list is an OFFICE STANDARD like the minimums table —
+  // the drafter grows it from real plans in COMPANY STANDARDS, so it is
+  // normalised, never hard-coded at the point of use. Chips are plain
+  // uppercase names; order is the tray order.
+  const DEFAULT_ROOM_TRAY = Object.freeze([
+    'KITCHEN', 'LIVING', 'DINING', 'BEDROOM', 'BATH', 'WC', 'ENSUITE',
+    'WALK-IN', 'CLOSET', 'LAUNDRY', 'DZ', 'OFFICE/DEN', 'PANTRY', 'HALL',
+    'STORAGE',
+  ]);
+
+  const normaliseRoomTray = value => {
+    const chips = (Array.isArray(value) ? value : [])
+      .map(chip => String(chip ?? '').replace(/\s+/g, ' ').trim().toUpperCase().slice(0, 24))
+      .filter(Boolean);
+    const unique = [...new Set(chips)];
+    return unique.length ? unique : [...DEFAULT_ROOM_TRAY];
+  };
+
+  // Which minimums row a stamped base answers to. Bases without a row
+  // (LIVING has a stored row but no detector category — see above — and
+  // the circulation/storage names) return null: name-only, no flag.
+  const STAMP_CATEGORIES = Object.freeze({
+    BEDROOM: 'bedroom',
+    KITCHEN: 'kitchen',
+    BATH: 'wc',
+    WC: 'wc',
+    ENSUITE: 'wc',
+    LAUNDRY: 'laundry',
+    DZ: 'dz',
+  });
+  const stampCategory = base => STAMP_CATEGORIES[String(base ?? '').toUpperCase()] || null;
+
   window.DraftRoomStandards = Object.freeze({
     DEFAULT_ROOM_MINIMUMS,
     normaliseRoomMinimums,
     evaluateRoom,
+    DEFAULT_ROOM_TRAY,
+    normaliseRoomTray,
+    stampCategory,
   });
 })();
 }

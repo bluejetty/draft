@@ -113,6 +113,8 @@ test('the finale reveal stands the drawing tool down before parking in E1', asyn
   await h.clickWorld(page, 2, 4);
   await h.waitForSaved(page);
   await page.keyboard.press('Enter');
+  await page.locator('[data-tour-popup]').click(); // → the rooms pause (#198)
+  await page.keyboard.press('Enter'); // the always-lit rooms gate
   await page.locator('[data-tour-popup] [data-tour-next-roof]').click();
   await expect(page.locator('[data-tour-gable]')).toBeVisible();
 

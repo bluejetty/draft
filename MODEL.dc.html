@@ -485,7 +485,7 @@
     <div style="margin-top:6px; font-size:12px; color:rgba(29,31,32,0.62); line-height:1.45;">{{ tourPopupNote }}</div>
     <sc-if value="{{ tourPopupChoice }}" hint-placeholder-val="{{ false }}">
       <div style="margin-top:10px; display:flex; gap:8px;">
-        <button data-tour-next-second onClick="{{ tourNextSecond }}" style="flex:1; height:32px; border:1px solid #8f2a1d; background:#c0392b; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0.06em; cursor:pointer;">NEXT: 2ND FLOOR (ENTER)</button>
+        <button data-tour-next-second onClick="{{ tourNextSecond }}" aria-label="Next: 2nd floor" style="flex:1; height:32px; border:1px solid #8f2a1d; background:#c0392b; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0.06em; cursor:pointer;">NEXT: 2ND FLOOR (ENTER)</button>
         <button data-tour-next-roof onClick="{{ tourNextRoof }}" style="flex:1; height:32px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">STRAIGHT TO ROOF</button>
       </div>
     </sc-if>
@@ -501,6 +501,19 @@
      once the gate is lit the under-bone button takes over. -->
 <sc-if value="{{ tourChipOpen }}" hint-placeholder-val="{{ false }}">
   <button data-tour-chip onClick="{{ onTourChip }}" style="position:fixed; top:56px; left:50%; transform:translateX(-50%); z-index:51; border:1px solid #557a46; background:rgba(85,122,70,0.1); color:#3c5c30; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; padding:5px 12px; cursor:pointer;">{{ tourChipLabel }}</button>
+</sc-if>
+
+<!-- The ROOM TRAY (board #198): room-name chips beside the plan while the
+     tour's rooms step holds a floor. Tap a chip, tap the plan — a stamp
+     lands. The list is a COMPANY STANDARD the drafter grows. -->
+<sc-if value="{{ roomTrayOpen }}" hint-placeholder-val="{{ false }}">
+  <div data-room-tray style="position:fixed; right:12px; top:110px; z-index:51; width:118px; max-height:calc(100vh - 180px); overflow-y:auto; display:flex; flex-direction:column; gap:4px; border:1px solid rgba(29,31,32,0.25); background:#fff; box-shadow:0 10px 28px rgba(29,31,32,0.18); padding:8px;">
+    <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.08em; color:#3c5c30;">ROOM TRAY</div>
+    <div style="font-size:10px; line-height:1.35; color:rgba(29,31,32,0.55); margin-bottom:2px;">Tap a name, then tap the plan.</div>
+    <sc-for list="{{ roomTrayChips }}" as="chip" hint-placeholder-count="15">
+      <button data-tray-chip onClick="{{ chip.onTap }}" style="border:1px solid {{ chip.border }}; background:{{ chip.bg }}; color:{{ chip.color }}; padding:5px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.05em; cursor:pointer; text-align:left;">{{ chip.label }}</button>
+    </sc-for>
+  </div>
 </sc-if>
 
 <sc-if value="{{ garageCalloutOpen }}" hint-placeholder-val="{{ false }}">
@@ -1202,6 +1215,16 @@
         <input data-note-editor-input type="text" value="{{ noteDraft }}" onInput="{{ onNoteDraftInput }}" onKeyDown="{{ onNoteDraftKey }}" placeholder="NOTE TEXT" aria-label="Annotation text" style="width:180px; border:1px solid rgba(29,31,32,0.2); padding:4px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20; outline:none; cursor:text;" />
         <button onClick="{{ onNoteCommit }}" style="border:none; background:#5980a6; color:#fff; padding:4px 10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">OK</button>
         <button onClick="{{ onNoteCancel }}" style="border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.45); padding:4px 8px; font-size:12px; cursor:pointer;">✕</button>
+      </div>
+    </sc-if>
+
+    <!-- Room-tag rename — opens on a clicked tag (board #198). Enter
+         commits, empty text deletes the stamp, Escape cancels. -->
+    <sc-if value="{{ tagEditorOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; left:{{ tagEditorX }}px; top:{{ tagEditorY }}px; transform:translate(-50%,0); display:flex; align-items:center; gap:4px; background:#fff; border:1px solid rgba(29,31,32,0.3); padding:4px 6px; box-shadow:0 2px 8px rgba(29,31,32,0.18); cursor:default; z-index:3;">
+        <input data-tag-editor-input type="text" value="{{ tagDraft }}" onInput="{{ onTagDraftInput }}" onKeyDown="{{ onTagDraftKey }}" placeholder="ROOM NAME" aria-label="Room name" style="width:120px; border:1px solid rgba(29,31,32,0.2); padding:4px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; background:#fff; color:#1d1f20; outline:none; cursor:text;" />
+        <button data-tag-editor-ok onClick="{{ onTagCommit }}" style="border:none; background:#5980a6; color:#fff; padding:4px 10px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">OK</button>
+        <button onClick="{{ onTagCancel }}" style="border:1px solid rgba(29,31,32,0.2); background:transparent; color:rgba(29,31,32,0.45); padding:4px 8px; font-size:12px; cursor:pointer;">✕</button>
       </div>
     </sc-if>
 
@@ -2049,6 +2072,10 @@ class Component extends DCLogic {
     layerStandards: normaliseLayerStandards(null),
     structureStandards: normaliseStructureStandards(null),
     roomMinimums: window.DraftRoomStandards.normaliseRoomMinimums(null),
+    roomTray: window.DraftRoomStandards.normaliseRoomTray(null),
+    roomTrayArmed: null,       // the tray chip waiting for a plan tap (board #198)
+    tagEditor: null,           // floating room-tag rename editor {x, y}
+    tagDraft: '',
     fenestrationStandards: window.DraftFenLabels.normaliseFenStandards(null),
     selectionVersion: 0,
     groupDialog:    false,
@@ -2248,6 +2275,9 @@ class Component extends DCLogic {
         }
         if (standards?.content?.model?.roomMinimums) {
           this.setState({ roomMinimums: window.DraftRoomStandards.normaliseRoomMinimums(standards.content.model.roomMinimums) });
+        }
+        if (standards?.content?.model?.roomTray) {
+          this.setState({ roomTray: window.DraftRoomStandards.normaliseRoomTray(standards.content.model.roomTray) });
         }
         if (standards?.content?.model?.fenestrationStandards) {
           this.setState({ fenestrationStandards: window.DraftFenLabels.normaliseFenStandards(standards.content.model.fenestrationStandards) });
@@ -2510,6 +2540,10 @@ class Component extends DCLogic {
         view: 'plan',
         name: tag.name,
         areaSqFt: tag.areaSqFt,
+        stamped: tag.stamped === true,
+        ...(tag.stamped === true && tag.base ? { base: tag.base } : {}),
+        ...(tag.stamped === true && tag.companionOf != null
+          ? { companionOf: tag.companionOf } : {}),
         underMin: tag.underMin === true,
         layer: ROOM_TAG_LAYER,
       })),
@@ -3227,6 +3261,7 @@ class Component extends DCLogic {
         layerStandards: normaliseLayerStandards(this.state.layerStandards),
         structureStandards: normaliseStructureStandards(this.state.structureStandards),
         roomMinimums: window.DraftRoomStandards.normaliseRoomMinimums(this.state.roomMinimums),
+        roomTray: window.DraftRoomStandards.normaliseRoomTray(this.state.roomTray),
         fenestrationStandards: window.DraftFenLabels.normaliseFenStandards(this.state.fenestrationStandards),
       },
     };
@@ -3273,6 +3308,9 @@ class Component extends DCLogic {
       }
       if (values.roomMinimums && typeof values.roomMinimums === 'object') {
         patch.roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(values.roomMinimums);
+      }
+      if (Array.isArray(values.roomTray)) {
+        patch.roomTray = window.DraftRoomStandards.normaliseRoomTray(values.roomTray);
       }
       if (values.fenestrationStandards && typeof values.fenestrationStandards === 'object') {
         patch.fenestrationStandards = window.DraftFenLabels.normaliseFenStandards(values.fenestrationStandards);
@@ -3396,8 +3434,12 @@ class Component extends DCLogic {
   _tourPopupPrimary() {
     const popup = this.state.tourPopup;
     if (popup === 'foundation') this._advanceTour('main');
-    else if (popup === 'main') this._advanceTour('second');
-    else if (popup === 'second') this._advanceTour('roof');
+    else if (popup === 'main') this._advanceTour('rooms-main');
+    // rooms-main is the CHOICE popup (2ND FLOOR vs straight to ROOF for a
+    // one-storey house) — Enter takes the primary, the red button.
+    else if (popup === 'rooms-main') this._advanceTour('second');
+    else if (popup === 'second') this._advanceTour('rooms-second');
+    else if (popup === 'rooms-second') this._advanceTour('roof');
     else if (popup === 'roof') {
       // ROOF DONE only HINTS (the drafter's finish): the tour parks at
       // 'finale', the bone glows, and the drafter's own press plays the
@@ -3411,10 +3453,12 @@ class Component extends DCLogic {
   }
 
   _advanceTour(step) {
-    const targets = { main: 3, second: 5, roof: 7 };
+    const targets = { main: 3, 'rooms-main': 3, second: 5, 'rooms-second': 5, roof: 7 };
     const messages = {
       main: 'MAIN FLOOR — PLACE STAIRS first: they cut the opening for every floor above and can shift the beam below. Walls and rooms are free-form after that.',
-      second: '2ND FLOOR — stairs stack over the run below: start them in the opening. Then walls and rooms, and NEXT: ROOF when you are ready.',
+      'rooms-main': 'STAMP THE ROOMS — tap a name in the tray, then tap the plan. BEDROOM brings its ENSUITE and WALK-IN along. NEXT ▲ when done, or skip straight past.',
+      second: '2ND FLOOR — stairs stack over the run below: start them in the opening. Then walls, and this floor’s rooms next.',
+      'rooms-second': 'STAMP THE 2ND FLOOR ROOMS — tap a name, then tap the plan. NEXT ▲ heads to the ROOF whenever you are ready.',
       roof: 'ROOF — the dashed footprint is live: drag an edge OUT for overhang, click an edge to flip EAVE / GABLE, or arm GABLE to place one. ROOF DONE when it reads right.',
     };
     this.setState({
@@ -3443,20 +3487,26 @@ class Component extends DCLogic {
     const step = this.state.tour.step;
     if (step === 'main') return this._stairs.some(stair => stair.levelId === 3);
     if (step === 'second') return this._stairs.some(stair => stair.levelId === 5);
-    if (step === 'roof') return true; // the pause ends when the drafter says so
+    // Stamping is optional (mom and dad might skip it) and the roof pause
+    // ends when the drafter says so — those gates are always lit.
+    if (['rooms-main', 'rooms-second', 'roof'].includes(step)) return true;
     return false;
   }
 
   _pressTourNext() {
     if (!this._tourGateReady()) return;
     const step = this.state.tour.step;
+    const notes = {
+      main: 'Stairs are in. Tap room names into rough spots next — the stamps are the room program the bone reads.',
+      'rooms-main': 'Rooms stamped (or skipped — that’s fine). Climb to the 2ND FLOOR, or go straight to the ROOF for a one-storey house.',
+      second: 'Stairs stack over the run below — headroom holds. This floor’s rooms are next.',
+      'rooms-second': 'The floors are set — on to the ROOF.',
+      roof: 'The roof is set — the house is ready. Press the BONE and watch it grow from the ground up.',
+    };
     this.setState({
       tourPopup: step,
-      tourPopupNote: step === 'main'
-        ? 'Stairs are in. Climb to the 2ND FLOOR, or go straight to the ROOF for a one-storey house.'
-        : step === 'roof'
-          ? 'The roof is set — the house is ready. Press the BONE and watch it grow from the ground up.'
-          : 'Stairs stack over the run below — headroom holds and the beam layout stays valid.',
+      roomTrayArmed: null,
+      tourPopupNote: notes[step] || '',
     });
   }
 
@@ -3488,7 +3538,7 @@ class Component extends DCLogic {
   // during the second, and every other level keeps its ordinary free node
   // editing. Refs carry their outline, so one walk finds the pulled copy.
   _tourPullRefs(sd) {
-    const stepLevelId = { main: 3, second: 5 }[this.state.tour.step];
+    const stepLevelId = { main: 3, 'rooms-main': 3, second: 5, 'rooms-second': 5 }[this.state.tour.step];
     if (!stepLevelId) return null;
     for (const ref of sd.refs) {
       const outline = ref.outline;
@@ -4150,7 +4200,7 @@ class Component extends DCLogic {
   _exitTour() {
     this._clearTourTimers();
     this.setState({
-      tour: format.tour(null), tourPopup: false, tourPopupNote: '', tourGableArmed: false,
+      tour: format.tour(null), tourPopup: false, tourPopupNote: '', tourGableArmed: false, roomTrayArmed: null,
       drawingMessage: 'Tour ended — the level cards take you anywhere, and the bone builds whenever you are ready.',
       drawingMessageError: false,
     }, () => this._markUnsaved());
@@ -5302,16 +5352,25 @@ class Component extends DCLogic {
       const ad   = this._arcDrag;
       const oad  = this._outlineArcDrag;
       const fd   = this._fixtureDrag;
+      const td   = this._roomTagDrag;
       const info = this._selectDownInfo;
       const windowSelection = this._windowSelection;
       this._selectDrag     = null;
       this._arcDrag        = null;
       this._outlineArcDrag = null;
       this._fixtureDrag    = null;
+      this._roomTagDrag    = null;
       this._selectDownInfo = null;
       this._windowSelection = null;
       if (ad?.active) this._markUnsaved();
       if (fd?.active) this._markUnsaved();
+      // A room-tag press resolves on its own (board #198): travelled →
+      // the move claims/promotes the tag; still → the rename editor opens.
+      if (td) {
+        if (td.active) this._claimStampMove(td.tag);
+        else this._openTagEditor(td.tag);
+        return;
+      }
       if (oad?.active) this._afterOutlineArcDrag(oad);
       if (windowSelection) {
         const end = this._getWorldPos(e.clientX, e.clientY);
@@ -9348,6 +9407,9 @@ class Component extends DCLogic {
     // The tour's roof pause owns its own gestures (board #238) — tags,
     // gable placement, pull-out drags — and parks free node-editing there.
     if (e.button === 0 && !e.altKey && this._handleTourRoofPress(e)) { e.preventDefault(); return; }
+    // An armed tray chip stamps the plan (board #198) before any tool sees
+    // the press.
+    if (e.button === 0 && !e.altKey && this._handleRoomTrayPress(e)) { e.preventDefault(); return; }
     const tool = this.state.activeTool;
     if (e.button === 0 && !e.altKey) {
       if (this._blockToolOutsidePlan(tool)) return;
@@ -9386,10 +9448,16 @@ class Component extends DCLogic {
             e.preventDefault();
           } else {
             const fixture = this._findFixtureAt(raw);
+            const tagHit = fixture ? null : this._roomTagHitAt(e);
             if (fixture) {
               // Press-and-drag on a fixture slides it along its host wall; a
               // clean click still selects it on mouseup.
               this._fixtureDrag = { fixture, startX: e.clientX, startY: e.clientY, active: false };
+              e.preventDefault();
+            } else if (tagHit) {
+              // Press-and-drag moves a room tag; a clean click opens its
+              // rename editor on mouseup (board #198).
+              this._roomTagDrag = { tag: tagHit.tag, startX: e.clientX, startY: e.clientY, active: false };
               e.preventDefault();
             } else {
               // Press-and-drag away from any node opens a window; Shift while
@@ -9624,6 +9692,19 @@ class Component extends DCLogic {
           const flat = (this._orthoHalfH * 2) / h * 4; // within ~4px of straight → snap flat
           ad.outline.points[ad.index].bulge = Math.abs(bulge) < flat ? 0 : bulge;
         }
+      }
+    }
+
+    // Room-tag drag (board #198) — the tag rides the cursor live.
+    if (this._roomTagDrag) {
+      const td = this._roomTagDrag;
+      if (!td.active) {
+        const ddx = e.clientX - td.startX, ddy = e.clientY - td.startY;
+        if (Math.sqrt(ddx * ddx + ddy * ddy) > 4) td.active = true;
+      }
+      if (td.active) {
+        const raw = this._getWorldPos(e.clientX, e.clientY);
+        if (raw) { td.tag.at.x = raw.x; td.tag.at.z = raw.z; }
       }
     }
 
@@ -11846,6 +11927,9 @@ class Component extends DCLogic {
       });
       return false;
     }
+    // The room-tag program stamps its counts into the PROJECT info with the
+    // build (board #198) — synchronous, so the same save carries them.
+    this._writeRoomCountsFromTags();
     this._markUnsaved();
     this.setState({
       drawingMessage: `House built from the outline: ${built.join(', ')}. Everything is ordinary geometry — reshape, retype, or delete any piece.`,
@@ -16443,16 +16527,50 @@ class Component extends DCLogic {
         : has('closet') ? 'bedroom'
         : 'room';
     });
-    // WCs and bedrooms number biggest-first; basement rooms take a B prefix.
+    // Stamps win their rooms (board #198, the #230 answer sheet's Q8): a
+    // detected room holding a stamp is NAMED by that stamp — the stamp
+    // absorbs the room's area and minimums verdict and the detector emits
+    // no tag of its own there. Stamps outside any room reset to unrated.
+    const stamps = this._roomStamps().filter(tag => tag.levelId === levelId);
+    stamps.forEach(tag => { tag.areaSqFt = 0; tag.underMin = false; });
+    rooms.forEach(room => {
+      const inside = stamps.filter(tag => this._polygonContains(room.loop.points, tag.at.x, tag.at.z));
+      if (inside.length) room.stampOwner = inside.sort((a, b) => a.id - b.id)[0];
+    });
+    // WCs and bedrooms number biggest-first; basement rooms take a B
+    // prefix, and numbering starts past the floor's stamps of the same
+    // base so a stamped BEDROOM 1 and a detected bedroom never collide.
     const prefix = levelId === BASEMENT_LEVEL_ID ? 'B' : '';
+    const stampPool = this._stampPool();
     ['wc', 'bedroom'].forEach(category => {
-      rooms.filter(room => room.category === category)
+      const start = window.DraftTour.detectorNumberStart(
+        stampPool, category === 'wc' ? 'WC' : 'BEDROOM', levelId);
+      rooms.filter(room => room.category === category && !room.stampOwner)
         .sort((a, b) => b.insideSqFt - a.insideSqFt)
-        .forEach((room, index) => { room.number = `${prefix}${index + 1}`; });
+        .forEach((room, index) => { room.number = `${prefix}${start + index}`; });
     });
     const elevation = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
-    this._roomTags = this._roomTags.filter(tag => tag.levelId !== levelId);
+    // Regeneration wipes only the DETECTOR's tags — stamps are the
+    // drafter's word and stay.
+    this._roomTags = this._roomTags.filter(tag => tag.levelId !== levelId || tag.stamped === true);
     rooms.forEach(room => {
+      // Under-minimum flag from the COMPANY STANDARDS room-minimums table:
+      // quiet feedback only, using the same bounding-box short side the
+      // BEDRM/BEDROOM naming already reads. Nothing blocks or auto-fixes.
+      // A stamped room grades under the STAMP's category where it has one
+      // (a custom-named stamp falls back to the fixtures' vote).
+      const verdict = window.DraftRoomStandards.evaluateRoom({
+        category: room.stampOwner
+          ? (window.DraftRoomStandards.stampCategory(room.stampOwner.base) || room.category)
+          : room.category,
+        insideSqFt: room.insideSqFt,
+        minDimensionFt: room.minSide,
+      }, this.state.roomMinimums);
+      if (room.stampOwner) {
+        room.stampOwner.areaSqFt = Math.round(room.insideSqFt * 10) / 10;
+        room.stampOwner.underMin = !verdict.ok;
+        return;
+      }
       const name = room.category === 'wc' ? `WC ${room.number}`
         : room.category === 'laundry' ? 'LAUNDRY'
         : room.category === 'kitchen' ? 'KITCHEN'
@@ -16460,14 +16578,6 @@ class Component extends DCLogic {
           ? `${room.minSide < ROOM_TAG_TIGHT_FT ? 'BEDRM' : 'BEDROOM'} ${room.number}`
           : 'ROOM';
       const at = this._roomLabelPoint(room.loop.points);
-      // Under-minimum flag from the COMPANY STANDARDS room-minimums table:
-      // quiet feedback only, using the same bounding-box short side the
-      // BEDRM/BEDROOM naming already reads. Nothing blocks or auto-fixes.
-      const verdict = window.DraftRoomStandards.evaluateRoom({
-        category: room.category,
-        insideSqFt: room.insideSqFt,
-        minDimensionFt: room.minSide,
-      }, this.state.roomMinimums);
       this._roomTags.push({
         id: this._nextRoomTagId++,
         at: new THREE.Vector3(at.x, elevation, at.z),
@@ -16504,8 +16614,185 @@ class Component extends DCLogic {
     });
   }
 
+  // ── The ROOM TRAY (board #198): stamps are room tags the drafter authored ──
+  // A stamp rides the ordinary tag entity with `stamped: true` and `base`
+  // (the tray chip it numbers under — null once renamed, custom forever).
+  // Numbering is DERIVED per floor from placement order, so deletes
+  // renumber with nothing stored; tour.js holds the pure rules.
+  _roomStamps() {
+    return this._roomTags.filter(tag => tag.stamped === true);
+  }
+
+  _stampPool() {
+    return this._roomStamps().filter(tag => tag.base)
+      .map(tag => ({ id: tag.id, levelId: tag.levelId, base: tag.base, name: tag.name }));
+  }
+
+  _refreshStampNames() {
+    const pool = this._stampPool();
+    this._roomTags.forEach(tag => {
+      if (!tag.stamped || !tag.base) return;
+      const entry = pool.find(item => item.id === tag.id);
+      if (entry) tag.name = window.DraftTour.stampDisplayName(pool, entry);
+    });
+  }
+
+  // The tray answers only the floor the tour is escorting — level cards
+  // stay free, but a chip can't stamp a level the step doesn't own.
+  _roomTrayActive() {
+    const level = { 'rooms-main': 3, 'rooms-second': 5 }[this.state.tour.step];
+    return level != null && this._activeLevelId() === level && !this.state.tourPopup;
+  }
+
+  _handleRoomTrayPress(e) {
+    if (!this.state.roomTrayArmed || !this._roomTrayActive()) return false;
+    const raw = this._getWorldPos(e.clientX, e.clientY);
+    if (!raw) return false;
+    this._placeStamp(this.state.roomTrayArmed, raw);
+    return true;
+  }
+
+  _placeStamp(base, pt) {
+    const levelId = this._activeLevelId();
+    const elevation = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
+    const drop = (chip, x, z, companionOf = null) => {
+      const tag = {
+        id: this._nextRoomTagId++,
+        at: new THREE.Vector3(x, elevation, z),
+        levelId,
+        view: 'plan',
+        name: chip,
+        areaSqFt: 0,
+        underMin: false,
+        stamped: true,
+        base: chip,
+        ...(companionOf != null ? { companionOf } : {}),
+        layer: ROOM_TAG_LAYER,
+      };
+      this._roomTags.push(tag);
+      return tag;
+    };
+    // Companions (user-approved): the floor's FIRST tray-stamped bedroom
+    // brings ENSUITE + WALK-IN, every later one a CLOSET — placement-time
+    // only, deletable, and ordinary stamps from then on.
+    const priorBedrooms = base === 'BEDROOM'
+      ? this._roomStamps().filter(tag => tag.base === 'BEDROOM' && tag.levelId === levelId).length
+      : 0;
+    const stamp = drop(base, pt.x, pt.z);
+    const companions = base === 'BEDROOM' ? window.DraftTour.bedroomCompanions(priorBedrooms) : [];
+    companions.forEach((chip, index) => drop(chip, pt.x, pt.z + 2.2 * (index + 1), stamp.id));
+    this._refreshStampNames();
+    this._markUnsaved();
+    this.setState({
+      roomTrayArmed: null,
+      drawingMessage: companions.length
+        ? `${stamp.name} stamped — ${companions.join(' + ')} came along (drag, rename, or delete any of them).`
+        : `${stamp.name} stamped. Tap another name to keep going, or NEXT ▲ when done.`,
+      drawingMessageError: false,
+    });
+  }
+
+  // Touching a tag makes it the drafter's word: a detector tag PROMOTES to
+  // a stamp (it survives ROOM TAGS re-runs), an auto-dropped companion is
+  // CLAIMED (it outlives its bedroom). Promotion never joins a numbering
+  // pool — the current name freezes as custom.
+  _claimStampMove(tag) {
+    if (!tag.stamped) { tag.stamped = true; tag.base = null; }
+    if (tag.companionOf != null) delete tag.companionOf;
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `${tag.name} moved — it's yours now and survives ROOM TAGS re-runs.`,
+      drawingMessageError: false,
+    });
+  }
+
+  _roomTagHitAt(e) {
+    const hits = this._roomTagHits || [];
+    if (!hits.length || !this._canvas) return null;
+    const rect = this._canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    return hits.find(hit => x >= hit.x - hit.w / 2 - 4 && x <= hit.x + hit.w / 2 + 4
+      && y >= hit.y - 12 && y <= hit.y + 10) || null;
+  }
+
+  _openTagEditor(tag) {
+    const screen = this._toScreen(tag.at);
+    this._tagEditing = tag;
+    this.setState({
+      tagEditor: { x: screen.x, y: screen.y + 14 },
+      tagDraft: tag.name,
+      drawingMessage: 'Rename the room — Enter commits, empty text deletes the stamp, Escape cancels.',
+      drawingMessageError: false,
+    }, () => {
+      const input = document.querySelector('[data-tag-editor-input]');
+      if (input) { input.focus(); input.select(); }
+    });
+  }
+
+  _commitTagEdit() {
+    const tag = this._tagEditing;
+    if (!tag) return;
+    this._tagEditing = null;
+    const name = this.state.tagDraft.replace(/\s+/g, ' ').trim().toUpperCase();
+    if (!name) {
+      this.setState({ tagEditor: null, tagDraft: '' });
+      this._deleteStamp(tag);
+      return;
+    }
+    if (name === tag.name) {
+      this.setState({ tagEditor: null, tagDraft: '' });
+      return;
+    }
+    tag.name = name;
+    tag.stamped = true;
+    tag.base = null; // renamed — it left the numbering pool, custom forever
+    if (tag.companionOf != null) delete tag.companionOf;
+    this._refreshStampNames();
+    this._markUnsaved();
+    this.setState({
+      tagEditor: null,
+      tagDraft: '',
+      drawingMessage: `${name} — renamed and yours; same-name stamps renumber around it.`,
+      drawingMessageError: false,
+    });
+  }
+
+  _cancelTagEdit() {
+    this._tagEditing = null;
+    this.setState({ tagEditor: null, tagDraft: '' });
+  }
+
+  // Deleting a bedroom takes its still-attached companions with it; a
+  // companion the drafter claimed (moved or renamed) survives.
+  _deleteStamp(tag) {
+    const doomed = new Set([tag.id]);
+    this._roomTags.forEach(other => { if (other.companionOf === tag.id) doomed.add(other.id); });
+    const took = doomed.size;
+    this._roomTags = this._roomTags.filter(other => !doomed.has(other.id));
+    this._refreshStampNames();
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: took > 1
+        ? 'Stamp deleted with its attached companions — the rest renumbered.'
+        : 'Stamp deleted — the rest renumbered.',
+      drawingMessageError: false,
+    });
+  }
+
+  // Board #198: the room-tag program writes the PROJECT page's room counts
+  // at BONE time — stamps already won their rooms during detection, so
+  // counting every tag counts each room once, and the stamps are the
+  // drafter's latest word. A drawing with no tags at all stays uncounted.
+  _writeRoomCountsFromTags() {
+    if (!this._roomTags.length) return;
+    const bedrooms = this._roomTags.filter(tag => /\bBED(ROOM|RM)\b/.test(tag.name)).length;
+    const bathrooms = this._roomTags.filter(tag => /\b(BATH|WC|ENSUITE)\b/.test(tag.name)).length;
+    this.setState({ projectInfo: { ...this.state.projectInfo, bedrooms, bathrooms } });
+  }
+
   _drawRoomTags2D(ctx, toS) {
     const tags = this._activeRoomTags();
+    this._roomTagHits = [];
     if (!tags.length) return;
     ctx.save();
     ctx.textAlign = 'center';
@@ -16517,6 +16804,9 @@ class Component extends DCLogic {
       ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
       ctx.textBaseline = area ? 'bottom' : 'middle';
       ctx.fillText(tag.name, s.x, area ? s.y - 1 : s.y);
+      // Every tag is grabbable: press-drag moves it, a click renames it
+      // (board #198) — the hit rides the painted label like pad labels do.
+      this._roomTagHits.push({ tag, x: s.x, y: area ? s.y - 1 : s.y, w: ctx.measureText(tag.name).width });
       let subY = s.y + 1;
       if (area) {
         ctx.font = '500 10px "Barlow Condensed", system-ui, sans-serif';
@@ -17313,6 +17603,11 @@ class Component extends DCLogic {
     if (this.state.tourGableArmed && e.key === 'Escape' && focusedControl !== 'field') {
       e.preventDefault();
       this.setState({ tourGableArmed: false, drawingMessage: 'GABLE off.', drawingMessageError: false });
+      return;
+    }
+    if (this.state.roomTrayArmed && e.key === 'Escape' && focusedControl !== 'field') {
+      e.preventDefault();
+      this.setState({ roomTrayArmed: null, drawingMessage: 'Stamp off.', drawingMessageError: false });
       return;
     }
     // At the finale, Enter or Space presses the bone too — the hint's
@@ -18357,19 +18652,22 @@ class Component extends DCLogic {
       projectCalloutOpen: this.state.projectCallout === true,
       dismissProjectCallout: () => this._dismissProjectCallout(false),
       tourPopupOpen: !!this.state.tourPopup,
-      tourPopupTitle: this.state.tourPopup === 'main' ? 'MAIN FLOOR DONE'
-        : this.state.tourPopup === 'second' ? '2ND FLOOR DONE, GOING TO ROOF'
+      tourPopupTitle: this.state.tourPopup === 'main' ? 'MAIN FLOOR DONE \u2014 STAMP THE ROOMS'
+        : this.state.tourPopup === 'rooms-main' ? 'MAIN ROOMS DONE'
+        : this.state.tourPopup === 'second' ? '2ND FLOOR DONE \u2014 STAMP THE ROOMS'
+        : this.state.tourPopup === 'rooms-second' ? '2ND FLOOR ROOMS DONE, GOING TO ROOF'
         : this.state.tourPopup === 'roof' ? 'ROOF DONE'
         : 'FOUNDATION DONE, GOING TO MAIN FLOOR',
-      tourPopupChoice: this.state.tourPopup === 'main',
-      tourPopupSingle: this.state.tourPopup !== 'main',
+      tourPopupChoice: this.state.tourPopup === 'rooms-main',
+      tourPopupSingle: this.state.tourPopup !== 'rooms-main',
       tourPopupNote: this.state.tourPopupNote,
-      advanceTour: () => { if (this.state.tourPopup !== 'main') this._tourPopupPrimary(); },
+      advanceTour: () => { if (this.state.tourPopup !== 'rooms-main') this._tourPopupPrimary(); },
       tourNextSecond: e => { e.stopPropagation(); this._advanceTour('second'); },
       tourNextRoof: e => { e.stopPropagation(); this._advanceTour('roof'); },
       // The under-bone climb button: NEXT ▲ FLOOR while a floor's gate is
-      // lit, PRESS ▲ BONE from the roof pause on — the arrow points at the
-      // bone above. At the finale it presses the bone itself.
+      // lit (rooms pauses included), PRESS ▲ BONE from the roof pause on —
+      // the arrow points at the bone above. At the finale it presses the
+      // bone itself.
       tourUnderBoneOpen: !this.state.tourPopup
         && (this.state.tour.step === 'finale' || this._tourGateReady()),
       tourUnderBoneTop: ['roof', 'finale'].includes(this.state.tour.step) ? 'PRESS' : 'NEXT',
@@ -18388,6 +18686,34 @@ class Component extends DCLogic {
         && !this.state.tourPopup && !this._tourGateReady(),
       tourChipLabel: `TOUR \u2014 PLACE STAIRS ON ${this.state.tour.step === 'second' ? '2ND FL' : 'MAIN FL'}`,
       onTourChip: () => this._activateContextTool('stair'),
+      // The ROOM TRAY (board #198) \u2014 chips from COMPANY STANDARDS, one
+      // armed at a time; tap a chip, tap the plan.
+      roomTrayOpen: this._roomTrayActive(),
+      roomTrayChips: this.state.roomTray.map(chip => ({
+        label: chip,
+        bg: this.state.roomTrayArmed === chip ? '#1d1f20' : '#fff',
+        color: this.state.roomTrayArmed === chip ? '#f2f2f3' : '#1d1f20',
+        border: this.state.roomTrayArmed === chip ? '#1d1f20' : 'rgba(29,31,32,0.2)',
+        onTap: () => this.setState({
+          roomTrayArmed: this.state.roomTrayArmed === chip ? null : chip,
+          drawingMessage: this.state.roomTrayArmed === chip
+            ? 'Stamp off.'
+            : `${chip} armed \u2014 tap the plan where the room goes.${chip === 'BEDROOM' ? ' The first bedroom brings ENSUITE + WALK-IN; later ones a CLOSET.' : ''}`,
+          drawingMessageError: false,
+        }),
+      })),
+      tagEditorOpen: Boolean(this.state.tagEditor),
+      tagEditorX: this.state.tagEditor?.x ?? -100,
+      tagEditorY: this.state.tagEditor?.y ?? -100,
+      tagDraft: this.state.tagDraft,
+      onTagDraftInput: event => this.setState({ tagDraft: event.target.value }),
+      onTagDraftKey: event => {
+        if (event.key === 'Enter') { event.preventDefault(); this._commitTagEdit(); }
+        if (event.key === 'Escape') { event.preventDefault(); this._cancelTagEdit(); }
+        event.stopPropagation();
+      },
+      onTagCommit: () => this._commitTagEdit(),
+      onTagCancel: () => this._cancelTagEdit(),
       tourRoofRowOpen: this.state.tour.step === 'roof' && !this.state.tourPopup,
       onTourGable: () => this.setState({ tourGableArmed: !this.state.tourGableArmed }, () => this._invalidate()),
       tourGableBg: this.state.tourGableArmed ? '#b04050' : '#fff',
