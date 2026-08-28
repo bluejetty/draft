@@ -1733,6 +1733,12 @@ const COLUMN_FOOTINGS = [
   { id:'pile12', label:'12"ø PILE', sizeIn:12, pile:true, note:'12"ø CONC PILE — DEPTH PER SOILS REPORT' },
 ];
 const GARAGE_PILE_DEFAULT = 'pile10';
+// MOVE FLOOR pile stubs (board #230 slice 3): a pulled floor corner past the
+// 2' cantilever rides on 8x8 wood posts down to drilled piles — the stubs
+// reuse the pile-column machinery, and the pulled level carries the office's
+// standard engineer notice.
+const TOUR_PULL_PILE = 'pile8';
+const TOUR_PULL_NOTE_BODY = "CANTILEVERED FLOOR — ENGINEER'S REVIEW AND STAMP REQUIRED. 8x8 WOOD POSTS ON CONC PILES — EMBEDDED STEEL SADDLE BRACKETS.";
 const COLUMN_SIZE_IN = 3; // 3"ø adjustable steel telepost
 const STRUCT_SNAP_FT = 1; // columns and beam ends pull onto each other inside this
 const COLUMN_LAYER = 'S-COL-FOOTING';
@@ -2431,6 +2437,10 @@ class Component extends DCLogic {
         ...(Number.isFinite(Number(column.padIn)) && Number(column.padIn) > 0
           ? { padIn: Number(column.padIn) } : {}),
         auto: column.auto === true,
+        // MOVE FLOOR pile stubs stay keyed to the pulled corner and level so
+        // a later pull of the same corner re-lands exactly its own piles.
+        ...(column.pullSrcId != null
+          ? { pullSrcId: column.pullSrcId, pullLevelId: column.pullLevelId } : {}),
         layer: COLUMN_LAYER,
       })),
       nextColumnId: this._nextColumnId || 1,
@@ -3437,30 +3447,200 @@ class Component extends DCLogic {
   // Stacked stairs (slice 2): on the 2ND FLOOR the tour snaps the top
   // nosing into the run below's zone — guiding, not scolding. Within the
   // zone the point stands; near it, it snaps to the zone edge; far away
-  // the click is refused with the reason.
+  // the click is refused with the reason. The zone math lives in tour.js
+  // (the slice-3 graduation); this wrapper keeps the THREE types.
   _tourStairSnap(pt) {
     const below = this._stairs.filter(stair => stair.levelId === 3);
-    if (!below.length) return { pt, snapped: false };
-    let best = null;
-    below.forEach(stair => {
-      const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
-      const len = Math.hypot(dx, dz) || 1;
-      const ux = dx / len, uz = dz / len;
-      const half = (stair.widthFt || 3) / 2 + 1; // the landing zone: run + 1' margin
-      const relX = pt.x - stair.start.x, relZ = pt.z - stair.start.z;
-      const along = Math.max(0, Math.min(len, relX * ux + relZ * uz));
-      const across = Math.max(-half, Math.min(half, -relX * uz + relZ * ux));
-      const zx = stair.start.x + ux * along - uz * across;
-      const zz = stair.start.z + uz * along + ux * across;
-      const dist = Math.hypot(pt.x - zx, pt.z - zz);
-      if (!best || dist < best.dist) best = { x: zx, z: zz, dist };
-    });
-    if (best.dist < 0.05) return { pt, snapped: false };          // already inside
-    if (best.dist <= 6) {
-      const snapped = pt.clone(); snapped.x = best.x; snapped.z = best.z;
-      return { pt: snapped, snapped: true };
+    const zone = window.DraftTour.stairSnapZone(pt, below);
+    if (!zone) return null;
+    if (!zone.snapped) return { pt, snapped: false };
+    const snapped = pt.clone(); snapped.x = zone.x; snapped.z = zone.z;
+    return { pt: snapped, snapped: true };
+  }
+
+  // ── MOVE FLOOR (board #230 slice 3): the pull ladder ──────────────────────
+  // While the tour holds a floor, pulling a house-outline corner past the
+  // support below follows the drafter's ladder (tour.js floorPullLadder):
+  // free cantilever to 2', a snap across the forbidden band to 4'-6", pile
+  // stages riding the corner out to the 18' ceiling. The drag itself feels
+  // the ladder; the consequences — pile stubs on the FOUNDATION plan and
+  // the engineer notice — commit on release.
+
+  // The dragged house-outline-copy corner on THE FLOOR THE TOUR IS
+  // ESCORTING, or null — MOVE FLOOR is the step's own affordance, so the
+  // ladder binds the MAIN copy during the main step and the 2ND FLOOR copy
+  // during the second, and every other level keeps its ordinary free node
+  // editing. Refs carry their outline, so one walk finds the pulled copy.
+  _tourPullRefs(sd) {
+    const stepLevelId = { main: 3, second: 5 }[this.state.tour.step];
+    if (!stepLevelId) return null;
+    for (const ref of sd.refs) {
+      const outline = ref.outline;
+      if (!outline || outline.garage || outline.masterId == null) continue;
+      if (outline.levelId !== stepLevelId) continue;
+      return { outline, point: outline.points[ref.prop] };
     }
     return null;
+  }
+
+  // The supporting outline below a pulled floor: MAIN pulls past the
+  // FOUNDATION, the 2ND FLOOR past MAIN (pulls included). The boneyard
+  // master backstops a drawing with no level-1 copy.
+  _tourPullSupport(levelId) {
+    const below = levelId === 5 ? [3, BASEMENT_LEVEL_ID] : [BASEMENT_LEVEL_ID];
+    for (const id of below) {
+      const outline = this._houseOutline(id);
+      if (outline) return outline;
+    }
+    return this._boneyardOutlines.find(outline => !outline.garage && outline.open !== true) || null;
+  }
+
+  // Where the pulled corner stands against the support: inside it, or d feet
+  // past it with q the nearest point on the support boundary — the spot the
+  // pile distances measure from.
+  _tourPullMeasure(point, support) {
+    let best = null;
+    const count = this._outlineSegmentCount(support);
+    for (let index = 0; index < count; index++) {
+      const seg = this._outlineSegment(support, index);
+      const { d, t } = this._distToLineSeg(point, seg);
+      if (!best || d < best.d) best = { d, q: this._pointOnLineSeg(seg, t) };
+    }
+    if (!best) return null;
+    return { inside: this._pointInOutline(support.points, point), d: best.d, q: best.q };
+  }
+
+  _setTourPullMessage(text, error) {
+    if (this.state.drawingMessage === text) return;
+    this.setState({ drawingMessage: text, drawingMessageError: error });
+  }
+
+  _tourPullReadout(verdict, rawD) {
+    const fmt = ft => formatArchitecturalInches(ft * 12);
+    const tour = window.DraftTour;
+    if (rawD > tour.FLOOR_PULL_MAX_FT + 1e-9) {
+      return `${fmt(tour.FLOOR_PULL_MAX_FT)} is the maximum pull.`;
+    }
+    if (!verdict.piles.length) {
+      return `Cantilever ${fmt(verdict.d)} — free to ${fmt(tour.FLOOR_CANTILEVER_FT)}, no pile.`;
+    }
+    if (verdict.piles.length === 1) {
+      return verdict.d > verdict.piles[0] + 1e-9
+        ? `Pulled ${fmt(verdict.d)} — the pile parks at ${fmt(verdict.piles[0])} and the corner cantilevers past it. ENGINEER'S REVIEW AND STAMP required.`
+        : `Pulled ${fmt(verdict.d)} — a pile rides under the corner. ENGINEER'S REVIEW AND STAMP required.`;
+    }
+    return `Pulled ${fmt(verdict.d)} — two piles, matched spacing. ENGINEER'S REVIEW AND STAMP required.`;
+  }
+
+  // The live half: runs inside the node drag, adjusting the vertex in place
+  // so the drag feels the ladder (the band skip, the 18' wall), with the
+  // verdict narrated as it changes. The ladder binds whenever the tour holds
+  // a floor — never a hard lock: free node editing stays free (the tour
+  // guides, it doesn't cage), the stairs sequencing lives in the popups and
+  // the climb gate, and the office's structural rule simply rides every
+  // outward pull.
+  _tourFloorPullConstrain(sd, pt) {
+    const info = this._tourPullRefs(sd);
+    if (!info) return;
+    const levelId = info.outline.levelId;
+    const support = this._tourPullSupport(levelId);
+    if (!support) return;
+    const measure = this._tourPullMeasure(pt, support);
+    if (!measure) return;
+    if (measure.inside) {
+      this._setTourPullMessage('Pulled IN — allowed. The uncovered strip stays floor for now.', false);
+      return;
+    }
+    if (measure.d < 1e-6) return;
+    const verdict = window.DraftTour.floorPullLadder(measure.d);
+    if (Math.abs(verdict.d - measure.d) > 1e-9) {
+      const ux = (pt.x - measure.q.x) / measure.d, uz = (pt.z - measure.q.z) / measure.d;
+      pt.x = measure.q.x + ux * verdict.d;
+      pt.z = measure.q.z + uz * verdict.d;
+    }
+    this._setTourPullMessage(this._tourPullReadout(verdict, measure.d), false);
+  }
+
+  // The release half: the corner's pile stubs re-land on the FOUNDATION plan
+  // at the ladder's spots — auto columns keyed to this corner and level, so
+  // hand-placed piles are never touched and pulling back in clears them.
+  // Runs inside the mouseup that marks the drag unsaved, so the vertex move
+  // and its piles are one history entry; the returned message lands after.
+  _tourFloorPullRelease(sd) {
+    const info = this._tourPullRefs(sd);
+    if (!info) return null;
+    const { outline, point } = info;
+    const srcId = point.srcId ?? null;
+    if (srcId == null) return null;
+    const support = this._tourPullSupport(outline.levelId);
+    if (!support) return null;
+    const measure = this._tourPullMeasure(point, support);
+    if (!measure) return null;
+    const verdict = measure.inside || measure.d < 1e-6
+      ? { d: 0, piles: [] }
+      : window.DraftTour.floorPullLadder(measure.d);
+    const before = this._columns.length;
+    this._columns = this._columns.filter(column => !(column.auto === true
+      && column.pullSrcId === srcId && column.pullLevelId === outline.levelId));
+    const removed = before !== this._columns.length;
+    const ux = verdict.piles.length ? (point.x - measure.q.x) / measure.d : 0;
+    const uz = verdict.piles.length ? (point.z - measure.q.z) / measure.d : 0;
+    const fdnLevel = this.state.levels.find(level => level.id === BASEMENT_LEVEL_ID);
+    const elevation = fdnLevel ? fdnLevel.elev : 0;
+    verdict.piles.forEach(distFt => {
+      this._columns.push({
+        id: this._nextColumnId++,
+        point: new THREE.Vector3(measure.q.x + ux * distFt, elevation, measure.q.z + uz * distFt),
+        levelId: BASEMENT_LEVEL_ID,
+        view: 'foundation',
+        footing: TOUR_PULL_PILE,
+        auto: true,
+        pullSrcId: srcId,
+        pullLevelId: outline.levelId,
+        layer: COLUMN_LAYER,
+      });
+    });
+    this._syncTourPullNote(outline.levelId, point, ux, uz);
+    if (verdict.piles.length) {
+      const stubs = verdict.piles.length === 1
+        ? 'One pile stub landed on the FOUNDATION plan under the pull'
+        : 'Two pile stubs landed on the FOUNDATION plan, matched spacing';
+      return `${stubs} — drag them along, add or delete, click a label to resize. ENGINEER'S REVIEW AND STAMP noted on this floor.`;
+    }
+    if (removed) return "Pulled back — the corner's pile stubs cleared.";
+    return null;
+  }
+
+  // The engineer notice is a real A-ANNO-NOTE on the pulled floor — one per
+  // level, deduped and cleared by its standard text, so a note the drafter
+  // edits becomes their own and is left alone.
+  _syncTourPullNote(levelId, point, ux, uz) {
+    const needed = this._columns.some(column => column.auto === true && column.pullLevelId === levelId);
+    const existing = this._notes.some(note => note.levelId === levelId && note.body === TOUR_PULL_NOTE_BODY);
+    if (!needed) {
+      if (existing) {
+        this._notes = this._notes.filter(note => !(note.levelId === levelId && note.body === TOUR_PULL_NOTE_BODY));
+      }
+      return;
+    }
+    if (existing) return;
+    const levelElev = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
+    const dirX = ux || 1;
+    this._notes.push({
+      id: this._nextNoteId++,
+      anchor: new THREE.Vector3(point.x, levelElev, point.z),
+      text: new THREE.Vector3(point.x + dirX * 4, levelElev, point.z + uz * 4),
+      levelId,
+      view: 'plan',
+      pane: null,
+      body: TOUR_PULL_NOTE_BODY,
+      end: 'arrow',
+      fill: true,
+      fillOpacity: 0.85,
+      outline: false,
+      bullnose: 0,
+      layer: NOTE_LAYER,
+    });
   }
 
   // Q3, confirmed: a stair on MAIN re-runs the span rule with the stair's
@@ -3489,7 +3669,9 @@ class Component extends DCLogic {
       return { min: Math.min(...coords), max: Math.max(...coords) };
     });
     this._beams = this._beams.filter(beam => !beam.auto);
-    this._columns = this._columns.filter(column => !column.auto);
+    // Only the tour's teleposts are the beam's to replace — MOVE FLOOR's
+    // auto PILE stubs belong to their pulled corner, not the stair layout.
+    this._columns = this._columns.filter(column => !column.auto || this._columnFooting(column).pile);
     const fdnLevel = this.state.levels.find(lvl => lvl.id === BASEMENT_LEVEL_ID);
     const elev = fdnLevel ? fdnLevel.elev : 0;
     const plan = window.DraftBuildHouse.midSpanBeams(points, { holes });
@@ -5140,7 +5322,14 @@ class Component extends DCLogic {
           if (!this._handlePadLabelClick(e)) this._handleSelectClick(info.worldPt, info.shiftHeld);
         }
       }
-      if (sd?.active) this._markUnsaved();
+      if (sd?.active) {
+        // MOVE FLOOR commits its consequences with the drag's own history
+        // entry: pile stubs and the engineer notice land before the mark,
+        // and the summary message after it (the mark clears messages).
+        const pullMessage = this._tourFloorPullRelease(sd);
+        this._markUnsaved();
+        if (pullMessage) this.setState({ drawingMessage: pullMessage, drawingMessageError: false });
+      }
       // A grabbed node that never travelled is a click: hand it to the tool.
       else if (sd?.clickTool) this._dispatchToolClick(sd.clickTool, e);
     });
@@ -6186,6 +6375,21 @@ class Component extends DCLogic {
       };
       const active = this._activeColumns();
       active.forEach(column => drawColumn(column));
+      // MOVE FLOOR pile stubs live on the FOUNDATION plan; the pulled floor
+      // shows its own as context ghosts so the drafter sees what carries
+      // the pull without leaving the level.
+      if (view !== 'foundation') {
+        const ghostLevelId = this._activeLevelId();
+        this._columns
+          .filter(column => column.auto === true && column.pullLevelId === ghostLevelId
+            && this._columnFooting(column).pile)
+          .forEach(column => {
+            ctx.save();
+            ctx.globalAlpha = 0.35;
+            drawColumn(column);
+            ctx.restore();
+          });
+      }
       if (view === 'foundation') {
         const shown = new Set(active);
         const upper = this._columns.filter(column => column.levelId > 0 && !shown.has(column));
@@ -9345,6 +9549,9 @@ class Component extends DCLogic {
         const raw = this._getWorldPos(e.clientX, e.clientY);
         if (raw) {
           const pt = this._dragSnapPoint(raw, sd);
+          // MOVE FLOOR: a tour floor's outline corner rides the pull ladder —
+          // the point is adjusted in place before any ref sees it.
+          this._tourFloorPullConstrain(sd, pt);
           sd.refs.forEach(r => {
             const target = r.target || r.seg;
             target[r.prop].x = pt.x;

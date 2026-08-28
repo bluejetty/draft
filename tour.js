@@ -1,11 +1,74 @@
 // The guided tour's pure rules (board #230/#238) — plain data in, verdicts
-// and geometry out: no state, no DOM, no THREE. Slice 5 starts the module
+// and geometry out: no state, no DOM, no THREE. Slice 5 started the module
 // with the roof step's math (gable anchors, snapping, splitting, the
-// wall-lengthens number, the finale's reveal easing); the earlier slices'
-// rules graduate here as they're touched. Everything below was validated
-// offline before wiring.
+// wall-lengthens number, the finale's reveal easing); slice 3 adds the
+// MOVE FLOOR pull ladder and graduates the stacked-stair snap zone here.
+// Everything below was validated offline before wiring.
 if (!window.DraftTour) {
 (() => {
+  // ── MOVE FLOOR: the pull ladder (slice 3, the drafter's exact numbers) ──
+  // How far a floor corner may pull past the supporting wall/footing below,
+  // and where the pile stubs land as it goes:
+  //   0 → 2'        pure cantilever — no pile (2' is the office's hard cap)
+  //   2' → 4'-6"    FORBIDDEN — the drag snaps across to the nearest side
+  //                 (3' is both an illegal cantilever and a bad pile spot)
+  //   4'-6" → 8'    one pile riding directly under the pulled corner
+  //   8' → 10'      the pile parks at 8'; the corner cantilevers ≤2' past it
+  //   10' → 18'     two piles: the outer rides the corner (parking at 16'),
+  //                 the inner always splits the footing→outer run evenly, so
+  //                 every span stays ≤8' and the final cantilever stays ≤2'
+  //   18'           the ceiling — the pull refuses to go further.
+  // The same 2' cap deliberately appears twice: off the footing at the
+  // bottom of the ladder, and off the outermost pile at the top of each
+  // pile stage. Pile distances are measured from the support toward the
+  // pulled corner.
+  const FLOOR_PULL_MAX_FT = 18;
+  const FLOOR_CANTILEVER_FT = 2;
+  const FLOOR_FIRST_PILE_FT = 4.5;
+  const FLOOR_ONE_PILE_PARK_FT = 8;
+  const FLOOR_TWO_PILE_PARK_FT = 16;
+  const floorPullLadder = requestedFt => {
+    let d = Math.max(0, Math.min(FLOOR_PULL_MAX_FT, requestedFt));
+    if (d > FLOOR_CANTILEVER_FT && d < FLOOR_FIRST_PILE_FT) {
+      d = d - FLOOR_CANTILEVER_FT < FLOOR_FIRST_PILE_FT - d
+        ? FLOOR_CANTILEVER_FT : FLOOR_FIRST_PILE_FT;
+    }
+    if (d <= FLOOR_CANTILEVER_FT) return { d, piles: [] };
+    if (d <= FLOOR_ONE_PILE_PARK_FT) return { d, piles: [d] };
+    if (d <= FLOOR_ONE_PILE_PARK_FT + FLOOR_CANTILEVER_FT) {
+      return { d, piles: [FLOOR_ONE_PILE_PARK_FT] };
+    }
+    const outer = Math.min(d, FLOOR_TWO_PILE_PARK_FT);
+    return { d, piles: [outer / 2, outer] };
+  };
+
+  // Stacked stairs (slice 2, graduated here): on the 2ND FLOOR the top
+  // nosing snaps into the run-below's landing zone — the run's rectangle
+  // plus a 1' margin. Inside the zone the point stands (snapped:false);
+  // within snapFt of it, the point snaps to the zone edge; farther away
+  // the click is refused (null). Stairs are plain {start:{x,z}, end:{x,z},
+  // widthFt} runs.
+  const stairSnapZone = (pt, stairs, marginFt = 1, snapFt = 6) => {
+    if (!Array.isArray(stairs) || !stairs.length) return { x: pt.x, z: pt.z, snapped: false };
+    let best = null;
+    stairs.forEach(stair => {
+      const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+      const len = Math.hypot(dx, dz) || 1;
+      const ux = dx / len, uz = dz / len;
+      const half = (stair.widthFt || 3) / 2 + marginFt;
+      const relX = pt.x - stair.start.x, relZ = pt.z - stair.start.z;
+      const along = Math.max(0, Math.min(len, relX * ux + relZ * uz));
+      const across = Math.max(-half, Math.min(half, -relX * uz + relZ * ux));
+      const zx = stair.start.x + ux * along - uz * across;
+      const zz = stair.start.z + uz * along + ux * across;
+      const dist = Math.hypot(pt.x - zx, pt.z - zz);
+      if (!best || dist < best.dist) best = { x: zx, z: zz, dist };
+    });
+    if (best.dist < 0.05) return { x: pt.x, z: pt.z, snapped: false }; // already inside
+    if (best.dist <= snapFt) return { x: best.x, z: best.z, snapped: true };
+    return null;
+  };
+
   // Anchors along one wall edge (a → b), harvested from what the floors
   // below put under it: opening centers (W/D), exterior-run midpoints
   // (WALL), adjacent column-pair midpoints (COL). Candidates are projected
@@ -75,6 +138,10 @@ if (!window.DraftTour) {
   };
 
   window.DraftTour = Object.freeze({
+    floorPullLadder,
+    FLOOR_PULL_MAX_FT,
+    FLOOR_CANTILEVER_FT,
+    stairSnapZone,
     normaliseTourRoofIncrements,
     gableAnchors,
     snapAlongEdge,
