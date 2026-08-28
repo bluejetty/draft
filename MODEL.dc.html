@@ -8775,7 +8775,7 @@ class Component extends DCLogic {
         if (!nearGable) return;
         const rise = this._sectionRoofHeightAt(pt, roof, roofFaces);
         if (rise == null) return;
-        top = Math.max(top, base + ROOF_FASCIA_IN / 12 + rise);
+        top = Math.max(top, base + rise);   // wall stops under the fascia
       });
       return top;
     };
@@ -9008,6 +9008,28 @@ class Component extends DCLogic {
                 ctx.stroke();
               }
             });
+            const overhang = Number(roof.overhang) || 0;
+            if (rake && runs.length && overhang > 0.05) {
+              // The metal soffit closes the corner: a line from the low
+              // point of the rake fascia straight back to the house wall,
+              // the flat soffit plane under the eave-overhang triangle.
+              const drop = ROOF_FASCIA_IN / 12;
+              const lo = ea <= eb ? { p: a, u: ua, e: ea } : { p: b, u: ub, e: eb };
+              const hi = ea <= eb ? { p: b } : { p: a };
+              const len = Math.hypot(hi.p.x - lo.p.x, hi.p.z - lo.p.z) || 1;
+              const wallU = (lo.p.x + (hi.p.x - lo.p.x) / len * overhang) * axis.x
+                + (lo.p.z + (hi.p.z - lo.p.z) / len * overhang) * axis.z;
+              const shown = runs.some(r => Math.min(r.u0, r.u1) - 0.1 <= lo.u
+                && lo.u <= Math.max(r.u0, r.u1) + 0.1);
+              if (shown && Math.abs(wallU - lo.u) > 0.2
+                && lo.u >= uMin - 0.01 && lo.u <= uMax + 0.01) {
+                ctx.strokeStyle = INK; ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(X(lo.u), Y(lo.e - drop));
+                ctx.lineTo(X(Math.max(uMin, Math.min(uMax, wallU))), Y(lo.e - drop));
+                ctx.stroke();
+              }
+            }
           }
         });
       });
