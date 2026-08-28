@@ -10,6 +10,8 @@ Years before a line of Rough Drafter existed, the founder worked a drafting stal
 
 It was a joke about the gap everyone in the trade knows: home-improvement TV taught clients to expect a finished house in a 22-minute episode, while real drafting took weeks of back-and-forth. The drive-thru was the absurd answer — service at the speed people actually wanted it.
 
+And at the time it was funny precisely **because it was impossible**. Everyone in the trade knew drafting could never move at window speed — that certainty was the whole joke. The tooling eventually caught up to the punchline.
+
 The joke turned out to be the correct product spec. The drive-thru became:
 
 - **The flagship ad universe** — THE DRIVE-THRU, THE MANAGER, the McRuffDrafter counter, the deadpan dogs in paper visors working the window (`ADVERTISEMENT/THE-MANAGER-script.md` and family).
