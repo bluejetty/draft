@@ -11971,7 +11971,6 @@ class Component extends DCLogic {
             z: closed[0].z - closed[legCount - 1].z,
           };
           const chordLen = Math.hypot(chord.x, chord.z) || 1;
-          const distances = closed.map((point, index) => (index < legCount - 1 ? overhang : 0));
           edges = closed.map((point, index) => {
             if (index >= legCount - 1) return 'gable';
             const next = closed[index + 1];
@@ -11980,6 +11979,11 @@ class Component extends DCLogic {
             const cross = Math.abs(dx * chord.z - dz * chord.x) / (len * chordLen);
             return cross < 0.5 ? 'gable' : 'eave'; // within ~30° of the house line
           });
+          // The GABLE CORNER style shapes the street-face gable too (board
+          // #252): boxed treatments halve it. The house-side edges stay zero.
+          const cornerStyle = this._gableCornerStyle();
+          const distances = edges.map((kind, index) => (index < legCount - 1
+            ? window.DraftGeometry2D.gableOverhangFt(kind, overhang, cornerStyle) : 0));
           points = window.DraftGeometry2D.offsetOutlineVariable(closed, distances);
         } else {
           points = this._offsetOutline(closed, overhang);
