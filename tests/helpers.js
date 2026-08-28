@@ -8,15 +8,22 @@ const { expect } = require('@playwright/test');
 const HALF_HEIGHT_FT = 25;          // default ortho half-height in _init()
 const STORAGE_BUCKET = 'model-drawing';
 
-async function openModel(page, { webgl = true, rails = true } = {}) {
+async function openModel(page, { webgl = true, rails = true, boneWallet = true } = {}) {
   // Init scripts run on every navigation, so the flag keeps a reload inside a
-  // test from wiping the drawing the test just made.
-  await page.addInitScript(() => {
+  // test from wiping the drawing the test just made. The FAT TEST WALLET
+  // (board #261): every spec gets 999 bones so bone-count never becomes a
+  // hidden constraint on unrelated tests — bone-wallet.spec.js opts out
+  // (boneWallet: false) to test the real 3-bone / drip / cap behavior.
+  await page.addInitScript(seedWallet => {
     if (sessionStorage.getItem('draft-test-storage-cleared')) return;
     sessionStorage.setItem('draft-test-storage-cleared', '1');
     indexedDB.deleteDatabase('pdf-img-mgr-shared');
     localStorage.clear();
-  });
+    if (seedWallet) {
+      localStorage.setItem('draft-bone-wallet',
+        JSON.stringify({ balance: 999, lastDripAt: Date.now(), createdAt: Date.now() }));
+    }
+  }, boneWallet);
   if (!webgl) {
     await page.addInitScript(() => {
       const real = HTMLCanvasElement.prototype.getContext;
