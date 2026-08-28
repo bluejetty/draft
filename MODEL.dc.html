@@ -8945,6 +8945,10 @@ class Component extends DCLogic {
       facesByRoof.forEach((roofFaces, roof) => {
         const eaveTop = this._roofBaseElev(roof, stack) + ROOF_FASCIA_IN / 12;
         const pitch = roof.pitch || 4;
+        const rpts = roof.points || [];
+        const gableSegs = rpts.flatMap((a, i) => (roof.edges?.[i] === 'gable'
+          ? [{ a, b: rpts[(i + 1) % rpts.length] }] : []));
+        const onGable = p => gableSegs.some(s => distToSegment(p, s.a, s.b) < 0.1);
         roofFaces.forEach(face => {
           const poly = face.points;
           for (let i = 0; i < poly.length; i++) {
@@ -8970,6 +8974,7 @@ class Component extends DCLogic {
               else { run.u1 = u; run.e1 = elev; }
             }
             const eave = Math.abs(ea - eaveTop) < 0.01 && Math.abs(eb - eaveTop) < 0.01;
+            const rake = !eave && onGable(a) && onGable(b);
             runs.forEach(r => {
               if (Math.abs(r.u1 - r.u0) < 0.05 && Math.abs(r.e1 - r.e0) < 0.05) return;
               if (eave) {
@@ -8983,6 +8988,18 @@ class Component extends DCLogic {
                 ctx.beginPath();
                 ctx.moveTo(X(r.u0), Y(eaveTop - ROOF_FASCIA_IN / 12));
                 ctx.lineTo(X(r.u1), Y(eaveTop - ROOF_FASCIA_IN / 12));
+                ctx.stroke();
+              } else if (rake && Math.abs(r.u1 - r.u0) > 0.2) {
+                // A rake wears its fascia too: the sloped board along the
+                // gable edge, top line light, heavy shadow 5.5" under it.
+                const drop = ROOF_FASCIA_IN / 12;
+                ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(X(r.u0), Y(r.e0)); ctx.lineTo(X(r.u1), Y(r.e1));
+                ctx.stroke();
+                ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
+                ctx.beginPath();
+                ctx.moveTo(X(r.u0), Y(r.e0 - drop)); ctx.lineTo(X(r.u1), Y(r.e1 - drop));
                 ctx.stroke();
               } else {
                 ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
