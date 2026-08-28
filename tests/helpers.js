@@ -8,7 +8,7 @@ const { expect } = require('@playwright/test');
 const HALF_HEIGHT_FT = 25;          // default ortho half-height in _init()
 const STORAGE_BUCKET = 'model-drawing';
 
-async function openModel(page, { webgl = true } = {}) {
+async function openModel(page, { webgl = true, rails = true } = {}) {
   // Init scripts run on every navigation, so the flag keeps a reload inside a
   // test from wiping the drawing the test just made.
   await page.addInitScript(() => {
@@ -28,15 +28,28 @@ async function openModel(page, { webgl = true } = {}) {
   }
   await page.goto('/MODEL.dc.html');
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await waitForModelReady(page);
+  await waitForModelReady(page, { rails });
   return page.locator('[data-model-canvas]');
+}
+
+// Pulls out any still-hidden side rail by its edge tab (TOOLS / LEVELS).
+async function openRails(page) {
+  if (await page.locator('[data-left-rail-tab]').count() === 0) return;
+  if (!(await page.locator('[data-model-left]').isVisible())) {
+    await page.locator('[data-left-rail-tab]').click();
+    await expect(page.locator('[data-model-left]')).toBeVisible();
+  }
+  if (!(await page.locator('[data-model-right]').isVisible())) {
+    await page.locator('[data-right-rail-tab]').click();
+    await expect(page.locator('[data-model-right]')).toBeVisible();
+  }
 }
 
 // The app stamps data-model-ready on <body> once init and the initial
 // drawing load finish — a condition wait instead of a fixed settle, so a
 // slow machine waits longer and a fast one doesn't wait at all. Use after
 // page.reload() too.
-async function waitForModelReady(page) {
+async function waitForModelReady(page, { rails = true } = {}) {
   await page.waitForFunction(() => document.body.dataset.modelReady === '1');
   // The entry performance notice pops right after the profile restore that
   // follows model-ready; put it away so it never covers the top-bar build
@@ -44,6 +57,9 @@ async function waitForModelReady(page) {
   // its own inline waits instead of this helper.
   const gotIt = page.locator('[data-perf-notice-continue]');
   try { await gotIt.click({ timeout: 2000 }); } catch { /* opted out or already gone */ }
+  // Both side rails start tucked behind their pull tabs (#242); nearly every
+  // spec works the rails, so pull them out unless the test opts out.
+  if (rails) await openRails(page);
 }
 
 // Top view keeps the camera at the origin, so feet map to pixels linearly.
@@ -182,6 +198,7 @@ module.exports = {
   HALF_HEIGHT_FT,
   STORAGE_BUCKET,
   openModel,
+  openRails,
   waitForModelReady,
   worldToClient,
   moveTo,

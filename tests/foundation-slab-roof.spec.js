@@ -116,7 +116,7 @@ test('FLOOR FROM SHAPE on FOUNDATION builds a slab from the shape', async ({ pag
 test('framed floors elsewhere are untouched by the foundation slab path', async ({ page }) => {
   await h.openModel(page);
   await switchLevel(page, 'MAIN FL');
-  await switchLayerView(page, 'FLOOR');
+  await switchLayerView(page, 'FLOOR PLAN');
   await drawFloorOutline(page);
 
   const saved = await h.savedDrawing(page);

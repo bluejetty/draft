@@ -103,20 +103,22 @@ test('a second BUILD HOUSE click never doubles the shell', async ({ page }) => {
   expect(saved.roofs).toHaveLength(1);
 });
 
-test('footing width edits on the level card and recenters the rings', async ({ page }) => {
+test('a wider saved footing width recenters the footing rings', async ({ page }) => {
   await h.openModel(page);
-  const fdn = page.locator('.level-row').filter({ has: page.locator('.level-name', { hasText: 'FOUNDATION' }) });
 
-  // The width lives on the FOUNDATION card (never printed on plan).
-  await fdn.locator('.level-edge-edit[title^="Footing width"]').click();
-  await expect(fdn.locator('.assembly-label')).toHaveText('FTG W');
-  const input = fdn.locator('.assembly-input');
-  await expect(input).toHaveValue('20"');
-  await input.fill('24');
-  await input.press('Enter');
-  await expect(fdn.locator('.level-edge-edit[title^="Footing width"]')).toHaveText('24" W');
-  await h.waitForSaved(page);
+  // The width left the FOUNDATION card face — it changes on the PROJECT page
+  // now, landing in the same saved assembly slot.
+  const fdn = page.locator('.level-row').filter({ has: page.locator('.level-name', { hasText: 'FOUNDATION' }) });
+  await expect(fdn.locator('.level-edge-edit[title^="Footing width"]')).toHaveCount(0);
+  await page.locator('[data-project-open]').click();
+  await page.waitForURL(/PROJECT\.html/);
+  const width = page.locator('[data-detail-input="footingWidth"]');
+  await width.fill('24');
+  await width.dispatchEvent('change');
+  await expect(page.locator('#status')).toContainText('saved');
   expect((await h.savedDrawing(page)).levelAssemblies['1'].footingWidthIn).toBe(24);
+  await page.goto('/MODEL.dc.html');
+  await h.waitForModelReady(page);
 
   // BUILD HOUSE draws the wider footing: 24" on the 8" wall = 8" each side.
   await drawOutlineRect(page);

@@ -127,7 +127,7 @@ test('editing a derived floor never moves the source shape', async ({ page }) =>
 
   // Drag the floor's corner on the FLOOR layer set, where the shape's own
   // corner is not the nearer vertex.
-  await levelRow(page, 'MAIN FL').getByRole('button', { name: 'FLOOR', exact: true }).click();
+  await levelRow(page, 'MAIN FL').getByRole('button', { name: 'FLOOR PLAN', exact: true }).click();
   await page.waitForTimeout(300);
   await h.selectTool(page, 'Select');
   const from = await h.worldToClient(page, 8, 6);
