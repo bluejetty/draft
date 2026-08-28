@@ -269,13 +269,17 @@ test.describe('Generated section view', () => {
         }
         if (best > W * 0.6) gradeY = y;
       }
-      // Deepest ink below grade, and concrete fills (there must be none).
+      // Deepest ink below grade, and BURIED concrete fills (there must be
+      // none — the beam hangs with no gravel bed). The census stays below
+      // grade: above it, the house standing BEHIND the garage legitimately
+      // shows its floor-assembly band since the garage roof dropped to its
+      // own single-storey height (board #245).
       let deepest = gradeY, grayCount = 0;
-      for (let y = Math.floor(H * 0.05); y < H; y++) {
+      for (let y = gradeY + 2; y < H; y++) {
         for (let x = Math.floor(W * 0.25); x < W; x++) {
           const i = at(x, y);
           if (gray(i)) grayCount += 1;
-          if (y > gradeY + 2 && inked(i)) deepest = Math.max(deepest, y);
+          if (inked(i)) deepest = Math.max(deepest, y);
         }
       }
       return { gradeY, deepest, grayCount, H };
@@ -284,7 +288,7 @@ test.describe('Generated section view', () => {
     // The hung beam's dashed band stops well short of basement depth: the
     // sheet still reserves footing depth, so buried ink stays shallow.
     expect(scan.deepest - scan.gradeY).toBeLessThan((scan.H - scan.gradeY) * 0.6);
-    // Elevations carry no concrete fills and no gravel bed.
+    // No buried concrete fills and no gravel bed under the hung beam.
     expect(scan.grayCount).toBeLessThan(100);
   });
 

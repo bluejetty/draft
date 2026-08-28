@@ -11799,12 +11799,24 @@ class Component extends DCLogic {
     return true;
   }
 
+  // The garage roof DROP rule (board #245): a garage zone is one storey, so
+  // when the house stands taller — more than one floor level in the stack
+  // (deleting the 2ND FL card makes a bungalow) — the attached garage stops
+  // sharing the house roof and gets its own single-storey roof, flush-cut
+  // at the upper-storey wall face. A single-storey house keeps the splice.
+  _garageRoofDrops() {
+    return this._floorLevels().length > 1;
+  }
+
   // The combined roof loop: with an attached flush-ceiling garage, the house
   // boundary path on the garage side (between the two shared attachment
   // nodes) is replaced by the garage's open legs, so one roof covers house +
-  // garage and the shared boundary never reaches the roof.
+  // garage and the shared boundary never reaches the roof. When the drop
+  // rule fires the splice is skipped — the house roof stays the plain house
+  // loop and the garage builds its own roof below.
   _houseRoofLoop(house) {
     const base = house.points.map(pt => ({ x: pt.x, z: pt.z, srcId: pt.srcId ?? null }));
+    if (this._garageRoofDrops()) return base;
     const garage = this._garageOutline(house.levelId);
     if (!garage || garage.open !== true) return base;
     const master = this._boneyardOutlines.find(item => item.id === garage.masterId);
@@ -11827,22 +11839,37 @@ class Component extends DCLogic {
   // from the house. A DETACHED garage has no house adjacency, so every edge
   // is an eave; a legacy closed garage tags its house-shared edge GABLE so
   // the planes run into the house roof, and the join usually needs a manual
-  // touch. An OPEN attached garage (flush ceiling) never builds its own roof
-  // — the house roof already spans the combined loop.
+  // touch. An OPEN attached garage (flush ceiling) builds no roof of its
+  // own beside a single-storey house — the house roof spans the combined
+  // loop — but when the DROP rule fires (board #245, the house stands
+  // taller) it builds a detached-style roof at the garage's own plate:
+  // ridge perpendicular to the shared house wall (the street face and the
+  // house side read GABLE, the legs read EAVE, so the planes drain away
+  // from the house — no valley against the upper wall), normal overhang on
+  // the three free sides, and ZERO on the house side — the roof plane runs
+  // right TO the upper-storey wall face and stops. Flashing is implied,
+  // not drawn.
   _buildGarageRoof() {
     const levelIds = [7, this._floorLevels()[0]?.id].filter(id => id != null);
     const seenMasters = new Set();
     let builtAny = false;
     levelIds.forEach(levelId => {
       this._garageOutlines(levelId).forEach(garage => {
-        if (garage.open === true) return;
+        const open = garage.open === true;
+        if (open && !this._garageRoofDrops()) return; // the splice owns it
         if (garage.masterId != null) {
           if (seenMasters.has(garage.masterId)) return;
           seenMasters.add(garage.masterId);
         }
-        const base = garage.points.map(pt => ({ x: pt.x, z: pt.z }));
-        const centre = base.reduce(
-          (sum, point) => ({ x: sum.x + point.x / base.length, z: sum.z + point.z / base.length }),
+        // An open garage's roof footprint is the closed slab polygon: the
+        // legs plus the house boundary path between the attachments — the
+        // flush-cut edge(s) ride that house line exactly.
+        const closed = open ? this._garageSlabPolygon(garage)
+          : garage.points.map(pt => ({ x: pt.x, z: pt.z, srcId: pt.srcId ?? null }));
+        if (closed.length < 3) return;
+        const legCount = open ? garage.points.length : closed.length;
+        const centre = closed.reduce(
+          (sum, point) => ({ x: sum.x + point.x / closed.length, z: sum.z + point.z / closed.length }),
           { x: 0, z: 0 },
         );
         if (this._roofs.some(roof => roof.levelId === 7 && roof.garage
@@ -11850,14 +11877,37 @@ class Component extends DCLogic {
         const detached = this._garageDetached(garage);
         const house = this._houseOutline(garage.levelId);
         const overhang = this.state.roofOverhang;
-        const points = this._offsetOutline(base, overhang);
-        const edges = base.map((point, index) => {
-          const next = base[(index + 1) % base.length];
-          return !detached && house && this._edgeOnOutline(point, next, house) ? 'gable' : 'eave';
-        });
+        let points, edges;
+        if (open) {
+          // House-path edges (index legCount-1 onward) are the flush cut:
+          // zero overhang, GABLE so the plane cuts vertically at the wall.
+          // Leg edges parallel to the house chord face the street — GABLE
+          // (the common front-garage look) — and the rest are eaves.
+          const chord = {
+            x: closed[0].x - closed[legCount - 1].x,
+            z: closed[0].z - closed[legCount - 1].z,
+          };
+          const chordLen = Math.hypot(chord.x, chord.z) || 1;
+          const distances = closed.map((point, index) => (index < legCount - 1 ? overhang : 0));
+          edges = closed.map((point, index) => {
+            if (index >= legCount - 1) return 'gable';
+            const next = closed[index + 1];
+            const dx = next.x - point.x, dz = next.z - point.z;
+            const len = Math.hypot(dx, dz) || 1;
+            const cross = Math.abs(dx * chord.z - dz * chord.x) / (len * chordLen);
+            return cross < 0.5 ? 'gable' : 'eave'; // within ~30° of the house line
+          });
+          points = window.DraftGeometry2D.offsetOutlineVariable(closed, distances);
+        } else {
+          points = this._offsetOutline(closed, overhang);
+          edges = closed.map((point, index) => {
+            const next = closed[(index + 1) % closed.length];
+            return !detached && house && this._edgeOnOutline(point, next, house) ? 'gable' : 'eave';
+          });
+        }
         this._roofs.push({
           id: this._newDrawingItemId('roof'),
-          points: points.map((point, index) => this._linkVertex(this._mergeVertex({ x: point.x, z: point.z }, 7, 'roof'), garage.points[index]?.srcId)),
+          points: points.map((point, index) => this._linkVertex(this._mergeVertex({ x: point.x, z: point.z }, 7, 'roof'), closed[index]?.srcId)),
           levelId: 7,
           sourceLevelId: garage.levelId,
           sourceShapeId: null,
@@ -11973,10 +12023,13 @@ class Component extends DCLogic {
       if (thickenedGarage) slabLabels.push('level 4" + 1\'-0" thickened edge');
       built.push(`garage slab (${slabLabels.join(' / ') || '4"'})`);
     }
-    if (this._buildHouseRoof()) built.push(openGarage ? `${this.state.roofPitch}:12 roof over house + garage` : `${this.state.roofPitch}:12 roof`);
-    if (this._buildGarageRoof()) built.push(attachedClosedGarage
-      ? 'garage roof (own height — tune the house join by hand)'
-      : 'garage roof (all eaves, own height)');
+    const splicedGarage = openGarage && !this._garageRoofDrops();
+    if (this._buildHouseRoof()) built.push(splicedGarage ? `${this.state.roofPitch}:12 roof over house + garage` : `${this.state.roofPitch}:12 roof`);
+    if (this._buildGarageRoof()) built.push(openGarage && this._garageRoofDrops()
+      ? 'garage roof (own single-storey height, flush at the upper wall)'
+      : attachedClosedGarage
+        ? 'garage roof (own height — tune the house join by hand)'
+        : 'garage roof (all eaves, own height)');
     // Fenestration: BONEYARD marks cut into the generated walls, and an
     // attached garage gets its overhead + man doors automatically.
     const markOpenings = this._buildMarkOpenings();
