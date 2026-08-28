@@ -22,6 +22,10 @@ The collected RoughDrafter LITE campaign lines. Real taglines carry the brand st
 - **A FEW MISTAKES ARE EXPECTED.** (alternate: *A FEW MISTAKES ARE OK.*) — the human-side companion to ROUGHLY TRUE. NEVER PERFECT.: the tagline is the philosophy, this is the permission slip. "Expected" beats "ok" — the tool PLANS for your mistakes (undo, rough drafts, forgiving snaps), and we expect a few from ourselves too; that's why the glitches stay. Also the trap-street doctrine in five words — the coffee-cup-that-became-a-button clause. Everyone gets to draw when a few mistakes are expected.
   And it cuts both ways — a two-way covenant: it lets THEM make mistakes and lets US be forgiven ours (the glitches, the rough edges). Most companies promise perfection and get crucified for every bug; we expect a few mistakes on both sides of the screen, so nobody has to pretend. Grace given, grace received.
 
+- **VECTOR BIM.** — the category coinage (drafter's, Aug 2026): ArchiCAD and Revit are **RASTER BIM** — you hand-place every element and the model is millions of baked-in objects, heavier the bigger it gets. Rough Drafter is **VECTOR BIM** — it stores the SOURCE (outline + stamps + your standards) and DERIVES the building, so edits ripple and the file stays tiny for the same reason an SVG does. Teaches a civilian the whole differentiator in one borrowed pair of words.
+  The line under it: **"They model the building. We model the rules that build it."**
+  Honesty asterisk (the ad never lies): Revit walls are parametric too — but their formulas describe one wall at a time; ours describe the whole house. Roughly true; true where it counts.
+
 - **The underDOG of CAD.** — the campaign frame in one word: the dog IS the underdog. David-vs-BIG-CAD with the mascot built in; the paw button, DOG MODE, the BONEYARD dog, and RUFF DRAFTERS were all already pointing here. Capitalize the DOG.
 
 ## JOKE / SUB-TAGLINES
