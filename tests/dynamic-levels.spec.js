@@ -70,7 +70,7 @@ test('an added 3RD FL gets the floor layer sets and joins BUILD HOUSE', async ({
   const names = await page.locator('.level-name').allTextContents();
   expect(names).toEqual(['SITE', 'ROOF', '3RD FL', '2ND FL', 'MAIN FL', 'FOUNDATION', 'BONEYARD']);
   const third = levelRow(page, '3RD FL');
-  await expect(third.locator('.level-layer')).toHaveText(['ELECTRIC', 'PLAN', 'FLOOR', 'STAIR']);
+  await expect(third.locator('.level-layer')).toHaveText(['ELECTRIC', 'WALL PLAN', 'FLOOR PLAN', 'STAIR']);
 
   await buildHouse(page);
   await h.waitForSaved(page);
@@ -95,7 +95,7 @@ test('an added 3RD FL gets the floor layer sets and joins BUILD HOUSE', async ({
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
   await h.waitForModelReady(page);
   await expect(levelRow(page, '3RD FL')).toHaveCount(1);
-  await expect(levelRow(page, '3RD FL').locator('.level-layer')).toHaveText(['ELECTRIC', 'PLAN', 'FLOOR', 'STAIR']);
+  await expect(levelRow(page, '3RD FL').locator('.level-layer')).toHaveText(['ELECTRIC', 'WALL PLAN', 'FLOOR PLAN', 'STAIR']);
 });
 
 test('the insulation wall type is drawable on the foundation PLAN', async ({ page }) => {

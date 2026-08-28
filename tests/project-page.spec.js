@@ -130,7 +130,5 @@ test('the level cards show the same values the PROJECT page sets', async ({ page
   await h.waitForModelReady(page);
   const mainRow = page.locator('.level-row')
     .filter({ has: page.locator('.level-name', { hasText: 'MAIN FL' }) });
-  const wallPair = mainRow.locator('.level-assembly-pair')
-    .filter({ has: page.getByText('WALL HT') });
-  await expect(wallPair.locator('.level-assembly-val')).toHaveValue(`9'-2"`);
+  await expect(mainRow.locator('.level-assembly-summary').first()).toHaveText(`9'-2"`);
 });

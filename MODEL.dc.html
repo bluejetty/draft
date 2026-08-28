@@ -52,11 +52,12 @@
     .level-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-layer-row { display:flex; align-items:stretch; gap:2px; }
     .level-layer-row .level-layer { flex:1 1 0; min-width:0; }
-    .level-assembly-pair { flex:1.6 1 0; min-width:0; display:flex; align-items:stretch; gap:2px; }
-    .level-assembly-shtg { align-self:center; flex:0 0 auto; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; color:rgba(29,31,32,0.5); white-space:nowrap; }
-    .level-assembly-pair .level-assembly { flex:0 0 auto; text-align:left; }
-    .level-assembly-val { flex:1 1 0; min-width:34px; width:100%; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:1px 3px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; text-align:right; }
-    .level-assembly-val:focus { outline:none; border-color:#5980a6; }
+    .level-assembly-summary { flex:1 1 0; min-width:0; border:1px solid rgba(29,31,32,0.14); background:rgba(29,31,32,0.04); color:rgba(29,31,32,0.45); cursor:pointer; padding:1px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; text-align:right; white-space:nowrap; }
+    .level-assembly-summary:hover { border-color:#5980a6; color:#365e86; }
+    .rail-tab { position:absolute; top:50%; transform:translateY(-50%); z-index:6; border:1px solid rgba(29,31,32,0.25); background:#fff; cursor:pointer; padding:10px 3px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.1em; color:rgba(29,31,32,0.55); writing-mode:vertical-rl; text-transform:uppercase; box-shadow:0 1px 6px rgba(29,31,32,0.14); }
+    .rail-tab:hover { border-color:#5980a6; color:#365e86; }
+    .rail-tab-left { left:0; border-left:none; border-radius:0 4px 4px 0; }
+    .rail-tab-right { right:0; border-right:none; border-radius:4px 0 0 4px; }
     .level-layer-bg { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:0; width:15px; display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.42); flex-shrink:0; }
     .level-layer-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-head { display:flex; align-items:flex-start; gap:5px; }
@@ -69,15 +70,11 @@
     .level-edge { display:flex; align-items:center; gap:3px; min-height:9px; }
     .level-edge-line { flex:1; border-top:1px solid rgba(29,31,32,0.55); }
     .level-edge-val { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; color:#1d1f20; white-space:nowrap; }
-    .level-assembly { border:1px solid rgba(29,31,32,0.18); background:#fff; color:rgba(29,31,32,0.68); cursor:pointer; padding:1px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; flex-shrink:0; text-transform:uppercase; }
-    .level-assembly:hover { border-color:#5980a6; color:#365e86; }
     .level-assembly-editor { display:flex; flex-direction:column; gap:3px; border:1px solid rgba(29,31,32,0.3); background:#fff; padding:5px 6px; margin:1px 0 2px; cursor:default; }
     .assembly-row { display:flex; align-items:center; gap:4px; }
     .assembly-label { width:48px; flex-shrink:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.05em; color:rgba(29,31,32,0.55); }
     .assembly-input { flex:1; min-width:0; border:1px solid #1d1f20; background:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:#f2f2f3; }
     .assembly-input:focus { outline:none; border-color:#5980a6; }
-    .assembly-joists { display:flex; gap:2px; }
-    .assembly-joist { flex:1; border:1px solid; cursor:pointer; padding:2px 0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.04em; line-height:1; }
     .assembly-error { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.03em; color:#c04040; }
     .assembly-ok { align-self:flex-end; border:1px solid rgba(29,31,32,0.18); background:#fff; color:rgba(29,31,32,0.68); cursor:pointer; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.06em; line-height:1; text-transform:uppercase; }
     .assembly-ok:hover { border-color:#5980a6; color:#365e86; }
@@ -95,7 +92,8 @@
     .tool-key-letter { position:absolute; top:2px; left:3px; font-weight:700; line-height:1; }
     .tool-key-name { max-width:100%; font-size:6.5px; font-weight:600; letter-spacing:0.03em; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     @media (max-width: 760px) {
-      [data-model-left], [data-model-right] { width:176px !important; }
+      [data-model-left] { width:176px !important; }
+      [data-model-right] { width:140px !important; }
       [data-model-right] { position:absolute; right:0; top:44px; bottom:28px; z-index:5; box-shadow:-5px 0 14px rgba(29,31,32,0.08); }
       [data-model-container] { min-width:0; }
       [data-model-title-detail] { display:none; }
@@ -619,8 +617,8 @@
 <!-- BODY -->
 <div style="display:flex; height:calc(100vh - 106px);">
 
-  <!-- LEFT TOOL RAIL -->
-  <div data-model-left style="width:200px; border-right:1px solid rgba(29,31,32,0.16); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff;">
+  <!-- LEFT TOOL RAIL — starts hidden; the TOOLS pull tab on the canvas edge opens it -->
+  <div data-model-left style="width:200px; border-right:1px solid rgba(29,31,32,0.16); flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff; display:{{ leftRailDisplay }};">
 
     <!-- TOOLS — keypad grid: 4 square keys per row, the command letter in the
          upper-left corner (it re-reads from SETTINGS remaps) and the tool name
@@ -1192,6 +1190,8 @@
   <div style="flex:1; position:relative; overflow:hidden;" data-model-container>
     <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:none;"></canvas>
     <canvas data-model-overlay style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
+    <button type="button" class="rail-tab rail-tab-left" data-left-rail-tab onClick="{{ onToggleLeftRail }}" title="{{ leftRailTabTitle }}">TOOLS</button>
+    <button type="button" class="rail-tab rail-tab-right" data-right-rail-tab onClick="{{ onToggleRightRail }}" title="{{ rightRailTabTitle }}">LEVELS</button>
     <!-- HTML crosshair cursor -->
     <div style="position:absolute; left:{{ cursorX }}px; top:{{ cursorY }}px; width:36px; height:36px; transform:translate(-50%,-50%); pointer-events:none; display:{{ cursorDisplay }};">
       <div style="position:absolute; top:50%; left:0; width:calc(50% - 7px); height:1px; background:#1d1f20; transform:translateY(-50%);"></div>
@@ -1246,8 +1246,8 @@
 
   </div>
 
-  <!-- RIGHT LEVEL RAIL -->
-  <div data-model-right style="width:200px; border-left:1px solid rgba(29,31,32,0.16); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff;">
+  <!-- RIGHT LEVEL RAIL — starts hidden; the LEVELS pull tab on the canvas edge opens it -->
+  <div data-model-right style="width:140px; border-left:1px solid rgba(29,31,32,0.16); flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff; display:{{ rightRailDisplay }};">
 
      <!-- LEVELS — floor elevations with compact layer rows where defined -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
@@ -1288,48 +1288,9 @@
                      <button type="button" class="level-layer-bg" onClick="{{ layer.onToggleBackground }}" title="{{ layer.bgTitle }}" style="background:{{ layer.bgButtonBg }}; border-color:{{ layer.bgButtonBorder }}; color:{{ layer.bgButtonColor }};">{{ layer.bgLabel }}</button>
                      <button type="button" class="{{ layer.rowClass }}" onClick="{{ layer.onSelect }}" title="{{ layer.title }}">{{ layer.label }}</button>
                      <sc-if value="{{ layer.hasAssembly }}" hint-placeholder-val="{{ false }}">
-                       <div class="level-assembly-pair">
-                         <button type="button" class="level-assembly" onClick="{{ layer.onOpenAssembly }}" title="{{ layer.assemblyTitle }}">{{ layer.assemblyLabel }}</button>
-                         <sc-if value="{{ layer.hasSheathingNote }}" hint-placeholder-val="{{ false }}">
-                           <span class="level-assembly-shtg" data-sheathing-note title="{{ layer.assemblyTitle }}">{{ layer.sheathingNote }}</span>
-                         </sc-if>
-                         <input class="level-assembly-val" value="{{ layer.assemblyValue }}" onClick="{{ layer.onAssemblyValClick }}" onFocus="{{ layer.onAssemblyValFocus }}" onInput="{{ layer.onAssemblyValInput }}" onKeyDown="{{ layer.onAssemblyValKey }}" onBlur="{{ layer.onAssemblyValBlur }}" title="{{ layer.assemblyTitle }}" />
-                       </div>
+                       <button type="button" class="level-assembly-summary" data-assembly-summary onClick="{{ layer.onOpenProject }}" title="{{ layer.assemblyTitle }}">{{ layer.assemblyValue }}</button>
                      </sc-if>
                    </div>
-                   <sc-if value="{{ layer.hasAssemblyEditor }}" hint-placeholder-val="{{ false }}">
-                     <div class="level-assembly-editor" onClick="{{ layer.assemblyEditor.onClick }}">
-                       <sc-if value="{{ layer.assemblyEditor.isWall }}" hint-placeholder-val="{{ false }}">
-                         <div class="assembly-row">
-                           <span class="assembly-label">WALL HT</span>
-                           <input class="assembly-input" value="{{ layer.assemblyEditor.wallInput }}" onInput="{{ layer.assemblyEditor.onWallInput }}" onKeyDown="{{ layer.assemblyEditor.onKey }}" />
-                         </div>
-                       </sc-if>
-                       <sc-if value="{{ layer.assemblyEditor.isFloor }}" hint-placeholder-val="{{ false }}">
-                         <div class="assembly-joists">
-                           <sc-for list="{{ layer.assemblyEditor.joistTypes }}" as="joist" hint-placeholder-count="4">
-                             <button type="button" class="assembly-joist" onClick="{{ joist.onSelect }}" title="{{ joist.title }}" style="background:{{ joist.bg }}; color:{{ joist.color }}; border-color:{{ joist.border }};">{{ joist.label }}</button>
-                           </sc-for>
-                         </div>
-                         <div class="assembly-row">
-                           <span class="assembly-label">DEPTH</span>
-                           <input class="assembly-input" value="{{ layer.assemblyEditor.depthInput }}" onInput="{{ layer.assemblyEditor.onDepthInput }}" onKeyDown="{{ layer.assemblyEditor.onKey }}" />
-                         </div>
-                         <div class="assembly-row">
-                           <span class="assembly-label">O.C.</span>
-                           <input class="assembly-input" value="{{ layer.assemblyEditor.spacingInput }}" onInput="{{ layer.assemblyEditor.onSpacingInput }}" onKeyDown="{{ layer.assemblyEditor.onKey }}" />
-                         </div>
-                         <div class="assembly-row">
-                           <span class="assembly-label">SHEATHING</span>
-                           <input class="assembly-input" value="{{ layer.assemblyEditor.sheathingInput }}" onInput="{{ layer.assemblyEditor.onSheathingInput }}" onKeyDown="{{ layer.assemblyEditor.onKey }}" />
-                         </div>
-                       </sc-if>
-                       <sc-if value="{{ layer.assemblyEditor.hasError }}" hint-placeholder-val="{{ false }}">
-                         <div class="assembly-error">{{ layer.assemblyEditor.error }}</div>
-                       </sc-if>
-                       <button type="button" class="assembly-ok" onClick="{{ layer.assemblyEditor.onAccept }}" title="Accept — Enter or Space">OK</button>
-                     </div>
-                   </sc-if>
                    <sc-if value="{{ layer.hasDepthEditor }}" hint-placeholder-val="{{ false }}">
                      <div class="level-assembly-editor" onClick="{{ layer.depthEditor.onClick }}">
                        <div class="assembly-row">
@@ -1961,8 +1922,8 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
 });
 const FLOOR_LEVEL_VIEWS = Object.freeze([
   Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
-  Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSION', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
-  Object.freeze({ id:'floor', label:'FLOOR', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION', 'A-ANNO-NOTE'] }),
+  Object.freeze({ id:'plan', label:'WALL PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSION', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
+  Object.freeze({ id:'floor', label:'FLOOR PLAN', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION', 'A-ANNO-NOTE'] }),
   Object.freeze({ id:'stair', label:'STAIR', contents:['A-STR', 'A-FL-OPNG', 'STAIR SECTION', 'A-ANNO-NOTE'] }),
 ]);
 const LEVEL_LAYER_VIEWS = Object.freeze({
@@ -1970,7 +1931,7 @@ const LEVEL_LAYER_VIEWS = Object.freeze({
   3: FLOOR_LEVEL_VIEWS,
   1: Object.freeze([
     Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
-    Object.freeze({ id:'plan', label:'PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
+    Object.freeze({ id:'plan', label:'WALL PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
     Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL-FOOTING', 'S-FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION', 'A-ANNO-NOTE'] }),
   ]),
 });
@@ -2178,14 +2139,8 @@ class Component extends DCLogic {
     autoDimFirstOffsetFt: 1.5, // gap between the plan and the closest auto string
     levelLayerViews: { 5:'plan', 3:'plan', 1:'plan' },
     levelAssemblies: {},        // levelId -> wall height + floor joist/sheathing assembly
-    assemblyEditor: null,       // { levelId, kind:'wall'|'floor' } open in the level rail
-    assemblyWallInput: '',
-    assemblyDepthInput: '',
-    assemblySpacingInput: '',
-    assemblySheathingInput: '',
-    assemblyJoistType: DEFAULT_JOIST_TYPE,
-    assemblyTyped: false,
-    assemblyError: '',
+    leftRailOpen: false,        // pull-out tabs: both side rails start hidden
+    rightRailOpen: false,
     activeLevelIdx: 3,
     nextLevelId:   9,
     backgroundLevelIds: [],
@@ -4480,8 +4435,6 @@ class Component extends DCLogic {
             .map(([rawId, assembly]) => [migrateLevelId(rawId), normaliseLevelAssembly(assembly)])
             .filter(([id]) => levelIds.has(Number(id))),
         ),
-        assemblyEditor: null,
-        assemblyError: '',
         roofOverhang: clampRoofOverhang(format.number(saved.roofOverhang, DEFAULT_ROOF_OVERHANG_FT)),
         roofPitch: clampRoofPitch(format.number(saved.roofPitch, DEFAULT_ROOF_PITCH)),
         elevationDatum: format.number(saved.elevationDatum, 0) === 100 ? 100 : 0,
@@ -18099,131 +18052,6 @@ class Component extends DCLogic {
     }, () => this._markUnsaved());
   }
 
-  // The black value box beside WALL HT / FL JST edits the number directly:
-  // wall height on the PLAN row, joist depth on the FLOOR row. Enter or
-  // clicking away commits; Escape puts the old number back.
-  _commitInlineAssembly() {
-    const inline = this.state.inlineAssembly;
-    if (!inline) return;
-    this.setState({ inlineAssembly: null });
-    const patch = { ...this._levelAssembly(inline.levelId) };
-    if (inline.kind === 'wall') {
-      const parsed = parseArchitecturalLength(inline.value);
-      if (!parsed.ok || parsed.inches <= 0) return;
-      patch.wallHeightFt = parsed.inches / 12;
-      if (inline.levelId === this._activeLevel()?.id) {
-        this.setState({
-          wallTopHeight: patch.wallHeightFt,
-          wallTopInput: formatArchitecturalInches(parsed.inches),
-          wallDimensionError: '',
-        });
-      }
-    } else {
-      const parsed = parseAssemblyInches(inline.value);
-      if (!parsed.ok || parsed.inches <= 0) return;
-      patch.joistDepthIn = parsed.inches;
-    }
-    const totalIn = patch.joistDepthIn + patch.sheathingIn;
-    const syncFloor = inline.kind === 'floor'
-      && inline.levelId === this._activeLevel()?.id
-      && this.state.floorStructure === 'floor';
-    this.setState({
-      levelAssemblies: { ...this.state.levelAssemblies, [inline.levelId]: patch },
-      ...(syncFloor ? {
-        floorThickness: totalIn / 12,
-        floorThicknessInput: formatArchitecturalInches(totalIn),
-        floorDimensionError: '',
-      } : {}),
-    }, () => this._markUnsaved());
-  }
-
-  _openAssemblyEditor(levelId, kind, event) {
-    event?.stopPropagation();
-    const current = this.state.assemblyEditor;
-    if (current && current.levelId === levelId && current.kind === kind) {
-      this.setState({ assemblyEditor: null, assemblyError: '' });
-      return;
-    }
-    const assembly = this._levelAssembly(levelId);
-    this.setState({
-      assemblyEditor: { levelId, kind },
-      assemblyWallInput: formatArchitecturalInches(assembly.wallHeightFt * 12),
-      assemblyJoistType: assembly.joistType,
-      assemblyDepthInput: formatInchesOnly(assembly.joistDepthIn),
-      assemblySpacingInput: formatInchesOnly(assembly.joistSpacingIn),
-      assemblySheathingInput: formatInchesOnly(assembly.sheathingIn),
-      assemblyTyped: false,
-      assemblyError: '',
-    });
-  }
-
-  _setAssemblyJoistType(typeId) {
-    const type = JOIST_TYPES.find(t => t.id === typeId);
-    if (!type) return;
-    this.setState({
-      assemblyJoistType: type.id,
-      ...(type.depthIn != null ? { assemblyDepthInput: formatInchesOnly(type.depthIn), assemblyTyped: false } : {}),
-      assemblyError: '',
-    });
-  }
-
-  _commitAssemblyEditor() {
-    const editor = this.state.assemblyEditor;
-    if (!editor) return;
-    const assembly = this._levelAssembly(editor.levelId);
-    const patch = { ...assembly };
-    if (editor.kind === 'wall') {
-      const parsed = parseArchitecturalLength(this.state.assemblyWallInput);
-      if (!parsed.ok || parsed.inches <= 0) {
-        this.setState({ assemblyError: parsed.ok ? 'Wall height must be greater than zero.' : parsed.error });
-        return;
-      }
-      patch.wallHeightFt = parsed.inches / 12;
-      // A wall-height edit on the working level also drives the WALL tool's
-      // top height, so newly drawn walls match the entered height.
-      if (editor.levelId === this._activeLevel()?.id) {
-        this.setState({
-          wallTopHeight: patch.wallHeightFt,
-          wallTopInput: formatArchitecturalInches(parsed.inches),
-          wallDimensionError: '',
-        });
-      }
-    } else {
-      const depth = parseAssemblyInches(this.state.assemblyDepthInput);
-      const spacing = parseAssemblyInches(this.state.assemblySpacingInput);
-      const sheathing = parseAssemblyInches(this.state.assemblySheathingInput);
-      const bad = [
-        [depth, 'joist depth'],
-        [spacing, 'spacing'],
-        [sheathing, 'sheathing'],
-      ].find(([parsed]) => !parsed.ok || parsed.inches <= 0);
-      if (bad) {
-        this.setState({ assemblyError: bad[0].ok ? `Enter a ${bad[1]} greater than zero.` : bad[0].error });
-        return;
-      }
-      patch.joistType = this.state.assemblyJoistType;
-      patch.joistDepthIn = depth.inches;
-      patch.joistSpacingIn = spacing.inches;
-      patch.sheathingIn = sheathing.inches;
-    }
-    // A framed-floor edit on the working level also drives the FLOOR tool's
-    // total thickness, so drawn floors match the entered assembly.
-    const totalIn = patch.joistDepthIn + patch.sheathingIn;
-    const syncFloor = editor.kind === 'floor'
-      && editor.levelId === this._activeLevel()?.id
-      && this.state.floorStructure === 'floor';
-    this.setState({
-      levelAssemblies: { ...this.state.levelAssemblies, [editor.levelId]: patch },
-      assemblyEditor: null,
-      assemblyError: '',
-      ...(syncFloor ? {
-        floorThickness: totalIn / 12,
-        floorThicknessInput: formatArchitecturalInches(totalIn),
-        floorDimensionError: '',
-      } : {}),
-    }, () => this._markUnsaved());
-  }
-
   // ─── renderVals ───────────────────────────────────────────────────────────────
   renderVals() {
     this._ensureDrawingCollections();
@@ -19062,50 +18890,7 @@ class Component extends DCLogic {
         const levelSlot = scopedView == null ? slot : -1;
         const selectedLayerView = this._activeLayerViewId(l.id);
         const borderHeights = this._levelBorderHeights(l.id);
-        const editor = this.state.assemblyEditor;
         const assembly = this._levelAssembly(l.id);
-        const editorModel = kind => (editor && editor.levelId === l.id && editor.kind === kind
-          ? {
-              isWall: kind === 'wall',
-              isFloor: kind === 'floor',
-              wallInput: this.state.assemblyWallInput,
-              depthInput: this.state.assemblyDepthInput,
-              spacingInput: this.state.assemblySpacingInput,
-              sheathingInput: this.state.assemblySheathingInput,
-              error: this.state.assemblyError,
-              hasError: Boolean(this.state.assemblyError),
-              joistTypes: JOIST_TYPES.map(type => ({
-                label: type.label,
-                title: type.depthIn != null
-                  ? `${type.label} — ${formatArchitecturalInches(type.depthIn)} deep`
-                  : `${type.label} — enter the joist depth`,
-                bg: this.state.assemblyJoistType === type.id ? '#1d1f20' : '#fff',
-                color: this.state.assemblyJoistType === type.id ? '#f2f2f3' : '#1d1f20',
-                border: this.state.assemblyJoistType === type.id ? '#1d1f20' : 'rgba(29,31,32,0.16)',
-                onSelect: event => { event.stopPropagation(); this._setAssemblyJoistType(type.id); },
-              })),
-              onWallInput: e => this.setState({ assemblyWallInput: e.target.value, assemblyTyped: true, assemblyError: '' }),
-              onDepthInput: e => this.setState({ assemblyDepthInput: e.target.value, assemblyTyped: true, assemblyError: '' }),
-              onSpacingInput: e => this.setState({ assemblySpacingInput: e.target.value, assemblyTyped: true, assemblyError: '' }),
-              onSheathingInput: e => this.setState({ assemblySheathingInput: e.target.value, assemblyTyped: true, assemblyError: '' }),
-              // Space accepts the offered values, but only until the user
-              // starts typing — fractions such as 11 7/8 need the space key.
-              onKey: e => {
-                if (e.key === 'Enter' || (e.key === ' ' && !this.state.assemblyTyped)) {
-                  e.preventDefault();
-                  this._commitAssemblyEditor();
-                }
-                if (e.key === 'Escape') { e.preventDefault(); this.setState({ assemblyEditor: null, assemblyError: '' }); }
-                e.stopPropagation();
-              },
-              onClick: e => e.stopPropagation(),
-              onAccept: e => { e.stopPropagation(); this._commitAssemblyEditor(); },
-            }
-          : null);
-        const inlineFor = kind => {
-          const inline = this.state.inlineAssembly;
-          return inline && inline.levelId === l.id && inline.kind === kind ? inline : null;
-        };
         const plainEdge = (value, title) => ({
           value, title, hasLine: true, noLine: false, plain: true, editable: false, onEdit: () => {},
         });
@@ -19118,7 +18903,6 @@ class Component extends DCLogic {
           const viewSlot = scopedView === view.id ? slot : -1;
           const assemblyKind = borderHeights && view.id === 'plan' ? 'wall'
             : borderHeights && view.id === 'floor' ? 'floor' : null;
-          const assemblyEditor = assemblyKind ? editorModel(assemblyKind) : null;
           const isFdnBox = fdn != null && view.id === 'foundation';
           const depthEditor = isFdnBox && this.state.depthEditor?.levelId === l.id
             ? {
@@ -19152,54 +18936,27 @@ class Component extends DCLogic {
               + (assemblyKind === 'floor' ? ' floor-profile' : ''),
             onSelect: event => this._selectLayerView(l.id, view.id, event),
             hasAssembly: assemblyKind != null,
-            assemblyLabel: assemblyKind === 'wall' ? 'WALL HT' : 'FL JST',
-            // The floor row shows its sheathing on the card face so the whole
-            // sandwich reads at a glance; the thickness is edited with the
-            // joists in the FLOOR assembly editor.
-            hasSheathingNote: assemblyKind === 'floor',
-            sheathingNote: assemblyKind === 'floor'
-              ? `+${formatInchesOnly(assembly.sheathingIn)}`
-              : '',
-            assemblyValue: inlineFor(assemblyKind) != null ? inlineFor(assemblyKind).value
-              : assemblyKind === 'wall' ? formatArchitecturalInches(assembly.wallHeightFt * 12)
-              : assemblyKind === 'floor' ? formatInchesOnly(assembly.joistDepthIn)
-              : '',
-            onAssemblyValClick: e => e.stopPropagation(),
-            onAssemblyValFocus: e => {
-              e.stopPropagation();
-              this.setState({ inlineAssembly: { levelId: l.id, kind: assemblyKind, value: e.target.value } });
-            },
-            onAssemblyValInput: e => this.setState({ inlineAssembly: { levelId: l.id, kind: assemblyKind, value: e.target.value } }),
-            onAssemblyValKey: e => {
-              if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                const input = e.target;
-                this.setState({ inlineAssembly: null }, () => input.blur());
-              }
-              e.stopPropagation();
-            },
-            onAssemblyValBlur: () => this._commitInlineAssembly(),
+            // Grey summary values on the card face: the wall height beside
+            // WALL PLAN and the overall floor thickness beside FLOOR PLAN.
+            // Tapping either one opens the PROJECT page where they change.
+            assemblyValue: assemblyKind === 'wall'
+              ? formatArchitecturalInches(assembly.wallHeightFt * 12)
+              : formatArchitecturalInches(assembly.joistDepthIn + assembly.sheathingIn),
             assemblyTitle: assemblyKind === 'wall'
-              ? `Wall height on ${l.name}: ${this._ftIn(assembly.wallHeightFt)}`
-              : `Floor: ${JOIST_TYPES.find(t => t.id === assembly.joistType)?.label} ${formatInchesOnly(assembly.joistDepthIn)} @ ${formatInchesOnly(assembly.joistSpacingIn)} O.C. + ${formatInchesOnly(assembly.sheathingIn)} sheathing`,
-            onOpenAssembly: event => this._openAssemblyEditor(l.id, assemblyKind, event),
-            assemblyEditor,
-            hasAssemblyEditor: assemblyEditor != null,
+              ? `Wall height on ${l.name}: ${this._ftIn(assembly.wallHeightFt)} — tap to change on the PROJECT page`
+              : `Floor: ${JOIST_TYPES.find(t => t.id === assembly.joistType)?.label} ${formatInchesOnly(assembly.joistDepthIn)} @ ${formatInchesOnly(assembly.joistSpacingIn)} O.C. + ${formatInchesOnly(assembly.sheathingIn)} sheathing — tap to change on the PROJECT page`,
+            onOpenProject: event => { event.stopPropagation(); this._openProjectPage(); },
             edgesTop: assemblyKind === 'floor'
               ? [plainEdge(borderHeights.sheathingTop, 'Top of floor sheathing')]
               : isFdnBox
-                ? [
-                    editEdge(fdn.slabTop, `Top of slab — ${formatInchesOnly(fdn.slabIn)} thick, click to change`, 'slab', false),
-                    plainEdge(fdn.wallBottom, 'Bottom of foundation wall — top of footing'),
-                  ]
+                ? [plainEdge(fdn.wallBottom, 'Bottom of foundation wall — top of footing')]
                 : [],
             edgesBottom: assemblyKind === 'floor'
               ? [plainEdge(borderHeights.floorBottom, 'Bottom of floor — top of wall or foundation below')]
               : isFdnBox
                 ? [
+                    editEdge(fdn.slabTop, `Top of slab — ${formatInchesOnly(fdn.slabIn)} thick, click to change`, 'slab', false),
                     editEdge(fdn.footingBottom, `Base of footing / excavation — ${formatInchesOnly(fdn.footingIn)} deep footing, click to change`, 'footing', true),
-                    editEdge(`${formatInchesOnly(fdn.footingWidthIn)} W`, `Footing width — ${formatInchesOnly(fdn.footingWidthIn)} wide, centered on the wall (never prints), click to change`, 'footingWidth', false),
                   ]
                 : [],
             depthEditor,
@@ -19235,6 +18992,12 @@ class Component extends DCLogic {
         };
       }),
       addLevel: () => this._addLevel(),
+      leftRailDisplay: this.state.leftRailOpen ? 'flex' : 'none',
+      rightRailDisplay: this.state.rightRailOpen ? 'flex' : 'none',
+      leftRailTabTitle: this.state.leftRailOpen ? 'Tuck the tool rail away' : 'Pull out the tool rail',
+      rightRailTabTitle: this.state.rightRailOpen ? 'Tuck the level rail away' : 'Pull out the level rail',
+      onToggleLeftRail: () => this.setState({ leftRailOpen: !this.state.leftRailOpen }),
+      onToggleRightRail: () => this.setState({ rightRailOpen: !this.state.rightRailOpen }),
       boneyard: {
         rowClass: 'level-row' + (this.state.boneyardActive ? ' active' : ''),
         title: 'BONEYARD — shelf storage: every drawing tool works here; geometry parks in its exact position, never prints, never shows in 3D',

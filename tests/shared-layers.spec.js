@@ -40,7 +40,7 @@ test.describe('shared wall layers', () => {
     expect(h.allWalls(await h.savedDrawing(page))).toHaveLength(1);
 
     // The same wall stays editable from PLAN.
-    await switchLayerView(page, 'PLAN');
+    await switchLayerView(page, 'WALL PLAN');
     await h.selectTool(page, 'Select');
     await h.clickWorld(page, 5, 0);
     await page.keyboard.press('Delete');

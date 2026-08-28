@@ -149,7 +149,7 @@ test('S-FOOTING lines are locked until the standards allow freeform editing', as
 
   await page.goto('/MODEL.dc.html');
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
   await useFoundationPlan(page);
   await h.selectTool(page, 'Select');
   await page.locator('[data-select-filters] button').filter({ hasText: /^LINE$/ }).click();

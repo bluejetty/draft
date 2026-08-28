@@ -65,7 +65,7 @@ test('a rectangle house with a floor hole and a basement reports exact level, su
 
   // Cut a 3' x 8' hole (24 sq ft) into the MAIN FL floor - same record a
   // stair rough opening writes, at a size this test controls exactly.
-  await switchLayerView(page, 'FLOOR');
+  await switchLayerView(page, 'FLOOR PLAN');
   await h.selectTool(page, 'Select');
   await h.clickWorld(page, 4, 0);
   await page.waitForTimeout(200);
@@ -100,7 +100,7 @@ test('the deduction for a true stair opening equals that opening\'s own polygon 
   await drawOutline(page, [[-8, -6], [8, -6], [8, 6], [-8, 6]]);
   await buildHouse(page);
 
-  await switchLayerView(page, 'FLOOR');
+  await switchLayerView(page, 'FLOOR PLAN');
   await h.selectTool(page, 'Select');
   await h.clickWorld(page, 4, 0);
   await page.waitForTimeout(200);

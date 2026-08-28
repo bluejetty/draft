@@ -22,7 +22,7 @@ async function switchLayerView(page, label) {
 
 // A 20×12 floor on the FLOOR layer set, centred on the origin.
 async function drawFloor(page) {
-  await switchLayerView(page, 'FLOOR');
+  await switchLayerView(page, 'FLOOR PLAN');
   await h.selectTool(page, 'Floor');
   await h.clickWorld(page, -10, -6);
   await h.clickWorld(page, 10, -6);

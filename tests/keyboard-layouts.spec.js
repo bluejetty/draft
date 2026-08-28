@@ -2,6 +2,7 @@
 // the closest single-key match to that application, keys stay editable after,
 // and the choice persists like any other keyboard setting.
 const { test, expect } = require('@playwright/test');
+const h = require('./helpers');
 
 async function openSettings(page) {
   await page.addInitScript(() => {
@@ -60,7 +61,7 @@ test('the model space honours a preset binding', async ({ page }) => {
 
   await page.goto('/MODEL.dc.html');
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
-  await page.waitForTimeout(500);
+  await h.waitForModelReady(page);
 
   await expect(page.getByRole('button', { name: /Fenestration\s+Shift\+W/i })).toBeVisible();
   await page.keyboard.press('Shift+W');
