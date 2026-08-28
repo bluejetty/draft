@@ -3393,7 +3393,7 @@ class Component extends DCLogic {
     const messages = {
       main: 'MAIN FLOOR — PLACE STAIRS first: they cut the opening for every floor above and can shift the beam below. Walls and rooms are free-form after that.',
       second: '2ND FLOOR — stairs stack over the run below: start them in the opening. Then walls and rooms, and NEXT: ROOF when you are ready.',
-      roof: 'ROOF — pitch and overhang come from the PROJECT page; the roof step of the tour lands in a coming update. The bone builds whenever you are ready.',
+      roof: 'ROOF — the dashed footprint is live: drag an edge OUT for overhang, click an edge to flip EAVE / GABLE, or arm GABLE to place one. ROOF DONE when it reads right.',
     };
     this.setState({
       tour: { step }, tourPopup: false, tourPopupNote: '',
@@ -3836,7 +3836,13 @@ class Component extends DCLogic {
     if (!front) return; // no auto elevations to jump to — the build stands
     this._revealStart = performance.now();
     this._revealActive = true;
-    this.setState({ activeView: 'cut', activeCutId: 'E1', drawingMessage: '', drawingMessageError: false });
+    // The reveal parks the drafter in E1 — stand the drawing tool down so a
+    // stray click there can't keep placing plan geometry.
+    this._cancelWall();
+    this._cancelLine();
+    this._cancelFloor();
+    this._cancelOutline();
+    this.setState({ activeView: 'cut', activeCutId: 'E1', activeTool: 'select', drawingMessage: '', drawingMessageError: false });
     this._invalidate();
   }
 
@@ -9037,6 +9043,7 @@ class Component extends DCLogic {
     if (e.button === 0 && !e.altKey && this._handleTourRoofPress(e)) { e.preventDefault(); return; }
     const tool = this.state.activeTool;
     if (e.button === 0 && !e.altKey) {
+      if (this._blockToolOutsidePlan(tool)) return;
       if (this._grabNodeForTool(e, tool)) { e.preventDefault(); return; }
       if (this._dispatchToolClick(tool, e)) return;
       if (tool === 'node') this._handleNodeArcDown(e);
@@ -9200,7 +9207,24 @@ class Component extends DCLogic {
     return { refs, vertices, origin, startX: e.clientX, startY: e.clientY, active: false, clickTool, downAt: performance.now() };
   }
 
+  // Plan-space tools refuse clicks outside TOP / PLAN the way STAIR does:
+  // inside a generated elevation or section the click's world coordinates
+  // are view-space, and committing them would land geometry on the plan.
+  _blockToolOutsidePlan(tool) {
+    if (this.state.activeView === 'top') return false;
+    const names = {
+      wall: 'Walls', line: 'Lines', floor: 'Floors', shape: 'Shapes',
+      outline: 'Outlines', dimension: 'Dimensions', column: 'Columns',
+      beam: 'Beams', fixture: 'Fixtures', node: 'Nodes',
+      fenestration: 'Openings',
+    };
+    if (!names[tool]) return false;
+    this.setState({ drawingMessage: `${names[tool]} are placed in TOP / PLAN view.`, drawingMessageError: true });
+    return true;
+  }
+
   _dispatchToolClick(tool, e) {
+    if (this._blockToolOutsidePlan(tool)) return true;
     if (tool === 'wall') this._handleWallClick();
     else if (tool === 'line') this._handleLineClick();
     else if (tool === 'floor') this._handleFloorClick(e);

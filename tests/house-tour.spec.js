@@ -156,7 +156,7 @@ test('a one-storey house presses STRAIGHT TO ROOF and the tour parks there', asy
   await page.keyboard.press('Enter'); // the lit gate answers the keyboard too
   await page.locator('[data-tour-popup] [data-tour-next-roof]').click();
   await expect(activeLevel(page)).toHaveText(/ROOF/);
-  await expect(page.locator('[data-model-drawing-message]')).toContainText(/roof step of the tour lands in a coming update/i);
+  await expect(page.locator('[data-model-drawing-message]')).toContainText(/dashed footprint is live/i);
   await h.waitForSaved(page);
   expect((await h.savedDrawing(page)).tour.step).toBe('roof');
 });
