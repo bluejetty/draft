@@ -98,6 +98,11 @@
       <div class="snap-row"><label for="tour-inc-shift">Shift</label><input type="number" id="tour-inc-shift" data-tour-inc="shiftIn" min="1" max="48" step="1" style="width:80px;"><span class="px">in</span></div>
       <div class="snap-row"><label for="tour-inc-ctrl">Ctrl+Shift</label><input type="number" id="tour-inc-ctrl" data-tour-inc="ctrlShiftIn" min="1" max="48" step="1" style="width:80px;"><span class="px">in</span></div>
     </section>
+    <section class="drafter" aria-label="Bone reveal">
+      <div class="drafter-title">Bone reveal</div>
+      <p class="drafter-note">Every BUILD HOUSE bone press that grows the house jumps to the front elevation and the house rises out of the ground. Turn it off to stay on the plan after a build.</p>
+      <div class="snap-row"><label for="bone-reveal">Rising reveal</label><input type="checkbox" id="bone-reveal" style="width:auto;"></div>
+    </section>
     <div class="notice">Commands are grouped by purpose. A key can include modifiers such as <strong>Shift+W</strong>, <strong>Ctrl+L</strong>, or <strong>Alt+1</strong>. Some shortcuts reserved by your browser or operating system may not be available.</div>
     <div class="layouts">
       <div class="layouts-title">Layout presets</div>
@@ -247,6 +252,14 @@
         status.classList.toggle('warning', warning || Boolean(duplicateMessage()));
       };
 
+      let boneReveal = active?.content?.model?.boneReveal !== false;
+      const boneRevealInput = document.querySelector('#bone-reveal');
+      boneRevealInput.checked = boneReveal;
+      boneRevealInput.addEventListener('change', () => {
+        boneReveal = boneRevealInput.checked;
+        saveActive(boneReveal ? 'Bone reveal on.' : 'Bone reveal off.');
+      });
+
       let tourRoofIncrements = window.DraftTour.normaliseTourRoofIncrements(active?.content?.model?.tourRoofIncrements);
       const tourIncInputs = [...document.querySelectorAll('[data-tour-inc]')];
       const fillTourIncrements = () => tourIncInputs.forEach(input => {
@@ -264,7 +277,7 @@
       });
 
       const saveActive = message => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -325,7 +338,7 @@
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);

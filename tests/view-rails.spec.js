@@ -214,7 +214,7 @@ test.describe('View galleries', () => {
 
 test.describe('The curtain moment', () => {
   test('the finale bone opens both rails and holds a beat before the house grows', async ({ page }) => {
-    await h.openModel(page);
+    await h.openModel(page, { boneReveal: true });
 
     // The guided tour up to the finale: trace, stairs, rooms, roof, bone.
     await page.locator('[data-select-house]').click();

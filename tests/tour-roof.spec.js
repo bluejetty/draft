@@ -138,7 +138,7 @@ test('edges pull OUT on the grid and refuse to tuck back under the house', async
 });
 
 test('PRESS ▲ BONE hints, the bone glows, and the press grows the house in the front elevation', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { boneReveal: true });
   await reachRoof(page, 16, 12);
 
   // The under-bone button reads PRESS ▲ BONE from the roof pause on.
