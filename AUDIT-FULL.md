@@ -255,7 +255,19 @@ Because it pushes, the model↔screen mapping changes when a panel opens, so the
 same fingertip position is a different point in the house before and after — see
 the first-contact log §00:35 for what that looks like to a beginner.
 
-**5.6 No favicon on the app pages — NIT**
+**5.6 Generated views are painted underneath the floating level cards — MINOR, CONFIRMED**
+The elevation and section workspaces size themselves to the full canvas
+(`_drawCutWorkspace2D(ctx, w, h, cut)` with `w = this._canvas.clientWidth`,
+`MODEL.dc.html:5723`), but the level-card column and the view rails are absolute
+elements floating over that canvas. So the right-hand edge of every generated
+elevation and section is drawn *behind* the cards. Visible in
+`audit-repros/evidence/section-attached.png` (the main-floor band runs on under
+the MAIN FL card) and in an attached-garage E1, where the garage roof disappears
+behind the card column. At 1024 px — the stated device — the covered strip is
+about 12% of the drawing width. The generated view should be laid out in the free
+area, not under the furniture.
+
+**5.7 No favicon on the app pages — NIT**
 Every MODEL/LAYOUT load takes a 404 on `/favicon.ico`; only `index.html`
 declares one.
 
@@ -341,14 +353,20 @@ in AUDIT-PERF §1; the other cost is that every drafter's IP and page load is
 visible to Google, in a proprietary product whose pitch is that nothing leaves
 the machine.
 
-**8.2 `innerHTML` sinks — not exploited, not cleared**
-`SETTINGS.html:202`, `:342`, `STANDARDS.html:256`, `PROJECT.html:537`, `:570`
-build markup with template literals. The interpolated values I traced are static
-config (keybinding groups, layout names, zone labels). `support.js:470` and `:480`
-feed on template text. I did **not** trace whether a user string — project name,
-a level name from `window.prompt`, a note body — can reach any of them, and
-`support.js` (1,911 lines) is unaudited. Nothing here is a finding yet; it is an
-unclosed question I am flagging rather than clearing.
+**8.2 `innerHTML` sinks — checked, no user-string path found**
+The DC engine's own uses (`support.js:470`, `:480`, `:776`) operate on template
+source, not data. Data interpolation — every `{{ }}` in the templates — is
+compiled by `walkText` (`support.js:569-584`) into React children
+(`h(Fragment, …, resolve(vals, p))`), and React escapes text children, so project
+names, note bodies and level names cannot inject markup through a template.
+The hand-written pages build markup with template literals
+(`SETTINGS.html:202`, `:342`, `STANDARDS.html:256`, `PROJECT.html:537`, `:570`),
+but everything interpolated there is static config — command labels, key labels,
+layout names, zone labels. The one user-typed value on the SETTINGS page, the
+package name, is never interpolated into markup (`packageName` reaches only
+`manager.createPackage`), and the drafter fields are written with `input.value`.
+I did not read all 1,911 lines of `support.js`, so this is "no path found in what
+I read", not a proof.
 
 **8.3 Nothing secret in the repo**
 `LICENSE` is proprietary; no keys, tokens, or personal data in the tracked files.
