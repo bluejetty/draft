@@ -299,7 +299,7 @@ The finding is the fragility, not the failures: `playwright.config.js` sets no
 by a third-party font request. Any CI without egress to fonts.googleapis.com
 reports six product failures that are not product failures.
 
-**7.2 The suite runs a configuration no user will ever have — MAJOR-adjacent, by construction**
+**7.2 The suite runs a configuration no user will ever have — MINOR, by construction (and I could not break it)**
 `tests/helpers.js:11-52` seeds, for every spec that does not opt out:
 `boneWallet: 999`, `boneReveal: false`, `suggestStairs: false`. So the shipped
 defaults — a 3-bone wallet, the bone jumping to the E1 elevation after a build,
@@ -381,6 +381,21 @@ Hostile-PDF and oversized-image behaviour untested.
   default, `drawing-format`'s load default, and LAYOUT's — all resolve to `left`.
 - **`_animate` reschedules before it works**, so a paint exception cannot kill
   the render loop.
+- **Referential integrity on entity deletes is right** — deleting a wall takes its
+  fenestration with it (0 left, 0 orphaned), and deleting a BONEYARD master under
+  built geometry is refused with "This outline carries built geometry — walls,
+  slab, or roof are anchored to it. Delete the built pieces first."
+  (`audit-repros/r16-referential.spec.js`). That makes M5 the exception rather
+  than the rule: the *entity* delete paths cascade; the *level* delete path
+  forgot five collections.
+- **The shipped default configuration builds cleanly.** Driven with
+  `boneReveal: true`, `autoStairs: true` and the real 3-bone wallet — the
+  combination no spec runs — the first bone press builds walls, a stair and a
+  roof, spends one bone, and reveals E1; the three presses after it are free
+  no-ops with the correct message and no page errors
+  (`audit-repros/r15-real-defaults.spec.js`). I did not find an interaction bug
+  between the new defaults, which is the answer to checklist 14 even though it is
+  not the answer I expected.
 
 ---
 
