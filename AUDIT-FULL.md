@@ -15,11 +15,25 @@ flight — dropping two underlay files at once, or one page adding while another
 removes — both read the same array and the second write erases the first's
 record. Fix: do the read and the put inside one `readwrite` transaction.
 
-**1.2 LAYOUT never tells the user a save failed — MINOR, INFERRED**
+**1.2 LAYOUT discards sheet work silently when a write fails — MAJOR, CONFIRMED**
 `LAYOUT.dc.html:333`: `.catch(error => console.warn('Unable to save the layout:', error))`.
-MODEL's equivalent surfaces the failure (`persistenceStatus: 'UNSAVED'`,
-`persistenceError: 'Save failed'`, `MODEL.dc.html:5121-5124`). On a full quota or
-in a private window, LAYOUT's sheet edits vanish on reload with no signal at all.
+MODEL's equivalent surfaces the failure; LAYOUT's writes to the console and
+carries on as if it had saved.
+
+Driven with every `saveSharedFile` call rejecting the way a full quota does
+(`audit-repros/r19-save-failure.spec.js`):
+
+```
+MODEL : status pill "UNSAVED", data-save-dirty 1, app keeps working,
+        and the next successful write recovers everything (3 of 3 lines)
+LAYOUT: nothing surfaced anywhere in the DOM, layoutSaveSeq stays 0,
+        and after a reload the viewport just placed is gone (0 viewports)
+```
+
+On a full quota, in a private window, or after iPad Safari evicts the origin's
+storage, a drafter can lay out a whole sheet — viewports, paper size,
+titleblock — and lose all of it on the next page load with no signal of any kind.
+MODEL's handling is the model to copy.
 
 **1.3 Correction to my own first-contact log — no finding**
 I recorded that the SAVED indicator never changes. It does: `_markUnsaved`
@@ -133,6 +147,24 @@ printed label (`DN — 14R @ 7 5/8"`, `:6879`) is the exact riser rounded to 1/1
 which is trade-normal. I did not audit headroom, L/U landings, or auto-placement.
 
 ---
+
+## 3b. Areas (the number on the permit application)
+
+**3b.1 The garage is inside the level net and the building total — MINOR, INFERRED, reaches paper**
+`areas.js:53-91`. `garageSqFt` is accumulated per level and reported, but it is
+never subtracted: `netSqFt = max(0, grossSqFt - openingsSqFt)`, and
+`totalSqFt = Σ netSqFt` (`:105-107`). The per-level row discloses it —
+`garageLabel: "incl. garage 240 sq ft"` (`MODEL.dc.html:4323`) — but the total
+line carries no such note (`:4330`), and the stated convention text
+(`areas.js:20-23`) talks only about floor openings. A drafter reading
+"TOTAL 2,440 sq ft" off the AREAS dialog onto a permit application is reporting
+the garage as floor area. Whether that is intended is Q16 in AUDIT-QUESTIONS.
+
+**3b.2 Overlapping floor shapes double-count — NIT, INFERRED**
+`areas.js:57-64` sums every floor polygon on a level with no union. Two floor
+shapes that overlap (a garage slab drawn over the main floor, a re-drawn floor
+left on top of the old one) count their overlap twice, in both the level net and
+the building total. Nothing in the UI prevents overlapping floors.
 
 ## 4. The level model
 
@@ -459,6 +491,16 @@ noting next to §5.2, where the length parser does not.
   default, `drawing-format`'s load default, and LAYOUT's — all resolve to `left`.
 - **`_animate` reschedules before it works**, so a paint exception cannot kill
   the render loop.
+- **MODEL survives a failing store.** With every IndexedDB write rejecting, the
+  status pill goes UNSAVED, the dirty beacon stays set, editing continues, and
+  the first successful write afterwards persists everything that accumulated
+  (`audit-repros/r19-save-failure.spec.js`). No work is lost and the user is
+  told. This is the right shape; §1.2 is the page that did not get it.
+- **`build-house.js`'s mid-span beam rule is careful.** The trigger reads the
+  bounding-box short span, which would over-trigger on an L, but `trimRun` /
+  `localSpanAt` (`build-house.js:102-121`) then keep the beam only over the
+  stretches whose *local* joist span actually exceeds the trigger. I went looking
+  for a false positive and the code had already handled it.
 - **Referential integrity on entity deletes is right** — deleting a wall takes its
   fenestration with it (0 left, 0 orphaned), and deleting a BONEYARD master under
   built geometry is refused with "This outline carries built geometry — walls,

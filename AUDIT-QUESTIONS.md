@@ -111,3 +111,15 @@ so legacy tests do not see them (`tests/helpers.js:29-52`). That is either
 temporary scaffolding until the specs are updated, or an admission that the
 defaults are too intrusive to test against. Which — because if it is the former,
 the combination coverage gap (AUDIT-FULL §7.2) has an owner and a date.
+
+**Q16 — Should the garage be inside the AREAS total?**
+`areas.js` tracks `garageSqFt` per level and then includes it in `netSqFt` and in
+the building total; only the per-level row says "incl. garage". Most permit
+applications want floor area *excluding* the garage, reported separately. Is the
+current total the number the drafter is meant to copy onto the application, or
+should the total exclude the garage and the dialog show it as its own line?
+
+**Q17 — Is a bone press that overrides the tour meant to skip the stair silently?**
+A mid-tour bone press builds both storeys and no stair, and the message lists
+what it built without mentioning what it skipped (AUDIT-FULL §5b.2). Deliberate
+("you overrode the escort, you own it") or an omission in the message?

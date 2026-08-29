@@ -34,6 +34,7 @@ regression tests as-is.
 | `r16-referential.spec.js` | checklist 11, orphans on delete | passes — cascades and refusals are correct |
 | `r17-elevation-attached.spec.js` | renders an attached-garage E1 for inspection | passes |
 | `r18-tour-abandon.spec.js` | checklist 5, tour abandonment | passes — prints the state each exit leaves |
+| `r19-save-failure.spec.js` | §1.2 write failures | passes — MODEL recovers, LAYOUT loses the sheet silently |
 | `p1`,`p3`,`p5`,`p6`,`p7`,`p8`,`p9`,`p10`,`p11`,`p12`,`p13` | AUDIT-PERF measurements | pass, print numbers |
 
 `evidence/` holds the two sections the app actually drew for C5:
