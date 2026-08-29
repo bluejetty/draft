@@ -27,4 +27,12 @@ regression tests as-is.
 | `r10-dim-sum.spec.js` | C1 through the UI | passes on this footprint, prints the strings |
 | `r10b-dim-sum-pure.spec.js` | C1 through the production builder | passes, prints 39.5% mismatch |
 | `r11-unicode.spec.js` | §5.2 smart punctuation | passes, prints the refusals |
+| `r12-section-band-gap.spec.js` | C5 section band, detached garage | passes the gap check by luck of the gap detector — read the printed runs and `evidence/section-house-garage.png` |
+| `r13-section-band-attached.spec.js` | C5 section band, attached garage | **fails** (main-floor band 597 px vs the storey above at 340 px) |
 | `p1`,`p3`,`p5`,`p6`,`p7`,`p8`,`p9`,`p10`,`p11`,`p12`,`p13` | AUDIT-PERF measurements | pass, print numbers |
+
+`evidence/` holds the two sections the app actually drew for C5:
+`section-attached.png` (framed floor + label `11 7/8" TJI + 3/4" SHTG` across a
+slab-on-grade attached garage, open storey drawn beneath it) and
+`section-house-garage.png` (one continuous floor band from the house across six
+feet of open ground to a detached garage).

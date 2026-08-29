@@ -8,35 +8,35 @@ Target: `main` @ `75a3cd6`. Repro specs referenced below are committed under
 
 ## Executive summary — the three worst things
 
-1. **The dimensions do not add up, on about 40% of strings.** Every dimension is
-   independently rounded to 1/16" at paint time, so a string of partials and the
-   overall above it are rounded separately. Driven through the production string
-   builder over 400 hand-traced footprints: **158 of 400 (39.5%)** print partials
-   that do not sum to the printed overall, worst case 1/8". A plan examiner's
-   first arithmetic check fails on a third of your sheets. This is the defect
-   the product cannot have, and it exists today.
+1. **The drawings lie, in two independent ways, and both reach paper.**
+   (a) Every dimension is rounded to 1/16" independently at paint time, so a
+   string of partials and the overall above it are rounded separately: **158 of
+   400 (39.5%)** hand-traced footprints print a string that does not add up to
+   its own overall, worst case 1/8". (b) A section through a house with a garage
+   draws the main-floor framed-floor assembly — labelled `11 7/8" TJI + 3/4"
+   SHTG` — straight across the garage, which is a 4" slab on grade, and leaves
+   the space under it drawn as an open basement storey. With a **detached**
+   garage the same band spans the open ground between the two buildings. A plan
+   examiner fails either of these on sight.
 
 2. **Nothing in this app listens to touch.** `MODEL.dc.html:5398-5410` binds
-   `mousemove` / `mousedown` / `dblclick` / `contextmenu` / `wheel` and nothing
-   else. `LAYOUT.dc.html:231-235` is the same. There is no `pointerdown`, no
-   `touchstart`, anywhere in the repo. What works on an iPad today works only
-   because Safari synthesises a click from a tap — so taps work and **every drag
-   fails**: no pan, no zoom, no node drag, no window select, no viewport
-   placement by drag. There is also no undo control in the DOM at all (searched
-   `title`, `aria-label`, and text for /undo|redo/: zero matches) — undo is
-   Ctrl+Z only. The stated benchmark is "mom and dad build a house on an iPad."
+   `mousemove`/`mousedown`/`dblclick`/`contextmenu`/`wheel`; `LAYOUT.dc.html:231-235`
+   the same. There is no `pointerdown` or `touchstart` anywhere in the repo. What
+   works on an iPad works only because Safari synthesises a click from a tap, so
+   taps work and **every drag fails**: no pan, no zoom, no node drag, no window
+   select, no viewport placement. There is also no undo control in the DOM at all
+   (zero matches for /undo|redo/ across text, `title` and `aria-label`) — undo is
+   Ctrl+Z only. The stated benchmark is "mom and dad build a house on an iPad".
    They cannot pan, zoom, or undo.
 
 3. **LAYOUT silently deletes work done in MODEL.** `LAYOUT.dc.html:317-334`
-   writes `this._saved` — the whole drawing as it looked when LAYOUT loaded —
-   back into the shared store on any sheet change. Anything drawn in MODEL after
-   that is gone. Reproduced: 9 lines before the LAYOUT click, 8 after
-   (`audit-repros/r1-layout-clobber.spec.js`). No warning, no conflict check, no
+   writes back the whole drawing as it looked when LAYOUT loaded, on any sheet
+   change. Reproduced: 9 lines before, 8 after. No warning, no conflict check, no
    re-read.
 
 Everything under those three is repairable in a sprint. Those three are the
-product: the drawing lies, the target device can't drive it, and the sheet page
-eats the model.
+product: the drawing disagrees with the building, the target device cannot drive
+it, and the sheet page eats the model.
 
 ---
 
@@ -45,26 +45,31 @@ eats the model.
 | # | Finding | Damage | Likelihood | Score |
 |---|---|---|---|---|
 | 1 | C1 Dimension strings do not sum to their overall (39.5% of strings) | 5 | 5 | **25** |
-| 2 | C2 No touch input path — every drag, pan and zoom is unreachable on iPad | 4 | 5 | **20** |
-| 3 | C3 LAYOUT overwrites the drawing with a stale snapshot | 5 | 4 | **20** |
-| 4 | C4 No undo/redo control exists outside the keyboard | 4 | 5 | **20** |
-| 5 | M1 The 2D overlay renders at 1× on every Retina screen | 3 | 5 | **15** |
-| 6 | M2 Render-blocking Google Fonts link: 12.9 s → 0.4 s startup | 3 | 4 | **12** |
-| 7 | M3 A placed viewport's scale can never be changed; the footer reports the selection anyway | 3 | 4 | **12** |
-| 8 | M4 `num()` coerces `null` / `""` / `false` / `[]` to 0 — geometry silently relocates on load | 5 | 2 | **10** |
-| 9 | M5 Deleting a level orphans its fenestrations/fixtures/stairs/notes/tags, then blames the file | 3 | 3 | **9** |
-| 10 | M6 `offsetOutline` has no self-intersection or zero-edge handling — wrong roof footprints and wrong ROOF dims | 4 | 2 | **8** |
+| 2 | C5 Section floor bands cross body boundaries — a framed floor over the garage slab, a basement under the garage, a floor band through open ground | 5 | 4 | **20** |
+| 3 | C2 No touch input path — every drag, pan and zoom is unreachable on iPad | 4 | 5 | **20** |
+| 4 | C3 LAYOUT overwrites the drawing with a stale snapshot | 5 | 4 | **20** |
+| 5 | C4 No undo/redo control exists outside the keyboard | 4 | 5 | **20** |
+| 6 | M1 The 2D overlay renders at 1× on every Retina screen | 3 | 5 | **15** |
+| 7 | M2 Render-blocking Google Fonts link: 12.9 s → 0.4 s startup | 3 | 4 | **12** |
+| 8 | M3 A placed viewport's scale can never be changed; the footer reports the selection anyway | 3 | 4 | **12** |
+| 9 | M4 `num()` coerces `null` / `""` / `false` / `[]` to 0 — geometry silently relocates on load | 5 | 2 | **10** |
+| 10 | M5 Deleting a level orphans its fenestrations/fixtures/stairs/notes/tags, then blames the file | 3 | 3 | **9** |
+
+Below the line: M6 `offsetOutline` degeneracies (4 × 2 = 8), M7 the 2" jog merge
+prints a coordinate where no wall stands (4 × 2 = 8).
 
 Damage 1-5: 1 cosmetic, 3 rework, 5 wrong paper or lost work.
 Likelihood 1-5: 1 needs a hand-edited file, 5 happens in the default flow.
 
 Why this order: the work order says anything that reaches paper outranks
-everything, and C1 reaches paper on the majority of permit sets. C2/C4 are next
-because the stated user is on a device the input layer was never written for —
-they are not "usability", they are "the product does not run for this customer".
-C3 is the only silent-data-loss path I could reproduce, but it needs two tabs,
-so it sits below the two that need nothing. M1 is ranked above M2 because it is
-permanent (it goes onto the sheet) while M2 is one line of HTML.
+everything, so the two defects that put a wrong number or a wrong assembly on a
+stamped sheet lead — C1 above C5 only because C1 needs no garage and no section,
+it happens on every drawing. C2/C4 come next because the stated user is on a
+device the input layer was never written for: that is not "usability", it is
+"the product does not run for this customer". C3 is the only silent-data-loss
+path I could reproduce, but it needs two tabs, so it sits below the ones that
+need nothing. M1 outranks M2 because it is permanent — it goes onto the sheet —
+while M2 is one line of HTML.
 
 ---
 
@@ -259,6 +264,85 @@ them (C2). There is no gesture layer to hide an undo in.
 
 **Shape of the fix.** Two buttons in the bottom strip, ≥44 px, wired to the same
 `_undo()` / `_redo()`.
+
+---
+
+## C5 — Section floor bands span every wall the cut crosses, regardless of which building it belongs to
+**Severity: CRITICAL · Confidence: CONFIRMED · Reaches paper**
+`MODEL.dc.html:8709-8712` (`levelSpan`), `:8789-8800` (the band draw),
+`MODEL.dc.html:8558-8582` (`_sectionWallCrossings`).
+
+**What breaks.** The generated section draws one floor-assembly band per level:
+
+```js
+const levelSpan = levelId => {
+  const us = crossings.filter(c => c.wall.levelId === levelId).map(c => c.u);
+  return us.length ? { min: Math.min(...us), max: Math.max(...us) } : null;
+};
+…
+const span = levelSpan(level.id) || fdnSpan;
+ctx.fillRect(x, Y(level.floorTop), wid, depth);   // one rectangle, min → max
+```
+
+`_sectionWallCrossings` walks `this._walls` with **no filter at all** — every
+level, every view, garage-body walls included (and BONEYARD shelf walls, which
+carry negative level ids). Garage walls are stored on the same level as the house
+walls, so `levelSpan(MAIN)` runs from the house's outermost crossed wall to the
+garage's outermost crossed wall and the band is drawn as a single unbroken
+rectangle between them.
+
+**What the drafter gets, measured on the rendered section** (both screenshots
+attached to the reproductions, both taken from the app):
+
+*Attached garage* (`audit-repros/r13-section-band-attached.spec.js`) — the common
+case. Band spans on the section canvas:
+
+```
+2ND FL band : rows 336-356, x 150..489  (340 px)   ← house only, correct
+MAIN FL band: rows 532-545, x 150..746  (597 px)   ← house + garage
+```
+The main-floor band is 76% wider than the storey above it and carries the label
+`11 7/8" TJI + 3/4" SHTG` across a garage that is a **4" slab on grade**. The
+space under that band inside the garage is drawn as an open storey — the section
+tells a plan examiner there is a basement under the garage. No garage slab is
+drawn at all in this cut: the slab/gravel detail at `:8748-8776` needs
+`beamCrossings.length > 1`, and a cut through one grade-beam leg gives one.
+
+*Detached garage* (`audit-repros/r12-section-band-gap.spec.js`) — same code, worse
+picture:
+
+```
+widest floor-band run: 656 px, x 142..797, in ONE unbroken run
+band runs on that row: [[142,797]]
+```
+One framed floor, drawn continuously from the house across six feet of open
+ground to a garage twenty feet away.
+
+**Repro.** Run either spec; each writes the section it produced to
+`/tmp/fc/section-attached.png` / `/tmp/fc/section-house-garage.png`. By hand:
+build a house, mark an attached garage, BUILD HOUSE, press `c` and cut a line
+through both, open S1.
+
+**Falsification attempt.** This is not a bug if garage walls are meant to sit on
+their own level, or if something downstream masks the band over the garage. I
+checked both. Garage walls are pushed with the level being built and only a
+`body: 'garage'` marker (`MODEL.dc.html:12006`, `:12181`), so they share
+`levelId` with the house walls; `levelSpan` filters on `levelId` alone and never
+looks at `body` or at the garage outline. And nothing masks it — the band is a
+single `fillRect`/`strokeRect` pair with no clipping, and the rendered pixels
+above show it unbroken. I also checked the suite: `tests/section-view.spec.js`
+covers a cut through the garage *only* (`:178`, `:238`) and a house+garage
+**elevation** (`:365`, which asserts `gapFaint < 10` — no level line across the
+gap, and that path is correct). There is no spec for a section cutting through
+both bodies. Not a wrong test; a missing one, over the exact case.
+
+**Shape of the fix.** Band by body, not by level: group the crossings into
+contiguous runs (garage outline membership is already computable —
+`_edgeOnOutline` against `_garageOutlines(levelId)`, used at `:8921-8926` in the
+elevation path) and draw one band per run at that body's own floor elevation, or
+none where the body is slab-on-grade. The elevation path already does this
+grouping; the section path never got it.
+
 
 ---
 
@@ -531,11 +615,13 @@ doubles the roof loop. Numbers and the iPad extrapolation are in AUDIT-PERF.md.
 
 ## What I did not examine
 
-- **Sections (S1/S2) beyond reading `_drawCutWorkspace2D`'s opening 80 lines.**
-  The work order names this the weak area and describes a garage band that must
-  butt, not splice. I read the roof-profile envelope and the wall-crossing setup
-  but did not trace the band assembly, so the rest of that family is unaudited by
-  me. This is the largest hole in this report.
+- **Sections (S1/S2) beyond the floor-band family (C5).** I found and proved the
+  floor-band case and read the foundation, grade-beam, slab and grade code around
+  it, but I did not trace the wall-standing pass, the roof-profile envelope on
+  diagonal cuts, doubled lines at shared corners, or layering order. Given that
+  the first thing I looked at in this family was wrong on the most common
+  configuration, I would expect more here. This is the largest hole in this
+  report.
 - **`auto-stair.js` (496 lines) end to end.** I checked the riser derivation
   (`_stairLayout`, `MODEL.dc.html:16779-16785`) — `ceil(rise / 7.875)` with an
   even divide, which is correct — and the L/U landing split only by reading. No
