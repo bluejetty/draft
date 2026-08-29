@@ -273,6 +273,42 @@ declares one.
 
 ---
 
+## 5b. The tour
+
+**5b.1 Abandonment is handled well — checked, sound**
+`audit-repros/r18-tour-abandon.spec.js` drives every exit I could find. The step
+is serialized with the drawing (`tour: {...this.state.tour}`,
+`MODEL.dc.html:2557`), so it survives a reload, an Escape, a level switch, and a
+round trip through LAYOUT — and the popup comes back each time:
+
+```
+tour after the outline closes : {"step":"foundation"}
+after a reload                : {"step":"foundation"}   popup visible: true
+after Escape                  : {"step":"foundation"}   popup visible: true
+after switching to ROOF       : {"step":"foundation"}   popup visible: true
+after a round trip to LAYOUT  : {"step":"foundation"}   popup visible: true
+```
+A bone press from any of those states clears the tour and builds. No stuck
+states, no half-tours.
+
+**5b.2 Overriding the tour builds a two-storey house with no stair, and says nothing — MINOR, CONFIRMED**
+A mid-tour bone press is a deliberate override (`MODEL.dc.html:12582-12588`), and
+it skips the tour's stair step. What the drafter gets:
+
+```
+after the bone: tour {"step":null} | walls 12 | stairs 0 | roofs 1
+message: "House built from the outline: MAIN FL walls, MAIN FL floor,
+          2ND FL walls, 2ND FL floor, FOUNDATION walls, slab"
+```
+
+Two storeys, no stair, no floor opening — and the message enumerates everything
+it built without mentioning the one thing it skipped. Pressing the bone again
+does not help: "Every level already has its shell." The house is now missing its
+means of egress and the only way to add it is by hand. Note that the *default*
+configuration would have caught this — stair suggestions park the first press —
+but only outside the tour; inside it, the override wins silently. One clause in
+the message ("— no stair; place one with the STAIR tool") would close it.
+
 ## 6. Error containment
 
 **6.1 No error boundary anywhere, but the loop survives — MINOR, CONFIRMED**
@@ -375,9 +411,33 @@ and phone from the settings package (`LAYOUT.dc.html:614-624`) — that is inten
 titleblock content, but worth knowing that a shared `.draft` file carries the
 drafter's phone number.
 
-**8.4 `pdf-scan.js` — not audited.** The worker is configured inline
-(`MODEL.dc.html:30`) and the 1 MB worker is lazily fetched, which is right.
-Hostile-PDF and oversized-image behaviour untested.
+**8.4 `pdf-scan.js`: the PDF rasterizer caps width only — MINOR, INFERRED**
+`pdf-scan.js:60-71`:
+
+```js
+const scale = Math.min(2.6, 2200 / viewport1.width);
+const viewport = page.getViewport({ scale });
+canvas.width  = Math.round(viewport.width);
+canvas.height = Math.round(viewport.height);
+```
+
+The cap is on the *width*. The photo path two functions down gets it right —
+`shrink = Math.min(1, cap / Math.max(bitmap.width, bitmap.height))`
+(`:81`) — so the asymmetry looks accidental. A tall page (a scanned strip, a
+rolled site plan, a hostile PDF) blows past every canvas budget: a 200 × 20000 pt
+page takes `scale = min(2.6, 11) = 2.6` and asks for a 520 × 52,000 canvas =
+**27 Mpx**, above iOS Safari's ~16.7 Mpx area limit. Safari then hands back an
+unusable canvas rather than throwing, and unlike the photo path
+(`if (!blob) throw`, `:88`) the PDF path assigns `scan.convertedBlob = blob`
+(`:69`) with no null check — so a silently blank underlay is stored as the
+converted output. Fix: cap on `Math.max(width, height)` like the photo path, and
+null-check the blob.
+
+Also unaudited in that file: `getOperatorList()` is parsed in the worker but its
+`fnArray` is iterated on the main thread (`:35-47`), so a PDF with millions of
+operators freezes the UI for the length of that loop. And `detectScalesInText`
+(`:97`) already accepts typographic primes (`\u2019`, `\u201d`) — which is worth
+noting next to §5.2, where the length parser does not.
 
 ---
 
