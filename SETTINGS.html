@@ -116,6 +116,8 @@
       <div class="snap-row"><label for="suggest-stairs">Stair suggestions</label><input type="checkbox" id="suggest-stairs" data-suggest-stairs></div>
       <p class="advanced-note">The guided tour's stair step and a BUILD HOUSE press with no stairs offer a rule-derived stair placement — riser math from the level heights, the run along the beam edge — as a suggestion to accept, replace or delete. Off means place every stair yourself.</p>
       <button class="action" id="snap-reset" type="button">RESET SNAP DEFAULT</button>
+      <p class="advanced-note" style="margin-top:12px;">Bone crunch &mdash; the short crunch when a bone spends on BUILD HOUSE (board #261). Sound only; the spend itself never depends on it.</p>
+      <div class="snap-row"><label for="wallet-sound"><input type="checkbox" id="wallet-sound" data-wallet-sound> Bone crunch on spend</label></div>
     </details>
     <section class="groups" id="groups" aria-label="Keyboard commands"></section>
     <details class="report">
@@ -285,8 +287,16 @@
         });
       });
 
+      let walletSound = active?.content?.model?.walletSound !== false; // default ON
+      const walletSoundInput = document.querySelector('[data-wallet-sound]');
+      walletSoundInput.checked = walletSound;
+      walletSoundInput.addEventListener('change', () => {
+        walletSound = walletSoundInput.checked;
+        saveActive(walletSound ? 'Bone crunch on.' : 'Bone crunch off.');
+      });
+
       const saveActive = message => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs, walletSound } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -347,7 +357,7 @@
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs, walletSound } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);

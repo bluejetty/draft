@@ -19,6 +19,7 @@
 <script src="./fen-labels.js"></script>
 <script src="./build-house.js"></script>
 <script src="./tour.js"></script>
+<script src="./bone-wallet.js"></script>
 <script src="./auto-stair.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
@@ -167,8 +168,9 @@
       </button>
     </sc-if>
     <div style="position:relative; line-height:0;">
-      <button data-build-house onClick="{{ onBuildHouse }}" aria-label="BUILD HOUSE" title="{{ buildHouseHint }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ buildHouseGlow }};">
+      <button data-build-house onClick="{{ onBuildHouse }}" aria-label="BUILD HOUSE" title="{{ boneWalletTitle }}" style="position:relative; border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ buildHouseGlow }};">
         <img src="./assets/btn-bone.png" alt="" style="height:44px; display:block;" />
+        <span data-bone-balance style="position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); text-align:center; pointer-events:none; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(29,31,32,0.55); letter-spacing:0.02em; font-size:{{ boneBalanceFontPx }}px; line-height:1;">{{ boneBalanceLabel }}</span>
       </button>
       <!-- The tour's climb button stands directly under the bone — NEXT ▲ FLOOR
            on the floors, PRESS ▲ BONE once the roof reads right — the arrow
@@ -2200,6 +2202,8 @@ class Component extends DCLogic {
     tsquareEngaged: false,
     protractorAngle: '',       // '' | '90' | '45' | '30' — which blade a held modifier grabbed
     tsquareOn: true,           // full-time 90° T-square while drawing; T toggles
+    boneWallet: { balance: 0, nextDripMs: null }, // the free-bone gauge (board #261)
+    walletSound: true,         // the bone-crunch on spend; personal SETTINGS
     suggestStairs: true,       // board #260: the tour and the bone OFFER stair placements
     compassOn: false,          // polar tracking instrument — down by default; P picks it up
     cuts:          [],
@@ -3248,6 +3252,7 @@ class Component extends DCLogic {
           drafter: { ...this.state.drafter },
           keybindings: { ...this.state.keybindings },
           tsquareOn: this.state.tsquareOn,
+          walletSound: this.state.walletSound,
           boneReveal: this.state.boneReveal,
           suggestStairs: this.state.suggestStairs,
           buildIntroOff: this.state.buildIntroOff,
@@ -3286,6 +3291,7 @@ class Component extends DCLogic {
           ? { drafter: normaliseDrafter(values.drafter) }
           : {}),
         ...(typeof values.tsquareOn === 'boolean' ? { tsquareOn: values.tsquareOn } : {}),
+        ...(typeof values.walletSound === 'boolean' ? { walletSound: values.walletSound } : {}),
         ...(typeof values.boneReveal === 'boolean' ? { boneReveal: values.boneReveal } : {}),
         ...(typeof values.suggestStairs === 'boolean' ? { suggestStairs: values.suggestStairs } : {}),
         ...(typeof values.buildIntroOff === 'boolean' ? { buildIntroOff: values.buildIntroOff } : {}),
@@ -5122,6 +5128,7 @@ class Component extends DCLogic {
   componentWillUnmount() {
     cancelAnimationFrame(this._raf);
     clearTimeout(this._layerRevealTimer);
+    clearInterval(this._boneTick);
     this._cancelPolarDwell();
     if (this._ro) this._ro.disconnect();
     if (this._controls && typeof this._controls.dispose === 'function') this._controls.dispose();
@@ -5469,6 +5476,10 @@ class Component extends DCLogic {
     // The pristine startup drawing, kept so NEW can hand back a blank sheet.
     this._blankDrawing = JSON.stringify(this._serializeDrawing());
     this._loadDrawing();
+    // The free-bone gauge (board #261): read once now, then a minute tick
+    // keeps the countdown and drip arrivals current without a reload.
+    this._refreshBoneWallet();
+    this._boneTick = setInterval(() => this._refreshBoneWallet(true), 60000);
     this._invalidate();
     this._animate();
   }
@@ -12480,12 +12491,27 @@ class Component extends DCLogic {
   // The red bone is the pure BUILD verb: the type buttons declare what the
   // outline is, the trace draws it, and the bone grows it. With no outline
   // yet, the bone points at the type buttons instead of arming a trace.
+  // The FREE-BONE wallet (board #261) gates ONLY the pop: pointing at the
+  // type buttons costs nothing, a press where every shell already stands
+  // costs nothing, and a build that fires costs one bone — every time,
+  // rebuilds included (TOO BAD is policy). The wallet check runs BEFORE
+  // the mid-tour teardown, so an empty-wallet press never ends the tour
+  // without building.
   _pressBuildHouse() {
     this._ensureDrawingCollections();
     const floors = this._floorLevels();
     const hasSource = [1, ...floors.map(level => level.id)]
       .some(levelId => this._houseOutline(levelId) || this._garageOutline(levelId));
     if (hasSource) {
+      const wallet = window.DraftBoneWallet.read();
+      if (wallet.balance < window.DraftBoneWallet.COSTS.buildHouse) {
+        this._refreshBoneWallet();
+        this.setState({
+          drawingMessage: `Out of bones — the next free bone lands in ${this._boneWaitLabel(wallet.nextDripMs)}.`,
+          drawingMessageError: true,
+        });
+        return;
+      }
       const step = this.state.tour.step;
       // Board #260, Q2(b) park-and-confirm: OUTSIDE the tour, a press with
       // no stairs anywhere first SUGGESTS them and stops — free, and the
@@ -12521,6 +12547,14 @@ class Component extends DCLogic {
         this.setState({ tour: format.tour(null), tourPopup: false, tourPopupNote: '', tourGableArmed: false });
       }
       const built = this._buildHouse();
+      if (built) {
+        // The bone pays for houses that pop — a true no-op stays free
+        // (Devin's ruling on the third outcome). Spends never enter the
+        // undo stack, and UNDO never refunds: policy, and says nothing.
+        window.DraftBoneWallet.spend(window.DraftBoneWallet.COSTS.buildHouse);
+        this._playBoneCrunch();
+      }
+      this._refreshBoneWallet();
       if (step === 'finale') this._afterTourBone();
       else if (built) this._startBoneReveal();
       return;
@@ -12529,6 +12563,69 @@ class Component extends DCLogic {
       drawingMessage: 'Nothing to build yet — press HOUSE (or a GARAGE button), trace the outline, then press the bone.',
       drawingMessageError: true,
     });
+  }
+
+  // ── The FREE-BONE wallet gauge (board #261) ───────────────────────────────
+  // The wallet is APP state, never drawing state: refreshes are plain
+  // setState — no _markUnsaved, no history entries, nothing in the save.
+  _boneWaitLabel(nextDripMs) {
+    if (nextDripMs == null) return '';
+    const minutes = Math.ceil(nextDripMs / 60000);
+    return minutes <= 1 ? '<1m' : `${minutes}m`;
+  }
+
+  _refreshBoneWallet(announceDrip = false) {
+    const previous = this.state.boneWallet;
+    const wallet = window.DraftBoneWallet.read();
+    if (wallet.balance === previous.balance && wallet.nextDripMs === previous.nextDripMs) return;
+    this.setState({ boneWallet: { balance: wallet.balance, nextDripMs: wallet.nextDripMs } });
+    // The +1 moment: a drip landing mid-session gets one quiet line —
+    // only from the minute tick, never on the heels of a spend.
+    if (announceDrip && wallet.balance > previous.balance && !this.state.drawingMessageError) {
+      this.setState({
+        drawingMessage: `A free bone landed — ${wallet.balance} in the wallet.`,
+        drawingMessageError: false,
+      });
+    }
+  }
+
+  // The bone crunch: a short synthesized WebAudio crunch on spend — two
+  // quick noise bites through a falling bandpass, no shipped asset. It
+  // respects the wallet-sound toggle (personal SETTINGS) and fails
+  // silently everywhere: blocked audio must never break the spend.
+  _playBoneCrunch() {
+    if (this.state.walletSound === false) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!this._audioCtx) this._audioCtx = new Ctx();
+      const ctx = this._audioCtx;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const bite = (at, duration, freq) => {
+        const frames = Math.max(1, Math.floor(ctx.sampleRate * duration));
+        const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < frames; i++) {
+          data[i] = (Math.random() * 2 - 1) * (1 - i / frames) ** 2;
+        }
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        const band = ctx.createBiquadFilter();
+        band.type = 'bandpass';
+        band.frequency.setValueAtTime(freq, at);
+        band.frequency.exponentialRampToValueAtTime(freq * 0.4, at + duration);
+        band.Q.value = 0.9;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.5, at);
+        gain.gain.exponentialRampToValueAtTime(0.001, at + duration);
+        source.connect(band).connect(gain).connect(ctx.destination);
+        source.start(at);
+        source.stop(at + duration);
+      };
+      const now = this._audioCtx.currentTime;
+      bite(now, 0.07, 900);         // cr—
+      bite(now + 0.08, 0.11, 500);  // —unch
+    } catch { /* audio blocked — the spend already happened, silently */ }
   }
 
   // HOUSE on the top bar: select-first — arm the outline trace for an
@@ -19570,8 +19667,30 @@ class Component extends DCLogic {
       onTourIncrement: () => this.setState({
         tourRoofIncrementIdx: (this.state.tourRoofIncrementIdx + 1) % 3,
       }),
-      buildHouseGlow: this.state.tour.step === 'finale'
-        ? 'drop-shadow(0 0 7px rgba(192,57,43,0.95))' : 'none',
+      // The bone IS the wallet gauge (board #261): balance on the button,
+      // an empty wallet greys out (grey beats the finale glow — a glowing
+      // bone with nothing to spend is a contradiction) and the overlay
+      // becomes the countdown to the next free bone.
+      buildHouseGlow: this.state.boneWallet.balance < 1
+        ? 'grayscale(1) brightness(0.82)'
+        : this.state.tour.step === 'finale'
+          ? 'drop-shadow(0 0 7px rgba(192,57,43,0.95))' : 'none',
+      boneBalanceLabel: this.state.boneWallet.balance < 1
+        ? `0 · ${this._boneWaitLabel(this.state.boneWallet.nextDripMs)}`
+        : String(this.state.boneWallet.balance),
+      // The digit ladder: sized for one digit, stepping down so even a
+      // five-digit paid wallet never overflows the bone.
+      boneBalanceFontPx: (() => {
+        const chars = this.state.boneWallet.balance < 1
+          ? 8
+          : String(this.state.boneWallet.balance).length;
+        return chars <= 1 ? 15 : chars <= 3 ? 11 : chars <= 5 ? 8 : 7;
+      })(),
+      boneWalletTitle: this.state.boneWallet.balance < 1
+        ? `Out of bones — the next free bone lands in ${this._boneWaitLabel(this.state.boneWallet.nextDripMs)}. One drips in every hour, up to ${window.DraftBoneWallet.DRIP_CAP}.`
+        : this.state.boneWallet.nextDripMs != null
+          ? `${this.state.boneWallet.balance} bone${this.state.boneWallet.balance === 1 ? '' : 's'} · next free bone in ${this._boneWaitLabel(this.state.boneWallet.nextDripMs)}. Each BUILD costs 1.`
+          : `${this.state.boneWallet.balance} bones — the free wallet is full. Each BUILD costs 1.`,
       perfNoticeOpen: this.state.perfNotice === true,
       dismissPerfNotice: () => this._dismissPerfNotice(),
       perfIntroOff: this.state.perfIntroOff === true,
