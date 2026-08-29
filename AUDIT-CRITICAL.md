@@ -58,11 +58,11 @@ it, and the sheet page eats the model.
 | 7 | M1 The 2D overlay renders at 1× on every Retina screen | 3 | 5 | **15** |
 | 8 | M2 Render-blocking Google Fonts link: 12.9 s → 0.4 s startup | 3 | 4 | **12** |
 | 9 | M3 A placed viewport's scale can never be changed; the footer reports the selection anyway | 3 | 4 | **12** |
-| 10 | M4 `num()` coerces `null` / `""` / `false` / `[]` to 0 — geometry silently relocates on load | 5 | 2 | **10** |
+| 10 | M7 The 2" jog merge dimensions to a coordinate where no wall stands | 4 | 3 | **12** |
 
-Just below: M5 deleting a level orphans five collections (3 × 3 = 9), M6
-`offsetOutline` degeneracies (4 × 2 = 8), M7 the 2" jog merge prints a coordinate
-where no wall stands (4 × 2 = 8), M10 LAYOUT loses the sheet on a failed write
+Just below: M4 `num()` coerces `null`/`""`/`false`/`[]` to 0 (5 × 2 = 10),
+M5 deleting a level orphans five collections (3 × 3 = 9), M6 `offsetOutline`
+degeneracies (4 × 2 = 8), M10 LAYOUT loses the sheet on a failed write
 (4 × 2 = 8).
 
 Damage 1-5: 1 cosmetic, 3 rework, 5 wrong paper or lost work.
