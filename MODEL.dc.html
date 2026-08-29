@@ -1683,6 +1683,16 @@ const normaliseLevelAssembly = raw => {
 };
 const MODEL_STORAGE_BUCKET = 'model-drawing';
 
+// Every drawing collection whose items belong to a LEVEL, in one place: what
+// `_deleteLevel` takes with the level, and the list a new level-owned
+// collection has to join. If an item of yours carries a `levelId`, its array
+// belongs here.
+const LEVEL_OWNED_COLLECTIONS = [
+  '_lines', '_walls', '_floors', '_shapes', '_roofs', '_outlines',
+  '_surfaceOpenings', '_dimensions', '_columns', '_beams',
+  '_fenestrations', '_fixtures', '_stairs', '_notes', '_roomTags',
+];
+
 // Architectural length formatting/parsing lives in formatters.js — pure
 // functions, shared here under their original names so call sites are
 // untouched.
@@ -4483,6 +4493,25 @@ class Component extends DCLogic {
         ...boneyardShelves.map(shelf => shelf.id + 1),
       );
       const ownerLevelIds = new Set([...levelIds, ...boneyardShelves.map(shelf => -shelf.id)]);
+      // Two different things get dropped at load, and telling a drafter they
+      // are the same thing is how a damaged file goes unnoticed:
+      //
+      //   ORPHANS — an item whose level is gone. Nothing is wrong with the
+      //   item; its level was deleted by a build of this app that did not take
+      //   every collection with it. Expected, harmless, and now cleaned up on
+      //   load.
+      //   DAMAGE — an item we could not read: a missing coordinate, a
+      //   nonsense id. Something is wrong with the FILE, and it is worth
+      //   saying so plainly.
+      //
+      // An orphan is recognisable from the stored record alone, so it is
+      // counted here and taken out of the `skipped` total below.
+      const orphaned = ['cuts', 'dimensions', 'lines', 'walls', 'floors', 'shapes',
+        'roofs', 'outlines', 'surfaceOpenings', 'columns', 'beams', 'stairs',
+        'fenestrations', 'fixtures', 'notes', 'roomTags', 'underlays']
+        .reduce((count, key) => count + (Array.isArray(saved[key]) ? saved[key] : [])
+          .filter(item => item && item.levelId !== undefined && item.levelId !== null
+            && !ownerLevelIds.has(Number(migrateLevelId(item.levelId)))).length, 0);
       const storedCuts = Array.isArray(saved.cuts)
         ? saved.cuts.map(cut => ({ ...cut, levelId: migrateLevelId(cut?.levelId) }))
         : saved.cuts;
@@ -4575,6 +4604,11 @@ class Component extends DCLogic {
         const end = format.point(segment?.end);
         const levelId = format.levelId(migrateLevelId(segment?.levelId), ownerLevelIds);
         if (!start || !end || levelId == null) return null;
+        // A segment with no length is not geometry: it has no direction, so it
+        // cannot be drawn, dimensioned, offset or joined, and it sits invisible
+        // in the drawing catching selections. Reject it into `skipped` rather
+        // than load it.
+        if (Math.hypot(end.x - start.x, end.z - start.z) < 1e-6) return null;
         return {
            id: this._storedItemId(segment?.id, type, usedIds),
           start: restoreVertex(start, levelId, extra.view, extra.body),
@@ -4923,7 +4957,13 @@ class Component extends DCLogic {
       // invisible/stale sections behind in 3D or accumulate duplicates.
       this._clearCutObjects();
       cuts.forEach(cut => this._restoreCutObjects(cut));
-      return { ok: true, reason: 'loaded', skipped: Math.max(0, skipped) };
+      return {
+        ok: true,
+        reason: 'loaded',
+        orphaned,
+        // What is left once the orphans are accounted for is real damage.
+        skipped: Math.max(0, skipped - orphaned),
+      };
   }
 
   // Returns { ok, reason }. A load that cannot be understood leaves the current
@@ -4936,7 +4976,15 @@ class Component extends DCLogic {
     let outcome = { ok: false, reason: 'empty' };
     try {
       if (!importedFile && !window.SharedFileStore) return outcome;
-      const file = importedFile || await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET);
+      let file = importedFile;
+      if (!file) {
+        // The revision comes back with the file: it is what the next save
+        // hands to `ifRev`, so a write that would land on top of the LAYOUT
+        // page's is refused and merged instead of clobbering it.
+        const at = await window.SharedFileStore.loadSharedFileAt(MODEL_STORAGE_BUCKET);
+        file = at.file;
+        this._storeRev = at.rev;
+      }
       if (!file) return outcome;
       const raw = await file.text();
       let saved = null;
@@ -4964,9 +5012,16 @@ class Component extends DCLogic {
       const failed = !outcome.ok && outcome.reason !== 'empty';
       const source = importedFile ? 'import' : 'store';
       const skipped = outcome.ok ? (outcome.skipped || 0) : 0;
+      const orphaned = outcome.ok ? (outcome.orphaned || 0) : 0;
+      const damaged = skipped
+        ? `${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded`
+        : '';
+      const strays = orphaned
+        ? `${orphaned} ${orphaned === 1 ? 'item' : 'items'} left over from a deleted level ${orphaned === 1 ? 'was' : 'were'} cleared`
+        : '';
       const message = !failed
-        ? (skipped && !importedFile
-          ? `Saved drawing loaded — ${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded.`
+        ? ((damaged || strays) && !importedFile
+          ? `Saved drawing loaded — ${[damaged, strays].filter(Boolean).join('; ')}.`
           : '')
         : outcome.reason === 'version'
           ? (source === 'import'
@@ -5093,6 +5148,38 @@ class Component extends DCLogic {
     return true;
   }
 
+  // Write the drawing to the shared bucket, guarded by the revision we last
+  // saw there. If someone else wrote in between — in practice the LAYOUT page
+  // saving a sheet, since it holds a whole copy of this same file — the write
+  // is REFUSED rather than applied, and we merge instead of clobbering: every
+  // key in this file is the Model Space's own and our copy is the current one,
+  // except `layout`, which is LAYOUT's. So we take theirs and write again.
+  //
+  // (`_saveGeneration` is a per-tab ordering guard — it decides which of THIS
+  // tab's in-flight writes gets to clear the dirty flag. It never knew about
+  // anyone else's writes; this is what does.)
+  async _writeDrawingToStore(file, triesLeft = 3) {
+    const store = window.SharedFileStore;
+    try {
+      this._storeRev = await store.saveSharedFile(file, MODEL_STORAGE_BUCKET, {
+        ifRev: Number.isInteger(this._storeRev) ? this._storeRev : null,
+      });
+      return;
+    } catch (error) {
+      if (!error?.stale || triesLeft <= 0) throw error;
+    }
+    const at = await store.loadSharedFileAt(MODEL_STORAGE_BUCKET);
+    this._storeRev = at.rev;
+    if (at.file) {
+      try {
+        const stored = JSON.parse(await at.file.text());
+        if (stored && typeof stored.layout === 'object') this._layoutData = stored.layout;
+      } catch { /* unreadable — our own copy is the better one to keep */ }
+    }
+    // Rebuilt so the sheet we just took rides out with it.
+    return this._writeDrawingToStore(this._drawingFile(), triesLeft - 1);
+  }
+
   _markUnsaved() {
     if (this._loadingDrawing || !this._drawingReady) return;
     this._recordHistory();
@@ -5109,7 +5196,7 @@ class Component extends DCLogic {
     const file = this._drawingFile();
     this._saveQueue = (this._saveQueue || Promise.resolve())
       .catch(() => {})
-      .then(() => window.SharedFileStore.saveSharedFile(file, MODEL_STORAGE_BUCKET))
+      .then(() => this._writeDrawingToStore(file))
       .then(() => {
         if (generation === this._saveGeneration) {
           document.body.dataset.saveSeq = String(generation);
@@ -8401,18 +8488,20 @@ class Component extends DCLogic {
     // changing the level collection so no chain can commit into another floor.
     this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelCut();
     const levelId = levels[idx].id;
-    this._lines = this._lines.filter(line => line.levelId !== levelId);
-    this._walls = this._walls.filter(wall => wall.levelId !== levelId);
-    this._floors = this._floors.filter(floor => floor.levelId !== levelId);
-    this._shapes = this._shapes.filter(shape => shape.levelId !== levelId);
-    this._roofs = this._roofs.filter(roof => roof.levelId !== levelId);
-    // Level outlines go with their level; the BONEYARD master is storage, not
-    // a level, so it is never touched by level deletion.
-    this._outlines = this._outlines.filter(outline => outline.levelId !== levelId);
-    this._surfaceOpenings = this._surfaceOpenings.filter(opening => opening.levelId !== levelId);
-    this._dimensions = this._dimensions.filter(dimension => dimension.levelId !== levelId);
-    this._columns = this._columns.filter(column => column.levelId !== levelId);
-    this._beams = this._beams.filter(beam => beam.levelId !== levelId);
+    // ONE list, so a new level-owned collection is added in one place instead
+    // of being forgotten here. It was: fenestrations, fixtures, stairs, notes
+    // and roomTags were each missing from this method, so deleting a level
+    // left its doors, windows, appliances, stairs, annotations and room names
+    // behind — pointing at a level id that no longer existed, invisible on
+    // every level, and carried through save after save.
+    //
+    // NOT on this list, deliberately: `_boneyardOutlines` (the BONEYARD master
+    // is storage, not a level), `_groups` (membership is cleaned up by
+    // `_cleanupGroups` below, since a group can span levels), and `cuts`,
+    // which live in component state and need their 3D objects disposed.
+    LEVEL_OWNED_COLLECTIONS.forEach(field => {
+      this[field] = this[field].filter(item => item.levelId !== levelId);
+    });
     // Cuts are owned by a level id, not by elevation: two levels can sit at the
     // same height, so only the deleted level's own sections go with it.
     const removedCuts = this.state.cuts.filter(cut => cut.levelId === levelId);

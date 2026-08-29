@@ -6,7 +6,12 @@ if (!window.DraftDrawingFormat) {
   // Bump when the stored shape changes; loads of any other version are refused.
   const VERSION = 1;
 
-  const num = value => (Number.isFinite(Number(value)) ? Number(value) : null);
+  // A REAL number, nothing coerced. `Number(value)` turned null, '', [], false
+  // and whitespace all into 0, so a coordinate that was missing or damaged did
+  // not fail — it quietly became the origin, and the entity loaded in the wrong
+  // place with nothing to show for it. A coordinate we cannot read now rejects
+  // its entity into `skipped`, which the load message reports.
+  const num = value => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 
   const oneOf = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
   const positive = (value, fallback) => {
