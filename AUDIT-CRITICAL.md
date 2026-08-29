@@ -651,34 +651,41 @@ self-intersection removal pass (or a proper polygon-offset routine) on the resul
 
 ---
 
-## M7 — `mergeJogs` prints a coordinate that is neither wall
-**Severity: MAJOR · Confidence: INFERRED · Reaches paper**
+## M7 — `mergeJogs` prints a dimension to a coordinate where no wall stands
+**Severity: MAJOR · Confidence: CONFIRMED · Reaches paper**
 `auto-dims.js:91-104`, tuning at `MODEL.dc.html:1618`
 (`AUTO_DIM_JOG_MERGE_FT = 2/12`).
 
 Corners within 2" of each other are strung as one coordinate. End clusters keep
-the true extreme, so overalls are honest — but a **middle** cluster is replaced
+the true extreme, so overalls stay honest — but a **middle** cluster is replaced
 by the arithmetic mean of its members:
 
 ```js
 return cluster.reduce((sum, value) => sum + value, 0) / cluster.length;
 ```
 
-So an L-shaped house whose inside corner is at 12'-0" on one wall and 12'-1 1/2"
-on the other prints a jog dimension to 12'-0 3/4" — a position where no wall
-stands, up to 1" from either. The overall still adds up, so the error is
-invisible to arithmetic checking; a framer measuring from the string lands 3/4"
-out.
+**Measured** (`audit-repros/r26-jog-merge.spec.js`, through the shipped
+`computeAutoDimStrings`): a north wall that steps 1.5" at x = 2, so the two real
+wall faces stand at 2.000 ft and 2.125 ft — 12'-0" and 12'-1 1/2" from the west
+wall.
+
+```
+the two real wall faces sit at x = [2, 2.125]
+coordinates the strings actually use: [-10, 2.0625, 10]
+printed distance from the west wall to the jog: "12'-0 3/4""
+```
+
+The sheet dimensions the jog to **12'-0 3/4"** — 3/4" from one wall and 3/4" from
+the other, a position where nothing is built. The overall still adds up, so
+arithmetic checking cannot catch it; a framer measuring from the string lands
+3/4" out on both faces.
 
 `tests/auto-dims.spec.js:209` covers a jog on the *perpendicular* axis (the
-string's offset), not the averaging of an interior coordinate, so nothing
-asserts this either way.
-
-Whether a 2" fabrication is acceptable on a permit set is a policy call, not a
-code call — see `AUDIT-QUESTIONS.md` Q3. The code comment says "merged into the
-neighbouring corner" but the code averages; at minimum the comment is wrong.
-
----
+string's stand-off), not the averaging of an interior coordinate, so nothing
+asserts this either way. Whether a 2" fabrication is acceptable on a permit set
+is a policy call, not a code call — see `AUDIT-QUESTIONS.md` Q3. Note also that
+the code comment says "merged into the neighbouring corner" while the code
+averages; whichever is intended, one of the two is wrong.
 
 ## M8 — LAYOUT cannot be operated by touch at all
 **Severity: MAJOR · Confidence: CONFIRMED**
