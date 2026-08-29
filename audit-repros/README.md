@@ -29,6 +29,7 @@ regression tests as-is.
 | `r11-unicode.spec.js` | §5.2 smart punctuation | passes, prints the refusals |
 | `r12-section-band-gap.spec.js` | C5 section band, detached garage | passes the gap check by luck of the gap detector — read the printed runs and `evidence/section-house-garage.png` |
 | `r13-section-band-attached.spec.js` | C5 section band, attached garage | **fails** (main-floor band 597 px vs the storey above at 340 px) |
+| `r14-level-model.spec.js` | §4.1 dynamic levels | passes — prints what a third storey and a deleted 2ND FL actually do |
 | `p1`,`p3`,`p5`,`p6`,`p7`,`p8`,`p9`,`p10`,`p11`,`p12`,`p13` | AUDIT-PERF measurements | pass, print numbers |
 
 `evidence/` holds the two sections the app actually drew for C5:

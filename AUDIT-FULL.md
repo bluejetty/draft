@@ -136,7 +136,7 @@ which is trade-normal. I did not audit headroom, L/U landings, or auto-placement
 
 ## 4. The level model
 
-**4.1 Level ids 3, 5 and 7 are literals in at least a dozen places — MINOR, INFERRED**
+**4.1 Level ids 3, 5 and 7 are literals in at least a dozen places — MINOR, CONFIRMED (narrower than it looks)**
 Only `BASEMENT_LEVEL_ID = 1` is named (`MODEL.dc.html:1937`). The rest are bare:
 
 ```
@@ -144,7 +144,7 @@ Only `BASEMENT_LEVEL_ID = 1` is named (`MODEL.dc.html:1937`). The rest are bare:
 3520  tour 'second': this._stairs.some(s => s.levelId === 5)
 3550  below stairs : this._stairs.filter(s => s.levelId === 3)
 3587  const below = levelId === 5 ? [3, BASEMENT_LEVEL_ID] : [BASEMENT_LEVEL_ID]
-3754  floor holes  : this._stairs.filter(s => s.levelId === 3)
+3754  tour beam    : this._stairs.filter(s => s.levelId === 3)
 3797  tour gate    : this._activeLevelId() === 7
 12326 roof exists  : this._roofs.some(r => r.levelId === 7 && !r.garage)
 12475 garage roof  : r.levelId === 7 && r.garage
@@ -156,15 +156,44 @@ Only `BASEMENT_LEVEL_ID = 1` is named (`MODEL.dc.html:1937`). The rest are bare:
 19630 dim hint     : this._activeLevelId() === 7
 ```
 
-`_addLevel` mints ids from `nextLevelId`, which starts at 9
-(`MODEL.dc.html:2189`). So a third storey is level 9: the tour never recognises
-it, its stairs never cut a hole in the floor above, and AUTO DIMS never treats a
-roof on it as a roof. Rename MAIN — the id survives, so behaviour follows the id
-and not the name, which is the right call and worth stating out loud somewhere.
-Delete ROOF and every `levelId === 7` branch silently stops firing. None of this
-crashes; it all just quietly stops working, which is worse.
-`tests/dynamic-levels.spec.js` exists — I did not read it closely enough to say
-which of these it covers.
+I drove this instead of assuming (`audit-repros/r14-level-model.spec.js`), and the
+core is healthier than the greps suggest:
+
+```
+factory level ids : 8:SITE 7:ROOF 5:2ND FL 3:MAIN FL 1:FOUNDATION
+after + ADD       : 8:SITE 7:ROOF 9:3RD FL 5:2ND FL 3:MAIN FL 1:FOUNDATION
+bone on the new storey: "House built from the outline: 3RD FL walls, 3RD FL floor, 32 auto dims."
+3RD FL at 18' with 8'-1 1/8" walls -> top of wall 26.09'
+```
+and the E1 elevation puts the roof correctly on top of the new stack, because
+`_roofBaseElev` reads the live `stack.bearing` rather than a stored elevation.
+BUILD HOUSE fills the new level; AUTO DIMS runs on it; deleting the 2ND FL and
+pressing the bone correctly reports "Every level already has its shell" instead of
+resurrecting it. Screenshot: `audit-repros/evidence/` is not needed — the roof
+lands where it should.
+
+What *is* hard-wired, and does silently stop working off the factory ids:
+
+- **ROOF-level auto dimensions** (`:16443`): the truss-span string only exists for
+  `levelId === 7`. Delete ROOF, add your own, and AUTO DIMS strings it as an
+  ordinary plan with no bearing-line break.
+- **The whole tour** (`:3519`, `:3520`, `:3797`, `:17263`, `:17322`): its steps
+  test for ids 3, 5 and 7 by number. On a project whose levels were rebuilt, the
+  escort silently does nothing at the steps it cannot recognise.
+- **`_rederiveTourBeam`** (`:3754`) re-lands the mid-span beam around stairs on
+  level 3 only — correct while it is tour-scoped, dead for a stair on any other
+  floor.
+- **Roof presence checks** (`:12326`, `:12475`, `:12766`) gate garage-roof
+  splicing and rebuild decisions on `levelId === 7`.
+
+None of it crashes; it all quietly stops firing, which is the expensive kind.
+Renaming MAIN is safe — behaviour follows the id, not the name — and that is
+worth stating somewhere a maintainer will see it.
+
+**4.1b "the PLAN plan" — NIT**
+AUTO DIMS on a user-added level reports: *"AUTO DIMS placed 4 dimensions around
+the PLAN plan — re-run after edits to refresh them."* `_draftingContextLabel`
+returns "PLAN" and the sentence appends "plan" (`MODEL.dc.html:16424`).
 
 **4.2 `_addLevel` collects geometry through `window.prompt` — MINOR**
 `MODEL.dc.html:8355-8373`: two blocking `prompt()` calls, then
