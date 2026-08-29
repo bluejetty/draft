@@ -88,6 +88,21 @@ if (!window.DraftAutoDims) {
     // Near-coincident corners string as ONE coordinate: a slightly off-square
     // outline gets straight strings instead of a pile of inch-scale jogs. The
     // end clusters keep the true extremes so overalls measure the footprint.
+    //
+    // The merged coordinate is always a REAL member of the cluster — a wall
+    // face that exists in the building (audit M7). An interior cluster used to
+    // collapse to its arithmetic mean, which put a printed dimension up to an
+    // inch from any wall on the drawing: a fabricated coordinate on a permit
+    // set. The dominant face wins (the coordinate the most edges land on),
+    // ties going to the lowest member so the choice is deterministic.
+    const dominantMember = cluster => {
+      let best = cluster[0], bestCount = 0;
+      cluster.forEach(value => {
+        const count = cluster.filter(other => Math.abs(other - value) < 1e-9).length;
+        if (count > bestCount) { bestCount = count; best = value; }
+      });
+      return best;
+    };
     const mergeJogs = values => {
       const sorted = [...values].sort((a, b) => a - b);
       const clusters = [];
@@ -99,7 +114,7 @@ if (!window.DraftAutoDims) {
       return clusters.map((cluster, index) => {
         if (index === 0) return cluster[0];
         if (index === clusters.length - 1) return cluster[cluster.length - 1];
-        return cluster.reduce((sum, value) => sum + value, 0) / cluster.length;
+        return dominantMember(cluster);
       });
     };
     // Fenestration centres, keyed to the group whose footprint holds the host
