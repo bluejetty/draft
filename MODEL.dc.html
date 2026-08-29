@@ -19,6 +19,7 @@
 <script src="./fen-labels.js"></script>
 <script src="./build-house.js"></script>
 <script src="./tour.js"></script>
+<script src="./auto-stair.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
      would otherwise run here and be mounted again by the helmet runtime. -->
@@ -2199,6 +2200,7 @@ class Component extends DCLogic {
     tsquareEngaged: false,
     protractorAngle: '',       // '' | '90' | '45' | '30' — which blade a held modifier grabbed
     tsquareOn: true,           // full-time 90° T-square while drawing; T toggles
+    suggestStairs: true,       // board #260: the tour and the bone OFFER stair placements
     compassOn: false,          // polar tracking instrument — down by default; P picks it up
     cuts:          [],
     elevationNames: {},         // per-drawing side names for E1-E4 (FRONT/LEFT...), defaults from COMPANY STANDARDS
@@ -2509,6 +2511,9 @@ class Component extends DCLogic {
           shape: stair.shape || 'straight',
           turn: stair.turn || 'right',
           winders: stair.winders || 0,
+          auto: stair.auto === true,
+          ...(Number.isInteger(stair.splitTreads) && stair.splitTreads > 0
+            ? { splitTreads: stair.splitTreads } : {}),
           layer: STAIR_LAYER,
         };
       }),
@@ -3244,6 +3249,7 @@ class Component extends DCLogic {
           keybindings: { ...this.state.keybindings },
           tsquareOn: this.state.tsquareOn,
           boneReveal: this.state.boneReveal,
+          suggestStairs: this.state.suggestStairs,
           buildIntroOff: this.state.buildIntroOff,
           garageIntroOff: this.state.garageIntroOff,
           perfIntroOff: this.state.perfIntroOff,
@@ -3281,6 +3287,7 @@ class Component extends DCLogic {
           : {}),
         ...(typeof values.tsquareOn === 'boolean' ? { tsquareOn: values.tsquareOn } : {}),
         ...(typeof values.boneReveal === 'boolean' ? { boneReveal: values.boneReveal } : {}),
+        ...(typeof values.suggestStairs === 'boolean' ? { suggestStairs: values.suggestStairs } : {}),
         ...(typeof values.buildIntroOff === 'boolean' ? { buildIntroOff: values.buildIntroOff } : {}),
         ...(typeof values.garageIntroOff === 'boolean' ? { garageIntroOff: values.garageIntroOff } : {}),
         ...(typeof values.perfIntroOff === 'boolean' ? { perfIntroOff: values.perfIntroOff } : {}),
@@ -3472,12 +3479,29 @@ class Component extends DCLogic {
     // itself — the drafter lands ready to place the top nosing instead of
     // drawing walls with whatever tool was left active.
     if (step === 'main' || step === 'second') this._activateContextTool('stair');
+    // Board #260: the stair step OFFERS the placement pre-made — the gate
+    // lights immediately and NEXT ▲ without touching it is a legitimate
+    // accept (Q6). Deleting it mid-step is "no thanks": no re-suggest.
+    let suggested = '';
+    if ((step === 'main' || step === 'second') && this.state.suggestStairs !== false
+      && !this._stairSuggestionDeclined) {
+      const res = this._suggestStairForLevel(targets[step]);
+      if (res?.stair) {
+        suggested = ` Suggested: ${res.note} Adjust it, replace it, or NEXT ▲ to accept.`;
+        // A MAIN stair — suggested like placed — re-derives the auto beam
+        // around its opening, the same as the hand-placed path.
+        if (step === 'main') this._rederiveTourBeam();
+      } else if (res) {
+        suggested = ` ${res.note}`;
+      }
+    }
     // _switchLevel writes its own context message and _markUnsaved clears the
     // strip when its callback settles — the tour's step message is the one the
     // drafter needs here, so it lands again after both.
-    if (messages[step]) this.setState(
-      { drawingMessage: messages[step], drawingMessageError: false },
-      () => this.setState({ drawingMessage: messages[step], drawingMessageError: false }),
+    const stepMessage = messages[step] ? messages[step] + suggested : '';
+    if (stepMessage) this.setState(
+      { drawingMessage: stepMessage, drawingMessageError: false },
+      () => this.setState({ drawingMessage: stepMessage, drawingMessageError: false }),
     );
   }
 
@@ -5291,6 +5315,10 @@ class Component extends DCLogic {
     // Stair-opening state — the anchored interior-face pick awaiting the
     // direction click.
     this._stairOpeningAnchor = null;
+
+    // Board #260: deleting a SUGGESTED stair is "no thanks" — nothing
+    // re-suggests for the rest of the session (fresh document = fresh offer).
+    this._stairSuggestionDeclined = false;
 
     // Surface-opening drawing state — a free-form hole in a floor or roof.
     this._surfaceOpeningDrawing = false;
@@ -12459,6 +12487,30 @@ class Component extends DCLogic {
       .some(levelId => this._houseOutline(levelId) || this._garageOutline(levelId));
     if (hasSource) {
       const step = this.state.tour.step;
+      // Board #260, Q2(b) park-and-confirm: OUTSIDE the tour, a press with
+      // no stairs anywhere first SUGGESTS them and stops — free, and the
+      // opening never cuts at a spot nobody approved. The next press
+      // builds with the openings where the (possibly re-placed) stairs
+      // stand. Mid-tour presses never park (the tour has its own stair
+      // step), and a declined suggestion (deleted) does not come back —
+      // that press builds stairless.
+      if (!step && this.state.suggestStairs !== false && !this._stairSuggestionDeclined
+        && !this._stairs.some(stair => (stair.view || 'plan') === 'plan')) {
+        const { placed, notes } = this._autoPlaceStairs();
+        if (placed.length) {
+          this.setState({
+            drawingMessage: `Stairs suggested — ${notes.join(' ')} Adjust or replace them, then press the bone to build.`,
+            drawingMessageError: false,
+          });
+          return;
+        }
+        if (notes.length) {
+          // Nothing fit: say why and carry on with the build — a house
+          // can stand without stairs, and parking forever would trap the
+          // bone.
+          this.setState({ drawingMessage: notes.join(' '), drawingMessageError: false });
+        }
+      }
       if (step && step !== 'finale') {
         // A mid-tour bone press: the drafter overrode the escort. The
         // build and the tour's end are ONE action — clear the tour first
@@ -16614,14 +16666,277 @@ class Component extends DCLogic {
     if (shape === 'straight' || layout.treads < 3) return null;
     const winders = shape === 'L' && STAIR_WINDER_OPTIONS.includes(stair.winders) ? stair.winders : 0;
     const landTreads = winders || 1; // the turn eats this many tread slots
-    const t1 = Math.max(1, Math.floor((layout.treads - landTreads) / 2));
+    // Board #260: splitTreads overrides the even split with the TOP leg's
+    // tread count — the entry L's short flight (2-3 down to the front-wall
+    // landing), or its stacked mirror (treads − 2..3). Clamped so both
+    // legs keep at least one tread; absent = the even split, unchanged.
+    const override = Number.isInteger(stair.splitTreads) && stair.splitTreads > 0
+      ? Math.min(stair.splitTreads, layout.treads - landTreads - 1)
+      : null;
+    const t1 = override != null ? Math.max(1, override)
+      : Math.max(1, Math.floor((layout.treads - landTreads) / 2));
     const t2 = Math.max(1, layout.treads - landTreads - t1);
-    // The 36" landing is CLEAR: measured to the nosing of the run above
-    // (which projects ~1" over it) with 1/2" of drywall at a walled edge.
+    return { shape, winders, t1, t2, landFt: this._stairLandFt(stair.widthFt), turn: stair.turn === 'left' ? 'left' : 'right' };
+  }
+
+  // The 36" landing is CLEAR: measured to the nosing of the run above
+  // (which projects ~1" over it) with 1/2" of drywall at a walled edge.
+  _stairLandFt(widthFt) {
     const clearFt = STAIR_LANDING_MIN_FT
       + (STAIR_RISER_FACE_IN - STAIR_TREAD_RUN_IN + STAIR_LANDING_DRYWALL_IN) / 12;
-    const landFt = Math.max(clearFt, stair.widthFt);
-    return { shape, winders, t1, t2, landFt, turn: stair.turn === 'left' ? 'left' : 'right' };
+    return Math.max(clearFt, widthFt);
+  }
+
+  // ─── AUTO-PLACE STAIRS (board #260) ──────────────────────────────────────
+  // BUILD HOUSE and the tour's stair step OFFER a rule-derived placement —
+  // riser math from the level heights, the run along the beam edge near the
+  // circulation core, folding to L/U when straight doesn't fit — as a
+  // SUGGESTION the drafter accepts, replaces or deletes, never a silent
+  // commit. The pure candidate logic lives in auto-stair.js; this layer
+  // feeds it real geometry and commits the winner tagged `auto: true`.
+  // Stairs have no drag today (reposition = delete + re-place), so
+  // promote-on-touch reduces to: a hand placement never carries `auto`, a
+  // re-run replaces only auto-tagged stairs, and DELETING a suggestion is
+  // "no thanks" — nothing re-suggests until the next document. If stair
+  // dragging ever lands, clear `auto` in that handler.
+
+  // The rule-derived suggestion for one level, uncommitted. Beam edges are
+  // the beams the opening must clear (the level's own FLOOR view) plus, for
+  // the lowest floor, the tour's mid-span beam on the FOUNDATION plan — the
+  // #246 edge the well hugs. Stamps weight the circulation core (rule A
+  // fires only when the front-entry zone wins the target).
+  _autoStairSuggestion(levelId) {
+    if (!window.DraftAutoStair) return null;
+    const outline = this._houseOutline(levelId);
+    if (!outline || outline.points.length < 3) return null;
+    const descent = this._stairDescent(levelId);
+    if (!descent || !(descent.riseFt > 0)) return null;
+    const layout = this._stairLayout(descent.riseFt);
+    const floors = this._floorLevels();
+    const lowest = floors.length > 0 && floors[0].id === levelId;
+    const beams = [
+      ...this._stairFloorBeams(levelId),
+      ...(lowest ? this._beams.filter(beam => beam.levelId === BASEMENT_LEVEL_ID && beam.view === 'foundation') : []),
+    ].map(beam => ({ start: { x: beam.start.x, z: beam.start.z }, end: { x: beam.end.x, z: beam.end.z } }));
+    const stamps = this._roomTags
+      .filter(tag => tag.levelId === levelId && tag.stamped === true && tag.base)
+      .map(tag => ({ name: tag.base, x: tag.at.x, z: tag.at.z }));
+    const res = window.DraftAutoStair.suggestStair({
+      points: outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      insetFt: this._stairOpeningSetbackFt(levelId),
+      beams,
+      stamps,
+      runFt: layout.runFt,
+      treads: layout.treads,
+      widthFt: this.state.stairWidth,
+      landFt: this._stairLandFt(this.state.stairWidth),
+      finishIn: STAIR_OPENING_FINISH_IN,
+      gapIn: STAIR_BEAM_CLEAR_IN,
+      runStepFt: STAIR_TREAD_RUN_IN / 12,
+      softInterior: lowest, // rule B: basement stairs prefer interior, softly
+    });
+    return { ...res, layout, descent };
+  }
+
+  // Commit one suggestion as an ordinary stair entity — the same shape a
+  // hand placement writes, plus the auto tag (and the entry L's split).
+  _buildAutoStair(levelId, sug, widthFt) {
+    const elevation = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
+    const dx = sug.stair.end.x - sug.stair.start.x, dz = sug.stair.end.z - sug.stair.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const firstLen = sug.stair.shape === 'straight' ? sug.layout.runFt
+      : (sug.stair.splitTreads || Math.max(1, Math.floor((sug.layout.treads - 1) / 2))) * STAIR_TREAD_RUN_IN / 12;
+    return {
+      id: this._nextStairId++,
+      start: new THREE.Vector3(sug.stair.start.x, elevation, sug.stair.start.z),
+      end: new THREE.Vector3(
+        sug.stair.start.x + (dx / len) * firstLen,
+        elevation,
+        sug.stair.start.z + (dz / len) * firstLen,
+      ),
+      levelId,
+      view: 'plan',
+      widthFt,
+      riseFt: sug.layout.riseFt,
+      rail: this._stairRail(),
+      shape: sug.stair.shape,
+      turn: sug.stair.turn,
+      winders: 0,
+      auto: true,
+      ...(Number.isInteger(sug.stair.splitTreads) && sug.stair.splitTreads > 0
+        ? { splitTreads: sug.stair.splitTreads } : {}),
+      layer: STAIR_LAYER,
+    };
+  }
+
+  // Stairs stack: the upper run goes directly over the one below so the
+  // headroom holds. Over an entry L the frame FLIPS (the boss's mapping):
+  // the upper stair's LONG top leg rides over the long leg below, the
+  // landing overlays the landing, and the short 2-3 step leg lands at the
+  // entry floor — so the turn reverses and splitTreads becomes the long
+  // top leg. Built uncommitted; the caller pushes it only when legal (Q4).
+  _buildStackedStair(below, levelId, layout, widthFt) {
+    const elevation = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
+    const runStep = STAIR_TREAD_RUN_IN / 12;
+    const dxb = below.end.x - below.start.x, dzb = below.end.z - below.start.z;
+    const lb = Math.hypot(dxb, dzb) || 1;
+    const d = { x: dxb / lb, z: dzb / lb };
+    const belowLayout = this._stairCurrentLayout(below);
+    const belowSplit = this._stairShapeSplit(below, belowLayout);
+    const make = (start, dir, firstLen, extra) => ({
+      id: this._nextStairId++,
+      start: new THREE.Vector3(start.x, elevation, start.z),
+      end: new THREE.Vector3(start.x + dir.x * firstLen, elevation, start.z + dir.z * firstLen),
+      levelId,
+      view: 'plan',
+      widthFt,
+      riseFt: layout.riseFt,
+      rail: below.rail,
+      shape: below.shape || 'straight',
+      turn: below.turn || 'right',
+      winders: below.winders || 0,
+      auto: true,
+      layer: STAIR_LAYER,
+      ...extra,
+    });
+    if (belowSplit && Number.isInteger(below.splitTreads) && below.splitTreads > 0) {
+      const tShort = belowSplit.t1;
+      const s = belowSplit.turn === 'right' ? 1 : -1;
+      const perp = { x: -d.z * s, z: d.x * s };
+      const L = belowSplit.landFt;
+      const run1b = belowSplit.t1 * runStep;
+      const landingCentre = {
+        x: below.start.x + d.x * (run1b + L / 2) + perp.x * (-below.widthFt / 2 + L / 2),
+        z: below.start.z + d.z * (run1b + L / 2) + perp.z * (-below.widthFt / 2 + L / 2),
+      };
+      const t1u = Math.max(1, layout.treads - 1 - tShort);
+      const du = { x: -perp.x, z: -perp.z };
+      const su = -s;
+      const perpU = { x: -du.z * su, z: du.x * su };
+      const Lu = this._stairLandFt(widthFt);
+      const run1u = t1u * runStep;
+      const start = {
+        x: landingCentre.x - du.x * (run1u + Lu / 2) - perpU.x * (-widthFt / 2 + Lu / 2),
+        z: landingCentre.z - du.z * (run1u + Lu / 2) - perpU.z * (-widthFt / 2 + Lu / 2),
+      };
+      return make(start, du, run1u, {
+        turn: su > 0 ? 'right' : 'left',
+        winders: 0,
+        splitTreads: t1u,
+      });
+    }
+    const firstLen = belowSplit
+      ? Math.max(1, Math.floor((layout.treads - 1) / 2)) * runStep
+      : layout.runFt;
+    return make({ x: below.start.x, z: below.start.z }, d, firstLen, {});
+  }
+
+  // Born legal, verified: every opening corner inside the interior ring and
+  // the well clear of the carrying beams — the exact two rules
+  // _stairAutoFit nudges for, checked without nudging.
+  _stairPlacementLegal(stair) {
+    const outline = this._houseOutline(stair.levelId);
+    if (!outline || outline.points.length < 3) return false;
+    const poly = this._stairOpeningFootprint(stair);
+    if (!poly || poly.length < 3) return false;
+    const ring = window.DraftGeometry2D.offsetOutline(
+      outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      -this._stairOpeningSetbackFt(stair.levelId));
+    if (!poly.every(pt => this._pointInOutline(ring, pt))) return false;
+    const clearFt = STAIR_BEAM_CLEAR_IN / 12;
+    return this._stairFloorBeams(stair.levelId)
+      .every(beam => this._stairBeamGapFt(beam, poly) >= clearFt - 1e-4);
+  }
+
+  // Rule B's trigger: the stair's well runs beside an exterior wall (its
+  // opening within a foot of the interior ring).
+  _stairWallAdjacent(stair) {
+    const outline = this._houseOutline(stair.levelId);
+    if (!outline || outline.points.length < 3) return false;
+    const poly = this._stairOpeningFootprint(stair);
+    if (!poly) return false;
+    const ring = window.DraftGeometry2D.offsetOutline(
+      outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      -this._stairOpeningSetbackFt(stair.levelId));
+    const edge = Math.min(...poly.map(pt => {
+      let best = Infinity;
+      for (let i = 0; i < ring.length; i++) {
+        best = Math.min(best, this._distToLineSeg(pt, { start: ring[i], end: ring[(i + 1) % ring.length] }).d);
+      }
+      return best;
+    }));
+    return edge < 1;
+  }
+
+  // Suggest for ONE level: stack over the run below first (Q4 — fall back
+  // to the level's own best candidate with a message when the stack can't
+  // be made legal), else derive fresh. Pushes the stair and returns
+  // { stair, note } — null when nothing fits (note says why) or the level
+  // needs no stair.
+  _suggestStairForLevel(levelId) {
+    const floors = this._floorLevels();
+    const idx = floors.findIndex(level => level.id === levelId);
+    if (idx < 0) return null;
+    const descent = this._stairDescent(levelId);
+    if (!descent || !(descent.riseFt > 0)) return null;
+    if (this._stairs.some(stair => stair.levelId === levelId && (stair.view || 'plan') === 'plan')) return null;
+    const layout = this._stairLayout(descent.riseFt);
+    const below = idx > 0
+      ? this._stairs.find(stair => stair.levelId === floors[idx - 1].id && (stair.view || 'plan') === 'plan')
+      : null;
+    // Rule B: the basement-descending stair beside an exterior wall widens
+    // every stacked stair above it to 3'-6" so the basement flight keeps
+    // its true 3'-0" clear past the thicker foundation.
+    const lowestStair = floors.length
+      ? this._stairs.find(stair => stair.levelId === floors[0].id && (stair.view || 'plan') === 'plan')
+      : null;
+    const widen = lowestStair ? this._stairWallAdjacent(lowestStair) : false;
+    const widthFt = idx > 0 && widen ? Math.max(3.5, this.state.stairWidth) : this.state.stairWidth;
+    let stackNote = '';
+    if (below) {
+      const stacked = this._buildStackedStair(below, levelId, layout, widthFt);
+      if (this._stairPlacementLegal(stacked)) {
+        this._stairs.push(stacked);
+        this._markUnsaved();
+        return {
+          stair: stacked,
+          note: `${floors[idx].name}: ${layout.risers} risers stacked over the run below — headroom holds.`,
+        };
+      }
+      this._nextStairId--; // the uncommitted candidate hands its id back
+      stackNote = ' (could not stack over the run below — headroom needs checking)';
+    }
+    const sug = this._autoStairSuggestion(levelId);
+    if (!sug) return null;
+    if (!sug.stair) {
+      return {
+        stair: null,
+        note: `${floors[idx].name}: no legal stair position — straight ${sug.report.straight || 'blocked'}; L ${sug.report.L || 'blocked'}; U ${sug.report.U || 'blocked'}.`,
+      };
+    }
+    const stair = this._buildAutoStair(levelId, sug, widthFt);
+    this._stairs.push(stair);
+    this._markUnsaved();
+    const how = sug.stair.splitTreads
+      ? `entry L — landing at the front wall, ${sug.stair.splitTreads} steps down from the entry`
+      : sug.stair.shape === 'straight'
+        ? `straight run${this._stairFloorBeams(levelId).length || this._beams.some(beam => beam.auto) ? ' along the beam edge' : ''}`
+        : sug.stair.shape === 'L' ? 'folded L at the corner nearest the core' : 'U switchback';
+    return { stair, note: `${floors[idx].name}: ${layout.risers} risers · ${how}${stackNote}.` };
+  }
+
+  // Every descending floor without a stair, bottom-up so upper floors can
+  // stack on what was just suggested below them.
+  _autoPlaceStairs() {
+    const placed = [];
+    const notes = [];
+    this._floorLevels().forEach(level => {
+      const res = this._suggestStairForLevel(level.id);
+      if (!res) return;
+      if (res.stair) placed.push(res.stair);
+      notes.push(res.note);
+    });
+    return { placed, notes };
   }
 
   // The stair's plan parts in world space: one straight run, or two runs
@@ -16881,6 +17196,9 @@ class Component extends DCLogic {
     if (!active.length) return;
     const stair = active[active.length - 1];
     this._stairs = this._stairs.filter(item => item !== stair);
+    // Deleting a SUGGESTED stair is "no thanks" (board #260, Q6): neither
+    // the tour step nor the next bone press re-suggests this session.
+    if (stair.auto === true) this._stairSuggestionDeclined = true;
     this._markUnsaved();
     this.setState({ drawingMessage: 'Stair removed.', drawingMessageError: false });
   }

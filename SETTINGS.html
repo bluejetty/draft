@@ -113,6 +113,8 @@
       <summary>Snap zone</summary>
       <p class="advanced-note">One number rules every snap: how close the cursor must be, in screen pixels, before a node, midpoint, or polar ray catches it. The wider magnetic pull and the close-the-outline radius scale from the same number. Larger catches from farther away; smaller only snaps when the cursor is nearly on the point. Saved with your keyboard settings.</p>
       <div class="snap-row"><label for="snap-zone">Snap zone</label><input type="number" id="snap-zone" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" id="snap-zone-default"></span></div>
+      <div class="snap-row"><label for="suggest-stairs">Stair suggestions</label><input type="checkbox" id="suggest-stairs" data-suggest-stairs></div>
+      <p class="advanced-note">The guided tour's stair step and a BUILD HOUSE press with no stairs offer a rule-derived stair placement — riser math from the level heights, the run along the beam edge — as a suggestion to accept, replace or delete. Off means place every stair yourself.</p>
       <button class="action" id="snap-reset" type="button">RESET SNAP DEFAULT</button>
     </details>
     <section class="groups" id="groups" aria-label="Keyboard commands"></section>
@@ -178,6 +180,13 @@
       // carries over as the one snap zone.
       let snapZone = snaps.normaliseSnapZone(
         active?.content?.model?.snapZone ?? active?.content?.model?.snapStrength);
+      let suggestStairs = active?.content?.model?.suggestStairs !== false;
+      const suggestStairsBox = document.querySelector('[data-suggest-stairs]');
+      suggestStairsBox.checked = suggestStairs;
+      suggestStairsBox.addEventListener('change', () => {
+        suggestStairs = suggestStairsBox.checked;
+        saveActive(suggestStairs ? 'Stair suggestions on.' : 'Stair suggestions off.');
+      });
       const drafterTools = window.DraftDrafter;
       let drafter = drafterTools.normaliseDrafter(active?.content?.model?.drafter);
 
@@ -277,7 +286,7 @@
       });
 
       const saveActive = message => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -338,7 +347,7 @@
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
