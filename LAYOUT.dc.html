@@ -7,6 +7,11 @@
 <script src="./vendor/react-dom-18.3.1.production.min.js"></script>
 <script src="./support.js"></script>
 <script src="./profile-manager.js"></script>
+<script src="./shared-file-store.js"></script>
+<script src="./drawing-format.js"></script>
+<script src="./wall-types.js"></script>
+<script src="./render-2d.js"></script>
+<script src="./layout-plan.js"></script>
 </head>
 <body>
 <x-dc>
@@ -96,10 +101,23 @@
       </sc-for>
     </div>
 
+    <!-- PLAN LEVEL -->
+    <sc-if value="{{ hasLevels }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Plan Level</div>
+        <sc-for list="{{ planLevels }}" as="lv" hint-placeholder-count="4">
+          <button data-layout-level="{{ lv.id }}" onClick="{{ lv.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ lv.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ lv.label }}</button>
+        </sc-for>
+      </div>
+    </sc-if>
+
     <!-- VIEWPORT -->
     <div style="padding:12px 14px;">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Viewport</div>
-      <button onClick="{{ addViewport }}" style="display:block; width:100%; text-align:center; border:1px solid #5980a6; background:#5980a6; color:#f2f2f3; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:13px; letter-spacing:0.04em; text-transform:uppercase; padding:9px 12px; cursor:pointer;">+ Add Viewport</button>
+      <button data-layout-add-viewport onClick="{{ addViewport }}" style="display:block; width:100%; text-align:center; border:1px solid #5980a6; background:{{ addViewportBg }}; color:{{ addViewportColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:13px; letter-spacing:0.04em; text-transform:uppercase; padding:9px 12px; cursor:pointer;">{{ addViewportLabel }}</button>
+      <sc-if value="{{ hasViewportNote }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:8px; font-size:11px; line-height:1.4; color:rgba(29,31,32,0.55);">{{ viewportNote }}</div>
+      </sc-if>
     </div>
 
   </div>
@@ -146,12 +164,18 @@ const SCALES = [
   { label: '1" = 1\'-0"',    pif: 1    },
 ];
 
+const MODEL_STORAGE_BUCKET = 'model-drawing';
+
 class Component extends DCLogic {
   state = {
     paperKey: '11x17',
     orientation: 'landscape',  // 'landscape' | 'portrait'
-    activeScale: 0,             // index into SCALES
+    activeScale: 2,             // index into SCALES — 1/4" is the working plan scale
+    activeLevelId: null,
     addingViewport: false,
+    viewports: [],              // { id, kind:'plan', levelId, pif, xIn, yIn } — sheet inches
+    nextViewportId: 1,
+    selectedViewportId: null,
     zoom: 1,   // pixels per paper inch on screen
     panX: 0,
     panY: 0,
@@ -162,6 +186,9 @@ class Component extends DCLogic {
   };
 
   componentDidMount() {
+    this._saved = null;
+    this._levels = [];
+    this._planBoundsByLevel = new Map();
     this._canvas = document.querySelector('[data-layout-canvas]');
     this._ctx = this._canvas ? this._canvas.getContext('2d') : null;
     if (!this._canvas) return;
@@ -174,14 +201,110 @@ class Component extends DCLogic {
     this._fitPaper();
     this._draw();
     this._restoreActiveProfilePackages();
-
+    this._loadDrawing();
 
     this._canvas.addEventListener('wheel',      this._whl = (e) => this._onWheel(e), { passive: false });
 
-    // Pan
-    this._canvas.addEventListener('mousedown',  this._mdn = (e) => this._onPanStart(e));
-    window.addEventListener('mousemove',        this._wmmv = (e) => this._onPanMove(e));
-    window.addEventListener('mouseup',          this._mup  = () => this._onPanEnd());
+    // Pan / viewport place + drag
+    this._canvas.addEventListener('mousedown',  this._mdn = (e) => this._onMouseDown(e));
+    window.addEventListener('mousemove',        this._wmmv = (e) => this._onMouseMove(e));
+    window.addEventListener('mouseup',          this._mup  = () => this._onMouseUp());
+    window.addEventListener('keydown',          this._kdn = (e) => this._onKeyDown(e));
+  }
+
+  // ─── The drawing behind the sheet ────────────────────────────────────────────
+  // LAYOUT projects the saved Model Space drawing. The raw saved object is kept
+  // as-is so writing the sheet back only ever touches its `layout` property —
+  // sheet coordinates live in paper inches, model geometry stays in feet, and
+  // the viewport's pif (paper inches per model foot) is the only bridge.
+  async _loadDrawing() {
+    let saved = null;
+    try {
+      const file = window.SharedFileStore
+        ? await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET)
+        : null;
+      if (file) saved = JSON.parse(await file.text());
+    } catch (error) {
+      console.warn('Unable to load the saved model drawing:', error);
+      saved = null;
+    }
+    const format = window.DraftDrawingFormat;
+    if (saved && !format.checkEnvelope(saved).ok) saved = null;
+    this._saved = saved;
+    this._drawingChecked = true;
+    this._levels = saved ? format.levels(saved.levels) : [];
+    this._planBoundsByLevel = new Map();
+    const levelIds = new Set(this._levels.map(level => level.id));
+    const layout = saved?.layout ? format.layout(saved.layout, levelIds) : null;
+    const patch = {
+      viewports: layout ? layout.viewports : [],
+      nextViewportId: layout ? layout.nextViewportId : 1,
+      activeLevelId: this._defaultLevelId(),
+    };
+    if (layout?.paperKey) patch.paperKey = layout.paperKey;
+    if (layout?.orientation) patch.orientation = layout.orientation;
+    this.setState(patch, () => {
+      this._fitPaper();
+      this._draw();
+      document.body.dataset.layoutReady = '1';
+      if (!document.body.dataset.layoutSaveSeq) document.body.dataset.layoutSaveSeq = '0';
+    });
+  }
+
+  // The level a new viewport shows first: the busiest plan — a house drawing
+  // lands on MAIN FL.
+  _defaultLevelId() {
+    const withWalls = this._levelsWithWalls();
+    if (!withWalls.length) return this._levels[0]?.id ?? null;
+    return withWalls.reduce((best, level) => (level.wallCount > best.wallCount ? level : best)).id;
+  }
+
+  _levelsWithWalls() {
+    if (!this._saved) return [];
+    const counts = new Map();
+    (Array.isArray(this._saved.walls) ? this._saved.walls : []).forEach(wall => {
+      counts.set(wall?.levelId, (counts.get(wall?.levelId) || 0) + 1);
+    });
+    return this._levels
+      .filter(level => counts.get(level.id))
+      .map(level => ({ ...level, wallCount: counts.get(level.id) }));
+  }
+
+  _planBounds(levelId) {
+    if (!this._planBoundsByLevel.has(levelId)) {
+      const walls = window.DraftLayoutPlan.planWalls(this._saved, levelId);
+      this._planBoundsByLevel.set(levelId, window.DraftLayoutPlan.wallBounds(walls));
+    }
+    return this._planBoundsByLevel.get(levelId);
+  }
+
+  // A viewport's rectangle on the sheet in paper inches, centred on xIn / yIn
+  // and sized by the plan extents at the viewport's own scale.
+  _viewportRectIn(viewport) {
+    const bounds = this._planBounds(viewport.levelId);
+    const wIn = bounds ? Math.max((bounds.maxX - bounds.minX) * viewport.pif, 0.75) : 2;
+    const hIn = bounds ? Math.max((bounds.maxZ - bounds.minZ) * viewport.pif, 0.75) : 2;
+    return { xIn: viewport.xIn - wIn / 2, yIn: viewport.yIn - hIn / 2, wIn, hIn };
+  }
+
+  // Write the sheet back onto the saved drawing — additive: only `layout`
+  // changes, everything the Model Space owns rides through untouched.
+  _persistLayout() {
+    if (!this._saved || !window.SharedFileStore) return;
+    this._saved.layout = {
+      paperKey: this.state.paperKey,
+      orientation: this.state.orientation,
+      viewports: this.state.viewports,
+      nextViewportId: this.state.nextViewportId,
+    };
+    const file = new File([JSON.stringify(this._saved)], 'model-drawing.json', { type: 'application/json' });
+    this._saveQueue = (this._saveQueue || Promise.resolve())
+      .catch(() => {})
+      .then(() => window.SharedFileStore.saveSharedFile(file, MODEL_STORAGE_BUCKET))
+      .then(() => {
+        document.body.dataset.layoutSaveSeq = String(Number(document.body.dataset.layoutSaveSeq || 0) + 1);
+      })
+      .catch(error => console.warn('Unable to save the layout:', error));
   }
 
   // ─── Personal settings and company standards packages ───────────────────────
@@ -294,6 +417,7 @@ class Component extends DCLogic {
     }
     window.removeEventListener('mousemove', this._wmmv);
     window.removeEventListener('mouseup', this._mup);
+    window.removeEventListener('keydown', this._kdn);
   }
 
   _resize() {
@@ -374,6 +498,56 @@ class Component extends DCLogic {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
     ctx.fillText(`${pw}" × ${ph}"  (${paperKey.toUpperCase()})`, panX, panY - 6);
+
+    this.state.viewports.forEach(viewport => this._drawViewport(ctx, viewport));
+  }
+
+  // One plan viewport: the model drawn at the viewport's architectural scale,
+  // clipped to its sheet rectangle. The transform chains model feet → paper
+  // inches (pif) → screen pixels (sheet zoom + pan); the plan centre sits on
+  // the viewport's xIn / yIn.
+  _drawViewport(ctx, viewport) {
+    const { zoom, panX, panY, selectedViewportId } = this.state;
+    const rect = this._viewportRectIn(viewport);
+    const px = {
+      x: panX + rect.xIn * zoom,
+      y: panY + rect.yIn * zoom,
+      w: rect.wIn * zoom,
+      h: rect.hIn * zoom,
+    };
+    const bounds = this._planBounds(viewport.levelId);
+    if (bounds) {
+      const cx = (bounds.minX + bounds.maxX) / 2;
+      const cz = (bounds.minZ + bounds.maxZ) / 2;
+      const toS = pt => ({
+        x: panX + (viewport.xIn + (pt.x - cx) * viewport.pif) * zoom,
+        y: panY + (viewport.yIn + (pt.z - cz) * viewport.pif) * zoom,
+      });
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(px.x, px.y, px.w, px.h);
+      ctx.clip();
+      window.DraftLayoutPlan.drawPlan(ctx, toS, this._saved, viewport.levelId, {
+        padFt: 0.5 / 12,
+        paperColor: '#ffffff',
+      });
+      ctx.restore();
+    }
+    // The frame is desk furniture, not ink: faint always, blue when selected.
+    const selected = viewport.id === selectedViewportId;
+    ctx.strokeStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.18)';
+    ctx.lineWidth = selected ? 1.5 : 0.75;
+    ctx.strokeRect(px.x, px.y, px.w, px.h);
+    const level = this._levels.find(l => l.id === viewport.levelId);
+    const scale = SCALES.find(s => s.pif === viewport.pif);
+    ctx.fillStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.45)';
+    ctx.font = `600 ${Math.max(9, zoom * 0.14)}px 'Barlow Condensed', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(
+      `${level ? level.name : 'PLAN'}${scale ? `  ·  ${scale.label}` : ''}`,
+      px.x + px.w / 2, px.y + px.h + 4,
+    );
   }
 
   _onWheel(e) {
@@ -392,35 +566,135 @@ class Component extends DCLogic {
     this._draw();
   }
 
-  _onPanStart(e) {
-    if (e.button !== 1 && !(e.button === 0 && e.altKey)) return; // middle click or alt+left
-    this._panning = true;
-    this._panStartX = e.clientX - this.state.panX;
-    this._panStartY = e.clientY - this.state.panY;
-    e.preventDefault();
+  // Screen pixels → sheet paper inches, through the sheet zoom and pan.
+  _sheetPointIn(e) {
+    const rect = this._canvas.getBoundingClientRect();
+    return {
+      xIn: (e.clientX - rect.left - this.state.panX) / this.state.zoom,
+      yIn: (e.clientY - rect.top - this.state.panY) / this.state.zoom,
+    };
   }
 
-  _onPanMove(e) {
-    if (!this._panning) return;
-    this.state.panX = e.clientX - this._panStartX;
-    this.state.panY = e.clientY - this._panStartY;
-    this._draw();
+  _viewportAt(ptIn) {
+    const list = this.state.viewports;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const r = this._viewportRectIn(list[i]);
+      if (ptIn.xIn >= r.xIn && ptIn.xIn <= r.xIn + r.wIn
+        && ptIn.yIn >= r.yIn && ptIn.yIn <= r.yIn + r.hIn) return list[i];
+    }
+    return null;
   }
 
-  _onPanEnd() { this._panning = false; }
+  _onMouseDown(e) {
+    if (e.button === 1 || (e.button === 0 && e.altKey)) { // middle click or alt+left pans
+      this._panning = true;
+      this._panStartX = e.clientX - this.state.panX;
+      this._panStartY = e.clientY - this.state.panY;
+      e.preventDefault();
+      return;
+    }
+    if (e.button !== 0) return;
+    const ptIn = this._sheetPointIn(e);
+    if (this.state.addingViewport) {
+      this._placeViewport(ptIn);
+      e.preventDefault();
+      return;
+    }
+    const hit = this._viewportAt(ptIn);
+    if (hit) {
+      this._draggingViewport = { id: hit.id, dxIn: hit.xIn - ptIn.xIn, dyIn: hit.yIn - ptIn.yIn };
+      this.setState({ selectedViewportId: hit.id }, () => this._draw());
+      e.preventDefault();
+    } else if (this.state.selectedViewportId != null) {
+      this.setState({ selectedViewportId: null }, () => this._draw());
+    }
+  }
+
+  _onMouseMove(e) {
+    if (this._panning) {
+      this.state.panX = e.clientX - this._panStartX;
+      this.state.panY = e.clientY - this._panStartY;
+      this._draw();
+      return;
+    }
+    if (this._draggingViewport) {
+      const ptIn = this._sheetPointIn(e);
+      const drag = this._draggingViewport;
+      this.state.viewports = this.state.viewports.map(viewport =>
+        (viewport.id === drag.id
+          ? { ...viewport, xIn: ptIn.xIn + drag.dxIn, yIn: ptIn.yIn + drag.dyIn }
+          : viewport));
+      drag.moved = true;
+      this._draw();
+    }
+  }
+
+  _onMouseUp() {
+    this._panning = false;
+    if (this._draggingViewport) {
+      const moved = this._draggingViewport.moved;
+      this._draggingViewport = null;
+      if (moved) this.setState({ viewports: this.state.viewports }, () => this._persistLayout());
+    }
+  }
+
+  _onKeyDown(e) {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (e.key === 'Escape') {
+      if (this.state.addingViewport || this.state.selectedViewportId != null) {
+        this.setState({ addingViewport: false, selectedViewportId: null }, () => this._draw());
+      }
+      return;
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && this.state.selectedViewportId != null) {
+      e.preventDefault();
+      this.setState({
+        viewports: this.state.viewports.filter(viewport => viewport.id !== this.state.selectedViewportId),
+        selectedViewportId: null,
+      }, () => { this._persistLayout(); this._draw(); });
+    }
+  }
+
+  _placeViewport(ptIn) {
+    const levelId = this.state.activeLevelId;
+    if (!this._saved || levelId == null) {
+      this.setState({ addingViewport: false });
+      return;
+    }
+    const viewport = {
+      id: this.state.nextViewportId,
+      kind: 'plan',
+      levelId,
+      pif: SCALES[this.state.activeScale].pif,
+      xIn: ptIn.xIn,
+      yIn: ptIn.yIn,
+    };
+    this.setState({
+      viewports: [...this.state.viewports, viewport],
+      nextViewportId: viewport.id + 1,
+      selectedViewportId: viewport.id,
+      addingViewport: false,
+    }, () => { this._persistLayout(); this._draw(); });
+  }
 
   _setPaper(key) {
     this.state.paperKey = key;
     this._fitPaper();
     this._draw();
-    this.setState({ paperKey: key }, () => this._rememberActiveProfile('settings'));
+    this.setState({ paperKey: key }, () => {
+      this._rememberActiveProfile('settings');
+      this._persistLayout();
+    });
   }
 
   _setOrientation(o) {
     this.state.orientation = o;
     this._fitPaper();
     this._draw();
-    this.setState({ orientation: o }, () => this._rememberActiveProfile('settings'));
+    this.setState({ orientation: o }, () => {
+      this._rememberActiveProfile('settings');
+      this._persistLayout();
+    });
   }
 
   _setScale(idx) {
@@ -428,7 +702,7 @@ class Component extends DCLogic {
   }
 
   renderVals() {
-    const { paperKey, orientation, activeScale, addingViewport } = this.state;
+    const { paperKey, orientation, activeScale, addingViewport, activeLevelId } = this.state;
     const paper = PAPER_SIZES[paperKey];
     const pw = orientation === 'landscape' ? paper.h : paper.w;
     const ph = orientation === 'landscape' ? paper.w : paper.h;
@@ -458,7 +732,19 @@ class Component extends DCLogic {
         onSelect: () => this._setScale(i),
         bg: activeScale === i ? scOn : scOff,
       })),
-      addViewport: () => this.setState({ addingViewport: !addingViewport }),
+      hasLevels: this._levelsWithWalls?.().length > 0,
+      planLevels: (this._levelsWithWalls?.() || []).map(level => ({
+        id: String(level.id),
+        label: level.name,
+        onSelect: () => this.setState({ activeLevelId: level.id }),
+        bg: activeLevelId === level.id ? 'rgba(29,31,32,0.09)' : '#fff',
+      })),
+      addViewport: () => this.setState({ addingViewport: !addingViewport }, () => this._draw()),
+      addViewportBg: addingViewport ? '#1d1f20' : '#5980a6',
+      addViewportColor: '#f2f2f3',
+      addViewportLabel: addingViewport ? 'CLICK THE SHEET…' : '+ Add Viewport',
+      hasViewportNote: Boolean(this._drawingChecked && !this._saved),
+      viewportNote: 'Draw a house in the MODEL space first — viewports project the saved drawing.',
       openSettingsDialog: () => this._openProfileDialog('settings'),
       openStandardsDialog: () => this._openProfileDialog('standards'),
       closeProfileDialog: () => this._closeProfileDialog(),
@@ -486,7 +772,7 @@ class Component extends DCLogic {
       profileDialogMessageColor: this.state.profileDialogError ? '#b04050' : '#557a46',
       paperLabel: `${pw}" × ${ph}"`,
       scaleLabel: SCALES[activeScale].label,
-      canvasCursor: this._panning ? 'grabbing' : 'crosshair',
+      canvasCursor: this._panning || this._draggingViewport ? 'grabbing' : (addingViewport ? 'crosshair' : 'default'),
     };
   }
 }
