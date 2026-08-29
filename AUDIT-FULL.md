@@ -16,24 +16,7 @@ removes — both read the same array and the second write erases the first's
 record. Fix: do the read and the put inside one `readwrite` transaction.
 
 **1.2 LAYOUT discards sheet work silently when a write fails — MAJOR, CONFIRMED**
-`LAYOUT.dc.html:333`: `.catch(error => console.warn('Unable to save the layout:', error))`.
-MODEL's equivalent surfaces the failure; LAYOUT's writes to the console and
-carries on as if it had saved.
-
-Driven with every `saveSharedFile` call rejecting the way a full quota does
-(`audit-repros/r19-save-failure.spec.js`):
-
-```
-MODEL : status pill "UNSAVED", data-save-dirty 1, app keeps working,
-        and the next successful write recovers everything (3 of 3 lines)
-LAYOUT: nothing surfaced anywhere in the DOM, layoutSaveSeq stays 0,
-        and after a reload the viewport just placed is gone (0 viewports)
-```
-
-On a full quota, in a private window, or after iPad Safari evicts the origin's
-storage, a drafter can lay out a whole sheet — viewports, paper size,
-titleblock — and lose all of it on the next page load with no signal of any kind.
-MODEL's handling is the model to copy.
+Promoted to `AUDIT-CRITICAL.md` M10.
 
 **1.3 Correction to my own first-contact log — no finding**
 I recorded that the SAVED indicator never changes. It does: `_markUnsaved`

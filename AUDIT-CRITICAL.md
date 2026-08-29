@@ -613,6 +613,35 @@ doubles the roof loop. Numbers and the iPad extrapolation are in AUDIT-PERF.md.
 
 ---
 
+## M10 — LAYOUT discards sheet work silently when the store rejects a write
+**Severity: MAJOR · Confidence: CONFIRMED · Silent data loss**
+`LAYOUT.dc.html:333` vs `MODEL.dc.html:5119-5124`.
+
+```js
+// LAYOUT
+.catch(error => console.warn('Unable to save the layout:', error));
+```
+
+Driven with every `saveSharedFile` rejecting, the way a full quota, a private
+window, or an iPad Safari storage eviction does
+(`audit-repros/r19-save-failure.spec.js`):
+
+```
+MODEL : status pill "UNSAVED", data-save-dirty stays 1, editing continues, and
+        the next successful write persists everything (3 of 3 lines recovered)
+LAYOUT: nothing surfaced anywhere in the DOM, layoutSaveSeq stays 0, and after
+        a reload the viewport just placed is gone (0 viewports)
+```
+
+A drafter can compose an entire sheet and lose all of it on the next page load
+with no signal. MODEL's handling of the identical failure is correct and is the
+shape to copy: surface the state, keep the dirty flag, let a later write recover.
+
+Damage 4 × Likelihood 2 = 8 — below the top ten only because it needs the store
+to fail; when it does, the loss is total and silent.
+
+---
+
 ## What I did not examine
 
 - **Sections (S1/S2) beyond the floor-band family (C5).** I found and proved the
