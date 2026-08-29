@@ -60,4 +60,24 @@ Web searches run the next day (`"Vector BIM"`, `"VECTOR-BIM" software`, `"raster
 
 The term isn't just an ad joke — it's the product thesis said out loud. Rough Drafter has always worked this way (the BONEYARD master outline, BUILD HOUSE derivation, live re-derivation when the source moves); the coinage gave that architecture a name a viewer can get in ten seconds. The ads carry it (the printer room, the deadpan dog), and the codebase proves it.
 
+---
+
+## AUGUST 29, 2026 — THE REBEL SIDE PROPHECY
+
+### What was said
+
+In a working conversation between the founder and Devin — while the test suite ground away in the background — the talk turned to what happens to the trade when Rough Drafter drafters start quoting half the timeline at full price.
+
+The prophecy, recorded here the day it was made:
+
+**The non-Rough-Draft drafters will start to hate the Rough Draft drafters.** Nothing breeds resentment like the guy across town delivering in a day what takes you a month. Every disruptive tool splits the trade into early adopters and grumblers — the CAD wave did exactly this to the hand drafters, who cursed AutoCAD right up until they bought a seat.
+
+**And then they will come over to the rebel side.** History is undefeated on this one. The conversion path runs: hate → quiet trial ("just to see") → hooked by the first bone press → certified pin on the board. The economics do the recruiting: once one competitor in a town turns rebel, everyone else converts or starves.
+
+**Darth Draftsman takes off the helmet eventually.**
+
+### Why it matters to us
+
+The hate is the marketing funnel. The haters' fix is the exact door the company built for them: $200 and a pin on the CERTIFIED DRAFTER NETWORK board. The tool doesn't replace the drafter — it repositions them from selling hours at the board to selling judgment — so the rebellion has room for every convert who walks in. When the grumbling starts, this entry is the reminder that it was expected, priced in, and welcomed.
+
 *More history as it happens.*
