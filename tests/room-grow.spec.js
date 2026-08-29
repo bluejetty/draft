@@ -4,8 +4,10 @@
 // with it seeded off). The #276 numbering rules — house-wide BEDROOM/WC
 // ladders, the one BEDROOM 1 primary, claimed numbers, the basement
 // B-series, the live WC fixture suffix — are RULES and run ungated. The
-// partition and numbering math is pinned by the 29-check offline harness
-// against room-grow.js; these specs pin the commit layer.
+// partition and numbering math is pinned by the offline harness
+// (proto/room-grow-harness.js, run with node); these specs pin the
+// commit layer — and, since board #290, that the partition clips to the
+// outline polygon instead of its bounding box.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -198,4 +200,84 @@ test('the WC number belongs to the room — fixtures never enter the stored name
   saved = await h.savedDrawing(page);
   expect(names(saved)).toContain('WC 1');
   expect(saved.roomTags.every(tag => !/\//.test(tag.name))).toBe(true);
+});
+
+// ── Board #290: the partition clips to the outline polygon ─────────────
+// An L-shaped house with stamps in both legs. The old partition sliced the
+// outline's BOUNDING BOX, so claims and grown walls ran through the notch —
+// outside the building. Nothing may stand there.
+const L_OUTLINE = [
+  { x: -14, z: -10 }, { x: 2, z: -10 }, { x: 2, z: -1 },
+  { x: 14, z: -1 }, { x: 14, z: 10 }, { x: -14, z: 10 },
+];
+
+function insidePolygon(poly, pt) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[j], b = poly[i];
+    if ((a.z > pt.z) !== (b.z > pt.z)
+      && pt.x < a.x + (b.x - a.x) * (pt.z - a.z) / (b.z - a.z)) inside = !inside;
+  }
+  return inside;
+}
+
+async function traceLHouse(page) {
+  await page.locator('[data-select-house]').click();
+  await page.keyboard.press('Enter');
+  for (const pt of L_OUTLINE) await h.clickWorld(page, pt.x, pt.z);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+}
+
+test('an L-shaped house grows nothing into the notch (board #290)', async ({ page }) => {
+  await h.openModel(page, { roomGrow: true });
+  await traceLHouse(page);
+  await page.locator('[data-tour-popup]').click();       // FOUNDATION DONE → MAIN
+  await placeStairs(page, -6, -3);                        // clear of the notch
+  await page.keyboard.press('Enter');
+  await page.locator('[data-tour-popup]').click();        // → rooms-main
+  await expect(page.locator('[data-room-tray]')).toBeVisible();
+
+  // Both legs of the L carry a stamp.
+  await stamp(page, 'KITCHEN', -9, -6);
+  await stamp(page, 'BEDROOM 1', -9, 6);
+  await stamp(page, 'BEDROOM', 8, 6);
+
+  await page.locator('[data-build-house]').click();
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  const grown = grownWalls(saved);
+  expect(grown.length).toBeGreaterThan(0);
+  // Every endpoint AND midpoint of every grown wall stands in the house.
+  const strays = [];
+  grown.forEach(wall => {
+    const mid = { x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 };
+    [wall.start, wall.end, mid].forEach(pt => {
+      if (!insidePolygon(L_OUTLINE, pt)) {
+        // A point on the outline itself is the exterior wall line, not a stray.
+        const onEdge = L_OUTLINE.some((a, i) => {
+          const b = L_OUTLINE[(i + 1) % L_OUTLINE.length];
+          const dx = b.x - a.x, dz = b.z - a.z;
+          const len2 = dx * dx + dz * dz || 1;
+          const t = Math.max(0, Math.min(1, ((pt.x - a.x) * dx + (pt.z - a.z) * dz) / len2));
+          return Math.hypot(pt.x - (a.x + dx * t), pt.z - (a.z + dz * t)) <= 0.5;
+        });
+        if (!onEdge) strays.push(`(${pt.x.toFixed(2)}, ${pt.z.toFixed(2)})`);
+      }
+    });
+  });
+  expect(strays, `grown wall geometry outside the L: ${strays.join(' ')}`).toEqual([]);
+
+  // And the notch itself — the quarter that is not the building — is empty.
+  const notch = { x0: 2, x1: 14, z0: -10, z1: -1 };
+  const inNotch = grown.filter(wall => [wall.start, wall.end].some(pt =>
+    pt.x > notch.x0 + 0.5 && pt.x < notch.x1 - 0.5
+    && pt.z > notch.z0 + 0.5 && pt.z < notch.z1 - 0.5));
+  expect(inNotch).toHaveLength(0);
+
+  // The stamps still grew: every one of them absorbed a claim.
+  const stamped = saved.roomTags.filter(tag => tag.stamped && tag.base && tag.companionOf == null);
+  expect(stamped.length).toBe(3);
+  stamped.forEach(tag => expect(tag.areaSqFt).toBeGreaterThan(0));
 });
