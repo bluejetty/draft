@@ -3236,18 +3236,37 @@ class Component extends DCLogic {
     });
   }
 
+  // What a load dropped, in the drafter's words. TWO different things, and
+  // reporting them as one is how a genuinely damaged file goes unnoticed
+  // among routine leftovers:
+  //   incomplete — we could not read the item. Something is wrong with the
+  //     FILE, and that is worth flagging as an error.
+  //   a level that is gone — the item is fine; the level it belonged to is
+  //     not in the drawing. Routine after a level delete (and older builds of
+  //     this app left these behind), or an import from another drawing.
+  _loadReport(outcome) {
+    const skipped = outcome.ok ? (outcome.skipped || 0) : 0;
+    const orphaned = outcome.ok ? (outcome.orphaned || 0) : 0;
+    const clauses = [];
+    if (skipped) {
+      clauses.push(`${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded`);
+    }
+    if (orphaned) {
+      clauses.push(`${orphaned} ${orphaned === 1 ? 'item' : 'items'} belonged to a level that is no longer in the drawing and ${orphaned === 1 ? 'was' : 'were'} dropped`);
+    }
+    return clauses.join('; ');
+  }
+
   async _importDrawingFile(file) {
     if (!file) return;
     const result = await this._loadDrawing(file);
     if (result.ok) {
       this._markUnsaved();
       this._fileDirty = false;
-      const skipped = result.skipped || 0;
+      const report = this._loadReport(result);
       this.setState({
-        drawingMessage: skipped
-          ? `${file.name} imported — ${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded.`
-          : `${file.name} imported.`,
-        drawingMessageError: skipped > 0,
+        drawingMessage: report ? `${file.name} imported — ${report}.` : `${file.name} imported.`,
+        drawingMessageError: (result.skipped || 0) > 0,
       });
     }
   }
@@ -5012,17 +5031,9 @@ class Component extends DCLogic {
       const failed = !outcome.ok && outcome.reason !== 'empty';
       const source = importedFile ? 'import' : 'store';
       const skipped = outcome.ok ? (outcome.skipped || 0) : 0;
-      const orphaned = outcome.ok ? (outcome.orphaned || 0) : 0;
-      const damaged = skipped
-        ? `${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded`
-        : '';
-      const strays = orphaned
-        ? `${orphaned} ${orphaned === 1 ? 'item' : 'items'} left over from a deleted level ${orphaned === 1 ? 'was' : 'were'} cleared`
-        : '';
+      const report = this._loadReport(outcome);
       const message = !failed
-        ? ((damaged || strays) && !importedFile
-          ? `Saved drawing loaded — ${[damaged, strays].filter(Boolean).join('; ')}.`
-          : '')
+        ? (report && !importedFile ? `Saved drawing loaded — ${report}.` : '')
         : outcome.reason === 'version'
           ? (source === 'import'
             ? 'Import failed — this file was made by a newer version of Draft. Nothing was changed.'

@@ -188,7 +188,7 @@ test('an orphan from an older build is cleared and reported as its own thing, no
   await h.waitForModelReady(page);
 
   const message = page.locator('[data-model-drawing-message]');
-  await expect(message).toContainText(/deleted level/i);
+  await expect(message).toContainText(/no longer in the drawing/i);
   await expect(message).not.toContainText(/incomplete/i);
   // Cleared, not carried: the next save writes the drawing without it. (Any
   // edit clears the message, so it is read above, before this.)

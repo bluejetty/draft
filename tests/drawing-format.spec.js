@@ -37,6 +37,10 @@ test('points and level ids are only accepted when usable', async ({ page }) => {
       full:     f.point({ x: 1, y: 2, z: 3 }),
       missingY: f.point({ x: 1, z: 3 }),
       textual:  f.point({ x: '1.5', z: '-2' }),
+      nulled:   f.point({ x: 1, z: null }),
+      empty:    f.point({ x: '', z: 2 }),
+      falsey:   f.point({ x: false, z: 2 }),
+      arrayed:  f.point({ x: [], z: 2 }),
       noZ:      f.point({ x: 1 }),
       known:    f.levelId('3', levelIds),
       unknown:  f.levelId(9, levelIds),
@@ -45,7 +49,17 @@ test('points and level ids are only accepted when usable', async ({ page }) => {
 
   expect(results.full).toEqual({ x: 1, y: 2, z: 3 });
   expect(results.missingY).toEqual({ x: 1, y: 0, z: 3 });
-  expect(results.textual).toEqual({ x: 1.5, y: 0, z: -2 });
+  // A coordinate has to be a REAL number. Every case below used to go through
+  // Number() and come back usable — null, '', false and [] all became 0 — so a
+  // damaged point did not fail, it moved to the origin and the drawing loaded
+  // looking almost right. A textual coordinate is refused along with them: this
+  // format writes numbers, so a string is not something this app wrote, and
+  // reading one is the same guess that hid the rest.
+  expect(results.textual).toBeNull();
+  expect(results.nulled).toBeNull();
+  expect(results.empty).toBeNull();
+  expect(results.falsey).toBeNull();
+  expect(results.arrayed).toBeNull();
   expect(results.noZ).toBeNull();
   expect(results.known).toBe(3);
   expect(results.unknown).toBeNull();
