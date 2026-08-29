@@ -34,7 +34,7 @@ Target: `main` @ `75a3cd6`. Repro specs referenced below are committed under
    Ctrl+Z only. The stated benchmark is "mom and dad build a house on an iPad".
    They cannot pan, zoom, or undo.
 
-3. **LAYOUT silently deletes work done in MODEL.** `LAYOUT.dc.html:317-334`
+3. **LAYOUT silently deletes work done in MODEL.** `LAYOUT.dc.html:317-335`
    writes back the whole drawing as it looked when LAYOUT loaded, on any sheet
    change. Reproduced: 9 lines before, 8 after. No warning, no conflict check, no
    re-read.
@@ -198,7 +198,7 @@ canvas, and set `touch-action: none` on the drawing surfaces.
 
 ## C3 — LAYOUT writes a stale whole-drawing snapshot over MODEL's work
 **Severity: CRITICAL · Confidence: CONFIRMED · Silent data loss**
-`LAYOUT.dc.html:317-334` (`_persistLayout`), `LAYOUT.dc.html:244-257`
+`LAYOUT.dc.html:317-335` (`_persistLayout`), `LAYOUT.dc.html:244-257`
 (`_loadDrawing`), `MODEL.dc.html:5096-5125` (`_markUnsaved`),
 `shared-file-store.js:53-60`.
 
@@ -361,7 +361,7 @@ grouping; the section path never got it.
 
 ## C6 — A rounding tolerance mismatch silently deletes the roof from a section
 **Severity: CRITICAL · Confidence: CONFIRMED · Reaches paper**
-`geometry-2d.js:683` and `geometry-2d.js:702` (`profileEnvelope`), consumed at
+`geometry-2d.js:683` and `geometry-2d.js:703` (`profileEnvelope`), consumed at
 `MODEL.dc.html:8666-8677` and gated at `:8811` (`if (lit.length > 1)`).
 
 **What breaks.** `profileEnvelope` collects the u-coordinates of every profile
@@ -376,7 +376,7 @@ tolerance:
 
 ```js
 if (u >= a.u - 1e-6 && u <= b.u + 1e-6 && b.u - a.u > 1e-9) { …interpolate… }
-return null;                                                          // :702-706
+return null;                                                          // :703-707
 ```
 
 `toFixed(5)` moves a value by up to **5e-6** — five times the tolerance. When a
@@ -716,7 +716,7 @@ doubles the roof loop. Numbers and the iPad extrapolation are in AUDIT-PERF.md.
 
 ## M10 — LAYOUT discards sheet work silently when the store rejects a write
 **Severity: MAJOR · Confidence: CONFIRMED · Silent data loss**
-`LAYOUT.dc.html:333` vs `MODEL.dc.html:5119-5124`.
+`LAYOUT.dc.html:334` vs `MODEL.dc.html:5119-5124`.
 
 ```js
 // LAYOUT
@@ -745,13 +745,16 @@ to fail; when it does, the loss is total and silent.
 
 ## What I did not examine
 
-- **Sections (S1/S2) beyond the floor-band family (C5).** I found and proved the
-  floor-band case and read the foundation, grade-beam, slab and grade code around
-  it, but I did not trace the wall-standing pass, the roof-profile envelope on
-  diagonal cuts, doubled lines at shared corners, or layering order. Given that
-  the first thing I looked at in this family was wrong on the most common
-  configuration, I would expect more here. This is the largest hole in this
-  report.
+- **Sections (S1/S2) beyond the two families I proved.** I found and proved the
+  floor-band case (C5) and the roof-profile dropout (C6), and read the
+  foundation, grade-beam, slab, grade and wall-standing code around them. I did
+  **not** audit: doubled linework at shared corners, layering/draw order, the
+  bottom-chord ceiling lines on multi-roof houses, the window and door details in
+  `_drawSectionWall`, or what happens when a cut crosses a BONEYARD shelf wall
+  (`_sectionWallCrossings` filters nothing, so shelf geometry is in the crossing
+  list and stretches the grade line — I saw the code path but never built the
+  case). Two of the first three things I looked at in this family were wrong; I
+  would expect more here, and this remains the largest hole in the report.
 - **`auto-stair.js` (496 lines) end to end.** I checked the riser derivation
   (`_stairLayout`, `MODEL.dc.html:16779-16785`) — `ceil(rise / 7.875)` with an
   even divide, which is correct — and the L/U landing split only by reading. No
@@ -770,5 +773,5 @@ to fail; when it does, the loss is total and silent.
 - **Real iPad Safari.** Everything device-related here is Chromium emulating a
   touch device, which is more forgiving than the real thing. Every touch finding
   should reproduce worse on hardware, not better.
-- **The full suite result.** It was still running when I wrote this; 6 failures
-  in the first 171 tests, all 30-31 s timeouts. See AUDIT-FULL.md §Test suite.
+- **The full suite result.** It was still running when I wrote this. See
+  AUDIT-FULL.md §7.1 for the failures and the proof that they are environmental.
