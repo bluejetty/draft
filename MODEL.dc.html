@@ -3793,12 +3793,17 @@ class Component extends DCLogic {
         : null;
       const dx = next.x - pt.x, dz = next.z - pt.z;
       const len = Math.hypot(dx, dz) || 1;
+      const kind = override?.kind || 'eave';
+      // The GABLE CORNER style shapes the default (board #252): the boxed
+      // treatments build gable edges at half the eave overhang. Pull-outs
+      // still floor at that per-kind default, never under it.
+      const kindBase = window.DraftGeometry2D.gableOverhangFt(kind, base, this._gableCornerStyle());
       return {
         index, a: { x: pt.x, z: pt.z }, b: { x: next.x, z: next.z }, len,
         ux: dx / len, uz: dz / len,
         fromSrc: keyed ? pt.srcId : null, toSrc: keyed ? next.srcId : null,
-        kind: override?.kind || 'eave',
-        overhang: override && override.overhangFt != null ? Math.max(override.overhangFt, base) : base,
+        kind,
+        overhang: override && override.overhangFt != null ? Math.max(override.overhangFt, kindBase) : kindBase,
         gables: keyed
           ? intent.gables.filter(gable => gable.fromSrc === pt.srcId && gable.toSrc === next.srcId) : [],
       };
@@ -5850,10 +5855,53 @@ class Component extends DCLogic {
         const sa = toS(a), sb = toS(b);
         ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
       });
+      const [gwa, gwb] = geoInfo.glazing;
+      const glazeRun = Math.hypot(gwb.x - gwa.x, gwb.z - gwa.z) || 1;
+      const gux = (gwb.x - gwa.x) / glazeRun, guz = (gwb.z - gwa.z) / glazeRun;
+      const gnx = -guz, gnz = gux;
       if (opening.type === 'window') {
-        const [ga, gb] = geoInfo.glazing.map(toS);
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(ga.x, ga.y); ctx.lineTo(gb.x, gb.y); ctx.stroke();
+        // Double-glazed unit: two panes 1/2" apart on the wall centreline,
+        // with 2"-wide frame blocks at each jamb reaching 1/2" past both
+        // wall faces.
+        ctx.lineWidth = 1.25;
+        [0.375 / 12, -0.375 / 12].forEach(off => {
+          const a = toS({ x: gwa.x + gnx * off, z: gwa.z + gnz * off });
+          const b = toS({ x: gwb.x + gnx * off, z: gwb.z + gnz * off });
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        });
+        const halfDepth = Math.max(...geoInfo.corners.map(corner =>
+          Math.abs((corner.x - geoInfo.center.x) * gnx + (corner.z - geoInfo.center.z) * gnz)));
+        const poke = halfDepth + 0.5 / 12;
+        const frameAlong = 2 / 12;
+        [[gwa, 1], [gwb, -1]].forEach(([end, sgn]) => {
+          const quad = [
+            { x: end.x + gnx * poke, z: end.z + gnz * poke },
+            { x: end.x - gnx * poke, z: end.z - gnz * poke },
+            { x: end.x + gux * sgn * frameAlong - gnx * poke, z: end.z + guz * sgn * frameAlong - gnz * poke },
+            { x: end.x + gux * sgn * frameAlong + gnx * poke, z: end.z + guz * sgn * frameAlong + gnz * poke },
+          ].map(toS);
+          ctx.beginPath();
+          ctx.moveTo(quad[0].x, quad[0].y); ctx.lineTo(quad[1].x, quad[1].y);
+          ctx.lineTo(quad[2].x, quad[2].y); ctx.lineTo(quad[3].x, quad[3].y);
+          ctx.closePath(); ctx.stroke();
+        });
+      }
+      if (opening.type === 'door' && !opening.garage) {
+        // Leaf and quarter swing: the flat slab standing open off the hinge
+        // jamb, the arc sweeping back to the latch jamb.
+        const hinge = toS(gwa);
+        const tip = toS({ x: gwa.x + gnx * glazeRun, z: gwa.z + gnz * glazeRun });
+        const latch = toS(gwb);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(hinge.x, hinge.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+        const r = Math.hypot(tip.x - hinge.x, tip.y - hinge.y);
+        const a0 = Math.atan2(tip.y - hinge.y, tip.x - hinge.x);
+        const a1 = Math.atan2(latch.y - hinge.y, latch.x - hinge.x);
+        let sweep = a1 - a0;
+        while (sweep > Math.PI) sweep -= 2 * Math.PI;
+        while (sweep < -Math.PI) sweep += 2 * Math.PI;
+        ctx.lineWidth = 1.25;
+        ctx.beginPath(); ctx.arc(hinge.x, hinge.y, r, a0, a0 + sweep, sweep < 0); ctx.stroke();
       }
       if (!this._isPrinting) {
         // Centre grab point — the dimension / snap anchor.
@@ -7829,6 +7877,13 @@ class Component extends DCLogic {
     return normaliseStructureStandards(this.state.structureStandards).freeformFootings;
   }
 
+  // GABLE CORNER (board #252): the office's corner treatment — 'flat' |
+  // 'return' | 'porkchop' | 'boxed'. Footprint derivations read it through
+  // geometry-2d's gableOverhangFt; the elevation pass draws its linework.
+  _gableCornerStyle() {
+    return normaliseStructureStandards(this.state.structureStandards).gableCorner;
+  }
+
   _footingLocked(item) {
     return item?.layer === 'S-FOOTING' && !this._freeformFootings();
   }
@@ -8754,8 +8809,10 @@ class Component extends DCLogic {
       ctx.strokeRect(x, Y(top), wid, (top - bottom) * pxPerFt);
       return;
     }
-    const gapBottom = opening.type === 'door' ? bottom : bottom + SILL_FT;
-    const gapTop = Math.min(bottom + HEAD_FT, top);
+    const headFt = opening.headHeight > 0 ? opening.headHeight : HEAD_FT;
+    const sillFt = opening.sillHeight > 0 ? opening.sillHeight : SILL_FT;
+    const gapBottom = opening.type === 'door' ? bottom : bottom + sillFt;
+    const gapTop = Math.min(bottom + headFt, top);
     // Above the head (header + plates) and, for windows, below the sill.
     ctx.fillRect(x, Y(top), wid, (top - gapTop) * pxPerFt);
     ctx.strokeRect(x, Y(top), wid, (top - gapTop) * pxPerFt);
@@ -8763,14 +8820,36 @@ class Component extends DCLogic {
       ctx.fillRect(x, Y(gapBottom), wid, (gapBottom - bottom) * pxPerFt);
       ctx.strokeRect(x, Y(gapBottom), wid, (gapBottom - bottom) * pxPerFt);
     }
-    ctx.fillStyle = 'rgba(29,31,32,0.55)';
-    ctx.font = "600 8px 'Barlow Condensed', system-ui, sans-serif";
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.save();
-    ctx.translate(x + wid / 2, Y((gapTop + gapBottom) / 2));
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText(opening.type.toUpperCase(), 0, 0);
-    ctx.restore();
+    ctx.fillStyle = '#fff'; ctx.lineWidth = 1;
+    if (opening.type === 'window') {
+      // The window unit in section: 2x6 frame members at head and sill
+      // reaching 1/2" past each wall face, double glazing between them —
+      // two 1/4" panes 1/2" apart — with 1/2" square stops between and on
+      // each side of the glass.
+      const frameDeep = Math.max(6 / 12, width + 1 / 12);
+      const fx = X(u - frameDeep / 2), fw = frameDeep * pxPerFt;
+      const frameThick = (2 / 12) * pxPerFt;
+      ctx.fillRect(fx, Y(gapTop), fw, frameThick);
+      ctx.strokeRect(fx, Y(gapTop), fw, frameThick);
+      ctx.fillRect(fx, Y(gapBottom + 2 / 12), fw, frameThick);
+      ctx.strokeRect(fx, Y(gapBottom + 2 / 12), fw, frameThick);
+      const glassTop = gapTop - 2 / 12, glassBottom = gapBottom + 2 / 12;
+      [0.375 / 12, -0.375 / 12].forEach(off => {
+        const gx = X(u + off);
+        ctx.beginPath(); ctx.moveTo(gx, Y(glassTop)); ctx.lineTo(gx, Y(glassBottom)); ctx.stroke();
+      });
+      const stop = (0.5 / 12) * pxPerFt;
+      ctx.fillStyle = 'rgba(29,31,32,0.35)';
+      [u - 0.875 / 12, u, u + 0.875 / 12].forEach(su => {
+        ctx.fillRect(X(su) - stop / 2, Y(glassBottom + 0.5 / 12), stop, stop);
+        ctx.fillRect(X(su) - stop / 2, Y(glassTop), stop, stop);
+      });
+    } else {
+      // A flat 1-3/4" slab door standing in the opening.
+      const slabW = Math.max(1.5, (1.75 / 12) * pxPerFt);
+      ctx.fillRect(X(u) - slabW / 2, Y(gapTop), slabW, (gapTop - gapBottom) * pxPerFt);
+      ctx.strokeRect(X(u) - slabW / 2, Y(gapTop), slabW, (gapTop - gapBottom) * pxPerFt);
+    }
   }
 
   // A cut that crosses nothing but faces the model is an elevation: wall
@@ -9166,12 +9245,31 @@ class Component extends DCLogic {
         const half = Math.abs(du) * f.width / 2;
         const ox = X(Math.max(uc - half, uMin)), ow = X(Math.min(uc + half, uMax)) - ox;
         if (ow <= 0) return;
-        const top = Math.min(floor + HEAD_FT, level.wallTop);
-        const bottom = f.type === 'door' ? floor : floor + SILL_FT;
+        const head = f.headHeight > 0 ? f.headHeight : HEAD_FT;
+        const sill = f.sillHeight > 0 ? f.sillHeight : SILL_FT;
+        const top = Math.min(floor + head, level.wallTop);
+        const bottom = f.type === 'door' ? floor : floor + sill;
         ctx.fillStyle = '#fafafa';
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
         ctx.strokeRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
+        const clipped = uc - half < uMin - 1e-6 || uc + half > uMax + 1e-6;
+        if (clipped) return;
+        if (f.type === 'door' && !f.garage) {
+          // Flat slab door face with a round knob at handle height on the
+          // latch side.
+          const knobR = Math.max(1.5, (1.25 / 12) * pxPerFt);
+          const kx = ox + ow - (2.5 / 12) * pxPerFt;
+          const ky = Y(Math.min(floor + 3, (top + bottom) / 2));
+          ctx.beginPath(); ctx.arc(kx, ky, knobR, 0, Math.PI * 2); ctx.stroke();
+        } else if (f.type === 'window') {
+          // The unit's frame face inside the rough opening: a 2"-wide border
+          // around the glazing.
+          const inset = (2 / 12) * pxPerFt;
+          if (ow > inset * 3 && (top - bottom) * pxPerFt > inset * 3) {
+            ctx.strokeRect(ox + inset, Y(top) + inset, ow - inset * 2, (top - bottom) * pxPerFt - inset * 2);
+          }
+        }
       });
     });
 
@@ -9364,21 +9462,88 @@ class Component extends DCLogic {
               // The metal soffit closes the corner: a line from the low
               // point of the rake fascia straight back to the house wall,
               // the flat soffit plane under the eave-overhang triangle.
+              // The reach back to the wall runs ALONG the rake's plan
+              // direction — the EAVE-side offset at the corner — so it is
+              // measured by projecting the corner's BONEYARD master point
+              // (the wall corner it was offset from) onto that direction.
+              // Halved-gable builds (board #252) and intent-pulled edges
+              // both land the line exactly on the wall face this way;
+              // roof.overhang stays the fallback for unlinked roofs.
               const drop = ROOF_FASCIA_IN / 12;
               const lo = ea <= eb ? { p: a, u: ua, e: ea } : { p: b, u: ub, e: eb };
-              const hi = ea <= eb ? { p: b } : { p: a };
+              const hi = ea <= eb ? { p: b, u: ub, e: eb } : { p: a, u: ua, e: ea };
               const len = Math.hypot(hi.p.x - lo.p.x, hi.p.z - lo.p.z) || 1;
-              const wallU = (lo.p.x + (hi.p.x - lo.p.x) / len * overhang) * axis.x
-                + (lo.p.z + (hi.p.z - lo.p.z) / len * overhang) * axis.z;
+              const rux = (hi.p.x - lo.p.x) / len, ruz = (hi.p.z - lo.p.z) / len;
+              const srcPt = rpts.find(rp => Math.hypot(rp.x - lo.p.x, rp.z - lo.p.z) < 0.05);
+              const masterPt = srcPt?.srcId ? this._masterPointById(srcPt.srcId) : null;
+              const along = masterPt
+                ? (masterPt.x - lo.p.x) * rux + (masterPt.z - lo.p.z) * ruz : NaN;
+              const reach = Number.isFinite(along) && along > 0.05 ? along : overhang;
+              const wallU = (lo.p.x + rux * reach) * axis.x + (lo.p.z + ruz * reach) * axis.z;
               const shown = runs.some(r => Math.min(r.u0, r.u1) - 0.1 <= lo.u
                 && lo.u <= Math.max(r.u0, r.u1) + 0.1);
-              if (shown && Math.abs(wallU - lo.u) > 0.2
+              if (shown && reach > 0.05 && Math.abs(wallU - lo.u) > 0.2
                 && lo.u >= uMin - 0.01 && lo.u <= uMax + 0.01) {
+                const wallUc = Math.max(uMin, Math.min(uMax, wallU));
                 ctx.strokeStyle = INK; ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(X(lo.u), Y(lo.e - drop));
-                ctx.lineTo(X(Math.max(uMin, Math.min(uMax, wallU))), Y(lo.e - drop));
+                ctx.lineTo(X(wallUc), Y(lo.e - drop));
                 ctx.stroke();
+                // GABLE CORNER treatments (board #252). Everything below is
+                // metal matching the fascia — one blended family, drawn in
+                // the soffit/crease inks, never the heavy silhouette.
+                const style = this._gableCornerStyle();
+                const du = hi.u - lo.u;
+                if (Math.abs(du) > 0.3) {
+                  const undersideAt = u => lo.e + (u - lo.u) / du * (hi.e - lo.e) - drop;
+                  if (style === 'return') {
+                    // SOFFIT RETURN: the eave soffit wraps the corner — a
+                    // short cornice-return band continuing the eave fascia
+                    // across the gable face, capped with a vertical seam.
+                    const dirIn = Math.sign(wallU - lo.u) || 1;
+                    const retLen = Math.min(Math.abs(wallU - lo.u), 1.25);
+                    const uEnd = lo.u + dirIn * retLen;
+                    ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(X(lo.u), Y(lo.e)); ctx.lineTo(X(uEnd), Y(lo.e));
+                    ctx.stroke();
+                    ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
+                    ctx.beginPath();
+                    ctx.moveTo(X(lo.u), Y(lo.e - drop)); ctx.lineTo(X(uEnd), Y(lo.e - drop));
+                    ctx.stroke();
+                    ctx.lineWidth = 1.25;
+                    ctx.beginPath();
+                    ctx.moveTo(X(uEnd), Y(lo.e));
+                    ctx.lineTo(X(uEnd), Y(lo.e - drop));
+                    ctx.stroke();
+                  } else if (style === 'porkchop' || style === 'boxed') {
+                    // PORK CHOP: the boxed corner return — the little
+                    // pyramid between the rake underside, the soffit line,
+                    // and this inner vertical face at the wall. (The
+                    // vertical the owner removed from FLAT CLOSE returns
+                    // here on purpose: this corner is metal, not wall
+                    // finish, so the seam against the wall exists.)
+                    ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+                    ctx.beginPath();
+                    ctx.moveTo(X(wallUc), Y(lo.e - drop));
+                    ctx.lineTo(X(wallUc), Y(undersideAt(wallU)));
+                    ctx.stroke();
+                    if (style === 'boxed') {
+                      // FULL BOXED RAKE: the pork chop soffit runs end to
+                      // end — the box's wall-side edge parallels the rake
+                      // underside the whole way up, stopping under the
+                      // apex where it meets its twin from the other slope
+                      // in a single peak vertex.
+                      const peakE = lo.e - drop + (hi.u - wallU) / du * (hi.e - lo.e);
+                      ctx.lineWidth = 1;
+                      ctx.beginPath();
+                      ctx.moveTo(X(wallUc), Y(lo.e - drop));
+                      ctx.lineTo(X(Math.max(uMin, Math.min(uMax, hi.u))), Y(peakE));
+                      ctx.stroke();
+                    }
+                  }
+                }
               }
             }
           }
@@ -12061,12 +12226,16 @@ class Component extends DCLogic {
       if (!a.srcId || !b.srcId) return null;
       return intent.edges.find(edge => edge.fromSrc === a.srcId && edge.toSrc === b.srcId) || null;
     };
+    const cornerStyle = this._gableCornerStyle();
     const distances = loop.map((pt, index) => {
       const override = edgeIntent(index);
       // Pull-out only: an override can widen an edge's overhang, never
-      // tuck it under the house default.
+      // tuck it under the house default — which the GABLE CORNER style
+      // shapes per kind (board #252: the boxed treatments halve gables).
+      const kindBase = window.DraftGeometry2D.gableOverhangFt(
+        edgeIntent(index)?.kind || 'eave', overhang, cornerStyle);
       return override && override.overhangFt != null
-        ? Math.max(override.overhangFt, overhang) : overhang;
+        ? Math.max(override.overhangFt, kindBase) : kindBase;
     });
     const offset = window.DraftGeometry2D.offsetOutlineVariable(loop, distances);
     const outPoints = [];
@@ -12204,7 +12373,6 @@ class Component extends DCLogic {
             z: closed[0].z - closed[legCount - 1].z,
           };
           const chordLen = Math.hypot(chord.x, chord.z) || 1;
-          const distances = closed.map((point, index) => (index < legCount - 1 ? overhang : 0));
           edges = closed.map((point, index) => {
             if (index >= legCount - 1) return 'gable';
             const next = closed[index + 1];
@@ -12213,6 +12381,11 @@ class Component extends DCLogic {
             const cross = Math.abs(dx * chord.z - dz * chord.x) / (len * chordLen);
             return cross < 0.5 ? 'gable' : 'eave'; // within ~30° of the house line
           });
+          // The GABLE CORNER style shapes the street-face gable too (board
+          // #252): boxed treatments halve it. The house-side edges stay zero.
+          const cornerStyle = this._gableCornerStyle();
+          const distances = edges.map((kind, index) => (index < legCount - 1
+            ? window.DraftGeometry2D.gableOverhangFt(kind, overhang, cornerStyle) : 0));
           points = window.DraftGeometry2D.offsetOutlineVariable(closed, distances);
         } else {
           points = this._offsetOutline(closed, overhang);
