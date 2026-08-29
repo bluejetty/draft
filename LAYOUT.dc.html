@@ -12,6 +12,7 @@
 <script src="./wall-types.js"></script>
 <script src="./render-2d.js"></script>
 <script src="./layout-plan.js"></script>
+<script src="./titleblock.js"></script>
 </head>
 <body>
 <x-dc>
@@ -111,6 +112,17 @@
       </div>
     </sc-if>
 
+    <!-- TITLEBLOCK: one strip per company, an 11×17 feature -->
+    <sc-if value="{{ showTitleblocks }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16);">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Titleblock</div>
+        <sc-for list="{{ titleblocks }}" as="tb" hint-placeholder-count="2">
+          <button data-layout-titleblock="{{ tb.id }}" onClick="{{ tb.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ tb.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ tb.label }}</button>
+        </sc-for>
+        <button data-layout-north onClick="{{ toggleNorthArrow }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ northArrowBg }}; color:{{ northArrowColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-top:6px;">{{ northArrowLabel }}</button>
+      </div>
+    </sc-if>
+
     <!-- VIEWPORT -->
     <div style="padding:12px 14px;">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Viewport</div>
@@ -170,6 +182,8 @@ class Component extends DCLogic {
   state = {
     paperKey: '11x17',
     orientation: 'landscape',  // 'landscape' | 'portrait'
+    titleblock: 'roughdrafter', // DraftTitleblock style id — 11×17 sheets only
+    northArrow: false, // the titleblock's arrow cell — site plans by convention, any sheet by choice
     activeScale: 2,             // index into SCALES — 1/4" is the working plan scale
     activeLevelId: null,
     addingViewport: false,
@@ -192,6 +206,15 @@ class Component extends DCLogic {
     this._canvas = document.querySelector('[data-layout-canvas]');
     this._ctx = this._canvas ? this._canvas.getContext('2d') : null;
     if (!this._canvas) return;
+
+    // Company logos for the titleblock identity cell — redraw as each lands.
+    this._logos = {};
+    (window.DraftTitleblock?.STYLES || []).forEach(style => {
+      const img = new Image();
+      img.onload = () => this._draw();
+      img.src = style.logoSrc;
+      this._logos[style.id] = img;
+    });
 
     this._ro = new ResizeObserver(() => { this._resize(); this._draw(); });
     const cont = document.querySelector('[data-layout-container]');
@@ -243,6 +266,8 @@ class Component extends DCLogic {
     };
     if (layout?.paperKey) patch.paperKey = layout.paperKey;
     if (layout?.orientation) patch.orientation = layout.orientation;
+    if (layout?.titleblock) patch.titleblock = layout.titleblock;
+    if (typeof layout?.northArrow === 'boolean') patch.northArrow = layout.northArrow;
     this.setState(patch, () => {
       this._fitPaper();
       this._draw();
@@ -294,6 +319,8 @@ class Component extends DCLogic {
     this._saved.layout = {
       paperKey: this.state.paperKey,
       orientation: this.state.orientation,
+      titleblock: this.state.titleblock,
+      northArrow: this.state.northArrow,
       viewports: this.state.viewports,
       nextViewportId: this.state.nextViewportId,
     };
@@ -314,6 +341,7 @@ class Component extends DCLogic {
         paperKey: this.state.paperKey,
         orientation: this.state.orientation,
         activeScale: this.state.activeScale,
+        titleblock: this.state.titleblock,
       },
     };
   }
@@ -325,6 +353,7 @@ class Component extends DCLogic {
     if (PAPER_SIZES[values.paperKey]) patch.paperKey = values.paperKey;
     if (['landscape', 'portrait'].includes(values.orientation)) patch.orientation = values.orientation;
     if (Number.isInteger(values.activeScale) && SCALES[values.activeScale]) patch.activeScale = values.activeScale;
+    if (window.DraftTitleblock?.styleById(values.titleblock)) patch.titleblock = values.titleblock;
     return patch;
   }
 
@@ -471,26 +500,51 @@ class Component extends DCLogic {
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
 
-    // Margin lines (0.5" inset)
+    // Margin border (0.5" inset). A right-strip titleblock owns the border:
+    // solid ink with the CLAY sheet's quite-rounded corners. Everything else
+    // keeps the faint dashed margin guide.
     const mPx = 0.5 * zoom;
-    ctx.strokeStyle = 'rgba(29,31,32,0.18)';
-    ctx.lineWidth = 0.75;
-    ctx.setLineDash([4, 4]);
-    ctx.strokeRect(panX + mPx, panY + mPx, pxW - mPx * 2, pxH - mPx * 2);
-    ctx.setLineDash([]);
+    const style = paperKey === '11x17' && window.DraftTitleblock
+      ? window.DraftTitleblock.styleById(this.state.titleblock) : null;
+    const inner = { x: panX + mPx, y: panY + mPx, w: pxW - mPx * 2, h: pxH - mPx * 2 };
+    if (style?.placement === 'right') {
+      const r = (style.cornerRadiusIn ?? window.DraftTitleblock.CORNER_RADIUS_IN) * zoom;
+      ctx.strokeStyle = '#1d1f20';
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.roundRect(inner.x, inner.y, inner.w, inner.h, r);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = 'rgba(29,31,32,0.18)';
+      ctx.lineWidth = 0.75;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(inner.x, inner.y, inner.w, inner.h);
+      ctx.setLineDash([]);
+    }
 
-    // Title block outline (bottom 1.5" strip)
-    const tbH = 1.5 * zoom;
-    ctx.strokeStyle = 'rgba(29,31,32,0.25)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(panX + mPx, panY + pxH - mPx - tbH, pxW - mPx * 2, tbH);
-
-    // Title block label
-    ctx.fillStyle = 'rgba(29,31,32,0.18)';
-    ctx.font = `${Math.max(9, zoom * 0.3)}px 'Barlow Condensed', sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('TITLE BLOCK', panX + pxW / 2, panY + pxH - mPx - tbH / 2);
+    // Title block: the company strip on 11×17 (boards #285/#286); the
+    // letter sheet keeps the plain placeholder strip.
+    const tbBox = style?.placement === 'right'
+      ? (() => {
+          const tbW = window.DraftTitleblock.STRIP_W_IN * zoom;
+          return { x: inner.x + inner.w - tbW, y: inner.y, w: tbW, h: inner.h };
+        })()
+      : (() => {
+          const tbH = (window.DraftTitleblock?.BAND_H_IN || 1.5) * zoom;
+          return { x: inner.x, y: inner.y + inner.h - tbH, w: inner.w, h: tbH };
+        })();
+    if (style) {
+      window.DraftTitleblock.draw(ctx, tbBox, style, this._titleblockInfo(), this._logos?.[style.id] || null);
+    } else {
+      ctx.strokeStyle = 'rgba(29,31,32,0.25)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(tbBox.x, tbBox.y, tbBox.w, tbBox.h);
+      ctx.fillStyle = 'rgba(29,31,32,0.18)';
+      ctx.font = `${Math.max(9, zoom * 0.3)}px 'Barlow Condensed', sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('TITLE BLOCK', tbBox.x + tbBox.w / 2, tbBox.y + tbBox.h / 2);
+    }
 
     // Paper size label (top-left outside paper)
     ctx.fillStyle = 'rgba(29,31,32,0.4)';
@@ -548,6 +602,46 @@ class Component extends DCLogic {
       `${level ? level.name : 'PLAN'}${scale ? `  ·  ${scale.label}` : ''}`,
       px.x + px.w / 2, px.y + px.h + 4,
     );
+  }
+
+  // The words the titleblock prints: project info rides the drawing, the
+  // drafter's identity rides the personal settings package, and the scale
+  // reads AS NOTED the moment two viewports disagree.
+  _titleblockInfo() {
+    const format = window.DraftDrawingFormat;
+    const project = format.projectInfo(this._saved?.projectInfo);
+    const drafter = window.DraftDrafter.normaliseDrafter(
+      window.DraftProfileManager?.getActive('settings')?.content?.model?.drafter);
+    const pifs = [...new Set(this.state.viewports.map(viewport => viewport.pif))];
+    const scale = pifs.length === 1
+      ? (SCALES.find(s => s.pif === pifs[0])?.label || 'AS NOTED')
+      : (pifs.length ? 'AS NOTED' : '');
+    return {
+      projectName: project.name,
+      owner: project.client,
+      address: project.address,
+      drafterName: drafter.name,
+      drafterPhone: drafter.phone,
+      date: new Date().toISOString().slice(0, 10),
+      scale,
+      sheet: '1',
+      revision: '',
+      pageTitle: this._pageTitle(),
+      // The sidebar toggle flies the arrow: site plans by convention (#43),
+      // any sheet by choice. The real plumbing — true north placed in model
+      // space, construction north derived — is board #289.
+      northArrow: this.state.northArrow,
+    };
+  }
+
+  // The sheet's second title line: what the sheet shows — the plan level
+  // when the viewports agree, PLANS when they don't.
+  _pageTitle() {
+    const levelIds = [...new Set(this.state.viewports.map(viewport => viewport.levelId))];
+    if (!levelIds.length) return '';
+    if (levelIds.length > 1) return 'PLANS';
+    const level = this._levels.find(l => l.id === levelIds[0]);
+    return level ? `${level.name} PLAN` : '';
   }
 
   _onWheel(e) {
@@ -701,6 +795,23 @@ class Component extends DCLogic {
     this.setState({ activeScale: idx }, () => this._rememberActiveProfile('settings'));
   }
 
+  _setTitleblock(id) {
+    this.setState({ titleblock: id }, () => {
+      this._draw();
+      this._rememberActiveProfile('settings');
+      this._persistLayout();
+    });
+  }
+
+  // The arrow flies on site plans by convention, but any sheet may raise or
+  // strike it — auto-setup from a model-space true north is board #289.
+  _toggleNorthArrow() {
+    this.setState({ northArrow: !this.state.northArrow }, () => {
+      this._draw();
+      this._persistLayout();
+    });
+  }
+
   renderVals() {
     const { paperKey, orientation, activeScale, addingViewport, activeLevelId } = this.state;
     const paper = PAPER_SIZES[paperKey];
@@ -732,6 +843,17 @@ class Component extends DCLogic {
         onSelect: () => this._setScale(i),
         bg: activeScale === i ? scOn : scOff,
       })),
+      showTitleblocks: paperKey === '11x17' && Boolean(window.DraftTitleblock),
+      titleblocks: (window.DraftTitleblock?.STYLES || []).map(style => ({
+        id: style.id,
+        label: style.label,
+        onSelect: () => this._setTitleblock(style.id),
+        bg: this.state.titleblock === style.id ? 'rgba(29,31,32,0.09)' : '#fff',
+      })),
+      toggleNorthArrow: () => this._toggleNorthArrow(),
+      northArrowBg: this.state.northArrow ? '#1d1f20' : '#fff',
+      northArrowColor: this.state.northArrow ? '#f2f2f3' : '#1d1f20',
+      northArrowLabel: this.state.northArrow ? 'North Arrow · On' : 'North Arrow · Off',
       hasLevels: this._levelsWithWalls?.().length > 0,
       planLevels: (this._levelsWithWalls?.() || []).map(level => ({
         id: String(level.id),

@@ -707,7 +707,10 @@ if (!window.DraftDrawingFormat) {
   // xIn / yIn its centre on the sheet in paper inches from the top-left
   // corner. Sheet coordinates never mix with model feet: pif is the only
   // bridge. Old drawings carry no layout and load with an empty sheet.
+  // `titleblock` (board #285) picks the company strip on the 11×17 sheet;
+  // the ids mirror DraftTitleblock.STYLES.
   const LAYOUT_PAPER_KEYS = ['11x17', '8.5x11'];
+  const LAYOUT_TITLEBLOCKS = ['bluejetty', 'roughdrafter', 'bluejetty-band', 'roughdrafter-band'];
   const layout = (raw, levelIds) => {
     const seen = new Set();
     const viewports = (Array.isArray(raw?.viewports) ? raw.viewports : []).map(viewport => {
@@ -731,6 +734,8 @@ if (!window.DraftDrawingFormat) {
     return {
       paperKey: oneOf(raw?.paperKey, LAYOUT_PAPER_KEYS, null),
       orientation: oneOf(raw?.orientation, ['landscape', 'portrait'], null),
+      titleblock: oneOf(raw?.titleblock, LAYOUT_TITLEBLOCKS, 'roughdrafter'),
+      northArrow: raw?.northArrow === true,
       viewports,
       nextViewportId: Math.max(
         Number.isInteger(Number(raw?.nextViewportId)) ? Number(raw.nextViewportId) : 1,
