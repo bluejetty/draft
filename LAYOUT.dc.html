@@ -119,6 +119,7 @@
         <sc-for list="{{ titleblocks }}" as="tb" hint-placeholder-count="2">
           <button data-layout-titleblock="{{ tb.id }}" onClick="{{ tb.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ tb.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ tb.label }}</button>
         </sc-for>
+        <button data-layout-north onClick="{{ toggleNorthArrow }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ northArrowBg }}; color:{{ northArrowColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-top:6px;">{{ northArrowLabel }}</button>
       </div>
     </sc-if>
 
@@ -182,6 +183,7 @@ class Component extends DCLogic {
     paperKey: '11x17',
     orientation: 'landscape',  // 'landscape' | 'portrait'
     titleblock: 'roughdrafter', // DraftTitleblock style id — 11×17 sheets only
+    northArrow: false, // the titleblock's arrow cell — site plans by convention, any sheet by choice
     activeScale: 2,             // index into SCALES — 1/4" is the working plan scale
     activeLevelId: null,
     addingViewport: false,
@@ -265,6 +267,7 @@ class Component extends DCLogic {
     if (layout?.paperKey) patch.paperKey = layout.paperKey;
     if (layout?.orientation) patch.orientation = layout.orientation;
     if (layout?.titleblock) patch.titleblock = layout.titleblock;
+    if (typeof layout?.northArrow === 'boolean') patch.northArrow = layout.northArrow;
     this.setState(patch, () => {
       this._fitPaper();
       this._draw();
@@ -317,6 +320,7 @@ class Component extends DCLogic {
       paperKey: this.state.paperKey,
       orientation: this.state.orientation,
       titleblock: this.state.titleblock,
+      northArrow: this.state.northArrow,
       viewports: this.state.viewports,
       nextViewportId: this.state.nextViewportId,
     };
@@ -504,7 +508,7 @@ class Component extends DCLogic {
       ? window.DraftTitleblock.styleById(this.state.titleblock) : null;
     const inner = { x: panX + mPx, y: panY + mPx, w: pxW - mPx * 2, h: pxH - mPx * 2 };
     if (style?.placement === 'right') {
-      const r = window.DraftTitleblock.CORNER_RADIUS_IN * zoom;
+      const r = (style.cornerRadiusIn ?? window.DraftTitleblock.CORNER_RADIUS_IN) * zoom;
       ctx.strokeStyle = '#1d1f20';
       ctx.lineWidth = 1.25;
       ctx.beginPath();
@@ -622,10 +626,22 @@ class Component extends DCLogic {
       scale,
       sheet: '1',
       revision: '',
-      // The north arrow belongs to the SITE PLAN sheet alone (#43); plan
-      // sheets never fly it.
-      northArrow: false,
+      pageTitle: this._pageTitle(),
+      // The sidebar toggle flies the arrow: site plans by convention (#43),
+      // any sheet by choice. The real plumbing — true north placed in model
+      // space, construction north derived — is board #289.
+      northArrow: this.state.northArrow,
     };
+  }
+
+  // The sheet's second title line: what the sheet shows — the plan level
+  // when the viewports agree, PLANS when they don't.
+  _pageTitle() {
+    const levelIds = [...new Set(this.state.viewports.map(viewport => viewport.levelId))];
+    if (!levelIds.length) return '';
+    if (levelIds.length > 1) return 'PLANS';
+    const level = this._levels.find(l => l.id === levelIds[0]);
+    return level ? `${level.name} PLAN` : '';
   }
 
   _onWheel(e) {
@@ -787,6 +803,15 @@ class Component extends DCLogic {
     });
   }
 
+  // The arrow flies on site plans by convention, but any sheet may raise or
+  // strike it — auto-setup from a model-space true north is board #289.
+  _toggleNorthArrow() {
+    this.setState({ northArrow: !this.state.northArrow }, () => {
+      this._draw();
+      this._persistLayout();
+    });
+  }
+
   renderVals() {
     const { paperKey, orientation, activeScale, addingViewport, activeLevelId } = this.state;
     const paper = PAPER_SIZES[paperKey];
@@ -825,6 +850,10 @@ class Component extends DCLogic {
         onSelect: () => this._setTitleblock(style.id),
         bg: this.state.titleblock === style.id ? 'rgba(29,31,32,0.09)' : '#fff',
       })),
+      toggleNorthArrow: () => this._toggleNorthArrow(),
+      northArrowBg: this.state.northArrow ? '#1d1f20' : '#fff',
+      northArrowColor: this.state.northArrow ? '#f2f2f3' : '#1d1f20',
+      northArrowLabel: this.state.northArrow ? 'North Arrow · On' : 'North Arrow · Off',
       hasLevels: this._levelsWithWalls?.().length > 0,
       planLevels: (this._levelsWithWalls?.() || []).map(level => ({
         id: String(level.id),

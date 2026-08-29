@@ -2,11 +2,12 @@
 // company strip — BLUEJETTY or ROUGH DRAFTER, one block per company — with
 // the project's words from the drawing and the drafter's identity from the
 // personal settings package. The primary composition runs down the RIGHT
-// edge (the CLAY sheet positions) inside a rounded-corner border; each
-// company's BAND alternate keeps the original bottom strip. The pick
-// persists on the drawing's layout and rides the settings package for the
-// next drawing; the letter sheet keeps the plain placeholder strip and no
-// picker. The north arrow is a SITE PLAN word — plan sheets never ink it.
+// edge (the CLAY sheet positions) — BLUEJETTY inside a rounded-corner
+// border, ROUGH DRAFTER inside a sharp one; each company's BAND alternate
+// keeps the original bottom strip. The pick persists on the drawing's
+// layout and rides the settings package for the next drawing; the letter
+// sheet keeps the plain placeholder strip and no picker. The north arrow
+// answers the sidebar toggle: off by default, any sheet may fly it.
 const { test, expect } = require('@playwright/test');
 
 const BUCKET = 'model-drawing';
@@ -136,18 +137,34 @@ test('the 11×17 sheet offers both companies plus their BAND alternates; ROUGH D
   expect((await savedDrawing(page)).layout.titleblock).toBe('roughdrafter');
 });
 
-test('the right strip sits in a rounded-corner border; plan sheets fly no north arrow', async ({ page }) => {
+test('ROUGH DRAFTER wears sharp corners, BLUEJETTY the rounded ones; the arrow cell starts bare', async ({ page }) => {
   await openLayout(page, houseDrawing());
-  // Quite-rounded corners: the border's ink leaves the sharp corner point
-  // and rides the arc. At the top-left margin corner the square-corner spot
-  // is bare while the arc's midpoint carries ink.
+  // The default ROUGH DRAFTER border turns a square 90° corner: ink sits
+  // right at the margin corner point.
+  expect(await inkAround(page, 0.5 + 0.02, 0.5 + 0.02, 0.06)).toBeGreaterThan(0);
+  // BLUEJETTY's quite-rounded corners leave the sharp corner point bare
+  // while the arc's midpoint carries ink.
+  await withLayoutSave(page, () => page.locator('[data-layout-titleblock="bluejetty"]').click());
   const r = 0.35;
   const arcMid = r - r / Math.SQRT2 + 0.02;
   expect(await inkAround(page, 0.5 + 0.02, 0.5 + 0.02, 0.06)).toBe(0);
   expect(await inkAround(page, 0.5 + arcMid, 0.5 + arcMid, 0.08)).toBeGreaterThan(0);
-  // The north-arrow corner stays bare on a plan sheet — the arrow is SITE
-  // PLAN ink only (#43).
+  // The north-arrow corner stays bare until the toggle raises it.
   expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBe(0);
+});
+
+test('the NORTH ARROW toggle inks the arrow cell and persists on the drawing', async ({ page }) => {
+  await openLayout(page, houseDrawing());
+  await expect(page.locator('[data-layout-north]')).toContainText('Off');
+  await withLayoutSave(page, () => page.locator('[data-layout-north]').click());
+  await expect(page.locator('[data-layout-north]')).toContainText('On');
+  expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBeGreaterThan(20);
+  expect((await savedDrawing(page)).layout.northArrow).toBe(true);
+  // The raised arrow survives a reload.
+  await page.reload();
+  await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
+  await expect(page.locator('[data-layout-north]')).toContainText('On');
+  expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBeGreaterThan(20);
 });
 
 test('the BAND alternate keeps the original bottom strip', async ({ page }) => {

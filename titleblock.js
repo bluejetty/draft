@@ -16,6 +16,9 @@ if (!window.DraftTitleblock) {
       company: 'BLUEJETTY',
       logoSrc: './assets/bluejetty.png',
       placement: 'right',
+      cornerRadiusIn: 0.35,
+      logoOnly: true,
+      arrowDivider: false,
     }),
     Object.freeze({
       id: 'roughdrafter',
@@ -23,6 +26,9 @@ if (!window.DraftTitleblock) {
       company: 'ROUGH DRAFTER',
       logoSrc: './assets/rough-drafter-logo.png',
       placement: 'right',
+      cornerRadiusIn: 0,
+      logoOnly: false,
+      arrowDivider: true,
     }),
     Object.freeze({
       id: 'bluejetty-band',
@@ -46,7 +52,9 @@ if (!window.DraftTitleblock) {
   const FAINT = 'rgba(29,31,32,0.55)';
 
   // Strip width (right placement) and band height (bottom placement) in
-  // paper inches, plus the sheet border's corner radius — quite rounded.
+  // paper inches. Each right-placement style carries its own sheet-border
+  // corner radius (BLUEJETTY quite rounded, ROUGH DRAFTER square);
+  // CORNER_RADIUS_IN stays as the fallback.
   const STRIP_W_IN = 1.15;
   const BAND_H_IN = 1.5;
   const CORNER_RADIUS_IN = 0.35;
@@ -124,36 +132,43 @@ if (!window.DraftTitleblock) {
       ctx.stroke();
     };
 
-    // North-arrow corner — ink only on SITE PLAN sheets, but the cell holds
-    // its place on every sheet so the composition never shifts.
+    // North-arrow corner — inked when the sheet flies it (the LAYOUT toggle;
+    // site plans by convention), and the cell holds its place on every sheet
+    // so the composition never shifts.
     if (info.northArrow) {
       drawNorthArrow(ctx, x + w / 2, y + (arrowB - y) / 2, Math.min(w, arrowB - y) * 0.34);
     }
-    divider(arrowB);
+    if (style.arrowDivider !== false) divider(arrowB);
 
-    // Rotated title: the project's name climbing the strip.
+    // Rotated words climbing the strip. Reading up the sheet, text starts at
+    // the section bottom (left-justified in the turned frame) so every rotated
+    // line shares the same start line.
     const rot = (text, tx, sectionTop, sectionBottom, basePx, weight, family, color) => {
       if (!text) return;
       const maxPx = (sectionBottom - sectionTop) - pad * 2;
       const size = fit(ctx, text, maxPx, basePx, family, weight);
       ctx.save();
-      ctx.translate(tx, (sectionTop + sectionBottom) / 2);
+      ctx.translate(tx, sectionBottom - pad);
       ctx.rotate(-Math.PI / 2);
       ctx.fillStyle = color;
       ctx.font = `${weight} ${size}px ${family}`;
-      ctx.textAlign = 'center';
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillText(text, 0, 0);
       ctx.restore();
     };
-    rot(info.projectName || 'NEW HOME', x + w * 0.5, arrowB, titleB, w * 0.34, 600, condensed, INK);
+
+    // The title reads as two stacked lines: the PROJECT on top, the page
+    // title underneath (turn the sheet and they read as line one / line two).
+    rot(info.projectName || 'NEW HOME', x + w * 0.32, arrowB, titleB, w * 0.3, 400, condensed, INK);
+    rot(info.pageTitle || '', x + w * 0.68, arrowB, titleB, w * 0.22, 400, condensed, FAINT);
     divider(titleB);
 
     // Rotated address + owner: label column against the rail, words beside.
     rot('BUILDING ADDRESS', x + w * 0.22, titleB, wordsB, w * 0.13, 600, condensed, FAINT);
-    rot(info.address, x + w * 0.4, titleB, wordsB, w * 0.15, 400, plain, INK);
+    rot(info.address, x + w * 0.4, titleB, wordsB, w * 0.14, 400, plain, INK);
     rot('BUILDING OWNER', x + w * 0.64, titleB, wordsB, w * 0.13, 600, condensed, FAINT);
-    rot(info.owner, x + w * 0.82, titleB, wordsB, w * 0.15, 400, plain, INK);
+    rot(info.owner, x + w * 0.82, titleB, wordsB, w * 0.14, 400, plain, INK);
     divider(wordsB);
 
     // The record rows, horizontal: REVISION / DATE / SCALE / DRAFT BY.
@@ -175,47 +190,59 @@ if (!window.DraftTitleblock) {
         ctx.stroke();
       }
       ctx.fillStyle = FAINT;
-      ctx.font = `600 ${Math.max(6, rowH * 0.28)}px ${condensed}`;
+      ctx.font = `600 ${Math.max(6, w * 0.13)}px ${condensed}`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       ctx.fillText(labelText, x + pad, top + rowH * 0.1);
       if (value) {
-        const size = fit(ctx, value, w - pad * 2, rowH * 0.36, plain, 400);
+        const size = fit(ctx, value, w - pad * 2, w * 0.14, plain, 400);
         ctx.fillStyle = INK;
         ctx.font = `400 ${size}px ${plain}`;
-        ctx.textAlign = 'right';
+        ctx.textAlign = 'left';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(value, x + w - pad, top + rowH * 0.94);
+        ctx.fillText(value, x + pad, top + rowH * 0.94);
       }
     });
     divider(rowsB);
 
-    // The company mark: logo over the name, drafter's phone underneath.
+    // The company mark: logo over the name, drafter's phone underneath. A
+    // logoOnly style skips the wordmark — its logo carries the name and
+    // fills ~75% of the cell instead.
     const markH = markB - rowsB;
     let markY = rowsB + markH * 0.12;
     if (logo && logo.complete && logo.naturalWidth) {
-      const logoH = markH * 0.42;
-      const logoW = Math.min(logoH * (logo.naturalWidth / logo.naturalHeight), w - pad * 2);
+      const share = style.logoOnly ? 0.75 : 0.42;
+      let logoW = w * (style.logoOnly ? 0.75 : 1) - (style.logoOnly ? 0 : pad * 2);
+      let logoH = logoW * (logo.naturalHeight / logo.naturalWidth);
+      if (logoH > markH * share) {
+        logoH = markH * share;
+        logoW = logoH * (logo.naturalWidth / logo.naturalHeight);
+      }
       ctx.drawImage(logo, x + (w - logoW) / 2, markY, logoW, logoH);
       markY += logoH + markH * 0.06;
     }
-    const companyPx = fit(ctx, style.company, w - pad * 2, markH * 0.18, condensed);
-    ctx.fillStyle = INK;
-    ctx.font = `600 ${companyPx}px ${condensed}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(style.company, x + w / 2, markY);
+    if (!style.logoOnly) {
+      const companyPx = fit(ctx, style.company, w - pad * 2, markH * 0.18, condensed);
+      ctx.fillStyle = INK;
+      ctx.font = `600 ${companyPx}px ${condensed}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(style.company, x + w / 2, markY);
+      markY += companyPx * 1.35;
+    }
     if (info.drafterPhone) {
-      const phonePx = fit(ctx, info.drafterPhone, w - pad * 2, markH * 0.13, plain, 400);
+      const phonePx = fit(ctx, info.drafterPhone, w - pad * 2, w * 0.13, plain, 400);
       ctx.fillStyle = FAINT;
       ctx.font = `400 ${phonePx}px ${plain}`;
-      ctx.fillText(info.drafterPhone, x + w / 2, markY + companyPx * 1.35);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(info.drafterPhone, x + w / 2, markY);
     }
     divider(markB);
 
     // The sheet number carries the bottom cell.
     ctx.fillStyle = FAINT;
-    ctx.font = `600 ${Math.max(6, w * 0.12)}px ${condensed}`;
+    ctx.font = `600 ${Math.max(6, w * 0.13)}px ${condensed}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText('SHEET', x + pad, markB + pad * 0.5);

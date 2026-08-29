@@ -735,6 +735,7 @@ if (!window.DraftDrawingFormat) {
       paperKey: oneOf(raw?.paperKey, LAYOUT_PAPER_KEYS, null),
       orientation: oneOf(raw?.orientation, ['landscape', 'portrait'], null),
       titleblock: oneOf(raw?.titleblock, LAYOUT_TITLEBLOCKS, 'roughdrafter'),
+      northArrow: raw?.northArrow === true,
       viewports,
       nextViewportId: Math.max(
         Number.isInteger(Number(raw?.nextViewportId)) ? Number(raw.nextViewportId) : 1,
