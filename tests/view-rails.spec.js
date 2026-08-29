@@ -150,10 +150,11 @@ test.describe('View galleries', () => {
     for (let i = 0; i < names.length; i++) {
       await expect(plans.nth(i).locator('.view-thumb-label')).toHaveText(names[i]);
     }
-    // The plan column stands inward of the sections column.
+    // The plan column stands inward of the sections column, on smaller screens.
     const planBox = await plans.first().boundingBox();
     const threeD = await page.locator('[data-view-rail-3d]').boundingBox();
     expect(planBox.x + planBox.width).toBeLessThanOrEqual(threeD.x + 1);
+    expect(planBox.width).toBeLessThan(threeD.width);
 
     await drawOutlineRect(page);
     await buildHouse(page);
