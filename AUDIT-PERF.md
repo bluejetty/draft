@@ -119,6 +119,36 @@ properties.
 
 ---
 
+## 2b. Every edit repaints every thumbnail through the full generator
+
+`_markUnsaved` bumps the view-rail epoch, and `_syncThumbColumn` then re-runs
+`_drawCutWorkspace2D` for every card whose epoch is stale
+(`MODEL.dc.html:5566-5572`). That is the *full* section/elevation generator per
+thumbnail — including the 241 × 41 silhouette sampler, whose cost is fixed by the
+sample count, not by the 232 × 152 thumbnail it is drawing into. Four auto
+elevations mean four full runs on every committed edit.
+
+Measured (`audit-repros/p14-thumb-repaint.spec.js`, worst frame in the 1.2 s
+after a committed edit):
+
+```
+empty drawing, no cuts        : worst frame 18.9 ms   (9 thumbnails, all plans)
+house + 4 auto elevations     : worst frame 41.5 ms   (12 thumbnails)
+house + 4 elevations + 3 cuts : worst frame 45.3 ms   (15 thumbnails)
+```
+
++22.6 ms per edit for the four elevation thumbnails; the three extra *sections*
+add only 3.8 ms, which isolates the cost squarely in the elevation silhouette
+sampler (§2), not in thumbnail drawing generally. On an A-series iPad
+(3-4× slower) that is **70-90 ms of hitch on every click that commits
+geometry** — one dropped frame minimum, on the device the product is aimed at.
+
+Same fix as §2: cache the silhouette per (cut, epoch) so the four elevations do
+not each re-derive it, and consider repainting thumbnails on an idle callback
+rather than inside the frame that services the edit.
+
+---
+
 ## 3. Plan interaction at scale: acceptable, with one spike
 
 `audit-repros/p1-perf.spec.js`, 300 walls across three levels, 120 synthetic

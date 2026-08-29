@@ -41,7 +41,7 @@ regression tests as-is.
 | `r23-roof-profile.spec.js` | C6, rules out `roofProfile` | passes |
 | `r24-roof-drop.spec.js` | C6, the exact drift that drops the point | passes, prints the 1.58e-06 vs 1e-6 comparison |
 | `r25-envelope-sweep.spec.js` | C6, 401 angles | passes, prints 58% / 29% / 13% |
-| `p1`,`p3`,`p5`,`p6`,`p7`,`p8`,`p9`,`p10`,`p11`,`p12`,`p13` | AUDIT-PERF measurements | pass, print numbers |
+| `p1`,`p3`,`p5`,`p6`,`p7`,`p8`,`p9`,`p10`,`p11`,`p12`,`p13`,`p14` | AUDIT-PERF measurements | pass, print numbers |
 
 `evidence/` holds the two sections the app actually drew for C5:
 `section-attached.png` (framed floor + label `11 7/8" TJI + 3/4" SHTG` across a
