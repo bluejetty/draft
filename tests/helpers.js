@@ -8,7 +8,7 @@ const { expect } = require('@playwright/test');
 const HALF_HEIGHT_FT = 25;          // default ortho half-height in _init()
 const STORAGE_BUCKET = 'model-drawing';
 
-async function openModel(page, { webgl = true, rails = true, boneReveal = false } = {}) {
+async function openModel(page, { webgl = true, rails = true, boneReveal = false, autoStairs = false } = {}) {
   // Init scripts run on every navigation, so the flag keeps a reload inside a
   // test from wiping the drawing the test just made.
   await page.addInitScript(() => {
@@ -18,11 +18,13 @@ async function openModel(page, { webgl = true, rails = true, boneReveal = false 
     localStorage.clear();
   });
   // The bone reveal (board #283) jumps every successful BUILD HOUSE press to
-  // the E1 elevation. The suite presses the bone as SETUP and keeps working
-  // the plan, so specs run with the reveal seeded off; the reveal specs opt
-  // back in with { boneReveal: true } and exercise the real default-on path.
-  if (!boneReveal) {
-    await page.addInitScript(() => {
+  // the E1 elevation, and STAIR SUGGESTIONS (board #260) place a phantom
+  // stair under the tour and the bone. The suite presses the bone and climbs
+  // the tour as SETUP, so both run seeded off; bone-reveal specs opt back in
+  // with { boneReveal: true } and auto-stair specs with { autoStairs: true },
+  // each exercising the real default-on path.
+  if (!boneReveal || !autoStairs) {
+    await page.addInitScript(seed => {
       const key = 'draft-active-package:settings';
       let pkg = null;
       try { pkg = JSON.parse(localStorage.getItem(key) || 'null'); } catch { pkg = null; }
@@ -33,9 +35,10 @@ async function openModel(page, { webgl = true, rails = true, boneReveal = false 
       if (!pkg.content.model || typeof pkg.content.model !== 'object') pkg.content.model = {};
       // Only seed when unset, so a spec that flips the setting keeps its
       // choice across reloads.
-      if (!('boneReveal' in pkg.content.model)) pkg.content.model.boneReveal = false;
+      if (seed.boneReveal && !('boneReveal' in pkg.content.model)) pkg.content.model.boneReveal = false;
+      if (seed.suggestStairs && !('suggestStairs' in pkg.content.model)) pkg.content.model.suggestStairs = false;
       localStorage.setItem(key, JSON.stringify(pkg));
-    });
+    }, { boneReveal: !boneReveal, suggestStairs: !autoStairs });
   }
   if (!webgl) {
     await page.addInitScript(() => {

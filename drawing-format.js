@@ -336,6 +336,12 @@ if (!window.DraftDrawingFormat) {
       seen.add(id);
       const risers = Number(stair?.risers);
       const shape = oneOf(stair?.shape, ['straight', 'L', 'U'], 'straight');
+      // Board #260, both additive: `auto` tags a placement the auto-stair
+      // rule suggested (cleared the moment the drafter touches it), and
+      // `splitTreads` overrides the even L/U split with the tread count of
+      // the TOP leg before the landing — the entry L's short flight.
+      // Absent means today's behavior exactly; old files are unaffected.
+      const splitTreads = Number(stair?.splitTreads);
       return {
         id,
         start,
@@ -350,6 +356,8 @@ if (!window.DraftDrawingFormat) {
         shape,
         turn: oneOf(stair?.turn, ['left', 'right'], 'right'),
         winders: shape === 'L' ? oneOf(Number(stair?.winders), [0, 2, 3], 0) : 0,
+        auto: stair?.auto === true,
+        ...(Number.isInteger(splitTreads) && splitTreads > 0 ? { splitTreads } : {}),
         layer: 'A-STR',
       };
     }).filter(Boolean);
