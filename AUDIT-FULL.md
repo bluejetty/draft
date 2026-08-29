@@ -349,22 +349,39 @@ declares `componentDidCatch`, so a throw in `render` would blank the app instead
 ## 7. Test suite
 
 **7.1 Every failure in this environment is a timeout with one root cause — no product defect**
-My background run of the full suite (chromium, one worker, no egress to
-fonts.googleapis.com) failed 12 of the first 379 tests. Every failure is 30-31 s
+The full suite finished: **550 passed, 14 failed, 2.8 hours** (chromium, one
+worker, no egress to fonts.googleapis.com). Every one of the 14 took 30.1-32.9 s
 — the default per-test timeout — and every one is in a spec that navigates two or
-three times: `auto-elevations:171`, `auto-elevations:206`, `auto-footings:125`,
-`auto-stair:156`, `bone-wallet:139`, `cut-bubbles:38`, `layout-titleblock:156`,
-`:178`, `:199`, `layout-viewports:224`, and two more of the same shape.
+three times:
+
+```
+auto-elevations.spec.js:171   turning the standard off in COMPANY STANDARDS removes the marks
+auto-elevations.spec.js:206   GABLE CORNER treatments add their metal linework to the E4 corners
+auto-footings.spec.js:125     S-FOOTING lines are locked until the standards allow freeform editing
+auto-stair.spec.js:156        an ENTRY stamp near the front wall wins the entry L
+bone-wallet.spec.js:139       the digit ladder keeps 3- and 5-digit balances inside the bone
+cut-bubbles.spec.js:38        marks render in both office styles
+layout-titleblock.spec.js:156 the NORTH ARROW toggle inks the arrow cell
+layout-titleblock.spec.js:178 picking BLUEJETTY persists on the drawing
+layout-titleblock.spec.js:199 project and drafter words flow into the strip
+layout-viewports.spec.js:224  paper size and orientation persist onto the drawing
+perf-notice.spec.js:48        don't show this again survives a reload
+project-info.spec.js:86       NEW clears the project information with the drawing
+roof.spec.js:252              PORK CHOP builds gable edges at half the eave overhang
+room-standards.spec.js:86     an under-min bedroom wears the quiet flag
+```
 
 `tests/auto-footings.spec.js:125` re-run alone with the timeout raised to 120 s
 **passes in 40.3 s**. It does three page loads (MODEL → STANDARDS → MODEL); at
 ~12.5 s of Google-Fonts stall per navigation (AUDIT-PERF §1) it cannot fit in
-30 s.
+30 s. Confirmed from the other end too: launching Chromium with
+`--no-proxy-server`, so the font request fails immediately instead of hanging on
+this sandbox's proxy, takes a room-grow spec from 21.6 s to 9.1 s.
 
 The finding is the fragility, not the failures: `playwright.config.js` sets no
 `timeout`, so the suite runs with 40-75% of every test's budget consumed by a
 third-party font request that is not part of the test. Any CI without egress to
-fonts.googleapis.com reports a dozen product failures that are not product
+fonts.googleapis.com reports fourteen product failures that are not product
 failures — and a reviewer's first instinct on seeing red is to distrust the
 change, not the network.
 

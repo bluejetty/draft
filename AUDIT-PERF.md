@@ -57,17 +57,20 @@ React, three.js and pdf.js already are, or load the stylesheet non-blocking
 ### The same line is most of the Playwright suite's runtime
 
 The suite is 564 tests, `fullyParallel: false`, one worker, and nearly every test
-loads MODEL at least once. At ~12.5 s of font stall per load that is **≈2.0 hours
-of the ~3-hour run spent waiting on a font that never arrives**. Observed rate in
-my own background run: 171 tests in 54 minutes ⇒ ~3.1 h projected.
+loads MODEL at least once. My full run finished at **550 passed, 14 failed, 2.8
+hours** — and at ~12.5 s of font stall per load, **≈2.0 of those 2.8 hours were
+spent waiting on a font that never arrives**. All 14 failures are timeouts caused
+by that stall (AUDIT-FULL §7.1), not by the product.
 
 **Fix (quick win, ten minutes):** add to `tests/helpers.js` `openModel`:
 ```js
 await page.route('**fonts.googleapis.com**', r => r.abort());
 await page.route('**fonts.gstatic.com**', r => r.abort());
 ```
-That alone should take the suite from ~3 h to ~1 h without weakening a single
-assertion. Self-hosting the fonts fixes it for tests *and* users at once, and is
+That alone should take the suite from 2.8 h to well under an hour without
+weakening a single assertion — measured the same way from the other end, blocking
+the font at the browser (`--no-proxy-server`, so the request fails instead of
+hanging) takes one spec from 21.6 s to 9.1 s. Self-hosting the fonts fixes it for tests *and* users at once, and is
 the right fix.
 
 Second-order suite win, not measured: the specs are almost all full-app
