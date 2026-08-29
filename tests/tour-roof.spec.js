@@ -156,7 +156,9 @@ test('PRESS ▲ BONE hints, the bone glows, and the press grows the house in the
 
   await page.locator('[data-build-house]').click();
   // The view jumps to the front elevation and the house grows bottom-to-top.
-  await expect(page.getByText(/E1/).first()).toBeVisible();
+  // The finale slides both rails open (which tucks the thumb wall away), so
+  // E1 lights up on the LEVELS panel's cut row.
+  await expect(page.locator('.cut-row.active')).toContainText('E1');
   await page.waitForTimeout(4300); // 1s curtain hold + the ~2.5s reveal
   await h.waitForSaved(page);
   const saved = await h.savedDrawing(page);
