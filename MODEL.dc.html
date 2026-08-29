@@ -5644,10 +5644,53 @@ class Component extends DCLogic {
         const sa = toS(a), sb = toS(b);
         ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
       });
+      const [gwa, gwb] = geoInfo.glazing;
+      const glazeRun = Math.hypot(gwb.x - gwa.x, gwb.z - gwa.z) || 1;
+      const gux = (gwb.x - gwa.x) / glazeRun, guz = (gwb.z - gwa.z) / glazeRun;
+      const gnx = -guz, gnz = gux;
       if (opening.type === 'window') {
-        const [ga, gb] = geoInfo.glazing.map(toS);
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(ga.x, ga.y); ctx.lineTo(gb.x, gb.y); ctx.stroke();
+        // Double-glazed unit: two panes 1/2" apart on the wall centreline,
+        // with 2"-wide frame blocks at each jamb reaching 1/2" past both
+        // wall faces.
+        ctx.lineWidth = 1.25;
+        [0.375 / 12, -0.375 / 12].forEach(off => {
+          const a = toS({ x: gwa.x + gnx * off, z: gwa.z + gnz * off });
+          const b = toS({ x: gwb.x + gnx * off, z: gwb.z + gnz * off });
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        });
+        const halfDepth = Math.max(...geoInfo.corners.map(corner =>
+          Math.abs((corner.x - geoInfo.center.x) * gnx + (corner.z - geoInfo.center.z) * gnz)));
+        const poke = halfDepth + 0.5 / 12;
+        const frameAlong = 2 / 12;
+        [[gwa, 1], [gwb, -1]].forEach(([end, sgn]) => {
+          const quad = [
+            { x: end.x + gnx * poke, z: end.z + gnz * poke },
+            { x: end.x - gnx * poke, z: end.z - gnz * poke },
+            { x: end.x + gux * sgn * frameAlong - gnx * poke, z: end.z + guz * sgn * frameAlong - gnz * poke },
+            { x: end.x + gux * sgn * frameAlong + gnx * poke, z: end.z + guz * sgn * frameAlong + gnz * poke },
+          ].map(toS);
+          ctx.beginPath();
+          ctx.moveTo(quad[0].x, quad[0].y); ctx.lineTo(quad[1].x, quad[1].y);
+          ctx.lineTo(quad[2].x, quad[2].y); ctx.lineTo(quad[3].x, quad[3].y);
+          ctx.closePath(); ctx.stroke();
+        });
+      }
+      if (opening.type === 'door' && !opening.garage) {
+        // Leaf and quarter swing: the flat slab standing open off the hinge
+        // jamb, the arc sweeping back to the latch jamb.
+        const hinge = toS(gwa);
+        const tip = toS({ x: gwa.x + gnx * glazeRun, z: gwa.z + gnz * glazeRun });
+        const latch = toS(gwb);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(hinge.x, hinge.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+        const r = Math.hypot(tip.x - hinge.x, tip.y - hinge.y);
+        const a0 = Math.atan2(tip.y - hinge.y, tip.x - hinge.x);
+        const a1 = Math.atan2(latch.y - hinge.y, latch.x - hinge.x);
+        let sweep = a1 - a0;
+        while (sweep > Math.PI) sweep -= 2 * Math.PI;
+        while (sweep < -Math.PI) sweep += 2 * Math.PI;
+        ctx.lineWidth = 1.25;
+        ctx.beginPath(); ctx.arc(hinge.x, hinge.y, r, a0, a0 + sweep, sweep < 0); ctx.stroke();
       }
       if (!this._isPrinting) {
         // Centre grab point — the dimension / snap anchor.
@@ -8548,8 +8591,10 @@ class Component extends DCLogic {
       ctx.strokeRect(x, Y(top), wid, (top - bottom) * pxPerFt);
       return;
     }
-    const gapBottom = opening.type === 'door' ? bottom : bottom + SILL_FT;
-    const gapTop = Math.min(bottom + HEAD_FT, top);
+    const headFt = opening.headHeight > 0 ? opening.headHeight : HEAD_FT;
+    const sillFt = opening.sillHeight > 0 ? opening.sillHeight : SILL_FT;
+    const gapBottom = opening.type === 'door' ? bottom : bottom + sillFt;
+    const gapTop = Math.min(bottom + headFt, top);
     // Above the head (header + plates) and, for windows, below the sill.
     ctx.fillRect(x, Y(top), wid, (top - gapTop) * pxPerFt);
     ctx.strokeRect(x, Y(top), wid, (top - gapTop) * pxPerFt);
@@ -8557,14 +8602,36 @@ class Component extends DCLogic {
       ctx.fillRect(x, Y(gapBottom), wid, (gapBottom - bottom) * pxPerFt);
       ctx.strokeRect(x, Y(gapBottom), wid, (gapBottom - bottom) * pxPerFt);
     }
-    ctx.fillStyle = 'rgba(29,31,32,0.55)';
-    ctx.font = "600 8px 'Barlow Condensed', system-ui, sans-serif";
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.save();
-    ctx.translate(x + wid / 2, Y((gapTop + gapBottom) / 2));
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText(opening.type.toUpperCase(), 0, 0);
-    ctx.restore();
+    ctx.fillStyle = '#fff'; ctx.lineWidth = 1;
+    if (opening.type === 'window') {
+      // The window unit in section: 2x6 frame members at head and sill
+      // reaching 1/2" past each wall face, double glazing between them —
+      // two 1/4" panes 1/2" apart — with 1/2" square stops between and on
+      // each side of the glass.
+      const frameDeep = Math.max(6 / 12, width + 1 / 12);
+      const fx = X(u - frameDeep / 2), fw = frameDeep * pxPerFt;
+      const frameThick = (2 / 12) * pxPerFt;
+      ctx.fillRect(fx, Y(gapTop), fw, frameThick);
+      ctx.strokeRect(fx, Y(gapTop), fw, frameThick);
+      ctx.fillRect(fx, Y(gapBottom + 2 / 12), fw, frameThick);
+      ctx.strokeRect(fx, Y(gapBottom + 2 / 12), fw, frameThick);
+      const glassTop = gapTop - 2 / 12, glassBottom = gapBottom + 2 / 12;
+      [0.375 / 12, -0.375 / 12].forEach(off => {
+        const gx = X(u + off);
+        ctx.beginPath(); ctx.moveTo(gx, Y(glassTop)); ctx.lineTo(gx, Y(glassBottom)); ctx.stroke();
+      });
+      const stop = (0.5 / 12) * pxPerFt;
+      ctx.fillStyle = 'rgba(29,31,32,0.35)';
+      [u - 0.875 / 12, u, u + 0.875 / 12].forEach(su => {
+        ctx.fillRect(X(su) - stop / 2, Y(glassBottom + 0.5 / 12), stop, stop);
+        ctx.fillRect(X(su) - stop / 2, Y(glassTop), stop, stop);
+      });
+    } else {
+      // A flat 1-3/4" slab door standing in the opening.
+      const slabW = Math.max(1.5, (1.75 / 12) * pxPerFt);
+      ctx.fillRect(X(u) - slabW / 2, Y(gapTop), slabW, (gapTop - gapBottom) * pxPerFt);
+      ctx.strokeRect(X(u) - slabW / 2, Y(gapTop), slabW, (gapTop - gapBottom) * pxPerFt);
+    }
   }
 
   // A cut that crosses nothing but faces the model is an elevation: wall
@@ -8960,12 +9027,31 @@ class Component extends DCLogic {
         const half = Math.abs(du) * f.width / 2;
         const ox = X(Math.max(uc - half, uMin)), ow = X(Math.min(uc + half, uMax)) - ox;
         if (ow <= 0) return;
-        const top = Math.min(floor + HEAD_FT, level.wallTop);
-        const bottom = f.type === 'door' ? floor : floor + SILL_FT;
+        const head = f.headHeight > 0 ? f.headHeight : HEAD_FT;
+        const sill = f.sillHeight > 0 ? f.sillHeight : SILL_FT;
+        const top = Math.min(floor + head, level.wallTop);
+        const bottom = f.type === 'door' ? floor : floor + sill;
         ctx.fillStyle = '#fafafa';
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
         ctx.strokeRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
+        const clipped = uc - half < uMin - 1e-6 || uc + half > uMax + 1e-6;
+        if (clipped) return;
+        if (f.type === 'door' && !f.garage) {
+          // Flat slab door face with a round knob at handle height on the
+          // latch side.
+          const knobR = Math.max(1.5, (1.25 / 12) * pxPerFt);
+          const kx = ox + ow - (2.5 / 12) * pxPerFt;
+          const ky = Y(Math.min(floor + 3, (top + bottom) / 2));
+          ctx.beginPath(); ctx.arc(kx, ky, knobR, 0, Math.PI * 2); ctx.stroke();
+        } else if (f.type === 'window') {
+          // The unit's frame face inside the rough opening: a 2"-wide border
+          // around the glazing.
+          const inset = (2 / 12) * pxPerFt;
+          if (ow > inset * 3 && (top - bottom) * pxPerFt > inset * 3) {
+            ctx.strokeRect(ox + inset, Y(top) + inset, ow - inset * 2, (top - bottom) * pxPerFt - inset * 2);
+          }
+        }
       });
     });
 
