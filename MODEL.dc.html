@@ -1229,7 +1229,7 @@
     <div data-view-rail-left class="view-rail view-rail-left"></div>
     <div data-view-rail-right class="view-rail view-rail-right">
       <div data-view-rail-plans class="view-rail-col"></div>
-      <div class="view-rail-col">
+      <div data-view-rail-outer class="view-rail-col">
         <div data-view-rail-sections style="display:flex; flex-direction:column; gap:6px;"></div>
         <div class="view-rail-spacer"></div>
         <button type="button" data-view-rail-3d class="view-thumb-3d" onClick="{{ enter3D }}" title="{{ view3DTitle }}" disabled="{{ webglUnavailable }}">⬡<span>3D</span></button>
@@ -5486,6 +5486,11 @@ class Component extends DCLogic {
     this._syncPlanColumn(document.querySelector('[data-view-rail-plans]'));
     document.querySelector('[data-view-rail-3d]')
       ?.classList.toggle('active', this.state.activeView === 'perspective');
+    // An open side panel takes the screens on its side with it — only the
+    // little plan column keeps its seat, so the drawing keeps max room.
+    left.style.display = this.state.leftRailOpen ? 'none' : '';
+    const outer = document.querySelector('[data-view-rail-outer]');
+    if (outer) outer.style.display = this.state.rightRailOpen ? 'none' : '';
   }
 
   _syncThumbColumn(box, cuts) {

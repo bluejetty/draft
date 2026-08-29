@@ -69,7 +69,7 @@ test.describe('Stretched level cards', () => {
 
 test.describe('View galleries', () => {
   test('E1-E4 thumbs stand down the left; empty right shows only the 3D screen', async ({ page }) => {
-    await h.openModel(page, { webgl: false });
+    await h.openModel(page, { webgl: false, rails: false });
 
     // Nothing built — no elevation thumbs, no section thumbs, no fakes.
     await expect(page.locator('[data-view-rail-left] .view-thumb')).toHaveCount(0);
@@ -109,7 +109,7 @@ test.describe('View galleries', () => {
   });
 
   test('a hand-cut section joins the right rail above the 3D screen', async ({ page }) => {
-    await h.openModel(page, { webgl: false });
+    await h.openModel(page, { webgl: false, rails: false });
     await drawOutlineRect(page);
     await buildHouse(page);
     await h.waitForSaved(page);
@@ -131,7 +131,9 @@ test.describe('View galleries', () => {
     await page.waitForTimeout(400);
     await expect(page.locator('[data-model-title-detail]').last()).toHaveText('S1');
 
-    // Deleting the cut clears its screen from the rail.
+    // Deleting the cut clears its screen from the rail. The delete row
+    // lives on the LEVELS panel, so pull the rails out for it.
+    await h.openRails(page);
     await page.locator('.level-row').first().locator('.level-body').click();
     await page.waitForTimeout(300);
     page.once('dialog', dialog => dialog.accept());
@@ -141,7 +143,7 @@ test.describe('View galleries', () => {
   });
 
   test('the inner plan column lists every level and brings its plan center', async ({ page }) => {
-    await h.openModel(page, { webgl: false });
+    await h.openModel(page, { webgl: false, rails: false });
 
     // One little screen per level, top-down, from the start.
     const plans = page.locator('[data-view-rail-plans] .view-thumb-plan');
@@ -181,6 +183,32 @@ test.describe('View galleries', () => {
     await page.waitForTimeout(400);
     await expect(page.locator('[data-model-title-detail]').last()).not.toHaveText('E1');
     await expect(page.locator('[data-view-rail-plans] [data-level-id="3"]')).toHaveClass(/active/);
+  });
+
+  test('open side panels cover the elevation and section screens; the plans keep their seat', async ({ page }) => {
+    await h.openModel(page, { webgl: false, rails: false });
+    await drawOutlineRect(page);
+    await buildHouse(page);
+    await h.waitForSaved(page);
+    await page.waitForTimeout(400);
+
+    // Rails tucked: the full TV wall stands.
+    await expect(page.locator('[data-view-rail-left] [data-cut-id="E1"]')).toBeVisible();
+    await expect(page.locator('[data-view-rail-3d]')).toBeVisible();
+
+    // Panels out: only the little plan screens stay on stage.
+    await h.openRails(page);
+    await page.waitForTimeout(300);
+    await expect(page.locator('[data-view-rail-left]')).toBeHidden();
+    await expect(page.locator('[data-view-rail-3d]')).toBeHidden();
+    await expect(page.locator('[data-view-rail-plans] .view-thumb-plan').first()).toBeVisible();
+
+    // Tuck them again — every screen returns.
+    await page.locator('[data-left-rail-tab]').click();
+    await page.locator('[data-right-rail-tab]').click();
+    await page.waitForTimeout(300);
+    await expect(page.locator('[data-view-rail-left] [data-cut-id="E1"]')).toBeVisible();
+    await expect(page.locator('[data-view-rail-3d]')).toBeVisible();
   });
 });
 
