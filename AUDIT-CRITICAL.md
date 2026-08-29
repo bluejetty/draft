@@ -8,16 +8,21 @@ Target: `main` @ `75a3cd6`. Repro specs referenced below are committed under
 
 ## Executive summary — the three worst things
 
-1. **The drawings lie, in two independent ways, and both reach paper.**
-   (a) Every dimension is rounded to 1/16" independently at paint time, so a
-   string of partials and the overall above it are rounded separately: **158 of
-   400 (39.5%)** hand-traced footprints print a string that does not add up to
-   its own overall, worst case 1/8". (b) A section through a house with a garage
-   draws the main-floor framed-floor assembly — labelled `11 7/8" TJI + 3/4"
-   SHTG` — straight across the garage, which is a 4" slab on grade, and leaves
-   the space under it drawn as an open basement storey. With a **detached**
-   garage the same band spans the open ground between the two buildings. A plan
-   examiner fails either of these on sight.
+1. **The drawings lie, in three independent ways, and all three reach paper.**
+   (a) **Dimensions do not add up.** Every dimension is rounded to 1/16"
+   independently at paint time, so a string of partials and the overall above it
+   are rounded separately: **158 of 400 (39.5%)** hand-traced footprints print a
+   string that does not sum to its own overall, worst case 1/8". (b) **Sections
+   lose their roof.** A `toFixed(5)` quantisation (±5e-6) measured against a 1e-6
+   containment tolerance in `profileEnvelope` drops profile points: over 401 cut
+   angles through a plain hip roof, **13% render no roof at all** and another
+   **29% render it short** — a finished-looking sheet with the eaves missing.
+   A cut rotated 0.9° flips it. (c) **Section floor bands cross buildings.** A
+   section through a house with a garage draws the main-floor framed-floor
+   assembly — labelled `11 7/8" TJI + 3/4" SHTG` — straight across the garage,
+   which is a 4" slab on grade, and leaves the space beneath drawn as an open
+   basement storey; with a detached garage the same band spans the open ground
+   between the two buildings. A plan examiner fails any of these on sight.
 
 2. **Nothing in this app listens to touch.** `MODEL.dc.html:5398-5410` binds
    `mousemove`/`mousedown`/`dblclick`/`contextmenu`/`wheel`; `LAYOUT.dc.html:231-235`
@@ -49,14 +54,16 @@ it, and the sheet page eats the model.
 | 3 | C2 No touch input path — every drag, pan and zoom is unreachable on iPad | 4 | 5 | **20** |
 | 4 | C3 LAYOUT overwrites the drawing with a stale snapshot | 5 | 4 | **20** |
 | 5 | C4 No undo/redo control exists outside the keyboard | 4 | 5 | **20** |
-| 6 | M1 The 2D overlay renders at 1× on every Retina screen | 3 | 5 | **15** |
-| 7 | M2 Render-blocking Google Fonts link: 12.9 s → 0.4 s startup | 3 | 4 | **12** |
-| 8 | M3 A placed viewport's scale can never be changed; the footer reports the selection anyway | 3 | 4 | **12** |
-| 9 | M4 `num()` coerces `null` / `""` / `false` / `[]` to 0 — geometry silently relocates on load | 5 | 2 | **10** |
-| 10 | M5 Deleting a level orphans its fenestrations/fixtures/stairs/notes/tags, then blames the file | 3 | 3 | **9** |
+| 6 | C6 A rounding-tolerance mismatch deletes the roof from 42% of non-orthogonal sections | 5 | 3 | **15** |
+| 7 | M1 The 2D overlay renders at 1× on every Retina screen | 3 | 5 | **15** |
+| 8 | M2 Render-blocking Google Fonts link: 12.9 s → 0.4 s startup | 3 | 4 | **12** |
+| 9 | M3 A placed viewport's scale can never be changed; the footer reports the selection anyway | 3 | 4 | **12** |
+| 10 | M4 `num()` coerces `null` / `""` / `false` / `[]` to 0 — geometry silently relocates on load | 5 | 2 | **10** |
 
-Below the line: M6 `offsetOutline` degeneracies (4 × 2 = 8), M7 the 2" jog merge
-prints a coordinate where no wall stands (4 × 2 = 8).
+Just below: M5 deleting a level orphans five collections (3 × 3 = 9), M6
+`offsetOutline` degeneracies (4 × 2 = 8), M7 the 2" jog merge prints a coordinate
+where no wall stands (4 × 2 = 8), M10 LAYOUT loses the sheet on a failed write
+(4 × 2 = 8).
 
 Damage 1-5: 1 cosmetic, 3 rework, 5 wrong paper or lost work.
 Likelihood 1-5: 1 needs a hand-edited file, 5 happens in the default flow.
@@ -348,6 +355,94 @@ contiguous runs (garage outline membership is already computable —
 elevation path) and draw one band per run at that body's own floor elevation, or
 none where the body is slab-on-grade. The elevation path already does this
 grouping; the section path never got it.
+
+
+---
+
+## C6 — A rounding tolerance mismatch silently deletes the roof from a section
+**Severity: CRITICAL · Confidence: CONFIRMED · Reaches paper**
+`geometry-2d.js:683` and `geometry-2d.js:702` (`profileEnvelope`), consumed at
+`MODEL.dc.html:8666-8677` and gated at `:8811` (`if (lit.length > 1)`).
+
+**What breaks.** `profileEnvelope` collects the u-coordinates of every profile
+breakpoint into a Set, quantised to five decimals:
+
+```js
+const events = new Set(profiles.flat().map(p => +p.u.toFixed(5)));   // :683
+```
+
+and then evaluates each event against the profile with a **1e-6** containment
+tolerance:
+
+```js
+if (u >= a.u - 1e-6 && u <= b.u + 1e-6 && b.u - a.u > 1e-9) { …interpolate… }
+return null;                                                          // :702-706
+```
+
+`toFixed(5)` moves a value by up to **5e-6** — five times the tolerance. When a
+profile endpoint's rounded u lands more than 1e-6 outside the segment it came
+from, `valueAt` returns null, the point is filtered out (`:715`), and the
+envelope comes back shorter than the profile it was handed. The section then
+does `const lit = roofSamples.filter(s => s.elev != null); if (lit.length > 1)` —
+with one sample left, **no roof is drawn at all**, and `yTop` falls back to
+`stack.bearing + 4`, so the sheet is a house with an open top and no ridge, no
+rafters, no fascia. No message, no console warning.
+
+**Measured, two neighbouring cuts through the same house** (`audit-repros/r24-roof-drop.spec.js`,
+running the section's own pipeline on the app's own cut records):
+
+```
+S1  cut (-16,-13)→(16,13)   profile 3 points → envelope 1 lit    <-- no roof drawn
+      u=-17.443908416  rounded=-17.443910000  drift=1.58e-06  > 1e-6  DROPPED
+      u= -0.000000000  rounded= 0.000000000   drift=2.80e-14         kept
+      u= 17.443908416  rounded= 17.443910000  drift=1.58e-06  > 1e-6  DROPPED
+
+S2  cut (-16,-13.4)→(16,13.4) profile 3 points → envelope 3 lit   <-- roof drawn
+      u=±17.132150519  rounded=±17.132150000  drift=5.19e-07  < 1e-6  kept
+```
+
+A cut rotated by **0.9°** is the difference between a section with a roof and a
+section without one.
+
+**How often** (`audit-repros/r25-envelope-sweep.spec.js`, 401 cut angles across a
+plain hip roof, using the shipped `roofProfile` + `profileEnvelope`):
+
+```
+401 cut angles across a hip roof:
+  intact profile                                 : 233  (58%)
+  endpoint(s) dropped, roof drawn but short      : 117  (29%)   e.g. 14.1deg 5->3
+  collapsed to <2 samples, NO ROOF DRAWN         :  51  (13%)   e.g. 38.3deg 3->1
+```
+
+**42% of non-orthogonal section cuts render the roof wrong**, and the 29% case is
+the more dangerous one: the roof is still drawn, just missing breakpoints, so the
+sheet looks finished and is not.
+
+**Repro.** Build any house, press `c`, cut corner to corner —
+`(-16,-13) → (16,13)`, viewer below — and open S1. Screenshot:
+`audit-repros/evidence/diagonal-section-no-roof.png`. Then repeat with the cut
+0.9° steeper; the roof comes back.
+
+**Falsification attempt.** This could be a `roofProfile` failure rather than an
+envelope failure, or an artefact of my synthetic roof. I ruled both out: called
+`roofProfile` directly with the **app's own saved roof record** and the **app's
+own axis** (`axis = { x: dir.z, z: -dir.x }`, matching `MODEL.dc.html:8624`) and
+got a valid 3-point profile in both the working and the failing case — the
+profiles are identical in shape and differ only in the sixth decimal of u. The
+loss happens strictly inside `profileEnvelope`, and the drift figures above show
+exactly which comparison rejects the point. I also checked that the viewer-side
+click is not the variable: `_finalizeCut` stores an exact perpendicular
+(`MODEL.dc.html:18578-18600`), so `axis` is always parallel to the cut line, and
+all three viewer choices on the failing cut produce the same missing roof. And I
+grepped the suite: `tests/section-view.spec.js:295` covers an angled cut, but it
+asserts the *silhouette is smooth* on an **elevation** (a cut standing outside
+the house), not the roof profile of a section cutting through it. Nothing
+defends this.
+
+**Shape of the fix.** One line: make the containment tolerance larger than the
+quantisation (`1e-6` → `1e-4`), or stop rounding the events and dedupe with a
+tolerance instead. Then assert `envelope.length >= profile.length` for every
+profile fed in.
 
 
 ---

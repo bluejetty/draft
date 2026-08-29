@@ -35,10 +35,18 @@ regression tests as-is.
 | `r17-elevation-attached.spec.js` | renders an attached-garage E1 for inspection | passes |
 | `r18-tour-abandon.spec.js` | checklist 5, tour abandonment | passes — prints the state each exit leaves |
 | `r19-save-failure.spec.js` | §1.2 write failures | passes — MODEL recovers, LAYOUT loses the sheet silently |
+| `r20-diagonal-cut.spec.js` | C6, first sighting | passes, prints roof-zone ink per angle |
+| `r21-cut-angle-sweep.spec.js` | C6, angle sweep in the app | passes |
+| `r22-cut-viewer.spec.js` | C6, rules out the viewer-side click | passes |
+| `r23-roof-profile.spec.js` | C6, rules out `roofProfile` | passes |
+| `r24-roof-drop.spec.js` | C6, the exact drift that drops the point | passes, prints the 1.58e-06 vs 1e-6 comparison |
+| `r25-envelope-sweep.spec.js` | C6, 401 angles | passes, prints 58% / 29% / 13% |
 | `p1`,`p3`,`p5`,`p6`,`p7`,`p8`,`p9`,`p10`,`p11`,`p12`,`p13` | AUDIT-PERF measurements | pass, print numbers |
 
 `evidence/` holds the two sections the app actually drew for C5:
 `section-attached.png` (framed floor + label `11 7/8" TJI + 3/4" SHTG` across a
 slab-on-grade attached garage, open storey drawn beneath it) and
 `section-house-garage.png` (one continuous floor band from the house across six
-feet of open ground to a detached garage).
+feet of open ground to a detached garage). For C6 it holds
+`diagonal-section-no-roof.png` and `diagonal-section-roof-ok.png` — the same
+house, two cuts 0.9 degrees apart.
