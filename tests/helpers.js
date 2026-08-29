@@ -8,7 +8,9 @@ const { expect } = require('@playwright/test');
 const HALF_HEIGHT_FT = 25;          // default ortho half-height in _init()
 const STORAGE_BUCKET = 'model-drawing';
 
-async function openModel(page, { webgl = true, rails = true, boneWallet = true } = {}) {
+async function openModel(page, {
+  webgl = true, rails = true, boneWallet = true, boneReveal = false, autoStairs = false,
+} = {}) {
   // Init scripts run on every navigation, so the flag keeps a reload inside a
   // test from wiping the drawing the test just made. The FAT TEST WALLET
   // (board #261): every spec gets 999 bones so bone-count never becomes a
@@ -24,6 +26,29 @@ async function openModel(page, { webgl = true, rails = true, boneWallet = true }
         JSON.stringify({ balance: 999, lastDripAt: Date.now(), createdAt: Date.now() }));
     }
   }, boneWallet);
+  // The bone reveal (board #283) jumps every successful BUILD HOUSE press to
+  // the E1 elevation, and STAIR SUGGESTIONS (board #260) place a phantom
+  // stair under the tour and the bone. The suite presses the bone and climbs
+  // the tour as SETUP, so both run seeded off; bone-reveal specs opt back in
+  // with { boneReveal: true } and auto-stair specs with { autoStairs: true },
+  // each exercising the real default-on path.
+  if (!boneReveal || !autoStairs) {
+    await page.addInitScript(seed => {
+      const key = 'draft-active-package:settings';
+      let pkg = null;
+      try { pkg = JSON.parse(localStorage.getItem(key) || 'null'); } catch { pkg = null; }
+      if (!pkg || pkg.format !== 'draft-profile-package' || pkg.kind !== 'settings') {
+        pkg = { format: 'draft-profile-package', version: 1, kind: 'settings', name: 'test-seed', createdAt: new Date().toISOString(), content: { model: {} } };
+      }
+      if (!pkg.content || typeof pkg.content !== 'object') pkg.content = {};
+      if (!pkg.content.model || typeof pkg.content.model !== 'object') pkg.content.model = {};
+      // Only seed when unset, so a spec that flips the setting keeps its
+      // choice across reloads.
+      if (seed.boneReveal && !('boneReveal' in pkg.content.model)) pkg.content.model.boneReveal = false;
+      if (seed.suggestStairs && !('suggestStairs' in pkg.content.model)) pkg.content.model.suggestStairs = false;
+      localStorage.setItem(key, JSON.stringify(pkg));
+    }, { boneReveal: !boneReveal, suggestStairs: !autoStairs });
+  }
   if (!webgl) {
     await page.addInitScript(() => {
       const real = HTMLCanvasElement.prototype.getContext;

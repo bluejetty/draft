@@ -336,6 +336,12 @@ if (!window.DraftDrawingFormat) {
       seen.add(id);
       const risers = Number(stair?.risers);
       const shape = oneOf(stair?.shape, ['straight', 'L', 'U'], 'straight');
+      // Board #260, both additive: `auto` tags a placement the auto-stair
+      // rule suggested (cleared the moment the drafter touches it), and
+      // `splitTreads` overrides the even L/U split with the tread count of
+      // the TOP leg before the landing — the entry L's short flight.
+      // Absent means today's behavior exactly; old files are unaffected.
+      const splitTreads = Number(stair?.splitTreads);
       return {
         id,
         start,
@@ -350,6 +356,8 @@ if (!window.DraftDrawingFormat) {
         shape,
         turn: oneOf(stair?.turn, ['left', 'right'], 'right'),
         winders: shape === 'L' ? oneOf(Number(stair?.winders), [0, 2, 3], 0) : 0,
+        auto: stair?.auto === true,
+        ...(Number.isInteger(splitTreads) && splitTreads > 0 ? { splitTreads } : {}),
         layer: 'A-STR',
       };
     }).filter(Boolean);
@@ -692,6 +700,45 @@ if (!window.DraftDrawingFormat) {
     };
   };
 
+  // LAYOUT (board #168): the sheet composition saved with the drawing. Paper
+  // and orientation are the sheet's own; each viewport is a window onto model
+  // space — kind picks the projection ('plan' for now), levelId the level it
+  // shows, pif the architectural scale (paper inches per model foot), and
+  // xIn / yIn its centre on the sheet in paper inches from the top-left
+  // corner. Sheet coordinates never mix with model feet: pif is the only
+  // bridge. Old drawings carry no layout and load with an empty sheet.
+  const LAYOUT_PAPER_KEYS = ['11x17', '8.5x11'];
+  const layout = (raw, levelIds) => {
+    const seen = new Set();
+    const viewports = (Array.isArray(raw?.viewports) ? raw.viewports : []).map(viewport => {
+      const id = Number(viewport?.id);
+      const viewportLevelId = levelId(viewport?.levelId, levelIds);
+      const pif = positive(viewport?.pif, null);
+      const xIn = num(viewport?.xIn);
+      const yIn = num(viewport?.yIn);
+      if (!Number.isInteger(id) || id < 1 || seen.has(id) || viewportLevelId == null) return null;
+      if (pif == null || xIn === null || yIn === null) return null;
+      seen.add(id);
+      return {
+        id,
+        kind: oneOf(viewport?.kind, ['plan'], 'plan'),
+        levelId: viewportLevelId,
+        pif,
+        xIn,
+        yIn,
+      };
+    }).filter(Boolean);
+    return {
+      paperKey: oneOf(raw?.paperKey, LAYOUT_PAPER_KEYS, null),
+      orientation: oneOf(raw?.orientation, ['landscape', 'portrait'], null),
+      viewports,
+      nextViewportId: Math.max(
+        Number.isInteger(Number(raw?.nextViewportId)) ? Number(raw.nextViewportId) : 1,
+        ...viewports.map(viewport => viewport.id + 1),
+      ),
+    };
+  };
+
   // Backgrounds are at most two other levels, never the active one.
   const backgroundLevelIds = (rawIds, levelIds, activeLevelId) =>
     (Array.isArray(rawIds) ? rawIds : [])
@@ -723,6 +770,7 @@ if (!window.DraftDrawingFormat) {
     underlays,
     projectInfo,
     zoneHeights,
+    layout,
     tour,
     roofIntent,
     backgroundLevelIds,

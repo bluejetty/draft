@@ -9,6 +9,7 @@
 <script src="./profile-manager.js"></script>
 <script src="./shared-file-store.js"></script>
 <script src="./drawing-format.js"></script>
+<script src="./wall-types.js"></script>
 <script src="./geometry-2d.js"></script>
 <script src="./formatters.js"></script>
 <script src="./auto-dims.js"></script>
@@ -19,6 +20,7 @@
 <script src="./build-house.js"></script>
 <script src="./tour.js"></script>
 <script src="./bone-wallet.js"></script>
+<script src="./auto-stair.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
      would otherwise run here and be mounted again by the helmet runtime. -->
@@ -36,7 +38,7 @@
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
     a { color: rgba(29,31,32,0.45); text-decoration: none; font-family: 'Barlow Condensed', system-ui, sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
     a:hover { color: #5980a6; }
-    .level-row { display:flex; align-items:stretch; border:1px solid rgba(29,31,32,0.16); margin-bottom:2px; cursor:pointer; background:#fff; }
+    .level-row { position:relative; display:flex; align-items:stretch; border:1px solid rgba(29,31,32,0.16); margin-bottom:2px; cursor:pointer; background:#fff; }
     .level-row:hover { background:rgba(29,31,32,0.03); }
     .level-row.active { border-color:#5980a6; background:rgba(89,128,166,0.09); }
     .level-tour-next { border:1px solid #557a46; background:#557a46; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:700; letter-spacing:0.05em; padding:2px 6px; cursor:pointer; }
@@ -52,8 +54,8 @@
     .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:0; width:16px; height:16px; display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:flex-start; margin-top:5px; }
     .level-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-layer-row { display:flex; align-items:stretch; gap:2px; }
-    .level-layer-row .level-layer { flex:1 1 0; min-width:0; }
-    .level-assembly-summary { flex:1 1 0; min-width:0; border:1px solid rgba(29,31,32,0.14); background:rgba(29,31,32,0.04); color:rgba(29,31,32,0.45); cursor:pointer; padding:1px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; text-align:right; white-space:nowrap; }
+    .level-layer-row .level-layer { flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; }
+    .level-assembly-summary { flex:0 0 46px; width:46px; border:1px solid rgba(29,31,32,0.14); background:rgba(29,31,32,0.04); color:rgba(29,31,32,0.45); cursor:pointer; padding:1px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; text-align:right; white-space:nowrap; }
     .level-assembly-summary:hover { border-color:#5980a6; color:#365e86; }
     .rail-tab { position:absolute; top:0; bottom:0; z-index:6; display:flex; align-items:center; justify-content:center; border:1px solid rgba(29,31,32,0.25); background:#fff; cursor:pointer; padding:0 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:18px; font-weight:600; line-height:1; letter-spacing:0.14em; color:rgba(29,31,32,0.8); writing-mode:vertical-rl; text-transform:uppercase; box-shadow:0 1px 6px rgba(29,31,32,0.14); }
     .rail-tab:hover { border-color:#5980a6; color:#365e86; }
@@ -68,13 +70,13 @@
     .strip-chip-frenchcurve:hover { color:#4a7fc0 !important; filter:drop-shadow(0 0 4px rgba(74,127,192,0.7)) !important; }
     .level-layer-bg { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:0; width:15px; display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.42); flex-shrink:0; }
     .level-layer-bg:hover { border-color:#5980a6; color:#5980a6; }
-    .level-head { display:flex; align-items:flex-start; gap:5px; }
+    .level-head { display:flex; align-items:flex-start; gap:5px; padding-right:12px; }
     .level-title { flex-shrink:0; min-width:0; }
     .level-edge-space { flex:1; }
     .level-edge-edit { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:1px 3px; font:inherit; }
     .level-edge-edit:hover { border-color:#5980a6; color:#5980a6; }
     .level-head .level-bg { margin-top:0; }
-    .level-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:flex-start; margin-top:4px; }
+    .level-del  { position:absolute; top:4px; right:1px; border:none; background:none; cursor:pointer; padding:0 5px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); }
     .level-edge { display:flex; align-items:center; gap:3px; min-height:9px; }
     .level-edge-line { flex:1; border-top:1px solid rgba(29,31,32,0.55); }
     .level-edge-val { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; color:#1d1f20; white-space:nowrap; }
@@ -95,6 +97,24 @@
     .cut-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; }
     .cut-del:hover { color:#c04040; }
     .cut-side { flex:1; min-width:0; padding:0 0 0 4px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:rgba(29,31,32,0.72); overflow:hidden; text-overflow:ellipsis; }
+    .view-rail { position:absolute; top:8px; bottom:8px; z-index:5; display:flex; flex-direction:column; gap:6px; overflow-y:auto; overflow-x:hidden; pointer-events:none; scrollbar-width:none; }
+    .view-rail::-webkit-scrollbar { display:none; }
+    .view-rail-left { left:36px; }
+    .view-rail-right { right:36px; flex-direction:row; align-items:stretch; gap:8px; }
+    .view-rail-col { display:flex; flex-direction:column; gap:6px; overflow-y:auto; overflow-x:hidden; min-height:0; scrollbar-width:none; }
+    .view-rail-col::-webkit-scrollbar { display:none; }
+    .view-rail-spacer { flex:1 1 auto; min-height:0; }
+    .view-thumb { pointer-events:auto; flex-shrink:0; width:118px; border:1px solid rgba(29,31,32,0.22); background:#fff; padding:0; cursor:pointer; box-shadow:0 1px 5px rgba(29,31,32,0.12); text-align:left; }
+    .view-thumb:hover { border-color:#5980a6; }
+    .view-thumb.active { border-color:#b04060; box-shadow:0 0 0 1px #b04060, 0 1px 5px rgba(29,31,32,0.12); }
+    .view-thumb canvas { display:block; width:116px; height:76px; background:#fafafa; }
+    .view-thumb-plan { width:88px; }
+    .view-thumb-plan canvas { width:86px; height:56px; }
+    .view-thumb-label { display:flex; align-items:center; gap:4px; padding:2px 5px 3px; border-top:1px solid rgba(29,31,32,0.1); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.68); white-space:nowrap; overflow:hidden; }
+    .view-thumb-3d { pointer-events:auto; flex-shrink:0; width:118px; height:76px; border:1px solid rgba(29,31,32,0.22); background:#fff; cursor:pointer; box-shadow:0 1px 5px rgba(29,31,32,0.12); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.1em; color:rgba(29,31,32,0.55); }
+    .view-thumb-3d:hover { border-color:#5980a6; color:#365e86; }
+    .view-thumb-3d.active { border-color:#b04060; box-shadow:0 0 0 1px #b04060, 0 1px 5px rgba(29,31,32,0.12); }
+    .view-thumb-3d[disabled] { opacity:0.5; cursor:not-allowed; }
     .tool-keypad { display:grid; grid-template-columns:repeat(4, 1fr); gap:3px; }
     .tool-key { position:relative; aspect-ratio:1 / 1; min-width:0; border:1px solid; padding:2px 1px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; font-family:'Barlow Condensed',system-ui,sans-serif; text-transform:uppercase; }
     .tool-key-letter { position:absolute; top:2px; left:3px; font-weight:700; line-height:1; }
@@ -1203,6 +1223,22 @@
     <canvas data-model-overlay style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
     <button type="button" class="rail-tab rail-tab-left" data-left-rail-tab onClick="{{ onToggleLeftRail }}" title="{{ leftRailTabTitle }}">ROUGHDRAFTER - LITE - DRAFTING TOOLS</button>
     <button type="button" class="rail-tab rail-tab-right" data-right-rail-tab onClick="{{ onToggleRightRail }}" title="{{ rightRailTabTitle }}">LEVELS - LAYERS</button>
+    <!-- VIEW GALLERIES (board #265): little TV-screen viewports down the canvas
+         edges — the four standard elevations on the left; on the right an inner
+         column of per-level PLAN thumbnails (SITE / ROOF / floors / FOUNDATION,
+         the always-available way back to the plans) beside the outer column of
+         hand-cut sections stacked over the 3D screen. New sections push 3D down;
+         the columns scroll when they overflow. Thumbnails are painted
+         imperatively from the same generators that draw the full-size views. -->
+    <div data-view-rail-left class="view-rail view-rail-left"></div>
+    <div data-view-rail-right class="view-rail view-rail-right">
+      <div data-view-rail-plans class="view-rail-col"></div>
+      <div data-view-rail-outer class="view-rail-col">
+        <div data-view-rail-sections style="display:flex; flex-direction:column; gap:6px;"></div>
+        <div class="view-rail-spacer"></div>
+        <button type="button" data-view-rail-3d class="view-thumb-3d" onClick="{{ enter3D }}" title="{{ view3DTitle }}" disabled="{{ webglUnavailable }}">⬡<span>3D</span></button>
+      </div>
+    </div>
     <!-- HTML crosshair cursor -->
     <div style="position:absolute; left:{{ cursorX }}px; top:{{ cursorY }}px; width:36px; height:36px; transform:translate(-50%,-50%); pointer-events:none; display:{{ cursorDisplay }};">
       <div style="position:absolute; top:50%; left:0; width:calc(50% - 7px); height:1px; background:#1d1f20; transform:translateY(-50%);"></div>
@@ -1657,25 +1693,8 @@ const {
   parseAssemblyInches,
 } = window.DraftFormatters;
 
-// Wall type definitions — totalIn is full assembly width in inches, centreline-based
-// layers listed left→right (outside→inside); fill: 'stud'|'concrete'|'insulation'
-const WALL_TYPES = [
-  { id:'stud_2x4',    label:'2×4 Stud  (3½")',   totalIn:3.5,   layers:[{in:3.5,   fill:'stud'}] },
-  { id:'stud_2x6',    label:'2×6 Stud  (5½")',   totalIn:5.5,   layers:[{in:5.5,   fill:'stud'}] },
-  // Basement wall insul at concrete — 2×4 SPF @ 24" O.C. held 2½" off the conc
-  // wall, 5½" batt filling out to a ½" air space at the concrete, VB on the
-  // warm side under ½" drywall; lines the concrete on the foundation PLAN.
-  { id:'insulation_6', label:'Insul Wall  (6½")',   totalIn:6.5,   layers:[{in:2.5,   fill:'insulation'},{in:3.5, fill:'insulation'},{in:0.5, fill:'stud'}] },
-  { id:'concrete_8',  label:'8" Concrete',         totalIn:8,     layers:[{in:8,     fill:'concrete'}] },
-  { id:'icf',         label:'ICF  (11¼")',         totalIn:11.25, layers:[{in:2.625,fill:'insulation'},{in:6,fill:'concrete'},{in:2.625,fill:'insulation'}] },
-  { id:'icf_13',      label:'ICF  (13¼")',         totalIn:13.25, layers:[{in:2.625,fill:'insulation'},{in:8,fill:'concrete'},{in:2.625,fill:'insulation'}] },
-  { id:'pt_wood_fdn', label:'2×8 PT Wood Fdn  (8")', totalIn:8,   layers:[{in:0.75,fill:'stud'},{in:7.25,fill:'stud'}] },
-];
-// Retired wall types in saved drawings map to their closest current assembly.
-const LEGACY_WALL_TYPES = Object.freeze({ concrete_12: 'concrete_8' });
-// Structural assemblies live on the FOUNDATION layer set only; every other
-// context offers the stud / insul walls.
-const FOUNDATION_WALL_TYPE_IDS = Object.freeze(['concrete_8', 'icf', 'icf_13', 'pt_wood_fdn']);
+// Wall assemblies come from wall-types.js, shared with the LAYOUT sheets.
+const { WALL_TYPES, LEGACY_WALL_TYPES, FOUNDATION_WALL_TYPE_IDS } = window.DraftWallTypes;
 // Fenestration defaults — door and window openings hosted on a wall. Heights
 // are measured from the bottom of the host wall; doors sit on it (sill 0).
 const DEFAULT_DOOR_WIDTH_FT = 3;
@@ -2115,6 +2134,7 @@ class Component extends DCLogic {
     perfIntroOff: false,      // "don't show this again" for the perf notice (settings profile)
     garageCallout: false,     // PROFESSOR GRUFF attached-garage lesson visibility
     garageIntroOff: false,    // "don't show this again" for the garage lesson (settings profile)
+    boneReveal: true,          // bone presses jump to E1 and grow the house (settings profile)
     areasOpen: false,         // AREAS dialog visibility (report is derived on render)
     // Per-project information saved inside the drawing file. The titleblock
     // and the site plan's LEGAL LAND DESCRIPTION block read from here; later
@@ -2184,6 +2204,7 @@ class Component extends DCLogic {
     tsquareOn: true,           // full-time 90° T-square while drawing; T toggles
     boneWallet: { balance: 0, nextDripMs: null }, // the free-bone gauge (board #261)
     walletSound: true,         // the bone-crunch on spend; personal SETTINGS
+    suggestStairs: true,       // board #260: the tour and the bone OFFER stair placements
     compassOn: false,          // polar tracking instrument — down by default; P picks it up
     cuts:          [],
     elevationNames: {},         // per-drawing side names for E1-E4 (FRONT/LEFT...), defaults from COMPANY STANDARDS
@@ -2494,6 +2515,9 @@ class Component extends DCLogic {
           shape: stair.shape || 'straight',
           turn: stair.turn || 'right',
           winders: stair.winders || 0,
+          auto: stair.auto === true,
+          ...(Number.isInteger(stair.splitTreads) && stair.splitTreads > 0
+            ? { splitTreads: stair.splitTreads } : {}),
           layer: STAIR_LAYER,
         };
       }),
@@ -2610,6 +2634,9 @@ class Component extends DCLogic {
       })),
       nextGroupId: this._nextGroupId || 1,
       nextDrawingItemId: this._nextDrawingItemId || 1,
+      // LAYOUT sheets ride the drawing untouched: the LAYOUT page owns them,
+      // the Model Space only round-trips what it loaded.
+      ...(this._layoutData ? { layout: this._layoutData } : {}),
       // Underlay binaries live in the shared file store keyed by underlay id;
       // the drawing only carries their placement and scale metadata.
       underlays: this._underlays.map(underlay => ({
@@ -3226,6 +3253,8 @@ class Component extends DCLogic {
           keybindings: { ...this.state.keybindings },
           tsquareOn: this.state.tsquareOn,
           walletSound: this.state.walletSound,
+          boneReveal: this.state.boneReveal,
+          suggestStairs: this.state.suggestStairs,
           buildIntroOff: this.state.buildIntroOff,
           garageIntroOff: this.state.garageIntroOff,
           perfIntroOff: this.state.perfIntroOff,
@@ -3263,6 +3292,8 @@ class Component extends DCLogic {
           : {}),
         ...(typeof values.tsquareOn === 'boolean' ? { tsquareOn: values.tsquareOn } : {}),
         ...(typeof values.walletSound === 'boolean' ? { walletSound: values.walletSound } : {}),
+        ...(typeof values.boneReveal === 'boolean' ? { boneReveal: values.boneReveal } : {}),
+        ...(typeof values.suggestStairs === 'boolean' ? { suggestStairs: values.suggestStairs } : {}),
         ...(typeof values.buildIntroOff === 'boolean' ? { buildIntroOff: values.buildIntroOff } : {}),
         ...(typeof values.garageIntroOff === 'boolean' ? { garageIntroOff: values.garageIntroOff } : {}),
         ...(typeof values.perfIntroOff === 'boolean' ? { perfIntroOff: values.perfIntroOff } : {}),
@@ -3376,8 +3407,8 @@ class Component extends DCLogic {
       setTimeout(() => {
         plan.beams.forEach(beam => this._beams.push({
           id: this._nextBeamId++,
-          start: new THREE.Vector3(beam.start.x, elev, beam.start.z),
-          end: new THREE.Vector3(beam.end.x, elev, beam.end.z),
+          start: this._linkPlanPoint(new THREE.Vector3(beam.start.x, elev, beam.start.z), master, beam.start.srcIndex),
+          end: this._linkPlanPoint(new THREE.Vector3(beam.end.x, elev, beam.end.z), master, beam.end.srcIndex),
           levelId: BASEMENT_LEVEL_ID,
           view: 'foundation',
           mode: 'flush',
@@ -3390,7 +3421,7 @@ class Component extends DCLogic {
       setTimeout(() => {
         plan.columns.forEach(column => this._columns.push({
           id: this._nextColumnId++,
-          point: new THREE.Vector3(column.x, elev, column.z),
+          point: this._linkPlanPoint(new THREE.Vector3(column.x, elev, column.z), master, column.srcIndex),
           levelId: BASEMENT_LEVEL_ID,
           view: 'foundation',
           footing: 'pad36',
@@ -3454,12 +3485,29 @@ class Component extends DCLogic {
     // itself — the drafter lands ready to place the top nosing instead of
     // drawing walls with whatever tool was left active.
     if (step === 'main' || step === 'second') this._activateContextTool('stair');
+    // Board #260: the stair step OFFERS the placement pre-made — the gate
+    // lights immediately and NEXT ▲ without touching it is a legitimate
+    // accept (Q6). Deleting it mid-step is "no thanks": no re-suggest.
+    let suggested = '';
+    if ((step === 'main' || step === 'second') && this.state.suggestStairs !== false
+      && !this._stairSuggestionDeclined) {
+      const res = this._suggestStairForLevel(targets[step]);
+      if (res?.stair) {
+        suggested = ` Suggested: ${res.note} Adjust it, replace it, or NEXT ▲ to accept.`;
+        // A MAIN stair — suggested like placed — re-derives the auto beam
+        // around its opening, the same as the hand-placed path.
+        if (step === 'main') this._rederiveTourBeam();
+      } else if (res) {
+        suggested = ` ${res.note}`;
+      }
+    }
     // _switchLevel writes its own context message and _markUnsaved clears the
     // strip when its callback settles — the tour's step message is the one the
     // drafter needs here, so it lands again after both.
-    if (messages[step]) this.setState(
-      { drawingMessage: messages[step], drawingMessageError: false },
-      () => this.setState({ drawingMessage: messages[step], drawingMessageError: false }),
+    const stepMessage = messages[step] ? messages[step] + suggested : '';
+    if (stepMessage) this.setState(
+      { drawingMessage: stepMessage, drawingMessageError: false },
+      () => this.setState({ drawingMessage: stepMessage, drawingMessageError: false }),
     );
   }
 
@@ -3726,13 +3774,13 @@ class Component extends DCLogic {
     const plan = window.DraftBuildHouse.midSpanBeams(points, { holes });
     plan.beams.forEach(beam => this._beams.push({
       id: this._nextBeamId++,
-      start: new THREE.Vector3(beam.start.x, elev, beam.start.z),
-      end: new THREE.Vector3(beam.end.x, elev, beam.end.z),
+      start: this._linkPlanPoint(new THREE.Vector3(beam.start.x, elev, beam.start.z), master, beam.start.srcIndex),
+      end: this._linkPlanPoint(new THREE.Vector3(beam.end.x, elev, beam.end.z), master, beam.end.srcIndex),
       levelId: BASEMENT_LEVEL_ID, view: 'foundation', mode: 'flush', auto: true, layer: BEAM_LAYER,
     }));
     plan.columns.forEach(column => this._columns.push({
       id: this._nextColumnId++,
-      point: new THREE.Vector3(column.x, elev, column.z),
+      point: this._linkPlanPoint(new THREE.Vector3(column.x, elev, column.z), master, column.srcIndex),
       levelId: BASEMENT_LEVEL_ID, view: 'foundation', footing: 'pad36', auto: true, layer: COLUMN_LAYER,
     }));
     this._markUnsaved();
@@ -3765,12 +3813,17 @@ class Component extends DCLogic {
         : null;
       const dx = next.x - pt.x, dz = next.z - pt.z;
       const len = Math.hypot(dx, dz) || 1;
+      const kind = override?.kind || 'eave';
+      // The GABLE CORNER style shapes the default (board #252): the boxed
+      // treatments build gable edges at half the eave overhang. Pull-outs
+      // still floor at that per-kind default, never under it.
+      const kindBase = window.DraftGeometry2D.gableOverhangFt(kind, base, this._gableCornerStyle());
       return {
         index, a: { x: pt.x, z: pt.z }, b: { x: next.x, z: next.z }, len,
         ux: dx / len, uz: dz / len,
         fromSrc: keyed ? pt.srcId : null, toSrc: keyed ? next.srcId : null,
-        kind: override?.kind || 'eave',
-        overhang: override && override.overhangFt != null ? Math.max(override.overhangFt, base) : base,
+        kind,
+        overhang: override && override.overhangFt != null ? Math.max(override.overhangFt, kindBase) : kindBase,
         gables: keyed
           ? intent.gables.filter(gable => gable.fromSrc === pt.srcId && gable.toSrc === next.srcId) : [],
       };
@@ -4063,9 +4116,20 @@ class Component extends DCLogic {
     this._clearTourTimers();
     this.setState({ tour: format.tour(null), tourPopup: false, tourPopupNote: '', tourGableArmed: false },
       () => this._markUnsaved());
+    this._startBoneReveal();
+  }
+
+  // The rising reveal (board #283): every bone press that grows the house
+  // jumps to the E1 front elevation and the house climbs out of the ground
+  // under the rising mask — not just the tour finale. BONE REVEAL in
+  // SETTINGS turns it off for drafters who'd rather stay on the plan.
+  _startBoneReveal() {
+    if (this.state.boneReveal === false) return;
     const front = this._autoElevationCuts().find(cut => cut.id === 'E1');
     if (!front) return; // no auto elevations to jump to — the build stands
-    this._revealStart = performance.now();
+    // The curtain moment: both rails slide open around the stage and the
+    // mask holds one beat — get them ready — before the house starts up.
+    this._revealStart = performance.now() + window.DraftTour.REVEAL_HOLD_MS;
     this._revealActive = true;
     // The reveal parks the drafter in E1 — stand the drawing tool down so a
     // stray click there can't keep placing plan geometry.
@@ -4073,7 +4137,7 @@ class Component extends DCLogic {
     this._cancelLine();
     this._cancelFloor();
     this._cancelOutline();
-    this.setState({ activeView: 'cut', activeCutId: 'E1', activeTool: 'select', drawingMessage: '', drawingMessageError: false });
+    this.setState({ leftRailOpen: true, rightRailOpen: true, activeView: 'cut', activeCutId: 'E1', activeTool: 'select', drawingMessage: '', drawingMessageError: false });
     this._invalidate();
   }
 
@@ -4408,6 +4472,8 @@ class Component extends DCLogic {
       // the BONEYARD existed load with the single default shelf. Shelf geometry
       // restores under its negative pseudo level id (-shelfId), so drawing items
       // may be owned by a level or by a shelf.
+      // LAYOUT sheets round-trip with the drawing; the LAYOUT page owns them.
+      this._layoutData = saved.layout ? format.layout(saved.layout, levelIds) : null;
       const boneyardShelves = format.boneyardShelves(saved.boneyardShelves);
       const activeBoneyardShelfId = boneyardShelves.some(shelf => shelf.id === Number(saved.activeBoneyardShelfId))
         ? Number(saved.activeBoneyardShelfId)
@@ -4640,11 +4706,14 @@ class Component extends DCLogic {
         : saved.columns;
       const columns = format.columns(storedColumns, ownerLevelIds);
       skipped += (Array.isArray(saved.columns) ? saved.columns.length : 0) - columns.length;
+      // Corner-linked auto structure (board #244) restores its link the same
+      // way dimension ends do, so a snapped beam keeps riding the jog corner
+      // across reloads.
       this._columns = columns.map(column => {
         const elevation = levelsById.get(column.levelId)?.elev ?? 0;
         return {
           ...column,
-          point: new THREE.Vector3(column.point.x, elevation, column.point.z),
+          point: reviveDimensionEnd(column.point, elevation),
         };
       });
       this._nextColumnId = Math.max(
@@ -4661,8 +4730,8 @@ class Component extends DCLogic {
         const elevation = levelsById.get(beam.levelId)?.elev ?? 0;
         return {
           ...beam,
-          start: new THREE.Vector3(beam.start.x, elevation, beam.start.z),
-          end: new THREE.Vector3(beam.end.x, elevation, beam.end.z),
+          start: reviveDimensionEnd(beam.start, elevation),
+          end: reviveDimensionEnd(beam.end, elevation),
         };
       });
       this._nextBeamId = Math.max(
@@ -4884,6 +4953,8 @@ class Component extends DCLogic {
     } finally {
       this._loadingDrawing = false;
       this._drawingReady = true;
+      this._bumpViewRailEpoch();
+      this._invalidate();
       // Readiness beacon for the test suite: set imperatively (not through
       // renderVals) so it flips the moment loading ends, independent of
       // render timing. data-save-seq / -dirty are kept by _markUnsaved.
@@ -5025,6 +5096,7 @@ class Component extends DCLogic {
   _markUnsaved() {
     if (this._loadingDrawing || !this._drawingReady) return;
     this._recordHistory();
+    this._bumpViewRailEpoch();
     this._fileDirty = true;
     // The dirty beacon flips synchronously with the edit — the UNSAVED text
     // renders a frame later, which is too late for a condition wait to see.
@@ -5251,6 +5323,10 @@ class Component extends DCLogic {
     // direction click.
     this._stairOpeningAnchor = null;
 
+    // Board #260: deleting a SUGGESTED stair is "no thanks" — nothing
+    // re-suggests for the rest of the session (fresh document = fresh offer).
+    this._stairSuggestionDeclined = false;
+
     // Surface-opening drawing state — a free-form hole in a floor or roof.
     this._surfaceOpeningDrawing = false;
     this._surfaceOpeningPoints  = [];
@@ -5425,10 +5501,182 @@ class Component extends DCLogic {
     const orbiting = this._controls?.enabled === true;
     if (orbiting) this._controls.update();
     if (document.hidden) return;
+    this._syncViewRails();
     if (!this._needsRedraw && !orbiting) return;
     this._needsRedraw = false;
     if (this._renderer) this._renderer.render(this._scene, this._camera);
     this._redrawOverlay();
+  }
+
+  // ── View galleries (board #265) ────────────────────────────────────────
+  // The little TV screens down the canvas edges: E1-E4 elevations on the
+  // left, hand-cut S sections on the right stacked above the 3D screen
+  // (new sections push it down; the column scrolls). Cards are managed
+  // imperatively — outside the component render — and each screen is
+  // painted by the SAME generator that draws the full-size cut view, so
+  // a thumbnail is always a true miniature. Repaints only when the model
+  // changes (the epoch), never on mouse traffic.
+  _bumpViewRailEpoch() {
+    this._viewRailEpoch = (this._viewRailEpoch || 0) + 1;
+  }
+
+  _syncViewRails() {
+    const left = document.querySelector('[data-view-rail-left]');
+    const sections = document.querySelector('[data-view-rail-sections]');
+    if (!left || !sections || !this._drawingReady) return;
+    this._syncThumbColumn(left, this._autoElevationCuts());
+    this._syncThumbColumn(sections, this.state.cuts);
+    this._syncPlanColumn(document.querySelector('[data-view-rail-plans]'));
+    document.querySelector('[data-view-rail-3d]')
+      ?.classList.toggle('active', this.state.activeView === 'perspective');
+    // An open side panel takes the screens on its side with it — only the
+    // little plan column keeps its seat, so the drawing keeps max room.
+    left.style.display = this.state.leftRailOpen ? 'none' : '';
+    const outer = document.querySelector('[data-view-rail-outer]');
+    if (outer) outer.style.display = this.state.rightRailOpen ? 'none' : '';
+  }
+
+  _syncThumbColumn(box, cuts) {
+    const epoch = String(this._viewRailEpoch || 0);
+    const stale = new Set([...box.children].map(card => card.dataset.cutId));
+    cuts.forEach(cut => {
+      stale.delete(String(cut.id));
+      let card = box.querySelector(`[data-cut-id="${cut.id}"]`);
+      if (!card) {
+        card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'view-thumb';
+        card.dataset.cutId = cut.id;
+        const cutId = cut.id; // keep the real id — datasets stringify numbers
+        card.addEventListener('click', () => this._enterCutView(cutId));
+        const screen = document.createElement('canvas');
+        screen.width = 232; screen.height = 152; // 2x the CSS size, crisp lines
+        card.appendChild(screen);
+        const label = document.createElement('div');
+        label.className = 'view-thumb-label';
+        card.appendChild(label);
+        box.appendChild(card);
+      }
+      const sideName = cut.auto ? this._elevationName(cut.id) : '';
+      card.title = cut.auto
+        ? `${cut.name} — the ${sideName} elevation; tap to bring it center`
+        : `${cut.name} — tap to bring this section center`;
+      card.lastChild.textContent = cut.name + (sideName ? ` · ${sideName}` : '');
+      card.classList.toggle('active',
+        this.state.activeView === 'cut' && this.state.activeCutId === cut.id);
+      if (card.dataset.epoch !== epoch) {
+        card.dataset.epoch = epoch;
+        const screen = card.firstChild;
+        const ctx = screen.getContext('2d');
+        ctx.clearRect(0, 0, screen.width, screen.height);
+        this._drawCutWorkspace2D(ctx, screen.width, screen.height, cut);
+      }
+    });
+    stale.forEach(id => box.querySelector(`[data-cut-id="${id}"]`)?.remove());
+  }
+
+  // The inner plan column: one little screen per level (SITE / ROOF / floors /
+  // FOUNDATION — a third storey grows the column), the always-available way
+  // back to the plans from any cut or 3D view.
+  _syncPlanColumn(box) {
+    if (!box) return;
+    const epoch = String(this._viewRailEpoch || 0);
+    const stale = new Set([...box.children].map(card => card.dataset.levelId));
+    this.state.levels.forEach((level, i) => {
+      stale.delete(String(level.id));
+      let card = box.querySelector(`[data-level-id="${level.id}"]`);
+      if (!card) {
+        card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'view-thumb view-thumb-plan';
+        card.dataset.levelId = level.id;
+        const levelId = level.id;
+        card.addEventListener('click', () => {
+          const idx = this.state.levels.findIndex(l => l.id === levelId);
+          if (idx >= 0) this._switchLevel(idx);
+        });
+        const screen = document.createElement('canvas');
+        screen.width = 172; screen.height = 112; // 2x the CSS size, crisp lines
+        card.appendChild(screen);
+        const label = document.createElement('div');
+        label.className = 'view-thumb-label';
+        card.appendChild(label);
+      }
+      // Keep the column in level order even when levels are added later.
+      if (box.children[i] !== card) box.insertBefore(card, box.children[i] || null);
+      card.title = `${level.name} — tap to bring this plan center`;
+      card.lastChild.textContent = level.name;
+      card.classList.toggle('active',
+        this.state.activeView === 'top' && !this.state.boneyardActive
+        && this._activeLevel()?.id === level.id);
+      if (card.dataset.epoch !== epoch) {
+        card.dataset.epoch = epoch;
+        const screen = card.firstChild;
+        const ctx = screen.getContext('2d');
+        ctx.clearRect(0, 0, screen.width, screen.height);
+        this._drawPlanThumb2D(ctx, screen.width, screen.height, level.id);
+      }
+    });
+    stale.forEach(id => box.querySelector(`[data-level-id="${id}"]`)?.remove());
+  }
+
+  // A level's plan in miniature: the level's own geometry fit to the little
+  // screen, drawn by the same painters as the big plan view.
+  _drawPlanThumb2D(ctx, w, h, levelId) {
+    this._ensureDrawingCollections();
+    // Levels with layer sets thumbnail their PLAN view; whole-level contexts
+    // (ROOF, SITE) show everything they hold.
+    const planOnly = this._layerViewsForLevel(levelId).length > 0;
+    const onPlan = item => !planOnly || (item.view || 'plan') === 'plan';
+    const walls = this._walls.filter(x => x.levelId === levelId && onPlan(x));
+    const lines = this._lines.filter(x => x.levelId === levelId && onPlan(x)
+      && this._lineLayerConfig(x.layer).visible);
+    const roofs = this._roofs.filter(x => x.levelId === levelId);
+    const outlines = this._outlines.filter(x => x.levelId === levelId);
+    const pts = [];
+    walls.forEach(s => pts.push(s.start, s.end));
+    lines.forEach(s => pts.push(s.start, s.end));
+    roofs.forEach(r => pts.push(...r.points));
+    outlines.forEach(o => pts.push(...o.points));
+    if (!pts.length) return;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    pts.forEach(p => {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+    });
+    const pad = 8;
+    const sc = Math.min((w - 2 * pad) / Math.max(1e-6, maxX - minX),
+                        (h - 2 * pad) / Math.max(1e-6, maxZ - minZ));
+    const ox = (w - sc * (maxX - minX)) / 2, oz = (h - sc * (maxZ - minZ)) / 2;
+    const toS = p => ({ x: ox + (p.x - minX) * sc, y: oz + (p.z - minZ) * sc });
+    roofs.forEach(roof => this._drawRoof2D(ctx, toS, roof));
+    const joins = this._wallJoins(walls);
+    walls.forEach(wall => this._drawWallSeg2D(ctx, toS, wall, false, joins, 'fill'));
+    walls.forEach(wall => this._drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke'));
+    ctx.save();
+    ctx.strokeStyle = '#1d1f20';
+    ctx.lineWidth = 1;
+    lines.forEach(seg => {
+      const a = toS(seg.start), b = toS(seg.end);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y);
+      if (seg.bulge) {
+        const c = toS(this._lineControlPoint(seg));
+        ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
+      } else {
+        ctx.lineTo(b.x, b.y);
+      }
+      ctx.stroke();
+    });
+    ctx.strokeStyle = 'rgba(29,31,32,0.3)';
+    outlines.forEach(outline => {
+      const loop = outline.points.map(toS);
+      if (loop.length < 2) return;
+      ctx.beginPath();
+      loop.forEach((p, index) => (index ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      if (!outline.open) ctx.closePath();
+      ctx.stroke();
+    });
+    ctx.restore();
   }
 
   _drawGrid2D(ctx, w, h) {
@@ -5655,10 +5903,53 @@ class Component extends DCLogic {
         const sa = toS(a), sb = toS(b);
         ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
       });
+      const [gwa, gwb] = geoInfo.glazing;
+      const glazeRun = Math.hypot(gwb.x - gwa.x, gwb.z - gwa.z) || 1;
+      const gux = (gwb.x - gwa.x) / glazeRun, guz = (gwb.z - gwa.z) / glazeRun;
+      const gnx = -guz, gnz = gux;
       if (opening.type === 'window') {
-        const [ga, gb] = geoInfo.glazing.map(toS);
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(ga.x, ga.y); ctx.lineTo(gb.x, gb.y); ctx.stroke();
+        // Double-glazed unit: two panes 1/2" apart on the wall centreline,
+        // with 2"-wide frame blocks at each jamb reaching 1/2" past both
+        // wall faces.
+        ctx.lineWidth = 1.25;
+        [0.375 / 12, -0.375 / 12].forEach(off => {
+          const a = toS({ x: gwa.x + gnx * off, z: gwa.z + gnz * off });
+          const b = toS({ x: gwb.x + gnx * off, z: gwb.z + gnz * off });
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        });
+        const halfDepth = Math.max(...geoInfo.corners.map(corner =>
+          Math.abs((corner.x - geoInfo.center.x) * gnx + (corner.z - geoInfo.center.z) * gnz)));
+        const poke = halfDepth + 0.5 / 12;
+        const frameAlong = 2 / 12;
+        [[gwa, 1], [gwb, -1]].forEach(([end, sgn]) => {
+          const quad = [
+            { x: end.x + gnx * poke, z: end.z + gnz * poke },
+            { x: end.x - gnx * poke, z: end.z - gnz * poke },
+            { x: end.x + gux * sgn * frameAlong - gnx * poke, z: end.z + guz * sgn * frameAlong - gnz * poke },
+            { x: end.x + gux * sgn * frameAlong + gnx * poke, z: end.z + guz * sgn * frameAlong + gnz * poke },
+          ].map(toS);
+          ctx.beginPath();
+          ctx.moveTo(quad[0].x, quad[0].y); ctx.lineTo(quad[1].x, quad[1].y);
+          ctx.lineTo(quad[2].x, quad[2].y); ctx.lineTo(quad[3].x, quad[3].y);
+          ctx.closePath(); ctx.stroke();
+        });
+      }
+      if (opening.type === 'door' && !opening.garage) {
+        // Leaf and quarter swing: the flat slab standing open off the hinge
+        // jamb, the arc sweeping back to the latch jamb.
+        const hinge = toS(gwa);
+        const tip = toS({ x: gwa.x + gnx * glazeRun, z: gwa.z + gnz * glazeRun });
+        const latch = toS(gwb);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(hinge.x, hinge.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+        const r = Math.hypot(tip.x - hinge.x, tip.y - hinge.y);
+        const a0 = Math.atan2(tip.y - hinge.y, tip.x - hinge.x);
+        const a1 = Math.atan2(latch.y - hinge.y, latch.x - hinge.x);
+        let sweep = a1 - a0;
+        while (sweep > Math.PI) sweep -= 2 * Math.PI;
+        while (sweep < -Math.PI) sweep += 2 * Math.PI;
+        ctx.lineWidth = 1.25;
+        ctx.beginPath(); ctx.arc(hinge.x, hinge.y, r, a0, a0 + sweep, sweep < 0); ctx.stroke();
       }
       if (!this._isPrinting) {
         // Centre grab point — the dimension / snap anchor.
@@ -7634,6 +7925,13 @@ class Component extends DCLogic {
     return normaliseStructureStandards(this.state.structureStandards).freeformFootings;
   }
 
+  // GABLE CORNER (board #252): the office's corner treatment — 'flat' |
+  // 'return' | 'porkchop' | 'boxed'. Footprint derivations read it through
+  // geometry-2d's gableOverhangFt; the elevation pass draws its linework.
+  _gableCornerStyle() {
+    return normaliseStructureStandards(this.state.structureStandards).gableCorner;
+  }
+
   _footingLocked(item) {
     return item?.layer === 'S-FOOTING' && !this._freeformFootings();
   }
@@ -8559,8 +8857,10 @@ class Component extends DCLogic {
       ctx.strokeRect(x, Y(top), wid, (top - bottom) * pxPerFt);
       return;
     }
-    const gapBottom = opening.type === 'door' ? bottom : bottom + SILL_FT;
-    const gapTop = Math.min(bottom + HEAD_FT, top);
+    const headFt = opening.headHeight > 0 ? opening.headHeight : HEAD_FT;
+    const sillFt = opening.sillHeight > 0 ? opening.sillHeight : SILL_FT;
+    const gapBottom = opening.type === 'door' ? bottom : bottom + sillFt;
+    const gapTop = Math.min(bottom + headFt, top);
     // Above the head (header + plates) and, for windows, below the sill.
     ctx.fillRect(x, Y(top), wid, (top - gapTop) * pxPerFt);
     ctx.strokeRect(x, Y(top), wid, (top - gapTop) * pxPerFt);
@@ -8568,14 +8868,36 @@ class Component extends DCLogic {
       ctx.fillRect(x, Y(gapBottom), wid, (gapBottom - bottom) * pxPerFt);
       ctx.strokeRect(x, Y(gapBottom), wid, (gapBottom - bottom) * pxPerFt);
     }
-    ctx.fillStyle = 'rgba(29,31,32,0.55)';
-    ctx.font = "600 8px 'Barlow Condensed', system-ui, sans-serif";
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.save();
-    ctx.translate(x + wid / 2, Y((gapTop + gapBottom) / 2));
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText(opening.type.toUpperCase(), 0, 0);
-    ctx.restore();
+    ctx.fillStyle = '#fff'; ctx.lineWidth = 1;
+    if (opening.type === 'window') {
+      // The window unit in section: 2x6 frame members at head and sill
+      // reaching 1/2" past each wall face, double glazing between them —
+      // two 1/4" panes 1/2" apart — with 1/2" square stops between and on
+      // each side of the glass.
+      const frameDeep = Math.max(6 / 12, width + 1 / 12);
+      const fx = X(u - frameDeep / 2), fw = frameDeep * pxPerFt;
+      const frameThick = (2 / 12) * pxPerFt;
+      ctx.fillRect(fx, Y(gapTop), fw, frameThick);
+      ctx.strokeRect(fx, Y(gapTop), fw, frameThick);
+      ctx.fillRect(fx, Y(gapBottom + 2 / 12), fw, frameThick);
+      ctx.strokeRect(fx, Y(gapBottom + 2 / 12), fw, frameThick);
+      const glassTop = gapTop - 2 / 12, glassBottom = gapBottom + 2 / 12;
+      [0.375 / 12, -0.375 / 12].forEach(off => {
+        const gx = X(u + off);
+        ctx.beginPath(); ctx.moveTo(gx, Y(glassTop)); ctx.lineTo(gx, Y(glassBottom)); ctx.stroke();
+      });
+      const stop = (0.5 / 12) * pxPerFt;
+      ctx.fillStyle = 'rgba(29,31,32,0.35)';
+      [u - 0.875 / 12, u, u + 0.875 / 12].forEach(su => {
+        ctx.fillRect(X(su) - stop / 2, Y(glassBottom + 0.5 / 12), stop, stop);
+        ctx.fillRect(X(su) - stop / 2, Y(glassTop), stop, stop);
+      });
+    } else {
+      // A flat 1-3/4" slab door standing in the opening.
+      const slabW = Math.max(1.5, (1.75 / 12) * pxPerFt);
+      ctx.fillRect(X(u) - slabW / 2, Y(gapTop), slabW, (gapTop - gapBottom) * pxPerFt);
+      ctx.strokeRect(X(u) - slabW / 2, Y(gapTop), slabW, (gapTop - gapBottom) * pxPerFt);
+    }
   }
 
   // A cut that crosses nothing but faces the model is an elevation: wall
@@ -8971,12 +9293,31 @@ class Component extends DCLogic {
         const half = Math.abs(du) * f.width / 2;
         const ox = X(Math.max(uc - half, uMin)), ow = X(Math.min(uc + half, uMax)) - ox;
         if (ow <= 0) return;
-        const top = Math.min(floor + HEAD_FT, level.wallTop);
-        const bottom = f.type === 'door' ? floor : floor + SILL_FT;
+        const head = f.headHeight > 0 ? f.headHeight : HEAD_FT;
+        const sill = f.sillHeight > 0 ? f.sillHeight : SILL_FT;
+        const top = Math.min(floor + head, level.wallTop);
+        const bottom = f.type === 'door' ? floor : floor + sill;
         ctx.fillStyle = '#fafafa';
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
         ctx.strokeRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
+        const clipped = uc - half < uMin - 1e-6 || uc + half > uMax + 1e-6;
+        if (clipped) return;
+        if (f.type === 'door' && !f.garage) {
+          // Flat slab door face with a round knob at handle height on the
+          // latch side.
+          const knobR = Math.max(1.5, (1.25 / 12) * pxPerFt);
+          const kx = ox + ow - (2.5 / 12) * pxPerFt;
+          const ky = Y(Math.min(floor + 3, (top + bottom) / 2));
+          ctx.beginPath(); ctx.arc(kx, ky, knobR, 0, Math.PI * 2); ctx.stroke();
+        } else if (f.type === 'window') {
+          // The unit's frame face inside the rough opening: a 2"-wide border
+          // around the glazing.
+          const inset = (2 / 12) * pxPerFt;
+          if (ow > inset * 3 && (top - bottom) * pxPerFt > inset * 3) {
+            ctx.strokeRect(ox + inset, Y(top) + inset, ow - inset * 2, (top - bottom) * pxPerFt - inset * 2);
+          }
+        }
       });
     });
 
@@ -9169,21 +9510,88 @@ class Component extends DCLogic {
               // The metal soffit closes the corner: a line from the low
               // point of the rake fascia straight back to the house wall,
               // the flat soffit plane under the eave-overhang triangle.
+              // The reach back to the wall runs ALONG the rake's plan
+              // direction — the EAVE-side offset at the corner — so it is
+              // measured by projecting the corner's BONEYARD master point
+              // (the wall corner it was offset from) onto that direction.
+              // Halved-gable builds (board #252) and intent-pulled edges
+              // both land the line exactly on the wall face this way;
+              // roof.overhang stays the fallback for unlinked roofs.
               const drop = ROOF_FASCIA_IN / 12;
               const lo = ea <= eb ? { p: a, u: ua, e: ea } : { p: b, u: ub, e: eb };
-              const hi = ea <= eb ? { p: b } : { p: a };
+              const hi = ea <= eb ? { p: b, u: ub, e: eb } : { p: a, u: ua, e: ea };
               const len = Math.hypot(hi.p.x - lo.p.x, hi.p.z - lo.p.z) || 1;
-              const wallU = (lo.p.x + (hi.p.x - lo.p.x) / len * overhang) * axis.x
-                + (lo.p.z + (hi.p.z - lo.p.z) / len * overhang) * axis.z;
+              const rux = (hi.p.x - lo.p.x) / len, ruz = (hi.p.z - lo.p.z) / len;
+              const srcPt = rpts.find(rp => Math.hypot(rp.x - lo.p.x, rp.z - lo.p.z) < 0.05);
+              const masterPt = srcPt?.srcId ? this._masterPointById(srcPt.srcId) : null;
+              const along = masterPt
+                ? (masterPt.x - lo.p.x) * rux + (masterPt.z - lo.p.z) * ruz : NaN;
+              const reach = Number.isFinite(along) && along > 0.05 ? along : overhang;
+              const wallU = (lo.p.x + rux * reach) * axis.x + (lo.p.z + ruz * reach) * axis.z;
               const shown = runs.some(r => Math.min(r.u0, r.u1) - 0.1 <= lo.u
                 && lo.u <= Math.max(r.u0, r.u1) + 0.1);
-              if (shown && Math.abs(wallU - lo.u) > 0.2
+              if (shown && reach > 0.05 && Math.abs(wallU - lo.u) > 0.2
                 && lo.u >= uMin - 0.01 && lo.u <= uMax + 0.01) {
+                const wallUc = Math.max(uMin, Math.min(uMax, wallU));
                 ctx.strokeStyle = INK; ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(X(lo.u), Y(lo.e - drop));
-                ctx.lineTo(X(Math.max(uMin, Math.min(uMax, wallU))), Y(lo.e - drop));
+                ctx.lineTo(X(wallUc), Y(lo.e - drop));
                 ctx.stroke();
+                // GABLE CORNER treatments (board #252). Everything below is
+                // metal matching the fascia — one blended family, drawn in
+                // the soffit/crease inks, never the heavy silhouette.
+                const style = this._gableCornerStyle();
+                const du = hi.u - lo.u;
+                if (Math.abs(du) > 0.3) {
+                  const undersideAt = u => lo.e + (u - lo.u) / du * (hi.e - lo.e) - drop;
+                  if (style === 'return') {
+                    // SOFFIT RETURN: the eave soffit wraps the corner — a
+                    // short cornice-return band continuing the eave fascia
+                    // across the gable face, capped with a vertical seam.
+                    const dirIn = Math.sign(wallU - lo.u) || 1;
+                    const retLen = Math.min(Math.abs(wallU - lo.u), 1.25);
+                    const uEnd = lo.u + dirIn * retLen;
+                    ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(X(lo.u), Y(lo.e)); ctx.lineTo(X(uEnd), Y(lo.e));
+                    ctx.stroke();
+                    ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
+                    ctx.beginPath();
+                    ctx.moveTo(X(lo.u), Y(lo.e - drop)); ctx.lineTo(X(uEnd), Y(lo.e - drop));
+                    ctx.stroke();
+                    ctx.lineWidth = 1.25;
+                    ctx.beginPath();
+                    ctx.moveTo(X(uEnd), Y(lo.e));
+                    ctx.lineTo(X(uEnd), Y(lo.e - drop));
+                    ctx.stroke();
+                  } else if (style === 'porkchop' || style === 'boxed') {
+                    // PORK CHOP: the boxed corner return — the little
+                    // pyramid between the rake underside, the soffit line,
+                    // and this inner vertical face at the wall. (The
+                    // vertical the owner removed from FLAT CLOSE returns
+                    // here on purpose: this corner is metal, not wall
+                    // finish, so the seam against the wall exists.)
+                    ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+                    ctx.beginPath();
+                    ctx.moveTo(X(wallUc), Y(lo.e - drop));
+                    ctx.lineTo(X(wallUc), Y(undersideAt(wallU)));
+                    ctx.stroke();
+                    if (style === 'boxed') {
+                      // FULL BOXED RAKE: the pork chop soffit runs end to
+                      // end — the box's wall-side edge parallels the rake
+                      // underside the whole way up, stopping under the
+                      // apex where it meets its twin from the other slope
+                      // in a single peak vertex.
+                      const peakE = lo.e - drop + (hi.u - wallU) / du * (hi.e - lo.e);
+                      ctx.lineWidth = 1;
+                      ctx.beginPath();
+                      ctx.moveTo(X(wallUc), Y(lo.e - drop));
+                      ctx.lineTo(X(Math.max(uMin, Math.min(uMax, hi.u))), Y(peakE));
+                      ctx.stroke();
+                    }
+                  }
+                }
               }
             }
           }
@@ -10606,6 +11014,23 @@ class Component extends DCLogic {
         vtx.z = source.z + (vtx.offZ || 0);
       });
     });
+    // Auto beams snapped to a jog corner (board #244) ride that corner too,
+    // corner teleposts with them — the same srcId/offset contract as the
+    // dimension ends above.
+    (this._beams || []).forEach(beam => {
+      [beam.start, beam.end].forEach(vtx => {
+        const source = vtx?.srcId ? masterPoints.get(vtx.srcId) : null;
+        if (!source) return;
+        vtx.x = source.x + (vtx.offX || 0);
+        vtx.z = source.z + (vtx.offZ || 0);
+      });
+    });
+    (this._columns || []).forEach(column => {
+      const source = column.point?.srcId ? masterPoints.get(column.point.srcId) : null;
+      if (!source) return;
+      column.point.x = source.x + (column.point.offX || 0);
+      column.point.z = source.z + (column.point.offZ || 0);
+    });
     // Attached-garage masters follow the house master points their end points
     // weld to, so a house edit keeps the garage attached.
     if (!master.garage) {
@@ -10649,6 +11074,15 @@ class Component extends DCLogic {
     if (!vtx?.srcId) return;
     const src = this._masterPointById(vtx.srcId);
     if (src) { vtx.offX = vtx.x - src.x; vtx.offZ = vtx.z - src.z; }
+  }
+
+  // A mid-span-beam plan point that landed on an outline corner carries the
+  // corner's srcIndex (board #244); link the committed vector to that master
+  // point so outline edits carry the beam and its corner telepost along —
+  // the dimension-ends mirror of the footing rings' pooled linking.
+  _linkPlanPoint(vtx, master, srcIndex) {
+    if (srcIndex == null) return vtx;
+    return this._linkVertex(vtx, master?.points?.[srcIndex]?.pointId);
   }
 
   // A local adjustment marks the point overridden and remembers its offset
@@ -11866,12 +12300,16 @@ class Component extends DCLogic {
       if (!a.srcId || !b.srcId) return null;
       return intent.edges.find(edge => edge.fromSrc === a.srcId && edge.toSrc === b.srcId) || null;
     };
+    const cornerStyle = this._gableCornerStyle();
     const distances = loop.map((pt, index) => {
       const override = edgeIntent(index);
       // Pull-out only: an override can widen an edge's overhang, never
-      // tuck it under the house default.
+      // tuck it under the house default — which the GABLE CORNER style
+      // shapes per kind (board #252: the boxed treatments halve gables).
+      const kindBase = window.DraftGeometry2D.gableOverhangFt(
+        edgeIntent(index)?.kind || 'eave', overhang, cornerStyle);
       return override && override.overhangFt != null
-        ? Math.max(override.overhangFt, overhang) : overhang;
+        ? Math.max(override.overhangFt, kindBase) : kindBase;
     });
     const offset = window.DraftGeometry2D.offsetOutlineVariable(loop, distances);
     const outPoints = [];
@@ -12009,7 +12447,6 @@ class Component extends DCLogic {
             z: closed[0].z - closed[legCount - 1].z,
           };
           const chordLen = Math.hypot(chord.x, chord.z) || 1;
-          const distances = closed.map((point, index) => (index < legCount - 1 ? overhang : 0));
           edges = closed.map((point, index) => {
             if (index >= legCount - 1) return 'gable';
             const next = closed[index + 1];
@@ -12018,6 +12455,11 @@ class Component extends DCLogic {
             const cross = Math.abs(dx * chord.z - dz * chord.x) / (len * chordLen);
             return cross < 0.5 ? 'gable' : 'eave'; // within ~30° of the house line
           });
+          // The GABLE CORNER style shapes the street-face gable too (board
+          // #252): boxed treatments halve it. The house-side edges stay zero.
+          const cornerStyle = this._gableCornerStyle();
+          const distances = edges.map((kind, index) => (index < legCount - 1
+            ? window.DraftGeometry2D.gableOverhangFt(kind, overhang, cornerStyle) : 0));
           points = window.DraftGeometry2D.offsetOutlineVariable(closed, distances);
         } else {
           points = this._offsetOutline(closed, overhang);
@@ -12071,12 +12513,36 @@ class Component extends DCLogic {
         return;
       }
       const step = this.state.tour.step;
+      // Board #260, Q2(b) park-and-confirm: OUTSIDE the tour, a press with
+      // no stairs anywhere first SUGGESTS them and stops — free, and the
+      // opening never cuts at a spot nobody approved. The next press
+      // builds with the openings where the (possibly re-placed) stairs
+      // stand. Mid-tour presses never park (the tour has its own stair
+      // step), and a declined suggestion (deleted) does not come back —
+      // that press builds stairless.
+      if (!step && this.state.suggestStairs !== false && !this._stairSuggestionDeclined
+        && !this._stairs.some(stair => (stair.view || 'plan') === 'plan')) {
+        const { placed, notes } = this._autoPlaceStairs();
+        if (placed.length) {
+          this.setState({
+            drawingMessage: `Stairs suggested — ${notes.join(' ')} Adjust or replace them, then press the bone to build.`,
+            drawingMessageError: false,
+          });
+          return;
+        }
+        if (notes.length) {
+          // Nothing fit: say why and carry on with the build — a house
+          // can stand without stairs, and parking forever would trap the
+          // bone.
+          this.setState({ drawingMessage: notes.join(' '), drawingMessageError: false });
+        }
+      }
       if (step && step !== 'finale') {
         // A mid-tour bone press: the drafter overrode the escort. The
         // build and the tour's end are ONE action — clear the tour first
         // (setState applies synchronously) so the build's own history entry
         // and save carry it, and a single undo still removes the whole
-        // house. No reveal on this path.
+        // house.
         this._clearTourTimers();
         this.setState({ tour: format.tour(null), tourPopup: false, tourPopupNote: '', tourGableArmed: false });
       }
@@ -12090,6 +12556,7 @@ class Component extends DCLogic {
       }
       this._refreshBoneWallet();
       if (step === 'finale') this._afterTourBone();
+      else if (built) this._startBoneReveal();
       return;
     }
     this.setState({
@@ -16296,14 +16763,277 @@ class Component extends DCLogic {
     if (shape === 'straight' || layout.treads < 3) return null;
     const winders = shape === 'L' && STAIR_WINDER_OPTIONS.includes(stair.winders) ? stair.winders : 0;
     const landTreads = winders || 1; // the turn eats this many tread slots
-    const t1 = Math.max(1, Math.floor((layout.treads - landTreads) / 2));
+    // Board #260: splitTreads overrides the even split with the TOP leg's
+    // tread count — the entry L's short flight (2-3 down to the front-wall
+    // landing), or its stacked mirror (treads − 2..3). Clamped so both
+    // legs keep at least one tread; absent = the even split, unchanged.
+    const override = Number.isInteger(stair.splitTreads) && stair.splitTreads > 0
+      ? Math.min(stair.splitTreads, layout.treads - landTreads - 1)
+      : null;
+    const t1 = override != null ? Math.max(1, override)
+      : Math.max(1, Math.floor((layout.treads - landTreads) / 2));
     const t2 = Math.max(1, layout.treads - landTreads - t1);
-    // The 36" landing is CLEAR: measured to the nosing of the run above
-    // (which projects ~1" over it) with 1/2" of drywall at a walled edge.
+    return { shape, winders, t1, t2, landFt: this._stairLandFt(stair.widthFt), turn: stair.turn === 'left' ? 'left' : 'right' };
+  }
+
+  // The 36" landing is CLEAR: measured to the nosing of the run above
+  // (which projects ~1" over it) with 1/2" of drywall at a walled edge.
+  _stairLandFt(widthFt) {
     const clearFt = STAIR_LANDING_MIN_FT
       + (STAIR_RISER_FACE_IN - STAIR_TREAD_RUN_IN + STAIR_LANDING_DRYWALL_IN) / 12;
-    const landFt = Math.max(clearFt, stair.widthFt);
-    return { shape, winders, t1, t2, landFt, turn: stair.turn === 'left' ? 'left' : 'right' };
+    return Math.max(clearFt, widthFt);
+  }
+
+  // ─── AUTO-PLACE STAIRS (board #260) ──────────────────────────────────────
+  // BUILD HOUSE and the tour's stair step OFFER a rule-derived placement —
+  // riser math from the level heights, the run along the beam edge near the
+  // circulation core, folding to L/U when straight doesn't fit — as a
+  // SUGGESTION the drafter accepts, replaces or deletes, never a silent
+  // commit. The pure candidate logic lives in auto-stair.js; this layer
+  // feeds it real geometry and commits the winner tagged `auto: true`.
+  // Stairs have no drag today (reposition = delete + re-place), so
+  // promote-on-touch reduces to: a hand placement never carries `auto`, a
+  // re-run replaces only auto-tagged stairs, and DELETING a suggestion is
+  // "no thanks" — nothing re-suggests until the next document. If stair
+  // dragging ever lands, clear `auto` in that handler.
+
+  // The rule-derived suggestion for one level, uncommitted. Beam edges are
+  // the beams the opening must clear (the level's own FLOOR view) plus, for
+  // the lowest floor, the tour's mid-span beam on the FOUNDATION plan — the
+  // #246 edge the well hugs. Stamps weight the circulation core (rule A
+  // fires only when the front-entry zone wins the target).
+  _autoStairSuggestion(levelId) {
+    if (!window.DraftAutoStair) return null;
+    const outline = this._houseOutline(levelId);
+    if (!outline || outline.points.length < 3) return null;
+    const descent = this._stairDescent(levelId);
+    if (!descent || !(descent.riseFt > 0)) return null;
+    const layout = this._stairLayout(descent.riseFt);
+    const floors = this._floorLevels();
+    const lowest = floors.length > 0 && floors[0].id === levelId;
+    const beams = [
+      ...this._stairFloorBeams(levelId),
+      ...(lowest ? this._beams.filter(beam => beam.levelId === BASEMENT_LEVEL_ID && beam.view === 'foundation') : []),
+    ].map(beam => ({ start: { x: beam.start.x, z: beam.start.z }, end: { x: beam.end.x, z: beam.end.z } }));
+    const stamps = this._roomTags
+      .filter(tag => tag.levelId === levelId && tag.stamped === true && tag.base)
+      .map(tag => ({ name: tag.base, x: tag.at.x, z: tag.at.z }));
+    const res = window.DraftAutoStair.suggestStair({
+      points: outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      insetFt: this._stairOpeningSetbackFt(levelId),
+      beams,
+      stamps,
+      runFt: layout.runFt,
+      treads: layout.treads,
+      widthFt: this.state.stairWidth,
+      landFt: this._stairLandFt(this.state.stairWidth),
+      finishIn: STAIR_OPENING_FINISH_IN,
+      gapIn: STAIR_BEAM_CLEAR_IN,
+      runStepFt: STAIR_TREAD_RUN_IN / 12,
+      softInterior: lowest, // rule B: basement stairs prefer interior, softly
+    });
+    return { ...res, layout, descent };
+  }
+
+  // Commit one suggestion as an ordinary stair entity — the same shape a
+  // hand placement writes, plus the auto tag (and the entry L's split).
+  _buildAutoStair(levelId, sug, widthFt) {
+    const elevation = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
+    const dx = sug.stair.end.x - sug.stair.start.x, dz = sug.stair.end.z - sug.stair.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const firstLen = sug.stair.shape === 'straight' ? sug.layout.runFt
+      : (sug.stair.splitTreads || Math.max(1, Math.floor((sug.layout.treads - 1) / 2))) * STAIR_TREAD_RUN_IN / 12;
+    return {
+      id: this._nextStairId++,
+      start: new THREE.Vector3(sug.stair.start.x, elevation, sug.stair.start.z),
+      end: new THREE.Vector3(
+        sug.stair.start.x + (dx / len) * firstLen,
+        elevation,
+        sug.stair.start.z + (dz / len) * firstLen,
+      ),
+      levelId,
+      view: 'plan',
+      widthFt,
+      riseFt: sug.layout.riseFt,
+      rail: this._stairRail(),
+      shape: sug.stair.shape,
+      turn: sug.stair.turn,
+      winders: 0,
+      auto: true,
+      ...(Number.isInteger(sug.stair.splitTreads) && sug.stair.splitTreads > 0
+        ? { splitTreads: sug.stair.splitTreads } : {}),
+      layer: STAIR_LAYER,
+    };
+  }
+
+  // Stairs stack: the upper run goes directly over the one below so the
+  // headroom holds. Over an entry L the frame FLIPS (the boss's mapping):
+  // the upper stair's LONG top leg rides over the long leg below, the
+  // landing overlays the landing, and the short 2-3 step leg lands at the
+  // entry floor — so the turn reverses and splitTreads becomes the long
+  // top leg. Built uncommitted; the caller pushes it only when legal (Q4).
+  _buildStackedStair(below, levelId, layout, widthFt) {
+    const elevation = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
+    const runStep = STAIR_TREAD_RUN_IN / 12;
+    const dxb = below.end.x - below.start.x, dzb = below.end.z - below.start.z;
+    const lb = Math.hypot(dxb, dzb) || 1;
+    const d = { x: dxb / lb, z: dzb / lb };
+    const belowLayout = this._stairCurrentLayout(below);
+    const belowSplit = this._stairShapeSplit(below, belowLayout);
+    const make = (start, dir, firstLen, extra) => ({
+      id: this._nextStairId++,
+      start: new THREE.Vector3(start.x, elevation, start.z),
+      end: new THREE.Vector3(start.x + dir.x * firstLen, elevation, start.z + dir.z * firstLen),
+      levelId,
+      view: 'plan',
+      widthFt,
+      riseFt: layout.riseFt,
+      rail: below.rail,
+      shape: below.shape || 'straight',
+      turn: below.turn || 'right',
+      winders: below.winders || 0,
+      auto: true,
+      layer: STAIR_LAYER,
+      ...extra,
+    });
+    if (belowSplit && Number.isInteger(below.splitTreads) && below.splitTreads > 0) {
+      const tShort = belowSplit.t1;
+      const s = belowSplit.turn === 'right' ? 1 : -1;
+      const perp = { x: -d.z * s, z: d.x * s };
+      const L = belowSplit.landFt;
+      const run1b = belowSplit.t1 * runStep;
+      const landingCentre = {
+        x: below.start.x + d.x * (run1b + L / 2) + perp.x * (-below.widthFt / 2 + L / 2),
+        z: below.start.z + d.z * (run1b + L / 2) + perp.z * (-below.widthFt / 2 + L / 2),
+      };
+      const t1u = Math.max(1, layout.treads - 1 - tShort);
+      const du = { x: -perp.x, z: -perp.z };
+      const su = -s;
+      const perpU = { x: -du.z * su, z: du.x * su };
+      const Lu = this._stairLandFt(widthFt);
+      const run1u = t1u * runStep;
+      const start = {
+        x: landingCentre.x - du.x * (run1u + Lu / 2) - perpU.x * (-widthFt / 2 + Lu / 2),
+        z: landingCentre.z - du.z * (run1u + Lu / 2) - perpU.z * (-widthFt / 2 + Lu / 2),
+      };
+      return make(start, du, run1u, {
+        turn: su > 0 ? 'right' : 'left',
+        winders: 0,
+        splitTreads: t1u,
+      });
+    }
+    const firstLen = belowSplit
+      ? Math.max(1, Math.floor((layout.treads - 1) / 2)) * runStep
+      : layout.runFt;
+    return make({ x: below.start.x, z: below.start.z }, d, firstLen, {});
+  }
+
+  // Born legal, verified: every opening corner inside the interior ring and
+  // the well clear of the carrying beams — the exact two rules
+  // _stairAutoFit nudges for, checked without nudging.
+  _stairPlacementLegal(stair) {
+    const outline = this._houseOutline(stair.levelId);
+    if (!outline || outline.points.length < 3) return false;
+    const poly = this._stairOpeningFootprint(stair);
+    if (!poly || poly.length < 3) return false;
+    const ring = window.DraftGeometry2D.offsetOutline(
+      outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      -this._stairOpeningSetbackFt(stair.levelId));
+    if (!poly.every(pt => this._pointInOutline(ring, pt))) return false;
+    const clearFt = STAIR_BEAM_CLEAR_IN / 12;
+    return this._stairFloorBeams(stair.levelId)
+      .every(beam => this._stairBeamGapFt(beam, poly) >= clearFt - 1e-4);
+  }
+
+  // Rule B's trigger: the stair's well runs beside an exterior wall (its
+  // opening within a foot of the interior ring).
+  _stairWallAdjacent(stair) {
+    const outline = this._houseOutline(stair.levelId);
+    if (!outline || outline.points.length < 3) return false;
+    const poly = this._stairOpeningFootprint(stair);
+    if (!poly) return false;
+    const ring = window.DraftGeometry2D.offsetOutline(
+      outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      -this._stairOpeningSetbackFt(stair.levelId));
+    const edge = Math.min(...poly.map(pt => {
+      let best = Infinity;
+      for (let i = 0; i < ring.length; i++) {
+        best = Math.min(best, this._distToLineSeg(pt, { start: ring[i], end: ring[(i + 1) % ring.length] }).d);
+      }
+      return best;
+    }));
+    return edge < 1;
+  }
+
+  // Suggest for ONE level: stack over the run below first (Q4 — fall back
+  // to the level's own best candidate with a message when the stack can't
+  // be made legal), else derive fresh. Pushes the stair and returns
+  // { stair, note } — null when nothing fits (note says why) or the level
+  // needs no stair.
+  _suggestStairForLevel(levelId) {
+    const floors = this._floorLevels();
+    const idx = floors.findIndex(level => level.id === levelId);
+    if (idx < 0) return null;
+    const descent = this._stairDescent(levelId);
+    if (!descent || !(descent.riseFt > 0)) return null;
+    if (this._stairs.some(stair => stair.levelId === levelId && (stair.view || 'plan') === 'plan')) return null;
+    const layout = this._stairLayout(descent.riseFt);
+    const below = idx > 0
+      ? this._stairs.find(stair => stair.levelId === floors[idx - 1].id && (stair.view || 'plan') === 'plan')
+      : null;
+    // Rule B: the basement-descending stair beside an exterior wall widens
+    // every stacked stair above it to 3'-6" so the basement flight keeps
+    // its true 3'-0" clear past the thicker foundation.
+    const lowestStair = floors.length
+      ? this._stairs.find(stair => stair.levelId === floors[0].id && (stair.view || 'plan') === 'plan')
+      : null;
+    const widen = lowestStair ? this._stairWallAdjacent(lowestStair) : false;
+    const widthFt = idx > 0 && widen ? Math.max(3.5, this.state.stairWidth) : this.state.stairWidth;
+    let stackNote = '';
+    if (below) {
+      const stacked = this._buildStackedStair(below, levelId, layout, widthFt);
+      if (this._stairPlacementLegal(stacked)) {
+        this._stairs.push(stacked);
+        this._markUnsaved();
+        return {
+          stair: stacked,
+          note: `${floors[idx].name}: ${layout.risers} risers stacked over the run below — headroom holds.`,
+        };
+      }
+      this._nextStairId--; // the uncommitted candidate hands its id back
+      stackNote = ' (could not stack over the run below — headroom needs checking)';
+    }
+    const sug = this._autoStairSuggestion(levelId);
+    if (!sug) return null;
+    if (!sug.stair) {
+      return {
+        stair: null,
+        note: `${floors[idx].name}: no legal stair position — straight ${sug.report.straight || 'blocked'}; L ${sug.report.L || 'blocked'}; U ${sug.report.U || 'blocked'}.`,
+      };
+    }
+    const stair = this._buildAutoStair(levelId, sug, widthFt);
+    this._stairs.push(stair);
+    this._markUnsaved();
+    const how = sug.stair.splitTreads
+      ? `entry L — landing at the front wall, ${sug.stair.splitTreads} steps down from the entry`
+      : sug.stair.shape === 'straight'
+        ? `straight run${this._stairFloorBeams(levelId).length || this._beams.some(beam => beam.auto) ? ' along the beam edge' : ''}`
+        : sug.stair.shape === 'L' ? 'folded L at the corner nearest the core' : 'U switchback';
+    return { stair, note: `${floors[idx].name}: ${layout.risers} risers · ${how}${stackNote}.` };
+  }
+
+  // Every descending floor without a stair, bottom-up so upper floors can
+  // stack on what was just suggested below them.
+  _autoPlaceStairs() {
+    const placed = [];
+    const notes = [];
+    this._floorLevels().forEach(level => {
+      const res = this._suggestStairForLevel(level.id);
+      if (!res) return;
+      if (res.stair) placed.push(res.stair);
+      notes.push(res.note);
+    });
+    return { placed, notes };
   }
 
   // The stair's plan parts in world space: one straight run, or two runs
@@ -16563,6 +17293,9 @@ class Component extends DCLogic {
     if (!active.length) return;
     const stair = active[active.length - 1];
     this._stairs = this._stairs.filter(item => item !== stair);
+    // Deleting a SUGGESTED stair is "no thanks" (board #260, Q6): neither
+    // the tour step nor the next bone press re-suggests this session.
+    if (stair.auto === true) this._stairSuggestionDeclined = true;
     this._markUnsaved();
     this.setState({ drawingMessage: 'Stair removed.', drawingMessageError: false });
   }
