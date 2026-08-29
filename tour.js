@@ -121,6 +121,9 @@ if (!window.DraftTour) {
     return y0 + (y1 - y0) * eased;
   };
   const REVEAL_MS = 2500;
+  // The held beat before the reveal starts climbing: the rails have just
+  // slid open, the audience settles, THEN the house grows.
+  const REVEAL_HOLD_MS = 1000;
 
   // ── Room stamps (board #198, slice 4) ───────────────────────────────────
   // A stamp: { id, levelId, base, name } — base is the tray chip it came
@@ -181,6 +184,7 @@ if (!window.DraftTour) {
     gablePeakRiseFt,
     revealClipY,
     REVEAL_MS,
+    REVEAL_HOLD_MS,
   });
 })();
 }
