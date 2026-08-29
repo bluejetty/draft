@@ -35,7 +35,7 @@
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
     a { color: rgba(29,31,32,0.45); text-decoration: none; font-family: 'Barlow Condensed', system-ui, sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
     a:hover { color: #5980a6; }
-    .level-row { display:flex; align-items:stretch; border:1px solid rgba(29,31,32,0.16); margin-bottom:2px; cursor:pointer; background:#fff; }
+    .level-row { position:relative; display:flex; align-items:stretch; border:1px solid rgba(29,31,32,0.16); margin-bottom:2px; cursor:pointer; background:#fff; }
     .level-row:hover { background:rgba(29,31,32,0.03); }
     .level-row.active { border-color:#5980a6; background:rgba(89,128,166,0.09); }
     .level-tour-next { border:1px solid #557a46; background:#557a46; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:700; letter-spacing:0.05em; padding:2px 6px; cursor:pointer; }
@@ -51,8 +51,8 @@
     .level-bg { border:1px solid rgba(29,31,32,0.2); background:#fff; cursor:pointer; padding:0; width:16px; height:16px; display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.48); flex-shrink:0; align-self:flex-start; margin-top:5px; }
     .level-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-layer-row { display:flex; align-items:stretch; gap:2px; }
-    .level-layer-row .level-layer { flex:1 1 0; min-width:0; }
-    .level-assembly-summary { flex:1 1 0; min-width:0; border:1px solid rgba(29,31,32,0.14); background:rgba(29,31,32,0.04); color:rgba(29,31,32,0.45); cursor:pointer; padding:1px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; text-align:right; white-space:nowrap; }
+    .level-layer-row .level-layer { flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; }
+    .level-assembly-summary { flex:0 0 46px; width:46px; border:1px solid rgba(29,31,32,0.14); background:rgba(29,31,32,0.04); color:rgba(29,31,32,0.45); cursor:pointer; padding:1px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; text-align:right; white-space:nowrap; }
     .level-assembly-summary:hover { border-color:#5980a6; color:#365e86; }
     .rail-tab { position:absolute; top:0; bottom:0; z-index:6; display:flex; align-items:center; justify-content:center; border:1px solid rgba(29,31,32,0.25); background:#fff; cursor:pointer; padding:0 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:18px; font-weight:600; line-height:1; letter-spacing:0.14em; color:rgba(29,31,32,0.8); writing-mode:vertical-rl; text-transform:uppercase; box-shadow:0 1px 6px rgba(29,31,32,0.14); }
     .rail-tab:hover { border-color:#5980a6; color:#365e86; }
@@ -67,13 +67,13 @@
     .strip-chip-frenchcurve:hover { color:#4a7fc0 !important; filter:drop-shadow(0 0 4px rgba(74,127,192,0.7)) !important; }
     .level-layer-bg { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:0; width:15px; display:flex; align-items:center; justify-content:center; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.04em; color:rgba(29,31,32,0.42); flex-shrink:0; }
     .level-layer-bg:hover { border-color:#5980a6; color:#5980a6; }
-    .level-head { display:flex; align-items:flex-start; gap:5px; }
+    .level-head { display:flex; align-items:flex-start; gap:5px; padding-right:12px; }
     .level-title { flex-shrink:0; min-width:0; }
     .level-edge-space { flex:1; }
     .level-edge-edit { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:1px 3px; font:inherit; }
     .level-edge-edit:hover { border-color:#5980a6; color:#5980a6; }
     .level-head .level-bg { margin-top:0; }
-    .level-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; align-self:flex-start; margin-top:4px; }
+    .level-del  { position:absolute; top:4px; right:1px; border:none; background:none; cursor:pointer; padding:0 5px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); }
     .level-edge { display:flex; align-items:center; gap:3px; min-height:9px; }
     .level-edge-line { flex:1; border-top:1px solid rgba(29,31,32,0.55); }
     .level-edge-val { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; color:#1d1f20; white-space:nowrap; }
@@ -94,6 +94,24 @@
     .cut-del  { border:none; background:none; cursor:pointer; padding:0 7px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); flex-shrink:0; }
     .cut-del:hover { color:#c04040; }
     .cut-side { flex:1; min-width:0; padding:0 0 0 4px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:rgba(29,31,32,0.72); overflow:hidden; text-overflow:ellipsis; }
+    .view-rail { position:absolute; top:8px; bottom:8px; z-index:5; display:flex; flex-direction:column; gap:6px; overflow-y:auto; overflow-x:hidden; pointer-events:none; scrollbar-width:none; }
+    .view-rail::-webkit-scrollbar { display:none; }
+    .view-rail-left { left:36px; }
+    .view-rail-right { right:36px; flex-direction:row; align-items:stretch; gap:8px; }
+    .view-rail-col { display:flex; flex-direction:column; gap:6px; overflow-y:auto; overflow-x:hidden; min-height:0; scrollbar-width:none; }
+    .view-rail-col::-webkit-scrollbar { display:none; }
+    .view-rail-spacer { flex:1 1 auto; min-height:0; }
+    .view-thumb { pointer-events:auto; flex-shrink:0; width:118px; border:1px solid rgba(29,31,32,0.22); background:#fff; padding:0; cursor:pointer; box-shadow:0 1px 5px rgba(29,31,32,0.12); text-align:left; }
+    .view-thumb:hover { border-color:#5980a6; }
+    .view-thumb.active { border-color:#b04060; box-shadow:0 0 0 1px #b04060, 0 1px 5px rgba(29,31,32,0.12); }
+    .view-thumb canvas { display:block; width:116px; height:76px; background:#fafafa; }
+    .view-thumb-plan { width:88px; }
+    .view-thumb-plan canvas { width:86px; height:56px; }
+    .view-thumb-label { display:flex; align-items:center; gap:4px; padding:2px 5px 3px; border-top:1px solid rgba(29,31,32,0.1); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.68); white-space:nowrap; overflow:hidden; }
+    .view-thumb-3d { pointer-events:auto; flex-shrink:0; width:118px; height:76px; border:1px solid rgba(29,31,32,0.22); background:#fff; cursor:pointer; box-shadow:0 1px 5px rgba(29,31,32,0.12); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.1em; color:rgba(29,31,32,0.55); }
+    .view-thumb-3d:hover { border-color:#5980a6; color:#365e86; }
+    .view-thumb-3d.active { border-color:#b04060; box-shadow:0 0 0 1px #b04060, 0 1px 5px rgba(29,31,32,0.12); }
+    .view-thumb-3d[disabled] { opacity:0.5; cursor:not-allowed; }
     .tool-keypad { display:grid; grid-template-columns:repeat(4, 1fr); gap:3px; }
     .tool-key { position:relative; aspect-ratio:1 / 1; min-width:0; border:1px solid; padding:2px 1px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; font-family:'Barlow Condensed',system-ui,sans-serif; text-transform:uppercase; }
     .tool-key-letter { position:absolute; top:2px; left:3px; font-weight:700; line-height:1; }
@@ -1201,6 +1219,22 @@
     <canvas data-model-overlay style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
     <button type="button" class="rail-tab rail-tab-left" data-left-rail-tab onClick="{{ onToggleLeftRail }}" title="{{ leftRailTabTitle }}">ROUGHDRAFTER - LITE - DRAFTING TOOLS</button>
     <button type="button" class="rail-tab rail-tab-right" data-right-rail-tab onClick="{{ onToggleRightRail }}" title="{{ rightRailTabTitle }}">LEVELS - LAYERS</button>
+    <!-- VIEW GALLERIES (board #265): little TV-screen viewports down the canvas
+         edges — the four standard elevations on the left; on the right an inner
+         column of per-level PLAN thumbnails (SITE / ROOF / floors / FOUNDATION,
+         the always-available way back to the plans) beside the outer column of
+         hand-cut sections stacked over the 3D screen. New sections push 3D down;
+         the columns scroll when they overflow. Thumbnails are painted
+         imperatively from the same generators that draw the full-size views. -->
+    <div data-view-rail-left class="view-rail view-rail-left"></div>
+    <div data-view-rail-right class="view-rail view-rail-right">
+      <div data-view-rail-plans class="view-rail-col"></div>
+      <div data-view-rail-outer class="view-rail-col">
+        <div data-view-rail-sections style="display:flex; flex-direction:column; gap:6px;"></div>
+        <div class="view-rail-spacer"></div>
+        <button type="button" data-view-rail-3d class="view-thumb-3d" onClick="{{ enter3D }}" title="{{ view3DTitle }}" disabled="{{ webglUnavailable }}">⬡<span>3D</span></button>
+      </div>
+    </div>
     <!-- HTML crosshair cursor -->
     <div style="position:absolute; left:{{ cursorX }}px; top:{{ cursorY }}px; width:36px; height:36px; transform:translate(-50%,-50%); pointer-events:none; display:{{ cursorDisplay }};">
       <div style="position:absolute; top:50%; left:0; width:calc(50% - 7px); height:1px; background:#1d1f20; transform:translateY(-50%);"></div>
@@ -4064,7 +4098,9 @@ class Component extends DCLogic {
       () => this._markUnsaved());
     const front = this._autoElevationCuts().find(cut => cut.id === 'E1');
     if (!front) return; // no auto elevations to jump to — the build stands
-    this._revealStart = performance.now();
+    // The curtain moment: both rails slide open around the stage and the
+    // mask holds one beat — get them ready — before the house starts up.
+    this._revealStart = performance.now() + window.DraftTour.REVEAL_HOLD_MS;
     this._revealActive = true;
     // The reveal parks the drafter in E1 — stand the drawing tool down so a
     // stray click there can't keep placing plan geometry.
@@ -4072,7 +4108,7 @@ class Component extends DCLogic {
     this._cancelLine();
     this._cancelFloor();
     this._cancelOutline();
-    this.setState({ activeView: 'cut', activeCutId: 'E1', activeTool: 'select', drawingMessage: '', drawingMessageError: false });
+    this.setState({ leftRailOpen: true, rightRailOpen: true, activeView: 'cut', activeCutId: 'E1', activeTool: 'select', drawingMessage: '', drawingMessageError: false });
     this._invalidate();
   }
 
@@ -4886,6 +4922,8 @@ class Component extends DCLogic {
     } finally {
       this._loadingDrawing = false;
       this._drawingReady = true;
+      this._bumpViewRailEpoch();
+      this._invalidate();
       // Readiness beacon for the test suite: set imperatively (not through
       // renderVals) so it flips the moment loading ends, independent of
       // render timing. data-save-seq / -dirty are kept by _markUnsaved.
@@ -5027,6 +5065,7 @@ class Component extends DCLogic {
   _markUnsaved() {
     if (this._loadingDrawing || !this._drawingReady) return;
     this._recordHistory();
+    this._bumpViewRailEpoch();
     this._fileDirty = true;
     // The dirty beacon flips synchronously with the edit — the UNSAVED text
     // renders a frame later, which is too late for a condition wait to see.
@@ -5422,10 +5461,182 @@ class Component extends DCLogic {
     const orbiting = this._controls?.enabled === true;
     if (orbiting) this._controls.update();
     if (document.hidden) return;
+    this._syncViewRails();
     if (!this._needsRedraw && !orbiting) return;
     this._needsRedraw = false;
     if (this._renderer) this._renderer.render(this._scene, this._camera);
     this._redrawOverlay();
+  }
+
+  // ── View galleries (board #265) ────────────────────────────────────────
+  // The little TV screens down the canvas edges: E1-E4 elevations on the
+  // left, hand-cut S sections on the right stacked above the 3D screen
+  // (new sections push it down; the column scrolls). Cards are managed
+  // imperatively — outside the component render — and each screen is
+  // painted by the SAME generator that draws the full-size cut view, so
+  // a thumbnail is always a true miniature. Repaints only when the model
+  // changes (the epoch), never on mouse traffic.
+  _bumpViewRailEpoch() {
+    this._viewRailEpoch = (this._viewRailEpoch || 0) + 1;
+  }
+
+  _syncViewRails() {
+    const left = document.querySelector('[data-view-rail-left]');
+    const sections = document.querySelector('[data-view-rail-sections]');
+    if (!left || !sections || !this._drawingReady) return;
+    this._syncThumbColumn(left, this._autoElevationCuts());
+    this._syncThumbColumn(sections, this.state.cuts);
+    this._syncPlanColumn(document.querySelector('[data-view-rail-plans]'));
+    document.querySelector('[data-view-rail-3d]')
+      ?.classList.toggle('active', this.state.activeView === 'perspective');
+    // An open side panel takes the screens on its side with it — only the
+    // little plan column keeps its seat, so the drawing keeps max room.
+    left.style.display = this.state.leftRailOpen ? 'none' : '';
+    const outer = document.querySelector('[data-view-rail-outer]');
+    if (outer) outer.style.display = this.state.rightRailOpen ? 'none' : '';
+  }
+
+  _syncThumbColumn(box, cuts) {
+    const epoch = String(this._viewRailEpoch || 0);
+    const stale = new Set([...box.children].map(card => card.dataset.cutId));
+    cuts.forEach(cut => {
+      stale.delete(String(cut.id));
+      let card = box.querySelector(`[data-cut-id="${cut.id}"]`);
+      if (!card) {
+        card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'view-thumb';
+        card.dataset.cutId = cut.id;
+        const cutId = cut.id; // keep the real id — datasets stringify numbers
+        card.addEventListener('click', () => this._enterCutView(cutId));
+        const screen = document.createElement('canvas');
+        screen.width = 232; screen.height = 152; // 2x the CSS size, crisp lines
+        card.appendChild(screen);
+        const label = document.createElement('div');
+        label.className = 'view-thumb-label';
+        card.appendChild(label);
+        box.appendChild(card);
+      }
+      const sideName = cut.auto ? this._elevationName(cut.id) : '';
+      card.title = cut.auto
+        ? `${cut.name} — the ${sideName} elevation; tap to bring it center`
+        : `${cut.name} — tap to bring this section center`;
+      card.lastChild.textContent = cut.name + (sideName ? ` · ${sideName}` : '');
+      card.classList.toggle('active',
+        this.state.activeView === 'cut' && this.state.activeCutId === cut.id);
+      if (card.dataset.epoch !== epoch) {
+        card.dataset.epoch = epoch;
+        const screen = card.firstChild;
+        const ctx = screen.getContext('2d');
+        ctx.clearRect(0, 0, screen.width, screen.height);
+        this._drawCutWorkspace2D(ctx, screen.width, screen.height, cut);
+      }
+    });
+    stale.forEach(id => box.querySelector(`[data-cut-id="${id}"]`)?.remove());
+  }
+
+  // The inner plan column: one little screen per level (SITE / ROOF / floors /
+  // FOUNDATION — a third storey grows the column), the always-available way
+  // back to the plans from any cut or 3D view.
+  _syncPlanColumn(box) {
+    if (!box) return;
+    const epoch = String(this._viewRailEpoch || 0);
+    const stale = new Set([...box.children].map(card => card.dataset.levelId));
+    this.state.levels.forEach((level, i) => {
+      stale.delete(String(level.id));
+      let card = box.querySelector(`[data-level-id="${level.id}"]`);
+      if (!card) {
+        card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'view-thumb view-thumb-plan';
+        card.dataset.levelId = level.id;
+        const levelId = level.id;
+        card.addEventListener('click', () => {
+          const idx = this.state.levels.findIndex(l => l.id === levelId);
+          if (idx >= 0) this._switchLevel(idx);
+        });
+        const screen = document.createElement('canvas');
+        screen.width = 172; screen.height = 112; // 2x the CSS size, crisp lines
+        card.appendChild(screen);
+        const label = document.createElement('div');
+        label.className = 'view-thumb-label';
+        card.appendChild(label);
+      }
+      // Keep the column in level order even when levels are added later.
+      if (box.children[i] !== card) box.insertBefore(card, box.children[i] || null);
+      card.title = `${level.name} — tap to bring this plan center`;
+      card.lastChild.textContent = level.name;
+      card.classList.toggle('active',
+        this.state.activeView === 'top' && !this.state.boneyardActive
+        && this._activeLevel()?.id === level.id);
+      if (card.dataset.epoch !== epoch) {
+        card.dataset.epoch = epoch;
+        const screen = card.firstChild;
+        const ctx = screen.getContext('2d');
+        ctx.clearRect(0, 0, screen.width, screen.height);
+        this._drawPlanThumb2D(ctx, screen.width, screen.height, level.id);
+      }
+    });
+    stale.forEach(id => box.querySelector(`[data-level-id="${id}"]`)?.remove());
+  }
+
+  // A level's plan in miniature: the level's own geometry fit to the little
+  // screen, drawn by the same painters as the big plan view.
+  _drawPlanThumb2D(ctx, w, h, levelId) {
+    this._ensureDrawingCollections();
+    // Levels with layer sets thumbnail their PLAN view; whole-level contexts
+    // (ROOF, SITE) show everything they hold.
+    const planOnly = this._layerViewsForLevel(levelId).length > 0;
+    const onPlan = item => !planOnly || (item.view || 'plan') === 'plan';
+    const walls = this._walls.filter(x => x.levelId === levelId && onPlan(x));
+    const lines = this._lines.filter(x => x.levelId === levelId && onPlan(x)
+      && this._lineLayerConfig(x.layer).visible);
+    const roofs = this._roofs.filter(x => x.levelId === levelId);
+    const outlines = this._outlines.filter(x => x.levelId === levelId);
+    const pts = [];
+    walls.forEach(s => pts.push(s.start, s.end));
+    lines.forEach(s => pts.push(s.start, s.end));
+    roofs.forEach(r => pts.push(...r.points));
+    outlines.forEach(o => pts.push(...o.points));
+    if (!pts.length) return;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    pts.forEach(p => {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+    });
+    const pad = 8;
+    const sc = Math.min((w - 2 * pad) / Math.max(1e-6, maxX - minX),
+                        (h - 2 * pad) / Math.max(1e-6, maxZ - minZ));
+    const ox = (w - sc * (maxX - minX)) / 2, oz = (h - sc * (maxZ - minZ)) / 2;
+    const toS = p => ({ x: ox + (p.x - minX) * sc, y: oz + (p.z - minZ) * sc });
+    roofs.forEach(roof => this._drawRoof2D(ctx, toS, roof));
+    const joins = this._wallJoins(walls);
+    walls.forEach(wall => this._drawWallSeg2D(ctx, toS, wall, false, joins, 'fill'));
+    walls.forEach(wall => this._drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke'));
+    ctx.save();
+    ctx.strokeStyle = '#1d1f20';
+    ctx.lineWidth = 1;
+    lines.forEach(seg => {
+      const a = toS(seg.start), b = toS(seg.end);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y);
+      if (seg.bulge) {
+        const c = toS(this._lineControlPoint(seg));
+        ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
+      } else {
+        ctx.lineTo(b.x, b.y);
+      }
+      ctx.stroke();
+    });
+    ctx.strokeStyle = 'rgba(29,31,32,0.3)';
+    outlines.forEach(outline => {
+      const loop = outline.points.map(toS);
+      if (loop.length < 2) return;
+      ctx.beginPath();
+      loop.forEach((p, index) => (index ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      if (!outline.open) ctx.closePath();
+      ctx.stroke();
+    });
+    ctx.restore();
   }
 
   _drawGrid2D(ctx, w, h) {

@@ -124,7 +124,7 @@ test('the finale reveal stands the drawing tool down before parking in E1', asyn
   await page.keyboard.press('Enter');
   await page.locator('[data-build-house]').click();
   await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
-  await page.waitForTimeout(3200); // the reveal runs ~2.5s
+  await page.waitForTimeout(4300); // 1s curtain hold + the ~2.5s reveal
   await h.waitForSaved(page);
 
   // The reveal disarmed the tool: SELECT holds it, and clicks in the
