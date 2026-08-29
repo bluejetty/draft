@@ -95,7 +95,7 @@ test('a wall drawn back in TOP / PLAN still works after a refused cut-view click
 });
 
 test('the finale reveal stands the drawing tool down before parking in E1', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { boneReveal: true });
 
   // The guided tour up to the roof pause, drawing the outline WITH the wall
   // tool armed later: trace, stairs, straight to roof, ROOF DONE, bone.

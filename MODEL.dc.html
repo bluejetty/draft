@@ -2131,6 +2131,7 @@ class Component extends DCLogic {
     perfIntroOff: false,      // "don't show this again" for the perf notice (settings profile)
     garageCallout: false,     // PROFESSOR GRUFF attached-garage lesson visibility
     garageIntroOff: false,    // "don't show this again" for the garage lesson (settings profile)
+    boneReveal: true,          // bone presses jump to E1 and grow the house (settings profile)
     areasOpen: false,         // AREAS dialog visibility (report is derived on render)
     // Per-project information saved inside the drawing file. The titleblock
     // and the site plan's LEGAL LAND DESCRIPTION block read from here; later
@@ -3242,6 +3243,7 @@ class Component extends DCLogic {
           drafter: { ...this.state.drafter },
           keybindings: { ...this.state.keybindings },
           tsquareOn: this.state.tsquareOn,
+          boneReveal: this.state.boneReveal,
           buildIntroOff: this.state.buildIntroOff,
           garageIntroOff: this.state.garageIntroOff,
           perfIntroOff: this.state.perfIntroOff,
@@ -3278,6 +3280,7 @@ class Component extends DCLogic {
           ? { drafter: normaliseDrafter(values.drafter) }
           : {}),
         ...(typeof values.tsquareOn === 'boolean' ? { tsquareOn: values.tsquareOn } : {}),
+        ...(typeof values.boneReveal === 'boolean' ? { boneReveal: values.boneReveal } : {}),
         ...(typeof values.buildIntroOff === 'boolean' ? { buildIntroOff: values.buildIntroOff } : {}),
         ...(typeof values.garageIntroOff === 'boolean' ? { garageIntroOff: values.garageIntroOff } : {}),
         ...(typeof values.perfIntroOff === 'boolean' ? { perfIntroOff: values.perfIntroOff } : {}),
@@ -4083,6 +4086,15 @@ class Component extends DCLogic {
     this._clearTourTimers();
     this.setState({ tour: format.tour(null), tourPopup: false, tourPopupNote: '', tourGableArmed: false },
       () => this._markUnsaved());
+    this._startBoneReveal();
+  }
+
+  // The rising reveal (board #283): every bone press that grows the house
+  // jumps to the E1 front elevation and the house climbs out of the ground
+  // under the rising mask — not just the tour finale. BONE REVEAL in
+  // SETTINGS turns it off for drafters who'd rather stay on the plan.
+  _startBoneReveal() {
+    if (this.state.boneReveal === false) return;
     const front = this._autoElevationCuts().find(cut => cut.id === 'E1');
     if (!front) return; // no auto elevations to jump to — the build stands
     // The curtain moment: both rails slide open around the stage and the
@@ -12452,12 +12464,13 @@ class Component extends DCLogic {
         // build and the tour's end are ONE action — clear the tour first
         // (setState applies synchronously) so the build's own history entry
         // and save carry it, and a single undo still removes the whole
-        // house. No reveal on this path.
+        // house.
         this._clearTourTimers();
         this.setState({ tour: format.tour(null), tourPopup: false, tourPopupNote: '', tourGableArmed: false });
       }
-      this._buildHouse();
+      const built = this._buildHouse();
       if (step === 'finale') this._afterTourBone();
+      else if (built) this._startBoneReveal();
       return;
     }
     this.setState({
