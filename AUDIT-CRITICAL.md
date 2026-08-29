@@ -110,8 +110,23 @@ worst case: overall 36'-5 5/8" | partials 7'-3 1/2" + 9'-1 3/8" + 9'-10 1/8" + 1
 7'-3 1/2" + 9'-1 3/8" + 9'-10 1/8" + 10'-2 1/2" = 36'-5 1/2". The sheet says
 36'-5 5/8" one line above it.
 
-**Repro:** run the spec above. Or trace any house with a finger, place three
-windows on one wall, press AUTO DIMS, and add the north string by hand.
+**And end to end in the app** (`audit-repros/r27-dim-sum-app.spec.js` — trace,
+BUILD HOUSE, place three windows, press AUTO DIMS, then read the dimension
+records back out of the store and print them exactly as the sheet does). Four
+hand-traced houses, one sheet already wrong:
+
+```
+MISMATCH: 5'-0" + 8'-9 15/16" + 8'-9 15/16" + 5'-0"  =  27'-7 7/8"   vs overall 27'-7 15/16"   DRIFT 1/16"
+adds up : 5'-0" + 8'-0 1/4"  + 8'-0 1/4"  + 5'-0"  =  26'-0 1/2"  vs overall 26'-0 1/2"
+adds up : 5'-0" + 8'-6"      + 8'-6"      + 5'-0"  =  27'-0"      vs overall 27'-0"
+adds up : 5'-0" + 8'-3"      + 8'-3"      + 5'-0"  =  26'-6"      vs overall 26'-6"
+```
+
+That first line is a permit sheet whose window string is 1/16" short of the
+overall printed directly above it.
+
+**Repro:** run either spec. Or trace any house with a finger, place three
+windows on one wall, press AUTO DIMS, and add the string up by hand.
 
 **Falsification attempt.** The way this is *not* a bug is if committed
 geometry is quantised to 1/16", because then every partial is an exact multiple
