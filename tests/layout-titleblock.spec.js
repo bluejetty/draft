@@ -1,9 +1,12 @@
-// TITLEBLOCK picker (board #285): the 11×17 sheet carries a real company
-// strip — BLUEJETTY or ROUGH DRAFTER, one block per company — with the
-// project's words from the drawing and the drafter's identity from the
-// personal settings package. The pick persists on the drawing's layout and
-// rides the settings package for the next drawing; the letter sheet keeps
-// the plain placeholder strip and no picker.
+// TITLEBLOCK picker (boards #285/#286): the 11×17 sheet carries a real
+// company strip — BLUEJETTY or ROUGH DRAFTER, one block per company — with
+// the project's words from the drawing and the drafter's identity from the
+// personal settings package. The primary composition runs down the RIGHT
+// edge (the CLAY sheet positions) inside a rounded-corner border; each
+// company's BAND alternate keeps the original bottom strip. The pick
+// persists on the drawing's layout and rides the settings package for the
+// next drawing; the letter sheet keeps the plain placeholder strip and no
+// picker. The north arrow is a SITE PLAN word — plan sheets never ink it.
 const { test, expect } = require('@playwright/test');
 
 const BUCKET = 'model-drawing';
@@ -14,10 +17,16 @@ const PW = 17;
 const PH = 11;
 const FIT_MARGIN = 60;
 
-// The strip: bottom 1.5" inside the 0.5" margin. The project cell is the
-// second of the five cells (20% + 34% of the 16" strip).
+// The vertical strip: 1.15" wide against the right 0.5" margin, sections
+// laid down the 10" inner height (mirrors titleblock.js drawRight).
+const STRIP_X = PW - 0.5 - 1.15 / 2; // strip centreline
+const INNER_H = PH - 1;
+const ARROW_MID_Y = 0.5 + INNER_H * 0.05; // inside the north-arrow cell
+const WORDS_MID_Y = 0.5 + INNER_H * ((0.44 + 0.62) / 2);
+const SHEET_MID_Y = 0.5 + INNER_H * ((0.92 + 1) / 2);
+
+// The BAND alternate: bottom 1.5" inside the 0.5" margin.
 const STRIP_TOP = PH - 0.5 - 1.5;
-const PROJECT_CELL_X = 0.5 + 16 * (0.2 + 0.34 / 2);
 const STRIP_MID_Y = STRIP_TOP + 0.75;
 
 const point = (x, z) => ({ x, y: 0, z });
@@ -113,16 +122,40 @@ async function inkAround(page, xIn, yIn, radiusIn = 0.5) {
   }, { cx: m.panX + xIn * m.zoom, cy: m.panY + yIn * m.zoom, r: radiusIn * m.zoom });
 }
 
-test('the 11×17 sheet offers both company blocks; ROUGH DRAFTER is the default', async ({ page }) => {
+test('the 11×17 sheet offers both companies plus their BAND alternates; ROUGH DRAFTER is the default', async ({ page }) => {
   await openLayout(page, houseDrawing());
   await expect(page.locator('[data-layout-titleblock="bluejetty"]')).toBeVisible();
   await expect(page.locator('[data-layout-titleblock="roughdrafter"]')).toBeVisible();
-  // The strip is a real titleblock, not the placeholder: the sheet-number
-  // cell inks its big numeral on the right.
-  expect(await inkAround(page, 0.5 + 16 * 0.94, STRIP_MID_Y, 0.6)).toBeGreaterThan(30);
+  await expect(page.locator('[data-layout-titleblock="bluejetty-band"]')).toBeVisible();
+  await expect(page.locator('[data-layout-titleblock="roughdrafter-band"]')).toBeVisible();
+  // The default strip runs down the right edge: the sheet-number cell inks
+  // its big numeral at the bottom of the strip.
+  expect(await inkAround(page, STRIP_X, SHEET_MID_Y, 0.3)).toBeGreaterThan(30);
   // The default pick lands on the drawing with the first persisted write.
   await withLayoutSave(page, () => page.locator('[data-layout-titleblock="roughdrafter"]').click());
   expect((await savedDrawing(page)).layout.titleblock).toBe('roughdrafter');
+});
+
+test('the right strip sits in a rounded-corner border; plan sheets fly no north arrow', async ({ page }) => {
+  await openLayout(page, houseDrawing());
+  // Quite-rounded corners: the border's ink leaves the sharp corner point
+  // and rides the arc. At the top-left margin corner the square-corner spot
+  // is bare while the arc's midpoint carries ink.
+  const r = 0.35;
+  const arcMid = r - r / Math.SQRT2 + 0.02;
+  expect(await inkAround(page, 0.5 + 0.02, 0.5 + 0.02, 0.06)).toBe(0);
+  expect(await inkAround(page, 0.5 + arcMid, 0.5 + arcMid, 0.08)).toBeGreaterThan(0);
+  // The north-arrow corner stays bare on a plan sheet — the arrow is SITE
+  // PLAN ink only (#43).
+  expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBe(0);
+});
+
+test('the BAND alternate keeps the original bottom strip', async ({ page }) => {
+  await openLayout(page, houseDrawing());
+  await withLayoutSave(page, () => page.locator('[data-layout-titleblock="roughdrafter-band"]').click());
+  expect((await savedDrawing(page)).layout.titleblock).toBe('roughdrafter-band');
+  // The band inks its sheet numeral in the bottom-right cell again.
+  expect(await inkAround(page, 0.5 + 16 * 0.94, STRIP_MID_Y, 0.6)).toBeGreaterThan(30);
 });
 
 test('picking BLUEJETTY persists on the drawing and survives a reload', async ({ page }) => {
@@ -148,7 +181,7 @@ test('the letter sheet stands the picker down and keeps the plain strip', async 
 
 test('project and drafter words flow into the strip', async ({ page }) => {
   await openLayout(page, houseDrawing());
-  const bare = await inkAround(page, PROJECT_CELL_X, STRIP_MID_Y, 1.2);
+  const bare = await inkAround(page, STRIP_X, WORDS_MID_Y, 0.55);
   // The PROJECT page's words ride the drawing; the drafter's identity rides
   // the personal settings package the SETTINGS page writes.
   const saved = await savedDrawing(page);
@@ -167,6 +200,7 @@ test('project and drafter words flow into the strip', async ({ page }) => {
   }, { bucket: BUCKET, drawing: saved });
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
-  const worded = await inkAround(page, PROJECT_CELL_X, STRIP_MID_Y, 1.2);
+  // The rotated BUILDING ADDRESS / OWNER block carries the new words.
+  const worded = await inkAround(page, STRIP_X, WORDS_MID_Y, 0.55);
   expect(worded).toBeGreaterThan(bare + 100);
 });

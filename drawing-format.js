@@ -710,7 +710,7 @@ if (!window.DraftDrawingFormat) {
   // `titleblock` (board #285) picks the company strip on the 11×17 sheet;
   // the ids mirror DraftTitleblock.STYLES.
   const LAYOUT_PAPER_KEYS = ['11x17', '8.5x11'];
-  const LAYOUT_TITLEBLOCKS = ['bluejetty', 'roughdrafter'];
+  const LAYOUT_TITLEBLOCKS = ['bluejetty', 'roughdrafter', 'bluejetty-band', 'roughdrafter-band'];
   const layout = (raw, levelIds) => {
     const seen = new Set();
     const viewports = (Array.isArray(raw?.viewports) ? raw.viewports : []).map(viewport => {

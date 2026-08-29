@@ -496,20 +496,39 @@ class Component extends DCLogic {
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
 
-    // Margin lines (0.5" inset)
+    // Margin border (0.5" inset). A right-strip titleblock owns the border:
+    // solid ink with the CLAY sheet's quite-rounded corners. Everything else
+    // keeps the faint dashed margin guide.
     const mPx = 0.5 * zoom;
-    ctx.strokeStyle = 'rgba(29,31,32,0.18)';
-    ctx.lineWidth = 0.75;
-    ctx.setLineDash([4, 4]);
-    ctx.strokeRect(panX + mPx, panY + mPx, pxW - mPx * 2, pxH - mPx * 2);
-    ctx.setLineDash([]);
-
-    // Title block: the company strip on 11×17 (board #285); the letter
-    // sheet keeps the plain placeholder strip.
-    const tbH = 1.5 * zoom;
-    const tbBox = { x: panX + mPx, y: panY + pxH - mPx - tbH, w: pxW - mPx * 2, h: tbH };
     const style = paperKey === '11x17' && window.DraftTitleblock
       ? window.DraftTitleblock.styleById(this.state.titleblock) : null;
+    const inner = { x: panX + mPx, y: panY + mPx, w: pxW - mPx * 2, h: pxH - mPx * 2 };
+    if (style?.placement === 'right') {
+      const r = window.DraftTitleblock.CORNER_RADIUS_IN * zoom;
+      ctx.strokeStyle = '#1d1f20';
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.roundRect(inner.x, inner.y, inner.w, inner.h, r);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = 'rgba(29,31,32,0.18)';
+      ctx.lineWidth = 0.75;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(inner.x, inner.y, inner.w, inner.h);
+      ctx.setLineDash([]);
+    }
+
+    // Title block: the company strip on 11×17 (boards #285/#286); the
+    // letter sheet keeps the plain placeholder strip.
+    const tbBox = style?.placement === 'right'
+      ? (() => {
+          const tbW = window.DraftTitleblock.STRIP_W_IN * zoom;
+          return { x: inner.x + inner.w - tbW, y: inner.y, w: tbW, h: inner.h };
+        })()
+      : (() => {
+          const tbH = (window.DraftTitleblock?.BAND_H_IN || 1.5) * zoom;
+          return { x: inner.x, y: inner.y + inner.h - tbH, w: inner.w, h: tbH };
+        })();
     if (style) {
       window.DraftTitleblock.draw(ctx, tbBox, style, this._titleblockInfo(), this._logos?.[style.id] || null);
     } else {
@@ -602,6 +621,10 @@ class Component extends DCLogic {
       date: new Date().toISOString().slice(0, 10),
       scale,
       sheet: '1',
+      revision: '',
+      // The north arrow belongs to the SITE PLAN sheet alone (#43); plan
+      // sheets never fly it.
+      northArrow: false,
     };
   }
 
