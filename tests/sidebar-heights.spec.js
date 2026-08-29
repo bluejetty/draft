@@ -204,13 +204,31 @@ test('both side rails start hidden and pull out from their tabs', async ({ page 
   await rightTab.click();
   await expect(page.locator('[data-model-right]')).toBeVisible();
 
-  // The condensed level rail runs 140px (70% of the old 200px).
-  const width = await page.locator('[data-model-right]').evaluate(el => el.getBoundingClientRect().width);
-  expect(width).toBeCloseTo(140, 0);
+  // Both rails share the same 190px width.
+  const rightWidth = await page.locator('[data-model-right]').evaluate(el => el.getBoundingClientRect().width);
+  expect(rightWidth).toBeCloseTo(190, 0);
+  const leftWidth = await page.locator('[data-model-left]').evaluate(el => el.getBoundingClientRect().width);
+  expect(leftWidth).toBeCloseTo(190, 0);
 
   // The tabs tuck the rails back away.
   await leftTab.click();
   await expect(page.locator('[data-model-left]')).toBeHidden();
   await rightTab.click();
   await expect(page.locator('[data-model-right]')).toBeHidden();
+});
+
+test('the pull tabs run the full canvas height and wear the long labels', async ({ page }) => {
+  await h.openModel(page, { rails: false });
+
+  const leftTab = page.locator('[data-left-rail-tab]');
+  const rightTab = page.locator('[data-right-rail-tab]');
+  await expect(leftTab).toHaveText('ROUGHDRAFTER - LITE - DRAFTING TOOLS');
+  await expect(rightTab).toHaveText('LEVELS - LAYERS');
+
+  // Full-length tabs: each runs the whole canvas edge.
+  const container = await page.locator('[data-model-container]').boundingBox();
+  for (const tab of [leftTab, rightTab]) {
+    const box = await tab.boundingBox();
+    expect(box.height).toBeCloseTo(container.height, 0);
+  }
 });

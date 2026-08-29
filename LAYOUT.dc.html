@@ -113,8 +113,6 @@
 
 <!-- STATUS BAR -->
 <div style="height:28px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em; color:rgba(29,31,32,0.55); background:#fff; flex-shrink:0; user-select:none;">
-  <span data-layout-sx>X: —</span>
-  <span style="margin-left:24px;" data-layout-sy>Y: —</span>
   <div style="flex:1;"></div>
   <span>{{ paperLabel }}  ·  {{ scaleLabel }}</span>
   <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT, and the logo
@@ -177,8 +175,7 @@ class Component extends DCLogic {
     this._draw();
     this._restoreActiveProfilePackages();
 
-    this._canvas.addEventListener('mousemove', this._mmv = (e) => this._onMouseMove(e));
-    this._canvas.addEventListener('mouseleave', this._mle = () => this._clearStatus());
+
     this._canvas.addEventListener('wheel',      this._whl = (e) => this._onWheel(e), { passive: false });
 
     // Pan
@@ -292,8 +289,6 @@ class Component extends DCLogic {
     if (this._ro) this._ro.disconnect();
     const c = this._canvas;
     if (c) {
-      c.removeEventListener('mousemove', this._mmv);
-      c.removeEventListener('mouseleave', this._mle);
       c.removeEventListener('wheel', this._whl);
       c.removeEventListener('mousedown', this._mdn);
     }
@@ -413,41 +408,6 @@ class Component extends DCLogic {
   }
 
   _onPanEnd() { this._panning = false; }
-
-  _onMouseMove(e) {
-    const canvas = this._canvas;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    // Convert screen px to paper inches
-    const { panX, panY, panKey, orientation } = this.state;
-    const { zoom } = this.state;
-    const paperX = (mx - panX) / zoom;
-    const paperY = (my - panY) / zoom;
-    document.querySelector('[data-layout-sx]').textContent = `X: ${this._fmtIn(paperX)}`;
-    document.querySelector('[data-layout-sy]').textContent = `Y: ${this._fmtIn(paperY)}`;
-  }
-
-  _clearStatus() {
-    document.querySelector('[data-layout-sx]').textContent = 'X: —';
-    document.querySelector('[data-layout-sy]').textContent = 'Y: —';
-  }
-
-  _fmtIn(inches) {
-    const neg = inches < 0;
-    const abs = Math.abs(inches);
-    const tot16 = Math.round(abs * 16);
-    const frac = tot16 % 16;
-    const wholeIn = Math.floor(tot16 / 16);
-    let s = `${neg ? '-' : ''}${wholeIn}`;
-    if (frac > 0) {
-      const gcd = (a, b) => b ? gcd(b, a % b) : a;
-      const g = gcd(frac, 16);
-      s += ` ${frac / g}/${16 / g}`;
-    }
-    return s + '"';
-  }
 
   _setPaper(key) {
     this.state.paperKey = key;

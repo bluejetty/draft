@@ -56,11 +56,12 @@ test('number keys no longer switch views', async ({ page }) => {
   expect(shared).not.toHaveProperty('front');
   expect(shared).not.toHaveProperty('side');
 
-  const viewChip = page.locator('text=TOP / PLAN').last();
-  await expect(viewChip).toBeVisible();
+  const control3D = page.locator('[data-model-3d-control]');
+  const cutLabel = page.locator('[data-model-title-detail]').last();
   for (const key of ['1', '2', '3', '4']) {
     await page.keyboard.press(key);
-    await expect(viewChip).toBeVisible();
+    await expect(control3D).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(cutLabel).toHaveText('');
   }
 });
 
