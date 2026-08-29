@@ -1,0 +1,558 @@
+# AUDIT-CRITICAL.md — CRITICAL and MAJOR findings
+
+Target: `main` @ `75a3cd6`. Repro specs referenced below are committed under
+`audit-repros/` and run against a static server on :4180 with
+`npx playwright test -c audit-repros/pw.config.js`.
+
+---
+
+## Executive summary — the three worst things
+
+1. **The dimensions do not add up, on about 40% of strings.** Every dimension is
+   independently rounded to 1/16" at paint time, so a string of partials and the
+   overall above it are rounded separately. Driven through the production string
+   builder over 400 hand-traced footprints: **158 of 400 (39.5%)** print partials
+   that do not sum to the printed overall, worst case 1/8". A plan examiner's
+   first arithmetic check fails on a third of your sheets. This is the defect
+   the product cannot have, and it exists today.
+
+2. **Nothing in this app listens to touch.** `MODEL.dc.html:5398-5410` binds
+   `mousemove` / `mousedown` / `dblclick` / `contextmenu` / `wheel` and nothing
+   else. `LAYOUT.dc.html:231-235` is the same. There is no `pointerdown`, no
+   `touchstart`, anywhere in the repo. What works on an iPad today works only
+   because Safari synthesises a click from a tap — so taps work and **every drag
+   fails**: no pan, no zoom, no node drag, no window select, no viewport
+   placement by drag. There is also no undo control in the DOM at all (searched
+   `title`, `aria-label`, and text for /undo|redo/: zero matches) — undo is
+   Ctrl+Z only. The stated benchmark is "mom and dad build a house on an iPad."
+   They cannot pan, zoom, or undo.
+
+3. **LAYOUT silently deletes work done in MODEL.** `LAYOUT.dc.html:317-334`
+   writes `this._saved` — the whole drawing as it looked when LAYOUT loaded —
+   back into the shared store on any sheet change. Anything drawn in MODEL after
+   that is gone. Reproduced: 9 lines before the LAYOUT click, 8 after
+   (`audit-repros/r1-layout-clobber.spec.js`). No warning, no conflict check, no
+   re-read.
+
+Everything under those three is repairable in a sprint. Those three are the
+product: the drawing lies, the target device can't drive it, and the sheet page
+eats the model.
+
+---
+
+## Top 10 by damage × likelihood
+
+| # | Finding | Damage | Likelihood | Score |
+|---|---|---|---|---|
+| 1 | C1 Dimension strings do not sum to their overall (39.5% of strings) | 5 | 5 | **25** |
+| 2 | C2 No touch input path — every drag, pan and zoom is unreachable on iPad | 4 | 5 | **20** |
+| 3 | C3 LAYOUT overwrites the drawing with a stale snapshot | 5 | 4 | **20** |
+| 4 | C4 No undo/redo control exists outside the keyboard | 4 | 5 | **20** |
+| 5 | M1 The 2D overlay renders at 1× on every Retina screen | 3 | 5 | **15** |
+| 6 | M2 Render-blocking Google Fonts link: 12.9 s → 0.4 s startup | 3 | 4 | **12** |
+| 7 | M3 A placed viewport's scale can never be changed; the footer reports the selection anyway | 3 | 4 | **12** |
+| 8 | M4 `num()` coerces `null` / `""` / `false` / `[]` to 0 — geometry silently relocates on load | 5 | 2 | **10** |
+| 9 | M5 Deleting a level orphans its fenestrations/fixtures/stairs/notes/tags, then blames the file | 3 | 3 | **9** |
+| 10 | M6 `offsetOutline` has no self-intersection or zero-edge handling — wrong roof footprints and wrong ROOF dims | 4 | 2 | **8** |
+
+Damage 1-5: 1 cosmetic, 3 rework, 5 wrong paper or lost work.
+Likelihood 1-5: 1 needs a hand-edited file, 5 happens in the default flow.
+
+Why this order: the work order says anything that reaches paper outranks
+everything, and C1 reaches paper on the majority of permit sets. C2/C4 are next
+because the stated user is on a device the input layer was never written for —
+they are not "usability", they are "the product does not run for this customer".
+C3 is the only silent-data-loss path I could reproduce, but it needs two tabs,
+so it sits below the two that need nothing. M1 is ranked above M2 because it is
+permanent (it goes onto the sheet) while M2 is one line of HTML.
+
+---
+
+# CRITICAL
+
+## C1 — Auto-dimension strings do not add up to the overall dimension
+**Severity: CRITICAL · Confidence: CONFIRMED · Reaches paper**
+`MODEL.dc.html:7334` (label = `this._ftIn(value)`), `MODEL.dc.html:19080-19082`,
+`formatters.js:15-29`, `auto-dims.js:237-256`.
+
+**What breaks.** Every dimension label is computed independently at paint time as
+`formatArchitecturalInches(distance * 12)`, which rounds to the nearest 1/16".
+`computeAutoDimStrings` emits a string of partials (`[lo, opening centres…, hi]`)
+and, separately, the overall (`[lo, hi]`). The partials are exact in model space —
+they do sum — but each is *printed* rounded on its own. Independent rounding of
+k partials against one rounding of the whole does not commute.
+
+Model coordinates are free-running reals: a traced corner is
+`(clientX − centre) / pixelsPerFoot`, never on the 1/16 grid. So the mismatch is
+the normal case, not the corner case.
+
+**Measured** (`audit-repros/r10b-dim-sum-pure.spec.js`, driving the shipped
+`window.DraftAutoDims.computeAutoDimStrings` and `window.DraftFormatters`,
+400 hand-traced rectangles with three openings each):
+
+```
+158 of 400 auto-dim strings print partials that do not add to the printed overall (39.5%)
+worst drift 2/16" = 0.1250"
+worst case: overall 36'-5 5/8" | partials 7'-3 1/2" + 9'-1 3/8" + 9'-10 1/8" + 10'-2 1/2"
+```
+7'-3 1/2" + 9'-1 3/8" + 9'-10 1/8" + 10'-2 1/2" = 36'-5 1/2". The sheet says
+36'-5 5/8" one line above it.
+
+**Repro:** run the spec above. Or trace any house with a finger, place three
+windows on one wall, press AUTO DIMS, and add the north string by hand.
+
+**Falsification attempt.** The way this is *not* a bug is if committed
+geometry is quantised to 1/16", because then every partial is an exact multiple
+of 1/16 and the sums are exact. I looked for that quantisation and it is not
+there: `formatters.normalizeArchitecturalInches` snaps only values that come
+back from `parseArchitecturalLength` (typed lengths), and
+`_pointForStorage` (`MODEL.dc.html:2359`) stores `point.x` raw. A live readback
+of a traced house gives a true span of 331.92" — 5310.72 sixteenths. I also
+checked the suite: `tests/auto-dims.spec.js` asserts segment *geometry*
+(`toBeCloseTo(16, 1)`) and never compares printed strings, so nothing defends
+this today. It is not asserted anywhere, and it is not prevented anywhere.
+
+**Shape of the fix.** Dimension text must be derived from a single quantisation
+pass over the whole string: round the *coordinates* to the display grid once
+(per string, at generation), then print differences of rounded coordinates.
+Every partial then sums to the overall by construction, and the drawn geometry
+matches the printed number. Snapping committed points to 1/16" at commit time
+would fix it more thoroughly and fixes the beginner's "21'-8 7/8" house" at the
+same time.
+
+---
+
+## C2 — There is no touch input path; every drag interaction is unreachable on the target device
+**Severity: CRITICAL · Confidence: CONFIRMED**
+`MODEL.dc.html:5398-5410`, `LAYOUT.dc.html:229-235`.
+
+**What breaks.** The only input listeners in the app are mouse ones:
+
+```js
+canvas.addEventListener('mousemove',  …)   // MODEL.dc.html:5398
+canvas.addEventListener('mousedown',  …)   // :5399
+canvas.addEventListener('dblclick',   …)   // :5400
+canvas.addEventListener('contextmenu',…)   // :5401
+canvas.addEventListener('wheel',      …)   // :5402
+window.addEventListener('mousemove',  …)   // :5404
+window.addEventListener('mouseup',    …)   // :5405
+```
+
+`grep -n "touchstart\|pointerdown" MODEL.dc.html LAYOUT.dc.html` returns nothing.
+Mobile Safari emits a synthetic mousedown/mouseup pair for a *tap*, which is why
+tools can be selected and points placed. It does **not** emit mousemove for a
+moving finger — the browser takes that gesture for scrolling — and it emits no
+`wheel` and no `contextmenu` at all.
+
+Consequences on an iPad, all confirmed against an emulated iPad (1024×768,
+`hasTouch`, DPR 2, CDP touch events):
+
+- One-finger drag on the canvas: pixel-identical screenshot before and after.
+- Two-finger pinch: pixel-identical screenshot before and after.
+  (Events *do* arrive — I logged `pointerdown:touch`, `pointermove:touch`,
+  `touchstart`, `touchmove` on window — the app has nothing bound to them.)
+- Therefore: **no pan and no zoom**. `_panning2D` (`MODEL.dc.html:10186`) is set
+  only from a mousedown; `_onWheel` (`:10427`) is the only zoom path.
+- Therefore: no node drag, no wall drag, no window/crossing selection, no arc
+  drag, no fixture drag, no room-tag drag, no roof pull, and on LAYOUT no
+  viewport drag.
+- `contextmenu` → `_onRightClick()` is dead code on iOS.
+- The drawing canvas has `touch-action: auto` (computed), so on real Safari the
+  browser claims the gesture before the app could see it even if it were bound.
+
+**Repro:** emulate any touch device, build a house, then attempt to pan or
+zoom. Nothing moves. (Driver used: `/tmp/fc/drive.js`; steps in
+`AUDIT-FIRST-CONTACT.md` §00:26.)
+
+**Falsification attempt.** This is not a bug if the app deliberately ships
+desktop-only for now. I looked for evidence of that intent: none in
+`README.md`, `ARCHITECTURE.md`, or `REFACTOR-PLAN.md`; the opposite is stated in
+the product brief ("Target users include complete beginners on iPads"). I also
+checked whether a synthesised mousemove might arrive during a touch drag in
+Chromium — it does not; only `pointermove` with `pointerType:'touch'` arrives,
+and nothing is bound to it.
+
+**Shape of the fix.** Bind `pointerdown/move/up` instead of the mouse trio (they
+cover mouse, pen and touch in one), add a two-pointer pinch/pan gesture on the
+canvas, and set `touch-action: none` on the drawing surfaces.
+
+---
+
+## C3 — LAYOUT writes a stale whole-drawing snapshot over MODEL's work
+**Severity: CRITICAL · Confidence: CONFIRMED · Silent data loss**
+`LAYOUT.dc.html:317-334` (`_persistLayout`), `LAYOUT.dc.html:244-257`
+(`_loadDrawing`), `MODEL.dc.html:5096-5125` (`_markUnsaved`),
+`shared-file-store.js:53-60`.
+
+**What breaks.** LAYOUT parses the whole drawing into `this._saved` once, at page
+load. `_persistLayout` then does:
+
+```js
+this._saved.layout = { …sheet state… };
+const file = new File([JSON.stringify(this._saved)], 'model-drawing.json', …);
+… SharedFileStore.saveSharedFile(file, MODEL_STORAGE_BUCKET)
+```
+
+It never re-reads the store, never compares versions, and writes the *entire*
+document, not just `layout`. The store is a single-record bucket
+(`saveSharedFiles` replaces the record wholesale). So every MODEL edit made
+after LAYOUT loaded is destroyed the first time the sheet changes.
+
+The mirror case exists too: MODEL's `_markUnsaved` also serialises and writes the
+whole drawing, so a LAYOUT change made after MODEL loaded is destroyed by the
+next MODEL edit. MODEL at least carries `layout` through (`:2639`), so it only
+loses changes made in the other tab, not the concept.
+
+**Repro** — `audit-repros/r1-layout-clobber.spec.js`, run and failing today:
+
+```
+lines at layout open: 8   after MODEL edit: 9
+lines before layout write: 9   after: 8
+```
+
+```js
+await openModel(page); /* trace + BUILD HOUSE */
+const layout = await context.newPage();
+await layout.goto('/LAYOUT.dc.html');
+await layout.waitForFunction(() => document.body.dataset.layoutReady === '1');
+await page.bringToFront();            // draw one more line in MODEL, autosaved
+await layout.bringToFront();
+await layout.getByRole('button', { name: /8\.5 × 11/i }).click();   // any sheet change
+// the line is gone from the stored drawing
+```
+
+**Falsification attempt.** This is not a bug if two tabs are impossible or if
+some guard re-reads before writing. Neither holds: MODEL and LAYOUT link to each
+other with plain `<a href>` (`MODEL.dc.html:1554`), which a long-press or a
+middle-click opens in a second tab; the app's own first-run notice ("CLOSE ALL
+OTHER BROWSER WINDOWS AND TABS") is evidence that users *do* have several open.
+I grepped LAYOUT for `visibilitychange`, `focus`, and `storage` listeners to see
+if it refreshes `_saved` when re-focused — there are none (only mousemove,
+mouseup, keydown, wheel). And `shared-file-store.writeRecords` is a blind `put`,
+with no read-modify-write and no version field to conflict on.
+
+**Shape of the fix.** LAYOUT should re-read the record inside the save queue and
+merge only its `layout` key (read-modify-write in one IndexedDB transaction), and
+the record should carry a monotonic revision so a stale write is refused rather
+than applied.
+
+---
+
+## C4 — Undo and redo exist only on the keyboard
+**Severity: CRITICAL (for the stated user) · Confidence: CONFIRMED**
+`MODEL.dc.html:18795-18802`, `profile-manager.js:129-130`.
+
+**What breaks.** Undo is reachable only through `matches('undo')` in the keydown
+handler, bound to `Ctrl+Z`. A DOM-wide search for any control whose text,
+`title`, or `aria-label` matches /undo|redo/ returns **zero elements**. On a
+tablet with no keyboard every action is permanent; the only recovery is select +
+DEL, and selection itself needs a drag for anything but a single item (see C2).
+
+**Repro:** open MODEL, run
+`[...document.querySelectorAll('*')].filter(e => /undo|redo/i.test((e.getAttribute('title')||'')+(e.getAttribute('aria-label')||'')+e.textContent)).length`
+→ `0`.
+
+**Falsification attempt.** A hidden gesture would falsify this — a two-finger
+tap, a shake, a swipe. I bound listeners for every touch and pointer event on
+window and drove taps, drags and pinches; nothing in the app responds to any of
+them (C2). There is no gesture layer to hide an undo in.
+
+**Shape of the fix.** Two buttons in the bottom strip, ≥44 px, wired to the same
+`_undo()` / `_redo()`.
+
+---
+
+# MAJOR
+
+## M1 — The 2D overlay is rendered at 1× on every high-DPI screen
+**Severity: MAJOR · Confidence: CONFIRMED · Reaches paper**
+`MODEL.dc.html:5723-5724`.
+
+```js
+const w = this._canvas.clientWidth, h = this._canvas.clientHeight;
+if (oc.width !== w || oc.height !== h) { oc.width = w; oc.height = h; }
+```
+
+The overlay backing store is sized in **CSS pixels**. Every piece of drafting ink
+— walls, dimensions and their text, sections, elevations, room tags, notes —
+lives on this canvas and is therefore rasterised at 1× and upscaled by the
+browser. Measured on an emulated iPad at DPR 2: WebGL canvas `2048×1380` backing
+for `1024×690` CSS (it *does* scale — `_renderer.setPixelRatio(min(dpr,2))`,
+`:5188`), overlay `1024×690` backing for the same box.
+
+The view-rail thumbnails are explicitly drawn at 2× ("2x the CSS size, crisp
+lines", `:5553`, `:5599`), so the author knows about DPI; the main drawing
+surface is the one place it was not applied. When printing lands, this canvas is
+the print source: a permit sheet rasterised at 96 dpi.
+
+**Repro:** open MODEL on any DPR≥2 device;
+`document.querySelector('[data-model-overlay]').width` equals its CSS width.
+
+**Shape of the fix.** Size the backing store to `clientWidth * dpr`, scale the
+context by `dpr`, keep all drawing code in CSS units.
+
+---
+
+## M2 — Every page blocks first paint on a third-party font stylesheet
+**Severity: MAJOR · Confidence: CONFIRMED**
+`MODEL.dc.html:35`, `LAYOUT.dc.html:20`, `PROJECT.html:11`, `SETTINGS.html:9`,
+`STANDARDS.html:10`, `index.html:15`.
+
+A render-blocking `<link rel="stylesheet" href="https://fonts.googleapis.com/…">`
+sits in the head of every page of an app whose own first-run dialog says "the
+drafting engine runs entirely on your machine". When that host is slow or
+unreachable, the parser stalls until the connection gives up.
+
+**Measured** (`audit-repros/p11-font-block.spec.js`, network to Google blocked as
+it would be on a job site with no signal):
+
+```
+model-ready as shipped     : 12936 ms
+model-ready with fonts cut :   395 ms
+```
+
+A CPU profile of that 12.9 s (`audit-repros/p10-profile.spec.js`) is **96.5%
+idle** — it is pure waiting, not work. `domInteractive` 12585 ms while the last
+script finished downloading at 76 ms (`p8`).
+
+This is also where the Playwright suite's runtime goes: 564 tests × ~12.5 s of
+font stall ≈ **2 of the ~3 hours**. See AUDIT-PERF.md.
+
+**Shape of the fix.** Self-host the two families in `vendor/` (the repo already
+vendors React, three.js and pdf.js for exactly this reason), or at minimum load
+them non-blocking with a system-font fallback.
+
+---
+
+## M3 — A placed viewport's scale can never be changed, and the status bar reports the selection anyway
+**Severity: MAJOR · Confidence: CONFIRMED · Print foundation**
+`LAYOUT.dc.html:795` (`_setScale`), `:762` (new viewport takes the scale),
+`:896` (`scaleLabel: SCALES[activeScale].label`), `:147` (footer template).
+
+`_setScale(idx)` only writes `activeScale` into state. Nothing walks the placed
+viewports. A viewport's `pif` is fixed at creation, and there is no UI to edit it
+— the only way to rescale a sheet is to delete the viewport and add a new one,
+which no affordance suggests.
+
+Meanwhile the sheet footer prints `SCALES[activeScale].label`, so it changes to
+the scale you picked while the drawing on the sheet stays at the old one.
+
+**Repro** — `audit-repros/p6-scale-select.spec.js`:
+
+```
+after placing at 1/4: {"pifs":[0.25],"footer":"1/4\" = 1'-0\""}
+after clicking 1/8 : {"pifs":[0.25],"footer":"1/8\" = 1'-0\""}
+```
+
+Mitigation that stops this being CRITICAL: the *titleblock* SCALE cell derives
+from the viewports' own `pif` (`LAYOUT.dc.html:615-618`), so the printed sheet
+stays self-consistent — it is the app chrome that lies, not the paper. Verified
+by reading `_titleblockInfo`.
+
+**Shape of the fix.** Apply the scale to the selected viewport (and show the
+selection), or disable the scale buttons while a viewport is selected and offer a
+per-viewport scale control.
+
+---
+
+## M4 — `num()` coerces `null`, `""`, `false` and `[]` to 0: geometry silently relocates on load
+**Severity: MAJOR · Confidence: CONFIRMED · Silent corruption**
+`drawing-format.js:9`, `drawing-format.js:30-44` (`point`), `MODEL.dc.html:2359`
+(`_pointForStorage`).
+
+```js
+const num = value => (Number.isFinite(Number(value)) ? Number(value) : null);
+```
+
+`Number(null)`, `Number("")`, `Number(false)` and `Number([])` are all `0` and
+all finite. The schema gate therefore accepts them as a coordinate of zero. It
+never refuses the file and never reports the entity as skipped.
+
+This matters because `_pointForStorage` writes `x` raw, and `JSON.stringify(NaN)`
+is `null`. Any coordinate that ever goes NaN is written as `null` and comes back
+as **0** — the geometry moves to the origin and, on the next autosave, the
+original is overwritten with the corrupted value.
+
+**Repro** — `audit-repros/r7-coordinate-corruption.spec.js`:
+
+```
+seeded  : wall-1 (10,10) → (null,10)          [what a NaN serialises to]
+loaded  : wall-1 (10,10) → (0,10)             [silently relocated, then re-saved]
+
+seeded  : x:"" , x:false , x:[]
+loaded  : all three become x:0 — 2 walls kept, one of them zero-length
+```
+
+**Shape of the fix.** `const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : null)`,
+and reject the entity (count it in `skipped`) rather than defaulting a
+coordinate. Also reject zero-length walls, which currently survive the gate.
+
+---
+
+## M5 — Deleting a level orphans five collections, then blames the user's file for it
+**Severity: MAJOR · Confidence: CONFIRMED**
+`MODEL.dc.html:8395-8443` (`_deleteLevel`), `drawing-format.js:46-49`
+(`levelId`), `MODEL.dc.html:4962-4966` (the "incomplete" message).
+
+`_deleteLevel` filters `_lines`, `_walls`, `_floors`, `_shapes`, `_roofs`,
+`_outlines`, `_surfaceOpenings`, `_dimensions`, `_columns`, `_beams`. It does
+**not** filter `_fenestrations`, `_fixtures`, `_stairs`, `_notes`, or `_roomTags`.
+Those records keep a `levelId` for a level that no longer exists and a `wallId`
+for a wall that was just deleted, and they are written to the saved file.
+
+On the next load, `levelId(value, levelIds)` returns null for them, they are
+dropped, and the count lands in `skipped`, which renders as:
+
+> "Saved drawing loaded — 1 item was incomplete and could not be loaded."
+
+The user deleted a floor. The app tells them their drawing was damaged.
+
+**Repro** — `audit-repros/r6-level-delete.spec.js`:
+
+```
+2ND FL owns before delete: {"walls":4,"fenestrations":1,…,"dimensions":4}
+2ND FL owns after delete : {"walls":0,"fenestrations":1,…,"dimensions":0}
+message after reload     : "Saved drawing loaded — 1 item was incomplete and could not be loaded."
+```
+
+**Shape of the fix.** Add the five collections to the filter list; better, derive
+the delete from one list of level-owned collections so the next collection added
+cannot be forgotten.
+
+---
+
+## M6 — `offsetOutline` has no self-intersection cleanup and no zero-length-edge guard
+**Severity: MAJOR · Confidence: CONFIRMED (function) / INFERRED (reachability) · Reaches paper**
+`geometry-2d.js:297-322`, consumers at `MODEL.dc.html:12506` (roof footprint),
+`MODEL.dc.html:14508`, `auto-dims.js:67` (bearing line for the ROOF-level truss
+dimensions), `MODEL.dc.html:14835` (thickened-edge slab ring).
+
+It is a plain miter offset: each edge is displaced, adjacent edges are
+intersected, done. Two failure modes, both measured by calling the shipped
+function (`audit-repros/r9-offset.spec.js`):
+
+**(a) Narrow features invert.** A 3'-wide neck offset inward by a 2' overhang:
+
+```
+narrow-neck footprint area 230.00 -> inward 2ft area 86.00
+offset ring: (2,2) (18,2) (18,8) (9.50,18) (10.50,18) (10.50,8) (2,8)
+```
+The neck's two sides have swapped places — the ring self-intersects. `auto-dims`
+uses exactly this inward offset to find the bearing-wall corners that break the
+ROOF-level truss string, so the printed truss dimensions on such a plan are
+taken from a crossed polygon.
+
+**(b) A duplicated point kills the overhang at that corner.**
+
+```
+square + duplicate corner, offset outward 2ft:
+  ring : (-2,-2) (22,-2) (20,20) (20,22) (-2,22)   area 550
+  clean: (-2,-2) (22,-2) (22,22) (-2,22)           area 576
+```
+The doubled corner does not move outward at all (`const len = Math.hypot(dx,dz) || 1`
+gives a zero normal for the degenerate edge), so the roof footprint loses its
+overhang at that corner — visible on the roof plan and in every elevation.
+
+**Reachability (why INFERRED, and how to settle it).** Consecutive duplicates are
+guarded while tracing (`MODEL.dc.html:10763-10770` treats a repeat click as a
+close). What I did not test is dragging one master outline node onto its
+neighbour, which would leave two coincident points in a committed outline; that
+is the experiment that would make (b) CONFIRMED end-to-end. (a) needs no
+degenerate input at all — any house with a wing narrower than twice the roof
+overhang reaches it.
+
+**Shape of the fix.** Drop zero-length edges before offsetting, and run a
+self-intersection removal pass (or a proper polygon-offset routine) on the result.
+
+---
+
+## M7 — `mergeJogs` prints a coordinate that is neither wall
+**Severity: MAJOR · Confidence: INFERRED · Reaches paper**
+`auto-dims.js:91-104`, tuning at `MODEL.dc.html:1618`
+(`AUTO_DIM_JOG_MERGE_FT = 2/12`).
+
+Corners within 2" of each other are strung as one coordinate. End clusters keep
+the true extreme, so overalls are honest — but a **middle** cluster is replaced
+by the arithmetic mean of its members:
+
+```js
+return cluster.reduce((sum, value) => sum + value, 0) / cluster.length;
+```
+
+So an L-shaped house whose inside corner is at 12'-0" on one wall and 12'-1 1/2"
+on the other prints a jog dimension to 12'-0 3/4" — a position where no wall
+stands, up to 1" from either. The overall still adds up, so the error is
+invisible to arithmetic checking; a framer measuring from the string lands 3/4"
+out.
+
+`tests/auto-dims.spec.js:209` covers a jog on the *perpendicular* axis (the
+string's offset), not the averaging of an interior coordinate, so nothing
+asserts this either way.
+
+Whether a 2" fabrication is acceptable on a permit set is a policy call, not a
+code call — see `AUDIT-QUESTIONS.md` Q3. The code comment says "merged into the
+neighbouring corner" but the code averages; at minimum the comment is wrong.
+
+---
+
+## M8 — LAYOUT cannot be operated by touch at all
+**Severity: MAJOR · Confidence: CONFIRMED**
+`LAYOUT.dc.html:229-235`.
+
+A subset of C2 worth its own work order because the fix is separate: LAYOUT binds
+`wheel`, `mousedown`, `mousemove`, `mouseup`, `keydown` — nothing else. Placing a
+viewport by tap may survive on Safari's synthetic click; **dragging one to
+position cannot**, and the sheet cannot be panned or zoomed. The sheet page is
+the print foundation and is currently desktop-only.
+
+---
+
+## M9 — The elevation/section silhouette is recomputed from scratch every frame
+**Severity: MAJOR (perf) · Confidence: CONFIRMED**
+`MODEL.dc.html:8968-8992`.
+
+`_drawElevationWorkspace2D` samples a 241 × 41 grid — **9,881 probes per
+repaint** — and each probe loops every roof calling `_sectionRoofHeightAt`
+(point-in-face across the roof's faces). It runs inside `_redrawOverlay`, which
+runs on every invalidated frame, i.e. on every mouse move. The thumbnails next to
+it are explicitly cached by epoch ("Repaints only when the model changes … never
+on mouse traffic", `:5514`); the full-size view is not.
+
+Measured with one roof on a desktop-class CPU (`audit-repros/p3-perf-elevation.spec.js`):
+
+```
+PLAN mousemove : median 16.7 ms  p95 18.7  max 20.9
+E1   mousemove : median 17.5 ms  p95 25.8  max 32.2
+```
+p95 is +38% and max +54% with a single roof; a house with an attached garage
+doubles the roof loop. Numbers and the iPad extrapolation are in AUDIT-PERF.md.
+
+---
+
+## What I did not examine
+
+- **Sections (S1/S2) beyond reading `_drawCutWorkspace2D`'s opening 80 lines.**
+  The work order names this the weak area and describes a garage band that must
+  butt, not splice. I read the roof-profile envelope and the wall-crossing setup
+  but did not trace the band assembly, so the rest of that family is unaudited by
+  me. This is the largest hole in this report.
+- **`auto-stair.js` (496 lines) end to end.** I checked the riser derivation
+  (`_stairLayout`, `MODEL.dc.html:16779-16785`) — `ceil(rise / 7.875)` with an
+  even divide, which is correct — and the L/U landing split only by reading. No
+  headroom or auto-placement testing.
+- **`pdf-scan.js` and underlay ingestion.** Not opened beyond confirming the
+  pdf.js worker is configured (`MODEL.dc.html:30`). Hostile-PDF handling is
+  untested.
+- **`support.js` (1,911 lines)** — the DC template engine everything renders
+  through. Two `innerHTML` sinks at `:470` and `:480` feed on template text; I did
+  not audit whether user strings (project name, level name from `window.prompt`,
+  note bodies) can reach them.
+- **PROJECT / SETTINGS / STANDARDS pages** beyond enumerating their
+  `innerHTML` uses.
+- **The 3D view**, garages (attached and detached), split levels, and the
+  fenestration detail views.
+- **Real iPad Safari.** Everything device-related here is Chromium emulating a
+  touch device, which is more forgiving than the real thing. Every touch finding
+  should reproduce worse on hardware, not better.
+- **The full suite result.** It was still running when I wrote this; 6 failures
+  in the first 171 tests, all 30-31 s timeouts. See AUDIT-FULL.md §Test suite.
