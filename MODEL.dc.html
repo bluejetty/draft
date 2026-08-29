@@ -9206,7 +9206,9 @@ class Component extends DCLogic {
       const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2));
       return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t));
     };
-    const gableTopAt = (pt, plateTop) => {
+    // Only a wall running ALONG the gable climbs; a perpendicular wall
+    // passing the gable's corner keeps its plate.
+    const gableTopAt = (pt, plateTop, wallDir) => {
       let top = plateTop;
       if (!facesByRoof) return top;
       facesByRoof.forEach((roofFaces, roof) => {
@@ -9214,8 +9216,17 @@ class Component extends DCLogic {
         if (Math.abs(base - plateTop) > 0.6) return;   // bears on another storey
         const reach = (Number(roof.overhang) || 0) + 1;
         const pts = roof.points || [];
-        const nearGable = pts.some((a, i) => roof.edges?.[i] === 'gable'
-          && distToSegment(pt, a, pts[(i + 1) % pts.length]) <= reach);
+        const nearGable = pts.some((a, i) => {
+          if (roof.edges?.[i] !== 'gable') return false;
+          const b = pts[(i + 1) % pts.length];
+          if (wallDir) {
+            const gx = b.x - a.x, gz = b.z - a.z;
+            const gLen = Math.hypot(gx, gz) || 1;
+            const cross = Math.abs(wallDir.x * gz - wallDir.z * gx) / gLen;
+            if (cross > 0.2) return false;
+          }
+          return distToSegment(pt, a, b) <= reach;
+        });
         if (!nearGable) return;
         const rise = this._sectionRoofHeightAt(pt, roof, roofFaces);
         if (rise == null) return;
@@ -9235,13 +9246,18 @@ class Component extends DCLogic {
           z: wall.start.z + (wall.end.z - wall.start.z) * t,
         };
       };
+      const wallLen = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z) || 1;
+      const wallDir = {
+        x: (wall.end.x - wall.start.x) / wallLen,
+        z: (wall.end.z - wall.start.z) / wallLen,
+      };
       const samples = Math.min(64, Math.max(2, Math.ceil((hiU - loU) / 0.5)));
       const tops = [];
       for (let s = 0; s <= samples; s++) {
         const u = loU + (hiU - loU) * s / samples;
-        tops.push({ u, top: gableTopAt(worldAt(u), level.wallTop) });
+        tops.push({ u, top: gableTopAt(worldAt(u), level.wallTop, wallDir) });
       }
-      return { face, loU, hiU, floor, worldAt, tops };
+      return { face, loU, hiU, floor, worldAt, wallDir, tops };
     });
     // A face standing entirely behind a nearer, taller face paints nothing
     // visible; skipping it keeps the shared corner verticals single-stroked.
@@ -9250,7 +9266,7 @@ class Component extends DCLogic {
       && other.loU <= geom.loU + 0.05 && other.hiU >= geom.hiU - 0.05
       && other.floor <= geom.floor + 1e-3
       && geom.tops.every(s =>
-        gableTopAt(other.worldAt(s.u), other.face.level.wallTop) >= s.top - 1e-3));
+        gableTopAt(other.worldAt(s.u), other.face.level.wallTop, other.wallDir) >= s.top - 1e-3));
     faceGeoms.filter(geom => !faceHidden(geom)).forEach(geom => {
       const { face, loU, hiU, floor, tops } = geom;
       const { wall, u1, u2, level } = face;
@@ -9355,6 +9371,7 @@ class Component extends DCLogic {
     });
 
     // Roof silhouette over the faces, with the fascia band along the eave.
+    const drawnFascia = [];
     if (lit.length > 1) {
       ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -9364,6 +9381,10 @@ class Component extends DCLogic {
           if (pen) ctx.lineTo(X(pen.u), Y(pen.base));
           pen = null;
           return;
+        }
+        if (pen && pen.base !== s.base) {
+          ctx.lineTo(X(pen.u), Y(pen.base));
+          pen = null;
         }
         if (!pen) { ctx.moveTo(X(s.u), Y(s.base)); ctx.lineTo(X(s.u), Y(s.elev)); }
         else ctx.lineTo(X(s.u), Y(s.elev));
@@ -9384,6 +9405,7 @@ class Component extends DCLogic {
         else run.u1 = s.u;
       });
       runs.filter(r => r.u1 - r.u0 > 0.5).forEach(r => {
+        drawnFascia.push(r);
         ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(X(r.u0), Y(r.base + ROOF_FASCIA_IN / 12));
@@ -9434,7 +9456,10 @@ class Component extends DCLogic {
         const rpts = roof.points || [];
         const gableSegs = rpts.flatMap((a, i) => (roof.edges?.[i] === 'gable'
           ? [{ a, b: rpts[(i + 1) % rpts.length] }] : []));
-        const onGable = p => gableSegs.some(s => distToSegment(p, s.a, s.b) < 0.1);
+        // A rake LIES ALONG one gable edge; a ridge spanning gable-to-gable
+        // (the dropped garage) touches two different ones and is no rake.
+        const onGable = (p, q) => gableSegs.some(s =>
+          distToSegment(p, s.a, s.b) < 0.1 && distToSegment(q, s.a, s.b) < 0.1);
         roofFaces.forEach(face => {
           const poly = face.points;
           for (let i = 0; i < poly.length; i++) {
@@ -9460,21 +9485,37 @@ class Component extends DCLogic {
               else { run.u1 = u; run.e1 = elev; }
             }
             const eave = Math.abs(ea - eaveTop) < 0.01 && Math.abs(eb - eaveTop) < 0.01;
-            const rake = !eave && onGable(a) && onGable(b);
+            const rake = !eave && onGable(a, b);
             runs.forEach(r => {
               if (Math.abs(r.u1 - r.u0) < 0.05 && Math.abs(r.e1 - r.e0) < 0.05) return;
               if (eave) {
                 // An eave wears the fascia band: the light top line and the
                 // heavy shadow along its bottom, same inks as the silhouette's.
-                ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(X(r.u0), Y(eaveTop)); ctx.lineTo(X(r.u1), Y(eaveTop));
-                ctx.stroke();
-                ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
-                ctx.beginPath();
-                ctx.moveTo(X(r.u0), Y(eaveTop - ROOF_FASCIA_IN / 12));
-                ctx.lineTo(X(r.u1), Y(eaveTop - ROOF_FASCIA_IN / 12));
-                ctx.stroke();
+                // Stretches the silhouette pass already banded stay drawn
+                // once: subtract its runs at this elevation, keep the rest.
+                let spans = [{ u0: Math.min(r.u0, r.u1), u1: Math.max(r.u0, r.u1) }];
+                drawnFascia
+                  .filter(f => Math.abs(f.base + ROOF_FASCIA_IN / 12 - eaveTop) < 0.05)
+                  .forEach(f => {
+                    spans = spans.flatMap(sp => {
+                      if (f.u1 <= sp.u0 + 0.05 || f.u0 >= sp.u1 - 0.05) return [sp];
+                      const keep = [];
+                      if (f.u0 > sp.u0 + 0.05) keep.push({ u0: sp.u0, u1: f.u0 });
+                      if (f.u1 < sp.u1 - 0.05) keep.push({ u0: f.u1, u1: sp.u1 });
+                      return keep;
+                    });
+                  });
+                spans.filter(sp => sp.u1 - sp.u0 > 0.2).forEach(sp => {
+                  ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+                  ctx.beginPath();
+                  ctx.moveTo(X(sp.u0), Y(eaveTop)); ctx.lineTo(X(sp.u1), Y(eaveTop));
+                  ctx.stroke();
+                  ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
+                  ctx.beginPath();
+                  ctx.moveTo(X(sp.u0), Y(eaveTop - ROOF_FASCIA_IN / 12));
+                  ctx.lineTo(X(sp.u1), Y(eaveTop - ROOF_FASCIA_IN / 12));
+                  ctx.stroke();
+                });
               } else if (rake && Math.abs(r.u1 - r.u0) > 0.2) {
                 // A rake wears its fascia too: the sloped board along the
                 // gable edge, top line light, heavy shadow 5.5" under it.

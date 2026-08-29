@@ -148,3 +148,77 @@ test('the front elevation shows the garage roof band low with house ink standing
   expect(tallRun).toBeGreaterThan(60);  // the two-storey house stands full height
   expect(lowRun).toBeGreaterThan(60);   // the garage roof band sits at its own height
 });
+
+test('the garage roof band butts the house without welding: one fascia, a bare ridge line', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageOutline(page);
+  await buildHouse(page);
+
+  // FRONT elevation: the garage eave faces the viewer, its ridge runs
+  // toward the house. The ridge spans gable-to-gable, so it is NOT a
+  // rake: it must read as ONE thin line, with the only heavy fascia ink
+  // sitting at the eave band — no second fascia dressed onto the ridge.
+  await page.locator('.cut-row', { hasText: 'E1' }).click({ position: { x: 18, y: 8 } });
+  await page.waitForTimeout(400);
+  await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
+
+  const scan = await page.evaluate(() => {
+    const canvas = document.querySelector('[data-model-overlay]');
+    const W = canvas.width, H = canvas.height;
+    const { data } = canvas.getContext('2d').getImageData(0, 0, W, H);
+    const dark = (x, y) => {
+      const i = (y * W + x) * 4;
+      return data[i + 3] > 200 && data[i] < 120 && data[i + 1] < 120 && data[i + 2] < 120;
+    };
+    // Grade: the lowest row where a dark run crosses most of the sheet.
+    let gradeY = 0;
+    for (let y = 0; y < H; y++) {
+      let run = 0, best = 0;
+      for (let x = 0; x < W; x++) {
+        run = dark(x, y) ? run + 1 : 0;
+        best = Math.max(best, run);
+      }
+      if (best > W * 0.6) gradeY = y;
+    }
+    // Column heights above grade tell the house plateau from the garage band.
+    const rises = [];
+    for (let x = 0; x < W; x++) {
+      let top = null;
+      for (let y = 24; y < gradeY - 60; y++) {
+        if (dark(x, y)) { top = y; break; }
+      }
+      rises.push(top == null ? null : gradeY - top);
+    }
+    const tall = Math.max(...rises.filter(rise => rise != null));
+    // The garage band columns: standing ink, but well under the house.
+    const bandCols = rises
+      .map((rise, x) => ({ rise, x }))
+      .filter(c => c.rise != null && c.rise < tall * 0.6 && c.rise > tall * 0.15);
+    if (!bandCols.length) return { bands: null };
+    // Probe the middle of the garage band: count the distinct dark bands
+    // from its roofline down to just above the wall plate, and how thick
+    // each one runs.
+    const mid = bandCols[Math.floor(bandCols.length / 2)];
+    const topY = gradeY - mid.rise;
+    const bands = [];
+    let inBand = false;
+    for (let y = topY - 4; y < gradeY - 60; y++) {
+      if (dark(mid.x, y)) {
+        if (!inBand) bands.push({ y0: y, y1: y });
+        else bands[bands.length - 1].y1 = y;
+        inBand = true;
+      } else inBand = false;
+    }
+    return { bands, midX: mid.x, topY };
+  });
+
+  expect(scan.bands).toBeTruthy();
+  // From the ridge down to the plate the probe crosses: the ridge line,
+  // the fascia top, and the heavy fascia base — three bands. The welded
+  // rendering dressed the ridge as a rake fascia, doubling it into a
+  // fourth heavy band.
+  expect(scan.bands.length).toBe(3);
+  // The ridge stays a bare line, not a fascia stripe.
+  expect(scan.bands[0].y1 - scan.bands[0].y0).toBeLessThan(4);
+});
