@@ -143,7 +143,13 @@ window.addEventListener('mousemove',  …)   // :5404
 window.addEventListener('mouseup',    …)   // :5405
 ```
 
-`grep -n "touchstart\|pointerdown" MODEL.dc.html LAYOUT.dc.html` returns nothing.
+`grep -c "pointerdown\|pointermove\|touchstart\|touchmove"` returns **0** for
+`MODEL.dc.html`, `LAYOUT.dc.html`, `PROJECT.html`, `SETTINGS.html`,
+`STANDARDS.html` and `index.html`. The only hits in the repo are the DC engine's
+attribute→prop name table (`support.js:336-348`, unused by any template) and
+`Notepad.dc.html:62-68`, a small side page that *does* bind
+`touchmove`/`touchend` — so the pattern exists in the codebase, one file over
+from the drafting surface.
 Mobile Safari emits a synthetic mousedown/mouseup pair for a *tap*, which is why
 tools can be selected and points placed. It does **not** emit mousemove for a
 moving finger — the browser takes that gesture for scrolling — and it emits no
