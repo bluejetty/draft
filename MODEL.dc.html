@@ -7195,10 +7195,13 @@ class Component extends DCLogic {
   // Cuts are Three.js objects, and nothing renders that scene without WebGL:
   // the overlay is the only place 2D-only drafting can see them.
   _drawCuts2D(ctx, toS) {
+    // Hairlines land on the half-pixel grid so the dashes stay crisp at any
+    // canvas size instead of antialiasing into two washed-out rows.
+    const snap = v => Math.round(v - 0.5) + 0.5;
     const dashedSeg = (start, end) => {
       const a = toS(start), b = toS(end);
       ctx.setLineDash([8, 5]);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(snap(a.x), snap(a.y)); ctx.lineTo(snap(b.x), snap(b.y)); ctx.stroke();
       ctx.setLineDash([]);
     };
     // Direction choice previews as the mark itself: a small blank bubble
@@ -8596,6 +8599,7 @@ class Component extends DCLogic {
         fdnFaces.push({
           lo: Math.max(Math.min(p1.u, p2.u), uMin),
           hi: Math.min(Math.max(p1.u, p2.u), uMax),
+          depth: (p1.d + p2.d) / 2,
           top: wall.topHeight, base: wall.baseHeight,
           wallIn: type ? type.totalIn : 8,
           bearing: wall.baseHeight <= 0.01,   // on a strip footing, not hung
@@ -8684,8 +8688,8 @@ class Component extends DCLogic {
       (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
     const x0 = marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
     const y0 = marginT + ((h - marginT - marginB) - (yTop - yBottom) * pxPerFt) / 2;
-    const X = u => x0 + (u - uMin) * pxPerFt;
-    const Y = e => y0 + (yTop - e) * pxPerFt;
+    const X = u => Math.round(x0 + (u - uMin) * pxPerFt - 0.5) + 0.5;
+    const Y = e => Math.round(y0 + (yTop - e) * pxPerFt - 0.5) + 0.5;
 
     const INK = '#1d1f20';
     header(`${cut.name} — GENERATED ELEVATION`);
@@ -8711,46 +8715,130 @@ class Component extends DCLogic {
     stack.floors.forEach(level => { mark(level.floorTop, houseHi); mark(level.wallTop, houseHi); });
     mark(fdn.grade);
 
-    // Foundation faces split at grade: the exposed concrete above grade reads
-    // as a light grey face; the buried part is dashed — a basement wall runs
-    // grade to footing with the footing projecting past the wall face; a hung
-    // garage grade beam shows just its buried band, no footing and no gravel
-    // (that detail belongs to the section).
-    fdnFaces.forEach(face => {
-      if (face.hi - face.lo < 0.5) return;
-      const top = fdn.wallBottom + face.top, base = fdn.wallBottom + face.base;
-      const x = X(face.lo), wid = (face.hi - face.lo) * pxPerFt;
-      if (top > fdn.grade) {
-        const shownBase = Math.max(base, fdn.grade);
-        ctx.fillStyle = '#e8e8ea';
-        ctx.strokeStyle = INK; ctx.lineWidth = 1;
-        ctx.fillRect(x, Y(top), wid, (top - shownBase) * pxPerFt);
-        ctx.strokeRect(x, Y(top), wid, (top - shownBase) * pxPerFt);
-      }
-      ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
-      ctx.setLineDash([5, 4]);
-      if (base < fdn.grade) {
-        const buriedTop = Math.min(top, fdn.grade);
-        ctx.strokeRect(x, Y(buriedTop), wid, (buriedTop - base) * pxPerFt);
-      }
-      if (face.bearing) {
-        const projFt = Math.max(0, fdn.footingWidthIn - face.wallIn) / 2 / 12;
-        ctx.strokeRect(X(face.lo - projFt), Y(base),
-          (face.hi - face.lo + projFt * 2) * pxPerFt, (fdn.footingIn / 12) * pxPerFt);
-      }
-      ctx.setLineDash([]);
+    // Foundation faces split at grade. The exposed concrete above grade reads
+    // as light grey faces, far to near, with a light-medium crease down each
+    // visible corner where two faces meet. Below grade only the outer outline
+    // shows, dashed: down the extreme wall edge, out at the footing, across
+    // the bottom and back up — one loop per building mass — plus dashed
+    // creases at viewer-facing corners and the footing steps under them.
+    const CREASE = 'rgba(29,31,32,0.45)';
+    const fdnGeoms = fdnFaces
+      .filter(face => face.hi - face.lo >= 0.5)
+      .map(face => ({
+        ...face,
+        topE: fdn.wallBottom + face.top,
+        baseE: fdn.wallBottom + face.base,
+        projFt: face.bearing
+          ? Math.max(0, fdn.footingWidthIn - face.wallIn) / 2 / 12 : 0,
+      }));
+    const exposed = fdnGeoms.filter(g => g.topE > fdn.grade)
+      .sort((a, b) => a.depth - b.depth);   // far first
+    const fdnHidden = g => exposed.some(o => o !== g
+      && o.depth > g.depth + 1e-6
+      && o.lo <= g.lo + 0.05 && o.hi >= g.hi - 0.05
+      && o.topE >= g.topE - 1e-3
+      && Math.max(o.baseE, fdn.grade) <= Math.max(g.baseE, fdn.grade) + 1e-3);
+    const shownFdn = exposed.filter(g => !fdnHidden(g));
+    shownFdn.forEach(g => {
+      const shownBase = Math.max(g.baseE, fdn.grade);
+      ctx.fillStyle = '#e8e8ea';
+      ctx.fillRect(X(g.lo), Y(g.topE),
+        (g.hi - g.lo) * pxPerFt, (g.topE - shownBase) * pxPerFt);
+    });
+    // Strokes after every fill, so a near face can't erase a far corner.
+    ctx.lineWidth = 1;
+    const strokedV = new Set();
+    shownFdn.forEach(g => {
+      const shownBase = Math.max(g.baseE, fdn.grade);
+      ctx.strokeStyle = INK;
+      ctx.beginPath();
+      ctx.moveTo(X(g.lo), Y(g.topE)); ctx.lineTo(X(g.hi), Y(g.topE));
+      ctx.moveTo(X(g.lo), Y(shownBase)); ctx.lineTo(X(g.hi), Y(shownBase));
+      ctx.stroke();
+      [g.lo, g.hi].forEach(u => {
+        const interior = shownFdn.some(o => o !== g
+          && u > o.lo + 0.05 && u < o.hi - 0.05);
+        const key = `${X(u)}|${interior}`;
+        if (strokedV.has(key)) return;
+        strokedV.add(key);
+        ctx.strokeStyle = interior ? CREASE : INK;
+        ctx.beginPath();
+        ctx.moveTo(X(u), Y(g.topE)); ctx.lineTo(X(u), Y(shownBase));
+        ctx.stroke();
+      });
+    });
+
+    // Underground: outline-only loops, one per building mass, gaps preserved.
+    const buried = fdnGeoms.filter(g => g.baseE < fdn.grade)
+      .sort((a, b) => a.lo - b.lo);
+    const bottomOf = g => g.bearing ? g.baseE - fdn.footingIn / 12 : g.baseE;
+    const runs = [];
+    buried.forEach(g => {
+      const last = runs[runs.length - 1];
+      if (last && g.lo <= last.hi + 0.5) {
+        last.hi = Math.max(last.hi, g.hi);
+        last.faces.push(g);
+      } else runs.push({ lo: g.lo, hi: g.hi, faces: [g] });
     });
     ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
     ctx.setLineDash([5, 4]);
-    const bearingFaces = fdnFaces.filter(face => face.bearing && face.hi - face.lo > 0.5);
-    if (bearingFaces.length) {
-      const lo = Math.min(...bearingFaces.map(f => f.lo));
-      const hi = Math.max(...bearingFaces.map(f => f.hi));
-      if (hi - lo > 0.5) {
-        ctx.strokeRect(X(lo), Y(fdn.slabTop), (hi - lo) * pxPerFt,
-          (fdn.slabIn / 12) * pxPerFt);
+    runs.forEach(run => {
+      const edgeFace = u => run.faces.reduce((best, g) =>
+        Math.min(Math.abs(g.lo - u), Math.abs(g.hi - u))
+          < Math.min(Math.abs(best.lo - u), Math.abs(best.hi - u)) ? g : best);
+      const leftF = edgeFace(run.lo), rightF = edgeFace(run.hi);
+      // Bottom silhouette: the deepest concrete under each stretch of the
+      // run — a footing under bearing walls, the beam base where it hangs.
+      const bottomAt = u => Math.min(...run.faces
+        .filter(g => g.lo - 1e-6 <= u && u <= g.hi + 1e-6)
+        .map(bottomOf));
+      const stops = [...new Set(run.faces.flatMap(g => [g.lo, g.hi]))]
+        .sort((a, b) => a - b);
+      ctx.beginPath();
+      ctx.moveTo(X(run.lo), Y(Math.min(leftF.topE, fdn.grade)));
+      ctx.lineTo(X(run.lo), Y(leftF.baseE));
+      if (leftF.projFt > 0) ctx.lineTo(X(run.lo - leftF.projFt), Y(leftF.baseE));
+      ctx.lineTo(X(run.lo - leftF.projFt), Y(bottomOf(leftF)));
+      let prevBottom = bottomOf(leftF);
+      for (let s = 0; s < stops.length - 1; s++) {
+        const b = bottomAt((stops[s] + stops[s + 1]) / 2);
+        const xe = stops[s + 1] === run.hi ? run.hi + rightF.projFt : stops[s + 1];
+        if (b !== prevBottom) ctx.lineTo(X(stops[s]), Y(b));
+        ctx.lineTo(X(xe), Y(b));
+        prevBottom = b;
       }
-    }
+      if (prevBottom !== bottomOf(rightF)) {
+        ctx.lineTo(X(run.hi + rightF.projFt), Y(bottomOf(rightF)));
+      }
+      if (rightF.projFt > 0) {
+        ctx.lineTo(X(run.hi + rightF.projFt), Y(rightF.baseE));
+        ctx.lineTo(X(run.hi), Y(rightF.baseE));
+      }
+      ctx.lineTo(X(run.hi), Y(Math.min(rightF.topE, fdn.grade)));
+      ctx.stroke();
+      // Viewer-facing corner creases: where a nearer buried face ends inside
+      // a farther one, the corner runs down the wall — and its footing turns
+      // a little further over with its own short crease.
+      run.faces.forEach(g => {
+        [g.lo, g.hi].forEach(u => {
+          const behind = run.faces.some(o => o !== g
+            && o.depth < g.depth - 1e-6
+            && u > o.lo + 0.05 && u < o.hi - 0.05);
+          if (!behind) return;
+          ctx.beginPath();
+          ctx.moveTo(X(u), Y(Math.min(g.topE, fdn.grade)));
+          ctx.lineTo(X(u), Y(g.baseE));
+          ctx.stroke();
+          if (g.projFt > 0) {
+            const out = u === g.lo ? u - g.projFt : u + g.projFt;
+            ctx.beginPath();
+            ctx.moveTo(X(out), Y(g.baseE));
+            ctx.lineTo(X(out), Y(bottomOf(g)));
+            ctx.stroke();
+          }
+        });
+      });
+    });
     ctx.setLineDash([]);
 
     // A thickened-edge detached slab has no foundation walls: its band is
@@ -8813,11 +8901,10 @@ class Component extends DCLogic {
       });
       return top;
     };
-    faces.forEach(face => {
+    const faceGeoms = faces.map(face => {
       const { wall, u1, u2, level } = face;
       const loU = Math.max(Math.min(u1, u2), uMin);
       const hiU = Math.min(Math.max(u1, u2), uMax);
-      const xa = X(loU), xb = X(hiU);
       const floor = face.garage ? garageBase(face.garage) : level.floorTop;
       const worldAt = u => {
         const t = (u - u1) / (u2 - u1);
@@ -8832,6 +8919,20 @@ class Component extends DCLogic {
         const u = loU + (hiU - loU) * s / samples;
         tops.push({ u, top: gableTopAt(worldAt(u), level.wallTop) });
       }
+      return { face, loU, hiU, floor, worldAt, tops };
+    });
+    // A face standing entirely behind a nearer, taller face paints nothing
+    // visible; skipping it keeps the shared corner verticals single-stroked.
+    const faceHidden = geom => faceGeoms.some(other =>
+      other !== geom && other.face.depth > geom.face.depth + 1e-6
+      && other.loU <= geom.loU + 0.05 && other.hiU >= geom.hiU - 0.05
+      && other.floor <= geom.floor + 1e-3
+      && geom.tops.every(s =>
+        gableTopAt(other.worldAt(s.u), other.face.level.wallTop) >= s.top - 1e-3));
+    faceGeoms.filter(geom => !faceHidden(geom)).forEach(geom => {
+      const { face, loU, hiU, floor, tops } = geom;
+      const { wall, u1, u2, level } = face;
+      const xa = X(loU), xb = X(hiU);
       ctx.fillStyle = '#fff';
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       ctx.beginPath();
