@@ -101,6 +101,7 @@ if (!window.DraftBuildHouse) {
     // rectilinear outlines houses are, the local span is piecewise-constant
     // between vertex coordinates along the beam axis, so trim exactly there.
     const alongCoord = pt => (axis === 'x' ? pt.x : pt.z);
+    const crossCoord = pt => (axis === 'x' ? pt.z : pt.x);
     const breaks = [...new Set(points.map(alongCoord))].sort((a, b) => a - b);
     const stripMid = (strip[0] + strip[1]) / 2;
     const localSpanAt = t => {
@@ -120,17 +121,114 @@ if (!window.DraftBuildHouse) {
       }
       return kept.filter(([a, b]) => b - a > 0.5);
     };
+    // ── The jog-corner rule (board #244) ──
+    // A re-entrant (interior angle > 180°) corner is where the point load
+    // lands, so a cut whose line can reach one snaps onto the corner node —
+    // the beam then rides outline edits through that shared point. Concavity
+    // reads from the ring orientation, the same signed-area convention as
+    // outlineInteriorRef; collinear points (mid-wall inserts) never qualify.
+    const ringArea = points.reduce((sum, pt, index) => {
+      const next = points[(index + 1) % points.length];
+      return sum + (pt.x * next.z - next.x * pt.z);
+    }, 0);
+    const reentrants = points.map((pt, index) => {
+      const prev = points[(index - 1 + points.length) % points.length];
+      const next = points[(index + 1) % points.length];
+      const cross = (pt.x - prev.x) * (next.z - pt.z) - (pt.z - prev.z) * (next.x - pt.x);
+      return { index, pt, cross };
+    }).filter(entry => Math.abs(entry.cross) > 1e-6
+      && Math.sign(entry.cross) !== Math.sign(ringArea));
+    // A candidate corner sits INSIDE the chosen clear strip (one in a stair
+    // hole or the smaller strip would pull the beam out of its strip) and
+    // within beamAtFt of the unsnapped cut; the nearest wins (least-moved).
+    const snapFor = c0 => {
+      let best = null;
+      reentrants.forEach(entry => {
+        const cc = crossCoord(entry.pt);
+        if (cc <= strip[0] + 1e-9 || cc >= strip[1] - 1e-9) return;
+        const dist = Math.abs(cc - c0);
+        if (dist > beamAtFt) return;
+        if (!best || dist < best.dist) best = { c: cc, dist };
+      });
+      return best;
+    };
+    // Never trade a lined-up beam for an over-span floor: after snapping,
+    // every joist span the beams leave behind — wall to beam, beam to beam —
+    // must stay within beamAtFt wherever the beams run. Violations are
+    // judged piecewise between vertex coordinates and RELATIVE to the
+    // unsnapped baseline (a stair hole can leave the smaller strip over-span
+    // today; the snap only has to introduce nothing new).
+    const violations = cutList => {
+      const runsByCut = cutList.map(c => clipLineToPolygon(points, axis, c).flatMap(trimRun));
+      const bad = new Set();
+      for (let i = 0; i + 1 < breaks.length; i++) {
+        const m = (breaks[i] + breaks[i + 1]) / 2;
+        const sections = clipLineToPolygon(points, axis === 'x' ? 'z' : 'x', m);
+        const host = sections.find(([a, b]) => a - 1e-9 <= stripMid && stripMid <= b + 1e-9);
+        if (!host || host[1] - host[0] <= beamAtFt + 1e-9) continue;
+        const stops = [host[0], host[1]];
+        cutList.forEach((c, k) => {
+          if (c <= host[0] + 1e-9 || c >= host[1] - 1e-9) return;
+          if (runsByCut[k].some(([r0, r1]) => r0 - 1e-9 <= m && m <= r1 + 1e-9)) stops.push(c);
+        });
+        stops.sort((a, b) => a - b);
+        for (let s = 0; s + 1 < stops.length; s++) {
+          if (stops[s + 1] - stops[s] > beamAtFt + 1e-9) { bad.add(i); break; }
+        }
+      }
+      return bad;
+    };
+    const snaps = cuts.map(c0 => ({ c0, snap: snapFor(c0) }));
+    let finalCuts = snaps.map(s => (s.snap ? s.snap.c : s.c0));
+    if (snaps.some(s => s.snap && s.snap.dist > 1e-9)) {
+      const baseViol = violations(cuts);
+      const okAgainstBase = list =>
+        [...violations(list)].every(piece => baseViol.has(piece));
+      if (!okAgainstBase(finalCuts)) {
+        // Un-snap the cut that moved furthest first, one at a time, until
+        // the span set is clean again — the least-moved beam survives.
+        const byMove = snaps.map((s, i) => ({ i, moved: s.snap ? s.snap.dist : 0 }))
+          .filter(entry => entry.moved > 1e-9)
+          .sort((a, b) => b.moved - a.moved);
+        for (const entry of byMove) {
+          finalCuts[entry.i] = snaps[entry.i].c0;
+          if (okAgainstBase(finalCuts)) break;
+        }
+      }
+    }
+    // A beam point landing on an outline corner (within 1e-6) carries the
+    // corner's index so the commit layer can link it to the master point; a
+    // run DEAD-ENDING at a re-entrant corner bears on nothing there and gets
+    // an extra column on the node (a split column within 0.5' yields to it).
+    const cornerIndexAt = (t, c) => {
+      const x = axis === 'x' ? t : c, z = axis === 'x' ? c : t;
+      const index = points.findIndex(pt => Math.abs(pt.x - x) < 1e-6 && Math.abs(pt.z - z) < 1e-6);
+      return index >= 0 ? index : null;
+    };
+    const reentrantIndexes = new Set(reentrants.map(entry => entry.index));
     const beams = [];
     const columns = [];
-    cuts.forEach(c => {
+    finalCuts.forEach(c => {
       clipLineToPolygon(points, axis, c).flatMap(trimRun).forEach(([r0, r1]) => {
         const len = r1 - r0;
         const spans = Math.max(1, Math.ceil(len / maxSpanFt));
         const at = t => (axis === 'x' ? { x: t, z: c } : { x: c, z: t });
+        const withSrc = t => {
+          const index = cornerIndexAt(t, c);
+          return index == null ? at(t) : { ...at(t), srcIndex: index };
+        };
         for (let s = 0; s < spans; s++) {
-          beams.push({ start: at(r0 + (len * s) / spans), end: at(r0 + (len * (s + 1)) / spans) });
+          beams.push({ start: withSrc(r0 + (len * s) / spans), end: withSrc(r0 + (len * (s + 1)) / spans) });
         }
-        for (let s = 1; s < spans; s++) columns.push(at(r0 + (len * s) / spans));
+        const cornerEnds = [r0, r1]
+          .map(t => ({ t, index: cornerIndexAt(t, c) }))
+          .filter(end => end.index != null && reentrantIndexes.has(end.index));
+        cornerEnds.forEach(end => columns.push({ ...at(end.t), srcIndex: end.index }));
+        for (let s = 1; s < spans; s++) {
+          const t = r0 + (len * s) / spans;
+          if (cornerEnds.some(end => Math.abs(end.t - t) < 0.5)) continue;
+          columns.push(at(t));
+        }
       });
     });
     return { beams, columns };
