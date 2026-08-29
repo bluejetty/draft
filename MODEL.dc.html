@@ -3370,8 +3370,8 @@ class Component extends DCLogic {
       setTimeout(() => {
         plan.beams.forEach(beam => this._beams.push({
           id: this._nextBeamId++,
-          start: new THREE.Vector3(beam.start.x, elev, beam.start.z),
-          end: new THREE.Vector3(beam.end.x, elev, beam.end.z),
+          start: this._linkPlanPoint(new THREE.Vector3(beam.start.x, elev, beam.start.z), master, beam.start.srcIndex),
+          end: this._linkPlanPoint(new THREE.Vector3(beam.end.x, elev, beam.end.z), master, beam.end.srcIndex),
           levelId: BASEMENT_LEVEL_ID,
           view: 'foundation',
           mode: 'flush',
@@ -3384,7 +3384,7 @@ class Component extends DCLogic {
       setTimeout(() => {
         plan.columns.forEach(column => this._columns.push({
           id: this._nextColumnId++,
-          point: new THREE.Vector3(column.x, elev, column.z),
+          point: this._linkPlanPoint(new THREE.Vector3(column.x, elev, column.z), master, column.srcIndex),
           levelId: BASEMENT_LEVEL_ID,
           view: 'foundation',
           footing: 'pad36',
@@ -3720,13 +3720,13 @@ class Component extends DCLogic {
     const plan = window.DraftBuildHouse.midSpanBeams(points, { holes });
     plan.beams.forEach(beam => this._beams.push({
       id: this._nextBeamId++,
-      start: new THREE.Vector3(beam.start.x, elev, beam.start.z),
-      end: new THREE.Vector3(beam.end.x, elev, beam.end.z),
+      start: this._linkPlanPoint(new THREE.Vector3(beam.start.x, elev, beam.start.z), master, beam.start.srcIndex),
+      end: this._linkPlanPoint(new THREE.Vector3(beam.end.x, elev, beam.end.z), master, beam.end.srcIndex),
       levelId: BASEMENT_LEVEL_ID, view: 'foundation', mode: 'flush', auto: true, layer: BEAM_LAYER,
     }));
     plan.columns.forEach(column => this._columns.push({
       id: this._nextColumnId++,
-      point: new THREE.Vector3(column.x, elev, column.z),
+      point: this._linkPlanPoint(new THREE.Vector3(column.x, elev, column.z), master, column.srcIndex),
       levelId: BASEMENT_LEVEL_ID, view: 'foundation', footing: 'pad36', auto: true, layer: COLUMN_LAYER,
     }));
     this._markUnsaved();
@@ -4639,11 +4639,14 @@ class Component extends DCLogic {
         : saved.columns;
       const columns = format.columns(storedColumns, ownerLevelIds);
       skipped += (Array.isArray(saved.columns) ? saved.columns.length : 0) - columns.length;
+      // Corner-linked auto structure (board #244) restores its link the same
+      // way dimension ends do, so a snapped beam keeps riding the jog corner
+      // across reloads.
       this._columns = columns.map(column => {
         const elevation = levelsById.get(column.levelId)?.elev ?? 0;
         return {
           ...column,
-          point: new THREE.Vector3(column.point.x, elevation, column.point.z),
+          point: reviveDimensionEnd(column.point, elevation),
         };
       });
       this._nextColumnId = Math.max(
@@ -4660,8 +4663,8 @@ class Component extends DCLogic {
         const elevation = levelsById.get(beam.levelId)?.elev ?? 0;
         return {
           ...beam,
-          start: new THREE.Vector3(beam.start.x, elevation, beam.start.z),
-          end: new THREE.Vector3(beam.end.x, elevation, beam.end.z),
+          start: reviveDimensionEnd(beam.start, elevation),
+          end: reviveDimensionEnd(beam.end, elevation),
         };
       });
       this._nextBeamId = Math.max(
@@ -10760,6 +10763,23 @@ class Component extends DCLogic {
         vtx.z = source.z + (vtx.offZ || 0);
       });
     });
+    // Auto beams snapped to a jog corner (board #244) ride that corner too,
+    // corner teleposts with them — the same srcId/offset contract as the
+    // dimension ends above.
+    (this._beams || []).forEach(beam => {
+      [beam.start, beam.end].forEach(vtx => {
+        const source = vtx?.srcId ? masterPoints.get(vtx.srcId) : null;
+        if (!source) return;
+        vtx.x = source.x + (vtx.offX || 0);
+        vtx.z = source.z + (vtx.offZ || 0);
+      });
+    });
+    (this._columns || []).forEach(column => {
+      const source = column.point?.srcId ? masterPoints.get(column.point.srcId) : null;
+      if (!source) return;
+      column.point.x = source.x + (column.point.offX || 0);
+      column.point.z = source.z + (column.point.offZ || 0);
+    });
     // Attached-garage masters follow the house master points their end points
     // weld to, so a house edit keeps the garage attached.
     if (!master.garage) {
@@ -10803,6 +10823,15 @@ class Component extends DCLogic {
     if (!vtx?.srcId) return;
     const src = this._masterPointById(vtx.srcId);
     if (src) { vtx.offX = vtx.x - src.x; vtx.offZ = vtx.z - src.z; }
+  }
+
+  // A mid-span-beam plan point that landed on an outline corner carries the
+  // corner's srcIndex (board #244); link the committed vector to that master
+  // point so outline edits carry the beam and its corner telepost along —
+  // the dimension-ends mirror of the footing rings' pooled linking.
+  _linkPlanPoint(vtx, master, srcIndex) {
+    if (srcIndex == null) return vtx;
+    return this._linkVertex(vtx, master?.points?.[srcIndex]?.pointId);
   }
 
   // A local adjustment marks the point overridden and remembers its offset
