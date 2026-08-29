@@ -348,19 +348,25 @@ declares `componentDidCatch`, so a throw in `render` would blank the app instead
 
 ## 7. Test suite
 
-**7.1 Six failures in this environment, all timeouts, all one root cause — no product defect**
-In my background run: 6 failures in the first 223 tests
-(`auto-elevations:171`, `auto-elevations:206`, `auto-footings:125`,
-`auto-stair:156`, `bone-wallet:139`, `cut-bubbles:38`), every one at 30-31 s.
+**7.1 Every failure in this environment is a timeout with one root cause — no product defect**
+My background run of the full suite (chromium, one worker, no egress to
+fonts.googleapis.com) failed 12 of the first 379 tests. Every failure is 30-31 s
+— the default per-test timeout — and every one is in a spec that navigates two or
+three times: `auto-elevations:171`, `auto-elevations:206`, `auto-footings:125`,
+`auto-stair:156`, `bone-wallet:139`, `cut-bubbles:38`, `layout-titleblock:156`,
+`:178`, `:199`, `layout-viewports:224`, and two more of the same shape.
+
 `tests/auto-footings.spec.js:125` re-run alone with the timeout raised to 120 s
-**passes in 40.3 s**. The tests that fail are the ones that navigate three times
-(MODEL → STANDARDS → MODEL); at ~12.5 s of Google-Fonts stall per navigation
-(AUDIT-PERF §1) they cannot fit in the 30 s default.
+**passes in 40.3 s**. It does three page loads (MODEL → STANDARDS → MODEL); at
+~12.5 s of Google-Fonts stall per navigation (AUDIT-PERF §1) it cannot fit in
+30 s.
 
 The finding is the fragility, not the failures: `playwright.config.js` sets no
-`timeout`, so the whole suite runs with ~40-75% of its per-test budget consumed
-by a third-party font request. Any CI without egress to fonts.googleapis.com
-reports six product failures that are not product failures.
+`timeout`, so the suite runs with 40-75% of every test's budget consumed by a
+third-party font request that is not part of the test. Any CI without egress to
+fonts.googleapis.com reports a dozen product failures that are not product
+failures — and a reviewer's first instinct on seeing red is to distrust the
+change, not the network.
 
 **7.2 The suite runs a configuration no user will ever have — MINOR, by construction (and I could not break it)**
 `tests/helpers.js:11-52` seeds, for every spec that does not opt out:
