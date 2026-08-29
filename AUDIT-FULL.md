@@ -376,6 +376,19 @@ exists. That is a reasonable engineering choice with an unreasonable consequence
 — the default flow has one test each and no combinations. My own first-contact
 run hit both defaults inside five minutes.
 
+**7.2b Wrong tests: I did not find one — but one spec's title defends behaviour the code does not have**
+I went looking specifically, because the work order scores a wrong test above a
+bug. Every assertion I read is accurate about what the code does. The closest
+case is `tests/auto-dims.spec.js:209`, titled *"an inch-scale jog strings
+straight: merged into the neighbouring corner"*. The code does not merge into a
+neighbouring corner; it replaces an interior cluster with its arithmetic mean
+(M7, now measured: two walls at 12'-0" and 12'-1 1/2" print as 12'-0 3/4").
+The spec passes because its assertions only check the overall length and the
+string's stand-off — never the merged coordinate. So it is not a wrong test, but
+it reads like coverage of exactly the case that is broken, and it would stop a
+reviewer from looking. Renaming it, or asserting the merged coordinate, would
+have surfaced M7 years earlier.
+
 **7.3 High-risk modules with no focused spec**
 `shared-file-store.js` (the only thing standing between the user and their work):
 no spec. `layout-plan.js` scale math against paper inches: no spec (the layout
@@ -383,7 +396,11 @@ specs assert viewport placement and titleblock text, not measured scale).
 `titleblock.js` content: covered indirectly by `layout-titleblock.spec.js`.
 `_loadDrawing`'s failure paths (`version` / `invalid` / partial-skip messages):
 `import-safety.spec.js` covers import; I did not find coverage for the stored-copy
-variants.
+variants. Also uncovered, and each one is a confirmed defect: a section cutting
+through **two bodies** (C5 — the garage specs all cut through the garage alone),
+a **non-orthogonal section** through a roof (C6 — the one angled-cut spec is an
+elevation), the **printed text** of any dimension (C1 — every dim spec asserts
+segment geometry, never the label), and any AREAS case **with a garage** (§3b.1).
 
 **7.4 Flake sources — light**
 Fixed `waitForTimeout(300)` settles appear in several specs
