@@ -96,6 +96,18 @@
           </select>
         </span>
       </div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">GABLE CORNER</span>
+        <span class="layer-use">How the gable/eave corner is built and drawn. FLAT CLOSE: the wall finish fills the soffit triangle and the rake wears the 5.5&#8243; fascia. SOFFIT RETURN: the eave soffit wraps the corner as a small cornice return at each lower rake end. PORK CHOP: the boxed corner return &mdash; a little pyramid at each lower rake end. FULL BOXED RAKE: the pork chop soffit runs the whole rake. PORK CHOP and FULL BOXED build the gable overhang at HALF the eave overhang (2&#8242; eaves &rarr; 1&#8242; rake) for proportion; returns and boxed areas are metal matching the fascia finish.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <select class="layer-name-input" id="gable-corner-style" data-gable-corner-style aria-label="Gable corner treatment" style="width:auto; min-width:170px;">
+            <option value="flat">FLAT CLOSE</option>
+            <option value="return">SOFFIT RETURN</option>
+            <option value="porkchop">PORK CHOP</option>
+            <option value="boxed">FULL BOXED RAKE</option>
+          </select>
+        </span>
+      </div>
     </section>
     <section class="group" style="margin-top:14px;" aria-label="Room minimums">
       <div class="group-title">Room minimums</div>
@@ -326,6 +338,19 @@
           : 'Cut bubbles tuck the triangle behind the circle.');
       });
 
+      const gableCornerSelect = document.querySelector('[data-gable-corner-style]');
+      const gableCornerNotes = {
+        flat: 'Gable corners close flat — the wall finish fills the soffit triangle.',
+        return: 'Gable corners carry a soffit return at each lower rake end.',
+        porkchop: 'Gable corners box in as pork chop returns — the gable overhang builds at half the eave overhang.',
+        boxed: 'The whole rake gets the boxed soffit — the gable overhang builds at half the eave overhang.',
+      };
+      gableCornerSelect.value = structureStandards.gableCorner;
+      gableCornerSelect.addEventListener('change', () => {
+        structureStandards = { ...structureStandards, gableCorner: gableCornerSelect.value };
+        saveActive(gableCornerNotes[gableCornerSelect.value] || 'Gable corner style saved.');
+      });
+
       const elevationNameInputs = [...document.querySelectorAll('[data-elevation-name]')];
       const fillElevationNames = () => elevationNameInputs.forEach(input => {
         input.value = structureStandards.elevationNames[input.dataset.elevationName];
@@ -407,6 +432,7 @@
         freeformInput.checked = structureStandards.freeformFootings;
         autoElevInput.checked = structureStandards.autoElevations;
         bubbleStyleSelect.value = structureStandards.cutBubbleStyle;
+        gableCornerSelect.value = structureStandards.gableCorner;
         fillElevationNames();
         roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(null);
         fillRoomMinimums();

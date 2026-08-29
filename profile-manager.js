@@ -345,6 +345,14 @@ if (!window.DraftProfileManager) {
   // hides the triangle behind the bubble with just the point showing;
   // PROUD wears the small triangle on the bubble's rim. More styles later.
   const CUT_BUBBLE_STYLES = ['tucked', 'proud'];
+  // GABLE CORNER (board #252): how the gable/eave corner is built and drawn.
+  // 'flat' — the wall finish fills the soffit triangle, rake wears the 5.5"
+  // fascia (the shipped baseline). 'return' — the eave soffit wraps the
+  // corner as a small cornice return at each lower rake end. 'porkchop' —
+  // the boxed corner return, a little pyramid at each lower rake end.
+  // 'boxed' — the pork chop soffit runs the whole rake. Options porkchop
+  // and boxed halve the gable-edge overhang for proportion.
+  const GABLE_CORNER_STYLES = ['flat', 'return', 'porkchop', 'boxed'];
   // The office names the sides the standard elevations look at — most call
   // E1 the FRONT, but the words are theirs to change.
   const DEFAULT_ELEVATION_NAMES = Object.freeze({ E1: 'FRONT', E2: 'LEFT', E3: 'BACK', E4: 'RIGHT' });
@@ -361,6 +369,7 @@ if (!window.DraftProfileManager) {
       freeformFootings: stored.freeformFootings === true,
       autoElevations: stored.autoElevations !== false,
       cutBubbleStyle: CUT_BUBBLE_STYLES.includes(stored.cutBubbleStyle) ? stored.cutBubbleStyle : 'tucked',
+      gableCorner: GABLE_CORNER_STYLES.includes(stored.gableCorner) ? stored.gableCorner : 'flat',
       elevationNames: normaliseElevationNames(stored.elevationNames),
     };
   };
