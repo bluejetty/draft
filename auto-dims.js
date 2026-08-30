@@ -10,6 +10,48 @@ if (!window.DraftAutoDims) {
   //   { start: {x, z}, end: {x, z}, srcStartId, srcEndId }
   // with srcIds naming the nearest master-linked corner for each end (null
   // when the group has no linked corners).
+  // The grid the dimension labels print on: formatArchitecturalInches rounds
+  // to the sixteenth, so 1/16" is 1/192 of a foot.
+  const PRINT_GRID_FT = 1 / 192;
+  // The shortest partial worth a string: under this the arrow pair and the
+  // text have nowhere to sit.
+  const MIN_PARTIAL_FT = 0.05;
+
+  // One string's coordinates, ready to print (board #290 / audit C1).
+  //
+  // Every label is `formatArchitecturalInches(distance * 12)` at paint time,
+  // which rounds to 1/16" — and a string of partials rounded one by one does
+  // NOT sum to the separately-rounded overall above it. Traced corners are
+  // free-running reals, so the mismatch was the normal case, not the corner
+  // case: 39.5% of strings printed a total that disagreed with its own parts.
+  //
+  // Quantising the coordinates ONCE, here, fixes it by construction: every
+  // partial and the overall are then differences of the same rounded numbers,
+  // so the parts add up to the whole exactly. The dimension line moves by at
+  // most 1/32" — the drawn extent now agrees with the printed number, which
+  // is the point. No building geometry is touched.
+  //
+  // A partial too short to draw is ABSORBED, never dropped: dropping one
+  // leaves a hole in the chain and the survivors stop summing to the overall.
+  const printableCoords = values => {
+    const snapped = values.map(value => Math.round(value / PRINT_GRID_FT) * PRINT_GRID_FT);
+    if (snapped.length < 2) return snapped;
+    const kept = [snapped[0]];
+    for (let i = 1; i < snapped.length - 1; i++) {
+      if (snapped[i] - kept[kept.length - 1] >= MIN_PARTIAL_FT) kept.push(snapped[i]);
+    }
+    const last = snapped[snapped.length - 1];
+    // The end coordinate always survives — it is what the overall measures to.
+    // When it is the ONLY partial, it prints whatever length it has, even
+    // under MIN_PARTIAL_FT: a lone partial has no neighbour to absorb into,
+    // and a side with a string but no segments would be worse than a cramped
+    // label. Needs a whole side under 0.6" to arise, so unreachable on a
+    // real plan.
+    if (last - kept[kept.length - 1] >= MIN_PARTIAL_FT || kept.length === 1) kept.push(last);
+    else kept[kept.length - 1] = last;
+    return kept;
+  };
+
   function computeAutoDimStrings({
     walls, outlines, roofs, openings, offsetOutline,
     firstOffset, jogMergeFt, stringSpacingFt,
@@ -234,12 +276,14 @@ if (!window.DraftAutoDims) {
         return best ? best.srcId : null;
       };
       const horizontal = entry.side === 'N' || entry.side === 'S';
-      entry.strings.forEach((coords, stringIndex) => {
+      entry.strings.forEach((rawCoords, stringIndex) => {
         const fixed = entry.edge + outward[entry.side]
           * (firstOffset + (entry.base + stringIndex) * stringSpacingFt);
+        // Quantised once, here — every partial and the overall on this side
+        // are differences of the same rounded coordinates, so they add up.
+        const coords = printableCoords(rawCoords);
         for (let i = 0; i < coords.length - 1; i++) {
           const a = coords[i], b = coords[i + 1];
-          if (b - a < 0.05) continue;
           // The rendered dim line offsets to the right of the start→end
           // direction (south for west→east runs, west for north→south), so
           // N and E strings run reversed to keep the ink on the outward side.

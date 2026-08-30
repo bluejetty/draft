@@ -47,6 +47,53 @@ async function runAutoDims(page) {
   await h.waitForSaved(page);
 }
 
+// Groups the active plan's auto strings into the rows they print on, then
+// asserts every multi-part row adds up to the single-segment row (the
+// overall) that shares its side — reading the LABELS the sheet shows, not
+// the segment lengths, because the label is what an examiner adds up.
+async function expectStringsSum(page) {
+  const saved = await h.savedDrawing(page);
+  const auto = saved.dimensions.filter(dimension =>
+    dimension.auto && dimension.levelId === 3 && dimension.view === 'plan');
+  expect(auto.length).toBeGreaterThan(0);
+  const printed = await page.evaluate(dims => dims.map(dimension => {
+    const length = Math.hypot(dimension.end.x - dimension.start.x,
+      dimension.end.z - dimension.start.z);
+    const label = window.DraftFormatters.formatArchitecturalInches(length * 12);
+    return { dimension, label, inches: window.DraftFormatters.parseArchitecturalLength(label).inches };
+  }), auto.map(dimension => ({ start: dimension.start, end: dimension.end })));
+  // A row is one printed string: same fixed coordinate, same orientation.
+  const rows = new Map();
+  printed.forEach(entry => {
+    const { start, end } = entry.dimension;
+    const horizontal = Math.abs(start.z - end.z) < 1e-9;
+    const key = `${horizontal ? 'h' : 'v'}@${(horizontal ? start.z : start.x).toFixed(4)}`;
+    rows.set(key, [...(rows.get(key) || []), entry]);
+  });
+  const sides = new Map();
+  [...rows.entries()].forEach(([key, entries]) => {
+    const side = key.split('@')[0] + (entries[0].dimension.start.z + entries[0].dimension.start.x > 0 ? '+' : '-');
+    sides.set(side, [...(sides.get(side) || []), entries]);
+  });
+  // Every multi-part row must be checked against an overall: the side
+  // grouping above is only trusted because a mis-bucketed side (no overall
+  // found beside its partials) fails this count instead of skipping silently.
+  const multiPartRows = [...rows.values()].filter(entries => entries.length > 1).length;
+  let checked = 0;
+  sides.forEach(stack => {
+    const overall = stack.find(entries => entries.length === 1);
+    if (!overall) return;
+    stack.filter(entries => entries.length > 1).forEach(entries => {
+      const sum = entries.reduce((total, entry) => total + entry.inches, 0);
+      checked += 1;
+      expect(`${entries.map(entry => entry.label).join(' + ')} = ${sum.toFixed(4)}"`)
+        .toBe(`${entries.map(entry => entry.label).join(' + ')} = ${overall[0].inches.toFixed(4)}"`);
+    });
+  });
+  expect(checked).toBe(multiPartRows);
+  expect(checked).toBeGreaterThan(0);
+}
+
 test('AUTO DIMS strings a rectangle: overalls everywhere, openings on the door side', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
@@ -81,6 +128,53 @@ test('AUTO DIMS strings a rectangle: overalls everywhere, openings on the door s
     h.near(dimension.start.z, -9) && h.near(dimension.end.z, -9));
   expect(overall).toBeTruthy();
   expect(Math.abs(overall.end.x - overall.start.x)).toBeCloseTo(16, 3);
+});
+
+test('printed partials add up to the printed overall, on a rectangle and on an L', async ({ page }) => {
+  // Audit C1. Every label is formatArchitecturalInches at paint time, which
+  // rounds to 1/16" — so partials rounded one by one used to disagree with
+  // the separately-rounded overall above them (39.5% of traced strings).
+  // The string's coordinates are quantised once at generation now, so the
+  // parts add to the whole by construction. This asserts the PRINTED
+  // STRINGS, not the segment geometry the other cases here watch.
+  await h.openModel(page);
+  // Hand-traced corners: deliberately NOT on the 1/16" grid, which is what a
+  // finger leaves behind and what the whole finding is about.
+  await h.selectTool(page, 'Outline');
+  await h.clickWorld(page, -8.37, -6.21);
+  await h.clickWorld(page, 8.11, -6.21);
+  await h.clickWorld(page, 8.11, 6.43);
+  await h.clickWorld(page, -8.37, 6.43);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  await h.climbTourToMain(page);
+  await buildHouse(page);
+  await h.waitForSaved(page);
+  await h.selectTool(page, 'Fenestration');
+  await h.clickWorld(page, -3.2, -6.21);
+  await h.waitForSaved(page);
+  await h.clickWorld(page, 2.6, -6.21);
+  await h.waitForSaved(page);
+  await runAutoDims(page);
+  await expectStringsSum(page);
+
+  // The same question on an L — a rectangle is the shape that hid this class
+  // of bug, so every geometry fix carries a non-rectangular case.
+  await h.openModel(page);
+  await h.selectTool(page, 'Outline');
+  await h.clickWorld(page, -9.13, -7.29);
+  await h.clickWorld(page, 8.41, -7.29);
+  await h.clickWorld(page, 8.41, -1.17);
+  await h.clickWorld(page, 1.73, -1.17);
+  await h.clickWorld(page, 1.73, 7.51);
+  await h.clickWorld(page, -9.13, 7.51);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  await h.climbTourToMain(page);
+  await buildHouse(page);
+  await h.waitForSaved(page);
+  await runAutoDims(page);
+  await expectStringsSum(page);
 });
 
 test('each side strings only its own facing corners: the notch stays off the flat sides', async ({ page }) => {
