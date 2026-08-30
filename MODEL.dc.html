@@ -9990,7 +9990,17 @@ class Component extends DCLogic {
     // The acquired polar origin glows orange while hovered or while its ray is engaged.
     const hoveringOrigin = magnet && magnetRaw && this._polarOrigin
       && Math.hypot(magnetRaw.x - this._polarOrigin.x, magnetRaw.z - this._polarOrigin.z) < 0.001;
-    if (this._polarOrigin && (polarHit || polarLocked || hoveringOrigin)) {
+    // Sitting EXACTLY on the origin is the one spot neither test above covers,
+    // and it is the moment the drafter most needs to see the ruler is zeroed
+    // there: _findPolarSnap has no direction to work with at zero distance
+    // (rightly — it returns null), and the origin's own node is excluded from
+    // the magnet while it is the node being dragged. The gap was invisible
+    // while the app read mouse events, which round the cursor to whole pixels
+    // and so almost never land dead on; pointer events keep the fractional
+    // position, and land on it.
+    const onOrigin = this._polarOrigin
+      && Math.hypot(raw.x - this._polarOrigin.x, raw.z - this._polarOrigin.z) < 0.001;
+    if (this._polarOrigin && (polarHit || polarLocked || hoveringOrigin || onOrigin)) {
       const os = this._toScreen(this._polarOrigin);
       newState.polarOriginX = os.x; newState.polarOriginY = os.y; newState.showPolarOrigin = true;
     }
