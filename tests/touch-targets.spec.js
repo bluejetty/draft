@@ -24,7 +24,6 @@ test.use({ viewport: { width: 1024, height: 768 } });
 // each measured. `min` is the floor a selector must clear.
 const REQUIRED = [
   ['.tool-key', 'the tool keypad'],
-  ['.rail-tab', 'the rail pull tabs'],
   ['.nav-key', 'the view-navigation keys'],
   ['.level-row .level-body', 'the level cards'],
   ['[data-areas-open]', 'AREAS'],
@@ -38,6 +37,7 @@ const REQUIRED = [
 // too — at the size they legitimately are — so that a future change which
 // makes them SMALLER still fails this spec.
 const EXCEPTIONS = [
+  ['.rail-tab', 33, 44, 'the pull tabs are flush with the screen edge and run the canvas\'s full height, so a finger cannot overshoot them outward; widening them would eat drawing area instead'],
   ['.strip-chip', 15, 44, 'instrument chips sit 10px apart; widening them closes that gap and a press near an edge lands on the neighbour, so these grow vertically only'],
 ];
 

@@ -127,7 +127,11 @@
        only the rectangle that answers a tap gets bigger. Measured, not
        guessed: tests/touch-targets.spec.js holds the numbers and names the
        few that cannot reach 44 without stealing a neighbour's taps. */
-    .rail-tab { min-width:44px; }
+    /* The rail pull-tabs are NOT widened. They sit flush against the screen
+       edge and run the full height of the canvas, so a finger cannot overshoot
+       them outward — a 33px edge handle is easy to hit in a way a 33px button
+       in open space is not. Widening them also eats drawing area and covers
+       canvas a spec clicks on, which is how this came back. */
     /* The bottom-right nav links grow VERTICALLY only. Widening them pushed
        the strip's right-hand group left until it sat on top of the centred
        instrument cluster and swallowed the chips' hovers — the strip at desk
