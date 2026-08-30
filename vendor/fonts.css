@@ -8,7 +8,9 @@
  * anyone else; the fonts are the last one, and now they aren't.
  *
  * Barlow, Barlow Condensed and DM Mono are SIL Open Font License 1.1
- * (https://scripts.sil.org/OFL), which permits redistribution like this.
+ * (https://scripts.sil.org/OFL), which permits redistribution like this;
+ * the license text and copyright notices ship beside the files, in
+ * fonts/OFL.txt.
  * The files are the LATIN subset from Google's own woff2 build, kept with
  * their unicode-range so anything outside it still falls through to the
  * page's fallback stack instead of rendering as tofu.
