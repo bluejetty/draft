@@ -105,6 +105,94 @@
     .tool-key { position:relative; aspect-ratio:1 / 1; min-width:0; border:1px solid; padding:2px 1px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; font-family:'Barlow Condensed',system-ui,sans-serif; text-transform:uppercase; }
     .tool-key-letter { position:absolute; top:2px; left:3px; font-weight:700; line-height:1; }
     .tool-key-name { max-width:100%; font-size:6.5px; font-weight:600; letter-spacing:0.03em; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    /* View-navigation keys (#304). The visual stays strip-sized; the HIT AREA
+       is grown to a finger with padding and pulled back out of the layout with
+       a matching negative margin, so the 34px strip is unchanged on a desk and
+       a thumb still lands on the button. Same trick everywhere below. */
+    .nav-key { display:inline-flex; align-items:center; justify-content:center; box-sizing:content-box;
+      min-width:32px; height:20px; padding:12px 6px; margin:0; border:1px solid rgba(29,31,32,0.2);
+      background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px;
+      font-weight:700; letter-spacing:0.06em; line-height:1; cursor:pointer; }
+    .nav-key:hover { border-color:#5980a6; color:#365e86; }
+    [data-view-nav] .nav-key { box-shadow:0 1px 5px rgba(29,31,32,0.16); }
+    .nav-key-wide { min-width:36px; }
+    /* Touch targets (#304) — see the measured audit in
+       tests/touch-targets.spec.js. touch-action:manipulation drops the 300ms
+       double-tap delay a browser otherwise holds every tap for. */
+    .tool-key, .rail-tab, .nav-key, .strip-chip,
+    .level-row .level-name, .level-row .level-body,
+    [data-tour-popup], [data-tour-next], [data-tour-chip] { touch-action:manipulation; }
+    /* Hit areas grown to a finger (#304). The pattern is padding out, negative
+       margin back, so the LOOK is untouched and the layout does not move —
+       only the rectangle that answers a tap gets bigger. Measured, not
+       guessed: tests/touch-targets.spec.js holds the numbers and names the
+       few that cannot reach 44 without stealing a neighbour's taps. */
+    .rail-tab { min-width:44px; }
+    /* The bottom-right nav links grow VERTICALLY only. Widening them pushed
+       the strip's right-hand group left until it sat on top of the centred
+       instrument cluster and swallowed the chips' hovers — the strip at desk
+       width has exactly enough room for the #259 design plus the controls,
+       and not a pixel more. The same three destinations are reachable from
+       the roomier PROJECT corner and the top bar, so this is the cheap half
+       of that trade. Pulling back horizontally is also what made the links
+       overlap each other, costing the logo the true corner.
+       The bottom-LEFT PROJECT link has room, so it grows both ways. */
+    [data-nav-cluster] a, [data-project-corner-bl] { padding:12px 10px !important;
+      margin:-12px 0; box-sizing:content-box; }
+    [data-areas-open], [data-unit-toggle] button { padding-top:16px !important; padding-bottom:16px !important;
+      margin-top:-16px; margin-bottom:-16px; box-sizing:content-box; }
+    /* The instrument chips grow VERTICALLY only. Widening them closes the
+       10px gap between chips, and once the boxes touch, a press near an edge
+       can land on the neighbour — bottom-strip.spec.js catches it as a hover
+       that never reaches the chip it aimed at. 15px wide is the honest limit
+       here; the chips that matter (compass, ruler, T-square) are also on the
+       keyboard. */
+    .strip-chip { padding:15px 0; margin:-15px 0; box-sizing:content-box; }
+    /* Level cards are a vertical list with nowhere to overlap, so these grow
+       for real rather than borrowing space from a neighbour. */
+    .level-row .level-name { padding:6px 4px; }
+    .level-row .level-body { min-height:44px; }
+    /* The strip degrades in a stated ORDER (#304), and ONLY below desk width:
+       the full design — cluster dead-centre, three dormant chips each side —
+       is what board #259 drew and what bottom-strip.spec.js pins, so nothing
+       here fires until the screen is genuinely tablet-sized.
+       It used to simply run out of
+       room and let its pieces overlap; now the least important things go first
+       and the controls are the last to be touched, so a drafter never loses a
+       button to a narrow screen:
+         1) the dormant decorative instruments — they do nothing but look good,
+         2) the background-reference read-out, then the tool hint,
+         3) the tool-name read-out (already dropped at 760).
+       The ruler, LENGTH box, T-square, protractor and compass survive, and so
+       do FINISH, the view keys and the nav cluster, all the way down. */
+    @media (max-width: 1200px) {
+      [data-mode-frenchcurve], [data-mode-shield] { display:none !important; }
+      [data-model-background-status] { display:none !important; }
+    }
+    @media (max-width: 1100px) {
+      [data-mode-brush], [data-mode-scale] { display:none !important; }
+      [data-strip-hint] { display:none !important; }
+    }
+    @media (max-width: 900px) {
+      [data-mode-triangle] { display:none !important; }
+    }
+    /* The instrument cluster is absolutely centred, which is right when there
+       is room and wrong when there is not: it sat ON TOP of the strip's
+       controls and swallowed their taps. Below this width it rejoins the flex
+       row and simply takes its turn, so nothing is ever covered. */
+    @media (max-width: 1200px) {
+      [data-strip-center] { position:static !important; transform:none !important; padding:0 !important; }
+    }
+    /* Palette push (#304): at iPad width an open left rail ate the drawing, so
+       the rails condense. The keypad goes to THREE columns as they do — a
+       narrower rail with 4 columns shrinks every tool key to about 29px, which
+       is half a fingertip. Three columns in a 150px rail lands each key back
+       near the 44px target. The grid look is kept; only its count changes. */
+    @media (max-width: 1100px) {
+      [data-model-left] { width:162px !important; }
+      [data-model-right] { width:162px !important; }
+      .tool-keypad { grid-template-columns:repeat(3, 1fr) !important; }
+    }
     @media (max-width: 760px) {
       [data-model-left] { width:160px !important; }
       [data-model-right] { width:160px !important; }
@@ -1215,6 +1303,26 @@
          still scroll by touch, which is how an iPad reaches the tool list. -->
     <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:none; touch-action:none;"></canvas>
     <canvas data-model-overlay style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
+
+    <!-- VIEW NAVIGATION (#304). It lives on the CANVAS, not the instrument
+         strip, and that is a measured decision rather than a preference: at
+         desk width the strip has room for the board #259 design — the
+         instrument cluster dead-centre with three dormant chips a side — and
+         the nav cluster, and nothing else. Adding these there put them on top
+         of the chips and swallowed their taps, or shrank everything below a
+         fingertip. The work order allowed a corner instead, so they take one.
+         Bottom-left, clear of the rail pull-tab, hugging the strip: it is the
+         quietest 44px of canvas there is, and it is where a thumb already
+         rests when the tablet is held. -->
+    <div data-view-nav style="position:absolute; left:52px; bottom:8px; z-index:4; display:flex; align-items:center; gap:4px;">
+      <sc-if value="{{ chainActive }}" hint-placeholder-val="{{ false }}">
+        <button data-finish-chain class="nav-key nav-key-wide" onClick="{{ onFinishChain }}" title="Finish this run — the same commit as Enter" style="border-color:#557a46; background:#557a46; color:#fff; margin-right:6px;">FINISH</button>
+      </sc-if>
+      <button data-zoom-out class="nav-key" onClick="{{ onZoomOut }}" title="Zoom out — one wheel notch" aria-label="Zoom out">&#8722;</button>
+      <button data-zoom-in class="nav-key" onClick="{{ onZoomIn }}" title="Zoom in — one wheel notch" aria-label="Zoom in">&#43;</button>
+      <button data-zoom-fit class="nav-key nav-key-wide" onClick="{{ onZoomFit }}" title="FIT — frame everything drawn on this level" aria-label="Fit drawing to screen">FIT</button>
+      <button data-hand-toggle class="nav-key nav-key-wide" onClick="{{ onToggleHand }}" title="{{ handChipTitle }}" aria-pressed="{{ handPressed }}" style="border-color:{{ handKeyBorder }}; background:{{ handKeyBg }}; color:{{ handKeyColor }};">HAND</button>
+    </div>
     <button type="button" class="rail-tab rail-tab-left" data-left-rail-tab onClick="{{ onToggleLeftRail }}" title="{{ leftRailTabTitle }}">ROUGHDRAFTER - LITE - DRAFTING TOOLS</button>
     <button type="button" class="rail-tab rail-tab-right" data-right-rail-tab onClick="{{ onToggleRightRail }}" title="{{ rightRailTabTitle }}">LEVELS - LAYERS</button>
     <!-- VIEW GALLERIES (boards #265 / #291): a two-column wall of little
@@ -1401,7 +1509,7 @@
        reference, and the drawing message. -->
   <span data-model-title-detail style="font-size:12px; font-weight:600; text-transform:uppercase; color:{{ topBarColor }}; flex-shrink:0;">{{ topBarLabel }}</span>
   <sc-if value="{{ showHint }}" hint-placeholder-val="{{ false }}">
-    <span style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:24vw;">{{ hintText }}</span>
+    <span data-strip-hint style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:24vw;">{{ hintText }}</span>
   </sc-if>
   <sc-if value="{{ backgroundEngaged }}" hint-placeholder-val="{{ false }}">
     <span data-model-background-status style="font-size:11px; color:{{ backgroundStatusColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:18vw;">{{ backgroundStatus }}</span>
@@ -1499,6 +1607,12 @@
     </svg>
   </span>
   </div>
+  <!-- NAVIGATE THE DRAWING (#304). Zoom was the wheel only and pan was
+       middle-drag or alt-drag, so on a touchscreen a drafter could draw and
+       then never move the view. These sit on the strip, so they never cover
+       the drawing, and they are reachable by thumb at the bottom of the
+       screen. They work with a mouse too — a desk feature that happens to
+       save the tablet. -->
   <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT, and the logo
        walks back out to the main page. The current page wears the dark face. -->
   <div data-nav-cluster style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
@@ -1531,6 +1645,12 @@ const ORTHO_LOCK_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'shape', '
 // Arming a polar origin takes a deliberate pause on the node — a drive-by
 // hover on the way across the board never plants a ruler zero.
 const POLAR_DWELL_MS = 350;
+// FIT breathing room (#304): frame the drawing at 112% of its own extents so
+// the outermost wall is not welded to the edge of the screen.
+const FIT_MARGIN = 1.12;
+// The smallest comfortable finger target. Apple and Google both land near
+// this; the chrome below grows its HIT AREA to it without changing the look.
+const TOUCH_TARGET_PX = 44;
 // Polar-origin activation effect: the node pulses orange and shoots hairline
 // direction rays that hold for a second, then fade out over another.
 const POLAR_FX_HOLD_MS = 1000;
@@ -2204,6 +2324,8 @@ class Component extends DCLogic {
     walletSound: true,         // the bone-crunch on spend; personal SETTINGS
     suggestStairs: true,       // board #260: the tour and the bone OFFER stair placements
     compassOn: false,          // polar tracking instrument — down by default; P picks it up
+    handOn: false,             // HAND (#304): engaged, a plain drag pans and tools are suspended
+    chainActive: false,        // a run is open (#304) — the FINISH control shows only then
     cuts:          [],
     elevationNames: {},         // per-drawing side names for E1-E4 (FRONT/LEFT...), defaults from COMPANY STANDARDS
     elevationMarkOffsets: {},   // per-drawing E1-E4 clearances from the outermost dim string (ft), default E_MARK_CLEAR_FT
@@ -5545,9 +5667,10 @@ class Component extends DCLogic {
       // current, and not touching that path is what keeps the desk identical.
       if (e.pointerType !== 'mouse') { this._insideCanvas = true; this._onMouseMove(e); }
       this._invalidate(); this._ctrlTapPending = false; this._onMouseDown(e);
+      this._syncChainActive();
     });
     canvas.addEventListener('pointercancel', this._cpcl = e => this._abandonPointer(e));
-    canvas.addEventListener('dblclick',    this._cdbl = e => { this._invalidate(); this._onDblClick(e); });
+    canvas.addEventListener('dblclick',    this._cdbl = e => { this._invalidate(); this._onDblClick(e); this._syncChainActive(); });
     canvas.addEventListener('contextmenu', this._cctx = e => { e.preventDefault(); this._invalidate(); this._onRightClick(); });
     canvas.addEventListener('wheel',       this._cwhl = e => { this._invalidate(); this._ctrlTapPending = false; this._onWheel(e); }, { passive: false });
     canvas.addEventListener('pointerleave', this._cmle = e => { if (this._ownsPointer(e)) this._leaveCanvasOnce(); });
@@ -10370,6 +10493,17 @@ class Component extends DCLogic {
     if (this.state.projectCallout) this._dismissProjectCallout(false);
     if (this.state.garageCallout) this._dismissGarageCallout();
     if (this.state.perfNotice) this._dismissPerfNotice();
+    // HAND engaged (#304): the press pans, whatever tool is selected. This is
+    // the one-finger pan an iPad has no other way to perform — a touchscreen
+    // has neither the middle button nor the Alt key the pan branch below
+    // wants. 3D keeps its own orbit controls.
+    if (this.state.handOn && e.button === 0 && this.state.activeView !== 'perspective') {
+      e.preventDefault();
+      this._panning2D = true;
+      this._pan2DPrevX = e.clientX;
+      this._pan2DPrevY = e.clientY;
+      return;
+    }
     if (this.state.lengthFrozen) {
       // A canvas click while the ruler holds a valid typed length is the
       // drafter's "done" — it commits the length just like Enter.
@@ -16650,6 +16784,125 @@ class Component extends DCLogic {
     return Math.PI / 4;
   }
 
+  // ─── Ending a chain without a keyboard (#304) ────────────────────────────
+  // A run of walls, a line chain, an outline: every one of them ended on
+  // Enter, or on a double click nobody is told about. An iPad shows a
+  // keyboard only while a text field has focus, so at the permit counter
+  // Enter is not available — the drafter could start a wall run and have no
+  // way to finish it. FINISH is that way, and it appears only while there is
+  // something to finish.
+
+  _chainInProgress() {
+    return !!(this._lineDrawing || this._wallDrawing || this._floorDrawing
+      || this._shapeDrawing || this._outlineDrawing || this._surfaceOpeningDrawing
+      || (this.state.activeTool === 'roof' && this.state.roofPhase === 'overhang'));
+  }
+
+  _syncChainActive() {
+    const active = this._chainInProgress();
+    if (active !== this.state.chainActive) this.setState({ chainActive: active });
+  }
+
+  // ONE place that knows how each tool ends its run, so the button and the
+  // keyboard cannot drift apart. Returns whether there was a chain to end.
+  _finishActiveChain() {
+    if (this._lineDrawing) { this._finishChain(); return true; }
+    if (this._wallDrawing) { this._finishWall(); return true; }
+    if (this._floorDrawing) { this._finishFloor(); return true; }
+    if (this._shapeDrawing) { this._finishShape(); return true; }
+    if (this._outlineDrawing) { this._finishOutline(); return true; }
+    if (this._surfaceOpeningDrawing) { this._finishSurfaceOpening(); return true; }
+    // BASIC roof: the same press accepts the current overhang and drops it.
+    if (this.state.activeTool === 'roof' && this.state.roofPhase === 'overhang') {
+      this._commitBasicRoof(); return true;
+    }
+    return false;
+  }
+
+  // ─── Navigating the drawing without a wheel or a middle button (#304) ────
+  // Zoom was `wheel` only and pan was middle-drag or alt-drag, so on the iPad
+  // this app is aimed at, a drafter could draw and then never move the view.
+  // These do it from the strip, and they work the same with a mouse — a desk
+  // feature that happens to save the tablet.
+
+  // The wheel's own step, so a tap zooms by exactly as much as a notch does.
+  _zoomStep(inward) {
+    if (this.state.activeView === 'perspective') return;
+    if (this._stairWorkspaceActive()) return; // locked framing, same as the wheel
+    this._orthoHalfH = Math.max(1, Math.min(300, this._orthoHalfH * (inward ? 0.88 : 1.14)));
+    this._updateOrthoFrustum();
+    this._updateGridLOD();
+    this._invalidate();
+  }
+
+  // Every committed point on the active level, in world feet — what FIT
+  // frames. Null when the level is empty, which is a message, not a no-op.
+  _visibleExtents() {
+    const levelId = this._activeLevel()?.id;
+    if (levelId == null) return null;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    const eat = point => {
+      if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.z)) return;
+      if (point.x < minX) minX = point.x;
+      if (point.x > maxX) maxX = point.x;
+      if (point.z < minZ) minZ = point.z;
+      if (point.z > maxZ) maxZ = point.z;
+    };
+    const mine = item => item.levelId === levelId;
+    [...this._walls, ...this._lines].filter(mine).forEach(seg => { eat(seg.start); eat(seg.end); });
+    [...this._floors, ...this._shapes, ...this._roofs, ...this._outlines]
+      .filter(mine).forEach(item => (item.points || []).forEach(eat));
+    if (!Number.isFinite(minX) || !Number.isFinite(minZ)) return null;
+    return { minX, maxX, minZ, maxZ };
+  }
+
+  // FIT: frame the drawing, centred, with a margin so the outermost wall is
+  // not welded to the edge of the screen.
+  _zoomExtents() {
+    if (this.state.activeView === 'perspective') {
+      this.setState({ drawingMessage: 'FIT frames the plan — leave the 3D view first.', drawingMessageError: true });
+      return;
+    }
+    if (this._stairWorkspaceActive()) return;
+    const bounds = this._visibleExtents();
+    if (!bounds) {
+      this.setState({ drawingMessage: 'Nothing drawn on this level yet — nothing to fit.', drawingMessageError: false });
+      return;
+    }
+    const canvas = this._canvas;
+    const w = canvas?.clientWidth || 800, h = canvas?.clientHeight || 600;
+    const halfH = Math.max((bounds.maxZ - bounds.minZ) / 2,
+      (bounds.maxX - bounds.minX) / 2 / (w / h), 2);
+    this._orthoHalfH = Math.max(1, Math.min(300, halfH * FIT_MARGIN));
+    this._orthoCamX = (bounds.minX + bounds.maxX) / 2;
+    this._orthoCamZ = (bounds.minZ + bounds.maxZ) / 2;
+    const e0 = this._drawElev || 0;
+    if (this.state.activeView === 'top' && this._orthoCam) {
+      this._orthoCam.position.set(this._orthoCamX, e0 + 200, this._orthoCamZ);
+      this._orthoCam.lookAt(this._orthoCamX, e0, this._orthoCamZ);
+    }
+    this._updateOrthoFrustum();
+    this._updateGridLOD();
+    this._invalidate();
+  }
+
+  // HAND is a mode, the way COMPASS is: engaged, a plain drag pans and the
+  // active tool is SUSPENDED, not swapped — releasing hands the drafter back
+  // to exactly the tool they had. Tap it again, or Escape, to put it down.
+  _toggleHand(force = null) {
+    const on = force === null ? !this.state.handOn : force;
+    if (on === this.state.handOn) return;
+    if (on) this._cancelPolarDwell();
+    else this._panning2D = false;
+    this.setState({
+      handOn: on,
+      drawingMessage: on
+        ? 'HAND up — drag to pan. Tap HAND again or press Escape to put it down.'
+        : 'HAND down — back to the drawing tool.',
+      drawingMessageError: false,
+    });
+  }
+
   // The compass picks polar tracking up or sets it down: while it is up, a
   // dwell on a node casts measuring rays from it; down, no arms appear.
   _toggleCompass() {
@@ -19189,6 +19442,11 @@ class Component extends DCLogic {
     if (matches('cancel')) {
       e.preventDefault();
       if (this.state.lengthFrozen) { this._cancelFrozenLength(); return; }
+      // Escape puts the HAND down (#304) — the same release as tapping it.
+      if (this.state.handOn) { this._toggleHand(false); return; }
+      // Whatever else Escape cancels below, the FINISH control must not be
+      // left showing over a chain that no longer exists.
+      setTimeout(() => this._syncChainActive(), 0);
       this._polarOrigin = null;
       this._polarSnap = null;
       this._cancelPolarDwell();
@@ -19296,16 +19554,7 @@ class Component extends DCLogic {
       return;
     }
     if (matches('finish') || matches('finishAlt')) {
-      if (this._lineDrawing) { e.preventDefault(); this._finishChain(); return; }
-      if (this._wallDrawing) { e.preventDefault(); this._finishWall();  return; }
-      if (this._floorDrawing) { e.preventDefault(); this._finishFloor(); return; }
-      if (this._shapeDrawing) { e.preventDefault(); this._finishShape(); return; }
-      if (this._outlineDrawing) { e.preventDefault(); this._finishOutline(); return; }
-      if (this._surfaceOpeningDrawing) { e.preventDefault(); this._finishSurfaceOpening(); return; }
-      // BASIC roof: Enter / Space accepts the current overhang and drops the roof.
-      if (this.state.activeTool === 'roof' && this.state.roofPhase === 'overhang') {
-        e.preventDefault(); this._commitBasicRoof(); return;
-      }
+      if (this._finishActiveChain()) { e.preventDefault(); this._syncChainActive(); return; }
     }
     // Shift is a temporary 45° angle lock while drawing. A plain Freeze Length
     // binding must remain usable without making the user release Shift first.
@@ -20534,6 +20783,20 @@ class Component extends DCLogic {
       compassChipTitle: this.state.compassOn
         ? `COMPASS up — rest on a node to cast polar rays [${shortcut('compass')} or tap sets it down]`
         : `COMPASS down — no polar rays [${shortcut('compass')} or tap picks it up]`,
+      chainActive: this.state.chainActive,
+      onFinishChain: () => { this._finishActiveChain(); this._syncChainActive(); },
+      // View navigation (#304) — zoom, fit and the HAND pan mode.
+      onZoomIn: () => this._zoomStep(true),
+      onZoomOut: () => this._zoomStep(false),
+      onZoomFit: () => this._zoomExtents(),
+      onToggleHand: () => this._toggleHand(),
+      handPressed: this.state.handOn ? 'true' : 'false',
+      handKeyBorder: this.state.handOn ? '#e07a20' : 'rgba(29,31,32,0.2)',
+      handKeyBg: this.state.handOn ? '#e07a20' : '#fff',
+      handKeyColor: this.state.handOn ? '#fff' : '#1d1f20',
+      handChipTitle: this.state.handOn
+        ? 'HAND up — drag to pan; the drawing tool is suspended [tap or Escape puts it down]'
+        : 'HAND — drag to pan the drawing without a wheel or a middle button [tap picks it up]',
       toggleTsquare: () => this._toggleTsquare(),
       toggleCompass: () => this._toggleCompass(),
       toggleRuler: () => this._toggleRulerLatch(),
