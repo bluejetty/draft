@@ -11,7 +11,7 @@ function levelRow(page, name) {
 
 async function useFloorContext(page, level = 'MAIN FL') {
   await levelRow(page, level).locator('.level-body').click();
-  await levelRow(page, level).locator('.level-layer', { hasText: 'FLOOR' }).click();
+  await levelRow(page, level).locator('.level-layer', { hasText: 'FLOOR LAYOUT' }).click();
 }
 
 test('beam first: a column placed near the beam centres onto its line', async ({ page }) => {
@@ -93,7 +93,7 @@ test('PLAN places and shows structure in the level\'s home set', async ({ page }
 
   // The foundation level's PLAN saves home to FOUNDATION.
   await levelRow(page, 'FOUNDATION').locator('.level-body').click();
-  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'PLAN' }).first().click();
+  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'BASEMENT' }).first().click();
   await h.selectTool(page, 'Column');
   await h.clickWorld(page, -8, -6);
   await h.waitForSaved(page);

@@ -55,13 +55,13 @@ async function toolRailLabels(page) {
 test('tool names stay the same on every layer set', async ({ page }) => {
   await h.openModel(page);
   const expected = ['SELECT', 'LINE', 'NODE / ARC', 'WALL', 'FLOOR', 'DIMENSION', 'EXTEND', 'TRIM'];
-  for (const view of ['WALL PLAN', 'FLOOR PLAN', 'ELECTRIC']) {
+  for (const view of ['FLOOR PLAN (WALLS)', 'FLOOR LAYOUT (FLOOR)', 'ELECTRIC']) {
     await switchLayerView(page, view);
     const labels = (await toolRailLabels(page))
       .map(label => label.trim().toUpperCase());
     for (const name of expected) expect(labels).toContain(name);
     // No context-prefixed variants anywhere in the rail.
-    expect(labels.some(label => /^(WALL PLAN|FLOOR PLAN|ELECTRIC|FOUNDATION) /.test(label))).toBe(false);
+    expect(labels.some(label => /^(FLOOR PLAN \(WALLS\)|FLOOR LAYOUT \(FLOOR\)|ELECTRIC|FOUNDATION) /.test(label))).toBe(false);
   }
 });
 
@@ -132,7 +132,7 @@ test('the Select menu offers rectangle selection options', async ({ page }) => {
 
 test('a wall drawn from FLOOR saves to PLAN and stays visible until the layer set changes', async ({ page }) => {
   await h.openModel(page);
-  await switchLayerView(page, 'FLOOR PLAN');
+  await switchLayerView(page, 'FLOOR LAYOUT (FLOOR)');
   await drawWall(page, -10, 0, 10, 0);
 
   const walls = h.allWalls(await h.savedDrawing(page));
@@ -143,8 +143,8 @@ test('a wall drawn from FLOOR saves to PLAN and stays visible until the layer se
   expect(await wallStrokeCount(page, 5, 0)).toBeGreaterThan(0);
 
   // …then it becomes the usual faded PLAN reference.
-  await switchLayerView(page, 'WALL PLAN');
-  await switchLayerView(page, 'FLOOR PLAN');
+  await switchLayerView(page, 'FLOOR PLAN (WALLS)');
+  await switchLayerView(page, 'FLOOR LAYOUT (FLOOR)');
   expect(await wallStrokeCount(page, 5, 0)).toBe(0);
 });
 
@@ -175,7 +175,7 @@ test('a wall drawn on FOUNDATION is a foundation wall living in that layer set',
 
   // The foundation PLAN shows the concrete walls as a shared reference, so
   // the int stud / insul walls draw against the poured structure.
-  await switchLayerView(page, 'WALL PLAN');
+  await switchLayerView(page, 'BASEMENT (WALLS)');
   expect(await wallStrokeCount(page, 5, 0)).toBeGreaterThan(0);
 });
 
@@ -220,7 +220,7 @@ test('dimensions can be placed on any layer set and save with it', async ({ page
 
 test('a floor drawn from PLAN saves to the FLOOR layer set', async ({ page }) => {
   await h.openModel(page);
-  await switchLayerView(page, 'WALL PLAN');
+  await switchLayerView(page, 'FLOOR PLAN (WALLS)');
   await h.selectTool(page, 'Floor');
   await drawTriangle(page);
 
@@ -232,7 +232,7 @@ test('a floor drawn from PLAN saves to the FLOOR layer set', async ({ page }) =>
 
 test('the Floor tool SLAB setting saves concrete slab outlines', async ({ page }) => {
   await h.openModel(page);
-  await switchLayerView(page, 'FLOOR PLAN');
+  await switchLayerView(page, 'FLOOR LAYOUT (FLOOR)');
   await h.selectTool(page, 'Floor');
   await page.getByRole('button', { name: 'SLAB', exact: true }).click();
   await drawTriangle(page);
