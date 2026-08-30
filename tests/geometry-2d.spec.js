@@ -170,6 +170,40 @@ test('the roof envelope never loses a profile point, at any cut angle', async ({
   expect(out.empty).toBe(0);
 });
 
+test('the envelope holds through the real path: skeleton → faces → profile → envelope', async ({ page }) => {
+  // The sweep above hand-builds its profile; C6 actually travelled the full
+  // composition, so pin that too: profiles cut through a real hip roof.
+  const out = await page.evaluate(() => {
+    const G = window.DraftGeometry2D;
+    const roof = {
+      points: [{ x: -14, z: -11 }, { x: 14, z: -11 }, { x: 14, z: 11 }, { x: -14, z: 11 }],
+      edges: ['eave', 'eave', 'eave', 'eave'], pitch: 6,
+    };
+    const faces = G.roofFaces(roof, G.roofSkeleton(roof));
+    let short = 0, empty = 0, checked = 0, worst = null;
+    for (let deg = 0; deg < 180; deg += 3) {
+      const rad = deg * Math.PI / 180;
+      const axis = { x: Math.cos(rad), z: Math.sin(rad) };
+      const cutA = { x: -40 * axis.x, z: -40 * axis.z };
+      const cutB = { x: 40 * axis.x, z: 40 * axis.z };
+      const profile = G.roofProfile(roof, faces, cutA, cutB, axis);
+      if (profile.length < 2) continue;
+      const envelope = G.profileEnvelope([profile]);
+      checked += 1;
+      if (envelope.length < profile.length) {
+        short += 1;
+        if (envelope.length < 2) empty += 1;
+        if (!worst) worst = { deg, profile: profile.length, envelope: envelope.length };
+      }
+    }
+    return { checked, short, empty, worst };
+  });
+  expect(out.checked).toBeGreaterThan(50);
+  expect(`${out.short} of ${out.checked} real-path cut angles lost a profile point`)
+    .toBe(`0 of ${out.checked} real-path cut angles lost a profile point`);
+  expect(out.empty).toBe(0);
+});
+
 test('no page keeps its own copy of the plan geometry helpers', async ({ page }) => {
   const source = await page.evaluate(async () => {
     const response = await fetch('/MODEL.dc.html');

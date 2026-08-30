@@ -687,6 +687,11 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     // fewer than two lit samples drew no roof at all. Near-equal events are
     // merged after sorting instead, which keeps the surviving value one the
     // profile really contains.
+    //
+    // The envelope-keeps-every-point guarantee holds for STRICTLY INCREASING
+    // profiles, which is what roofProfile produces (sections draw fascia
+    // drops themselves, so vertical steps never enter a profile). A profile
+    // carrying two points at the same u would lose one to this merge.
     const EVENT_MERGE_EPS = 1e-9;
     const events = profiles.flat().map(p => p.u);
     const segs = profiles.map(profile => {
