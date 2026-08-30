@@ -8,10 +8,16 @@
 // configuration no user has, so a feature that only misbehaves ALONGSIDE
 // another one has nothing watching for it.
 //
-// This spec is that watch. It opts into nothing and seeds nothing: three
-// bones like a new browser, the reveal on, suggestions on, and one drafter's
-// path straight through — trace, the tour's foundation, the suggested stair,
-// the rooms pause, the roof, the bone, and out onto a LAYOUT sheet.
+// This spec is that watch. It seeds no settings and no wallet: three bones
+// like a new browser, the reveal on, suggestions on, and one drafter's path
+// straight through — trace, the tour's foundation, the suggested stair, the
+// rooms pause, the roof, the bone, and out onto a LAYOUT sheet.
+//
+// It is a shipping-DEFAULTS test, not a cold-arrival test: openModel still
+// dismisses the performance notice like any drafter would, and
+// waitForModelReady opens both tucked side rails so the levels are
+// clickable. The pinned path starts after those two user actions; the
+// notice and the tucked rails have their own specs.
 //
 // THE RULE THIS PINS: a new default-on feature ships with its place in this
 // combination test. If it changes what the drafter sees on this path, it
