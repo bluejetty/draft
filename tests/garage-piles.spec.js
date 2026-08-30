@@ -11,7 +11,7 @@ function levelRow(page, name) {
 
 async function useFoundationContext(page) {
   await levelRow(page, 'FOUNDATION').locator('.level-body').click();
-  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'PLAN' }).first().click();
+  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'BASEMENT' }).first().click();
 }
 
 // House: 16×12 rect. Attached garage: an open 3-leg run off the right side.

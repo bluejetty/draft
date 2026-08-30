@@ -8,7 +8,9 @@
   <script src="./formatters.js"></script>
   <script src="./drawing-format.js"></script>
   <script src="./project-page.js"></script>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap">
+  <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
+       critical path of the page. -->
+  <link rel="stylesheet" href="vendor/fonts.css" />
   <style>
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; background:#f5f5f4; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; }
@@ -616,5 +618,7 @@
       repaint();
     })();
   </script>
+  <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
+  <script src="./traffic-counter.js" defer></script>
 </body>
 </html>

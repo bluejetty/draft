@@ -220,6 +220,84 @@ test.describe('Generated section view', () => {
     expect(scan.midCount).toBeGreaterThan(40);
   });
 
+  test('a section through house AND garage bands each body on its own, not one across both', async ({ page }) => {
+    // Audit C5. _sectionWallCrossings filters nothing, and garage walls sit
+    // on the SAME level as the house walls with only a body marker — so the
+    // main-floor band ran from the house's outermost crossed wall to the
+    // GARAGE's, drawing a framed floor ("11 7/8 TJI + 3/4 SHTG") across a
+    // 4" slab on grade and an open storey under it. The suite had no
+    // two-body section case at all.
+    await h.openModel(page, { webgl: false });
+    await drawOutlineRect(page);
+    await h.selectTool(page, 'Outline');
+    await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
+    await page.keyboard.press('Enter');
+    await h.clickWorld(page, 8, -4);
+    await h.clickWorld(page, 20, -4);
+    await h.clickWorld(page, 20, 4);
+    await h.clickWorld(page, 8, 4);
+    await page.keyboard.press('Enter');
+    await h.waitForSaved(page);
+    await buildHouse(page);
+    await h.waitForSaved(page);
+
+    // One cut straight through both bodies, west to east.
+    await page.keyboard.press('c');
+    await h.clickWorld(page, -12, 0);
+    await h.clickWorld(page, 24, 0);
+    await h.clickWorld(page, 0, -10);
+    await page.waitForTimeout(400);
+    await page.locator('.cut-row', { hasText: 'S1' }).click();
+    await page.waitForTimeout(400);
+
+    // The floor-assembly band is a pale blue fill; measure each band's full
+    // horizontal extent and compare the storeys.
+    const bands = await page.evaluate(() => {
+      const canvas = document.querySelector('[data-model-overlay]');
+      const W = canvas.width, H = canvas.height;
+      const { data } = canvas.getContext('2d').getImageData(0, 0, W, H);
+      // rgba(89,128,166,0.15) over the near-white sheet.
+      const bandAt = i => data[i + 3] > 0
+        && data[i] > 215 && data[i] < 240
+        && data[i + 1] > 222 && data[i + 1] < 244
+        && data[i + 2] > 228 && data[i + 2] < 250
+        && data[i + 2] > data[i] + 6;
+      const rows = [];
+      for (let y = 0; y < H; y++) {
+        let lo = -1, hi = -1, count = 0;
+        for (let x = 0; x < W; x++) {
+          if (!bandAt((y * W + x) * 4)) continue;
+          if (lo < 0) lo = x;
+          hi = x; count += 1;
+        }
+        if (count > 40) rows.push({ y, lo, hi });
+      }
+      // Group adjacent rows into bands, keeping each band's widest extent.
+      const out = [];
+      rows.forEach(row => {
+        const last = out[out.length - 1];
+        if (last && row.y - last.y <= 3) {
+          last.y = row.y;
+          last.lo = Math.min(last.lo, row.lo);
+          last.hi = Math.max(last.hi, row.hi);
+        } else out.push({ ...row, top: row.y });
+      });
+      return out.map(band => ({ top: band.top, lo: band.lo, hi: band.hi, width: band.hi - band.lo }));
+    });
+
+    // Two storeys, two bands. They measure the SAME house, so their extents
+    // match; before the fix the main-floor band was ~75% wider because it
+    // reached across the garage.
+    expect(bands.length).toBeGreaterThanOrEqual(2);
+    const widths = bands.map(band => band.width);
+    expect(`main ${Math.max(...widths)} vs upper ${Math.min(...widths)} px`)
+      .toBe(`main ${Math.max(...widths)} vs upper ${Math.max(...widths)} px`);
+    // And no band reaches into the garage half of the cut.
+    const rightMost = Math.max(...bands.map(band => band.hi));
+    const leftMost = Math.min(...bands.map(band => band.lo));
+    expect((rightMost - leftMost) / (bands[0].hi - bands[0].lo)).toBeLessThan(1.1);
+  });
+
   test('a garage elevation keeps the beam a shallow dashed band, no gravel', async ({ page }) => {
     await h.openModel(page, { webgl: false });
     await drawOutlineRect(page);

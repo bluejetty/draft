@@ -65,7 +65,7 @@ test('a rectangle house with a floor hole and a basement reports exact level, su
 
   // Cut a 3' x 8' hole (24 sq ft) into the MAIN FL floor - same record a
   // stair rough opening writes, at a size this test controls exactly.
-  await switchLayerView(page, 'FLOOR PLAN');
+  await switchLayerView(page, 'FLOOR LAYOUT (FLOOR)');
   await h.selectTool(page, 'Select');
   await h.clickWorld(page, 4, 0);
   await page.waitForTimeout(200);
@@ -100,7 +100,7 @@ test('the deduction for a true stair opening equals that opening\'s own polygon 
   await drawOutline(page, [[-8, -6], [8, -6], [8, 6], [-8, 6]]);
   await buildHouse(page);
 
-  await switchLayerView(page, 'FLOOR PLAN');
+  await switchLayerView(page, 'FLOOR LAYOUT (FLOOR)');
   await h.selectTool(page, 'Select');
   await h.clickWorld(page, 4, 0);
   await page.waitForTimeout(200);
@@ -210,6 +210,70 @@ test('a corner gap inside the join tolerance still closes the room at the same a
   await page.waitForTimeout(400);
   const open = (await h.savedDrawing(page)).roomTags.filter(tag => tag.levelId === 1);
   expect(open).toHaveLength(0);
+});
+
+test('an attached garage is measured, disclosed, and kept OUT of the building total', async ({ page }) => {
+  await h.openModel(page);
+  // 16 x 12 house = 192 sq ft a level. Attached garage: an open 3-leg run off
+  // the x=8 wall, closed by the house boundary between its attachments, so
+  // the slab measures 12 x 8 = 96 sq ft on FOUNDATION.
+  await drawOutline(page, [[-8, -6], [8, -6], [8, 6], [-8, 6]]);
+  await h.selectTool(page, 'Outline');
+  await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
+  await page.keyboard.press('Enter'); // the professor's lesson steps aside
+  for (const [x, z] of [[8, -4], [20, -4], [20, 4], [8, 4]]) await h.clickWorld(page, x, z);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  await buildHouse(page);
+
+  // The slab really is a garage floor of the size above - the report's inputs,
+  // asserted before its output.
+  const saved = await h.savedDrawing(page);
+  const garageFloors = saved.floors.filter(floor => floor.garage);
+  expect(garageFloors).toHaveLength(1);
+  expect(garageFloors[0].levelId).toBe(1);
+
+  await openAreas(page);
+  const rows = page.locator('[data-areas-level]');
+  // FOUNDATION carries both slabs: gross 288, garage 96 disclosed and taken
+  // OUT, net 192 - the same figure the garage-less levels report.
+  const foundation = rows.nth(2);
+  await expect(foundation).toContainText('FOUNDATION');
+  await expect(foundation).toContainText('gross 288 sq ft');
+  await expect(foundation).toContainText('garage 96 sq ft, excluded');
+  await expect(foundation.locator('[data-areas-net]')).toHaveText('192 sq ft');
+  // The number a drafter copies onto a permit application: three level nets,
+  // no garage in it, with the garage stated on its own line beside it.
+  await expect(page.locator('[data-areas-total]')).toHaveText('576 sq ft');
+  await expect(page.locator('[data-areas-garage]')).toContainText('Garage 96 sq ft');
+  await expect(page.locator('[data-areas-garage]')).toContainText('excluded from the building total');
+  await expect(page.locator('[data-areas-convention]')).toContainText('kept OUT');
+  await closeAreas(page);
+});
+
+test('the printed level nets add up to the printed total: round each net once, sum the rounded values', async ({ page }) => {
+  await h.openModel(page);
+  // 16 x 12.4 = 198.4 sq ft a level: a fractional net, chosen so rounding
+  // each level and rounding the sum genuinely disagree (198 + 198 + 198 =
+  // 594, while round(595.2) = 595). The drafter adds the printed column and
+  // must land on the printed bottom line — so the total is the sum of the
+  // nets AS PRINTED.
+  await drawOutline(page, [[-8, -6.2], [8, -6.2], [8, 6.2], [-8, 6.2]]);
+  await buildHouse(page);
+
+  await openAreas(page);
+  const rows = page.locator('[data-areas-level]');
+  await expect(rows).toHaveCount(3);
+  const nets = [];
+  for (let i = 0; i < 3; i++) {
+    const text = await rows.nth(i).locator('[data-areas-net]').textContent();
+    nets.push(parseInt(text, 10));
+    expect(text).toBe('198 sq ft');
+  }
+  const totalText = await page.locator('[data-areas-total]').textContent();
+  expect(parseInt(totalText, 10)).toBe(nets.reduce((sum, net) => sum + net, 0));
+  await expect(page.locator('[data-areas-total]')).toHaveText('594 sq ft');
+  await closeAreas(page);
 });
 
 test('an open-concept space rolls up as one combined room; the plan tag is untouched', async ({ page }) => {

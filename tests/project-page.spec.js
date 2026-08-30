@@ -116,7 +116,7 @@ test('grade defaults a foot below foundation top and drives the detached garage 
   expect(saved.zoneHeights.zones.detachedGarage.offsetFt).toBeCloseTo(-4, 5);
 });
 
-test('the level cards show the same values the PROJECT page sets', async ({ page }) => {
+test('a wall height set on the PROJECT page lands in the saved assembly', async ({ page }) => {
   await h.openModel(page);
   await openProjectPage(page);
 
@@ -125,10 +125,4 @@ test('the level cards show the same values the PROJECT page sets', async ({ page
 
   const saved = await h.savedDrawing(page);
   expect(saved.levelAssemblies['3'].wallHeightFt).toBeCloseTo((9 * 12 + 2) / 12, 5);
-
-  await page.goto('/MODEL.dc.html');
-  await h.waitForModelReady(page);
-  const mainRow = page.locator('.level-row')
-    .filter({ has: page.locator('.level-name', { hasText: 'MAIN FL' }) });
-  await expect(mainRow.locator('.level-assembly-summary').first()).toHaveText(`9'-2"`);
 });

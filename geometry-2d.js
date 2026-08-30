@@ -680,7 +680,20 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // the union of breakpoints PLUS pairwise segment crossings — an envelope
   // vertexes where one roof passes another, not only at either one's kinks.
   const profileEnvelope = (profiles) => {
-    const events = new Set(profiles.flat().map(p => +p.u.toFixed(5)));
+    // Event u-values stay EXACT (audit C6). Rounding them for de-duplication
+    // moved each by up to 5e-6, five times the containment tolerance below,
+    // so a profile's own endpoint could fall outside the segment it came
+    // from — valueAt returned null, the point dropped, and a section with
+    // fewer than two lit samples drew no roof at all. Near-equal events are
+    // merged after sorting instead, which keeps the surviving value one the
+    // profile really contains.
+    //
+    // The envelope-keeps-every-point guarantee holds for STRICTLY INCREASING
+    // profiles, which is what roofProfile produces (sections draw fascia
+    // drops themselves, so vertical steps never enter a profile). A profile
+    // carrying two points at the same u would lose one to this merge.
+    const EVENT_MERGE_EPS = 1e-9;
+    const events = profiles.flat().map(p => p.u);
     const segs = profiles.map(profile => {
       const list = [];
       for (let i = 0; i < profile.length - 1; i++) list.push([profile[i], profile[i + 1]]);
@@ -693,10 +706,11 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
         const mP = (p2.rise - p1.rise) / (p2.u - p1.u), mQ = (q2.rise - q1.rise) / (q2.u - q1.u);
         if (Math.abs(mP - mQ) < 1e-12) return;
         const u = (q1.rise - mQ * q1.u - p1.rise + mP * p1.u) / (mP - mQ);
-        if (u > lo + 1e-9 && u < hi - 1e-9) events.add(+u.toFixed(5));
+        if (u > lo + 1e-9 && u < hi - 1e-9) events.push(u);
       }));
     }
-    const sorted = [...events].sort((x, y) => x - y);
+    const sorted = events.sort((x, y) => x - y)
+      .filter((u, index, list) => index === 0 || u - list[index - 1] > EVENT_MERGE_EPS);
     const valueAt = (profile, u) => {
       for (let i = 0; i < profile.length - 1; i++) {
         const a = profile[i], b = profile[i + 1];

@@ -8,6 +8,15 @@ module.exports = defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: 'list',
+  // Stated, not inherited. Playwright's 30s default was set for an app that
+  // waited on fonts.googleapis.com before it painted (audit M2, fixed by
+  // self-hosting) — without that stall a spec that drives a whole house is
+  // comfortably inside 30s, but the heaviest ones (a full BUILD HOUSE, a
+  // save-and-reload, a section sweep) are not, and a slow CI box needs room
+  // besides. 90s is that room; it is not a licence for a spec to sit and
+  // wait, and a spec that needs more is a spec to look at, not to raise this
+  // for.
+  timeout: 90_000,
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
     viewport: { width: 1280, height: 900 },
