@@ -1716,6 +1716,21 @@ const ROOF_LAYER = 'A-ROOF';
 // cozy spot the standard elevations use. This is the least the line extends
 // past the drawn ends when there are no walls to measure against.
 const CUT_BUBBLE_PUSH_FT = 6;
+// The standard elevation marks stand this far outside the outermost dimension
+// string on their side (board #263). Each mark's grab handle can slide it
+// along its own axis, and the chosen clearance saves with the drawing.
+const E_MARK_CLEAR_FT = 2;
+const E_MARK_CLEAR_MIN_FT = 0.5;
+const E_MARK_CLEAR_MAX_FT = 60;
+const clampEMarkClear = value => Math.min(E_MARK_CLEAR_MAX_FT, Math.max(E_MARK_CLEAR_MIN_FT, value));
+// Which way each mark's axis runs: E1 south of the plan, E2 west, E3 north,
+// E4 east — `sign * (coordinate - dim edge)` reads the mark's clearance.
+const E_MARK_SIDES = {
+  E1: { side: 'S', axis: 'z', sign: 1 },
+  E2: { side: 'W', axis: 'x', sign: -1 },
+  E3: { side: 'N', axis: 'z', sign: -1 },
+  E4: { side: 'E', axis: 'x', sign: 1 },
+};
 // Structural point supports and spans, placed manually in either order —
 // columns centre onto a beam line and beam ends snap to columns, so they line
 // up whichever is placed first. A beam is one span between two supports:
@@ -2023,6 +2038,16 @@ const normaliseSavedElevationNames = value => {
     .map(id => [id, stored[id].trim().toUpperCase()]));
 };
 
+// Per-drawing clearances for the standard elevation marks — how far outside
+// the outermost dimension string each of E1-E4 stands. Only real numbers
+// survive, clamped to the working band; anything missing means the default.
+const normaliseSavedElevationMarkOffsets = value => {
+  const stored = value && typeof value === 'object' ? value : {};
+  return Object.fromEntries(['E1', 'E2', 'E3', 'E4']
+    .filter(id => typeof stored[id] === 'number' && Number.isFinite(stored[id]))
+    .map(id => [id, clampEMarkClear(stored[id])]));
+};
+
 // Undo keeps whole serialized drawings, so it is bounded by count and by size.
 const HISTORY_LIMIT = 60;
 const HISTORY_MAX_CHARS = 8000000;
@@ -2181,6 +2206,7 @@ class Component extends DCLogic {
     compassOn: false,          // polar tracking instrument — down by default; P picks it up
     cuts:          [],
     elevationNames: {},         // per-drawing side names for E1-E4 (FRONT/LEFT...), defaults from COMPANY STANDARDS
+    elevationMarkOffsets: {},   // per-drawing E1-E4 clearances from the outermost dim string (ft), default E_MARK_CLEAR_FT
     nextCutId:     1,
     activeCutId:   null,
     cutPhase:      'idle',     // 'idle'|'placing'|'choosing'
@@ -2587,6 +2613,7 @@ class Component extends DCLogic {
       roofPitch: this.state.roofPitch,
       elevationDatum: this.state.elevationDatum,
       elevationNames: { ...this.state.elevationNames },
+      elevationMarkOffsets: { ...this.state.elevationMarkOffsets },
       cuts: this.state.cuts.map(cut => ({
         id: cut.id,
         name: cut.name,
@@ -4572,6 +4599,7 @@ class Component extends DCLogic {
         roofPitch: clampRoofPitch(format.number(saved.roofPitch, DEFAULT_ROOF_PITCH)),
         elevationDatum: format.number(saved.elevationDatum, 0) === 100 ? 100 : 0,
         elevationNames: normaliseSavedElevationNames(saved.elevationNames),
+        elevationMarkOffsets: normaliseSavedElevationMarkOffsets(saved.elevationMarkOffsets),
         roofDimensionError: '',
         cuts,
         nextCutId,
@@ -5433,6 +5461,7 @@ class Component extends DCLogic {
     this._outlineArcDrag = null;       // { outline, index, startX, startY, active } — outline segment arc drag
     this._selectDownInfo = null;       // { worldPt, clientX, clientY, shiftHeld } — pending click
     this._fixtureDrag    = null;       // { fixture, startX, startY, active } — fixture slide along its wall
+    this._eMarkDrag      = null;       // { id, axis, sign, base, startX, startY, active } — E-mark clearance slide (board #263)
     this._fixtureRunStart = null;      // { wallId, along, side } — first click of a cabinet / vanity run
     this._tubPending     = null;       // { wallId, along, side } — tub back wall, waiting on the faucet-end wall
     this._lastClient     = null;       // { x, y } — last cursor position for cursor-side notices
@@ -5536,6 +5565,7 @@ class Component extends DCLogic {
       const oad  = this._outlineArcDrag;
       const fd   = this._fixtureDrag;
       const td   = this._roomTagDrag;
+      const ed   = this._eMarkDrag;
       const info = this._selectDownInfo;
       const windowSelection = this._windowSelection;
       this._selectDrag     = null;
@@ -5543,10 +5573,12 @@ class Component extends DCLogic {
       this._outlineArcDrag = null;
       this._fixtureDrag    = null;
       this._roomTagDrag    = null;
+      this._eMarkDrag      = null;
       this._selectDownInfo = null;
       this._windowSelection = null;
       if (ad?.active) this._markUnsaved();
       if (fd?.active) this._markUnsaved();
+      if (ed) { if (ed.active) this._markUnsaved(); return; }
       // A room-tag press resolves on its own (board #198): travelled →
       // the move claims/promotes the tag; still → the rename editor opens.
       if (td) {
@@ -7768,6 +7800,28 @@ class Component extends DCLogic {
     ctx.fillStyle = '#b04060';
     [...this._autoElevationCuts(), ...this.state.cuts].forEach(bubbleMark);
 
+    // Each standard elevation mark wears a grab handle at mid-line under the
+    // SELECT tool (board #263): press-and-drag slides the mark along its own
+    // axis so the drafter picks the clearance when the default looks odd.
+    this._eMarkHandleHits = [];
+    if (!this._isPrinting && this.state.activeTool === 'select' && this.state.activeView === 'top') {
+      this._autoElevationCuts().forEach(cut => {
+        const mid = toS({
+          x: (cut.startPt.x + cut.endPt.x) / 2,
+          y: cut.elev + 0.02,
+          z: (cut.startPt.z + cut.endPt.z) / 2,
+        });
+        const r = 5;
+        ctx.beginPath();
+        ctx.moveTo(mid.x, mid.y - r); ctx.lineTo(mid.x + r, mid.y);
+        ctx.lineTo(mid.x, mid.y + r); ctx.lineTo(mid.x - r, mid.y);
+        ctx.closePath();
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.stroke();
+        this._eMarkHandleHits.push({ id: cut.id, x: mid.x, y: mid.y });
+      });
+    }
+
     const phase = this.state.cutPhase;
     if (phase !== 'idle' && this._cutStart3) {
       const y = (this._drawElev || 0) + 0.05;
@@ -8155,18 +8209,14 @@ class Component extends DCLogic {
     return { start: along(tMin), end: along(tMax) };
   }
 
-  // The four standard elevations place themselves just outside the plan
-  // extents: E1 along the bottom looking up into the model, E2 left looking
-  // right, E3 top looking down, E4 right looking left. Like hand-placed
-  // cuts, dirVec points to the side the viewer stands on. Each side's mark
-  // stands clear of the drawing ink: past the outermost dimension string in
-  // its corridor (any level), then the usual half-gap further out.
-  _autoElevationCuts() {
-    if (!this._autoElevationsOn()) return [];
+  // The outermost dimension string in each side's corridor (any level) — the
+  // reference line the standard elevation marks measure their clearance from.
+  // With no dimensions on a side, the plan's own wall extents stand in.
+  _eMarkDimEdges() {
     const box = this._planWallExtents();
-    if (!box) return [];
+    if (!box) return null;
     const { minX, maxX, minZ, maxZ } = box;
-    const off = this._cutMarkGapFt(), pad = 2;
+    const pad = 2;
     const edge = { N: minZ, S: maxZ, W: minX, E: maxX };
     this._dimensions.filter(dimension => dimension.levelId > 0).forEach(dimension => {
       [dimension.start, dimension.end].forEach(pt => {
@@ -8180,15 +8230,39 @@ class Component extends DCLogic {
         }
       });
     });
+    return edge;
+  }
+
+  // How far outside the outermost dimension string a standard elevation mark
+  // stands: the drafter's dragged clearance if its handle has moved, else 2'.
+  _eMarkClearFt(id) {
+    const stored = this.state.elevationMarkOffsets[id];
+    return Number.isFinite(stored) ? stored : E_MARK_CLEAR_FT;
+  }
+
+  // The four standard elevations place themselves just outside the plan
+  // extents: E1 along the bottom looking up into the model, E2 left looking
+  // right, E3 top looking down, E4 right looking left. Like hand-placed
+  // cuts, dirVec points to the side the viewer stands on. Each side's mark
+  // stands clear of the drawing ink: 2' past the outermost dimension string
+  // in its corridor (any level), or wherever its grab handle was dragged.
+  _autoElevationCuts() {
+    if (!this._autoElevationsOn()) return [];
+    const box = this._planWallExtents();
+    if (!box) return [];
+    const edge = this._eMarkDimEdges();
+    const { minX, maxX, minZ, maxZ } = box;
+    const pad = 2;
+    const at = id => edge[E_MARK_SIDES[id].side] + E_MARK_SIDES[id].sign * this._eMarkClearFt(id);
     return [
       { id: 'E1', name: 'E1', auto: true, elev: 0, levelId: null,
-        startPt: { x: minX - pad, z: edge.S + off }, endPt: { x: maxX + pad, z: edge.S + off }, dirVec: { x: 0, z: 1 } },
+        startPt: { x: minX - pad, z: at('E1') }, endPt: { x: maxX + pad, z: at('E1') }, dirVec: { x: 0, z: 1 } },
       { id: 'E2', name: 'E2', auto: true, elev: 0, levelId: null,
-        startPt: { x: edge.W - off, z: minZ - pad }, endPt: { x: edge.W - off, z: maxZ + pad }, dirVec: { x: -1, z: 0 } },
+        startPt: { x: at('E2'), z: minZ - pad }, endPt: { x: at('E2'), z: maxZ + pad }, dirVec: { x: -1, z: 0 } },
       { id: 'E3', name: 'E3', auto: true, elev: 0, levelId: null,
-        startPt: { x: minX - pad, z: edge.N - off }, endPt: { x: maxX + pad, z: edge.N - off }, dirVec: { x: 0, z: -1 } },
+        startPt: { x: minX - pad, z: at('E3') }, endPt: { x: maxX + pad, z: at('E3') }, dirVec: { x: 0, z: -1 } },
       { id: 'E4', name: 'E4', auto: true, elev: 0, levelId: null,
-        startPt: { x: edge.E + off, z: minZ - pad }, endPt: { x: edge.E + off, z: maxZ + pad }, dirVec: { x: 1, z: 0 } },
+        startPt: { x: at('E4'), z: minZ - pad }, endPt: { x: at('E4'), z: maxZ + pad }, dirVec: { x: 1, z: 0 } },
     ];
   }
 
@@ -10261,6 +10335,7 @@ class Component extends DCLogic {
     this._outlineArcDrag = null;
     this._fixtureDrag    = null;
     this._roomTagDrag    = null;
+    this._eMarkDrag      = null;
     this._selectDownInfo = null;
     this._windowSelection = null;
     this._invalidate();
@@ -10354,6 +10429,22 @@ class Component extends DCLogic {
             };
             e.preventDefault();
             return;
+          }
+          // A press on a standard elevation mark's handle slides the mark
+          // along its own axis (board #263) — checked first because the
+          // handle stands out past the dimension strings, clear of the plan.
+          const eMarkHit = this._eMarkHandleAt(e);
+          if (eMarkHit) {
+            const { axis, sign, side } = E_MARK_SIDES[eMarkHit.id];
+            const edge = this._eMarkDimEdges();
+            if (edge) {
+              this._eMarkDrag = {
+                id: eMarkHit.id, axis, sign, base: edge[side],
+                startX: e.clientX, startY: e.clientY, active: false,
+              };
+              e.preventDefault();
+              return;
+            }
           }
           const refs = this._findVertexHit(raw, this.state.selectFilter);
           if (refs) {
@@ -10610,6 +10701,20 @@ class Component extends DCLogic {
           const h = this._canvas?.clientHeight || 600;
           const flat = (this._orthoHalfH * 2) / h * 4; // within ~4px of straight → snap flat
           ad.outline.points[ad.index].bulge = Math.abs(bulge) < flat ? 0 : bulge;
+        }
+      }
+    }
+
+    // E-mark handle drag (board #263) — the mark slides along its own axis,
+    // its clearance from the outermost dimension string following the cursor.
+    if (this._eMarkDrag) {
+      const ed = this._eMarkDrag;
+      if (!ed.active && Math.hypot(e.clientX - ed.startX, e.clientY - ed.startY) > 4) ed.active = true;
+      if (ed.active) {
+        const raw = this._getWorldPos(e.clientX, e.clientY);
+        if (raw) {
+          const clear = clampEMarkClear(ed.sign * (raw[ed.axis] - ed.base));
+          this.setState({ elevationMarkOffsets: { ...this.state.elevationMarkOffsets, [ed.id]: clear } });
         }
       }
     }
@@ -18087,6 +18192,17 @@ class Component extends DCLogic {
       drawingMessage: `${tag.name} moved — it's yours now and survives ROOM TAGS re-runs.`,
       drawingMessageError: false,
     });
+  }
+
+  // The grab handle on a standard elevation mark's line, drawn under the
+  // SELECT tool (board #263). Hits come from the last overlay paint, the same
+  // screen geometry the drafter sees.
+  _eMarkHandleAt(e) {
+    const hits = this._eMarkHandleHits || [];
+    if (!hits.length || !this._canvas) return null;
+    const rect = this._canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    return hits.find(hit => Math.hypot(x - hit.x, y - hit.y) <= 12) || null;
   }
 
   _roomTagHitAt(e) {
