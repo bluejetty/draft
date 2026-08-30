@@ -77,9 +77,9 @@ if (!window.DraftRoomStandards) {
   // normalised, never hard-coded at the point of use. Chips are plain
   // uppercase names; order is the tray order.
   const DEFAULT_ROOM_TRAY = Object.freeze([
-    'KITCHEN', 'LIVING', 'DINING', 'BEDROOM', 'BATH', 'WC', 'ENSUITE',
-    'WALK-IN', 'CLOSET', 'LAUNDRY', 'DZ', 'OFFICE/DEN', 'PANTRY', 'HALL',
-    'STORAGE',
+    'KITCHEN', 'LIVING', 'DINING', 'BEDROOM 1', 'BEDROOM', 'BATH', 'WC',
+    'ENSUITE', 'WALK-IN', 'CLOSET', 'LAUNDRY', 'DZ', 'OFFICE/DEN', 'PANTRY',
+    'HALL', 'STORAGE',
   ]);
 
   const normaliseRoomTray = value => {
@@ -87,13 +87,25 @@ if (!window.DraftRoomStandards) {
       .map(chip => String(chip ?? '').replace(/\s+/g, ' ').trim().toUpperCase().slice(0, 24))
       .filter(Boolean);
     const unique = [...new Set(chips)];
-    return unique.length ? unique : [...DEFAULT_ROOM_TRAY];
+    if (!unique.length) return [...DEFAULT_ROOM_TRAY];
+    // BEDROOM 1 — the one primary suite (#276) — is a RULE, so it must be
+    // reachable from every tray: inject it into saved trays that predate
+    // it, ahead of the ordinary BEDROOM chip. Idempotent per load; note a
+    // removal therefore re-injects on the next load — flagged in the PR
+    // notes, since the ruling asked for both reachable-everywhere and
+    // office-removable and the two meet exactly here.
+    if (!unique.includes('BEDROOM 1')) {
+      const at = unique.indexOf('BEDROOM');
+      unique.splice(at >= 0 ? at : unique.length, 0, 'BEDROOM 1');
+    }
+    return unique;
   };
 
   // Which minimums row a stamped base answers to. Bases without a row
   // (LIVING has a stored row but no detector category — see above — and
   // the circulation/storage names) return null: name-only, no flag.
   const STAMP_CATEGORIES = Object.freeze({
+    'BEDROOM 1': 'bedroom',
     BEDROOM: 'bedroom',
     KITCHEN: 'kitchen',
     BATH: 'wc',

@@ -18,6 +18,7 @@ Tagline everywhere: **ZERO → PLAN IN 5 MINUTES!** (spoken: "zero to plan in fi
 | `STANDARD-ENDCARD.md` | Reusable end clip: 10s chrome logo card + the legal scroll (real and funny at the same time) |
 | `TAGLINES.md` | The collected campaign lines — real taglines, support lines, joke sub-taglines |
 | `SHARE-YOUR-HOUSE.md` | The built-in marketing loop — bone-cooldown SHARE moment, one-page feature sheet, logo stamp |
+| `FEED-THE-TRADE.md` | The drafter-facing positioning piece — stock plans were lead generators, we build a better lead |
 | `GRUFFS-DRAFTING-universe.md` | GRUFFS DRAFTING — the fast-food universe: the 50's drive-through, the eras, THE CARHOP concept, the brand-safety rule |
 | `THE-MANAGER-script.md` / `THE-MANAGER-video-prompt.md` | THE MANAGER — Karen vs. the golden retriever manager (:60, Gruffs 80s lobby) |
 | `THE-MANAGER-script-10s.md` / `THE-MANAGER-10s-video-prompt.md` | THE DEN — one joke, ten seconds (Gruffs 80s lobby) |

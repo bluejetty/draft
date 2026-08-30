@@ -77,11 +77,15 @@ test('the tray stamps on a chip-tap/plan-tap pair, disarms, and the step can ski
   expect(saved.tour.step).toBe('roof');
 });
 
-test('bedrooms number from the first stamp, companions ride along, and deletes renumber + cascade', async ({ page }) => {
+test('the primary brings the suite, ordinary bedrooms number from 2, and deletes renumber + cascade', async ({ page }) => {
+  // #276 pin update: BEDROOM 1 is its own chip and the ONE primary suite
+  // (ENSUITE + WALK-IN); the ordinary BEDROOM chip numbers from 2 with a
+  // CLOSET each. The mechanics pinned here — companions attach, deletes
+  // renumber and cascade, the survivor closet drops bare — are unchanged.
   await h.openModel(page);
   await reachRoomsMain(page, 24, 18);
 
-  await stamp(page, 'BEDROOM', -6, 0);
+  await stamp(page, 'BEDROOM 1', -6, 0);
   let saved = await h.savedDrawing(page);
   expect(names(saved)).toEqual(['BEDROOM 1', 'ENSUITE', 'WALK-IN']);
   const companions = stamps(saved).filter(tag => tag.companionOf != null);
@@ -94,6 +98,11 @@ test('bedrooms number from the first stamp, companions ride along, and deletes r
     'BEDROOM 1', 'BEDROOM 2', 'BEDROOM 3',
     'CLOSET 1', 'CLOSET 2', 'ENSUITE', 'WALK-IN',
   ]);
+
+  // A second BEDROOM 1 is refused quietly — one primary per house.
+  await stamp(page, 'BEDROOM 1', 3, 4);
+  saved = await h.savedDrawing(page);
+  expect(names(saved).filter(name => name === 'BEDROOM 1')).toHaveLength(1);
 
   // Deleting BEDROOM 2 (empty text commits the delete) renumbers the third
   // bedroom down and takes the still-attached CLOSET with it — the lone
@@ -128,8 +137,9 @@ test('renames leave the numbering pool, drags claim companions, and everything s
   await expect(page.locator('[data-room-tray]')).toBeVisible(); // the step resumed
 
   // A dragged companion is claimed and outlives its bedroom; the attached
-  // one dies with it.
-  await stamp(page, 'BEDROOM', 6, 2);
+  // one dies with it. (#276 pin update: the ENSUITE + WALK-IN pair rides
+  // the BEDROOM 1 primary chip now.)
+  await stamp(page, 'BEDROOM 1', 6, 2);
   await h.selectTool(page, 'Select');
   const from = await h.worldToClient(page, 6, 4.2); // the ENSUITE companion
   const to = await h.worldToClient(page, 10, 6);
@@ -181,20 +191,21 @@ test('a stamp names the room it sits in, grades UNDER MIN, and offsets the detec
   await h.waitForSaved(page);
 
   const saved = await h.savedDrawing(page);
-  const bedroom1 = saved.roomTags.find(tag => tag.name === 'BEDROOM 1');
-  expect(bedroom1.stamped).toBe(true);          // the stamp IS the room's tag
-  expect(bedroom1.areaSqFt).toBeGreaterThan(50); // it absorbed the room's area
-  expect(bedroom1.underMin).toBe(true);          // 8x8 fails the 97 sq ft row
+  // #276 pin update: the ordinary chip numbers from 2 (1 is the primary's).
+  const stampedBedroom = saved.roomTags.find(tag => tag.name === 'BEDROOM 2');
+  expect(stampedBedroom.stamped).toBe(true);          // the stamp IS the room's tag
+  expect(stampedBedroom.areaSqFt).toBeGreaterThan(50); // it absorbed the room's area
+  expect(stampedBedroom.underMin).toBe(true);          // 8x8 fails the 97 sq ft row
   expect(saved.roomTags.some(tag => tag.name === 'ROOM' && tag.at.x < 0)).toBe(false);
   // The detector's own bedroom numbers PAST the stamp — no name collision.
-  expect(saved.roomTags.some(tag => /^BED(ROOM|RM) 2$/.test(tag.name) && !tag.stamped)).toBe(true);
+  expect(saved.roomTags.some(tag => /^BED(ROOM|RM) 3$/.test(tag.name) && !tag.stamped)).toBe(true);
 });
 
 test('a mid-step bone press builds, ends the tour, and stamps the room counts into the project info', async ({ page }) => {
   await h.openModel(page);
   await reachRoomsMain(page, 16, 12);
 
-  await stamp(page, 'BEDROOM', -3, 0); // brings ENSUITE + WALK-IN
+  await stamp(page, 'BEDROOM', -3, 0); // #276 pin update: brings a CLOSET
   await stamp(page, 'BATH', 4, 0);
   await page.locator('[data-build-house]').click();
   await h.waitForSaved(page);
@@ -203,5 +214,5 @@ test('a mid-step bone press builds, ends the tour, and stamps the room counts in
   expect(saved.tour.step).toBe(null);
   expect(saved.walls.length).toBeGreaterThan(0);
   expect(saved.projectInfo.bedrooms).toBe(1);
-  expect(saved.projectInfo.bathrooms).toBe(2); // BATH + the ENSUITE companion
+  expect(saved.projectInfo.bathrooms).toBe(1); // BATH (the suite rides BEDROOM 1 now)
 });

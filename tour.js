@@ -125,34 +125,60 @@ if (!window.DraftTour) {
   // slid open, the audience settles, THEN the house grows.
   const REVEAL_HOLD_MS = 1000;
 
-  // ── Room stamps (board #198, slice 4) ───────────────────────────────────
+  // ── Room stamps (board #198, slice 4; numbering reworked under #276) ────
   // A stamp: { id, levelId, base, name } — base is the tray chip it came
   // from; a renamed stamp has base:null and its custom name is forever.
-  // Numbering is DERIVED per floor from placement order (id order), so
-  // deleting a stamp renumbers the rest with no stored counter. BEDROOM
-  // always numbers from the first stamp (the companion rule keys off
-  // BEDROOM 1); every other base is bare until a second lands.
-  const STAMP_ALWAYS_NUMBERED = ['BEDROOM'];
+  // Numbering is DERIVED from placement order (id order), so deleting a
+  // stamp renumbers the rest with no stored counter. BEDROOM and WC run
+  // house-wide ladders (room-grow.js owns those, plus the BEDROOM 1
+  // primary and the basement B-series); every other base stays per-floor,
+  // bare until a second lands.
+  const HOUSE_WIDE = ['BEDROOM', 'WC', 'BEDROOM 1'];
   const stampDisplayName = (stamps, stamp) => {
     if (!stamp.base) return stamp.name; // renamed — custom forever
+    if (HOUSE_WIDE.includes(stamp.base) && window.DraftRoomGrow) {
+      const name = window.DraftRoomGrow.assignStampNumbers(stamps).get(stamp.id);
+      if (name) return name;
+    }
     const pool = stamps
       .filter(other => other.base === stamp.base && other.levelId === stamp.levelId)
       .sort((a, b) => a.id - b.id);
-    if (!STAMP_ALWAYS_NUMBERED.includes(stamp.base) && pool.length === 1) return stamp.base;
+    if (pool.length === 1) return stamp.base;
     return `${stamp.base} ${pool.indexOf(stamp) + 1}`;
   };
 
-  // Companion bases to drop when a tray-stamped bedroom lands, given the
-  // same-floor stamped bedrooms that existed BEFORE this placement: the
-  // floor's first bedroom brings its ENSUITE + WALK-IN (the 98% case,
-  // deletable for the 2%), every later one a CLOSET.
-  const bedroomCompanions = priorBedroomsOnFloor =>
-    priorBedroomsOnFloor === 0 ? ['ENSUITE', 'WALK-IN'] : ['CLOSET'];
+  // Companion bases to drop when a tray-stamped bedroom lands (#276): the
+  // PRIMARY SUITE — the one BEDROOM 1 — brings its ENSUITE + WALK-IN;
+  // every ordinary bedroom brings a CLOSET, first-of-its-floor or not.
+  const bedroomCompanions = base =>
+    base === 'BEDROOM 1' ? ['ENSUITE', 'WALK-IN']
+      : base === 'BEDROOM' ? ['CLOSET'] : [];
 
-  // Where the detector starts numbering a base on a floor (1-based), so a
-  // stamped BEDROOM 1 and a detected bedroom can never share a name.
-  const detectorNumberStart = (stamps, base, levelId) =>
-    stamps.filter(stamp => stamp.base === base && stamp.levelId === levelId).length + 1;
+  // Where the detector starts numbering a base (1-based), so a stamped
+  // room and a detected room can never share a name. BEDROOM and WC
+  // ladders run house-wide above grade under #276 (the basement keeps its
+  // own B ladder), counting claimed numbers too; other bases stay
+  // per-floor. Detected tags themselves keep their provisional per-run
+  // names — the primary-suite rule governs STAMPS only.
+  const detectorNumberStart = (stamps, base, levelId, basementLevelId = 1) => {
+    const houseWide = ['BEDROOM', 'WC'].includes(base);
+    const basement = levelId === basementLevelId;
+    if (houseWide && window.DraftRoomGrow) {
+      // Read the numbers the stamps ACTUALLY carry (the primary's 1, the
+      // ordinary ladder from 2, claims, the basement B-series) and start
+      // one past the highest — counting stamps would collide now that the
+      // ordinary bedroom ladder starts at 2.
+      const names = window.DraftRoomGrow.assignStampNumbers(stamps, { basementLevelId });
+      const pattern = new RegExp(`^${base} ${basement ? 'B' : ''}(\\d+)$`);
+      let highest = 0;
+      stamps.forEach(stamp => {
+        const match = (names.get(stamp.id) || '').match(pattern);
+        if (match) highest = Math.max(highest, Number(match[1]));
+      });
+      return highest + 1;
+    }
+    return stamps.filter(stamp => stamp.base === base && stamp.levelId === levelId).length + 1;
+  };
 
   // Free-placement increments (office standard, personal SETTINGS): the
   // resting grid plus the two momentary modifier grids, all in inches.

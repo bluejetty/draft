@@ -9,7 +9,7 @@ const HALF_HEIGHT_FT = 25;          // default ortho half-height in _init()
 const STORAGE_BUCKET = 'model-drawing';
 
 async function openModel(page, {
-  webgl = true, rails = true, boneWallet = true, boneReveal = false, autoStairs = false,
+  webgl = true, rails = true, boneWallet = true, boneReveal = false, autoStairs = false, roomGrow = false,
 } = {}) {
   // Init scripts run on every navigation, so the flag keeps a reload inside a
   // test from wiping the drawing the test just made. The FAT TEST WALLET
@@ -27,12 +27,13 @@ async function openModel(page, {
     }
   }, boneWallet);
   // The bone reveal (board #283) jumps every successful BUILD HOUSE press to
-  // the E1 elevation, and STAIR SUGGESTIONS (board #260) place a phantom
-  // stair under the tour and the bone. The suite presses the bone and climbs
-  // the tour as SETUP, so both run seeded off; bone-reveal specs opt back in
-  // with { boneReveal: true } and auto-stair specs with { autoStairs: true },
-  // each exercising the real default-on path.
-  if (!boneReveal || !autoStairs) {
+  // the E1 elevation, STAIR SUGGESTIONS (board #260) place a phantom stair
+  // under the tour and the bone, and ROOM GROWING (board #275) previews and
+  // grows interior walls from stamps. The suite presses the bone and climbs
+  // the tour as SETUP, so all three run seeded off; the feature specs opt
+  // back in ({ boneReveal: true } / { autoStairs: true } / { roomGrow:
+  // true }), each exercising the real default-on path.
+  if (!boneReveal || !autoStairs || !roomGrow) {
     await page.addInitScript(seed => {
       const key = 'draft-active-package:settings';
       let pkg = null;
@@ -46,8 +47,9 @@ async function openModel(page, {
       // choice across reloads.
       if (seed.boneReveal && !('boneReveal' in pkg.content.model)) pkg.content.model.boneReveal = false;
       if (seed.suggestStairs && !('suggestStairs' in pkg.content.model)) pkg.content.model.suggestStairs = false;
+      if (seed.roomGrow && !('roomGrow' in pkg.content.model)) pkg.content.model.roomGrow = false;
       localStorage.setItem(key, JSON.stringify(pkg));
-    }, { boneReveal: !boneReveal, suggestStairs: !autoStairs });
+    }, { boneReveal: !boneReveal, suggestStairs: !autoStairs, roomGrow: !roomGrow });
   }
   if (!webgl) {
     await page.addInitScript(() => {
