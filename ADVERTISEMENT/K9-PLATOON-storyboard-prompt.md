@@ -57,6 +57,12 @@ IMPORTANT — keep the panels clean:
 - No timestamps, timecodes, or date stamps in the frames.
 - No stage directions, camera notes, or prompt text inside the panels.
 - The ONLY readable text is the end-card logo in panel 6.
+- BRAND SAFETY — no real-world brands anywhere in the panels: no real
+  company logos, trademarks, or lookalike marks on clothing, uniforms,
+  hats, vehicles, signage, or background buildings — no golden arches,
+  no crowns, no swooshes, nothing recognizable. The only mark in this
+  world is the fictional ROUGHDRAFTER identity. Reject and regenerate
+  any panel where a real brand sneaks in.
 - Exactly one salesman, one husband, one wife, one baby — do not
   duplicate the humans; the dog platoon is many dogs by design.
 

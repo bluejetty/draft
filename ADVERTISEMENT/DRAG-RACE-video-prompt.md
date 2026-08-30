@@ -15,6 +15,7 @@ IMPORTANT — keep the picture clean:
 - Do NOT show any timestamps, timecodes, clocks overlays, "PM 7:45"-style captions, or date stamps.
 - Do NOT show any stage directions, camera notes, prompt text, watermarks, or subtitles.
 - The ONLY text allowed on screen is the final chrome logo card: ROUGHDRAFTER LITE — ZERO → PLAN IN 5 MINUTES! (and the word GO on the starting lights if natural).
+- BRAND SAFETY — no real-world brands anywhere in frame: no real company logos, trademarks, or lookalike marks on clothing, hats, the car, signage, props, or background buildings — no golden arches, no crowns, no swooshes, nothing recognizable. The only mark in this world is the fictional ROUGHDRAFTER identity. Any output where a real brand sneaks in is rejected — check clothing and background props before calling a take good.
 - Exactly one drafter, one car, one desk — do not duplicate characters.
 
 ---

@@ -17,6 +17,7 @@ Keep the picture clean:
 - Do NOT show any timestamps, timecodes, clock overlays, or date stamps.
 - Do NOT show any stage directions, camera notes, prompt text, watermarks, subtitles, or captions.
 - The ONLY text allowed on screen is the final chrome logo card: ROUGHDRAFTER LITE — ZERO → PLAN IN 5 MINUTES! and "The Paw Knows" beneath it.
+- BRAND SAFETY — no real-world brands anywhere in frame: no real company logos, trademarks, or lookalike marks on clothing, the computer, desk props, or anything in the background — nothing recognizable. The only mark in this world is the fictional ROUGHDRAFTER identity. Any output where a real brand sneaks in is rejected — check clothing and background props before calling a take good.
 - Exactly one drafter, one desk, one monitor — do not duplicate characters.
 
 ## Audio (built separately, laid over in the edit)
