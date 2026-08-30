@@ -8505,7 +8505,20 @@ class Component extends DCLogic {
   _sectionWallCrossings(cut, axis) {
     const a = cut.startPt, b = cut.endPt;
     const crossings = [];
+    // A wall belongs to the garage it lies on, not just to a level: garage
+    // walls are stored on the SAME level as the house walls with only a body
+    // marker, so anything spanning "the level" has to ask which building
+    // (audit C5). The elevation path already groups this way.
+    const garagesByLevel = {};
+    const garageFor = wall => {
+      const list = garagesByLevel[wall.levelId]
+        || (garagesByLevel[wall.levelId] = this._garageOutlines(wall.levelId));
+      return list.find(garage => this._edgeOnOutline(wall.start, wall.end, garage)) || null;
+    };
     this._walls.forEach(wall => {
+      // BONEYARD shelf walls live on negative pseudo levels and are not in
+      // the building at all.
+      if (wall.levelId < 0) return;
       const c = wall.start, d = wall.end;
       const denom = (b.x - a.x) * (d.z - c.z) - (b.z - a.z) * (d.x - c.x);
       if (Math.abs(denom) < 1e-9) return;   // parallel — an elevation face, not a cut
@@ -8524,6 +8537,7 @@ class Component extends DCLogic {
         wall, u: px * axis.x + pz * axis.z,
         width,
         alongWall: t * wallLen,
+        garage: garageFor(wall),
       });
     });
     return crossings;
@@ -8653,9 +8667,15 @@ class Component extends DCLogic {
     mark(stack.foundation.slabTop);
     mark(stack.foundation.footingBottom);
 
-    // Level extents: each floor band spans the outermost walls it crosses.
+    // Level extents: the floor-assembly band spans the outermost walls of
+    // the HOUSE it crosses — never the garage's (audit C5). A garage is a
+    // slab on grade, so a band drawn across it claimed a framed floor and an
+    // open storey underneath; with a detached garage the same band ran
+    // across the open ground between the two buildings.
     const levelSpan = levelId => {
-      const us = crossings.filter(c => c.wall.levelId === levelId).map(c => c.u);
+      const us = crossings
+        .filter(c => c.wall.levelId === levelId && !c.garage)
+        .map(c => c.u);
       return us.length ? { min: Math.min(...us), max: Math.max(...us) } : null;
     };
 
@@ -8695,9 +8715,22 @@ class Component extends DCLogic {
     // the 4" garage slab, its under-slab line dashed, gravel dotted below —
     // section detail only, elevations keep just the buried outline.
     const beamCrossings = fdnCrossings.filter(c => c.wall.baseHeight > 0.01);
-    if (beamCrossings.length > 1) {
-      const lo = Math.min(...beamCrossings.map(c => c.u));
-      const hi = Math.max(...beamCrossings.map(c => c.u));
+    if (beamCrossings.length) {
+      // The slab spans its GARAGE, not the pair of legs the cut happened to
+      // clip (audit C5): a cut through a single grade-beam leg used to draw
+      // no slab at all, leaving the band above it standing over nothing.
+      // Project the garage's own outline onto the cut axis and clip that to
+      // the cut; fall back to the crossings when the body is unknown.
+      const garage = beamCrossings.map(c => c.garage).find(Boolean);
+      const outlineUs = garage
+        ? garage.points.map(pt => pt.x * axis.x + pt.z * axis.z)
+        : [];
+      const lo = outlineUs.length
+        ? Math.max(uMin, Math.min(...outlineUs))
+        : Math.min(...beamCrossings.map(c => c.u));
+      const hi = outlineUs.length
+        ? Math.min(uMax, Math.max(...outlineUs))
+        : Math.max(...beamCrossings.map(c => c.u));
       if (hi - lo > 1) {
         const plateTop = fdn.wallBottom
           + Math.max(...beamCrossings.map(c => c.wall.topHeight)) + GARAGE_BEAM_PLATE_IN / 12;
