@@ -1,9 +1,11 @@
 // The view galleries (boards #265 / #291): a two-column wall of little
 // TV screens down the right canvas edge. Fixed seating — E1|E3, E2|E4,
-// SITE PLAN|ROOF PLAN, each floor's PLAN (walls) beside its LAYOUT
-// (floor), BASEMENT (walls) beside the concrete FOUNDATION plan, then
-// hand-cut sections filling left-then-right — plus the finale's curtain
-// moment. The open LEVELS panel covers only the outer column.
+// ROOF PLAN|SITE PLAN, each floor's PLAN (walls) beside its LAYOUT
+// (floor), the concrete FOUNDATION plan beside BASEMENT (walls), then
+// sections filling left-then-right — E1-E4 and two section seats hold
+// empty screens until their views exist — plus the finale's curtain
+// moment. The open LEVELS panel covers only the outer column; the 3D
+// screen stands top-left where the open toolbox covers it.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -74,13 +76,19 @@ test.describe('View galleries', () => {
   test('the fixed seating chart fills both columns; E1-E4 arrive with the build', async ({ page }) => {
     await h.openModel(page, { webgl: false, rails: false });
 
-    // Nothing built — no elevations yet, but every plan seat is taken.
+    // Nothing built — every seat is taken: empty E and S screens hold
+    // their chairs, and the plans keep theirs.
     expect(await innerLabels(page)).toEqual([
-      'SITE PLAN', '2ND FL PLAN (WALLS)', 'MAIN FL PLAN (WALLS)', 'BASEMENT (WALLS)',
+      'E1 · FRONT', 'E2 · LEFT', 'ROOF PLAN',
+      '2ND FL PLAN (WALLS)', 'MAIN FL PLAN (WALLS)', 'FOUNDATION', 'S1',
     ]);
     expect(await outerLabels(page)).toEqual([
-      'ROOF PLAN', '2ND FL LAYOUT (FLOOR)', 'MAIN FL LAYOUT (FLOOR)', 'FOUNDATION',
+      'E3 · BACK', 'E4 · RIGHT', 'SITE PLAN',
+      '2ND FL LAYOUT (FLOOR)', 'MAIN FL LAYOUT (FLOOR)', 'BASEMENT (WALLS)', 'S2',
     ]);
+    // The empty seats are placeholders, not live buttons.
+    await expect(page.locator('[data-rail-key="empty:E1"]')).toHaveClass(/empty/);
+    await expect(page.locator('[data-rail-key="empty:S1"]')).toHaveClass(/empty/);
     await expect(page.locator('[data-view-rail-3d]')).toBeVisible();
 
     await drawOutlineRect(page);
@@ -88,15 +96,18 @@ test.describe('View galleries', () => {
     await h.waitForSaved(page);
     await page.waitForTimeout(400);
 
-    // E1|E3 and E2|E4 take the top rows; the plans keep their seats below.
+    // E1|E3 and E2|E4 take the top rows for real — live screens now, not
+    // placeholders — and the plans keep their seats below.
+    await expect(page.locator('[data-rail-key="cut:E1"]')).toBeVisible();
+    await expect(page.locator('[data-rail-key="empty:E1"]')).toHaveCount(0);
     const inner = await innerLabels(page);
     const outer = await outerLabels(page);
     expect(inner[0]).toContain('E1');
     expect(inner[1]).toContain('E2');
-    expect(inner[2]).toBe('SITE PLAN');
+    expect(inner[2]).toBe('ROOF PLAN');
     expect(outer[0]).toContain('E3');
     expect(outer[1]).toContain('E4');
-    expect(outer[2]).toBe('ROOF PLAN');
+    expect(outer[2]).toBe('SITE PLAN');
 
     // Each little screen carries real ink — a true miniature, not a blank.
     const ink = await page.evaluate(() => {
@@ -126,9 +137,11 @@ test.describe('View galleries', () => {
     await placeCut(page, 0);
     await page.waitForTimeout(400);
 
-    // Both columns seat 6 fixed cards; S1 lands as the inner column's 7th.
+    // Both columns seat 6 fixed cards; S1 lands as the inner column's 7th,
+    // a live screen where the placeholder held its chair.
     const thumb = thumbByLabel(page, '[data-view-rail-inner]', 'S1');
     await expect(thumb).toBeVisible();
+    await expect(thumb).not.toHaveClass(/empty/);
     const inner = await innerLabels(page);
     expect(inner[inner.length - 1]).toBe('S1');
 
@@ -137,11 +150,7 @@ test.describe('View galleries', () => {
     await page.waitForTimeout(400);
     const s2Thumb = thumbByLabel(page, '[data-view-rail-outer-cards]', 'S2');
     await expect(s2Thumb).toBeVisible();
-
-    // The sections stack ABOVE the 3D screen — new cuts push it down.
-    const s2Box = await s2Thumb.boundingBox();
-    const threeD = await page.locator('[data-view-rail-3d]').boundingBox();
-    expect(s2Box.y + s2Box.height).toBeLessThanOrEqual(threeD.y + 1);
+    await expect(s2Thumb).not.toHaveClass(/empty/);
 
     // Tapping S1 brings the section center.
     await thumb.click();
@@ -157,8 +166,12 @@ test.describe('View galleries', () => {
       await page.locator('.cut-row', { hasText: name }).locator('.cut-del').click();
       await page.waitForTimeout(400);
     }
-    await expect(thumbByLabel(page, '.view-rail-right', 'S1')).toHaveCount(0);
-    await expect(thumbByLabel(page, '.view-rail-right', 'S2')).toHaveCount(0);
+    // The placeholders take the chairs back — empty screens, not live cuts.
+    // S2's seat sits in the outer column, behind the open LEVELS panel.
+    await expect(page.locator('[data-rail-key="empty:S1"]')).toBeVisible();
+    await expect(page.locator('[data-rail-key="empty:S2"]')).toHaveCount(1);
+    await expect(thumbByLabel(page, '.view-rail-right', 'S1')).toHaveClass(/empty/);
+    await expect(thumbByLabel(page, '.view-rail-right', 'S2')).toHaveClass(/empty/);
   });
 
   test('the BASEMENT and FOUNDATION seats show different layer views', async ({ page }) => {
@@ -209,6 +222,25 @@ test.describe('View galleries', () => {
       .locator('.level-name').click();
     await page.waitForTimeout(300);
     await expect(page.locator('.level-row.active .level-layer.active')).toHaveText('FOUNDATION');
+  });
+
+  test('the 3D screen stands top-left; the open toolbox covers it', async ({ page }) => {
+    await h.openModel(page, { webgl: false, rails: false });
+
+    // Rails tucked: the 3D screen sits in the canvas's top-left corner.
+    const threeD = page.locator('[data-view-rail-3d]');
+    await expect(threeD).toBeVisible();
+    const canvasBox = await page.locator('[data-model-container]').boundingBox();
+    const box = await threeD.boundingBox();
+    expect(box.x - canvasBox.x).toBeLessThan(60);
+    expect(box.y - canvasBox.y).toBeLessThan(30);
+
+    // The toolbox pull-out covers the 3D screen; tucking it brings it back.
+    await page.locator('[data-left-rail-tab]').click();
+    await expect(page.locator('[data-model-left]')).toBeVisible();
+    await expect(threeD).toBeHidden();
+    await page.locator('[data-left-rail-tab]').click();
+    await expect(threeD).toBeVisible();
   });
 
   test('the open LEVELS panel covers only the outer column; the inner keeps its seat', async ({ page }) => {
