@@ -6043,6 +6043,12 @@ class Component extends DCLogic {
     return this.state.lengthFrozen ? this._frozenEnd : this._snapPt;
   }
 
+  // DELIBERATE (drafter's ruling, audit Q6 — do NOT "fix"): the overlay
+  // renders at 1x CSS pixels, NOT window.devicePixelRatio. This canvas
+  // repaints on every cursor/finger move; staying 1x means 4x less repaint
+  // work on Retina-class screens (iPad, 4K). Eye-tested on the actual iPad:
+  // no visible degradation. Retina-scaling this canvas quadruples the
+  // hottest repaint bill in the app for sharpness nobody noticed missing.
   _redrawOverlay() {
     const ctx = this._overlayCtx, oc = this._overlayCanvas;
     if (!ctx || !oc || !this._canvas) return;
