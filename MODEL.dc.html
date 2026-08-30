@@ -20,6 +20,7 @@
 <script src="./build-house.js"></script>
 <script src="./tour.js"></script>
 <script src="./bone-wallet.js"></script>
+<script src="./stair-rules.js"></script>
 <script src="./auto-stair.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
@@ -16870,7 +16871,12 @@ class Component extends DCLogic {
   // the lowest floor, the tour's mid-span beam on the FOUNDATION plan — the
   // #246 edge the well hugs. Stamps weight the circulation core (rule A
   // fires only when the front-entry zone wins the target).
-  _autoStairSuggestion(levelId) {
+  // `lowerStair` is the committed flight on the level below, passed only
+  // where we already know it — the stacking path, when the strict stack
+  // could not hold its headroom. The engine turns it into a soft pull
+  // toward the run below; nothing else changes, and passing nothing
+  // leaves the placement exactly as it was.
+  _autoStairSuggestion(levelId, lowerStair = null) {
     if (!window.DraftAutoStair) return null;
     const outline = this._houseOutline(levelId);
     if (!outline || outline.points.length < 3) return null;
@@ -16899,6 +16905,7 @@ class Component extends DCLogic {
       gapIn: STAIR_BEAM_CLEAR_IN,
       runStepFt: STAIR_TREAD_RUN_IN / 12,
       softInterior: lowest, // rule B: basement stairs prefer interior, softly
+      lowerStair,           // research §2.4: pull toward the run below when we know it
     });
     return { ...res, layout, descent };
   }
@@ -17071,7 +17078,15 @@ class Component extends DCLogic {
       this._nextStairId--; // the uncommitted candidate hands its id back
       stackNote = ' (could not stack over the run below — headroom needs checking)';
     }
-    const sug = this._autoStairSuggestion(levelId);
+    // The strict stack did not hold; fall back to a free placement, but
+    // let the flight below still pull on it. Its run midpoint stands in
+    // for the well centre — near enough for a proximity bonus.
+    const sug = this._autoStairSuggestion(levelId, below ? {
+      wellCentre: {
+        x: (below.start.x + below.end.x) / 2,
+        z: (below.start.z + below.end.z) / 2,
+      },
+    } : null);
     if (!sug) return null;
     if (!sug.stair) {
       return {
