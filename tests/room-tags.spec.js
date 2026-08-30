@@ -100,7 +100,7 @@ test('closets mark bedrooms: BEDROOM when wide, BEDRM in a tight room', async ({
 test('basement rooms take the B prefix: WC B1 on the FOUNDATION plan', async ({ page }) => {
   await h.openModel(page);
   await levelRow(page, 'FOUNDATION').locator('.level-body').click();
-  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'PLAN' }).click();
+  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'BASEMENT' }).click();
   await page.waitForTimeout(300);
   await drawTwoRoomHouse(page, 2);
   await placeFixtures(page, 'TOILET', [[-4, -5.5], [6, -5.5]]);

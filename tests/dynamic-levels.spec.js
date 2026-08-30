@@ -70,7 +70,7 @@ test('an added 3RD FL gets the floor layer sets and joins BUILD HOUSE', async ({
   const names = await page.locator('.level-name').allTextContents();
   expect(names).toEqual(['SITE', 'ROOF', '3RD FL', '2ND FL', 'MAIN FL', 'FOUNDATION', 'BONEYARD']);
   const third = levelRow(page, '3RD FL');
-  await expect(third.locator('.level-layer')).toHaveText(['ELECTRIC', 'WALL PLAN', 'FLOOR PLAN', 'STAIR']);
+  await expect(third.locator('.level-layer')).toHaveText(['ELECTRIC', 'FLOOR PLAN (WALLS)', 'FLOOR LAYOUT (FLOOR)', 'STAIR']);
 
   await buildHouse(page);
   await h.waitForSaved(page);
@@ -95,7 +95,7 @@ test('an added 3RD FL gets the floor layer sets and joins BUILD HOUSE', async ({
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
   await h.waitForModelReady(page);
   await expect(levelRow(page, '3RD FL')).toHaveCount(1);
-  await expect(levelRow(page, '3RD FL').locator('.level-layer')).toHaveText(['ELECTRIC', 'WALL PLAN', 'FLOOR PLAN', 'STAIR']);
+  await expect(levelRow(page, '3RD FL').locator('.level-layer')).toHaveText(['ELECTRIC', 'FLOOR PLAN (WALLS)', 'FLOOR LAYOUT (FLOOR)', 'STAIR']);
 });
 
 test('the insulation wall type is drawable on the foundation PLAN', async ({ page }) => {
@@ -103,7 +103,7 @@ test('the insulation wall type is drawable on the foundation PLAN', async ({ pag
 
   // Work on FOUNDATION's PLAN layer set.
   await levelRow(page, 'FOUNDATION').locator('.level-body').click();
-  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'PLAN' }).click();
+  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'BASEMENT' }).click();
   await page.waitForTimeout(300);
 
   await h.selectTool(page, 'Wall');
@@ -134,7 +134,7 @@ test('wall types follow the context: structural on FOUNDATION, stud walls on PLA
   await expect(page.getByRole('button', { name: '2×4 Stud  (3½")' })).toHaveCount(0);
 
   // The PLAN layer set on the FOUNDATION card offers the stud / insul walls.
-  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'PLAN' }).click();
+  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'BASEMENT' }).click();
   await page.waitForTimeout(300);
   await expect(page.getByRole('button', { name: 'Insul Wall  (6½")' })).toBeVisible();
   await expect(page.getByRole('button', { name: '2×4 Stud  (3½")' })).toBeVisible();
@@ -158,7 +158,7 @@ test('the foundation PLAN shows the concrete walls as a locked reference', async
   await h.waitForSaved(page);
 
   await levelRow(page, 'FOUNDATION').locator('.level-body').click();
-  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'PLAN' }).click();
+  await levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'BASEMENT' }).click();
   await page.waitForTimeout(400);
 
   // The concrete wall drawn on the FOUNDATION set renders on PLAN too.

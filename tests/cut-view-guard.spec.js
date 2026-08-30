@@ -20,6 +20,11 @@ async function buildAndOpenE1(page) {
   await page.getByRole('button', { name: 'BUILD HOUSE' }).click();
   await page.waitForTimeout(300);
   await h.waitForSaved(page);
+  // Land on MAIN FL PLAN so every plan-space tool is armed under the cut view.
+  await page.locator('.level-row')
+    .filter({ has: page.locator('.level-name', { hasText: 'MAIN FL' }) })
+    .locator('.level-name').click();
+  await page.waitForTimeout(300);
   await page.locator('.cut-row', { hasText: 'E1' }).click({ position: { x: 18, y: 8 } });
   await page.waitForTimeout(400);
   await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');

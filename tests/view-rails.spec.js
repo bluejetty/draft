@@ -1,7 +1,9 @@
-// The view galleries (board #265): little TV-screen viewports down the
-// canvas edges — the four standard elevations on the left, hand-cut S
-// sections on the right stacked above the 3D screen — plus the stretched
-// level cards behind them and the finale's curtain moment.
+// The view galleries (boards #265 / #291): a two-column wall of little
+// TV screens down the right canvas edge. Fixed seating — E1|E3, E2|E4,
+// SITE PLAN|ROOF PLAN, each floor's PLAN (walls) beside its LAYOUT
+// (floor), BASEMENT (walls) beside the concrete FOUNDATION plan, then
+// hand-cut sections filling left-then-right — plus the finale's curtain
+// moment. The open LEVELS panel covers only the outer column.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -31,8 +33,22 @@ async function placeCut(page, z) {
   await page.waitForTimeout(400);
 }
 
+function innerLabels(page) {
+  return page.locator('[data-view-rail-inner] .view-thumb-label').allTextContents();
+}
+
+function outerLabels(page) {
+  return page.locator('[data-view-rail-outer-cards] .view-thumb-label').allTextContents();
+}
+
+// Hand-cut sections key by numeric id; find their screens by label instead.
+function thumbByLabel(page, column, label) {
+  return page.locator(`${column} .view-thumb`)
+    .filter({ has: page.locator('.view-thumb-label', { hasText: label }) });
+}
+
 test.describe('Stretched level cards', () => {
-  test('cards reach the rail edge and the summaries share one width', async ({ page }) => {
+  test('cards reach the rail edge and layer labels sit on one line', async ({ page }) => {
     await h.openModel(page, { webgl: false });
 
     // Every level card spans the rail — no unused strip on the right.
@@ -46,20 +62,7 @@ test.describe('Stretched level cards', () => {
       expect(rail.x + rail.width - (row.x + row.width)).toBeLessThan(32);
     }
 
-    // WALL PLAN / FLOOR PLAN sit on one line, and every grey summary box is
-    // the same short width instead of eating half the row.
-    const summaries = page.locator('[data-assembly-summary]');
-    const sCount = await summaries.count();
-    expect(sCount).toBeGreaterThan(2);
-    const widths = [];
-    for (let i = 0; i < sCount; i++) {
-      const box = await summaries.nth(i).boundingBox();
-      widths.push(box.width);
-      expect(box.width).toBeLessThan(60);
-    }
-    expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(1);
-
-    for (const name of ['WALL PLAN', 'FLOOR PLAN']) {
+    for (const name of ['FLOOR PLAN (WALLS)', 'FLOOR LAYOUT (FLOOR)']) {
       const label = page.locator('.level-layer', { hasText: name }).first();
       const box = await label.boundingBox();
       expect(box.height).toBeLessThan(20); // a wrap would double it
@@ -68,12 +71,16 @@ test.describe('Stretched level cards', () => {
 });
 
 test.describe('View galleries', () => {
-  test('E1-E4 thumbs stand down the left; empty right shows only the 3D screen', async ({ page }) => {
+  test('the fixed seating chart fills both columns; E1-E4 arrive with the build', async ({ page }) => {
     await h.openModel(page, { webgl: false, rails: false });
 
-    // Nothing built — no elevation thumbs, no section thumbs, no fakes.
-    await expect(page.locator('[data-view-rail-left] .view-thumb')).toHaveCount(0);
-    await expect(page.locator('[data-view-rail-sections] .view-thumb')).toHaveCount(0);
+    // Nothing built — no elevations yet, but every plan seat is taken.
+    expect(await innerLabels(page)).toEqual([
+      'SITE PLAN', '2ND FL PLAN (WALLS)', 'MAIN FL PLAN (WALLS)', 'BASEMENT (WALLS)',
+    ]);
+    expect(await outerLabels(page)).toEqual([
+      'ROOF PLAN', '2ND FL LAYOUT (FLOOR)', 'MAIN FL LAYOUT (FLOOR)', 'FOUNDATION',
+    ]);
     await expect(page.locator('[data-view-rail-3d]')).toBeVisible();
 
     await drawOutlineRect(page);
@@ -81,17 +88,19 @@ test.describe('View galleries', () => {
     await h.waitForSaved(page);
     await page.waitForTimeout(400);
 
-    const left = page.locator('[data-view-rail-left] .view-thumb');
-    await expect(left).toHaveCount(4);
-    for (const name of ['E1', 'E2', 'E3', 'E4']) {
-      await expect(page.locator(`[data-view-rail-left] [data-cut-id="${name}"]`)).toBeVisible();
-    }
-    // Still no section fakes on the right.
-    await expect(page.locator('[data-view-rail-sections] .view-thumb')).toHaveCount(0);
+    // E1|E3 and E2|E4 take the top rows; the plans keep their seats below.
+    const inner = await innerLabels(page);
+    const outer = await outerLabels(page);
+    expect(inner[0]).toContain('E1');
+    expect(inner[1]).toContain('E2');
+    expect(inner[2]).toBe('SITE PLAN');
+    expect(outer[0]).toContain('E3');
+    expect(outer[1]).toContain('E4');
+    expect(outer[2]).toBe('ROOF PLAN');
 
     // Each little screen carries real ink — a true miniature, not a blank.
     const ink = await page.evaluate(() => {
-      const canvas = document.querySelector('[data-view-rail-left] [data-cut-id="E1"] canvas');
+      const canvas = document.querySelector('[data-rail-key="cut:E1"] canvas');
       const { data } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
       let count = 0;
       for (let i = 0; i < data.length; i += 4) {
@@ -102,13 +111,13 @@ test.describe('View galleries', () => {
     expect(ink).toBeGreaterThan(200);
 
     // Tapping a thumb brings that view center.
-    await page.locator('[data-view-rail-left] [data-cut-id="E2"]').click();
+    await page.locator('[data-rail-key="cut:E2"]').click();
     await page.waitForTimeout(400);
     await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E2');
-    await expect(page.locator('[data-view-rail-left] [data-cut-id="E2"]')).toHaveClass(/active/);
+    await expect(page.locator('[data-rail-key="cut:E2"]')).toHaveClass(/active/);
   });
 
-  test('a hand-cut section joins the right rail above the 3D screen', async ({ page }) => {
+  test('a hand-cut section starts the next row, left cell first', async ({ page }) => {
     await h.openModel(page, { webgl: false, rails: false });
     await drawOutlineRect(page);
     await buildHouse(page);
@@ -117,47 +126,43 @@ test.describe('View galleries', () => {
     await placeCut(page, 0);
     await page.waitForTimeout(400);
 
-    const thumb = page.locator('[data-view-rail-sections] [data-cut-id]').first();
+    // Both columns seat 6 fixed cards; S1 lands as the inner column's 7th.
+    const thumb = thumbByLabel(page, '[data-view-rail-inner]', 'S1');
     await expect(thumb).toBeVisible();
-    await expect(page.locator('[data-view-rail-sections] .view-thumb')).toHaveCount(1);
+    const inner = await innerLabels(page);
+    expect(inner[inner.length - 1]).toBe('S1');
 
-    // The section stacks ABOVE the 3D screen — new cuts push it down.
-    const thumbBox = await thumb.boundingBox();
+    // A second cut fills the right cell of the same row.
+    await placeCut(page, 2);
+    await page.waitForTimeout(400);
+    const s2Thumb = thumbByLabel(page, '[data-view-rail-outer-cards]', 'S2');
+    await expect(s2Thumb).toBeVisible();
+
+    // The sections stack ABOVE the 3D screen — new cuts push it down.
+    const s2Box = await s2Thumb.boundingBox();
     const threeD = await page.locator('[data-view-rail-3d]').boundingBox();
-    expect(thumbBox.y + thumbBox.height).toBeLessThanOrEqual(threeD.y + 1);
+    expect(s2Box.y + s2Box.height).toBeLessThanOrEqual(threeD.y + 1);
 
-    // Tapping it brings the section center.
+    // Tapping S1 brings the section center.
     await thumb.click();
     await page.waitForTimeout(400);
     await expect(page.locator('[data-model-title-detail]').last()).toHaveText('S1');
 
-    // Deleting the cut clears its screen from the rail. The delete row
-    // lives on the LEVELS panel, so pull the rails out for it.
+    // Deleting the cuts clears their screens from the rail. The delete rows
+    // live on the LEVELS panel, so pull the rails out for them.
     await h.openRails(page);
-    await page.locator('.level-row').first().locator('.level-body').click();
     await page.waitForTimeout(300);
-    page.once('dialog', dialog => dialog.accept());
-    await page.locator('.cut-row', { hasText: 'S1' }).locator('.cut-del').click();
-    await page.waitForTimeout(400);
-    await expect(page.locator('[data-view-rail-sections] .view-thumb')).toHaveCount(0);
+    for (const name of ['S2', 'S1']) {
+      page.once('dialog', dialog => dialog.accept());
+      await page.locator('.cut-row', { hasText: name }).locator('.cut-del').click();
+      await page.waitForTimeout(400);
+    }
+    await expect(thumbByLabel(page, '.view-rail-right', 'S1')).toHaveCount(0);
+    await expect(thumbByLabel(page, '.view-rail-right', 'S2')).toHaveCount(0);
   });
 
-  test('the inner plan column lists every level and brings its plan center', async ({ page }) => {
+  test('the BASEMENT and FOUNDATION seats show different layer views', async ({ page }) => {
     await h.openModel(page, { webgl: false, rails: false });
-
-    // One little screen per level, top-down, from the start.
-    const plans = page.locator('[data-view-rail-plans] .view-thumb-plan');
-    await expect(plans).toHaveCount(5);
-    const names = ['SITE', 'ROOF', '2ND FL', 'MAIN FL', 'FOUNDATION'];
-    for (let i = 0; i < names.length; i++) {
-      await expect(plans.nth(i).locator('.view-thumb-label')).toHaveText(names[i]);
-    }
-    // The plan column stands inward of the sections column, on smaller screens.
-    const planBox = await plans.first().boundingBox();
-    const threeD = await page.locator('[data-view-rail-3d]').boundingBox();
-    expect(planBox.x + planBox.width).toBeLessThanOrEqual(threeD.x + 1);
-    expect(planBox.width).toBeLessThan(threeD.width);
-
     await drawOutlineRect(page);
     await buildHouse(page);
     await h.waitForSaved(page);
@@ -165,7 +170,7 @@ test.describe('View galleries', () => {
 
     // Built plans carry real ink in their miniatures.
     const ink = await page.evaluate(() => {
-      const canvas = document.querySelector('[data-view-rail-plans] [data-level-id="3"] canvas');
+      const canvas = document.querySelector('[data-rail-key="plan:3:plan"] canvas');
       const { data } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
       let count = 0;
       for (let i = 0; i < data.length; i += 4) {
@@ -176,16 +181,37 @@ test.describe('View galleries', () => {
     expect(ink).toBeGreaterThan(100);
 
     // From an elevation, tapping a plan thumb brings that plan back center.
-    await page.locator('[data-view-rail-left] [data-cut-id="E1"]').click();
+    await page.locator('[data-rail-key="cut:E1"]').click();
     await page.waitForTimeout(400);
     await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
-    await page.locator('[data-view-rail-plans] [data-level-id="3"]').click();
+    await page.locator('[data-rail-key="plan:3:plan"]').click();
     await page.waitForTimeout(400);
     await expect(page.locator('[data-model-title-detail]').last()).not.toHaveText('E1');
-    await expect(page.locator('[data-view-rail-plans] [data-level-id="3"]')).toHaveClass(/active/);
+    await expect(page.locator('[data-rail-key="plan:3:plan"]')).toHaveClass(/active/);
+
+    // The FOUNDATION seat opens the concrete foundation view; the BASEMENT
+    // seat opens the same level's wall plan.
+    await page.locator('[data-rail-key="plan:1:foundation"]').click();
+    await page.waitForTimeout(400);
+    await expect(page.locator('[data-rail-key="plan:1:foundation"]')).toHaveClass(/active/);
+    await expect(page.locator('[data-rail-key="plan:1:plan"]')).not.toHaveClass(/active/);
+    await page.locator('[data-rail-key="plan:1:plan"]').click();
+    await page.waitForTimeout(400);
+    await expect(page.locator('[data-rail-key="plan:1:plan"]')).toHaveClass(/active/);
+    await expect(page.locator('[data-rail-key="plan:1:foundation"]')).not.toHaveClass(/active/);
   });
 
-  test('open side panels cover the elevation and section screens; the plans keep their seat', async ({ page }) => {
+  test('the FOUNDATION level lands on the concrete plan by default', async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+
+    await page.locator('.level-row')
+      .filter({ has: page.locator('.level-name', { hasText: 'FOUNDATION' }) })
+      .locator('.level-name').click();
+    await page.waitForTimeout(300);
+    await expect(page.locator('.level-row.active .level-layer.active')).toHaveText('FOUNDATION');
+  });
+
+  test('the open LEVELS panel covers only the outer column; the inner keeps its seat', async ({ page }) => {
     await h.openModel(page, { webgl: false, rails: false });
     await drawOutlineRect(page);
     await buildHouse(page);
@@ -193,21 +219,23 @@ test.describe('View galleries', () => {
     await page.waitForTimeout(400);
 
     // Rails tucked: the full TV wall stands.
-    await expect(page.locator('[data-view-rail-left] [data-cut-id="E1"]')).toBeVisible();
+    await expect(page.locator('[data-rail-key="cut:E1"]')).toBeVisible();
+    await expect(page.locator('[data-rail-key="cut:E3"]')).toBeVisible();
     await expect(page.locator('[data-view-rail-3d]')).toBeVisible();
 
-    // Panels out: only the little plan screens stay on stage.
+    // Panels out: the outer column steps aside; the inner column stays.
     await h.openRails(page);
     await page.waitForTimeout(300);
-    await expect(page.locator('[data-view-rail-left]')).toBeHidden();
+    await expect(page.locator('[data-view-rail-outer]')).toBeHidden();
     await expect(page.locator('[data-view-rail-3d]')).toBeHidden();
-    await expect(page.locator('[data-view-rail-plans] .view-thumb-plan').first()).toBeVisible();
+    await expect(page.locator('[data-rail-key="cut:E1"]')).toBeVisible();
+    await expect(page.locator('[data-rail-key="plan:3:plan"]')).toBeVisible();
 
     // Tuck them again — every screen returns.
     await page.locator('[data-left-rail-tab]').click();
     await page.locator('[data-right-rail-tab]').click();
     await page.waitForTimeout(300);
-    await expect(page.locator('[data-view-rail-left] [data-cut-id="E1"]')).toBeVisible();
+    await expect(page.locator('[data-rail-key="cut:E3"]')).toBeVisible();
     await expect(page.locator('[data-view-rail-3d]')).toBeVisible();
   });
 });
