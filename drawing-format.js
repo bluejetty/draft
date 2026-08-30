@@ -431,6 +431,9 @@ if (!window.DraftDrawingFormat) {
       const stamped = tag?.stamped === true;
       const base = String(tag?.base ?? '').replace(/\s+/g, ' ').trim().toUpperCase();
       const companionOf = Number(tag?.companionOf);
+      // #276: claimedNo pins an edited BEDROOM/WC number — the ladder
+      // renumbers around it. Additive; absent = auto-numbered as always.
+      const claimedNo = Number(tag?.claimedNo);
       return {
         id,
         at,
@@ -441,6 +444,7 @@ if (!window.DraftDrawingFormat) {
         underMin: tag?.underMin === true,
         stamped,
         ...(stamped && base ? { base } : {}),
+        ...(stamped && Number.isInteger(claimedNo) && claimedNo > 0 ? { claimedNo } : {}),
         ...(stamped && Number.isInteger(companionOf) && companionOf !== id
           ? { companionOf } : {}),
         layer: 'ROOM-IDS-AREA',
