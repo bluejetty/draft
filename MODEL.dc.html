@@ -32,7 +32,9 @@
 <body>
 <x-dc>
 <helmet>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap" />
+  <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
+       critical path of the page. -->
+  <link rel="stylesheet" href="vendor/fonts.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
