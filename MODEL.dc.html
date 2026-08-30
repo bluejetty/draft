@@ -1691,6 +1691,12 @@ const LEVEL_OWNED_COLLECTIONS = [
   '_lines', '_walls', '_floors', '_shapes', '_roofs', '_outlines',
   '_surfaceOpenings', '_dimensions', '_columns', '_beams',
   '_fenestrations', '_fixtures', '_stairs', '_notes', '_roomTags',
+  // Underlays are level-owned by the format's own rule — `underlays(raw,
+  // levelIds)` refuses one whose level is not in the set — so a deleted
+  // level used to leave its traced PDF or photo behind, pointing at a level
+  // that is gone, and the next load reported it as an item the drawing lost.
+  // Their binaries live in their own bucket and go with them; see below.
+  '_underlays',
 ];
 
 // Architectural length formatting/parsing lives in formatters.js — pure
@@ -4523,14 +4529,28 @@ class Component extends DCLogic {
       //   nonsense id. Something is wrong with the FILE, and it is worth
       //   saying so plainly.
       //
-      // An orphan is recognisable from the stored record alone, so it is
-      // counted here and taken out of the `skipped` total below.
-      const orphaned = ['cuts', 'dimensions', 'lines', 'walls', 'floors', 'shapes',
+      // An orphan is recognisable from the stored record alone. The two
+      // totals are counted SEPARATELY, from the same records — never one
+      // minus the other. Subtracting them let a file's orphans cancel its
+      // damage: two cuts on a level that is gone plus one wall with an
+      // unreadable coordinate reported as "2 items belonged to a level that
+      // is no longer in the drawing" and no damage at all, which is the
+      // silence this distinction exists to break.
+      const isOrphan = item => item && item.levelId !== undefined && item.levelId !== null
+        && !ownerLevelIds.has(Number(migrateLevelId(item.levelId)));
+      const orphansIn = raw => (Array.isArray(raw) ? raw : []).filter(isOrphan).length;
+      // `cuts` is NOT on this list: a cut whose level is unknown is KEPT,
+      // with its levelId nulled ("Cuts predating explicit ownership keep a
+      // null levelId"), so it is not an orphan that was dropped — counting
+      // it said two items went away that are still in the drawing.
+      const orphaned = ['dimensions', 'lines', 'walls', 'floors', 'shapes',
         'roofs', 'outlines', 'surfaceOpenings', 'columns', 'beams', 'stairs',
         'fenestrations', 'fixtures', 'notes', 'roomTags', 'underlays']
-        .reduce((count, key) => count + (Array.isArray(saved[key]) ? saved[key] : [])
-          .filter(item => item && item.levelId !== undefined && item.levelId !== null
-            && !ownerLevelIds.has(Number(migrateLevelId(item.levelId)))).length, 0);
+        .reduce((count, key) => count + orphansIn(saved[key]), 0);
+      // What a collection rejected BEYOND its orphans is damage: something in
+      // the file we could not read.
+      const damaged = (raw, keptLength) =>
+        Math.max(0, (Array.isArray(raw) ? raw.length : 0) - keptLength - orphansIn(raw));
       const storedCuts = Array.isArray(saved.cuts)
         ? saved.cuts.map(cut => ({ ...cut, levelId: migrateLevelId(cut?.levelId) }))
         : saved.cuts;
@@ -4540,7 +4560,7 @@ class Component extends DCLogic {
         ? saved.dimensions.map(dimension => ({ ...dimension, levelId: migrateLevelId(dimension?.levelId) }))
         : saved.dimensions;
       const dimensions = format.dimensions(storedDimensions, ownerLevelIds);
-      skipped += (Array.isArray(saved.dimensions) ? saved.dimensions.length : 0) - dimensions.length;
+      skipped += damaged(saved.dimensions, dimensions.length);
       const nextDimensionId = Math.max(
         1,
         ...dimensions.map(dimension => dimension.id + 1),
@@ -4648,7 +4668,7 @@ class Component extends DCLogic {
             });
           }).filter(Boolean)
         : [];
-      skipped += (Array.isArray(saved.lines) ? saved.lines.length : 0) - this._lines.length;
+      skipped += damaged(saved.lines, this._lines.length);
       this._walls = Array.isArray(saved.walls)
          ? saved.walls.map(wall => restoreSegment(wall, 'wall', {
           view: wall?.view === 'foundation' ? 'foundation' : 'plan',
@@ -4660,7 +4680,7 @@ class Component extends DCLogic {
           refLine: format.oneOf(wall.refLine, REF_LINES, 'left'),
         })).filter(Boolean)
         : [];
-      skipped += (Array.isArray(saved.walls) ? saved.walls.length : 0) - this._walls.length;
+      skipped += damaged(saved.walls, this._walls.length);
       this._floors = Array.isArray(saved.floors)
         ? saved.floors.map(floor => {
           const levelId = format.levelId(migrateLevelId(floor?.levelId), ownerLevelIds);
@@ -4680,19 +4700,19 @@ class Component extends DCLogic {
           };
         }).filter(Boolean)
         : [];
-      skipped += (Array.isArray(saved.floors) ? saved.floors.length : 0) - this._floors.length;
+      skipped += damaged(saved.floors, this._floors.length);
       this._shapes = format.shapes(saved.shapes, ownerLevelIds).map(shape => ({
         ...shape,
         id: this._storedItemId(shape.id, 'shape', usedIds),
         points: shape.points.map(point => this._mergeVertex(point, shape.levelId, 'shape')),
       }));
-      skipped += (Array.isArray(saved.shapes) ? saved.shapes.length : 0) - this._shapes.length;
+      skipped += damaged(saved.shapes, this._shapes.length);
       this._roofs = format.roofs(saved.roofs, ownerLevelIds).map(roof => ({
         ...roof,
         id: this._storedItemId(roof.id, 'roof', usedIds),
         points: roof.points.map(point => restoreVertex(point, roof.levelId, 'roof')),
       }));
-      skipped += (Array.isArray(saved.roofs) ? saved.roofs.length : 0) - this._roofs.length;
+      skipped += damaged(saved.roofs, this._roofs.length);
       const wallsById = new Map(this._walls.map(wall => [wall.id, wall]));
       this._fenestrations = format.fenestrations(saved.fenestrations, ownerLevelIds).map(opening => {
         const wall = wallsById.get(opening.wallId);
@@ -4705,7 +4725,7 @@ class Component extends DCLogic {
           offset: clamped.offset,
         };
       }).filter(Boolean);
-      skipped += (Array.isArray(saved.fenestrations) ? saved.fenestrations.length : 0) - this._fenestrations.length;
+      skipped += damaged(saved.fenestrations, this._fenestrations.length);
       // Fixtures restore after walls so both host references resolve: the back
       // wall must exist on the fixture's level, and a tub's faucet-end wall too.
       this._fixtures = format.fixtures(saved.fixtures, ownerLevelIds).map(fixture => {
@@ -4720,7 +4740,7 @@ class Component extends DCLogic {
           id: this._storedItemId(fixture.id, 'fixture', usedIds),
         };
       }).filter(Boolean);
-      skipped += (Array.isArray(saved.fixtures) ? saved.fixtures.length : 0) - this._fixtures.length;
+      skipped += damaged(saved.fixtures, this._fixtures.length);
       const floorIds = new Set(this._floors.map(floor => floor.id));
       const roofIds = new Set(this._roofs.map(roof => roof.id));
       this._surfaceOpenings = format.surfaceOpenings(saved.surfaceOpenings, ownerLevelIds).map(opening => {
@@ -4732,7 +4752,7 @@ class Component extends DCLogic {
           points: opening.points.map(point => this._mergeVertex(point, opening.levelId, 'opening')),
         };
       }).filter(Boolean);
-      skipped += (Array.isArray(saved.surfaceOpenings) ? saved.surfaceOpenings.length : 0) - this._surfaceOpenings.length;
+      skipped += damaged(saved.surfaceOpenings, this._surfaceOpenings.length);
       const levelsById = new Map(levels.map(level => [level.id, level]));
       // Dimension ends restore their master-point link like pooled vertices,
       // so auto strings keep riding footprint edits after a reload.
@@ -4758,7 +4778,7 @@ class Component extends DCLogic {
         ? saved.columns.map(column => ({ ...column, levelId: migrateLevelId(column?.levelId) }))
         : saved.columns;
       const columns = format.columns(storedColumns, ownerLevelIds);
-      skipped += (Array.isArray(saved.columns) ? saved.columns.length : 0) - columns.length;
+      skipped += damaged(saved.columns, columns.length);
       // Corner-linked auto structure (board #244) restores its link the same
       // way dimension ends do, so a snapped beam keeps riding the jog corner
       // across reloads.
@@ -4778,7 +4798,7 @@ class Component extends DCLogic {
         ? saved.beams.map(beam => ({ ...beam, levelId: migrateLevelId(beam?.levelId) }))
         : saved.beams;
       const beams = format.beams(storedBeams, ownerLevelIds);
-      skipped += (Array.isArray(saved.beams) ? saved.beams.length : 0) - beams.length;
+      skipped += damaged(saved.beams, beams.length);
       this._beams = beams.map(beam => {
         const elevation = levelsById.get(beam.levelId)?.elev ?? 0;
         return {
@@ -4797,7 +4817,7 @@ class Component extends DCLogic {
         ? saved.stairs.map(stair => ({ ...stair, levelId: migrateLevelId(stair?.levelId) }))
         : saved.stairs;
       const stairs = format.stairs(storedStairs, ownerLevelIds);
-      skipped += (Array.isArray(saved.stairs) ? saved.stairs.length : 0) - stairs.length;
+      skipped += damaged(saved.stairs, stairs.length);
       this._stairs = stairs.map(stair => {
         const elevation = levelsById.get(stair.levelId)?.elev ?? 0;
         return {
@@ -4816,7 +4836,7 @@ class Component extends DCLogic {
         ? saved.notes.map(note => ({ ...note, levelId: migrateLevelId(note?.levelId) }))
         : saved.notes;
       const notes = format.notes(storedNotes, ownerLevelIds);
-      skipped += (Array.isArray(saved.notes) ? saved.notes.length : 0) - notes.length;
+      skipped += damaged(saved.notes, notes.length);
       // STAIR-view notes keep pane-local coordinates; plan-view notes live in
       // world space at their level's elevation like every other plan entity.
       this._notes = notes.map(note => {
@@ -4839,7 +4859,7 @@ class Component extends DCLogic {
         ? saved.roomTags.map(tag => ({ ...tag, levelId: migrateLevelId(tag?.levelId) }))
         : saved.roomTags;
       const roomTags = format.roomTags(storedRoomTags, ownerLevelIds);
-      skipped += (Array.isArray(saved.roomTags) ? saved.roomTags.length : 0) - roomTags.length;
+      skipped += damaged(saved.roomTags, roomTags.length);
       this._roomTags = roomTags.map(tag => ({
         ...tag,
         at: new THREE.Vector3(tag.at.x, levelsById.get(tag.levelId)?.elev ?? 0, tag.at.z),
@@ -4853,7 +4873,7 @@ class Component extends DCLogic {
         ? saved.underlays.map(underlay => ({ ...underlay, levelId: migrateLevelId(underlay?.levelId) }))
         : saved.underlays;
       this._underlays = format.underlays(storedUnderlays, ownerLevelIds);
-      skipped += (Array.isArray(saved.underlays) ? saved.underlays.length : 0) - this._underlays.length;
+      skipped += damaged(saved.underlays, this._underlays.length);
       this._underlayImages = new Map();
       this._loadUnderlayImages();
       // Outlines restore as isolated points — they never join the shared
@@ -4957,7 +4977,7 @@ class Component extends DCLogic {
            } : null,
          };
        }).filter(Boolean) : [];
-       skipped += (Array.isArray(saved.groups) ? saved.groups.length : 0) - this._groups.length;
+       skipped += damaged(saved.groups, this._groups.length);
        const numericGroupIds = this._groups
          .map(group => Number(String(group.id).replace(/^group-/, '')))
          .filter(Number.isInteger);
@@ -4976,13 +4996,7 @@ class Component extends DCLogic {
       // invisible/stale sections behind in 3D or accumulate duplicates.
       this._clearCutObjects();
       cuts.forEach(cut => this._restoreCutObjects(cut));
-      return {
-        ok: true,
-        reason: 'loaded',
-        orphaned,
-        // What is left once the orphans are accounted for is real damage.
-        skipped: Math.max(0, skipped - orphaned),
-      };
+      return { ok: true, reason: 'loaded', orphaned, skipped: Math.max(0, skipped) };
   }
 
   // Returns { ok, reason }. A load that cannot be understood leaves the current
@@ -8510,8 +8524,18 @@ class Component extends DCLogic {
     // is storage, not a level), `_groups` (membership is cleaned up by
     // `_cleanupGroups` below, since a group can span levels), and `cuts`,
     // which live in component state and need their 3D objects disposed.
+    // An underlay's PICTURE lives outside the drawing, in its own store
+    // bucket keyed by the underlay id, so dropping the record is only half of
+    // it — take the binary too, or the bytes sit there for the life of the
+    // browser profile with nothing pointing at them.
+    const droppedUnderlays = (this._underlays || []).filter(item => item.levelId === levelId);
     LEVEL_OWNED_COLLECTIONS.forEach(field => {
       this[field] = this[field].filter(item => item.levelId !== levelId);
+    });
+    droppedUnderlays.forEach(underlay => {
+      this._underlayImages?.delete(underlay.id);
+      window.SharedFileStore?.removeNamedFile(underlay.id, 'underlays')
+        .catch(error => console.warn('Underlay binary removal failed:', error));
     });
     // Cuts are owned by a level id, not by elevation: two levels can sit at the
     // same height, so only the deleted level's own sections go with it.

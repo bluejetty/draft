@@ -98,6 +98,32 @@ test('two tabs on one drawing: neither the sheet nor the model erases the other'
   stored = await h.savedDrawing(page);
   expect(stored.layout.paperKey, 'the sheet change survives a model write').toBe('8.5x11');
   expect(stored.lines.length).toBe(afterEdit.lines.length + 1);
+
+  // ── the third page ─────────────────────────────────────────────────────
+  // PROJECT holds a whole copy of the same file too, and the bone's own
+  // notice sends the drafter to it. It snapshots the drawing at load like the
+  // other two, so it gets the same treatment: it may write its six keys and
+  // nothing else.
+  const project = await context.newPage();
+  await project.goto('/PROJECT.html');
+  await expect(project.locator('[data-project-name]')).toBeVisible();
+
+  await page.bringToFront();
+  await drawLine(page, -20, 20, 20, 20);
+  const beforeProject = await h.savedDrawing(page);
+
+  await project.bringToFront();
+  await project.locator('[data-project-name]').fill('THE SMITH RESIDENCE');
+  await project.locator('[data-project-name]').blur();
+  await expect(project.locator('#status')).toContainText(/saved/i);
+
+  stored = await h.savedDrawing(project);
+  expect(stored.lines.length, 'the model edits survive a PROJECT write')
+    .toBe(beforeProject.lines.length);
+  expect(stored.walls.length).toBe(built.walls.length);
+  expect(stored.layout.paperKey, 'and so does the sheet').toBe('8.5x11');
+  expect(stored.projectInfo.name, 'and the project change really landed')
+    .toBe('THE SMITH RESIDENCE');
 });
 
 test('a coordinate that cannot be read refuses its entity instead of moving it to the origin', async ({ page }) => {
@@ -154,9 +180,12 @@ test('deleting a level takes ALL of its geometry with it', async ({ page }) => {
 
   const before = await h.savedDrawing(page);
   const secondId = before.levels.find(level => level.name === '2ND FL').id;
+  // Every collection LEVEL_OWNED_COLLECTIONS carries, underlays included:
+  // this list and that one have to stay the same length, or a collection can
+  // be forgotten in the method AND in the test that guards it.
   const owned = drawing => ['walls', 'lines', 'floors', 'shapes', 'roofs', 'outlines',
     'surfaceOpenings', 'dimensions', 'columns', 'beams', 'fenestrations', 'fixtures',
-    'stairs', 'notes', 'roomTags']
+    'stairs', 'notes', 'roomTags', 'underlays']
     .reduce((count, key) => count + (drawing[key] || [])
       .filter(item => item.levelId === secondId).length, 0);
   expect(owned(before), 'the level really owns geometry to lose').toBeGreaterThan(0);
@@ -229,4 +258,66 @@ test('a failed write is visible on the sheet, and it recovers on the next good o
   const stored = await h.savedDrawing(page);
   expect(stored.layout.paperKey).toBe('11x17');
   expect(stored.walls.length).toBeGreaterThan(0);
+});
+
+test('an underlay goes with its level, like everything else the level owns', async ({ page }) => {
+  await h.openModel(page);
+  const drawing = ONE_WALL();
+  drawing.levels.push({ id: 5, name: '2ND FL', elev: 9, visible: true });
+  // A traced PDF page on the 2ND floor. Underlays are level-owned by the
+  // format's own rule, and _deleteLevel forgot them.
+  drawing.underlays = [{
+    id: 'underlay-1', levelId: 5, kind: 'image', x: 0, z: 0,
+    widthFt: 20, heightFt: 15, page: 1, opacity: 0.5, scaleRatio: 1,
+  }];
+  await seedDrawing(page, drawing);
+  await page.reload();
+  await h.waitForModelReady(page);
+  let loaded = await h.savedDrawing(page);
+  expect(loaded.underlays, 'the underlay loaded').toHaveLength(1);
+
+  page.on('dialog', dialog => dialog.accept());
+  await levelRow(page, '2ND FL').locator('text=×').first().click();
+  await page.waitForTimeout(400);
+  await h.waitForSaved(page);
+
+  loaded = await h.savedDrawing(page);
+  expect(loaded.underlays || [], 'the underlay went with its level').toHaveLength(0);
+
+  // And the reload is clean — no leftover to report as a loss.
+  await page.reload();
+  await h.waitForModelReady(page);
+  await expect(page.locator('[data-model-drawing-message]')).not.toContainText(/no longer in the drawing/i);
+});
+
+test('orphans do not cancel damage: a file with both reports both', async ({ page }) => {
+  await h.openModel(page);
+  const drawing = ONE_WALL({ end: { x: null, y: 0, z: 10 } });   // one damaged wall
+  // Two cuts on a level that is not in the file. A foreign-level cut is KEPT
+  // (its levelId nulls by design), so it is not a dropped orphan at all —
+  // counting it as one used to subtract two from the damage total and report
+  // a genuinely broken file as routine leftovers.
+  drawing.cuts = [
+    { id: 1, name: 'S1', startPt: { x: -5, z: 0 }, endPt: { x: 5, z: 0 },
+      dirVec: { x: 0, z: 1 }, elev: 0, levelId: 99 },
+    { id: 2, name: 'S2', startPt: { x: -5, z: 2 }, endPt: { x: 5, z: 2 },
+      dirVec: { x: 0, z: 1 }, elev: 0, levelId: 99 },
+  ];
+  // And a wall on a level that is gone: a real orphan, from an older build.
+  drawing.walls.push({ ...ONE_WALL().walls[0], id: 'wall-orphan', levelId: 99 });
+  await seedDrawing(page, drawing);
+  await page.reload();
+  await h.waitForModelReady(page);
+
+  const message = page.locator('[data-model-drawing-message]');
+  // BOTH clauses. The damaged wall is the one that must not go unmentioned.
+  await expect(message).toContainText(/incomplete/i);
+  await expect(message).toContainText(/no longer in the drawing/i);
+  // The cuts were kept, so they are not among the items reported as dropped.
+  // (Read after an edit: nothing is written back until one, and the message
+  // above has to be read before it — any edit clears it.)
+  await drawLine(page, -20, -20, -20, -18);
+  const loaded = await h.savedDrawing(page);
+  expect(loaded.cuts, 'a cut whose level is unknown is kept, not dropped').toHaveLength(2);
+  expect(loaded.walls, 'the damaged wall and the orphan are both gone').toHaveLength(0);
 });
