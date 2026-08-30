@@ -23,10 +23,17 @@ async function clickPadLabel(page, worldX, padBottomZ) {
   const p = await h.worldToClient(page, worldX, padBottomZ);
   await page.evaluate(({ cx, cy }) => {
     const canvas = document.querySelector('[data-model-canvas]');
-    const opts = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy, button: 0 };
-    canvas.dispatchEvent(new PointerEvent('mousemove', { ...opts, buttons: 0 }));
-    canvas.dispatchEvent(new PointerEvent('mousedown', { ...opts, buttons: 1 }));
-    window.dispatchEvent(new PointerEvent('mouseup', { ...opts, buttons: 0 }));
+    // POINTER names, in step with the canvas listeners (audit C2) — the same
+    // rename helpers.js `clickWorld` took. This dispatcher is a local copy
+    // only because it aims 8px below the world point to land on the pad
+    // label; nothing else about it changed.
+    const opts = {
+      bubbles: true, cancelable: true, view: window,
+      clientX: cx, clientY: cy, button: 0, pointerId: 1, isPrimary: true,
+    };
+    canvas.dispatchEvent(new PointerEvent('pointermove', { ...opts, buttons: 0 }));
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { ...opts, buttons: 1 }));
+    window.dispatchEvent(new PointerEvent('pointerup', { ...opts, buttons: 0 }));
   }, { cx: p.x, cy: p.y + 8 });
   await page.waitForTimeout(300);
 }

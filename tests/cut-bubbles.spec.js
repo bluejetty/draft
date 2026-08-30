@@ -87,7 +87,9 @@ test.describe('Cut bubble styles', () => {
     const gap = await h.worldToClient(page, 9, 0);
     const gapPixels = await h.overlayPixels(page, gap.x, gap.y, 20);
     expect(h.countColor(gapPixels, CUT_RED)).toBeGreaterThan(0);
-    const far = await h.worldToClient(page, 15, 0);
+    // (17' out clears the E4 standard mark, which stands 2' past the
+    // outermost dimension string on the east side — board #263.)
+    const far = await h.worldToClient(page, 17, 0);
     const farPixels = await h.overlayPixels(page, far.x, far.y, 12);
     expect(h.countColor(farPixels, CUT_RED)).toBe(0);
   });
