@@ -3,8 +3,14 @@
 // frozen data plus small pure helpers: no DOM, no state, no store, shaped
 // like room-standards.js beside it.
 //
-// PROVENANCE AND ITS LIMITS — read before trusting a number:
-// every share and every frequency in this file is a MODEL-SYNTHESIZED
+// PROVENANCE AND ITS LIMITS — read before trusting a number.
+// The section marks below (§2.4, §3, §9 …) point into
+// `docs/stair-database-compiled.md`, the keeper document this table was
+// built from: nine independent research syntheses reconciled into one,
+// with the disagreements preserved. It rides with the repo so these
+// citations resolve for whoever reads this file next.
+//
+// Every share and every frequency in this file is a MODEL-SYNTHESIZED
 // ESTIMATE reconciled from nine independent research syntheses, NOT a
 // measured census. The compiled database says it plainly: "no public
 // census of North American plan catalogs exists". So the shape shares are
