@@ -64,7 +64,13 @@ test.describe('failed imports', () => {
 
     await importFile(page, 'partly-broken.draft', JSON.stringify(partly));
 
-    await expect(page.locator('[data-model-drawing-message]')).toContainText('3 items were incomplete');
+    // Two different reasons, reported as two different things: the
+    // endpoint-less line and the two-point floor are DAMAGE, while the line on
+    // level 9999 is simply on a level this drawing does not have. Rolling them
+    // together is how a corrupt file hides behind routine leftovers.
+    const message = page.locator('[data-model-drawing-message]');
+    await expect(message).toContainText('2 items were incomplete');
+    await expect(message).toContainText('1 item belonged to a level that is no longer in the drawing');
     await h.waitForSaved(page);
     const saved = await h.savedDrawing(page);
     expect(h.allLines(saved)).toHaveLength(h.allLines(exported).length);

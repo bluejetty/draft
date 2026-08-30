@@ -1209,7 +1209,11 @@
 
   <!-- CANVAS AREA -->
   <div style="flex:1; position:relative; overflow:hidden;" data-model-container>
-    <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:none;"></canvas>
+    <!-- touch-action:none ONLY here (audit C2): the browser must not claim a
+         finger drag on the drawing surface as page scroll or pinch-zoom. It is
+         deliberately not set on the container, the rails or any panel — those
+         still scroll by touch, which is how an iPad reaches the tool list. -->
+    <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:none; touch-action:none;"></canvas>
     <canvas data-model-overlay style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
     <button type="button" class="rail-tab rail-tab-left" data-left-rail-tab onClick="{{ onToggleLeftRail }}" title="{{ leftRailTabTitle }}">ROUGHDRAFTER - LITE - DRAFTING TOOLS</button>
     <button type="button" class="rail-tab rail-tab-right" data-right-rail-tab onClick="{{ onToggleRightRail }}" title="{{ rightRailTabTitle }}">LEVELS - LAYERS</button>
@@ -1630,6 +1634,22 @@ const normaliseLevelAssembly = raw => {
   };
 };
 const MODEL_STORAGE_BUCKET = 'model-drawing';
+
+// Every drawing collection whose items belong to a LEVEL, in one place: what
+// `_deleteLevel` takes with the level, and the list a new level-owned
+// collection has to join. If an item of yours carries a `levelId`, its array
+// belongs here.
+const LEVEL_OWNED_COLLECTIONS = [
+  '_lines', '_walls', '_floors', '_shapes', '_roofs', '_outlines',
+  '_surfaceOpenings', '_dimensions', '_columns', '_beams',
+  '_fenestrations', '_fixtures', '_stairs', '_notes', '_roomTags',
+  // Underlays are level-owned by the format's own rule — `underlays(raw,
+  // levelIds)` refuses one whose level is not in the set — so a deleted
+  // level used to leave its traced PDF or photo behind, pointing at a level
+  // that is gone, and the next load reported it as an item the drawing lost.
+  // Their binaries live in their own bucket and go with them; see below.
+  '_underlays',
+];
 
 // Architectural length formatting/parsing lives in formatters.js — pure
 // functions, shared here under their original names so call sites are
@@ -3179,18 +3199,37 @@ class Component extends DCLogic {
     });
   }
 
+  // What a load dropped, in the drafter's words. TWO different things, and
+  // reporting them as one is how a genuinely damaged file goes unnoticed
+  // among routine leftovers:
+  //   incomplete — we could not read the item. Something is wrong with the
+  //     FILE, and that is worth flagging as an error.
+  //   a level that is gone — the item is fine; the level it belonged to is
+  //     not in the drawing. Routine after a level delete (and older builds of
+  //     this app left these behind), or an import from another drawing.
+  _loadReport(outcome) {
+    const skipped = outcome.ok ? (outcome.skipped || 0) : 0;
+    const orphaned = outcome.ok ? (outcome.orphaned || 0) : 0;
+    const clauses = [];
+    if (skipped) {
+      clauses.push(`${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded`);
+    }
+    if (orphaned) {
+      clauses.push(`${orphaned} ${orphaned === 1 ? 'item' : 'items'} belonged to a level that is no longer in the drawing and ${orphaned === 1 ? 'was' : 'were'} dropped`);
+    }
+    return clauses.join('; ');
+  }
+
   async _importDrawingFile(file) {
     if (!file) return;
     const result = await this._loadDrawing(file);
     if (result.ok) {
       this._markUnsaved();
       this._fileDirty = false;
-      const skipped = result.skipped || 0;
+      const report = this._loadReport(result);
       this.setState({
-        drawingMessage: skipped
-          ? `${file.name} imported — ${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded.`
-          : `${file.name} imported.`,
-        drawingMessageError: skipped > 0,
+        drawingMessage: report ? `${file.name} imported — ${report}.` : `${file.name} imported.`,
+        drawingMessageError: (result.skipped || 0) > 0,
       });
     }
   }
@@ -4450,6 +4489,39 @@ class Component extends DCLogic {
         ...boneyardShelves.map(shelf => shelf.id + 1),
       );
       const ownerLevelIds = new Set([...levelIds, ...boneyardShelves.map(shelf => -shelf.id)]);
+      // Two different things get dropped at load, and telling a drafter they
+      // are the same thing is how a damaged file goes unnoticed:
+      //
+      //   ORPHANS — an item whose level is gone. Nothing is wrong with the
+      //   item; its level was deleted by a build of this app that did not take
+      //   every collection with it. Expected, harmless, and now cleaned up on
+      //   load.
+      //   DAMAGE — an item we could not read: a missing coordinate, a
+      //   nonsense id. Something is wrong with the FILE, and it is worth
+      //   saying so plainly.
+      //
+      // An orphan is recognisable from the stored record alone. The two
+      // totals are counted SEPARATELY, from the same records — never one
+      // minus the other. Subtracting them let a file's orphans cancel its
+      // damage: two cuts on a level that is gone plus one wall with an
+      // unreadable coordinate reported as "2 items belonged to a level that
+      // is no longer in the drawing" and no damage at all, which is the
+      // silence this distinction exists to break.
+      const isOrphan = item => item && item.levelId !== undefined && item.levelId !== null
+        && !ownerLevelIds.has(Number(migrateLevelId(item.levelId)));
+      const orphansIn = raw => (Array.isArray(raw) ? raw : []).filter(isOrphan).length;
+      // `cuts` is NOT on this list: a cut whose level is unknown is KEPT,
+      // with its levelId nulled ("Cuts predating explicit ownership keep a
+      // null levelId"), so it is not an orphan that was dropped — counting
+      // it said two items went away that are still in the drawing.
+      const orphaned = ['dimensions', 'lines', 'walls', 'floors', 'shapes',
+        'roofs', 'outlines', 'surfaceOpenings', 'columns', 'beams', 'stairs',
+        'fenestrations', 'fixtures', 'notes', 'roomTags', 'underlays']
+        .reduce((count, key) => count + orphansIn(saved[key]), 0);
+      // What a collection rejected BEYOND its orphans is damage: something in
+      // the file we could not read.
+      const damaged = (raw, keptLength) =>
+        Math.max(0, (Array.isArray(raw) ? raw.length : 0) - keptLength - orphansIn(raw));
       const storedCuts = Array.isArray(saved.cuts)
         ? saved.cuts.map(cut => ({ ...cut, levelId: migrateLevelId(cut?.levelId) }))
         : saved.cuts;
@@ -4459,7 +4531,7 @@ class Component extends DCLogic {
         ? saved.dimensions.map(dimension => ({ ...dimension, levelId: migrateLevelId(dimension?.levelId) }))
         : saved.dimensions;
       const dimensions = format.dimensions(storedDimensions, ownerLevelIds);
-      skipped += (Array.isArray(saved.dimensions) ? saved.dimensions.length : 0) - dimensions.length;
+      skipped += damaged(saved.dimensions, dimensions.length);
       const nextDimensionId = Math.max(
         1,
         ...dimensions.map(dimension => dimension.id + 1),
@@ -4542,6 +4614,11 @@ class Component extends DCLogic {
         const end = format.point(segment?.end);
         const levelId = format.levelId(migrateLevelId(segment?.levelId), ownerLevelIds);
         if (!start || !end || levelId == null) return null;
+        // A segment with no length is not geometry: it has no direction, so it
+        // cannot be drawn, dimensioned, offset or joined, and it sits invisible
+        // in the drawing catching selections. Reject it into `skipped` rather
+        // than load it.
+        if (Math.hypot(end.x - start.x, end.z - start.z) < 1e-6) return null;
         return {
            id: this._storedItemId(segment?.id, type, usedIds),
           start: restoreVertex(start, levelId, extra.view, extra.body),
@@ -4562,7 +4639,7 @@ class Component extends DCLogic {
             });
           }).filter(Boolean)
         : [];
-      skipped += (Array.isArray(saved.lines) ? saved.lines.length : 0) - this._lines.length;
+      skipped += damaged(saved.lines, this._lines.length);
       this._walls = Array.isArray(saved.walls)
          ? saved.walls.map(wall => restoreSegment(wall, 'wall', {
           view: wall?.view === 'foundation' ? 'foundation' : 'plan',
@@ -4574,7 +4651,7 @@ class Component extends DCLogic {
           refLine: format.oneOf(wall.refLine, REF_LINES, 'left'),
         })).filter(Boolean)
         : [];
-      skipped += (Array.isArray(saved.walls) ? saved.walls.length : 0) - this._walls.length;
+      skipped += damaged(saved.walls, this._walls.length);
       this._floors = Array.isArray(saved.floors)
         ? saved.floors.map(floor => {
           const levelId = format.levelId(migrateLevelId(floor?.levelId), ownerLevelIds);
@@ -4594,19 +4671,19 @@ class Component extends DCLogic {
           };
         }).filter(Boolean)
         : [];
-      skipped += (Array.isArray(saved.floors) ? saved.floors.length : 0) - this._floors.length;
+      skipped += damaged(saved.floors, this._floors.length);
       this._shapes = format.shapes(saved.shapes, ownerLevelIds).map(shape => ({
         ...shape,
         id: this._storedItemId(shape.id, 'shape', usedIds),
         points: shape.points.map(point => this._mergeVertex(point, shape.levelId, 'shape')),
       }));
-      skipped += (Array.isArray(saved.shapes) ? saved.shapes.length : 0) - this._shapes.length;
+      skipped += damaged(saved.shapes, this._shapes.length);
       this._roofs = format.roofs(saved.roofs, ownerLevelIds).map(roof => ({
         ...roof,
         id: this._storedItemId(roof.id, 'roof', usedIds),
         points: roof.points.map(point => restoreVertex(point, roof.levelId, 'roof')),
       }));
-      skipped += (Array.isArray(saved.roofs) ? saved.roofs.length : 0) - this._roofs.length;
+      skipped += damaged(saved.roofs, this._roofs.length);
       const wallsById = new Map(this._walls.map(wall => [wall.id, wall]));
       this._fenestrations = format.fenestrations(saved.fenestrations, ownerLevelIds).map(opening => {
         const wall = wallsById.get(opening.wallId);
@@ -4619,7 +4696,7 @@ class Component extends DCLogic {
           offset: clamped.offset,
         };
       }).filter(Boolean);
-      skipped += (Array.isArray(saved.fenestrations) ? saved.fenestrations.length : 0) - this._fenestrations.length;
+      skipped += damaged(saved.fenestrations, this._fenestrations.length);
       // Fixtures restore after walls so both host references resolve: the back
       // wall must exist on the fixture's level, and a tub's faucet-end wall too.
       this._fixtures = format.fixtures(saved.fixtures, ownerLevelIds).map(fixture => {
@@ -4634,7 +4711,7 @@ class Component extends DCLogic {
           id: this._storedItemId(fixture.id, 'fixture', usedIds),
         };
       }).filter(Boolean);
-      skipped += (Array.isArray(saved.fixtures) ? saved.fixtures.length : 0) - this._fixtures.length;
+      skipped += damaged(saved.fixtures, this._fixtures.length);
       const floorIds = new Set(this._floors.map(floor => floor.id));
       const roofIds = new Set(this._roofs.map(roof => roof.id));
       this._surfaceOpenings = format.surfaceOpenings(saved.surfaceOpenings, ownerLevelIds).map(opening => {
@@ -4646,7 +4723,7 @@ class Component extends DCLogic {
           points: opening.points.map(point => this._mergeVertex(point, opening.levelId, 'opening')),
         };
       }).filter(Boolean);
-      skipped += (Array.isArray(saved.surfaceOpenings) ? saved.surfaceOpenings.length : 0) - this._surfaceOpenings.length;
+      skipped += damaged(saved.surfaceOpenings, this._surfaceOpenings.length);
       const levelsById = new Map(levels.map(level => [level.id, level]));
       // Dimension ends restore their master-point link like pooled vertices,
       // so auto strings keep riding footprint edits after a reload.
@@ -4672,7 +4749,7 @@ class Component extends DCLogic {
         ? saved.columns.map(column => ({ ...column, levelId: migrateLevelId(column?.levelId) }))
         : saved.columns;
       const columns = format.columns(storedColumns, ownerLevelIds);
-      skipped += (Array.isArray(saved.columns) ? saved.columns.length : 0) - columns.length;
+      skipped += damaged(saved.columns, columns.length);
       // Corner-linked auto structure (board #244) restores its link the same
       // way dimension ends do, so a snapped beam keeps riding the jog corner
       // across reloads.
@@ -4692,7 +4769,7 @@ class Component extends DCLogic {
         ? saved.beams.map(beam => ({ ...beam, levelId: migrateLevelId(beam?.levelId) }))
         : saved.beams;
       const beams = format.beams(storedBeams, ownerLevelIds);
-      skipped += (Array.isArray(saved.beams) ? saved.beams.length : 0) - beams.length;
+      skipped += damaged(saved.beams, beams.length);
       this._beams = beams.map(beam => {
         const elevation = levelsById.get(beam.levelId)?.elev ?? 0;
         return {
@@ -4711,7 +4788,7 @@ class Component extends DCLogic {
         ? saved.stairs.map(stair => ({ ...stair, levelId: migrateLevelId(stair?.levelId) }))
         : saved.stairs;
       const stairs = format.stairs(storedStairs, ownerLevelIds);
-      skipped += (Array.isArray(saved.stairs) ? saved.stairs.length : 0) - stairs.length;
+      skipped += damaged(saved.stairs, stairs.length);
       this._stairs = stairs.map(stair => {
         const elevation = levelsById.get(stair.levelId)?.elev ?? 0;
         return {
@@ -4730,7 +4807,7 @@ class Component extends DCLogic {
         ? saved.notes.map(note => ({ ...note, levelId: migrateLevelId(note?.levelId) }))
         : saved.notes;
       const notes = format.notes(storedNotes, ownerLevelIds);
-      skipped += (Array.isArray(saved.notes) ? saved.notes.length : 0) - notes.length;
+      skipped += damaged(saved.notes, notes.length);
       // STAIR-view notes keep pane-local coordinates; plan-view notes live in
       // world space at their level's elevation like every other plan entity.
       this._notes = notes.map(note => {
@@ -4753,7 +4830,7 @@ class Component extends DCLogic {
         ? saved.roomTags.map(tag => ({ ...tag, levelId: migrateLevelId(tag?.levelId) }))
         : saved.roomTags;
       const roomTags = format.roomTags(storedRoomTags, ownerLevelIds);
-      skipped += (Array.isArray(saved.roomTags) ? saved.roomTags.length : 0) - roomTags.length;
+      skipped += damaged(saved.roomTags, roomTags.length);
       this._roomTags = roomTags.map(tag => ({
         ...tag,
         at: new THREE.Vector3(tag.at.x, levelsById.get(tag.levelId)?.elev ?? 0, tag.at.z),
@@ -4767,7 +4844,7 @@ class Component extends DCLogic {
         ? saved.underlays.map(underlay => ({ ...underlay, levelId: migrateLevelId(underlay?.levelId) }))
         : saved.underlays;
       this._underlays = format.underlays(storedUnderlays, ownerLevelIds);
-      skipped += (Array.isArray(saved.underlays) ? saved.underlays.length : 0) - this._underlays.length;
+      skipped += damaged(saved.underlays, this._underlays.length);
       this._underlayImages = new Map();
       this._loadUnderlayImages();
       // Outlines restore as isolated points — they never join the shared
@@ -4871,7 +4948,7 @@ class Component extends DCLogic {
            } : null,
          };
        }).filter(Boolean) : [];
-       skipped += (Array.isArray(saved.groups) ? saved.groups.length : 0) - this._groups.length;
+       skipped += damaged(saved.groups, this._groups.length);
        const numericGroupIds = this._groups
          .map(group => Number(String(group.id).replace(/^group-/, '')))
          .filter(Number.isInteger);
@@ -4890,7 +4967,7 @@ class Component extends DCLogic {
       // invisible/stale sections behind in 3D or accumulate duplicates.
       this._clearCutObjects();
       cuts.forEach(cut => this._restoreCutObjects(cut));
-      return { ok: true, reason: 'loaded', skipped: Math.max(0, skipped) };
+      return { ok: true, reason: 'loaded', orphaned, skipped: Math.max(0, skipped) };
   }
 
   // Returns { ok, reason }. A load that cannot be understood leaves the current
@@ -4903,7 +4980,15 @@ class Component extends DCLogic {
     let outcome = { ok: false, reason: 'empty' };
     try {
       if (!importedFile && !window.SharedFileStore) return outcome;
-      const file = importedFile || await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET);
+      let file = importedFile;
+      if (!file) {
+        // The revision comes back with the file: it is what the next save
+        // hands to `ifRev`, so a write that would land on top of the LAYOUT
+        // page's is refused and merged instead of clobbering it.
+        const at = await window.SharedFileStore.loadSharedFileAt(MODEL_STORAGE_BUCKET);
+        file = at.file;
+        this._storeRev = at.rev;
+      }
       if (!file) return outcome;
       const raw = await file.text();
       let saved = null;
@@ -4931,10 +5016,9 @@ class Component extends DCLogic {
       const failed = !outcome.ok && outcome.reason !== 'empty';
       const source = importedFile ? 'import' : 'store';
       const skipped = outcome.ok ? (outcome.skipped || 0) : 0;
+      const report = this._loadReport(outcome);
       const message = !failed
-        ? (skipped && !importedFile
-          ? `Saved drawing loaded — ${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded.`
-          : '')
+        ? (report && !importedFile ? `Saved drawing loaded — ${report}.` : '')
         : outcome.reason === 'version'
           ? (source === 'import'
             ? 'Import failed — this file was made by a newer version of Draft. Nothing was changed.'
@@ -5060,6 +5144,38 @@ class Component extends DCLogic {
     return true;
   }
 
+  // Write the drawing to the shared bucket, guarded by the revision we last
+  // saw there. If someone else wrote in between — in practice the LAYOUT page
+  // saving a sheet, since it holds a whole copy of this same file — the write
+  // is REFUSED rather than applied, and we merge instead of clobbering: every
+  // key in this file is the Model Space's own and our copy is the current one,
+  // except `layout`, which is LAYOUT's. So we take theirs and write again.
+  //
+  // (`_saveGeneration` is a per-tab ordering guard — it decides which of THIS
+  // tab's in-flight writes gets to clear the dirty flag. It never knew about
+  // anyone else's writes; this is what does.)
+  async _writeDrawingToStore(file, triesLeft = 3) {
+    const store = window.SharedFileStore;
+    try {
+      this._storeRev = await store.saveSharedFile(file, MODEL_STORAGE_BUCKET, {
+        ifRev: Number.isInteger(this._storeRev) ? this._storeRev : null,
+      });
+      return;
+    } catch (error) {
+      if (!error?.stale || triesLeft <= 0) throw error;
+    }
+    const at = await store.loadSharedFileAt(MODEL_STORAGE_BUCKET);
+    this._storeRev = at.rev;
+    if (at.file) {
+      try {
+        const stored = JSON.parse(await at.file.text());
+        if (stored && typeof stored.layout === 'object') this._layoutData = stored.layout;
+      } catch { /* unreadable — our own copy is the better one to keep */ }
+    }
+    // Rebuilt so the sheet we just took rides out with it.
+    return this._writeDrawingToStore(this._drawingFile(), triesLeft - 1);
+  }
+
   _markUnsaved() {
     if (this._loadingDrawing || !this._drawingReady) return;
     this._recordHistory();
@@ -5076,7 +5192,7 @@ class Component extends DCLogic {
     const file = this._drawingFile();
     this._saveQueue = (this._saveQueue || Promise.resolve())
       .catch(() => {})
-      .then(() => window.SharedFileStore.saveSharedFile(file, MODEL_STORAGE_BUCKET))
+      .then(() => this._writeDrawingToStore(file))
       .then(() => {
         if (generation === this._saveGeneration) {
           document.body.dataset.saveSeq = String(generation);
@@ -5103,15 +5219,16 @@ class Component extends DCLogic {
     if (this._renderer) this._renderer.dispose();
     const c = this._canvas;
     if (c) {
-      c.removeEventListener('mousemove',   this._cmmv);
-      c.removeEventListener('mousedown',   this._cmdn);
-      c.removeEventListener('dblclick',    this._cdbl);
-      c.removeEventListener('contextmenu', this._cctx);
-      c.removeEventListener('wheel',       this._cwhl);
-      c.removeEventListener('mouseleave',  this._cmle);
+      c.removeEventListener('pointermove',   this._cmmv);
+      c.removeEventListener('pointerdown',   this._cmdn);
+      c.removeEventListener('pointercancel', this._cpcl);
+      c.removeEventListener('dblclick',      this._cdbl);
+      c.removeEventListener('contextmenu',   this._cctx);
+      c.removeEventListener('wheel',         this._cwhl);
+      c.removeEventListener('pointerleave',  this._cmle);
     }
-    window.removeEventListener('mousemove', this._wmmv);
-    window.removeEventListener('mouseup',   this._wmup);
+    window.removeEventListener('pointermove', this._wmmv);
+    window.removeEventListener('pointerup',   this._wmup);
     window.removeEventListener('keydown',   this._onKey);
     window.removeEventListener('keydown',   this._onKdn);
     window.removeEventListener('keydown',   this._onCtrlDown);
@@ -5356,20 +5473,61 @@ class Component extends DCLogic {
     this._cutHoverSide = null;
     this._panning2D  = false;
     this._snapPt     = null;
+    // The pointer currently drawing, and whether it is over the canvas — see
+    // _claimPointer / _leaveCanvasOnce.
+    this._activePointerId = null;
+    this._insideCanvas    = false;
 
     // 2D overlay canvas (for crisp line + node rendering)
     this._overlayCanvas = document.querySelector('[data-model-overlay]');
     this._overlayCtx = this._overlayCanvas ? this._overlayCanvas.getContext('2d') : null;
 
     // Events
-    canvas.addEventListener('mousemove',   this._cmmv = e => { this._invalidate(); this._onMouseMove(e); });
-    canvas.addEventListener('mousedown',   this._cmdn = e => { this._invalidate(); this._ctrlTapPending = false; this._onMouseDown(e); });
+    // Events. ONE DOOR for mouse, finger and Apple Pencil (audit C2): the app's
+    // stated target is an iPad at the permit counter, and until this board a
+    // finger could not draw a wall — every canvas listener was mouse-only.
+    //
+    // Three listeners stay as they were, on purpose: `wheel` has no pointer
+    // equivalent; `dblclick` has none either (a pointer stream carries no
+    // notion of a double tap, and the browser still synthesises dblclick from
+    // mouse input); and `contextmenu` is wanted as-is, because a long press on
+    // iPad fires it.
+    canvas.addEventListener('pointermove', this._cmmv = e => {
+      if (!this._ownsPointer(e)) return;
+      // A captured pointer keeps delivering moves that happen OUTSIDE the
+      // canvas. Plain mousemove stopped at the canvas edge, so the bounds test
+      // keeps the crosshair and the in-progress rubber band behaving exactly as
+      // they did on a desk — and fires the leave that capture swallowed.
+      if (!this._pointerOverCanvas(e)) { this._leaveCanvasOnce(); return; }
+      this._insideCanvas = true;
+      this._invalidate();
+      this._onMouseMove(e);
+    });
+    canvas.addEventListener('pointerdown', this._cmdn = e => {
+      if (!this._claimPointer(e)) return;
+      // A finger and a Pencil have NO HOVER. A mouse arrives at a point by
+      // moving there, and the move handler is what computes the snapped
+      // cursor (`_snapPt`) the drawing tools then commit; a tap arrives out of
+      // nowhere, so without this the press read a cursor from wherever the
+      // pointer last was — on the first tap of a session, nowhere at all, and
+      // the tap drew nothing. This is the line that lets a finger draw.
+      //
+      // Mouse is deliberately excluded: it has already hovered, its cursor is
+      // current, and not touching that path is what keeps the desk identical.
+      if (e.pointerType !== 'mouse') { this._insideCanvas = true; this._onMouseMove(e); }
+      this._invalidate(); this._ctrlTapPending = false; this._onMouseDown(e);
+    });
+    canvas.addEventListener('pointercancel', this._cpcl = e => this._abandonPointer(e));
     canvas.addEventListener('dblclick',    this._cdbl = e => { this._invalidate(); this._onDblClick(e); });
     canvas.addEventListener('contextmenu', this._cctx = e => { e.preventDefault(); this._invalidate(); this._onRightClick(); });
     canvas.addEventListener('wheel',       this._cwhl = e => { this._invalidate(); this._ctrlTapPending = false; this._onWheel(e); }, { passive: false });
-    canvas.addEventListener('mouseleave',  this._cmle = () => { this._invalidate(); this._onMouseLeave(); });
-    window.addEventListener('mousemove',   this._wmmv = e => { this._invalidate(); this._onGlobalMouseMove(e); });
-    window.addEventListener('mouseup',     this._wmup = e => {
+    canvas.addEventListener('pointerleave', this._cmle = e => { if (this._ownsPointer(e)) this._leaveCanvasOnce(); });
+    window.addEventListener('pointermove', this._wmmv = e => { if (!this._ownsPointer(e)) return; this._invalidate(); this._onGlobalMouseMove(e); });
+    window.addEventListener('pointerup',   this._wmup = e => {
+      if (!this._ownsPointer(e)) return;
+      // Free the pointer FIRST: several branches below return early, and a
+      // pointer id left claimed locks the canvas out of every later gesture.
+      this._releasePointer(e);
       this._invalidate();
       if (this._tourRoofDrag) this._endTourRoofDrag();
       this._panning2D = false;
@@ -8395,18 +8553,30 @@ class Component extends DCLogic {
     // changing the level collection so no chain can commit into another floor.
     this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelCut();
     const levelId = levels[idx].id;
-    this._lines = this._lines.filter(line => line.levelId !== levelId);
-    this._walls = this._walls.filter(wall => wall.levelId !== levelId);
-    this._floors = this._floors.filter(floor => floor.levelId !== levelId);
-    this._shapes = this._shapes.filter(shape => shape.levelId !== levelId);
-    this._roofs = this._roofs.filter(roof => roof.levelId !== levelId);
-    // Level outlines go with their level; the BONEYARD master is storage, not
-    // a level, so it is never touched by level deletion.
-    this._outlines = this._outlines.filter(outline => outline.levelId !== levelId);
-    this._surfaceOpenings = this._surfaceOpenings.filter(opening => opening.levelId !== levelId);
-    this._dimensions = this._dimensions.filter(dimension => dimension.levelId !== levelId);
-    this._columns = this._columns.filter(column => column.levelId !== levelId);
-    this._beams = this._beams.filter(beam => beam.levelId !== levelId);
+    // ONE list, so a new level-owned collection is added in one place instead
+    // of being forgotten here. It was: fenestrations, fixtures, stairs, notes
+    // and roomTags were each missing from this method, so deleting a level
+    // left its doors, windows, appliances, stairs, annotations and room names
+    // behind — pointing at a level id that no longer existed, invisible on
+    // every level, and carried through save after save.
+    //
+    // NOT on this list, deliberately: `_boneyardOutlines` (the BONEYARD master
+    // is storage, not a level), `_groups` (membership is cleaned up by
+    // `_cleanupGroups` below, since a group can span levels), and `cuts`,
+    // which live in component state and need their 3D objects disposed.
+    // An underlay's PICTURE lives outside the drawing, in its own store
+    // bucket keyed by the underlay id, so dropping the record is only half of
+    // it — take the binary too, or the bytes sit there for the life of the
+    // browser profile with nothing pointing at them.
+    const droppedUnderlays = (this._underlays || []).filter(item => item.levelId === levelId);
+    LEVEL_OWNED_COLLECTIONS.forEach(field => {
+      this[field] = this[field].filter(item => item.levelId !== levelId);
+    });
+    droppedUnderlays.forEach(underlay => {
+      this._underlayImages?.delete(underlay.id);
+      window.SharedFileStore?.removeNamedFile(underlay.id, 'underlays')
+        .catch(error => console.warn('Underlay binary removal failed:', error));
+    });
     // Cuts are owned by a level id, not by elevation: two levels can sit at the
     // same height, so only the deleted level's own sections go with it.
     const removedCuts = this.state.cuts.filter(cut => cut.levelId === levelId);
@@ -9971,7 +10141,17 @@ class Component extends DCLogic {
     // The acquired polar origin glows orange while hovered or while its ray is engaged.
     const hoveringOrigin = magnet && magnetRaw && this._polarOrigin
       && Math.hypot(magnetRaw.x - this._polarOrigin.x, magnetRaw.z - this._polarOrigin.z) < 0.001;
-    if (this._polarOrigin && (polarHit || polarLocked || hoveringOrigin)) {
+    // Sitting EXACTLY on the origin is the one spot neither test above covers,
+    // and it is the moment the drafter most needs to see the ruler is zeroed
+    // there: _findPolarSnap has no direction to work with at zero distance
+    // (rightly — it returns null), and the origin's own node is excluded from
+    // the magnet while it is the node being dragged. The gap was invisible
+    // while the app read mouse events, which round the cursor to whole pixels
+    // and so almost never land dead on; pointer events keep the fractional
+    // position, and land on it.
+    const onOrigin = this._polarOrigin
+      && Math.hypot(raw.x - this._polarOrigin.x, raw.z - this._polarOrigin.z) < 0.001;
+    if (this._polarOrigin && (polarHit || polarLocked || hoveringOrigin || onOrigin)) {
       const os = this._toScreen(this._polarOrigin);
       newState.polarOriginX = os.x; newState.polarOriginY = os.y; newState.showPolarOrigin = true;
     }
@@ -10037,6 +10217,68 @@ class Component extends DCLogic {
       if (tool !== 'cut' || this.state.cutPhase === 'idle') if (lenEl) lenEl.textContent = '';
     }
 
+  }
+
+  // ─── One pointer at a time (audit C2) ────────────────────────────────────
+  // Mouse, finger and Pencil all arrive here as pointer events. The canvas
+  // takes the FIRST pointer that goes down and ignores every other one until
+  // it lifts: a second finger landing mid-stroke must not yank the wall being
+  // drawn, and a palm resting on an iPad must not become a second cursor.
+  // Two-finger pan/zoom is a follow-up board — this is the policy that makes
+  // one finger reliable first.
+  _ownsPointer(e) {
+    return this._activePointerId === null || this._activePointerId === e.pointerId;
+  }
+
+  _claimPointer(e) {
+    if (this._activePointerId !== null && this._activePointerId !== e.pointerId) return false;
+    this._activePointerId = e.pointerId;
+    // Capture, so a drag that wanders off the canvas — or off the edge of an
+    // iPad screen — still delivers its moves and its up. Touch pointers are
+    // captured implicitly by the browser; this puts mouse and pen on the same
+    // footing, which is the job the window-level mouse listeners used to do.
+    try { this._canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+    return true;
+  }
+
+  _releasePointer(e) {
+    if (this._activePointerId !== e.pointerId) return;
+    this._activePointerId = null;
+    try { this._canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+  }
+
+  // A cancelled pointer never sends an up: iOS taking the gesture for a system
+  // swipe, a palm rejected, the Pencil leaving range. Free the canvas or
+  // NOTHING can draw again — but deliberately do not run the up handler's
+  // commit branches, because the gesture did not finish, it was taken away.
+  _abandonPointer(e) {
+    if (!this._ownsPointer(e)) return;
+    this._releasePointer(e);
+    if (this._tourRoofDrag) this._endTourRoofDrag();
+    this._panning2D      = false;
+    this._selectDrag     = null;
+    this._arcDrag        = null;
+    this._outlineArcDrag = null;
+    this._fixtureDrag    = null;
+    this._roomTagDrag    = null;
+    this._selectDownInfo = null;
+    this._windowSelection = null;
+    this._invalidate();
+  }
+
+  _pointerOverCanvas(e) {
+    const rect = this._canvas ? this._canvas.getBoundingClientRect() : null;
+    if (!rect) return true;
+    return e.clientX >= rect.left && e.clientX <= rect.right
+      && e.clientY >= rect.top && e.clientY <= rect.bottom;
+  }
+
+  // The leave the capture swallowed, delivered once per exit.
+  _leaveCanvasOnce() {
+    if (!this._insideCanvas) return;
+    this._insideCanvas = false;
+    this._invalidate();
+    this._onMouseLeave();
   }
 
   _onMouseLeave() {

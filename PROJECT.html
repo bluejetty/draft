@@ -234,20 +234,69 @@
         if (text) statusTimer = setTimeout(() => { statusEl.textContent = ''; }, 4000);
       };
 
+      // The keys this page owns — the ONLY ones it may write. Everything else
+      // in the file belongs to whoever wrote it: the Model Space owns the
+      // geometry, the LAYOUT page owns `layout`.
+      const projectKeys = () => ({
+        projectInfo,
+        zoneHeights,
+        levelAssemblies,
+        roofPitch,
+        roofOverhang,
+        activeWallType,
+      });
+
+      // This page used to write `drawing` — the whole file as it read it when
+      // the tab opened, with the six keys above replaced. Every other key in
+      // that object was a snapshot, so a house drawn in the Model Space while
+      // a PROJECT tab sat open was erased the moment a project field changed:
+      // the walls, the roof, the sheet, all of it, silently reverted to
+      // whatever this page happened to have loaded. Same defect the Model
+      // Space and LAYOUT just closed between them, one door over.
+      //
+      // So: re-read inside the save queue, put our six keys onto whatever is
+      // actually stored now, and write it guarded by the revision we just
+      // read. If someone saved in between, the write is REFUSED and we go
+      // round again against the newer file rather than flattening it.
+      const writeProjectToStore = async (triesLeft = 3) => {
+        const store = window.SharedFileStore;
+        const at = await store.loadSharedFileAt(BUCKET);
+        let base = null;
+        if (at.file) {
+          try { base = JSON.parse(await at.file.text()); } catch { base = null; }
+        }
+        // Nothing readable in the bucket — a first-ever save, or a file no
+        // one can parse. This page's own copy is then the only drawing there
+        // is, and `at.rev` is 0 on an empty bucket, which is the revision an
+        // untouched bucket compares equal to.
+        if (!base || typeof base !== 'object') base = drawing;
+        const merged = { ...base, ...projectKeys() };
+        const file = new File([JSON.stringify(merged)], fileName, { type: 'application/json' });
+        try {
+          await store.saveSharedFile(file, BUCKET, { ifRev: at.rev });
+        } catch (error) {
+          if (!error?.stale || triesLeft <= 0) throw error;
+          return writeProjectToStore(triesLeft - 1);
+        }
+        // Keep the page's copy current: the readouts that derive from the
+        // drawing (foundation thickness, ICF) read it, and it is the base a
+        // save falls back to.
+        drawing = merged;
+      };
+
+      // The queue is this page's own ordering guard: two edits in quick
+      // succession write in the order they were made. Each pass re-reads, so
+      // the second sees the first's revision.
       let saveQueue = Promise.resolve();
       const save = note => {
         if (readOnly) return;
-        drawing.projectInfo = projectInfo;
-        drawing.zoneHeights = zoneHeights;
-        drawing.levelAssemblies = levelAssemblies;
-        drawing.roofPitch = roofPitch;
-        drawing.roofOverhang = roofOverhang;
-        drawing.activeWallType = activeWallType;
-        const file = new File([JSON.stringify(drawing)], fileName, { type: 'application/json' });
         saveQueue = saveQueue.catch(() => {})
-          .then(() => window.SharedFileStore.saveSharedFile(file, BUCKET))
+          .then(() => writeProjectToStore())
           .then(() => showStatus(note || 'Saved with the drawing.'))
-          .catch(() => showStatus('Could not save — is browser storage available?'));
+          .catch(error => {
+            console.warn('Unable to save the project information:', error);
+            showStatus('Could not save — is browser storage available?');
+          });
       };
 
       // ── Identity ────────────────────────────────────────────────────────
