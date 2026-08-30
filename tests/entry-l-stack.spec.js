@@ -12,9 +12,11 @@
 // So this file tests the CLAIM the stacking is for: headroom. The landing
 // above must sit over the landing below, and the run above must cross the run
 // below at a right angle — checked from the stored geometry, in both turn
-// directions, and on a house where the mirrored run may not fit at all (there
-// the contract is that the app says so and falls back to a legal stair, rather
-// than drawing one that hangs outside the building).
+// directions (the ENTRY stamp's end of the front wall picks the turn, and
+// each case asserts which turn it got, so the coverage cannot silently
+// collapse back to one direction), and on a house where the mirrored run may
+// not fit at all (there the contract is that the app says so and falls back
+// to a legal stair, rather than drawing one that hangs outside the building).
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -44,6 +46,34 @@ function landingCentre(stair) {
 }
 
 const autoStairs = saved => saved.stairs.filter(stair => stair.auto);
+
+// Even-odd ray cast: is the point inside the outline ring? The stacking
+// branch mirrors a run across the plan, so "inside the building" has to mean
+// the polygon, not its bounding box — on an L plan the notch is inside the
+// box and outside the walls.
+const insideRing = (poly, pt) => {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[j], b = poly[i];
+    if ((a.z > pt.z) !== (b.z > pt.z)
+      && pt.x < a.x + (b.x - a.x) * (pt.z - a.z) / (b.z - a.z)) hit = !hit;
+  }
+  return hit;
+};
+
+// Both stairs stand inside the building: start, end, and landing centre of
+// each, ray-cast against the level's outline ring.
+function expectStairsInside(saved, stairs) {
+  const outline = saved.outlines.find(item => item.levelId === 5 && item.points.length >= 3)
+    || saved.outlines.find(item => item.points.length >= 3);
+  stairs.forEach(stair => {
+    const centre = landingCentre(stair);
+    [stair.start, stair.end, { x: centre.x, z: centre.z }].forEach(point => {
+      expect(insideRing(outline.points, point),
+        `(${point.x.toFixed(2)}, ${point.z.toFixed(2)}) inside the outline`).toBe(true);
+    });
+  });
+}
 
 async function traceHouse(page, points) {
   await page.locator('[data-select-house]').click();
@@ -124,30 +154,37 @@ function expectStackedOverEntryL(main, upper) {
 }
 
 // A rectangle deep enough for the mirrored long leg to fit, front wall at
-// z = +12. The stair sits either side of centre; the ENTRY stamp is what
-// makes the L an ENTRY L.
+// z = +12. The ENTRY stamp is what makes the L an ENTRY L, and its end of
+// the front wall is what picks the turn: the landing slides along the wall
+// toward the stamp's projection, and the main flight runs from the landing
+// toward the roomier side — so a stamp near the right end turns the stair
+// right, and one near the left end turns it left. Each case asserts the
+// turn it was built to get, so both branches of landingCentre's
+// `turn === 'right'` sign really run.
 const DEEP = [[-14, -12], [14, -12], [14, 12], [-14, 12]];
 
-test('an entry L on the right of the plan stacks over itself', async ({ page }) => {
-  await entryLSession(page, { house: DEEP, stair: [[2, -2], [2, 4]], entryAt: [0, 10.5] });
+test('an entry near the right end of the front wall turns right, and stacks', async ({ page }) => {
+  await entryLSession(page, { house: DEEP, stair: [[2, -2], [2, 4]], entryAt: [10, 10.5] });
   const saved = await h.savedDrawing(page);
   const main = autoStairs(saved).find(stair => stair.levelId === 3);
   const upper = autoStairs(saved).find(stair => stair.levelId === 5);
   expect(main, 'MAIN got an auto stair').toBeTruthy();
   expect(upper, '2ND got an auto stair').toBeTruthy();
+  expect(main.turn).toBe('right');
   expectStackedOverEntryL(main, upper);
 });
 
-test('an entry L on the left of the plan stacks over itself the same way', async ({ page }) => {
-  // The mirror image. Whichever turn this picks, the stack above it must
-  // reverse that turn and land on the same landing — the invariants are the
-  // same, which is exactly what one hard-coded turn direction cannot show.
-  await entryLSession(page, { house: DEEP, stair: [[-2, -2], [-2, 4]], entryAt: [0, 10.5] });
+test('an entry near the left end of the front wall turns left, and stacks', async ({ page }) => {
+  // The genuinely mirrored case: the OTHER turn, not just the other side of
+  // the plan — main.turn differs from the case above, so a sign error in
+  // landingCentre cannot hide by applying the same wrong sign to both files.
+  await entryLSession(page, { house: DEEP, stair: [[-2, -2], [-2, 4]], entryAt: [-10, 10.5] });
   const saved = await h.savedDrawing(page);
   const main = autoStairs(saved).find(stair => stair.levelId === 3);
   const upper = autoStairs(saved).find(stair => stair.levelId === 5);
   expect(main).toBeTruthy();
   expect(upper).toBeTruthy();
+  expect(main.turn).toBe('left');
   expectStackedOverEntryL(main, upper);
 });
 
@@ -176,26 +213,41 @@ test('a shallower house stacks too, and neither stair lands outside the building
     expectStackedOverEntryL(main, upper);
   } else {
     // The fallback: the app says the stack could not be made, in the same
-    // breath as the stair it placed instead.
+    // breath as the stair it placed instead. Both wordings are verified
+    // against the source (MODEL.dc.html's _suggestStairForLevel), not
+    // guessed — this branch has never executed, so the strings being real
+    // is all that separates an untested assertion from a wrong one.
     expect(note).toMatch(/could not stack over the run below|no legal stair position/i);
   }
 
   // Whatever it placed, both stairs stand inside the building. The stacking
   // branch mirrors a run across the plan; landing that outside the walls is
   // the failure this sweep exists to catch.
-  const outline = saved.outlines.find(item => item.levelId === 5 && item.points.length >= 3)
-    || saved.outlines.find(item => item.points.length >= 3);
-  const minX = Math.min(...outline.points.map(point => point.x));
-  const maxX = Math.max(...outline.points.map(point => point.x));
-  const minZ = Math.min(...outline.points.map(point => point.z));
-  const maxZ = Math.max(...outline.points.map(point => point.z));
-  [main, upper].forEach(stair => {
-    const centre = landingCentre(stair);
-    [stair.start, stair.end, { x: centre.x, z: centre.z }].forEach(point => {
-      expect(point.x).toBeGreaterThanOrEqual(minX - 0.01);
-      expect(point.x).toBeLessThanOrEqual(maxX + 0.01);
-      expect(point.z).toBeGreaterThanOrEqual(minZ - 0.01);
-      expect(point.z).toBeLessThanOrEqual(maxZ + 0.01);
-    });
+  expectStairsInside(saved, [main, upper]);
+});
+
+test('an L-shaped house: the stack stays out of the notch', async ({ page }) => {
+  // The plan where the bounding box would lie: the notch (the missing
+  // quadrant) is inside the box and outside the walls. The front wing is
+  // kept wide enough (18') that the entry L is still the pick, and the
+  // mirrored upper run rides back across the plan toward the notch — if the
+  // stack lands in it, the ray cast says so where a box check would stay
+  // green.
+  const ell = [[-14, -12], [14, -12], [14, 12], [-4, 12], [-4, 4], [-14, 4]];
+  const note = await entryLSession(page, {
+    house: ell, stair: [[2, -2], [2, 4]], entryAt: [5, 10.5],
   });
+  const saved = await h.savedDrawing(page);
+  const main = autoStairs(saved).find(stair => stair.levelId === 3);
+  const upper = autoStairs(saved).find(stair => stair.levelId === 5);
+  expect(main).toBeTruthy();
+  expect(upper, 'the floor above still gets a stair either way').toBeTruthy();
+
+  if (main.shape === 'L' && Number.isInteger(main.splitTreads) && upper.splitTreads > main.splitTreads) {
+    expectStackedOverEntryL(main, upper);
+  } else {
+    expect(note).toMatch(/could not stack over the run below|no legal stair position/i);
+  }
+
+  expectStairsInside(saved, [main, upper]);
 });
