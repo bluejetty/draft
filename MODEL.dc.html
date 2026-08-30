@@ -4317,6 +4317,14 @@ class Component extends DCLogic {
       basementLevelId: BASEMENT_LEVEL_ID,
     });
     const sq = value => `${Math.round(value)} sq ft`;
+    // The printed column must add up: the total is the sum of the level nets
+    // AS PRINTED — each net rounded once, the total summed from those rounded
+    // values — so the drafter adding the column lands on the line at the
+    // bottom (audit C1's rule, applied to the AREAS report).
+    const roundedNets = report.levels.map(row =>
+      row.netSqFt === null ? null : Math.round(row.netSqFt));
+    const printedTotal = roundedNets.filter(net => net !== null)
+      .reduce((sum, net) => sum + net, 0);
     return {
       rows: report.levels.map(row => ({
         name: row.name,
@@ -4337,7 +4345,7 @@ class Component extends DCLogic {
       garageLine: report.garageSqFt > 0
         ? `Garage ${sq(report.garageSqFt)} \u2014 excluded from the building total`
         : '',
-      totalLabel: report.totalSqFt === null ? '\u2014' : sq(report.totalSqFt),
+      totalLabel: report.totalSqFt === null ? '\u2014' : `${printedTotal} sq ft`,
       convention: report.convention,
     };
   }

@@ -251,6 +251,31 @@ test('an attached garage is measured, disclosed, and kept OUT of the building to
   await closeAreas(page);
 });
 
+test('the printed level nets add up to the printed total: round each net once, sum the rounded values', async ({ page }) => {
+  await h.openModel(page);
+  // 16 x 12.4 = 198.4 sq ft a level: a fractional net, chosen so rounding
+  // each level and rounding the sum genuinely disagree (198 + 198 + 198 =
+  // 594, while round(595.2) = 595). The drafter adds the printed column and
+  // must land on the printed bottom line — so the total is the sum of the
+  // nets AS PRINTED.
+  await drawOutline(page, [[-8, -6.2], [8, -6.2], [8, 6.2], [-8, 6.2]]);
+  await buildHouse(page);
+
+  await openAreas(page);
+  const rows = page.locator('[data-areas-level]');
+  await expect(rows).toHaveCount(3);
+  const nets = [];
+  for (let i = 0; i < 3; i++) {
+    const text = await rows.nth(i).locator('[data-areas-net]').textContent();
+    nets.push(parseInt(text, 10));
+    expect(text).toBe('198 sq ft');
+  }
+  const totalText = await page.locator('[data-areas-total]').textContent();
+  expect(parseInt(totalText, 10)).toBe(nets.reduce((sum, net) => sum + net, 0));
+  await expect(page.locator('[data-areas-total]')).toHaveText('594 sq ft');
+  await closeAreas(page);
+});
+
 test('an open-concept space rolls up as one combined room; the plan tag is untouched', async ({ page }) => {
   await h.openModel(page);
   // One big 20 x 20 open space with kitchen fixtures on the north wall: the
