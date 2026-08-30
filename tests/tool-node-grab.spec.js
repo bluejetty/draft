@@ -75,12 +75,15 @@ test('a quick flick over a node places a point instead of dragging the node', as
   const from = await h.worldToClient(page, 10, 0);
   await page.evaluate(pt => {
     const canvas = document.querySelector('[data-model-canvas]');
-    const fire = (type, x, y) => canvas.dispatchEvent(new MouseEvent(type,
-      { bubbles: true, clientX: x, clientY: y, button: 0 }));
-    fire('mousemove', pt.x, pt.y);
-    fire('mousedown', pt.x, pt.y);
-    fire('mousemove', pt.x + 8, pt.y + 8);
-    fire('mouseup', pt.x + 8, pt.y + 8);
+    // PointerEvent with pointer names, in step with the canvas listeners
+    // (audit C2). It was a MouseEvent; the sequence, the coordinates and the
+    // 8px of travel are the same, and they are the point of the test.
+    const fire = (type, x, y) => canvas.dispatchEvent(new PointerEvent(type,
+      { bubbles: true, clientX: x, clientY: y, button: 0, pointerId: 1, isPrimary: true }));
+    fire('pointermove', pt.x, pt.y);
+    fire('pointerdown', pt.x, pt.y);
+    fire('pointermove', pt.x + 8, pt.y + 8);
+    fire('pointerup', pt.x + 8, pt.y + 8);
   }, from);
   await page.waitForTimeout(400); // clear the 350ms double-click window
   await h.clickWorld(page, 10, -8);

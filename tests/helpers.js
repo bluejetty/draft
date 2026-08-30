@@ -116,10 +116,23 @@ async function clickWorld(page, x, z) {
     // focused button would swallow the keyboard shortcuts that follow.
     if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
     const canvas = document.querySelector('[data-model-canvas]');
-    const opts = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy, button: 0 };
-    canvas.dispatchEvent(new PointerEvent('mousemove', { ...opts, buttons: 0 }));
-    canvas.dispatchEvent(new PointerEvent('mousedown', { ...opts, buttons: 1 }));
-    window.dispatchEvent(new PointerEvent('mouseup', { ...opts, buttons: 0 }));
+    // POINTER names, matching the canvas listeners (audit C2). These were
+    // already PointerEvent objects carrying MOUSE event names — that mismatch
+    // is the one thing which had to change in step with the app, and it is the
+    // only thing that did. Coordinates, ordering, the blur above and the 400ms
+    // settle below are untouched: this helper's contract is what ~550 specs
+    // are written against.
+    //
+    // pointerId 1 is what Chromium gives a real mouse, so these agree with the
+    // genuine pointermove `moveTo` just sent through page.mouse — the canvas
+    // sees one pointer, claims it on down, releases it on up.
+    const opts = {
+      bubbles: true, cancelable: true, view: window,
+      clientX: cx, clientY: cy, button: 0, pointerId: 1, isPrimary: true,
+    };
+    canvas.dispatchEvent(new PointerEvent('pointermove', { ...opts, buttons: 0 }));
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { ...opts, buttons: 1 }));
+    window.dispatchEvent(new PointerEvent('pointerup', { ...opts, buttons: 0 }));
   }, { cx: p.x, cy: p.y });
   // Two clicks inside 350ms read as a double click (finish chain).
   await page.waitForTimeout(400);
