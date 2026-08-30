@@ -267,6 +267,9 @@ test('a merged jog dimensions to a real wall face, never to the average of two',
     expect(`x=${x.toFixed(4)} on a real face: ${onRealFace}`).toBe(`x=${x.toFixed(4)} on a real face: true`);
   });
   expect(printedXs.some(x => Math.abs(x - (2.88 + 3) / 2) < 0.01)).toBe(false);
+  // And the merge still MERGES: the 1 7/16" pair strings as ONE coordinate,
+  // and it is one of the two — not a pile of inch-scale jog strings.
+  expect(printedXs.filter(x => Math.abs(x - 2.88) < 0.05 || Math.abs(x - 3) < 0.05)).toHaveLength(1);
 });
 
 test('N and E strings run reversed so the drawn line lands outward', async ({ page }) => {

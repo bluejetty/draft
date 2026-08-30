@@ -94,7 +94,11 @@ if (!window.DraftAutoDims) {
     // collapse to its arithmetic mean, which put a printed dimension up to an
     // inch from any wall on the drawing: a fabricated coordinate on a permit
     // set. The dominant face wins (the coordinate the most edges land on),
-    // ties going to the lowest member so the choice is deterministic.
+    // ties going to the lowest member so the choice is deterministic — and a
+    // tie is the COMMON case: a two-face cluster where each face contributes
+    // the same number of edges. The chosen face is later snapped to the 1/16"
+    // print grid, so the strung coordinate is a real face to the nearest
+    // sixteenth rather than exactly on it.
     const dominantMember = cluster => {
       let best = cluster[0], bestCount = 0;
       cluster.forEach(value => {
