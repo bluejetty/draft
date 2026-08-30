@@ -115,6 +115,39 @@ const U_RING = [{ x: 0, z: 0 }, { x: 15, z: 0 }, { x: 15, z: 20 }, { x: 25, z: 2
   eq('numbering: a claimed number is kept', claimed.get(1), 'BEDROOM 4');
   eq('numbering: the ladder skips a claimed number', [claimed.get(2), claimed.get(3)],
     ['BEDROOM 2', 'BEDROOM 3']);
+
+  // A number belongs to ONE tag per series: the earliest claimant (stamp
+  // order) keeps it, the later duplicate falls back onto the ladder.
+  const dupBeds = G.assignStampNumbers([
+    { id: 1, base: 'BEDROOM', levelId: 3, claimedNo: 4 },
+    { id: 2, base: 'BEDROOM', levelId: 5, claimedNo: 4 },
+    { id: 3, base: 'BEDROOM', levelId: 3 },
+  ]);
+  eq('duplicate claim: the earliest bedroom claimant keeps the number',
+    dupBeds.get(1), 'BEDROOM 4');
+  eq('duplicate claim: the later bedroom claimant falls to the ladder',
+    dupBeds.get(2), 'BEDROOM 2');
+  eq('duplicate claim: unclaimed bedrooms are untouched', dupBeds.get(3), 'BEDROOM 3');
+
+  const dupWcs = G.assignStampNumbers([
+    { id: 1, base: 'WC', levelId: 3, claimedNo: 3 },
+    { id: 2, base: 'WC', levelId: 3, claimedNo: 3 },
+  ]);
+  eq('duplicate claim: WC series honors the earliest claimant', dupWcs.get(1), 'WC 3');
+  eq('duplicate claim: the later WC claimant takes the next free rung', dupWcs.get(2), 'WC 1');
+
+  // The basement series resolves its own duplicates, independent of the
+  // above-grade ladders.
+  const dupBasement = G.assignStampNumbers([
+    { id: 1, base: 'BEDROOM', levelId: 1, claimedNo: 2 },
+    { id: 2, base: 'BEDROOM', levelId: 1, claimedNo: 2 },
+    { id: 3, base: 'WC', levelId: 1, claimedNo: 1 },
+    { id: 4, base: 'WC', levelId: 1, claimedNo: 1 },
+  ]);
+  eq('duplicate claim: basement bedrooms resolve to distinct numbers',
+    [dupBasement.get(1), dupBasement.get(2)], ['BEDROOM B2', 'BEDROOM B1']);
+  eq('duplicate claim: basement WCs resolve to distinct numbers',
+    [dupBasement.get(3), dupBasement.get(4)], ['WC B1', 'WC B2']);
 }
 
 // ── 2. The one primary ────────────────────────────────────────────────
