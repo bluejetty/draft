@@ -75,6 +75,10 @@ async function expectStringsSum(page) {
     const side = key.split('@')[0] + (entries[0].dimension.start.z + entries[0].dimension.start.x > 0 ? '+' : '-');
     sides.set(side, [...(sides.get(side) || []), entries]);
   });
+  // Every multi-part row must be checked against an overall: the side
+  // grouping above is only trusted because a mis-bucketed side (no overall
+  // found beside its partials) fails this count instead of skipping silently.
+  const multiPartRows = [...rows.values()].filter(entries => entries.length > 1).length;
   let checked = 0;
   sides.forEach(stack => {
     const overall = stack.find(entries => entries.length === 1);
@@ -86,6 +90,7 @@ async function expectStringsSum(page) {
         .toBe(`${entries.map(entry => entry.label).join(' + ')} = ${overall[0].inches.toFixed(4)}"`);
     });
   });
+  expect(checked).toBe(multiPartRows);
   expect(checked).toBeGreaterThan(0);
 }
 

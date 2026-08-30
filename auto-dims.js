@@ -42,6 +42,11 @@ if (!window.DraftAutoDims) {
     }
     const last = snapped[snapped.length - 1];
     // The end coordinate always survives — it is what the overall measures to.
+    // When it is the ONLY partial, it prints whatever length it has, even
+    // under MIN_PARTIAL_FT: a lone partial has no neighbour to absorb into,
+    // and a side with a string but no segments would be worse than a cramped
+    // label. Needs a whole side under 0.6" to arise, so unreachable on a
+    // real plan.
     if (last - kept[kept.length - 1] >= MIN_PARTIAL_FT || kept.length === 1) kept.push(last);
     else kept[kept.length - 1] = last;
     return kept;
