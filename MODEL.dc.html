@@ -603,6 +603,10 @@
         </div>
       </sc-for>
       <div data-areas-suite style="margin-top:12px; font-size:12px; font-weight:600; color:#365e86;">{{ areasReport.suiteLine }}</div>
+      <!-- The garage rides beside the total, never inside it: a permit
+           application asks for floor area excluding the garage. Empty string
+           when there is no garage, so the line collapses away. -->
+      <div data-areas-garage style="margin-top:10px; display:flex; align-items:baseline; font-size:12px; color:rgba(29,31,32,0.62);">{{ areasReport.garageLine }}</div>
       <div style="margin-top:8px; display:flex; align-items:baseline; border-top:1px solid rgba(29,31,32,0.25); padding-top:8px;">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">Building total</div>
         <div data-areas-total style="margin-left:auto; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:600;">{{ areasReport.totalLabel }}</div>
@@ -4256,6 +4260,14 @@ class Component extends DCLogic {
       basementLevelId: BASEMENT_LEVEL_ID,
     });
     const sq = value => `${Math.round(value)} sq ft`;
+    // The printed column must add up: the total is the sum of the level nets
+    // AS PRINTED — each net rounded once, the total summed from those rounded
+    // values — so the drafter adding the column lands on the line at the
+    // bottom (audit C1's rule, applied to the AREAS report).
+    const roundedNets = report.levels.map(row =>
+      row.netSqFt === null ? null : Math.round(row.netSqFt));
+    const printedTotal = roundedNets.filter(net => net !== null)
+      .reduce((sum, net) => sum + net, 0);
     return {
       rows: report.levels.map(row => ({
         name: row.name,
@@ -4263,14 +4275,20 @@ class Component extends DCLogic {
           : row.source === 'rooms' ? 'rooms only, approx.' : '',
         grossLabel: row.grossSqFt === null ? '\u2014' : sq(row.grossSqFt),
         lessLabel: row.openingsSqFt > 0 ? `less floor openings ${sq(row.openingsSqFt)}` : '',
-        garageLabel: row.garageSqFt > 0 ? `incl. garage ${sq(row.garageSqFt)}` : '',
+        // The garage is measured and disclosed per level, but it is NOT in
+        // that level's net or in the building total (audit Q16) — the wording
+        // has to say so, or the numbers look like they don't add up.
+        garageLabel: row.garageSqFt > 0 ? `garage ${sq(row.garageSqFt)}, excluded` : '',
         netLabel: row.netSqFt === null ? '\u2014' : sq(row.netSqFt),
         roomsLine: row.rooms.map(room => `${room.name} ${room.areaSqFt}`).join(' \u00b7 '),
       })),
       suiteLine: report.suite
         ? `${report.suite.name} (secondary suite figure): ${sq(report.suite.netSqFt)}`
         : '',
-      totalLabel: report.totalSqFt === null ? '\u2014' : sq(report.totalSqFt),
+      garageLine: report.garageSqFt > 0
+        ? `Garage ${sq(report.garageSqFt)} \u2014 excluded from the building total`
+        : '',
+      totalLabel: report.totalSqFt === null ? '\u2014' : `${printedTotal} sq ft`,
       convention: report.convention,
     };
   }

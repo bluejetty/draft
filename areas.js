@@ -20,7 +20,9 @@ if (!window.DraftAreas) {
   const CONVENTION = 'Areas are as built: floor openings (stair rough openings '
     + 'included) are deducted from the level they are cut from. The building '
     + 'total is the sum of the level nets, so a stairwell counts once — at the '
-    + 'level with solid floor beneath it.';
+    + 'level with solid floor beneath it. The GARAGE is measured but kept OUT '
+    + 'of the level nets and the building total, and reported on its own line: '
+    + 'permit applications ask for floor area excluding the garage.';
 
   // Open-concept rule (stated, not guessed): one enclosed space is ONE room —
   // no invented boundaries. A KITCHEN-voted room well past a kitchen's
@@ -88,7 +90,11 @@ if (!window.DraftAreas) {
         grossSqFt,
         openingsSqFt,
         garageSqFt,
-        netSqFt: grossSqFt === null ? null : Math.max(0, grossSqFt - openingsSqFt),
+        // The net a drafter copies onto an application is the FLOOR area:
+        // the garage is measured, reported on its own line, and kept out of
+        // this number and out of the building total (audit Q16).
+        netSqFt: grossSqFt === null ? null
+          : Math.max(0, grossSqFt - openingsSqFt - garageSqFt),
         rooms: roomTags
           .filter(tag => tag.levelId === level.id && tag.areaSqFt > 0)
           .map(tag => ({ name: rollupName(tag), areaSqFt: tag.areaSqFt })),
@@ -105,6 +111,8 @@ if (!window.DraftAreas) {
       totalSqFt: measured.length
         ? measured.reduce((sum, row) => sum + row.netSqFt, 0)
         : null,
+      // Reported beside the total, never inside it.
+      garageSqFt: rows.reduce((sum, row) => sum + (row.garageSqFt || 0), 0),
       convention: CONVENTION,
     };
   }
