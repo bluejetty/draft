@@ -11,6 +11,14 @@
 // than the one it was served from, and the model still comes up with every
 // other origin cut off. A timing test would pass on a fast desk the day
 // someone links a CDN back in; this one won't.
+//
+// One deliberate exception lives outside this suite's sight: the visit
+// counter (traffic-counter.js) speaks to the GoatCounter host — async, off
+// the critical path, fail-silent — but only when the page is served from a
+// real domain. On localhost it says nothing at all, which is why these specs
+// still see zero off-site requests: the rule for the critical path stands,
+// and the counter may never grow into a blocking dependency without failing
+// here.
 const { test, expect } = require('@playwright/test');
 
 const PAGES = [
