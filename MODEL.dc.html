@@ -1219,7 +1219,11 @@
 
   <!-- CANVAS AREA -->
   <div style="flex:1; position:relative; overflow:hidden;" data-model-container>
-    <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:none;"></canvas>
+    <!-- touch-action:none ONLY here (audit C2): the browser must not claim a
+         finger drag on the drawing surface as page scroll or pinch-zoom. It is
+         deliberately not set on the container, the rails or any panel — those
+         still scroll by touch, which is how an iPad reaches the tool list. -->
+    <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:none; touch-action:none;"></canvas>
     <canvas data-model-overlay style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
     <button type="button" class="rail-tab rail-tab-left" data-left-rail-tab onClick="{{ onToggleLeftRail }}" title="{{ leftRailTabTitle }}">ROUGHDRAFTER - LITE - DRAFTING TOOLS</button>
     <button type="button" class="rail-tab rail-tab-right" data-right-rail-tab onClick="{{ onToggleRightRail }}" title="{{ rightRailTabTitle }}">LEVELS - LAYERS</button>
@@ -5136,15 +5140,16 @@ class Component extends DCLogic {
     if (this._renderer) this._renderer.dispose();
     const c = this._canvas;
     if (c) {
-      c.removeEventListener('mousemove',   this._cmmv);
-      c.removeEventListener('mousedown',   this._cmdn);
-      c.removeEventListener('dblclick',    this._cdbl);
-      c.removeEventListener('contextmenu', this._cctx);
-      c.removeEventListener('wheel',       this._cwhl);
-      c.removeEventListener('mouseleave',  this._cmle);
+      c.removeEventListener('pointermove',   this._cmmv);
+      c.removeEventListener('pointerdown',   this._cmdn);
+      c.removeEventListener('pointercancel', this._cpcl);
+      c.removeEventListener('dblclick',      this._cdbl);
+      c.removeEventListener('contextmenu',   this._cctx);
+      c.removeEventListener('wheel',         this._cwhl);
+      c.removeEventListener('pointerleave',  this._cmle);
     }
-    window.removeEventListener('mousemove', this._wmmv);
-    window.removeEventListener('mouseup',   this._wmup);
+    window.removeEventListener('pointermove', this._wmmv);
+    window.removeEventListener('pointerup',   this._wmup);
     window.removeEventListener('keydown',   this._onKey);
     window.removeEventListener('keydown',   this._onKdn);
     window.removeEventListener('keydown',   this._onCtrlDown);
@@ -5389,20 +5394,61 @@ class Component extends DCLogic {
     this._cutHoverSide = null;
     this._panning2D  = false;
     this._snapPt     = null;
+    // The pointer currently drawing, and whether it is over the canvas — see
+    // _claimPointer / _leaveCanvasOnce.
+    this._activePointerId = null;
+    this._insideCanvas    = false;
 
     // 2D overlay canvas (for crisp line + node rendering)
     this._overlayCanvas = document.querySelector('[data-model-overlay]');
     this._overlayCtx = this._overlayCanvas ? this._overlayCanvas.getContext('2d') : null;
 
     // Events
-    canvas.addEventListener('mousemove',   this._cmmv = e => { this._invalidate(); this._onMouseMove(e); });
-    canvas.addEventListener('mousedown',   this._cmdn = e => { this._invalidate(); this._ctrlTapPending = false; this._onMouseDown(e); });
+    // Events. ONE DOOR for mouse, finger and Apple Pencil (audit C2): the app's
+    // stated target is an iPad at the permit counter, and until this board a
+    // finger could not draw a wall — every canvas listener was mouse-only.
+    //
+    // Three listeners stay as they were, on purpose: `wheel` has no pointer
+    // equivalent; `dblclick` has none either (a pointer stream carries no
+    // notion of a double tap, and the browser still synthesises dblclick from
+    // mouse input); and `contextmenu` is wanted as-is, because a long press on
+    // iPad fires it.
+    canvas.addEventListener('pointermove', this._cmmv = e => {
+      if (!this._ownsPointer(e)) return;
+      // A captured pointer keeps delivering moves that happen OUTSIDE the
+      // canvas. Plain mousemove stopped at the canvas edge, so the bounds test
+      // keeps the crosshair and the in-progress rubber band behaving exactly as
+      // they did on a desk — and fires the leave that capture swallowed.
+      if (!this._pointerOverCanvas(e)) { this._leaveCanvasOnce(); return; }
+      this._insideCanvas = true;
+      this._invalidate();
+      this._onMouseMove(e);
+    });
+    canvas.addEventListener('pointerdown', this._cmdn = e => {
+      if (!this._claimPointer(e)) return;
+      // A finger and a Pencil have NO HOVER. A mouse arrives at a point by
+      // moving there, and the move handler is what computes the snapped
+      // cursor (`_snapPt`) the drawing tools then commit; a tap arrives out of
+      // nowhere, so without this the press read a cursor from wherever the
+      // pointer last was — on the first tap of a session, nowhere at all, and
+      // the tap drew nothing. This is the line that lets a finger draw.
+      //
+      // Mouse is deliberately excluded: it has already hovered, its cursor is
+      // current, and not touching that path is what keeps the desk identical.
+      if (e.pointerType !== 'mouse') { this._insideCanvas = true; this._onMouseMove(e); }
+      this._invalidate(); this._ctrlTapPending = false; this._onMouseDown(e);
+    });
+    canvas.addEventListener('pointercancel', this._cpcl = e => this._abandonPointer(e));
     canvas.addEventListener('dblclick',    this._cdbl = e => { this._invalidate(); this._onDblClick(e); });
     canvas.addEventListener('contextmenu', this._cctx = e => { e.preventDefault(); this._invalidate(); this._onRightClick(); });
     canvas.addEventListener('wheel',       this._cwhl = e => { this._invalidate(); this._ctrlTapPending = false; this._onWheel(e); }, { passive: false });
-    canvas.addEventListener('mouseleave',  this._cmle = () => { this._invalidate(); this._onMouseLeave(); });
-    window.addEventListener('mousemove',   this._wmmv = e => { this._invalidate(); this._onGlobalMouseMove(e); });
-    window.addEventListener('mouseup',     this._wmup = e => {
+    canvas.addEventListener('pointerleave', this._cmle = e => { if (this._ownsPointer(e)) this._leaveCanvasOnce(); });
+    window.addEventListener('pointermove', this._wmmv = e => { if (!this._ownsPointer(e)) return; this._invalidate(); this._onGlobalMouseMove(e); });
+    window.addEventListener('pointerup',   this._wmup = e => {
+      if (!this._ownsPointer(e)) return;
+      // Free the pointer FIRST: several branches below return early, and a
+      // pointer id left claimed locks the canvas out of every later gesture.
+      this._releasePointer(e);
       this._invalidate();
       if (this._tourRoofDrag) this._endTourRoofDrag();
       this._panning2D = false;
@@ -10010,6 +10056,68 @@ class Component extends DCLogic {
       if (tool !== 'cut' || this.state.cutPhase === 'idle') if (lenEl) lenEl.textContent = '';
     }
 
+  }
+
+  // ─── One pointer at a time (audit C2) ────────────────────────────────────
+  // Mouse, finger and Pencil all arrive here as pointer events. The canvas
+  // takes the FIRST pointer that goes down and ignores every other one until
+  // it lifts: a second finger landing mid-stroke must not yank the wall being
+  // drawn, and a palm resting on an iPad must not become a second cursor.
+  // Two-finger pan/zoom is a follow-up board — this is the policy that makes
+  // one finger reliable first.
+  _ownsPointer(e) {
+    return this._activePointerId === null || this._activePointerId === e.pointerId;
+  }
+
+  _claimPointer(e) {
+    if (this._activePointerId !== null && this._activePointerId !== e.pointerId) return false;
+    this._activePointerId = e.pointerId;
+    // Capture, so a drag that wanders off the canvas — or off the edge of an
+    // iPad screen — still delivers its moves and its up. Touch pointers are
+    // captured implicitly by the browser; this puts mouse and pen on the same
+    // footing, which is the job the window-level mouse listeners used to do.
+    try { this._canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+    return true;
+  }
+
+  _releasePointer(e) {
+    if (this._activePointerId !== e.pointerId) return;
+    this._activePointerId = null;
+    try { this._canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+  }
+
+  // A cancelled pointer never sends an up: iOS taking the gesture for a system
+  // swipe, a palm rejected, the Pencil leaving range. Free the canvas or
+  // NOTHING can draw again — but deliberately do not run the up handler's
+  // commit branches, because the gesture did not finish, it was taken away.
+  _abandonPointer(e) {
+    if (!this._ownsPointer(e)) return;
+    this._releasePointer(e);
+    if (this._tourRoofDrag) this._endTourRoofDrag();
+    this._panning2D      = false;
+    this._selectDrag     = null;
+    this._arcDrag        = null;
+    this._outlineArcDrag = null;
+    this._fixtureDrag    = null;
+    this._roomTagDrag    = null;
+    this._selectDownInfo = null;
+    this._windowSelection = null;
+    this._invalidate();
+  }
+
+  _pointerOverCanvas(e) {
+    const rect = this._canvas ? this._canvas.getBoundingClientRect() : null;
+    if (!rect) return true;
+    return e.clientX >= rect.left && e.clientX <= rect.right
+      && e.clientY >= rect.top && e.clientY <= rect.bottom;
+  }
+
+  // The leave the capture swallowed, delivered once per exit.
+  _leaveCanvasOnce() {
+    if (!this._insideCanvas) return;
+    this._insideCanvas = false;
+    this._invalidate();
+    this._onMouseLeave();
   }
 
   _onMouseLeave() {
