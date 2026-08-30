@@ -86,12 +86,15 @@
     .view-rail { position:absolute; top:8px; bottom:8px; z-index:5; display:flex; flex-direction:column; gap:6px; overflow-y:auto; overflow-x:hidden; pointer-events:none; scrollbar-width:none; }
     .view-rail::-webkit-scrollbar { display:none; }
     .view-rail-right { right:36px; flex-direction:row; align-items:stretch; gap:8px; }
+    .view-rail-left { left:36px; }
     .view-rail-col { display:flex; flex-direction:column; gap:6px; overflow-y:auto; overflow-x:hidden; min-height:0; scrollbar-width:none; }
     .view-rail-col::-webkit-scrollbar { display:none; }
-    .view-rail-spacer { flex:1 1 auto; min-height:0; }
     .view-thumb { pointer-events:auto; flex-shrink:0; width:118px; border:1px solid rgba(29,31,32,0.22); background:#fff; padding:0; cursor:pointer; box-shadow:0 1px 5px rgba(29,31,32,0.12); text-align:left; }
     .view-thumb:hover { border-color:#5980a6; }
     .view-thumb.active { border-color:#b04060; box-shadow:0 0 0 1px #b04060, 0 1px 5px rgba(29,31,32,0.12); }
+    .view-thumb.empty { cursor:default; }
+    .view-thumb.empty:hover { border-color:rgba(29,31,32,0.22); }
+    .view-thumb.empty .view-thumb-label { color:rgba(29,31,32,0.38); }
     .view-thumb canvas { display:block; width:116px; height:76px; background:#fafafa; }
     .view-thumb-label { display:flex; align-items:center; gap:4px; padding:2px 5px 3px; border-top:1px solid rgba(29,31,32,0.1); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.68); white-space:nowrap; overflow:hidden; }
     .view-thumb-3d { pointer-events:auto; flex-shrink:0; width:118px; height:76px; border:1px solid rgba(29,31,32,0.22); background:#fff; cursor:pointer; box-shadow:0 1px 5px rgba(29,31,32,0.12); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.1em; color:rgba(29,31,32,0.55); }
@@ -1212,20 +1215,23 @@
     <button type="button" class="rail-tab rail-tab-right" data-right-rail-tab onClick="{{ onToggleRightRail }}" title="{{ rightRailTabTitle }}">LEVELS - LAYERS</button>
     <!-- VIEW GALLERIES (boards #265 / #291): a two-column wall of little
          TV screens down the right canvas edge. Fixed seating — E1|E3,
-         E2|E4, SITE PLAN|ROOF PLAN, then each floor's PLAN (walls) beside
-         its LAYOUT (floor), BASEMENT (walls) beside the concrete
-         FOUNDATION plan, and hand-cut sections filling left-then-right
-         below, with the 3D screen at the bottom of the outer column. The
-         open LEVELS panel covers only the outer column; the inner column
-         always keeps its seat. Thumbnails are painted imperatively from
-         the same generators that draw the full-size views. -->
+         E2|E4, ROOF PLAN|SITE PLAN, then each floor's PLAN (walls) beside
+         its LAYOUT (floor), the concrete FOUNDATION plan beside BASEMENT
+         (walls), and sections filling left-then-right below. E1-E4 and two
+         section seats keep their screens even before anything exists to
+         show. The open LEVELS panel covers only the outer column; the
+         inner column always keeps its seat. The 3D screen stands alone at
+         the top-left, where the open toolbox covers it. Thumbnails are
+         painted imperatively from the same generators that draw the
+         full-size views. -->
     <div data-view-rail-right class="view-rail view-rail-right">
       <div data-view-rail-inner class="view-rail-col"></div>
       <div data-view-rail-outer class="view-rail-col">
         <div data-view-rail-outer-cards style="display:flex; flex-direction:column; gap:6px;"></div>
-        <div class="view-rail-spacer"></div>
-        <button type="button" data-view-rail-3d class="view-thumb-3d" onClick="{{ enter3D }}" title="{{ view3DTitle }}" disabled="{{ webglUnavailable }}">⬡<span>3D</span></button>
       </div>
+    </div>
+    <div data-view-rail-left class="view-rail view-rail-left">
+      <button type="button" data-view-rail-3d class="view-thumb-3d" onClick="{{ enter3D }}" title="{{ view3DTitle }}" disabled="{{ webglUnavailable }}">⬡<span>3D</span></button>
     </div>
     <!-- HTML crosshair cursor -->
     <div style="position:absolute; left:{{ cursorX }}px; top:{{ cursorY }}px; width:36px; height:36px; transform:translate(-50%,-50%); pointer-events:none; display:{{ cursorDisplay }};">
@@ -5471,9 +5477,10 @@ class Component extends DCLogic {
 
   // ── View galleries (boards #265 / #291) ────────────────────────────────
   // The two-column wall of little TV screens down the right canvas edge.
-  // Fixed seating: E1|E3, E2|E4, SITE PLAN|ROOF PLAN, each floor's PLAN
-  // (walls) beside its LAYOUT (floor), BASEMENT (walls) beside the concrete
-  // FOUNDATION plan, then hand-cut sections filling left-then-right. Cards
+  // Fixed seating: E1|E3, E2|E4, ROOF PLAN|SITE PLAN, each floor's PLAN
+  // (walls) beside its LAYOUT (floor), the concrete FOUNDATION plan beside
+  // BASEMENT (walls), then sections filling left-then-right — E1-E4 and
+  // two section seats hold empty screens until their views exist. Cards
   // are managed imperatively — outside the component render — and each
   // screen is painted by the SAME generator that draws the full-size view,
   // so a thumbnail is always a true miniature. Repaints only when the model
@@ -5495,6 +5502,9 @@ class Component extends DCLogic {
     // keeps its seat, so every view stays one tap away.
     const outer = document.querySelector('[data-view-rail-outer]');
     if (outer) outer.style.display = this.state.rightRailOpen ? 'none' : '';
+    // The 3D screen stands top-left; the open toolbox covers it.
+    const left = document.querySelector('[data-view-rail-left]');
+    if (left) left.style.display = this.state.leftRailOpen ? 'none' : '';
   }
 
   // The seating chart: paired rows across the two columns.
@@ -5524,26 +5534,41 @@ class Component extends DCLogic {
       },
       paint: (ctx, w, h) => this._drawPlanThumb2D(ctx, w, h, level.id, viewId || 'plan'),
     };
+    // An empty seat: a dark screen holding the chair for a view that does
+    // not exist yet, so the wall always shows the full seating chart.
+    const emptyCard = (key, label, title) => ({
+      key: `empty:${key}`, label, title, empty: true,
+      active: false, onClick: null, paint: () => {},
+    });
     const push = (a, b) => { if (a) inner.push(a); if (b) outer.push(b); };
     const byId = id => this.state.levels.find(level => level.id === id);
     const elevs = this._autoElevationCuts();
-    push(cutCard(elevs[0]), cutCard(elevs[2]));
-    push(cutCard(elevs[1]), cutCard(elevs[3]));
-    push(planCard(byId(8), null, 'SITE PLAN'), planCard(byId(7), null, 'ROOF PLAN'));
+    const elevCard = (i, id) => cutCard(elevs[i]) || emptyCard(id,
+      `${id} · ${this._elevationName(id)}`,
+      `${id} — this elevation cuts itself when the house builds`);
+    push(elevCard(0, 'E1'), elevCard(2, 'E3'));
+    push(elevCard(1, 'E2'), elevCard(3, 'E4'));
+    push(planCard(byId(7), null, 'ROOF PLAN'), planCard(byId(8), null, 'SITE PLAN'));
     this.state.levels.forEach(level => {
       const views = layerViewsForLevelId(level.id);
       if (!views.length) return;
       if (views.some(view => view.id === 'foundation')) {
-        push(planCard(level, 'plan', 'BASEMENT (WALLS)'),
-             planCard(level, 'foundation', 'FOUNDATION'));
+        push(planCard(level, 'foundation', 'FOUNDATION'),
+             planCard(level, 'plan', 'BASEMENT (WALLS)'));
       } else {
         push(planCard(level, 'plan', `${level.name} PLAN (WALLS)`),
              planCard(level, 'floor', `${level.name} LAYOUT (FLOOR)`));
       }
     });
-    // Sections start on the next row, left cell first, filling across.
-    this.state.cuts.forEach(cut => {
-      (inner.length <= outer.length ? inner : outer).push(cutCard(cut));
+    // Sections start on the next row, left cell first, filling across —
+    // two seats stand ready even before the drafter cuts anything.
+    const sections = this.state.cuts.map(cutCard);
+    for (let n = sections.length; n < 2; n += 1) {
+      sections.push(emptyCard(`S${n + 1}`, `S${n + 1}`,
+        `S${n + 1} — cut a section to fill this screen`));
+    }
+    sections.forEach(card => {
+      (inner.length <= outer.length ? inner : outer).push(card);
     });
     return { inner, outer };
   }
@@ -5566,7 +5591,8 @@ class Component extends DCLogic {
         label.className = 'view-thumb-label';
         card.appendChild(label);
       }
-      card.onclick = spec.onClick;
+      card.onclick = spec.onClick || null;
+      card.classList.toggle('empty', Boolean(spec.empty));
       // Keep the column in seating order even when views come and go.
       if (box.children[i] !== card) box.insertBefore(card, box.children[i] || null);
       card.title = spec.title;
@@ -20239,5 +20265,7 @@ class Component extends DCLogic {
   }
 }
 </script>
+  <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
+  <script src="./traffic-counter.js" defer></script>
 </body>
 </html>
