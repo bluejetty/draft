@@ -20,6 +20,10 @@
   <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
        critical path of the page. -->
   <link rel="stylesheet" href="vendor/fonts.css" />
+  <!-- Landscape on every working screen (board #310): in portrait on a
+       touch device this covers the page until the tablet is turned. ENTRY
+       is the one screen that does not load it. -->
+  <script src="orientation-guard.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
