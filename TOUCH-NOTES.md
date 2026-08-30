@@ -103,3 +103,30 @@ the next thing to fix, and there are two ways to go:
 
 Recommend 2 now and 1 when the gesture board comes up; they do not conflict.
 That call is Devon's, not mine, which is why this is a note and not a commit.
+
+## Since this was written — what has been closed
+
+This file is a snapshot of the pointer-migration board and is left as one: the
+findings above are what a finger could and could not do at that moment, and the
+recommendation at the end was acted on. Three boards have run since, and the
+closing paragraph would otherwise stand as a false statement of where things
+are. What is no longer true:
+
+- **"It cannot navigate the drawing."** Board #304 built option 2 — the
+  on-screen ZOOM IN / ZOOM OUT / FIT cluster and the HAND toggle. The gesture
+  board then built option 1 — two-finger pan and pinch. As recommended, both,
+  and they did not conflict: a second TOUCH pointer on the canvas promotes to a
+  gesture and discards the pending run, which is the only place the
+  first-pointer-wins policy had to be renegotiated. A mouse never joins one.
+- **"Ending a chain" needs a keyboard.** #304 added the FINISH control, live
+  only while there is a run to finish. The double-tap still works.
+- **Exact entry needed a keyboard.** Board #311 added tappable direction rays
+  and an on-screen length pad feeding the same ruler the desk types into, so a
+  complete exact outline can be drawn by finger. Sticky RULER mode is skipped
+  on a coarse pointer there — on a tablet the rays are the sticky loop.
+- **Portrait.** Board #310: the working screens hold landscape behind an
+  interstitial, ENTRY follows the device.
+
+Still open from the list above, unchanged: **UNDO is keyboard-only** (its own
+board), Escape has the same problem, and the hover-gated flows — polar dwell,
+magnet highlights, `title` tooltips — are still hover-gated.
