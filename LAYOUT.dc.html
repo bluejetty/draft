@@ -138,7 +138,10 @@
 
   <!-- CANVAS AREA -->
   <div style="flex:1; position:relative; overflow:hidden; background:#c8c8c8;" data-layout-container>
-    <canvas data-layout-canvas style="display:block; width:100%; height:100%; outline:none; cursor:{{ canvasCursor }};"></canvas>
+    <!-- touch-action:none ONLY on the sheet (audit C2): a finger dragging a
+         viewport must not be taken by the browser as page scroll. The panels
+         and the scale list around it still scroll by touch. -->
+    <canvas data-layout-canvas style="display:block; width:100%; height:100%; outline:none; cursor:{{ canvasCursor }}; touch-action:none;"></canvas>
   </div>
 
 </div>
@@ -230,10 +233,22 @@ class Component extends DCLogic {
 
     this._canvas.addEventListener('wheel',      this._whl = (e) => this._onWheel(e), { passive: false });
 
-    // Pan / viewport place + drag
-    this._canvas.addEventListener('mousedown',  this._mdn = (e) => this._onMouseDown(e));
-    window.addEventListener('mousemove',        this._wmmv = (e) => this._onMouseMove(e));
-    window.addEventListener('mouseup',          this._mup  = () => this._onMouseUp());
+    // Pan / viewport place + drag, through POINTER events (audit C2) — the
+    // same door the Model Space uses, so a finger can place a viewport and
+    // drag it around the sheet. `wheel` above stays as it is: there is no
+    // pointer equivalent, and pinch-zoom is a later board.
+    this._canvas.addEventListener('pointerdown',   this._mdn = (e) => {
+      if (this._claimPointer(e)) this._onMouseDown(e);
+    });
+    this._canvas.addEventListener('pointercancel', this._pcl = (e) => this._abandonPointer(e));
+    window.addEventListener('pointermove',      this._wmmv = (e) => { if (this._ownsPointer(e)) this._onMouseMove(e); });
+    window.addEventListener('pointerup',        this._mup  = (e) => {
+      if (!this._ownsPointer(e)) return;
+      // Release first: _onMouseUp has early returns, and a pointer id left
+      // claimed locks the sheet out of every later gesture.
+      this._releasePointer(e);
+      this._onMouseUp();
+    });
     window.addEventListener('keydown',          this._kdn = (e) => this._onKeyDown(e));
   }
 
@@ -444,10 +459,11 @@ class Component extends DCLogic {
     const c = this._canvas;
     if (c) {
       c.removeEventListener('wheel', this._whl);
-      c.removeEventListener('mousedown', this._mdn);
+      c.removeEventListener('pointerdown', this._mdn);
+      c.removeEventListener('pointercancel', this._pcl);
     }
-    window.removeEventListener('mousemove', this._wmmv);
-    window.removeEventListener('mouseup', this._mup);
+    window.removeEventListener('pointermove', this._wmmv);
+    window.removeEventListener('pointerup', this._mup);
     window.removeEventListener('keydown', this._kdn);
   }
 
@@ -679,6 +695,38 @@ class Component extends DCLogic {
         && ptIn.yIn >= r.yIn && ptIn.yIn <= r.yIn + r.hIn) return list[i];
     }
     return null;
+  }
+
+  // ─── One pointer at a time (audit C2) ────────────────────────────────────
+  // Mirrors the Model Space: the sheet takes the FIRST pointer down and
+  // ignores the rest until it lifts, and captures it so a viewport dragged
+  // past the edge of the canvas still gets its moves and its up.
+  _ownsPointer(e) {
+    return this._activePointerId == null || this._activePointerId === e.pointerId;
+  }
+
+  _claimPointer(e) {
+    if (this._activePointerId != null && this._activePointerId !== e.pointerId) return false;
+    this._activePointerId = e.pointerId;
+    try { this._canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+    return true;
+  }
+
+  _releasePointer(e) {
+    if (this._activePointerId !== e.pointerId) return;
+    this._activePointerId = null;
+    try { this._canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+  }
+
+  // A cancelled pointer never sends an up. Free the claim and drop the
+  // in-flight gesture WITHOUT committing it — the drag did not finish, it was
+  // taken away.
+  _abandonPointer(e) {
+    if (!this._ownsPointer(e)) return;
+    this._releasePointer(e);
+    this._panning = false;
+    this._draggingViewport = null;
+    this._draw();
   }
 
   _onMouseDown(e) {
