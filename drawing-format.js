@@ -6,7 +6,12 @@ if (!window.DraftDrawingFormat) {
   // Bump when the stored shape changes; loads of any other version are refused.
   const VERSION = 1;
 
-  const num = value => (Number.isFinite(Number(value)) ? Number(value) : null);
+  // A REAL number, nothing coerced. `Number(value)` turned null, '', [], false
+  // and whitespace all into 0, so a coordinate that was missing or damaged did
+  // not fail — it quietly became the origin, and the entity loaded in the wrong
+  // place with nothing to show for it. A coordinate we cannot read now rejects
+  // its entity into `skipped`, which the load message reports.
+  const num = value => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 
   const oneOf = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
   const positive = (value, fallback) => {
@@ -244,7 +249,10 @@ if (!window.DraftDrawingFormat) {
         pitch: Math.min(24, Math.max(0, number(roof?.pitch, 4))),
         fascia: 5.5,
         garage: roof?.garage === true,
-        plateHeightFt: Number.isFinite(Number(roof?.plateHeightFt)) ? Number(roof.plateHeightFt) : null,
+        // A real number or nothing: `Number(null)` is 0, and a stored null
+        // read as a plate height of ZERO bears a garage roof at the main
+        // floor line instead of on its wall stack.
+        plateHeightFt: num(roof?.plateHeightFt),
         layer: 'A-ROOF',
       };
     }).filter(Boolean);
@@ -529,14 +537,18 @@ if (!window.DraftDrawingFormat) {
         if (!parsed) return null;
         const srcId = String(raw?.srcId || '').trim();
         const bulge = Number(raw?.bulge);
-        const offX = Number(raw?.offX);
-        const offZ = Number(raw?.offZ);
         return {
           ...parsed,
           srcId: srcId || null,
+          // A bulge we cannot read is a straight edge, which is the safe
+          // reading — 0 is the value, not a stand-in for a missing one.
           bulge: Number.isFinite(bulge) ? bulge : 0,
-          offX: Number.isFinite(offX) ? offX : null,
-          offZ: Number.isFinite(offZ) ? offZ : null,
+          // An offset is not like that: null means "none stored, derive it
+          // from where the point sits", and 0 means "explicitly on top of
+          // the master". `Number(null)` is 0, so an unreadable offset used
+          // to pin an overridden point onto its master and move geometry.
+          offX: num(raw?.offX),
+          offZ: num(raw?.offZ),
         };
       }).filter(Boolean);
       if (outlineLevelId == null || points.length < 3) return null;
@@ -674,14 +686,16 @@ if (!window.DraftDrawingFormat) {
 
   const zoneHeights = raw => {
     const zones = raw && typeof raw.zones === 'object' && raw.zones ? raw.zones : {};
-    const offset = value => (Number.isFinite(Number(value)) ? Number(value) : 0);
+    // Real numbers only, here as everywhere else: `Number(null)` is 0, and a
+    // zone offset that reads 0 instead of "not set" moves a drawn line.
+    const offset = value => num(value) ?? 0;
     return {
       // GRADE LEVEL: the drawn grade line, stored relative to the TOP OF THE
       // FOUNDATION WALL. Defaults a deliberate 1'-0" below — the drawn grade
       // is the conservative LOW case and the site crew fills up to it, which
       // leaves fill to play with for drainage. Old saves carry no value and
       // land here.
-      gradeOffsetFt: Number.isFinite(Number(raw?.gradeOffsetFt)) ? Number(raw.gradeOffsetFt) : -1,
+      gradeOffsetFt: num(raw?.gradeOffsetFt) ?? -1,
       zones: {
         attachedGarage: { offsetFt: offset(zones.attachedGarage?.offsetFt) },
         // The detached garage DERIVES from grade until overridden — null
