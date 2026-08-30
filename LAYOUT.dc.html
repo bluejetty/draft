@@ -138,13 +138,20 @@
 
   <!-- CANVAS AREA -->
   <div style="flex:1; position:relative; overflow:hidden; background:#c8c8c8;" data-layout-container>
-    <canvas data-layout-canvas style="display:block; width:100%; height:100%; outline:none; cursor:{{ canvasCursor }};"></canvas>
+    <!-- touch-action:none ONLY on the sheet (audit C2): a finger dragging a
+         viewport must not be taken by the browser as page scroll. The panels
+         and the scale list around it still scroll by touch. -->
+    <canvas data-layout-canvas style="display:block; width:100%; height:100%; outline:none; cursor:{{ canvasCursor }}; touch-action:none;"></canvas>
   </div>
 
 </div>
 
 <!-- STATUS BAR -->
 <div style="height:28px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em; color:rgba(29,31,32,0.55); background:#fff; flex-shrink:0; user-select:none;">
+  <!-- A failed sheet save has to be visible. It used to be a console.warn:
+       the drafter kept placing viewports onto a sheet that was not being
+       written anywhere. Same readout the Model Space carries. -->
+  <span data-layout-status style="{{ statusStyle }}">{{ statusLabel }}</span>
   <div style="flex:1;"></div>
   <span>{{ paperLabel }}  ·  {{ scaleLabel }}</span>
   <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT, and the logo
@@ -199,6 +206,8 @@ class Component extends DCLogic {
     profileFileName: '',
     profileDialogMessage: '',
     profileDialogError: false,
+    persistenceStatus: 'SAVED',  // 'SAVED' | 'UNSAVED' — the sheet on disk
+    persistenceError: '',
   };
 
   componentDidMount() {
@@ -230,10 +239,22 @@ class Component extends DCLogic {
 
     this._canvas.addEventListener('wheel',      this._whl = (e) => this._onWheel(e), { passive: false });
 
-    // Pan / viewport place + drag
-    this._canvas.addEventListener('mousedown',  this._mdn = (e) => this._onMouseDown(e));
-    window.addEventListener('mousemove',        this._wmmv = (e) => this._onMouseMove(e));
-    window.addEventListener('mouseup',          this._mup  = () => this._onMouseUp());
+    // Pan / viewport place + drag, through POINTER events (audit C2) — the
+    // same door the Model Space uses, so a finger can place a viewport and
+    // drag it around the sheet. `wheel` above stays as it is: there is no
+    // pointer equivalent, and pinch-zoom is a later board.
+    this._canvas.addEventListener('pointerdown',   this._mdn = (e) => {
+      if (this._claimPointer(e)) this._onMouseDown(e);
+    });
+    this._canvas.addEventListener('pointercancel', this._pcl = (e) => this._abandonPointer(e));
+    window.addEventListener('pointermove',      this._wmmv = (e) => { if (this._ownsPointer(e)) this._onMouseMove(e); });
+    window.addEventListener('pointerup',        this._mup  = (e) => {
+      if (!this._ownsPointer(e)) return;
+      // Release first: _onMouseUp has early returns, and a pointer id left
+      // claimed locks the sheet out of every later gesture.
+      this._releasePointer(e);
+      this._onMouseUp();
+    });
     window.addEventListener('keydown',          this._kdn = (e) => this._onKeyDown(e));
   }
 
@@ -314,11 +335,9 @@ class Component extends DCLogic {
     return { xIn: viewport.xIn - wIn / 2, yIn: viewport.yIn - hIn / 2, wIn, hIn };
   }
 
-  // Write the sheet back onto the saved drawing — additive: only `layout`
-  // changes, everything the Model Space owns rides through untouched.
-  _persistLayout() {
-    if (!this._saved || !window.SharedFileStore) return;
-    this._saved.layout = {
+  // The sheet as this page owns it — the ONLY key this page may write.
+  _layoutKey() {
+    return {
       paperKey: this.state.paperKey,
       orientation: this.state.orientation,
       titleblock: this.state.titleblock,
@@ -326,14 +345,57 @@ class Component extends DCLogic {
       viewports: this.state.viewports,
       nextViewportId: this.state.nextViewportId,
     };
-    const file = new File([JSON.stringify(this._saved)], 'model-drawing.json', { type: 'application/json' });
+  }
+
+  // Write the sheet back onto the saved drawing — additive, and now genuinely
+  // so. It used to write `this._saved`: the whole drawing as this page read it
+  // at load, with `layout` replaced. Every OTHER key in that object was a
+  // snapshot, so a house drawn in the Model Space while a LAYOUT tab sat open
+  // was erased the moment a viewport moved — the walls, the roof, all of it,
+  // silently reverted to what the sheet happened to have loaded.
+  //
+  // So: re-read the stored file inside the save queue, put our `layout` onto
+  // whatever is actually there now, and write it guarded by the revision we
+  // just read. If the Model Space saved in between, the write is refused and
+  // we go round again against the newer file rather than flattening it.
+  _persistLayout() {
+    if (!this._drawingChecked || !window.SharedFileStore) return;
+    document.body.dataset.layoutSaveDirty = '1';
+    this.setState({ persistenceStatus: 'UNSAVED', persistenceError: '' });
     this._saveQueue = (this._saveQueue || Promise.resolve())
       .catch(() => {})
-      .then(() => window.SharedFileStore.saveSharedFile(file, MODEL_STORAGE_BUCKET))
+      .then(() => this._writeLayoutToStore())
       .then(() => {
+        document.body.dataset.layoutSaveDirty = '0';
         document.body.dataset.layoutSaveSeq = String(Number(document.body.dataset.layoutSaveSeq || 0) + 1);
+        this.setState({ persistenceStatus: 'SAVED', persistenceError: '' });
       })
-      .catch(error => console.warn('Unable to save the layout:', error));
+      .catch(error => {
+        console.warn('Unable to save the layout:', error);
+        this.setState({ persistenceStatus: 'UNSAVED', persistenceError: 'Save failed' });
+      });
+  }
+
+  async _writeLayoutToStore(triesLeft = 3) {
+    const store = window.SharedFileStore;
+    const at = await store.loadSharedFileAt(MODEL_STORAGE_BUCKET);
+    let base = null;
+    if (at.file) {
+      try { base = JSON.parse(await at.file.text()); } catch { base = null; }
+    }
+    // Nothing readable in the bucket: fall back to the copy this page loaded,
+    // and if there is not one either there is no drawing to put a sheet on.
+    if (!base || typeof base !== 'object') base = this._saved;
+    if (!base) return;
+    const merged = { ...base, layout: this._layoutKey() };
+    const file = new File([JSON.stringify(merged)], 'model-drawing.json', { type: 'application/json' });
+    try {
+      await store.saveSharedFile(file, MODEL_STORAGE_BUCKET, { ifRev: at.rev });
+    } catch (error) {
+      if (!error?.stale || triesLeft <= 0) throw error;
+      return this._writeLayoutToStore(triesLeft - 1);
+    }
+    this._saved = merged;
   }
 
   // ─── Personal settings and company standards packages ───────────────────────
@@ -444,10 +506,11 @@ class Component extends DCLogic {
     const c = this._canvas;
     if (c) {
       c.removeEventListener('wheel', this._whl);
-      c.removeEventListener('mousedown', this._mdn);
+      c.removeEventListener('pointerdown', this._mdn);
+      c.removeEventListener('pointercancel', this._pcl);
     }
-    window.removeEventListener('mousemove', this._wmmv);
-    window.removeEventListener('mouseup', this._mup);
+    window.removeEventListener('pointermove', this._wmmv);
+    window.removeEventListener('pointerup', this._mup);
     window.removeEventListener('keydown', this._kdn);
   }
 
@@ -681,6 +744,38 @@ class Component extends DCLogic {
     return null;
   }
 
+  // ─── One pointer at a time (audit C2) ────────────────────────────────────
+  // Mirrors the Model Space: the sheet takes the FIRST pointer down and
+  // ignores the rest until it lifts, and captures it so a viewport dragged
+  // past the edge of the canvas still gets its moves and its up.
+  _ownsPointer(e) {
+    return this._activePointerId == null || this._activePointerId === e.pointerId;
+  }
+
+  _claimPointer(e) {
+    if (this._activePointerId != null && this._activePointerId !== e.pointerId) return false;
+    this._activePointerId = e.pointerId;
+    try { this._canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+    return true;
+  }
+
+  _releasePointer(e) {
+    if (this._activePointerId !== e.pointerId) return;
+    this._activePointerId = null;
+    try { this._canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+  }
+
+  // A cancelled pointer never sends an up. Free the claim and drop the
+  // in-flight gesture WITHOUT committing it — the drag did not finish, it was
+  // taken away.
+  _abandonPointer(e) {
+    if (!this._ownsPointer(e)) return;
+    this._releasePointer(e);
+    this._panning = false;
+    this._draggingViewport = null;
+    this._draw();
+  }
+
   _onMouseDown(e) {
     if (e.button === 1 || (e.button === 0 && e.altKey)) { // middle click or alt+left pans
       this._panning = true;
@@ -896,6 +991,10 @@ class Component extends DCLogic {
       profileDialogMessageColor: this.state.profileDialogError ? '#b04050' : '#557a46',
       paperLabel: `${pw}" × ${ph}"`,
       scaleLabel: SCALES[activeScale].label,
+      statusLabel: this.state.persistenceError
+        ? `${this.state.persistenceStatus} — ${this.state.persistenceError}`
+        : this.state.persistenceStatus,
+      statusStyle: this.state.persistenceError ? 'color:#b04050; font-weight:600;' : '',
       canvasCursor: this._panning || this._draggingViewport ? 'grabbing' : (addingViewport ? 'crosshair' : 'default'),
     };
   }

@@ -54,20 +54,20 @@ test.describe('Standard E1-E4 elevations', () => {
 
     // E1's cut line runs along the bottom of the model area (larger z in
     // world terms) with the viewer standing south of it. The marks stand
-    // outside the outermost dimension string on their side, half the first
-    // offset further out — clear of the strings, unlike the tucked S marks.
+    // 2' outside the outermost dimension string on their side (board #263)
+    // — clear of the strings, unlike the tucked S marks.
     const saved = await h.savedDrawing(page);
     const dimS = Math.max(...saved.dimensions.flatMap(d => [d.start.z, d.end.z]));
     const dimE = Math.max(...saved.dimensions.flatMap(d => [d.start.x, d.end.x]));
     expect(dimS).toBeGreaterThan(6);
     expect(dimE).toBeGreaterThan(8);
 
-    const south = await h.worldToClient(page, 0, dimS + 0.75);
-    const pixels = await h.overlayPixels(page, south.x, south.y, 20);
+    const south = await h.worldToClient(page, 0, dimS + 2);
+    const pixels = await h.overlayPixels(page, south.x, south.y, 8);
     expect(h.countColor(pixels, CUT_RED)).toBeGreaterThan(0);
 
-    const east = await h.worldToClient(page, dimE + 0.75, 0);
-    const eastPixels = await h.overlayPixels(page, east.x, east.y, 20);
+    const east = await h.worldToClient(page, dimE + 2, 0);
+    const eastPixels = await h.overlayPixels(page, east.x, east.y, 8);
     expect(h.countColor(eastPixels, CUT_RED)).toBeGreaterThan(0);
 
     // And the old tucked spot inside the strings is clear of cut ink now.

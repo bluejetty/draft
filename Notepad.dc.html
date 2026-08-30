@@ -26,9 +26,11 @@
       placeholder="{{ placeholder }}"
       style="width:100%; height:{{ textareaHeight }}; min-height:60px; max-height:400px; resize:none; border:none; outline:none; padding:28px 14px 14px; font-family:inherit; font-size:13px; box-sizing:border-box; display:block;"
     ></textarea>
+    <!-- One handler for mouse, finger and pen (audit C2): onPointerDown
+         replaces the onMouseDown + onTouchStart pair this used to carry.
+         touch-action:none was already right and stays. -->
     <div
-      onMouseDown="{{ onDragHandleDown }}"
-      onTouchStart="{{ onDragHandleDown }}"
+      onPointerDown="{{ onDragHandleDown }}"
       style="position:absolute; left:0; right:0; bottom:0; height:8px; cursor:row-resize; touch-action:none;"
     ></div>
   </div>
@@ -46,26 +48,36 @@ class Component extends DCLogic {
     if (saved !== null) this.setState({ text: saved });
   }
 
+  // Resize drag on one path (audit C2). This used to run two: mouse listeners
+  // and touch listeners side by side, each digging the y out of a different
+  // shape (`ev.touches[0].clientY` or `ev.clientY`). A pointer event carries
+  // clientY whatever moved it, so mouse, finger and pen share one handler and
+  // there is no second path to keep in step.
   onDragHandleDown = (e) => {
     e.preventDefault();
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const startY = clientY;
+    const startY = e.clientY;
     const startHeight = this.textareaRef.current ? this.textareaRef.current.offsetHeight : 100;
+    const handle = e.currentTarget;
+    const pointerId = e.pointerId;
+    // Capture, so a drag that runs off the pad — or off the screen edge on an
+    // iPad — keeps resizing instead of stopping dead.
+    try { handle.setPointerCapture(pointerId); } catch { /* pointer already gone */ }
     const onMove = (ev) => {
-      const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
-      const h = Math.max(60, Math.min(400, startHeight + (y - startY)));
-      this.setState({ height: h });
+      if (ev.pointerId !== pointerId) return;
+      this.setState({ height: Math.max(60, Math.min(400, startHeight + (ev.clientY - startY))) });
     };
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onUp);
+    // pointercancel as well as pointerup: a gesture the browser takes away
+    // never sends an up, and these listeners would outlive the drag.
+    const onUp = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      try { handle.releasePointerCapture(pointerId); } catch { /* already released */ }
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    window.addEventListener('touchmove', onMove, { passive: false });
-    window.addEventListener('touchend', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   };
 
   onChange = (e) => {

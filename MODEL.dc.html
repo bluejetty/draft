@@ -21,6 +21,7 @@
 <script src="./tour.js"></script>
 <script src="./bone-wallet.js"></script>
 <script src="./auto-stair.js"></script>
+<script src="./room-grow.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
      would otherwise run here and be mounted again by the helmet runtime. -->
@@ -114,6 +115,98 @@
     .tool-key { position:relative; aspect-ratio:1 / 1; min-width:0; border:1px solid; padding:2px 1px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; font-family:'Barlow Condensed',system-ui,sans-serif; text-transform:uppercase; }
     .tool-key-letter { position:absolute; top:2px; left:3px; font-weight:700; line-height:1; }
     .tool-key-name { max-width:100%; font-size:6.5px; font-weight:600; letter-spacing:0.03em; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    /* View-navigation keys (#304). The visual stays strip-sized; the HIT AREA
+       is grown to a finger with padding and pulled back out of the layout with
+       a matching negative margin, so the 34px strip is unchanged on a desk and
+       a thumb still lands on the button. Same trick everywhere below. */
+    .nav-key { display:inline-flex; align-items:center; justify-content:center; box-sizing:content-box;
+      min-width:32px; height:20px; padding:12px 6px; margin:0; border:1px solid rgba(29,31,32,0.2);
+      background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px;
+      font-weight:700; letter-spacing:0.06em; line-height:1; cursor:pointer; }
+    .nav-key:hover { border-color:#5980a6; color:#365e86; }
+    [data-view-nav] .nav-key { box-shadow:0 1px 5px rgba(29,31,32,0.16); }
+    .nav-key-wide { min-width:36px; }
+    /* Touch targets (#304) — see the measured audit in
+       tests/touch-targets.spec.js. touch-action:manipulation drops the 300ms
+       double-tap delay a browser otherwise holds every tap for. */
+    .tool-key, .rail-tab, .nav-key, .strip-chip,
+    .level-row .level-name, .level-row .level-body,
+    [data-tour-popup], [data-tour-next], [data-tour-chip] { touch-action:manipulation; }
+    /* Hit areas grown to a finger (#304). The pattern is padding out, negative
+       margin back, so the LOOK is untouched and the layout does not move —
+       only the rectangle that answers a tap gets bigger. Measured, not
+       guessed: tests/touch-targets.spec.js holds the numbers and names the
+       few that cannot reach 44 without stealing a neighbour's taps. */
+    /* The rail pull-tabs are NOT widened. They sit flush against the screen
+       edge and run the full height of the canvas, so a finger cannot overshoot
+       them outward — a 33px edge handle is easy to hit in a way a 33px button
+       in open space is not. Widening them also eats drawing area and covers
+       canvas a spec clicks on, which is how this came back. */
+    /* The bottom-right nav links grow VERTICALLY only. Widening them pushed
+       the strip's right-hand group left until it sat on top of the centred
+       instrument cluster and swallowed the chips' hovers — the strip at desk
+       width has exactly enough room for the #259 design plus the controls,
+       and not a pixel more. The same three destinations are reachable from
+       the roomier PROJECT corner and the top bar, so this is the cheap half
+       of that trade. Pulling back horizontally is also what made the links
+       overlap each other, costing the logo the true corner.
+       The bottom-LEFT PROJECT link has room, so it grows both ways. */
+    [data-nav-cluster] a, [data-project-corner-bl] { padding:12px 10px !important;
+      margin:-12px 0; box-sizing:content-box; }
+    [data-areas-open], [data-unit-toggle] button { padding-top:16px !important; padding-bottom:16px !important;
+      margin-top:-16px; margin-bottom:-16px; box-sizing:content-box; }
+    /* The instrument chips grow VERTICALLY only. Widening them closes the
+       10px gap between chips, and once the boxes touch, a press near an edge
+       can land on the neighbour — bottom-strip.spec.js catches it as a hover
+       that never reaches the chip it aimed at. 15px wide is the honest limit
+       here; the chips that matter (compass, ruler, T-square) are also on the
+       keyboard. */
+    .strip-chip { padding:15px 0; margin:-15px 0; box-sizing:content-box; }
+    /* Level cards are a vertical list with nowhere to overlap, so these grow
+       for real rather than borrowing space from a neighbour. */
+    .level-row .level-name { padding:6px 4px; }
+    .level-row .level-body { min-height:44px; }
+    /* The strip degrades in a stated ORDER (#304), and ONLY below desk width:
+       the full design — cluster dead-centre, three dormant chips each side —
+       is what board #259 drew and what bottom-strip.spec.js pins, so nothing
+       here fires until the screen is genuinely tablet-sized.
+       It used to simply run out of
+       room and let its pieces overlap; now the least important things go first
+       and the controls are the last to be touched, so a drafter never loses a
+       button to a narrow screen:
+         1) the dormant decorative instruments — they do nothing but look good,
+         2) the background-reference read-out, then the tool hint,
+         3) the tool-name read-out (already dropped at 760).
+       The ruler, LENGTH box, T-square, protractor and compass survive, and so
+       do FINISH, the view keys and the nav cluster, all the way down. */
+    @media (max-width: 1200px) {
+      [data-mode-frenchcurve], [data-mode-shield] { display:none !important; }
+      [data-model-background-status] { display:none !important; }
+    }
+    @media (max-width: 1100px) {
+      [data-mode-brush], [data-mode-scale] { display:none !important; }
+      [data-strip-hint] { display:none !important; }
+    }
+    @media (max-width: 900px) {
+      [data-mode-triangle] { display:none !important; }
+    }
+    /* The instrument cluster is absolutely centred, which is right when there
+       is room and wrong when there is not: it sat ON TOP of the strip's
+       controls and swallowed their taps. Below this width it rejoins the flex
+       row and simply takes its turn, so nothing is ever covered. */
+    @media (max-width: 1200px) {
+      [data-strip-center] { position:static !important; transform:none !important; padding:0 !important; }
+    }
+    /* Palette push (#304): at iPad width an open left rail ate the drawing, so
+       the rails condense. The keypad goes to THREE columns as they do — a
+       narrower rail with 4 columns shrinks every tool key to about 29px, which
+       is half a fingertip. Three columns in a 150px rail lands each key back
+       near the 44px target. The grid look is kept; only its count changes. */
+    @media (max-width: 1100px) {
+      [data-model-left] { width:162px !important; }
+      [data-model-right] { width:162px !important; }
+      .tool-keypad { grid-template-columns:repeat(3, 1fr) !important; }
+    }
     @media (max-width: 760px) {
       [data-model-left] { width:160px !important; }
       [data-model-right] { width:160px !important; }
@@ -1218,8 +1311,32 @@
 
   <!-- CANVAS AREA -->
   <div style="flex:1; position:relative; overflow:hidden;" data-model-container>
-    <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:none;"></canvas>
+    <!-- touch-action:none ONLY here (audit C2): the browser must not claim a
+         finger drag on the drawing surface as page scroll or pinch-zoom. It is
+         deliberately not set on the container, the rails or any panel — those
+         still scroll by touch, which is how an iPad reaches the tool list. -->
+    <canvas data-model-canvas style="display:block; width:100%; height:100%; outline:none; cursor:none; touch-action:none;"></canvas>
     <canvas data-model-overlay style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
+
+    <!-- VIEW NAVIGATION (#304). It lives on the CANVAS, not the instrument
+         strip, and that is a measured decision rather than a preference: at
+         desk width the strip has room for the board #259 design — the
+         instrument cluster dead-centre with three dormant chips a side — and
+         the nav cluster, and nothing else. Adding these there put them on top
+         of the chips and swallowed their taps, or shrank everything below a
+         fingertip. The work order allowed a corner instead, so they take one.
+         Bottom-left, clear of the rail pull-tab, hugging the strip: it is the
+         quietest 44px of canvas there is, and it is where a thumb already
+         rests when the tablet is held. -->
+    <div data-view-nav style="position:absolute; left:52px; bottom:8px; z-index:4; display:flex; align-items:center; gap:4px;">
+      <sc-if value="{{ chainActive }}" hint-placeholder-val="{{ false }}">
+        <button data-finish-chain class="nav-key nav-key-wide" onClick="{{ onFinishChain }}" title="Finish this run — the same commit as Enter" style="border-color:#557a46; background:#557a46; color:#fff; margin-right:6px;">FINISH</button>
+      </sc-if>
+      <button data-zoom-out class="nav-key" onClick="{{ onZoomOut }}" title="Zoom out — one wheel notch" aria-label="Zoom out">&#8722;</button>
+      <button data-zoom-in class="nav-key" onClick="{{ onZoomIn }}" title="Zoom in — one wheel notch" aria-label="Zoom in">&#43;</button>
+      <button data-zoom-fit class="nav-key nav-key-wide" onClick="{{ onZoomFit }}" title="FIT — frame everything drawn on this level" aria-label="Fit drawing to screen">FIT</button>
+      <button data-hand-toggle class="nav-key nav-key-wide" onClick="{{ onToggleHand }}" title="{{ handChipTitle }}" aria-pressed="{{ handPressed }}" style="border-color:{{ handKeyBorder }}; background:{{ handKeyBg }}; color:{{ handKeyColor }};">HAND</button>
+    </div>
     <button type="button" class="rail-tab rail-tab-left" data-left-rail-tab onClick="{{ onToggleLeftRail }}" title="{{ leftRailTabTitle }}">ROUGHDRAFTER - LITE - DRAFTING TOOLS</button>
     <button type="button" class="rail-tab rail-tab-right" data-right-rail-tab onClick="{{ onToggleRightRail }}" title="{{ rightRailTabTitle }}">LEVELS - LAYERS</button>
     <!-- VIEW GALLERIES (boards #265 / #291): a two-column wall of little
@@ -1406,7 +1523,7 @@
        reference, and the drawing message. -->
   <span data-model-title-detail style="font-size:12px; font-weight:600; text-transform:uppercase; color:{{ topBarColor }}; flex-shrink:0;">{{ topBarLabel }}</span>
   <sc-if value="{{ showHint }}" hint-placeholder-val="{{ false }}">
-    <span style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:24vw;">{{ hintText }}</span>
+    <span data-strip-hint style="font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:{{ hintColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:24vw;">{{ hintText }}</span>
   </sc-if>
   <sc-if value="{{ backgroundEngaged }}" hint-placeholder-val="{{ false }}">
     <span data-model-background-status style="font-size:11px; color:{{ backgroundStatusColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:18vw;">{{ backgroundStatus }}</span>
@@ -1526,6 +1643,12 @@
       </svg>
     </button>
   </div>
+  <!-- NAVIGATE THE DRAWING (#304). Zoom was the wheel only and pan was
+       middle-drag or alt-drag, so on a touchscreen a drafter could draw and
+       then never move the view. These sit on the strip, so they never cover
+       the drawing, and they are reachable by thumb at the bottom of the
+       screen. They work with a mouse too — a desk feature that happens to
+       save the tablet. -->
   <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT, and the logo
        walks back out to the main page. The current page wears the dark face. -->
   <div data-nav-cluster style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
@@ -1558,6 +1681,12 @@ const ORTHO_LOCK_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'shape', '
 // Arming a polar origin takes a deliberate pause on the node — a drive-by
 // hover on the way across the board never plants a ruler zero.
 const POLAR_DWELL_MS = 350;
+// FIT breathing room (#304): frame the drawing at 112% of its own extents so
+// the outermost wall is not welded to the edge of the screen.
+const FIT_MARGIN = 1.12;
+// The smallest comfortable finger target. Apple and Google both land near
+// this; the chrome below grows its HIT AREA to it without changing the look.
+const TOUCH_TARGET_PX = 44;
 // Polar-origin activation effect: the node pulses orange and shoots hairline
 // direction rays that hold for a second, then fade out over another.
 const POLAR_FX_HOLD_MS = 1000;
@@ -1662,6 +1791,22 @@ const normaliseLevelAssembly = raw => {
 };
 const MODEL_STORAGE_BUCKET = 'model-drawing';
 
+// Every drawing collection whose items belong to a LEVEL, in one place: what
+// `_deleteLevel` takes with the level, and the list a new level-owned
+// collection has to join. If an item of yours carries a `levelId`, its array
+// belongs here.
+const LEVEL_OWNED_COLLECTIONS = [
+  '_lines', '_walls', '_floors', '_shapes', '_roofs', '_outlines',
+  '_surfaceOpenings', '_dimensions', '_columns', '_beams',
+  '_fenestrations', '_fixtures', '_stairs', '_notes', '_roomTags',
+  // Underlays are level-owned by the format's own rule — `underlays(raw,
+  // levelIds)` refuses one whose level is not in the set — so a deleted
+  // level used to leave its traced PDF or photo behind, pointing at a level
+  // that is gone, and the next load reported it as an item the drawing lost.
+  // Their binaries live in their own bucket and go with them; see below.
+  '_underlays',
+];
+
 // Architectural length formatting/parsing lives in formatters.js — pure
 // functions, shared here under their original names so call sites are
 // untouched.
@@ -1727,6 +1872,21 @@ const ROOF_LAYER = 'A-ROOF';
 // cozy spot the standard elevations use. This is the least the line extends
 // past the drawn ends when there are no walls to measure against.
 const CUT_BUBBLE_PUSH_FT = 6;
+// The standard elevation marks stand this far outside the outermost dimension
+// string on their side (board #263). Each mark's grab handle can slide it
+// along its own axis, and the chosen clearance saves with the drawing.
+const E_MARK_CLEAR_FT = 2;
+const E_MARK_CLEAR_MIN_FT = 0.5;
+const E_MARK_CLEAR_MAX_FT = 60;
+const clampEMarkClear = value => Math.min(E_MARK_CLEAR_MAX_FT, Math.max(E_MARK_CLEAR_MIN_FT, value));
+// Which way each mark's axis runs: E1 south of the plan, E2 west, E3 north,
+// E4 east — `sign * (coordinate - dim edge)` reads the mark's clearance.
+const E_MARK_SIDES = {
+  E1: { side: 'S', axis: 'z', sign: 1 },
+  E2: { side: 'W', axis: 'x', sign: -1 },
+  E3: { side: 'N', axis: 'z', sign: -1 },
+  E4: { side: 'E', axis: 'x', sign: 1 },
+};
 // Structural point supports and spans, placed manually in either order —
 // columns centre onto a beam line and beam ends snap to columns, so they line
 // up whichever is placed first. A beam is one span between two supports:
@@ -2034,6 +2194,16 @@ const normaliseSavedElevationNames = value => {
     .map(id => [id, stored[id].trim().toUpperCase()]));
 };
 
+// Per-drawing clearances for the standard elevation marks — how far outside
+// the outermost dimension string each of E1-E4 stands. Only real numbers
+// survive, clamped to the working band; anything missing means the default.
+const normaliseSavedElevationMarkOffsets = value => {
+  const stored = value && typeof value === 'object' ? value : {};
+  return Object.fromEntries(['E1', 'E2', 'E3', 'E4']
+    .filter(id => typeof stored[id] === 'number' && Number.isFinite(stored[id]))
+    .map(id => [id, clampEMarkClear(stored[id])]));
+};
+
 // Undo keeps whole serialized drawings, so it is bounded by count and by size.
 const HISTORY_LIMIT = 60;
 const HISTORY_MAX_CHARS = 8000000;
@@ -2189,9 +2359,13 @@ class Component extends DCLogic {
     boneWallet: { balance: 0, nextDripMs: null }, // the free-bone gauge (board #261)
     walletSound: true,         // the bone-crunch on spend; personal SETTINGS
     suggestStairs: true,       // board #260: the tour and the bone OFFER stair placements
+    roomGrow: true,            // boards #275/#276: stamps preview + grow rooms on the bone
     compassOn: false,          // polar tracking instrument — down by default; P picks it up
+    handOn: false,             // HAND (#304): engaged, a plain drag pans and tools are suspended
+    chainActive: false,        // a run is open (#304) — the FINISH control shows only then
     cuts:          [],
     elevationNames: {},         // per-drawing side names for E1-E4 (FRONT/LEFT...), defaults from COMPANY STANDARDS
+    elevationMarkOffsets: {},   // per-drawing E1-E4 clearances from the outermost dim string (ft), default E_MARK_CLEAR_FT
     nextCutId:     1,
     activeCutId:   null,
     cutPhase:      'idle',     // 'idle'|'placing'|'choosing'
@@ -2375,6 +2549,7 @@ class Component extends DCLogic {
         baseHeight: wall.baseHeight,
         topHeight: wall.topHeight,
         refLine: wall.refLine,
+        ...(wall.auto === true ? { auto: true } : {}),
       })),
       floors: this._floors.map(floor => ({
         id: floor.id,
@@ -2531,6 +2706,8 @@ class Component extends DCLogic {
         areaSqFt: tag.areaSqFt,
         stamped: tag.stamped === true,
         ...(tag.stamped === true && tag.base ? { base: tag.base } : {}),
+        ...(tag.stamped === true && Number.isInteger(tag.claimedNo) && tag.claimedNo > 0
+          ? { claimedNo: tag.claimedNo } : {}),
         ...(tag.stamped === true && tag.companionOf != null
           ? { companionOf: tag.companionOf } : {}),
         underMin: tag.underMin === true,
@@ -2598,6 +2775,7 @@ class Component extends DCLogic {
       roofPitch: this.state.roofPitch,
       elevationDatum: this.state.elevationDatum,
       elevationNames: { ...this.state.elevationNames },
+      elevationMarkOffsets: { ...this.state.elevationMarkOffsets },
       cuts: this.state.cuts.map(cut => ({
         id: cut.id,
         name: cut.name,
@@ -3210,18 +3388,37 @@ class Component extends DCLogic {
     });
   }
 
+  // What a load dropped, in the drafter's words. TWO different things, and
+  // reporting them as one is how a genuinely damaged file goes unnoticed
+  // among routine leftovers:
+  //   incomplete — we could not read the item. Something is wrong with the
+  //     FILE, and that is worth flagging as an error.
+  //   a level that is gone — the item is fine; the level it belonged to is
+  //     not in the drawing. Routine after a level delete (and older builds of
+  //     this app left these behind), or an import from another drawing.
+  _loadReport(outcome) {
+    const skipped = outcome.ok ? (outcome.skipped || 0) : 0;
+    const orphaned = outcome.ok ? (outcome.orphaned || 0) : 0;
+    const clauses = [];
+    if (skipped) {
+      clauses.push(`${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded`);
+    }
+    if (orphaned) {
+      clauses.push(`${orphaned} ${orphaned === 1 ? 'item' : 'items'} belonged to a level that is no longer in the drawing and ${orphaned === 1 ? 'was' : 'were'} dropped`);
+    }
+    return clauses.join('; ');
+  }
+
   async _importDrawingFile(file) {
     if (!file) return;
     const result = await this._loadDrawing(file);
     if (result.ok) {
       this._markUnsaved();
       this._fileDirty = false;
-      const skipped = result.skipped || 0;
+      const report = this._loadReport(result);
       this.setState({
-        drawingMessage: skipped
-          ? `${file.name} imported — ${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded.`
-          : `${file.name} imported.`,
-        drawingMessageError: skipped > 0,
+        drawingMessage: report ? `${file.name} imported — ${report}.` : `${file.name} imported.`,
+        drawingMessageError: (result.skipped || 0) > 0,
       });
     }
   }
@@ -3239,6 +3436,7 @@ class Component extends DCLogic {
           walletSound: this.state.walletSound,
           boneReveal: this.state.boneReveal,
           suggestStairs: this.state.suggestStairs,
+          roomGrow: this.state.roomGrow,
           buildIntroOff: this.state.buildIntroOff,
           garageIntroOff: this.state.garageIntroOff,
           perfIntroOff: this.state.perfIntroOff,
@@ -3278,6 +3476,7 @@ class Component extends DCLogic {
         ...(typeof values.walletSound === 'boolean' ? { walletSound: values.walletSound } : {}),
         ...(typeof values.boneReveal === 'boolean' ? { boneReveal: values.boneReveal } : {}),
         ...(typeof values.suggestStairs === 'boolean' ? { suggestStairs: values.suggestStairs } : {}),
+        ...(typeof values.roomGrow === 'boolean' ? { roomGrow: values.roomGrow } : {}),
         ...(typeof values.buildIntroOff === 'boolean' ? { buildIntroOff: values.buildIntroOff } : {}),
         ...(typeof values.garageIntroOff === 'boolean' ? { garageIntroOff: values.garageIntroOff } : {}),
         ...(typeof values.perfIntroOff === 'boolean' ? { perfIntroOff: values.perfIntroOff } : {}),
@@ -3454,7 +3653,7 @@ class Component extends DCLogic {
     const targets = { main: 3, 'rooms-main': 3, second: 5, 'rooms-second': 5, roof: 7 };
     const messages = {
       main: 'MAIN FLOOR — PLACE STAIRS first: they cut the opening for every floor above and can shift the beam below. Walls and rooms are free-form after that.',
-      'rooms-main': 'STAMP THE ROOMS — tap a name in the tray, then tap the plan. BEDROOM brings its ENSUITE and WALK-IN along. NEXT ▲ when done, or skip straight past.',
+      'rooms-main': 'STAMP THE ROOMS — tap a name in the tray, then tap the plan. BEDROOM 1 is the primary suite (ENSUITE + WALK-IN come along); plain BEDROOMs bring a closet. NEXT ▲ when done, or skip straight past.',
       second: '2ND FLOOR — stairs stack over the run below: start them in the opening. Then walls, and this floor’s rooms next.',
       'rooms-second': 'STAMP THE 2ND FLOOR ROOMS — tap a name, then tap the plan. NEXT ▲ heads to the ROOF whenever you are ready.',
       roof: 'ROOF — the dashed footprint is live: drag an edge OUT for overhang, click an edge to flip EAVE / GABLE, or arm GABLE to place one. ROOF DONE when it reads right.',
@@ -4481,6 +4680,39 @@ class Component extends DCLogic {
         ...boneyardShelves.map(shelf => shelf.id + 1),
       );
       const ownerLevelIds = new Set([...levelIds, ...boneyardShelves.map(shelf => -shelf.id)]);
+      // Two different things get dropped at load, and telling a drafter they
+      // are the same thing is how a damaged file goes unnoticed:
+      //
+      //   ORPHANS — an item whose level is gone. Nothing is wrong with the
+      //   item; its level was deleted by a build of this app that did not take
+      //   every collection with it. Expected, harmless, and now cleaned up on
+      //   load.
+      //   DAMAGE — an item we could not read: a missing coordinate, a
+      //   nonsense id. Something is wrong with the FILE, and it is worth
+      //   saying so plainly.
+      //
+      // An orphan is recognisable from the stored record alone. The two
+      // totals are counted SEPARATELY, from the same records — never one
+      // minus the other. Subtracting them let a file's orphans cancel its
+      // damage: two cuts on a level that is gone plus one wall with an
+      // unreadable coordinate reported as "2 items belonged to a level that
+      // is no longer in the drawing" and no damage at all, which is the
+      // silence this distinction exists to break.
+      const isOrphan = item => item && item.levelId !== undefined && item.levelId !== null
+        && !ownerLevelIds.has(Number(migrateLevelId(item.levelId)));
+      const orphansIn = raw => (Array.isArray(raw) ? raw : []).filter(isOrphan).length;
+      // `cuts` is NOT on this list: a cut whose level is unknown is KEPT,
+      // with its levelId nulled ("Cuts predating explicit ownership keep a
+      // null levelId"), so it is not an orphan that was dropped — counting
+      // it said two items went away that are still in the drawing.
+      const orphaned = ['dimensions', 'lines', 'walls', 'floors', 'shapes',
+        'roofs', 'outlines', 'surfaceOpenings', 'columns', 'beams', 'stairs',
+        'fenestrations', 'fixtures', 'notes', 'roomTags', 'underlays']
+        .reduce((count, key) => count + orphansIn(saved[key]), 0);
+      // What a collection rejected BEYOND its orphans is damage: something in
+      // the file we could not read.
+      const damaged = (raw, keptLength) =>
+        Math.max(0, (Array.isArray(raw) ? raw.length : 0) - keptLength - orphansIn(raw));
       const storedCuts = Array.isArray(saved.cuts)
         ? saved.cuts.map(cut => ({ ...cut, levelId: migrateLevelId(cut?.levelId) }))
         : saved.cuts;
@@ -4490,7 +4722,7 @@ class Component extends DCLogic {
         ? saved.dimensions.map(dimension => ({ ...dimension, levelId: migrateLevelId(dimension?.levelId) }))
         : saved.dimensions;
       const dimensions = format.dimensions(storedDimensions, ownerLevelIds);
-      skipped += (Array.isArray(saved.dimensions) ? saved.dimensions.length : 0) - dimensions.length;
+      skipped += damaged(saved.dimensions, dimensions.length);
       const nextDimensionId = Math.max(
         1,
         ...dimensions.map(dimension => dimension.id + 1),
@@ -4531,6 +4763,7 @@ class Component extends DCLogic {
         roofPitch: clampRoofPitch(format.number(saved.roofPitch, DEFAULT_ROOF_PITCH)),
         elevationDatum: format.number(saved.elevationDatum, 0) === 100 ? 100 : 0,
         elevationNames: normaliseSavedElevationNames(saved.elevationNames),
+        elevationMarkOffsets: normaliseSavedElevationMarkOffsets(saved.elevationMarkOffsets),
         roofDimensionError: '',
         cuts,
         nextCutId,
@@ -4573,6 +4806,11 @@ class Component extends DCLogic {
         const end = format.point(segment?.end);
         const levelId = format.levelId(migrateLevelId(segment?.levelId), ownerLevelIds);
         if (!start || !end || levelId == null) return null;
+        // A segment with no length is not geometry: it has no direction, so it
+        // cannot be drawn, dimensioned, offset or joined, and it sits invisible
+        // in the drawing catching selections. Reject it into `skipped` rather
+        // than load it.
+        if (Math.hypot(end.x - start.x, end.z - start.z) < 1e-6) return null;
         return {
            id: this._storedItemId(segment?.id, type, usedIds),
           start: restoreVertex(start, levelId, extra.view, extra.body),
@@ -4593,7 +4831,7 @@ class Component extends DCLogic {
             });
           }).filter(Boolean)
         : [];
-      skipped += (Array.isArray(saved.lines) ? saved.lines.length : 0) - this._lines.length;
+      skipped += damaged(saved.lines, this._lines.length);
       this._walls = Array.isArray(saved.walls)
          ? saved.walls.map(wall => restoreSegment(wall, 'wall', {
           view: wall?.view === 'foundation' ? 'foundation' : 'plan',
@@ -4603,9 +4841,12 @@ class Component extends DCLogic {
           baseHeight: format.number(wall.baseHeight, 0),
           topHeight: format.number(wall.topHeight, DEFAULT_WALL_TOP_FT),
           refLine: format.oneOf(wall.refLine, REF_LINES, 'left'),
+          // #275: grown interior walls stay auto until the drafter
+          // touches them — regeneration replaces only still-tagged walls.
+          ...(wall?.auto === true ? { auto: true } : {}),
         })).filter(Boolean)
         : [];
-      skipped += (Array.isArray(saved.walls) ? saved.walls.length : 0) - this._walls.length;
+      skipped += damaged(saved.walls, this._walls.length);
       this._floors = Array.isArray(saved.floors)
         ? saved.floors.map(floor => {
           const levelId = format.levelId(migrateLevelId(floor?.levelId), ownerLevelIds);
@@ -4625,19 +4866,19 @@ class Component extends DCLogic {
           };
         }).filter(Boolean)
         : [];
-      skipped += (Array.isArray(saved.floors) ? saved.floors.length : 0) - this._floors.length;
+      skipped += damaged(saved.floors, this._floors.length);
       this._shapes = format.shapes(saved.shapes, ownerLevelIds).map(shape => ({
         ...shape,
         id: this._storedItemId(shape.id, 'shape', usedIds),
         points: shape.points.map(point => this._mergeVertex(point, shape.levelId, 'shape')),
       }));
-      skipped += (Array.isArray(saved.shapes) ? saved.shapes.length : 0) - this._shapes.length;
+      skipped += damaged(saved.shapes, this._shapes.length);
       this._roofs = format.roofs(saved.roofs, ownerLevelIds).map(roof => ({
         ...roof,
         id: this._storedItemId(roof.id, 'roof', usedIds),
         points: roof.points.map(point => restoreVertex(point, roof.levelId, 'roof')),
       }));
-      skipped += (Array.isArray(saved.roofs) ? saved.roofs.length : 0) - this._roofs.length;
+      skipped += damaged(saved.roofs, this._roofs.length);
       const wallsById = new Map(this._walls.map(wall => [wall.id, wall]));
       this._fenestrations = format.fenestrations(saved.fenestrations, ownerLevelIds).map(opening => {
         const wall = wallsById.get(opening.wallId);
@@ -4650,7 +4891,7 @@ class Component extends DCLogic {
           offset: clamped.offset,
         };
       }).filter(Boolean);
-      skipped += (Array.isArray(saved.fenestrations) ? saved.fenestrations.length : 0) - this._fenestrations.length;
+      skipped += damaged(saved.fenestrations, this._fenestrations.length);
       // Fixtures restore after walls so both host references resolve: the back
       // wall must exist on the fixture's level, and a tub's faucet-end wall too.
       this._fixtures = format.fixtures(saved.fixtures, ownerLevelIds).map(fixture => {
@@ -4665,7 +4906,7 @@ class Component extends DCLogic {
           id: this._storedItemId(fixture.id, 'fixture', usedIds),
         };
       }).filter(Boolean);
-      skipped += (Array.isArray(saved.fixtures) ? saved.fixtures.length : 0) - this._fixtures.length;
+      skipped += damaged(saved.fixtures, this._fixtures.length);
       const floorIds = new Set(this._floors.map(floor => floor.id));
       const roofIds = new Set(this._roofs.map(roof => roof.id));
       this._surfaceOpenings = format.surfaceOpenings(saved.surfaceOpenings, ownerLevelIds).map(opening => {
@@ -4677,7 +4918,7 @@ class Component extends DCLogic {
           points: opening.points.map(point => this._mergeVertex(point, opening.levelId, 'opening')),
         };
       }).filter(Boolean);
-      skipped += (Array.isArray(saved.surfaceOpenings) ? saved.surfaceOpenings.length : 0) - this._surfaceOpenings.length;
+      skipped += damaged(saved.surfaceOpenings, this._surfaceOpenings.length);
       const levelsById = new Map(levels.map(level => [level.id, level]));
       // Dimension ends restore their master-point link like pooled vertices,
       // so auto strings keep riding footprint edits after a reload.
@@ -4703,7 +4944,7 @@ class Component extends DCLogic {
         ? saved.columns.map(column => ({ ...column, levelId: migrateLevelId(column?.levelId) }))
         : saved.columns;
       const columns = format.columns(storedColumns, ownerLevelIds);
-      skipped += (Array.isArray(saved.columns) ? saved.columns.length : 0) - columns.length;
+      skipped += damaged(saved.columns, columns.length);
       // Corner-linked auto structure (board #244) restores its link the same
       // way dimension ends do, so a snapped beam keeps riding the jog corner
       // across reloads.
@@ -4723,7 +4964,7 @@ class Component extends DCLogic {
         ? saved.beams.map(beam => ({ ...beam, levelId: migrateLevelId(beam?.levelId) }))
         : saved.beams;
       const beams = format.beams(storedBeams, ownerLevelIds);
-      skipped += (Array.isArray(saved.beams) ? saved.beams.length : 0) - beams.length;
+      skipped += damaged(saved.beams, beams.length);
       this._beams = beams.map(beam => {
         const elevation = levelsById.get(beam.levelId)?.elev ?? 0;
         return {
@@ -4742,7 +4983,7 @@ class Component extends DCLogic {
         ? saved.stairs.map(stair => ({ ...stair, levelId: migrateLevelId(stair?.levelId) }))
         : saved.stairs;
       const stairs = format.stairs(storedStairs, ownerLevelIds);
-      skipped += (Array.isArray(saved.stairs) ? saved.stairs.length : 0) - stairs.length;
+      skipped += damaged(saved.stairs, stairs.length);
       this._stairs = stairs.map(stair => {
         const elevation = levelsById.get(stair.levelId)?.elev ?? 0;
         return {
@@ -4761,7 +5002,7 @@ class Component extends DCLogic {
         ? saved.notes.map(note => ({ ...note, levelId: migrateLevelId(note?.levelId) }))
         : saved.notes;
       const notes = format.notes(storedNotes, ownerLevelIds);
-      skipped += (Array.isArray(saved.notes) ? saved.notes.length : 0) - notes.length;
+      skipped += damaged(saved.notes, notes.length);
       // STAIR-view notes keep pane-local coordinates; plan-view notes live in
       // world space at their level's elevation like every other plan entity.
       this._notes = notes.map(note => {
@@ -4784,7 +5025,7 @@ class Component extends DCLogic {
         ? saved.roomTags.map(tag => ({ ...tag, levelId: migrateLevelId(tag?.levelId) }))
         : saved.roomTags;
       const roomTags = format.roomTags(storedRoomTags, ownerLevelIds);
-      skipped += (Array.isArray(saved.roomTags) ? saved.roomTags.length : 0) - roomTags.length;
+      skipped += damaged(saved.roomTags, roomTags.length);
       this._roomTags = roomTags.map(tag => ({
         ...tag,
         at: new THREE.Vector3(tag.at.x, levelsById.get(tag.levelId)?.elev ?? 0, tag.at.z),
@@ -4798,7 +5039,7 @@ class Component extends DCLogic {
         ? saved.underlays.map(underlay => ({ ...underlay, levelId: migrateLevelId(underlay?.levelId) }))
         : saved.underlays;
       this._underlays = format.underlays(storedUnderlays, ownerLevelIds);
-      skipped += (Array.isArray(saved.underlays) ? saved.underlays.length : 0) - this._underlays.length;
+      skipped += damaged(saved.underlays, this._underlays.length);
       this._underlayImages = new Map();
       this._loadUnderlayImages();
       // Outlines restore as isolated points — they never join the shared
@@ -4902,7 +5143,7 @@ class Component extends DCLogic {
            } : null,
          };
        }).filter(Boolean) : [];
-       skipped += (Array.isArray(saved.groups) ? saved.groups.length : 0) - this._groups.length;
+       skipped += damaged(saved.groups, this._groups.length);
        const numericGroupIds = this._groups
          .map(group => Number(String(group.id).replace(/^group-/, '')))
          .filter(Number.isInteger);
@@ -4921,7 +5162,7 @@ class Component extends DCLogic {
       // invisible/stale sections behind in 3D or accumulate duplicates.
       this._clearCutObjects();
       cuts.forEach(cut => this._restoreCutObjects(cut));
-      return { ok: true, reason: 'loaded', skipped: Math.max(0, skipped) };
+      return { ok: true, reason: 'loaded', orphaned, skipped: Math.max(0, skipped) };
   }
 
   // Returns { ok, reason }. A load that cannot be understood leaves the current
@@ -4934,7 +5175,15 @@ class Component extends DCLogic {
     let outcome = { ok: false, reason: 'empty' };
     try {
       if (!importedFile && !window.SharedFileStore) return outcome;
-      const file = importedFile || await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET);
+      let file = importedFile;
+      if (!file) {
+        // The revision comes back with the file: it is what the next save
+        // hands to `ifRev`, so a write that would land on top of the LAYOUT
+        // page's is refused and merged instead of clobbering it.
+        const at = await window.SharedFileStore.loadSharedFileAt(MODEL_STORAGE_BUCKET);
+        file = at.file;
+        this._storeRev = at.rev;
+      }
       if (!file) return outcome;
       const raw = await file.text();
       let saved = null;
@@ -4962,10 +5211,9 @@ class Component extends DCLogic {
       const failed = !outcome.ok && outcome.reason !== 'empty';
       const source = importedFile ? 'import' : 'store';
       const skipped = outcome.ok ? (outcome.skipped || 0) : 0;
+      const report = this._loadReport(outcome);
       const message = !failed
-        ? (skipped && !importedFile
-          ? `Saved drawing loaded — ${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded.`
-          : '')
+        ? (report && !importedFile ? `Saved drawing loaded — ${report}.` : '')
         : outcome.reason === 'version'
           ? (source === 'import'
             ? 'Import failed — this file was made by a newer version of Draft. Nothing was changed.'
@@ -5091,6 +5339,38 @@ class Component extends DCLogic {
     return true;
   }
 
+  // Write the drawing to the shared bucket, guarded by the revision we last
+  // saw there. If someone else wrote in between — in practice the LAYOUT page
+  // saving a sheet, since it holds a whole copy of this same file — the write
+  // is REFUSED rather than applied, and we merge instead of clobbering: every
+  // key in this file is the Model Space's own and our copy is the current one,
+  // except `layout`, which is LAYOUT's. So we take theirs and write again.
+  //
+  // (`_saveGeneration` is a per-tab ordering guard — it decides which of THIS
+  // tab's in-flight writes gets to clear the dirty flag. It never knew about
+  // anyone else's writes; this is what does.)
+  async _writeDrawingToStore(file, triesLeft = 3) {
+    const store = window.SharedFileStore;
+    try {
+      this._storeRev = await store.saveSharedFile(file, MODEL_STORAGE_BUCKET, {
+        ifRev: Number.isInteger(this._storeRev) ? this._storeRev : null,
+      });
+      return;
+    } catch (error) {
+      if (!error?.stale || triesLeft <= 0) throw error;
+    }
+    const at = await store.loadSharedFileAt(MODEL_STORAGE_BUCKET);
+    this._storeRev = at.rev;
+    if (at.file) {
+      try {
+        const stored = JSON.parse(await at.file.text());
+        if (stored && typeof stored.layout === 'object') this._layoutData = stored.layout;
+      } catch { /* unreadable — our own copy is the better one to keep */ }
+    }
+    // Rebuilt so the sheet we just took rides out with it.
+    return this._writeDrawingToStore(this._drawingFile(), triesLeft - 1);
+  }
+
   _markUnsaved() {
     if (this._loadingDrawing || !this._drawingReady) return;
     this._recordHistory();
@@ -5107,7 +5387,7 @@ class Component extends DCLogic {
     const file = this._drawingFile();
     this._saveQueue = (this._saveQueue || Promise.resolve())
       .catch(() => {})
-      .then(() => window.SharedFileStore.saveSharedFile(file, MODEL_STORAGE_BUCKET))
+      .then(() => this._writeDrawingToStore(file))
       .then(() => {
         if (generation === this._saveGeneration) {
           document.body.dataset.saveSeq = String(generation);
@@ -5134,15 +5414,16 @@ class Component extends DCLogic {
     if (this._renderer) this._renderer.dispose();
     const c = this._canvas;
     if (c) {
-      c.removeEventListener('mousemove',   this._cmmv);
-      c.removeEventListener('mousedown',   this._cmdn);
-      c.removeEventListener('dblclick',    this._cdbl);
-      c.removeEventListener('contextmenu', this._cctx);
-      c.removeEventListener('wheel',       this._cwhl);
-      c.removeEventListener('mouseleave',  this._cmle);
+      c.removeEventListener('pointermove',   this._cmmv);
+      c.removeEventListener('pointerdown',   this._cmdn);
+      c.removeEventListener('pointercancel', this._cpcl);
+      c.removeEventListener('dblclick',      this._cdbl);
+      c.removeEventListener('contextmenu',   this._cctx);
+      c.removeEventListener('wheel',         this._cwhl);
+      c.removeEventListener('pointerleave',  this._cmle);
     }
-    window.removeEventListener('mousemove', this._wmmv);
-    window.removeEventListener('mouseup',   this._wmup);
+    window.removeEventListener('pointermove', this._wmmv);
+    window.removeEventListener('pointerup',   this._wmup);
     window.removeEventListener('keydown',   this._onKey);
     window.removeEventListener('keydown',   this._onKdn);
     window.removeEventListener('keydown',   this._onCtrlDown);
@@ -5325,6 +5606,11 @@ class Component extends DCLogic {
     // re-suggests for the rest of the session (fresh document = fresh offer).
     this._stairSuggestionDeclined = false;
 
+    // Boards #275: partition edges the drafter deleted stay ungrown for
+    // the session; the preview plan memo lives beside it.
+    this._declinedGrowEdges = new Set();
+    this._roomGrowCache = null;
+
     // Surface-opening drawing state — a free-form hole in a floor or roof.
     this._surfaceOpeningDrawing = false;
     this._surfaceOpeningPoints  = [];
@@ -5347,6 +5633,7 @@ class Component extends DCLogic {
     this._outlineArcDrag = null;       // { outline, index, startX, startY, active } — outline segment arc drag
     this._selectDownInfo = null;       // { worldPt, clientX, clientY, shiftHeld } — pending click
     this._fixtureDrag    = null;       // { fixture, startX, startY, active } — fixture slide along its wall
+    this._eMarkDrag      = null;       // { id, axis, sign, base, startX, startY, active } — E-mark clearance slide (board #263)
     this._fixtureRunStart = null;      // { wallId, along, side } — first click of a cabinet / vanity run
     this._tubPending     = null;       // { wallId, along, side } — tub back wall, waiting on the faucet-end wall
     this._lastClient     = null;       // { x, y } — last cursor position for cursor-side notices
@@ -5387,20 +5674,62 @@ class Component extends DCLogic {
     this._cutHoverSide = null;
     this._panning2D  = false;
     this._snapPt     = null;
+    // The pointer currently drawing, and whether it is over the canvas — see
+    // _claimPointer / _leaveCanvasOnce.
+    this._activePointerId = null;
+    this._insideCanvas    = false;
 
     // 2D overlay canvas (for crisp line + node rendering)
     this._overlayCanvas = document.querySelector('[data-model-overlay]');
     this._overlayCtx = this._overlayCanvas ? this._overlayCanvas.getContext('2d') : null;
 
     // Events
-    canvas.addEventListener('mousemove',   this._cmmv = e => { this._invalidate(); this._onMouseMove(e); });
-    canvas.addEventListener('mousedown',   this._cmdn = e => { this._invalidate(); this._ctrlTapPending = false; this._onMouseDown(e); });
-    canvas.addEventListener('dblclick',    this._cdbl = e => { this._invalidate(); this._onDblClick(e); });
+    // Events. ONE DOOR for mouse, finger and Apple Pencil (audit C2): the app's
+    // stated target is an iPad at the permit counter, and until this board a
+    // finger could not draw a wall — every canvas listener was mouse-only.
+    //
+    // Three listeners stay as they were, on purpose: `wheel` has no pointer
+    // equivalent; `dblclick` has none either (a pointer stream carries no
+    // notion of a double tap, and the browser still synthesises dblclick from
+    // mouse input); and `contextmenu` is wanted as-is, because a long press on
+    // iPad fires it.
+    canvas.addEventListener('pointermove', this._cmmv = e => {
+      if (!this._ownsPointer(e)) return;
+      // A captured pointer keeps delivering moves that happen OUTSIDE the
+      // canvas. Plain mousemove stopped at the canvas edge, so the bounds test
+      // keeps the crosshair and the in-progress rubber band behaving exactly as
+      // they did on a desk — and fires the leave that capture swallowed.
+      if (!this._pointerOverCanvas(e)) { this._leaveCanvasOnce(); return; }
+      this._insideCanvas = true;
+      this._invalidate();
+      this._onMouseMove(e);
+    });
+    canvas.addEventListener('pointerdown', this._cmdn = e => {
+      if (!this._claimPointer(e)) return;
+      // A finger and a Pencil have NO HOVER. A mouse arrives at a point by
+      // moving there, and the move handler is what computes the snapped
+      // cursor (`_snapPt`) the drawing tools then commit; a tap arrives out of
+      // nowhere, so without this the press read a cursor from wherever the
+      // pointer last was — on the first tap of a session, nowhere at all, and
+      // the tap drew nothing. This is the line that lets a finger draw.
+      //
+      // Mouse is deliberately excluded: it has already hovered, its cursor is
+      // current, and not touching that path is what keeps the desk identical.
+      if (e.pointerType !== 'mouse') { this._insideCanvas = true; this._onMouseMove(e); }
+      this._invalidate(); this._ctrlTapPending = false; this._onMouseDown(e);
+      this._syncChainActive();
+    });
+    canvas.addEventListener('pointercancel', this._cpcl = e => this._abandonPointer(e));
+    canvas.addEventListener('dblclick',    this._cdbl = e => { this._invalidate(); this._onDblClick(e); this._syncChainActive(); });
     canvas.addEventListener('contextmenu', this._cctx = e => { e.preventDefault(); this._invalidate(); this._onRightClick(); });
     canvas.addEventListener('wheel',       this._cwhl = e => { this._invalidate(); this._ctrlTapPending = false; this._onWheel(e); }, { passive: false });
-    canvas.addEventListener('mouseleave',  this._cmle = () => { this._invalidate(); this._onMouseLeave(); });
-    window.addEventListener('mousemove',   this._wmmv = e => { this._invalidate(); this._onGlobalMouseMove(e); });
-    window.addEventListener('mouseup',     this._wmup = e => {
+    canvas.addEventListener('pointerleave', this._cmle = e => { if (this._ownsPointer(e)) this._leaveCanvasOnce(); });
+    window.addEventListener('pointermove', this._wmmv = e => { if (!this._ownsPointer(e)) return; this._invalidate(); this._onGlobalMouseMove(e); });
+    window.addEventListener('pointerup',   this._wmup = e => {
+      if (!this._ownsPointer(e)) return;
+      // Free the pointer FIRST: several branches below return early, and a
+      // pointer id left claimed locks the canvas out of every later gesture.
+      this._releasePointer(e);
       this._invalidate();
       if (this._tourRoofDrag) this._endTourRoofDrag();
       this._panning2D = false;
@@ -5409,6 +5738,7 @@ class Component extends DCLogic {
       const oad  = this._outlineArcDrag;
       const fd   = this._fixtureDrag;
       const td   = this._roomTagDrag;
+      const ed   = this._eMarkDrag;
       const info = this._selectDownInfo;
       const windowSelection = this._windowSelection;
       this._selectDrag     = null;
@@ -5416,10 +5746,12 @@ class Component extends DCLogic {
       this._outlineArcDrag = null;
       this._fixtureDrag    = null;
       this._roomTagDrag    = null;
+      this._eMarkDrag      = null;
       this._selectDownInfo = null;
       this._windowSelection = null;
       if (ad?.active) this._markUnsaved();
       if (fd?.active) this._markUnsaved();
+      if (ed) { if (ed.active) this._markUnsaved(); return; }
       // A room-tag press resolves on its own (board #198): travelled →
       // the move claims/promotes the tag; still → the rename editor opens.
       if (td) {
@@ -5742,6 +6074,12 @@ class Component extends DCLogic {
     return this.state.lengthFrozen ? this._frozenEnd : this._snapPt;
   }
 
+  // DELIBERATE (drafter's ruling, audit Q6 — do NOT "fix"): the overlay
+  // renders at 1x CSS pixels, NOT window.devicePixelRatio. This canvas
+  // repaints on every cursor/finger move; staying 1x means 4x less repaint
+  // work on Retina-class screens (iPad, 4K). Eye-tested on the actual iPad:
+  // no visible degradation. Retina-scaling this canvas quadruples the
+  // hottest repaint bill in the app for sharpness nobody noticed missing.
   _redrawOverlay() {
     const ctx = this._overlayCtx, oc = this._overlayCanvas;
     if (!ctx || !oc || !this._canvas) return;
@@ -6504,6 +6842,7 @@ class Component extends DCLogic {
     // The OUTLINE guide paints last so it sits on top of all other linework.
     this._drawOutlines2D(ctx, toS);
     this._drawTourRoof2D(ctx, toS);
+    this._drawRoomGrow2D(ctx, toS);
   }
 
   // The OUTLINE guide never prints — it is drafting scaffolding, not linework.
@@ -7641,6 +7980,28 @@ class Component extends DCLogic {
     ctx.fillStyle = '#b04060';
     [...this._autoElevationCuts(), ...this.state.cuts].forEach(bubbleMark);
 
+    // Each standard elevation mark wears a grab handle at mid-line under the
+    // SELECT tool (board #263): press-and-drag slides the mark along its own
+    // axis so the drafter picks the clearance when the default looks odd.
+    this._eMarkHandleHits = [];
+    if (!this._isPrinting && this.state.activeTool === 'select' && this.state.activeView === 'top') {
+      this._autoElevationCuts().forEach(cut => {
+        const mid = toS({
+          x: (cut.startPt.x + cut.endPt.x) / 2,
+          y: cut.elev + 0.02,
+          z: (cut.startPt.z + cut.endPt.z) / 2,
+        });
+        const r = 5;
+        ctx.beginPath();
+        ctx.moveTo(mid.x, mid.y - r); ctx.lineTo(mid.x + r, mid.y);
+        ctx.lineTo(mid.x, mid.y + r); ctx.lineTo(mid.x - r, mid.y);
+        ctx.closePath();
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.stroke();
+        this._eMarkHandleHits.push({ id: cut.id, x: mid.x, y: mid.y });
+      });
+    }
+
     const phase = this.state.cutPhase;
     if (phase !== 'idle' && this._cutStart3) {
       const y = (this._drawElev || 0) + 0.05;
@@ -8028,18 +8389,14 @@ class Component extends DCLogic {
     return { start: along(tMin), end: along(tMax) };
   }
 
-  // The four standard elevations place themselves just outside the plan
-  // extents: E1 along the bottom looking up into the model, E2 left looking
-  // right, E3 top looking down, E4 right looking left. Like hand-placed
-  // cuts, dirVec points to the side the viewer stands on. Each side's mark
-  // stands clear of the drawing ink: past the outermost dimension string in
-  // its corridor (any level), then the usual half-gap further out.
-  _autoElevationCuts() {
-    if (!this._autoElevationsOn()) return [];
+  // The outermost dimension string in each side's corridor (any level) — the
+  // reference line the standard elevation marks measure their clearance from.
+  // With no dimensions on a side, the plan's own wall extents stand in.
+  _eMarkDimEdges() {
     const box = this._planWallExtents();
-    if (!box) return [];
+    if (!box) return null;
     const { minX, maxX, minZ, maxZ } = box;
-    const off = this._cutMarkGapFt(), pad = 2;
+    const pad = 2;
     const edge = { N: minZ, S: maxZ, W: minX, E: maxX };
     this._dimensions.filter(dimension => dimension.levelId > 0).forEach(dimension => {
       [dimension.start, dimension.end].forEach(pt => {
@@ -8053,15 +8410,39 @@ class Component extends DCLogic {
         }
       });
     });
+    return edge;
+  }
+
+  // How far outside the outermost dimension string a standard elevation mark
+  // stands: the drafter's dragged clearance if its handle has moved, else 2'.
+  _eMarkClearFt(id) {
+    const stored = this.state.elevationMarkOffsets[id];
+    return Number.isFinite(stored) ? stored : E_MARK_CLEAR_FT;
+  }
+
+  // The four standard elevations place themselves just outside the plan
+  // extents: E1 along the bottom looking up into the model, E2 left looking
+  // right, E3 top looking down, E4 right looking left. Like hand-placed
+  // cuts, dirVec points to the side the viewer stands on. Each side's mark
+  // stands clear of the drawing ink: 2' past the outermost dimension string
+  // in its corridor (any level), or wherever its grab handle was dragged.
+  _autoElevationCuts() {
+    if (!this._autoElevationsOn()) return [];
+    const box = this._planWallExtents();
+    if (!box) return [];
+    const edge = this._eMarkDimEdges();
+    const { minX, maxX, minZ, maxZ } = box;
+    const pad = 2;
+    const at = id => edge[E_MARK_SIDES[id].side] + E_MARK_SIDES[id].sign * this._eMarkClearFt(id);
     return [
       { id: 'E1', name: 'E1', auto: true, elev: 0, levelId: null,
-        startPt: { x: minX - pad, z: edge.S + off }, endPt: { x: maxX + pad, z: edge.S + off }, dirVec: { x: 0, z: 1 } },
+        startPt: { x: minX - pad, z: at('E1') }, endPt: { x: maxX + pad, z: at('E1') }, dirVec: { x: 0, z: 1 } },
       { id: 'E2', name: 'E2', auto: true, elev: 0, levelId: null,
-        startPt: { x: edge.W - off, z: minZ - pad }, endPt: { x: edge.W - off, z: maxZ + pad }, dirVec: { x: -1, z: 0 } },
+        startPt: { x: at('E2'), z: minZ - pad }, endPt: { x: at('E2'), z: maxZ + pad }, dirVec: { x: -1, z: 0 } },
       { id: 'E3', name: 'E3', auto: true, elev: 0, levelId: null,
-        startPt: { x: minX - pad, z: edge.N - off }, endPt: { x: maxX + pad, z: edge.N - off }, dirVec: { x: 0, z: -1 } },
+        startPt: { x: minX - pad, z: at('E3') }, endPt: { x: maxX + pad, z: at('E3') }, dirVec: { x: 0, z: -1 } },
       { id: 'E4', name: 'E4', auto: true, elev: 0, levelId: null,
-        startPt: { x: edge.E + off, z: minZ - pad }, endPt: { x: edge.E + off, z: maxZ + pad }, dirVec: { x: 1, z: 0 } },
+        startPt: { x: at('E4'), z: minZ - pad }, endPt: { x: at('E4'), z: maxZ + pad }, dirVec: { x: 1, z: 0 } },
     ];
   }
 
@@ -8426,18 +8807,30 @@ class Component extends DCLogic {
     // changing the level collection so no chain can commit into another floor.
     this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelCut();
     const levelId = levels[idx].id;
-    this._lines = this._lines.filter(line => line.levelId !== levelId);
-    this._walls = this._walls.filter(wall => wall.levelId !== levelId);
-    this._floors = this._floors.filter(floor => floor.levelId !== levelId);
-    this._shapes = this._shapes.filter(shape => shape.levelId !== levelId);
-    this._roofs = this._roofs.filter(roof => roof.levelId !== levelId);
-    // Level outlines go with their level; the BONEYARD master is storage, not
-    // a level, so it is never touched by level deletion.
-    this._outlines = this._outlines.filter(outline => outline.levelId !== levelId);
-    this._surfaceOpenings = this._surfaceOpenings.filter(opening => opening.levelId !== levelId);
-    this._dimensions = this._dimensions.filter(dimension => dimension.levelId !== levelId);
-    this._columns = this._columns.filter(column => column.levelId !== levelId);
-    this._beams = this._beams.filter(beam => beam.levelId !== levelId);
+    // ONE list, so a new level-owned collection is added in one place instead
+    // of being forgotten here. It was: fenestrations, fixtures, stairs, notes
+    // and roomTags were each missing from this method, so deleting a level
+    // left its doors, windows, appliances, stairs, annotations and room names
+    // behind — pointing at a level id that no longer existed, invisible on
+    // every level, and carried through save after save.
+    //
+    // NOT on this list, deliberately: `_boneyardOutlines` (the BONEYARD master
+    // is storage, not a level), `_groups` (membership is cleaned up by
+    // `_cleanupGroups` below, since a group can span levels), and `cuts`,
+    // which live in component state and need their 3D objects disposed.
+    // An underlay's PICTURE lives outside the drawing, in its own store
+    // bucket keyed by the underlay id, so dropping the record is only half of
+    // it — take the binary too, or the bytes sit there for the life of the
+    // browser profile with nothing pointing at them.
+    const droppedUnderlays = (this._underlays || []).filter(item => item.levelId === levelId);
+    LEVEL_OWNED_COLLECTIONS.forEach(field => {
+      this[field] = this[field].filter(item => item.levelId !== levelId);
+    });
+    droppedUnderlays.forEach(underlay => {
+      this._underlayImages?.delete(underlay.id);
+      window.SharedFileStore?.removeNamedFile(underlay.id, 'underlays')
+        .catch(error => console.warn('Underlay binary removal failed:', error));
+    });
     // Cuts are owned by a level id, not by elevation: two levels can sit at the
     // same height, so only the deleted level's own sections go with it.
     const removedCuts = this.state.cuts.filter(cut => cut.levelId === levelId);
@@ -10002,7 +10395,17 @@ class Component extends DCLogic {
     // The acquired polar origin glows orange while hovered or while its ray is engaged.
     const hoveringOrigin = magnet && magnetRaw && this._polarOrigin
       && Math.hypot(magnetRaw.x - this._polarOrigin.x, magnetRaw.z - this._polarOrigin.z) < 0.001;
-    if (this._polarOrigin && (polarHit || polarLocked || hoveringOrigin)) {
+    // Sitting EXACTLY on the origin is the one spot neither test above covers,
+    // and it is the moment the drafter most needs to see the ruler is zeroed
+    // there: _findPolarSnap has no direction to work with at zero distance
+    // (rightly — it returns null), and the origin's own node is excluded from
+    // the magnet while it is the node being dragged. The gap was invisible
+    // while the app read mouse events, which round the cursor to whole pixels
+    // and so almost never land dead on; pointer events keep the fractional
+    // position, and land on it.
+    const onOrigin = this._polarOrigin
+      && Math.hypot(raw.x - this._polarOrigin.x, raw.z - this._polarOrigin.z) < 0.001;
+    if (this._polarOrigin && (polarHit || polarLocked || hoveringOrigin || onOrigin)) {
       const os = this._toScreen(this._polarOrigin);
       newState.polarOriginX = os.x; newState.polarOriginY = os.y; newState.showPolarOrigin = true;
     }
@@ -10070,6 +10473,69 @@ class Component extends DCLogic {
 
   }
 
+  // ─── One pointer at a time (audit C2) ────────────────────────────────────
+  // Mouse, finger and Pencil all arrive here as pointer events. The canvas
+  // takes the FIRST pointer that goes down and ignores every other one until
+  // it lifts: a second finger landing mid-stroke must not yank the wall being
+  // drawn, and a palm resting on an iPad must not become a second cursor.
+  // Two-finger pan/zoom is a follow-up board — this is the policy that makes
+  // one finger reliable first.
+  _ownsPointer(e) {
+    return this._activePointerId === null || this._activePointerId === e.pointerId;
+  }
+
+  _claimPointer(e) {
+    if (this._activePointerId !== null && this._activePointerId !== e.pointerId) return false;
+    this._activePointerId = e.pointerId;
+    // Capture, so a drag that wanders off the canvas — or off the edge of an
+    // iPad screen — still delivers its moves and its up. Touch pointers are
+    // captured implicitly by the browser; this puts mouse and pen on the same
+    // footing, which is the job the window-level mouse listeners used to do.
+    try { this._canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+    return true;
+  }
+
+  _releasePointer(e) {
+    if (this._activePointerId !== e.pointerId) return;
+    this._activePointerId = null;
+    try { this._canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+  }
+
+  // A cancelled pointer never sends an up: iOS taking the gesture for a system
+  // swipe, a palm rejected, the Pencil leaving range. Free the canvas or
+  // NOTHING can draw again — but deliberately do not run the up handler's
+  // commit branches, because the gesture did not finish, it was taken away.
+  _abandonPointer(e) {
+    if (!this._ownsPointer(e)) return;
+    this._releasePointer(e);
+    if (this._tourRoofDrag) this._endTourRoofDrag();
+    this._panning2D      = false;
+    this._selectDrag     = null;
+    this._arcDrag        = null;
+    this._outlineArcDrag = null;
+    this._fixtureDrag    = null;
+    this._roomTagDrag    = null;
+    this._eMarkDrag      = null;
+    this._selectDownInfo = null;
+    this._windowSelection = null;
+    this._invalidate();
+  }
+
+  _pointerOverCanvas(e) {
+    const rect = this._canvas ? this._canvas.getBoundingClientRect() : null;
+    if (!rect) return true;
+    return e.clientX >= rect.left && e.clientX <= rect.right
+      && e.clientY >= rect.top && e.clientY <= rect.bottom;
+  }
+
+  // The leave the capture swallowed, delivered once per exit.
+  _leaveCanvasOnce() {
+    if (!this._insideCanvas) return;
+    this._insideCanvas = false;
+    this._invalidate();
+    this._onMouseLeave();
+  }
+
   _onMouseLeave() {
     this._noteStairHover = null;
     this._cancelPolarDwell();
@@ -10084,6 +10550,17 @@ class Component extends DCLogic {
     if (this.state.projectCallout) this._dismissProjectCallout(false);
     if (this.state.garageCallout) this._dismissGarageCallout();
     if (this.state.perfNotice) this._dismissPerfNotice();
+    // HAND engaged (#304): the press pans, whatever tool is selected. This is
+    // the one-finger pan an iPad has no other way to perform — a touchscreen
+    // has neither the middle button nor the Alt key the pan branch below
+    // wants. 3D keeps its own orbit controls.
+    if (this.state.handOn && e.button === 0 && this.state.activeView !== 'perspective') {
+      e.preventDefault();
+      this._panning2D = true;
+      this._pan2DPrevX = e.clientX;
+      this._pan2DPrevY = e.clientY;
+      return;
+    }
     if (this.state.lengthFrozen) {
       // A canvas click while the ruler holds a valid typed length is the
       // drafter's "done" — it commits the length just like Enter.
@@ -10143,6 +10620,22 @@ class Component extends DCLogic {
             };
             e.preventDefault();
             return;
+          }
+          // A press on a standard elevation mark's handle slides the mark
+          // along its own axis (board #263) — checked first because the
+          // handle stands out past the dimension strings, clear of the plan.
+          const eMarkHit = this._eMarkHandleAt(e);
+          if (eMarkHit) {
+            const { axis, sign, side } = E_MARK_SIDES[eMarkHit.id];
+            const edge = this._eMarkDimEdges();
+            if (edge) {
+              this._eMarkDrag = {
+                id: eMarkHit.id, axis, sign, base: edge[side],
+                startX: e.clientX, startY: e.clientY, active: false,
+              };
+              e.preventDefault();
+              return;
+            }
           }
           const refs = this._findVertexHit(raw, this.state.selectFilter);
           if (refs) {
@@ -10403,6 +10896,20 @@ class Component extends DCLogic {
       }
     }
 
+    // E-mark handle drag (board #263) — the mark slides along its own axis,
+    // its clearance from the outermost dimension string following the cursor.
+    if (this._eMarkDrag) {
+      const ed = this._eMarkDrag;
+      if (!ed.active && Math.hypot(e.clientX - ed.startX, e.clientY - ed.startY) > 4) ed.active = true;
+      if (ed.active) {
+        const raw = this._getWorldPos(e.clientX, e.clientY);
+        if (raw) {
+          const clear = clampEMarkClear(ed.sign * (raw[ed.axis] - ed.base));
+          this.setState({ elevationMarkOffsets: { ...this.state.elevationMarkOffsets, [ed.id]: clear } });
+        }
+      }
+    }
+
     // Room-tag drag (board #198) — the tag rides the cursor live.
     if (this._roomTagDrag) {
       const td = this._roomTagDrag;
@@ -10453,6 +10960,7 @@ class Component extends DCLogic {
           // ref has landed) so later master edits carry the adjustment along
           // in its new position.
           sd.refs.forEach(r => this._relinkVertex((r.target || r.seg)[r.prop]));
+          this._unautoTouchedWalls(new Set(sd.refs.map(r => (r.target || r.seg)[r.prop])));
           this._afterOutlineVertexDrag(sd.refs);
         }
       }
@@ -12814,6 +13322,13 @@ class Component extends DCLogic {
     if (stairCut.cut) {
       built.push(`${stairCut.cut} stair opening${stairCut.cut === 1 ? '' : 's'}`);
       if (stairCut.nudges.length) built.push(`stair nudged ${stairCut.nudges.join(', ')} clear of beams / walls`);
+    }
+    // Room growing (boards #275/#276): the stamp program becomes real 2x4
+    // interior walls, routed around the stair openings just cut.
+    const grown = this._growStampedRooms();
+    if (grown.walls) {
+      built.push(`${grown.walls} interior wall${grown.walls === 1 ? '' : 's'} grown from ${grown.rooms} room stamp${grown.rooms === 1 ? '' : 's'}`);
+      if (grown.flagged) built.push(`${grown.flagged} grown room${grown.flagged === 1 ? '' : 's'} flagged UNDER MIN`);
     }
     // The dimension stack refreshes on every build that changed something, so
     // the strings pick up the new corners and opening centres.
@@ -15909,6 +16424,7 @@ class Component extends DCLogic {
       vertex.z += dz;
       this._relinkVertex(vertex);
     });
+    this._unautoTouchedWalls(this._extendSession.vertices);
     this._extendUndo = { changes };
     this._extendSession = null;
     this._markUnsaved();
@@ -16332,6 +16848,125 @@ class Component extends DCLogic {
   _angleLockStep() {
     if (this._ctrlHeld && this._shiftHeld) return Math.PI / 6;
     return Math.PI / 4;
+  }
+
+  // ─── Ending a chain without a keyboard (#304) ────────────────────────────
+  // A run of walls, a line chain, an outline: every one of them ended on
+  // Enter, or on a double click nobody is told about. An iPad shows a
+  // keyboard only while a text field has focus, so at the permit counter
+  // Enter is not available — the drafter could start a wall run and have no
+  // way to finish it. FINISH is that way, and it appears only while there is
+  // something to finish.
+
+  _chainInProgress() {
+    return !!(this._lineDrawing || this._wallDrawing || this._floorDrawing
+      || this._shapeDrawing || this._outlineDrawing || this._surfaceOpeningDrawing
+      || (this.state.activeTool === 'roof' && this.state.roofPhase === 'overhang'));
+  }
+
+  _syncChainActive() {
+    const active = this._chainInProgress();
+    if (active !== this.state.chainActive) this.setState({ chainActive: active });
+  }
+
+  // ONE place that knows how each tool ends its run, so the button and the
+  // keyboard cannot drift apart. Returns whether there was a chain to end.
+  _finishActiveChain() {
+    if (this._lineDrawing) { this._finishChain(); return true; }
+    if (this._wallDrawing) { this._finishWall(); return true; }
+    if (this._floorDrawing) { this._finishFloor(); return true; }
+    if (this._shapeDrawing) { this._finishShape(); return true; }
+    if (this._outlineDrawing) { this._finishOutline(); return true; }
+    if (this._surfaceOpeningDrawing) { this._finishSurfaceOpening(); return true; }
+    // BASIC roof: the same press accepts the current overhang and drops it.
+    if (this.state.activeTool === 'roof' && this.state.roofPhase === 'overhang') {
+      this._commitBasicRoof(); return true;
+    }
+    return false;
+  }
+
+  // ─── Navigating the drawing without a wheel or a middle button (#304) ────
+  // Zoom was `wheel` only and pan was middle-drag or alt-drag, so on the iPad
+  // this app is aimed at, a drafter could draw and then never move the view.
+  // These do it from the strip, and they work the same with a mouse — a desk
+  // feature that happens to save the tablet.
+
+  // The wheel's own step, so a tap zooms by exactly as much as a notch does.
+  _zoomStep(inward) {
+    if (this.state.activeView === 'perspective') return;
+    if (this._stairWorkspaceActive()) return; // locked framing, same as the wheel
+    this._orthoHalfH = Math.max(1, Math.min(300, this._orthoHalfH * (inward ? 0.88 : 1.14)));
+    this._updateOrthoFrustum();
+    this._updateGridLOD();
+    this._invalidate();
+  }
+
+  // Every committed point on the active level, in world feet — what FIT
+  // frames. Null when the level is empty, which is a message, not a no-op.
+  _visibleExtents() {
+    const levelId = this._activeLevel()?.id;
+    if (levelId == null) return null;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    const eat = point => {
+      if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.z)) return;
+      if (point.x < minX) minX = point.x;
+      if (point.x > maxX) maxX = point.x;
+      if (point.z < minZ) minZ = point.z;
+      if (point.z > maxZ) maxZ = point.z;
+    };
+    const mine = item => item.levelId === levelId;
+    [...this._walls, ...this._lines].filter(mine).forEach(seg => { eat(seg.start); eat(seg.end); });
+    [...this._floors, ...this._shapes, ...this._roofs, ...this._outlines]
+      .filter(mine).forEach(item => (item.points || []).forEach(eat));
+    if (!Number.isFinite(minX) || !Number.isFinite(minZ)) return null;
+    return { minX, maxX, minZ, maxZ };
+  }
+
+  // FIT: frame the drawing, centred, with a margin so the outermost wall is
+  // not welded to the edge of the screen.
+  _zoomExtents() {
+    if (this.state.activeView === 'perspective') {
+      this.setState({ drawingMessage: 'FIT frames the plan — leave the 3D view first.', drawingMessageError: true });
+      return;
+    }
+    if (this._stairWorkspaceActive()) return;
+    const bounds = this._visibleExtents();
+    if (!bounds) {
+      this.setState({ drawingMessage: 'Nothing drawn on this level yet — nothing to fit.', drawingMessageError: false });
+      return;
+    }
+    const canvas = this._canvas;
+    const w = canvas?.clientWidth || 800, h = canvas?.clientHeight || 600;
+    const halfH = Math.max((bounds.maxZ - bounds.minZ) / 2,
+      (bounds.maxX - bounds.minX) / 2 / (w / h), 2);
+    this._orthoHalfH = Math.max(1, Math.min(300, halfH * FIT_MARGIN));
+    this._orthoCamX = (bounds.minX + bounds.maxX) / 2;
+    this._orthoCamZ = (bounds.minZ + bounds.maxZ) / 2;
+    const e0 = this._drawElev || 0;
+    if (this.state.activeView === 'top' && this._orthoCam) {
+      this._orthoCam.position.set(this._orthoCamX, e0 + 200, this._orthoCamZ);
+      this._orthoCam.lookAt(this._orthoCamX, e0, this._orthoCamZ);
+    }
+    this._updateOrthoFrustum();
+    this._updateGridLOD();
+    this._invalidate();
+  }
+
+  // HAND is a mode, the way COMPASS is: engaged, a plain drag pans and the
+  // active tool is SUSPENDED, not swapped — releasing hands the drafter back
+  // to exactly the tool they had. Tap it again, or Escape, to put it down.
+  _toggleHand(force = null) {
+    const on = force === null ? !this.state.handOn : force;
+    if (on === this.state.handOn) return;
+    if (on) this._cancelPolarDwell();
+    else this._panning2D = false;
+    this.setState({
+      handOn: on,
+      drawingMessage: on
+        ? 'HAND up — drag to pan. Tap HAND again or press Escape to put it down.'
+        : 'HAND down — back to the drawing tool.',
+      drawingMessageError: false,
+    });
   }
 
   // The compass picks polar tracking up or sets it down: while it is up, a
@@ -17741,6 +18376,9 @@ class Component extends DCLogic {
       if (room.stampOwner) {
         room.stampOwner.areaSqFt = Math.round(room.insideSqFt * 10) / 10;
         room.stampOwner.underMin = !verdict.ok;
+        // #276: the room's loop rides the tag (transient) so the WC
+        // fixture suffix can read live at paint time.
+        room.stampOwner._roomPts = room.loop.points;
         return;
       }
       const name = room.category === 'wc' ? `WC ${room.number}`
@@ -17758,6 +18396,7 @@ class Component extends DCLogic {
         name,
         areaSqFt: Math.round(room.insideSqFt * 10) / 10,
         underMin: !verdict.ok,
+        _roomPts: room.loop.points, // transient — the WC suffix reads it live
         layer: ROOM_TAG_LAYER,
       });
     });
@@ -17797,7 +18436,10 @@ class Component extends DCLogic {
 
   _stampPool() {
     return this._roomStamps().filter(tag => tag.base)
-      .map(tag => ({ id: tag.id, levelId: tag.levelId, base: tag.base, name: tag.name }));
+      .map(tag => ({
+        id: tag.id, levelId: tag.levelId, base: tag.base, name: tag.name,
+        ...(Number.isInteger(tag.claimedNo) && tag.claimedNo > 0 ? { claimedNo: tag.claimedNo } : {}),
+      }));
   }
 
   _refreshStampNames() {
@@ -17826,6 +18468,22 @@ class Component extends DCLogic {
 
   _placeStamp(base, pt) {
     const levelId = this._activeLevelId();
+    // #276: exactly one primary suite per house, and never in the
+    // basement — a second BEDROOM 1 is refused quietly, chip disarmed.
+    if (base === 'BEDROOM 1') {
+      const allowed = window.DraftRoomGrow.primaryAllowed(this._roomStamps(),
+        { basementLevelId: BASEMENT_LEVEL_ID, levelId });
+      if (!allowed.ok) {
+        this.setState({
+          roomTrayArmed: null,
+          drawingMessage: allowed.reason === 'basement'
+            ? 'BEDROOM 1 — the primary suite — lives on the living floors. Downstairs, plain BEDROOM stamps make BEDROOM B1, B2...'
+            : 'There is already a BEDROOM 1 — one primary suite per house. Rename it (BEDROOM 2, say) to move the title here.',
+          drawingMessageError: true,
+        });
+        return;
+      }
+    }
     const elevation = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
     const drop = (chip, x, z, companionOf = null) => {
       const tag = {
@@ -17844,14 +18502,12 @@ class Component extends DCLogic {
       this._roomTags.push(tag);
       return tag;
     };
-    // Companions (user-approved): the floor's FIRST tray-stamped bedroom
-    // brings ENSUITE + WALK-IN, every later one a CLOSET — placement-time
-    // only, deletable, and ordinary stamps from then on.
-    const priorBedrooms = base === 'BEDROOM'
-      ? this._roomStamps().filter(tag => tag.base === 'BEDROOM' && tag.levelId === levelId).length
-      : 0;
+    // Companions (#276): the PRIMARY SUITE — the one BEDROOM 1 — brings
+    // ENSUITE + WALK-IN; every ordinary bedroom brings a CLOSET, first of
+    // its floor or not — placement-time only, deletable, and ordinary
+    // stamps from then on.
     const stamp = drop(base, pt.x, pt.z);
-    const companions = base === 'BEDROOM' ? window.DraftTour.bedroomCompanions(priorBedrooms) : [];
+    const companions = window.DraftTour.bedroomCompanions(base);
     companions.forEach((chip, index) => drop(chip, pt.x, pt.z + 2.2 * (index + 1), stamp.id));
     this._refreshStampNames();
     this._markUnsaved();
@@ -17876,6 +18532,17 @@ class Component extends DCLogic {
       drawingMessage: `${tag.name} moved — it's yours now and survives ROOM TAGS re-runs.`,
       drawingMessageError: false,
     });
+  }
+
+  // The grab handle on a standard elevation mark's line, drawn under the
+  // SELECT tool (board #263). Hits come from the last overlay paint, the same
+  // screen geometry the drafter sees.
+  _eMarkHandleAt(e) {
+    const hits = this._eMarkHandleHits || [];
+    if (!hits.length || !this._canvas) return null;
+    const rect = this._canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    return hits.find(hit => Math.hypot(x - hit.x, y - hit.y) <= 12) || null;
   }
 
   _roomTagHitAt(e) {
@@ -17915,9 +18582,52 @@ class Component extends DCLogic {
       this.setState({ tagEditor: null, tagDraft: '' });
       return;
     }
+    // #276: a BEDROOM/WC numbered name is a RENUMBER, not a rename — the
+    // tag joins that family and CLAIMS the typed number (claimedNo); the
+    // ladder renumbers around it. "BEDROOM 1" claims the primary suite —
+    // refused while another stands, and that refusal/acceptance IS the
+    // demote/promote path. Any other text leaves the pool, custom forever.
+    const claim = name.match(/^(BEDROOM|WC) (B?)(\d+)$/);
+    if (claim) {
+      const family = claim[1];
+      const number = Number(claim[3]);
+      if (family === 'BEDROOM' && !claim[2] && number === 1) {
+        const allowed = window.DraftRoomGrow.primaryAllowed(
+          this._roomStamps().filter(other => other !== tag),
+          { basementLevelId: BASEMENT_LEVEL_ID, levelId: tag.levelId });
+        if (!allowed.ok) {
+          this.setState({
+            tagEditor: null, tagDraft: '',
+            drawingMessage: allowed.reason === 'basement'
+              ? 'BEDROOM 1 — the primary suite — lives on the living floors, not the basement (BEDROOM B1 is the first basement bedroom).'
+              : 'There is already a BEDROOM 1 — demote it first (rename it BEDROOM 2, say), then promote this one.',
+            drawingMessageError: true,
+          });
+          return;
+        }
+        tag.base = 'BEDROOM 1';
+        delete tag.claimedNo;
+      } else {
+        tag.base = family;
+        tag.claimedNo = number;
+      }
+      tag.stamped = true;
+      if (tag.companionOf != null) delete tag.companionOf;
+      this._refreshStampNames();
+      this._markUnsaved();
+      this.setState({
+        tagEditor: null, tagDraft: '',
+        drawingMessage: tag.base === 'BEDROOM 1'
+          ? 'BEDROOM 1 — the primary suite. One per house; the ordinary bedrooms renumber from 2.'
+          : `${tag.name} — number claimed; the ${family} ladder renumbers around it.`,
+        drawingMessageError: false,
+      });
+      return;
+    }
     tag.name = name;
     tag.stamped = true;
     tag.base = null; // renamed — it left the numbering pool, custom forever
+    delete tag.claimedNo;
     if (tag.companionOf != null) delete tag.companionOf;
     this._refreshStampNames();
     this._markUnsaved();
@@ -17962,6 +18672,150 @@ class Component extends DCLogic {
     this.setState({ projectInfo: { ...this.state.projectInfo, bedrooms, bathrooms } });
   }
 
+  // ─── ROOM GROWING (boards #275/#276) ─────────────────────────────────────
+  // Stamps stop being just labels: each projects a dashed boundary preview
+  // of the room it will claim, and BUILD HOUSE partitions the floor into
+  // real 2x4 interior walls from the stamp program (room-grow.js owns the
+  // pure math). Gated behind the roomGrow personal setting; the #276
+  // numbering rules run regardless — rules, not suggestions.
+
+  // The inputs one level feeds the module: the interior region (outline
+  // inset by the thickest exterior PLAN wall), this level's stamps, and
+  // the stair wells to route around — a parked SUGGESTED stair included.
+  _roomGrowInputs(levelId) {
+    if (this.state.roomGrow === false || !window.DraftRoomGrow) return null;
+    const outline = this._houseOutline(levelId);
+    if (!outline || outline.points.length < 3) return null;
+    const stamps = this._roomStamps()
+      .filter(tag => tag.levelId === levelId && tag.base)
+      .map(tag => ({
+        id: tag.id, base: tag.base, x: tag.at.x, z: tag.at.z,
+        ...(tag.companionOf != null ? { companionOf: tag.companionOf } : {}),
+      }));
+    if (!stamps.some(stamp => stamp.companionOf == null)) return null;
+    const thickest = this._walls
+      .filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan'
+        && this._edgeOnOutline(wall.start, wall.end, outline))
+      .reduce((most, wall) => {
+        const def = WALL_TYPES.find(type => type.id === (wall.wallType || 'stud_2x6'));
+        return Math.max(most, def ? def.totalIn : 0);
+      }, WALL_TYPES.find(type => type.id === 'stud_2x6').totalIn);
+    const points = window.DraftGeometry2D.offsetOutline(
+      outline.points.map(pt => ({ x: pt.x, z: pt.z })), -(thickest / 12));
+    const stairWells = this._stairs
+      .filter(stair => stair.levelId === levelId && (stair.view || 'plan') === 'plan')
+      .map(stair => this._stairOpeningFootprint(stair))
+      .filter(Boolean);
+    return { points, stamps, stairWells, minimums: this.state.roomMinimums };
+  }
+
+  // The preview repaints every overlay frame, so the plan memoizes on a
+  // fingerprint of what feeds it — stamps, stairs, and the outline.
+  _roomGrowPlan(levelId) {
+    const inputs = this._roomGrowInputs(levelId);
+    if (!inputs) return null;
+    const key = `${levelId}|${inputs.points.map(pt => `${Math.round(pt.x * 8)},${Math.round(pt.z * 8)}`).join(';')}`
+      + `|${inputs.stamps.map(stamp => `${stamp.id}:${stamp.base}:${Math.round(stamp.x * 8)}:${Math.round(stamp.z * 8)}:${stamp.companionOf ?? ''}`).join(';')}`
+      + `|${inputs.stairWells.map(poly => poly.map(pt => `${Math.round(pt.x * 8)},${Math.round(pt.z * 8)}`).join(',')).join(';')}`;
+    if (this._roomGrowCache?.key === key) return this._roomGrowCache.plan;
+    const plan = window.DraftRoomGrow.growRooms(inputs);
+    this._roomGrowCache = { key, plan };
+    return plan;
+  }
+
+  // The dashed boundary preview — live, screen-only, never printing.
+  _drawRoomGrow2D(ctx, toS) {
+    if (this._isPrinting || this.state.roomGrow === false) return;
+    const plan = this._roomGrowPlan(this._activeLevelId());
+    if (!plan || !plan.rooms.length) return;
+    ctx.save();
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 1.2;
+    plan.rooms.forEach(room => {
+      const a = toS({ x: room.rect.x0, z: room.rect.z0 });
+      const b = toS({ x: room.rect.x1, z: room.rect.z1 });
+      ctx.strokeStyle = room.underMin ? 'rgba(176,64,80,0.75)' : 'rgba(89,128,166,0.5)';
+      ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+    });
+    ctx.restore();
+  }
+
+  // A declined partition edge (the drafter deleted the grown wall) stays
+  // ungrown for the session — the #260 decline spirit, per edge.
+  _growEdgeKey(seg) {
+    const r = value => Math.round(value * 4) / 4;
+    const a = `${r(seg.start.x)},${r(seg.start.z)}`;
+    const b = `${r(seg.end.x)},${r(seg.end.z)}`;
+    return a < b ? `${a}|${b}` : `${b}|${a}`;
+  }
+
+  // #275 promote-on-touch: a grown wall whose endpoint the drafter moved
+  // is the drafter's now — regeneration keeps its hands off it.
+  _unautoTouchedWalls(moved) {
+    this._walls.forEach(wall => {
+      if (wall.auto === true && (moved.has(wall.start) || moved.has(wall.end))) delete wall.auto;
+    });
+  }
+
+  // BUILD HOUSE grows the stamped floors: untouched auto walls are
+  // replaced wholesale (the stamp program is the source of truth until
+  // the drafter edits), touched and hand walls never. Each stamp absorbs
+  // its claim's area and minimums verdict on the spot — detection refines
+  // them later, and never silently: an under-min bedroom/WC flags loud.
+  _growStampedRooms() {
+    if (this.state.roomGrow === false || !window.DraftRoomGrow) return { walls: 0, rooms: 0, flagged: 0 };
+    const result = { walls: 0, rooms: 0, flagged: 0 };
+    const levelIds = [...new Set(this._roomStamps().filter(tag => tag.base).map(tag => tag.levelId))];
+    levelIds.forEach(levelId => {
+      const plan = this._roomGrowPlan(levelId);
+      if (!plan || !plan.walls.length) return;
+      this._walls = this._walls.filter(wall => !(wall.auto === true
+        && wall.levelId === levelId && (wall.view || 'plan') === 'plan'));
+      const declined = this._declinedGrowEdges || new Set();
+      plan.walls.forEach(seg => {
+        if (declined.has(this._growEdgeKey(seg))) return;
+        this._walls.push({
+          id: this._newDrawingItemId('wall'),
+          start: this._mergeVertex({ x: seg.start.x, z: seg.start.z }, levelId, 'plan'),
+          end: this._mergeVertex({ x: seg.end.x, z: seg.end.z }, levelId, 'plan'),
+          levelId,
+          view: 'plan',
+          wallType: 'stud_2x4',
+          baseHeight: this.state.wallBaseHeight,
+          topHeight: this.state.wallTopHeight,
+          refLine: 'center',
+          auto: true,
+        });
+        result.walls += 1;
+      });
+      plan.rooms.forEach(room => {
+        const tag = this._roomTags.find(item => item.id === room.stampId);
+        if (!tag) return;
+        tag.areaSqFt = Math.round(room.insideSqFt * 10) / 10;
+        tag.underMin = room.underMin === true;
+        if (room.underMin) result.flagged += 1;
+        if (!room.companion) result.rooms += 1;
+      });
+    });
+    return result;
+  }
+
+  // #276: the WC number belongs to the ROOM; its fixtures speak through a
+  // live suffix — /B a tub, /S a shower (a stall IS a shower), /BS both —
+  // computed at paint from the fixtures inside the room's loop, never
+  // stored, so a fixture edit changes only the readout. The loop rides
+  // the tag transiently from detection; before the first ROOM TAGS run of
+  // a session there is no loop yet and the bare name paints.
+  _wcSuffixFor(tag) {
+    if (!/^WC\b/.test(tag.name) || !tag._roomPts || !window.DraftRoomGrow) return '';
+    const kinds = [];
+    this._fixtures.filter(fixture => fixture.levelId === tag.levelId).forEach(fixture => {
+      const center = this._fixtureGeometry(fixture)?.center;
+      if (center && this._polygonContains(tag._roomPts, center.x, center.z)) kinds.push(fixture.kind);
+    });
+    return window.DraftRoomGrow.wcSuffix(kinds);
+  }
+
   _drawRoomTags2D(ctx, toS) {
     const tags = this._activeRoomTags();
     this._roomTagHits = [];
@@ -17971,14 +18825,15 @@ class Component extends DCLogic {
     ctx.fillStyle = ROOM_TAG_COLOR;
     tags.forEach(tag => {
       const s = toS(tag.at);
+      const label = tag.name + this._wcSuffixFor(tag);
       const area = this.state.roomAreasOn && tag.levelId === MAIN_FLOOR_LEVEL_ID && tag.areaSqFt > 0
         ? this._areaLabel(tag.areaSqFt) : '';
       ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
       ctx.textBaseline = area ? 'bottom' : 'middle';
-      ctx.fillText(tag.name, s.x, area ? s.y - 1 : s.y);
+      ctx.fillText(label, s.x, area ? s.y - 1 : s.y);
       // Every tag is grabbable: press-drag moves it, a click renames it
       // (board #198) — the hit rides the painted label like pad labels do.
-      this._roomTagHits.push({ tag, x: s.x, y: area ? s.y - 1 : s.y, w: ctx.measureText(tag.name).width });
+      this._roomTagHits.push({ tag, x: s.x, y: area ? s.y - 1 : s.y, w: ctx.measureText(label).width });
       let subY = s.y + 1;
       if (area) {
         ctx.font = '500 10px "Barlow Condensed", system-ui, sans-serif';
@@ -18311,6 +19166,7 @@ class Component extends DCLogic {
       pt.x = end.x; pt.z = end.z;
     });
     drag.refs.forEach(ref => this._relinkVertex((ref.target || ref.seg)[ref.prop]));
+    this._unautoTouchedWalls(new Set(drag.refs.map(ref => (ref.target || ref.seg)[ref.prop])));
     this._afterOutlineVertexDrag(drag.refs);
   }
 
@@ -18594,6 +19450,7 @@ class Component extends DCLogic {
     if (frozenTool === 'nodedrag' && this._frozenDrag) {
       this._frozenDrag.restore.forEach(({ pt, x, z }) => { pt.x = x; pt.z = z; });
       this._frozenDrag.refs.forEach(ref => this._relinkVertex((ref.target || ref.seg)[ref.prop]));
+      this._unautoTouchedWalls(new Set(this._frozenDrag.refs.map(ref => (ref.target || ref.seg)[ref.prop])));
       this._afterOutlineVertexDrag(this._frozenDrag.refs);
       this._frozenDrag = null;
     }
@@ -18862,6 +19719,11 @@ class Component extends DCLogic {
     if (matches('cancel')) {
       e.preventDefault();
       if (this.state.lengthFrozen) { this._cancelFrozenLength(); return; }
+      // Escape puts the HAND down (#304) — the same release as tapping it.
+      if (this.state.handOn) { this._toggleHand(false); return; }
+      // Whatever else Escape cancels below, the FINISH control must not be
+      // left showing over a chain that no longer exists.
+      setTimeout(() => this._syncChainActive(), 0);
       this._polarOrigin = null;
       this._polarSnap = null;
       this._cancelPolarDwell();
@@ -18927,6 +19789,13 @@ class Component extends DCLogic {
           + this._selectedFenestrations.size + this._selectedSurfaceOpenings.size + this._selectedDimensions.size
           + this._selectedFixtures.size;
         this._lines = this._lines.filter(l => !this._selectedSegs.has(l));
+        // Deleting a GROWN wall declines that partition edge for the
+        // session (#275) — the next bone press does not regrow it.
+        this._selectedSegs.forEach(seg => {
+          if (seg.auto === true && this._walls.includes(seg)) {
+            (this._declinedGrowEdges ||= new Set()).add(this._growEdgeKey(seg));
+          }
+        });
         this._walls = this._walls.filter(w => !this._selectedSegs.has(w));
         this._dimensions = this._dimensions.filter(dimension => !this._selectedDimensions.has(dimension));
         this._floors = this._floors.filter(floor => !this._selectedFloors.has(floor));
@@ -18969,16 +19838,7 @@ class Component extends DCLogic {
       return;
     }
     if (matches('finish') || matches('finishAlt')) {
-      if (this._lineDrawing) { e.preventDefault(); this._finishChain(); return; }
-      if (this._wallDrawing) { e.preventDefault(); this._finishWall();  return; }
-      if (this._floorDrawing) { e.preventDefault(); this._finishFloor(); return; }
-      if (this._shapeDrawing) { e.preventDefault(); this._finishShape(); return; }
-      if (this._outlineDrawing) { e.preventDefault(); this._finishOutline(); return; }
-      if (this._surfaceOpeningDrawing) { e.preventDefault(); this._finishSurfaceOpening(); return; }
-      // BASIC roof: Enter / Space accepts the current overhang and drops the roof.
-      if (this.state.activeTool === 'roof' && this.state.roofPhase === 'overhang') {
-        e.preventDefault(); this._commitBasicRoof(); return;
-      }
+      if (this._finishActiveChain()) { e.preventDefault(); this._syncChainActive(); return; }
     }
     // Shift is a temporary 45° angle lock while drawing. A plain Freeze Length
     // binding must remain usable without making the user release Shift first.
@@ -20222,6 +21082,20 @@ class Component extends DCLogic {
       compassChipTitle: this.state.compassOn
         ? `COMPASS up — rest on a node to cast polar rays [${shortcut('compass')} or tap sets it down]`
         : `COMPASS down — no polar rays [${shortcut('compass')} or tap picks it up]`,
+      chainActive: this.state.chainActive,
+      onFinishChain: () => { this._finishActiveChain(); this._syncChainActive(); },
+      // View navigation (#304) — zoom, fit and the HAND pan mode.
+      onZoomIn: () => this._zoomStep(true),
+      onZoomOut: () => this._zoomStep(false),
+      onZoomFit: () => this._zoomExtents(),
+      onToggleHand: () => this._toggleHand(),
+      handPressed: this.state.handOn ? 'true' : 'false',
+      handKeyBorder: this.state.handOn ? '#e07a20' : 'rgba(29,31,32,0.2)',
+      handKeyBg: this.state.handOn ? '#e07a20' : '#fff',
+      handKeyColor: this.state.handOn ? '#fff' : '#1d1f20',
+      handChipTitle: this.state.handOn
+        ? 'HAND up — drag to pan; the drawing tool is suspended [tap or Escape puts it down]'
+        : 'HAND — drag to pan the drawing without a wheel or a middle button [tap picks it up]',
       toggleTsquare: () => this._toggleTsquare(),
       toggleCompass: () => this._toggleCompass(),
       toggleRuler: () => this._toggleRulerLatch(),
