@@ -19,7 +19,7 @@ async function usePlanContext(page, level = 'MAIN FL') {
 
 async function useFloorContext(page, level = 'MAIN FL') {
   await levelRow(page, level).locator('.level-body').click();
-  await levelRow(page, level).locator('.level-layer', { hasText: 'FLOOR' }).click();
+  await levelRow(page, level).locator('.level-layer', { hasText: 'FLOOR LAYOUT' }).click();
 }
 
 async function drawOutlineRect(page, hx = 8, hz = 6) {

@@ -56,7 +56,7 @@ async function regionColor(page, [r, g, b], x0, y0, x1, y1, tol = 26) {
 test('floor cards get a STAIR layer set below FLOOR; FOUNDATION does not', async ({ page }) => {
   await h.openModel(page);
   const mainLayers = levelRow(page, 'MAIN FL').locator('.level-layer');
-  await expect(mainLayers).toHaveText(['ELECTRIC', 'WALL PLAN', 'FLOOR PLAN', 'STAIR']);
+  await expect(mainLayers).toHaveText(['ELECTRIC', 'FLOOR PLAN (WALLS)', 'FLOOR LAYOUT (FLOOR)', 'STAIR']);
   await expect(levelRow(page, '2ND FL').locator('.level-layer', { hasText: 'STAIR' })).toHaveCount(1);
   await expect(levelRow(page, 'FOUNDATION').locator('.level-layer', { hasText: 'STAIR' })).toHaveCount(0);
 });

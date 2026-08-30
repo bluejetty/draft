@@ -32,7 +32,9 @@
 <body>
 <x-dc>
 <helmet>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap" />
+  <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
+       critical path of the page. -->
+  <link rel="stylesheet" href="vendor/fonts.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
@@ -55,8 +57,6 @@
     .level-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-layer-row { display:flex; align-items:stretch; gap:2px; }
     .level-layer-row .level-layer { flex:1 1 0; min-width:0; white-space:nowrap; overflow:hidden; }
-    .level-assembly-summary { flex:0 0 46px; width:46px; border:1px solid rgba(29,31,32,0.14); background:rgba(29,31,32,0.04); color:rgba(29,31,32,0.45); cursor:pointer; padding:1px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; text-align:right; white-space:nowrap; }
-    .level-assembly-summary:hover { border-color:#5980a6; color:#365e86; }
     .rail-tab { position:absolute; top:0; bottom:0; z-index:6; display:flex; align-items:center; justify-content:center; border:1px solid rgba(29,31,32,0.25); background:#fff; cursor:pointer; padding:0 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:18px; font-weight:600; line-height:1; letter-spacing:0.14em; color:rgba(29,31,32,0.8); writing-mode:vertical-rl; text-transform:uppercase; box-shadow:0 1px 6px rgba(29,31,32,0.14); }
     .rail-tab:hover { border-color:#5980a6; color:#365e86; }
     .rail-tab-left { left:0; border-right:none; border-radius:4px 0 0 4px; transform:rotate(180deg); }
@@ -72,22 +72,8 @@
     .level-layer-bg:hover { border-color:#5980a6; color:#5980a6; }
     .level-head { display:flex; align-items:flex-start; gap:5px; padding-right:12px; }
     .level-title { flex-shrink:0; min-width:0; }
-    .level-edge-space { flex:1; }
-    .level-edge-edit { border:1px solid rgba(29,31,32,0.18); background:#fff; cursor:pointer; padding:1px 3px; font:inherit; }
-    .level-edge-edit:hover { border-color:#5980a6; color:#5980a6; }
     .level-head .level-bg { margin-top:0; }
     .level-del  { position:absolute; top:4px; right:1px; border:none; background:none; cursor:pointer; padding:0 5px; font-size:14px; line-height:1; color:rgba(29,31,32,0.25); }
-    .level-edge { display:flex; align-items:center; gap:3px; min-height:9px; }
-    .level-edge-line { flex:1; border-top:1px solid rgba(29,31,32,0.55); }
-    .level-edge-val { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; line-height:1; letter-spacing:0.03em; color:#1d1f20; white-space:nowrap; }
-    .level-assembly-editor { display:flex; flex-direction:column; gap:3px; border:1px solid rgba(29,31,32,0.3); background:#fff; padding:5px 6px; margin:1px 0 2px; cursor:default; }
-    .assembly-row { display:flex; align-items:center; gap:4px; }
-    .assembly-label { width:48px; flex-shrink:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.05em; color:rgba(29,31,32,0.55); }
-    .assembly-input { flex:1; min-width:0; border:1px solid #1d1f20; background:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; color:#f2f2f3; }
-    .assembly-input:focus { outline:none; border-color:#5980a6; }
-    .assembly-error { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:0.03em; color:#c04040; }
-    .assembly-ok { align-self:flex-end; border:1px solid rgba(29,31,32,0.18); background:#fff; color:rgba(29,31,32,0.68); cursor:pointer; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.06em; line-height:1; text-transform:uppercase; }
-    .assembly-ok:hover { border-color:#5980a6; color:#365e86; }
     .level-del:hover { color:#c04040; }
     .cut-row { display:flex; align-items:center; border:1px solid rgba(29,31,32,0.16); margin-bottom:3px; cursor:pointer; background:#fff; }
     .cut-row:hover { background:rgba(29,31,32,0.03); }
@@ -99,17 +85,17 @@
     .cut-side { flex:1; min-width:0; padding:0 0 0 4px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:rgba(29,31,32,0.72); overflow:hidden; text-overflow:ellipsis; }
     .view-rail { position:absolute; top:8px; bottom:8px; z-index:5; display:flex; flex-direction:column; gap:6px; overflow-y:auto; overflow-x:hidden; pointer-events:none; scrollbar-width:none; }
     .view-rail::-webkit-scrollbar { display:none; }
-    .view-rail-left { left:36px; }
     .view-rail-right { right:36px; flex-direction:row; align-items:stretch; gap:8px; }
+    .view-rail-left { left:36px; }
     .view-rail-col { display:flex; flex-direction:column; gap:6px; overflow-y:auto; overflow-x:hidden; min-height:0; scrollbar-width:none; }
     .view-rail-col::-webkit-scrollbar { display:none; }
-    .view-rail-spacer { flex:1 1 auto; min-height:0; }
     .view-thumb { pointer-events:auto; flex-shrink:0; width:118px; border:1px solid rgba(29,31,32,0.22); background:#fff; padding:0; cursor:pointer; box-shadow:0 1px 5px rgba(29,31,32,0.12); text-align:left; }
     .view-thumb:hover { border-color:#5980a6; }
     .view-thumb.active { border-color:#b04060; box-shadow:0 0 0 1px #b04060, 0 1px 5px rgba(29,31,32,0.12); }
+    .view-thumb.empty { cursor:default; }
+    .view-thumb.empty:hover { border-color:rgba(29,31,32,0.22); }
+    .view-thumb.empty .view-thumb-label { color:rgba(29,31,32,0.38); }
     .view-thumb canvas { display:block; width:116px; height:76px; background:#fafafa; }
-    .view-thumb-plan { width:88px; }
-    .view-thumb-plan canvas { width:86px; height:56px; }
     .view-thumb-label { display:flex; align-items:center; gap:4px; padding:2px 5px 3px; border-top:1px solid rgba(29,31,32,0.1); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.68); white-space:nowrap; overflow:hidden; }
     .view-thumb-3d { pointer-events:auto; flex-shrink:0; width:118px; height:76px; border:1px solid rgba(29,31,32,0.22); background:#fff; cursor:pointer; box-shadow:0 1px 5px rgba(29,31,32,0.12); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.1em; color:rgba(29,31,32,0.55); }
     .view-thumb-3d:hover { border-color:#5980a6; color:#365e86; }
@@ -170,7 +156,7 @@
     <div style="position:relative; line-height:0;">
       <button data-build-house onClick="{{ onBuildHouse }}" aria-label="BUILD HOUSE" title="{{ boneWalletTitle }}" style="position:relative; border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ buildHouseGlow }};">
         <img src="./assets/btn-bone.png" alt="" style="height:44px; display:block;" />
-        <span data-bone-balance style="position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); text-align:center; pointer-events:none; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(29,31,32,0.55); letter-spacing:0.02em; font-size:{{ boneBalanceFontPx }}px; line-height:1;">{{ boneBalanceLabel }}</span>
+        <span data-bone-balance style="position:absolute; left:0; right:0; top:74%; transform:translateY(-50%); text-align:center; pointer-events:none; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(29,31,32,0.55); letter-spacing:0.02em; font-size:{{ boneBalanceFontPx }}px; line-height:1;">{{ boneBalanceLabel }}</span>
       </button>
       <!-- The tour's climb button stands directly under the bone — NEXT ▲ FLOOR
            on the floors, PRESS ▲ BONE once the roof reads right — the arrow
@@ -620,6 +606,10 @@
         </div>
       </sc-for>
       <div data-areas-suite style="margin-top:12px; font-size:12px; font-weight:600; color:#365e86;">{{ areasReport.suiteLine }}</div>
+      <!-- The garage rides beside the total, never inside it: a permit
+           application asks for floor area excluding the garage. Empty string
+           when there is no garage, so the line collapses away. -->
+      <div data-areas-garage style="margin-top:10px; display:flex; align-items:baseline; font-size:12px; color:rgba(29,31,32,0.62);">{{ areasReport.garageLine }}</div>
       <div style="margin-top:8px; display:flex; align-items:baseline; border-top:1px solid rgba(29,31,32,0.25); padding-top:8px;">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">Building total</div>
         <div data-areas-total style="margin-left:auto; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:15px; font-weight:600;">{{ areasReport.totalLabel }}</div>
@@ -1223,21 +1213,25 @@
     <canvas data-model-overlay style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></canvas>
     <button type="button" class="rail-tab rail-tab-left" data-left-rail-tab onClick="{{ onToggleLeftRail }}" title="{{ leftRailTabTitle }}">ROUGHDRAFTER - LITE - DRAFTING TOOLS</button>
     <button type="button" class="rail-tab rail-tab-right" data-right-rail-tab onClick="{{ onToggleRightRail }}" title="{{ rightRailTabTitle }}">LEVELS - LAYERS</button>
-    <!-- VIEW GALLERIES (board #265): little TV-screen viewports down the canvas
-         edges — the four standard elevations on the left; on the right an inner
-         column of per-level PLAN thumbnails (SITE / ROOF / floors / FOUNDATION,
-         the always-available way back to the plans) beside the outer column of
-         hand-cut sections stacked over the 3D screen. New sections push 3D down;
-         the columns scroll when they overflow. Thumbnails are painted
-         imperatively from the same generators that draw the full-size views. -->
-    <div data-view-rail-left class="view-rail view-rail-left"></div>
+    <!-- VIEW GALLERIES (boards #265 / #291): a two-column wall of little
+         TV screens down the right canvas edge. Fixed seating — E1|E3,
+         E2|E4, ROOF PLAN|SITE PLAN, then each floor's PLAN (walls) beside
+         its LAYOUT (floor), the concrete FOUNDATION plan beside BASEMENT
+         (walls), and sections filling left-then-right below. E1-E4 and two
+         section seats keep their screens even before anything exists to
+         show. The open LEVELS panel covers only the outer column; the
+         inner column always keeps its seat. The 3D screen stands alone at
+         the top-left, where the open toolbox covers it. Thumbnails are
+         painted imperatively from the same generators that draw the
+         full-size views. -->
     <div data-view-rail-right class="view-rail view-rail-right">
-      <div data-view-rail-plans class="view-rail-col"></div>
+      <div data-view-rail-inner class="view-rail-col"></div>
       <div data-view-rail-outer class="view-rail-col">
-        <div data-view-rail-sections style="display:flex; flex-direction:column; gap:6px;"></div>
-        <div class="view-rail-spacer"></div>
-        <button type="button" data-view-rail-3d class="view-thumb-3d" onClick="{{ enter3D }}" title="{{ view3DTitle }}" disabled="{{ webglUnavailable }}">⬡<span>3D</span></button>
+        <div data-view-rail-outer-cards style="display:flex; flex-direction:column; gap:6px;"></div>
       </div>
+    </div>
+    <div data-view-rail-left class="view-rail view-rail-left">
+      <button type="button" data-view-rail-3d class="view-thumb-3d" onClick="{{ enter3D }}" title="{{ view3DTitle }}" disabled="{{ webglUnavailable }}">⬡<span>3D</span></button>
     </div>
     <!-- HTML crosshair cursor -->
     <div style="position:absolute; left:{{ cursorX }}px; top:{{ cursorY }}px; width:36px; height:36px; transform:translate(-50%,-50%); pointer-events:none; display:{{ cursorDisplay }};">
@@ -1296,6 +1290,21 @@
   <!-- RIGHT LEVEL RAIL — starts hidden; the LEVELS pull tab on the canvas edge opens it -->
   <div data-model-right style="width:190px; border-left:1px solid rgba(29,31,32,0.16); flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff; display:{{ rightRailDisplay }};">
 
+    <!-- ELEVATIONS / SECTIONS — E1-E4 hold the top of the menu (#291) -->
+    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.55); margin-bottom:6px;">Elev / Sec Views</div>
+      <sc-if value="{{ noCuts }}" hint-placeholder-val="{{ true }}">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; color:rgba(29,31,32,0.35); padding:4px 2px;">Press [{{ cutShortcut }}] to cut a view</div>
+      </sc-if>
+      <sc-for list="{{ cuts }}" as="cut" hint-placeholder-count="0">
+        <div class="{{ cut.rowClass }}" onClick="{{ cut.onView }}">
+          <div class="cut-bar"></div>
+          <div class="cut-body" style="display:flex; align-items:center;">{{ cut.name }}<span class="cut-side" style="{{ cut.sideStyle }}" title="The side this elevation faces — rename E1-E4 in COMPANY STANDARDS">{{ cut.sideName }}</span></div>
+          <button class="cut-del" style="{{ cut.delStyle }}" onClick="{{ cut.onDelete }}" title="Delete">×</button>
+        </div>
+      </sc-for>
+    </div>
+
      <!-- LEVELS — floor elevations with compact layer rows where defined -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
       <div style="display:flex; align-items:center; margin-bottom:8px;">
@@ -1319,49 +1328,10 @@
              <sc-if value="{{ level.hasLayers }}" hint-placeholder-val="{{ false }}">
                <div class="level-layer-stack">
                  <sc-for list="{{ level.layers }}" as="layer" hint-placeholder-count="3">
-                   <sc-for list="{{ layer.edgesTop }}" as="edge" hint-placeholder-count="1">
-                     <div class="level-edge" title="{{ edge.title }}">
-                       <sc-if value="{{ edge.hasLine }}" hint-placeholder-val="{{ true }}"><span class="level-edge-line"></span></sc-if>
-                       <sc-if value="{{ edge.noLine }}" hint-placeholder-val="{{ false }}"><span class="level-edge-space"></span></sc-if>
-                       <sc-if value="{{ edge.editable }}" hint-placeholder-val="{{ false }}">
-                         <button type="button" class="level-edge-val level-edge-edit" onClick="{{ edge.onEdit }}" title="{{ edge.title }}">{{ edge.value }}</button>
-                       </sc-if>
-                       <sc-if value="{{ edge.plain }}" hint-placeholder-val="{{ true }}">
-                         <span class="level-edge-val">{{ edge.value }}</span>
-                       </sc-if>
-                     </div>
-                   </sc-for>
                    <div class="level-layer-row">
                      <button type="button" class="level-layer-bg" onClick="{{ layer.onToggleBackground }}" title="{{ layer.bgTitle }}" style="background:{{ layer.bgButtonBg }}; border-color:{{ layer.bgButtonBorder }}; color:{{ layer.bgButtonColor }};">{{ layer.bgLabel }}</button>
                      <button type="button" class="{{ layer.rowClass }}" onClick="{{ layer.onSelect }}" title="{{ layer.title }}">{{ layer.label }}</button>
-                     <sc-if value="{{ layer.hasAssembly }}" hint-placeholder-val="{{ false }}">
-                       <button type="button" class="level-assembly-summary" data-assembly-summary onClick="{{ layer.onOpenProject }}" title="{{ layer.assemblyTitle }}">{{ layer.assemblyValue }}</button>
-                     </sc-if>
                    </div>
-                   <sc-if value="{{ layer.hasDepthEditor }}" hint-placeholder-val="{{ false }}">
-                     <div class="level-assembly-editor" onClick="{{ layer.depthEditor.onClick }}">
-                       <div class="assembly-row">
-                         <span class="assembly-label">{{ layer.depthEditor.label }}</span>
-                         <input class="assembly-input" value="{{ layer.depthEditor.input }}" onInput="{{ layer.depthEditor.onInput }}" onKeyDown="{{ layer.depthEditor.onKey }}" />
-                       </div>
-                       <sc-if value="{{ layer.depthEditor.hasError }}" hint-placeholder-val="{{ false }}">
-                         <div class="assembly-error">{{ layer.depthEditor.error }}</div>
-                       </sc-if>
-                       <button type="button" class="assembly-ok" onClick="{{ layer.depthEditor.onAccept }}" title="Accept — Enter or Space">OK</button>
-                     </div>
-                   </sc-if>
-                   <sc-for list="{{ layer.edgesBottom }}" as="edge" hint-placeholder-count="1">
-                     <div class="level-edge" title="{{ edge.title }}">
-                       <sc-if value="{{ edge.hasLine }}" hint-placeholder-val="{{ true }}"><span class="level-edge-line"></span></sc-if>
-                       <sc-if value="{{ edge.noLine }}" hint-placeholder-val="{{ false }}"><span class="level-edge-space"></span></sc-if>
-                       <sc-if value="{{ edge.editable }}" hint-placeholder-val="{{ false }}">
-                         <button type="button" class="level-edge-val level-edge-edit" onClick="{{ edge.onEdit }}" title="{{ edge.title }}">{{ edge.value }}</button>
-                       </sc-if>
-                       <sc-if value="{{ edge.plain }}" hint-placeholder-val="{{ true }}">
-                         <span class="level-edge-val">{{ edge.value }}</span>
-                       </sc-if>
-                     </div>
-                   </sc-for>
                    <sc-if value="{{ layer.hasContents }}" hint-placeholder-val="{{ false }}">
                      <div class="level-layer-contents">
                        <sc-for list="{{ layer.contents }}" as="content" hint-placeholder-count="5">
@@ -1369,13 +1339,6 @@
                        </sc-for>
                      </div>
                    </sc-if>
-                 </sc-for>
-               </div>
-             </sc-if>
-             <sc-if value="{{ level.hasEdges }}" hint-placeholder-val="{{ false }}">
-               <div class="level-layer-stack">
-                 <sc-for list="{{ level.edges }}" as="edge" hint-placeholder-count="1">
-                   <div class="level-edge" title="{{ edge.title }}"><span class="level-edge-line"></span><span class="level-edge-val">{{ edge.value }}</span></div>
                  </sc-for>
                </div>
              </sc-if>
@@ -1403,21 +1366,6 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- ELEVATIONS / SECTIONS -->
-    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.55); margin-bottom:6px;">Elev / Sec Views</div>
-      <sc-if value="{{ noCuts }}" hint-placeholder-val="{{ true }}">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; color:rgba(29,31,32,0.35); padding:4px 2px;">Press [{{ cutShortcut }}] to cut a view</div>
-      </sc-if>
-      <sc-for list="{{ cuts }}" as="cut" hint-placeholder-count="0">
-        <div class="{{ cut.rowClass }}" onClick="{{ cut.onView }}">
-          <div class="cut-bar"></div>
-          <div class="cut-body" style="display:flex; align-items:center;">{{ cut.name }}<span class="cut-side" style="{{ cut.sideStyle }}" title="The side this elevation faces — rename E1-E4 in COMPANY STANDARDS">{{ cut.sideName }}</span></div>
-          <button class="cut-del" style="{{ cut.delStyle }}" onClick="{{ cut.onDelete }}" title="Delete">×</button>
-        </div>
-      </sc-for>
     </div>
 
    <!-- 3D VIEW (special) -->
@@ -1981,8 +1929,8 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
 });
 const FLOOR_LEVEL_VIEWS = Object.freeze([
   Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
-  Object.freeze({ id:'plan', label:'WALL PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSION', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
-  Object.freeze({ id:'floor', label:'FLOOR PLAN', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION', 'A-ANNO-NOTE'] }),
+  Object.freeze({ id:'plan', label:'FLOOR PLAN (WALLS)', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSION', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
+  Object.freeze({ id:'floor', label:'FLOOR LAYOUT (FLOOR)', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION', 'A-ANNO-NOTE'] }),
   Object.freeze({ id:'stair', label:'STAIR', contents:['A-STR', 'A-FL-OPNG', 'STAIR SECTION', 'A-ANNO-NOTE'] }),
 ]);
 const LEVEL_LAYER_VIEWS = Object.freeze({
@@ -1990,7 +1938,7 @@ const LEVEL_LAYER_VIEWS = Object.freeze({
   3: FLOOR_LEVEL_VIEWS,
   1: Object.freeze([
     Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
-    Object.freeze({ id:'plan', label:'WALL PLAN', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
+    Object.freeze({ id:'plan', label:'BASEMENT (WALLS)', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
     Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL-FOOTING', 'S-FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION', 'A-ANNO-NOTE'] }),
   ]),
 });
@@ -2002,7 +1950,12 @@ const layerViewsForLevelId = levelId => {
   return LEVEL_LAYER_VIEWS[id]
     || (id > 0 && !WHOLE_LEVEL_IDS.includes(id) ? FLOOR_LEVEL_VIEWS : []);
 };
-const defaultLayerViewId = levelId => (layerViewsForLevelId(levelId).length ? 'plan' : null);
+// FOUNDATION opens on the concrete foundation plan; floors open on walls.
+const defaultLayerViewId = levelId => {
+  const views = layerViewsForLevelId(levelId);
+  if (!views.length) return null;
+  return views.some(view => view.id === 'foundation') ? 'foundation' : 'plan';
+};
 // Layer standards revealed by a layer-set button collapse again after a minute.
 const LAYER_REVEAL_MS = 60000;
 const migrateLevelId = value => {
@@ -2197,7 +2150,7 @@ class Component extends DCLogic {
     garageCornerPrompt: false, // CONNECT AT CORNER stub choice pending
     detachedFoundationPrompt: false, // detached-garage foundation choice pending
     autoDimFirstOffsetFt: 1.5, // gap between the plan and the closest auto string
-    levelLayerViews: { 5:'plan', 3:'plan', 1:'plan' },
+    levelLayerViews: { 5:'plan', 3:'plan', 1:'foundation' },
     levelAssemblies: {},        // levelId -> wall height + floor joist/sheathing assembly
     leftRailOpen: false,        // pull-out tabs: both side rails start hidden
     rightRailOpen: false,
@@ -4348,6 +4301,14 @@ class Component extends DCLogic {
       basementLevelId: BASEMENT_LEVEL_ID,
     });
     const sq = value => `${Math.round(value)} sq ft`;
+    // The printed column must add up: the total is the sum of the level nets
+    // AS PRINTED — each net rounded once, the total summed from those rounded
+    // values — so the drafter adding the column lands on the line at the
+    // bottom (audit C1's rule, applied to the AREAS report).
+    const roundedNets = report.levels.map(row =>
+      row.netSqFt === null ? null : Math.round(row.netSqFt));
+    const printedTotal = roundedNets.filter(net => net !== null)
+      .reduce((sum, net) => sum + net, 0);
     return {
       rows: report.levels.map(row => ({
         name: row.name,
@@ -4355,14 +4316,20 @@ class Component extends DCLogic {
           : row.source === 'rooms' ? 'rooms only, approx.' : '',
         grossLabel: row.grossSqFt === null ? '\u2014' : sq(row.grossSqFt),
         lessLabel: row.openingsSqFt > 0 ? `less floor openings ${sq(row.openingsSqFt)}` : '',
-        garageLabel: row.garageSqFt > 0 ? `incl. garage ${sq(row.garageSqFt)}` : '',
+        // The garage is measured and disclosed per level, but it is NOT in
+        // that level's net or in the building total (audit Q16) — the wording
+        // has to say so, or the numbers look like they don't add up.
+        garageLabel: row.garageSqFt > 0 ? `garage ${sq(row.garageSqFt)}, excluded` : '',
         netLabel: row.netSqFt === null ? '\u2014' : sq(row.netSqFt),
         roomsLine: row.rooms.map(room => `${room.name} ${room.areaSqFt}`).join(' \u00b7 '),
       })),
       suiteLine: report.suite
         ? `${report.suite.name} (secondary suite figure): ${sq(report.suite.netSqFt)}`
         : '',
-      totalLabel: report.totalSqFt === null ? '\u2014' : sq(report.totalSqFt),
+      garageLine: report.garageSqFt > 0
+        ? `Garage ${sq(report.garageSqFt)} \u2014 excluded from the building total`
+        : '',
+      totalLabel: report.totalSqFt === null ? '\u2014' : `${printedTotal} sq ft`,
       convention: report.convention,
     };
   }
@@ -5620,135 +5587,161 @@ class Component extends DCLogic {
     this._redrawOverlay();
   }
 
-  // ── View galleries (board #265) ────────────────────────────────────────
-  // The little TV screens down the canvas edges: E1-E4 elevations on the
-  // left, hand-cut S sections on the right stacked above the 3D screen
-  // (new sections push it down; the column scrolls). Cards are managed
-  // imperatively — outside the component render — and each screen is
-  // painted by the SAME generator that draws the full-size cut view, so
-  // a thumbnail is always a true miniature. Repaints only when the model
+  // ── View galleries (boards #265 / #291) ────────────────────────────────
+  // The two-column wall of little TV screens down the right canvas edge.
+  // Fixed seating: E1|E3, E2|E4, ROOF PLAN|SITE PLAN, each floor's PLAN
+  // (walls) beside its LAYOUT (floor), the concrete FOUNDATION plan beside
+  // BASEMENT (walls), then sections filling left-then-right — E1-E4 and
+  // two section seats hold empty screens until their views exist. Cards
+  // are managed imperatively — outside the component render — and each
+  // screen is painted by the SAME generator that draws the full-size view,
+  // so a thumbnail is always a true miniature. Repaints only when the model
   // changes (the epoch), never on mouse traffic.
   _bumpViewRailEpoch() {
     this._viewRailEpoch = (this._viewRailEpoch || 0) + 1;
   }
 
   _syncViewRails() {
-    const left = document.querySelector('[data-view-rail-left]');
-    const sections = document.querySelector('[data-view-rail-sections]');
-    if (!left || !sections || !this._drawingReady) return;
-    this._syncThumbColumn(left, this._autoElevationCuts());
-    this._syncThumbColumn(sections, this.state.cuts);
-    this._syncPlanColumn(document.querySelector('[data-view-rail-plans]'));
+    const inner = document.querySelector('[data-view-rail-inner]');
+    const outerCards = document.querySelector('[data-view-rail-outer-cards]');
+    if (!inner || !outerCards || !this._drawingReady) return;
+    const columns = this._viewRailCards();
+    this._syncRailColumn(inner, columns.inner);
+    this._syncRailColumn(outerCards, columns.outer);
     document.querySelector('[data-view-rail-3d]')
       ?.classList.toggle('active', this.state.activeView === 'perspective');
-    // An open side panel takes the screens on its side with it — only the
-    // little plan column keeps its seat, so the drawing keeps max room.
-    left.style.display = this.state.leftRailOpen ? 'none' : '';
+    // The open LEVELS panel covers only the outer column — the inner column
+    // keeps its seat, so every view stays one tap away.
     const outer = document.querySelector('[data-view-rail-outer]');
     if (outer) outer.style.display = this.state.rightRailOpen ? 'none' : '';
+    // The 3D screen stands top-left; the open toolbox covers it.
+    const left = document.querySelector('[data-view-rail-left]');
+    if (left) left.style.display = this.state.leftRailOpen ? 'none' : '';
   }
 
-  _syncThumbColumn(box, cuts) {
+  // The seating chart: paired rows across the two columns.
+  _viewRailCards() {
+    const inner = [], outer = [];
+    const cutCard = cut => cut && {
+      key: `cut:${cut.id}`,
+      label: cut.name + (cut.auto ? ` · ${this._elevationName(cut.id)}` : ''),
+      title: cut.auto
+        ? `${cut.name} — the ${this._elevationName(cut.id)} elevation; tap to bring it center`
+        : `${cut.name} — tap to bring this section center`,
+      active: this.state.activeView === 'cut' && this.state.activeCutId === cut.id,
+      onClick: () => this._enterCutView(cut.id),
+      paint: (ctx, w, h) => this._drawCutWorkspace2D(ctx, w, h, cut),
+    };
+    const planCard = (level, viewId, label) => level && {
+      key: `plan:${level.id}:${viewId || ''}`,
+      label,
+      title: `${label} — tap to bring this plan center`,
+      active: this.state.activeView === 'top' && !this.state.boneyardActive
+        && this._activeLevel()?.id === level.id
+        && (viewId == null || this._activeLayerViewId(level.id) === viewId),
+      onClick: () => {
+        if (viewId) { this._selectLayerView(level.id, viewId); return; }
+        const idx = this.state.levels.findIndex(l => l.id === level.id);
+        if (idx >= 0) this._switchLevel(idx);
+      },
+      paint: (ctx, w, h) => this._drawPlanThumb2D(ctx, w, h, level.id, viewId || 'plan'),
+    };
+    // An empty seat: a dark screen holding the chair for a view that does
+    // not exist yet, so the wall always shows the full seating chart.
+    const emptyCard = (key, label, title) => ({
+      key: `empty:${key}`, label, title, empty: true,
+      active: false, onClick: null, paint: () => {},
+    });
+    const push = (a, b) => { if (a) inner.push(a); if (b) outer.push(b); };
+    const byId = id => this.state.levels.find(level => level.id === id);
+    const elevs = this._autoElevationCuts();
+    const elevCard = (i, id) => cutCard(elevs[i]) || emptyCard(id,
+      `${id} · ${this._elevationName(id)}`,
+      `${id} — this elevation cuts itself when the house builds`);
+    push(elevCard(0, 'E1'), elevCard(2, 'E3'));
+    push(elevCard(1, 'E2'), elevCard(3, 'E4'));
+    push(planCard(byId(7), null, 'ROOF PLAN'), planCard(byId(8), null, 'SITE PLAN'));
+    this.state.levels.forEach(level => {
+      const views = layerViewsForLevelId(level.id);
+      if (!views.length) return;
+      if (views.some(view => view.id === 'foundation')) {
+        push(planCard(level, 'foundation', 'FOUNDATION'),
+             planCard(level, 'plan', 'BASEMENT (WALLS)'));
+      } else {
+        push(planCard(level, 'plan', `${level.name} PLAN (WALLS)`),
+             planCard(level, 'floor', `${level.name} LAYOUT (FLOOR)`));
+      }
+    });
+    // Sections start on the next row, left cell first, filling across —
+    // two seats stand ready even before the drafter cuts anything.
+    const sections = this.state.cuts.map(cutCard);
+    for (let n = sections.length; n < 2; n += 1) {
+      sections.push(emptyCard(`S${n + 1}`, `S${n + 1}`,
+        `S${n + 1} — cut a section to fill this screen`));
+    }
+    sections.forEach(card => {
+      (inner.length <= outer.length ? inner : outer).push(card);
+    });
+    return { inner, outer };
+  }
+
+  _syncRailColumn(box, cards) {
     const epoch = String(this._viewRailEpoch || 0);
-    const stale = new Set([...box.children].map(card => card.dataset.cutId));
-    cuts.forEach(cut => {
-      stale.delete(String(cut.id));
-      let card = box.querySelector(`[data-cut-id="${cut.id}"]`);
+    const stale = new Set([...box.children].map(card => card.dataset.railKey));
+    cards.forEach((spec, i) => {
+      stale.delete(spec.key);
+      let card = box.querySelector(`[data-rail-key="${spec.key}"]`);
       if (!card) {
         card = document.createElement('button');
         card.type = 'button';
         card.className = 'view-thumb';
-        card.dataset.cutId = cut.id;
-        const cutId = cut.id; // keep the real id — datasets stringify numbers
-        card.addEventListener('click', () => this._enterCutView(cutId));
+        card.dataset.railKey = spec.key;
         const screen = document.createElement('canvas');
         screen.width = 232; screen.height = 152; // 2x the CSS size, crisp lines
         card.appendChild(screen);
         const label = document.createElement('div');
         label.className = 'view-thumb-label';
         card.appendChild(label);
-        box.appendChild(card);
       }
-      const sideName = cut.auto ? this._elevationName(cut.id) : '';
-      card.title = cut.auto
-        ? `${cut.name} — the ${sideName} elevation; tap to bring it center`
-        : `${cut.name} — tap to bring this section center`;
-      card.lastChild.textContent = cut.name + (sideName ? ` · ${sideName}` : '');
-      card.classList.toggle('active',
-        this.state.activeView === 'cut' && this.state.activeCutId === cut.id);
-      if (card.dataset.epoch !== epoch) {
-        card.dataset.epoch = epoch;
-        const screen = card.firstChild;
-        const ctx = screen.getContext('2d');
-        ctx.clearRect(0, 0, screen.width, screen.height);
-        this._drawCutWorkspace2D(ctx, screen.width, screen.height, cut);
-      }
-    });
-    stale.forEach(id => box.querySelector(`[data-cut-id="${id}"]`)?.remove());
-  }
-
-  // The inner plan column: one little screen per level (SITE / ROOF / floors /
-  // FOUNDATION — a third storey grows the column), the always-available way
-  // back to the plans from any cut or 3D view.
-  _syncPlanColumn(box) {
-    if (!box) return;
-    const epoch = String(this._viewRailEpoch || 0);
-    const stale = new Set([...box.children].map(card => card.dataset.levelId));
-    this.state.levels.forEach((level, i) => {
-      stale.delete(String(level.id));
-      let card = box.querySelector(`[data-level-id="${level.id}"]`);
-      if (!card) {
-        card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'view-thumb view-thumb-plan';
-        card.dataset.levelId = level.id;
-        const levelId = level.id;
-        card.addEventListener('click', () => {
-          const idx = this.state.levels.findIndex(l => l.id === levelId);
-          if (idx >= 0) this._switchLevel(idx);
-        });
-        const screen = document.createElement('canvas');
-        screen.width = 172; screen.height = 112; // 2x the CSS size, crisp lines
-        card.appendChild(screen);
-        const label = document.createElement('div');
-        label.className = 'view-thumb-label';
-        card.appendChild(label);
-      }
-      // Keep the column in level order even when levels are added later.
+      card.onclick = spec.onClick || null;
+      card.classList.toggle('empty', Boolean(spec.empty));
+      // Keep the column in seating order even when views come and go.
       if (box.children[i] !== card) box.insertBefore(card, box.children[i] || null);
-      card.title = `${level.name} — tap to bring this plan center`;
-      card.lastChild.textContent = level.name;
-      card.classList.toggle('active',
-        this.state.activeView === 'top' && !this.state.boneyardActive
-        && this._activeLevel()?.id === level.id);
+      card.title = spec.title;
+      card.lastChild.textContent = spec.label;
+      card.classList.toggle('active', Boolean(spec.active));
       if (card.dataset.epoch !== epoch) {
         card.dataset.epoch = epoch;
         const screen = card.firstChild;
         const ctx = screen.getContext('2d');
         ctx.clearRect(0, 0, screen.width, screen.height);
-        this._drawPlanThumb2D(ctx, screen.width, screen.height, level.id);
+        spec.paint(ctx, screen.width, screen.height);
       }
     });
-    stale.forEach(id => box.querySelector(`[data-level-id="${id}"]`)?.remove());
+    [...box.children].forEach(card => {
+      if (stale.has(card.dataset.railKey)) card.remove();
+    });
   }
 
   // A level's plan in miniature: the level's own geometry fit to the little
   // screen, drawn by the same painters as the big plan view.
-  _drawPlanThumb2D(ctx, w, h, levelId) {
+  _drawPlanThumb2D(ctx, w, h, levelId, viewId = 'plan') {
     this._ensureDrawingCollections();
-    // Levels with layer sets thumbnail their PLAN view; whole-level contexts
-    // (ROOF, SITE) show everything they hold.
+    // Levels with layer sets thumbnail the requested layer view; whole-level
+    // contexts (ROOF, SITE) show everything they hold.
     const planOnly = this._layerViewsForLevel(levelId).length > 0;
-    const onPlan = item => !planOnly || (item.view || 'plan') === 'plan';
+    const onPlan = item => !planOnly || (item.view || 'plan') === viewId;
     const walls = this._walls.filter(x => x.levelId === levelId && onPlan(x));
     const lines = this._lines.filter(x => x.levelId === levelId && onPlan(x)
       && this._lineLayerConfig(x.layer).visible);
     const roofs = this._roofs.filter(x => x.levelId === levelId);
+    const floors = (this._floors || []).filter(x => x.levelId === levelId && onPlan(x));
     const outlines = this._outlines.filter(x => x.levelId === levelId);
     const pts = [];
     walls.forEach(s => pts.push(s.start, s.end));
     lines.forEach(s => pts.push(s.start, s.end));
     roofs.forEach(r => pts.push(...r.points));
+    floors.forEach(f => pts.push(...f.points));
     outlines.forEach(o => pts.push(...o.points));
     if (!pts.length) return;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -5762,6 +5755,7 @@ class Component extends DCLogic {
     const ox = (w - sc * (maxX - minX)) / 2, oz = (h - sc * (maxZ - minZ)) / 2;
     const toS = p => ({ x: ox + (p.x - minX) * sc, y: oz + (p.z - minZ) * sc });
     roofs.forEach(roof => this._drawRoof2D(ctx, toS, roof));
+    floors.forEach(floor => this._drawFloor2D(ctx, toS, floor));
     const joins = this._wallJoins(walls);
     walls.forEach(wall => this._drawWallSeg2D(ctx, toS, wall, false, joins, 'fill'));
     walls.forEach(wall => this._drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke'));
@@ -8681,7 +8675,20 @@ class Component extends DCLogic {
   _sectionWallCrossings(cut, axis) {
     const a = cut.startPt, b = cut.endPt;
     const crossings = [];
+    // A wall belongs to the garage it lies on, not just to a level: garage
+    // walls are stored on the SAME level as the house walls with only a body
+    // marker, so anything spanning "the level" has to ask which building
+    // (audit C5). The elevation path already groups this way.
+    const garagesByLevel = {};
+    const garageFor = wall => {
+      const list = garagesByLevel[wall.levelId]
+        || (garagesByLevel[wall.levelId] = this._garageOutlines(wall.levelId));
+      return list.find(garage => this._edgeOnOutline(wall.start, wall.end, garage)) || null;
+    };
     this._walls.forEach(wall => {
+      // BONEYARD shelf walls live on negative pseudo levels and are not in
+      // the building at all.
+      if (wall.levelId < 0) return;
       const c = wall.start, d = wall.end;
       const denom = (b.x - a.x) * (d.z - c.z) - (b.z - a.z) * (d.x - c.x);
       if (Math.abs(denom) < 1e-9) return;   // parallel — an elevation face, not a cut
@@ -8700,6 +8707,7 @@ class Component extends DCLogic {
         wall, u: px * axis.x + pz * axis.z,
         width,
         alongWall: t * wallLen,
+        garage: garageFor(wall),
       });
     });
     return crossings;
@@ -8829,9 +8837,15 @@ class Component extends DCLogic {
     mark(stack.foundation.slabTop);
     mark(stack.foundation.footingBottom);
 
-    // Level extents: each floor band spans the outermost walls it crosses.
+    // Level extents: the floor-assembly band spans the outermost walls of
+    // the HOUSE it crosses — never the garage's (audit C5). A garage is a
+    // slab on grade, so a band drawn across it claimed a framed floor and an
+    // open storey underneath; with a detached garage the same band ran
+    // across the open ground between the two buildings.
     const levelSpan = levelId => {
-      const us = crossings.filter(c => c.wall.levelId === levelId).map(c => c.u);
+      const us = crossings
+        .filter(c => c.wall.levelId === levelId && !c.garage)
+        .map(c => c.u);
       return us.length ? { min: Math.min(...us), max: Math.max(...us) } : null;
     };
 
@@ -8871,9 +8885,22 @@ class Component extends DCLogic {
     // the 4" garage slab, its under-slab line dashed, gravel dotted below —
     // section detail only, elevations keep just the buried outline.
     const beamCrossings = fdnCrossings.filter(c => c.wall.baseHeight > 0.01);
-    if (beamCrossings.length > 1) {
-      const lo = Math.min(...beamCrossings.map(c => c.u));
-      const hi = Math.max(...beamCrossings.map(c => c.u));
+    if (beamCrossings.length) {
+      // The slab spans its GARAGE, not the pair of legs the cut happened to
+      // clip (audit C5): a cut through a single grade-beam leg used to draw
+      // no slab at all, leaving the band above it standing over nothing.
+      // Project the garage's own outline onto the cut axis and clip that to
+      // the cut; fall back to the crossings when the body is unknown.
+      const garage = beamCrossings.map(c => c.garage).find(Boolean);
+      const outlineUs = garage
+        ? garage.points.map(pt => pt.x * axis.x + pt.z * axis.z)
+        : [];
+      const lo = outlineUs.length
+        ? Math.max(uMin, Math.min(...outlineUs))
+        : Math.min(...beamCrossings.map(c => c.u));
+      const hi = outlineUs.length
+        ? Math.min(uMax, Math.max(...outlineUs))
+        : Math.max(...beamCrossings.map(c => c.u));
       if (hi - lo > 1) {
         const plateTop = fdn.wallBottom
           + Math.max(...beamCrossings.map(c => c.wall.topHeight)) + GARAGE_BEAM_PLATE_IN / 12;
@@ -19225,37 +19252,9 @@ class Component extends DCLogic {
     return (assembly.joistDepthIn + assembly.sheathingIn) / 12;
   }
 
-  // The level cards draw a side profile: the PLAN row is the wall, the FLOOR
-  // row is the joists + sheathing, and the row borders carry the construction
-  // heights. Top of main-floor sheathing is the 0' datum, switchable to a
-  // 100' datum so basement marks stay positive.
-  _levelBorderHeights(levelId) {
-    const datum = this.state.elevationDatum;
-    const label = feet => this._elevLabel(feet + datum);
-    const floors = this._floorLevels();
-    const idx = floors.findIndex(level => level.id === levelId);
-    if (idx < 0) return null;
-    // Floors stack: each sheathing top sits a wall height above the floor
-    // below, plus its own joists + sheathing. The lowest floor is the datum.
-    let sheathingTop = 0;
-    for (let i = 1; i <= idx; i++) {
-      sheathingTop += this._levelAssembly(floors[i - 1].id).wallHeightFt
-        + this._levelFloorFt(floors[i].id);
-    }
-    return {
-      sheathingTop: label(sheathingTop),
-      floorBottom: label(sheathingTop - this._levelFloorFt(levelId)),
-    };
-  }
-
-  // The FOUNDATION card carries its heights on border lines like the floor
-  // profiles: the line above the FOUNDATION box is the bottom of the wall
-  // (top of footing), the line below is the base of the footing / excavation,
-  // and the top of slab — where basement stairs land — floats above without a
-  // line. Slab thickness and footing depth change by clicking their numbers.
-  // Footing width is collected on the level card (it never prints on plan —
-  // the contractor centers the footing on the wall). Unset widths derive from
-  // the foundation wall type: ICF walls sit on 24", everything else on 20".
+  // Footing width never prints on plan — the contractor centers the footing
+  // on the wall. Unset widths derive from the foundation wall type: ICF walls
+  // sit on 24", everything else on 20".
   _footingWidthIn(levelId) {
     const assembly = this._levelAssembly(levelId);
     if (assembly.footingWidthIn) return assembly.footingWidthIn;
@@ -19263,78 +19262,6 @@ class Component extends DCLogic {
       && (wall.view || 'plan') === 'foundation'
       && String(wall.wallType || '').startsWith('icf'));
     return icf ? ICF_FOOTING_WIDTH_IN : DEFAULT_FOOTING_WIDTH_IN;
-  }
-
-  _foundationHeights() {
-    const datum = this.state.elevationDatum;
-    const assembly = this._levelAssembly(1);
-    const wallBottom = -this._levelFloorFt(3) - this._levelWallTopFt(1, 'foundation');
-    return {
-      slabIn: assembly.slabThicknessIn,
-      footingIn: assembly.footingDepthIn,
-      footingWidthIn: this._footingWidthIn(1),
-      slabTop: this._elevLabel(wallBottom + assembly.slabThicknessIn / 12 + datum),
-      wallBottom: this._elevLabel(wallBottom + datum),
-      footingBottom: this._elevLabel(wallBottom - assembly.footingDepthIn / 12 + datum),
-    };
-  }
-
-  // The roof card's number is the top floor's top of wall — where the walls
-  // meet the truss bottoms.
-  _roofBearingHeight() {
-    let bearing = 0;
-    this._floorLevels().forEach((level, index) => {
-      if (index > 0) bearing += this._levelFloorFt(level.id);
-      bearing += this._levelAssembly(level.id).wallHeightFt;
-    });
-    return this._elevLabel(bearing + this.state.elevationDatum);
-  }
-
-  _openDepthEditor(levelId, kind, event) {
-    event?.stopPropagation();
-    const current = this.state.depthEditor;
-    if (current && current.levelId === levelId && current.kind === kind) {
-      this.setState({ depthEditor: null, depthError: '' });
-      return;
-    }
-    const assembly = this._levelAssembly(levelId);
-    this.setState({
-      depthEditor: { levelId, kind },
-      depthInput: formatInchesOnly(kind === 'footing' ? assembly.footingDepthIn
-        : kind === 'footingWidth' ? this._footingWidthIn(levelId)
-        : assembly.slabThicknessIn),
-      depthTyped: false,
-      depthError: '',
-    });
-  }
-
-  _commitDepthEditor() {
-    const editor = this.state.depthEditor;
-    if (!editor) return;
-    const parsed = parseAssemblyInches(this.state.depthInput);
-    if (!parsed.ok || parsed.inches <= 0) {
-      this.setState({ depthError: parsed.ok ? 'Depth must be greater than zero.' : parsed.error });
-      return;
-    }
-    const field = editor.kind === 'footing' ? 'footingDepthIn'
-      : editor.kind === 'footingWidth' ? 'footingWidthIn'
-      : 'slabThicknessIn';
-    const assembly = { ...this._levelAssembly(editor.levelId), [field]: parsed.inches };
-    // Editing the slab on the working level also drives the FLOOR tool's slab
-    // thickness, so newly drawn slabs match.
-    const syncSlab = editor.kind === 'slab'
-      && editor.levelId === this._activeLevel()?.id
-      && this.state.floorStructure === 'slab';
-    this.setState({
-      levelAssemblies: { ...this.state.levelAssemblies, [editor.levelId]: assembly },
-      depthEditor: null,
-      depthError: '',
-      ...(syncSlab ? {
-        floorThickness: parsed.inches / 12,
-        floorThicknessInput: formatArchitecturalInches(parsed.inches),
-        floorDimensionError: '',
-      } : {}),
-    }, () => this._markUnsaved());
   }
 
   // ─── renderVals ───────────────────────────────────────────────────────────────
@@ -20189,42 +20116,10 @@ class Component extends DCLogic {
         // a scoped reference lights up its layer-set button instead.
         const levelSlot = scopedView == null ? slot : -1;
         const selectedLayerView = this._activeLayerViewId(l.id);
-        const borderHeights = this._levelBorderHeights(l.id);
-        const assembly = this._levelAssembly(l.id);
-        const plainEdge = (value, title) => ({
-          value, title, hasLine: true, noLine: false, plain: true, editable: false, onEdit: () => {},
-        });
-        const editEdge = (value, title, kind, withLine) => ({
-          value, title, hasLine: withLine, noLine: !withLine, plain: false, editable: true,
-          onEdit: event => this._openDepthEditor(l.id, kind, event),
-        });
-        const fdn = l.id === 1 ? this._foundationHeights() : null;
+        // The cards carry no height numbers — PROJECT holds the values and
+        // the on-screen elevation border lines show them live (#291).
         const layers = this._layerViewsForLevel(l.id).map(view => {
           const viewSlot = scopedView === view.id ? slot : -1;
-          const assemblyKind = borderHeights && view.id === 'plan' ? 'wall'
-            : borderHeights && view.id === 'floor' ? 'floor' : null;
-          const isFdnBox = fdn != null && view.id === 'foundation';
-          const depthEditor = isFdnBox && this.state.depthEditor?.levelId === l.id
-            ? {
-                label: this.state.depthEditor.kind === 'footing' ? 'FTG DP'
-                  : this.state.depthEditor.kind === 'footingWidth' ? 'FTG W'
-                  : 'SLAB',
-                input: this.state.depthInput,
-                onInput: e => this.setState({ depthInput: e.target.value, depthTyped: true, depthError: '' }),
-                onKey: e => {
-                  if (e.key === 'Enter' || (e.key === ' ' && !this.state.depthTyped)) {
-                    e.preventDefault();
-                    this._commitDepthEditor();
-                  }
-                  if (e.key === 'Escape') { e.preventDefault(); this.setState({ depthEditor: null, depthError: '' }); }
-                  e.stopPropagation();
-                },
-                onClick: e => e.stopPropagation(),
-                onAccept: e => { e.stopPropagation(); this._commitDepthEditor(); },
-                hasError: Boolean(this.state.depthError),
-                error: this.state.depthError,
-              }
-            : null;
           return {
             label: view.label,
             title: `Show ${view.label} items on ${l.name}`,
@@ -20232,35 +20127,8 @@ class Component extends DCLogic {
               ? view.contents.map(id => this._layerStandard(id).name)
               : [],
             hasContents: this.state.layerRevealKey === `${l.id}:${view.id}` && view.contents.length > 0,
-            rowClass: 'level-layer' + (view.id === selectedLayerView ? ' active' : '')
-              + (assemblyKind === 'floor' ? ' floor-profile' : ''),
+            rowClass: 'level-layer' + (view.id === selectedLayerView ? ' active' : ''),
             onSelect: event => this._selectLayerView(l.id, view.id, event),
-            hasAssembly: assemblyKind != null,
-            // Grey summary values on the card face: the wall height beside
-            // WALL PLAN and the overall floor thickness beside FLOOR PLAN.
-            // Tapping either one opens the PROJECT page where they change.
-            assemblyValue: assemblyKind === 'wall'
-              ? formatArchitecturalInches(assembly.wallHeightFt * 12)
-              : formatArchitecturalInches(assembly.joistDepthIn + assembly.sheathingIn),
-            assemblyTitle: assemblyKind === 'wall'
-              ? `Wall height on ${l.name}: ${this._ftIn(assembly.wallHeightFt)} — tap to change on the PROJECT page`
-              : `Floor: ${JOIST_TYPES.find(t => t.id === assembly.joistType)?.label} ${formatInchesOnly(assembly.joistDepthIn)} @ ${formatInchesOnly(assembly.joistSpacingIn)} O.C. + ${formatInchesOnly(assembly.sheathingIn)} sheathing — tap to change on the PROJECT page`,
-            onOpenProject: event => { event.stopPropagation(); this._openProjectPage(); },
-            edgesTop: assemblyKind === 'floor'
-              ? [plainEdge(borderHeights.sheathingTop, 'Top of floor sheathing')]
-              : isFdnBox
-                ? [plainEdge(fdn.wallBottom, 'Bottom of foundation wall — top of footing')]
-                : [],
-            edgesBottom: assemblyKind === 'floor'
-              ? [plainEdge(borderHeights.floorBottom, 'Bottom of floor — top of wall or foundation below')]
-              : isFdnBox
-                ? [
-                    editEdge(fdn.slabTop, `Top of slab — ${formatInchesOnly(fdn.slabIn)} thick, click to change`, 'slab', false),
-                    editEdge(fdn.footingBottom, `Base of footing / excavation — ${formatInchesOnly(fdn.footingIn)} deep footing, click to change`, 'footing', true),
-                  ]
-                : [],
-            depthEditor,
-            hasDepthEditor: depthEditor != null,
             ...bgSlotStyle(viewSlot),
             bgTitle: viewSlot === 0 ? `Background 1 — blue, only ${view.label} shows`
               : viewSlot === 1 ? `Background 2 — red, only ${view.label} shows`
@@ -20269,15 +20137,10 @@ class Component extends DCLogic {
             onToggleBackground: event => this._toggleBackgroundLayerView(l.id, view.id, event),
           };
         });
-        const edges = l.id === 7
-          ? [{ value: this._roofBearingHeight(), title: 'Top of 2nd floor walls — where the roof trusses bear' }]
-          : [];
         return {
           name: l.name,
           layers,
           hasLayers: layers.length > 0,
-          edges,
-          hasEdges: edges.length > 0,
           color: LEVEL_COLORS[i % LEVEL_COLORS.length],
           rowClass: 'level-row' + (i === activeLevelIdx && !this.state.boneyardActive ? ' active' : ''),
           tourNext: i === activeLevelIdx && !this.state.boneyardActive && this._tourGateReady(),
@@ -20526,5 +20389,7 @@ class Component extends DCLogic {
   }
 }
 </script>
+  <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
+  <script src="./traffic-counter.js" defer></script>
 </body>
 </html>

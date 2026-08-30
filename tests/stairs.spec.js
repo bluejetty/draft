@@ -194,7 +194,7 @@ test('winders hide behind a double-click on L and never follow a U', async ({ pa
 test('stairs only place in PLAN; FLOOR keeps the tool disabled', async ({ page }) => {
   await h.openModel(page);
   await levelRow(page, 'MAIN FL').locator('.level-body').click();
-  await levelRow(page, 'MAIN FL').locator('.level-layer', { hasText: 'FLOOR' }).click();
+  await levelRow(page, 'MAIN FL').locator('.level-layer', { hasText: 'FLOOR LAYOUT' }).click();
 
   const stairButton = page.getByRole('button', { name: /\bStair\b/i }).first();
   await expect(stairButton).toBeDisabled();

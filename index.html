@@ -10,9 +10,9 @@
     <meta property="og:description" content="Rough Drafter: draw the outline, stamp the rooms, build the house." />
     <meta property="og:type" content="website" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
+         critical path of the page. -->
+    <link rel="stylesheet" href="vendor/fonts.css" />
     <style>
       :root {
         --ink: #163653;
@@ -114,5 +114,7 @@
     </div>
 
 
-  </body>
+    <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
+  <script src="./traffic-counter.js" defer></script>
+</body>
 </html>
