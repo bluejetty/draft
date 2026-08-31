@@ -447,6 +447,11 @@ if (!window.DraftDrawingFormat) {
         ...(stamped && Number.isInteger(claimedNo) && claimedNo > 0 ? { claimedNo } : {}),
         ...(stamped && Number.isInteger(companionOf) && companionOf !== id
           ? { companionOf } : {}),
+        // #323: a stamp the drive-thru program dealt, not one the drafter
+        // placed. Gruff replaces his own on a re-run and never touches
+        // theirs. Additive: old drawings load with the flag absent, i.e.
+        // every existing stamp reads as the drafter's, which it is.
+        ...(stamped && tag?.auto === true ? { auto: true } : {}),
         layer: 'ROOM-IDS-AREA',
       };
     }).filter(Boolean);

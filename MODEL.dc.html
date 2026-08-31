@@ -24,6 +24,7 @@
 <script src="./auto-stair.js"></script>
 <script src="./room-grow.js"></script>
 <script src="./gruff-interview.js"></script>
+<script src="./gruff-drivethru.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
      would otherwise run here and be mounted again by the helmet runtime. -->
@@ -250,6 +251,11 @@
   <div data-model-tools-stack style="display:flex; flex-direction:column; gap:1px; margin-left:8px;">
     <button data-areas-open onClick="{{ openAreasDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">AREAS</button>
     <button data-insert-underlay onClick="{{ openInsertDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">INSERT</button>
+  </div>
+  <!-- ASK GRUFF stands in its own column: the tools stack seats exactly two
+       and a third button there overlaps AREAS. -->
+  <div data-gruff-stack style="display:flex; flex-direction:column; justify-content:center; margin-left:8px;">
+    <button data-gruff-open onClick="{{ onGruffOpen }}" title="{{ gruffOpenTitle }}" style="min-width:64px; border:1px solid #8f2a1d; background:{{ gruffOpenBg }}; color:{{ gruffOpenColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">ASK GRUFF</button>
   </div>
 
   <div data-build-cluster style="position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; align-items:center; gap:8px; z-index:6;">
@@ -638,6 +644,62 @@
     </sc-for>
   </div>
 </sc-if>
+
+<!-- GRUFF'S DRIVE-THRU WINDOW (board #323, the UI half): the professor leans
+     out of the menu board and takes the order. Every question, every parse
+     and every position belongs to gruff-interview.js — this is only his
+     face. The board never computes a coordinate.
+
+     Trap #3 discipline, which has now cost this project twice: the board
+     art, the portrait, the speaker and BOTH screens are decorative and take
+     no press at all. Only the chips, the field and SEND opt back in. A tap
+     on the panel's own white background still reaches the drawing behind,
+     and the bone stays live the whole time — silence is a valid answer. -->
+<sc-if value="{{ gruffOpen }}" hint-placeholder-val="{{ false }}">
+  <div data-gruff-window role="dialog" aria-label="Professor Gruff takes your order" style="position:fixed; left:50%; top:96px; transform:translateX(-50%); z-index:53; width:min(680px, calc(100vw - 24px)); pointer-events:none;">
+    <div style="position:relative; width:100%; aspect-ratio:1250 / 1050;">
+      <img data-gruff-board src="./assets/gruff-drivethru-board.png" alt="" style="position:absolute; left:0; top:0; width:100%; height:100%; display:block; pointer-events:none;" />
+
+      <!-- The black screen: Gruff's voice, red LED lettering. Output only.
+           The face is a local monospace stack — a web font here would put a
+           third-party request on the page and tests/no-third-party.spec.js
+           would rightly fail it. -->
+      <div data-gruff-screen aria-live="polite" style="position:absolute; left:41.44%; top:9.333%; width:53.36%; height:40.952%; pointer-events:none; box-sizing:border-box; padding:3.2% 4%; display:flex; flex-direction:column; justify-content:center; gap:4%; font-family:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace; color:#ff4033; text-shadow:0 0 10px rgba(255,64,51,0.5); letter-spacing:0.03em; line-height:1.35; overflow:hidden;">
+        <div data-gruff-line style="font-size:clamp(11px, 2.05vw, 19px); font-weight:600;">{{ gruffLine }}</div>
+        <sc-if value="{{ gruffHasReminder }}" hint-placeholder-val="{{ false }}">
+          <div data-gruff-reminder style="font-size:clamp(9px, 1.5vw, 14px); opacity:0.74;">{{ gruffReminder }}</div>
+        </sc-if>
+        <sc-if value="{{ gruffHasHint }}" hint-placeholder-val="{{ false }}">
+          <div data-gruff-hint style="font-size:clamp(9px, 1.5vw, 14px); opacity:0.6;">{{ gruffHint }}</div>
+        </sc-if>
+      </div>
+
+      <!-- The white panel: the client's answer, ordinary black letters. The
+           panel is a container only — pointer-events stay off it so its
+           blank space never swallows a press meant for the drawing. -->
+      <div data-gruff-answer style="position:absolute; left:6.64%; top:53.429%; width:86.56%; height:28%; pointer-events:none; box-sizing:border-box; padding:1.6% 2%; display:flex; flex-direction:column; justify-content:center; gap:6px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20; overflow:hidden;">
+        <sc-if value="{{ gruffAsking }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+            <sc-for list="{{ gruffChips }}" as="chip" hint-placeholder-count="4">
+              <button data-gruff-chip onClick="{{ chip.onTap }}" style="pointer-events:auto; border:1px solid {{ chip.border }}; background:{{ chip.bg }}; color:{{ chip.color }}; padding:5px 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0.06em; cursor:pointer;">{{ chip.label }}</button>
+            </sc-for>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input data-gruff-field value="{{ gruffDraft }}" onInput="{{ onGruffDraft }}" onKeyDown="{{ onGruffFieldKey }}" placeholder="{{ gruffPlaceholder }}" aria-label="Your answer to Professor Gruff" style="pointer-events:auto; min-width:0; flex:1; height:30px; border:1px solid rgba(29,31,32,0.3); background:#fff; padding:4px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:13px; outline-offset:1px;" />
+            <button data-gruff-send onClick="{{ onGruffSend }}" disabled="{{ gruffSendDisabled }}" style="pointer-events:auto; border:1px solid #8f2a1d; background:{{ gruffSendBg }}; color:#fff; padding:6px 14px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0.06em; cursor:{{ gruffSendCursor }};">SEND</button>
+          </div>
+        </sc-if>
+        <sc-if value="{{ gruffDone }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+            <div data-gruff-done-note style="font-size:13px; line-height:1.4;">{{ gruffDoneNote }}</div>
+            <button data-gruff-close onClick="{{ onGruffClose }}" style="pointer-events:auto; flex-shrink:0; border:1px solid #557a46; background:#557a46; color:#fff; padding:6px 14px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0.06em; cursor:pointer;">CLOSE</button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
 
 <sc-if value="{{ garageCalloutOpen }}" hint-placeholder-val="{{ false }}">
   <div data-garage-callout style="position:fixed; bottom:72px; left:50%; transform:translateX(-50%); z-index:52; width:360px; border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 14px 38px rgba(29,31,32,0.22); padding:14px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
@@ -2238,6 +2300,14 @@ class Component extends DCLogic {
     roomMinimums: window.DraftRoomStandards.normaliseRoomMinimums(null),
     roomTray: window.DraftRoomStandards.normaliseRoomTray(null),
     roomTrayArmed: null,       // the tray chip waiting for a plan tap (board #198)
+    // GRUFF'S DRIVE-THRU WINDOW (board #323): gruffState is the interview
+    // engine's own frozen state, held whole and replaced on every answer
+    // — never edited here, because answer() is the only thing allowed to
+    // advance it.
+    gruffOpen: false,
+    gruffState: null,
+    gruffDraft: '',
+    gruffProgram: null,        // the last program applied, for the closing line
     tagEditor: null,           // floating room-tag rename editor {x, y}
     tagDraft: '',
     fenestrationStandards: window.DraftFenLabels.normaliseFenStandards(null),
@@ -2716,6 +2786,7 @@ class Component extends DCLogic {
           ? { claimedNo: tag.claimedNo } : {}),
         ...(tag.stamped === true && tag.companionOf != null
           ? { companionOf: tag.companionOf } : {}),
+        ...(tag.stamped === true && tag.auto === true ? { auto: true } : {}),
         underMin: tag.underMin === true,
         layer: ROOM_TAG_LAYER,
       })),
@@ -13236,6 +13307,12 @@ class Component extends DCLogic {
   // without building.
   _pressBuildHouse() {
     this._ensureDrawingCollections();
+    // Board #323: the bone is never gated behind finishing the interview.
+    // Pressed mid-order it deals what Gruff has so far — program() fills
+    // every unanswered rung from the house defaults — and then builds.
+    if (this.state.gruffOpen && this.state.gruffState && !this.state.gruffProgram) {
+      this._gruffApplyProgram();
+    }
     const floors = this._floorLevels();
     const hasSource = [1, ...floors.map(level => level.id)]
       .some(levelId => this._houseOutline(levelId) || this._garageOutline(levelId));
@@ -18956,6 +19033,147 @@ class Component extends DCLogic {
     this.setState({ projectInfo: { ...this.state.projectInfo, bedrooms, bathrooms } });
   }
 
+  // ─── GRUFF'S DRIVE-THRU WINDOW (board #323, the UI half) ─────────────────
+  // Gather what the drawing already knows, hand it to the engine, render
+  // what comes back, apply the program. Nothing here decides where a room
+  // goes and nothing here parses an answer: gruff-interview.js owns both,
+  // and MODEL's build path will read the same program() later. Two
+  // placement implementations that disagree is the bug this rule prevents.
+
+  // The door mark's world point, so Gruff never asks which side the front
+  // door is on when the drafter has already marked it. A mark keys to the
+  // master edge that STARTS at edgeId, the same lookup _buildMarkOpenings
+  // uses.
+  _gruffEntryDoor(outline) {
+    if (!outline || !Array.isArray(outline.marks)) return null;
+    const mark = outline.marks.find(item => item && item.type === 'door');
+    if (!mark) return null;
+    const index = outline.points.findIndex(point => point.pointId === mark.edgeId);
+    if (index < 0) return null;
+    const seg = this._outlineSegment(outline, index);
+    const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
+    const len = Math.hypot(dx, dz);
+    if (!(len > 0)) return null;
+    const t = Math.min(Math.max((mark.offsetFt || 0) / len, 0), 1);
+    return { x: seg.start.x + dx * t, z: seg.start.z + dz * t };
+  }
+
+  _gruffSnapshot() {
+    // _floorLevels() already climbs from the ground up, which is the order
+    // the engine's levelIds[storey - 1] expects.
+    const levels = this._floorLevels();
+    const outline = levels.map(level => this._houseOutline(level.id)).find(Boolean)
+      || this._houseOutline(1) || null;
+    const info = this.state.projectInfo || {};
+    return {
+      outlinePoints: outline ? outline.points : null,
+      levels: levels.map(level => ({ id: level.id })),
+      // A stair's zone is where it sits, which is the middle of its run.
+      stairs: (this._stairs || [])
+        .filter(stair => stair && stair.start && stair.end)
+        .map(stair => ({
+          levelId: stair.levelId,
+          x: (stair.start.x + stair.end.x) / 2,
+          z: (stair.start.z + stair.end.z) / 2,
+        })),
+      projectInfo: { bedrooms: Number(info.bedrooms), bathrooms: Number(info.bathrooms) },
+      entryDoor: this._gruffEntryDoor(outline),
+    };
+  }
+
+  _gruffQuestion() {
+    return this.state.gruffState
+      ? window.DraftGruffInterview.nextQuestion(this.state.gruffState)
+      : null;
+  }
+
+  _openGruff() {
+    this._ensureDrawingCollections();
+    const facts = window.DraftGruffDrivethru.factsFrom(this._gruffSnapshot());
+    // The seed rides the drawing, so the same house hears the same flavour
+    // twice running and two different houses do not sound identical.
+    const seed = ((this._roomTags.length * 7) + (this._walls.length * 3) + 1) % 997;
+    this.setState({
+      gruffOpen: true,
+      gruffDraft: '',
+      gruffProgram: null,
+      gruffState: window.DraftGruffInterview.startState(facts, seed),
+    });
+  }
+
+  _closeGruff() {
+    this.setState({ gruffOpen: false, gruffDraft: '' });
+  }
+
+  // Every answer goes through the engine, which owns the parsing and hands
+  // back a NEW state. Something it cannot read comes back as the same
+  // question with a good-natured line in front — that is its job, not ours,
+  // so this just renders whatever nextQuestion() says next.
+  _gruffAnswer(value) {
+    const state = this.state.gruffState;
+    if (!state) return;
+    const question = window.DraftGruffInterview.nextQuestion(state);
+    if (!question || question.done === true) return;
+    const next = window.DraftGruffInterview.answer(state, question.id, value);
+    const after = window.DraftGruffInterview.nextQuestion(next);
+    // The last rung answered: deal the program without asking for a second
+    // press the client has no reason to expect.
+    if (after && after.done === true) { this._gruffApplyProgram(next); return; }
+    this.setState({ gruffState: next, gruffDraft: '' });
+  }
+
+  // The program becomes ordinary stamps — editable, deletable, numbered by
+  // the same ladder as the tray's. Positions are the engine's, used
+  // verbatim: the panel does not nudge them by so much as a foot.
+  _gruffApplyProgram(state) {
+    const interview = state || this.state.gruffState;
+    if (!interview) return null;
+    const program = window.DraftGruffInterview.program(interview);
+    this._ensureDrawingCollections();
+    // Gruff replaces his own previous deal and never the drafter's stamps.
+    // That is what the persisted `auto` flag is for.
+    this._roomTags = this._roomTags.filter(tag => tag.auto !== true);
+    const idMap = new Map();
+    program.stamps.forEach(stamp => {
+      if (stamp.levelId == null) return;
+      const elevation = this.state.levels.find(level => level.id === stamp.levelId)?.elev ?? 0;
+      const tag = {
+        id: this._nextRoomTagId++,
+        at: new THREE.Vector3(stamp.x, elevation, stamp.z),
+        levelId: stamp.levelId,
+        view: 'plan',
+        name: stamp.base,
+        areaSqFt: 0,
+        underMin: false,
+        stamped: true,
+        auto: true,
+        base: stamp.base,
+        layer: ROOM_TAG_LAYER,
+      };
+      idMap.set(stamp.id, tag.id);
+      this._roomTags.push(tag);
+    });
+    // Companions tie to their host by tag id, which only exists once every
+    // stamp has one — so this is a second pass, not a cleverer first one.
+    program.stamps.forEach(stamp => {
+      if (stamp.companionOf == null) return;
+      const tag = this._roomTags.find(item => item.id === idMap.get(stamp.id));
+      const hostId = idMap.get(stamp.companionOf);
+      if (tag && hostId != null) tag.companionOf = hostId;
+    });
+    this._refreshStampNames();
+    this._markUnsaved();
+    const dealt = idMap.size;
+    this.setState({
+      gruffState: interview,
+      gruffProgram: program,
+      gruffDraft: '',
+      drawingMessage: `Gruff has your order: ${dealt} room stamp${dealt === 1 ? '' : 's'} on the plan. Press the bone to build it.`,
+      drawingMessageError: false,
+    });
+    return program;
+  }
+
   // ─── ROOM GROWING (boards #275/#276) ─────────────────────────────────────
   // Stamps stop being just labels: each projects a dashed boundary preview
   // of the room it will claim, and BUILD HOUSE partitions the floor into
@@ -19932,6 +20150,11 @@ class Component extends DCLogic {
       this.setState({ tourGableArmed: false, drawingMessage: 'GABLE off.', drawingMessageError: false });
       return;
     }
+    if (this.state.gruffOpen && e.key === 'Escape') {
+      e.preventDefault();
+      this._closeGruff();
+      return;
+    }
     if (this.state.roomTrayArmed && e.key === 'Escape' && focusedControl !== 'field') {
       e.preventDefault();
       this.setState({ roomTrayArmed: null, drawingMessage: 'Stamp off.', drawingMessageError: false });
@@ -20801,6 +21024,56 @@ class Component extends DCLogic {
       onTourChip: () => this._activateContextTool('stair'),
       // The ROOM TRAY (board #198) \u2014 chips from COMPANY STANDARDS, one
       // armed at a time; tap a chip, tap the plan.
+      // GRUFF'S DRIVE-THRU WINDOW (board #323). Every string on the two
+      // screens is the engine's own — the panel writes no prose of its own
+      // and invents no reminder.
+      ...(() => {
+        const view = window.DraftGruffDrivethru.viewModel(this._gruffQuestion(), this.state.gruffDraft);
+        const program = this.state.gruffProgram;
+        return {
+          gruffOpen: this.state.gruffOpen === true,
+          gruffOpenBg: this.state.gruffOpen ? '#c0392b' : '#fff',
+          gruffOpenColor: this.state.gruffOpen ? '#fff' : '#8f2a1d',
+          gruffOpenTitle: 'ASK GRUFF \u2014 the professor takes your order at the drive-thru window and stamps the rooms. The bone stays live: press it any time and everything unsaid falls to a default.',
+          onGruffOpen: () => (this.state.gruffOpen ? this._closeGruff() : this._openGruff()),
+          gruffLine: view.line,
+          gruffHasReminder: view.reminder !== '',
+          gruffReminder: view.reminder,
+          gruffHasHint: view.hint !== '',
+          gruffHint: view.hint,
+          // Once the order is placed the window stops asking — whether the
+          // client answered the last rung or pressed the bone at the third.
+          gruffAsking: this.state.gruffOpen === true && view.done !== true && program == null,
+          gruffDone: view.done === true || program != null,
+          gruffDraft: this.state.gruffDraft,
+          gruffPlaceholder: view.placeholder,
+          gruffSendDisabled: !view.canSend,
+          gruffSendBg: view.canSend ? '#c0392b' : 'rgba(192,57,43,0.45)',
+          gruffSendCursor: view.canSend ? 'pointer' : 'default',
+          gruffChips: view.chips.map(chip => ({
+            label: chip.label,
+            bg: chip.suggested ? '#1d1f20' : '#fff',
+            color: chip.suggested ? '#f2f2f3' : '#1d1f20',
+            border: chip.suggested ? '#1d1f20' : 'rgba(29,31,32,0.3)',
+            onTap: () => this._gruffAnswer(chip.value),
+          })),
+          gruffDoneNote: program
+            ? `${program.stamps.length} room${program.stamps.length === 1 ? '' : 's'} stamped${program.defaulted.length ? `, ${program.defaulted.length} left at the house default` : ''}. Press the bone to build it.`
+            : 'Press the bone whenever you are ready.',
+          onGruffDraft: e => this.setState({ gruffDraft: e.target.value }),
+          onGruffFieldKey: e => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            const typed = String(this.state.gruffDraft || '').trim();
+            if (typed) this._gruffAnswer(typed);
+          },
+          onGruffSend: () => {
+            const typed = String(this.state.gruffDraft || '').trim();
+            if (typed) this._gruffAnswer(typed);
+          },
+          onGruffClose: () => this._closeGruff(),
+        };
+      })(),
       roomTrayOpen: this._roomTrayActive(),
       roomTrayChips: this.state.roomTray.map(chip => ({
         label: chip,
