@@ -12,14 +12,38 @@ if (!window.DraftAutoStair) {
 (() => {
   const geo = window.DraftGeometry2D;
 
-  // Tunables — scoring weights and the placement gaps.
-  const BEAM_EDGE_GAP_IN = 2;        // well long edge off the beam centreline (#246)
-  const BEDROOM_REPEL_FT = 6;        // BEDROOM stamp proximity that starts the penalty
-  const BEDROOM_REPEL_WEIGHT = 2;    // score per foot of intrusion into that circle
-  const EXTERIOR_SOFT_PENALTY = 2;   // rule B: soft nudge away from the exterior wall
-  const WALL_ADJACENT_FT = 1;        // "beside an exterior wall" = well within this of the ring
-  const ENTRY_L_BONUS = 4;           // rule A: the entry L beats an equally-near straight
-  const ENTRY_STEP_PENALTY = 1;      // per entry step past the fewest: steps are need-driven
+  // The rulebook (stair-rules.js). The brains used to be the constants
+  // below; they now live in a table with provenance and confidence on
+  // every row, and this file reads it. The constants stay as SEEDS: the
+  // table was seeded from them, so a table row and its seed agree, and a
+  // build that somehow loads this file without the rulebook still places
+  // exactly the stair it placed before rather than a silently different
+  // one. `rule` reads a weight, `sized` reads a distance/threshold.
+  const rules = () => window.DraftStairRules || null;
+  const rule = (id, seed) => {
+    const row = rules()?.PLACEMENT_BY_ID?.[id];
+    return Number.isFinite(row?.weight) ? row.weight : seed;
+  };
+  const sized = (id, field, seed) => {
+    const row = rules()?.PLACEMENT_BY_ID?.[id];
+    return Number.isFinite(row?.[field]) ? row[field] : seed;
+  };
+
+  // Tunables — scoring weights and the placement gaps. Each is the seed
+  // for the table row named beside it.
+  const BEAM_EDGE_GAP_IN = rule('beamEdgeGap', 2);          // well long edge off the beam centreline (#246)
+  const BEDROOM_REPEL_FT = sized('bedroomRepel', 'radiusFt', 6);  // BEDROOM stamp proximity that starts the penalty
+  const BEDROOM_REPEL_WEIGHT = rule('bedroomRepel', 2);     // score per foot of intrusion into that circle
+  const EXTERIOR_SOFT_PENALTY = rule('exteriorWallPenalty', 2);   // rule B: soft nudge away from the exterior wall
+  const WALL_ADJACENT_FT = sized('exteriorWallPenalty', 'thresholdFt', 1); // "beside an exterior wall" = well within this of the ring
+  const ENTRY_L_BONUS = -rule('entryLBonus', -4);           // rule A: the entry L beats an equally-near straight
+  const ENTRY_STEP_PENALTY = rule('entryStepPenalty', 1);   // per entry step past the fewest: steps are need-driven
+  // Stacking (research §2.4): a bonus for landing over the stair below,
+  // falling off to nothing at the radius. Absent unless the caller passes
+  // lowerStair, so it changes no placement that ships today.
+  const STACK_BONUS = -rule('basementStacking', -10);
+  const STACK_RADIUS_FT = sized('basementStacking', 'radiusFt', 12);
+  const CIRCULATION_WEIGHT = rule('circulationDistance', 1);  // cost per foot from the circulation target
   const ENTRY_STAMPS = ['ENTRY', 'FOYER'];   // the front-entry zone (HALL is generic circulation)
   const PULL_STAMPS = ['HALL', 'ENTRY', 'FOYER'];
   const REPEL_STAMPS = ['BEDROOM'];
@@ -118,6 +142,21 @@ if (!window.DraftAutoStair) {
       if (d < BEDROOM_REPEL_FT) worst = Math.max(worst, (BEDROOM_REPEL_FT - d) * BEDROOM_REPEL_WEIGHT);
     });
     return worst;
+  };
+
+  // Stacking (research §2.4): the basement stair usually sits under the
+  // main one — claimed rates run 60-100%, stored as a 0.7-0.9 prior. The
+  // research does NOT agree on what "stacking" means (exact footprint
+  // overlap, same structural bay, or merely nearby), so this models the
+  // middle reading: proximity of well centres, full bonus dead-on and
+  // nothing left by the radius. No lowerStair, no term — which is why
+  // adding this rule moves no stair that ships today.
+  const stackingBonus = (wellCentre, lowerStair) => {
+    const at = lowerStair?.wellCentre || lowerStair;
+    if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.z)) return 0;
+    const d = Math.hypot(at.x - wellCentre.x, at.z - wellCentre.z);
+    if (!(d < STACK_RADIUS_FT)) return 0;
+    return -STACK_BONUS * (1 - d / STACK_RADIUS_FT);
   };
 
   // One beam LINE per distinct cross-position: collinear committed spans
@@ -405,13 +444,27 @@ if (!window.DraftAutoStair) {
   // ── The one entry point ──
   // opts: { points, insetFt, beams, stamps, runFt, treads, widthFt,
   //         landingFt=3, landFt, finishIn=1, gapIn=2, uGapIn=4.5,
-  //         runStepFt=10/12, softInterior=false }
+  //         runStepFt=10/12, softInterior=false,
+  //         lowerStair=null, jurisdiction='ca' }
+  //
+  // Both new inputs are additive. `lowerStair` is the committed stair on
+  // the level below and enables the stacking bonus; without it that term
+  // is absent. `jurisdiction` picks the DIMENSIONS pack that supplies the
+  // width and landing defaults — and only the DEFAULTS, so a caller
+  // passing explicit numbers (MODEL always passes widthFt) is untouched
+  // by it. The two packs deliberately agree on the landing: 36" satisfies
+  // both IRC and NBC, and narrowing it would move every stair that leaves
+  // landingFt unset.
   const suggestStair = opts => {
+    const pack = rules()?.dimensionsFor?.(opts.jurisdiction) || null;
     const {
       points, insetFt, beams = [], stamps = [],
-      runFt, treads, widthFt = 3, landingFt = 3,
+      runFt, treads,
+      widthFt = pack?.defaultWidthFt ?? 3,
+      landingFt = pack?.defaultLandingFt ?? 3,
       landFt = 3, finishIn = 1, gapIn = BEAM_EDGE_GAP_IN,
       uGapIn = 4.5, runStepFt = 10 / 12, softInterior = false,
+      lowerStair = null,
     } = opts;
     if (!Array.isArray(points) || points.length < 3 || !(runFt > 0)) {
       return { stair: null, report: { straight: 'no footprint or run', L: null, U: null } };
@@ -422,15 +475,31 @@ if (!window.DraftAutoStair) {
     const finishFt = finishIn / 12, gapFt = gapIn / 12, uGapFt = uGapIn / 12;
     const common = { runFt, widthFt, landingFt, finishFt, gapFt, landFt, uGapFt, runStepFt };
     const report = { straight: null, L: null, U: null };
+    // The score is a COST: lower wins. Every term is recorded as it is
+    // added, so the winner can say WHY it won — same arithmetic as
+    // before, now with its working shown.
     const score = cand => {
-      let s = Math.hypot(cand.wellCentre.x - target.point.x, cand.wellCentre.z - target.point.z)
-        + bedroomPenalty(cand.wellCentre, stamps);
+      const terms = [];
+      const add = (ruleId, points) => { if (points) terms.push({ ruleId, points }); return points; };
+      let s = add('circulationDistance', CIRCULATION_WEIGHT
+        * Math.hypot(cand.wellCentre.x - target.point.x, cand.wellCentre.z - target.point.z));
+      s += add('bedroomRepel', bedroomPenalty(cand.wellCentre, stamps));
       const edge = Math.min(...cand.well.map(pt => distToRing(pt, ring)));
       cand.wallAdjacent = edge < WALL_ADJACENT_FT;
-      if (softInterior && cand.wallAdjacent) s += EXTERIOR_SOFT_PENALTY;   // rule B
-      if (cand.entryL) s -= ENTRY_L_BONUS - (cand.splitTreads - 2) * ENTRY_STEP_PENALTY; // rule A
+      if (softInterior && cand.wallAdjacent) s += add('exteriorWallPenalty', EXTERIOR_SOFT_PENALTY); // rule B
+      if (cand.entryL) {                                                   // rule A
+        s += add('entryLBonus', -ENTRY_L_BONUS);
+        s += add('entryStepPenalty', (cand.splitTreads - 2) * ENTRY_STEP_PENALTY);
+      }
+      s += add('basementStacking', stackingBonus(cand.wellCentre, lowerStair));
+      cand.terms = terms;
       return s;
     };
+    // The winner explains itself through the rulebook; with no rulebook
+    // loaded the raw terms still travel, so the report never goes empty.
+    const breakdown = cand => (rules()?.scoreBreakdown
+      ? rules().scoreBreakdown(cand, cand.terms || [])
+      : (cand.terms || []).filter(term => term.points));
     const pick = list => list.reduce((best, cand) => {
       const s = score(cand);
       return !best || s < best.s ? { cand, s } : best;
@@ -448,6 +517,7 @@ if (!window.DraftAutoStair) {
     }
     if (pool.length) {
       const best = pick(pool);
+      report.rulesFired = breakdown(best.cand);
       return { stair: finish(best.cand, target), report, target: target.kind };
     }
     report.straight = `needs ${(runFt + 2 * landingFt).toFixed(1)}' clear along the beam; longest run is ${straight.longest.toFixed(1)}'`;
@@ -458,6 +528,7 @@ if (!window.DraftAutoStair) {
       const folds = foldCandidates(ring, lines, { ...common, t1, t2 }, target.point, shape);
       if (folds.candidates.length) {
         const best = pick(folds.candidates);
+        report.rulesFired = breakdown(best.cand);
         return { stair: finish(best.cand, target), report, target: target.kind };
       }
       report[shape] = folds.reasons[0] || `no ${shape} corner fits`;
