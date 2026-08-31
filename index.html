@@ -58,11 +58,24 @@
       }
 
       /* The logo's rendered width is the ONE number this page sizes from.
-         The bone is 55% of it, expressed as a calc off the same custom
-         property rather than a second clamp — so the ratio holds at every
-         breakpoint by construction, including the <=760px rule below,
-         instead of relying on two sets of numbers being kept in step. */
-      :root { --logo-w: clamp(240px, 39vw, 420px); }
+         The bone is a fraction of it, expressed as a calc off the same
+         custom property rather than a second clamp — so the ratio holds at
+         every breakpoint by construction, including the <=760px rule
+         below, instead of relying on two sets of numbers being kept in
+         step.
+
+         Sizes are set from what the page actually PAINTS, not from the
+         box: the logo is 450px and the bone 115px, which is double and
+         half of the 225px / 231px that were really on screen before.
+
+         Those two numbers were not the box numbers. The <img> carried a
+         height attribute, which pins the box height, so `aspect-ratio`
+         never applied and `object-fit: contain` letterboxed the art —
+         the logo painted 225px wide no matter what width the box was
+         given, and widening the box only added empty space either side.
+         That is why the bone (231px painted) was wider than the wordmark.
+         `height: auto` below hands sizing back to the width. */
+      :root { --logo-w: min(450px, 88vw, 70vh); }
 
       .enter {
         display: flex;
@@ -92,6 +105,10 @@
       .enter-logo,
       .enter-bone {
         display: block;
+        /* The width is the size; the height follows the image's own
+           proportions. Without this the height attribute wins and the art
+           is letterboxed inside a box it never fills. */
+        height: auto;
         object-fit: contain;
         filter: drop-shadow(0 18px 30px rgba(22, 54, 83, 0.2));
         transition: filter 160ms ease;
@@ -107,15 +124,23 @@
         aspect-ratio: 1;               /* the wordmark is square, 225x225 */
       }
       .enter-bone {
-        width: calc(var(--logo-w) * 0.55);
+        width: calc(var(--logo-w) * 0.2567);
         aspect-ratio: 287 / 275;       /* the bone's own proportions, undistorted */
+      }
+
+      /* A short window (a laptop with browser chrome eating the height) gets
+         its breathing room trimmed rather than the logo, so the doubled
+         size survives everywhere it can and the page never scrolls to
+         show a way in that should be the first thing you see. */
+      @media (max-height: 720px) {
+        main { padding: 24px 0; }
       }
 
       @media (max-width: 760px) {
         .shell { width: min(100% - 32px, 540px); }
         main { padding: 32px 0; }
-        /* Only the one number changes; the bone follows it. */
-        :root { --logo-w: min(64vw, 315px); }
+        /* --logo-w needs no override: min(450px, 88vw) already shrinks to
+           fit a phone, and the bone follows it down. */
       }
     </style>
   </head>

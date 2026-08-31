@@ -132,6 +132,10 @@ if (!window.DraftDrawingFormat) {
         sillHeight,
         headHeight,
         garage: opening?.garage === true,
+        // Board #169: the bone's own windows carry their provenance so a
+        // re-deal knows which are still its to replace. Old drawings have
+        // no flag and validate unchanged as the drafter's.
+        auto: opening?.auto === true,
       };
     }).filter(Boolean);
 

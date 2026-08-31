@@ -121,6 +121,8 @@
       <div class="snap-row"><label for="snap-zone">Snap zone</label><input type="number" id="snap-zone" min="1" max="60" step="1"><span class="px">px</span><span class="snap-default" id="snap-zone-default"></span></div>
       <div class="snap-row"><label for="suggest-stairs">Stair suggestions</label><input type="checkbox" id="suggest-stairs" data-suggest-stairs></div>
       <div class="snap-row"><label for="room-grow">Room growing</label><input type="checkbox" id="room-grow" data-room-grow></div>
+      <div class="snap-row"><label for="auto-windows">Auto windows</label><input type="checkbox" id="auto-windows" data-auto-windows></div>
+      <p class="advanced-note">BUILD HOUSE deals windows onto the exterior walls by the office siting rules &mdash; front and back maximized, bedrooms rescued on the side wall, one side left bare until the site plan says which. Every one is an ordinary window you can move, resize or delete; the bone only ever deals the first hand. Off means every window is yours to place.</p>
       <p class="advanced-note">Room stamps project a dashed boundary preview of the room each will claim, and BUILD HOUSE grows real 2x4 interior walls from the stamp program. Off means stamps stay labels and every wall is yours to draw.</p>
       <p class="advanced-note">The guided tour's stair step and a BUILD HOUSE press with no stairs offer a rule-derived stair placement — riser math from the level heights, the run along the beam edge — as a suggestion to accept, replace or delete. Off means place every stair yourself.</p>
       <button class="action" id="snap-reset" type="button">RESET SNAP DEFAULT</button>
@@ -198,6 +200,13 @@
         saveActive(suggestStairs ? 'Stair suggestions on.' : 'Stair suggestions off.');
       });
       let roomGrow = active?.content?.model?.roomGrow !== false;
+      let autoWindows = active?.content?.model?.autoWindows !== false;
+      const autoWindowsBox = document.querySelector('[data-auto-windows]');
+      autoWindowsBox.checked = autoWindows;
+      autoWindowsBox.addEventListener('change', () => {
+        autoWindows = autoWindowsBox.checked;
+        saveActive(autoWindows ? 'Auto windows on.' : 'Auto windows off.');
+      });
       const roomGrowBox = document.querySelector('[data-room-grow]');
       roomGrowBox.checked = roomGrow;
       roomGrowBox.addEventListener('change', () => {
@@ -311,7 +320,7 @@
       });
 
       const saveActive = message => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs, walletSound, roomGrow } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs, walletSound, roomGrow, autoWindows } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -372,7 +381,7 @@
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs, walletSound, roomGrow } });
+        const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs, walletSound, roomGrow, autoWindows } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
