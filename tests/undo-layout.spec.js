@@ -8,6 +8,10 @@
 // Every sheet mutation already funnels through _persistLayout, so that is
 // where the snapshot is taken, and the two controls sit on the status bar in
 // the same shape the Model Space's strip carries.
+//
+// Since the bone deals the default sheet set (#168), LAYOUT opens with
+// viewports already on the sheets; these specs count against that dealt
+// baseline rather than an empty sheet.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -62,19 +66,23 @@ test('a placed viewport can be taken back, and put back again', async ({ page })
   const canvas = page.locator('canvas').first();
   const box = await canvas.boundingBox();
 
+  // The bone already dealt the default set; the hand-placed one rides on top.
+  const dealt = (await storedLayout(page)).viewports.length;
+
   await waitForSheetSave(page, async () => {
     await page.getByRole('button', { name: /ADD VIEWPORT/i }).click();
     await page.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.45);
   });
-  expect((await storedLayout(page)).viewports, 'the viewport landed').toHaveLength(1);
+  expect((await storedLayout(page)).viewports, 'the viewport landed').toHaveLength(dealt + 1);
 
   await waitForSheetSave(page, () => undo(page).click());
-  expect((await storedLayout(page)).viewports, 'and came back off the sheet').toHaveLength(0);
+  expect((await storedLayout(page)).viewports, 'and came back off the sheet').toHaveLength(dealt);
 
   await waitForSheetSave(page, () => redo(page).click());
   const back = (await storedLayout(page)).viewports;
-  expect(back, 'redo put it back').toHaveLength(1);
-  expect(back[0].pif, 'at the scale it was placed with').toBeCloseTo(1 / 4, 5);
+  expect(back, 'redo put it back').toHaveLength(dealt + 1);
+  const placed = back.reduce((a, b) => (a.id > b.id ? a : b));
+  expect(placed.pif, 'at the scale it was placed with').toBeCloseTo(1 / 4, 5);
 });
 
 test('the sheet history writes only the layout key — the drawing rides through', async ({ page }) => {
