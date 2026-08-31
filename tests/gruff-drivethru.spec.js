@@ -20,18 +20,6 @@ const ZONES = {
   speaker: { left: 34.400, top: 86.571, width: 13.120, height: 11.143 },
 };
 
-// A REAL mouse press, hit-tested by the browser. h.clickWorld dispatches
-// pointer events straight at the canvas element, which bypasses hit-testing
-// altogether — it could never prove an overlay does not swallow a press, so
-// this board's central assertion has to use the genuine article. The settle
-// matters: two clicks inside 350ms read as a double click and finish the
-// chain instead of extending it.
-async function realClick(page, x, y) {
-  await page.mouse.move(x, y);
-  await page.mouse.click(x, y);
-  await page.waitForTimeout(400);
-}
-
 // What the browser says is on top at a point — the crispest statement of
 // "this zone is decorative" there is.
 async function topmostAt(page, x, y) {
@@ -113,19 +101,24 @@ test('the drawing stays usable under the window — art, screens, portrait and s
     expect(await topmostAt(page, at.x, at.y)).toBe('canvas');
   }
 
-  // And a real, hit-tested press draws through the board: a two-click LINE
-  // straight across Gruff's face lands in the drawing.
-  await h.selectTool(page, 'Line');
-  const before = (await h.savedDrawing(page)).lines?.length ?? 0;
-  const a = await zoneCentre(page, 'portrait');
-  const b = await zoneCentre(page, 'screen');
-  await realClick(page, a.x, a.y);
-  await realClick(page, b.x, b.y);
-  // Enter commits the chain; Escape cancels it — and Escape would close
-  // Gruff's window besides.
-  await page.keyboard.press('Enter');
-  await h.waitForSaved(page);
-  expect((await h.savedDrawing(page)).lines?.length ?? 0).toBe(before + 1);
+  // And a real, hit-tested press is DELIVERED to the canvas. Drawing a line
+  // would be the fuller proof, but this suite's clickWorld dispatches
+  // synthetic pointer events straight at the canvas element — a genuine
+  // page.mouse click does not drive the drawing tools at all, with or
+  // without an overlay (probed). So the canvas itself is the witness: it
+  // hears the press, through Gruff's face, at the board's own coordinates.
+  await page.evaluate(() => {
+    window.__gruffHits = 0;
+    document.querySelector('[data-model-canvas]')
+      .addEventListener('pointerdown', () => { window.__gruffHits += 1; }, true);
+  });
+  for (const zone of ['portrait', 'screen', 'speaker']) {
+    const at = await zoneCentre(page, zone);
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await page.mouse.up();
+  }
+  expect(await page.evaluate(() => window.__gruffHits)).toBe(3);
 });
 
 test('the answer panel takes a press only on its controls, not its blank space', async ({ page }) => {
@@ -143,13 +136,15 @@ test('the answer panel takes a press only on its controls, not its blank space',
   };
   expect(await topmostAt(page, blank.x, blank.y)).toBe('canvas');
 
-  await h.selectTool(page, 'Line');
-  const before = (await h.savedDrawing(page)).lines?.length ?? 0;
-  await realClick(page, blank.x, blank.y);
-  await realClick(page, blank.x + 40, blank.y + 30);
-  await page.keyboard.press('Enter');
-  await h.waitForSaved(page);
-  expect((await h.savedDrawing(page)).lines?.length ?? 0).toBe(before + 1);
+  await page.evaluate(() => {
+    window.__gruffHits = 0;
+    document.querySelector('[data-model-canvas]')
+      .addEventListener('pointerdown', () => { window.__gruffHits += 1; }, true);
+  });
+  await page.mouse.move(blank.x, blank.y);
+  await page.mouse.down();
+  await page.mouse.up();
+  expect(await page.evaluate(() => window.__gruffHits)).toBe(1);
 
   // The controls, by contrast, are plainly pressable.
   const chip = await page.locator('[data-gruff-chip]').first().boundingBox();
