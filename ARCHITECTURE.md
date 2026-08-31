@@ -13,22 +13,73 @@ no bundler: what is in the repo is what runs.
 | File | Role |
 | --- | --- |
 | `index.html` | Entry hub: plain HTML, links into the workspaces. |
-| `MODEL.dc.html` | The drafting workspace — nearly all application logic lives here (~16,500 lines). |
+| `MODEL.dc.html` | The drafting workspace — most application logic still lives here, though several modules have been extracted out of it (see `REFACTOR-PLAN.md`). |
 | `LAYOUT.dc.html` | Sheet layout workspace. |
 | `SETTINGS.html` | Keyboard bindings and preferences UI. |
 | `STANDARDS.html` | Company Standard Layers reference. |
 | `Notepad.dc.html`, `SaveBox.dc.html` | Small DC components; `SaveBox` is the minimal worked example of the component pattern. |
 
 Shared plain-JS modules, each loaded with an ordinary `<script src>` tag
-and each guarded by `if (!window.X)` so double-loading is harmless:
+and each guarded by `if (!window.X)` so double-loading is harmless. That
+guard earns its keep beyond tidiness: it is what lets a stand-in module be
+displaced by the real one, simply by loading the real one first.
+
+Nearly all of these are **pure** — no DOM, no component state, plain data in
+and plain data out — which is what makes them testable in node without a
+browser (see `proto/`). The handful that reach for the platform say so.
+
+**Platform and storage**
 
 | File | Global | Role |
 | --- | --- | --- |
 | `support.js` | `DCLogic` etc. | The DC runtime. **Generated** from `dc-runtime/src/*.ts` — do not edit by hand (header says how to rebuild). |
 | `drawing-format.js` | `DraftDrawingFormat` | Stored-drawing readers: format version + one validator per collection. |
-| `geometry-2d.js` | `DraftGeometry2D` | Pure plan-view math (snap, trim, distances) on plain `{x,y,z}` objects — no THREE, no state, unit-testable alone. |
-| `profile-manager.js` | `DraftProfileManager` | Personal-settings / company-standards packages. JSON data only; imported packages never execute code. Owns `DEFAULT_KEYBINDINGS`. |
-| `shared-file-store.js` | `SharedFileStore` | IndexedDB wrapper (db `pdf-img-mgr-shared`, store `files`). Buckets of records; named-record helpers for many files per bucket. |
+| `shared-file-store.js` | `SharedFileStore` | **IndexedDB.** Wrapper over db `pdf-img-mgr-shared`, store `files`. Buckets of records, each carrying a revision so a concurrent whole-bucket write is caught rather than silently clobbering. |
+| `profile-manager.js` | `DraftProfileManager` | **localStorage.** Personal-settings / company-standards packages. JSON data only; imported packages never execute code. Owns `DEFAULT_KEYBINDINGS`. |
+| `orientation-guard.js` | `DraftOrientationGuard` | **DOM.** Holds every working screen in landscape on a coarse pointer; ENTRY is exempt. |
+| `traffic-counter.js` | — | The one deliberate off-site request in the app, and the single exception `tests/no-third-party.spec.js` knows about. |
+
+**Geometry and painting**
+
+| File | Global | Role |
+| --- | --- | --- |
+| `geometry-2d.js` | `DraftGeometry2D` | Plan-view math (snap, trim, distances, roof skeleton and faces) on plain `{x,y,z}` objects — no THREE, no state. |
+| `formatters.js` | `DraftFormatters` | Architectural length parsing and formatting: the one place feet-and-inches becomes a number and back. |
+| `wall-types.js` | `DraftWallTypes` | Wall assembly definitions; `totalIn` is the full assembly width. Authoritative on wall geometry. |
+| `render-2d.js` | `DraftRender2D` | The 2D overlay painters: a canvas context and a world→screen transform in, ink out. |
+| `cut-view.js` | `DraftCutView` | The generated section / elevation painter, shared by MODEL and the LAYOUT sheets — so one fix heals both screens, and one bug shows on both. |
+| `layout-plan.js` | `DraftLayoutPlan` | Turns a saved drawing's plan-level entities into ink on a LAYOUT viewport. |
+| `titleblock.js` | `DraftTitleblock` | The company strip on a LAYOUT sheet. |
+
+**Generation — the machinery behind the bone**
+
+| File | Global | Role |
+| --- | --- | --- |
+| `build-house.js` | `DraftBuildHouse` | BUILD HOUSE itself: measure the outline, return walls, floors, slab and footings as plain data. |
+| `room-grow.js` | `DraftRoomGrow` | Stamp programs in, partition walls and room claims out, plus the house-wide BEDROOM / WC numbering ladder. |
+| `auto-stair.js` | `DraftAutoStair` | Where a stair fits, derived from the outline, beam lines and stamps. |
+| `stair-rules.js` | `DraftStairRules` | The rulebook `auto-stair.js` reads, so the numbers are an office standard rather than constants in a tool. |
+| `auto-windows.js` | `DraftAutoWindows` | The office's window-siting ruleset: faces and room claims in, openings out. |
+| `auto-dims.js` | `DraftAutoDims` | AUTO DIMS string computation. |
+| `areas.js` | `DraftAreas` | Per-level and building areas for permit applications. |
+
+**Office standards — where the drafting knowledge lives**
+
+| File | Global | Role |
+| --- | --- | --- |
+| `room-standards.js` | `DraftRoomStandards` | Preferred room minimum sizes, and the ROOM TRAY list. |
+| `fen-labels.js` | `DraftFenLabels` | The fenestration naming ladder and its stock tables. Authoritative on what an opening is *called*. |
+
+**Guided flows and secondary pages**
+
+| File | Global | Role |
+| --- | --- | --- |
+| `tour.js` | `DraftTour` | The guided tour's rules: plain data in, verdicts and geometry out. |
+| `gruff-interview.js` | `DraftGruffInterview` | The interview engine — the question tree Gruff works through. Deterministic: no network, no AI, seeded flavour only. |
+| `gruff-drivethru.js` | `DraftGruffDrivethru` | The drive-thru window's pure half. |
+| `bone-wallet.js` | `DraftBoneWallet` | **localStorage.** The bone economy: seed grant, cost per build, drip and cap. |
+| `project-page.js` | `DraftProjectPage` | The PROJECT page's typical wall-section detail. |
+| `pdf-scan.js` | `DraftPdfScan` | **DOM.** PDF / photo scan-and-convert for the INSERT flow. |
 
 Vendored libraries live in `vendor/` (React 18.3.1, Three.js 0.128,
 OrbitControls, pdf.js 3.11.174 + its matching worker). Nothing is fetched

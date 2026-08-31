@@ -1,8 +1,14 @@
 # MODEL.dc.html split — plan only
 
-Per the work order: this is a proposal document. **Zero code moves before
-#116 lands**, and nothing here is a commitment — it's the safest order we
-could find if/when the split starts.
+This began as a proposal document, written while the split was still
+hypothetical and gated on board #116. That gate is long gone — #116 (the
+semantic cut views) landed, and **steps 1 to 4 have all been carried out**,
+each as its own reviewed PR, in the order proposed here.
+
+What remains live is steps 5 and 6, and the most useful thing in this
+document is now the reasoning for why those two should be approached
+differently — or, in the case of step 6, not at all. Read the risks section
+before proposing any further extraction; it is the part that has aged best.
 
 ## What the DC framework allows
 
@@ -24,33 +30,43 @@ shrinks; it doesn't fragment.
 
 Each step is one PR, suite green, and provably a delegation — the module
 function takes explicit inputs and returns values; the class method
-becomes a one-liner calling it. No behavior change, no test edits.
+becomes a one-liner calling it. No behavior change, no test edits. That
+rule held for all four completed steps and is the reason none of them
+needed a follow-up fix.
 
-1. **Formatters** (`── Formatters ──`, ~15,130): feet/inch string
-   formatting. Pure string-in/string-out, zero state. → `formatters.js`.
-   Lowest possible risk; a warm-up that establishes the PR shape.
-2. **2D painters** (roof plan ~11,070; wall cross-section ~11,250; shape
-   ~11,500; cuts ~5,660; stair panes ~5,180–5,750): already written as
-   `(ctx, toS, data)` painters that read collections handed to them. →
-   `render-2d.js`, with the data they currently pluck off `this` passed
-   as one explicit argument object. The pixel-assertion tests
+**Status against `main` at `c2f4d72`:** steps 1–4 done, 5 and 6 outstanding.
+
+1. ✅ **Done → `formatters.js`.** Feet/inch string
+   formatting. Pure string-in/string-out, zero state. Lowest possible
+   risk; the warm-up that established the PR shape the rest followed.
+2. ✅ **Done → `render-2d.js`.** The 2D painters, already written as
+   `(ctx, toS, data)` painters reading collections handed to them, with
+   the data they had plucked off `this` passed as one explicit argument
+   object. The pixel-assertion tests
    (overlayPixels checks) pin these hard, which is what makes the move
    verifiable.
-3. **Auto-dims** (`── Line drawing ──` neighborhood, `_placeAutoDims` +
-   `facingOf`/`mergeJogs`/string-stacking, ~13,050–13,390): a
+3. ✅ **Done → `auto-dims.js`.** `_placeAutoDims` and its helpers: a
    self-contained algorithm over `(outlines, roofs, walls, fenestrations,
    settings)` returning dimension entries. Three spec files pin it
-   (auto-dims, roof-dims, auto-footings). → `auto-dims.js`.
-4. **BUILD HOUSE generation** (~8,590–9,270): outline → walls/slab/roof
+   (auto-dims, roof-dims, auto-footings).
+4. ✅ **Done → `build-house.js`.** Outline → walls/slab/roof
    generation; feeds on assemblies and outlines, returns geometry. Pinned
    by auto-house, build-links, garage specs.
-5. **Vertex pool** (~11,790+): stateful (owns `_vertices` identity and
+5. ⏳ **Outstanding — vertex pool.** Stateful (owns `_vertices` identity and
    the srcId master-link semantics) — extract only behind a deliberate
    interface, late, if ever.
-6. **Tool state machines and keyboard** (mouse/tool sections, keyboard at
-   ~14,880): these *are* the component — they read and write live state
-   on every event. Leave in the class. If 3D pressure demands it, the
-   template here is a context-object interface designed then, not now.
+6. ⛔ **Deliberately not extracted — tool state machines and keyboard.**
+   These *are* the component: they read and write live state on every
+   event. Leave them in the class. If 3D pressure ever demands otherwise,
+   the template is a context-object interface designed then, not now.
+
+**And one that was never in this plan: `cut-view.js`.** The generated
+section / elevation painter came out under board #168, so that the LAYOUT
+sheets could seat the same views MODEL draws. It followed the same rule —
+its own PR, a pure module, no behavior change — which is why it slotted in
+without disturbing the numbered order above. Expect more of these: the plan
+lists the extractions worth doing on their own merits, not every extraction
+a feature will ever justify.
 
 Persistence (`buildSave`/`_applyDrawingData`) stays in the class in all
 phases: the four-place rule (collections init, serializer, applier,
@@ -79,16 +95,30 @@ places live together next to the format module.
 - **renderVals keys and template strings are load-bearing.** The split
   must never rename a renderVals key or a state field — templates
   reference them by string and no tool will catch a typo statically.
-- **#116 lands first, always.** Sections/elevations will touch cuts,
-  renderers, and level heights; splitting under Devon's feet would force
-  him to rebase across a reorganization. The plan waits.
+- **~~#116 lands first, always.~~** *Satisfied.* Board #116 — the semantic
+  cut views — landed, and the extractions followed it rather than racing
+  it. The reasoning is kept because it generalises: an extraction must not
+  land under an in-flight feature that touches the same region, or its
+  author pays for the reorganisation in rebase conflicts. Substitute
+  whatever is in flight today; right now that is the elevation painter.
 
 ## What "done" looks like
 
-MODEL.dc.html keeps: the template, the component class with state,
-lifecycle, tools, keyboard, persistence, and thin delegations. Alongside
-it: `formatters.js`, `render-2d.js`, `auto-dims.js`, `build-house.js`
-in the geometry-2d mold — pure, unit-testable, and individually
-reviewable. Rough arithmetic: those four sections are ~3,500–4,000 lines
-of today's ~16,500, taking the main file under ~13,000 with zero
-behavior change.
+This is now largely a description rather than a forecast. MODEL.dc.html
+keeps the template, the component class with its state, lifecycle, tools,
+keyboard, persistence, and thin delegations. Alongside it stand
+`formatters.js`, `render-2d.js`, `auto-dims.js`, `build-house.js` and
+`cut-view.js`, all in the geometry-2d mold — pure, testable in node, and
+individually reviewable.
+
+The file did not shrink the way the original arithmetic predicted, and that
+is worth knowing rather than quietly restating: MODEL has grown through the
+extractions, because features have been landing faster than logic has been
+moving out. The extractions are still worth it — what left is the part that
+can be tested without a browser — but nobody should expect the line count to
+fall from extraction alone, and a plan that measures success in lines will
+keep reporting failure.
+
+That is what rule 5 in BRANCHING.md is for: new logic starts in a module.
+Extraction fixes the past one painful PR at a time; the rule stops the file
+growing in the first place, which is the cheaper half by a wide margin.
