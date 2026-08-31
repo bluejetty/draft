@@ -96,13 +96,21 @@ test('a finger places a wall and drags a node', async ({ page }) => {
   expect(h.touchesPoint(walls[0], 6, 2), 'the dragged end followed the finger').toBe(true);
 });
 
-test('a second finger landing mid-stroke does not steal the wall being drawn', async ({ page }) => {
+test('a second finger landing mid-stroke takes the view, and commits nothing', async ({ page }) => {
+  // AMENDED by the gesture board. This spec used to pin the migration-era
+  // rule — first pointer wins everywhere, so a second finger changed nothing
+  // and the wall still committed. On the CANVAS that is now deliberately
+  // different: a second TOUCH pointer promotes to the pan/pinch gesture,
+  // because "I started a line and actually wanted to move the view" is the
+  // save a tablet needs. Everywhere else — chrome, chips, cards — first
+  // pointer wins exactly as before, and a mouse never joins a gesture.
+  //
+  // What has NOT changed, and is still the point of this test: the intruding
+  // finger never drops a corner of its own.
   await h.openModel(page);
   await h.selectTool(page, 'Wall');
   await tapWorld(page, -6, 0);
 
-  // Two touch points at once: the first is mid-chain, the second lands far
-  // away. First pointer wins — the second must not drop a corner of its own.
   const first = await h.worldToClient(page, 6, 0);
   const intruder = await h.worldToClient(page, 0, 8);
   const client = await page.context().newCDPSession(page);
@@ -121,9 +129,10 @@ test('a second finger landing mid-stroke does not steal the wall being drawn', a
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
 
-  const walls = h.allWalls(await h.savedDrawing(page));
-  expect(walls).toHaveLength(1);
-  // The wall runs where the FIRST finger said, not to the intruder at (0, 8).
-  expect(h.touchesPoint(walls[0], -6, 0)).toBe(true);
-  expect(h.touchesPoint(walls[0], 6, 0)).toBe(true);
+  // The pending run was discarded, not committed behind the drafter's back —
+  // and above all, nothing was drawn to the intruder's corner.
+  const saved = await h.savedDrawing(page);
+  const walls = h.allWalls(saved || {});
+  expect(walls).toHaveLength(0);
+  expect(h.allLines(saved || {})).toHaveLength(0);
 });

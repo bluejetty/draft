@@ -38,6 +38,10 @@
   <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
        critical path of the page. -->
   <link rel="stylesheet" href="vendor/fonts.css" />
+  <!-- Landscape on every working screen (board #310): in portrait on a
+       touch device this covers the page until the tablet is turned. ENTRY
+       is the one screen that does not load it. -->
+  <script src="orientation-guard.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
@@ -5685,6 +5689,8 @@ class Component extends DCLogic {
     // _claimPointer / _leaveCanvasOnce.
     this._activePointerId = null;
     this._insideCanvas    = false;
+    this._touchPoints     = new Map();  // live TOUCH pointers on the canvas
+    this._gesture         = null;       // { midX, midY, dist } while two fingers own the view
 
     // 2D overlay canvas (for crisp line + node rendering)
     this._overlayCanvas = document.querySelector('[data-model-overlay]');
@@ -5701,6 +5707,7 @@ class Component extends DCLogic {
     // mouse input); and `contextmenu` is wanted as-is, because a long press on
     // iPad fires it.
     canvas.addEventListener('pointermove', this._cmmv = e => {
+      if (this._gestureMove(e)) return;
       if (!this._ownsPointer(e)) return;
       // A captured pointer keeps delivering moves that happen OUTSIDE the
       // canvas. Plain mousemove stopped at the canvas edge, so the bounds test
@@ -5712,6 +5719,7 @@ class Component extends DCLogic {
       this._onMouseMove(e);
     });
     canvas.addEventListener('pointerdown', this._cmdn = e => {
+      if (this._gestureDown(e)) return;
       if (!this._claimPointer(e)) return;
       // A finger and a Pencil have NO HOVER. A mouse arrives at a point by
       // moving there, and the move handler is what computes the snapped
@@ -5733,6 +5741,7 @@ class Component extends DCLogic {
     canvas.addEventListener('pointerleave', this._cmle = e => { if (this._ownsPointer(e)) this._leaveCanvasOnce(); });
     window.addEventListener('pointermove', this._wmmv = e => { if (!this._ownsPointer(e)) return; this._invalidate(); this._onGlobalMouseMove(e); });
     window.addEventListener('pointerup',   this._wmup = e => {
+      if (this._gestureEnd(e)) return;
       if (!this._ownsPointer(e)) return;
       // Free the pointer FIRST: several branches below return early, and a
       // pointer id left claimed locks the canvas out of every later gesture.
@@ -10491,6 +10500,115 @@ class Component extends DCLogic {
   // drawn, and a palm resting on an iPad must not become a second cursor.
   // Two-finger pan/zoom is a follow-up board — this is the policy that makes
   // one finger reliable first.
+  // ─── Two fingers pan and pinch (the deferred gesture board) ──────────────
+  // The sanctioned amendment to first-pointer-wins: on the CANVAS, a second
+  // TOUCH pointer promotes to a gesture. Everywhere else — chrome, chips,
+  // cards — first-pointer-wins stands exactly as the migration installed it,
+  // and the mouse is untouched: gestures are pointerType 'touch' only, so a
+  // mouse plus a stray finger can never combine into one.
+  //
+  // Pan and pinch are ONE gesture, not two modes: every move recomputes the
+  // midpoint and the spread and applies both. No threshold, no mode split.
+
+  _gestureDown(e) {
+    if (e.pointerType !== 'touch') return false;
+    this._touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (this._touchPoints.size < 2) return false;
+    try { this._canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+    if (!this._gesture) {
+      // THE SAVE: the first finger may already have started a line or picked
+      // up a node. A second finger means the drafter wanted to move the view,
+      // not draw — so the pending work is discarded, never committed, down
+      // the same path pointercancel uses.
+      this._discardPendingDraw();
+      if (this._activePointerId != null) {
+        try { this._canvas.releasePointerCapture(this._activePointerId); } catch { /* gone */ }
+        this._activePointerId = null;
+      }
+    }
+    this._gesture = this._gestureFrame();
+    return true;
+  }
+
+  _gestureMove(e) {
+    if (e.pointerType !== 'touch' || !this._touchPoints.has(e.pointerId)) return false;
+    this._touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!this._gesture) return false;
+    // One finger left of a gesture: swallow its moves. Lifting back to one
+    // does NOT resume drawing — the gesture ends when the LAST finger lifts.
+    if (this._touchPoints.size < 2) return true;
+    const next = this._gestureFrame();
+    this._applyGesture(this._gesture, next);
+    this._gesture = next;
+    return true;
+  }
+
+  _gestureEnd(e) {
+    if (!e || e.pointerType !== 'touch') return false;
+    this._touchPoints.delete(e.pointerId);
+    if (!this._gesture) return false;
+    try { this._canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    if (this._touchPoints.size === 0) {
+      this._gesture = null;
+      this._activePointerId = null;   // the next single finger starts clean
+      this._invalidate();
+    } else if (this._touchPoints.size >= 2) {
+      this._gesture = this._gestureFrame();  // a finger left, two still down
+    }
+    return true;
+  }
+
+  // Midpoint and spread of the two fingers that own the gesture.
+  _gestureFrame() {
+    const [a, b] = [...this._touchPoints.values()].slice(0, 2);
+    return { midX: (a.x + b.x) / 2, midY: (a.y + b.y) / 2, dist: Math.hypot(a.x - b.x, a.y - b.y) };
+  }
+
+  _applyGesture(prev, next) {
+    if (this.state.activeView === 'perspective') return; // 3D keeps its orbit
+    if (this._stairWorkspaceActive()) return;            // locked framing
+    // PINCH, anchored on the midpoint: the world point under the fingers stays
+    // under the fingers. The same trick as the cursor-anchored wheel zoom —
+    // zoom, then correct the camera by however far that point slid.
+    if (prev.dist > 1 && next.dist > 1) {
+      const before = this._getWorldPos(next.midX, next.midY);
+      this._orthoHalfH = Math.max(1, Math.min(300, this._orthoHalfH * (prev.dist / next.dist)));
+      this._updateOrthoFrustum();
+      const after = this._getWorldPos(next.midX, next.midY);
+      if (before && after && this.state.activeView === 'top') {
+        this._orthoCamX += before.x - after.x;
+        this._orthoCamZ += before.z - after.z;
+        const e0 = this._drawElev || 0;
+        this._orthoCam.position.set(this._orthoCamX, e0 + 200, this._orthoCamZ);
+        this._orthoCam.lookAt(this._orthoCamX, e0, this._orthoCamZ);
+      }
+    }
+    // PAN, by the midpoint's travel — through the same _panBy the middle-drag
+    // and the HAND mode use.
+    this._panBy(next.midX - prev.midX, next.midY - prev.midY);
+    this._updateGridLOD();
+    this._invalidate();
+  }
+
+  // Everything a press may have started, thrown away without committing. Both
+  // the pointercancel path and the two-finger save end up here.
+  _discardPendingDraw() {
+    this._cancelWall(); this._cancelLine(); this._cancelFloor();
+    this._cancelShape(); this._cancelOutline(); this._cancelCut();
+    if (this._tourRoofDrag) this._endTourRoofDrag();
+    this._panning2D      = false;
+    this._selectDrag     = null;
+    this._arcDrag        = null;
+    this._outlineArcDrag = null;
+    this._fixtureDrag    = null;
+    this._roomTagDrag    = null;
+    this._eMarkDrag      = null;
+    this._selectDownInfo = null;
+    this._windowSelection = null;
+    this._syncChainActive();
+    this._invalidate();
+  }
+
   _ownsPointer(e) {
     return this._activePointerId === null || this._activePointerId === e.pointerId;
   }
@@ -10517,19 +10635,10 @@ class Component extends DCLogic {
   // NOTHING can draw again — but deliberately do not run the up handler's
   // commit branches, because the gesture did not finish, it was taken away.
   _abandonPointer(e) {
+    if (this._gestureEnd(e)) return;
     if (!this._ownsPointer(e)) return;
     this._releasePointer(e);
-    if (this._tourRoofDrag) this._endTourRoofDrag();
-    this._panning2D      = false;
-    this._selectDrag     = null;
-    this._arcDrag        = null;
-    this._outlineArcDrag = null;
-    this._fixtureDrag    = null;
-    this._roomTagDrag    = null;
-    this._eMarkDrag      = null;
-    this._selectDownInfo = null;
-    this._windowSelection = null;
-    this._invalidate();
+    this._discardPendingDraw();
   }
 
   _pointerOverCanvas(e) {
@@ -10983,6 +11092,13 @@ class Component extends DCLogic {
     if (!this._panning2D) return;
     const dx = e.clientX - this._pan2DPrevX, dy = e.clientY - this._pan2DPrevY;
     this._pan2DPrevX = e.clientX; this._pan2DPrevY = e.clientY;
+    this._panBy(dx, dy);
+  }
+
+  // Slide the view by a screen delta, in whichever view is open. Extracted so
+  // the middle-drag, the HAND mode and the two-finger gesture all pan through
+  // ONE piece of arithmetic — three copies of this would drift.
+  _panBy(dx, dy) {
     const h = this._canvas?.clientHeight || 600, w = this._canvas?.clientWidth || 800;
     const fpx = (this._orthoHalfH * 2) / h;
     const e0 = this._drawElev || 0, view = this.state.activeView;
