@@ -11,7 +11,10 @@
 <script src="./drawing-format.js"></script>
 <script src="./wall-types.js"></script>
 <script src="./render-2d.js"></script>
+<script src="./geometry-2d.js"></script>
 <script src="./layout-plan.js"></script>
+<script src="./formatters.js"></script>
+<script src="./cut-view.js"></script>
 <script src="./titleblock.js"></script>
 </head>
 <body>
@@ -105,6 +108,15 @@
         <button onClick="{{ setLandscape }}" style="padding:7px 10px; font-size:12px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; letter-spacing:0.04em; border:none; background:{{ landscapeBg }}; color:{{ landscapeColor }}; cursor:pointer; border-right:1px solid rgba(29,31,32,0.16);">LAND</button>
         <button onClick="{{ setPortrait }}"  style="padding:7px 10px; font-size:12px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; letter-spacing:0.04em; border:none; background:{{ portraitBg }};  color:{{ portraitColor }};  cursor:pointer;">PORT</button>
       </div>
+    </div>
+
+    <!-- SHEET -->
+    <div style="padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Sheet</div>
+      <sc-for list="{{ sheets }}" as="sh" hint-placeholder-count="2">
+        <button data-layout-sheet="{{ sh.id }}" onClick="{{ sh.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ sh.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ sh.label }}</button>
+      </sc-for>
+      <button data-layout-add-sheet onClick="{{ addSheet }}" style="display:block; width:100%; text-align:left; border:1px dashed rgba(29,31,32,0.3); background:#fff; color:rgba(29,31,32,0.6); font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer;">+ Sheet</button>
     </div>
 
     <!-- SCALE -->
@@ -207,12 +219,60 @@ const PAPER_SIZES = {
 const SCALES = [
   { label: '1/16" = 1\'-0"', pif: 1/16 },
   { label: '1/8" = 1\'-0"',  pif: 1/8  },
+  { label: '3/16" = 1\'-0"', pif: 3/16 },
   { label: '1/4" = 1\'-0"',  pif: 1/4  },
   { label: '3/8" = 1\'-0"',  pif: 3/8  },
   { label: '1/2" = 1\'-0"',  pif: 1/2  },
   { label: '3/4" = 1\'-0"',  pif: 3/4  },
   { label: '1" = 1\'-0"',    pif: 1    },
 ];
+
+// The auto composer's ladder, largest first: the working plan scale, then the
+// honest steps down. Anything below 1/16" is not a real drafting scale.
+const AUTO_SCALE_PREFS = [1 / 4, 3 / 16, 1 / 8, 1 / 16];
+
+// Composer spacing, in paper inches: air between viewports, and the caption
+// line each viewport wears under its frame.
+const COMPOSE_GAP_IN = 0.35;
+const COMPOSE_LABEL_IN = 0.3;
+
+// The four standard elevations stand just outside the plan, the same rule the
+// Model Space's E marks follow: dirVec points at the side the viewer is on.
+const E_MARK_SIDES = {
+  E1: { side: 'S', sign: 1,  dir: { x: 0,  z: 1 } },
+  E2: { side: 'W', sign: -1, dir: { x: -1, z: 0 } },
+  E3: { side: 'N', sign: -1, dir: { x: 0,  z: -1 } },
+  E4: { side: 'E', sign: 1,  dir: { x: 1,  z: 0 } },
+};
+const E_MARK_CLEAR_FT = 2;
+
+// The Model Space's level-assembly defaults, mirrored so the sheet reads a
+// saved drawing the way the drawing's own screens do.
+const DEFAULT_WALL_TOP_FT = (8 * 12 + 1 + 1 / 8) / 12;
+const DEFAULT_FOOTING_WIDTH_IN = 20;
+const ICF_FOOTING_WIDTH_IN = 24;
+const defaultLevelAssembly = () => ({
+  wallHeightFt: DEFAULT_WALL_TOP_FT,
+  joistDepthIn: 11 + 7 / 8,
+  sheathingIn: 3 / 4,
+  slabThicknessIn: 3,
+  footingDepthIn: 8,
+  footingWidthIn: null,
+});
+const normaliseLevelAssembly = raw => {
+  const base = defaultLevelAssembly();
+  if (!raw || typeof raw !== 'object') return base;
+  const positive = (value, fallback) =>
+    (Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback);
+  return {
+    wallHeightFt: positive(raw.wallHeightFt, base.wallHeightFt),
+    joistDepthIn: positive(raw.joistDepthIn, base.joistDepthIn),
+    sheathingIn: positive(raw.sheathingIn, base.sheathingIn),
+    slabThicknessIn: positive(raw.slabThicknessIn, base.slabThicknessIn),
+    footingDepthIn: positive(raw.footingDepthIn, base.footingDepthIn),
+    footingWidthIn: positive(raw.footingWidthIn, null),
+  };
+};
 
 const MODEL_STORAGE_BUCKET = 'model-drawing';
 
@@ -222,10 +282,12 @@ class Component extends DCLogic {
     orientation: 'landscape',  // 'landscape' | 'portrait'
     titleblock: 'roughdrafter', // DraftTitleblock style id — 11×17 sheets only
     northArrow: false, // the titleblock's arrow cell — site plans by convention, any sheet by choice
-    activeScale: 2,             // index into SCALES — 1/4" is the working plan scale
+    auto: false,       // the sheets are the composer's dealt hand; any manual edit takes them over
+    activeSheet: 1,
+    activeScale: 3,             // index into SCALES — 1/4" is the working plan scale
     activeLevelId: null,
     addingViewport: false,
-    viewports: [],              // { id, kind:'plan', levelId, pif, xIn, yIn } — sheet inches
+    viewports: [],              // { id, kind, levelId|cutId|elevId, pif, sheet, xIn, yIn } — sheet inches
     nextViewportId: 1,
     selectedViewportId: null,
     zoom: 1,   // pixels per paper inch on screen
@@ -319,18 +381,29 @@ class Component extends DCLogic {
     this._drawingChecked = true;
     this._levels = saved ? format.levels(saved.levels) : [];
     this._planBoundsByLevel = new Map();
+    this._cutEnv = null;
+    this._cutExtentsCache = new Map();
+    this._elevCutsCache = null;
     const levelIds = new Set(this._levels.map(level => level.id));
-    const layout = saved?.layout ? format.layout(saved.layout, levelIds) : null;
+    this._cuts = saved ? format.cuts(saved.cuts, levelIds) : [];
+    const cutIds = new Set(this._cuts.map(cut => cut.id));
+    const layout = saved?.layout ? format.layout(saved.layout, levelIds, cutIds) : null;
     const patch = {
       viewports: layout ? layout.viewports : [],
       nextViewportId: layout ? layout.nextViewportId : 1,
       activeLevelId: this._defaultLevelId(),
+      auto: layout?.auto === true,
+      activeSheet: 1,
     };
     if (layout?.paperKey) patch.paperKey = layout.paperKey;
     if (layout?.orientation) patch.orientation = layout.orientation;
     if (layout?.titleblock) patch.titleblock = layout.titleblock;
     if (typeof layout?.northArrow === 'boolean') patch.northArrow = layout.northArrow;
     this.setState(patch, () => {
+      // The bone's request: a fresh build asks for the default sheet set, and
+      // the sheets stay the composer's until a hand touches them. A drawing
+      // whose sheets were ever arranged by hand loads exactly as saved.
+      if (this.state.auto) this._composeDefaultSet();
       this._fitPaper();
       this._draw();
       // The sheet as it arrived is the state the first change undoes TO.
@@ -369,12 +442,203 @@ class Component extends DCLogic {
     return this._planBoundsByLevel.get(levelId);
   }
 
+  // ─── The saved drawing as the cut painter's world ────────────────────────
+  // The Model Space hands cut-view.js its live state; this page has only the
+  // saved JSON, so the same environment contract is rebuilt from the file.
+  _cutViewEnv() {
+    if (this._cutEnv) return this._cutEnv;
+    const saved = this._saved;
+    if (!saved) return null;
+    const format = window.DraftDrawingFormat;
+    const levelIds = new Set(this._levels.map(level => level.id));
+    const num = value => (Number.isFinite(Number(value)) ? Number(value) : null);
+    const point = raw => {
+      const x = num(raw?.x), z = num(raw?.z);
+      return x === null || z === null ? null : { x, z };
+    };
+    const walls = (Array.isArray(saved.walls) ? saved.walls : []).map(wall => {
+      const start = point(wall?.start), end = point(wall?.end);
+      if (!start || !end || !levelIds.has(Number(wall?.levelId))) return null;
+      const topHeight = num(wall?.topHeight);
+      return {
+        id: String(wall?.id || ''),
+        start,
+        end,
+        levelId: Number(wall.levelId),
+        view: wall?.view || 'plan',
+        ...(wall?.body === 'garage' ? { body: 'garage' } : {}),
+        wallType: wall?.wallType,
+        baseHeight: num(wall?.baseHeight) ?? 0,
+        topHeight: topHeight !== null && topHeight > 0 ? topHeight : DEFAULT_WALL_TOP_FT,
+      };
+    }).filter(Boolean);
+    const floors = (Array.isArray(saved.floors) ? saved.floors : []).map(floor => {
+      const points = (Array.isArray(floor?.points) ? floor.points : []).map(point).filter(Boolean);
+      if (points.length < 3 || !levelIds.has(Number(floor?.levelId))) return null;
+      return {
+        points,
+        levelId: Number(floor.levelId),
+        view: floor?.view || 'floor',
+        garage: floor?.garage === true,
+        thickenedEdge: floor?.thickenedEdge === true,
+      };
+    }).filter(Boolean);
+    const roofs = format.roofs(saved.roofs, levelIds);
+    const fenestrations = format.fenestrations(saved.fenestrations, levelIds);
+    const outlines = format.outlines(saved.outlines, levelIds);
+    const shelves = format.boneyardShelves(saved.boneyardShelves);
+    const masters = format.boneyardOutlines(saved.boneyardOutlines, new Set(shelves.map(shelf => shelf.id)));
+    const assemblies = saved.levelAssemblies && typeof saved.levelAssemblies === 'object'
+      ? saved.levelAssemblies : {};
+    const levelAssembly = levelId => normaliseLevelAssembly(assemblies[levelId]);
+    // SITE and ROOF are whole-level contexts and the FOUNDATION bears no floor
+    // of its own — the floor-bearing stack is every other level, lowest first.
+    const floorLevels = this._levels
+      .filter(level => level.id > 0 && level.id !== 1 && level.id !== 7 && level.id !== 8)
+      .slice()
+      .reverse();
+    const levelWallTopFt = (levelId, view = 'plan') => {
+      const tops = walls
+        .filter(wall => wall.levelId === levelId && wall.view === view)
+        .map(wall => wall.topHeight);
+      return tops.length ? Math.max(...tops) : DEFAULT_WALL_TOP_FT;
+    };
+    const distToSeg = (pt, a, b) => {
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len2 = dx * dx + dz * dz;
+      const t = len2 ? Math.max(0, Math.min(1, ((pt.x - a.x) * dx + (pt.z - a.z) * dz) / len2)) : 0;
+      return Math.hypot(pt.x - (a.x + t * dx), pt.z - (a.z + t * dz));
+    };
+    const standards = window.DraftStructureStandards.normaliseStructureStandards(
+      window.DraftProfileManager?.getActive('standards')?.content?.model?.structureStandards);
+    const datum = format.number(saved.elevationDatum, 0) === 100 ? 100 : 0;
+    const units = saved.units === 'metric' ? 'metric' : 'imperial';
+    const ftIn = feet => window.DraftFormatters.formatArchitecturalInches(feet * 12);
+    this._cutEnv = {
+      floorLevels: () => floorLevels,
+      levelAssembly,
+      levelFloorFt: levelId => {
+        const assembly = levelAssembly(levelId);
+        return (assembly.joistDepthIn + assembly.sheathingIn) / 12;
+      },
+      levelWallTopFt,
+      footingWidthIn: levelId => {
+        const assembly = levelAssembly(levelId);
+        if (assembly.footingWidthIn) return assembly.footingWidthIn;
+        const icf = walls.some(wall => wall.levelId === levelId
+          && wall.view === 'foundation'
+          && String(wall.wallType || '').startsWith('icf'));
+        return icf ? ICF_FOOTING_WIDTH_IN : DEFAULT_FOOTING_WIDTH_IN;
+      },
+      walls: () => walls,
+      roofs: () => roofs,
+      floors: () => floors,
+      fenestrations: () => fenestrations,
+      garageOutlines: levelId => outlines.filter(outline =>
+        outline.levelId === levelId && outline.garage && outline.points.length >= 3),
+      garageFoundation: garage => {
+        const mode = garage?.foundation
+          || masters.find(master => master.id === garage?.masterId)?.foundation;
+        return mode === 'thickened' ? 'thickened' : 'gradebeam';
+      },
+      edgeOnOutline: (a, b, outline, eps = 0.1) => {
+        if (!outline) return false;
+        const count = outline.open ? outline.points.length - 1 : outline.points.length;
+        const onBoundary = pt => outline.points.some((p, index) => {
+          if (index >= count) return false;
+          const q = outline.points[(index + 1) % outline.points.length];
+          return distToSeg(pt, p, q) <= eps;
+        });
+        return onBoundary(a) && onBoundary(b)
+          && onBoundary({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+      },
+      masterPointById: srcId => {
+        for (const master of masters) {
+          const src = master.points.find(p => p.id === srcId);
+          if (src) return src;
+        }
+        return null;
+      },
+      gableCornerStyle: () => standards.gableCorner,
+      elevLabel: elev => {
+        const sign = elev > 0 && !datum ? '+' : '';
+        return sign + (units === 'imperial' ? ftIn(elev) : (elev * 0.3048).toFixed(3) + ' m');
+      },
+      ftIn,
+      elevationDatum: () => datum,
+    };
+    return this._cutEnv;
+  }
+
+  // The four standard elevations, synthesized the way the Model Space's E
+  // marks stand them: just outside the plan's walls, looking back at it.
+  _standardElevationCuts() {
+    if (this._elevCutsCache) return this._elevCutsCache;
+    const walls = (this._cutViewEnv()?.walls() || []).filter(wall => wall.levelId > 0);
+    if (!walls.length) return (this._elevCutsCache = []);
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    walls.forEach(wall => [wall.start, wall.end].forEach(pt => {
+      minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
+      minZ = Math.min(minZ, pt.z); maxZ = Math.max(maxZ, pt.z);
+    }));
+    if (maxX - minX < 1 || maxZ - minZ < 1) return (this._elevCutsCache = []);
+    const pad = 2;
+    const edge = { S: maxZ, N: minZ, E: maxX, W: minX };
+    const at = id => edge[E_MARK_SIDES[id].side] + E_MARK_SIDES[id].sign * E_MARK_CLEAR_FT;
+    this._elevCutsCache = [
+      { id: 'E1', name: 'E1', elev: 0, levelId: null,
+        startPt: { x: minX - pad, z: at('E1') }, endPt: { x: maxX + pad, z: at('E1') },
+        dirVec: E_MARK_SIDES.E1.dir },
+      { id: 'E2', name: 'E2', elev: 0, levelId: null,
+        startPt: { x: at('E2'), z: minZ - pad }, endPt: { x: at('E2'), z: maxZ + pad },
+        dirVec: E_MARK_SIDES.E2.dir },
+      { id: 'E3', name: 'E3', elev: 0, levelId: null,
+        startPt: { x: minX - pad, z: at('E3') }, endPt: { x: maxX + pad, z: at('E3') },
+        dirVec: E_MARK_SIDES.E3.dir },
+      { id: 'E4', name: 'E4', elev: 0, levelId: null,
+        startPt: { x: at('E4'), z: minZ - pad }, endPt: { x: at('E4'), z: maxZ + pad },
+        dirVec: E_MARK_SIDES.E4.dir },
+    ];
+    return this._elevCutsCache;
+  }
+
+  _cutForViewport(viewport) {
+    if (viewport.kind === 'section') return this._cuts.find(cut => cut.id === viewport.cutId) || null;
+    if (viewport.kind === 'elevation') {
+      return this._standardElevationCuts().find(cut => cut.id === viewport.elevId) || null;
+    }
+    return null;
+  }
+
+  // Model extents of a section / elevation view, cached per cut: horizontal
+  // in the cut's own paper axis, vertical in model elevation feet.
+  _cutExtents(viewport) {
+    const key = `${viewport.kind}:${viewport.kind === 'section' ? viewport.cutId : viewport.elevId}`;
+    if (!this._cutExtentsCache.has(key)) {
+      const cut = this._cutForViewport(viewport);
+      const env = this._cutViewEnv();
+      let extents = null;
+      if (cut && env) {
+        try { extents = window.DraftCutView.cutViewExtents(env, cut); } catch { extents = null; }
+      }
+      this._cutExtentsCache.set(key, extents);
+    }
+    return this._cutExtentsCache.get(key);
+  }
+
   // A viewport's rectangle on the sheet in paper inches, centred on xIn / yIn
-  // and sized by the plan extents at the viewport's own scale.
+  // and sized by the view's model extents at the viewport's own scale.
   _viewportRectIn(viewport) {
-    const bounds = this._planBounds(viewport.levelId);
-    const wIn = bounds ? Math.max((bounds.maxX - bounds.minX) * viewport.pif, 0.75) : 2;
-    const hIn = bounds ? Math.max((bounds.maxZ - bounds.minZ) * viewport.pif, 0.75) : 2;
+    let wFt = null, hFt = null;
+    if (viewport.kind === 'plan') {
+      const bounds = this._planBounds(viewport.levelId);
+      if (bounds) { wFt = bounds.maxX - bounds.minX; hFt = bounds.maxZ - bounds.minZ; }
+    } else {
+      const extents = this._cutExtents(viewport);
+      if (extents) { wFt = extents.uMax - extents.uMin; hFt = extents.yTop - extents.yBottom; }
+    }
+    const wIn = wFt !== null ? Math.max(wFt * viewport.pif, 0.75) : 2;
+    const hIn = hFt !== null ? Math.max(hFt * viewport.pif, 0.75) : 2;
     return { xIn: viewport.xIn - wIn / 2, yIn: viewport.yIn - hIn / 2, wIn, hIn };
   }
 
@@ -386,9 +650,135 @@ class Component extends DCLogic {
       orientation: this.state.orientation,
       titleblock: this.state.titleblock,
       northArrow: this.state.northArrow,
+      auto: this.state.auto,
       viewports: this.state.viewports,
       nextViewportId: this.state.nextViewportId,
     };
+  }
+
+  // ─── The default sheet set (board #168) ───────────────────────────
+  // The bone's dealt hand: every plan with walls, every drawn section, and
+  // the four standard elevations, each at the largest real drafting scale
+  // that fits the paper, packed onto as many sheets as they need. Plans and
+  // sections flow together; elevations keep their own pages — E1+E2 on one,
+  // E3+E4 on the next — squeezing all four onto one page is a manual move.
+
+  // The paper a viewport may use: inside the margins, less the titleblock's
+  // strip or band.
+  _composeRegionIn() {
+    const { paperKey, orientation } = this.state;
+    const paper = PAPER_SIZES[paperKey];
+    const pw = orientation === 'landscape' ? paper.h : paper.w;
+    const ph = orientation === 'landscape' ? paper.w : paper.h;
+    const margin = 0.5;
+    let w = pw - margin * 2, h = ph - margin * 2;
+    const style = paperKey === '11x17' && window.DraftTitleblock
+      ? window.DraftTitleblock.styleById(this.state.titleblock) : null;
+    if (style?.placement === 'right') w -= window.DraftTitleblock.STRIP_W_IN;
+    else h -= (window.DraftTitleblock?.BAND_H_IN || 1.5);
+    return { x: margin, y: margin, w, h };
+  }
+
+  // The largest scale on the ladder at which every view in the list fits the
+  // region together (stacked for a pair, alone otherwise); the smallest rung
+  // is the floor — a view too big for even 1/16" still prints, clipped.
+  _autoScaleFor(views, region) {
+    const fits = pif => {
+      const maxW = Math.max(...views.map(view => view.wFt)) * pif;
+      const sumH = views.reduce((sum, view) => sum + view.hFt * pif + COMPOSE_LABEL_IN, 0)
+        + COMPOSE_GAP_IN * (views.length - 1);
+      return maxW <= region.w && sumH <= region.h;
+    };
+    return AUTO_SCALE_PREFS.find(fits) ?? AUTO_SCALE_PREFS[AUTO_SCALE_PREFS.length - 1];
+  }
+
+  _composeDefaultSet() {
+    if (!this._saved) return;
+    const region = this._composeRegionIn();
+    const planLevels = this._levelsWithWalls()
+      .filter(level => level.id > 0 && level.id !== 7 && level.id !== 8)
+      .slice()
+      .reverse(); // levels store top-down; a permit set reads bottom-up
+    const flow = [];
+    planLevels.forEach(level => {
+      const bounds = this._planBounds(level.id);
+      if (!bounds) return;
+      flow.push({
+        kind: 'plan', levelId: level.id,
+        wFt: bounds.maxX - bounds.minX, hFt: bounds.maxZ - bounds.minZ,
+      });
+    });
+    this._cuts.forEach(cut => {
+      const extents = this._cutExtents({ kind: 'section', cutId: cut.id });
+      if (!extents) return;
+      flow.push({
+        kind: 'section', cutId: cut.id,
+        wFt: extents.uMax - extents.uMin, hFt: extents.yTop - extents.yBottom,
+      });
+    });
+    const elevViews = this._standardElevationCuts().map(cut => {
+      const extents = this._cutExtents({ kind: 'elevation', elevId: cut.id });
+      return extents ? {
+        kind: 'elevation', elevId: cut.id,
+        wFt: extents.uMax - extents.uMin, hFt: extents.yTop - extents.yBottom,
+      } : null;
+    }).filter(Boolean);
+    if (!flow.length && !elevViews.length) return;
+
+    const viewports = [];
+    let nextId = 1;
+    let sheet = 1;
+    // Plans and sections shelf-pack left to right, top to bottom, each at the
+    // largest rung it fits alone; a view that doesn't fit the leftover space
+    // starts a new row, then a new sheet.
+    let cursorX = region.x, cursorY = region.y, rowH = 0;
+    let placedAny = false;
+    flow.forEach(view => {
+      const pif = this._autoScaleFor([view], region);
+      const wIn = view.wFt * pif;
+      const hIn = view.hFt * pif + COMPOSE_LABEL_IN;
+      if (placedAny && cursorX + wIn > region.x + region.w + 1e-9) {
+        cursorX = region.x;
+        cursorY += rowH + COMPOSE_GAP_IN;
+        rowH = 0;
+      }
+      if (placedAny && cursorY + hIn > region.y + region.h + 1e-9) {
+        sheet += 1;
+        cursorX = region.x; cursorY = region.y; rowH = 0;
+      }
+      const base = { id: nextId++, pif, sheet,
+        xIn: cursorX + (view.wFt * pif) / 2, yIn: cursorY + (view.hFt * pif) / 2 };
+      viewports.push(view.kind === 'plan'
+        ? { ...base, kind: 'plan', levelId: view.levelId }
+        : { ...base, kind: 'section', cutId: view.cutId });
+      cursorX += wIn + COMPOSE_GAP_IN;
+      rowH = Math.max(rowH, hIn);
+      placedAny = true;
+    });
+    // Elevations: two to a page, stacked and centred — E1+E2, then E3+E4.
+    const pairs = [elevViews.slice(0, 2), elevViews.slice(2)].filter(pair => pair.length);
+    pairs.forEach(pair => {
+      if (placedAny || viewports.length) sheet += 1; else placedAny = true;
+      const pif = this._autoScaleFor(pair, region);
+      const stackH = pair.reduce((sum, view) => sum + view.hFt * pif + COMPOSE_LABEL_IN, 0)
+        + COMPOSE_GAP_IN * (pair.length - 1);
+      let y = region.y + Math.max(0, (region.h - stackH) / 2);
+      pair.forEach(view => {
+        viewports.push({
+          id: nextId++, kind: 'elevation', elevId: view.elevId, pif, sheet,
+          xIn: region.x + region.w / 2,
+          yIn: y + (view.hFt * pif) / 2,
+        });
+        y += view.hFt * pif + COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
+      });
+    });
+    this.setState({
+      viewports,
+      nextViewportId: nextId,
+      selectedViewportId: null,
+      activeSheet: 1,
+      auto: true,
+    }, () => { this._persistLayout(); this._draw(); });
   }
 
   // ─── The sheet's history (audit C4) ─────────────────────────────────────
@@ -752,9 +1142,21 @@ class Component extends DCLogic {
     ctx.font = `600 11px 'Barlow Condensed', sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(`${pw}" × ${ph}"  (${paperKey.toUpperCase()})`, panX, panY - 6);
+    const sheetCount = this._sheetCount();
+    ctx.fillText(
+      `${pw}" × ${ph}"  (${paperKey.toUpperCase()})${sheetCount > 1 ? `  ·  SHEET ${this.state.activeSheet} OF ${sheetCount}` : ''}`,
+      panX, panY - 6,
+    );
 
-    this.state.viewports.forEach(viewport => this._drawViewport(ctx, viewport));
+    this._sheetViewports().forEach(viewport => this._drawViewport(ctx, viewport));
+  }
+
+  _sheetViewports(sheet = this.state.activeSheet) {
+    return this.state.viewports.filter(viewport => (viewport.sheet || 1) === sheet);
+  }
+
+  _sheetCount() {
+    return Math.max(1, ...this.state.viewports.map(viewport => viewport.sheet || 1));
   }
 
   // One plan viewport: the model drawn at the viewport's architectural scale,
@@ -770,39 +1172,67 @@ class Component extends DCLogic {
       w: rect.wIn * zoom,
       h: rect.hIn * zoom,
     };
-    const bounds = this._planBounds(viewport.levelId);
-    if (bounds) {
-      const cx = (bounds.minX + bounds.maxX) / 2;
-      const cz = (bounds.minZ + bounds.maxZ) / 2;
-      const toS = pt => ({
-        x: panX + (viewport.xIn + (pt.x - cx) * viewport.pif) * zoom,
-        y: panY + (viewport.yIn + (pt.z - cz) * viewport.pif) * zoom,
-      });
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(px.x, px.y, px.w, px.h);
-      ctx.clip();
-      window.DraftLayoutPlan.drawPlan(ctx, toS, this._saved, viewport.levelId, {
-        padFt: 0.5 / 12,
-        paperColor: '#ffffff',
-      });
-      ctx.restore();
+    if (viewport.kind === 'plan') {
+      const bounds = this._planBounds(viewport.levelId);
+      if (bounds) {
+        const cx = (bounds.minX + bounds.maxX) / 2;
+        const cz = (bounds.minZ + bounds.maxZ) / 2;
+        const toS = pt => ({
+          x: panX + (viewport.xIn + (pt.x - cx) * viewport.pif) * zoom,
+          y: panY + (viewport.yIn + (pt.z - cz) * viewport.pif) * zoom,
+        });
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px.x, px.y, px.w, px.h);
+        ctx.clip();
+        window.DraftLayoutPlan.drawPlan(ctx, toS, this._saved, viewport.levelId, {
+          padFt: 0.5 / 12,
+          paperColor: '#ffffff',
+        });
+        ctx.restore();
+      }
+    } else {
+      const cut = this._cutForViewport(viewport);
+      const extents = this._cutExtents(viewport);
+      const env = this._cutViewEnv();
+      if (cut && extents && env) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(px.x, px.y, px.w, px.h);
+        ctx.clip();
+        ctx.translate(px.x, px.y);
+        window.DraftCutView.drawCutView(env, ctx, px.w, px.h, cut, {
+          pxPerFt: viewport.pif * zoom,
+          extents,
+          paperColor: '#ffffff',
+        });
+        ctx.restore();
+      }
     }
     // The frame is desk furniture, not ink: faint always, blue when selected.
     const selected = viewport.id === selectedViewportId;
     ctx.strokeStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.18)';
     ctx.lineWidth = selected ? 1.5 : 0.75;
     ctx.strokeRect(px.x, px.y, px.w, px.h);
-    const level = this._levels.find(l => l.id === viewport.levelId);
     const scale = SCALES.find(s => s.pif === viewport.pif);
     ctx.fillStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.45)';
     ctx.font = `600 ${Math.max(9, zoom * 0.14)}px 'Barlow Condensed', sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText(
-      `${level ? level.name : 'PLAN'}${scale ? `  ·  ${scale.label}` : ''}`,
+      `${this._viewportTitle(viewport)}${scale ? `  ·  ${scale.label}` : ''}`,
       px.x + px.w / 2, px.y + px.h + 4,
     );
+  }
+
+  _viewportTitle(viewport) {
+    if (viewport.kind === 'section') {
+      const cut = this._cutForViewport(viewport);
+      return cut ? `SECTION ${cut.name}` : 'SECTION';
+    }
+    if (viewport.kind === 'elevation') return `ELEVATION ${viewport.elevId}`;
+    const level = this._levels.find(l => l.id === viewport.levelId);
+    return level ? `${level.name} PLAN` : 'PLAN';
   }
 
   // The words the titleblock prints: project info rides the drawing, the
@@ -813,7 +1243,8 @@ class Component extends DCLogic {
     const project = format.projectInfo(this._saved?.projectInfo);
     const drafter = window.DraftDrafter.normaliseDrafter(
       window.DraftProfileManager?.getActive('settings')?.content?.model?.drafter);
-    const pifs = [...new Set(this.state.viewports.map(viewport => viewport.pif))];
+    const sheetViewports = this._sheetViewports();
+    const pifs = [...new Set(sheetViewports.map(viewport => viewport.pif))];
     const scale = pifs.length === 1
       ? (SCALES.find(s => s.pif === pifs[0])?.label || 'AS NOTED')
       : (pifs.length ? 'AS NOTED' : '');
@@ -825,9 +1256,9 @@ class Component extends DCLogic {
       drafterPhone: drafter.phone,
       date: new Date().toISOString().slice(0, 10),
       scale,
-      sheet: '1',
+      sheet: String(this.state.activeSheet),
       revision: '',
-      pageTitle: this._pageTitle(),
+      pageTitle: this._pageTitle(sheetViewports),
       // The sidebar toggle flies the arrow: site plans by convention (#43),
       // any sheet by choice. The real plumbing — true north placed in model
       // space, construction north derived — is board #289.
@@ -835,11 +1266,27 @@ class Component extends DCLogic {
     };
   }
 
-  // The sheet's second title line: what the sheet shows — the plan level
-  // when the viewports agree, PLANS when they don't.
-  _pageTitle() {
-    const levelIds = [...new Set(this.state.viewports.map(viewport => viewport.levelId))];
-    if (!levelIds.length) return '';
+  // The sheet's second title line: the one view's own name when the sheet
+  // holds a single kind that agrees, the kind's plural when it doesn't, and
+  // the kinds joined when the sheet mixes them.
+  _pageTitle(sheetViewports = this._sheetViewports()) {
+    if (!sheetViewports.length) return '';
+    const kinds = [...new Set(sheetViewports.map(viewport => viewport.kind))];
+    if (kinds.length > 1) {
+      return [['plan', 'PLANS'], ['section', 'SECTIONS'], ['elevation', 'ELEVATIONS']]
+        .filter(([kind]) => kinds.includes(kind))
+        .map(([, word]) => word)
+        .join(' · ');
+    }
+    if (kinds[0] === 'section') {
+      const names = [...new Set(sheetViewports.map(viewport => this._cutForViewport(viewport)?.name).filter(Boolean))];
+      return names.length === 1 ? `SECTION ${names[0]}` : 'SECTIONS';
+    }
+    if (kinds[0] === 'elevation') {
+      const ids = [...new Set(sheetViewports.map(viewport => viewport.elevId))];
+      return ids.length === 1 ? `ELEVATION ${ids[0]}` : `ELEVATIONS ${ids.join(' · ')}`;
+    }
+    const levelIds = [...new Set(sheetViewports.map(viewport => viewport.levelId))];
     if (levelIds.length > 1) return 'PLANS';
     const level = this._levels.find(l => l.id === levelIds[0]);
     return level ? `${level.name} PLAN` : '';
@@ -871,7 +1318,7 @@ class Component extends DCLogic {
   }
 
   _viewportAt(ptIn) {
-    const list = this.state.viewports;
+    const list = this._sheetViewports();
     for (let i = list.length - 1; i >= 0; i--) {
       const r = this._viewportRectIn(list[i]);
       if (ptIn.xIn >= r.xIn && ptIn.xIn <= r.xIn + r.wIn
@@ -961,7 +1408,7 @@ class Component extends DCLogic {
     if (this._draggingViewport) {
       const moved = this._draggingViewport.moved;
       this._draggingViewport = null;
-      if (moved) this.setState({ viewports: this.state.viewports }, () => this._persistLayout());
+      if (moved) this.setState({ viewports: this.state.viewports, auto: false }, () => this._persistLayout());
     }
   }
 
@@ -978,6 +1425,7 @@ class Component extends DCLogic {
       this.setState({
         viewports: this.state.viewports.filter(viewport => viewport.id !== this.state.selectedViewportId),
         selectedViewportId: null,
+        auto: false,
       }, () => { this._persistLayout(); this._draw(); });
     }
   }
@@ -995,12 +1443,14 @@ class Component extends DCLogic {
       pif: SCALES[this.state.activeScale].pif,
       xIn: ptIn.xIn,
       yIn: ptIn.yIn,
+      sheet: this.state.activeSheet,
     };
     this.setState({
       viewports: [...this.state.viewports, viewport],
       nextViewportId: viewport.id + 1,
       selectedViewportId: viewport.id,
       addingViewport: false,
+      auto: false,
     }, () => { this._persistLayout(); this._draw(); });
   }
 
@@ -1008,7 +1458,7 @@ class Component extends DCLogic {
     this.state.paperKey = key;
     this._fitPaper();
     this._draw();
-    this.setState({ paperKey: key }, () => {
+    this.setState({ paperKey: key, auto: false }, () => {
       this._rememberActiveProfile('settings');
       this._persistLayout();
     });
@@ -1018,7 +1468,7 @@ class Component extends DCLogic {
     this.state.orientation = o;
     this._fitPaper();
     this._draw();
-    this.setState({ orientation: o }, () => {
+    this.setState({ orientation: o, auto: false }, () => {
       this._rememberActiveProfile('settings');
       this._persistLayout();
     });
@@ -1029,17 +1479,21 @@ class Component extends DCLogic {
   }
 
   _setTitleblock(id) {
-    this.setState({ titleblock: id }, () => {
+    this.setState({ titleblock: id, auto: false }, () => {
       this._draw();
       this._rememberActiveProfile('settings');
       this._persistLayout();
     });
   }
 
+  _setActiveSheet(sheet) {
+    this.setState({ activeSheet: sheet, selectedViewportId: null }, () => this._draw());
+  }
+
   // The arrow flies on site plans by convention, but any sheet may raise or
   // strike it — auto-setup from a model-space true north is board #289.
   _toggleNorthArrow() {
-    this.setState({ northArrow: !this.state.northArrow }, () => {
+    this.setState({ northArrow: !this.state.northArrow, auto: false }, () => {
       this._draw();
       this._persistLayout();
     });
@@ -1087,6 +1541,14 @@ class Component extends DCLogic {
       northArrowBg: this.state.northArrow ? '#1d1f20' : '#fff',
       northArrowColor: this.state.northArrow ? '#f2f2f3' : '#1d1f20',
       northArrowLabel: this.state.northArrow ? 'North Arrow · On' : 'North Arrow · Off',
+      sheets: Array.from({ length: this._sheetCount() }, (_, i) => ({
+        id: String(i + 1),
+        label: `SHEET ${i + 1}`,
+        onSelect: () => this._setActiveSheet(i + 1),
+        bg: this.state.activeSheet === i + 1 ? 'rgba(29,31,32,0.09)' : '#fff',
+      })),
+      hasSheets: this._sheetCount() > 1 || this.state.activeSheet > 1,
+      addSheet: () => this._setActiveSheet(this._sheetCount() + 1),
       hasLevels: this._levelsWithWalls?.().length > 0,
       planLevels: (this._levelsWithWalls?.() || []).map(level => ({
         id: String(level.id),

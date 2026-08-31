@@ -729,40 +729,62 @@ if (!window.DraftDrawingFormat) {
 
   // LAYOUT (board #168): the sheet composition saved with the drawing. Paper
   // and orientation are the sheet's own; each viewport is a window onto model
-  // space — kind picks the projection ('plan' for now), levelId the level it
-  // shows, pif the architectural scale (paper inches per model foot), and
-  // xIn / yIn its centre on the sheet in paper inches from the top-left
-  // corner. Sheet coordinates never mix with model feet: pif is the only
-  // bridge. Old drawings carry no layout and load with an empty sheet.
-  // `titleblock` (board #285) picks the company strip on the 11×17 sheet;
-  // the ids mirror DraftTitleblock.STYLES.
+  // space — kind picks the projection, pif the architectural scale (paper
+  // inches per model foot), and xIn / yIn its centre on the sheet in paper
+  // inches from the top-left corner. Sheet coordinates never mix with model
+  // feet: pif is the only bridge. Old drawings carry no layout and load with
+  // an empty sheet. `titleblock` (board #285) picks the company strip on the
+  // 11×17 sheet; the ids mirror DraftTitleblock.STYLES.
+  //
+  // Three semantic kinds, each with its own reference into the model:
+  //   plan      → levelId, a level in the drawing
+  //   section   → cutId, a saved cut's integer id
+  //   elevation → elevId, one of the four standard marks 'E1'..'E4'
+  // A viewport whose kind is unknown or whose reference is gone is DROPPED,
+  // never silently repointed at a plan: a section box turning into a plan of
+  // the wrong level is worse than an empty seat. `sheet` seats the viewport
+  // on a numbered page; `auto` marks a composition the bone dealt, which a
+  // rebuild may replace — the flag clears on the drafter's first manual edit
+  // so a hand-adjusted layout is never thrown away.
   const LAYOUT_PAPER_KEYS = ['11x17', '8.5x11'];
   const LAYOUT_TITLEBLOCKS = ['bluejetty', 'roughdrafter', 'bluejetty-band', 'roughdrafter-band'];
-  const layout = (raw, levelIds) => {
+  const LAYOUT_ELEV_IDS = ['E1', 'E2', 'E3', 'E4'];
+  const layout = (raw, levelIds, cutIds = new Set()) => {
     const seen = new Set();
     const viewports = (Array.isArray(raw?.viewports) ? raw.viewports : []).map(viewport => {
       const id = Number(viewport?.id);
-      const viewportLevelId = levelId(viewport?.levelId, levelIds);
+      const kind = oneOf(viewport?.kind, ['plan', 'section', 'elevation'], viewport?.kind == null ? 'plan' : null);
       const pif = positive(viewport?.pif, null);
       const xIn = num(viewport?.xIn);
       const yIn = num(viewport?.yIn);
-      if (!Number.isInteger(id) || id < 1 || seen.has(id) || viewportLevelId == null) return null;
+      const sheet = Number.isInteger(Number(viewport?.sheet)) && Number(viewport.sheet) >= 1
+        ? Number(viewport.sheet) : 1;
+      if (!Number.isInteger(id) || id < 1 || seen.has(id) || kind == null) return null;
       if (pif == null || xIn === null || yIn === null) return null;
+      const base = { id, kind, pif, xIn, yIn, sheet };
+      if (kind === 'plan') {
+        const viewportLevelId = levelId(viewport?.levelId, levelIds);
+        if (viewportLevelId == null) return null;
+        seen.add(id);
+        return { ...base, levelId: viewportLevelId };
+      }
+      if (kind === 'section') {
+        const cutId = Number(viewport?.cutId);
+        if (!Number.isInteger(cutId) || !cutIds.has(cutId)) return null;
+        seen.add(id);
+        return { ...base, cutId };
+      }
+      const elevId = oneOf(viewport?.elevId, LAYOUT_ELEV_IDS, null);
+      if (elevId == null) return null;
       seen.add(id);
-      return {
-        id,
-        kind: oneOf(viewport?.kind, ['plan'], 'plan'),
-        levelId: viewportLevelId,
-        pif,
-        xIn,
-        yIn,
-      };
+      return { ...base, elevId };
     }).filter(Boolean);
     return {
       paperKey: oneOf(raw?.paperKey, LAYOUT_PAPER_KEYS, null),
       orientation: oneOf(raw?.orientation, ['landscape', 'portrait'], null),
       titleblock: oneOf(raw?.titleblock, LAYOUT_TITLEBLOCKS, 'roughdrafter'),
       northArrow: raw?.northArrow === true,
+      auto: raw?.auto === true,
       viewports,
       nextViewportId: Math.max(
         Number.isInteger(Number(raw?.nextViewportId)) ? Number(raw.nextViewportId) : 1,

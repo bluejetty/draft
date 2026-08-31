@@ -13,6 +13,11 @@
 // straight through — trace, the tour's foundation, the suggested stair, the
 // rooms pause, the roof, the bone, and out onto a LAYOUT sheet.
 //
+// On paper the bone now deals the default sheet set (#168): plans first,
+// then E1+E2 on one sheet and E3+E4 on the next, all before the drafter
+// touches LAYOUT. The first hand-placed viewport rides on top of that set
+// and takes ownership of the sheets (layout.auto goes false).
+//
 // It is a shipping-DEFAULTS test, not a cold-arrival test: openModel still
 // dismisses the performance notice like any drafter would, and
 // waitForModelReady opens both tucked side rails so the levels are
@@ -142,8 +147,18 @@ test('the shipping defaults draw a whole house and put it on a sheet', async ({ 
     const file = await window.SharedFileStore.loadSharedFile(bucket);
     return JSON.parse(await file.text());
   }, h.STORAGE_BUCKET);
-  expect(onPaper.layout.viewports).toHaveLength(1);
-  expect(onPaper.layout.viewports[0].kind).toBe('plan');
+  // The bone dealt the default sheet set: plans first, then E1+E2 on one
+  // sheet and E3+E4 on the next. The hand-placed plan rides on top of it,
+  // and placing it by hand took ownership of the sheets.
+  const vps = onPaper.layout.viewports;
+  const elev = id => vps.find(v => v.elevId === id);
+  expect(elev('E1').sheet).toBe(elev('E2').sheet);
+  expect(elev('E3').sheet).toBe(elev('E4').sheet);
+  expect(elev('E3').sheet).toBe(elev('E1').sheet + 1);
+  const placed = vps.reduce((a, b) => (a.id > b.id ? a : b));
+  expect(placed.kind).toBe('plan');
+  expect(placed.sheet).toBe(1);
+  expect(onPaper.layout.auto).toBe(false);
   // The house the model built is still in the same file the sheet writes to -
   // the last hand-off on the path, and the one the audit found a clobber in.
   expect(onPaper.walls.length).toBeGreaterThan(0);
