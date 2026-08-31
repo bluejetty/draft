@@ -25,6 +25,13 @@
     html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
     a { color: rgba(29,31,32,0.45); text-decoration: none; font-family: 'Barlow Condensed', system-ui, sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
     a:hover { color: #5980a6; }
+    /* UNDO / REDO on the status bar. Same shape as the Model Space's strip
+       controls: the hit area is bigger than the arrow drawn in it, because
+       this page is driven entirely by pointer and a fingertip needs somewhere
+       to land. The bar's own height caps the vertical dimension. */
+    .strip-history { display:inline-flex; align-items:center; justify-content:center; min-width:44px; height:28px; padding:0; border:none; background:transparent; color:rgba(29,31,32,0.62); cursor:pointer; transition:color 120ms ease; }
+    .strip-history:hover:not(:disabled) { color:#365e86; }
+    .strip-history:disabled { color:rgba(29,31,32,0.16); cursor:default; }
     @media (max-width:560px) {
       .layout-profile-button { min-width:48px !important; padding:1px 4px !important; font-size:7px !important; }
     }
@@ -153,6 +160,24 @@
        written anywhere. Same readout the Model Space carries. -->
   <span data-layout-status style="{{ statusStyle }}">{{ statusLabel }}</span>
   <div style="flex:1;"></div>
+  <!-- UNDO / REDO. This page had no history at all: a viewport dragged off
+       the sheet, a titleblock swapped by mistake, a delete — every one of
+       them permanent, on the one page in the app that is driven entirely by
+       pointer. Same two controls the Model Space strip carries. -->
+  <div data-history-controls style="display:flex; align-items:center; margin-right:12px;">
+    <button type="button" data-undo class="strip-history" onClick="{{ onUndoPress }}" disabled="{{ undoDisabled }}" title="{{ undoTitle }}" aria-label="{{ undoTitle }}">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 7 H9.5 A3.2 3.2 0 0 1 9.5 13.4 H6"></path>
+        <path d="M5.6 4.4 L3 7 L5.6 9.6"></path>
+      </svg>
+    </button>
+    <button type="button" data-redo class="strip-history" onClick="{{ onRedoPress }}" disabled="{{ redoDisabled }}" title="{{ redoTitle }}" aria-label="{{ redoTitle }}">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M13 7 H6.5 A3.2 3.2 0 0 0 6.5 13.4 H10"></path>
+        <path d="M10.4 4.4 L13 7 L10.4 9.6"></path>
+      </svg>
+    </button>
+  </div>
   <span>{{ paperLabel }}  ·  {{ scaleLabel }}</span>
   <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT, and the logo
        walks back out to the main page. The current page wears the dark face. -->
@@ -206,6 +231,11 @@ class Component extends DCLogic {
     profileFileName: '',
     profileDialogMessage: '',
     profileDialogError: false,
+    // How deep the sheet's undo stacks are. They live in state because the
+    // buttons are drawn from them and _persistLayout — where the history is
+    // recorded — runs INSIDE a setState callback, after that render is gone.
+    historyPast: 0,
+    historyFuture: 0,
     persistenceStatus: 'SAVED',  // 'SAVED' | 'UNSAVED' — the sheet on disk
     persistenceError: '',
   };
@@ -213,6 +243,11 @@ class Component extends DCLogic {
   componentDidMount() {
     this._saved = null;
     this._levels = [];
+    // The sheet's undo stack. `_layoutSnapshot` is the sheet as it stands
+    // right now; `past` is what it was before each change.
+    this._layoutHistory = { past: [], future: [] };
+    this._layoutSnapshot = null;
+    this._restoringLayout = false;
     this._planBoundsByLevel = new Map();
     this._canvas = document.querySelector('[data-layout-canvas]');
     this._ctx = this._canvas ? this._canvas.getContext('2d') : null;
@@ -294,6 +329,10 @@ class Component extends DCLogic {
     this.setState(patch, () => {
       this._fitPaper();
       this._draw();
+      // The sheet as it arrived is the state the first change undoes TO.
+      // Without this the first change has nothing behind it and cannot be
+      // taken back — the one every drafter tries first.
+      this._layoutSnapshot = JSON.stringify(this._layoutKey());
       document.body.dataset.layoutReady = '1';
       if (!document.body.dataset.layoutSaveSeq) document.body.dataset.layoutSaveSeq = '0';
     });
@@ -335,7 +374,8 @@ class Component extends DCLogic {
     return { xIn: viewport.xIn - wIn / 2, yIn: viewport.yIn - hIn / 2, wIn, hIn };
   }
 
-  // The sheet as this page owns it — the ONLY key this page may write.
+  // The sheet as this page owns it — the ONLY key this page may write, and
+  // the unit both the guarded save and the history work in.
   _layoutKey() {
     return {
       paperKey: this.state.paperKey,
@@ -345,6 +385,88 @@ class Component extends DCLogic {
       viewports: this.state.viewports,
       nextViewportId: this.state.nextViewportId,
     };
+  }
+
+  // ─── The sheet's history (audit C4) ─────────────────────────────────────
+  // This page had none. A viewport dragged off the edge, a titleblock swapped
+  // by mistake, a delete — every one of them permanent, on the page that is
+  // driven entirely by pointer and has no keyboard path at all.
+  //
+  // Every sheet mutation already funnels through _persistLayout, exactly the
+  // way every drawing mutation funnels through the Model Space's
+  // _markUnsaved, so that is where the snapshot is taken — one choke point,
+  // and a new mutation is recorded whether or not whoever adds it remembers
+  // this exists. Bounded by count for the same reason the drawing's is: a
+  // long session must not grow without limit.
+  static get LAYOUT_HISTORY_LIMIT() { return 60; }
+
+  _recordLayoutHistory() {
+    const snapshot = JSON.stringify(this._layoutKey());
+    if (snapshot === this._layoutSnapshot) return;
+    if (this._layoutSnapshot != null && !this._restoringLayout) {
+      this._layoutHistory.past.push(this._layoutSnapshot);
+      this._layoutHistory.future = [];
+      while (this._layoutHistory.past.length > Component.LAYOUT_HISTORY_LIMIT) {
+        this._layoutHistory.past.shift();
+      }
+    }
+    this._layoutSnapshot = snapshot;
+  }
+
+  // Puts a snapshot back on the page: state, the paper fit, the ink, and the
+  // write. Guarded so restoring is not itself recorded as a change.
+  _restoreLayoutSnapshot(snapshot) {
+    let next = null;
+    try { next = JSON.parse(snapshot); } catch { return false; }
+    if (!next || typeof next !== 'object') return false;
+    this._restoringLayout = true;
+    Object.assign(this.state, next);
+    this._layoutSnapshot = snapshot;
+    this.setState({ ...next, selectedViewportId: null }, () => {
+      this._fitPaper();
+      this._draw();
+      this._persistLayout();
+      this._restoringLayout = false;
+    });
+    return true;
+  }
+
+  // Publishes the stack depths so the buttons re-render. Without it a button
+  // stays dead until some unrelated change happens to draw the page again.
+  _syncHistoryState() {
+    const past = this._layoutHistory.past.length;
+    const future = this._layoutHistory.future.length;
+    if (past === this.state.historyPast && future === this.state.historyFuture) return;
+    this.setState({ historyPast: past, historyFuture: future });
+  }
+
+  // Both stacks move BEFORE the restore, not after: the restore renders, and
+  // a render that ran while the other stack was still empty would draw the
+  // opposite button dead for a frame.
+  _undoLayout() {
+    if (!this._layoutHistory.past.length) return false;
+    const current = this._layoutSnapshot;
+    const snapshot = this._layoutHistory.past.pop();
+    if (current != null) this._layoutHistory.future.push(current);
+    if (!this._restoreLayoutSnapshot(snapshot)) {
+      if (current != null) this._layoutHistory.future.pop();
+      this._layoutHistory.past.push(snapshot);
+      return false;
+    }
+    return true;
+  }
+
+  _redoLayout() {
+    if (!this._layoutHistory.future.length) return false;
+    const current = this._layoutSnapshot;
+    const snapshot = this._layoutHistory.future.pop();
+    if (current != null) this._layoutHistory.past.push(current);
+    if (!this._restoreLayoutSnapshot(snapshot)) {
+      if (current != null) this._layoutHistory.past.pop();
+      this._layoutHistory.future.push(snapshot);
+      return false;
+    }
+    return true;
   }
 
   // Write the sheet back onto the saved drawing — additive, and now genuinely
@@ -358,8 +480,18 @@ class Component extends DCLogic {
   // whatever is actually there now, and write it guarded by the revision we
   // just read. If the Model Space saved in between, the write is refused and
   // we go round again against the newer file rather than flattening it.
+  //
+  // The sheet's history is taken here too, and for the same reason the save
+  // is: every sheet mutation funnels through this one choke point, so a
+  // mutation added later is recorded whether or not whoever adds it knows the
+  // history exists. It is deliberately NOT written onto `this._saved` — that
+  // copy is a snapshot, and putting the layout on it is the very clobber the
+  // guarded write above exists to prevent; `_writeLayoutToStore` merges the
+  // key onto whatever is actually stored and refreshes `_saved` from that.
   _persistLayout() {
     if (!this._drawingChecked || !window.SharedFileStore) return;
+    this._recordLayoutHistory();
+    this._syncHistoryState();
     document.body.dataset.layoutSaveDirty = '1';
     this.setState({ persistenceStatus: 'UNSAVED', persistenceError: '' });
     this._saveQueue = (this._saveQueue || Promise.resolve())
@@ -991,6 +1123,16 @@ class Component extends DCLogic {
       profileDialogMessageColor: this.state.profileDialogError ? '#b04050' : '#557a46',
       paperLabel: `${pw}" × ${ph}"`,
       scaleLabel: SCALES[activeScale].label,
+      // Straight through to the same methods, so a keyboard path added later
+      // has one implementation to bind to.
+      onUndoPress: () => this._undoLayout(),
+      onRedoPress: () => this._redoLayout(),
+      undoDisabled: !this.state.historyPast,
+      redoDisabled: !this.state.historyFuture,
+      undoTitle: this.state.historyPast
+        ? 'Undo the last sheet change' : 'Nothing to undo yet',
+      redoTitle: this.state.historyFuture
+        ? 'Redo the sheet change just undone' : 'Nothing to redo',
       statusLabel: this.state.persistenceError
         ? `${this.state.persistenceStatus} — ${this.state.persistenceError}`
         : this.state.persistenceStatus,
