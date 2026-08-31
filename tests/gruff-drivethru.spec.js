@@ -100,7 +100,9 @@ test('the drawing stays usable under the window — art, screens, portrait and s
   // The board art, both screens, the portrait and the speaker are scenery.
   // The browser's own hit-test is the witness: at the centre of each, the
   // thing on top is the drawing.
-  for (const zone of ['portrait', 'screen', 'speaker', 'answer']) {
+  // Not the answer panel: its centre is the field, which is a control and
+  // is meant to take the press. Its blank space is the next spec's business.
+  for (const zone of ['portrait', 'screen', 'speaker']) {
     const at = await zoneCentre(page, zone);
     const panel = await page.locator('[data-gruff-window]').boundingBox();
     // The point really is under the panel, or this proves nothing at all.
@@ -119,7 +121,9 @@ test('the drawing stays usable under the window — art, screens, portrait and s
   const b = await zoneCentre(page, 'screen');
   await realClick(page, a.x, a.y);
   await realClick(page, b.x, b.y);
-  await page.keyboard.press('Escape');
+  // Enter commits the chain; Escape cancels it — and Escape would close
+  // Gruff's window besides.
+  await page.keyboard.press('Enter');
   await h.waitForSaved(page);
   expect((await h.savedDrawing(page)).lines?.length ?? 0).toBe(before + 1);
 });
@@ -143,7 +147,7 @@ test('the answer panel takes a press only on its controls, not its blank space',
   const before = (await h.savedDrawing(page)).lines?.length ?? 0;
   await realClick(page, blank.x, blank.y);
   await realClick(page, blank.x + 40, blank.y + 30);
-  await page.keyboard.press('Escape');
+  await page.keyboard.press('Enter');
   await h.waitForSaved(page);
   expect((await h.savedDrawing(page)).lines?.length ?? 0).toBe(before + 1);
 
