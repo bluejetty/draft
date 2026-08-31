@@ -15483,6 +15483,134 @@ class Component extends DCLogic {
     return joins;
   }
 
+  // ─── Inside-face corners (board #303) ───────────────────────────────────────
+  // An interior wall butts into the FACE of an exterior wall, not its
+  // centreline — but the snap pool only ever held centrelines, so the point a
+  // drafter actually aims at on a jog was not a magnet at all. They either
+  // eyeballed the face or snapped the centreline and left a half-thickness gap.
+  //
+  // These corners are DERIVED: computed from the walls on demand, never stored
+  // in the drawing, never draggable. A fresh Vector3 is minted per query on
+  // purpose — the magnet returns the very object it matched, and geometry
+  // welds by object identity, so handing the same cached point to two walls
+  // would quietly weld them together.
+
+  // A wall's two face lines, as normal offsets from its centreline. NOT simply
+  // half the thickness either side: refLine moves the assembly off the
+  // centreline ('left' puts the whole thickness on one side), so these are the
+  // same startOff/endOff the plan render draws with. Two walls of different
+  // types meeting at a corner each contribute their own pair, which is what
+  // makes a 2x6 meeting an 8" concrete land right.
+  _wallFaceOffsets(wall) {
+    const def = WALL_TYPES.find(type => type.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
+    const totalFt = def.totalIn / 12;
+    const refLine = wall.refLine || 'center';
+    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
+    return [startOff, startOff + totalFt];
+  }
+
+  _computeInsideFaceCorners(walls) {
+    if (walls.length < 2) return [];
+    const joins = this._wallJoins(walls);
+    // The enclosed regions of the wall centrelines. A corner landing inside one
+    // is the inside-face corner — which is the bisector's INNER corner at a
+    // convex corner of the footprint and its OUTER corner at a reflex one (the
+    // notch of an L), so the containment test decides rather than a guess about
+    // which way the walls turn.
+    const faces = geo.roomLoops(walls.map(wall => ({ start: wall.start, end: wall.end })));
+    const inside = pt => faces.some(face => {
+      const ring = face.points;
+      let hit = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const a = ring[j], b = ring[i];
+        if ((a.z > pt.z) !== (b.z > pt.z)
+          && pt.x < a.x + (b.x - a.x) * (pt.z - a.z) / (b.z - a.z)) hit = !hit;
+      }
+      return hit;
+    });
+    const cross = (p1, d1, p2, d2) => {
+      const den = d1.x * d2.z - d1.z * d2.x;
+      if (Math.abs(den) < 1e-9) return null;           // parallel faces never corner
+      const t = ((p2.x - p1.x) * d2.z - (p2.z - p1.z) * d2.x) / den;
+      return { x: p1.x + d1.x * t, z: p1.z + d1.z * t };
+    };
+    const out = [];
+    for (const [vertex, join] of joins) {
+      // Only two-wall corners this slice. A 'continuation' is collinear and has
+      // no corner at all; tee and multi nodes would need the stem's faces
+      // against the host's, which this machinery does not give cheaply.
+      if (join.type !== 'miter' || !join.entries || join.entries.length !== 2) continue;
+      const arms = join.entries.map(entry => {
+        const wall = entry.seg;
+        const other = entry.at === 'start' ? wall.end : wall.start;
+        const ox = other.x - vertex.x, oz = other.z - vertex.z;
+        const olen = Math.hypot(ox, oz);
+        if (olen < 0.001) return null;
+        const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+        const wlen = Math.hypot(dx, dz);
+        if (wlen < 0.001) return null;
+        const u = { x: dx / wlen, z: dz / wlen };
+        return {
+          wall,
+          out: { x: ox / olen, z: oz / olen },       // away from the shared vertex
+          u,
+          n: { x: -u.z, z: u.x },                    // the render's normal
+          offsets: this._wallFaceOffsets(wall),
+        };
+      });
+      if (arms.some(arm => !arm)) continue;
+      const [a, b] = arms;
+      // The bisector opens into the angle the two arms make. A face displaced
+      // along it is the inner face; the other is the outer.
+      const bis = { x: a.out.x + b.out.x, z: a.out.z + b.out.z };
+      const blen = Math.hypot(bis.x, bis.z);
+      if (blen < 0.001) continue;                    // straight through: no corner
+      bis.x /= blen; bis.z /= blen;
+      const split = arm => {
+        const towards = off => off * (arm.n.x * bis.x + arm.n.z * bis.z);
+        const [o1, o2] = arm.offsets;
+        return towards(o1) >= towards(o2) ? [o1, o2] : [o2, o1];
+      };
+      const [aIn, aOut] = split(a), [bIn, bOut] = split(b);
+      const lineAt = (arm, off) => ({
+        x: arm.wall.start.x + arm.n.x * off,
+        z: arm.wall.start.z + arm.n.z * off,
+      });
+      const innerPt = cross(lineAt(a, aIn), a.u, lineAt(b, bIn), b.u);
+      const outerPt = cross(lineAt(a, aOut), a.u, lineAt(b, bOut), b.u);
+      const y = vertex.y ?? 0;
+      const sources = [vertex, a.wall.start, a.wall.end, b.wall.start, b.wall.end];
+      const keep = [];
+      const insideInner = innerPt && inside(innerPt);
+      const insideOuter = outerPt && inside(outerPt);
+      if (insideInner) keep.push(innerPt);
+      else if (insideOuter) keep.push(outerPt);
+      else {
+        // No closed run around this corner: both faces are legitimate places to
+        // land an interior wall, so offer both rather than guessing.
+        if (innerPt) keep.push(innerPt);
+        if (outerPt) keep.push(outerPt);
+      }
+      keep.forEach(pt => out.push({ x: pt.x, y, z: pt.z, sources }));
+    }
+    return out;
+  }
+
+  // Recomputed whenever the walls move, change type, or leave — the signature
+  // covers exactly the inputs the corners are built from, so a node drag, a
+  // thickness change and a delete all fall out of one check rather than three
+  // invalidation hooks that can be forgotten one at a time.
+  _insideFaceCorners() {
+    const walls = this._activeWalls();
+    const sig = walls.map(wall => `${wall.start.x.toFixed(4)},${wall.start.z.toFixed(4)},`
+      + `${wall.end.x.toFixed(4)},${wall.end.z.toFixed(4)},`
+      + `${wall.wallType || ''},${wall.refLine || ''}`).join('|');
+    if (!this._faceCornerCache || this._faceCornerCache.sig !== sig) {
+      this._faceCornerCache = { sig, corners: this._computeInsideFaceCorners(walls) };
+    }
+    return this._faceCornerCache.corners;
+  }
+
   // ─── Snap helpers ────────────────────────────────────────────────────────────
   _collectActiveVertices() {
     const pts = [];
@@ -15493,6 +15621,13 @@ class Component extends DCLogic {
     this._pendingChain.forEach(s => { pts.push(s.start, s.end); });
     this._activeWalls().forEach(w => { pts.push(w.start, w.end); });
     this._wallChain.forEach(s => { pts.push(s.start, s.end); });
+    // Board #303: the inside-face corners of wall jogs get the same citizenship
+    // beam ends and column centres have. Minted fresh each call — see above.
+    this._insideFaceCorners().forEach(corner => {
+      const pt = new THREE.Vector3(corner.x, corner.y, corner.z);
+      pt.faceCornerOf = corner.sources;
+      pts.push(pt);
+    });
     this._activeFloors().forEach(floor => pts.push(...floor.points));
     this._activeShapes().forEach(shape => pts.push(...shape.points));
     this._activeRoofs().forEach(roof => pts.push(...roof.points));
@@ -15605,6 +15740,9 @@ class Component extends DCLogic {
     if (!exclude) return vertices;
     return vertices.filter(vertex => {
       if (exclude.has(vertex)) return false;
+      // A derived face corner is built from its walls' vertices, so one whose
+      // wall is being dragged chases the cursor exactly as a midpoint would.
+      if (vertex.faceCornerOf && vertex.faceCornerOf.some(v => exclude.has(v))) return false;
       for (const ex of exclude) {
         if (Math.abs(vertex.x - ex.x) < 0.001 && Math.abs(vertex.z - ex.z) < 0.001) return false;
       }
