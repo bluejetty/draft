@@ -4677,8 +4677,6 @@ class Component extends DCLogic {
       // the BONEYARD existed load with the single default shelf. Shelf geometry
       // restores under its negative pseudo level id (-shelfId), so drawing items
       // may be owned by a level or by a shelf.
-      // LAYOUT sheets round-trip with the drawing; the LAYOUT page owns them.
-      this._layoutData = saved.layout ? format.layout(saved.layout, levelIds) : null;
       const boneyardShelves = format.boneyardShelves(saved.boneyardShelves);
       const activeBoneyardShelfId = boneyardShelves.some(shelf => shelf.id === Number(saved.activeBoneyardShelfId))
         ? Number(saved.activeBoneyardShelfId)
@@ -4725,6 +4723,11 @@ class Component extends DCLogic {
         ? saved.cuts.map(cut => ({ ...cut, levelId: migrateLevelId(cut?.levelId) }))
         : saved.cuts;
       const cuts = format.cuts(storedCuts, ownerLevelIds);
+      // LAYOUT sheets round-trip with the drawing; the LAYOUT page owns them.
+      // Section viewports reference cuts, so the reading waits for the cuts.
+      this._layoutData = saved.layout
+        ? format.layout(saved.layout, levelIds, new Set(cuts.map(cut => cut.id)))
+        : null;
       let skipped = (Array.isArray(saved.cuts) ? saved.cuts.length : 0) - cuts.length;
       const storedDimensions = Array.isArray(saved.dimensions)
         ? saved.dimensions.map(dimension => ({ ...dimension, levelId: migrateLevelId(dimension?.levelId) }))
@@ -12314,6 +12317,10 @@ class Component extends DCLogic {
     // The room-tag program stamps its counts into the PROJECT info with the
     // build (board #198) — synchronous, so the same save carries them.
     this._writeRoomCountsFromTags();
+    // The bone asks LAYOUT for the default sheet set (board #168). The flag
+    // rides the same save as the build; LAYOUT composes on it and any manual
+    // sheet edit takes it back off.
+    this._layoutData = { ...(this._layoutData || {}), auto: true };
     this._markUnsaved();
     this.setState({
       drawingMessage: `House built from the outline: ${built.join(', ')}. Everything is ordinary geometry — reshape, retype, or delete any piece.`,
