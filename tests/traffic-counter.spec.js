@@ -66,7 +66,23 @@ test('a blocked counter host leaves the page complete and quiet', async ({ page,
 
   await page.goto('https://draft.test/index.html');
   await page.waitForLoadState('load');
-  await expect(page.locator('.enter-name')).toHaveText('Rough Drafter');
+  // The entry page is the new logo above the bone, and nothing else — the
+  // wordmark text span this used to assert on came off with that change
+  // (the logo carries its own lettering now). What still has to be true is
+  // that the way in is THERE and still goes where it went: both images
+  // resolve, and both links point at the model space.
+  const logo = page.locator('.enter-logo');
+  const bone = page.locator('.enter-bone');
+  await expect(logo).toBeVisible();
+  await expect(bone).toBeVisible();
+  for (const image of [logo, bone]) {
+    // naturalWidth is 0 for an image that 404'd, so this catches a missing
+    // or misnamed asset rather than merely a present <img> tag.
+    await expect.poll(() => image.evaluate(el => el.complete && el.naturalWidth > 0)).toBe(true);
+  }
+  const targets = await page.locator('.enter-link').evaluateAll(
+    links => links.map(link => new URL(link.href).pathname.split('/').pop()));
+  expect(targets).toEqual(['MODEL.dc.html', 'MODEL.dc.html']);
   await expect(page.locator('[data-traffic-counter]')).toHaveCount(0);
 });
 
