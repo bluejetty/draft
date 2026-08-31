@@ -4617,6 +4617,11 @@ class Component extends DCLogic {
       if (!levels.length) return { ok: false, reason: 'invalid' };
 
       const levelIds = new Set(levels.map(level => level.id));
+      // A replaced drawing starts with a clean growing slate: declines
+      // belong to the drawing they were made in, and the plan memo must
+      // not survive into geometry it was never computed from.
+      this._declinedGrowEdges = new Set();
+      this._roomGrowCache = null;
       const savedActiveIdx = Math.max(0, Math.min(
         savedLevels.length - 1,
         Number.isInteger(saved.activeLevelIdx) ? saved.activeLevelIdx : 0,
@@ -5788,6 +5793,10 @@ class Component extends DCLogic {
         }
       }
       if (sd?.active) {
+        // A landed drag is a touch: the grown walls under its vertices are
+        // the drafter's now (#275). A drag the ruler consumed settled its
+        // own ownership — Enter promoted on commit, Escape declined.
+        if (!sd.froze) this._unautoTouchedWalls(new Set(sd.refs.map(r => (r.target || r.seg)[r.prop])));
         // MOVE FLOOR commits its consequences with the drag's own history
         // entry: pile stubs and the engineer notice land before the mark,
         // and the summary message after it (the mark clears messages).
@@ -10962,7 +10971,10 @@ class Component extends DCLogic {
           // ref has landed) so later master edits carry the adjustment along
           // in its new position.
           sd.refs.forEach(r => this._relinkVertex((r.target || r.seg)[r.prop]));
-          this._unautoTouchedWalls(new Set(sd.refs.map(r => (r.target || r.seg)[r.prop])));
+          // The live preview moves geometry without claiming ownership —
+          // #275 promote-on-touch resolves when the drag lands (mouseup or
+          // a typed commit), so a cancelled gesture hands the wall back.
+          sd.froze = false;
           this._afterOutlineVertexDrag(sd.refs);
         }
       }
@@ -13331,6 +13343,8 @@ class Component extends DCLogic {
     if (grown.walls) {
       built.push(`${grown.walls} interior wall${grown.walls === 1 ? '' : 's'} grown from ${grown.rooms} room stamp${grown.rooms === 1 ? '' : 's'}`);
       if (grown.flagged) built.push(`${grown.flagged} grown room${grown.flagged === 1 ? '' : 's'} flagged UNDER MIN`);
+    } else if (grown.swept) {
+      built.push(`${grown.swept} stale grown wall${grown.swept === 1 ? '' : 's'} swept`);
     }
     // The dimension stack refreshes on every build that changed something, so
     // the strings pick up the new corners and opening centres.
@@ -18864,13 +18878,15 @@ class Component extends DCLogic {
   }
 
   // The preview repaints every overlay frame, so the plan memoizes on a
-  // fingerprint of what feeds it — stamps, stairs, and the outline.
+  // fingerprint of what feeds it — every growRooms input, exactly: the
+  // outline, the stamps, the stair wells, and the minimums table.
   _roomGrowPlan(levelId) {
     const inputs = this._roomGrowInputs(levelId);
     if (!inputs) return null;
-    const key = `${levelId}|${inputs.points.map(pt => `${Math.round(pt.x * 8)},${Math.round(pt.z * 8)}`).join(';')}`
-      + `|${inputs.stamps.map(stamp => `${stamp.id}:${stamp.base}:${Math.round(stamp.x * 8)}:${Math.round(stamp.z * 8)}:${stamp.companionOf ?? ''}`).join(';')}`
-      + `|${inputs.stairWells.map(poly => poly.map(pt => `${Math.round(pt.x * 8)},${Math.round(pt.z * 8)}`).join(',')).join(';')}`;
+    const key = `${levelId}|${inputs.points.map(pt => `${pt.x},${pt.z}`).join(';')}`
+      + `|${inputs.stamps.map(stamp => `${stamp.id}:${stamp.base}:${stamp.x}:${stamp.z}:${stamp.companionOf ?? ''}`).join(';')}`
+      + `|${inputs.stairWells.map(poly => poly.map(pt => `${pt.x},${pt.z}`).join(',')).join(';')}`
+      + `|${JSON.stringify(inputs.minimums ?? null)}`;
     if (this._roomGrowCache?.key === key) return this._roomGrowCache.plan;
     const plan = window.DraftRoomGrow.growRooms(inputs);
     this._roomGrowCache = { key, plan };
@@ -18895,12 +18911,14 @@ class Component extends DCLogic {
   }
 
   // A declined partition edge (the drafter deleted the grown wall) stays
-  // ungrown for the session — the #260 decline spirit, per edge.
-  _growEdgeKey(seg) {
+  // ungrown for the session — the #260 decline spirit, per edge. The key
+  // carries the level, so a decline never reaches the matching edge on
+  // another floor.
+  _growEdgeKey(seg, levelId) {
     const r = value => Math.round(value * 4) / 4;
     const a = `${r(seg.start.x)},${r(seg.start.z)}`;
     const b = `${r(seg.end.x)},${r(seg.end.z)}`;
-    return a < b ? `${a}|${b}` : `${b}|${a}`;
+    return `${levelId}|${a < b ? `${a}|${b}` : `${b}|${a}`}`;
   }
 
   // #275 promote-on-touch: a grown wall whose endpoint the drafter moved
@@ -18917,17 +18935,25 @@ class Component extends DCLogic {
   // its claim's area and minimums verdict on the spot — detection refines
   // them later, and never silently: an under-min bedroom/WC flags loud.
   _growStampedRooms() {
-    if (this.state.roomGrow === false || !window.DraftRoomGrow) return { walls: 0, rooms: 0, flagged: 0 };
-    const result = { walls: 0, rooms: 0, flagged: 0 };
-    const levelIds = [...new Set(this._roomStamps().filter(tag => tag.base).map(tag => tag.levelId))];
+    if (this.state.roomGrow === false || !window.DraftRoomGrow) return { walls: 0, rooms: 0, flagged: 0, swept: 0 };
+    const result = { walls: 0, rooms: 0, flagged: 0, swept: 0 };
+    // Every level with a stamp program AND every level still holding grown
+    // walls: a floor whose stamps are gone gets its stale partitions swept.
+    const levelIds = [...new Set([
+      ...this._roomStamps().filter(tag => tag.base).map(tag => tag.levelId),
+      ...this._walls.filter(wall => wall.auto === true && (wall.view || 'plan') === 'plan')
+        .map(wall => wall.levelId),
+    ])];
     levelIds.forEach(levelId => {
       const plan = this._roomGrowPlan(levelId);
-      if (!plan || !plan.walls.length) return;
-      this._walls = this._walls.filter(wall => !(wall.auto === true
+      const kept = this._walls.filter(wall => !(wall.auto === true
         && wall.levelId === levelId && (wall.view || 'plan') === 'plan'));
+      result.swept += this._walls.length - kept.length;
+      this._walls = kept;
+      if (!plan || !plan.walls.length) return;
       const declined = this._declinedGrowEdges || new Set();
       plan.walls.forEach(seg => {
-        if (declined.has(this._growEdgeKey(seg))) return;
+        if (declined.has(this._growEdgeKey(seg, levelId))) return;
         this._walls.push({
           id: this._newDrawingItemId('wall'),
           start: this._mergeVertex({ x: seg.start.x, z: seg.start.z }, levelId, 'plan'),
@@ -19291,6 +19317,7 @@ class Component extends DCLogic {
     this._frozenAngle = this._lockAngle ?? (len > 0.001 ? Math.atan2(dz, dx) : 0);
     this._frozenStart = start;
     this._frozenTool  = 'nodedrag';
+    sd.froze = true;
     this._frozenDrag  = {
       refs: sd.refs,
       restore: sd.refs.map(ref => {
@@ -19311,8 +19338,10 @@ class Component extends DCLogic {
   }
 
   // Land the frozen node drag at `end`, keeping shared vertices welded and
-  // outline overrides / master links up to date.
-  _placeFrozenDrag(end) {
+  // outline overrides / master links up to date. Only a COMMIT promotes a
+  // grown wall to the drafter (#275) — the live preview moves geometry
+  // without claiming ownership, so Escape hands the wall back untouched.
+  _placeFrozenDrag(end, { commit = false } = {}) {
     const drag = this._frozenDrag;
     if (!drag) return;
     drag.refs.forEach(ref => {
@@ -19320,7 +19349,7 @@ class Component extends DCLogic {
       pt.x = end.x; pt.z = end.z;
     });
     drag.refs.forEach(ref => this._relinkVertex((ref.target || ref.seg)[ref.prop]));
-    this._unautoTouchedWalls(new Set(drag.refs.map(ref => (ref.target || ref.seg)[ref.prop])));
+    if (commit) this._unautoTouchedWalls(new Set(drag.refs.map(ref => (ref.target || ref.seg)[ref.prop])));
     this._afterOutlineVertexDrag(drag.refs);
   }
 
@@ -19456,7 +19485,7 @@ class Component extends DCLogic {
         this._frozenStart.x + Math.cos(this._frozenAngle) * total,
         this._frozenStart.y,
         this._frozenStart.z + Math.sin(this._frozenAngle) * total,
-      ));
+      ), { commit: true });
       this._frozenDrag = null;
       this._lockAngle = null;
       this._frozenEnd = null;
@@ -19604,7 +19633,6 @@ class Component extends DCLogic {
     if (frozenTool === 'nodedrag' && this._frozenDrag) {
       this._frozenDrag.restore.forEach(({ pt, x, z }) => { pt.x = x; pt.z = z; });
       this._frozenDrag.refs.forEach(ref => this._relinkVertex((ref.target || ref.seg)[ref.prop]));
-      this._unautoTouchedWalls(new Set(this._frozenDrag.refs.map(ref => (ref.target || ref.seg)[ref.prop])));
       this._afterOutlineVertexDrag(this._frozenDrag.refs);
       this._frozenDrag = null;
     }
@@ -19947,7 +19975,7 @@ class Component extends DCLogic {
         // session (#275) — the next bone press does not regrow it.
         this._selectedSegs.forEach(seg => {
           if (seg.auto === true && this._walls.includes(seg)) {
-            (this._declinedGrowEdges ||= new Set()).add(this._growEdgeKey(seg));
+            (this._declinedGrowEdges ||= new Set()).add(this._growEdgeKey(seg, seg.levelId));
           }
         });
         this._walls = this._walls.filter(w => !this._selectedSegs.has(w));

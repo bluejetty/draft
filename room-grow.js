@@ -52,17 +52,25 @@ if (!window.DraftRoomGrow) {
         const pool = list.filter(tag => norm(tag.base) === base
           && (tag.levelId === basementLevelId) === basement);
         if (!pool.length) return;
-        const claimed = new Set(pool
-          .filter(tag => Number.isInteger(tag.claimedNo) && tag.claimedNo > 0)
-          .map(tag => tag.claimedNo));
+        // A number belongs to ONE tag per series: the earliest claimant
+        // (stamp order) keeps it, later claimants of the same number fall
+        // back onto the ladder like unclaimed tags.
+        const honored = new Map();
+        const claimed = new Set();
+        pool.forEach(tag => {
+          if (Number.isInteger(tag.claimedNo) && tag.claimedNo > 0 && !claimed.has(tag.claimedNo)) {
+            honored.set(tag.id, tag.claimedNo);
+            claimed.add(tag.claimedNo);
+          }
+        });
         // The ordinary BEDROOM ladder starts at 2 above grade — number 1
         // belongs to the primary suite. Basement ladders and WC start at 1.
         let next = !basement && base === 'BEDROOM' ? 2 : 1;
         const prefix = basement ? 'B' : '';
         pool.forEach(tag => {
           let n;
-          if (Number.isInteger(tag.claimedNo) && tag.claimedNo > 0) {
-            n = tag.claimedNo;
+          if (honored.has(tag.id)) {
+            n = honored.get(tag.id);
           } else {
             while (claimed.has(next)) next += 1;
             n = next;
