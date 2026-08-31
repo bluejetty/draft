@@ -22,6 +22,7 @@
 <script src="./bone-wallet.js"></script>
 <script src="./stair-rules.js"></script>
 <script src="./auto-stair.js"></script>
+<script src="./auto-windows.js"></script>
 <script src="./room-grow.js"></script>
 <script src="./gruff-interview.js"></script>
 <script src="./pdf-scan.js"></script>
@@ -2366,6 +2367,7 @@ class Component extends DCLogic {
     walletSound: true,         // the bone-crunch on spend; personal SETTINGS
     suggestStairs: true,       // board #260: the tour and the bone OFFER stair placements
     roomGrow: true,            // boards #275/#276: stamps preview + grow rooms on the bone
+    autoWindows: true,         // board #169: the bone deals windows onto the exterior walls
     compassOn: false,          // polar tracking instrument — down by default; P picks it up
     handOn: false,             // HAND (#304): engaged, a plain drag pans and tools are suspended
     chainActive: false,        // a run is open (#304) — the FINISH control shows only then
@@ -2604,6 +2606,7 @@ class Component extends DCLogic {
         sillHeight: opening.sillHeight,
         headHeight: opening.headHeight,
         garage: opening.garage === true,
+        auto: opening.auto === true,
       })),
       fixtures: this._fixtures.map(fixture => ({
         id: fixture.id,
@@ -3443,6 +3446,7 @@ class Component extends DCLogic {
           boneReveal: this.state.boneReveal,
           suggestStairs: this.state.suggestStairs,
           roomGrow: this.state.roomGrow,
+          autoWindows: this.state.autoWindows,
           buildIntroOff: this.state.buildIntroOff,
           garageIntroOff: this.state.garageIntroOff,
           perfIntroOff: this.state.perfIntroOff,
@@ -3483,6 +3487,7 @@ class Component extends DCLogic {
         ...(typeof values.boneReveal === 'boolean' ? { boneReveal: values.boneReveal } : {}),
         ...(typeof values.suggestStairs === 'boolean' ? { suggestStairs: values.suggestStairs } : {}),
         ...(typeof values.roomGrow === 'boolean' ? { roomGrow: values.roomGrow } : {}),
+        ...(typeof values.autoWindows === 'boolean' ? { autoWindows: values.autoWindows } : {}),
         ...(typeof values.buildIntroOff === 'boolean' ? { buildIntroOff: values.buildIntroOff } : {}),
         ...(typeof values.garageIntroOff === 'boolean' ? { garageIntroOff: values.garageIntroOff } : {}),
         ...(typeof values.perfIntroOff === 'boolean' ? { perfIntroOff: values.perfIntroOff } : {}),
@@ -12965,14 +12970,69 @@ class Component extends DCLogic {
         const seg = this._outlineSegment(garage, index);
         return Math.hypot(seg.end.x - seg.start.x, seg.end.z - seg.start.z);
       };
+      // The man door connects the garage to the house, so it belongs on the
+      // leg nearest the house — and that same leg is what tells the door
+      // logic which way the cars are NOT going.
+      const houseOutline = this._houseOutline(level.id);
+      const houseFrontZ = houseOutline
+        ? Math.max(...houseOutline.points.map(pt => pt.z)) : null;
+      const legMid = index => {
+        const seg = this._outlineSegment(garage, index);
+        return { x: (seg.start.x + seg.end.x) / 2, z: (seg.start.z + seg.end.z) / 2 };
+      };
+      const legOrientation = index => {
+        const seg = this._outlineSegment(garage, index);
+        const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
+        const len = Math.hypot(dx, dz) || 1;
+        let n = { x: -dz / len, z: dx / len };
+        const c = { x: 0, z: 0 };
+        for (let i = 0; i < count; i++) { const m = legMid(i); c.x += m.x / count; c.z += m.z / count; }
+        const m = legMid(index);
+        if ((m.x + n.x * 0.2 - c.x) ** 2 + (m.z + n.z * 0.2 - c.z) ** 2
+          < (m.x - c.x) ** 2 + (m.z - c.z) ** 2) n = { x: -n.x, z: -n.z };
+        return window.DraftAutoWindows
+          ? window.DraftAutoWindows.faceOrientation(n) : 'front';
+      };
+      const refined = this.state.autoWindows !== false && !!window.DraftAutoWindows;
+      let manIndex = -1;
+      if (refined && houseOutline) {
+        let best = Infinity;
+        for (let index = 0; index < count; index++) {
+          if (legLen(index) < GARAGE_MAN_DOOR_FT + 1) continue;
+          const m = legMid(index);
+          const d = Math.min(...houseOutline.points.map(pt => Math.hypot(pt.x - m.x, pt.z - m.z)));
+          if (d < best) { best = d; manIndex = index; }
+        }
+      }
+
+      // Board #169: with auto windows on, the office's face rules pick the
+      // door leg — the street face when the garage steps back, otherwise
+      // the face opposite the man-door connection. Off, the old
+      // longest-leg pick stands so legacy drawings rebuild unchanged.
       let frontIndex = 0;
       for (let index = 1; index < count; index++) if (legLen(index) > legLen(frontIndex)) frontIndex = index;
+      let doorPlan = null;
+      if (refined) {
+        const faces = [];
+        for (let index = 0; index < count; index++) {
+          faces.push({
+            index,
+            orientation: legOrientation(index),
+            lengthFt: legLen(index),
+            behindHouseFront: houseFrontZ != null && legMid(index).z < houseFrontZ - 0.5,
+          });
+        }
+        doorPlan = window.DraftAutoWindows.garageDoorPlan({ faces, manDoorFaceIndex: manIndex });
+        if (doorPlan) frontIndex = doorPlan.faceIndex;
+      }
+      if (manIndex === frontIndex || manIndex < 0) {
+        manIndex = -1;
+        for (let index = count - 1; index >= 0; index--) {
+          if (index !== frontIndex && legLen(index) >= GARAGE_MAN_DOOR_FT + 1) { manIndex = index; break; }
+        }
+      }
       const overheadW = legLen(frontIndex) >= GARAGE_OVERHEAD_DOOR_FT + 2
         ? GARAGE_OVERHEAD_DOOR_FT : GARAGE_OVERHEAD_DOOR_NARROW_FT;
-      let manIndex = -1;
-      for (let index = count - 1; index >= 0; index--) {
-        if (index !== frontIndex && legLen(index) >= GARAGE_MAN_DOOR_FT + 1) { manIndex = index; break; }
-      }
       const foundationCopy = garage.masterId != null
         ? this._garageOutlines(1).find(copy => copy.masterId === garage.masterId) || null
         : null;
@@ -12981,12 +13041,54 @@ class Component extends DCLogic {
         { levelId: 1, view: 'foundation', copy: foundationCopy },
       ].forEach(({ levelId, view, copy }) => {
         if (!copy || this._outlineSegmentCount(copy) !== count) return;
-        if (this._placeAutoDoor(levelId, view, this._outlineSegment(copy, frontIndex), overheadW, GARAGE_OVERHEAD_HEAD_FT, { garage: true })) added++;
+        const seg = this._outlineSegment(copy, frontIndex);
+        if (doorPlan && doorPlan.doors.length > 1) {
+          // Two singles read better on a street face than one wide double,
+          // and the plan already spaced them by the same 3'-0" rule.
+          doorPlan.doors.forEach(door => {
+            if (this._placeAutoDoorAt(levelId, view, seg, door.offset, door.widthFt,
+              door.headFt, { garage: true })) added++;
+          });
+        } else if (this._placeAutoDoor(levelId, view, seg, overheadW, GARAGE_OVERHEAD_HEAD_FT, { garage: true })) added++;
         if (manIndex >= 0
           && this._placeAutoDoor(levelId, view, this._outlineSegment(copy, manIndex), GARAGE_MAN_DOOR_FT, DEFAULT_OPENING_HEAD_FT)) added++;
       });
     });
     return added;
+  }
+
+  // Place a door at a given offset along the wall spanning seg's endpoints.
+  // Unlike _placeAutoDoor this allows a second door on the same wall — the
+  // caller has already spaced them — but still refuses to sit on top of an
+  // opening that is already there.
+  _placeAutoDoorAt(levelId, view, seg, offsetFt, widthFt, headFt, extra = {}) {
+    const a = { x: seg.start.x, z: seg.start.z };
+    const b = { x: seg.end.x, z: seg.end.z };
+    const eps = 0.1;
+    const wall = this._walls.find(w => w.levelId === levelId && (w.view || 'plan') === view
+      && ((Math.hypot(w.start.x - a.x, w.start.z - a.z) <= eps && Math.hypot(w.end.x - b.x, w.end.z - b.z) <= eps)
+        || (Math.hypot(w.start.x - b.x, w.start.z - b.z) <= eps && Math.hypot(w.end.x - a.x, w.end.z - a.z) <= eps)));
+    if (!wall) return false;
+    const forward = Math.hypot(wall.start.x - a.x, wall.start.z - a.z) <= eps;
+    const along = forward ? offsetFt : this._wallLength(wall) - offsetFt;
+    const clamped = this._clampOpeningToWall(wall, along, widthFt);
+    if (!clamped) return false;
+    if (this._fenestrations.some(opening => opening.wallId === wall.id
+      && Math.abs(opening.offset - clamped.offset) < (opening.width + widthFt) / 2)) return false;
+    this._fenestrations.push({
+      id: this._newDrawingItemId('fenestration'),
+      wallId: wall.id,
+      levelId,
+      view,
+      type: 'door',
+      layer: FENESTRATION_LAYERS.door,
+      offset: clamped.offset,
+      width: widthFt,
+      sillHeight: 0,
+      headHeight: headFt,
+      ...extra,
+    });
+    return true;
   }
 
   // Centre a door on the generated wall spanning seg's endpoints. A wall that
@@ -13016,6 +13118,153 @@ class Component extends DCLogic {
       ...extra,
     });
     return true;
+  }
+
+  // ─── Auto windows (board #169) ──────────────────────────────────────────
+  // The bone stops leaving walls bare. The siting math lives in
+  // auto-windows.js; this layer gathers the real geometry, hands it over,
+  // and commits the result as ordinary fenestrations carrying `auto: true`.
+  // Everything the dealer places is the drafter's to move, resize or
+  // delete — the bone only ever deals the first hand.
+
+  // The exterior faces of one level: each generated PLAN wall that rides an
+  // outline edge, with the orientation the E-marks would call it, whatever
+  // already sits on it, and whether the drafter has claimed it outright.
+  _autoWindowFaces(levelId) {
+    const outline = this._houseOutline(levelId);
+    if (!outline || outline.points.length < 3) return [];
+    const pts = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
+    const inside = probe => {
+      let hit = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const a = pts[j], b = pts[i];
+        if ((a.z > probe.z) !== (b.z > probe.z)
+          && probe.x < a.x + (b.x - a.x) * (probe.z - a.z) / (b.z - a.z)) hit = !hit;
+      }
+      return hit;
+    };
+    const eps = 0.1;
+    const faces = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len = Math.hypot(dx, dz);
+      if (len < 0.5) continue;
+      const wall = this._walls.find(w => w.levelId === levelId && (w.view || 'plan') === 'plan'
+        && ((Math.hypot(w.start.x - a.x, w.start.z - a.z) <= eps && Math.hypot(w.end.x - b.x, w.end.z - b.z) <= eps)
+          || (Math.hypot(w.start.x - b.x, w.start.z - b.z) <= eps && Math.hypot(w.end.x - a.x, w.end.z - a.z) <= eps)));
+      if (!wall) continue;
+      const forward = Math.hypot(wall.start.x - a.x, wall.start.z - a.z) <= eps;
+      const ux = dx / len, uz = dz / len;
+      // Perpendicular, flipped until it points OUT of the ring — the same
+      // test the room work uses, so "front" here and E1 there agree.
+      let n = { x: -uz, z: ux };
+      const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+      if (inside({ x: mid.x + n.x * 0.2, z: mid.z + n.z * 0.2 })) n = { x: -n.x, z: -n.z };
+      const openings = this._fenestrations.filter(opening => opening.wallId === wall.id);
+      faces.push({
+        id: `L${levelId}E${i}`,
+        wallId: wall.id,
+        levelId,
+        orientation: window.DraftAutoWindows.faceOrientation(n),
+        lengthFt: this._wallLength(wall),
+        // A face carrying anything the drafter owns — a hand-placed
+        // opening or one cut from his BONEYARD mark — is his whole.
+        blocked: openings.some(opening => opening.auto !== true),
+        taken: openings.map(opening => ({ centre: opening.offset, widthFt: opening.width })),
+        wall,
+        forward,
+        start: forward ? a : b,
+        u: forward ? { x: ux, z: uz } : { x: -ux, z: -uz },
+        inward: { x: -n.x, z: -n.z },
+      });
+    }
+    return faces;
+  }
+
+  // Which stamped rooms front which face, and where along it. Claims come
+  // from the room-grow plan, so this is the same geometry the dashed
+  // preview draws — with room growing off there are no claims and the
+  // dealer falls back to spreading windows on the face itself (open plan).
+  _autoWindowRooms(levelId, faces) {
+    const plan = this._roomGrowPlan(levelId);
+    if (!plan || !plan.rooms.length) return [];
+    const TOUCH_FT = 1.5;   // a claim sits a wall's thickness inside the centreline
+    return plan.rooms.map(room => {
+      const tag = this._roomTags.find(item => item.id === room.stampId);
+      const corners = [
+        { x: room.rect.x0, z: room.rect.z0 }, { x: room.rect.x1, z: room.rect.z0 },
+        { x: room.rect.x1, z: room.rect.z1 }, { x: room.rect.x0, z: room.rect.z1 },
+      ];
+      const frontage = [];
+      faces.forEach(face => {
+        let minIn = Infinity, lo = Infinity, hi = -Infinity;
+        corners.forEach(pt => {
+          const rx = pt.x - face.start.x, rz = pt.z - face.start.z;
+          minIn = Math.min(minIn, rx * face.inward.x + rz * face.inward.z);
+          const along = rx * face.u.x + rz * face.u.z;
+          lo = Math.min(lo, along); hi = Math.max(hi, along);
+        });
+        if (minIn < -0.5 || minIn > TOUCH_FT) return;
+        const from = Math.max(0, lo), to = Math.min(face.lengthFt, hi);
+        if (to - from < 1) return;
+        frontage.push({ faceId: face.id, centreFt: (from + to) / 2 });
+      });
+      return { id: room.stampId, base: tag?.base || '', levelId, frontage };
+    }).filter(room => room.frontage.length);
+  }
+
+  // A deleted auto window stays declined for the session — the #260/#275
+  // decline spirit, keyed to the wall and the spot it stood on.
+  _autoWindowKey(wallId, offset) {
+    return `${wallId}|${Math.round(offset * 4) / 4}`;
+  }
+
+  _dealAutoWindows() {
+    if (this.state.autoWindows === false || !window.DraftAutoWindows) return { placed: 0, report: [] };
+    const declined = this._declinedAutoWindows || new Set();
+    let placed = 0;
+    const report = [];
+    this._floorLevels().forEach(level => {
+      // Clear our own previous hand FIRST, so last press's windows neither
+      // block this one's faces nor count against its spacing.
+      this._fenestrations = this._fenestrations.filter(opening => !(opening.auto === true
+        && opening.type === 'window' && opening.levelId === level.id
+        && (opening.view || 'plan') === 'plan'));
+      const faces = this._autoWindowFaces(level.id);
+      if (!faces.length) return;
+      const rooms = this._autoWindowRooms(level.id, faces);
+      const deal = window.DraftAutoWindows.dealWindows({
+        faces: faces.map(({ wall, forward, start, u, inward, ...rest }) => rest),
+        rooms,
+      });
+      const byId = new Map(faces.map(face => [face.id, face]));
+      deal.windows.forEach(win => {
+        const face = byId.get(win.faceId);
+        if (!face) return;
+        // The module measures along the face; the wall may run the other way.
+        const offset = face.forward ? win.offset : face.lengthFt - win.offset;
+        if (declined.has(this._autoWindowKey(face.wallId, offset))) return;
+        const clamped = this._clampOpeningToWall(face.wall, offset, win.widthFt);
+        if (!clamped) return;
+        this._fenestrations.push({
+          id: this._newDrawingItemId('fenestration'),
+          wallId: face.wallId,
+          levelId: level.id,
+          view: 'plan',
+          type: 'window',
+          layer: FENESTRATION_LAYERS.window,
+          offset: clamped.offset,
+          width: win.widthFt,
+          sillHeight: win.sillFt,
+          headHeight: win.headFt,
+          auto: true,
+        });
+        placed += 1;
+      });
+      report.push(...deal.report);
+    });
+    return { placed, report };
   }
 
   _buildHouseRoof() {
@@ -13462,6 +13711,12 @@ class Component extends DCLogic {
     } else if (grown.swept) {
       built.push(`${grown.swept} stale grown wall${grown.swept === 1 ? '' : 's'} swept`);
     }
+    // Auto windows (board #169) last of the fenestration work: the grown
+    // rooms above are the bedroom-access oracle the siting rules read, and
+    // dealing after the marks and garage doors means their faces are
+    // already spoken for.
+    const dealt = this._dealAutoWindows();
+    if (dealt.placed) built.push(`${dealt.placed} window${dealt.placed === 1 ? '' : 's'} dealt onto the exterior walls`);
     // The dimension stack refreshes on every build that changed something, so
     // the strings pick up the new corners and opening centres.
     if (built.length) {
@@ -20100,6 +20355,13 @@ class Component extends DCLogic {
         this._roofs = this._roofs.filter(roof => !this._selectedRoofs.has(roof));
         // Openings go with their own selection and with any deleted host wall.
         const wallIds = new Set(this._walls.map(w => w.id));
+        // A deleted auto window is the drafter's answer: it stays gone for
+        // the session rather than coming back on the next bone press.
+        this._selectedFenestrations.forEach(opening => {
+          if (opening.auto !== true || opening.type !== 'window') return;
+          if (!(this._declinedAutoWindows instanceof Set)) this._declinedAutoWindows = new Set();
+          this._declinedAutoWindows.add(this._autoWindowKey(opening.wallId, opening.offset));
+        });
         this._fenestrations = this._fenestrations.filter(opening =>
           !this._selectedFenestrations.has(opening) && wallIds.has(opening.wallId));
         // Fixtures go with their own selection and with any deleted host wall —
