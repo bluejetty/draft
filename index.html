@@ -73,9 +73,13 @@
          never applied and `object-fit: contain` letterboxed the art —
          the logo painted 225px wide no matter what width the box was
          given, and widening the box only added empty space either side.
-         That is why the bone (231px painted) was wider than the wordmark.
+         That is why the bone (231px painted) was wider than the logo.
          `height: auto` below hands sizing back to the width. */
-      :root { --logo-w: min(450px, 88vw, 70vh); }
+      /* 460, not 450: the logo art fills 90.9% of its square canvas where the
+         old wordmark filled 92.9%, so the wider box paints the mark at the
+         same visible size. One file serves the entry page, the home links
+         and the printed titleblock — 800x800, so nothing upscales. */
+      :root { --logo-w: min(460px, 88vw, 70vh); }
 
       .enter {
         display: flex;
@@ -121,7 +125,7 @@
       }
       .enter-logo {
         width: var(--logo-w);
-        aspect-ratio: 1;               /* the wordmark is square, 225x225 */
+        aspect-ratio: 1;               /* the logo is square, 800x800 */
       }
       .enter-bone {
         width: calc(var(--logo-w) * 0.2567);
@@ -139,7 +143,7 @@
       @media (max-width: 760px) {
         .shell { width: min(100% - 32px, 540px); }
         main { padding: 32px 0; }
-        /* --logo-w needs no override: min(450px, 88vw) already shrinks to
+        /* --logo-w needs no override: min(460px, 88vw) already shrinks to
            fit a phone, and the bone follows it down. */
       }
     </style>
@@ -149,7 +153,7 @@
       <main>
         <div class="enter">
           <a class="enter-link" href="MODEL.dc.html" aria-label="Open Rough Drafter model space">
-            <img class="enter-logo" src="assets/rough-drafter-wordmark.png"
+            <img class="enter-logo" src="assets/rough-drafter-logo.png"
                  width="225" height="225"
                  alt="Rough Drafter: a rolled blueprint lettered ROUGH DRAFTER" />
           </a>

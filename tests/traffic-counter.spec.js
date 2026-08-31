@@ -67,7 +67,7 @@ test('a blocked counter host leaves the page complete and quiet', async ({ page,
   await page.goto('https://draft.test/index.html');
   await page.waitForLoadState('load');
   // The entry page is the new logo above the bone, and nothing else — the
-  // wordmark text span this used to assert on came off with that change
+  // name text span this used to assert on came off with that change
   // (the logo carries its own lettering now). What still has to be true is
   // that the way in is THERE and still goes where it went: both images
   // resolve, and both links point at the model space.
@@ -88,7 +88,7 @@ test('a blocked counter host leaves the page complete and quiet', async ({ page,
   // box. With object-fit: contain the two differ: a height attribute pins
   // the box, aspect-ratio stops applying, and the art is letterboxed
   // inside a box it never fills — which is how the entry page once shipped
-  // with a 231px bone beside a 225px wordmark while every box measurement
+  // with a 231px bone beside a 225px logo while every box measurement
   // looked right. Measure what the eye sees.
   const painted = await page.evaluate(() => {
     const art = el => {
@@ -102,6 +102,18 @@ test('a blocked counter host leaves the page complete and quiet', async ({ page,
     };
   });
   expect(painted.logo).toBeGreaterThan(painted.bone * 2);
+
+  // And the mark must not be UPSCALED. #200 doubled the painted logo to
+  // 450px without checking its source, which was 225x225 — so the brand
+  // painted at 2x upscale on the first page anyone sees, and at 4x on a
+  // retina iPad. Box measurements all looked right; only the source
+  // resolution said otherwise. The file has to carry at least the pixels
+  // it paints.
+  const upscale = await page.locator('.enter-logo').evaluate(el => ({
+    natural: el.naturalWidth,
+    painted: el.getBoundingClientRect().width,
+  }));
+  expect(upscale.natural).toBeGreaterThanOrEqual(upscale.painted);
   await expect(page.locator('[data-traffic-counter]')).toHaveCount(0);
 });
 
