@@ -83,6 +83,25 @@ test('a blocked counter host leaves the page complete and quiet', async ({ page,
   const targets = await page.locator('.enter-link').evaluateAll(
     links => links.map(link => new URL(link.href).pathname.split('/').pop()));
   expect(targets).toEqual(['MODEL.dc.html', 'MODEL.dc.html']);
+
+  // The logo must PAINT bigger than the bone, not merely occupy a wider
+  // box. With object-fit: contain the two differ: a height attribute pins
+  // the box, aspect-ratio stops applying, and the art is letterboxed
+  // inside a box it never fills — which is how the entry page once shipped
+  // with a 231px bone beside a 225px wordmark while every box measurement
+  // looked right. Measure what the eye sees.
+  const painted = await page.evaluate(() => {
+    const art = el => {
+      const r = el.getBoundingClientRect();
+      const scale = Math.min(r.width / el.naturalWidth, r.height / el.naturalHeight);
+      return el.naturalWidth * scale;
+    };
+    return {
+      logo: art(document.querySelector('.enter-logo')),
+      bone: art(document.querySelector('.enter-bone')),
+    };
+  });
+  expect(painted.logo).toBeGreaterThan(painted.bone * 2);
   await expect(page.locator('[data-traffic-counter]')).toHaveCount(0);
 });
 
