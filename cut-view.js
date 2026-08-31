@@ -165,8 +165,46 @@ if (!window.DraftCutView) {
     return null;
   }
 
-  function drawCutView(env, ctx, w, h, cut) {
-    ctx.fillStyle = '#fafafa';
+  // A caller-owned fit (LAYOUT sheets) maps model feet to pixels at an exact
+  // architectural scale: pxPerFt fixes the scale and extents fix the framing,
+  // so the drawing lands on the sheet where the viewport says, not where the
+  // screen-fit margins would centre it.
+  const externalFit = opts =>
+    (opts && Number.isFinite(opts.pxPerFt) && opts.pxPerFt > 0 ? opts : null);
+
+  // The model-space extents a cut view will occupy: the cut's own span along
+  // the viewing axis, and the vertical band from below the footings to above
+  // the tallest roof. LAYOUT sizes a sheet viewport from these and hands them
+  // back through fit.extents so the rectangle and the drawing agree exactly.
+  function cutViewExtents(env, cut) {
+    const stack = sectionLevelStack(env);
+    if (!stack) return null;
+    const dir = cut.dirVec;
+    const axis = { x: dir.z, z: -dir.x };
+    const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
+    const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
+    let roofTop = null;
+    env.roofs().forEach(roof => {
+      if (!roof.points || roof.points.length < 3) return;
+      const base = roofBaseElev(roof, stack) + ROOF_FASCIA_IN / 12;
+      geo.roofFaces(roof, geo.roofSkeleton(roof)).forEach(face => {
+        face.points.forEach(pt => {
+          const elev = base + geo.roofFaceRise(face, pt, roof.pitch || 4);
+          if (roofTop === null || elev > roofTop) roofTop = elev;
+        });
+      });
+    });
+    return {
+      uMin: Math.min(uA, uB),
+      uMax: Math.max(uA, uB),
+      yTop: Math.max(stack.bearing + 4, roofTop === null ? -Infinity : roofTop + 2),
+      yBottom: stack.foundation.footingBottom - 2,
+    };
+  }
+
+  function drawCutView(env, ctx, w, h, cut, opts) {
+    const fit = externalFit(opts);
+    ctx.fillStyle = (opts && opts.paperColor) || '#fafafa';
     ctx.fillRect(0, 0, w, h);
     const stack = sectionLevelStack(env);
     const dir = cut.dirVec;
@@ -174,6 +212,7 @@ if (!window.DraftCutView) {
     // right on the paper is (dir.z, -dir.x) — the cut line's own direction.
     const axis = { x: dir.z, z: -dir.x };
     const header = (label) => {
+      if (fit) return;   // the sheet captions its viewports itself
       ctx.fillStyle = 'rgba(29,31,32,0.55)';
       ctx.font = "600 10px 'Barlow Condensed', system-ui, sans-serif";
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
@@ -183,7 +222,7 @@ if (!window.DraftCutView) {
     const crossings = sectionWallCrossings(env, cut, axis);
     if (!crossings.length) {
       // Standing outside the model looking at it: an elevation, not a section.
-      if (drawElevationView(env, ctx, w, h, cut, stack, axis, header)) return;
+      if (drawElevationView(env, ctx, w, h, cut, stack, axis, header, opts)) return;
       header(cut.name);
       ctx.fillStyle = 'rgba(29,31,32,0.55)';
       ctx.font = "600 13px 'Barlow Condensed', system-ui, sans-serif";
@@ -223,11 +262,12 @@ if (!window.DraftCutView) {
       });
     }
 
-    const yTop = Math.max(stack.bearing + 4,
+    const yTop = fit?.extents ? fit.extents.yTop : Math.max(stack.bearing + 4,
       ...roofSamples.filter(s => s.elev != null).map(s => s.elev + 2));
-    const yBottom = stack.foundation.footingBottom - 2;
-    const marginL = 64, marginR = 24, marginT = 30, marginB = 16;
-    const pxPerFt = Math.max(2, Math.min(
+    const yBottom = fit?.extents ? fit.extents.yBottom : stack.foundation.footingBottom - 2;
+    const marginL = fit ? 0 : 64, marginR = fit ? 0 : 24,
+      marginT = fit ? 0 : 30, marginB = fit ? 0 : 16;
+    const pxPerFt = fit ? fit.pxPerFt : Math.max(2, Math.min(
       (w - marginL - marginR) / Math.max(uMax - uMin, 4),
       (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
     const x0 = marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
@@ -474,7 +514,8 @@ if (!window.DraftCutView) {
   // openings on each face, the roof silhouette, a grade line, and the
   // below-grade foundation dashed. Returns false when nothing projects
   // into the cut's span, so the caller can fall back to the guidance text.
-  function drawElevationView(env, ctx, w, h, cut, stack, axis, header) {
+  function drawElevationView(env, ctx, w, h, cut, stack, axis, header, opts) {
+    const fit = externalFit(opts);
     const dir = cut.dirVec;
     const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
     const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
@@ -582,10 +623,12 @@ if (!window.DraftCutView) {
 
     const fdn = stack.foundation;
     const lit = silhouette.filter(s => s.elev != null);
-    const yTop = Math.max(stack.bearing + 4, ...lit.map(s => s.elev + 2));
-    const yBottom = fdn.footingBottom - 2;
-    const marginL = 64, marginR = 24, marginT = 30, marginB = 16;
-    const pxPerFt = Math.max(2, Math.min(
+    const yTop = fit?.extents ? fit.extents.yTop
+      : Math.max(stack.bearing + 4, ...lit.map(s => s.elev + 2));
+    const yBottom = fit?.extents ? fit.extents.yBottom : fdn.footingBottom - 2;
+    const marginL = fit ? 0 : 64, marginR = fit ? 0 : 24,
+      marginT = fit ? 0 : 30, marginB = fit ? 0 : 16;
+    const pxPerFt = fit ? fit.pxPerFt : Math.max(2, Math.min(
       (w - marginL - marginR) / Math.max(uMax - uMin, 4),
       (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
     const x0 = marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
@@ -1253,6 +1296,7 @@ if (!window.DraftCutView) {
     }),
     sectionLevelStack,
     sectionWallCrossings,
+    cutViewExtents,
     roofBaseElev,
     sectionRoofHeightAt,
     drawCutView,
