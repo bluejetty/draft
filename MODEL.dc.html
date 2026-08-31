@@ -65,6 +65,15 @@
     .rail-tab-left { left:0; border-right:none; border-radius:4px 0 0 4px; transform:rotate(180deg); }
     .rail-tab-right { right:0; border-right:none; border-radius:4px 0 0 4px; }
     .strip-chip { display:inline-flex; transition:color 120ms ease, filter 120ms ease; }
+    /* UNDO / REDO on the strip. The hit area is deliberately larger than the
+       arrow drawn inside it: 44px wide by the strip's full height, so a
+       fingertip finds it (the audit measured every control on this strip at
+       15x15). The strip's own height caps the vertical dimension — see the
+       PR: going past it would overlap the drawing canvas and start eating
+       clicks meant for the plan. */
+    .strip-history { display:inline-flex; align-items:center; justify-content:center; min-width:44px; height:34px; padding:0; border:none; background:transparent; color:rgba(29,31,32,0.62); cursor:pointer; transition:color 120ms ease; }
+    .strip-history:hover:not(:disabled) { color:#365e86; }
+    .strip-history:disabled { color:rgba(29,31,32,0.16); cursor:default; }
     .strip-chip-compass:hover { color:#d97e2f !important; filter:drop-shadow(0 0 4px rgba(217,126,47,0.7)) !important; }
     .strip-chip-triangle:hover { color:#3f9f9f !important; filter:drop-shadow(0 0 4px rgba(63,159,159,0.7)) !important; }
     .strip-chip-brush:hover { color:#8a63b8 !important; filter:drop-shadow(0 0 4px rgba(138,99,184,0.7)) !important; }
@@ -1613,6 +1622,28 @@
       <path d="M3 13 C3 7 7 8.5 8.5 5.5 C9.5 3.5 13 3 13 6 C13 9 9 8.5 8 11 C7.4 12.5 5.5 13.5 3 13 Z"></path>
     </svg>
   </span>
+  </div>
+  <!-- UNDO / REDO, reachable without a keyboard (audit C4).
+       The history itself is not new — _undo() / _redo() over serialized
+       snapshots have been here all along — but the only way IN was Ctrl+Z,
+       and the drafter this app is built for is holding an iPad with no
+       keyboard attached. Every action was permanent for them.
+       These call exactly the same _undo() / _redo() the bindings call: one
+       path, so the two can never drift. A button with nothing to undo is
+       disabled and looks it, rather than answering a press with nothing. -->
+  <div data-history-controls style="display:flex; align-items:center; flex-shrink:0;">
+    <button type="button" data-undo class="strip-history" onClick="{{ onUndoPress }}" disabled="{{ undoDisabled }}" title="{{ undoTitle }}" aria-label="{{ undoTitle }}">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 7 H9.5 A3.2 3.2 0 0 1 9.5 13.4 H6"></path>
+        <path d="M5.6 4.4 L3 7 L5.6 9.6"></path>
+      </svg>
+    </button>
+    <button type="button" data-redo class="strip-history" onClick="{{ onRedoPress }}" disabled="{{ redoDisabled }}" title="{{ redoTitle }}" aria-label="{{ redoTitle }}">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M13 7 H6.5 A3.2 3.2 0 0 0 6.5 13.4 H10"></path>
+        <path d="M10.4 4.4 L13 7 L10.4 9.6"></path>
+      </svg>
+    </button>
   </div>
   <!-- NAVIGATE THE DRAWING (#304). Zoom was the wheel only and pan was
        middle-drag or alt-drag, so on a touchscreen a drafter could draw and
@@ -20294,6 +20325,21 @@ class Component extends DCLogic {
       : backgroundMode === 'red' ? '#dd6568' : 'rgba(29,31,32,0.42)';
     const persistenceStatusColor = this.state.persistenceStatus === 'SAVED'
       ? '#6a7a52' : '#b04050';
+    // The strip's UNDO / REDO. `_history` is not component state, but every
+    // path that touches it — a recorded edit, an undo, a redo — ends in a
+    // setState, so these are read fresh on the render that follows.
+    // The Extend tool keeps a single-step undo of its own for sessions with
+    // nothing in the shared history yet, and _undo() falls through to it, so
+    // the button is live whenever EITHER has something to give back.
+    const undoAvailable = this._history.past.length > 0
+      || (this._extendUndo?.changes?.length || 0) > 0;
+    const redoAvailable = this._history.future.length > 0;
+    const undoTitle = undoAvailable
+      ? `Undo the last change  [${shortcut('undo')}]`
+      : 'Nothing to undo yet';
+    const redoTitle = redoAvailable
+      ? `Redo the change just undone  [${shortcut('redo')}]`
+      : 'Nothing to redo';
     const profileDialog = this.state.profileDialog;
     const profileDialogTitle = profileDialog === 'standards' ? 'Company Standards' : 'Personal Settings';
     const profileDialogDescription = profileDialog === 'standards'
@@ -21287,6 +21333,14 @@ class Component extends DCLogic {
       backgroundStatusColor,
       persistenceStatus: this.state.persistenceStatus,
       persistenceStatusColor,
+      // Straight through to the same methods the keybindings call — the
+      // button is another way in, never a second implementation.
+      onUndoPress: () => this._undo(),
+      onRedoPress: () => this._redo(),
+      undoDisabled: !undoAvailable,
+      redoDisabled: !redoAvailable,
+      undoTitle,
+      redoTitle,
       drawingMessage: this.state.drawingMessage,
       drawingMessageColor: this.state.drawingMessageError ? '#b04050' : 'rgba(29,31,32,0.55)',
     };
