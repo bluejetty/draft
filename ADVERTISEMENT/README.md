@@ -19,6 +19,9 @@ Tagline everywhere: **ZERO → PLAN IN 5 MINUTES!** (spoken: "zero to plan in fi
 | `TAGLINES.md` | The collected campaign lines — real taglines, support lines, joke sub-taglines |
 | `SHARE-YOUR-HOUSE.md` | The built-in marketing loop — bone-cooldown SHARE moment, one-page feature sheet, logo stamp |
 | `FEED-THE-TRADE.md` | The drafter-facing positioning piece — stock plans were lead generators, we build a better lead |
+| `GRUFFS-DRAFTING-universe.md` | GRUFFS DRAFTING — the fast-food universe: the 50's drive-through, the eras, THE CARHOP concept, the brand-safety rule |
+| `THE-MANAGER-script.md` / `THE-MANAGER-video-prompt.md` | THE MANAGER — Karen vs. the golden retriever manager (:60, Gruffs 80s lobby) |
+| `THE-MANAGER-script-10s.md` / `THE-MANAGER-10s-video-prompt.md` | THE DEN — one joke, ten seconds (Gruffs 80s lobby) |
 
 ## Folders
 
@@ -28,3 +31,7 @@ Tagline everywhere: **ZERO → PLAN IN 5 MINUTES!** (spoken: "zero to plan in fi
 ## House style
 
 Semi-realistic 1980s airbrushed illustration, halfway between photoreal and cartoon — painted-poster look, striped synthwave sun, neon grid horizon, light VHS grain. Not photorealistic, not flat cartoon.
+
+## Brand safety
+
+No real-world company logos, trademarks, or lookalike marks in any generated frame — uniforms, props, signage, backgrounds included. Only our own fictional identities (GRUFFS DRAFTING, ROUGHDRAFTER / RUFFDRAFTER) appear on anything. Every video/storyboard prompt carries the BRAND SAFETY clause; any output where a real brand sneaks in is rejected, never published. Full rule in `GRUFFS-DRAFTING-universe.md`.

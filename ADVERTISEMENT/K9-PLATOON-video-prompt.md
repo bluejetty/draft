@@ -51,6 +51,13 @@ IMPORTANT — keep the picture clean:
 - The ONLY text allowed on screen is the final chrome logo card:
   ROUGHDRAFTER — ZERO TO HOUSE IN 5 MINUTES! and "Skip the pitch." beneath
   it (the word GO! on the button face is fine if natural).
+- BRAND SAFETY — no real-world brands anywhere in frame: no real company
+  logos, trademarks, or lookalike marks on clothing, uniforms, hats, the
+  tank, signage, props, or background buildings — no golden arches, no
+  crowns, no swooshes, nothing recognizable. The only mark in this world
+  is the fictional ROUGHDRAFTER identity. Any output where a real brand
+  sneaks in is rejected — check uniforms and background props before
+  calling a take good.
 - Exactly one salesman, one husband, one wife, one baby — never duplicate
   the humans; the dog platoon is many dogs by design.
 - Nobody speaks on camera: the salesman's mouth moves but his pitch is
