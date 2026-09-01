@@ -239,6 +239,27 @@ not on code.
 Real choices. A dog picks a position in each range; the house default is what
 Gruff uses today, taken from the current code.
 
+### 4.0 The footprint — size and shape
+
+The two biggest dials, and the two you can pick out of a lineup fastest. Both
+were missing from the first cut of this section, which listed room-level
+preferences and no whole-house ones — caught by three dogs that turned out not
+to fit it.
+
+| Choice | Range | House default |
+|--------|-------|---------------|
+| Total area | no cap → a hard ceiling | no cap |
+| Aspect ratio | as near square as the order allows → 4:1 and beyond | balanced |
+| Jogs | none unless forced → freely | as the plan wants |
+
+A cap is a narrowing, so it can never produce an invalid house. It can produce
+**no house at all** — a dog capped at 1200 sq ft cannot take a five-bedroom
+order without going under the §3.1 floors, which he may never do.
+
+So a dog needs a way to say **"not my kind of house"**, and it has to go back
+out through the window rather than quietly shrinking bedrooms. That case is
+unhandled in both books today; see `chad-the-chihuahua.md`.
+
 ### 4.1 Room targets — how much above the floor
 
 A dog aims for a size, and §3.1 is the floor he can never go under.

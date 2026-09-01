@@ -41,10 +41,27 @@ Professor Gruff, who writes notes inside the model, is a different character
 doing a different job and is not an employee of either shift. Name to be sorted
 later; kept apart here so the rename stays a rename.
 
+## On the payroll
+
+**Drive-thru:** Gruff, and nobody else yet.
+
+**Drafting:** Gruff on shift. Three drafts on the bench, none of them running
+anywhere — Sheldon the Schnauzer (plain and square), Chad the Chihuahua (1200
+sq ft and under), Bob the Weiner Dog (long and narrow). They exist to be
+argued with, and each ends with what's still open about him.
+
+Each one carries a single axis. That's deliberate: a dog who differs on
+everything is indistinguishable from a dog who differs on nothing.
+
+Chad raises the first case nobody has an answer for — **a dog who can't take
+the order.** Five bedrooms won't fit in 1200 sq ft without breaking the room
+minimums, which he may never do, so he has to be able to decline. See his
+file.
+
 ## Not built yet
 
-No dog files exist. One dog per job for now, and everything below is the door
-left open rather than a thing that runs:
+No dog file is loaded by anything. One dog per job for now, and everything
+below is the door left open rather than a thing that runs:
 
 - a picker for the drafting dog, saved with the drawing so a reopened plan
   comes back in the same hand
