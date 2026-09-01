@@ -235,6 +235,20 @@ if (!window.DraftBuildHouse) {
     // foundation wall traces it, so an end anywhere ON it already bears. A
     // caller that knows about interior bearing walls or beams underneath
     // passes a wider test in — nothing is reached for.
+    //
+    // BEAMS ARE DRAWN TO THE EDGE OF THE FLOOR, and that is a drawing
+    // convention, not an oversight: the sheet is a measurement document, and
+    // the fabricator takes the bearing off the length (3" onto concrete or
+    // masonry, 1½" onto wood). Do not shorten a beam here to model that — it
+    // would make every dimension on the sheet read short. For the same reason
+    // this asks whether bearing is PRESENT, not how much of it there is.
+    //
+    // The question is only ever asked outward. A floor or beam may cantilever
+    // up to 2' PAST its support, but an end stopping SHORT of one never
+    // reaches it and cannot bear on it however close it comes. Runs are
+    // clipped to the outline, so no end extends past a wall and the outward
+    // allowance never decides a case; if that ever changes, it belongs here
+    // as a tolerance on this test rather than anywhere else.
     const onOutline = p => points.some((a, i) => {
       const b = points[(i + 1) % points.length];
       const dx = b.x - a.x, dz = b.z - a.z;
