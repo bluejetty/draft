@@ -114,12 +114,18 @@ is *deliberately not on a wall* — it sits out in the field of a floor or a
 ceiling, which is the whole reason it exists. So it cannot use the wall pattern
 and it forces the storage question below to be answered rather than deferred.
 
-**Open, and Movie's to answer:** one kind for both, or two that happen to share
-a symbol? Drawn the same either way, but a floor outlet and a ceiling outlet
-are different things to a builder, and only the model can tell them apart.
-Until he answers, **store the surface** (floor or ceiling) on the device even
-if one symbol paints both — that way the answer costs a painter change and not
-a migration.
+**Answered, Movie's ruling 1 Sep: one kind, and the drafter switches it.** The
+device stores a `surface` of `floor` or `ceiling`, and that value is **editable
+on a placed outlet** — flipped the way a door swing is flipped, not chosen once
+at placement and not corrected by deleting and re-placing.
+
+Which leaves one thing to build that the ruling does not pay for by itself:
+**one symbol paints both, so the sheet has to say which in words.** The
+square-around-the-outlet is identical either way and the drawing alone cannot
+tell a builder which plane the box is in. Label it beside the symbol, the way
+sheet 14 separates a chandelier from a vanity — two devices that are also the
+same circle. A `surface` stored but never printed is a fact the model knows and
+the plan does not.
 
 **Ceiling-hosted storage is an open call and yours to make in the PR.** A point
 on a level is the obvious one; a room-relative point survives a room being
@@ -128,9 +134,11 @@ board makes that the spec does not settle.
 
 ### The life-safety layer
 
-`E-SAFETY` is new, and it is Movie's ruling that it exists: detectors must be
-on a layer **that is always on**, so a drafter switching the electric off to
-work on something else cannot make the smokes vanish from a sheet.
+`E-SAFETY` is new, it is Movie's ruling that it exists, and `E-SAFETY` is the
+name he settled on (1 Sep) — it matches the `A-` / `S-` / `E-` prefixes already
+in `DEFAULT_LAYER_STANDARDS`. Detectors must be on a layer **that is always
+on**, so a drafter switching the electric off to work on something else cannot
+make the smokes vanish from a sheet.
 
 Add it to the vocabulary in `tests/layer-standards.spec.js` and to
 `layer-views.js` — and note it belongs in the `contents` of the **plan views

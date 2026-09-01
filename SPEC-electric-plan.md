@@ -81,10 +81,18 @@ field of a floor or a ceiling, which is the point of it. So it hosts on the
 room the way a pot light does, and it is the device that forces the
 ceiling-host storage question below to be answered rather than deferred.
 
-**Open, Movie's:** one kind for both surfaces, or two that share a symbol? A
-floor outlet and a ceiling outlet are the same drawing and different things to
-a builder. Until he says, store the surface on the device even if one symbol
-paints both — then the answer costs a painter change, not a migration.
+**Settled, Movie's ruling 1 Sep: one kind, and the drafter switches it.** Not
+two device kinds and not a choice made at placement time — one device with a
+`surface` of `floor` or `ceiling` that can be flipped on a placed outlet, the
+way a door swing is flipped rather than redrawn. So the drafter who put it in
+the wrong plane fixes it in one action instead of deleting and re-placing.
+
+The consequence to build: **one symbol paints both, so the sheet has to say
+which it is in words.** The square-around-the-outlet is identical either way,
+and a builder reading the plan cannot tell a floor box from a ceiling box from
+the drawing alone. Label it the way sheet 14 labels a chandelier and a vanity —
+the text beside the symbol is already this office's way of separating devices
+that share a mark.
 
 ### Placement — where the devices actually go
 
@@ -238,11 +246,13 @@ a bare coordinate cannot.
 one of only three layer names that survive a reload — see the whitelist
 hazard below.
 
-**Life safety gets its own layer.** Movie's ruling, 1 Sep: smoke and CO
-detectors must be a layer that is always on, so a drafter turning electric off
-to work on something else cannot make them vanish. There is no such name in
-the tested vocabulary yet; the board adds one. This also buys a life-safety
-only print for the inspector, later, for free.
+**Life safety gets its own layer, and it is `E-SAFETY`.** Movie's ruling, 1
+Sep: smoke and CO detectors must be a layer that is always on, so a drafter
+turning electric off to work on something else cannot make them vanish. There
+is no such name in the tested vocabulary yet; the board adds one. The name
+matches the `A-` / `S-` / `E-` prefixes the standards table already uses, and
+it is cheap to change right up until a saved drawing contains one. This also
+buys a life-safety only print for the inspector, later, for free.
 
 ---
 
