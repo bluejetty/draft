@@ -1,8 +1,11 @@
 // THE BUILD ROW — turtle, rabbit, and lamps that mean something (board NEW-4).
 //
-// Three states per lamp: DIM when the thing does not exist and its tool is
-// not armed, ARMED while you trace, LIT once the thing is in the drawing.
-// Armed beats lit, so a press never reads as switching something off.
+// Three states per lamp: OFF when the thing does not exist and its tool is
+// not armed, LIT once the thing is in the drawing, ARMED while you trace.
+// Off and lit are two pieces of art — the button, and the same button with
+// its light out — so off is drawn rather than approximated by a filter, and
+// a dark lamp keeps the colour that says which lamp it is. Armed is the lit
+// art plus a halo, and it beats lit, so a press never reads as an off.
 //
 // The rule these specs exist to protect: LIT IS DERIVED FROM THE MODEL ON
 // EVERY RENDER AND NEVER STORED. That is what makes F5 keep the lights and
@@ -11,23 +14,33 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
-const DIM = 'grayscale(1) brightness(0.7)';
-const LIT = 'none';
+// Off and on are two pieces of ART, not one filter: each lamp has the button
+// lit and the same button with its light out. The halo is the third state and
+// the only one that is a filter.
+const off = name => new RegExp(`${name}out\\.png$`);
+const on = name => new RegExp(`btn-${name}\\.png$`);
+const NO_GLOW = 'none';
 const armedRe = {
   house: /rgba?\(192, ?57, ?43/,
   attached: /rgba?\(63, ?127, ?214/,
   detached: /rgba?\(125, ?91, ?166/,
 };
 
+// Each lamp read as the pair that describes it: which art it wears, and
+// whether it carries the armed halo.
 const lamps = page => page.evaluate(() => {
-  const f = sel => { const el = document.querySelector(sel); return el ? el.style.filter : null; };
+  const read = sel => {
+    const el = document.querySelector(sel);
+    if (!el) return null;
+    return { src: el.querySelector('img')?.getAttribute('src') || '', glow: el.style.filter };
+  };
   return {
-    turtle: f('[data-select-turtle]'),
-    house: f('[data-select-house]'),
-    split: f('[data-select-split]'),
-    attached: f('[data-mark-attached-garage]'),
-    detached: f('[data-mark-detached-garage]'),
-    rabbit: f('[data-select-rabbit]'),
+    turtle: read('[data-select-turtle]'),
+    house: read('[data-select-house]'),
+    split: read('[data-select-split]'),
+    attached: read('[data-mark-attached-garage]'),
+    detached: read('[data-mark-detached-garage]'),
+    rabbit: read('[data-select-rabbit]'),
   };
 });
 
@@ -60,8 +73,9 @@ test.describe('The build row lamps', () => {
     await h.openModel(page, { webgl: false });
 
     let state = await lamps(page);
-    expect(state.house).toBe(DIM);
-    expect(state.detached).toBe(DIM);
+    expect(state.house.src).toMatch(off('house'));
+    expect(state.house.glow).toBe(NO_GLOW);
+    expect(state.detached.src).toMatch(off('detached'));
     // SPLIT and ATTACHED are not in the DOM until a house master exists.
     expect(state.split).toBeNull();
     expect(state.attached).toBeNull();
@@ -69,9 +83,11 @@ test.describe('The build row lamps', () => {
     await page.locator('[data-select-house]').click();
     await page.waitForTimeout(200);
     state = await lamps(page);
-    expect(state.house).toMatch(armedRe.house);
+    // Arming lights the button and adds the halo, though nothing exists yet.
+    expect(state.house.src).toMatch(on('house'));
+    expect(state.house.glow).toMatch(armedRe.house);
     // Arming one lamp says nothing about any other.
-    expect(state.detached).toBe(DIM);
+    expect(state.detached.src).toMatch(off('detached'));
   });
 
   test('building lights each lamp, and armed still beats lit', async ({ page }) => {
@@ -83,18 +99,21 @@ test.describe('The build row lamps', () => {
     // shows up here by construction rather than by contrivance: the house
     // exists AND is armed, and the row shows armed.
     let state = await lamps(page);
-    expect(state.house).toMatch(armedRe.house);
-    expect(state.attached).toBe(LIT);
-    expect(state.detached).toBe(LIT);
+    expect(state.house.glow).toMatch(armedRe.house);
+    expect(state.attached.src).toMatch(on('attached'));
+    expect(state.attached.glow).toBe(NO_GLOW);
+    expect(state.detached.src).toMatch(on('detached'));
 
     // Arming a garage hands the bright state over: the house stops being
     // armed and falls back to lit, because it still exists.
     await page.locator('[data-mark-attached-garage]').click();
     await page.waitForTimeout(200);
     state = await lamps(page);
-    expect(state.attached).toMatch(armedRe.attached);
-    expect(state.house).toBe(LIT);
-    expect(state.detached).toBe(LIT);
+    expect(state.attached.glow).toMatch(armedRe.attached);
+    // The house stops being armed and falls back to lit art, no halo.
+    expect(state.house.src).toMatch(on('house'));
+    expect(state.house.glow).toBe(NO_GLOW);
+    expect(state.detached.src).toMatch(on('detached'));
   });
 
   test('lit survives a reload and NEW puts every lamp out', async ({ page }) => {
@@ -106,9 +125,10 @@ test.describe('The build row lamps', () => {
     await page.reload();
     await h.waitForModelReady(page);
     let state = await lamps(page);
-    expect(state.house).toBe(LIT);
-    expect(state.attached).toBe(LIT);
-    expect(state.detached).toBe(LIT);
+    for (const name of ['house', 'attached', 'detached']) {
+      expect(state[name].src).toMatch(on(name));
+      expect(state[name].glow).toBe(NO_GLOW);
+    }
 
     await page.getByRole('button', { name: 'NEW', exact: true }).click();
     const dontSave = page.getByRole('button', { name: "DON'T SAVE" });
@@ -116,13 +136,13 @@ test.describe('The build row lamps', () => {
     await h.waitForSaved(page);
 
     state = await lamps(page);
-    expect(state.house).toBe(DIM);
-    expect(state.detached).toBe(DIM);
+    expect(state.house.src).toMatch(off('house'));
+    expect(state.detached.src).toMatch(off('detached'));
     expect(state.split).toBeNull();
     expect(state.attached).toBeNull();
   });
 
-  test('SPLIT holds its place permanently dim until split zones exist', async ({ page }) => {
+  test('SPLIT holds its place, light out, until split zones exist', async ({ page }) => {
     await h.openModel(page, { webgl: false });
     await traceRect(page, [[-8, -6], [8, -6], [8, 6], [-8, 6], [-8, -6]]);
     await h.climbTourToMain(page);
@@ -130,10 +150,12 @@ test.describe('The build row lamps', () => {
     // It appears with the house, and it is dark: there is no split geometry
     // and no split tool, so it can neither be armed nor exist. Unavailable
     // is the truth about it, not a defect.
-    expect((await lamps(page)).split).toBe(DIM);
+    expect((await lamps(page)).split.src).toMatch(off('split'));
     await page.locator('[data-select-split]').click();
     await expect(page.locator('[data-model-drawing-message]')).toContainText('coming soon');
-    expect((await lamps(page)).split).toBe(DIM);
+    const split = (await lamps(page)).split;
+    expect(split.src).toMatch(off('split'));
+    expect(split.glow).toBe(NO_GLOW);
   });
 
   test('turtle and rabbit bookend the row, always present and never lamps', async ({ page }) => {
@@ -146,8 +168,8 @@ test.describe('The build row lamps', () => {
     // They wear no filter in any drawing state — an assistance level is not
     // a thing that can exist, so dim/armed/lit would say something untrue.
     let state = await lamps(page);
-    expect(state.turtle).toBe('');
-    expect(state.rabbit).toBe('');
+    expect(state.turtle.glow).toBe('');
+    expect(state.rabbit.glow).toBe('');
 
     // First and last in the cluster, with the lamps between them.
     const order = await page.evaluate(() => [...document.querySelector('[data-build-cluster]').children]
@@ -166,8 +188,8 @@ test.describe('The build row lamps', () => {
     await traceRect(page, [[-8, -6], [8, -6], [8, 6], [-8, 6], [-8, -6]]);
     await h.climbTourToMain(page);
     state = await lamps(page);
-    expect(state.house).toBe(LIT);
-    expect(state.turtle).toBe('');
-    expect(state.rabbit).toBe('');
+    expect(state.house.src).toMatch(on('house'));
+    expect(state.turtle.glow).toBe('');
+    expect(state.rabbit.glow).toBe('');
   });
 });
