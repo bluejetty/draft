@@ -183,14 +183,26 @@ Never the other way round. If the drafter routes curves by hand, the drawing
 can say a switch controls a light when the model disagrees, and nobody will
 ever find out. Stored relationship, derived line.
 
-The bank is **derived, never stored** — Gilligan's call, 1 Sep, and the right
-one. A stored bank would be a third thing that has to agree with the fixture
-and the switch, and three things that must agree are three things that can
-drift. Grouped instead, "one switch per bank" is true by definition and the
-gang count is a `COUNT DISTINCT` rather than a number somebody maintains.
+The bank is **derived, never stored** — Gilligan's call, 1 Sep. The reason is
+**orphaning**, and it is worth stating exactly, because the wrong reason would
+mislead whoever revisits this: a stored bank can outlive its lights. Delete the
+last light in a bank and a record sits there attached to a switch and holding
+nothing, waiting for someone to sweep it. That is precisely the failure the
+leg rule already forbids — *a leg is never left pointing at nothing* — and a
+bank record, being a thing in its own right, inherits it. Group the lights on
+their switch instead and the last deletion makes the bank stop existing,
+because it was never a thing to begin with.
 
-When three-way switching arrives a light answers to more than one switch, and
-*that* is when a bank earns its own record. Not before.
+(Not drift. `light.bankId` + `bank.switchId` duplicates no fact and could not
+fall out of sync; an earlier draft of this spec said otherwise and was wrong.)
+
+With the bank grouped, one switch per bank is true by definition and the gang
+count is the distinct switches in the room, counted.
+
+**Revisit when three-ways arrive.** That is the trigger, and it is stated so it
+is a condition rather than folklore: a light answering to more than one switch
+stops `switchId` being a single value, and the bank becomes a real entity —
+cheap at that point, because the grouping already names the seam.
 
 One honest note on where this came from. I tried to recover the pairings by
 tracing the dashes out of the PDF — chain the segments end to end, then match

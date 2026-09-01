@@ -200,16 +200,22 @@ fixture where the room wants one light. **Do not invent a grid.**
 > **A fixture stores what switches it. The painter draws the curve from that,
 > and the bank is what you get by grouping fixtures on that switch.**
 
-**The bank is derived, never stored** — your call, 1 Sep, and it is the right
-way round. A stored bank is a third record that has to agree with the fixture
-and the switch; grouped instead, one-switch-per-bank is true by definition and
-the gang count is a `COUNT DISTINCT`. Nothing new to store, and the change is
-only in how the generator assigns: lights are grouped into banks and each bank
-gets one switch, rather than each light hunting a switch on its own.
+**The bank is derived, never stored** — your call, 1 Sep, and your reason, not
+the one an earlier draft of this board gave. Not drift: `light.bankId` +
+`bank.switchId` duplicates no fact. **Orphaning**: a stored bank outlives its
+last light and sits there attached to a switch holding nothing, which is
+exactly what the leg rule forbids and exactly what a thing-in-its-own-right
+inherits. Grouped, the last deletion makes the bank stop existing.
 
-Say in the PR that three-ways are the point where a light answers to more than
-one switch and a bank earns its own record. Not now — Movie's instruction — but
-the grouping is where that seam will be.
+Nothing new to store, then, and the change is only in how the generator
+assigns: lights are grouped into banks and each bank gets one switch, rather
+than each light hunting a switch on its own. Gang count is the distinct
+switches in the room, counted.
+
+State the revisit condition in the PR: **three-ways**. A light answering to
+more than one switch stops `switchId` being a single value and the bank
+becomes a real entity — cheap then, because the grouping already names the
+seam. Not now; Movie's instruction.
 
 The red dashed curves on sheet 14 are the only thing that says which switch
 runs which lights, so they must come out of the stored relationship. If a
