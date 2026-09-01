@@ -229,10 +229,26 @@ const SCALES = [
 
 // The auto composer's ladder, largest first: the working plan scale, then the
 // honest steps down. Anything below 1/16" is not a real drafting scale.
-const AUTO_SCALE_PREFS = [1 / 4, 3 / 16, 1 / 8, 1 / 16];
+// Largest first, first rung that fits. 1/16" is not a real drafting scale
+// and is off the ladder: it survives only as the clipped last resort for a
+// view that fits at nothing else at all. Too big is self-evident; too small
+// is an opinion, so the rule needs no fill threshold to tune.
+const AUTO_SCALE_PREFS = [1 / 4, 3 / 16, 1 / 8];
+const AUTO_SCALE_LAST_RESORT = 1 / 16;
 
 // Composer spacing, in paper inches: air between viewports, and the caption
 // line each viewport wears under its frame.
+// What a view claims on paper is the rectangle it DRAWS plus everything
+// drawn around it. Dimension strings and elevation markers are not on
+// elevations yet, so their allowances are zero — named and zero, so that
+// adding them later moves the chosen scale by itself instead of sending
+// someone back into this arithmetic. Feet per side.
+// (The caption below the frame is COMPOSE_LABEL_IN and is counted there —
+// do not add it again here.)
+const VIEW_ALLOWANCE_FT = Object.freeze({
+  dimensions: 0,   // strings standing off the object
+  markers: 0,      // elevation / level markers hanging off the sides
+});
 const COMPOSE_GAP_IN = 0.35;
 const COMPOSE_LABEL_IN = 0.3;
 
@@ -626,17 +642,51 @@ class Component extends DCLogic {
     return this._cutExtentsCache.get(key);
   }
 
+  // ── What a view occupies, measured once (board NEW-2) ────────────────
+  // Measured: an elevation's height was the SECTION painter's reserved box —
+  // the object plus 2' of air above the ridge and 2' below the footing. On a
+  // two-storey over a basement that reads 36.25' for 32.25' of ink, and the
+  // pair misses the 1/8" rung by 0.05'. The building was never too tall; it
+  // was measured too tall.
+  //
+  // The buried foundation is NOT padding and stays in: an elevation draws it
+  // dashed below grade, down to the footing. Only the air comes off.
+  _viewAllowanceFt() {
+    return VIEW_ALLOWANCE_FT.dimensions + VIEW_ALLOWANCE_FT.markers;
+  }
+
+  // The footprint a view claims on paper, in feet. The scale chooser, the
+  // frame and the painter all ask this one function, so they cannot disagree
+  // about how big the view is.
+  _viewFootprintFt(view) {
+    const pad = 2 * this._viewAllowanceFt();
+    if (view.kind === 'plan') {
+      const b = this._planBounds(view.levelId);
+      return b ? { wFt: (b.maxX - b.minX) + pad, hFt: (b.maxZ - b.minZ) + pad } : null;
+    }
+    const ex = this._cutExtents(view);
+    if (!ex) return null;
+    const drawn = view.kind === 'elevation' && Number.isFinite(ex.yTopDrawn);
+    const top = drawn ? ex.yTopDrawn : ex.yTop;
+    const bottom = drawn ? ex.yBottomDrawn : ex.yBottom;
+    return { wFt: (ex.uMax - ex.uMin) + pad, hFt: (top - bottom) + pad };
+  }
+
+  // The rectangle the painter fits its ink to. An elevation paints the drawn
+  // box; a section keeps the padded one its own painter reserves.
+  _paintExtents(viewport) {
+    const ex = this._cutExtents(viewport);
+    if (!ex) return null;
+    if (viewport.kind !== 'elevation' || !Number.isFinite(ex.yTopDrawn)) return ex;
+    return { ...ex, yTop: ex.yTopDrawn, yBottom: ex.yBottomDrawn };
+  }
+
   // A viewport's rectangle on the sheet in paper inches, centred on xIn / yIn
   // and sized by the view's model extents at the viewport's own scale.
   _viewportRectIn(viewport) {
-    let wFt = null, hFt = null;
-    if (viewport.kind === 'plan') {
-      const bounds = this._planBounds(viewport.levelId);
-      if (bounds) { wFt = bounds.maxX - bounds.minX; hFt = bounds.maxZ - bounds.minZ; }
-    } else {
-      const extents = this._cutExtents(viewport);
-      if (extents) { wFt = extents.uMax - extents.uMin; hFt = extents.yTop - extents.yBottom; }
-    }
+    const foot = this._viewFootprintFt(viewport);
+    const wFt = foot ? foot.wFt : null;
+    const hFt = foot ? foot.hFt : null;
     const wIn = wFt !== null ? Math.max(wFt * viewport.pif, 0.75) : 2;
     const hIn = hFt !== null ? Math.max(hFt * viewport.pif, 0.75) : 2;
     return { xIn: viewport.xIn - wIn / 2, yIn: viewport.yIn - hIn / 2, wIn, hIn };
@@ -682,14 +732,20 @@ class Component extends DCLogic {
   // The largest scale on the ladder at which every view in the list fits the
   // region together (stacked for a pair, alone otherwise); the smallest rung
   // is the floor — a view too big for even 1/16" still prints, clipped.
-  _autoScaleFor(views, region) {
+  _autoScaleFor(views, region, axis = 'stack') {
     const fits = pif => {
+      if (axis === 'row') {
+        const sumW = views.reduce((sum, view) => sum + view.wFt * pif, 0)
+          + COMPOSE_GAP_IN * (views.length - 1);
+        const maxH = Math.max(...views.map(view => view.hFt)) * pif + COMPOSE_LABEL_IN;
+        return sumW <= region.w && maxH <= region.h;
+      }
       const maxW = Math.max(...views.map(view => view.wFt)) * pif;
       const sumH = views.reduce((sum, view) => sum + view.hFt * pif + COMPOSE_LABEL_IN, 0)
         + COMPOSE_GAP_IN * (views.length - 1);
       return maxW <= region.w && sumH <= region.h;
     };
-    return AUTO_SCALE_PREFS.find(fits) ?? AUTO_SCALE_PREFS[AUTO_SCALE_PREFS.length - 1];
+    return AUTO_SCALE_PREFS.find(fits) ?? AUTO_SCALE_LAST_RESORT;
   }
 
   _composeDefaultSet() {
@@ -700,29 +756,21 @@ class Component extends DCLogic {
       .slice()
       .reverse(); // levels store top-down; a permit set reads bottom-up
     const flow = [];
+    const sized = view => {
+      const foot = this._viewFootprintFt(view);
+      return foot ? { ...view, wFt: foot.wFt, hFt: foot.hFt } : null;
+    };
     planLevels.forEach(level => {
-      const bounds = this._planBounds(level.id);
-      if (!bounds) return;
-      flow.push({
-        kind: 'plan', levelId: level.id,
-        wFt: bounds.maxX - bounds.minX, hFt: bounds.maxZ - bounds.minZ,
-      });
+      const view = sized({ kind: 'plan', levelId: level.id });
+      if (view) flow.push(view);
     });
     this._cuts.forEach(cut => {
-      const extents = this._cutExtents({ kind: 'section', cutId: cut.id });
-      if (!extents) return;
-      flow.push({
-        kind: 'section', cutId: cut.id,
-        wFt: extents.uMax - extents.uMin, hFt: extents.yTop - extents.yBottom,
-      });
+      const view = sized({ kind: 'section', cutId: cut.id });
+      if (view) flow.push(view);
     });
-    const elevViews = this._standardElevationCuts().map(cut => {
-      const extents = this._cutExtents({ kind: 'elevation', elevId: cut.id });
-      return extents ? {
-        kind: 'elevation', elevId: cut.id,
-        wFt: extents.uMax - extents.uMin, hFt: extents.yTop - extents.yBottom,
-      } : null;
-    }).filter(Boolean);
+    const elevViews = this._standardElevationCuts()
+      .map(cut => sized({ kind: 'elevation', elevId: cut.id }))
+      .filter(Boolean);
     if (!flow.length && !elevViews.length) return;
 
     const viewports = [];
@@ -733,28 +781,83 @@ class Component extends DCLogic {
     // starts a new row, then a new sheet.
     let cursorX = region.x, cursorY = region.y, rowH = 0;
     let placedAny = false;
-    flow.forEach(view => {
-      const pif = this._autoScaleFor([view], region);
-      const wIn = view.wFt * pif;
-      const hIn = view.hFt * pif + COMPOSE_LABEL_IN;
-      if (placedAny && cursorX + wIn > region.x + region.w + 1e-9) {
-        cursorX = region.x;
-        cursorY += rowH + COMPOSE_GAP_IN;
-        rowH = 0;
-      }
-      if (placedAny && cursorY + hIn > region.y + region.h + 1e-9) {
-        sheet += 1;
-        cursorX = region.x; cursorY = region.y; rowH = 0;
-      }
-      const base = { id: nextId++, pif, sheet,
-        xIn: cursorX + (view.wFt * pif) / 2, yIn: cursorY + (view.hFt * pif) / 2 };
+    const place = (view, pif, xIn, yIn) => {
+      const base = { id: nextId++, pif, sheet, xIn, yIn };
       viewports.push(view.kind === 'plan'
         ? { ...base, kind: 'plan', levelId: view.levelId }
         : { ...base, kind: 'section', cutId: view.cutId });
-      cursorX += wIn + COMPOSE_GAP_IN;
-      rowH = Math.max(rowH, hIn);
       placedAny = true;
-    });
+    };
+    if (flow.length === 1) {
+      // One view sits in the middle of its sheet, not the corner.
+      const view = flow[0];
+      const pif = this._autoScaleFor([view], region);
+      place(view, pif, region.x + region.w / 2,
+        region.y + (region.h - COMPOSE_LABEL_IN) / 2);
+    } else if (flow.length === 2) {
+      // A pair balances: side by side when the two read wider than tall
+      // together, stacked when taller than wide, and the block centres as a
+      // group either way.
+      const sumW = flow[0].wFt + flow[1].wFt;
+      const sumH = flow[0].hFt + flow[1].hFt;
+      const axis = sumW > sumH ? 'row' : 'stack';
+      const pif = this._autoScaleFor(flow, region, axis);
+      if (axis === 'row') {
+        const blockW = sumW * pif + COMPOSE_GAP_IN;
+        const maxH = Math.max(...flow.map(v => v.hFt)) * pif + COMPOSE_LABEL_IN;
+        let x = region.x + Math.max(0, (region.w - blockW) / 2);
+        const midY = region.y + Math.max(0, (region.h - maxH) / 2);
+        flow.forEach(view => {
+          place(view, pif, x + (view.wFt * pif) / 2, midY + (view.hFt * pif) / 2);
+          x += view.wFt * pif + COMPOSE_GAP_IN;
+        });
+      } else {
+        const blockH = sumH * pif + 2 * COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
+        let y = region.y + Math.max(0, (region.h - blockH) / 2);
+        flow.forEach(view => {
+          place(view, pif, region.x + region.w / 2, y + (view.hFt * pif) / 2);
+          y += view.hFt * pif + COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
+        });
+      }
+    } else {
+      // Three or more keep the shelf packing; the block is centred after,
+      // per sheet. Balance beyond this wants a drafter's eye.
+      const packed = [];
+      flow.forEach(view => {
+        const pif = this._autoScaleFor([view], region);
+        const wIn = view.wFt * pif;
+        const hIn = view.hFt * pif + COMPOSE_LABEL_IN;
+        if (placedAny && cursorX + wIn > region.x + region.w + 1e-9) {
+          cursorX = region.x;
+          cursorY += rowH + COMPOSE_GAP_IN;
+          rowH = 0;
+        }
+        if (placedAny && cursorY + hIn > region.y + region.h + 1e-9) {
+          sheet += 1;
+          cursorX = region.x; cursorY = region.y; rowH = 0;
+        }
+        place(view, pif, cursorX + wIn / 2, cursorY + (view.hFt * pif) / 2);
+        packed.push({ vp: viewports[viewports.length - 1], sheet, wIn, hIn,
+          left: cursorX, top: cursorY });
+        cursorX += wIn + COMPOSE_GAP_IN;
+        rowH = Math.max(rowH, hIn);
+      });
+      // Centre each sheet's packed block in the region — off the corner.
+      const bySheet = new Map();
+      packed.forEach(item => {
+        if (!bySheet.has(item.sheet)) bySheet.set(item.sheet, []);
+        bySheet.get(item.sheet).push(item);
+      });
+      bySheet.forEach(items => {
+        const left = Math.min(...items.map(i => i.left));
+        const right = Math.max(...items.map(i => i.left + i.wIn));
+        const top = Math.min(...items.map(i => i.top));
+        const bottom = Math.max(...items.map(i => i.top + i.hIn));
+        const dx = Math.max(0, (region.w - (right - left)) / 2) - (left - region.x);
+        const dy = Math.max(0, (region.h - (bottom - top)) / 2) - (top - region.y);
+        items.forEach(i => { i.vp.xIn += dx; i.vp.yIn += dy; });
+      });
+    }
     // Elevations: two to a page, stacked and centred — E1+E2, then E3+E4.
     const pairs = [elevViews.slice(0, 2), elevViews.slice(2)].filter(pair => pair.length);
     pairs.forEach(pair => {
@@ -1193,7 +1296,7 @@ class Component extends DCLogic {
       }
     } else {
       const cut = this._cutForViewport(viewport);
-      const extents = this._cutExtents(viewport);
+      const extents = this._paintExtents(viewport);
       const env = this._cutViewEnv();
       if (cut && extents && env) {
         ctx.save();
