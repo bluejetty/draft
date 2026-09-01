@@ -2299,6 +2299,15 @@ const {
   normaliseActiveLineLayer,
 } = window.DraftLineLayers;
 const { normaliseLayerStandards } = window.DraftLayerStandards;
+// Every layer name the office standard knows. The loader and the line-layer
+// config both used to keep a hand-written list of three names and flatten
+// everything else to 'draft' -- so a line saved on any other layer came back
+// MISSING FROM ITS SHEET after a reload, silently, with nothing logged. Two
+// separate chains had to agree, and adding a layer meant remembering both.
+// One derived set instead: a new layer is a table entry, not a fourth branch.
+const KNOWN_LAYER_IDS = new Set(
+  window.DraftLayerStandards.DEFAULT_LAYER_STANDARDS.flatMap(group => group.layers).map(l => l.id));
+
 const { normaliseStructureStandards } = window.DraftStructureStandards;
 const { normaliseSnapZone } = window.DraftSnapZone;
 const { normaliseDrafter } = window.DraftDrafter;
@@ -5017,9 +5026,10 @@ class Component extends DCLogic {
             const view = ['plan', 'floor', 'e-power', 'foundation'].includes(line?.view) ? line.view : 'plan';
             return restoreSegment(line, 'line', {
               view,
-              layer: line?.layer === 'no-draft' ? 'no-draft'
-                : line?.layer === 'S-FOOTING' ? 'S-FOOTING'
-                : (line?.layer === 'E-POWER' || view === 'e-power') ? 'E-POWER' : 'draft',
+              // A known layer name survives the round trip; the e-power view
+              // still names its own lines; anything unknown falls to draft.
+              layer: KNOWN_LAYER_IDS.has(line?.layer) ? line.layer
+                : (view === 'e-power' ? 'E-POWER' : 'draft'),
               bulge: Number.isFinite(Number(line?.bulge)) ? Number(line.bulge) : 0,
             });
           }).filter(Boolean)
@@ -8569,10 +8579,11 @@ class Component extends DCLogic {
     this._layerRevealTimer = setTimeout(() => this.setState({ layerRevealKey: null }), LAYER_REVEAL_MS);
   }
 
+  // The second half of the same bug: even a layer that survived the loader
+  // was looked up as 'draft' here, so its own visible/printable settings
+  // never applied. Known names pass through; only unknown ones fall back.
   _lineLayerConfig(layerId) {
-    return this._layerStandard(
-      layerId === 'no-draft' ? 'no-draft' : layerId === 'E-POWER' ? 'E-POWER'
-        : layerId === 'S-FOOTING' ? 'S-FOOTING' : 'draft');
+    return this._layerStandard(KNOWN_LAYER_IDS.has(layerId) ? layerId : 'draft');
   }
 
   // Command-driven layers: generic lines drawn in the ELECTRIC layer set are
