@@ -10,54 +10,54 @@ done than it looks from the outside.
 
 ---
 
+## Correction (1 Sep, after Devin checked it)
+
+**The first version of this note was wrong, and wrong in the direction that
+makes the work look bigger than it is.** It claimed lines and floors carry no
+`layer` field, from a check of `drawing-format.js`'s normaliser alone. That
+does not follow, and the code says otherwise:
+
+- `_buildHouseFootings` sets `layer: 'S-FOOTING'`, and MODEL serialises
+  `layer: line.layer || 'draft'`. **Footings persist with their real AIA
+  layer.**
+- All 22 AIA names exist and are guarded by `tests/layer-standards.spec.js` —
+  `S-SLAB`, `S-FDN` and `E-POWER` among them. They are a tested standard, not
+  an aspiration.
+
 ## What is actually missing
 
-The layer table in `layer-views.js` names the contents of each view. Audited
-against `drawing-format.js`, entity by entity:
+The gap is narrower than "no layers" and different in kind.
 
-| Layer | Entity in the saved format? |
+**Some entities store their layer; some are identified structurally instead.**
+A slab is not stored as `S-SLAB` — it is a floor with `view:'foundation'` and
+`structure:'slab'`. So anything asking "give me the `S-SLAB` entities" gets
+nothing, even though the geometry is right there and the app labels it S-SLAB
+on screen.
+
+| Entity | How its layer is known |
 | --- | --- |
-| `S-BEAM` | yes |
-| `S-COL-FOOTING` | yes |
-| `A-FL-OPNG` | yes |
-| `A-STR` | yes |
-| `S-SLAB` | **no** |
-| `S-FDN` | **no** |
-| `S-FOOTING` | **no** |
-| `E-POWER` | **no** |
+| footings (lines) | stored: `layer: 'S-FOOTING'` |
+| beams, pad footings | stored: `S-BEAM`, `S-COL-FOOTING` |
+| openings, fixtures, notes, tags | stored |
+| **slabs (floors)** | **derived: `view` + `structure`, no layer string** |
+| **foundation walls** | **derived: `wall.view === 'foundation'`** |
 
-That table is the whole story, and it is easy to read the wrong lesson off
-it. The obvious reading is "four painters are missing." That is wrong for
-three of the four rows.
+## Board A — one mapping function, not per-sheet filters
 
-## Board A — the structural sheets: the geometry exists, the labels do not
+Sheets 6, 8 and the structural half of 9.
 
-Sheets 6, 8 (floor layouts) and the structural half of 9.
+The job is a **mapping**, not a tagging pass: `(kind, view, structure)` to an
+AIA layer name, for the kinds that derive theirs rather than store it. Then
+`drawPlan` filters on the mapped name exactly as it filters walls today.
 
-**MODEL already builds this geometry.** `_buildHouseFootings` pushes footings
-into `this._lines`. `_buildGarageSlab` works in `this._floors`. Beams and pad
-footings already carry `S-BEAM` and `S-COL-FOOTING` and are real entities.
+Write it as one function because **the DXF export needs the same mapping**.
+A layer name is what a DXF layer IS, so a per-sheet filter here would have to
+be re-derived there, and the two would drift. One function, two callers.
 
-What is missing is not the drawing — it is that **`lines` and `floors` carry
-no `layer` field at all** (confirmed: no layer key in either normaliser). A
-footing is a line indistinguishable from any other line, so nothing can ask
-for "the footings" and get them.
-
-So the job is:
-
-1. Give `lines` and `floors` a `layer`, defaulted so old drawings load
-   unchanged — the same additive shape as `auto` on fenestrations (#169) and
-   on room tags (#323).
-2. Tag them where they are built: footings `S-FOOTING`, slabs `S-SLAB`,
-   foundation walls' own layer `S-FDN`.
-3. `drawPlan` already filters; extend it to draw lines and floors whose layer
-   is in the view's `contents`. It draws walls and openings today, and
-   `render2D` has no line or floor painter — but these are polylines and
-   polygons, not new symbol families.
-
-**Size:** one session, most of it in the tagging and its migration, not the
-painting. **Risk:** a `layer` field on two more entity kinds touches the save
-format, so the three-places rule applies and old drawings are the test.
+**Size:** smaller than a session. **Risk:** low — nothing is stored
+differently, so no save-format change and no migration. The existing
+`layer-standards.spec.js` already pins the vocabulary the mapping must
+produce.
 
 ## Board B — electric: there is nothing to draw
 
