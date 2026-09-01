@@ -105,9 +105,13 @@ invent a second one.
 
 ### The floor outlet and the ceiling outlet
 
-Movie's ruling, 1 Sep: a **floor outlet and a ceiling outlet, both drawn as the
-outlet symbol with a square around it.** An addition to the sheet-14 set, not
-something read off it.
+Movie's ruling, 1 Sep: a **floor outlet and a ceiling outlet**. An addition to
+the sheet-14 set, not something read off it.
+
+The mark, in Movie's words and the same for both: **the circle with its two
+lines, the same size as the wall outlet, with a square drawn around it**, and
+the text `CEIL` or `FLR` above, below or beside it. Those exact words, no
+periods.
 
 They matter out of proportion to their size, because they are the first devices
 *deliberately not on a wall* — they sit out in the field of a floor or a
@@ -122,14 +126,13 @@ placed separately, and a drafter who wants the other deletes and places the
 other. Ignore any earlier wording that had you store a switchable surface; the
 plane is not a setting on a device, it is which device was placed.
 
-Which leaves one thing to build that the ruling does not pay for by itself:
-**both paint the same symbol, so the sheet has to say which in words.** The
-square-around-the-outlet is identical either way and the drawing alone cannot
-tell a builder which plane the box is in. Label it beside the symbol, the way
-sheet 14 separates a chandelier from a vanity — two devices that are also the
-same circle. Here the label is the only thing carrying the distinction, so it
-is not optional and must not be truncated: an unlabelled square is a box the
-builder has to guess at.
+So the two kinds are two device kinds but **one mark**, and the label is the
+only thing that distinguishes them anywhere — not in the drawing and, once
+there is no stored surface, not in the model either. `CEIL` and `FLR` are the
+device's identity as drawn, not decoration on it. The painter must not treat
+them as droppable annotation: no truncation, no vanishing at small scale. An
+unlabelled square is a box the builder has to guess at. (Sheet 14 already works
+this way — a chandelier and a vanity are the same circle told apart by text.)
 
 **Ceiling-hosted storage is an open call and yours to make in the PR.** A point
 on a level is the obvious one; a room-relative point survives a room being

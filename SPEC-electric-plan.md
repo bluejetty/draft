@@ -74,8 +74,12 @@ Two devices are **not** on sheet 14 and are Movie's addition, 1 Sep:
 
 | Device | Symbol |
 | --- | --- |
-| Floor outlet | the outlet symbol with a square around it |
-| Ceiling outlet | the outlet symbol with a square around it |
+| Floor outlet | the wall-outlet mark, same size, with a square around it, labelled `FLR` |
+| Ceiling outlet | the wall-outlet mark, same size, with a square around it, labelled `CEIL` |
+
+Movie's description, 1 Sep: the circle with its two lines, **the same size as
+the wall outlet**, a square drawn around it, and the text `CEIL` or `FLR` above,
+below or beside it. The mark is identical for both; only the text differs.
 
 They are the only outlets deliberately off the wall — they sit out in the field
 of a floor or a ceiling, which is the point of them. So they host on the room
@@ -89,12 +93,12 @@ a drafter who wants the other one deletes this one and places that one. Which
 is the plainer model: the plane is not a setting on a device, it is which
 device you placed.
 
-They share the square-around-the-outlet mark, so **the sheet still has to say
-which in words.** The drawing alone cannot tell a builder which plane the box
-is in. Label it the way sheet 14 labels a chandelier and a vanity — the text
-beside the symbol is already this office's way of separating devices that share
-a mark, and here it is the only thing carrying the distinction, so it is not
-optional and must not be truncated away.
+They share one mark, so **the label is the only thing that distinguishes them,
+anywhere.** `CEIL` and `FLR` are not annotation on this device, they are the
+device's identity as drawn — which is the same trick sheet 14 uses to tell a
+chandelier from a vanity, two devices that are also the same circle. So the
+label is not optional, must not be truncated, and must not drop out at small
+scale: an unlabelled square is a box the builder has to guess at.
 
 ### Placement — where the devices actually go
 
