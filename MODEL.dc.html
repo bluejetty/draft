@@ -10727,15 +10727,37 @@ class Component extends DCLogic {
   // an open run welded onto the house, DETACHED closes its own loop — so a
   // run near the house never guesses which one was meant.
   _toggleGarageMode(mode) {
+    // A part-drawn outline belongs to the builder that started it. Tapping a
+    // different builder mid-trace used to leave the legs on screen and only
+    // change their colour: the painter reads its colour off outlineGarage, so
+    // the same partial loop carried on under the new owner.
+    //
+    // That is not cosmetic. An ATTACHED run must start and end on the house
+    // outline and a DETACHED loop must close on itself, so a trace begun under
+    // one rule and finished under the other satisfies neither -- and the
+    // geometry reaching _commitOutline was never drawn to the rule it is
+    // validated against. A dozen other tool switches already call
+    // _cancelOutline for exactly this reason; this was the path that forgot.
+    //
+    // The user drew those legs, so say they are gone rather than let them
+    // notice. Converting the trace instead is a bigger job than the bug is
+    // worth, and tapping a different button means drawing a different thing.
+    const hadTrace = this._outlinePoints.length > 0;
+    const said = text => (hadTrace
+      ? `Part-drawn outline dropped — a trace belongs to the builder that started it. ${text}`
+      : text);
     if (this.state.outlineGarage === mode) {
+      if (hadTrace) this._cancelOutline();
       this.setState({
         outlineGarage: null,
         garageCallout: false,
-        drawingMessage: 'GARAGE marking off — outlines close as ordinary house outlines again.',
+        drawingMessage: said('GARAGE marking off — outlines close as ordinary house outlines again.'),
         drawingMessageError: false,
       });
       return;
     }
+    // Nothing changes hands here -- the mode is refused -- so the trace is
+    // deliberately left alone.
     if (mode === 'attached' && !this._shelfHasHouseMaster()) {
       this.setState({
         drawingMessage: 'Draw the house OUTLINE first — an ATTACHED garage run welds onto it. A garage with no house is a DETACHED garage.',
@@ -10746,12 +10768,14 @@ class Component extends DCLogic {
     // The marks live on the instrument strip and work from any tool: arming a
     // garage arms the outline trace with it.
     if (this.state.activeTool !== 'outline' && !this._activateContextTool('outline')) return;
+    // After the tool switch, so a refused switch discards nothing.
+    if (hadTrace) this._cancelOutline();
     this.setState({
       outlineGarage: mode,
       garageCallout: mode === 'attached' && !this.state.garageIntroOff,
-      drawingMessage: mode === 'attached'
+      drawingMessage: said(mode === 'attached'
         ? 'ATTACHED GARAGE — draw an OPEN run of 3+ legs starting and ending on the house outline; double-click or Enter finishes on the last point. BUILD HOUSE grows the beam, slab, doors and roof.'
-        : 'DETACHED GARAGE — draw its own loop and close it back on the first point (or press Enter); the prompt picks grade beam or thickened-edge slab. BUILD HOUSE grows its walls, slab, doors and roof.',
+        : 'DETACHED GARAGE — draw its own loop and close it back on the first point (or press Enter); the prompt picks grade beam or thickened-edge slab. BUILD HOUSE grows its walls, slab, doors and roof.'),
       drawingMessageError: false,
     });
   }
