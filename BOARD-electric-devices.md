@@ -134,6 +134,13 @@ them as droppable annotation: no truncation, no vanishing at small scale. An
 unlabelled square is a box the builder has to guess at. (Sheet 14 already works
 this way — a chandelier and a vanity are the same circle told apart by text.)
 
+**Draw a placeholder and move on.** Movie's instruction, 1 Sep: the finished
+symbol geometry comes later from Devin, so do not stall the painter waiting on
+it. Put the mark behind one function per device kind and paint anything legible
+for now; swapping the geometry should then be a one-file change and touch no
+rule, no host and no storage. Say in the PR which function is the placeholder
+so the swap is findable.
+
 **Ceiling-hosted storage is an open call and yours to make in the PR.** A point
 on a level is the obvious one; a room-relative point survives a room being
 resized. Say which you chose and why — it is the one storage decision this
