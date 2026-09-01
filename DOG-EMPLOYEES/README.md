@@ -65,6 +65,21 @@ the order.** Five bedrooms won't fit in 1200 sq ft without breaking the room
 minimums, which he may never do, so he has to be able to decline. See his
 file.
 
+## The Boneyard
+
+What's underneath the button: the dogs, the dials, the tunables, the
+guidebooks, the bench. Everything buried.
+
+It's a secret club in the way a thing sitting in plain sight is secret — only
+because nobody looked. **Nothing in the Boneyard is locked, paid for, or
+earned.** A user who asks is in, immediately, at whatever depth they asked
+about. Visits decide what we *show first*, never what a person is allowed to
+reach.
+
+That distinction is the whole rule, and it's easy to lose. The moment a rung
+reads "come back three times to unlock", it has stopped being a boneyard and
+become a loyalty program, and that is very hard to take back out once shipped.
+
 ## When a dog reaches a user
 
 Not on the first visit. Someone who has never made a plan doesn't know what a
@@ -78,7 +93,8 @@ they can actually answer.
 
 Same ladder further up: the dogs, then TOY MODE's dials, then drafting mode
 for the ones who keep pulling. One rule holds it together — **never show a
-control until they've seen the thing it changes.**
+control until they've seen the thing it changes.** The ladder is the order
+people notice the Boneyard in, not a set of doors.
 
 Two consequences worth fixing now, because they're cheap now and expensive
 later:
