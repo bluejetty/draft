@@ -194,11 +194,25 @@ if (!window.DraftCutView) {
         });
       });
     });
+    // Two rectangles, not one. yTop/yBottom are what the SECTION painter
+    // reserves: the object plus 2' of air above the ridge and below the
+    // footing, which keeps a section's cut edges off its frame.
+    //
+    // yTopDrawn/yBottomDrawn are what an ELEVATION actually puts ink on:
+    // the roof silhouette at the top (or the bearing line where no roof
+    // covers the cut), and the footing bottom underneath — the buried
+    // foundation IS drawn, dashed, below grade, so it stays in. The air
+    // does not. A sheet sizing an elevation by the padded figure asks the
+    // page for four feet it will never fill, which on a two-storey house
+    // over a basement is the difference between 1/8" and 1/16".
+    const bare = roofTop === null ? stack.bearing : Math.max(stack.bearing, roofTop);
     return {
       uMin: Math.min(uA, uB),
       uMax: Math.max(uA, uB),
       yTop: Math.max(stack.bearing + 4, roofTop === null ? -Infinity : roofTop + 2),
       yBottom: stack.foundation.footingBottom - 2,
+      yTopDrawn: bare,
+      yBottomDrawn: stack.foundation.footingBottom,
     };
   }
 
