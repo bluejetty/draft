@@ -314,10 +314,7 @@ class Component extends DCLogic {
     northArrow: false, // the titleblock's arrow cell — site plans by convention, any sheet by choice
     auto: false,       // the sheets are the composer's dealt hand; any manual edit takes them over
     activeSheet: 1,
-    // Found by VALUE, not position: #212 inserted 3/32" at index 1 and every
-    // index after it shifted, so the hard-coded 3 quietly became 3/16". A
-    // ladder entry added later cannot move the working plan scale again.
-    activeScale: SCALES.findIndex(scale => scale.pif === 1 / 4),
+    activeScale: 3,             // index into SCALES — 1/4" is the working plan scale
     activeLevelId: null,
     addingViewport: false,
     viewports: [],              // { id, kind, levelId|cutId|elevId, pif, sheet, xIn, yIn } — sheet inches
