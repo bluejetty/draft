@@ -237,6 +237,7 @@ const SCALES = [
 // the bottom of this ladder. Too big is self-evident; too small is an opinion,
 // so the rule needs no fill threshold to tune.
 const AUTO_SCALE_PREFS = [1 / 4, 3 / 16, 1 / 8, 3 / 32];
+const WORKING_SCALE_IDX = SCALES.findIndex(s => s.pif === 1 / 4);
 const AUTO_SCALE_LAST_RESORT = 3 / 32;
 // A view's type picks which ladder it walks; the chooser is the same either
 // way. A site plan at 1/8" is nonsense -- it wants an engineer's scale.
@@ -314,7 +315,7 @@ class Component extends DCLogic {
     northArrow: false, // the titleblock's arrow cell — site plans by convention, any sheet by choice
     auto: false,       // the sheets are the composer's dealt hand; any manual edit takes them over
     activeSheet: 1,
-    activeScale: 3,             // index into SCALES — 1/4" is the working plan scale
+    activeScale: WORKING_SCALE_IDX, // index into SCALES — 1/4" is the working plan scale
     activeLevelId: null,
     addingViewport: false,
     viewports: [],              // { id, kind, levelId|cutId|elevId, pif, sheet, xIn, yIn } — sheet inches
@@ -995,6 +996,7 @@ class Component extends DCLogic {
         paperKey: this.state.paperKey,
         orientation: this.state.orientation,
         activeScale: this.state.activeScale,
+        activeScalePif: SCALES[this.state.activeScale]?.pif,
         titleblock: this.state.titleblock,
       },
     };
@@ -1006,7 +1008,9 @@ class Component extends DCLogic {
     const patch = {};
     if (PAPER_SIZES[values.paperKey]) patch.paperKey = values.paperKey;
     if (['landscape', 'portrait'].includes(values.orientation)) patch.orientation = values.orientation;
-    if (Number.isInteger(values.activeScale) && SCALES[values.activeScale]) patch.activeScale = values.activeScale;
+    const byPif = SCALES.findIndex(s => s.pif === values.activeScalePif);
+    if (byPif >= 0) patch.activeScale = byPif;
+    else if (Number.isInteger(values.activeScale) && SCALES[values.activeScale]) patch.activeScale = values.activeScale;
     if (window.DraftTitleblock?.styleById(values.titleblock)) patch.titleblock = values.titleblock;
     return patch;
   }
