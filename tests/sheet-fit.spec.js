@@ -173,6 +173,30 @@ test('the fix leaves measurable headroom for dimensions still to come', async ({
   expect(slackIn).toBeGreaterThan(0.9);
 });
 
+test('a house too wide for 1/8" lands on 3/32", not half the size', async ({ page }) => {
+  const d = twoStoreyOverBasement();
+  d.cuts = [];
+  const wide = w => (w.start.x === 36 || w.end.x === 36)
+    ? { ...w,
+        start: { ...w.start, x: w.start.x === 36 ? 130 : w.start.x },
+        end: { ...w.end, x: w.end.x === 36 ? 130 : w.end.x } }
+    : w;
+  d.walls = d.walls.map(wide);
+  d.roofs[0].points = [
+    { x: -1.5, z: -1.5 }, { x: 131.5, z: -1.5 },
+    { x: 131.5, z: 27.5 }, { x: -1.5, z: 27.5 },
+  ];
+  await openLayout(page, d);
+  await waitForCompose(page);
+  const layout = await savedLayout(page);
+  const plan = layout.viewports.find(v => v.kind === 'plan');
+  // 130' of house needs 16.25" at 1/8" and the region is 14.85" wide, so the
+  // pair of rungs on either side of it decide this: 3/32" holds it in 12.19",
+  // where 1/16" would draw the same house at half the size for no reason.
+  expect(plan.pif).toBe(3 / 32);
+  layout.viewports.forEach(v => expect(v.pif).toBeGreaterThanOrEqual(3 / 32));
+});
+
 test('a single view sits in the middle of its sheet, not the corner', async ({ page }) => {
   const d = twoStoreyOverBasement();
   d.cuts = [];                       // one plan level with walls, no sections
