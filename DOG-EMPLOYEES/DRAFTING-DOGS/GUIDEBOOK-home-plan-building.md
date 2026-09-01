@@ -104,6 +104,47 @@ US and Canadian packs stay fully separate and are never blended.
 
 Every dog. Every time. Extracted from the running code.
 
+### 3.0 Three kinds of MAIN restriction
+
+Every rule below is one of three things, and the difference is not cosmetic:
+
+- **CODE** — a building code or municipal requirement. Not ours. We can be
+  wrong about it, and if we are, the code wins. Every CODE row wants a
+  citation someone can go and read; §3.11 is where they live.
+- **OFFICE** — how this office does it. A convention we hold to so drawings
+  agree with each other. Ours to set, and a client may reasonably decline one.
+- **RUFFDRAFTER** — good house building. Not required by anybody; it is simply
+  the better house. The closet on the shared wall is one of these — no
+  authority asks for it, it is just right, and knowing why is the whole job.
+
+The three fail differently, which is the reason for splitting them. Break a
+CODE rule and the house doesn't get built. Break an OFFICE rule and the
+drawings disagree. Break a RUFFDRAFTER rule and you get a legal, consistent,
+slightly worse house — which is the kind of wrong nobody catches.
+
+How §3 currently splits:
+
+| § | Class | Cited? |
+|---|-------|--------|
+| 3.1 room minimum floors | mixed — bedroom is NBC-derived, the rest RUFFDRAFTER | bedroom only, loosely |
+| 3.2 circulation minimums | mixed — the 3'-0" hall is code-derived | no |
+| 3.3 stair geometry | CODE | `docs/stair-database-compiled.md` |
+| 3.4 private room on the stair | RUFFDRAFTER | n/a |
+| 3.5 window siting | RUFFDRAFTER, over a code floor for bedroom egress | no |
+| 3.6 wall assemblies | OFFICE | n/a |
+| 3.7 areas | OFFICE convention | n/a |
+| 3.8 the compass | OFFICE | n/a |
+| 3.10 closet placement | RUFFDRAFTER | n/a |
+
+**Anything uncited is not CODE until it is cited.** That is the safe direction
+to be wrong in — we never tell someone the code requires a thing we can't show
+them. The table is therefore also the to-do list.
+
+**Municipality is not a column.** Setbacks, height limits, lot coverage,
+secondary suites and garage rules vary town by town, and this book has nowhere
+to hold "depends where you are." Every one of those sits outside the book
+entirely today. Unsolved, and flagged so it isn't discovered late.
+
 ### 3.1 Room minimum floors — `room-standards.js`
 
 | Room | Min area | Least dimension | Source |
@@ -262,6 +303,28 @@ much closet he gives a bedroom that didn't ask.
 Open: whether 3'-4" is a floor or the actual target, and whether a bedroom
 whose geometry can't produce this arrangement gets a closet somewhere else or
 reports that it couldn't.
+
+### 3.11 References
+
+Every source we can point a person at, kept here whether or not a rule cites
+it yet. Add to it whenever one turns up — a link found and not written down is
+a link found twice.
+
+| What | Where |
+|------|-------|
+| National Building Code of Canada 2020, free electronic editions | https://nrc.canada.ca/en/certifications-evaluations-standards/codes-canada/codes-canada-publications |
+| Illustrated User's Guide, NBC 2020 Part 9 — Housing and Small Buildings, the part that actually governs a house | same page, listed under 2020 |
+| Stair rules — nine reconciled syntheses, disputes preserved | `docs/stair-database-compiled.md` |
+
+Wanted and missing: the specific NBC Part 9 article numbers behind the bedroom
+floor area, the hall width and bedroom egress windows — each is a §3 row
+claiming code without proving it. And the **provincial** code that actually
+applies, since the NBC is a model the provinces adopt with amendments rather
+than a code in force on its own.
+
+RUFFDRAFTER rules don't get citations, because there is nobody to cite. What
+they get instead is a **reason**, written next to them. A rule of good practice
+with no reason attached is indistinguishable from a habit.
 
 ---
 
