@@ -14,6 +14,24 @@
 // No room rule lives in this file. It answers two questions — what size is a
 // closet, and which wall should it stand against — and the constraint module
 // decides what any of that is allowed to mean.
+//
+// ── SCOPE NOTE, NOT BUILT HERE ──────────────────────────────────────────
+// This module is WIRED INTO NOTHING. Nothing calls `placeIn`, no closet is
+// drawn from it, and merging it puts no closet on screen. It exists because it
+// was written before the board moved, and it is left in place so whoever picks
+// the board up starts from tested code rather than a blank file.
+//
+// What is still owed, and is that board's work rather than this file's:
+//
+//   AUTO-PLACE A CLOSET IN EVERY SECONDARY BEDROOM, UNASKED. (Movie, 1 Sep.)
+//   The drafter may move it or delete it afterwards; the toy just never leaves
+//   one out. The only non-placement is a REFUSAL — no wall can take it without
+//   covering a window, a door or a swing — and that reports rather than
+//   forcing one in. `placeIn` already returns exactly that refusal; what does
+//   not exist is the pass that walks the plan's bedrooms and calls it.
+//
+//   The minimum clear strip in front of a closet is still Movie's number. See
+//   CLEAR_STRIP_MIN_FT below.
 if (!window.DraftClosets) {
 (() => {
   // ── Movie's dimensions, 1 Sep ─────────────────────────────────────────
