@@ -1534,13 +1534,13 @@
   <!-- RIGHT LEVEL RAIL — starts hidden; the LEVELS pull tab on the canvas edge opens it -->
   <div data-model-right style="width:190px; border-left:1px solid rgba(29,31,32,0.16); flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff; display:{{ rightRailDisplay }};">
 
-    <!-- ELEVATIONS / SECTIONS — E1-E4 hold the top of the menu (#291) -->
+    <!-- ELEVATIONS — E1-E4 hold the top of the menu (#291), and now hold it
+         alone: the drafter's sections moved below LEVELS so the rail reads in
+         the order the printed set does. There is no empty state here; four
+         elevations always exist. -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.55); margin-bottom:6px;">Elev / Sec Views</div>
-      <sc-if value="{{ noCuts }}" hint-placeholder-val="{{ true }}">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; color:rgba(29,31,32,0.35); padding:4px 2px;">Press [{{ cutShortcut }}] to cut a view</div>
-      </sc-if>
-      <sc-for list="{{ cuts }}" as="cut" hint-placeholder-count="0">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.55); margin-bottom:6px;">Elevations</div>
+      <sc-for list="{{ elevationCuts }}" as="cut" hint-placeholder-count="4">
         <div class="{{ cut.rowClass }}" onClick="{{ cut.onView }}">
           <div class="cut-bar"></div>
           <div class="cut-body" style="display:flex; align-items:center;">{{ cut.name }}<span class="cut-side" style="{{ cut.sideStyle }}" title="The side this elevation faces — rename E1-E4 in COMPANY STANDARDS">{{ cut.sideName }}</span></div>
@@ -1610,6 +1610,24 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- SECTIONS — the drafter's cuts. The printed set runs elevations first
+         and sections near the end, after foundation and basement
+         (paper-rules.md), so the rail does too. Below the LEVELS card, not
+         inside it: BONEYARD is storage for a level, a section is not. -->
+    <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
+      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.55); margin-bottom:6px;">Sections</div>
+      <sc-if value="{{ noSections }}" hint-placeholder-val="{{ true }}">
+        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; color:rgba(29,31,32,0.35); padding:4px 2px;">Press [{{ cutShortcut }}] to cut a view</div>
+      </sc-if>
+      <sc-for list="{{ sectionCuts }}" as="cut" hint-placeholder-count="0">
+        <div class="{{ cut.rowClass }}" onClick="{{ cut.onView }}">
+          <div class="cut-bar"></div>
+          <div class="cut-body" style="display:flex; align-items:center;">{{ cut.name }}<span class="cut-side" style="{{ cut.sideStyle }}" title="The side this elevation faces — rename E1-E4 in COMPANY STANDARDS">{{ cut.sideName }}</span></div>
+          <button class="cut-del" style="{{ cut.delStyle }}" onClick="{{ cut.onDelete }}" title="Delete">×</button>
+        </div>
+      </sc-for>
     </div>
 
    <!-- 3D VIEW (special) -->
@@ -10709,15 +10727,37 @@ class Component extends DCLogic {
   // an open run welded onto the house, DETACHED closes its own loop — so a
   // run near the house never guesses which one was meant.
   _toggleGarageMode(mode) {
+    // A part-drawn outline belongs to the builder that started it. Tapping a
+    // different builder mid-trace used to leave the legs on screen and only
+    // change their colour: the painter reads its colour off outlineGarage, so
+    // the same partial loop carried on under the new owner.
+    //
+    // That is not cosmetic. An ATTACHED run must start and end on the house
+    // outline and a DETACHED loop must close on itself, so a trace begun under
+    // one rule and finished under the other satisfies neither -- and the
+    // geometry reaching _commitOutline was never drawn to the rule it is
+    // validated against. A dozen other tool switches already call
+    // _cancelOutline for exactly this reason; this was the path that forgot.
+    //
+    // The user drew those legs, so say they are gone rather than let them
+    // notice. Converting the trace instead is a bigger job than the bug is
+    // worth, and tapping a different button means drawing a different thing.
+    const hadTrace = this._outlinePoints.length > 0;
+    const said = text => (hadTrace
+      ? `Part-drawn outline dropped — a trace belongs to the builder that started it. ${text}`
+      : text);
     if (this.state.outlineGarage === mode) {
+      if (hadTrace) this._cancelOutline();
       this.setState({
         outlineGarage: null,
         garageCallout: false,
-        drawingMessage: 'GARAGE marking off — outlines close as ordinary house outlines again.',
+        drawingMessage: said('GARAGE marking off — outlines close as ordinary house outlines again.'),
         drawingMessageError: false,
       });
       return;
     }
+    // Nothing changes hands here -- the mode is refused -- so the trace is
+    // deliberately left alone.
     if (mode === 'attached' && !this._shelfHasHouseMaster()) {
       this.setState({
         drawingMessage: 'Draw the house OUTLINE first — an ATTACHED garage run welds onto it. A garage with no house is a DETACHED garage.',
@@ -10728,12 +10768,14 @@ class Component extends DCLogic {
     // The marks live on the instrument strip and work from any tool: arming a
     // garage arms the outline trace with it.
     if (this.state.activeTool !== 'outline' && !this._activateContextTool('outline')) return;
+    // After the tool switch, so a refused switch discards nothing.
+    if (hadTrace) this._cancelOutline();
     this.setState({
       outlineGarage: mode,
       garageCallout: mode === 'attached' && !this.state.garageIntroOff,
-      drawingMessage: mode === 'attached'
+      drawingMessage: said(mode === 'attached'
         ? 'ATTACHED GARAGE — draw an OPEN run of 3+ legs starting and ending on the house outline; double-click or Enter finishes on the last point. BUILD HOUSE grows the beam, slab, doors and roof.'
-        : 'DETACHED GARAGE — draw its own loop and close it back on the first point (or press Enter); the prompt picks grade beam or thickened-edge slab. BUILD HOUSE grows its walls, slab, doors and roof.',
+        : 'DETACHED GARAGE — draw its own loop and close it back on the first point (or press Enter); the prompt picks grade beam or thickened-edge slab. BUILD HOUSE grows its walls, slab, doors and roof.'),
       drawingMessageError: false,
     });
   }
@@ -20060,6 +20102,17 @@ class Component extends DCLogic {
     const { activeTool, units, activeView, isDrawing,
             levels, activeLevelIdx, backgroundLevelIds, backgroundLevelViews, backgroundMode,
             cuts, activeCutId, cutPhase, choosingDir, extendScope, extendPhase, copyPhase } = this.state;
+    // One row shape for both rail lists: same markup, same onView / onDelete
+    // wiring. Splitting the rail is a move, not a rewrite.
+    const cutRow = c => ({
+      name: c.name,
+      sideStyle: c.auto ? '' : 'display:none;',
+      sideName: c.auto ? this._elevationName(c.id) : '',
+      rowClass: 'cut-row' + (activeCutId === c.id ? ' active' : ''),
+      delStyle: c.auto ? 'display:none;' : '',
+      onView:   () => this._enterCutView(c.id),
+      onDelete: (e) => this._deleteCut(c.id, e),
+    });
     const on  = { bg:'#1d1f20', color:'#f2f2f3', border:'#1d1f20' };
     const off = { bg:'#fff',    color:'#1d1f20', border:'rgba(29,31,32,0.16)' };
     const hi  = 'rgba(29,31,32,0.09)', lo = '#fff';
@@ -20259,7 +20312,9 @@ class Component extends DCLogic {
       }),
       showHint, hintText, hintColor,
       choosingDir,
-      noCuts: cuts.length === 0 && this._autoElevationCuts().length === 0,
+      // Elevations are never empty -- E1-E4 always exist -- so the "cut a
+      // view" hint belongs to the sections block alone.
+      noSections: cuts.length === 0,
       toolStripEmpty: !toolStripHasOptions,
       toolStripLabel: activeTool === 'node' ? 'NODE / ARC' : (activeTool === 'cut' ? 'ELEV/SEC CUT' : String(activeTool || '').toUpperCase()),
       lineToolActive: activeTool === 'line',
@@ -21034,7 +21089,7 @@ class Component extends DCLogic {
             onToggleBackground: event => this._toggleBackgroundLayerView(l.id, view.id, event),
           };
         });
-        return {
+    return {
           name: l.name,
           layers,
           hasLayers: layers.length > 0,
@@ -21079,15 +21134,17 @@ class Component extends DCLogic {
         () => this._markUnsaved(),
       ),
 
-      cuts: [...this._autoElevationCuts(), ...cuts].map(c => ({
-        name: c.name,
-        sideStyle: c.auto ? '' : 'display:none;',
-        sideName: c.auto ? this._elevationName(c.id) : '',
-        rowClass: 'cut-row' + (activeCutId === c.id ? ' active' : ''),
-        delStyle: c.auto ? 'display:none;' : '',
-        onView:   () => this._enterCutView(c.id),
-        onDelete: (e) => this._deleteCut(c.id, e),
-      })),
+      // Two lists, not one. The rail used to render the automatic elevations
+      // and the drafter's sections through a single sc-for, so a section
+      // landed directly under E4 at the top. The printed set reads
+      // elevations first and sections near the end, after foundation and
+      // basement (paper-rules.md), and a drafter who knows the set should
+      // not have to learn a second order for the screen.
+      //
+      // The split is at `auto`, which already carries the distinction --
+      // no new field on the cut record to keep in agreement.
+      elevationCuts: this._autoElevationCuts().map(c => cutRow(c)),
+      sectionCuts: cuts.map(c => cutRow(c)),
 
       drawTools: [
         standardTool('Select', shortcut('select'), ()=>{ this._cancelExtend(); this._cancelWall(); this._cancelLine(); this._cancelFloor(); this._cancelShape(); this._cancelOutline(); this._cancelDimension(); this._cancelBeam(); this._cancelStair(); this._cancelNote(); this._cancelRoof(); this._windowSelection = null; this.setState({activeTool:'select', selectionMode:'click', selectFilter:'all'}); }, activeTool==='select'),
