@@ -192,13 +192,26 @@ if (!window.DraftToyConstraints) {
   // about a proposed one.
   //
   //   walls:    [{ id, start, end, wallType, refLine, cantileverFt?, ... }]
-  //   rooms:    [{ id, category, clearWidthFt, clearDepthFt, bounds:
-  //               [{ wallId, dim: 'width'|'depth', sign: +1|-1 }] }]
+  //   rooms:    [{ id, category, clearWidthFt, clearDepthFt,
+  //               insideSqFt?, minDimensionFt?, bounds:
+  //               [{ wallId, dim: 'width'|'depth', sign: +1|-1, runFt? }] }]
   //   openings: [{ id, wallId, offsetFt, widthFt }]
   //
   // A room's `bounds` say how its clear dimensions answer to a wall moving in
   // its own positive direction. MODEL owns that mapping because it owns plan
   // topology; this module owns what the resulting numbers are allowed to be.
+  //
+  // THE MEASURED NUMBERS ARE HANDED OVER, NOT RE-DERIVED. `insideSqFt` and
+  // `minDimensionFt` are what MODEL's room-tag pass already computes off the
+  // room's own loop, and they are what the standards get asked about. Deriving
+  // the area here as width x depth instead is the area of a RECTANGLE: it
+  // overstates an L by its notch — a 20x20 bounding box around a 300 sq ft L
+  // reads 400 — and the toy would then permit a room the room tag flags on the
+  // same drawing. One derivation, not two.
+  //
+  // Both are optional, and absent means the caller has only two dimensions to
+  // offer: their product and their smaller are then the only numbers
+  // consistent with what it said, which is exactly right for a rectangle.
   const isLegal = config => {
     const walls = (config && config.walls) || [];
     const rooms = (config && config.rooms) || [];
@@ -213,8 +226,8 @@ if (!window.DraftToyConstraints) {
       const depth = num(room.clearDepthFt) ?? 0;
       const verdict = standards.evaluateRoom({
         category: room.category,
-        insideSqFt: width * depth,
-        minDimensionFt: Math.min(width, depth),
+        insideSqFt: num(room.insideSqFt) ?? width * depth,
+        minDimensionFt: num(room.minDimensionFt) ?? Math.min(width, depth),
       }, minimums);
       if (!verdict.ok) {
         violations.push({ reason: REASON.MIN_ROOM, roomId: room.id, failures: verdict.failures });
@@ -261,15 +274,54 @@ if (!window.DraftToyConstraints) {
     const rooms = (config.rooms || []).map(room => {
       const bounds = (room.bounds || []).filter(bound => groupIds.includes(bound.wallId));
       if (!bounds.length) return room;
-      let width = num(room.clearWidthFt) ?? 0;
-      let depth = num(room.clearDepthFt) ?? 0;
+      const width0 = num(room.clearWidthFt) ?? 0;
+      const depth0 = num(room.clearDepthFt) ?? 0;
+      let width = width0;
+      let depth = depth0;
+      // The measured area TRAVELS with the move instead of being recomputed
+      // from the box afterwards: it answers to the run of the room's own edge
+      // along the wall that moved, which MODEL measured off the loop. `runFt`
+      // absent falls back to the opposite dimension — that run for a
+      // rectangle, and the same rectangle the width x depth fallback assumes.
+      let area = num(room.insideSqFt);
       bounds.forEach(bound => {
         const change = (bound.sign < 0 ? -1 : 1) * delta;
+        const sweep = num(bound.runFt) ?? (bound.dim === 'depth' ? width0 : depth0);
+        if (area !== null) area += change * sweep;
         if (bound.dim === 'depth') depth += change; else width += change;
       });
-      return { ...room, clearWidthFt: width, clearDepthFt: depth };
+      const moved = { ...room, clearWidthFt: width, clearDepthFt: depth };
+      if (area !== null) moved.insideSqFt = area;
+      // The least dimension is the short side of the box the move just
+      // changed, which is what MODEL's `minSide` is measuring in the first
+      // place — so advancing it is reading the same box, not a second opinion.
+      if (num(room.minDimensionFt) !== null) moved.minDimensionFt = Math.min(width, depth);
+      return moved;
     });
     return { ...config, walls, rooms };
+  };
+
+  // WHAT STOPPED THE SET — in the same words whether it stopped you dead or
+  // merely short. A room violation knows its room but not which wall shrank
+  // it, so trace it back through the room's bounds: the wall that blocks a
+  // group drag is usually not the one under the finger, and without naming it
+  // a refusal reads as the app ignoring the user.
+  const describeBlocker = (blocked, ctx, groupIds, grabbedId) => {
+    const said = { reason: blocked.reason };
+    if (blocked.band) said.band = blocked.band;
+    if (blocked.roomId) said.roomId = blocked.roomId;
+    let culprit = blocked.wallId || null;
+    if (!culprit && blocked.roomId) {
+      const room = (ctx.rooms || []).find(r => r.id === blocked.roomId);
+      const bound = ((room && room.bounds) || []).find(b => groupIds.includes(b.wallId));
+      culprit = bound ? bound.wallId : null;
+    }
+    if (culprit && culprit !== grabbedId) {
+      said.reason = REASON.GROUP_MEMBER_BLOCKED;
+      said.blockedBy = culprit;
+      said.underlying = blocked.reason;
+    }
+    return said;
   };
 
   // ── ALLOWED MOVE ──────────────────────────────────────────────────────
@@ -310,33 +362,27 @@ if (!window.DraftToyConstraints) {
         const advisory = (configAfterMove(base, groupIds, d).walls || [])
           .map(w => num(w.cantileverFt)).filter(ft => ft)
           .map(cantileverBand).find(band => band !== BAND.FREE);
+        // A DRAG THAT STOPPED SHORT SAYS WHY. Without this the ruling — the
+        // wall stops at the permitted position and the thing that stopped it
+        // speaks — only holds when NOTHING was permitted, and the commoner
+        // half (moved some, wanted more) has a wall stopping under the finger
+        // for no stated reason, which on a touchscreen reads as a dropped
+        // touch. `blocked` is the first refusal walking back from what was
+        // asked, so it is the rule the user actually leaned on.
+        if (blocked) Object.assign(result, describeBlocker(blocked, ctx, groupIds, wall.id));
+        // The advisory band describes where the wall LANDED, so it is the
+        // later word on `band`. The two can only both exist in DRAFTING, where
+        // BUMP_FOUNDATION is permitted and only BUMP_AND_PILES blocks; in TOY
+        // no permitted position is ever in a band, so `band` there is the one
+        // that stopped you, which is what the BUMP_FOUNDATION steer reads.
         if (advisory) result.band = advisory;
         return result;
       }
       if (!blocked) blocked = verdict.violations[0];
     }
 
-    const refusal = { delta: 0, reason: blocked ? blocked.reason : REASON.NO_MOVE, group: groupIds };
-    if (blocked) {
-      if (blocked.band) refusal.band = blocked.band;
-      if (blocked.roomId) refusal.roomId = blocked.roomId;
-      // WHICH MEMBER STOPPED THE SET. A room violation knows its room but not
-      // which wall shrank it, so trace it back through the room's bounds. This
-      // matters because the wall that blocks a group drag is usually not the
-      // one under the finger — without naming it, a refusal reads as the app
-      // ignoring the user.
-      let culprit = blocked.wallId || null;
-      if (!culprit && blocked.roomId) {
-        const room = (ctx.rooms || []).find(r => r.id === blocked.roomId);
-        const bound = (room && room.bounds || []).find(b => groupIds.includes(b.wallId));
-        culprit = bound ? bound.wallId : null;
-      }
-      if (culprit && culprit !== wall.id) {
-        refusal.reason = REASON.GROUP_MEMBER_BLOCKED;
-        refusal.blockedBy = culprit;
-        refusal.underlying = blocked.reason;
-      }
-    }
+    const refusal = { delta: 0, reason: REASON.NO_MOVE, group: groupIds };
+    if (blocked) Object.assign(refusal, describeBlocker(blocked, ctx, groupIds, wall.id));
     return refusal;
   };
 
@@ -352,6 +398,7 @@ if (!window.DraftToyConstraints) {
     OPENING_EDGE_FT,
     isLegal,
     allowedMove,
+    describeBlocker,
     configAfterMove,
     weldGroup,
     cantileverBand,

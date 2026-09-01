@@ -119,6 +119,69 @@ const wall = (id, x0, z0, x1, z1, extra = {}) => ({
   check('a partly-blocked drag moves as far as it legally can',
     T.allowedMove(shared, 3, roomy).delta === 2,
     `got ${T.allowedMove(shared, 3, roomy).delta}`);
+
+  // ── AND IT SAYS WHY IT STOPPED ────────────────────────────────────────
+  // The ruling is that the wall stops at the permitted position and the thing
+  // that stopped it speaks. A verdict that carried the reason only when
+  // NOTHING was permitted left the commoner half — moved some, wanted more —
+  // with a wall stopping under the finger for no stated reason, which on a
+  // touchscreen reads as a dropped touch rather than a rule.
+  const short = T.allowedMove(shared, 3, roomy);
+  check('a drag that stopped short names the rule that stopped it',
+    short.reason === T.REASON.MIN_ROOM, JSON.stringify(short));
+  check('and names the room, same as a flat refusal does',
+    short.roomId === 'bed3', JSON.stringify(short));
+
+  // The other half of the same distinction: a move that got everything it
+  // asked for has nothing to explain, so `reason` present IS "you got less
+  // than you asked for" and the UI needs no second field to tell them apart.
+  check('a move that was granted in full carries no reason',
+    T.allowedMove(shared, 2, roomy).reason === undefined,
+    JSON.stringify(T.allowedMove(shared, 2, roomy)));
+}
+
+// ── 3b · The area is MEASURED, never re-derived from the box ─────────────
+// MODEL's room-tag pass computes the inside area off the room's own loop.
+// Multiplying the two clear dimensions instead is the area of a RECTANGLE,
+// and the gap is not rounding: a 20x20 bounding box around an L-shaped room
+// of 300 sq ft reads 400. Left re-derived, the toy would permit a room the
+// room tag flags as under-minimum on the very same drawing.
+{
+  const shared = wall('shared', 0, 0, 0, 20);
+  // An L: 20x20 bounding box, 300 sq ft of actual floor. A bedroom needs 97
+  // sq ft, so both readings are legal at rest — the divergence has to be
+  // pushed against a limit to show, which is what the shrink below does.
+  const ell = extra => ({
+    id: 'ell', category: 'bedroom',
+    clearWidthFt: 20, clearDepthFt: 20, insideSqFt: 300,
+    bounds: [{ wallId: 'shared', dim: 'width', sign: -1, runFt: 10 }],
+    ...extra,
+  });
+  const ctx = { walls: [shared], rooms: [ell()], openings: [] };
+
+  const firstReason = config => (T.isLegal(config).violations[0] || {}).reason;
+  check('the measured area is the one the standards are asked about',
+    firstReason({ ...ctx, rooms: [ell({ insideSqFt: 96 })] }) === T.REASON.MIN_ROOM,
+    'a 96 sq ft room passed while its bounding box said 400');
+  check('and without one, two dimensions still describe a rectangle',
+    firstReason({ walls: [], rooms: [{ id: 'r', category: 'bedroom',
+      clearWidthFt: 8, clearDepthFt: 10, bounds: [] }], openings: [] }) === T.REASON.MIN_ROOM);
+
+  // The area travels with the move by the RUN of the room's edge along the
+  // wall that moved — 10', not the 20' the bounding box would sweep.
+  const moved = T.configAfterMove({ ...ctx, rooms: [ell()] }, ['shared'], 2).rooms[0];
+  check('a move takes area off by the run of the edge that moved',
+    near(moved.insideSqFt, 280) && near(moved.clearWidthFt, 18),
+    `area ${moved.insideSqFt} width ${moved.clearWidthFt}`);
+
+  // 300 sq ft losing 10 per foot hits the 97 floor after 20 feet, but the
+  // 9'-8" least dimension bites first: width 20 -> 10 is nine feet of legal
+  // shrink, and the tenth would leave 10'-0" ... which still clears. The
+  // eleventh leaves 9'-0" and does not.
+  const shrink = T.allowedMove(shared, 12, ctx);
+  check('the least dimension stops the shrink at the honest foot',
+    shrink.delta === 10 && shrink.reason === T.REASON.MIN_ROOM,
+    JSON.stringify(shrink));
 }
 
 // ── 4 · A welded group moves as one, and one blocked member blocks it ────
