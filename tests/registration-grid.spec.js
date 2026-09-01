@@ -157,3 +157,46 @@ test('a drawing saved before this board opens on the world grid, unchanged', asy
   await h.waitForSaved(page);
   expect(await origin(page)).toEqual({ x: 0, z: 0 });
 });
+
+// ── Part 3, scoped: the field exists, nothing reads it yet ──
+// The site plan has no painter, so a target could not move anything and none
+// is drawn. The FORMAT field is the part that is expensive to add later —
+// every drawing saved between now and then would lack it — so it is carried
+// now and the UI waits. These pin the round-trip, not a feature.
+test('the site registration round-trips, and defaults to unregistered', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  await h.selectTool(page, 'Line');
+  await h.clickWorld(page, 3, 3);
+  await h.clickWorld(page, 9, 3);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  // Every drawing that exists today is unregistered, and says so.
+  const read = async () => page.evaluate(async bucket => {
+    const file = await window.SharedFileStore.loadSharedFile(bucket);
+    return JSON.parse(await file.text()).siteRegistration;
+  }, h.STORAGE_BUCKET);
+  expect(await read()).toBeNull();
+
+  // A registration written into the file survives a reload with its angle.
+  await page.evaluate(async bucket => {
+    const file = await window.SharedFileStore.loadSharedFile(bucket);
+    const saved = JSON.parse(await file.text());
+    saved.siteRegistration = { x: 40.5, z: -12.25, angleRad: 0.5235987755982988 };
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(saved)], 'model-drawing.json', { type: 'application/json' }), bucket);
+  }, h.STORAGE_BUCKET);
+  await page.reload();
+  await h.waitForModelReady(page);
+
+  await h.selectTool(page, 'Line');
+  await h.clickWorld(page, -6, 8);
+  await h.clickWorld(page, -1, 8);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  const back = await read();
+  expect(back.x).toBeCloseTo(40.5, 6);
+  expect(back.z).toBeCloseTo(-12.25, 6);
+  expect(back.angleRad).toBeCloseTo(0.5235987755982988, 9);   // 30°, kept
+});

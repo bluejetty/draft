@@ -2285,6 +2285,28 @@ const { normaliseDrafter } = window.DraftDrafter;
 
 // Per-drawing side names for the standard elevations — only E1-E4 entries
 // with real text survive; anything missing falls back to COMPANY STANDARDS.
+// ── Where the building sits on the lot (board NEW-5, part 3) ──
+// STORED NOW, CONSUMED LATER, and deliberately so. The site plan has no
+// painter yet, so nothing can draw the house positioned on the lot and
+// dragging a target would move nothing. The FIELD is the part that is
+// expensive to add later, because every drawing saved between now and then
+// would lack it — so the format carries it and the UI waits.
+//
+// The angle is here for the same reason: a building set at an angle to the
+// street is ordinary, and adding a rotation once drawings exist means
+// migrating them. It costs one number now.
+//
+// The house never stores site coordinates. Its plan keeps its own numbers,
+// the site holds ONE registration point, and moving that point moves the
+// whole building without touching a wall.
+const normaliseSiteRegistration = raw => {
+  if (!raw || typeof raw !== 'object') return null;
+  const x = Number(raw.x), z = Number(raw.z);
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
+  const angle = Number(raw.angleRad);
+  return { x, z, angleRad: Number.isFinite(angle) ? angle : 0 };
+};
+
 // A stored drawing datum: a finite plan point, or null for "no origin yet".
 // Anything else in a file is read as no origin rather than trusted.
 const normaliseDrawingOrigin = raw => {
@@ -2333,6 +2355,9 @@ class Component extends DCLogic {
     // sets it, whoever places it. A saved drawing carries it, so a reopened
     // file keeps the grid it was drawn on.
     drawingOrigin: null,
+    // Where the datum above sits on the lot, and at what angle. Nothing reads
+    // it yet — see normaliseSiteRegistration.
+    siteRegistration: null,
     activeView:    'top',      // 'top'|'front'|'side'|'perspective'|'cut'
     snapZone: normaliseSnapZone(null),
     drafter: normaliseDrafter(null),
@@ -2886,6 +2911,7 @@ class Component extends DCLogic {
       backgroundMode: this.state.backgroundMode,
       units: this.state.units,
       drawingOrigin: this.state.drawingOrigin,
+      siteRegistration: this.state.siteRegistration,
       lineLayers: normaliseLineLayers(this.state.lineLayers),
       activeLineLayer: this._activeLineLayer(),
       activeWallType: this.state.activeWallType,
@@ -4889,6 +4915,10 @@ class Component extends DCLogic {
         drawingOrigin: 'drawingOrigin' in saved
           ? normaliseDrawingOrigin(saved.drawingOrigin)
           : { x: 0, z: 0 },
+        // Unregistered is the honest default for every drawing that exists
+        // today, so absent and null agree here — unlike drawingOrigin, there
+        // is no older meaning to preserve.
+        siteRegistration: normaliseSiteRegistration(saved.siteRegistration),
         lineLayers: normaliseLineLayers(saved.lineLayers || this.state.lineLayers),
         activeLineLayer: normaliseActiveLineLayer(saved.activeLineLayer),
         activeWallType: WALL_TYPES.some(type => type.id === saved.activeWallType)
