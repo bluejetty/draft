@@ -2,7 +2,6 @@
 
 **From:** Skipper, 1 Sep, part 3 of board NEW-5
 **Status:** scoping only, plus one format field. The targets were not built.
-the targets did not.
 
 ## What was asked
 
