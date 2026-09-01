@@ -59,6 +59,30 @@ differently, so no save-format change and no migration. The existing
 `layer-standards.spec.js` already pins the vocabulary the mapping must
 produce.
 
+## The hazard board A must handle first (found by Devin, verified here)
+
+`MODEL.dc.html:4930-4938` restores a line's layer through a **whitelist**:
+
+```js
+layer: line?.layer === 'no-draft' ? 'no-draft'
+     : line?.layer === 'S-FOOTING' ? 'S-FOOTING'
+     : (line?.layer === 'E-POWER' || view === 'e-power') ? 'E-POWER' : 'draft',
+```
+
+Three names survive a reload on a line. **Every other layer name collapses to
+`draft`**, silently, with nothing logged and nothing failing.
+
+So a mapping that writes `S-FDN` onto a line would serialise correctly, look
+right in the saved JSON, and be flattened the next time the drawing opens.
+The sheet would be right until reload and wrong after it — the worst shape of
+bug to find from a customer rather than a test.
+
+Board A therefore starts here: make the layer restore validate against the
+`layer-standards.spec.js` vocabulary instead of a hand-kept ternary, so a new
+layer name is a table entry rather than a fourth branch somebody forgets. Do
+this BEFORE the mapping, or the mapping's output will not survive a round
+trip.
+
 ## Board B — electric: there is nothing to draw
 
 Sheet 14.
