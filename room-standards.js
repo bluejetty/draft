@@ -78,8 +78,8 @@ if (!window.DraftRoomStandards) {
   // uppercase names; order is the tray order.
   const DEFAULT_ROOM_TRAY = Object.freeze([
     'KITCHEN', 'LIVING', 'DINING', 'BEDROOM 1', 'BEDROOM', 'BATH', 'WC',
-    'ENSUITE', 'WALK-IN', 'CLOSET', 'LAUNDRY', 'DZ', 'OFFICE/DEN', 'PANTRY',
-    'HALL', 'STORAGE',
+    'ENSUITE', 'J&JBATH', 'WALK-IN', 'CLOSET', 'LAUNDRY', 'DZ', 'OFFICE/DEN',
+    'PANTRY', 'HALL', 'STORAGE',
   ]);
 
   const normaliseRoomTray = value => {
@@ -111,6 +111,7 @@ if (!window.DraftRoomStandards) {
     BATH: 'wc',
     WC: 'wc',
     ENSUITE: 'wc',
+    'J&JBATH': 'wc',
     LAUNDRY: 'laundry',
     DZ: 'dz',
   });
