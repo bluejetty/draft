@@ -98,7 +98,7 @@ invent a second one.
 | Device | Host | Layer |
 | --- | --- | --- |
 | Pot light, ceiling fixture, chandelier, fan | ceiling | `E-POWER` |
-| Outlet, switch bank, vanity light | wall | `E-POWER` |
+| Outlet, switch, vanity light | wall | `E-POWER` |
 | Stove / dryer outlet | wall | `E-POWER` |
 | **Floor outlet**, **ceiling outlet** (two kinds) | room — see below | `E-POWER` |
 | Smoke detector, CO/smoke detector | ceiling | **`E-SAFETY`** |
@@ -134,12 +134,11 @@ them as droppable annotation: no truncation, no vanishing at small scale. An
 unlabelled square is a box the builder has to guess at. (Sheet 14 already works
 this way — a chandelier and a vanity are the same circle told apart by text.)
 
-**Draw a placeholder and move on.** Movie's instruction, 1 Sep: the finished
-symbol geometry comes later from Devin, so do not stall the painter waiting on
-it. Put the mark behind one function per device kind and paint anything legible
-for now; swapping the geometry should then be a one-file change and touch no
-rule, no host and no storage. Say in the PR which function is the placeholder
-so the swap is findable.
+**The symbols are drawn — no placeholder needed.** `electric-symbols.js` on
+this branch: `wallOutlet`, `floorOutlet`, `ceilingOutlet` off one shared
+`outletMark`, plus `drawDevice` for the host rotation. The label is drawn by
+the same function as the square, so a caller cannot paint the box and forget
+the text, and `MIN_LABEL_PX` is a floor the text will not shrink below.
 
 **Ceiling-hosted storage is an open call and yours to make in the PR.** A point
 on a level is the obvious one; a room-relative point survives a room being
@@ -167,18 +166,25 @@ enforced rather than merely intended.
 All from the spec; all Movie's. Repeated here only so the board is checkable.
 
 1. **A room with one light centres it** in the room.
-2. **Switches gang at the entry** — one bank beside the door you come in by,
-   and the gang count is however many things that room switches.
-3. **A light joins the bank it is entered from** — pick the switch by
+2. **One switch per light bank.** Movie's ruling, 1 Sep, and the unit
+   everything else is counted in: a **bank** is the lights that go on and off
+   together, and it has exactly **one** switch. Four pot lights that come on
+   together are one bank on one switch, not four switches. No three-way
+   switching yet — his instruction — so one means one.
+3. **Switches gang at the entry** — the switches sit beside the door you come
+   in by. A **bank** is lights and a **gang** is switches: the gang holds one
+   switch per bank, so the gang count is the room's bank count, one `$` each.
+   Derive it; never store it, or someone maintains it by hand and it drifts.
+4. **A light joins the bank it is entered from** — pick the switch by
    *direction*, not by shortest straight line. Nearest-by-distance fails
    exactly where it shows: a light near a party wall is often closest to the
    next room's bank.
-4. **Outlets sit on the wall face** — measured off sheet 14 at a median 0.29 ft
+5. **Outlets sit on the wall face** — measured off sheet 14 at a median 0.29 ft
    from the wall line, which is to say: on it.
-5. **Multi-fixture rooms space at roughly 5–7 ft** — measured, medians of 6.6 /
+6. **Multi-fixture rooms space at roughly 5–7 ft** — measured, medians of 6.6 /
    5.0 / 5.9 ft across the three plans.
 
-Rules 4 and 5 are **measurements, not rulings**. They came from classifying
+Rules 5 and 6 are **measurements, not rulings**. They came from classifying
 690 red blobs on one sheet, of which 37 circles and 77 outlets classified
 confidently — a sample. Use them as defaults; do not enforce them; and if
 implementing shows a number to be wrong, that is a finding for Movie, not a
@@ -191,7 +197,12 @@ fixture where the room wants one light. **Do not invent a grid.**
 
 ### The switch leg is derived, never drawn
 
-> **A fixture stores what switches it. The painter draws the curve from that.**
+> **A fixture stores the bank it belongs to, a bank stores its one switch, and
+> the painter draws the curves from that.**
+
+Which is what makes a bank one thing rather than a convention: the four pot
+lights in a bank draw four curves back to the one switch, and they do it
+because they share a bank, not because a painter grouped them.
 
 The red dashed curves on sheet 14 are the only thing that says which switch
 runs which lights, so they must come out of the stored relationship. If a

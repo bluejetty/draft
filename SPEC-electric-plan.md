@@ -68,7 +68,8 @@ plan below is context, not the subject.
 | Stove | four-burner symbol, drawn in red over the range |
 
 **The dashed red curve is the switch leg**, drawn from a switch to every
-fixture it controls.
+fixture it controls — i.e. to every light in its bank, so a bank of four draws
+four curves from the one switch.
 
 Two devices are **not** on sheet 14 and are Movie's addition, 1 Sep:
 
@@ -112,13 +113,27 @@ fixture takes the room centroid and nothing else has to be decided. Pot lights
 are the separate case: several fixtures in one room, laid out rather than
 centred.
 
-**Switches gang at the entry.** Movie's ruling: the bank sits beside the door
-you come in by, and everything in the room switches from it. So a switch is not
-placed device by device — the room gets *one bank at its entry*, and the gang
-count is however many things that room switches. `$`, `$$`, `$$$` on the sheet
-is that count, drawn.
+**One switch per light bank.** Movie's ruling, 1 Sep, and it is the unit the
+whole thing is built on: a **bank** is the set of lights that go on and off
+together, and it takes exactly **one switch**. Not one switch per light — four
+pot lights over a kitchen counter that come on together are one bank on one
+switch. A switch controls a bank; a bank answers to one switch; the light
+belongs to a bank. Nothing else.
 
-**A light joins the switch it is entered from.** Movie's ruling, and the one
+No three-way switching yet — Movie's instruction. So "one switch" is literally
+one, and the second switch at the far door is a later board, not an exception
+to build room for now.
+
+**Switches gang at the entry.** Movie's ruling: the switches sit beside the
+door you come in by, and everything in the room switches from there. Two words
+that are easy to run together, so keep them apart: a **bank** is lights, a
+**gang** is switches — the gang at the door holds one switch per bank. So a switch is not
+placed device by device — the room gets *one gang at its entry*, and the gang
+count is **the number of light banks in the room**, one `$` each. `$`, `$$`,
+`$$$` on the sheet is that count, drawn — which means the count is derived and
+nobody maintains it: add a bank and the gang grows on its own.
+
+**A light joins the bank it is entered from.** Movie's ruling, and the one
 that makes the switch legs derivable rather than drawn:
 
 > Pick the switch by **direction** — the bank on the side the light is
@@ -159,7 +174,8 @@ The dashes are what make sheet 14 an electrical plan rather than a scatter of
 dots — they are the only thing on it that says *which switch runs which
 lights*. So:
 
-> **A fixture stores what switches it. The painter draws the curve from that.**
+> **A fixture stores the bank it belongs to, a bank stores its one switch, and
+> the painter draws the curves from that.**
 
 Never the other way round. If the drafter routes curves by hand, the drawing
 can say a switch controls a light when the model disagrees, and nobody will
