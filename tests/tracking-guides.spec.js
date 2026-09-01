@@ -34,6 +34,27 @@ async function guideInk(page, x, z, halfFt) {
   }, { cx, cy, r });
 }
 
+
+// The caught indicator is blue (#5980a6): blue-dominant, unlike the guides.
+async function caughtInk(page, x, z, halfFt) {
+  const box = await page.locator('[data-model-canvas]').boundingBox();
+  const ppf = box.height / 50;
+  const cx = box.width / 2 + x * ppf;
+  const cy = box.height / 2 + z * ppf;
+  const r = Math.max(4, halfFt * ppf);
+  return page.evaluate(({ cx, cy, r }) => {
+    const canvas = document.querySelector('[data-model-overlay]');
+    if (!canvas) return -1;
+    const d = canvas.getContext('2d').getImageData(
+      Math.round(cx - r), Math.round(cy - r), Math.round(r * 2), Math.round(r * 2)).data;
+    let blue = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] > 8 && d[i + 2] > 120 && d[i + 2] > d[i] + 30) blue += 1;
+    }
+    return blue;
+  }, { cx, cy, r });
+}
+
 // A node off to the side, then an angle-locked draw that has not reached it.
 async function lockedDrawPastANode(page) {
   await h.selectTool(page, 'Line');
@@ -97,4 +118,43 @@ test('with no draw in progress nothing is drawn', async ({ page }) => {
   await page.waitForTimeout(150);
 
   expect(await guideInk(page, 12, 4, 2)).toBe(0);
+});
+
+test('crossing a guide catches the intersection, and the caught line reads differently', async ({ page }) => {
+  await h.openModel(page);
+  await lockedDrawPastANode(page);
+
+  // Before the catch the node's line is orange guide only, no blue.
+  expect(await guideInk(page, 12, 4, 2)).toBeGreaterThan(0);
+  expect(await caughtInk(page, 12, -4, 3)).toBe(0);
+
+  // Cross it: the cursor reaches the node's tracking line at x = 12.
+  await h.moveTo(page, 12, 0);
+  await page.waitForTimeout(200);
+
+  // Now the caught indicator runs from the node to the snap point in blue —
+  // faint orange means "you could line up here", solid blue means "you are
+  // on it", and the change of colour is the feedback.
+  expect(await caughtInk(page, 12, -4, 3)).toBeGreaterThan(0);
+});
+
+test('a drawing with many nodes does not draw all of them', async ({ page }) => {
+  await h.openModel(page);
+  // Eight candidate nodes strung along the ray's axis.
+  await h.selectTool(page, 'Line');
+  for (const x of [0, 2, 4, 6, 8, 10, 12, 14]) await h.clickWorld(page, x, -9);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  await h.selectTool(page, 'Line');
+  await h.clickWorld(page, -14, 0);
+  await h.moveTo(page, -2, 0);          // travelling +x from x = -2
+  await page.waitForTimeout(150);
+
+  // TRACKING_GUIDE_MAX is 6, chosen by ALONG-RAY gap: from x = -2 the nearest
+  // six lines are x = 0..10, so the two beyond them get nothing. Forty nodes
+  // would otherwise be forty lines.
+  expect(await guideInk(page, 0, 4, 1.5)).toBeGreaterThan(0);
+  expect(await guideInk(page, 10, 4, 1.5)).toBeGreaterThan(0);
+  expect(await guideInk(page, 14, 4, 1.5)).toBe(0);
 });

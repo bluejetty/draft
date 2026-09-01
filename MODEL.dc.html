@@ -16472,7 +16472,19 @@ class Component extends DCLogic {
     const dirZ = Math.sin(this._lockAngle);
     const along = pt => (pt.x - start.x) * dirX + (pt.z - start.z) * dirZ;
     const alongCursor = along(cursorPt);
+    // Coincident vertices are ONE tracking line. A polyline reports each
+    // interior corner twice — once ending a segment, once starting the next —
+    // so an eight-point chain arrives as fourteen candidates, and capping
+    // without deduping spends the budget on repeats: six slots drew four
+    // distinct lines. Dedupe by position first, then cap.
+    const seen = new Set();
     const nodes = this._trackingCandidates(start, exclude)
+      .filter(vertex => {
+        const key = `${Math.round(vertex.x * 4096)},${Math.round(vertex.z * 4096)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .map(vertex => ({ vertex, gap: Math.abs(along(vertex) - alongCursor) }))
       .sort((a, b) => a.gap - b.gap)
       .slice(0, TRACKING_GUIDE_MAX)
