@@ -218,6 +218,7 @@ const PAPER_SIZES = {
 // Architectural scales: label, paperInchesPerFoot
 const SCALES = [
   { label: '1/16" = 1\'-0"', pif: 1/16 },
+  { label: '3/32" = 1\'-0"', pif: 3/32 },
   { label: '1/8" = 1\'-0"',  pif: 1/8  },
   { label: '3/16" = 1\'-0"', pif: 3/16 },
   { label: '1/4" = 1\'-0"',  pif: 1/4  },
@@ -228,13 +229,14 @@ const SCALES = [
 ];
 
 // The auto composer's ladder, largest first: the working plan scale, then the
-// honest steps down. Anything below 1/16" is not a real drafting scale.
-// Largest first, first rung that fits. 1/16" is not a real drafting scale
-// and is off the ladder: it survives only as the clipped last resort for a
-// view that fits at nothing else at all. Too big is self-evident; too small
-// is an opinion, so the rule needs no fill threshold to tune.
-const AUTO_SCALE_PREFS = [1 / 4, 3 / 16, 1 / 8];
-const AUTO_SCALE_LAST_RESORT = 1 / 16;
+// honest steps down. Largest first, first rung that fits. 3/32" is the floor —
+// half a step under 1/8", and the rung a wide house lands on rather than
+// halving to 1/16". Below that nothing is dealt automatically: 1/16" reads too
+// small to draft from, and a site plan wants an engineer's scale rather than
+// the bottom of this ladder. Too big is self-evident; too small is an opinion,
+// so the rule needs no fill threshold to tune.
+const AUTO_SCALE_PREFS = [1 / 4, 3 / 16, 1 / 8, 3 / 32];
+const AUTO_SCALE_LAST_RESORT = 3 / 32;
 
 // Composer spacing, in paper inches: air between viewports, and the caption
 // line each viewport wears under its frame.
