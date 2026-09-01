@@ -178,27 +178,49 @@ test('the stair re-derive keeps the corner snap and re-links through the second 
 });
 
 // ── The beam posts what bears on nothing, and lines up where it can ──
-// These four are the geometry, exercised through the shipped module in the
-// page rather than through the UI: midSpanBeams is pure, so a plan goes in
-// and beams and columns come out, and the cases below are plans the tour
-// cannot easily be driven to trace.
-const beamsFor = (page, points, opts = {}) => page.evaluate(
-  ({ pts, o }) => window.DraftBuildHouse.midSpanBeams(pts, o),
-  { pts: points.map(([x, z]) => ({ x, z })), o: opts });
+// These are the geometry, exercised through the shipped module in the page
+// rather than through the UI: midSpanBeams is pure, so a plan goes in and
+// beams and columns come out, and the plans below are ones the tour cannot
+// easily be driven to trace.
+//
+// THE QUESTION IS ALWAYS "DOES SOMETHING BEAR HERE", NEVER "IS THIS ON THE
+// OUTLINE". The outline is only midSpanBeams' DEFAULT answer, because the
+// foundation wall usually traces it — but a cantilever, a walkout corner or
+// a garage slab edge are outline points with nothing beneath. Asserting
+// against the bearing answer rather than the outline is what makes it safe
+// to delete board #244's vertex rule instead of merely inverting it: an
+// honest bearing lookup keeps the post on an unsupported end automatically.
+//
+// A bearing test cannot be serialised into the page, so a case names the
+// unsupported stretch and the page builds the predicate.
+const beamsFor = (page, points, { unsupportedEastOf = null, ...opts } = {}) => page.evaluate(
+  ({ pts, o, cut }) => {
+    const onOutline = p => pts.some((a, i) => {
+      const b = pts[(i + 1) % pts.length];
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2));
+      return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t)) < 1e-6;
+    });
+    const bearsAt = cut == null ? null : (p => onOutline(p) && p.x < cut);
+    const result = window.DraftBuildHouse.midSpanBeams(pts, bearsAt ? { ...o, bearsAt } : o);
+    // Hand the bearing answer back so the assertions can use the same one the
+    // module used, rather than a second opinion about the outline.
+    const bears = bearsAt || onOutline;
+    return {
+      ...result,
+      bearing: result.columns.map(bears),
+      endBearing: [...result.beams].map(b => [bears(b.start), bears(b.end)]),
+    };
+  },
+  { pts: points.map(([x, z]) => ({ x, z })), o: opts, cut: unsupportedEastOf });
 
-// A point is on the outline when the foundation wall runs through it.
-const onOutline = (points, p) => points.some(([ax, az], i) => {
-  const [bx, bz] = points[(i + 1) % points.length];
-  const dx = bx - ax, dz = bz - az;
-  const len2 = dx * dx + dz * dz || 1;
-  const t = Math.max(0, Math.min(1, ((p.x - ax) * dx + (p.z - az) * dz) / len2));
-  return Math.hypot(p.x - (ax + dx * t), p.z - (az + dz * t)) < 1e-6;
-});
 // A free end is a beam endpoint no other segment shares — a run's own end,
 // not one of the intermediate splits.
 const freeEnds = beams => beams.flatMap(b => [b.start, b.end]).filter(p =>
   beams.filter(o => [o.start, o.end].some(q =>
     Math.abs(q.x - p.x) < 1e-6 && Math.abs(q.z - p.z) < 1e-6)).length === 1);
+const near = (a, b) => Math.hypot(a.x - b.x, a.z - b.z) < 1e-6;
 
 const L_HOUSE = [[-15, -12], [15, -12], [15, -2], [3, -2], [3, 12], [-15, 12]];
 // Two notches at different depths: whatever the cut snaps to, the local span
@@ -208,26 +230,53 @@ const TWO_NOTCH = [[-40, -12], [40, -12], [40, 12], [20, 12], [20, 6],
   [0, 6], [0, 12], [-20, 12], [-20, 2], [-40, 2]];
 
 test.describe('posts go where nothing bears', () => {
-  test('a beam end landing on the outline gets no post — concrete is already under it', async ({ page }) => {
+  test('no post stands where something already bears', async ({ page }) => {
     await h.openModel(page, { webgl: false });
-    const { beams, columns } = await beamsFor(page, L_HOUSE);
+    const { columns, bearing } = await beamsFor(page, L_HOUSE);
 
-    // The run dead-ends on the jog corner, which is a point the foundation
-    // wall runs through. Board #244 posted it; that was the inverted rule.
-    expect(freeEnds(beams).some(p => onOutline(L_HOUSE, p))).toBe(true);
-    expect(columns.filter(c => onOutline(L_HOUSE, c))).toHaveLength(0);
+    // The run dead-ends on the jog corner, which bears. Board #244 posted it;
+    // that was the inverted rule. Not one column sits on a bearing point.
+    expect(columns.length).toBeGreaterThan(0);
+    expect(bearing.some(Boolean)).toBe(false);
   });
 
   test('a run trimmed mid-floor gets a post at its free end', async ({ page }) => {
     await h.openModel(page, { webgl: false });
-    const { beams, columns } = await beamsFor(page, TWO_NOTCH);
+    const { beams, columns, bearing, endBearing } = await beamsFor(page, TWO_NOTCH);
 
-    const hanging = freeEnds(beams).filter(p => !onOutline(TWO_NOTCH, p));
-    expect(hanging.length).toBeGreaterThan(0);   // trimRun really cut mid-floor
-    hanging.forEach(p => expect(columns.some(c =>
-      Math.hypot(c.x - p.x, c.z - p.z) < 1e-6)).toBe(true));
-    // ... and still nothing standing on concrete anywhere.
-    expect(columns.filter(c => onOutline(TWO_NOTCH, c))).toHaveLength(0);
+    // Pair each free end with the bearing answer the module itself used.
+    const ends = freeEnds(beams);
+    const bearsAtEnd = new Map();
+    beams.forEach((b, i) => {
+      bearsAtEnd.set(`${b.start.x},${b.start.z}`, endBearing[i][0]);
+      bearsAtEnd.set(`${b.end.x},${b.end.z}`, endBearing[i][1]);
+    });
+    const posted = p => columns.some(c => near(c, p));
+    const hanging = ends.filter(p => bearsAtEnd.get(`${p.x},${p.z}`) === false);
+
+    // trimRun really cut runs short out in the floor on this plan.
+    expect(hanging.length).toBeGreaterThan(0);
+    // Every unsupported free end carries a post ...
+    hanging.forEach(p => expect(posted(p)).toBe(true));
+    // ... and no post stands anywhere something already bears.
+    expect(bearing.some(Boolean)).toBe(false);
+  });
+
+  test('an end ON the outline with nothing under it keeps its post', async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+    // The east side of the L is cantilevered — outline, but no concrete. This
+    // is the case that would regress if the rule read the outline instead of
+    // asking; #244's node at (3,-2) is on the outline and unsupported here.
+    const { beams, columns } = await beamsFor(page, L_HOUSE, { unsupportedEastOf: 0 });
+
+    const ends = freeEnds(beams);
+    const eastEnd = ends.find(p => p.x > 0);
+    expect(eastEnd).toBeTruthy();
+    expect(columns.some(c => near(c, eastEnd))).toBe(true);
+    // The west end is over the wall and still gets nothing.
+    const westEnd = ends.find(p => p.x < -10);
+    expect(westEnd).toBeTruthy();
+    expect(columns.some(c => near(c, westEnd))).toBe(false);
   });
 });
 
