@@ -275,9 +275,17 @@ returns — and the stop is made legible:
   foundation out instead" — because that rule has a recommended alternative
   and a minimum-room block does not.
 
-This needs nothing added to `toy-constraints.js`: `reason`, `blockedBy`,
-`underlying`, `roomId` and `band` are already on the verdict, which is the
-proof the seam was drawn in the right place.
+The seam was drawn in the right place — `reason`, `blockedBy`, `underlying`,
+`roomId` and `band` were already the vocabulary of the verdict. But the first
+draft of this paragraph claimed it needed *nothing* added to
+`toy-constraints.js`, and that was only true of a flat refusal. Those fields
+were attached when the move was refused outright and dropped when it was
+merely cut short — which is the case this whole section is about. Corrected
+while gathering the context for step 2: a partial stop now carries the same
+description a refusal does, so "the wall stops at the permitted position and
+the thing that stopped it says why" holds in both halves. A move granted in
+full still carries no reason, so `reason` present means exactly "you got less
+than you asked for".
 
 Left to step 2 to tune by feel: whether the line appears the instant the wall
 stops or after a short hold, so a fast drag that grazes a limit doesn't flash
