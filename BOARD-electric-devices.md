@@ -100,32 +100,36 @@ invent a second one.
 | Pot light, ceiling fixture, chandelier, fan | ceiling | `E-POWER` |
 | Outlet, switch bank, vanity light | wall | `E-POWER` |
 | Stove / dryer outlet | wall | `E-POWER` |
-| **Floor / ceiling outlet** | room — see below | `E-POWER` |
+| **Floor outlet**, **ceiling outlet** (two kinds) | room — see below | `E-POWER` |
 | Smoke detector, CO/smoke detector | ceiling | **`E-SAFETY`** |
 
-### The floor / ceiling outlet
+### The floor outlet and the ceiling outlet
 
-Movie's ruling, 1 Sep: a **floor or ceiling outlet, drawn as the outlet symbol
-with a square around it.** It is an addition to the sheet-14 set, not something
-read off it.
+Movie's ruling, 1 Sep: a **floor outlet and a ceiling outlet, both drawn as the
+outlet symbol with a square around it.** An addition to the sheet-14 set, not
+something read off it.
 
-It matters out of proportion to its size, because it is the first device that
-is *deliberately not on a wall* — it sits out in the field of a floor or a
-ceiling, which is the whole reason it exists. So it cannot use the wall pattern
-and it forces the storage question below to be answered rather than deferred.
+They matter out of proportion to their size, because they are the first devices
+*deliberately not on a wall* — they sit out in the field of a floor or a
+ceiling, which is the whole reason they exist. So they cannot use the wall
+pattern and they force the storage question below to be answered rather than
+deferred.
 
-**Answered, Movie's ruling 1 Sep: one kind, and the drafter switches it.** The
-device stores a `surface` of `floor` or `ceiling`, and that value is **editable
-on a placed outlet** — flipped the way a door swing is flipped, not chosen once
-at placement and not corrected by deleting and re-placing.
+**Answered, and superseding the earlier ruling on this board: two separate
+kinds, and nothing converts between them.** Movie, 1 Sep. Not one device with a
+`surface` field and no floor-to-ceiling flip — build them as two device kinds,
+placed separately, and a drafter who wants the other deletes and places the
+other. Ignore any earlier wording that had you store a switchable surface; the
+plane is not a setting on a device, it is which device was placed.
 
 Which leaves one thing to build that the ruling does not pay for by itself:
-**one symbol paints both, so the sheet has to say which in words.** The
+**both paint the same symbol, so the sheet has to say which in words.** The
 square-around-the-outlet is identical either way and the drawing alone cannot
 tell a builder which plane the box is in. Label it beside the symbol, the way
 sheet 14 separates a chandelier from a vanity — two devices that are also the
-same circle. A `surface` stored but never printed is a fact the model knows and
-the plan does not.
+same circle. Here the label is the only thing carrying the distinction, so it
+is not optional and must not be truncated: an unlabelled square is a box the
+builder has to guess at.
 
 **Ceiling-hosted storage is an open call and yours to make in the PR.** A point
 on a level is the obvious one; a room-relative point survives a room being
@@ -207,13 +211,10 @@ things.**
   device. **No line drawing at all** — which is what keeps the dashed leg
   honest, because the only way to change what a switch runs is to move or
   delete the device itself.
-- **A fourth verb: edit a property of a selected electric device.** Gilligan's
-  catch, 1 Sep, on the floor/ceiling switch — flipping a placed outlet's
-  `surface` is none of move, delete or add, and the closed list should say so
-  rather than rely on a generous reading. It is inside the rule and not an
-  exception to it: the restriction governs what may *move*, not what a device
-  may *know*. A property edit changes no geometry, touches nothing that is not
-  electric, and cannot nudge a wall. Same shape as flipping a door swing.
+- **Three verbs and no fourth.** You were right that flipping a placed outlet's
+  surface was none of move, delete or add. Movie's later ruling — two separate
+  outlet kinds, no conversion — removes the case, so the list stays closed and
+  nothing on this sheet edits a property in place.
 - **A symbol this board does not cover is made in the Boneyard, not drawn on
   the plan.** Movie's ruling, 1 Sep. The escape hatch for a device nobody
   anticipated is to author a custom electric object and then place it — so it

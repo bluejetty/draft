@@ -70,29 +70,31 @@ plan below is context, not the subject.
 **The dashed red curve is the switch leg**, drawn from a switch to every
 fixture it controls.
 
-One device is **not** on sheet 14 and is Movie's addition, 1 Sep:
+Two devices are **not** on sheet 14 and are Movie's addition, 1 Sep:
 
 | Device | Symbol |
 | --- | --- |
-| Floor / ceiling outlet | the outlet symbol with a square around it |
+| Floor outlet | the outlet symbol with a square around it |
+| Ceiling outlet | the outlet symbol with a square around it |
 
-It is the only outlet that is deliberately off the wall — it sits out in the
-field of a floor or a ceiling, which is the point of it. So it hosts on the
-room the way a pot light does, and it is the device that forces the
-ceiling-host storage question below to be answered rather than deferred.
+They are the only outlets deliberately off the wall — they sit out in the field
+of a floor or a ceiling, which is the point of them. So they host on the room
+the way a pot light does, and they are what forces the ceiling-host storage
+question below to be answered rather than deferred.
 
-**Settled, Movie's ruling 1 Sep: one kind, and the drafter switches it.** Not
-two device kinds and not a choice made at placement time — one device with a
-`surface` of `floor` or `ceiling` that can be flipped on a placed outlet, the
-way a door swing is flipped rather than redrawn. So the drafter who put it in
-the wrong plane fixes it in one action instead of deleting and re-placing.
+**Settled, Movie's ruling 1 Sep: two separate kinds, and nothing converts
+between them.** Not one device with a surface field, and no floor-to-ceiling
+flip — a floor outlet and a ceiling outlet are placed as different devices, and
+a drafter who wants the other one deletes this one and places that one. Which
+is the plainer model: the plane is not a setting on a device, it is which
+device you placed.
 
-The consequence to build: **one symbol paints both, so the sheet has to say
-which it is in words.** The square-around-the-outlet is identical either way,
-and a builder reading the plan cannot tell a floor box from a ceiling box from
-the drawing alone. Label it the way sheet 14 labels a chandelier and a vanity —
-the text beside the symbol is already this office's way of separating devices
-that share a mark.
+They share the square-around-the-outlet mark, so **the sheet still has to say
+which in words.** The drawing alone cannot tell a builder which plane the box
+is in. Label it the way sheet 14 labels a chandelier and a vanity — the text
+beside the symbol is already this office's way of separating devices that share
+a mark, and here it is the only thing carrying the distinction, so it is not
+optional and must not be truncated away.
 
 ### Placement — where the devices actually go
 
@@ -180,13 +182,12 @@ the rule above from being a wish: if a leg cannot be drawn by hand, the only
 way to change what a switch runs is to move or delete a device, so the drawing
 cannot disagree with the model.
 
-**Editing a property of a selected device is a fourth verb, and it is allowed.**
-Gilligan's catch, 1 Sep: flipping a placed outlet between floor and ceiling is
-none of move, delete or add, so the closed list has to name it rather than rely
-on a generous reading of "nothing else". It is inside the rule, not an
-exception to it — the restriction governs what may *move*, not what a device
-may *know*. A property edit changes no geometry and cannot touch anything that
-is not electric, so a drafter still cannot nudge a wall.
+**Three verbs and no fourth.** Gilligan raised whether editing a property of a
+selected device belonged on the list, because the floor/ceiling outlet was
+briefly one device with a switchable surface. Movie's later ruling — two
+separate devices, no conversion — removes the case that asked for it, so the
+list stays closed at move, delete, add. Nothing on the electric sheet edits a
+property in place.
 
 **A symbol we did not anticipate is made in the Boneyard, not drawn on the
 plan.** Movie's ruling, 1 Sep, and it is what makes the restriction survivable:
@@ -224,8 +225,8 @@ way to store one floating in a room. Dragging one slides it along its host and
 hops it to a nearer wall; it never leaves the walls. So the two hosts drag
 differently, and should — **wall devices slide, ceiling devices float.**
 
-The floor/ceiling outlet is the deliberate exception: it is an outlet that
-floats, because being off the wall is what it is for.
+The floor outlet and the ceiling outlet are the deliberate exceptions: outlets
+that float, because being off the wall is what they are for.
 
 ### Hosting
 
