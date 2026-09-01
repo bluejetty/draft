@@ -134,6 +134,13 @@
       font-weight:700; letter-spacing:0.06em; line-height:1; cursor:pointer; }
     .nav-key:hover { border-color:#5980a6; color:#365e86; }
     [data-view-nav] .nav-key { box-shadow:0 1px 5px rgba(29,31,32,0.16); }
+    /* Length-pad keys (#311): 44px, the same target the chrome sweep settled
+       on, and laid out like every number pad a drafter has ever used. */
+    .pad-key { min-height:44px; border:1px solid rgba(29,31,32,0.24); background:#fff; color:#1d1f20;
+      font-family:'Barlow Condensed',system-ui,sans-serif; font-size:16px; font-weight:700;
+      letter-spacing:0.04em; cursor:pointer; touch-action:manipulation; }
+    .pad-key:hover { border-color:#5980a6; color:#365e86; }
+    .pad-key-go { background:#557a46; border-color:#557a46; color:#fff; }
     .nav-key-wide { min-width:36px; }
     /* Touch targets (#304) — see the measured audit in
        tests/touch-targets.spec.js. touch-action:manipulation drops the 300ms
@@ -1398,6 +1405,34 @@
          Bottom-left, clear of the rail pull-tab, hugging the strip: it is the
          quietest 44px of canvas there is, and it is where a thumb already
          rests when the tablet is held. -->
+    <!-- THE LENGTH PAD (#311). A drafter on an iPad has no keyboard, so the
+         type-ahead ruler had no way to be typed into. This is that keyboard,
+         and ONLY that: every key pushes a character into the same ruler the
+         desk types into, and ENTER presses the same commit. It appears only
+         after a direction ray is tapped, and it docks to whichever side of
+         the canvas the pending corner is NOT on, so it can never cover the
+         corner being drawn from. -->
+    <sc-if value="{{ entryPadOpen }}" hint-placeholder-val="{{ false }}">
+      <div data-entry-pad style="position:absolute; {{ entryPadDock }} bottom:64px; z-index:6; width:168px; padding:10px; background:#fbfbfc; border:1px solid rgba(29,31,32,0.28); box-shadow:0 6px 20px rgba(29,31,32,0.22); font-family:'Barlow Condensed',system-ui,sans-serif; touch-action:manipulation;">
+        <div data-entry-pad-readout style="height:30px; margin-bottom:8px; padding:0 8px; display:flex; align-items:center; justify-content:flex-end; border:1px solid rgba(29,31,32,0.2); background:#fff; font-size:16px; font-weight:700; letter-spacing:0.04em;">{{ entryPadValue }}</div>
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:4px;">
+          <button class="pad-key" data-pad-key="7" onClick="{{ onPadKey }}">7</button>
+          <button class="pad-key" data-pad-key="8" onClick="{{ onPadKey }}">8</button>
+          <button class="pad-key" data-pad-key="9" onClick="{{ onPadKey }}">9</button>
+          <button class="pad-key" data-pad-key="4" onClick="{{ onPadKey }}">4</button>
+          <button class="pad-key" data-pad-key="5" onClick="{{ onPadKey }}">5</button>
+          <button class="pad-key" data-pad-key="6" onClick="{{ onPadKey }}">6</button>
+          <button class="pad-key" data-pad-key="1" onClick="{{ onPadKey }}">1</button>
+          <button class="pad-key" data-pad-key="2" onClick="{{ onPadKey }}">2</button>
+          <button class="pad-key" data-pad-key="3" onClick="{{ onPadKey }}">3</button>
+          <button class="pad-key" data-pad-key="0" onClick="{{ onPadKey }}">0</button>
+          <button class="pad-key" data-pad-key="&#39;" onClick="{{ onPadKey }}" title="feet">&#39;</button>
+          <button class="pad-key" data-pad-key="-" onClick="{{ onPadKey }}" title="feet and inches, as 12-6">&#45;</button>
+          <button class="pad-key" data-entry-pad-back onClick="{{ onPadBack }}" title="Backspace">&#9003;</button>
+          <button class="pad-key pad-key-go" data-entry-pad-enter onClick="{{ onPadEnter }}" title="Commit this leg — the same Enter the keyboard presses" style="grid-column:span 2;">ENTER</button>
+        </div>
+      </div>
+    </sc-if>
     <div data-view-nav style="position:absolute; left:52px; bottom:8px; z-index:4; display:flex; align-items:center; gap:4px;">
       <sc-if value="{{ chainActive }}" hint-placeholder-val="{{ false }}">
         <button data-finish-chain class="nav-key nav-key-wide" onClick="{{ onFinishChain }}" title="Finish this run — the same commit as Enter" style="border-color:#557a46; background:#557a46; color:#fff; margin-right:6px;">FINISH</button>
@@ -1751,6 +1786,11 @@ const ORTHO_LOCK_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'shape', '
 // Arming a polar origin takes a deliberate pause on the node — a drive-by
 // hover on the way across the board never plants a ruler zero.
 const POLAR_DWELL_MS = 350;
+// Guided entry by finger (#311). The ray knob sits this far from the pending
+// corner — close enough to read as belonging to it, far enough that the knobs
+// do not crowd the corner itself.
+const ENTRY_RAY_PX = 78;
+const ENTRY_RAY_HIT_PX = 22;   // a 44px target, measured as a radius
 // FIT breathing room (#304): frame the drawing at 112% of its own extents so
 // the outermost wall is not welded to the edge of the screen.
 const FIT_MARGIN = 1.12;
@@ -2438,6 +2478,7 @@ class Component extends DCLogic {
     compassOn: false,          // polar tracking instrument — down by default; P picks it up
     handOn: false,             // HAND (#304): engaged, a plain drag pans and tools are suspended
     chainActive: false,        // a run is open (#304) — the FINISH control shows only then
+    rayEntry: false,           // a ray was tapped (#311): the on-screen length pad is up
     cuts:          [],
     elevationNames: {},         // per-drawing side names for E1-E4 (FRONT/LEFT...), defaults from COMPANY STANDARDS
     elevationMarkOffsets: {},   // per-drawing E1-E4 clearances from the outermost dim string (ft), default E_MARK_CLEAR_FT
@@ -6939,6 +6980,47 @@ class Component extends DCLogic {
     this._drawOutlines2D(ctx, toS);
     this._drawTourRoof2D(ctx, toS);
     this._drawRoomGrow2D(ctx, toS);
+    // The entry rays sit above even that: they are the thing being aimed at.
+    this._drawEntryRays2D(ctx);
+  }
+
+  // Tappable direction rays from the pending corner (#311). Drafting aid, not
+  // linework: overlay only, so it never reaches paper — the same rule the
+  // OUTLINE guide follows.
+  _drawEntryRays2D(ctx) {
+    if (!this._entryRaysLive()) return;
+    const start = this._chainAnchor();
+    const origin = start && this._toScreen(start);
+    if (!origin) return;
+    ctx.save();
+    this._entryRays().forEach(ray => {
+      const colour = ray.close ? '#557a46' : '#5980a6';
+      if (!ray.close) {
+        ctx.beginPath();
+        ctx.moveTo(origin.x, origin.y);
+        ctx.lineTo(ray.x, ray.y);
+        ctx.strokeStyle = 'rgba(89,128,166,0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.beginPath();
+      ctx.arc(ray.x, ray.y, 11, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      if (ray.close) {
+        // The close knob wears a ring so it cannot be mistaken for a heading.
+        ctx.beginPath();
+        ctx.arc(ray.x, ray.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = colour;
+        ctx.fill();
+      }
+    });
+    ctx.restore();
   }
 
   // The OUTLINE guide never prints — it is drafting scaffolding, not linework.
@@ -9515,6 +9597,10 @@ class Component extends DCLogic {
     this._eMarkDrag      = null;
     this._selectDownInfo = null;
     this._windowSelection = null;
+    // The pad belongs to the run that just went away (#311). Each _cancel*
+    // already drops the ruler for its own tool; this makes it unconditional,
+    // so no future tool can leave a pad floating over nothing.
+    this._dismissEntryPad();
     this._syncChainActive();
     this._invalidate();
   }
@@ -9584,6 +9670,9 @@ class Component extends DCLogic {
     // the one-finger pan an iPad has no other way to perform — a touchscreen
     // has neither the middle button nor the Alt key the pan branch below
     // wants. 3D keeps its own orbit controls.
+    // A tap on a direction ray is spent there (#311) — it aims the run, it
+    // does not drop a corner.
+    if (e.button === 0 && this._rayTapAt(e)) { e.preventDefault(); return; }
     if (this.state.handOn && e.button === 0 && this.state.activeView !== 'perspective') {
       e.preventDefault();
       this._panning2D = true;
@@ -16298,6 +16387,141 @@ class Component extends DCLogic {
   // way to finish it. FINISH is that way, and it appears only while there is
   // something to finish.
 
+  // ─── Guided entry by finger (board #311) ─────────────────────────────────
+  // A drafter on an iPad with no keyboard draws an exact outline the same way
+  // the desk does: point a direction, type a length, commit. The desk points
+  // with the cursor and types on the keyboard; the tablet taps a RAY and types
+  // on a PAD. Both ends feed the same ruler — see _pushLengthChar.
+
+  // The corner a new leg would grow from, for whichever chain tool is running.
+  // The same choice _freezeLength makes; extracted so the rays and the ruler
+  // can never disagree about where the run is.
+  _chainAnchor() {
+    const tool = this.state.activeTool;
+    if (tool === 'line') return this._lineDrawing ? this._lineStart : null;
+    if (tool === 'wall') return this._wallDrawing ? this._wallStart : null;
+    if (tool === 'outline') {
+      return this._outlineDrawing && this._outlinePoints.length
+        ? this._outlinePoints[this._outlinePoints.length - 1] : null;
+    }
+    return null;
+  }
+
+  // The directions the lock actually allows right now, so the rays offer
+  // exactly what the desk would: 90s under the T-square, 45s with the
+  // protractor blade, 30s with the tight blade. With no lock at all the desk
+  // is free-angle and rays cannot show infinity — the 45s are offered as the
+  // useful set, which is a choice worth knowing about.
+  _entryRayStep() {
+    if (this._ctrlHeld && this._shiftHeld) return Math.PI / 6;
+    if (this._shiftHeld) return Math.PI / 4;
+    if (this.state.tsquareOn) return Math.PI / 2;
+    return Math.PI / 4;
+  }
+
+  // Rays are a TOUCH aid. They never appear for a mouse, which keeps every
+  // desk flow and every mouse-driven spec exactly as it was.
+  _entryRaysLive() {
+    if (!this._coarsePointer()) return false;
+    if (this.state.lengthFrozen) return false;   // a length is already being typed
+    if (this._gesture) return false;             // two fingers own the view
+    return !!this._chainAnchor();
+  }
+
+  _coarsePointer() {
+    return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  }
+
+  // Each ray as a screen-space knob: where to paint it, and what to hit-test.
+  // The knob is the target, not the line — a 44px disc at a known place beats
+  // hit-testing a hairline, and it is the same 44 the chrome sweep settled on.
+  _entryRays() {
+    const start = this._chainAnchor();
+    if (!start) return [];
+    const origin = this._toScreen(start);
+    if (!origin) return [];
+    const step = this._entryRayStep();
+    const count = Math.round((Math.PI * 2) / step);
+    const rays = [];
+    for (let i = 0; i < count; i++) {
+      const angle = i * step;
+      rays.push({
+        angle,
+        x: origin.x + Math.cos(angle) * ENTRY_RAY_PX,
+        y: origin.y + Math.sin(angle) * ENTRY_RAY_PX,
+        close: false,
+      });
+    }
+    // THE CLOSE. Back to the first corner, when closing is legal — the finger
+    // version of clicking the first point. Its own colour, its own knob, and
+    // it sits at the real corner rather than out on the ring so there is no
+    // doubt which corner it means.
+    if (this.state.activeTool === 'outline' && this._outlineDrawing && this._outlinePoints.length >= 3) {
+      const first = this._toScreen(this._outlinePoints[0]);
+      if (first) rays.push({ angle: null, x: first.x, y: first.y, close: true });
+    }
+    return rays;
+  }
+
+  // A tap near a knob picks that direction (or closes the loop). Returns true
+  // when the tap was spent here, so the drawing tools never see it.
+  _rayTapAt(e) {
+    if (!this._entryRaysLive()) return false;
+    const rect = this._canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left, py = e.clientY - rect.top;
+    const hit = this._entryRays().find(ray =>
+      Math.hypot(ray.x - px, ray.y - py) <= ENTRY_RAY_HIT_PX);
+    if (!hit) return false;
+    if (hit.close) { this._finishActiveChain(); this._syncChainActive(); return true; }
+    this._beginRayEntry(hit.angle);
+    return true;
+  }
+
+  // Point the run down a ray and open the ruler on it, empty and waiting.
+  // This is the tablet's substitute for aiming the cursor: it sets the very
+  // same _lockAngle the desk's T-square sets, then wakes the SAME ruler.
+  _beginRayEntry(angle) {
+    const start = this._chainAnchor();
+    if (!start) return;
+    this._lockAngle = angle;
+    // _freezeLength decides which side of the ruler zero the length lands on
+    // by looking at the cursor. A finger has no cursor, so put a notional one
+    // a foot down the ray — the direction the drafter just tapped.
+    this._snapPt = new THREE.Vector3(
+      start.x + Math.cos(angle), start.y ?? 0, start.z + Math.sin(angle),
+    );
+    this._suppressRulerFocus = true;
+    this._freezeLength('');
+    this.setState({ rayEntry: true });
+    this._invalidate();
+  }
+
+  // ONE entry path for a typed length, whoever typed it: the keyboard's
+  // type-ahead or the on-screen pad. The pad has no parallel parsing, no
+  // second commit — it pushes characters here and presses the same Enter.
+  _pushLengthChar(ch) {
+    if (!this.state.lengthFrozen) { this._freezeLength(ch); return; }
+    this.setState({
+      frozenLengthInput: this.state.frozenLengthInput + ch,
+      frozenDimensionError: '',
+    }, () => this._updateFrozenPreview());
+  }
+
+  _popLengthChar() {
+    if (!this.state.lengthFrozen) return;
+    this.setState({
+      frozenLengthInput: this.state.frozenLengthInput.slice(0, -1),
+      frozenDimensionError: '',
+    }, () => this._updateFrozenPreview());
+  }
+
+  // A hardware keyboard wins: a Bluetooth keyboard on an iPad means the pad
+  // is in the way, so the first digit it sends puts the pad away. The ruler
+  // itself carries on exactly as it was.
+  _dismissEntryPad() {
+    if (this.state.rayEntry) this.setState({ rayEntry: false });
+  }
+
   _chainInProgress() {
     return !!(this._lineDrawing || this._wallDrawing || this._floorDrawing
       || this._shapeDrawing || this._outlineDrawing || this._surfaceOpeningDrawing
@@ -18648,6 +18872,10 @@ class Component extends DCLogic {
   // next one, so the drafter never presses R again — point, type, Enter.
   _rearmStickyRuler() {
     if (!this.state.rulerMode || this.state.lengthFrozen) return;
+    // On a tablet the RAYS are the sticky loop (#311): re-freezing an empty
+    // ruler here would suppress them (a frozen length hides the rays) and
+    // leave a finger with no way to aim the next leg.
+    if (this._coarsePointer()) return;
     const tool = this.state.activeTool;
     const drawing = (tool === 'line' && this._lineDrawing)
       || (tool === 'wall' && this._wallDrawing)
@@ -18721,6 +18949,12 @@ class Component extends DCLogic {
       if (len > 0.001) frozenLengthInput = formatArchitecturalInches(len * 12);
     }
     this.setState({ lengthFrozen: true, frozenLengthInput, frozenDimensionError: '' }, () => {
+      // A ray-tapped freeze deliberately does NOT take focus (#311). Two
+      // reasons, both load-bearing: focusing a text field on an iPad raises the
+      // system keyboard right over the pad that replaced it, and a focused
+      // field makes _handleKey return at its `focusedControl === 'field'` gate,
+      // which is the very path a hardware digit uses to put the pad away.
+      if (this._suppressRulerFocus) { this._suppressRulerFocus = false; return; }
       const inp = document.querySelector('[data-frozen-length]');
       if (!inp) return;
       inp.focus();
@@ -19072,7 +19306,9 @@ class Component extends DCLogic {
     this._frozenAngle = 0;
     if (frozenTool === 'line' && this._linePreviewObj) this._linePreviewObj.visible = false;
     if ((frozenTool === 'wall' || frozenTool === 'extend') && this._previewLine) this._previewLine.visible = false;
-    this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '' });
+    // The on-screen pad is a view of this ruler, so it goes when the ruler
+    // goes — Escape, a tool change, a cancelled run.
+    this.setState({ lengthFrozen: false, frozenLengthInput: '', frozenDimensionError: '', rayEntry: false });
   }
 
   // ─── Cut drawing ──────────────────────────────────────────────────────────────
@@ -19477,11 +19713,10 @@ class Component extends DCLogic {
       if (this.state.lengthFrozen) {
         // The box is open but hasn't taken focus yet (fast typing): collect
         // the digit here so none drop between the wake-up and the focus.
+        // A REAL keyboard is talking, so the on-screen pad stands down (#311).
         e.preventDefault();
-        this.setState({
-          frozenLengthInput: this.state.frozenLengthInput + e.key,
-          frozenDimensionError: '',
-        }, () => this._updateFrozenPreview());
+        this._dismissEntryPad();
+        this._pushLengthChar(e.key);
         return;
       }
       const tool = this.state.activeTool;
@@ -19493,6 +19728,7 @@ class Component extends DCLogic {
       const polarReady = this._polarOrigin && this._polarSnap && POLAR_RULER_TOOLS.has(tool);
       if (drawing || polarReady) {
         e.preventDefault();
+        this._dismissEntryPad();
         this._freezeLength(e.key);
         return;
       }
@@ -20754,6 +20990,29 @@ class Component extends DCLogic {
         ? `COMPASS up — rest on a node to cast polar rays [${shortcut('compass')} or tap sets it down]`
         : `COMPASS down — no polar rays [${shortcut('compass')} or tap picks it up]`,
       chainActive: this.state.chainActive,
+      // The length pad (#311) — open only while a tapped ray is waiting for a
+      // number, and docked away from the corner it is being typed for.
+      entryPadOpen: this.state.rayEntry && this.state.lengthFrozen,
+      entryPadValue: this.state.frozenLengthInput || '\u2007',
+      entryPadDock: (() => {
+        const anchorPt = this._chainAnchor();
+        const screen = anchorPt ? this._toScreen(anchorPt) : null;
+        const width = this._canvas ? this._canvas.clientWidth : 1024;
+        // Corner on the left half → the pad takes the right, and vice versa.
+        return screen && screen.x < width / 2 ? 'right:16px;' : 'left:16px;';
+      })(),
+      onPadKey: event => {
+        const key = event && event.currentTarget && event.currentTarget.dataset
+          ? event.currentTarget.dataset.padKey : null;
+        if (key) this._pushLengthChar(key);
+      },
+      onPadBack: () => this._popLengthChar(),
+      // ENTER on the pad is the ruler's own Enter, no second commit path. It
+      // deliberately does NOT force the pad shut: a length that fails to parse
+      // leaves the ruler open with its error, and the pad has to still be
+      // there to correct it. A good commit clears lengthFrozen, which closes
+      // the pad on its own.
+      onPadEnter: () => { this._confirmFrozenLength(); this._syncChainActive(); },
       onFinishChain: () => { this._finishActiveChain(); this._syncChainActive(); },
       // View navigation (#304) — zoom, fit and the HAND pan mode.
       onZoomIn: () => this._zoomStep(true),
