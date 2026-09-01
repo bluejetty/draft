@@ -268,12 +268,21 @@
   </div>
 
   <div data-build-cluster style="position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; align-items:center; gap:8px; z-index:6;">
+    <!-- TURTLE and RABBIT bookend the row permanently while its middle grows,
+         so unlike SPLIT and ATTACHED they are NOT wrapped in hasHouseMaster —
+         which means the turtle is not always next to HOUSE, and that is
+         intended. They wear no filter binding: they are assistance levels,
+         not things that can exist in the drawing, so the lamps' dim/armed/lit
+         treatment would say something untrue about them. -->
+    <button data-select-turtle onClick="{{ onSelectTurtle }}" aria-label="TURTLE PACE" title="TURTLE — guided pace, explains each step (coming soon)" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0;">
+      <img src="./assets/btn-turtle.png" alt="" style="height:38px; display:block;" />
+    </button>
     <button data-select-house onClick="{{ onSelectHouse }}" aria-label="HOUSE OUTLINE" title="{{ houseButtonHint }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ houseButtonGlow }};">
-      <img src="./assets/btn-house.png" alt="" style="height:38px; display:block;" />
+      <img src="{{ houseButtonSrc }}" alt="" style="height:38px; display:block;" />
     </button>
     <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
       <button data-select-split onClick="{{ onSelectSplit }}" aria-label="SPLIT LEVEL" title="SPLIT LEVEL — mark a split-level zone (coming soon)" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ splitButtonGlow }};">
-        <img src="./assets/btn-split.png" alt="" style="height:38px; display:block;" />
+        <img src="{{ splitButtonSrc }}" alt="" style="height:38px; display:block;" />
       </button>
     </sc-if>
     <div style="position:relative; line-height:0;">
@@ -294,11 +303,14 @@
     </div>
     <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
       <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" aria-label="{{ attachedGarageLabel }}" title="{{ attachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ attachedButtonGlow }};">
-        <img src="./assets/btn-attached.png" alt="" style="height:38px; display:block;" />
+        <img src="{{ attachedButtonSrc }}" alt="" style="height:38px; display:block;" />
       </button>
     </sc-if>
     <button data-mark-detached-garage onClick="{{ onMarkDetachedGarage }}" aria-label="{{ detachedGarageLabel }}" title="{{ detachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ detachedButtonGlow }};">
-      <img src="./assets/btn-detached.png" alt="" style="height:38px; display:block;" />
+      <img src="{{ detachedButtonSrc }}" alt="" style="height:38px; display:block;" />
+    </button>
+    <button data-select-rabbit onClick="{{ onSelectRabbit }}" aria-label="RABBIT PACE" title="RABBIT — quick pace, stays out of the way (coming soon)" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0;">
+      <img src="./assets/btn-rabbit.png" alt="" style="height:38px; display:block;" />
     </button>
   </div>
 
@@ -10576,6 +10588,20 @@ class Component extends DCLogic {
       && this._boneyardOutlines.some(outline => outline.shelfId === shelf.id && !outline.garage);
   }
 
+  // The garage half of the same question, for the build row's lamps (board
+  // NEW-4). Same shape and the same active-shelf scope as
+  // _shelfHasHouseMaster, so all three lamps agree on what "exists" means.
+  // A master carries `detached` explicitly and it is set true only where a
+  // detached master is made, so an attached one reads false rather than
+  // undefined.
+  _shelfHasGarageMaster(detached) {
+    this._ensureDrawingCollections();
+    const shelf = this._activeBoneyardShelf();
+    return shelf != null
+      && this._boneyardOutlines.some(outline => outline.shelfId === shelf.id
+        && outline.garage === true && (outline.detached === true) === detached);
+  }
+
   // The two garage buttons arm the Outline tool explicitly — ATTACHED draws
   // an open run welded onto the house, DETACHED closes its own loop — so a
   // run near the house never guesses which one was meant.
@@ -12642,6 +12668,20 @@ class Component extends DCLogic {
   _pressSplitLevel() {
     this.setState({
       drawingMessage: 'SPLIT LEVEL zones are coming soon — they mark a stepped area of the house with its own floor heights.',
+      drawingMessageError: true,
+    });
+  }
+
+  // TURTLE and RABBIT are assistance levels — how much the app explains while
+  // you draw. Neither behaviour is specified yet, so they say what is coming
+  // the way _pressSplitLevel does rather than answering a press with nothing.
+  // They are not lamps: an assistance level is not a thing that can exist in
+  // the drawing, so the build row's dim/armed/lit treatment does not apply.
+  _pressAssistLevel(pace) {
+    this.setState({
+      drawingMessage: pace === 'turtle'
+        ? 'TURTLE pace is coming soon — it will walk you through each step as you draw.'
+        : 'RABBIT pace is coming soon — it will stay out of the way once you know the moves.',
       drawingMessageError: true,
     });
   }
@@ -20049,6 +20089,31 @@ class Component extends DCLogic {
       ? 'Save the current drafting standards to share with an office, or import standards from a portable file.'
       : 'Save the current personal drafting preferences, or import a saved setup from another browser or computer.';
 
+    // ── The build row's lamps (board NEW-4) ────────────────────────────
+    // Three states, and they differ on TWO AXES rather than three points of
+    // one brightness ramp: desaturation says off, a coloured halo says armed,
+    // and the art's own colour — these buttons are drawn as lit lamps
+    // already — carries the middle. A third value on the brightness axis is
+    // not readable at 38px. Checked at 38px on the white bar, not assumed.
+    //
+    // LIT IS DERIVED HERE, ON EVERY RENDER, AND NEVER STORED. A saved drawing
+    // opens with its lamps already on and NEW clears them for free, because
+    // both rebuild the masters. There is no flag to set, so no flag to leave
+    // stale behind an F5.
+    //
+    // Scoped to the ACTIVE BONEYARD SHELF, following _shelfHasHouseMaster:
+    // SPLIT and ATTACHED only exist in the DOM while that helper is true, so
+    // a drawing-wide lamp could light for something the row is not showing.
+    // Each lamp has TWO pieces of art — lit, and the same button with its
+    // light off — so "off" is drawn rather than approximated. A CSS
+    // desaturate turned every dark lamp the same grey and cost each button
+    // the colour that says which button it is.
+    const lampArt = (name, on) => `./assets/${on ? `btn-${name}` : `${name}out`}.png`;
+    const houseArmed = this.state.activeTool === 'outline' && !this.state.outlineGarage;
+    const houseExists = this._shelfHasHouseMaster();
+    const attachedExists = this._shelfHasGarageMaster(false);
+    const detachedExists = this._shelfHasGarageMaster(true);
+
     return {
       topBarLabel, topBarColor, workingContextLabel, activeLineLayerLabel: this._activeLineLayerLabel(),
       genericLineLayers: ['draft', 'no-draft'].map(id => {
@@ -20487,14 +20552,31 @@ class Component extends DCLogic {
       onMarkDetachedGarage: () => this._toggleGarageMode('detached'),
       onSelectHouse: () => this._toggleHouseMode(),
       onSelectSplit: () => this._pressSplitLevel(),
-      hasHouseMaster: this._shelfHasHouseMaster(),
-      houseButtonHint: this.state.activeTool === 'outline' && !this.state.outlineGarage
+      onSelectTurtle: () => this._pressAssistLevel('turtle'),
+      onSelectRabbit: () => this._pressAssistLevel('rabbit'),
+      hasHouseMaster: houseExists,
+      houseButtonHint: houseArmed
         ? 'HOUSE — tracing; click to cancel' : 'HOUSE — press, then trace the outline; the bone builds it',
-      houseButtonGlow: this.state.activeTool === 'outline' && !this.state.outlineGarage
-        ? 'drop-shadow(0 0 5px rgba(192,57,43,0.9))' : 'none',
+      // Armed beats lit: while you trace, the tool state is the one worth
+      // showing, and it is the louder of the two so a press never reads as
+      // switching something off. A halo means "this is happening now" and is
+      // only ever on one button; the art means "this exists" and is routinely
+      // on three or four at once.
+      houseButtonSrc: lampArt('house', houseExists || houseArmed),
+      houseButtonGlow: houseArmed ? 'drop-shadow(0 0 5px rgba(192,57,43,0.9))' : 'none',
+      // SPLIT wears its off art permanently, and that is correct rather than
+      // a defect: _pressSplitLevel is a stub, so there is no split geometry,
+      // no split tool and no arm state — the button holds its place and reads
+      // as unavailable, which is what it is. Both of these become the same
+      // expressions as its neighbours when split zones land.
+      splitButtonSrc: lampArt('split', false),
       splitButtonGlow: 'none',
+      attachedButtonSrc: lampArt('attached',
+        attachedExists || this.state.outlineGarage === 'attached'),
       attachedButtonGlow: this.state.outlineGarage === 'attached'
         ? 'drop-shadow(0 0 5px rgba(63,127,214,0.9))' : 'none',
+      detachedButtonSrc: lampArt('detached',
+        detachedExists || this.state.outlineGarage === 'detached'),
       detachedButtonGlow: this.state.outlineGarage === 'detached'
         ? 'drop-shadow(0 0 5px rgba(125,91,166,0.95))' : 'none',
       attachedGarageLabel: this.state.outlineGarage === 'attached'
