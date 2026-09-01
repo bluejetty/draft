@@ -323,6 +323,44 @@ test.describe('TOY MODE grip tabs', () => {
     expect(await inkAnywhere(page, BLOCK_ORANGE)).toBe(0);
   });
 
+  test('in a weld group the highlight lands on the blocker, not the grabbed wall', async ({ page }) => {
+    await openToy(page);
+    await drawWall(page, -13, -5, 13, -5);
+    await drawWall(page, 13, -5, 13, 5);
+    await drawWall(page, 13, 5, -13, 5);
+    await drawWall(page, -13, 5, -13, -5);
+    // The partition in TWO collinear halves meeting at (0,0). They meet end to
+    // end, so they weld into one group and move together -- and either can be
+    // the one that stops the drag while the other is under the finger.
+    await drawWall(page, 0, -5, 0, 0);
+    await drawWall(page, 0, 0, 0, 5);
+    await closetOnNorthWall(page, -10, -6);
+    await page.waitForTimeout(200);
+
+    // One tab between the two halves, because they are one group.
+    const north = await hasTabAt(page, 0, -5, 0, 0);
+    const south = await hasTabAt(page, 0, 0, 0, 5);
+    expect([north, south].filter(Boolean).length).toBe(1);
+
+    const grabbed = north ? [0, -5, 0, 0] : [0, 0, 0, 5];
+    await dragTabBy(page, await tabSpot(page, ...grabbed), -8,
+      { release: false, steps: 6, settle: 90 });
+    await expect(message(page)).toContainText(/would be under/i);
+
+    // Both halves now stand at the permitted foot, one above z=0 and one
+    // below, so which of them wears the highlight is readable off the canvas.
+    const permitted = -1;
+    const onNorth = await inkAt(page, await h.worldToClient(page, permitted, -2.5), BLOCK_ORANGE, 7);
+    const onSouth = await inkAt(page, await h.worldToClient(page, permitted, 2.5), BLOCK_ORANGE, 7);
+    // Exactly one half is lit: the highlight is a wall, not the whole group.
+    expect((onNorth > 0) !== (onSouth > 0)).toBe(true);
+    // And it is the half that ISN'T under the finger. In a welded group the
+    // wall that stops you is usually not the one you grabbed, and lighting up
+    // the grabbed one would teach the wrong rule.
+    expect(north ? onSouth > 0 : onNorth > 0).toBe(true);
+    await page.mouse.up();
+  });
+
   test('without the flag there is no tab anywhere', async ({ page }) => {
     // The door is temporary, but while it is the door it has to work both
     // ways: an ordinary drafting session must be untouched by any of this.
