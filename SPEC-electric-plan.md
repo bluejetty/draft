@@ -165,12 +165,19 @@ better source anyway — the drawing is the output of the rule, not the rule.
 Movie's ruling, 1 Sep: on the electric plan the drafter can **move a symbol,
 delete one, or add one. Nothing else — and only electric things.**
 
-Two consequences, both load-bearing:
+The consequences, all load-bearing:
 
 **No line drawing on the sheet.** There is no tool for it. That is what keeps
 the rule above from being a wish: if a leg cannot be drawn by hand, the only
 way to change what a switch runs is to move or delete a device, so the drawing
 cannot disagree with the model.
+
+**A symbol we did not anticipate is made in the Boneyard, not drawn on the
+plan.** Movie's ruling, 1 Sep, and it is what makes the restriction survivable:
+the drafter is never stuck, he just makes a custom electric object and places
+it. So the escape hatch produces a *device* — hosted, movable with its wall,
+checkable, exportable — where freehand linework would produce the one electric
+thing on the sheet that nothing can reason about.
 
 **The leg is attached at both ends.** Drag a light and its curve follows it;
 delete a switch and its legs go with it. A leg is never left pointing at

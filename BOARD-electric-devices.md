@@ -52,26 +52,35 @@ comes back *missing from the ELECTRIC sheet* — and only after a save and
 reopen, which is the shape of bug you hear about from a customer.
 
 **And it is not the only one.** Gilligan's reading, 1 Sep, corrected this
-board — there are three gates spelling out the same three names by hand, not
-one:
+board — **two** places spell out the same three names by hand, not one:
 
 | Where | What it decides | Failure if missed |
 | --- | --- | --- |
 | `MODEL.dc.html` 5017 | the layer a saved line comes back as | device vanishes from the sheet after a reload |
 | `MODEL.dc.html` 8544 | the standard a line is *painted* from | device loads correctly and still draws as `draft` |
-| `profile-manager.js` 272 | which layer a line can be *drawn* on | `E-SAFETY` cannot be the active layer at all |
 
 Fixing only the first is the trap: the save-reload test then passes and the
-device is still wrong on screen. Fix all three.
+device is still wrong on screen. Fix both.
+
+There is a third hardcoding, `normaliseActiveLineLayer` in `profile-manager.js`
+272, and **it is not one of these — leave it.** It governs which layer the
+drafter may pick to draw on, and `draft` / `no-draft` is the right answer
+there. See the sheet-restrictions section below.
 
 The canonical table is **`DEFAULT_LAYER_STANDARDS` in `profile-manager.js`
 277** — Gilligan's find, and better than what this board originally said. Drive
-all three off it, so adding a layer is a table entry rather than a fourth
-branch in three places for somebody to forget.
+both off it, so adding a layer is a table entry rather than a third branch in
+two places for somebody to forget.
 
 Prove it with a save-reload round trip on a layer that is *not* one of the
 three, **failing on the unfixed code first**. Add a case for the painted
 standard too, or the second gate goes unnoticed exactly as it did here.
+
+**The round trip has to go through the app.** Gilligan's catch, 1 Sep, on his
+own test: a proof that writes a file and reads it back passes on the unfixed
+code, because it never asks the loader anything. Load the saved drawing into
+MODEL and re-serialise from there — and check the test fails before the fix,
+which is the only thing that tells you it is asking a real question.
 
 Only then add the new layer.
 
@@ -190,6 +199,19 @@ things.**
   device. **No line drawing at all** — which is what keeps the dashed leg
   honest, because the only way to change what a switch runs is to move or
   delete the device itself.
+- **A symbol this board does not cover is made in the Boneyard, not drawn on
+  the plan.** Movie's ruling, 1 Sep. The escape hatch for a device nobody
+  anticipated is to author a custom electric object and then place it — so it
+  arrives as a device with a host, and every electric thing on the sheet stays
+  something the rules can reason about. Freehand linework would be the one
+  electric thing that cannot be checked, cannot ride a wall edit, and cannot
+  export. Out of scope to build here; in scope not to foreclose.
+- **`E-SAFETY` must never be a drawable active layer.** `normaliseActiveLineLayer`
+  (`profile-manager.js` 272) collapses the drafter's layer choice to `draft` or
+  `no-draft` and that is deliberate, not an oversight — semantic layers are
+  stamped by context and by the build. Leave it alone, and say in the PR that
+  you left it alone on purpose: a detector is placed by the build, never drawn
+  freehand.
 - **Everything that is not electric is locked.** Walls, doors, fixtures,
   dimensions, room tags — visible as the background you draw on, not
   selectable, not draggable. A drafter cannot nudge a wall while he is placing
