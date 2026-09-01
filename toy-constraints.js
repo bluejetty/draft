@@ -27,10 +27,10 @@ if (!window.DraftToyConstraints) {
   const OPENING_EDGE_FT = 2 / 12;    // an opening needs this much wall each side
 
   // ── Reason codes ──────────────────────────────────────────────────────
-  // A NAMED SET, exported — never English assembled at the call site. What a
-  // blocked drag does (nothing, resist, or explain) is an open ruling and a
-  // property of the presentation, not of this function. Codes are what stop
-  // that ruling turning into a find-and-replace across the UI once answered.
+  // A NAMED SET, exported — never English assembled at the call site. A
+  // blocked drag stops at the permitted position and the blocker says why in
+  // the room's words ("BEDROOM 2 would be under 9'-8""), which is presentation
+  // built FROM these codes rather than from strings this module wrote.
   const REASON = Object.freeze({
     NOT_ORTHOGONAL: 'NOT_ORTHOGONAL',
     TOUCHES_NON_ORTHOGONAL: 'TOUCHES_NON_ORTHOGONAL',
