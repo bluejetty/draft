@@ -131,6 +131,12 @@ const wall = (id, x0, z0, x1, z1, extra = {}) => ({
     short.reason === T.REASON.MIN_ROOM, JSON.stringify(short));
   check('and names the room, same as a flat refusal does',
     short.roomId === 'bed3', JSON.stringify(short));
+  // And the minimum that was hit, because "BEDROOM 2 would be under 9'-8""
+  // needs the number, and the presentation layer must not have to ask the
+  // standards a second question to find out which rule bit.
+  check('and carries the minimum it hit, so the line can be in feet',
+    short.failures && short.failures.some(f => f.rule === 'dimension' && f.min > 9),
+    JSON.stringify(short.failures));
 
   // The other half of the same distinction: a move that got everything it
   // asked for has nothing to explain, so `reason` present IS "you got less

@@ -310,6 +310,11 @@ if (!window.DraftToyConstraints) {
     const said = { reason: blocked.reason };
     if (blocked.band) said.band = blocked.band;
     if (blocked.roomId) said.roomId = blocked.roomId;
+    // The MINIMUM that was hit, so a refusal can be put in the room's words
+    // ("BEDROOM 2 would be under 9'-8"") rather than in this module's. Which
+    // rule failed decides the sentence, so the presentation layer needs it and
+    // must not go asking the standards a second question to find out.
+    if (blocked.failures) said.failures = blocked.failures;
     let culprit = blocked.wallId || null;
     if (!culprit && blocked.roomId) {
       const room = (ctx.rooms || []).find(r => r.id === blocked.roomId);
