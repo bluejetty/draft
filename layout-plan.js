@@ -15,7 +15,16 @@ if (!window.DraftLayoutPlan) {
   // walls plus its foundation structure (the foundation-level PLAN draws the
   // int walls against the poured concrete). Shared endpoints intern to one
   // point object per coordinate so the join index can key on identity.
-  function planWalls(saved, levelId) {
+  // `view` selects WHICH DRAWING of the level: 'plan' is the walls plan,
+  // 'foundation' the concrete under it (board NEW-2 part 2). Passing null
+  // means "every wall on this level", which is what this function did before
+  // views existed -- a saved layout whose viewports carry no view therefore
+  // composes byte-for-byte as it did, which the order requires. Only a
+  // viewport that names its view gets filtered.
+  //
+  // Without that filter a FOUNDATION sheet draws the basement walls and the
+  // concrete on top of each other, since both live on level 1.
+  function planWalls(saved, levelId, view = null) {
     const interned = new Map();
     const intern = raw => {
       const x = num(raw?.x), z = num(raw?.z);
@@ -26,6 +35,7 @@ if (!window.DraftLayoutPlan) {
     };
     return (Array.isArray(saved?.walls) ? saved.walls : [])
       .filter(wall => wall?.levelId === levelId)
+      .filter(wall => view === null || (wall.view || 'plan') === view)
       .map(wall => {
         const start = intern(wall.start), end = intern(wall.end);
         if (!start || !end || start === end) return null;
@@ -239,13 +249,15 @@ if (!window.DraftLayoutPlan) {
   // beneath every boundary), then the openings carving their gaps. toS maps
   // model feet to screen pixels; the caller centres it on the wall bounds.
   function drawPlan(ctx, toS, saved, levelId, env = {}) {
-    const walls = planWalls(saved, levelId);
+    const view = env.view || null;
+    const walls = planWalls(saved, levelId, view);
     if (!walls.length) return false;
     const joins = wallJoins(walls);
     const wallEnv = { wallTypes: WALL_TYPES };
     walls.forEach(w => window.DraftRender2D.drawWallSeg2D(ctx, toS, w, false, joins, 'fill', wallEnv));
     walls.forEach(w => window.DraftRender2D.drawWallSeg2D(ctx, toS, w, false, joins, 'stroke', wallEnv));
     planOpenings(saved, levelId, walls).forEach(opening => {
+      if (view !== null && (opening.view || 'plan') !== view) return;
       const wall = walls.find(w => w.id === opening.wallId);
       const geo = wall && openingGeometry(opening, wall, env.padFt);
       if (geo) drawOpening2D(ctx, toS, opening, geo, env);

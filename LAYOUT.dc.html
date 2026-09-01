@@ -12,6 +12,7 @@
 <script src="./wall-types.js"></script>
 <script src="./render-2d.js"></script>
 <script src="./geometry-2d.js"></script>
+<script src="./layer-views.js"></script>
 <script src="./layout-plan.js"></script>
 <script src="./formatters.js"></script>
 <script src="./cut-view.js"></script>
@@ -238,6 +239,17 @@ const SCALES = [
 const AUTO_SCALE_PREFS = [1 / 4, 3 / 16, 1 / 8, 3 / 32];
 const WORKING_SCALE_IDX = SCALES.findIndex(s => s.pif === 1 / 4);
 const AUTO_SCALE_LAST_RESORT = 3 / 32;
+// A view's type picks which ladder it walks; the chooser is the same either
+// way. A site plan at 1/8" is nonsense -- it wants an engineer's scale.
+// Metric (1:50/1:100/1:200, site 1:250/1:500) is a drawing-wide setting
+// rather than a per-view one, so adding it later is another entry here plus
+// a lookup by the drawing's unit -- not a rewrite of the chooser.
+const SITE_SCALE_PREFS = [1 / 120, 1 / 240, 1 / 360, 1 / 480];  // 1"=10',20',30',40'
+const SCALE_FAMILIES = Object.freeze({
+  architect: Object.freeze({ prefs: AUTO_SCALE_PREFS, lastResort: AUTO_SCALE_LAST_RESORT }),
+  site:      Object.freeze({ prefs: SITE_SCALE_PREFS, lastResort: 1 / 480 }),
+});
+const scaleFamilyFor = view => (view && view.kind === 'site' ? 'site' : 'architect');
 
 // Composer spacing, in paper inches: air between viewports, and the caption
 // line each viewport wears under its frame.
@@ -736,6 +748,7 @@ class Component extends DCLogic {
   // region together (stacked for a pair, alone otherwise); the smallest rung
   // is the floor — a view too big for even 1/16" still prints, clipped.
   _autoScaleFor(views, region, axis = 'stack') {
+    const family = SCALE_FAMILIES[scaleFamilyFor(views[0])] || SCALE_FAMILIES.architect;
     const fits = pif => {
       if (axis === 'row') {
         const sumW = views.reduce((sum, view) => sum + view.wFt * pif, 0)
@@ -748,133 +761,79 @@ class Component extends DCLogic {
         + COMPOSE_GAP_IN * (views.length - 1);
       return maxW <= region.w && sumH <= region.h;
     };
-    return AUTO_SCALE_PREFS.find(fits) ?? AUTO_SCALE_LAST_RESORT;
+    return family.prefs.find(fits) ?? family.lastResort;
   }
 
   _composeDefaultSet() {
     if (!this._saved) return;
     const region = this._composeRegionIn();
-    const planLevels = this._levelsWithWalls()
-      .filter(level => level.id > 0 && level.id !== 7 && level.id !== 8)
+    const floorLevels = this._levelsWithWalls()
+      .filter(level => level.id > 0 && level.id !== 1 && level.id !== 7 && level.id !== 8)
       .slice()
-      .reverse(); // levels store top-down; a permit set reads bottom-up
-    const flow = [];
+      .sort((x, y) => y.id - x.id);          // top storey first, the way a set reads
     const sized = view => {
       const foot = this._viewFootprintFt(view);
       return foot ? { ...view, wFt: foot.wFt, hFt: foot.hFt } : null;
     };
-    planLevels.forEach(level => {
-      const view = sized({ kind: 'plan', levelId: level.id });
-      if (view) flow.push(view);
-    });
-    this._cuts.forEach(cut => {
-      const view = sized({ kind: 'section', cutId: cut.id });
-      if (view) flow.push(view);
-    });
+    // A sheet is dealt only if something would put ink on it. A bungalow has
+    // no 2ND FL sheet; a drawing with no concrete has no FOUNDATION sheet.
+    // Never deal a blank sheet.
+    const planSheet = (levelId, view) => {
+      const walls = window.DraftLayoutPlan.planWalls(this._saved, levelId, view);
+      return walls.length ? sized({ kind: 'plan', levelId, view }) : null;
+    };
+    const sectionViews = this._cuts
+      .map(cut => sized({ kind: 'section', cutId: cut.id }))
+      .filter(Boolean);
     const elevViews = this._standardElevationCuts()
       .map(cut => sized({ kind: 'elevation', elevId: cut.id }))
       .filter(Boolean);
-    if (!flow.length && !elevViews.length) return;
+
+    // Movie's set order (board NEW-2 part 2). Sheets 3 and 4 (SITE, ROOF) and
+    // the floor-layout and electrical sheets are absent on purpose: no
+    // painter and, for S-SLAB / S-FDN / E-POWER, no entities in the drawing
+    // format to paint. They are their own boards, not silent omissions.
+    const sheetPlan = [];
+    if (elevViews.length) sheetPlan.push(elevViews.slice(0, 2));      // 1
+    if (elevViews.length > 2) sheetPlan.push(elevViews.slice(2));     // 2
+    floorLevels.forEach(level => {                                    // 5, 7
+      const view = planSheet(level.id, 'plan');
+      if (view) sheetPlan.push([view]);
+    });
+    const foundation = planSheet(1, 'foundation');                    // 9
+    if (foundation) sheetPlan.push([foundation]);
+    sectionViews.forEach(view => sheetPlan.push([view]));             // 10-12
+    const basement = planSheet(1, 'plan');                            // 13
+    if (basement) sheetPlan.push([basement]);
+    if (!sheetPlan.length) return;
 
     const viewports = [];
     let nextId = 1;
-    let sheet = 1;
-    // Plans and sections shelf-pack left to right, top to bottom, each at the
-    // largest rung it fits alone; a view that doesn't fit the leftover space
-    // starts a new row, then a new sheet.
-    let cursorX = region.x, cursorY = region.y, rowH = 0;
-    let placedAny = false;
-    const place = (view, pif, xIn, yIn) => {
-      const base = { id: nextId++, pif, sheet, xIn, yIn };
-      viewports.push(view.kind === 'plan'
-        ? { ...base, kind: 'plan', levelId: view.levelId }
-        : { ...base, kind: 'section', cutId: view.cutId });
-      placedAny = true;
-    };
-    if (flow.length === 1) {
-      // One view sits in the middle of its sheet, not the corner.
-      const view = flow[0];
-      const pif = this._autoScaleFor([view], region);
-      place(view, pif, region.x + region.w / 2,
-        region.y + (region.h - COMPOSE_LABEL_IN) / 2);
-    } else if (flow.length === 2) {
-      // A pair balances: side by side when the two read wider than tall
-      // together, stacked when taller than wide, and the block centres as a
-      // group either way.
-      const sumW = flow[0].wFt + flow[1].wFt;
-      const sumH = flow[0].hFt + flow[1].hFt;
-      const axis = sumW > sumH ? 'row' : 'stack';
-      const pif = this._autoScaleFor(flow, region, axis);
-      if (axis === 'row') {
-        const blockW = sumW * pif + COMPOSE_GAP_IN;
-        const maxH = Math.max(...flow.map(v => v.hFt)) * pif + COMPOSE_LABEL_IN;
-        let x = region.x + Math.max(0, (region.w - blockW) / 2);
-        const midY = region.y + Math.max(0, (region.h - maxH) / 2);
-        flow.forEach(view => {
-          place(view, pif, x + (view.wFt * pif) / 2, midY + (view.hFt * pif) / 2);
-          x += view.wFt * pif + COMPOSE_GAP_IN;
-        });
-      } else {
-        const blockH = sumH * pif + 2 * COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
-        let y = region.y + Math.max(0, (region.h - blockH) / 2);
-        flow.forEach(view => {
-          place(view, pif, region.x + region.w / 2, y + (view.hFt * pif) / 2);
-          y += view.hFt * pif + COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
-        });
+    // Sheet numbering follows the order: sheet 1 is the first dealt.
+    sheetPlan.forEach((views, index) => {
+      const sheet = index + 1;
+      const pif = this._autoScaleFor(views, region);
+      const commit = (view, xIn, yIn) => {
+        const base = { id: nextId++, pif, sheet, xIn, yIn };
+        if (view.kind === 'plan') {
+          viewports.push({ ...base, kind: 'plan', levelId: view.levelId, view: view.view });
+        } else if (view.kind === 'section') {
+          viewports.push({ ...base, kind: 'section', cutId: view.cutId });
+        } else {
+          viewports.push({ ...base, kind: 'elevation', elevId: view.elevId });
+        }
+      };
+      if (views.length === 1) {
+        // Part 1's rule stands: a single view sits in the middle of its sheet.
+        commit(views[0], region.x + region.w / 2,
+          region.y + (region.h - COMPOSE_LABEL_IN) / 2);
+        return;
       }
-    } else {
-      // Three or more keep the shelf packing; the block is centred after,
-      // per sheet. Balance beyond this wants a drafter's eye.
-      const packed = [];
-      flow.forEach(view => {
-        const pif = this._autoScaleFor([view], region);
-        const wIn = view.wFt * pif;
-        const hIn = view.hFt * pif + COMPOSE_LABEL_IN;
-        if (placedAny && cursorX + wIn > region.x + region.w + 1e-9) {
-          cursorX = region.x;
-          cursorY += rowH + COMPOSE_GAP_IN;
-          rowH = 0;
-        }
-        if (placedAny && cursorY + hIn > region.y + region.h + 1e-9) {
-          sheet += 1;
-          cursorX = region.x; cursorY = region.y; rowH = 0;
-        }
-        place(view, pif, cursorX + wIn / 2, cursorY + (view.hFt * pif) / 2);
-        packed.push({ vp: viewports[viewports.length - 1], sheet, wIn, hIn,
-          left: cursorX, top: cursorY });
-        cursorX += wIn + COMPOSE_GAP_IN;
-        rowH = Math.max(rowH, hIn);
-      });
-      // Centre each sheet's packed block in the region — off the corner.
-      const bySheet = new Map();
-      packed.forEach(item => {
-        if (!bySheet.has(item.sheet)) bySheet.set(item.sheet, []);
-        bySheet.get(item.sheet).push(item);
-      });
-      bySheet.forEach(items => {
-        const left = Math.min(...items.map(i => i.left));
-        const right = Math.max(...items.map(i => i.left + i.wIn));
-        const top = Math.min(...items.map(i => i.top));
-        const bottom = Math.max(...items.map(i => i.top + i.hIn));
-        const dx = Math.max(0, (region.w - (right - left)) / 2) - (left - region.x);
-        const dy = Math.max(0, (region.h - (bottom - top)) / 2) - (top - region.y);
-        items.forEach(i => { i.vp.xIn += dx; i.vp.yIn += dy; });
-      });
-    }
-    // Elevations: two to a page, stacked and centred — E1+E2, then E3+E4.
-    const pairs = [elevViews.slice(0, 2), elevViews.slice(2)].filter(pair => pair.length);
-    pairs.forEach(pair => {
-      if (placedAny || viewports.length) sheet += 1; else placedAny = true;
-      const pif = this._autoScaleFor(pair, region);
-      const stackH = pair.reduce((sum, view) => sum + view.hFt * pif + COMPOSE_LABEL_IN, 0)
-        + COMPOSE_GAP_IN * (pair.length - 1);
+      const stackH = views.reduce((sum, view) => sum + view.hFt * pif + COMPOSE_LABEL_IN, 0)
+        + COMPOSE_GAP_IN * (views.length - 1);
       let y = region.y + Math.max(0, (region.h - stackH) / 2);
-      pair.forEach(view => {
-        viewports.push({
-          id: nextId++, kind: 'elevation', elevId: view.elevId, pif, sheet,
-          xIn: region.x + region.w / 2,
-          yIn: y + (view.hFt * pif) / 2,
-        });
+      views.forEach(view => {
+        commit(view, region.x + region.w / 2, y + (view.hFt * pif) / 2);
         y += view.hFt * pif + COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
       });
     });

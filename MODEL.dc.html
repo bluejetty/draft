@@ -26,6 +26,7 @@
 <script src="./auto-windows.js"></script>
 <script src="./room-grow.js"></script>
 <script src="./gruff-interview.js"></script>
+<script src="./layer-views.js"></script>
 <script src="./gruff-drivethru.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
@@ -2220,35 +2221,14 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
   3: 'MAIN FL',
   1: 'FOUNDATION',
 });
-const FLOOR_LEVEL_VIEWS = Object.freeze([
-  Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
-  Object.freeze({ id:'plan', label:'FLOOR PLAN (WALLS)', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSION', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
-  Object.freeze({ id:'floor', label:'FLOOR LAYOUT (FLOOR)', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION', 'A-ANNO-NOTE'] }),
-  Object.freeze({ id:'stair', label:'STAIR', contents:['A-STR', 'A-FL-OPNG', 'STAIR SECTION', 'A-ANNO-NOTE'] }),
-]);
-const LEVEL_LAYER_VIEWS = Object.freeze({
-  5: FLOOR_LEVEL_VIEWS,
-  3: FLOOR_LEVEL_VIEWS,
-  1: Object.freeze([
-    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
-    Object.freeze({ id:'plan', label:'BASEMENT (WALLS)', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
-    Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL-FOOTING', 'S-FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION', 'A-ANNO-NOTE'] }),
-  ]),
-});
-// SITE and ROOF are whole-level drafting contexts; every other positive level
-// — including levels added with + ADD — is a floor with the standard sets.
-const WHOLE_LEVEL_IDS = Object.freeze([7, 8]);
-const layerViewsForLevelId = levelId => {
-  const id = Number(levelId);
-  return LEVEL_LAYER_VIEWS[id]
-    || (id > 0 && !WHOLE_LEVEL_IDS.includes(id) ? FLOOR_LEVEL_VIEWS : []);
-};
-// FOUNDATION opens on the concrete foundation plan; floors open on walls.
-const defaultLayerViewId = levelId => {
-  const views = layerViewsForLevelId(levelId);
-  if (!views.length) return null;
-  return views.some(view => view.id === 'foundation') ? 'foundation' : 'plan';
-};
+// The layer-view table moved to layer-views.js (board NEW-2 part 2) so the
+// sheet composer can read the same one — a plan viewport now says which
+// DRAWING of a level it is, not just which level. Same names, same values;
+// one definition instead of two that could drift.
+const {
+  FLOOR_LEVEL_VIEWS, LEVEL_LAYER_VIEWS, WHOLE_LEVEL_IDS,
+  layerViewsForLevelId, defaultLayerViewId,
+} = window.DraftLayerViews;
 // Layer standards revealed by a layer-set button collapse again after a minute.
 const LAYER_REVEAL_MS = 60000;
 const migrateLevelId = value => {
