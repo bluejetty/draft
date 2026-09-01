@@ -22,28 +22,41 @@ const LAYER = 'S-BEAM';
 test('a layer outside the old whitelist survives a save and reload', async ({ page }) => {
   await h.openModel(page);
 
-  // Write a drawing carrying one line on that layer, then open it.
-  await page.evaluate(async ({ bucket, layer }) => {
-    const drawing = {
+  // Straight into the bucket the app loads from, then reopen it.
+  await page.evaluate(async ({ bucket, json }) => {
+    const file = new File([json], 'model-drawing.json', { type: 'application/json' });
+    await window.SharedFileStore.saveSharedFile(file, bucket);
+  }, {
+    bucket: h.STORAGE_BUCKET,
+    json: JSON.stringify({
       version: 1,
-      levels: [{ id: 3, name: 'MAIN FL', elev: 0 }],
+      levels: [{ id: 3, name: 'MAIN FL', elev: 0, visible: true }],
       lines: [{
-        id: 1, levelId: 3, view: 'plan', layer,
+        id: 1, levelId: 3, view: 'plan', layer: LAYER,
         start: { x: 0, y: 0, z: 0 }, end: { x: 10, y: 0, z: 0 },
       }],
-    };
-    const file = new File([JSON.stringify(drawing)], 'model-drawing.json', { type: 'application/json' });
-    await window.SharedFileStore.saveSharedFile(file, bucket);
-  }, { bucket: BUCKET, layer: LAYER });
-
+    }),
+  });
   await page.reload();
-  await page.waitForFunction(() => document.body.dataset.modelReady === '1');
+  await h.waitForModelReady(page);
+
+  // The app must WRITE the drawing back, or this reads the file the test
+  // itself wrote and proves nothing — an earlier version passed on the
+  // unfixed code for exactly that reason. An edit forces the re-serialise,
+  // so what is asserted is what the LOAD PATH produced.
+  await h.selectTool(page, 'Line');
+  await h.clickWorld(page, -6, 6);
+  await h.clickWorld(page, 6, 6);
+  await page.keyboard.press('Enter');
   await h.waitForSaved(page);
 
   const saved = await h.savedDrawing(page);
-  const line = (saved.lines || [])[0];
+  // Ids are reassigned on load, so find the seeded line by its geometry.
+  const line = (saved.lines || []).find(l =>
+    Math.abs(l.start.x - 0) < 0.01 && Math.abs(l.start.z - 0) < 0.01
+    && Math.abs(l.end.x - 10) < 0.01 && Math.abs(l.end.z - 0) < 0.01);
   expect(line).toBeTruthy();
-  // Before the fix this read 'draft': the name was eaten on the way in and
-  // written back flattened, so the original was gone for good.
+  // Before the fix this came back 'draft': the name was eaten on the way in
+  // and written back flattened, so the original was gone for good.
   expect(line.layer).toBe(LAYER);
 });
