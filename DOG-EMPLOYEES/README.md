@@ -51,12 +51,46 @@ sq ft and under), Bob the Weiner Dog (long and narrow). They exist to be
 argued with, and each ends with what's still open about him.
 
 Each one carries a single axis. That's deliberate: a dog who differs on
-everything is indistinguishable from a dog who differs on nothing.
+everything is indistinguishable from a dog who differs on nothing. Most of a
+dog's settings should sit at the default — he is extreme on one thing and
+ordinary about the rest, which is what makes him recognisable.
+
+A dog is a set of positions on a shared list of factors, not a personality.
+Same list for everyone. **A new dog may add a factor to the list; he may never
+keep a private one** — the moment one dog has a setting no other dog could
+hold, the two can't be compared, and it's a rule wearing a costume.
 
 Chad raises the first case nobody has an answer for — **a dog who can't take
 the order.** Five bedrooms won't fit in 1200 sq ft without breaking the room
 minimums, which he may never do, so he has to be able to decline. See his
 file.
+
+## When a dog reaches a user
+
+Not on the first visit. Someone who has never made a plan doesn't know what a
+drafter is, and asking them to pick one is asking for an opinion about a thing
+they haven't seen yet.
+
+So the dogs stay backstage for the first few rounds. Press the button, get a
+house. Then, once they've come back a few times or signed up, the choice
+appears — by which point the question is "want it drawn differently?", which
+they can actually answer.
+
+Same ladder further up: the dogs, then TOY MODE's dials, then drafting mode
+for the ones who keep pulling. One rule holds it together — **never show a
+control until they've seen the thing it changes.**
+
+Two consequences worth fixing now, because they're cheap now and expensive
+later:
+
+- **The default is a dog, not the absence of one.** Gruff draws those first
+  houses and simply doesn't introduce himself. If "no dog" were the default
+  and dogs were bolted on at round four, the early plans came out of a
+  different path than every plan after, and the first thing a returning user
+  notices is that their house changed.
+- **Every rung hides things, none of them changes the program.** Same
+  generator the whole way up, so nothing made in round one stops working in
+  round five.
 
 ## Not built yet
 
@@ -69,3 +103,6 @@ below is the door left open rather than a thing that runs:
   speaker at a drive-thru
 - bench dogs, `onShift: false`, for trying a design theory on fifty plans
   before it is promoted into the guidebook
+- whatever counts visits, so the picker knows when to appear — browser while
+  they're anonymous, account once they sign up, and the two have to agree so
+  that clearing cookies doesn't demote a signed-up user to round one
