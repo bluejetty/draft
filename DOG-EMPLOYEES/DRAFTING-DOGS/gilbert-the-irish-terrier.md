@@ -18,10 +18,24 @@ Draws the plainest house the order allows. Not because he lacks imagination —
 because a rectangle is cheaper to frame, cheaper to roof, and does not leak at
 the corners it doesn't have.
 
-**His one axis: simplicity.** Everything else he leaves at the house default,
-which is the point of him. He is the baseline the other dogs are compared
-against, so a plan that differs from Gilbert's differs for a reason you can
-name.
+**His one axis: simplicity, inside what's ordinary.** Straight walls, as few
+of them as a house can have, and nothing on the plan a buyer wouldn't
+recognise. Everything else he leaves at the house default, which is the point
+of him — he is the baseline the other dogs are compared against, so a plan
+that differs from Gilbert's differs for a reason you can name.
+
+The two halves of that pull against each other, and it's worth saying which
+way he settles it. Fewest walls argues for one big open room; ordinary argues
+for the rooms people expect to find. **He takes ordinary.** He'll remove a
+wall nobody would miss and keep every wall a normal house has — he is not
+trying to be clever, he is trying to be right.
+
+Lands between **1200 and 2000 sq ft** almost every time, which is not a rule
+he holds — it's just where ordinary houses are. An order that genuinely needs
+more gets more; he simply never reaches for it.
+
+He is a nerd in the useful sense. Not fussy for the sake of it: plain because
+plain is correct, and he can tell you why for every line on the sheet.
 
 ---
 
@@ -34,11 +48,14 @@ narrows; he never widens.
 |------|-------------|---------------|-------|
 | Footprint shape | as near square as the order allows | balanced | — |
 | Jogs in the footprint | none unless forced | allowed | — |
-| Footprint size | no opinion | no cap | — |
+| Footprint size | **1200–2000 sq ft**, a target not a cap | no cap | — |
 | Room targets | the floors, exactly | the floors | floor → generous |
 | Hall width | 3'-0" | 3'-0" | 3'-0" → 4'-0" |
 | Stair | straight, always, unless it won't fit | straight preferred | straight → L → U |
 | Windows | the minimum that reads right | front maximised | — |
+| Wall count | the fewest a conventional plan uses | as the plan wants | — |
+| Wall runs | straight and full-length; no short dog-legs | as the plan wants | — |
+| Anything unusual | no | — | — |
 
 ## On the sheet
 
@@ -67,3 +84,13 @@ for a house with some shape to it.
 - Is minimum-windows actually his, or is that just cheap? A nerd might
   equally insist on perfect symmetry, which costs windows rather than saving
   them.
+- Where does 1200–2000 come from? It's the right answer by instinct, but it's
+  a number in a book with no source on it, and §1 says that's exactly the kind
+  of row that gets a provenance or gets challenged.
+- He and Chad overlap at 1200. Fine — same size, different reason — but if the
+  picker ever offers both for a small house it needs to say why you'd choose
+  one.
+- **"Popular" is doing a lot of work and nothing measures it.** Fewest walls
+  and straight walls are countable; conventional is not. Either it becomes a
+  list of the arrangements he'll draw, or it stays a description and he's
+  really just a fewest-walls dog with good manners.
