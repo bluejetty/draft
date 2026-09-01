@@ -17,6 +17,8 @@
 <script src="./cut-view.js"></script>
 <script src="./areas.js"></script>
 <script src="./room-standards.js"></script>
+<script src="./toy-constraints.js"></script>
+<script src="./toy-context.js"></script>
 <script src="./fen-labels.js"></script>
 <script src="./build-house.js"></script>
 <script src="./tour.js"></script>
@@ -2205,6 +2207,19 @@ const fixtureKindDef = id => FIXTURE_KINDS.find(kind => kind.id === id) || FIXTU
 // room has the space for it. The optional area readout is MAIN FL only.
 const ROOM_TAG_LAYER = 'ROOM-IDS-AREA';
 const ROOM_TAG_COLOR = '#1d1f20';
+// TOY MODE grip tabs (turtle path step 2). A tab is drawn off the face of a
+// wall the toy may move, so the wall itself stays readable underneath.
+const TOY_TAB_OFFSET_PX = 18;   // how far off the wall face the tab floats
+const TOY_TAB_R_PX = 8;         // half-width of the tab square
+const TOY_DRAG_SLOP_PX = 4;     // travel before a press counts as a drag
+// How long the wall must sit against a limit before the blocker speaks. A
+// fast, confident drag that grazes a rule and carries on should not flash
+// text at someone who never noticed it; a drag that actually stops should
+// explain itself before the user starts pushing harder. A sixth of a second
+// is under the threshold where a stopped wall reads as a dropped touch, and
+// well over the length of a graze.
+const TOY_BLOCK_SAY_MS = 160;
+
 const ROOM_TAG_MIN_AREA_SQFT = 12;  // smaller enclosures (chases, built closets) are skipped
 const ROOM_TAG_JOIN_FT = 0.7;       // wall ends within this bridge into one room corner
 const ROOM_TAG_TIGHT_FT = 8;        // rooms narrower than this shorten BEDROOM to BEDRM
@@ -2530,6 +2545,7 @@ class Component extends DCLogic {
     cuts:          [],
     elevationNames: {},         // per-drawing side names for E1-E4 (FRONT/LEFT...), defaults from COMPANY STANDARDS
     elevationMarkOffsets: {},   // per-drawing E1-E4 clearances from the outermost dim string (ft), default E_MARK_CLEAR_FT
+    toyBlocked: null,           // { wallId, text } — TOY MODE: what stopped the drag, and its words
     nextCutId:     1,
     activeCutId:   null,
     cutPhase:      'idle',     // 'idle'|'placing'|'choosing'
@@ -5824,6 +5840,7 @@ class Component extends DCLogic {
     this._selectDownInfo = null;       // { worldPt, clientX, clientY, shiftHeld } — pending click
     this._fixtureDrag    = null;       // { fixture, startX, startY, active } — fixture slide along its wall
     this._eMarkDrag      = null;       // { id, axis, sign, base, startX, startY, active } — E-mark clearance slide (board #263)
+    this._toyDrag        = null;       // { wallId, group, normal, context, origins, startX, startY, active } — TOY MODE grip tab
     this._fixtureRunStart = null;      // { wallId, along, side } — first click of a cabinet / vanity run
     this._tubPending     = null;       // { wallId, along, side } — tub back wall, waiting on the faucet-end wall
     this._lastClient     = null;       // { x, y } — last cursor position for cursor-side notices
@@ -5934,6 +5951,7 @@ class Component extends DCLogic {
       const fd   = this._fixtureDrag;
       const td   = this._roomTagDrag;
       const ed   = this._eMarkDrag;
+      const yd   = this._toyDrag;
       const info = this._selectDownInfo;
       const windowSelection = this._windowSelection;
       this._selectDrag     = null;
@@ -5942,11 +5960,22 @@ class Component extends DCLogic {
       this._fixtureDrag    = null;
       this._roomTagDrag    = null;
       this._eMarkDrag      = null;
+      this._toyDrag        = null;
       this._selectDownInfo = null;
       this._windowSelection = null;
       if (ad?.active) this._markUnsaved();
       if (fd?.active) this._markUnsaved();
       if (ed) { if (ed.active) this._markUnsaved(); return; }
+      // A grip-tab release commits exactly what was on screen: the preview
+      // already put the wall at the permitted position, so there is nothing
+      // left to decide here. The blocker's line clears with the drag that
+      // caused it — it is chrome, not a dialog.
+      if (yd) {
+        if (yd.active && yd.delta) this._markUnsaved();
+        if (this.state.toyBlocked) this.setState({ toyBlocked: null });
+        this._invalidate();
+        return;
+      }
       // A room-tag press resolves on its own (board #198): travelled →
       // the move claims/promotes the tag; still → the rename editor opens.
       if (td) {
@@ -8273,6 +8302,55 @@ class Component extends DCLogic {
         }
       }
     }
+
+    // TOY MODE grip tabs (turtle path step 2). A tab per weld group, at the
+    // midpoint of the wall, floated off its face so the wall stays readable
+    // underneath. Walls the constraint module refuses as inert get none.
+    this._toyTabHits = [];
+    if (!this._isPrinting && this._toyModeOn() && this.state.activeView === 'top') {
+      const toyContext = this._toyDrag ? this._toyDrag.context : this._toyContext();
+      const blocked = this.state.toyBlocked;
+      // The blocker first, underneath the tabs: a thick stroke along the wall
+      // that stopped the drag, which is what `blockedBy` is for.
+      if (blocked) {
+        const wall = this._walls.find(entry => entry.id === blocked.wallId);
+        if (wall) {
+          const a = toS({ x: wall.start.x, y: 0, z: wall.start.z });
+          const b = toS({ x: wall.end.x, y: 0, z: wall.end.z });
+          ctx.save();
+          ctx.strokeStyle = '#d97706';
+          ctx.lineWidth = 5;
+          ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+          ctx.restore();
+        }
+      }
+      this._toyTabs(toyContext).forEach(tab => {
+        const wall = tab.wall;
+        const mid = { x: (wall.start.x + wall.end.x) / 2, y: 0,
+          z: (wall.start.z + wall.end.z) / 2 };
+        const here = toS(mid);
+        const outward = toS({ x: mid.x + tab.normal.x, y: 0, z: mid.z + tab.normal.z });
+        const dx = outward.x - here.x, dy = outward.y - here.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const at = { x: here.x + dx / len * TOY_TAB_OFFSET_PX,
+          y: here.y + dy / len * TOY_TAB_OFFSET_PX };
+        const held = this._toyDrag && this._toyDrag.wallId === wall.id;
+        ctx.save();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#2c6e9b';
+        ctx.fillStyle = held ? '#9ecbe8' : '#fff';
+        // A stub back to the wall, so a tab reads as belonging to it.
+        ctx.beginPath();
+        ctx.moveTo(here.x, here.y); ctx.lineTo(at.x, at.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.rect(at.x - TOY_TAB_R_PX, at.y - TOY_TAB_R_PX, TOY_TAB_R_PX * 2, TOY_TAB_R_PX * 2);
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+        this._toyTabHits.push({ wallId: wall.id, x: at.x, y: at.y });
+      });
+    }
     ctx.restore();
   }
 
@@ -9718,6 +9796,7 @@ class Component extends DCLogic {
     this._fixtureDrag    = null;
     this._roomTagDrag    = null;
     this._eMarkDrag      = null;
+    this._toyDrag        = null;
     this._selectDownInfo = null;
     this._windowSelection = null;
     // The pad belongs to the run that just went away (#311). Each _cancel*
@@ -9839,6 +9918,36 @@ class Component extends DCLogic {
     if (e.button === 0 && !e.altKey && this._handleRoomTrayPress(e)) { e.preventDefault(); return; }
     const tool = this.state.activeTool;
     if (e.button === 0 && !e.altKey) {
+      // TOY MODE: a press on a grip tab starts a constrained wall drag, and it
+      // is checked before every tool. A tab floats clear of the plan and can
+      // only mean one thing — and TOY MODE has no drafting tool for it to be
+      // an affordance of, so it cannot wait for SELECT to be active.
+      const toyHit = this._toyModeOn() ? this._toyTabAt(e) : null;
+      if (toyHit) {
+        const context = this._toyContext();
+        const wall = (context.walls || []).find(entry => entry.id === toyHit.wallId);
+        const normal = wall && window.DraftToyContext.leftNormal(wall);
+        if (wall && normal) {
+          const group = window.DraftToyConstraints.weldGroup(wall, context).map(entry => entry.id);
+          const origins = new Map();
+          group.forEach(id => {
+            const live = this._walls.find(entry => entry.id === id);
+            if (live) {
+              origins.set(id, {
+                start: { x: live.start.x, z: live.start.z },
+                end: { x: live.end.x, z: live.end.z },
+              });
+            }
+          });
+          this._toyDrag = {
+            wallId: wall.id, wall, group, normal, context, origins,
+            startX: e.clientX, startY: e.clientY, active: false,
+            said: new Set(), heldSince: 0, delta: 0,
+          };
+          e.preventDefault();
+          return;
+        }
+      }
       if (this._blockToolOutsidePlan(tool)) return;
       if (this._grabNodeForTool(e, tool)) { e.preventDefault(); return; }
       if (this._dispatchToolClick(tool, e)) return;
@@ -10144,6 +10253,28 @@ class Component extends DCLogic {
           const h = this._canvas?.clientHeight || 600;
           const flat = (this._orthoHalfH * 2) / h * 4; // within ~4px of straight → snap flat
           ad.outline.points[ad.index].bulge = Math.abs(bulge) < flat ? 0 : bulge;
+        }
+      }
+    }
+
+    // TOY MODE grip-tab drag. The finger proposes; the constraint module
+    // disposes. The wall is drawn where `delta` says, never where the cursor
+    // is, so the preview and the committed result are the same geometry — and
+    // the distance asked for is always measured from where the wall STARTED,
+    // or each frame would ask "how far from here?" and the answer would creep.
+    if (this._toyDrag) {
+      const yd = this._toyDrag;
+      if (!yd.active && Math.hypot(e.clientX - yd.startX, e.clientY - yd.startY) > TOY_DRAG_SLOP_PX) {
+        yd.active = true;
+      }
+      if (yd.active) {
+        const at = this._getWorldPos(e.clientX, e.clientY);
+        const from = this._getWorldPos(yd.startX, yd.startY);
+        if (at && from) {
+          const wanted = (at.x - from.x) * yd.normal.x + (at.z - from.z) * yd.normal.z;
+          const verdict = window.DraftToyConstraints.allowedMove(yd.wall, wanted, yd.context);
+          this._toyPreview(yd, verdict.delta);
+          this._toySpeak(yd, verdict);
         }
       }
     }
@@ -18171,6 +18302,191 @@ class Component extends DCLogic {
       drawingMessageError: false,
     });
     return true;
+  }
+
+  // ─── TOY MODE: grip tabs (turtle path step 2) ────────────────────────────
+  //
+  // A wall the toy may move wears a tab. Drag it and the wall moves in whole
+  // feet; when it can go no further IT STOPS AT THE POSITION THE RULE ALLOWS
+  // AND THE THING THAT STOPPED IT SAYS WHY. Never elastic — a mode whose whole
+  // claim is that it cannot show you an invalid house must not spend a blocked
+  // drag displaying one, and on a touchscreen a wall that stretches reads as
+  // "push harder", which is fighting the rule rather than seeing it.
+  //
+  // NOT ONE RULE LIVES HERE. Every decision about how far a wall may go is
+  // toy-constraints.js's, and gathering the house it reads is toy-context.js's.
+  // What is below is presentation: where the tab sits, what the drag does with
+  // the verdict, and how a reason code becomes a sentence.
+
+  // The temporary door. The real mode switch is step 5 and is built once,
+  // properly, with the dashboard — this is a query flag so the board that owns
+  // the switch is not pre-empted by a toggle nobody agreed to.
+  _toyModeOn() {
+    if (this._toyModeFlag === undefined) {
+      let on = false;
+      try { on = new URLSearchParams(window.location.search).get('toy') === '1'; } catch (err) { on = false; }
+      this._toyModeFlag = on;
+    }
+    return this._toyModeFlag;
+  }
+
+  // The same vote _placeRoomTags casts, over the same fixtures, so the toy and
+  // the room tag never disagree about what a room IS while disagreeing about
+  // whether it is big enough.
+  _toyCategoryFor(points) {
+    const levelId = this._activeLevelId();
+    const stamp = this._roomStamps()
+      .filter(tag => tag.levelId === levelId && this._polygonContains(points, tag.at.x, tag.at.z))
+      .sort((a, b) => a.id - b.id)[0];
+    if (stamp) {
+      const stamped = window.DraftRoomStandards.stampCategory(stamp.base);
+      if (stamped) return stamped;
+    }
+    const kinds = new Set();
+    this._fixtures.filter(fixture => fixture.levelId === levelId).forEach(fixture => {
+      const centre = this._fixtureGeometry(fixture)?.center;
+      if (centre && this._polygonContains(points, centre.x, centre.z)) kinds.add(fixture.kind);
+    });
+    const has = (...list) => list.some(kind => kinds.has(kind));
+    return has('toilet', 'tub', 'shower', 'stall', 'vanity') ? 'wc'
+      : has('washer', 'dryer') ? 'laundry'
+      : has('sink', 'fridge', 'stove', 'cabinet') ? 'kitchen'
+      : has('closet') ? 'bedroom'
+      : 'room';
+  }
+
+  // The house as the constraint module reads it. The walls handed over are
+  // COPIES: a drag previews by moving the real ones, and the verdict must keep
+  // being computed against where they started or each frame would ask "how far
+  // from here?" and the answer would creep.
+  _toyContext() {
+    const walls = this._activeWalls()
+      .filter(wall => (wall.view || 'plan') === 'plan')
+      .map(wall => ({ ...wall,
+        start: { x: wall.start.x, z: wall.start.z },
+        end: { x: wall.end.x, z: wall.end.z } }));
+    return window.DraftToyContext.gather({
+      walls,
+      openings: this._fenestrations.filter(opening => (opening.view || 'plan') === 'plan'),
+      categoryFor: loop => this._toyCategoryFor(loop.points),
+    });
+  }
+
+  // ONE TAB PER WELD GROUP, not per wall: two tabs that always move together
+  // are a lie about what the house is. A wall the module refuses as inert gets
+  // no tab at all — silence is the honest presentation of "the toy has no
+  // opinion here", and a tab that never works is worse than no tab.
+  _toyTabs(context) {
+    const toy = window.DraftToyConstraints;
+    const claimed = new Set();
+    const tabs = [];
+    (context.walls || []).forEach(wall => {
+      if (claimed.has(wall.id)) return;
+      const verdict = toy.allowedMove(wall, 1, context);
+      const group = verdict.group && verdict.group.length ? verdict.group : [wall.id];
+      group.forEach(id => claimed.add(id));
+      if (verdict.reason === toy.REASON.NOT_ORTHOGONAL
+        || verdict.reason === toy.REASON.TOUCHES_NON_ORTHOGONAL) return;
+      const normal = window.DraftToyContext.leftNormal(wall);
+      if (!normal) return;
+      tabs.push({ wallId: wall.id, group, wall, normal });
+    });
+    return tabs;
+  }
+
+  _toyTabAt(e) {
+    const hits = this._toyTabHits || [];
+    if (!hits.length || !this._canvas) return null;
+    const rect = this._canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    return hits.find(hit => Math.abs(x - hit.x) <= TOY_TAB_R_PX + 4
+      && Math.abs(y - hit.y) <= TOY_TAB_R_PX + 4) || null;
+  }
+
+  // The room in the user's words, not the detector's. A stamped or tagged room
+  // says its own name; anything else falls back to what it is.
+  _toyRoomName(room) {
+    if (!room) return 'THAT ROOM';
+    const levelId = this._activeLevelId();
+    const tag = this._roomTags.find(entry => entry.levelId === levelId
+      && this._polygonContains(room.points, entry.at.x, entry.at.z));
+    if (tag && tag.name) return tag.name;
+    return room.category && room.category !== 'room' ? room.category.toUpperCase() : 'THAT ROOM';
+  }
+
+  // ── THE ONE TABLE: reason code -> sentence ──────────────────────────────
+  // "BEDROOM 2 would be under 9'-8"", never MIN_ROOM. A beginner who reads the
+  // first has learned something about houses; the second teaches nothing and
+  // reads as an error. Kept in one place so the next reason code added to the
+  // constraint module has exactly one place to be worded.
+  _toyRefusalLine(verdict, context) {
+    const toy = window.DraftToyConstraints;
+    const R = toy.REASON;
+    const code = verdict.underlying || verdict.reason;
+    const room = (context.rooms || []).find(entry => entry.id === verdict.roomId);
+    const hit = (verdict.failures || [])[0];
+    switch (code) {
+      case R.MIN_ROOM:
+        return hit && hit.rule === 'dimension'
+          ? `${this._toyRoomName(room)} would be under ${formatArchitecturalInches(hit.min * 12)}`
+          : `${this._toyRoomName(room)} would be under ${Math.round(hit ? hit.min : 0)} sq ft`;
+      case R.OPENING_WOULD_NOT_FIT:
+        return 'A door or window on that wall would not fit any more';
+      // The one band with a recommended alternative, so it steers rather than
+      // refuses. A minimum-room block has no such alternative and must not
+      // pretend to.
+      case R.CANTILEVER:
+        return verdict.band === toy.BAND.BUMP_AND_PILES
+          ? 'Too far to hang — bump the foundation out and add piles'
+          : 'Too far to hang — bump the foundation out instead';
+      case R.NOT_ORTHOGONAL:
+      case R.TOUCHES_NON_ORTHOGONAL:
+        return 'That wall is not square, so the toy has no opinion about it';
+      default:
+        return null;
+    }
+  }
+
+  // The wall sits at `delta`, never at the finger. Preview and commit are the
+  // same geometry because they are the same code.
+  _toyPreview(drag, delta) {
+    if (drag.delta === delta) return;
+    drag.delta = delta;
+    drag.origins.forEach((origin, id) => {
+      const wall = this._walls.find(entry => entry.id === id);
+      if (!wall) return;
+      wall.start.x = origin.start.x + drag.normal.x * delta;
+      wall.start.z = origin.start.z + drag.normal.z * delta;
+      wall.end.x = origin.end.x + drag.normal.x * delta;
+      wall.end.z = origin.end.z + drag.normal.z * delta;
+    });
+    this._invalidate();
+  }
+
+  // Non-modal, self-clearing, ONCE PER RULE PER DRAG. Nothing to dismiss
+  // mid-drag, and no chattering while the user keeps leaning on the same wall.
+  _toySpeak(drag, verdict) {
+    const code = verdict.underlying || verdict.reason;
+    if (!code || code === window.DraftToyConstraints.REASON.NO_MOVE) {
+      drag.heldSince = 0;
+      if (this.state.toyBlocked) this.setState({ toyBlocked: null });
+      return;
+    }
+    if (drag.said.has(code)) return;
+    const now = performance.now();
+    if (!drag.heldSince) { drag.heldSince = now; return; }
+    if (now - drag.heldSince < TOY_BLOCK_SAY_MS) return;
+    const text = this._toyRefusalLine(verdict, drag.context);
+    if (!text) return;
+    drag.said.add(code);
+    // THE BLOCKER HIGHLIGHTS, NOT THE GRABBED WALL. In a weld group the wall
+    // that stops you is usually not the one under your finger, and lighting up
+    // the wrong one teaches the wrong rule.
+    this.setState({
+      toyBlocked: { wallId: verdict.blockedBy || drag.wallId, text },
+      drawingMessage: text,
+      drawingMessageError: false,
+    });
   }
 
   // The room-tag core: finds the enclosed rooms in the level's PLAN walls,
