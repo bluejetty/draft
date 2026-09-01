@@ -46,7 +46,7 @@ later; kept apart here so the rename stays a rename.
 **Drive-thru:** Gruff, and nobody else yet.
 
 **Drafting:** Gruff on shift. Three drafts on the bench, none of them running
-anywhere — Sheldon the Schnauzer (plain and square), Chad the Chihuahua (1200
+anywhere — Gilbert the Irish Terrier (plain and square), Chad the Chihuahua (1200
 sq ft and under), Bob the Weiner Dog (long and narrow). They exist to be
 argued with, and each ends with what's still open about him.
 
