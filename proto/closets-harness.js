@@ -197,11 +197,10 @@ const rect = (w, d, ids = ['N', 'E', 'S', 'W']) => ([
 
 // ── 6 · The clearance in front is unset, and honestly so ─────────────────
 {
-  // OPEN: Movie's number. Nothing may refuse a move for want of a clear strip
-  // until it has one, and the constant is the single place it lands.
-  check('the clear strip in front has no number yet',
-    C.CLEAR_STRIP_MIN_FT === null,
-    'a number appeared here without Movie supplying it');
+  // Movie supplied it on 1 Sep: 3'-0". It has one home, so the day a depth
+  // option or a second kind of object arrives there is one number to revisit.
+  check('the clear strip has exactly one home',
+    near(C.CLEAR_STRIP_MIN_FT, 3));
 }
 
 // ── 7 · AUTO-PLACE, UNASKED ──────────────────────────────────────────────
@@ -268,12 +267,18 @@ const rect = (w, d, ids = ['N', 'E', 'S', 'W']) => ([
   const room = depth => ({ id: 'bed2', clearWidthFt: 12, clearDepthFt: depth });
   const ask = depth => C.clearanceFor(closet, { rooms: [room(depth)] });
 
-  // NOTHING REFUSES WHILE THE NUMBER IS MOVIE'S. The whole path is wired and
-  // the day the constant stops being null it starts refusing, with no other
-  // change anywhere -- so a room squeezed to nothing is still legal today, and
-  // the harness says so out loud rather than looking like it passed.
-  check('with no minimum given, no closet refuses anything',
-    ask(3).ok === true, JSON.stringify(ask(3)));
+  // Movie's number, 1 Sep: 3'-0" of floor to stand on. The closet's own
+  // 2'-4 1/2" plus that strip is 5'-4 1/2", so a room shallower than that
+  // cannot hold an openable closet.
+  check('the minimum is Movie\'s 3\'-0", not a derived number',
+    near(C.CLEAR_STRIP_MIN_FT, 3), `${C.CLEAR_STRIP_MIN_FT}`);
+  check('a room too shallow to open the closet is refused',
+    ask(5).ok === false, JSON.stringify(ask(5)));
+  check('and one with the strip intact is not',
+    ask(6).ok === true, JSON.stringify(ask(6)));
+  check('the refusal carries both what was needed and what was left',
+    near(ask(5).needFt, 3) && near(ask(5).haveFt, 5 - C.FOOTPRINT_DEPTH_FT),
+    JSON.stringify(ask(5)));
 
   // What it MEASURES is right regardless, and is the half that can be checked
   // now: a 12ft room less the closet's own 2'-4 1/2" leaves 9'-7 1/2" to stand
@@ -284,17 +289,6 @@ const rect = (w, d, ids = ['N', 'E', 'S', 'W']) => ([
     near(C.clearanceFor({ ...closet, dim: 'width' }, { rooms: [room(30)] }).haveFt,
       12 - C.FOOTPRINT_DEPTH_FT),
     'a closet on the width axis measured the depth');
-
-  // Once a number exists it bites, which is the behaviour waiting behind the
-  // constant. Proved by asking with a supplied minimum rather than by editing
-  // the constant, so the check cannot itself become the thing that fills it in.
-  const withMin = (depth, min) => {
-    const have = depth - C.FOOTPRINT_DEPTH_FT;
-    return { ok: have >= min, haveFt: have, needFt: min };
-  };
-  check('and a 3ft strip would refuse a room squeezed under 5\'-4 1/2"',
-    withMin(5, 3).ok === false && withMin(6, 3).ok === true,
-    JSON.stringify([withMin(5, 3), withMin(6, 3)]));
 
   // A thing that is not a closet is not this module's to answer for.
   check('anything that is not a closet is somebody else\'s answer',

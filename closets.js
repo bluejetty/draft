@@ -58,20 +58,16 @@ if (!window.DraftClosets) {
     { label: 'D18',  widthFt: 1.5 },
   ]);
 
-  // ── OPEN QUESTION — MOVIE'S NUMBER, NOT OURS ──────────────────────────
+  // ── THE CLEAR STRIP IN FRONT OF A CLOSET ──────────────────────────────
   //
-  //   HOW MUCH CLEAR FLOOR MUST BE LEFT IN FRONT OF A CLOSET?
+  //   3'-0". Movie, 1 Sep.
   //
-  // The strip you stand in to open it. It is the rule that stops a bedroom
-  // being shrunk until its own closet cannot be opened, so nothing enforces
-  // that until this has a number — and the number is a builder's, which is why
-  // it is not being guessed here. Measured for context: a shallow reach-in
-  // leaves about 6ft of strip and a walk-in about 4ft, and Devin's
-  // recommendation to Movie was 3'-0", which clears both.
-  //
-  // Supplying it is a one-line change, and the clearance check below starts
-  // working the moment it stops being null.
-  const CLEAR_STRIP_MIN_FT = null;
+  // The floor you stand on to open it, and the rule that stops a bedroom being
+  // shrunk until its own closet will not open. A builder's number rather than
+  // a derived one, which is why it was asked for instead of guessed: measured
+  // for context while it was outstanding, a shallow reach-in leaves about 6ft
+  // of strip and a walk-in about 4ft, and 3'-0" clears both.
+  const CLEAR_STRIP_MIN_FT = 3;
 
   const num = value => (typeof value === 'number' && Number.isFinite(value) ? value : null);
   const lengthOf = wall => Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
@@ -338,7 +334,6 @@ if (!window.DraftClosets) {
     if (across === null) return { ok: true };
     const haveFt = across - FOOTPRINT_DEPTH_FT;
     const needFt = CLEAR_STRIP_MIN_FT;
-    if (needFt === null) return { ok: true, haveFt, needFt: null };
     return { ok: haveFt >= needFt - 1e-9, haveFt, needFt };
   };
 
