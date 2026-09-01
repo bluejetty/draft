@@ -17,6 +17,7 @@
 <script src="./cut-view.js"></script>
 <script src="./areas.js"></script>
 <script src="./room-standards.js"></script>
+<script src="./turtle.js"></script>
 <script src="./toy-constraints.js"></script>
 <script src="./toy-context.js"></script>
 <script src="./fen-labels.js"></script>
@@ -659,6 +660,23 @@
 <!-- The ROOM TRAY (board #198): room-name chips beside the plan while the
      tour's rooms step holds a floor. Tap a chip, tap the plan — a stamp
      lands. The list is a COMPANY STANDARD the drafter grows. -->
+<!-- THE TURTLE (turtle path step 3). Two verbs and nothing else: turn, and go
+     a whole number of feet. Big targets and no keyboard, because the point is a
+     beginner on an iPad -- the full interaction pass is step 4, but a control
+     that needed a keyboard would have to be thrown away by it. -->
+<sc-if value="{{ turtleWalking }}" hint-placeholder-val="{{ false }}">
+  <div data-turtle-panel style="position:fixed; left:50%; transform:translateX(-50%); bottom:56px; z-index:52; display:flex; align-items:center; gap:8px; border:1px solid rgba(29,31,32,0.25); background:#fff; box-shadow:0 10px 28px rgba(29,31,32,0.18); padding:8px 10px; font-family:'Barlow Condensed',system-ui,sans-serif;">
+    <span data-turtle-facing style="font-size:11px; font-weight:700; letter-spacing:0.08em; color:#3c5c30; min-width:70px;">{{ turtleFacing }}</span>
+    <button data-turtle-left onClick="{{ onTurtleLeft }}" aria-label="TURN LEFT" style="min-width:44px; min-height:38px; border:1px solid rgba(29,31,32,0.3); background:#fff; font-size:15px; cursor:pointer;">&#8630;</button>
+    <button data-turtle-right onClick="{{ onTurtleRight }}" aria-label="TURN RIGHT" style="min-width:44px; min-height:38px; border:1px solid rgba(29,31,32,0.3); background:#fff; font-size:15px; cursor:pointer;">&#8631;</button>
+    <button data-turtle-less onClick="{{ onTurtleLess }}" aria-label="ONE FOOT LESS" style="min-width:38px; min-height:38px; border:1px solid rgba(29,31,32,0.3); background:#fff; font-size:16px; cursor:pointer;">&#8722;</button>
+    <span data-turtle-feet style="font-size:14px; font-weight:700; min-width:44px; text-align:center;">{{ turtleFeetLabel }}</span>
+    <button data-turtle-more onClick="{{ onTurtleMore }}" aria-label="ONE FOOT MORE" style="min-width:38px; min-height:38px; border:1px solid rgba(29,31,32,0.3); background:#fff; font-size:16px; cursor:pointer;">+</button>
+    <button data-turtle-go onClick="{{ onTurtleGo }}" style="min-width:64px; min-height:38px; border:1px solid #3c5c30; background:#3c5c30; color:#fff; font-size:13px; font-weight:700; letter-spacing:0.08em; cursor:pointer;">GO</button>
+    <button data-turtle-done onClick="{{ onTurtleDone }}" style="min-width:56px; min-height:38px; border:1px solid rgba(29,31,32,0.3); background:#fff; font-size:12px; letter-spacing:0.06em; cursor:pointer;">STOP</button>
+  </div>
+</sc-if>
+
 <sc-if value="{{ roomTrayOpen }}" hint-placeholder-val="{{ false }}">
   <div data-room-tray style="position:fixed; right:44px; top:110px; z-index:51; width:118px; max-height:calc(100vh - 180px); overflow-y:auto; display:flex; flex-direction:column; gap:4px; border:1px solid rgba(29,31,32,0.25); background:#fff; box-shadow:0 10px 28px rgba(29,31,32,0.18); padding:8px;">
     <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.08em; color:#3c5c30;">ROOM TRAY</div>
@@ -2558,6 +2576,8 @@ class Component extends DCLogic {
     elevationNames: {},         // per-drawing side names for E1-E4 (FRONT/LEFT...), defaults from COMPANY STANDARDS
     elevationMarkOffsets: {},   // per-drawing E1-E4 clearances from the outermost dim string (ft), default E_MARK_CLEAR_FT
     toyBlocked: null,           // { wallId, text } — TOY MODE: what stopped the drag, and its words
+    turtleWalk: null,           // TURTLE: { at, heading, moves, pendingTurn } while it walks
+    turtleFeet: 12,             // the distance the next GO covers, in whole feet
     nextCutId:     1,
     activeCutId:   null,
     cutPhase:      'idle',     // 'idle'|'placing'|'choosing'
@@ -8342,6 +8362,42 @@ class Component extends DCLogic {
       }
     }
 
+    // THE TURTLE ON SCREEN (turtle path step 3), and the legs it has walked so
+    // far. The walk is not committed until it closes, so what is drawn here is
+    // a promise rather than a wall — dashed, so it never reads as one.
+    if (!this._isPrinting && this.state.turtleWalk && this.state.activeView === 'top') {
+      const turtle = window.DraftTurtle;
+      const walk = this.state.turtleWalk;
+      const trail = turtle.walk(walk.moves, { startAt: walk.at, heading: walk.heading });
+      ctx.save();
+      ctx.strokeStyle = '#3c5c30';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      trail.points.forEach((point, index) => {
+        const at = toS({ x: point.x, y: 0, z: point.z });
+        if (index === 0) ctx.moveTo(at.x, at.y); else ctx.lineTo(at.x, at.y);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // The turtle itself, pointing where the next GO will take it — the
+      // pending turn included, so a press to turn is visible before it moves.
+      const facing = turtle.HEADINGS[this._turtleFacing(walk, trail.heading)];
+      const nose = toS({ x: trail.at.x, y: 0, z: trail.at.z });
+      const tip = toS({ x: trail.at.x + facing.x, y: 0, z: trail.at.z + facing.z });
+      const dx = tip.x - nose.x, dy = tip.y - nose.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      ctx.fillStyle = '#3c5c30';
+      ctx.beginPath();
+      ctx.moveTo(nose.x + ux * 11, nose.y + uy * 11);
+      ctx.lineTo(nose.x - ux * 7 - uy * 7, nose.y - uy * 7 + ux * 7);
+      ctx.lineTo(nose.x - ux * 7 + uy * 7, nose.y - uy * 7 - ux * 7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
     // TOY MODE grip tabs (turtle path step 2). A tab per weld group, at the
     // midpoint of the wall, floated off its face so the wall stays readable
     // underneath. Walls the constraint module refuses as inert get none.
@@ -12993,18 +13049,139 @@ class Component extends DCLogic {
     });
   }
 
-  // TURTLE and RABBIT are assistance levels — how much the app explains while
-  // you draw. Neither behaviour is specified yet, so they say what is coming
-  // the way _pressSplitLevel does rather than answering a press with nothing.
-  // They are not lamps: an assistance level is not a thing that can exist in
-  // the drawing, so the build row's dim/armed/lit treatment does not apply.
+  // TURTLE and RABBIT are assistance levels — how much the app does for you.
+  // RABBIT is not built. TURTLE is, and only inside TOY MODE: it is the
+  // beginner's drawing surface, and handing it to a drafter who pressed a
+  // build-row button would be answering a press with a different app.
   _pressAssistLevel(pace) {
+    if (pace === 'turtle' && this._toyModeOn()) { this._startTurtle(); return; }
     this.setState({
       drawingMessage: pace === 'turtle'
         ? 'TURTLE pace is coming soon — it will walk you through each step as you draw.'
         : 'RABBIT pace is coming soon — it will stay out of the way once you know the moves.',
       drawingMessageError: true,
     });
+  }
+
+  // ─── THE TURTLE (turtle path step 3) ────────────────────────────────────
+  //
+  // Two verbs. Turn left 90°, right 90°, or straight on; go a whole number of
+  // feet. TWO IS THE REASON IT WORKS — every verb added is another thing to
+  // teach before a beginner can draw a wall — and because it only turns 90°,
+  // everything it draws is square BY CONSTRUCTION rather than by a check that
+  // runs afterwards.
+  //
+  // The walk is held here and committed as walls when it closes. Which side
+  // the inside ends up on is never asked for: turtle.js reads it off the
+  // finished path, so someone can turn whichever way feels natural and still
+  // get the faces right — and the faces are the point, because the turtle
+  // walks the INSIDE FACE. Walk the centreline instead and the user sets 12
+  // and the finished room measures 11'-6½", every dimension on the drawing
+  // contradicting the number they set.
+
+  _startTurtle() {
+    const datum = this.state.drawingOrigin || { x: 0, z: 0 };
+    this.setState({
+      turtleWalk: { at: { x: datum.x, z: datum.z }, heading: 0, moves: [], pending: [] },
+      drawingMessage: 'TURTLE — turn, set the feet, and GO. It walks the inside face, so the number you set is the room you get.',
+      drawingMessageError: false,
+    });
+    this._invalidate();
+  }
+
+  // The turn is REMEMBERED, not drawn. It lands on the next GO, which is how
+  // "left, twelve" is said out loud and the order the two verbs read in.
+  //
+  // Turns ACCUMULATE. Pressing left twice points the turtle west, because that
+  // is what a second press means to the person doing it -- the alternative,
+  // where the second press replaces the first, silently ignores it. Two verbs
+  // do not include a 180, so the extra quarters ride out as zero-distance
+  // moves: they turn the turtle and draw nothing, which is exactly what a turn
+  // on the spot is.
+  _turtleTurn(which) {
+    const walk = this.state.turtleWalk;
+    if (!walk) return;
+    this.setState({ turtleWalk: { ...walk, pending: [...(walk.pending || []), which] } });
+    this._invalidate();
+  }
+
+  // Where the turtle is pointing right now, pending turns included.
+  _turtleFacing(walk, fromHeading) {
+    return (walk.pending || []).reduce(
+      (heading, which) => window.DraftTurtle.turn(heading, which), fromHeading);
+  }
+
+  // Whole feet, and never a keyboard: the distance is nudged rather than typed,
+  // so there is no input path an inch could arrive down.
+  _turtleFeet(byFt) {
+    this.setState({ turtleFeet: Math.max(1, Math.round(this.state.turtleFeet + byFt)) });
+  }
+
+  _turtleGo() {
+    const walk = this.state.turtleWalk;
+    if (!walk) return;
+    const turtle = window.DraftTurtle;
+    const pending = walk.pending || [];
+    const moves = [
+      ...walk.moves,
+      ...pending.map(which => ({ turn: which, goFt: 0 })),
+      { turn: turtle.TURN.STRAIGHT, goFt: this.state.turtleFeet },
+    ];
+    const path = turtle.walk(moves, { startAt: walk.at, heading: walk.heading });
+    // A walk that came home is a room. It is never nudged shut — a wall quietly
+    // moved to close a loop is the same lie as a wall quietly snapped to a foot
+    // — so this only fires when the turtle actually arrived back.
+    if (turtle.closes(path)) { this._commitTurtle(path); return; }
+    this.setState({
+      turtleWalk: { ...walk, moves, pending: [] },
+      drawingMessage: `TURTLE — ${moves.length} wall${moves.length === 1 ? '' : 's'} so far. Come back to the start to close the room.`,
+      drawingMessageError: false,
+    });
+    this._invalidate();
+  }
+
+  _commitTurtle(path) {
+    const walls = window.DraftTurtle.wallsFrom(path, { wallType: this.state.wallType || 'stud_2x6' });
+    const levelId = this._activeLevelId();
+    const view = 'plan';
+    // Committed through the vertex pool, the same way every other wall in the
+    // app is: shared corners have to BE shared, or the room the turtle just
+    // closed comes apart the first time a grip tab moves one of its walls.
+    const topHeight = this._levelAssembly(levelId).wallHeightFt;
+    walls.forEach(wall => {
+      this._walls.push({
+        id: this._newDrawingItemId('wall'),
+        start: this._linkVertex(this._mergeVertex({ x: wall.start.x, z: wall.start.z }, levelId, view)),
+        end: this._linkVertex(this._mergeVertex({ x: wall.end.x, z: wall.end.z }, levelId, view)),
+        levelId,
+        view,
+        wallType: wall.wallType,
+        baseHeight: 0,
+        topHeight,
+        refLine: wall.refLine,
+      });
+    });
+    this._markUnsaved();
+    this.setState({
+      turtleWalk: null,
+      drawingMessage: `TURTLE closed the room — ${walls.length} walls, drawn to the inside face.`,
+      drawingMessageError: false,
+    });
+    this._invalidate();
+  }
+
+  // A part-walked room belongs to the walk that started it: stopping drops it
+  // rather than leaving legs on screen with no turtle behind them.
+  _stopTurtle() {
+    const had = (this.state.turtleWalk?.moves || []).length;
+    this.setState({
+      turtleWalk: null,
+      drawingMessage: had
+        ? `TURTLE stopped — ${had} unclosed leg${had === 1 ? '' : 's'} dropped. A room is only drawn when the walk comes home.`
+        : 'TURTLE stopped.',
+      drawingMessageError: false,
+    });
+    this._invalidate();
   }
 
   _buildHouse() {
@@ -21142,6 +21319,20 @@ class Component extends DCLogic {
       onSelectHouse: () => this._toggleHouseMode(),
       onSelectSplit: () => this._pressSplitLevel(),
       onSelectTurtle: () => this._pressAssistLevel('turtle'),
+      turtleWalking: !!this.state.turtleWalk,
+      turtleFacing: this.state.turtleWalk
+        ? `FACING ${window.DraftTurtle.HEADINGS[this._turtleFacing(this.state.turtleWalk,
+            window.DraftTurtle.walk(this.state.turtleWalk.moves, {
+              startAt: this.state.turtleWalk.at, heading: this.state.turtleWalk.heading,
+            }).heading)].name}`
+        : '',
+      turtleFeetLabel: `${this.state.turtleFeet}'`,
+      onTurtleLeft: () => this._turtleTurn('left'),
+      onTurtleRight: () => this._turtleTurn('right'),
+      onTurtleLess: () => this._turtleFeet(-1),
+      onTurtleMore: () => this._turtleFeet(1),
+      onTurtleGo: () => this._turtleGo(),
+      onTurtleDone: () => this._stopTurtle(),
       onSelectRabbit: () => this._pressAssistLevel('rabbit'),
       hasHouseMaster: houseExists,
       houseButtonHint: houseArmed
