@@ -80,21 +80,42 @@ That distinction is the whole rule, and it's easy to lose. The moment a rung
 reads "come back three times to unlock", it has stopped being a boneyard and
 become a loyalty program, and that is very hard to take back out once shipped.
 
+### The rites
+
+You go deeper by **doing a thing, not by waiting.** A rite is an act, and
+every one of them is available in the next thirty seconds — which is how the
+Boneyard stays unlocked while still having an order to it. The rite is the
+asking.
+
+None can be failed. None can be bought. And each one ends by showing you the
+next, so nobody is ever told to level up — they finish a thing and can see
+there's further to go.
+
+| | The act | What it opens onto |
+|---|---------|--------------------|
+| **I** | The House — press the button, get a plan | it exists, and you made it |
+| **II** | The Order — answer the window instead of taking the defaults | the plan changes in front of you; it's yours now |
+| **III** | The Hand — hold two plans of the same order side by side and say which you prefer | you just did what choosing a drafter means, so the dogs get names |
+| **IV** | The Dial — change one thing and watch the house move | the plan has parts, and parts have reasons |
+| **V** | The Line — draw one wall yourself | drafting mode, and the mess that comes with it |
+
+The rule that keeps this from rotting: **a rite must be something they'd have
+done anyway.** Invent a hoop that exists only to be jumped through and it is a
+gate wearing robes.
+
 ## When a dog reaches a user
 
 Not on the first visit. Someone who has never made a plan doesn't know what a
 drafter is, and asking them to pick one is asking for an opinion about a thing
 they haven't seen yet.
 
-So the dogs stay backstage for the first few rounds. Press the button, get a
-house. Then, once they've come back a few times or signed up, the choice
-appears — by which point the question is "want it drawn differently?", which
-they can actually answer.
+So the dogs stay backstage until the third rite. Press the button, get a
+house. The choice appears when the question has become "want it drawn
+differently?" — which they can answer, because by then they've compared two
+plans and know what the answer would cost.
 
-Same ladder further up: the dogs, then TOY MODE's dials, then drafting mode
-for the ones who keep pulling. One rule holds it together — **never show a
-control until they've seen the thing it changes.** The ladder is the order
-people notice the Boneyard in, not a set of doors.
+One rule holds the whole ladder together — **never show a control until
+they've seen the thing it changes.** That is what each rite is for.
 
 Two consequences worth fixing now, because they're cheap now and expensive
 later:
@@ -119,6 +140,6 @@ below is the door left open rather than a thing that runs:
   speaker at a drive-thru
 - bench dogs, `onShift: false`, for trying a design theory on fifty plans
   before it is promoted into the guidebook
-- whatever counts visits, so the picker knows when to appear — browser while
-  they're anonymous, account once they sign up, and the two have to agree so
-  that clearing cookies doesn't demote a signed-up user to round one
+- whatever remembers which rites someone has passed — browser while they're
+  anonymous, account once they sign up, and the two have to agree so that
+  clearing cookies doesn't send a signed-up user back to the first rite
