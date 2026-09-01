@@ -871,6 +871,60 @@ if (!window.DraftCutView) {
       });
       return top;
     };
+    // A wall standing BEHIND a nearer roof is not visible through it. Walls
+    // hide each other by the painter's algorithm — far first, each filled
+    // opaque before it is stroked — and `faceHidden` skips the ones a nearer
+    // wall swallows whole. Roofs never joined that: the roof passes stroke
+    // edges onto the paper and fill nothing, so no wall has ever been hidden
+    // by one. A far wing's gable-end wall therefore climbed its triangle
+    // straight through a nearer wing's roof, which is the see-through this
+    // board was raised for.
+    //
+    // Along the sightline a roof sheet covers a BAND of the elevation it
+    // projects onto: from the lowest surface the ray crosses, less the
+    // fascia hanging off that edge, up to the highest. The band, not a bare
+    // height comparison, is the test — a gable's OWN roof stands nearer than
+    // its wall and higher than its plate, yet sits on that wall rather than
+    // in front of it. `gableTopAt` returns `base + rise` and the band's floor
+    // works out to the same `base + rise` for that roof, so a wall is never
+    // clipped by the roof it carries; EPS covers the float noise between two
+    // spellings of one number.
+    //
+    // Only surfaces STRICTLY NEARER than the wall may hide it, so the ray runs
+    // from the wall toward the viewer, the way `hidden()` does — but EXACTLY,
+    // by clipping the real face polygons against it the way the section
+    // painter does, not by marching stations. `roofFaceRise` is linear across
+    // a face, so a piece's two ends bracket every height along it and the
+    // band is read straight off the breakpoints. A sampled march put the
+    // band's floor wherever a station happened to land — up to half a foot
+    // above the eave it was meant to find, leaving a sliver of wall top
+    // standing above a roof that covers it.
+    // Each roof is banded ON ITS OWN. Merged, a low detached-garage roof and
+    // the house roof behind it would read as one mass filling everything
+    // between them, and a wall top standing in the clear air between the two
+    // would be hidden by neither of them.
+    const ROOF_COVER_EPS = 0.02;
+    const fasciaFt = ROOF_FASCIA_IN / 12;
+    const roofClippedTop = (pt, depth, top) => {
+      if (!facesByRoof || !facesByRoof.size) return top;
+      const span = dHi - depth;
+      if (span < 0.1) return top;
+      const far = { x: pt.x + dir.x * span, z: pt.z + dir.z * span };
+      let clipped = top;
+      facesByRoof.forEach((roofFaces, roof) => {
+        const base = roofBaseElev(roof, stack) + fasciaFt;
+        let lo = Infinity, hi = -Infinity;
+        geo.roofProfile(roof, roofFaces, pt, far, dir).forEach(p => {
+          const elev = base + p.rise;
+          if (elev > hi) hi = elev;
+          if (elev < lo) lo = elev;
+        });
+        if (hi === -Infinity) return;   // the ray misses this roof entirely
+        lo -= fasciaFt;
+        if (top > lo + ROOF_COVER_EPS && top <= hi + ROOF_COVER_EPS) clipped = Math.min(clipped, lo);
+      });
+      return clipped;
+    };
     const faceGeoms = faces.map(face => {
       const { wall, u1, u2, level } = face;
       const loU = Math.max(Math.min(u1, u2), uMin);
@@ -892,7 +946,15 @@ if (!window.DraftCutView) {
       const tops = [];
       for (let s = 0; s <= samples; s++) {
         const u = loU + (hiU - loU) * s / samples;
-        tops.push({ u, top: gableTopAt(worldAt(u), level.wallTop, wallDir) });
+        const at = worldAt(u);
+        // Dropped to the floor of a nearer roof's band when that band swallows
+        // the wall's top. What is left below still meets the nearer WALLS, and
+        // the painter's opaque fill goes on covering that the way it always has.
+        // Never below the face's own floor: a band floor under this storey
+        // would turn the face inside out rather than hide it.
+        const top = Math.max(floor, roofClippedTop(at, face.depth,
+          gableTopAt(at, level.wallTop, wallDir)));
+        tops.push({ u, top });
       }
       return { face, loU, hiU, floor, worldAt, wallDir, tops };
     });
