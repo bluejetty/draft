@@ -1,0 +1,233 @@
+# HOME PLAN BUILDING GUIDEBOOK
+
+**Rough Drafter — back of house**
+Rev 1, 31 Aug 2026. Extracted from the working code, not from memory.
+
+---
+
+## 0. What this book is
+
+The order comes through the window as a **program** — rooms wanted, storeys,
+entry side, and where the client would like things. This book is what turns
+that into a house that stands up.
+
+It does not ask the client anything. That's the *Drive-Thru Window Operator
+Guidebook*. The two books meet at the program and nowhere else — which is what
+lets you put a different dog on the window without touching how houses get
+built, and change a rule in here without rewriting the interview.
+
+**Who reads this book:**
+
+- **Gruff**, arranging rooms after taking the order
+- **TOY MODE**, to keep a beginner inside buildable geometry
+- **RABBIT**, later, generating several plans that all have to be valid
+- **the drafter**, when they want to know why the machine did that
+
+Four readers, one book. That's the reason it's written as tables the code
+loads rather than prose someone implements — a rule in a document gets built
+once and then drifts; a rule in a table is the thing actually running.
+
+---
+
+## 1. How a rule is written down
+
+`stair-rules.js` already does this properly and it's the model for the whole
+book. Every row carries:
+
+- the **number**
+- its **source**, cited to a document that rides with the repo
+- a **confidence** — HIGH, MEDIUM, LOW
+- a **band** rather than a single figure where sources disagree, because the
+  spread between them is information and averaging it away would be a lie
+- any **dispute**, preserved rather than resolved
+- `verified: false`, kept until someone works it against the actual IRC/NBC
+  text
+
+That last flag is the honesty of the whole system. **Nothing in this book is a
+code approval.** These are the office's numbers and sound practice. A permit
+set needs someone who knows the local code to sign it.
+
+US and Canadian packs stay fully separate and are never blended.
+
+---
+
+## 2. The rules as they stand today
+
+Extracted from the running code. Where a rule exists but isn't written down
+anywhere a human can read it, that's noted — those are the gaps this book
+closes.
+
+### 2.1 Room minimums — `room-standards.js`
+
+| Room | Min area | Least dimension | Source |
+|------|----------|-----------------|--------|
+| Bedroom | 97 sq ft | 9'-8" | NBC-style habitable-room default |
+| Kitchen | 40 sq ft | 5'-0" | the engine's own auto-kitchen envelope |
+| Living | 145 sq ft | 10'-0" | office default |
+| WC / bath | 18 sq ft | 3'-0" | office default, 3' clear width |
+| Laundry | 15 sq ft | 4'-6" | a washer+dryer pair wants 4'-6" clear |
+| DZ / mud room | 33 sq ft | 5'-6" | bench-with-lockers 2'-6"×6'-0" plus a 36" circulation strip |
+
+The DZ row has the best provenance in the table — it's derived from an actual
+unit against a wall plus the strip you walk down, credited to Jerry's House
+Design. That's the standard every other row should be brought up to.
+
+**These are office preference, not a code engine.** A flag is feedback the
+drafter may ignore. And a category the detector can't identify never flags at
+all — a flag must never fire on a guess.
+
+### 2.2 Circulation — `room-grow.js`
+
+- The hall spine is **3'-0" clear**.
+- A usable stretch of room beside the spine is **4'-0"** minimum.
+- The spine runs only where the footprint gives it full width — on an L it
+  stops at the notch rather than sailing through it. On a U it comes back in
+  pieces, and says so rather than silently joining them.
+- The corridor **slides off the stair's centre** when a mandatory room (one
+  that flags — bedroom or WC) needs more depth than its side would otherwise
+  get. It still has to touch the stair well, so the slide is bounded.
+
+That sliding rule is the most sophisticated thing in the current engine and it
+is documented nowhere but in the code. It belongs in this book.
+
+### 2.3 The stair — `stair-rules.js` + `auto-stair.js`
+
+Shape preference, in the ladder every source agrees on: **straight → L → U →
+winders as a last resort.**
+
+| Shape | Prior share | Confidence | Generated today |
+|-------|-------------|------------|-----------------|
+| Straight | 35–50% | HIGH | yes |
+| L | 25–35% | HIGH | yes |
+| U / switchback | 15–25% | MEDIUM | yes |
+| Straight w/ mid-landing | 2–8% | LOW | no |
+
+Placement rules the engine actually applies:
+
+- A stair well is **born legal** — inflated by half the finish allowance, kept
+  inside the interior ring, holding a 2" gap off any beam centreline.
+- **Bedrooms repel the stair** within 6'-0", scoring worse the deeper the
+  intrusion.
+- **Halls, entries and foyers pull it.** An entry L beats an equally near
+  straight, because it breaks the door-to-bedrooms sightline.
+- Exterior walls get a **soft push away** — a stair on an outside wall is
+  wasting the best glazing.
+- Fewer steps from the entry is better; steps should be need-driven.
+- A basement stair **prefers to land under the one above it**, falling off to
+  nothing at 12'-0".
+
+The stacking prior is 0.7–0.9 and the sources don't agree on what "stacking"
+even means, so the engine models the middle reading: proximity of well
+centres. Recorded here so nobody mistakes it for a measured fact.
+
+### 2.4 A private room may not open onto the stair — **NEW, not yet built**
+
+A room whose door lands directly on the stair — no landing, no hall between —
+may only be a room you walk through.
+
+**Allowed:** living, kitchen, entry, hallway, dining, DZ.
+**Never:** bedrooms, bathrooms of any kind, storage, closets.
+
+Raised by Movie 31 Aug from a generated plan with a bedroom in front of the
+stair. Board written: `work-order-stair-landing-rooms.md`.
+
+> **Live collision.** The drive-thru currently *defaults* storage, the main
+> bath, laundry and the drop zone to "by the stairs." Two of those four are on
+> the forbidden list. The window is ordering what the kitchen must refuse —
+> the seam behaving correctly, but the defaults need changing too.
+
+### 2.5 Windows — `auto-windows.js`
+
+- 3'-0" clear between opening **edges**; never crowd.
+- 2'-0" clear of a corner.
+- Front is maximised, up to five; sides carry 2–3, or up to 5 on a wall over
+  40'-0"; back defaults to 2 per floor.
+- A **WC gets a small unit set high** — 24×24 at a 4'-6" sill. The point is
+  daylight without a sightline, so it's the sill that changes, not just the
+  size.
+- A window that can't sit where it wants **slides to the nearest spot that
+  clears** rather than being dropped. A room pushed two feet along its own
+  frontage still reads as its window.
+- Everything the machine places is ordinary fenestration marked `auto`. **The
+  drafter's own openings always outrank it.**
+
+### 2.6 Wall assemblies — `wall-types.js`
+
+2×4 (3½"), 2×6 (5½"), insulated basement wall (6½"), 8" concrete, ICF (11¼"
+and 13¼"), 2×8 PT wood foundation (8").
+
+Structural assemblies are offered on the **foundation layer set only**; every
+other context offers stud and insulated walls. Retired types in old drawings
+map to their closest current assembly.
+
+### 2.7 Areas — `areas.js`
+
+Areas are **as built**: a floor opening, stair rough openings included, is
+deducted from the level it's cut from. The building total is the sum of the
+level nets, so a stairwell counts exactly once — at the level with solid floor
+beneath it.
+
+Stated in the code, printed in the dialog, and repeated here because a permit
+application is exactly where an undocumented convention becomes an argument.
+
+### 2.8 The compass
+
+E1 front (+z), E2 left (−x), E3 back (−z), E4 right (+x).
+
+One mapping, defined once, so a client saying "front", a stamp placed at the
+front, and the E1 elevation are the same thing. Both the interview and the
+window siting read it. **Never let a second copy of this exist.**
+
+---
+
+## 3. Rules that will be needed and don't exist yet
+
+From the TOY MODE spec and the turtle path — settled in conversation, not yet
+written as data:
+
+- **Whole feet.** Toy geometry moves in whole-foot increments; everything is
+  orthogonal by construction.
+- **Cantilevers.** Up to 2'-0" silently fine. 2'-0"–4'-6" possible but poor
+  practice, hard-blocked in toy mode. Beyond 4'-6", move the foundation and
+  add piles — drafting mode allows it with advice.
+- **Minimum interior room sizes on a drag** — the same table as §2.1, applied
+  live rather than as an after-the-fact flag.
+- **Openings carry their wall** when it moves.
+- **Non-orthogonal geometry is refused** in toy mode, not silently rounded.
+
+And the one that has no home yet: **the constraint function**,
+`allowedMove(wall, proposedDelta, context) -> { delta, reason? }`. That's the
+seam every rule above gets applied through when the user is dragging rather
+than generating. It's step 1 of the turtle path and it's blocked on rulings,
+not on code.
+
+---
+
+## 4. What this book is honest about
+
+**Angles are not fixed.** Snapping to sixteenths makes orthogonal work exact.
+A wall at 37° between two perfect nodes still has an irrational length. That's
+arithmetic, not a bug — and it's the strongest argument for toy mode staying
+at 90°.
+
+**The shares are priors, not a census.** No public census of North American
+plan catalogues exists. Every share in §2.3 is a model-synthesised estimate
+reconciled from nine research syntheses. They are tie-breakers. They must
+never become hard constraints.
+
+**Nothing here is verified against code text.** Every dimension carries
+`verified: false` until someone works the §9 checklist against the actual IRC
+and NBC.
+
+---
+
+## 5. Open for ruling
+
+1. **Laundry on the stair** — allowed or not? Blocking both books.
+2. **Office/den on the stair** — same question.
+3. **Interior walls: bones, or move whole rooms?** The largest open fork —
+   decides whether grip tabs are a wall thing or a room thing, and everything
+   in the turtle path is shaped by it.
+4. **Blocked drag** — does it do nothing, resist, or explain?
+5. **Old non-foot walls** — snap to the nearest foot, or move by whole-foot
+   deltas from where they are?
