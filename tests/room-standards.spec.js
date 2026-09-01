@@ -64,6 +64,13 @@ test('the default table carries the stated seeds', async ({ page }) => {
   expect(Object.keys(table).sort()).toEqual(['bedroom', 'dz', 'kitchen', 'laundry', 'living', 'wc']);
 });
 
+test('J&JBATH rides the tray as a bathroom, held to the WC minimums', async ({ page }) => {
+  await h.openModel(page);
+  const tray = await page.evaluate(() => window.DraftRoomStandards.normaliseRoomTray(null));
+  expect(tray).toContain('J&JBATH');
+  expect(await page.evaluate(() => window.DraftRoomStandards.stampCategory('J&JBATH'))).toBe('wc');
+});
+
 test('STANDARDS edits persist through a reload and reset restores the defaults', async ({ page }) => {
   await openStandards(page);
   const bedroomArea = page.locator('[data-room-min-area="bedroom"]');
