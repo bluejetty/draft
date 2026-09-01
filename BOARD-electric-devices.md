@@ -173,8 +173,8 @@ All from the spec; all Movie's. Repeated here only so the board is checkable.
    switching yet — his instruction — so one means one.
 3. **Switches gang at the entry** — the switches sit beside the door you come
    in by. A **bank** is lights and a **gang** is switches: the gang holds one
-   switch per bank, so the gang count is the room's bank count, one `$` each.
-   Derive it; never store it, or someone maintains it by hand and it drifts.
+   switch per bank, so the gang count is the room's bank count, one `$` each —
+   the distinct switches in the room, counted, not a number anyone maintains.
 4. **A light joins the bank it is entered from** — pick the switch by
    *direction*, not by shortest straight line. Nearest-by-distance fails
    exactly where it shows: a light near a party wall is often closest to the
@@ -197,12 +197,19 @@ fixture where the room wants one light. **Do not invent a grid.**
 
 ### The switch leg is derived, never drawn
 
-> **A fixture stores the bank it belongs to, a bank stores its one switch, and
-> the painter draws the curves from that.**
+> **A fixture stores what switches it. The painter draws the curve from that,
+> and the bank is what you get by grouping fixtures on that switch.**
 
-Which is what makes a bank one thing rather than a convention: the four pot
-lights in a bank draw four curves back to the one switch, and they do it
-because they share a bank, not because a painter grouped them.
+**The bank is derived, never stored** — your call, 1 Sep, and it is the right
+way round. A stored bank is a third record that has to agree with the fixture
+and the switch; grouped instead, one-switch-per-bank is true by definition and
+the gang count is a `COUNT DISTINCT`. Nothing new to store, and the change is
+only in how the generator assigns: lights are grouped into banks and each bank
+gets one switch, rather than each light hunting a switch on its own.
+
+Say in the PR that three-ways are the point where a light answers to more than
+one switch and a bank earns its own record. Not now — Movie's instruction — but
+the grouping is where that seam will be.
 
 The red dashed curves on sheet 14 are the only thing that says which switch
 runs which lights, so they must come out of the stored relationship. If a

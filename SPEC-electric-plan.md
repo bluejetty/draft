@@ -120,6 +120,8 @@ pot lights over a kitchen counter that come on together are one bank on one
 switch. A switch controls a bank; a bank answers to one switch; the light
 belongs to a bank. Nothing else.
 
+The bank is a way of reading the model, not a record in it — see below.
+
 No three-way switching yet — Movie's instruction. So "one switch" is literally
 one, and the second switch at the far door is a later board, not an exception
 to build room for now.
@@ -174,12 +176,21 @@ The dashes are what make sheet 14 an electrical plan rather than a scatter of
 dots — they are the only thing on it that says *which switch runs which
 lights*. So:
 
-> **A fixture stores the bank it belongs to, a bank stores its one switch, and
-> the painter draws the curves from that.**
+> **A fixture stores what switches it. The painter draws the curve from that,
+> and the bank is what you get by grouping fixtures on that switch.**
 
 Never the other way round. If the drafter routes curves by hand, the drawing
 can say a switch controls a light when the model disagrees, and nobody will
 ever find out. Stored relationship, derived line.
+
+The bank is **derived, never stored** — Gilligan's call, 1 Sep, and the right
+one. A stored bank would be a third thing that has to agree with the fixture
+and the switch, and three things that must agree are three things that can
+drift. Grouped instead, "one switch per bank" is true by definition and the
+gang count is a `COUNT DISTINCT` rather than a number somebody maintains.
+
+When three-way switching arrives a light answers to more than one switch, and
+*that* is when a bank earns its own record. Not before.
 
 One honest note on where this came from. I tried to recover the pairings by
 tracing the dashes out of the PDF — chain the segments end to end, then match
