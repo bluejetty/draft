@@ -416,6 +416,76 @@ if (!window.DraftDrawingFormat) {
   // on ROOM-IDS-AREA, one per enclosed room found on a level's PLAN. Each
   // carries its computed inside area so the MAIN FL area readout can toggle
   // without re-running detection.
+  // ── Electric devices (board: the electric plan) ────────────────────────
+  // Two hosts and every device has exactly one.
+  //
+  // WALL-HOSTED devices copy the fixture pattern above VERBATIM: wallId,
+  // offset along the wall from its start, side, and NO STORED GEOMETRY, so a
+  // device redraws from the current wall and rides a wall edit instead of
+  // being orphaned by it. An outlet and a vanity are the same problem a
+  // fixture already solved; two patterns for it would drift.
+  //
+  // POINT-HOSTED devices (ceiling and floor) store a point on the level.
+  // The spec preferred storing them relative to the room that holds them, and
+  // that is not possible here: rooms are NOT entities in this format. There is
+  // no `rooms` key, and room polygons are derived at runtime by
+  // geometry-2d.js roomLoops() from the wall segments. The only room-ish thing
+  // carrying an id is a roomTag, which is a LABEL at a point rather than the
+  // room -- delete or move the tag and a device anchored to it is orphaned
+  // while the room is unchanged.
+  //
+  // The spec's reason for preferring room-relative still holds (TOY MODE has
+  // to ask a room how big it is), but it does not need a stored link:
+  // electric-rules.js answers "which room holds this point" by containment at
+  // read time. Derive the room from the point; do not store the room. Same
+  // argument as the derived bank, and the same failure avoided -- a stored
+  // link can be orphaned when its anchor goes, a derived one cannot exist to
+  // be.
+  const DEVICE_WALL_KINDS = ['outlet', 'switch', 'vanity', 'stove-outlet', 'dryer-outlet'];
+  const DEVICE_POINT_KINDS = ['pot', 'fan', 'chandelier', 'smoke', 'co-smoke', 'floor-ac', 'ceiling-ac'];
+  // Life safety rides its own layer so a drafter switching the electric off to
+  // work on something else cannot make the smokes vanish from a sheet.
+  const DEVICE_SAFETY_KINDS = ['smoke', 'co-smoke'];
+  // FLOOR AC and CEILING AC are two device kinds sharing one mark: the outlet
+  // circle in a square, told apart ONLY by the label FLR / CEIL. Nothing in
+  // the geometry distinguishes them, which is why they are separate kinds
+  // rather than one kind with a surface flag.
+  const DEVICE_HOSTS = { 'floor-ac': 'floor', 'ceiling-ac': 'ceiling' };
+
+  const electricDevices = (rawDevices, levelIds) => (Array.isArray(rawDevices) ? rawDevices : [])
+    .map(device => {
+      const deviceLevelId = levelId(device?.levelId, levelIds);
+      const kind = oneOf(device?.kind, [...DEVICE_WALL_KINDS, ...DEVICE_POINT_KINDS], null);
+      if (deviceLevelId == null || !kind) return null;
+      const layer = DEVICE_SAFETY_KINDS.includes(kind) ? 'E-SAFETY' : 'E-POWER';
+      const base = {
+        id: String(device?.id || '').trim(),
+        levelId: deviceLevelId,
+        view: 'plan',
+        kind,
+        layer,
+        // The bone's own devices, so a re-deal replaces its work and never the
+        // drafter's -- the same flag the auto windows carry (#169). Absent on
+        // anything he has touched, and on every drawing saved before this.
+        ...(device?.auto === true ? { auto: true } : {}),
+        // A fixture stores what switches it; the painter draws the curve from
+        // that. Banks are the lights grouped on this value, never a record.
+        ...(device?.switchId != null && String(device.switchId).trim()
+          ? { switchId: String(device.switchId).trim() } : {}),
+      };
+      if (DEVICE_WALL_KINDS.includes(kind)) {
+        const wallId = String(device?.wallId || '').trim();
+        const offset = num(device?.offset);
+        // No representation for a wall device floating in a room: it cannot be
+        // dropped off a wall because it cannot be stored off one.
+        if (!wallId || offset === null || offset < 0) return null;
+        return { ...base, host: 'wall', wallId, offset, side: device?.side === -1 ? -1 : 1 };
+      }
+      const at = point(device?.at);
+      if (!at) return null;
+      return { ...base, host: DEVICE_HOSTS[kind] || 'ceiling', at };
+    }).filter(Boolean);
+
   const roomTags = (rawTags, levelIds) => {
     const seen = new Set();
     return (Array.isArray(rawTags) ? rawTags : []).map(tag => {
@@ -813,6 +883,7 @@ if (!window.DraftDrawingFormat) {
     stairs,
     notes,
     roomTags,
+    electricDevices,
     fenestrations,
     fixtures,
     surfaceOpenings,
