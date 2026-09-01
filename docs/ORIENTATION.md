@@ -557,33 +557,26 @@ The working method, not the theory, because I did exactly this today:
 
 ## 6. Process
 
-**28. Where does the board list live? — I don't know, and that is the answer.**
+**28. Where does the board list live? — `BOARDS.md`, in the repo root.**
 
-This is Kevin's biggest question and I have to disappoint him honestly.
+This answer was "I don't know" when this document was written, which was the
+honest answer at the time and the reason the file now exists. Read it before
+starting anything: board #323 was built twice, in parallel, by two agents who
+could not see each other.
 
-**I have never seen the list.** Work orders reach me as **uploaded markdown
-files, relayed by a human** (the user in my session, who is passing them
-between Devin, Gilligan and me). I read the file, do the board, and hand back a
-zip. I cite `#304` or `#311` because *the order I was handed* cited them.
+What it is: the shared work list, ranked by urgency and by what blocks what,
+with the recommended next few at the bottom and the standing rules after that.
+Work orders still reach agents as uploaded markdown files relayed by a human;
+`BOARDS.md` is the index those orders are cut from.
 
-What I can say:
+One thing that has already caused a mistake:
 
-- There are **no GitHub issues on the repo** — I checked, and Kevin has too.
-- Board numbers are **dense and ordered** (`#141`, `#158`, `#168`, `#170`,
-  `#182`, `#189`, `#190`, `#195`, `#230`, `#244`, `#259`, `#260`, `#275`,
-  `#283`, `#290`, `#303`, `#304`, `#310`, `#311`, `#323`), which means a real
-  maintained list exists somewhere with real numbering.
-- Some numbers collide with **PR numbers** and that has already caused a
-  mistake: I had to correct a claim that the polish board was PR `#190` when
-  `#190` was a different, already-merged PR and the polish board was `#191`.
-  **Board numbers and PR numbers are different namespaces and they overlap.**
-  Do not resolve one against the other without checking.
-
-`[inferred]` It is most likely a document or tracker Devon (the drafter/owner)
-maintains outside the repo, since Devin refers to boards being "closed" and
-"scoped" in ways that imply a single source. **Ask Devon directly** — and if
-the answer is "it's in my head" or "it's in a chat," that is worth a board of
-its own, because right now the only agent who can read the backlog is a human.
+- **Board numbers and PR numbers are different sequences and they overlap.**
+  Write "board #168" or "PR #168", never a bare number. Board #116 was the
+  semantic cut views; PR #116 was the entry logo, unrelated — and a stale
+  BRANCHING rule gated all restructuring on the wrong one of the two for
+  months. There are **no GitHub issues on the repo**; board numbers are Devin's
+  and only `BOARDS.md` resolves them.
 
 **29. What makes a work order good.**
 

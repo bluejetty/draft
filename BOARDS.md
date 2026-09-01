@@ -1,0 +1,165 @@
+# BOARDS — bluejetty/draft
+
+The shared work list. Kept by Kevin (Port Admiral) from Devin's board export of
+31 Aug 2026 plus decisions made in coordination since.
+
+**Board numbers are Devin's.** He assigns them; this file records them. Board
+numbers and PR numbers are different sequences that overlap — always write
+"board #168" or "PR #168", never a bare number. Board #203 (3D reveal) and PR
+#203 (the composer) are different things, and that collision has already caused
+one error.
+
+Three items still have no number and are marked **NEW**. Devin numbers them
+next time he is awake.
+
+---
+
+## 1 · Critical — something is wrong on the live site
+
+Only one thing in the whole list qualifies. Everything else is missing work,
+not broken work.
+
+| Board | Item | Size | State |
+| --- | --- | --- | --- |
+| **NEW-1** | **Elevations read as see-through in E2/E4.** *Rev 5, 31 Aug — the wrong ink located by measurement.* The far ridge plateau at 22.005 is **legitimate**. What is wrong is that **the near wing's rake terminates in mid-air at exactly that elevation** — 29 px inboard of its own wall corner and 8 px above it — instead of running on to its eave and overhanging by the roof's 2'. **The fix draws more, not less.** Five earlier root causes disproven by measurement (wall occluders: 744 calls, 0 hits; ternary search: 100× denser scan, identical to 3 dp; walls vs silhouette: near tops 21.0–21.6, below the envelope). | ½–1 day | **Out with Skipper now**, in a session scoped to the repo so he can push his own PR. Rev 5 order + `repro-L-house.draft` delivered. |
+
+Why it is the only critical one: auto-compose now deals E1–E4 onto every
+default sheet set, so this defect appears four times on every job and reads as
+a fault in the brand-new composer.
+
+---
+
+## 2 · Blocking others — small, and other work waits on them
+
+These are hours, not days, and each one unblocks something bigger.
+
+| Board | Item | Size | Blocks |
+| --- | --- | --- | --- |
+| **NEW-2** | **Note A — composition order.** Add site, roof, basement and electric sheets so the dealt set matches the approved sheet order. Also fix the auto scale. Today it deals elevations at 1/16" and they swim on an 11×17 — **but the ladder is not in the wrong order** (it already runs 1/4"→1/16" and takes the first rung that fits); the fault is that an elevation's measured height runs 2' below the footing to 2' above the ridge, so a basement house measures ~38' for ~25' of visible building and the pair drops a rung. One ruling from Movie, 1 Sep: **drop 1/16" off the ladder** (not a real drawing scale, clipped last resort only) and otherwise **leave the chooser alone** — largest-that-fits stays. A fill rule was considered and rejected: too big is self-evident, too small is an opinion, and largest-that-fits lands on mostly 1/8" and 3/16" anyway without a tuned threshold. **Fit must be measured on the annotated extent, not the building envelope** — dimension strings, elevation/level markers and the view title all sit outside the object, so a set that fits bare comes back one step too big the day dimensions land. **Views must be placed, not stacked into the corner** — one view centres in the working area; two sit side by side if the pair reads wider than tall, stacked if taller than wide, and the pair centres as a group. Same measurement as the fit test, so it comes almost free. Refine the balancing with a drafter's eye later; anything is better than upper-left. | 2–4 h | The whole default-set feature reads as half-finished until this lands. |
+| **NEW-4** | **The build row lights up.** Turtle before HOUSE, rabbit after DETACHED, and the row's lamps inverted: **dim by default, bright while armed, softly lit once that thing exists in the drawing.** Lit state is derived from the model, not remembered — so it survives F5 and clears on a new drawing. **Each lamp reads its own object, so two, three or four can be lit at once** (house + split + both garages); there is no one-at-a-time rule. Art supplied by Movie, 1 Sep: turtle 1024², rabbit 330², both with real alpha. Today the buttons sit at full brightness always and only glow while armed; the bone is the only one that ever dims. | 3–5 h | Nothing waits on it, but it is the visible half of TOY MODE and the first thing anyone sees. |
+| **NEW-3** | **Note B — auto section-cut placement.** Cut 1 through the stair showing treads in length; cut 2 through house/garage where attached; cut 3 always, in the unused direction. | 4–6 h | Depends on stairs-in-section: `cut-view.js` does not draw treads beyond the cut plane, so a stair-oriented cut currently shows nothing. Fix that first or the rule is decorative. |
+| #4 (docs) | ~~Stale architecture docs.~~ **Landed as PR #206**, 31 Aug. `docs/ORIENTATION.md` landed alongside it as PR #207. | — | — |
+| — | ~~`playwright.config.js` hardcodes port 4173 with `reuseExistingServer`.~~ **Landed as PR #205**, 31 Aug, 677/0. Set `DRAFT_TEST_PORT` and you always get your own server. | — | Unblocks running two agents on one box, and so the MODEL split. |
+| — | **Board #311 `pointer/outline-entry`** is open as **PR #208**. Measured 633/0 on its old base; needs a re-run against current main before merge. | minutes + a suite run | — |
+
+---
+
+## 3 · Large — days, and each needs a spec before it needs an agent
+
+Ordered longest first.
+
+| Board | Item | Size | Note |
+| --- | --- | --- | --- |
+| #305 | **Print / PDF export of the sheet set.** | 2–3 days | Devin's own top candidate. Nothing in the product is real to a customer until it prints. Landmine flagged: vector-PDF openings. Also needs the out-of-bones-at-print-time ruling. |
+| #12 / #243 | **TOY MODE + the turtle.** `allowedMove()`, grip tabs, whole-foot rounding, the turtle's two verbs. | 2–3 days | Spec drafted: `spec-toy-mode-constraints.md`. The rules half is pure math and testable in node with no browser — build and prove that first, UI second. |
+| — | **RABBIT — four plans per press**, and the real-estate / concept-plan area with data-driven styles. | 2–3 days | Depends on the constraint set existing, because variation is whatever the constraints do not pin down. Specced alongside TOY MODE. |
+| #13 | **Circulation and door placement.** | days, and unbounded | The hardest thing on the list, and not for technical reasons: there is no correct answer to encode, only taste. Collect rules of thumb long before this becomes a job. |
+| #14 | **Specifications composer** — 8.5×11 flowing text, appended after the drawings. | 1–2 days | Needs the four document-processor answers first: pagination, keep-with-next, numbering that survives an insert, measured text matching painted text. |
+| #1 | **Extract the plan painter out of MODEL.** | 1 day | Mechanical, with a worked example to copy (`cut-view.js`). LAYOUT cannot draw floor plans on sheets without it. Good overnight job — but one agent only, it is the big file. |
+| #6 | **Persistence extraction.** `buildSaveData` / `applySavedData` / auto-resume are three lists that must agree. | 1 day | Worth doing because it is dangerous, not because it is big: a field missed in one list silently fails to survive a reload. |
+
+---
+
+## 4 · Medium — a session each, no dependencies
+
+`#330` click-to-cut section boxes · `#169` auto windows + doors family ·
+`#247` interior walls align to jog inside faces · `#303` inside-corner snap
+pool · `#331` NAHB room-program defaults · `#198` room stamping step ·
+`#315` the bone fills the gaps · `#319` skippable pre-build form ·
+`#321` entry page rework · `#318` tray door/window centreline snap ·
+`#2a` reorder the MODEL right-side menu to mirror the sheet order.
+
+---
+
+## 5 · Small — an hour or two each
+
+`#306` comic-book arrows · `#320` bone sounds · `#312` house number ·
+`#206` tooltips · `#207` level sound · `#153` filename convention ·
+lossless re-encode of the entry-page PNGs (49 KB → 385 KB in PR #204, on the
+first page an iPad loads).
+
+---
+
+## 6 · Parked
+
+**Editable dimensions — change the house by typing a dimension.** Movie's
+idea, 31 Aug; parked by his own ruling, and rightly.
+
+- **Movie's second thought solves the hard half, 31 Aug:** don't let the user
+  edit any dimension and then work out what they meant. **Offer a curated set
+  of changeable dimensions, each stating its consequence in words** — "Bedroom
+  2 +1'-0", Bedroom 3 −1'-0"". The ambiguity never arises, because the app only
+  ever offers moves it already understands.
+  - An offer must always name **both** halves. The room that loses space is the
+    half nobody notices, and it is the half that causes the complaint.
+  - **Room minimums decide what gets offered.** `room-standards.js` already
+    knows each room's floor and already flags UNDER MIN on the plan, so a move
+    is offered only while the room giving up space stays legal. The house
+    cannot be steered into a bad plan, and the offer vanishes exactly where it
+    would become one.
+  - This makes it **TOY-MODE-safe after all** — a curated list of legal moves
+    with stated consequences is precisely what a toy is. Full free editing of
+    any dimension stays a DRAFTING-mode gesture.
+- Easier later, once grip tabs exist — an interior dimension edit is "move that
+  wall's face", the same move a grip tab makes, typed instead of dragged.
+- Splits into an easy half and a hard half. Editing an **overall** dimension is
+  unambiguous: the house grows that way. Editing a link in the **interior
+  chain** is not — the chain must keep summing, so either the house grew or the
+  next room shrank, and only the drafter knows which. That is the part needing
+  a way to explain itself before it can be built.
+- Prerequisite: interior dimensions must exist and be correct first.
+
+
+
+*Money / marketing / lore* — parked until printing exists, which is the right
+call: `#52` backend · `#262` watermark membership · `#254` bone tokens ·
+`#273` drafter network · and the rest of Devin's list.
+
+*Far future* — `#188`/`#189` 3D export and walkthrough · `#203`(board) 3D
+reveal · `#240` scan-to-house · `#213` US regions.
+
+---
+
+## Recommended next six
+
+For the next day or two, in this order.
+
+1. **NEW-1 see-through elevations** — already out with Skipper. Live defect,
+   about to be multiplied by four per job.
+2. **NEW-2 Note A composition order + the 3/16" scale ladder** — finishes the
+   feature that shipped this afternoon. Small, and it is the difference between
+   "the composer works" and "the composer does what the office does".
+3. ~~**#4 stale architecture docs**~~ — landed, PR #206 and #207.
+4. ~~**The playwright port collision**~~ — landed, PR #205.
+5. **#1 extract the plan painter** — mechanical, has a worked example, unblocks
+   floor plans on sheets. Ideal overnight job for one agent alone in the big
+   file.
+6. **`allowedMove()` — the TOY MODE rules only, no UI** — pure math, node
+   harness, no browser. Proves the whole mode is possible for a fraction of the
+   cost, and everything else in TOY MODE sits on top of it.
+
+Deliberately **not** in the six:
+
+- **#305 print/PDF**, despite being Devin's top pick and the most valuable
+  thing on the list. It is the biggest job here and it wants the sheet set
+  finished first — printing a set that is still missing its site and roof
+  sheets means printing it twice.
+- **NEW-3 Note B section cuts**, because stairs-in-section has to land first.
+- **Anything in TOY MODE with a user interface**, until the rules underneath it
+  are proven.
+
+## Standing rules
+
+- **One job per session, push at every milestone.** Four hours of reading that
+  lives only in one agent's head costs a day when that agent stops.
+- **Old drawings must keep opening.** Standing check on every PR touching
+  `drawing-format.js`.
+- **Check main before starting.** Board #323 was built twice, in parallel, by
+  two agents, because neither could see this file. That is what it is for.
+- **Never bug-check on `roughdrafter.com`** — it lags `main` by hours.
+- **A session that cannot push to the repo it is working on is not set up.**
+  Run `git push --dry-run` on a throwaway branch before writing a line. Twice on
+  31 Aug this surfaced only after a full day's work, and both times the work had
+  to be relayed out by hand as a bundle.
+- **Say the total you expect before you run the suite, then the total you got.**
+  A run that quietly loses a spec is green either way.
