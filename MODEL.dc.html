@@ -1787,7 +1787,6 @@ const LEVEL_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a
 // Grid, node, and midpoint snap catch distances come from the user's
 // snap-strength settings (screen-space pixels, adjustable in Settings).
 // Shift/angle-locked alignment catch distance from a node center.
-const LOCKED_NODE_SNAP_PX = 3;
 // Tools whose next click can ride a polar-tracking ray from an acquired node.
 // While the ray is engaged, the acquired node is also the ruler zero: a typed
 // length measures from it, and these tools can even place their first point
@@ -16290,20 +16289,43 @@ class Component extends DCLogic {
   // When angle-locked, find a vertex whose perpendicular tracking line the cursor
   // is near and return the intersection of that perpendicular with the locked ray.
   _findTrackingSnap(cursorPt, start, exclude = null) {
-    if (this._lockAngle == null) return null;
-    const threshWorld = LOCKED_NODE_SNAP_PX * this._worldPerPixel();
+    if (this._lockAngle == null || !start) return null;
+    // Catch the node's TRACKING LINE -- the perpendicular through it -- not
+    // the node itself. The whole point of tracking is that you are somewhere
+    // else: out on your own ray, lining up with a corner that may be across
+    // the drawing. Measured against the node, the test can only pass once you
+    // are close enough not to have needed tracking, and for a node off the
+    // ray's axis it can never pass at all. The rays were real but unreachable.
+    //
+    // The distance from the cursor to that perpendicular is just the along-ray
+    // gap between them, |(cursor - node) . d|, so this needs no new geometry:
+    // the snap point stays the node projected onto the locked ray from start.
+    //
+    // The catch is the ordinary node snap zone. It is deliberately NOT a new
+    // number and NOT the 5x magnet: one setting drives every catch in the app,
+    // and widening it to make closing easier makes everything grabbier.
+    const catchWorld = this._nodeSnapRadius();
+    const dirX = Math.cos(this._lockAngle);
+    const dirZ = Math.sin(this._lockAngle);
+    const along = pt => (pt.x - start.x) * dirX + (pt.z - start.z) * dirZ;
+    const alongCursor = along(cursorPt);
 
     const find = vertices => {
-      // Require the cursor to be genuinely near the node center, and skip the
-      // chain tip so the ray cannot snap to its own start. A dragged vertex
-      // (riding the cursor) can never be its own tracking reference either.
-      const candidates = this._withoutVertices(vertices, exclude).filter(vertex => !start
-        || Math.abs(vertex.x - start.x) >= 0.001 || Math.abs(vertex.z - start.z) >= 0.001);
-      const refPt = geo.nearestVertex(candidates, cursorPt, threshWorld);
-      if (!refPt) return null;
-      // Snap point: project the nearby node onto the locked ray from start.
-      const projected = geo.projectOntoRay(start, this._lockAngle, refPt);
-      return { snapPt: new THREE.Vector3(projected.x, start.y, projected.z), refPt };
+      // Skip the chain tip so a ray cannot track its own start, and a dragged
+      // vertex (riding the cursor) can never be its own reference either.
+      const candidates = this._withoutVertices(vertices, exclude).filter(vertex =>
+        Math.abs(vertex.x - start.x) >= 0.001 || Math.abs(vertex.z - start.z) >= 0.001);
+      // Nearest tracking line wins; active vertices are offered before
+      // background ones by the two calls below, so ties resolve as before.
+      let best = null;
+      let bestGap = Infinity;
+      candidates.forEach(vertex => {
+        const gap = Math.abs(along(vertex) - alongCursor);
+        if (gap <= catchWorld && gap < bestGap) { bestGap = gap; best = vertex; }
+      });
+      if (!best) return null;
+      const projected = geo.projectOntoRay(start, this._lockAngle, best);
+      return { snapPt: new THREE.Vector3(projected.x, start.y, projected.z), refPt: best };
     };
     return find(this._collectActiveVertices()) || find(this._collectBackgroundVertices());
   }
