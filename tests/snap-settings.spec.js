@@ -1,6 +1,12 @@
-// Snap feedback and the one SNAP ZONE setting: the 0,0 origin marker rings
-// when it has hold of the cursor, and every catch radius — node, midpoint,
-// polar — derives from the single snap-zone number.
+// Snap feedback and the one SNAP ZONE setting: the drawing's datum rings when
+// it has hold of the cursor, and every catch radius — node, midpoint, polar —
+// derives from the single snap-zone number.
+//
+// The datum WAS the world's 0,0, and board NEW-5 made it float: an untouched
+// model space measures from nothing, and the first node placed becomes the
+// origin. So these two tests changed with the behaviour rather than being
+// deleted — the ring and the exact pull still exist and are still asserted,
+// they just belong to a point the drafter placed instead of to the world.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -19,38 +25,62 @@ async function setSnapZone(page, zone) {
   await h.waitForModelReady(page);
 }
 
-test('the 0,0 origin rings while it has hold of the cursor, with no toggle', async ({ page }) => {
+test("the datum has hold of the cursor, and rings when no node is on it", async ({ page }) => {
   await h.openModel(page);
 
-  // Slightly off the origin: the pull grabs the cursor, the ring marks it.
+  // Nothing placed, nothing to measure from: there is no datum to ring, so
+  // hovering where the world's 0,0 used to pull now rings nothing.
   await h.moveTo(page, 0.2, 0);
-  await expect(originRing(page)).toBeVisible();
-  const box = await originRing(page).boundingBox();
-  const target = await h.worldToClient(page, 0, 0);
-  expect(Math.abs(box.x + box.width / 2 - target.x)).toBeLessThan(2);
-  expect(Math.abs(box.y + box.height / 2 - target.y)).toBeLessThan(2);
+  await expect(originRing(page)).toBeHidden();
 
-  // Away from the origin nothing rings — there are no other grid points.
-  await h.moveTo(page, 5.2, 5);
+  // Place a line away from 0,0 — its first node becomes the datum.
+  await h.selectTool(page, 'Line');
+  await h.clickWorld(page, 4, -3);
+  await h.clickWorld(page, 11, -3);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+
+  // Hovering next to the datum, the cursor is caught exactly. The RING does
+  // not show, and that is the behaviour changing rather than breaking: the
+  // datum is now a node the drafter placed, so the node magnet — which
+  // outranks the origin ring by design — owns the feedback. The old ring
+  // existed because the world's 0,0 was a snap point no node ever occupied.
+  await h.moveTo(page, 4.2, -3);
+  await expect(page.locator('[data-model-magnet]')).toBeVisible();
+  await expect(originRing(page)).toBeHidden();
+
+  // The origin pull is still there underneath, for the case the magnet cannot
+  // cover: a datum whose node has been deleted. Away from everything, nothing
+  // rings and nothing magnets.
+  await h.moveTo(page, 9.2, 5);
   await expect(originRing(page)).toBeHidden();
 });
 
-test('a click near the origin snaps exactly to 0,0', async ({ page }) => {
+test("a click near the datum snaps exactly onto it", async ({ page }) => {
   await h.openModel(page);
   await page.keyboard.press('t'); // set the T-square down — the far click stays unsnapped
 
+  // The first line sets the datum at its start; the second starts near that
+  // datum and must land exactly on it, the way a click near 0,0 used to.
   await h.selectTool(page, 'Line');
-  await h.clickWorld(page, 0.2, 0);
+  await h.clickWorld(page, 4, -3);
+  await h.clickWorld(page, 11, -3);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  const datum = h.allLines(await h.savedDrawing(page))[0].start;
+
+  await h.selectTool(page, 'Line');
+  await h.clickWorld(page, 4.2, -3);
   await h.clickWorld(page, 9, 5.4);
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
 
-  const line = h.allLines(await h.savedDrawing(page))[0];
-  // The origin click snaps exactly; the far click stays unsnapped.
-  expect(line.start.x).toBe(0);
-  expect(line.start.z).toBe(0);
-  expect(Math.abs(line.end.x - 9)).toBeLessThan(0.1);
-  expect(Math.abs(line.end.z - 5.4)).toBeLessThan(0.1);
+  const second = h.allLines(await h.savedDrawing(page))[1];
+  // The datum click snaps exactly; the far click stays unsnapped.
+  expect(second.start.x).toBe(datum.x);
+  expect(second.start.z).toBe(datum.z);
+  expect(Math.abs(second.end.x - 9)).toBeLessThan(0.1);
+  expect(Math.abs(second.end.z - 5.4)).toBeLessThan(0.1);
 });
 
 test('node and midpoint pull follow the settings', async ({ page }) => {

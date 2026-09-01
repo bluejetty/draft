@@ -2284,6 +2284,36 @@ const { normaliseDrafter } = window.DraftDrafter;
 
 // Per-drawing side names for the standard elevations — only E1-E4 entries
 // with real text survive; anything missing falls back to COMPANY STANDARDS.
+// ── Where the building sits on the lot (board NEW-5, part 3) ──
+// STORED NOW, CONSUMED LATER, and deliberately so. The site plan has no
+// painter yet, so nothing can draw the house positioned on the lot and
+// dragging a target would move nothing. The FIELD is the part that is
+// expensive to add later, because every drawing saved between now and then
+// would lack it — so the format carries it and the UI waits.
+//
+// The angle is here for the same reason: a building set at an angle to the
+// street is ordinary, and adding a rotation once drawings exist means
+// migrating them. It costs one number now.
+//
+// The house never stores site coordinates. Its plan keeps its own numbers,
+// the site holds ONE registration point, and moving that point moves the
+// whole building without touching a wall.
+const normaliseSiteRegistration = raw => {
+  if (!raw || typeof raw !== 'object') return null;
+  const x = Number(raw.x), z = Number(raw.z);
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
+  const angle = Number(raw.angleRad);
+  return { x, z, angleRad: Number.isFinite(angle) ? angle : 0 };
+};
+
+// A stored drawing datum: a finite plan point, or null for "no origin yet".
+// Anything else in a file is read as no origin rather than trusted.
+const normaliseDrawingOrigin = raw => {
+  if (!raw || typeof raw !== 'object') return null;
+  const x = Number(raw.x), z = Number(raw.z);
+  return Number.isFinite(x) && Number.isFinite(z) ? { x, z } : null;
+};
+
 const normaliseSavedElevationNames = value => {
   const stored = value && typeof value === 'object' ? value : {};
   return Object.fromEntries(['E1', 'E2', 'E3', 'E4']
@@ -2318,6 +2348,15 @@ class Component extends DCLogic {
     copyMessage: '',
     copyBase: null,
     units:         'imperial',
+    // ── The drawing's own datum (board NEW-5) ──
+    // null is a REAL state, not an empty value: an untouched model space has
+    // no origin, and so shows no grid and no target. The first node placed
+    // sets it, whoever places it. A saved drawing carries it, so a reopened
+    // file keeps the grid it was drawn on.
+    drawingOrigin: null,
+    // Where the datum above sits on the lot, and at what angle. Nothing reads
+    // it yet — see normaliseSiteRegistration.
+    siteRegistration: null,
     activeView:    'top',      // 'top'|'front'|'side'|'perspective'|'cut'
     snapZone: normaliseSnapZone(null),
     drafter: normaliseDrafter(null),
@@ -2870,6 +2909,8 @@ class Component extends DCLogic {
       )),
       backgroundMode: this.state.backgroundMode,
       units: this.state.units,
+      drawingOrigin: this.state.drawingOrigin,
+      siteRegistration: this.state.siteRegistration,
       lineLayers: normaliseLineLayers(this.state.lineLayers),
       activeLineLayer: this._activeLineLayer(),
       activeWallType: this.state.activeWallType,
@@ -4865,6 +4906,18 @@ class Component extends DCLogic {
         contextBackgrounds,
         backgroundMode: format.oneOf(saved.backgroundMode, ['blue', 'red', 'none'], 'blue'),
         units: saved.units === 'metric' ? 'metric' : 'imperial',
+        // ABSENT and NULL mean different things here. A drawing saved before
+        // this board has no `drawingOrigin` key at all: it was drawn on the
+        // world grid, so 0,0 is what leaves every coordinate where it is. A
+        // blank drawing stores the key explicitly as null, which is how NEW
+        // gets back to "no origin yet" instead of silently adopting 0,0.
+        drawingOrigin: 'drawingOrigin' in saved
+          ? normaliseDrawingOrigin(saved.drawingOrigin)
+          : { x: 0, z: 0 },
+        // Unregistered is the honest default for every drawing that exists
+        // today, so absent and null agree here — unlike drawingOrigin, there
+        // is no older meaning to preserve.
+        siteRegistration: normaliseSiteRegistration(saved.siteRegistration),
         lineLayers: normaliseLineLayers(saved.lineLayers || this.state.lineLayers),
         activeLineLayer: normaliseActiveLineLayer(saved.activeLineLayer),
         activeWallType: WALL_TYPES.some(type => type.id === saved.activeWallType)
@@ -6167,6 +6220,12 @@ class Component extends DCLogic {
   _drawGrid2D(ctx, w, h) {
     // Only meaningful for top / plan view
     if (this.state.activeView !== 'top') return;
+    // No datum, no grid: an untouched model space has nothing to measure from,
+    // and a grid drawn from the world's 0,0 would be measuring from a point
+    // that means nothing to this drawing. The look is unchanged once there is
+    // one — only what it counts from moves.
+    const datum = this.state.drawingOrigin;
+    if (!datum) return;
     const halfH = this._orthoHalfH;
     const halfW = halfH * (w / h);
     const camX  = this._orthoCamX || 0;
@@ -6179,8 +6238,8 @@ class Component extends DCLogic {
     const drawGridLines = (unit, color, lineWidth) => {
       ctx.beginPath();
       ctx.strokeStyle = color; ctx.lineWidth = lineWidth;
-      const x0 = Math.ceil((camX - halfW) / unit) * unit;
-      const z0 = Math.ceil((camZ - halfH) / unit) * unit;
+      const x0 = datum.x + Math.ceil((camX - halfW - datum.x) / unit) * unit;
+      const z0 = datum.z + Math.ceil((camZ - halfH - datum.z) / unit) * unit;
       for (let x = x0; x <= camX + halfW + unit; x += unit) {
         ctx.moveTo(sx(x), 0); ctx.lineTo(sx(x), h);
       }
@@ -7837,7 +7896,15 @@ class Component extends DCLogic {
   // The 0,0 origin: a small circle-and-crosshair target on the grid paper.
   // Always snappable, never printed — a drafting datum, not linework.
   _drawOrigin2D(ctx, toS) {
-    const o = toS(new THREE.Vector3(0, this._drawElev || 0, 0));
+    // The datum is the drawing's, not the world's, so the target stands on the
+    // first node placed rather than on 0,0 — and on nothing at all before one
+    // exists. It moves to the SITE level when that plan can draw the house
+    // (board NEW-5 part 3); until then it stays visible here, because the
+    // origin still has hold of the cursor and an unseen snap target is worse
+    // than a marker sitting on a node the drafter placed themselves.
+    const datum = this.state.drawingOrigin;
+    if (!datum) return;
+    const o = toS(new THREE.Vector3(datum.x, this._drawElev || 0, datum.z));
     ctx.save();
     ctx.strokeStyle = '#557a46';
     ctx.lineWidth = 1.5;
@@ -9173,8 +9240,49 @@ class Component extends DCLogic {
     return hits.length ? hits[0].point : null;
   }
 
+  // ── The project's own increment (board NEW-5) ──
+  // A free node lands on a sixteenth of an inch, or a millimetre on a metric
+  // project. It used to land on a free real, so a wall could sit at 12.0001'
+  // while its dimension printed 12'-0": the partials then failed to sum to the
+  // overall, and the only way to make the numbers agree was to nudge the wall
+  // by a sixty-fourth that existed nowhere on screen. The discrepancy was in
+  // the rounding, not in the drawing, so there is now no extra to go hunting.
+  //
+  // The grid follows the PROJECT'S units, because a grid only produces clean
+  // numbers in the system it belongs to — a millimetre is not a sixteenth of
+  // anything, so a metric drawing on a sixteenth grid would step in 1.5875 mm.
+  // Units are a property of the project rather than a view toggle: switching
+  // later re-labels the drawing and leaves the geometry where it is, which
+  // reads untidily in the new system and is not silently re-snapped.
+  _gridStepFt() {
+    return this.state.units === 'metric' ? 0.001 / 0.3048 : 1 / 192;
+  }
+
+  // The one place a free point is put on the grid. There are TWO free-point
+  // paths, not one: `basePt` in the drawing resolver, and `_snap` for a node
+  // drag and the extend / copy bases. Both call this; nothing else does.
+  _quantise(pt) {
+    const step = this._gridStepFt();
+    // Counted FROM the datum, so the grid a node lands on is the same grid the
+    // screen draws. With a datum that is itself on the increment the two agree
+    // anyway; this keeps them agreeing for one that is not, such as a datum
+    // arriving from a file or from Gruff.
+    const datum = this.state.drawingOrigin || { x: 0, z: 0 };
+    const q = (value, from) => from + Math.round((value - from) / step) * step;
+    return new THREE.Vector3(q(pt.x, datum.x), pt.y, q(pt.z, datum.z));
+  }
+
+  // ROUND THE NODE, NEVER THE DERIVED. Centrelines, face offsets and join
+  // points are computed FROM nodes; rounding those as well would be rounding
+  // rounded numbers, and a wall would end up a thirty-second off the node it
+  // came from. One snap, at the source.
+  //
+  // FREE POINTS ONLY. A caught node, a midpoint, or a point projected onto a
+  // locked ray never reaches here — the resolver above returns those directly.
+  // They already sit on real geometry, and rounding them would break the very
+  // alignment they exist to provide.
   _snap(pt) {
-    return this._originSnapPoint(pt) || pt.clone();
+    return this._originSnapPoint(pt) || this._quantise(pt);
   }
 
   // An engaged angle lock always owns the direction: a node or midpoint near
@@ -9233,9 +9341,11 @@ class Component extends DCLogic {
   // The 0,0 origin marker is the one always-snappable grid point: any tool
   // catches it when the cursor moves within its magnetic pull, no toggle.
   _originSnapPoint(pt) {
+    const datum = this.state.drawingOrigin;
+    if (!datum) return null;   // nothing to be pulled to yet
     const pull = this._nodeSnapRadius();
-    if (Math.hypot(pt.x, pt.z) > pull) return null;
-    return new THREE.Vector3(0, pt.y || 0, 0);
+    if (Math.hypot(pt.x - datum.x, pt.z - datum.z) > pull) return null;
+    return new THREE.Vector3(datum.x, pt.y || 0, datum.z);
   }
 
   // ─── Mouse ───────────────────────────────────────────────────────────────────
@@ -9266,7 +9376,11 @@ class Component extends DCLogic {
     if (!raw) { this.setState({ showCursor: false, showMagnet: false, showMidSnap: false, showOriginSnapPt: false, showPolarOrigin: false }); return; }
 
     const originHit = this._originSnapPoint(raw);
-    const basePt = originHit ? originHit.clone() : raw.clone();
+    // The free cursor point, on the grid. Everything the resolver may prefer to
+    // it below — a magnet, a midpoint, a tracking or polar hit, a projection
+    // onto a locked ray — is real geometry or derived from it, and is returned
+    // unrounded so the alignment it exists to provide survives.
+    const basePt = originHit ? originHit.clone() : this._quantise(raw);
     const tool   = this.state.activeTool;
     // A live node drag snaps like drawing does: its T-square start is the grab
     // point, and the node being dragged never magnets to itself.
@@ -9909,8 +10023,18 @@ class Component extends DCLogic {
     return true;
   }
 
+  // The first node placed sets the drawing's datum, whoever places it — the
+  // user or Gruff. Claimed here rather than in a tool, because every tool that
+  // draws from `_snapPt` passes through this one dispatch, and claiming it on
+  // the PREVIEW path would set a datum from a cursor that never landed.
+  _claimOriginAt(pt) {
+    if (!pt || this.state.drawingOrigin) return;
+    this.setState({ drawingOrigin: { x: pt.x, z: pt.z } });
+  }
+
   _dispatchToolClick(tool, e) {
     if (this._blockToolOutsidePlan(tool)) return true;
+    this._claimOriginAt(this._snapPt);
     if (tool === 'wall') this._handleWallClick();
     else if (tool === 'line') this._handleLineClick();
     else if (tool === 'floor') this._handleFloorClick(e);
