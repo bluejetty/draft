@@ -180,6 +180,14 @@ the rule above from being a wish: if a leg cannot be drawn by hand, the only
 way to change what a switch runs is to move or delete a device, so the drawing
 cannot disagree with the model.
 
+**Editing a property of a selected device is a fourth verb, and it is allowed.**
+Gilligan's catch, 1 Sep: flipping a placed outlet between floor and ceiling is
+none of move, delete or add, so the closed list has to name it rather than rely
+on a generous reading of "nothing else". It is inside the rule, not an
+exception to it — the restriction governs what may *move*, not what a device
+may *know*. A property edit changes no geometry and cannot touch anything that
+is not electric, so a drafter still cannot nudge a wall.
+
 **A symbol we did not anticipate is made in the Boneyard, not drawn on the
 plan.** Movie's ruling, 1 Sep, and it is what makes the restriction survivable:
 the drafter is never stuck, he just makes a custom electric object and places

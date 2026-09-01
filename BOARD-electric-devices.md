@@ -207,6 +207,13 @@ things.**
   device. **No line drawing at all** — which is what keeps the dashed leg
   honest, because the only way to change what a switch runs is to move or
   delete the device itself.
+- **A fourth verb: edit a property of a selected electric device.** Gilligan's
+  catch, 1 Sep, on the floor/ceiling switch — flipping a placed outlet's
+  `surface` is none of move, delete or add, and the closed list should say so
+  rather than rely on a generous reading. It is inside the rule and not an
+  exception to it: the restriction governs what may *move*, not what a device
+  may *know*. A property edit changes no geometry, touches nothing that is not
+  electric, and cannot nudge a wall. Same shape as flipping a door swing.
 - **A symbol this board does not cover is made in the Boneyard, not drawn on
   the plan.** Movie's ruling, 1 Sep. The escape hatch for a device nobody
   anticipated is to author a custom electric object and then place it — so it
