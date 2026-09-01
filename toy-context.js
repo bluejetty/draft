@@ -152,7 +152,7 @@ if (!window.DraftToyContext) {
   // leaves interior partitions (which T into walls rather than meeting them
   // end to end) as the singletons that flex. Coherent, and honest about what
   // is known. Supplying the flags is its own board.
-  const gather = ({ walls, openings, categoryFor, joinFt, minAreaSqFt } = {}) => {
+  const gather = ({ walls, openings, objects, clearanceFor, categoryFor, joinFt, minAreaSqFt } = {}) => {
     const plan = (walls || []).filter(wall => wall && wall.start && wall.end);
     const byId = new Map(plan.map(wall => [wall.id, wall]));
 
@@ -173,6 +173,11 @@ if (!window.DraftToyContext) {
     return {
       walls: plan,
       rooms,
+      // Things standing IN the rooms travel with the context untouched, and
+      // whoever owns them answers for their clearance. This module measures
+      // rooms; it does not know what a closet is either.
+      objects: objects || [],
+      clearanceFor,
       openings: (openings || []).map(opening => ({
         id: opening.id,
         wallId: opening.wallId,

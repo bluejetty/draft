@@ -18432,6 +18432,15 @@ class Component extends DCLogic {
           : `${this._toyRoomName(room)} would be under ${Math.round(hit ? hit.min : 0)} sq ft`;
       case R.OPENING_WOULD_NOT_FIT:
         return 'A door or window on that wall would not fit any more';
+      // Something STANDING in the room stopped this, not the room itself. The
+      // constraint module never learned what the thing is -- it asked whoever
+      // owns it -- so the sentence is built from the kind that came back.
+      case R.OBJECT_CLEARANCE: {
+        const thing = String(verdict.objectKind || 'fitting').toUpperCase();
+        return room
+          ? `The ${thing} in ${this._toyRoomName(room)} would not open any more`
+          : `The ${thing} would not open any more`;
+      }
       // The one band with a recommended alternative, so it steers rather than
       // refuses. A minimum-room block has no such alternative and must not
       // pretend to.

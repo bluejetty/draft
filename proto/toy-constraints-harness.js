@@ -333,6 +333,61 @@ const wall = (id, x0, z0, x1, z1, extra = {}) => ({
     !verdict.ok && verdict.violations[0].reason === T.REASON.OPENING_WOULD_NOT_FIT);
 }
 
+// ── 8b · THE SEAM: a thing standing in the room answers for itself ──────
+// A closet is an OBJECT placed in a room, not a bite out of its outline
+// (Movie, 1 Sep) -- which is what lets every rule above measure a rectangle.
+// But an object has clearance of its own: a bedroom can be shrunk until its
+// own closet will not open, and this module must be able to refuse that
+// WITHOUT KNOWING WHAT A CLOSET IS.
+//
+// So it asks, and the answer comes back from whoever owns the object. What is
+// pinned here is the seam itself -- that the question is asked, that a "no" is
+// a violation carrying enough to name the thing, and that with nobody to ask
+// nothing can refuse.
+{
+  const shared = wall('shared', 0, 0, 0, 12);
+  const roomy = () => ({
+    id: 'bed4', category: 'bedroom', clearWidthFt: 12, clearDepthFt: 12,
+    bounds: [{ wallId: 'shared', dim: 'width', sign: -1 }],
+  });
+  const closet = { id: 'c1', kind: 'closet', roomId: 'bed4' };
+
+  // The object's owner answers from the room's CHANGED dimensions, which is
+  // what a clear strip actually depends on -- so a proposed move is what it
+  // gets asked about, not the house at rest.
+  const needs = min => (object, config) => {
+    const room = (config.rooms || []).find(entry => entry.id === object.roomId);
+    const have = room ? Math.min(room.clearWidthFt, room.clearDepthFt) : 0;
+    return { ok: have >= min, needFt: min, haveFt: have };
+  };
+  const ctx = () => ({ walls: [shared], rooms: [roomy()], openings: [], objects: [closet] });
+
+  check('with nobody to ask, an object cannot refuse anything',
+    T.isLegal(ctx()).ok, JSON.stringify(T.isLegal(ctx()).violations));
+
+  const asked = T.isLegal({ ...ctx(), clearanceFor: needs(20) });
+  check('a no from the owner is a violation',
+    !asked.ok && asked.violations[0].reason === T.REASON.OBJECT_CLEARANCE,
+    JSON.stringify(asked.violations));
+  check('and it carries enough to name the thing and its room',
+    asked.violations[0].objectId === 'c1' && asked.violations[0].objectKind === 'closet'
+      && asked.violations[0].roomId === 'bed4',
+    JSON.stringify(asked.violations[0]));
+  check('a yes is silent', T.isLegal({ ...ctx(), clearanceFor: needs(1) }).ok);
+
+  // The point of the seam: it constrains a MOVE. `shared` bounds the room with
+  // sign -1, so a POSITIVE delta is the one that shrinks it. Eleven feet of
+  // room is fine and ten is not, so the drag stops on the foot the object
+  // needs -- and it bites at two feet, a foot before the bedroom's own 9'-8"
+  // would have at three. The object stopped this drag, not the room.
+  const move = T.allowedMove(shared, 5, { ...ctx(), clearanceFor: needs(11) });
+  check('so a move that would shut the closet stops where it still opens',
+    move.delta === 1, JSON.stringify(move));
+  check('and the refusal names the object rather than the room alone',
+    move.objectId === 'c1' && move.reason === T.REASON.OBJECT_CLEARANCE,
+    JSON.stringify(move));
+}
+
 // ── 9 · The predicate is usable on its own (RABBIT's input) ─────────────
 {
   const legal = T.isLegal({
