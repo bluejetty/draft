@@ -70,7 +70,7 @@ if (!window.DraftBuildHouse) {
     return runs;
   };
 
-  const midSpanBeams = (points, { beamAtFt = 19, maxSpanFt = 12, holes = [] } = {}) => {
+  const midSpanBeams = (points, { beamAtFt = 19, maxSpanFt = 12, holes = [], bearsAt = null } = {}) => {
     const xs = points.map(pt => pt.x), zs = points.map(pt => pt.z);
     const box = { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
     const w = box.maxX - box.minX, d = box.maxZ - box.minZ;
@@ -138,17 +138,34 @@ if (!window.DraftBuildHouse) {
       return { index, pt, cross };
     }).filter(entry => Math.abs(entry.cross) > 1e-6
       && Math.sign(entry.cross) !== Math.sign(ringArea));
-    // A candidate corner sits INSIDE the chosen clear strip (one in a stair
-    // hole or the smaller strip would pull the beam out of its strip) and
-    // within beamAtFt of the unsnapped cut; the nearest wins (least-moved).
+    // ── Favour the corner over the middle ──
+    // Lining up is the PREFERRED answer and dead centre is the fallback, not
+    // the other way round: joists come out equal lengths and the framing
+    // stacks. So every outline corner is a candidate, not only the re-entrant
+    // ones — a convex corner carries the line of an exterior wall, and lining
+    // up on that is the same win. An edge running parallel to the beam has a
+    // constant cross-coordinate shared with its own endpoints, so the vertex
+    // list already carries the wall lines with the corners.
+    //
+    // A candidate sits INSIDE the chosen clear strip (one in a stair hole or
+    // the smaller strip would pull the beam out of its strip; the strip's own
+    // ends are the exterior walls, where a beam would be redundant) and within
+    // beamAtFt of the unsnapped cut. Nearest wins — least-moved — and a
+    // re-entrant node breaks a tie, since that is where a point load actually
+    // lands (board #244).
+    const reentrantIndexes = new Set(reentrants.map(entry => entry.index));
     const snapFor = c0 => {
       let best = null;
-      reentrants.forEach(entry => {
-        const cc = crossCoord(entry.pt);
+      points.forEach((pt, index) => {
+        const cc = crossCoord(pt);
         if (cc <= strip[0] + 1e-9 || cc >= strip[1] - 1e-9) return;
         const dist = Math.abs(cc - c0);
         if (dist > beamAtFt) return;
-        if (!best || dist < best.dist) best = { c: cc, dist };
+        const reentrant = reentrantIndexes.has(index);
+        if (!best || dist < best.dist - 1e-9
+          || (Math.abs(dist - best.dist) <= 1e-9 && reentrant && !best.reentrant)) {
+          best = { c: cc, dist, reentrant };
+        }
       });
       return best;
     };
@@ -197,15 +214,50 @@ if (!window.DraftBuildHouse) {
       }
     }
     // A beam point landing on an outline corner (within 1e-6) carries the
-    // corner's index so the commit layer can link it to the master point; a
-    // run DEAD-ENDING at a re-entrant corner bears on nothing there and gets
-    // an extra column on the node (a split column within 0.5' yields to it).
+    // corner's index so the commit layer can link it to the master point.
+    // That link is about identity, not support: whether a post belongs at an
+    // end is asked separately, below.
     const cornerIndexAt = (t, c) => {
       const x = axis === 'x' ? t : c, z = axis === 'x' ? c : t;
       const index = points.findIndex(pt => Math.abs(pt.x - x) < 1e-6 && Math.abs(pt.z - z) < 1e-6);
       return index >= 0 ? index : null;
     };
-    const reentrantIndexes = new Set(reentrants.map(entry => entry.index));
+    // ── What carries a post (board: the beam posts what bears on nothing) ──
+    // A post goes where a beam end has nothing under it. The question used to
+    // be asked the other way round — a post if and only if the end landed on
+    // a re-entrant outline vertex — and that is inverted, because an outline
+    // vertex is a point the foundation wall runs through. It put teleposts and
+    // 36" pads on top of concrete, and it missed every end `trimRun` leaves
+    // out in the floor, since a trim lands on a break coordinate that is no
+    // vertex at all.
+    //
+    // The outline is the bearing midSpanBeams can answer for itself: the
+    // foundation wall traces it, so an end anywhere ON it already bears. A
+    // caller that knows about interior bearing walls or beams underneath
+    // passes a wider test in — nothing is reached for.
+    //
+    // BEAMS ARE DRAWN TO THE EDGE OF THE FLOOR, and that is a drawing
+    // convention, not an oversight: the sheet is a measurement document, and
+    // the fabricator takes the bearing off the length (3" onto concrete or
+    // masonry, 1½" onto wood). Do not shorten a beam here to model that — it
+    // would make every dimension on the sheet read short. For the same reason
+    // this asks whether bearing is PRESENT, not how much of it there is.
+    //
+    // The question is only ever asked outward. A floor or beam may cantilever
+    // up to 2' PAST its support, but an end stopping SHORT of one never
+    // reaches it and cannot bear on it however close it comes. Runs are
+    // clipped to the outline, so no end extends past a wall and the outward
+    // allowance never decides a case; if that ever changes, it belongs here
+    // as a tolerance on this test rather than anywhere else.
+    const onOutline = p => points.some((a, i) => {
+      const b = points[(i + 1) % points.length];
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < 1e-12) return false;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2));
+      return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t)) < 1e-6;
+    });
+    const bears = typeof bearsAt === 'function' ? bearsAt : onOutline;
     const beams = [];
     const columns = [];
     finalCuts.forEach(c => {
@@ -220,13 +272,17 @@ if (!window.DraftBuildHouse) {
         for (let s = 0; s < spans; s++) {
           beams.push({ start: withSrc(r0 + (len * s) / spans), end: withSrc(r0 + (len * (s + 1)) / spans) });
         }
-        const cornerEnds = [r0, r1]
+        // srcIndex still rides along wherever an end coincides with a master
+        // point — that is what carries a beam through outline edits, and it is
+        // unrelated to whether a post belongs there.
+        const freeEnds = [r0, r1]
           .map(t => ({ t, index: cornerIndexAt(t, c) }))
-          .filter(end => end.index != null && reentrantIndexes.has(end.index));
-        cornerEnds.forEach(end => columns.push({ ...at(end.t), srcIndex: end.index }));
+          .filter(end => !bears(at(end.t)));
+        freeEnds.forEach(end => columns.push(end.index == null
+          ? at(end.t) : { ...at(end.t), srcIndex: end.index }));
         for (let s = 1; s < spans; s++) {
           const t = r0 + (len * s) / spans;
-          if (cornerEnds.some(end => Math.abs(end.t - t) < 0.5)) continue;
+          if (freeEnds.some(end => Math.abs(end.t - t) < 0.5)) continue;
           columns.push(at(t));
         }
       });
