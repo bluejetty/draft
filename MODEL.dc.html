@@ -1832,6 +1832,9 @@ const TOUCH_TARGET_PX = 44;
 const POLAR_FX_HOLD_MS = 1000;
 const POLAR_FX_FADE_MS = 1000;
 const POLAR_FX_RAY_PX  = 140;
+// How many tracking guides to paint at once. Every corner of a drawn house is
+// a candidate, so a plan with forty nodes would otherwise get forty lines.
+const TRACKING_GUIDE_MAX = 6;
 const DEFAULT_WALL_TOP_FT = (8 * 12 + 1 + 1 / 8) / 12;
 const DEFAULT_FLOOR_THICKNESS_IN = 12 + 5 / 8;
 const DEFAULT_SLAB_THICKNESS_IN = 4;
@@ -6986,6 +6989,32 @@ class Component extends DCLogic {
       }
     }
 
+    // Tracking guides: the lines you are looking for, drawn before you find
+    // one. Orange, the polar family's colour, because these read as the same
+    // KIND of thing as the polar ray — a guide cast from a node — even though
+    // the caught indicator below is blue. Faint and 1px: every other guide on
+    // this overlay is 1px, and the faintest thing on screen should not be the
+    // heaviest line drawn.
+    //
+    // Painted first in this block so the polar ray, the caught indicator and
+    // the geometry all sit over them.
+    if (this._trackingGuides && this._trackingGuides.nodes.length) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(224,122,32,0.30)'; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
+      // A node's tracking line is the perpendicular to the locked ray through
+      // it, extending past the node both ways rather than stopping at it.
+      const gAngle = this._trackingGuides.angle;
+      const gx = -Math.sin(gAngle), gz = Math.cos(gAngle);
+      const reach = this._worldPerPixel() * 2000;
+      this._trackingGuides.nodes.forEach(node => {
+        const a = toS({ x: node.x - gx * reach, y: node.y, z: node.z - gz * reach });
+        const b = toS({ x: node.x + gx * reach, y: node.y, z: node.z + gz * reach });
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      });
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     // Polar-tracking ruler: dashed orange ray from the acquired origin node.
     // While a polar-measured length is being typed, the ray sticks to the
     // frozen zero and endpoint so the ruler shows where the point will land.
@@ -9445,8 +9474,12 @@ class Component extends DCLogic {
 
     // Projection tracking: cursor near perpendicular through a vertex → snap to intersection
     let trackingHit = null;
+    let trackingGuides = null;
     if (angleLockHeld && start && this._lockAngle != null) {
       trackingHit = this._findTrackingSnap(raw, start, drag?.vertices);
+      // Same inputs, same condition, same candidate list — the guides show
+      // the drafter the lines he is hunting for, before he finds one.
+      trackingGuides = this._trackingGuidesFor(raw, start, drag?.vertices);
     }
 
     // Magnet snap — but an engaged angle lock owns the direction: a node near
@@ -9509,6 +9542,7 @@ class Component extends DCLogic {
     this._snapPt = finalPt;
     this._trackingRef  = trackingHit ? trackingHit.refPt  : null;
     this._trackingSnap = trackingHit ? trackingHit.snapPt : null;
+    this._trackingGuides = trackingGuides;
     this._polarSnap    = polarHit || polarLocked;
 
     const sc = this._toScreen(cursorPt);
@@ -16454,6 +16488,52 @@ class Component extends DCLogic {
   // ─── Projection tracking ─────────────────────────────────────────────────────
   // When angle-locked, find a vertex whose perpendicular tracking line the cursor
   // is near and return the intersection of that perpendicular with the locked ray.
+  // The nodes projection tracking will consider, in the search's own
+  // precedence: active vertices, and background ones only when there are no
+  // active candidates at all. Both the search and the guide painter read this
+  // one list, so a line the app draws is always a line it will actually
+  // catch — a guide it will not snap to is worse than no guide.
+  //
+  // Skipping the chain tip keeps a ray from tracking its own start, and a
+  // dragged vertex (riding the cursor) is never its own reference.
+  _trackingCandidates(start, exclude = null) {
+    const usable = vertices => this._withoutVertices(vertices, exclude).filter(vertex =>
+      Math.abs(vertex.x - start.x) >= 0.001 || Math.abs(vertex.z - start.z) >= 0.001);
+    const active = usable(this._collectActiveVertices());
+    return active.length ? active : usable(this._collectBackgroundVertices());
+  }
+
+  // The guides to paint: the nodes whose tracking lines the drafter is about
+  // to cross. Capped by ALONG-RAY nearness rather than screen distance,
+  // because that is the axis a tracking line is caught on — these are
+  // literally the next lines the cursor will meet. A node sitting near the
+  // cursor whose line is nowhere near catchable would be a lie.
+  _trackingGuidesFor(cursorPt, start, exclude = null) {
+    if (this._lockAngle == null || !start) return null;
+    const dirX = Math.cos(this._lockAngle);
+    const dirZ = Math.sin(this._lockAngle);
+    const along = pt => (pt.x - start.x) * dirX + (pt.z - start.z) * dirZ;
+    const alongCursor = along(cursorPt);
+    // Coincident vertices are ONE tracking line. A polyline reports each
+    // interior corner twice — once ending a segment, once starting the next —
+    // so an eight-point chain arrives as fourteen candidates, and capping
+    // without deduping spends the budget on repeats: six slots drew four
+    // distinct lines. Dedupe by position first, then cap.
+    const seen = new Set();
+    const nodes = this._trackingCandidates(start, exclude)
+      .filter(vertex => {
+        const key = `${Math.round(vertex.x * 4096)},${Math.round(vertex.z * 4096)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(vertex => ({ vertex, gap: Math.abs(along(vertex) - alongCursor) }))
+      .sort((a, b) => a.gap - b.gap)
+      .slice(0, TRACKING_GUIDE_MAX)
+      .map(entry => entry.vertex);
+    return nodes.length ? { angle: this._lockAngle, nodes } : null;
+  }
+
   _findTrackingSnap(cursorPt, start, exclude = null) {
     if (this._lockAngle == null || !start) return null;
     // Catch the node's TRACKING LINE -- the perpendicular through it -- not
@@ -16476,24 +16556,16 @@ class Component extends DCLogic {
     const along = pt => (pt.x - start.x) * dirX + (pt.z - start.z) * dirZ;
     const alongCursor = along(cursorPt);
 
-    const find = vertices => {
-      // Skip the chain tip so a ray cannot track its own start, and a dragged
-      // vertex (riding the cursor) can never be its own reference either.
-      const candidates = this._withoutVertices(vertices, exclude).filter(vertex =>
-        Math.abs(vertex.x - start.x) >= 0.001 || Math.abs(vertex.z - start.z) >= 0.001);
-      // Nearest tracking line wins; active vertices are offered before
-      // background ones by the two calls below, so ties resolve as before.
-      let best = null;
-      let bestGap = Infinity;
-      candidates.forEach(vertex => {
-        const gap = Math.abs(along(vertex) - alongCursor);
-        if (gap <= catchWorld && gap < bestGap) { bestGap = gap; best = vertex; }
-      });
-      if (!best) return null;
-      const projected = geo.projectOntoRay(start, this._lockAngle, best);
-      return { snapPt: new THREE.Vector3(projected.x, start.y, projected.z), refPt: best };
-    };
-    return find(this._collectActiveVertices()) || find(this._collectBackgroundVertices());
+    // Nearest tracking line wins, over the one shared candidate list.
+    let best = null;
+    let bestGap = Infinity;
+    this._trackingCandidates(start, exclude).forEach(vertex => {
+      const gap = Math.abs(along(vertex) - alongCursor);
+      if (gap <= catchWorld && gap < bestGap) { bestGap = gap; best = vertex; }
+    });
+    if (!best) return null;
+    const projected = geo.projectOntoRay(start, this._lockAngle, best);
+    return { snapPt: new THREE.Vector3(projected.x, start.y, projected.z), refPt: best };
   }
 
   // Arming happens on a deliberate dwell: the cursor has to rest on the node
