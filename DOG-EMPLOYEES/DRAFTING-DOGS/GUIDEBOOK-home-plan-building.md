@@ -232,6 +232,37 @@ seam every rule above gets applied through when the user is dragging rather
 than generating. It's step 1 of the turtle path and it's blocked on rulings,
 not on code.
 
+### 3.10 Where a closet goes in a bedroom — **NEW, not yet built**
+
+The default position, and it is a default because it is derived rather than
+chosen:
+
+- **On the wall shared with the next room**, not on an exterior wall — an
+  exterior wall is where the window goes, and a closet backing onto a
+  neighbouring room is the cheapest wall in the house to build.
+- **One end tight to the exterior wall**, so the closet starts in the corner
+  rather than floating and leaving a dead pocket beside it. Which end depends
+  on which side of the room the door is.
+- **The other end returns to the shared interior wall**, closing the closet
+  with a short return rather than a second full wall.
+- **At least 3'-4" clear** between that return and the bedroom/hall wall the
+  bedroom door is framed in. Clear between finished faces, not a rough
+  opening — this is the strip the door needs to be framed and to swing, and it
+  is the dimension the whole arrangement is really built around.
+
+The closet **length is the user's**. Everything above is where it sits; how
+deep into the room it runs is a thing the turtle may drag, bounded by the
+3'-4" and by §3.1 leaving a legal bedroom behind.
+
+Which makes this the first rule that is also a **weld**: the return is welded
+to the shared wall and travels with it, and the free end is the grip. Raised
+by Movie 1 Sep. No dog gets a lean on the 3'-4"; where a dog may differ is how
+much closet he gives a bedroom that didn't ask.
+
+Open: whether 3'-4" is a floor or the actual target, and whether a bedroom
+whose geometry can't produce this arrangement gets a closet somewhere else or
+reports that it couldn't.
+
 ---
 
 ## 4. PERSONALITY RESTRICTIONS
