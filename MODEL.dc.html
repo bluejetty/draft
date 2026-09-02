@@ -2896,6 +2896,7 @@ class Component extends DCLogic {
         ...(tag.stamped === true && tag.companionOf != null
           ? { companionOf: tag.companionOf } : {}),
         ...(tag.stamped === true && tag.auto === true ? { auto: true } : {}),
+        ...(tag.stamped === true && tag.closetDeclined === true ? { closetDeclined: true } : {}),
         underMin: tag.underMin === true,
         layer: ROOM_TAG_LAYER,
       })),
@@ -13962,10 +13963,29 @@ class Component extends DCLogic {
     }));
   }
 
+  // A user's deletion is an INSTRUCTION. The room remembers that it was told
+  // no, so the auto-pass does not hand the closet back on the next open. It is
+  // stored on the room's own stamp, which is the room's identity and survives a
+  // rebuild that throws the geometry away -- remembering the CLOSET instead
+  // would lose the instruction the moment the walls were regenerated.
+  _declineClosetFor(fixture) {
+    if (!fixture || fixture.kind !== 'closet') return;
+    const centre = this._fixtureGeometry(fixture)?.center;
+    if (!centre) return;
+    const levelId = this._activeLevelId();
+    const room = this._toyContext().rooms.find(entry =>
+      this._polygonContains(entry.points, centre.x, centre.z));
+    if (!room) return;
+    const stamp = this._roomStamps().find(tag => tag.levelId === levelId
+      && this._polygonContains(room.points, tag.at.x, tag.at.z));
+    if (stamp) { stamp.closetDeclined = true; this._markUnsaved(); }
+  }
+
   _deleteLastFixture() {
     const fixtures = this._activeFixtures();
     if (!fixtures.length) return;
     const last = fixtures[fixtures.length - 1];
+    this._declineClosetFor(last);
     this._fixtures = this._fixtures.filter(fixture => fixture !== last);
     this._selectedFixtures?.delete(last);
     this._markUnsaved();
@@ -18359,10 +18379,25 @@ class Component extends DCLogic {
       if (centre && this._polygonContains(points, centre.x, centre.z)) kinds.add(fixture.kind);
     });
     const has = (...list) => list.some(kind => kinds.has(kind));
+    // A ROOM IS A BEDROOM BY ITS PROGRAM STAMP, NOT BY HAVING A CLOSET
+    // (Movie, 1 Sep). The closet is a RESULT of the room being a bedroom and
+    // never the evidence for it, so the fixture vote deliberately does not
+    // infer one: inferring it made auto-placement circular -- a room could not
+    // be seen as a bedroom until it already had the thing the pass exists to
+    // give it.
+    //
+    // The real test is an egress opening plus a door that closes, which is the
+    // egress board's to build. Until it lands the stamp is the whole answer
+    // here -- correct if incomplete, because it never calls something a
+    // bedroom that is not one.
+    //
+    // The drafting-side detector in _placeRoomTags still reads closet ->
+    // bedroom. That is the older rule and now the wrong way round, but
+    // changing it moves room tags on every existing drawing and belongs with
+    // the egress board, where the replacement test actually exists.
     return has('toilet', 'tub', 'shower', 'stall', 'vanity') ? 'wc'
       : has('washer', 'dryer') ? 'laundry'
       : has('sink', 'fridge', 'stove', 'cabinet') ? 'kitchen'
-      : has('closet') ? 'bedroom'
       : 'room';
   }
 
@@ -18398,10 +18433,18 @@ class Component extends DCLogic {
       return tag && /BEDR(OO)?M\s*1\b/i.test(tag.name || '');
     });
     const suite = named || bedrooms[0];
+    // A room that was told no is not missing a closet -- it has one fewer than
+    // it might, on purpose. Skipping it the same way the suite is skipped keeps
+    // one rule for "this room is not owed one".
+    const declined = new Set(this._roomStamps()
+      .filter(tag => tag.levelId === levelId && tag.closetDeclined === true)
+      .map(tag => (context.rooms.find(room =>
+        this._polygonContains(room.points, tag.at.x, tag.at.z)) || {}).id)
+      .filter(Boolean));
     const rooms = context.rooms.map(room => ({
       id: room.id,
       category: room.category,
-      primary: !!suite && room.id === suite.id,
+      primary: (!!suite && room.id === suite.id) || declined.has(room.id),
       wallIds: room.bounds.map(bound => bound.wallId),
       points: room.points,
     }));
@@ -20309,6 +20352,7 @@ class Component extends DCLogic {
           !this._selectedFenestrations.has(opening) && wallIds.has(opening.wallId));
         // Fixtures go with their own selection and with any deleted host wall —
         // a tub also needs its faucet-end wall to survive.
+        [...this._selectedFixtures].forEach(fixture => this._declineClosetFor(fixture));
         this._fixtures = this._fixtures.filter(fixture =>
           !this._selectedFixtures.has(fixture) && wallIds.has(fixture.wallId)
           && (!fixture.endWallId || wallIds.has(fixture.endWallId)));

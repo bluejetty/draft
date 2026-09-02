@@ -61,22 +61,23 @@ const closets = async page => (h.savedDrawing
 const message = page => page.locator('[data-model-drawing-message]');
 
 test.describe('The closet object', () => {
-  // ── A DEPENDENCY WORTH KNOWING ABOUT ──────────────────────────────────
-  // The room detector votes a room's category from the fixtures inside it,
-  // and the ONLY fixture that marks a bedroom is a closet. So a room is not
-  // recognised as a bedroom until it already has the thing auto-placement
-  // exists to give it, and the fixture path is circular: the pass can only
-  // ever reach rooms a drafter has STAMPED as bedrooms.
+  // ── A ROOM IS A BEDROOM BY ITS PROGRAM STAMP ──────────────────────────
+  // Movie's ruling, 1 Sep, and it is what unsticks this pass. The closet is a
+  // RESULT of a room being a bedroom, never the evidence for it -- the older
+  // rule read a closet as proof of a bedroom, which made auto-placement
+  // circular: a room could not be seen as a bedroom until it already had the
+  // thing the pass exists to give it.
   //
-  // That is not a defect in the pass -- it is where the feature actually takes
-  // effect, which is after the rooms are named. Reported rather than worked
-  // around, because working around it would mean guessing which unnamed rooms
-  // are bedrooms and carpeting a house with closets.
+  // So the toy asks the stamp. Until the egress board lands -- an openable
+  // opening plus a door that closes is the real test -- the stamp is the whole
+  // answer, which is correct if incomplete: it never calls something a bedroom
+  // that is not one.
   //
-  // What is pinned below is the wiring either side of that: the pass runs, it
-  // never doubles up, it never fires for a drafter, and it does not guess. The
-  // placement rules themselves -- squaring, openings winning, the shared-wall
-  // tie-break, the clear strip -- are proved in proto/closets-harness.js.
+  // What is pinned below is the wiring either side of that: the pass does not
+  // guess, it does not double up, it does not fire for a drafter, and a room
+  // that was told no stays told. The placement rules themselves -- squaring,
+  // openings winning, the shared-wall tie-break, the clear strip -- are proved
+  // in proto/closets-harness.js.
 
   test('an unnamed room is not guessed to be a bedroom', async ({ page }) => {
     await openToy(page);
@@ -91,11 +92,14 @@ test.describe('The closet object', () => {
     expect(await closets(page)).toHaveLength(0);
   });
 
-  test('a room that already has one is never given a second', async ({ page }) => {
+  test('a closet in a room is not evidence that the room is a bedroom', async ({ page }) => {
     await openToy(page);
     await drawTwoBedrooms(page);
-    // A hand-placed closet is the one non-stamp route to being a bedroom --
-    // and it is also, by definition, a bedroom that is not missing a closet.
+    // THE FLIP THAT UNSTICKS THE PASS. A closet used to be read as proof of a
+    // bedroom, which is backwards -- and circular, because it made the pass
+    // unable to reach any room that did not already have one. Now a room with
+    // a closet and no stamp is just a room, so nothing is inferred from it and
+    // nothing is added anywhere.
     await closetFixture(page, -16, -12, -6.6);
     expect(await closets(page)).toHaveLength(1);
 
@@ -103,8 +107,6 @@ test.describe('The closet object', () => {
     await h.waitForModelReady(page);
     await h.waitForSaved(page);
 
-    // The toy places what is MISSING. A closet the drafter drew -- or moved --
-    // is still that room's closet.
     expect(await closets(page)).toHaveLength(1);
   });
 
