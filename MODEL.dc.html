@@ -11244,24 +11244,23 @@ class Component extends DCLogic {
   _commitOutline(points, closedGarage = false) {
     this._ensureDrawingCollections();
     if (points.length < 3) return null;
-    // NO CROSSING GUARD HERE, and the measurement is why. A crossing outline
-    // encloses no floor -- polygonArea returns exactly 0 for a bowtie -- and
-    // refusing one at commit was the ruling. But _commitOutline is the wrong
-    // place to enforce it: measured on tests/auto-dims.spec.js:326, this
-    // receives SEVEN points for an outline the drafter drew with EIGHT
-    // corners, and that seven-point ring genuinely does self-intersect:
+    // A CROSSING OUTLINE IS REFUSED. It encloses no floor: two lobes wind
+    // oppositely and the shoelace area cancels to EXACTLY zero, which is the
+    // worse failure -- a sheet reading 47 sq ft where it should say 50 gets
+    // questioned; one reading 0 for a room plainly on the page reads as a
+    // rendering glitch and gets shrugged at.
     //
-    //   GUARD n=7 geo=object si=true pts=[[-8,-6],[8,-6],[8,6]]
-    //
-    // So the predicate was right about the ring it was handed and wrong to be
-    // asked here at all -- the shape is not yet what was drawn. Guarding here
-    // turned a green spec red for a house with a 1 7/16" jog in one wall,
-    // which is a real thing a drafter draws.
-    //
-    // DraftGeometry2D.selfIntersects and its harness stay: the detector is
-    // sound and mutation-tested. What is missing is the right place to call
-    // it, which is a question about the drawing pipeline rather than about
-    // geometry, and it is not answered yet.
+    // selfIntersects tests PROPER crossings only. That distinction is the
+    // whole reason this guard can exist: the vertex magnet merges a small jog
+    // into a zero-width spike, and an earlier tolerance-based test called
+    // every spike a crossing and refused houses the app itself draws.
+    if (window.DraftGeometry2D.selfIntersects(points)) {
+      this.setState({
+        drawingMessage: 'That outline crosses itself, so it encloses no floor area. Redraw it without the crossing.',
+        drawingMessageError: true,
+      });
+      return null;
+    }
     const shelf = this._activeBoneyardShelf();
     const shelfHasMaster = this._boneyardOutlines.some(outline => outline.shelfId === shelf.id && !outline.garage);
     const level = this.state.boneyardActive ? null : this._activeLevel();

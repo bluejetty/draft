@@ -118,11 +118,30 @@ if (!window.DraftGeometry2D) {
   const selfIntersects = points => {
     if (!Array.isArray(points) || points.length < 4) return false;
     const n = points.length;
-    const edge = i => ({ start: points[i], end: points[(i + 1) % n] });
+    // PROPER crossings only -- strict sign changes on both segments. Touching
+    // at a point and lying along each other are deliberately NOT crossings,
+    // and that distinction is the whole of this function.
+    //
+    // WHY, measured 2 Sep. The vertex magnet merges corners closer together
+    // than its screen-space reach, so a drafter's small jog becomes a
+    // ZERO-WIDTH SPIKE in the stored ring -- out and back along one line, as
+    // in (3,6) -> (3,3) -> (3,6). That spike is normal, permanent, and present
+    // in ordinary drawings. An earlier version of this function used
+    // segmentIntersection, whose tolerance counts a touch as a hit, so it
+    // called every spike a crossing and refused houses the app itself draws.
+    //
+    // The strict test separates them exactly: rectangle, L, T, deep C, U and
+    // spike ring all false; a bowtie true whether its lobes are equal or not.
+    // That last case matters -- an unequal bowtie defeats every area-ratio
+    // test, because a deep C encloses the same fraction of itself that one
+    // does.
+    const side = (a, b, p) => Math.sign((b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x));
     for (let i = 0; i < n; i += 1) {
+      const a = points[i], b = points[(i + 1) % n];
       for (let j = i + 2; j < n; j += 1) {
         if (i === 0 && j === n - 1) continue;   // the closing pair share a corner
-        if (segmentIntersection(edge(i), edge(j))) return true;
+        const c = points[j], d = points[(j + 1) % n];
+        if (side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0) return true;
       }
     }
     return false;
