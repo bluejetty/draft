@@ -8819,6 +8819,10 @@ class Component extends DCLogic {
   _activeWalls() {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
+    // This filter is load-bearing beyond walls: _activeFixtures derives its
+    // set from these ids, so it is what keeps fixtures off a foreign layer
+    // view too. The courtesy escape below is safe because _selectLayerView
+    // clears those ids on every layer-set change, so none survive a switch.
     return this._walls.filter(wall => wall.levelId === levelId && (view == null || (wall.view || 'plan') === view
       || (!this._isPrinting && this._courtesyWallIds?.has(wall.id))));
   }
@@ -13499,6 +13503,11 @@ class Component extends DCLogic {
     };
   }
 
+  // NOTE (electric sheet): this keys off the ids from _activeWalls, so a
+  // fixture inherits the layer-view exclusion rather than having one of its
+  // own. That inheritance is the ONLY thing keeping a sink unselectable on
+  // the ELECTRIC sheet -- loosen the filter in _activeWalls and this rule
+  // silently loses its guard. tests/electric-sheet.spec.js fails if it does.
   _activeFixtures() {
     const levelId = this._activeLevelId();
     const wallIds = new Set([...this._activeWalls(), ...this._sharedContextWalls()].map(wall => wall.id));
