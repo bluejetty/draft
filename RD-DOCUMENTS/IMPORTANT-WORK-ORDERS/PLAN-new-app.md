@@ -58,6 +58,49 @@ That third row is why the review pays twice.
 
 ---
 
+## Two rules that come from two things writing one file
+
+Both were raised by Gilligan and both are day-one, not polish.
+
+### `ifRev` is not optional
+
+Drawings live in IndexedDB under `model-drawing`, and **LAYOUT and PROJECT read
+the same bucket.** Writes are guarded:
+
+```js
+await store.saveSharedFile(file, MODEL_STORAGE_BUCKET, { ifRev: at.rev });
+```
+
+Optimistic concurrency: a write landing on a revision it did not read is
+refused and merged rather than clobbering. **A new page that writes without
+`ifRev` silently overwrites whatever LAYOUT just did.** Reading is free.
+Any new page inherits that obligation the day it first writes.
+
+### What "better" means, in four clauses
+
+The plan says *old pages run untouched until their replacement is better* a
+dozen times. That sentence is load-bearing and had no owner and no test, which
+Gilligan caught. It means:
+
+1. The new page does everything the old one does **for the tasks it claims** --
+   not all tasks.
+2. Its specs cover that scope.
+3. Movie has drawn a real house with it and preferred it.
+4. **The old page still opens a drawing the new page has written, without
+   loss** -- checked by a spec, not by hand, for as long as both exist.
+
+The fourth is the one I had missed, and it is the one that makes the rest
+safe. Both pages are live on the same bucket during the changeover, so if the
+new page writes a key the old one chokes on -- or drops one it needs -- then
+falling back does not restore anything. It strands the drafter's file. A
+rollback is not a rollback unless the old page can still open what the new one
+wrote.
+
+When all four hold, `index.html` repoints. The old page stays two weeks,
+unlinked and reachable by URL, then goes.
+
+---
+
 ## Step 1 — ENTRY
 
 **The first thing anyone sees, and half of it is already built.**

@@ -70,8 +70,14 @@
 
      The scrim arrives a second later, UNDER this (z-index 61 over 60),
      so the bone stays lit while everything else dims. -->
-<div data-first-bone hidden
-     style="position:fixed; inset:0; z-index:61; display:flex; align-items:center; justify-content:center; pointer-events:none;">
+<!-- display:none, NOT the `hidden` attribute. `hidden` is only a UA rule
+     ([hidden]{display:none}) and an author `display` in a style attribute
+     beats it -- so `hidden` plus `display:flex` left this element laid out
+     over the whole viewport, invisible, with its button still taking
+     presses. It ate every click aimed at the middle of the canvas and
+     failed 17 specs across five files. The script below turns it on. -->
+<div data-first-bone
+     style="position:fixed; inset:0; z-index:61; display:none; align-items:center; justify-content:center; pointer-events:none;">
   <button data-first-bone-press aria-label="BUILD MY FIRST HOUSE"
           style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; pointer-events:auto;">
     <img src="./assets/btn-bone.png" alt="" width="287" height="275" style="display:block; max-width:60vw; height:auto;" />
@@ -89,7 +95,7 @@
     let seen = true;
     try { seen = localStorage.getItem('draft-entry-coach-seen') === '1'; } catch (err) { seen = true; }
     if (seen) return;
-    holder.hidden = false;
+    holder.style.display = 'flex';
     // The component decides what a press MEANS -- it is the only thing that
     // knows whether the sheet is empty. This just says it happened.
     holder.querySelector('[data-first-bone-press]').addEventListener('click', () => {
