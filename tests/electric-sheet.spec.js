@@ -33,39 +33,55 @@ async function oneWall(page) {
   await h.waitForSaved(page);
 }
 
-test('the control: on the plan that wall selects and deletes', async ({ page }) => {
+// A fridge on that wall. Fixtures are the entity that matters here: every
+// other active-set helper (_activeWalls, _activeLines, _activeDimensions,
+// _activeRoomTags, _activeColumns, _activeBeams) already filters by the
+// level's layer view, so those are excluded from the electric sheet before
+// selection is even asked. _activeFixtures does NOT, so a sink or a stove
+// was selectable on it — the one real hole the spec's "fixtures are
+// background, not selectable" rule was catching.
+async function oneFixture(page) {
+  await h.selectTool(page, 'Fixture');
+  await page.getByRole('button', { name: 'FRIDGE', exact: true }).click();
+  await h.clickWorld(page, 2, -5.6);
+  await h.waitForSaved(page);
+}
+
+test('the control: on the plan that fixture selects and deletes', async ({ page }) => {
   await h.openModel(page);
   await oneWall(page);
-  expect(h.allWalls(await h.savedDrawing(page))).toHaveLength(1);
+  await oneFixture(page);
+  expect((await h.savedDrawing(page)).fixtures).toHaveLength(1);
 
   await h.selectTool(page, 'Select');
-  await h.clickWorld(page, 0, -6);          // dead on the wall line
+  await h.clickWorld(page, 2, -5.6);
   await page.keyboard.press('Delete');
   await h.waitForSaved(page);
 
-  expect(h.allWalls(await h.savedDrawing(page))).toHaveLength(0);
+  expect((await h.savedDrawing(page)).fixtures).toHaveLength(0);
 });
 
-test('on the ELECTRIC sheet the identical click cannot touch the wall', async ({ page }) => {
+test('on the ELECTRIC sheet the identical click cannot touch the fixture', async ({ page }) => {
   await h.openModel(page);
   await oneWall(page);
+  await oneFixture(page);
   await useLayerView(page, 'MAIN FL', 'ELECTRIC');
 
   await h.selectTool(page, 'Select');
-  await h.clickWorld(page, 0, -6);          // the exact click that worked above
+  await h.clickWorld(page, 2, -5.6);        // the exact click that worked above
   await page.keyboard.press('Delete');
   await page.waitForTimeout(300);
 
-  expect(h.allWalls(await h.savedDrawing(page))).toHaveLength(1);
+  expect((await h.savedDrawing(page)).fixtures).toHaveLength(1);
 });
 
-test('nor through its corner, which would be a back door into dragging it', async ({ page }) => {
+test('the wall is background there too, though its layer view already said so', async ({ page }) => {
   await h.openModel(page);
   await oneWall(page);
   await useLayerView(page, 'MAIN FL', 'ELECTRIC');
 
   await h.selectTool(page, 'Select');
-  await h.clickWorld(page, -8, -6);         // the wall's own vertex
+  await h.clickWorld(page, 0, -6);
   await page.keyboard.press('Delete');
   await page.waitForTimeout(300);
 
