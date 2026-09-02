@@ -110,7 +110,7 @@ Do it while already in that code for another reason. On its own it is a large
 diff that changes no behaviour — poor value, and poor timing right before
 somebody starts reading the file.
 
-### 9. Drop the `.dc.` from the page filenames
+### 8. Drop the `.dc.` from the page filenames
 
 Movie's, and the reason is plain: `MODEL.dc.html` is an odd thing to type and
 an odd thing to explain. Four files carry it — `MODEL`, `LAYOUT`, `Notepad`,
