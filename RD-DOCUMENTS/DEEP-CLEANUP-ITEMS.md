@@ -8,10 +8,25 @@ urgent** — that is the point of the list. It exists so the work is remembered
 instead of rediscovered, and so whoever does it starts with the traps already
 mapped.
 
-**How to do one of these, and it is Movie's rule:** take a zip of the whole
+**How to do one of these, and it is Movie's rule:** take a backup of the whole
 repository first, then do the work, then prove it still works. In that order.
-Git history and a green suite cover most of it, but a zip on a disc covers the
-case they do not — and it costs a minute.
+
+Take it with `git bundle`, not a zip. A zip holds the files as they are today;
+a bundle is one file holding every branch, tag and commit, and it restores with
+`git clone`. On 2 Sep a zip would not have covered the day's actual near-miss —
+229 branches deleted, one of them holding 19 commits nobody else had.
+
+**Unshallow first.** The agent containers clone shallow, and a bundle made in
+one is truncated at the cutoff *while still reporting* `The bundle records a
+complete history` — `verify` cannot see past a boundary it believes is the
+beginning. It fails at restore instead, which is the worst moment to find out.
+
+```
+git rev-parse --is-shallow-repository   # if true, do not bundle yet
+git fetch --unshallow origin
+git bundle create rough-drafter-$(date +%Y%m%d).bundle --all
+git clone <that file> /tmp/restoretest  # the only proof that counts
+```
 
 Two health readings taken while writing this, worth knowing before anyone
 starts "improving" things:
@@ -26,15 +41,21 @@ starts "improving" things:
 
 ## Cheap and safe — do these first
 
-### 1. Delete merged remote branches
+### 1. Delete merged remote branches — **DONE 2 Sep 2026**
 
-**118 branches** on the remote are already merged into `main` and were never
-deleted. They make `git branch -r` unreadable and hide the handful that are
-actually live.
+229 branches down to 7, nothing lost. Left here for the trap, which cost a
+branch and nearly cost nineteen commits.
 
-Safe by definition: a merged branch's commits are in `main`. Keep any branch
-that is *not* merged, obviously, and check before each delete rather than
-scripting it blind.
+`git branch --merged` listed only 118 of the 229 as merged. The cause is in
+item 15, and it is not what item 15 originally said: the container held a
+**shallow clone**, so most merge bases were invisible and long-merged branches
+read as tens of commits ahead. **Unshallow before judging any branch**, and
+until you have, read the PR badge on GitHub's branches page instead.
+
+One branch — `claude/rough-drafter-audit-2bv0hh`, 19 commits — was deleted
+mid-sweep on a merged-looking reading and restored from a local object at
+`ce29ded`. That recovery was luck. The bundle rule above is so the next one
+is not.
 
 ### 2. `SPEC-*.md` → `RULES-*.md`
 
@@ -190,7 +211,8 @@ whether it is worth the diff is a judgement.
 
 ### 11. The 26 MB of PDFs
 
-`BUILDING-CODES/` is 26 MB of the repository's 29. **Deleting them does not
+`RD-DOCUMENTS/BUILDING-CODES/` is 26 MB of the 54 MB working tree, and 25.7 MB
+of blob across all history. **Deleting them does not
 shrink the repo** — git keeps the blobs, so every clone still pays. Only a
 history rewrite recovers it, which means force-pushing over shared branches
 and is ruled out by `BRANCHING.md` for good reasons.
@@ -223,50 +245,68 @@ regardless of how the entry sequence question lands.
 
 ---
 
-### 15. main's history was rewritten, and git cannot see past it
+### 15. A shallow clone reads exactly like a rewritten history
 
-Found while trying to judge which old branches were safe to delete. It
-explains a lot and it will waste somebody's afternoon if it is not written
-down.
+Found while trying to judge which old branches were safe to delete. **This
+entry said the opposite for most of a day** — that `main` had been squashed or
+filtered — and that reading was wrong. It is left in, corrected, because the
+wrong version was convincing, and the way it fell apart is the useful part.
+
+The agent containers clone **shallow**. `.git/shallow` held three boundary
+commits. Everything older than them is simply absent, and git does not
+announce this — it answers every question as though the cutoff were the
+beginning of time.
 
 ```
-main's own log        453 commits
-the repository        755 commits
+                        shallow      real
+main's own log            453         782
+all refs                  680*        809
+```
+<sub>*Gilligan's container, truncated at a different depth. Three of us read three
+different numbers off the same repository.</sub>
+
+What that produced, all of it looking like separate problems:
+
+- **`git branch --merged` under-reports.** A merged branch's merge base is
+  older than the cutoff, so git cannot see the shared history and counts the
+  branch as tens of commits ahead. This is what nearly cost the audit branch.
+- **Commit subjects go missing.** `main` appeared not to contain *"BUILD HOUSE:
+  one click generates the starter shell from the outline"*. It does, at
+  `7697162`, below the cutoff.
+- **GitHub disagrees with git, and GitHub is right** — not because it reads
+  merge records instead of ancestry, but because it has the whole history and
+  the container does not.
+
+**The fix is two commands and about three seconds:**
+
+```
+git rev-parse --is-shallow-repository
+git fetch --unshallow origin
 ```
 
-`main` does **not** contain the subject *"BUILD HOUSE: one click generates the
-starter shell from the outline"* — a commit whose work is plainly in the app.
-So the history was squashed or filtered at some point, and old branches share
-almost no ancestry with what `main` is now.
+#### How the wrong version survived as long as it did
 
-Three consequences, each of which looks like a different problem until you
-know the cause:
+Each proof was real evidence pointing at the wrong cause, which is the only
+kind that is dangerous.
 
-- **`git branch --merged` under-reports.** Branches whose PRs merged show as
-  unmerged, because their commits are not ancestors of `main` any more.
-- **Matching by commit subject fails too**, since the rewrite changed the
-  subjects it kept.
-- **GitHub disagrees with git**, and GitHub is right. Its branches page shows
-  `1 ahead` where git counts 319, because it is reading its own record of the
-  merge rather than walking ancestry.
+- *"453 commits against the repository's 755."* Both numbers were measured, and
+  they do disagree — because one was a shallow log and the other was
+  `git count-objects`, which counts loose objects, not commits. Two units, one
+  comparison.
+- *"`main` lacks the BUILD HOUSE commit."* True of what the container could
+  see. False of the repository.
+- *"`claude/new-session-1wmbue` is a byte-identical duplicate of `e66d412` —
+  same `git patch-id`."* This one had **no left-hand side at all**. That branch
+  tip was a *merge* commit, and `git diff-tree -p` emits nothing for a merge
+  without `-m`; it produced zero bytes, so no patch-id was ever computed for
+  it. The single id that came back, `0494df74`, was `e66d412`'s own — matched
+  against itself. And `e66d412` is a plain ancestor of `main`, which needs no
+  rewrite to explain.
 
-So: **to judge an old branch, read the PR badge on the branches page.** A
-merged PR is proof the work landed. Git cannot tell you, and neither can a
-commit message.
-
-Two worked examples, both of which looked alarming and were fine:
-
-- `claude/new-session-1wmbue` — 1 commit ahead, *"Elevations hide a wall
-  standing behind a nearer wing's roof"*. That work **is** in `main` as
-  `e66d412`, delivered by `skipper/elevation-occlusion`. Same change, two
-  SHAs.
-- `devin/1787701415-section-marks` — git says 319 ahead; its top commits
-  include *"Extract the four pure 2D painters into render-2d.js"*, and
-  `render-2d.js` is in `main`.
-
-Nothing needs fixing. The rewrite is done and rewriting it back would be far
-worse. This entry exists so the next person does not spend an hour proving
-git wrong.
+The pattern worth keeping: **a story that explains three anomalies at once is
+not thereby true.** A shallow clone explains all three too, and it is the
+duller explanation, which is the one that was right. What broke it was not
+more reasoning — it was trying to restore the backup and watching it fail.
 
 ## Not cleanup. Please do not.
 
