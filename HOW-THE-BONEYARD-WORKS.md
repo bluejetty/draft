@@ -152,5 +152,43 @@ water, so having it silently shrink because someone pushed a wall out is a
 different proposition from a floor cantilever shrinking. Not assumed either
 way.
 
+---
+
+## Growing and shrinking are not symmetric
+
+> Movie: *"the only way they can reduce footprint is in the boneyard using the
+> bone or foundation"*
+
+So the two directions have different rules and different doors:
+
+| | where it can be done | what it affects |
+|---|---|---|
+| **push out** | any lower floor | everything above -- extends, or spends overhang |
+| **reduce footprint** | **only in the boneyard**, via the bone or the foundation | -- |
+
+Growing is available anywhere and is safe: things above follow, and the
+overhang rule absorbs what it can. Shrinking is gated to one place.
+
+> Skipper's note: and this is the argument for the whole feature, not a
+> restriction bolted onto it. Shrinking is the destructive direction -- pull
+> the base in and something above it can be left standing on nothing. It is
+> the one move where you need to see the whole building before you commit,
+> and the left window is exactly that: every level in its own colour, stacked,
+> with the thing you are about to cut visible. The 3D iso is not decoration on
+> the boneyard. It is what makes the boneyard the right place to keep the
+> destructive verb.
+
+### The bone and the foundation
+
+> Movie: *"the bone and foundation wireframe may become the same thing in the
+> future"*
+
+Recorded because it changes how this should be built, not just what it will
+look like later. They already share their rules -- move either outward and the
+same thing happens (see above), and both are named as the doors to shrinking.
+So they should not be built as two mechanisms that happen to agree; they
+should be **one mechanism with two names**, and the day they merge is a rename
+rather than a rewrite.
+
 <!-- next: -->
 
