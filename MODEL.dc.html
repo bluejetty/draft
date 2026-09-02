@@ -15527,6 +15527,9 @@ class Component extends DCLogic {
   // returned refs still cover every item touching the vertex, so a drag keeps
   // the shared vertex pool welded together.
   _findVertexHit(worldPt, filter = null) {
+    // The electric sheet has no vertices to grab: a wall corner would
+    // otherwise be a back door into moving the wall the outlets sit on.
+    if (this._onElectricSheet()) return null;
     const allows = type => !filter || filter === 'all' || filter === type;
     const r = this._magnetRadius() * 1.5;
     let bestD = r, bestVtx = null;
@@ -16083,7 +16086,26 @@ class Component extends DCLogic {
 
   // SELECT can engage one object type (the OBJECT TYPE chips); every pick
   // path then ignores everything else until the filter returns to ALL.
+  // On the ELECTRIC sheet the drafter may move, delete and add electric
+  // devices, and nothing else. Everything that is not electric -- walls,
+  // doors, fixtures, dimensions, room tags -- is the background he draws on:
+  // visible, and not selectable. He cannot nudge a wall while placing outlets
+  // along it.
+  //
+  // Enforced HERE, at the one funnel every selection branch already runs
+  // through, rather than by making other things merely hard to grab. If it
+  // were done in the painter, or by widening a threshold, it would not be
+  // done: something would still be pickable on a lucky pixel.
+  //
+  // What is restricted is his ability to damage the building while he is
+  // thinking about lights -- not his judgement about the electric plan. The
+  // same distinction TOY MODE draws.
+  _onElectricSheet() {
+    return !this.state.boneyardActive && this._activeLayerViewId() === 'e-power';
+  }
+
   _selectFilterAllows(type) {
+    if (this._onElectricSheet()) return type === 'electric';
     const filter = this.state.selectFilter || 'all';
     return filter === 'all' || filter === type;
   }
