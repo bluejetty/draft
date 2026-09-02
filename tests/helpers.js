@@ -10,7 +10,7 @@ const STORAGE_BUCKET = 'model-drawing';
 
 async function openModel(page, {
   webgl = true, rails = true, boneWallet = true, boneReveal = false, autoStairs = false, roomGrow = false,
-  autoWindows = false, entryCoach = false,
+  autoWindows = false, entryCoach = false, search = '',
 } = {}) {
   // Init scripts run on every navigation, so the flag keeps a reload inside a
   // test from wiping the drawing the test just made. The FAT TEST WALLET
@@ -73,7 +73,11 @@ async function openModel(page, {
       };
     });
   }
-  await page.goto('/MODEL.dc.html');
+  // `search` opens the page with a query string. TOY MODE's temporary door is
+  // a query flag until the real mode switch lands (turtle path step 5), so a
+  // spec that needs it asks for it here rather than navigating by hand and
+  // losing every init script above.
+  await page.goto(`/MODEL.dc.html${search}`);
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
   await waitForModelReady(page, { rails });
   return page.locator('[data-model-canvas]');

@@ -38,6 +38,7 @@ if (!window.DraftToyConstraints) {
     OPENING_WOULD_NOT_FIT: 'OPENING_WOULD_NOT_FIT',
     CANTILEVER: 'CANTILEVER',
     GROUP_MEMBER_BLOCKED: 'GROUP_MEMBER_BLOCKED',
+    OBJECT_CLEARANCE: 'OBJECT_CLEARANCE',
     NO_MOVE: 'NO_MOVE',
   });
 
@@ -260,6 +261,42 @@ if (!window.DraftToyConstraints) {
       violations.push({ reason: REASON.CANTILEVER, wallId: wall.id, band, cantileverFt: ft });
     });
 
+    // ── THE SEAM FOR THINGS STANDING IN A ROOM ──────────────────────────
+    // A closet is an OBJECT placed in a room, not a bite taken out of its
+    // outline (Movie, 1 Sep). That ruling is what keeps every rule above
+    // simple: the room stays a rectangle, so the minimums measure the box and
+    // no neck measurement is needed anywhere.
+    //
+    // But an object has clearance of its own. A bedroom can be shrunk until
+    // its own closet will not open, and this module has to be able to refuse
+    // that WITHOUT KNOWING WHAT A CLOSET IS. So it asks.
+    //
+    // `clearanceFor` is supplied by whoever owns the object and answers for
+    // one object in a proposed configuration -- it can read the room's changed
+    // dimensions out of that configuration, which is what a clear strip
+    // depends on. This module knows only that `ok: false` is a violation, and
+    // carries enough of the answer back for the refusal to name the thing.
+    //
+    // NO OBJECT REASONING BELONGS HERE, and none should ever be added: the day
+    // a second kind of object needs clearance, it implements the same call.
+    // With no callback supplied nothing is asked and nothing can refuse, which
+    // is the honest state while the clear strip has no number yet.
+    const clearanceFor = config && config.clearanceFor;
+    if (typeof clearanceFor === 'function') {
+      (config.objects || []).forEach(object => {
+        const verdict = clearanceFor(object, config);
+        if (!verdict || verdict.ok !== false) return;
+        violations.push({
+          reason: REASON.OBJECT_CLEARANCE,
+          objectId: object.id,
+          objectKind: object.kind,
+          roomId: object.roomId,
+          needFt: verdict.needFt,
+          haveFt: verdict.haveFt,
+        });
+      });
+    }
+
     return { ok: violations.length === 0, violations };
   };
 
@@ -315,6 +352,10 @@ if (!window.DraftToyConstraints) {
     // rule failed decides the sentence, so the presentation layer needs it and
     // must not go asking the standards a second question to find out.
     if (blocked.failures) said.failures = blocked.failures;
+    // What the refusal has to name, when the thing that stopped the move was
+    // an object standing in the room rather than the room itself.
+    if (blocked.objectId !== undefined) said.objectId = blocked.objectId;
+    if (blocked.objectKind !== undefined) said.objectKind = blocked.objectKind;
     let culprit = blocked.wallId || null;
     if (!culprit && blocked.roomId) {
       const room = (ctx.rooms || []).find(r => r.id === blocked.roomId);
@@ -357,7 +398,8 @@ if (!window.DraftToyConstraints) {
     // toward zero a foot at a time and take the largest the whole
     // configuration accepts, so a partly-blocked drag still moves as far as it
     // legally can instead of refusing outright.
-    const base = { walls, rooms: ctx.rooms, openings: ctx.openings, minimums: ctx.minimums, mode };
+    const base = { walls, rooms: ctx.rooms, openings: ctx.openings, minimums: ctx.minimums, mode,
+      objects: ctx.objects, clearanceFor: ctx.clearanceFor };
     const step = wanted > 0 ? FOOT_FT : -FOOT_FT;
     let blocked = null;
     for (let d = wanted; Math.abs(d) >= FOOT_FT - 1e-9; d -= step) {
@@ -383,7 +425,15 @@ if (!window.DraftToyConstraints) {
         if (advisory) result.band = advisory;
         return result;
       }
-      if (!blocked) blocked = verdict.violations[0];
+      // THE BINDING CONSTRAINT IS THE CLOSEST ONE, not the furthest. Walking
+      // back from what was asked, several rules can refuse the far positions
+      // while only one refuses the position just past where the wall actually
+      // stopped -- and that last one is the rule the user leaned on. Keeping
+      // the first refusal instead reports whatever failed out at the finger,
+      // which on a long drag is rarely what stopped it: drag a wall five feet
+      // into a room and the area minimum fails out there, while the thing that
+      // held you at one foot was the closet behind you.
+      blocked = verdict.violations[0];
     }
 
     const refusal = { delta: 0, reason: REASON.NO_MOVE, group: groupIds };
