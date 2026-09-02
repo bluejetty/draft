@@ -797,6 +797,33 @@ if (!window.DraftDrawingFormat) {
     };
   };
 
+  // The PROJECT page's section table: the typical-section numbers, one row
+  // per BUILD TYPE. HOUSE is not stored here — HOUSE *is* the drawing's live
+  // assembly, edited through the level cards and the wall-section detail.
+  // The other types carry only what they differ in; null is "not set", which
+  // reads as the type's default, and a type simply has no cell for an item
+  // it cannot use (a garage has no upper floor, a house no wood fill wall).
+  const SECTION_TABLE_TYPES = Object.freeze([
+    'split', 'bilevel', 'modifiedBilevel', 'attachedGarage', 'detachedGarage',
+  ]);
+  const SECTION_TABLE_FIELDS = Object.freeze([
+    'roofPitch', 'roofOverhangFt',
+    'mainWallHeightFt', 'mainJoistDepthIn', 'mainSheathingIn',
+    'upperWallHeightFt', 'upperJoistDepthIn',
+    'fdnWallHeightFt', 'woodFillHeightFt',
+    'slabThicknessIn', 'footingWidthIn', 'footingDepthIn',
+  ]);
+  const sectionTable = raw => {
+    const stored = raw && typeof raw.rows === 'object' && raw.rows ? raw.rows : {};
+    return {
+      rows: Object.fromEntries(SECTION_TABLE_TYPES.map(type => {
+        const row = stored[type] && typeof stored[type] === 'object' ? stored[type] : {};
+        return [type, Object.fromEntries(SECTION_TABLE_FIELDS
+          .map(field => [field, positive(row[field], null)]))];
+      })),
+    };
+  };
+
   // LAYOUT (board #168): the sheet composition saved with the drawing. Paper
   // and orientation are the sheet's own; each viewport is a window onto model
   // space — kind picks the projection, pif the architectural scale (paper
@@ -946,6 +973,9 @@ if (!window.DraftDrawingFormat) {
     underlays,
     projectInfo,
     zoneHeights,
+    sectionTable,
+    SECTION_TABLE_TYPES,
+    SECTION_TABLE_FIELDS,
     specs,
     layout,
     tour,

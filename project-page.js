@@ -18,6 +18,80 @@ if (!window.DraftProjectPage) {
     Object.freeze({ id: 'modifiedBilevel', label: 'MODIFIED BILEVEL', reserved: true }),
   ]);
 
+  // ── The section table ────────────────────────────────────────────────
+  // A row per BUILD TYPE, a column per measured item. HOUSE is the drawing's
+  // own live assembly; the rest carry only what they differ in and show only
+  // the items their type uses — a garage has no floor joists, a bungalow no
+  // second floor, a bilevel no wood fill wall.
+  //
+  // Wall heights are DERIVED FROM THE STUD, never typed: a wall is a stud
+  // plus two top plates and one bottom plate, so the height that wastes no
+  // lumber is a precut length plus 4½". Type the stud, read the wall.
+  const PLATE_STACK_IN = 1.5 * 3;
+  const STUD_LENGTHS_IN = Object.freeze([92.625, 104.625, 116.625]);
+  // A basement fill wall doesn't get to choose its height, so it takes the
+  // offcut instead: an 8' precut sawn in two, rounded off the sixteenth.
+  const HALF_STUD_IN = 46.25;
+  const wallHeightFtFromStud = studIn => (studIn + PLATE_STACK_IN) / 12;
+  const studInFromWallHeightFt = wallHeightFt => wallHeightFt * 12 - PLATE_STACK_IN;
+
+  const SECTION_TABLE_ROWS = Object.freeze([
+    Object.freeze({ id: 'house', label: 'HOUSE', live: true }),
+    Object.freeze({ id: 'split', label: 'SPLIT', live: false }),
+    Object.freeze({ id: 'bilevel', label: 'BILEVEL', live: false }),
+    Object.freeze({ id: 'modifiedBilevel', label: 'MOD BILEVEL', live: false }),
+    Object.freeze({ id: 'attachedGarage', label: 'ATTACHED GARAGE', live: false }),
+    Object.freeze({ id: 'detachedGarage', label: 'DETACHED GARAGE', live: false }),
+  ]);
+
+  const ALL_TYPES = SECTION_TABLE_ROWS.map(row => row.id);
+  const HOUSE_LIKE = ['house', 'split', 'bilevel', 'modifiedBilevel'];
+  const SILL_PLATE_IN = 1.5;
+  const item = (id, label, unit, field, types, extra) =>
+    Object.freeze({ id, label, unit, field, types: Object.freeze(types), ...extra });
+
+  // unit: 'pitch' plain number | 'ftin' feet-and-inches | 'in' inches |
+  // 'stud' inches typed, wall height read back underneath | 'derived' read-only.
+  const SECTION_TABLE_ITEMS = Object.freeze([
+    item('pitch', 'PITCH :12', 'pitch', 'roofPitch', ALL_TYPES),
+    item('overhang', 'OVERHANG', 'ftin', 'roofOverhangFt', ALL_TYPES),
+    item('heel', 'ROOF HEEL', 'derived', null, ALL_TYPES),
+    item('upperStud', '2ND FL STUD', 'stud', 'upperWallHeightFt', ['house', 'modifiedBilevel']),
+    item('upperJoists', '2ND FL JOISTS', 'in', 'upperJoistDepthIn', ['house', 'modifiedBilevel']),
+    item('mainStud', 'MAIN FL STUD', 'stud', 'mainWallHeightFt', ALL_TYPES),
+    item('mainJoists', 'MAIN FL JOISTS', 'in', 'mainJoistDepthIn', HOUSE_LIKE),
+    item('mainSheathing', 'MAIN FL SHEATHING', 'in', 'mainSheathingIn', HOUSE_LIKE),
+    item('fdnWall', 'FDN WALL HT', 'ftin', 'fdnWallHeightFt', ALL_TYPES),
+    item('sill', 'SILL PLATE', 'derived', null, ALL_TYPES),
+    item('woodFill', 'WOOD FILL HT', 'ftin', 'woodFillHeightFt', ['split', 'modifiedBilevel']),
+    item('slab', 'SLAB', 'in', 'slabThicknessIn', ALL_TYPES),
+    item('basementClg', 'BSMT CLG HT', 'derived', null, HOUSE_LIKE),
+    item('footingWidth', 'FTG WIDTH', 'in', 'footingWidthIn', ALL_TYPES),
+    item('footingDepth', 'FTG DEPTH', 'in', 'footingDepthIn', ALL_TYPES),
+  ]);
+
+  // What a type is worth before anyone types anything. The SPLIT's 5'-0"
+  // concrete wall with the 1½" sill on top is the office default — 5'-1½"
+  // to the bearing surface, and the entry floor sits on that sill, so extra
+  // basement height is made up with a 2x6 wood wall above the concrete
+  // rather than a taller pour. A field absent here falls back to the
+  // HOUSE's live value.
+  const SECTION_TABLE_DEFAULTS = Object.freeze({
+    split: Object.freeze({
+      fdnWallHeightFt: 5,
+      woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,
+    }),
+    bilevel: Object.freeze({ fdnWallHeightFt: 5 }),
+    modifiedBilevel: Object.freeze({
+      fdnWallHeightFt: 5,
+      woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,
+    }),
+  });
+
+  // The heel is the fascia plus the rise the roof gains across the overhang
+  // — the same rule the detail draws it with.
+  const roofHeelIn = (fasciaIn, overhangFt, pitch) => fasciaIn + overhangFt * pitch;
+
   // The detached garage's grade beam rides ~8" above grade at the house —
   // the derive rule the ZONE HEIGHTS panel applies until overridden.
   const GARAGE_BEAM_ABOVE_GRADE_IN = 8;
@@ -154,6 +228,16 @@ if (!window.DraftProjectPage) {
     ZONE_ROWS,
     CUT_DEPTH_FT,
     GARAGE_BEAM_ABOVE_GRADE_IN,
+    SECTION_TABLE_ROWS,
+    SECTION_TABLE_ITEMS,
+    SECTION_TABLE_DEFAULTS,
+    STUD_LENGTHS_IN,
+    HALF_STUD_IN,
+    PLATE_STACK_IN,
+    SILL_PLATE_IN,
+    wallHeightFtFromStud,
+    studInFromWallHeightFt,
+    roofHeelIn,
     buildWallSection,
     paintWallSection,
   });
