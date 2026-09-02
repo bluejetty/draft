@@ -118,13 +118,37 @@ It uses the gate that already exists -- `draft-entry-coach-seen` in
 localStorage, which is what makes today's coach show a single time. Once you
 have built your first house on a machine, the big bone does not return there.
 
-Worth knowing why the gate is needed at all: **model space opens empty every
-time.** `_init()` sets up the canvas, camera and WebGL and loads nothing;
-the shared store holds PDF underlays, not drawings. A drawing lives in a
-`.draft` file on the drafter's own computer and is opened back through the file
-picker, which is why the top bar reads UNSAVED on a fresh load -- not a warning,
-just the truth. Without the gate the whole first-house sequence would fire on
-every single visit.
+**Correction to an earlier draft of this file**, which said model space opens
+empty every time. It does not. Drawings persist in IndexedDB under the bucket
+`model-drawing`, and `_loadDrawing()` runs on startup:
+
+```js
+const MODEL_STORAGE_BUCKET = 'model-drawing';
+const at = await window.SharedFileStore.loadSharedFileAt(MODEL_STORAGE_BUCKET);
+```
+
+I had read `_init()`, found it setting up only canvas, camera and WebGL, and
+concluded there was no restore. The restore is further along the boot chain.
+Movie caught it the way it should be caught: *"i was opening it and getting my
+old houses showing."*
+
+**LAYOUT and PROJECT read the same bucket**, so a drawing is already shared
+live across three pages. That is not an argument for same-origin -- it is the
+existing architecture, and a new page joins it by reading the same store.
+
+Writes are guarded and a new page must respect that:
+
+```js
+await store.saveSharedFile(file, MODEL_STORAGE_BUCKET, { ifRev: at.rev });
+```
+
+Optimistic concurrency -- a write landing on a revision it did not read is
+refused and merged rather than clobbering LAYOUT's. Reading is free; writing
+without `ifRev` would quietly overwrite another page's work.
+
+The gate is still needed, for the plain reason: **the first house is the first
+house.** Somebody returning to a drawing they already built does not want the
+screen tinted at them again.
 
 ---
 
