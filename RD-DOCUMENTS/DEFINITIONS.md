@@ -122,10 +122,28 @@ frame blocks at each jamb"*, and the same in `layout-plan.js`). A level name in
 front of it removes both collisions; without one it walks straight into them.
 
 `wireframe`, by contrast, is free — every use of it in the repository is
-inside `vendor/` — but it is **not a synonym for the master frame.** A
-wireframe is *how the frame is drawn* in the boneyard's left window: edges
-only, a colour per level. The frame is the geometry; the wireframe is a view
-of it. The same frame drawn solid would still be the frame.
+inside `vendor/`.
+
+### WIREFRAME
+
+> Movie: *"the wireframe will be the 'structural' lines in the model that can
+> be manipulated in the ways we discuss"*
+
+**The structural lines, and the ones the move rules act on.** Not a drawing
+style — the name comes from how it is shown in the boneyard's left window
+(edges only, a colour per level), but it refers to the lines themselves.
+
+Which makes it a **scope**, and that is the useful part: it says what the
+boneyard's rules can move and what they cannot. A wall is wireframe. A
+dimension, a room tag, a note and a hatch are not — they are drawn *from* the
+model, and they follow whatever they are attached to rather than being pushed
+themselves.
+
+> Skipper's note, and it is a correction of my own from ten minutes earlier: I
+> had written that the frame is the geometry and the wireframe is a view of
+> it. That is wrong. They are the same lines, seen from two angles — the
+> **master frame** is that line set as a thing the building hangs off, and the
+> **wireframe** is that line set as a thing you may take hold of.
 
 ### COPY
 
