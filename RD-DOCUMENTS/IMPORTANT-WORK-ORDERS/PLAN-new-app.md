@@ -154,7 +154,24 @@ months, not weeks, and it is not committed to here.
 
 ---
 
-## Step 3 — BONEYARD
+## Step 3 — the level rules (BONEYARD may not survive as a place)
+
+**Open, and Movie's call: the boneyard may be deleted entirely and become a
+LEVEL.** That follows from his earlier ruling that the bone and the foundation
+wireframe may become the same thing. If it is a level, it needs no card, no
+page and no special case -- it is the bottom of the stack.
+
+**The rules survive that; only the place is in question.**
+`HOW-THE-BONEYARD-WORKS.md` is not really about a boneyard. It is about how
+levels relate: move one and everything above responds, outward eats overhang,
+inward carries everything with it, the cantilever ladder walked backwards, the
+dead band. Those hold whether the thing being dragged is called BONEYARD or
+FOUNDATION, so `wireframe-move.js` is the same module either way.
+
+So this step does not wait on the decision. Build the rules; decide where they
+are reached from afterwards.
+
+### The old shape, for reference
 
 After MODEL space exists, because the boneyard manipulates what MODEL draws.
 
