@@ -34,3 +34,10 @@ knows its parent point.
 
 <!-- Movie explaining. Being filled in as he goes. -->
 
+### Two windows, side by side
+
+The boneyard becomes **two windows sitting side by side** rather than the one
+shelf strip it is today.
+
+<!-- next: what is in each window, and what the pair is for -->
+
