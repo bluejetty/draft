@@ -467,11 +467,70 @@ a reachable one — recorded, not fixed.
 
 **Carry all five across as they stand.**
 
-## Still to read — two
+## Verdicts 16–17 — `bone-wallet.js`, `gruff-drivethru.js`: **right as it is**
 
-`bone-wallet.js` and `gruff-drivethru.js`. Neither has a node harness, so a
-verdict means writing one first — the same job `pdf-scan` turned out to be, and
-both already load under `node`.
+The last two, and both needed a harness written before a verdict could be given.
+Both now have one.
+
+### `bone-wallet.js` — 12 checks
+
+Nine exports; `read` and `spend` touch localStorage, the rest are pure. The pure
+pair carry the whole risk: `normalise` decides what a stored wallet may say and
+`applyDrip` decides what an hour is worth. An error in either hands out free
+bones or freezes the faucet, and neither shows on screen until somebody
+complains.
+
+It handles every hostile case already:
+
+```
+mangled record          -> reseeds to 3, does not throw
+negative balance        -> floors at 0
+fractional balance      -> floors, never rounds up
+lastDripAt in the FUTURE-> clamps to now   (clock set back, restored VM)
+2.5 hours below the cap -> +2 bones, and the half hour CARRIES
+at the cap              -> the clock parks; elapsed time is discarded
+100 hours from empty    -> still stops at the cap
+```
+
+The carry is the subtle one and the harness pins it: discard the fraction
+instead of carrying it and a reload every 59 minutes drips nothing, ever.
+Mutation-tested — `lastDripAt = now` in place of the carry fails with the exact
+millisecond values.
+
+**And its honesty is the reason it passes.** Its header calls it an honour
+system by design: localStorage, editable with devtools, real enforcement waiting
+on the server ledger (#52). So the harness pins the **arithmetic**, not the
+security — which is the claim the module actually makes for itself.
+
+### `gruff-drivethru.js` — 19 checks
+
+Four board zones, stored as percentages because the art scales, but **measured**
+off `assets/gruff-drivethru-board.png` at its natural 1250×1050. That is the
+fact worth pinning: every zone still resolves to a whole pixel of the source art
+on both axes. A percentage that no longer does is a number somebody nudged by
+eye, and nudging by eye is how a panel drifts off the drawing beneath it.
+
+Also pinned: no zone runs off the board, the portrait ends before the screen
+begins, the answer strip starts below both, the speaker sits below the answer —
+and `factsFrom()`, `doorSide()`, `outlineBox()` return `{hasStairs:false}`,
+`null`, `null` on no input. It reads a draft; it does not invent one.
+
+## Method note — a mutation that never applied is not a test
+
+The whole-pixel check appeared to survive a nudge of `portrait.left`. It had
+not: the source reads `6.720` and the mutation searched for `6.72,`, so the file
+was never edited and a green run was reported as evidence the assertion was
+worthless.
+
+Re-run with the edit **asserted before the harness runs** — `assert s.count(old)
+== 1` — it fails correctly, `[false, true]`, exit 1.
+
+Skipper hit the identical shape in the same few minutes, from the other side: a
+spec that passed with its subject deleted. **A mutation test proves nothing
+unless the mutation is proven to have happened.** That is the seventh instrument
+error of these two days and, like the other six, it was caught before it shipped
+— by re-running rather than by reasoning about it.
+
 
 
 
