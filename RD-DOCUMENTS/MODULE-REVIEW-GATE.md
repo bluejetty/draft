@@ -500,11 +500,16 @@ millisecond values.
 **The ceiling reading is confirmed, 2 Sep.** "Ten a day" and "a ceiling of ten"
 are different rules that agree only for somebody who never spends — measured
 before asking: never spends, 24h → 10; spends as they go, 24h → **24**. Put to
-the owner, and the answer is the **ceiling**: hold at most ten, and a bone spent
-at nine comes back the next hour. That is what `DRIP_CAP` does and what the
-harness pins, so no change was needed. Recorded because the daily-allowance
-reading is a natural misreading of the same sentence, and the next person to
-have it should find it already settled.
+the owner: the decision is to **leave the ceiling as built** — hold at most ten,
+and a bone spent at nine comes back the next hour — with the allowance reading
+considered and not adopted. *"Either will work for now; it is not a big deal how
+many bones get sent out."* So this is a deliberate choice rather than a settled
+rule, and it is cheap to revisit: the daily version was written and reverted, and
+the shape is a third limit in `applyDrip`'s `Math.min` plus two stored fields.
+
+Recorded because the daily-allowance reading is a natural misreading of the same
+sentence, and the next person to have it should find the measurement already
+done — never spends → 10, spends as they go → 24 — rather than repeat it.
 
 **And its honesty is the reason it passes.** Its header calls it an honour
 system by design: localStorage, editable with devtools, real enforcement waiting
