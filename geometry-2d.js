@@ -99,6 +99,35 @@ if (!window.DraftGeometry2D) {
     };
   };
 
+  // Does a closed ring cross itself? Reuses segmentIntersection rather than
+  // repeating the math, and skips the pairs that always touch: adjacent edges
+  // share a corner, and the first and last edges share the closing one. Their
+  // shared endpoint lands inside segmentIntersection's own tolerance, so
+  // counting them would report every polygon as self-intersecting.
+  //
+  // WHAT THIS IS FOR, and what it deliberately is not. A self-intersecting
+  // outline is drawable today: the T-square forces segments onto an axis and
+  // hides it, but `t` stows the T-square. polygonArea then returns 0 for a
+  // bowtie, because the two lobes wind oppositely and cancel exactly -- the
+  // shoelace formula doing precisely what it says, and no way for the caller
+  // to tell that 0 from an honest zero.
+  //
+  // This answers only "does it cross itself". What the app should DO about one
+  // -- refuse the outline, warn and continue, or report the area as unknown --
+  // is a ruling nobody has made, so it is not made here.
+  const selfIntersects = points => {
+    if (!Array.isArray(points) || points.length < 4) return false;
+    const n = points.length;
+    const edge = i => ({ start: points[i], end: points[(i + 1) % n] });
+    for (let i = 0; i < n; i += 1) {
+      for (let j = i + 2; j < n; j += 1) {
+        if (i === 0 && j === n - 1) continue;   // the closing pair share a corner
+        if (segmentIntersection(edge(i), edge(j))) return true;
+      }
+    }
+    return false;
+  };
+
   // Intersection nearest to where the user clicked along seg.
   const nearestIntersection = (seg, others, point) => {
     const hits = [];
@@ -741,6 +770,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     angleDeg,
     paramAlongSegment,
     segmentIntersection,
+    selfIntersects,
     nearestIntersection,
     roomLoops,
     offsetOutline,
