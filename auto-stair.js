@@ -8,6 +8,13 @@
 // The suggestion is born legal: every candidate keeps its well (inflated
 // by half the finish allowance) inside the interior ring and holds the
 // #246 beam-edge gap, so `_stairAutoFit` finds nothing to nudge.
+// REQUIRES window.DraftGeometry2D -- resolved at CALL time, not at load. A page may list this
+// script before its dependency and still work; only the run/landing geometry needs the
+// dependency present by the time it is called.
+//
+// It was captured at load until 2 Sep, which meant a page whose script order
+// put this first got a module that loaded clean, reported every export, and
+// threw later from a call site naming a different file.
 if (!window.DraftAutoStair) {
 (() => {
   const geo = () => window.DraftGeometry2D;

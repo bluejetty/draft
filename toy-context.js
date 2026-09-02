@@ -16,6 +16,13 @@
 // the illegal one — a failure that looks exactly like working software from
 // the outside. Buried in a 21,000-line component it cannot be tested; here it
 // can, in node, in all four directions.
+// REQUIRES window.DraftGeometry2D and window.DraftToyConstraints -- resolved at CALL time, not at load. A page may list this
+// script before its dependency and still work; only the room read needs the
+// dependency present by the time it is called.
+//
+// It was captured at load until 2 Sep, which meant a page whose script order
+// put this first got a module that loaded clean, reported every export, and
+// threw later from a call site naming a different file.
 if (!window.DraftToyContext) {
 (() => {
   const geo = () => window.DraftGeometry2D;

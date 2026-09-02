@@ -21,6 +21,13 @@
 // No DOM, no component state, node-loadable, frozen. What is here is the SHAPE
 // of the ceremony; what any of the three ways in actually does belongs to
 // those, not to this.
+// REQUIRES window.DraftGruffInterview -- resolved at CALL time, not at load. A page may list this
+// script before its dependency and still work; only the ceremony defaults needs the
+// dependency present by the time it is called.
+//
+// It was captured at load until 2 Sep, which meant a page whose script order
+// put this first got a module that loaded clean, reported every export, and
+// threw later from a call site naming a different file.
 if (!window.DraftFirstRun) {
 (() => {
   const interview = () => window.DraftGruffInterview;

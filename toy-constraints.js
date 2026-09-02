@@ -12,6 +12,13 @@
 // deliberate — RABBIT's four-plans-per-press generates against the predicate,
 // and bolting a generator onto a move-validator afterwards is the expensive
 // version of this.
+// REQUIRES window.DraftGeometry2D, window.DraftWallTypes and window.DraftRoomStandards -- resolved at CALL time, not at load. A page may list this
+// script before its dependency and still work; only the room and wall rules needs the
+// dependency present by the time it is called.
+//
+// It was captured at load until 2 Sep, which meant a page whose script order
+// put this first got a module that loaded clean, reported every export, and
+// threw later from a call site naming a different file.
 if (!window.DraftToyConstraints) {
 (() => {
   const geo = () => window.DraftGeometry2D;
