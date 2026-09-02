@@ -1818,7 +1818,13 @@ const LEVEL_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a
 const POLAR_RULER_TOOLS = new Set(['line', 'wall', 'outline']);
 const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'dimension', 'cut', 'extend', 'copy', 'stair']);
 // Segment-drawing tools the full-time T-square squares to 90° while it is on.
-const ORTHO_LOCK_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'shape', 'stair']);
+// Everything that draws or moves along a line belongs here: a section line, a
+// dimension, and the extend/copy destination vector are all squared the same
+// way a wall is, and a drafter who turns the T-square on means all of them.
+const ORTHO_LOCK_TOOLS = new Set([
+  'line', 'wall', 'floor', 'outline', 'shape', 'stair',
+  'cut', 'dimension', 'extend', 'copy',
+]);
 // Arming a polar origin takes a deliberate pause on the node — a drive-by
 // hover on the way across the board never plants a ruler zero.
 const POLAR_DWELL_MS = 350;
