@@ -236,3 +236,66 @@ pattern, not assumed.
 The durable fix is to resolve these lazily inside the functions instead of at
 module scope. That is a change to the **old** app and belongs to the review
 gate, not to the new page.
+
+---
+
+## THE SCOPE SEAM — the most-shared modules are the least-reviewed
+
+Found 2 Sep while reconciling two independent capture sweeps that disagreed.
+The disagreement turned out not to be an error on either side: we were counting
+in **different scopes**, and both numbers were right for their own question.
+
+| scope | files | captures |
+|---|---:|---:|
+| the gate's seventeen | 6 | 9 |
+| repo-wide, plain `const X = window.Y` only | 7 | 10 |
+| **repo-wide, all shapes (incl. destructuring)** | **8** | **13** |
+
+The review gate's rule is *"loaded by `MODEL.dc.html` and by nothing else"* — a
+sound criterion, and chosen for a good reason: nothing outside MODEL has ever
+exercised those modules, so they carry the highest risk of untested drift.
+`cut-view.js` (MODEL **and** LAYOUT) and `layout-plan.js` (LAYOUT only) are
+correctly outside it. Neither is an oversight.
+
+**But the inverse of that criterion is the seam.** Of 38 modules at root:
+
+| | count | reviewed by the gate |
+|---|---:|---|
+| loaded by exactly 1 page | 22 | 17 of them |
+| **loaded by 2+ pages** | **14** | **none — by definition** |
+| loaded by no page | 2 | `first-run.js` only |
+
+The fourteen shared modules are the load-bearing ones:
+
+```
+shared-file-store.js   5 pages      formatters.js        3 pages
+drawing-format.js      5 pages      render-2d.js         3 pages
+profile-manager.js     4 pages      wall-types.js        3 pages
+cut-view.js, geometry-2d.js, tour.js, layer-views.js,
+room-standards.js, bone-sound.js, electric-symbols.js,
+fen-labels.js                       2 pages each
+```
+
+A defect in any of these hurts more pages than a defect in any of the
+seventeen, and none of them has a gate.
+
+### And this is not abstract: tier 1 is built entirely on the ungated half
+
+| tier 1 dependency | pages | in the gate |
+|---|---:|---|
+| `shared-file-store.js` | 5 | **no** |
+| `drawing-format.js` | 5 | **no** |
+| `render-2d.js` | 3 | **no** |
+| `wall-types.js` | 3 | **no** |
+
+Four for four. `MODEL.html` reads and never writes, so nothing here is urgent —
+but every later tier writes, and `shared-file-store.js` is the module a write
+goes through on five pages.
+
+**Suggested, not decided:** the natural next gate batch is those four, in that
+order. They are the shared core, they are what the new page runs on, and
+`render-2d.js` is already known to reach for zero globals — which is the
+strongest evidence yet that a *reviewed* shared module carries across cleanly.
+
+The four captures outside the gate (`cut-view.js` ×3, `layout-plan.js` ×1) are
+recorded above and belong to whoever reviews the shared fourteen.
