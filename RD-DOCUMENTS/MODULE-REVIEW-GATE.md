@@ -107,6 +107,49 @@ really guards it, and says plainly that a new caller must bring its own.
 That is what "right but unclear" means: correct where it sits, and correct only
 because of something outside it.
 
+## Verdict 2 — `areas.js`: **right but unclear**
+
+127 lines, four exports, pure shoelace, and it states its convention at the top
+where a drafter can read it — areas are as built, an opening is deducted from
+the level whose floor it is cut from, so a stairwell counts exactly once. That
+much is exemplary.
+
+Measured against known shapes:
+
+```
+10x10 square                        100     correct
+the same square wound backwards     100     winding-independent, correct
+triangle b=10 h=10                   50     correct
+two points / one point / empty        0     degenerate, returns 0
+BOWTIE (two 5x5 lobes)                0     <-- expected 50
+```
+
+**A self-intersecting polygon returns zero.** The two lobes wind oppositely and
+cancel exactly. On a permit application that is a silent understatement, and a
+shape that plainly has area reports none.
+
+The module is not wrong for its real contract, which is *simple polygon in,
+area out* — shoelace has no other meaning. What is missing is that the contract
+is written nowhere, and **nothing upstream enforces it**: there is no
+`isSimple`, no crossing test, no guard on any outline path in the repo.
+
+### It is the same missing guard the audit already found
+
+`AUDIT-CRITICAL.md` M6 — *`offsetOutline` has no self-intersection cleanup* —
+CONFIRMED for the function, INFERRED for reachability, with consumers at the
+roof footprint, the ROOF-level truss dimensions and the thickened-edge slab
+ring. `areas.js` is a **second consumer of that one absent guard**, and it was
+not among M6's list.
+
+That changes M6's shape: it is not a defect in one function, it is a missing
+precondition shared by every path that accepts a drafted outline. Whether a
+drafter can actually draw one remains unproven — the same INFERRED that M6
+carried, and the right next measurement rather than the right next assumption.
+
+**Recommended, not done here:** `areas.js` has a spec but no harness, and its
+spec costs 92 seconds in a browser to prove arithmetic that node settles in
+milliseconds. A harness of the table above is the cheaper guard.
+
 ## Finding 2 — all seventeen load under plain `node`
 
 Checked with `document` explicitly undefined:
