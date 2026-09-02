@@ -128,6 +128,66 @@ if (!window.DraftGeometry2D) {
     return false;
   };
 
+  // Is `inner` wholly inside `outer`? Both must be simple rings.
+  //
+  // Corner containment alone is NOT enough: on a concave host, every corner of
+  // the inner ring can sit inside while an edge between two of them leaves and
+  // comes back. So this asks twice — every corner inside, AND no edge of the
+  // inner ring crossing any edge of the outer one — and reuses
+  // segmentIntersection for the second question rather than repeating the math.
+  //
+  // WHY IT EXISTS. A floor opening is deducted from its host's area
+  // ARITHMETICALLY: the slab polygon is never cut, so nothing else ever asks
+  // whether the hole is actually in the floor it is charged against. Cutting
+  // the hole geometrically would have answered that for free; subtracting it
+  // has to ask out loud.
+  const ringInsideRing = (inner, outer) => {
+    if (!Array.isArray(inner) || !Array.isArray(outer)) return false;
+    if (inner.length < 3 || outer.length < 3) return false;
+    const EPS = 0.001;
+    // On the boundary counts as inside. A stair opening run flush to an
+    // exterior wall shares that wall's line exactly, and refusing it would
+    // force the drafter to leave the sliver of floor this design exists to
+    // make unnecessary.
+    const onEdge = pt => outer.some((a, i) => {
+      const b = outer[(i + 1) % outer.length];
+      const cross = (b.x - a.x) * (pt.z - a.z) - (b.z - a.z) * (pt.x - a.x);
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (len < EPS || Math.abs(cross) / len > EPS) return false;
+      const t = ((pt.x - a.x) * (b.x - a.x) + (pt.z - a.z) * (b.z - a.z)) / (len * len);
+      return t >= -EPS && t <= 1 + EPS;
+    });
+    const within = pt => {
+      if (onEdge(pt)) return true;
+      let hit = false;
+      for (let i = 0, j = outer.length - 1; i < outer.length; j = i, i += 1) {
+        const a = outer[i], b = outer[j];
+        if ((a.z > pt.z) !== (b.z > pt.z)
+          && pt.x < (b.x - a.x) * (pt.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    if (!inner.every(within)) return false;
+    // Corners alone are not enough on a CONCAVE host: a triangle with all three
+    // corners on an L-shaped floor can still run its long edge through the
+    // notch. So also require that no edge PROPERLY crosses a host edge —
+    // strict sign changes on both sides, which is deliberately false for edges
+    // that merely touch at a point or lie along each other. Collinear must not
+    // count: an opening flush to an exterior wall shares that wall's line, and
+    // that is the case this whole guard exists to keep legal.
+    const side = (a, b, p) => Math.sign((b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x));
+    const properlyCrosses = (a, b, c, d) =>
+      side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+    for (let i = 0; i < inner.length; i += 1) {
+      const a = inner[i], b = inner[(i + 1) % inner.length];
+      for (let j = 0; j < outer.length; j += 1) {
+        const c = outer[j], d = outer[(j + 1) % outer.length];
+        if (properlyCrosses(a, b, c, d)) return false;
+      }
+    }
+    return true;
+  };
+
   // Intersection nearest to where the user clicked along seg.
   const nearestIntersection = (seg, others, point) => {
     const hits = [];
@@ -771,6 +831,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     paramAlongSegment,
     segmentIntersection,
     selfIntersects,
+    ringInsideRing,
     nearestIntersection,
     roomLoops,
     offsetOutline,
