@@ -128,9 +128,29 @@ INFERRED, not stated: the reverse. Moving a foundation wall **inward** should
 exceed 20'-0". That is the only reading where the rule is reversible, but
 Movie has not said it and it is written here as my inference.
 
-OPEN: what happens to the roof when the overhang is what changed? The floor
-edge did not move, so presumably the roof does not either -- but "and the
-roof" was said about the extending case, not this one.
+### It is not a foundation rule. It is a "lower floor" rule
+
+Answered while writing the above, and it generalises the whole section:
+
+> Movie: *"any wireframe above should be affected by outward push of any lower
+> floor (including the roof)"*
+
+So **nothing above a pushed floor is left untouched** -- not the floor
+directly above, not the top storey, not the roof. And "affected" covers both
+outcomes already described: either the thing above extends with the push, or
+its overhang absorbs it. Those are the two ways a level can respond, and every
+level above responds one way or the other.
+
+Which means the foundation is not special. It is simply the lowest floor, so
+pushing it affects the most. Push a middle floor and everything above *it*
+responds by the same rule; the floors below do nothing.
+
+OPEN: does a roof **eave** count as an overhang to be eaten? An eave is an
+overhang, and `geometry-2d.js` models eave edges as a real thing with the
+straight-skeleton wavefront. But an eave has a designed width for shedding
+water, so having it silently shrink because someone pushed a wall out is a
+different proposition from a floor cantilever shrinking. Not assumed either
+way.
 
 <!-- next: -->
 
