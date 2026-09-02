@@ -11244,6 +11244,23 @@ class Component extends DCLogic {
   _commitOutline(points, closedGarage = false) {
     this._ensureDrawingCollections();
     if (points.length < 3) return null;
+    // A CROSSING OUTLINE IS REFUSED, for the same reason as one with two
+    // points: it does not enclose a house. Two lobes of a bowtie wind
+    // oppositely, so the shoelace area is not merely wrong, it is exactly
+    // ZERO -- and zero is the worse failure. A sheet reading 47 sq ft where
+    // it should say 50 gets questioned; one reading 0 for a room plainly on
+    // the page reads as a rendering glitch and gets shrugged at.
+    //
+    // It is drawable: the T-square squares every segment and hides it, but
+    // `t` stows the T-square and then the corners land exactly where clicked.
+    // Confirmed by measurement, not inferred -- see the audit's M6.
+    if (window.DraftGeometry2D.selfIntersects(points)) {
+      this.setState({
+        drawingMessage: 'That outline crosses itself, so it encloses no floor area. Redraw it without the crossing.',
+        drawingMessageError: true,
+      });
+      return null;
+    }
     const shelf = this._activeBoneyardShelf();
     const shelfHasMaster = this._boneyardOutlines.some(outline => outline.shelfId === shelf.id && !outline.garage);
     const level = this.state.boneyardActive ? null : this._activeLevel();
