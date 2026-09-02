@@ -222,3 +222,73 @@ test('the garage roof band butts the house without welding: one fascia, a bare r
   // The ridge stays a bare line, not a fascia stripe.
   expect(scan.bands[0].y1 - scan.bands[0].y0).toBeLessThan(4);
 });
+
+test('the garage roof reaches the house wall it butts, under the house overhang', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageOutline(page);
+  await buildHouse(page);
+
+  // The house roof overhangs two feet past the shared wall, high above the
+  // garage roof running beneath it. Read as "the taller roof stands in
+  // front", that overhang hid the garage roof for its whole width and the
+  // elevation showed a garage roof stopping two feet shy of the house.
+  await page.locator('.cut-row', { hasText: 'E1' }).click({ position: { x: 18, y: 8 } });
+  await page.waitForTimeout(400);
+  await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
+
+  const scan = await page.evaluate(() => {
+    const canvas = document.querySelector('[data-model-overlay]');
+    const W = canvas.width, H = canvas.height;
+    const { data } = canvas.getContext('2d').getImageData(0, 0, W, H);
+    const dark = (x, y) => {
+      const i = (y * W + x) * 4;
+      return data[i + 3] > 200 && data[i] < 120 && data[i + 1] < 120 && data[i + 2] < 120;
+    };
+    let gradeY = 0;
+    for (let y = 0; y < H; y++) {
+      let run = 0, best = 0;
+      for (let x = 0; x < W; x++) {
+        run = dark(x, y) ? run + 1 : 0;
+        best = Math.max(best, run);
+      }
+      if (best > W * 0.6) gradeY = y;
+    }
+    const rises = [];
+    for (let x = 0; x < W; x++) {
+      let top = null;
+      for (let y = 24; y < gradeY - 60; y++) {
+        if (dark(x, y)) { top = y; break; }
+      }
+      rises.push(top == null ? null : gradeY - top);
+    }
+    const tall = Math.max(...rises.filter(rise => rise != null));
+    const cols = rises.map((rise, x) => ({ rise, x })).filter(c => c.rise != null);
+    const bandCols = cols.filter(c => c.rise < tall * 0.6 && c.rise > tall * 0.15);
+    const houseCols = cols.filter(c => c.rise > tall * 0.85);
+    if (!bandCols.length || !houseCols.length) return null;
+    // The tip of the house overhang: the last column whose topmost ink is
+    // the house roof, and the column the garage roof used to stop at.
+    const overhangTipX = Math.max(...houseCols.map(c => c.x));
+    // The garage eave, followed back toward the house from mid-band.
+    const mid = bandCols[Math.floor(bandCols.length / 2)];
+    const topY = gradeY - mid.rise;
+    let eaveY = null;
+    for (let y = topY; y < topY + 40 && y < gradeY; y++) if (dark(mid.x, y)) eaveY = y;
+    if (eaveY == null) return null;
+    const inked = x => dark(x, eaveY) || dark(x, eaveY - 1) || dark(x, eaveY + 1);
+    let eaveLeftX = mid.x;
+    for (let x = mid.x, gap = 0; x > 0 && gap < 4; x--) {
+      if (inked(x)) { eaveLeftX = x; gap = 0; } else gap++;
+    }
+    // Scale, from the garage roof itself: its far rake sits 12' beyond the
+    // house overhang tip in this fixture.
+    const bandRightX = Math.max(...bandCols.map(c => c.x));
+    return { overhangTipX, eaveLeftX, pxPerFt: (bandRightX - overhangTipX) / 12 };
+  });
+
+  expect(scan).toBeTruthy();
+  // The eave carries on past the overhang tip and lands on the wall face —
+  // two feet further, the width the elevation was dropping.
+  expect(scan.overhangTipX - scan.eaveLeftX).toBeGreaterThan(scan.pxPerFt * 1.5);
+});
