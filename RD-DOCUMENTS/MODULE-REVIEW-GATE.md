@@ -150,6 +150,53 @@ carried, and the right next measurement rather than the right next assumption.
 spec costs 92 seconds in a browser to prove arithmetic that node settles in
 milliseconds. A harness of the table above is the cheaper guard.
 
+## Verdict 3 — `auto-dims.js`: **right as it is**
+
+326 lines, one export, `computeAutoDimStrings`. The first of the seventeen to
+earn the top verdict, and it earns it for one reason: **it names its
+preconditions in its own header.**
+
+> *plain data in (filtered walls/outlines/roofs, resolved opening centres,
+> tuning numbers), dimension segments out. No THREE, no component state, no
+> DOM — **the caller owns filtering, vertex linking, and the dimension
+> records**.*
+
+That sentence is the whole difference between this verdict and the two before
+it. `pdf-scan.js` and `areas.js` are equally correct in the app and equally
+dangerous to carry, because what the caller must guarantee is discoverable only
+by reading the caller. Here it is written where the next person looks.
+
+Measured:
+
+```
+empty walls/outlines/roofs   -> null    matches the documented "nothing to string"
+{}                           -> throws  missing keys, programmer error at the call site
+no argument                  -> throws  same
+```
+
+`PRINT_GRID_FT = 1 / 192` is the sixteenth-of-an-inch print grid stated as a
+named constant with its derivation beside it. That is the arithmetic the
+audit's **C1** was about — partials not summing to their overall — and C1 now
+measures **0 of 400 strings drifting, worst case 0/16"**. The grid is right and
+it is right on purpose.
+
+**No change recommended.** Carry it across as it stands.
+
+## Method note — a quieter failure than a collision
+
+Verdict 2 needed one more measurement: whether a drafter can actually draw a
+self-intersecting outline. I wrote that it was "the right next measurement".
+Skipper read that as *Gilligan is running it* and stood down to avoid
+duplicating the work. Neither of us ran it.
+
+Two agents colliding on one file costs an afternoon and shows up in a diff.
+**Two agents each assuming the other has it costs the measurement entirely and
+shows up nowhere.** It was recoverable only because he said out loud what he
+was standing down from.
+
+The habit that fixes it, and it is cheap: **when you stand down, say what you
+are not doing and why you believe it is covered.** Silence reads as coverage.
+
 ## Finding 2 — all seventeen load under plain `node`
 
 Checked with `document` explicitly undefined:
