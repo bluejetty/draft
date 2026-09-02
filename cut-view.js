@@ -1074,20 +1074,24 @@ if (!window.DraftCutView) {
     if (lit.length > 1) {
       ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
       ctx.beginPath();
-      let pen = null;
+      let pen = null, prevLit = false;
       silhouette.forEach(s => {
         if (s.elev == null) {
           if (pen) ctx.lineTo(X(pen.u), Y(pen.base));
-          pen = null;
+          pen = null; prevLit = false;
           return;
         }
         if (pen && pen.base !== s.base) {
           ctx.lineTo(X(pen.u), Y(pen.base));
           pen = null;
         }
-        if (!pen) { ctx.moveTo(X(s.u), Y(s.base)); ctx.lineTo(X(s.u), Y(s.elev)); }
+        // The riser down to the base closes the outline against open air. A
+        // roof taking over from another — a garage roof running on under the
+        // house's overhang — has no vertical edge, so it starts at its surface.
+        if (!pen && !prevLit) { ctx.moveTo(X(s.u), Y(s.base)); ctx.lineTo(X(s.u), Y(s.elev)); }
+        else if (!pen) ctx.moveTo(X(s.u), Y(s.elev));
         else ctx.lineTo(X(s.u), Y(s.elev));
-        pen = s;
+        pen = s; prevLit = true;
       });
       if (pen) ctx.lineTo(X(pen.u), Y(pen.base));
       ctx.stroke();
@@ -1125,28 +1129,33 @@ if (!window.DraftCutView) {
     // stayed invisible behind a taller wing; this pass walks every face edge
     // and hides only the truly hidden stretches.
     if (facesByRoof && facesByRoof.size) {
-      const tallestAt = pt => {
-        let tallest = null;
-        facesByRoof.forEach((roofFaces, roof) => {
-          const rise = sectionRoofHeightAt(pt, roof, roofFaces);
-          if (rise == null) return;
-          const elev = roofBaseElev(roof, stack) + ROOF_FASCIA_IN / 12 + rise;
-          if (tallest === null || elev > tallest) tallest = elev;
-        });
-        return tallest;
-      };
-      // Hidden when any roof surface nearer to the viewer covers the point:
-      // march the view ray from the point toward the viewer (+dir).
+      // Hidden when a nearer roof covers the point on the paper: the band it
+      // projects onto, from the lowest surface the ray crosses (less its
+      // fascia) up to the highest — the test `roofClippedTop` runs for walls.
+      // A taller roof behind does not hide what passes under it, so each roof
+      // is banded on its own rather than compared by height.
       const hidden = (pt, elev) => {
-        const span = dHi - (pt.x * dir.x + pt.z * dir.z);
+        const depth = pt.x * dir.x + pt.z * dir.z;
+        const span = dHi - depth;
         if (span < 0.1) return false;
-        const steps = Math.min(32, Math.max(4, Math.ceil(span / 1.5)));
-        for (let j = 1; j <= steps; j++) {
-          const m = span * j / steps;
-          const cover = tallestAt({ x: pt.x + dir.x * m, z: pt.z + dir.z * m });
-          if (cover != null && cover > elev + 0.05) return true;
-        }
-        return false;
+        // From just in front of the point, so a surface never hides itself.
+        const near = { x: pt.x + dir.x * 0.05, z: pt.z + dir.z * 0.05 };
+        const far = { x: pt.x + dir.x * span, z: pt.z + dir.z * span };
+        let covered = false;
+        facesByRoof.forEach((roofFaces, roof) => {
+          if (covered) return;
+          const base = roofBaseElev(roof, stack) + fasciaFt;
+          let lo = Infinity, hi = -Infinity;
+          geo.roofProfile(roof, roofFaces, near, far, dir).forEach(p => {
+            const e = base + p.rise;
+            if (e > hi) hi = e;
+            if (e < lo) lo = e;
+          });
+          if (hi === -Infinity) return;   // the ray misses this roof entirely
+          lo -= fasciaFt;
+          if (elev > lo + ROOF_COVER_EPS && elev < hi - ROOF_COVER_EPS) covered = true;
+        });
+        return covered;
       };
       const seen = new Set();
       facesByRoof.forEach((roofFaces, roof) => {
