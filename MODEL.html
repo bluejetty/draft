@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<!--
+  MODEL.html — the framework-free model space, tier 1.
+
+  This is the migration target. It is NOT wired into the site: index.html still
+  points at MODEL.dc.html, which serves every user until this page earns the
+  swap. Both live at root together on purpose, so the old page keeps running
+  untouched while this one is filled in.
+
+  Tier 1 asks one question and answers only that: can a page with no framework
+  read the drawing MODEL.dc.html saved, and paint it with the same painters?
+  It reads. It does not write. Nothing here can damage a drawing.
+
+  What it carries, and why the list is this short: render-2d.js reaches for
+  zero globals — every outside thing it needs arrives in an `env` object — so
+  the wall painter costs exactly one dependency, wall-types.js.
+
+  Load order is not cosmetic. Eight modules in this repo capture a global at
+  module scope (`const geo = window.DraftGeometry2D;`), which binds at load
+  time, so a dependency arriving later never helps. None of the four below do
+  that — checked, not assumed — but the moment tier 2 adds one, order becomes
+  load-bearing. See MIGRATION-STATUS.md.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rough Drafter — Model Space</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin:0; height:100%; background:#1d1f20; overflow:hidden;
+    font:13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color:#e7e5e2; }
+  #plan { display:block; width:100%; height:100%; cursor:grab; touch-action:none; }
+  #plan.dragging { cursor:grabbing; }
+
+  #readout { position:fixed; left:12px; bottom:12px; z-index:5;
+    background:rgba(20,22,23,0.82); border:1px solid #3a3d3f; border-radius:6px;
+    padding:8px 11px; font-variant-numeric:tabular-nums; white-space:pre;
+    pointer-events:none; letter-spacing:0.01em; }
+  #readout b { color:#f0b429; font-weight:600; }
+
+  #hint { position:fixed; right:12px; bottom:12px; z-index:5; color:#8b8f92;
+    pointer-events:none; }
+
+  /* The empty and error states say what to do, because a black screen with
+     nothing on it is indistinguishable from a page that failed to boot. */
+  #notice { position:fixed; inset:0; z-index:6; display:none;
+    align-items:center; justify-content:center; padding:24px; text-align:center; }
+  #notice.show { display:flex; }
+  #notice div { max-width:34em; }
+  #notice h1 { font-size:17px; font-weight:600; margin:0 0 8px; color:#f0b429; }
+  #notice p { margin:0 0 6px; color:#b9bcbe; }
+  #notice code { color:#e7e5e2; background:#2a2d2e; padding:1px 5px; border-radius:3px; }
+</style>
+</head>
+<body>
+
+<canvas id="plan"></canvas>
+<div id="readout">loading…</div>
+<div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
+<div id="notice"><div id="notice-body"></div></div>
+
+<script src="./shared-file-store.js"></script>
+<script src="./wall-types.js"></script>
+<script src="./drawing-format.js"></script>
+<script src="./render-2d.js"></script>
+
+<script>
+(() => {
+  'use strict';
+
+  const BUCKET = 'model-drawing';
+  const canvas = document.getElementById('plan');
+  const ctx = canvas.getContext('2d');
+  const readout = document.getElementById('readout');
+  const notice = document.getElementById('notice');
+  const noticeBody = document.getElementById('notice-body');
+
+  // View state in world units (feet). scale is screen pixels per foot.
+  // Deliberately plain arithmetic: MODEL.dc.html projects through a three.js
+  // camera, but the painters take `toS` as a parameter and never ask where it
+  // came from, so tier 1 owes three.js nothing.
+  const view = { cx: 0, cz: 0, scale: 6 };
+  let drawing = null;
+
+  const say = (title, body) => {
+    noticeBody.innerHTML = `<h1>${title}</h1>${body}`;
+    notice.classList.add('show');
+  };
+
+  // ── canvas sizing ─────────────────────────────────────────────────────────
+  // Backing store in device pixels, drawing in CSS pixels, so lines are crisp
+  // on a retina screen without every painter having to know the ratio.
+  let dpr = 1, cssW = 0, cssH = 0;
+  const resize = () => {
+    dpr = window.devicePixelRatio || 1;
+    cssW = canvas.clientWidth;
+    cssH = canvas.clientHeight;
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    paint();
+  };
+
+  // ── world → screen ────────────────────────────────────────────────────────
+  const toS = p => ({
+    x: (p.x - view.cx) * view.scale + cssW / 2,
+    y: (p.z - view.cz) * view.scale + cssH / 2,
+  });
+  const toWorld = (sx, sy) => ({
+    x: (sx - cssW / 2) / view.scale + view.cx,
+    z: (sy - cssH / 2) / view.scale + view.cz,
+  });
+
+  // ── what is on the page ───────────────────────────────────────────────────
+  const walls = () => drawing?.walls || [];
+  const lines = () => drawing?.lines || [];
+  const floors = () => drawing?.floors || [];
+
+  // Every point that defines the drawing's extent, for fit-to-content.
+  const allPoints = () => {
+    const pts = [];
+    walls().forEach(w => { if (w.start && w.end) pts.push(w.start, w.end); });
+    lines().forEach(l => { if (l.start && l.end) pts.push(l.start, l.end); });
+    floors().forEach(f => (f.points || []).forEach(p => pts.push(p)));
+    return pts.filter(p => Number.isFinite(p?.x) && Number.isFinite(p?.z));
+  };
+
+  const fit = () => {
+    const pts = allPoints();
+    if (!pts.length) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    pts.forEach(p => {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+    });
+    view.cx = (minX + maxX) / 2;
+    view.cz = (minZ + maxZ) / 2;
+    // A drawing one foot across must not zoom to a thousand pixels per foot,
+    // and a zero-extent one must not divide by zero.
+    const spanX = Math.max(maxX - minX, 1);
+    const spanZ = Math.max(maxZ - minZ, 1);
+    const margin = 0.86;
+    view.scale = Math.min(cssW / spanX, cssH / spanZ) * margin;
+    view.scale = Math.max(0.25, Math.min(view.scale, 200));
+  };
+
+  // ── painting ──────────────────────────────────────────────────────────────
+  const paintGrid = () => {
+    // One line per foot while they are far enough apart to read, else per ten.
+    const step = view.scale >= 9 ? 1 : view.scale >= 1.2 ? 10 : 100;
+    const tl = toWorld(0, 0), br = toWorld(cssW, cssH);
+    const x0 = Math.floor(tl.x / step) * step, x1 = Math.ceil(br.x / step) * step;
+    const z0 = Math.floor(tl.z / step) * step, z1 = Math.ceil(br.z / step) * step;
+    // A grid that redraws ten thousand lines at low zoom costs more than it
+    // tells anyone, so bail rather than crawl.
+    if ((x1 - x0) / step > 400 || (z1 - z0) / step > 400) return;
+    ctx.save();
+    ctx.lineWidth = 1;
+    for (let x = x0; x <= x1; x += step) {
+      const major = Math.abs(x % (step * 10)) < 1e-6;
+      ctx.strokeStyle = major ? '#34383a' : '#26292a';
+      const s = toS({ x, z: 0 });
+      ctx.beginPath(); ctx.moveTo(s.x, 0); ctx.lineTo(s.x, cssH); ctx.stroke();
+    }
+    for (let z = z0; z <= z1; z += step) {
+      const major = Math.abs(z % (step * 10)) < 1e-6;
+      ctx.strokeStyle = major ? '#34383a' : '#26292a';
+      const s = toS({ x: 0, z });
+      ctx.beginPath(); ctx.moveTo(0, s.y); ctx.lineTo(cssW, s.y); ctx.stroke();
+    }
+    ctx.restore();
+  };
+
+  const paintFloors = () => {
+    ctx.save();
+    ctx.fillStyle = 'rgba(120,140,150,0.10)';
+    floors().forEach(floor => {
+      const pts = (floor.points || []).filter(p => Number.isFinite(p?.x));
+      if (pts.length < 3) return;
+      ctx.beginPath();
+      pts.forEach((p, i) => { const s = toS(p); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
+      ctx.closePath();
+      ctx.fill();
+    });
+    ctx.restore();
+  };
+
+  const paintLines = () => {
+    ctx.save();
+    ctx.strokeStyle = '#7f8688';
+    ctx.lineWidth = 1;
+    lines().forEach(line => {
+      if (!line.start || !line.end) return;
+      const a = toS(line.start), b = toS(line.end);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    });
+    ctx.restore();
+  };
+
+  const paintWalls = () => {
+    const WT = window.DraftWallTypes;
+    const R = window.DraftRender2D;
+    if (!WT || !R) return;
+    // joins is optional in drawWallSeg2D — null gives capped ends instead of
+    // mitred corners. Mitring needs MODEL's _wallJoins(), which is tier 2.
+    walls().forEach(wall => {
+      if (!wall.start || !wall.end) return;
+      R.drawWallSeg2D(ctx, toS, wall, false, null, 'both', { wallTypes: WT.WALL_TYPES });
+    });
+  };
+
+  const paint = () => {
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.fillStyle = '#1d1f20';
+    ctx.fillRect(0, 0, cssW, cssH);
+    if (drawing) { paintGrid(); paintFloors(); paintLines(); paintWalls(); }
+    ctx.restore();
+    updateReadout();
+  };
+
+  const updateReadout = () => {
+    if (!drawing) return;
+    readout.innerHTML =
+      `walls <b>${walls().length}</b>   lines <b>${lines().length}</b>   `
+      + `floors <b>${floors().length}</b>\n`
+      + `levels <b>${(drawing.levels || []).length}</b>   `
+      + `scale <b>${view.scale.toFixed(2)}</b> px/ft`;
+  };
+
+  // ── pan and zoom ──────────────────────────────────────────────────────────
+  let dragging = null;
+  canvas.addEventListener('pointerdown', e => {
+    dragging = { sx: e.clientX, sy: e.clientY, cx: view.cx, cz: view.cz };
+    canvas.classList.add('dragging');
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    view.cx = dragging.cx - (e.clientX - dragging.sx) / view.scale;
+    view.cz = dragging.cz - (e.clientY - dragging.sy) / view.scale;
+    paint();
+  });
+  const endDrag = e => {
+    if (!dragging) return;
+    dragging = null;
+    canvas.classList.remove('dragging');
+    if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+  };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    // Zoom about the cursor: the world point under it must not move.
+    const before = toWorld(sx, sy);
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    view.scale = Math.max(0.25, Math.min(view.scale * factor, 200));
+    const after = toWorld(sx, sy);
+    view.cx += before.x - after.x;
+    view.cz += before.z - after.z;
+    paint();
+  }, { passive: false });
+
+  window.addEventListener('keydown', e => {
+    if (e.key === '0') { fit(); paint(); }
+  });
+  window.addEventListener('resize', resize);
+
+  // ── boot ──────────────────────────────────────────────────────────────────
+  const boot = async () => {
+    resize();
+    let file = null;
+    try {
+      file = await window.SharedFileStore.loadSharedFile(BUCKET);
+    } catch (err) {
+      readout.textContent = 'store unavailable';
+      say('The drawing store could not be opened',
+        `<p>IndexedDB refused to open: <code>${String(err && err.message || err)}</code></p>
+         <p>Private-browsing windows and blocked site data both do this.</p>`);
+      return;
+    }
+    if (!file) {
+      readout.textContent = 'no drawing saved';
+      say('No saved drawing on this origin',
+        `<p>Nothing is stored under <code>${BUCKET}</code> yet.</p>
+         <p>Draw something in <code>MODEL.dc.html</code> on this same origin and save it,
+            then reload this page. Storage is per-origin, so a drawing made on a
+            different host or port will not appear here.</p>`);
+      return;
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch (err) {
+      readout.textContent = 'unreadable';
+      say('The saved drawing could not be parsed',
+        `<p><code>${String(err && err.message || err)}</code></p>`);
+      return;
+    }
+
+    // The same envelope check MODEL.dc.html runs, from the same module, so this
+    // page agrees with the old one about what a valid drawing is rather than
+    // inventing a second opinion.
+    const check = window.DraftDrawingFormat?.checkEnvelope(parsed)
+      || { ok: true, reason: 'unchecked' };
+    if (!check.ok) {
+      readout.textContent = `envelope ${check.reason}`;
+      say('That drawing is not one this page can read',
+        `<p>checkEnvelope said <code>${check.reason}</code>.
+            <code>version</code> means it was written by a newer MODEL than this page knows.</p>`);
+      return;
+    }
+
+    drawing = parsed;
+    fit();
+    paint();
+  };
+
+  boot();
+})();
+</script>
+</body>
+</html>

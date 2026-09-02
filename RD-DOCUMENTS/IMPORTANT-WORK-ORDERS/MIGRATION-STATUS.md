@@ -121,3 +121,86 @@ that is live-state code — tools and keyboard, which stay together in any
 framework. That is the long part, and it is the last part.
 
 Everything above it in this document is smaller than it looks.
+
+---
+
+## TIER 1 IS BUILT — and the page half finally has a number
+
+`MODEL.html` exists at root, **329 lines**, and it does exactly one thing: it
+reads the drawing `MODEL.dc.html` saved and paints the walls with the same
+`render-2d.js` painters, with React and the DC runtime absent. It reads and
+never writes, so it cannot cost anyone a drawing. `index.html` still points at
+the old page and nothing about the live site has changed.
+
+Four specs in `tests/model-html-tier1.spec.js`, all green, and the ink
+assertion is mutation-proven in both directions.
+
+### What tier 1 cost, against what was guessed
+
+The page half of the 6–10 week estimate had **no measurement behind it at all**
+— fifteen thousand stateful lines nobody had tried to move. It now has one data
+point, and the point is smaller than feared:
+
+| | |
+|---|---|
+| estimated for tier 1 | 2–3 days |
+| actual | one sitting |
+| dependencies needed | **four** — `shared-file-store`, `wall-types`, `drawing-format`, `render-2d` |
+| three.js needed | **none** |
+
+The reason is one fact worth generalising: **`render-2d.js` reaches for zero
+globals.** Every outside thing it needs arrives in an `env` object, so the wall
+painter cost exactly one dependency (`wall-types.js`) rather than dragging the
+component behind it. `MODEL.dc.html` calls those four painters from only **four
+sites in 22,467 lines**.
+
+The one real substitution: MODEL's live `_toScreen` projects through a
+**three.js camera**, and tier 1 does not. The painters take `toS` as a
+parameter and never ask where it came from, so plain arithmetic pan/zoom
+satisfies them completely. Whether the 3D views can make the same substitution
+is untested and is NOT implied by this result.
+
+**This does not yet shorten the estimate.** Walls are the friendliest thing on
+the page. Tools, keyboard and live state are the 80%, and none of it is
+touched. What tier 1 establishes is only that the pure modules cross over
+cleanly — which was the optimistic assumption, now checked once instead of
+hoped.
+
+### LOAD ORDER IS LOAD-BEARING — read before writing any new page
+
+Eight modules capture a global **at module scope**:
+
+```
+auto-stair.js       const geo = window.DraftGeometry2D;
+build-house.js      const geo = window.DraftGeometry2D;
+cut-view.js         const geo = window.DraftGeometry2D;
+first-run.js        const interview = window.DraftGruffInterview;
+room-grow.js        const geo = window.DraftGeometry2D;
+toy-constraints.js  geometry-2d, wall-types, room-standards
+toy-context.js      geometry-2d, toy-constraints
+```
+
+`const geo = window.DraftGeometry2D;` binds when the file loads, so a
+dependency arriving **later never helps**. The module loads fine and exports
+fine, and throws only when the consuming function is finally called — an error
+that points at the wrong file entirely. Found by Gilligan in `build-house.js`
+(verdict 5), generalised here.
+
+`MODEL.dc.html` satisfies all nine edges today, but by growth rather than by
+design, and one is a near-miss: `toy-context.js` (script 16) needs
+`toy-constraints.js` (script 15). **Adjacent.** A single reordering breaks
+`footingRings`-style calls.
+
+None of tier 1's four modules is on that list — checked, not assumed. **Tier 2
+is where this bites**, and any new page must load these dependencies first:
+
+```
+geometry-2d.js, wall-types.js, room-standards.js   BEFORE
+auto-stair, build-house, cut-view, room-grow, toy-constraints
+toy-constraints.js                                 BEFORE  toy-context.js
+gruff-interview.js                                 BEFORE  first-run.js
+```
+
+The durable fix is to resolve these lazily inside the functions instead of at
+module scope, which is a change to the **old** app and belongs to the review
+gate, not to the new page.
