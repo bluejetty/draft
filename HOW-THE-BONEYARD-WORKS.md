@@ -140,16 +140,52 @@ The guess was reasonable and it was still a guess; leaving the strike-through
 because the wrong symmetry is the obvious thing to assume and the next person
 will assume it too.
 
-OPEN -- still Skipper's inference, awaiting Movie: what happens on an
-**outward** move when the overhang is *smaller* than the move. An overhang of
-4'-0" cannot absorb a 10'-0" push. My reading is that it is eaten to zero, the
-level stops hanging and becomes flush, and the remaining 6'-0" carries its edge
-out -- one move changing behaviour halfway through. The alternative is that
-the push simply stops when the overhang is spent, which is a refusal rather
-than a conversion.
+### An overhang cannot be any width it likes
 
-(Briefly written up here as RULED on 2 Sep. It was not -- I read an "ok" as an
-answer to it. Corrected the same minute.)
+> Movie: *"there shouldn't be a 4ft overhang it should only be 2ft max
+> cantilever or next step to a pile at 4'6"*
+
+My worked example used a 4'-0" overhang, which cannot exist. The legal widths
+come in two ranges with a dead band between them, and they are already the
+constants in `toy-constraints.js`:
+
+```
+0'-0" .. 2'-0"     free cantilever, nothing under it     CANTILEVER_FREE_FT
+2'-0" .. 4'-6"     ILLEGAL as an overhang -- bump the    CANTILEVER_PILES_FT
+                   foundation out to meet it instead
+4'-6" .. 20'-0"    carried on piles
+```
+
+So an overhang is either **2'-0" or less**, or **4'-6" or more**. Never
+between.
+
+### Which makes the real question the dead band, not the remainder
+
+An outward push shrinks the overhang, so it can walk it straight into the
+illegal band. There is nothing hypothetical about this -- it happens on
+ordinary numbers:
+
+```
+overhang    10'-0"   (legal, on piles)
+push out     7'-0"
+would leave  3'-0"   ILLEGAL
+```
+
+OPEN -- three ways it could go, and the choice is Movie's:
+
+1. **Snap down to 2'-0"** -- eat more than was asked. The overhang jumps the
+   band in one move and lands as a free cantilever.
+2. **Snap up to 4'-6"** -- eat less than was asked. The push is short-changed
+   and the wall does not go as far as the finger.
+3. **Stop at 4'-6"** and say why. The drag halts at the last legal position,
+   and it takes a second press to cross the band.
+
+> Skipper's note: 3 is what the rest of the toy already does -- *"it stops
+> dead and the blocker says why. Never elastic"* (Movie, 1 Sep). And it falls
+> out of the 6" nudge nicely: pressing down from 4'-6" cannot land on 4'-0",
+> so that press jumps to 2'-0" -- the band crossed deliberately, in one
+> visible step, rather than slid through.
+
 
 ### It is not a foundation rule. It is a "lower floor" rule
 
