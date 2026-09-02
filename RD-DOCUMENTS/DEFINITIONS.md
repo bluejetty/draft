@@ -30,7 +30,7 @@ collision by a distance, and the one most worth fixing.
 | the BUILD HOUSE button | `data-build-house` | **the bone button** |
 | the big button on the entry page | `index.html`, `.enter-bone` | **the entry bone** |
 | a wall's movable unit in TOY MODE | `toy-constraints.js` — *"a wall has a bone"* | **weld group** (see below) |
-| the boneyard's master geometry | `_boneyardOutlines` | **the master** (see below) |
+| the boneyard's master geometry | `_boneyardOutlines` | **the master wireframe** (see below) |
 
 The first three are the same idea — a bone is what you spend and the button is
 what you spend it on — so they can share the word. The last two are unrelated
@@ -89,13 +89,33 @@ basement, two floor levels and a roof.
 
 ### BONEYARD
 
-Never-printing shelf storage, sitting under the level stack. Holds **masters**.
-Not a level, not a view — a store.
+**The area** — the level layer under the level stack, never printing. It is the
+place, not the thing in it. Holds the master wireframe on its shelves.
 
-### MASTER
+### MASTER WIREFRAME
 
-The outline a boneyard shelf holds, from which every level takes a **copy**.
-Each of its points has a stable `pointId`.
+**The thing in it** — the whole 3D skeleton the building hangs off. Every
+level's outline takes a **copy** from it, and each of its points has a stable
+`pointId`.
+
+Ruled 2 Sep. "Bone" is dropped from geometry entirely: a bone is what you
+spend, and a wireframe is what the house is built on. Nothing is lost, because
+"bone" was never saying anything about the geometry that "wireframe" does not
+say better.
+
+### <LEVEL> FRAME
+
+One level's outline within the master wireframe: **MAIN FLOOR FRAME**,
+**FOUNDATION FRAME**, **ROOF FRAME**, and so on.
+
+**Always qualified by a level name, never bare.** "Frame" on its own is taken
+twice over in this codebase — it is a render frame in the draw loop over a
+thousand times, and it is a building element (`MODEL.dc.html:6655`, *"2\"-wide
+frame blocks at each jamb"*, and the same in `layout-plan.js`). A level name in
+front of it removes both collisions; without one it walks straight into them.
+
+`wireframe`, by contrast, is free: every use of it in the repository is inside
+`vendor/`.
 
 ### COPY
 
@@ -235,7 +255,7 @@ Nothing here is done yet. Each is a rename, not a behaviour change.
 | now | proposed | why |
 |---|---|---|
 | "a wall's bone" (toy) | **weld group** | already the real name for it; "bone" is the currency |
-| `_boneyardOutlines` | **`_masters`** | it is the master store; "bone" adds nothing |
+| `_boneyardOutlines` | **`_masterWireframe`** | it is the skeleton, not a bone; and "boneyard" is the place it is kept, not the thing |
 | `SPEC-*.md` | **`RULES-*.md`** | frees "specification" for the drawing-set meaning |
 | "node" for an object | **object placement** | Movie's ruling, already agreed |
 
@@ -243,6 +263,9 @@ Nothing here is done yet. Each is a rename, not a behaviour change.
 
 - Is a roof **eave** an overhang for the purpose of the rules above? It is
   geometry that projects, but it has a designed width.
-- **"Bone" for the 3D skeleton in the boneyard** — Movie has said the bone and
-  the foundation wireframe may become one thing. If they do, that thing needs
-  a name, and it should be decided before it has two.
+- ~~**"Bone" for the 3D skeleton in the boneyard.**~~ **Settled 2 Sep:** the
+  boneyard is the area, the master wireframe is the geometry, and a single
+  level's outline is a `<LEVEL> FRAME`. Which also names the merge in advance
+  — if the bone and the foundation wireframe become one thing, it is the
+  FOUNDATION FRAME of the master wireframe, and there is nothing left to
+  decide.
