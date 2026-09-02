@@ -2471,6 +2471,7 @@ class Component extends DCLogic {
     // slot) join this object.
     projectInfo: format.projectInfo(null),
     zoneHeights: format.zoneHeights(null), // board #221 — PROJECT page zone rows
+    sectionTable: format.sectionTable(null), // PROJECT page section table — per build type
     tour: format.tour(null),  // board #230 — the guided full-house flow's parked step
     roofIntent: format.roofIntent(null), // board #238 — the roof pause edits intent, the bone builds it
     tourRoofIncrements: window.DraftTour.normaliseTourRoofIncrements(null),
@@ -2902,6 +2903,7 @@ class Component extends DCLogic {
       },
       zoneHeights: { zones: Object.fromEntries(Object.entries(this.state.zoneHeights.zones)
         .map(([id, zone]) => [id, { ...zone }])) },
+      sectionTable: format.sectionTable(this.state.sectionTable),
       boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
       activeBoneyardShelfId: this.state.activeBoneyardShelfId,
       nextBoneyardShelfId: this.state.nextBoneyardShelfId,
@@ -4980,6 +4982,7 @@ class Component extends DCLogic {
         roomAreasOn: saved.roomAreasOn === true,
         projectInfo: format.projectInfo(saved.projectInfo),
         zoneHeights: format.zoneHeights(saved.zoneHeights),
+        sectionTable: format.sectionTable(saved.sectionTable),
         tour: format.tour(saved.tour),
         roofIntent: format.roofIntent(saved.roofIntent),
         tourPopup: format.tour(saved.tour).step === 'foundation' ? 'foundation' : false,
