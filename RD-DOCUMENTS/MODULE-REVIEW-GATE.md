@@ -229,6 +229,44 @@ board. Neither half would have got there alone.
 spec costs 92 seconds in a browser to prove arithmetic that node settles in
 milliseconds. A harness of the table above is the cheaper guard.
 
+## Where a crossing check can live — measured, and the answer is "not on outlines"
+
+The crossing guard was reverted after it turned `auto-dims.spec.js` red. The
+reason is more useful than the revert.
+
+```
+COMMIT  n=7 xs=-8,8,8,3,3,3,-8
+STORED  lvl 8,7,5,3,1 — all   xs=[-8,8,8,3,3,3,-8]
+```
+
+A drafter draws eight corners with a 1 7/16" jog. The **vertex magnet** —
+`_magnetRadius() = worldPerPixel × snapZonePx × 5`, reaching 8–12 inches at the
+suite's default zoom — swallows a 1.44" gap whole, so `x = 2.88` snaps to `3`,
+the coincident pair dedupes, and what is left where the jog was is a
+**zero-width spike**: `(3,6) → (3,3) → (3,6)`, out and back along one line.
+
+`selfIntersects` is entirely right to call that a crossing. **And the spike is
+stored permanently, on every level.** It is not transient, and `2.88` never
+comes back — the spec clicks 2.88 but asserts only about *printed dimension
+strings*, never about stored coordinates, and passes because the printed value
+is `3`.
+
+**So a crossing check has nowhere safe to live on outlines at all** — not at
+commit, not after. Any such check run on stored geometry will flag ordinary
+drawings, because "self-intersecting" and "has a magnet-merged corner" are the
+same shape. That is not a tolerance to tune.
+
+**Which sharpens the M6 fix rather than abandoning it.** A spike has zero area,
+so it cannot corrupt a total; a bowtie has two lobes that cancel, and that is
+what produces a permit figure of zero. The question worth asking is therefore
+not *does the ring cross itself* but *do its lobes cancel* — the signed area
+against the unsigned. Different question, different answer, and not the one I
+built.
+
+Five wrong theories died in this thread — four speculative, and one reported as
+a negative result from checking a single mechanism. The last was the expensive
+one: a confident wrong negative tells everybody to stop looking.
+
 ## Verdict 3 — `auto-dims.js`: **right as it is**
 
 326 lines, one export, `computeAutoDimStrings`. The first of the seventeen to
