@@ -112,11 +112,19 @@ third.
 Cheap either way -- the numbers live in one table in `starter-shape.js` -- but
 worth answering before anyone measures a starter house and finds it enormous.
 
-## Still open
+## Ruled: the big bone shows once, ever
 
-**Does the big bone come back?** It is for the first house. Whether it returns
-on a later visit to an empty drawing, or appears exactly once ever, is not
-settled.
+It uses the gate that already exists -- `draft-entry-coach-seen` in
+localStorage, which is what makes today's coach show a single time. Once you
+have built your first house on a machine, the big bone does not return there.
+
+Worth knowing why the gate is needed at all: **model space opens empty every
+time.** `_init()` sets up the canvas, camera and WebGL and loads nothing;
+the shared store holds PDF underlays, not drawings. A drawing lives in a
+`.draft` file on the drafter's own computer and is opened back through the file
+picker, which is why the top bar reads UNSAVED on a fresh load -- not a warning,
+just the truth. Without the gate the whole first-house sequence would fire on
+every single visit.
 
 ---
 
