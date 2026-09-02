@@ -431,15 +431,49 @@ naming `geometry-2d` — a file that is fine.
 resolve at call time and guard it. One line each, behaviour-identical wherever
 the order is right, and it deletes the whole class.
 
-## Still to read — seven
+## Verdicts 11–15 — `auto-windows`, `closets`, `electric-rules`, `gruff-interview`, `turtle`: **right as it is**
 
-`auto-windows`, `bone-wallet`, `closets`, `electric-rules`, `gruff-drivethru`,
-`gruff-interview`, `turtle`.
+Five at once, on three measured grounds rather than on reading:
 
-Three of them — `auto-stair`, `bone-wallet`, `gruff-drivethru` — have no node
-harness, so a verdict on them means writing one first, as `pdf-scan` did. That
-is the cost of the verdict, and it is small: every one of the seventeen already
-loads under node.
+1. **Harnesses pass** — 45, 26, 26, 73 and turtle's own checks, all exit 0.
+2. **Zero captures** — none of the five appears in Finding 3's list, so none
+   depends on load order.
+3. **Empty in, empty out** — every export was called with no argument:
+
+```
+turtle.walk()              {"points":[{x:0,z:0}],"legs":[],"heading":0}   a walk that has not moved
+turtle.wallsFrom()         []
+turtle.closes()            false
+closets.autoPlace()        {"placed":[],"refused":[]}
+closets.placeIn()          {"refused":"NO_ROOM"}          <- refuses, and names why
+electric.candidates()      {"lights":[],"gangs":[],"outlets":[]}
+autoWindows.dealWindows()  {"windows":[],"report":[],"sidesByLevel":{}}
+```
+
+Not one of them invents an answer. `closets.placeIn()` is the best of them: it
+refuses **with a named reason**, which is the shape the whole gate has been
+asking for — the opposite of `calibrateScale` returning `{ok: true}` for a
+negative sheet.
+
+**One note, on `auto-windows.faceOrientation`.** With a zero or absent normal it
+returns `'front'`, because `|z| >= |x|` and `z >= 0` both hold at the origin. It
+is the same family as the bowtie — confident on degenerate input — but far
+milder, and the module **states its precondition** in the comment directly
+above: *"MODEL hands us the outward normal; this is the one place the mapping
+lives so the board and the marks can never drift apart."* The caller's duty is
+named, which is the whole difference between this verdict and verdicts 1 and 2.
+A zero normal means a face with no area, so it is a degenerate input rather than
+a reachable one — recorded, not fixed.
+
+**Carry all five across as they stand.**
+
+## Still to read — two
+
+`bone-wallet.js` and `gruff-drivethru.js`. Neither has a node harness, so a
+verdict means writing one first — the same job `pdf-scan` turned out to be, and
+both already load under `node`.
+
+
 
 **No verdict is being given on grep evidence.** A keyword scan of the headers
 suggested which of these name their caller's duty, and that is a hint about
