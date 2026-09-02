@@ -138,5 +138,32 @@ const rect = (x0, z0, x1, z1) => [
   check('the gang carries one switch per bank', built.gangs[0].switches, 1);
 }
 
+// ── The magnet and the generator are the same answer ────────────────────
+// The whole reason the rules live in a module: generate asks "what goes
+// here", the magnet asks "where would it have gone". If those two ever
+// disagree, a hand-added plan drifts from a built one -- which is the drift
+// the module exists to prevent, so it is worth asserting rather than
+// assuming.
+{
+  const house = {
+    rooms: [{ id: 'A', polygon: rect(0, 0, 12, 10), entry: { wallId: 'wA', offset: 1, side: 'in' } }],
+    walls: [{ id: 'wA', start: { x: 0, z: 0 }, end: { x: 12, z: 0 } }],
+  };
+  const built = R.generate(house);
+  const offered = R.candidates(house);
+
+  check('the magnet offers exactly what the build placed: lights',
+    offered.lights.map(l => [l.x, l.z]), built.lights.map(l => [l.x, l.z]));
+  check('the magnet offers exactly what the build placed: outlets',
+    offered.outlets.map(o => [o.wallId, o.offset]), built.outlets.map(o => [o.wallId, o.offset]));
+
+  // And a device added by hand at the offered position lands where the build
+  // would have put it -- same rule, same answer, no drift.
+  const byHand = offered.lights[0];
+  const byBuild = built.lights[0];
+  near('a hand-added light lands where the build would have put it (x)', byHand.x, byBuild.x);
+  near('a hand-added light lands where the build would have put it (z)', byHand.z, byBuild.z);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nall checks passed');
 process.exit(failures ? 1 : 0);

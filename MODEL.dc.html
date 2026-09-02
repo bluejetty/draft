@@ -13969,6 +13969,70 @@ class Component extends DCLogic {
     });
   }
 
+  // ── Electric magnets (board: the electric plan) ──────────────────────
+  // A device being added snaps to where the rules WOULD have put it. That is
+  // electric-rules.js read a third way -- generate asks what goes here, the
+  // magnet asks where it would have gone -- so a plan the drafter adds to
+  // cannot drift from the plan the build wrote. Same table, same answer.
+  //
+  // The catch is the drafter's OWN snap zone (_nodeSnapRadius, from
+  // profile-manager's DEFAULT_SNAP_ZONE, which he has already tuned), never a
+  // private radius. Note it is a PIXEL radius, so the magnet loosens as he
+  // zooms out -- which is what he expects, and the reason not to reinvent it
+  // in feet.
+  //
+  // A magnet is a suggestion, not a rule: it says where along a wall an
+  // outlet sits, or where in a room a light lands. It does NOT decide whether
+  // a wall device is on a wall at all -- that is not a suggestion, it is the
+  // storage model, which has no way to hold one floating in a room.
+  _electricHouse() {
+    const levelId = this._activeLevelId();
+    const walls = this._walls.filter(wall => wall.levelId === levelId
+      && (wall.view || 'plan') === 'plan');
+    const loops = geo.roomLoops(walls.map(wall => {
+      const def = WALL_TYPES.find(type => type.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
+      return {
+        start: { x: wall.start.x, z: wall.start.z },
+        end: { x: wall.end.x, z: wall.end.z },
+        halfFt: def.totalIn / 24,
+      };
+    }), ROOM_TAG_JOIN_FT);
+    return {
+      rooms: loops.map((loop, index) => ({
+        id: `r${index}`,
+        polygon: (loop.points || []).map(pt => ({ x: pt.x, z: pt.z })),
+      })).filter(room => room.polygon.length >= 3),
+      walls: walls.map(wall => ({ id: wall.id, start: wall.start, end: wall.end })),
+    };
+  }
+
+  // The nearest candidate within the snap zone, or null. Wall candidates are
+  // measured at their point on the wall so the comparison is like for like.
+  _electricMagnet(worldPt) {
+    const rules = window.DraftElectricRules;
+    if (!rules || !worldPt) return null;
+    const reach = this._nodeSnapRadius();
+    const house = this._electricHouse();
+    const candidates = rules.candidates(house);
+    const wallsById = new Map(this._walls.map(wall => [wall.id, wall]));
+    const points = [
+      ...candidates.lights.map(c => ({ at: { x: c.x, z: c.z }, candidate: c })),
+      ...candidates.outlets.map(c => {
+        const frame = wallsById.has(c.wallId) && this._wallFrame(wallsById.get(c.wallId));
+        if (!frame) return null;
+        const pt = frame.at(c.offset, frame.endOff);
+        return { at: { x: pt.x, z: pt.z }, candidate: c };
+      }).filter(Boolean),
+    ];
+    let best = null;
+    let bestD = reach;
+    points.forEach(entry => {
+      const d = Math.hypot(entry.at.x - worldPt.x, entry.at.z - worldPt.z);
+      if (d < bestD) { bestD = d; best = entry; }
+    });
+    return best;
+  }
+
   // ── Electric device rendering (board: the electric plan) ─────────────
   // Everything electrical is red, over the plan in its normal colours: the
   // plan below is context, not the subject. The marks themselves come from
