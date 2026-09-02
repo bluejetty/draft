@@ -96,6 +96,23 @@ test('releasing Shift hands the point back to the free cursor', async ({ page })
   expect(h.near(end.z, 2, 0.3)).toBe(true);
 });
 
+// The T-square is the drafter's tool, not the wall tool's: anything drawn
+// along a line squares to it. A section line drifting a foot and a half off
+// horizontal is the case that used to save crooked.
+test('the T-square squares a section line, not only the drawing tools', async ({ page }) => {
+  await h.openModel(page);
+  await page.keyboard.press('c');
+  await h.clickWorld(page, -12, 0);
+  await h.moveTo(page, 12, 1.5);
+  await h.clickWorld(page, 12, 1.5);
+  await h.clickWorld(page, 0, -8);
+  await h.waitForSaved(page);
+
+  const cut = (await h.savedDrawing(page)).cuts.at(-1);
+  expect(h.near(cut.endPt.z, cut.startPt.z, 0.2)).toBe(true);
+  expect(cut.endPt.x - cut.startPt.x).toBeGreaterThan(20);
+});
+
 test('a bare Ctrl tap works the T-square light like T', async ({ page }) => {
   await h.openModel(page);
   const chip = page.locator('[data-mode-tsquare]');

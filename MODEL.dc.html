@@ -20,6 +20,7 @@
 <script src="./toy-constraints.js"></script>
 <script src="./toy-context.js"></script>
 <script src="./closets.js"></script>
+<script src="./bone-sound.js"></script>
 <script src="./fen-labels.js"></script>
 <script src="./build-house.js"></script>
 <script src="./tour.js"></script>
@@ -30,6 +31,8 @@
 <script src="./room-grow.js"></script>
 <script src="./gruff-interview.js"></script>
 <script src="./layer-views.js"></script>
+<script src="./electric-symbols.js"></script>
+<script src="./electric-rules.js"></script>
 <script src="./gruff-drivethru.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
@@ -117,6 +120,11 @@
     .view-thumb.active { border-color:#b04060; box-shadow:0 0 0 1px #b04060, 0 1px 5px rgba(29,31,32,0.12); }
     .view-thumb.empty { cursor:default; }
     .view-thumb.empty:hover { border-color:rgba(29,31,32,0.22); }
+    /* An empty seat that CAN be filled by hand reads as an invitation: the
+       elevations cut themselves, so only the section seats offer. */
+    .view-thumb.empty.offer { cursor:pointer; }
+    .view-thumb.empty.offer:hover { border-color:#5980a6; }
+    .view-thumb.empty.offer:hover .view-thumb-label { color:#365e86; }
     .view-thumb.empty .view-thumb-label { color:rgba(29,31,32,0.38); }
     .view-thumb canvas { display:block; width:116px; height:76px; background:#fafafa; }
     .view-thumb-label { display:flex; align-items:center; gap:4px; padding:2px 5px 3px; border-top:1px solid rgba(29,31,32,0.1); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.68); white-space:nowrap; overflow:hidden; }
@@ -140,6 +148,22 @@
     [data-view-nav] .nav-key { box-shadow:0 1px 5px rgba(29,31,32,0.16); }
     /* Length-pad keys (#311): 44px, the same target the chrome sweep settled
        on, and laid out like every number pad a drafter has ever used. */
+    /* The entry coach fades UP rather than appearing: the beat before it is
+       there so the model area is seen unobstructed first, and a scrim that
+       snapped in would spend that beat and then startle. */
+    @keyframes entry-coach-in { from { opacity:0; } to { opacity:1; } }
+    /* The arrows breathe toward the button. Small -- it is pointing, not
+       flashing, and a scrim that jumps around is harder to read past. */
+    /* While the coach is up the build row sits above the scrim so the bone can
+       be pressed -- so every OTHER thing on the row is dimmed to the tint and
+       taken out of the press path, or raising the row would quietly light up
+       five buttons the coach never mentioned. */
+    [data-build-cluster].coaching > * { opacity:0.3; pointer-events:none; transition:opacity 220ms ease-out; }
+    [data-build-cluster].coaching > .bone-wrap { opacity:1; pointer-events:auto; }
+    @keyframes entry-coach-nudge {
+      0%, 100% { transform:translateY(0); }
+      50%      { transform:translateY(-5px); }
+    }
     .pad-key { min-height:44px; border:1px solid rgba(29,31,32,0.24); background:#fff; color:#1d1f20;
       font-family:'Barlow Condensed',system-ui,sans-serif; font-size:16px; font-weight:700;
       letter-spacing:0.04em; cursor:pointer; touch-action:manipulation; }
@@ -271,7 +295,7 @@
     <button data-gruff-open onClick="{{ onGruffOpen }}" title="{{ gruffOpenTitle }}" style="min-width:64px; border:1px solid #8f2a1d; background:{{ gruffOpenBg }}; color:{{ gruffOpenColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">ASK GRUFF</button>
   </div>
 
-  <div data-build-cluster style="position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; align-items:center; gap:8px; z-index:6;">
+  <div data-build-cluster class="{{ buildClusterClass }}" style="position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; align-items:center; gap:8px; z-index:{{ buildClusterZ }};">
     <!-- TURTLE and RABBIT bookend the row permanently while its middle grows,
          so unlike SPLIT and ATTACHED they are NOT wrapped in hasHouseMaster —
          which means the turtle is not always next to HOUSE, and that is
@@ -289,7 +313,11 @@
         <img src="{{ splitButtonSrc }}" alt="" style="height:38px; display:block;" />
       </button>
     </sc-if>
-    <div style="position:relative; line-height:0;">
+    <!-- THE BONE ALONE RISES. While the entry coach is up the cluster stops
+         making a stacking context of its own, so this wrapper -- and nothing
+         else on the row -- comes through the scrim. The one thing you already
+         know how to press is the one thing still lit. -->
+    <div class="bone-wrap" style="position:relative; line-height:0;">
       <button data-build-house onClick="{{ onBuildHouse }}" aria-label="BUILD HOUSE" title="{{ boneWalletTitle }}" style="position:relative; border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ buildHouseGlow }};">
         <img src="./assets/btn-bone.png" alt="" style="height:44px; display:block;" />
         <span data-bone-balance style="position:absolute; left:0; right:0; top:74%; transform:translateY(-50%); text-align:center; pointer-events:none; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(29,31,32,0.55); letter-spacing:0.02em; font-size:{{ boneBalanceFontPx }}px; line-height:1;">{{ boneBalanceLabel }}</span>
@@ -660,6 +688,25 @@
 <!-- The ROOM TRAY (board #198): room-name chips beside the plan while the
      tour's rooms step holds a floor. Tap a chip, tap the plan — a stamp
      lands. The list is a COMPANY STANDARD the drafter grows. -->
+<!-- THE FIRST PRESS TEACHES THE SECOND. You arrive here from the entry page
+     by pressing the bone; the logo does not come with you and the bone does,
+     so the one thing you already know how to press is the one thing still on
+     screen. A beat later everything else dims and it is named.
+
+     The bone is CUT OUT of the tint rather than covered by it -- the build
+     cluster rises above the scrim -- because an instruction you cannot follow
+     is worse than no instruction. -->
+<sc-if value="{{ entryCoachOn }}" hint-placeholder-val="{{ false }}">
+  <div data-entry-coach onClick="{{ onDismissEntryCoach }}" style="position:fixed; inset:0; z-index:60; background:rgba(29,31,32,0.62); cursor:pointer; animation:entry-coach-in 420ms ease-out both;">
+    <!-- Hung off the bone's own measured position rather than a guessed one,
+         so the arrows keep pointing at it when the build row changes. -->
+    <div data-entry-coach-call style="position:absolute; left:{{ entryCoachX }}px; top:{{ entryCoachY }}px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:none;">
+      <div data-entry-coach-arrows aria-hidden="true" style="font-size:26px; line-height:1; color:#f4c542; text-shadow:0 2px 8px rgba(0,0,0,0.55); letter-spacing:6px; animation:entry-coach-nudge 1.1s ease-in-out infinite;">&#9650;&#9650;&#9650;</div>
+      <div data-entry-coach-line style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:20px; font-weight:700; letter-spacing:0.14em; color:#fff; text-align:center; text-shadow:0 2px 10px rgba(0,0,0,0.5); white-space:nowrap;">PRESS BUTTON TO BUILD HOUSE PLAN</div>
+    </div>
+  </div>
+</sc-if>
+
 <sc-if value="{{ roomTrayOpen }}" hint-placeholder-val="{{ false }}">
   <div data-room-tray style="position:fixed; right:44px; top:110px; z-index:51; width:118px; max-height:calc(100vh - 180px); overflow-y:auto; display:flex; flex-direction:column; gap:4px; border:1px solid rgba(29,31,32,0.25); background:#fff; box-shadow:0 10px 28px rgba(29,31,32,0.18); padding:8px;">
     <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.08em; color:#3c5c30;">ROOM TRAY</div>
@@ -1788,12 +1835,13 @@
        the drawing, and they are reachable by thumb at the bottom of the
        screen. They work with a mouse too — a desk feature that happens to
        save the tablet. -->
-  <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT, and the logo
+  <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT · SPECS, and the logo
        walks back out to the main page. The current page wears the dark face. -->
   <div data-nav-cluster style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
     <a data-nav-model href="./MODEL.dc.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">MODEL</a>
     <a data-nav-layout href="./LAYOUT.dc.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">LAYOUT</a>
     <a data-nav-project href="./PROJECT.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">PROJECT</a>
+    <a data-nav-specs href="./SPECS.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">SPECS</a>
     <a data-nav-home href="./index.html" title="Rough Drafter — back to the main page" style="display:inline-flex; align-items:center; height:20px; padding:0 2px; line-height:0;">
       <img src="./assets/rough-drafter-logo.png" alt="Rough Drafter home" style="height:24px; display:block;" />
     </a>
@@ -1815,7 +1863,13 @@ const LEVEL_COLORS = ['#6a7a52','#7a6ea6','#5980a6','#4d9ea6','#a68a5a','#c4905a
 const POLAR_RULER_TOOLS = new Set(['line', 'wall', 'outline']);
 const POLAR_TRACKING_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'dimension', 'cut', 'extend', 'copy', 'stair']);
 // Segment-drawing tools the full-time T-square squares to 90° while it is on.
-const ORTHO_LOCK_TOOLS = new Set(['line', 'wall', 'floor', 'outline', 'shape', 'stair']);
+// Everything that draws or moves along a line belongs here: a section line, a
+// dimension, and the extend/copy destination vector are all squared the same
+// way a wall is, and a drafter who turns the T-square on means all of them.
+const ORTHO_LOCK_TOOLS = new Set([
+  'line', 'wall', 'floor', 'outline', 'shape', 'stair',
+  'cut', 'dimension', 'extend', 'copy',
+]);
 // Arming a polar origin takes a deliberate pause on the node — a drive-by
 // hover on the way across the board never plants a ruler zero.
 const POLAR_DWELL_MS = 350;
@@ -1942,6 +1996,7 @@ const LEVEL_OWNED_COLLECTIONS = [
   '_lines', '_walls', '_floors', '_shapes', '_roofs', '_outlines',
   '_surfaceOpenings', '_dimensions', '_columns', '_beams',
   '_fenestrations', '_fixtures', '_stairs', '_notes', '_roomTags',
+  '_electricDevices',
   // Underlays are level-owned by the format's own rule — `underlays(raw,
   // levelIds)` refuses one whose level is not in the set — so a deleted
   // level used to leave its traced PDF or photo behind, pointing at a level
@@ -2489,6 +2544,7 @@ class Component extends DCLogic {
     // slot) join this object.
     projectInfo: format.projectInfo(null),
     zoneHeights: format.zoneHeights(null), // board #221 — PROJECT page zone rows
+    sectionTable: format.sectionTable(null), // PROJECT page section table — per build type
     tour: format.tour(null),  // board #230 — the guided full-house flow's parked step
     roofIntent: format.roofIntent(null), // board #238 — the roof pause edits intent, the bone builds it
     tourRoofIncrements: window.DraftTour.normaliseTourRoofIncrements(null),
@@ -2562,6 +2618,8 @@ class Component extends DCLogic {
     elevationNames: {},         // per-drawing side names for E1-E4 (FRONT/LEFT...), defaults from COMPANY STANDARDS
     elevationMarkOffsets: {},   // per-drawing E1-E4 clearances from the outermost dim string (ft), default E_MARK_CLEAR_FT
     toyBlocked: null,           // { wallId, text } — TOY MODE: what stopped the drag, and its words
+    entryCoach: false,          // the first-visit scrim naming the bone
+    entryCoachAt: null,         // where the bone actually is, measured when the scrim goes up
     nextCutId:     1,
     activeCutId:   null,
     cutPhase:      'idle',     // 'idle'|'placing'|'choosing'
@@ -2681,6 +2739,7 @@ class Component extends DCLogic {
     if (!Array.isArray(this._floors)) this._floors = [];
     if (!Array.isArray(this._fenestrations)) this._fenestrations = [];
     if (!Array.isArray(this._fixtures)) this._fixtures = [];
+    if (!Array.isArray(this._electricDevices)) this._electricDevices = [];
     if (!Array.isArray(this._surfaceOpenings)) this._surfaceOpenings = [];
     if (!Array.isArray(this._shapes)) this._shapes = [];
     if (!Array.isArray(this._roofs)) this._roofs = [];
@@ -2795,6 +2854,23 @@ class Component extends DCLogic {
         headHeight: opening.headHeight,
         garage: opening.garage === true,
         auto: opening.auto === true,
+      })),
+      // Electric devices. A wall-hosted one writes wallId + offset and NO
+      // geometry, so it redraws from the current wall; a point-hosted one
+      // writes its point, and which room holds it is derived at read time
+      // rather than stored (rooms are not entities in this format).
+      electricDevices: this._electricDevices.map(device => ({
+        id: device.id,
+        levelId: device.levelId,
+        view: device.view || 'plan',
+        kind: device.kind,
+        layer: device.layer,
+        host: device.host,
+        ...(device.host === 'wall'
+          ? { wallId: device.wallId, offset: device.offset, side: device.side }
+          : { at: { x: device.at.x, y: device.at.y, z: device.at.z } }),
+        ...(device.auto === true ? { auto: true } : {}),
+        ...(device.switchId ? { switchId: device.switchId } : {}),
       })),
       fixtures: this._fixtures.map(fixture => ({
         id: fixture.id,
@@ -2922,6 +2998,7 @@ class Component extends DCLogic {
       },
       zoneHeights: { zones: Object.fromEntries(Object.entries(this.state.zoneHeights.zones)
         .map(([id, zone]) => [id, { ...zone }])) },
+      sectionTable: format.sectionTable(this.state.sectionTable),
       boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
       activeBoneyardShelfId: this.state.activeBoneyardShelfId,
       nextBoneyardShelfId: this.state.nextBoneyardShelfId,
@@ -3000,6 +3077,9 @@ class Component extends DCLogic {
       // LAYOUT sheets ride the drawing untouched: the LAYOUT page owns them,
       // the Model Space only round-trips what it loaded.
       ...(this._layoutData ? { layout: this._layoutData } : {}),
+      // Same deal for the SPECS page's project overrides: written there, read
+      // there, and only carried here so a save from this page cannot drop them.
+      ...(this._specsData ? { specs: this._specsData } : {}),
       // Underlay binaries live in the shared file store keyed by underlay id;
       // the drawing only carries their placement and scale metadata.
       underlays: this._underlays.map(underlay => ({
@@ -4928,6 +5008,8 @@ class Component extends DCLogic {
       this._layoutData = saved.layout
         ? format.layout(saved.layout, levelIds, new Set(cuts.map(cut => cut.id)))
         : null;
+      // The SPECS page's overrides ride along the same way.
+      this._specsData = saved.specs ? format.specs(saved.specs) : null;
       let skipped = (Array.isArray(saved.cuts) ? saved.cuts.length : 0) - cuts.length;
       const storedDimensions = Array.isArray(saved.dimensions)
         ? saved.dimensions.map(dimension => ({ ...dimension, levelId: migrateLevelId(dimension?.levelId) }))
@@ -5000,6 +5082,7 @@ class Component extends DCLogic {
         roomAreasOn: saved.roomAreasOn === true,
         projectInfo: format.projectInfo(saved.projectInfo),
         zoneHeights: format.zoneHeights(saved.zoneHeights),
+        sectionTable: format.sectionTable(saved.sectionTable),
         tour: format.tour(saved.tour),
         roofIntent: format.roofIntent(saved.roofIntent),
         tourPopup: format.tour(saved.tour).step === 'foundation' ? 'foundation' : false,
@@ -5131,6 +5214,18 @@ class Component extends DCLogic {
         };
       }).filter(Boolean);
       skipped += damaged(saved.fixtures, this._fixtures.length);
+      // A wall device whose host is gone is dropped rather than left floating:
+      // there is no representation for one off a wall, which is the same rule
+      // that makes it ride a wall edit instead of being orphaned by it.
+      this._electricDevices = format.electricDevices(saved.electricDevices, ownerLevelIds)
+        .map(device => {
+          if (device.host === 'wall') {
+            const wall = wallsById.get(device.wallId);
+            if (!wall || wall.levelId !== device.levelId) return null;
+          }
+          return { ...device, id: this._storedItemId(device.id, 'electric', usedIds) };
+        }).filter(Boolean);
+      skipped += damaged(saved.electricDevices, this._electricDevices.length);
       const floorIds = new Set(this._floors.map(floor => floor.id));
       const roofIds = new Set(this._roofs.map(roof => roof.id));
       this._surfaceOpenings = format.surfaceOpenings(saved.surfaceOpenings, ownerLevelIds).map(opening => {
@@ -5436,6 +5531,7 @@ class Component extends DCLogic {
       // deletion should survive a reopen needs a ruling and is not invented
       // here.
       if (this._toyModeOn()) this._toyAutoPlaceClosets();
+      this._armEntryCoach();
       document.body.dataset.modelReady = '1';
       if (!document.body.dataset.saveSeq) document.body.dataset.saveSeq = '0';
       document.body.dataset.saveDirty = '0';
@@ -5596,6 +5692,7 @@ class Component extends DCLogic {
       try {
         const stored = JSON.parse(await at.file.text());
         if (stored && typeof stored.layout === 'object') this._layoutData = stored.layout;
+        if (stored && typeof stored.specs === 'object') this._specsData = stored.specs;
       } catch { /* unreadable — our own copy is the better one to keep */ }
     }
     // Rebuilt so the sheet we just took rides out with it.
@@ -5778,6 +5875,7 @@ class Component extends DCLogic {
     this._floors     = []; // committed closed floor outlines
     this._fenestrations = []; // door/window openings hosted on walls
     this._fixtures   = []; // kitchen / bath / laundry symbols hosted on walls
+    this._electricDevices = []; // outlets, switches, lights, detectors (board: electric)
     this._surfaceOpenings = []; // free-form openings cut from a floor or roof
     this._roofs      = []; // roof footprints — edge-drawn or built from a shape
     this._dimensions = []; // two-point plan/floor dimensions
@@ -6152,9 +6250,9 @@ class Component extends DCLogic {
     };
     // An empty seat: a dark screen holding the chair for a view that does
     // not exist yet, so the wall always shows the full seating chart.
-    const emptyCard = (key, label, title) => ({
-      key: `empty:${key}`, label, title, empty: true,
-      active: false, onClick: null, paint: () => {},
+    const emptyCard = (key, label, title, onClick = null) => ({
+      key: `empty:${key}`, label, title, empty: true, offer: Boolean(onClick),
+      active: false, onClick, paint: () => {},
     });
     const push = (a, b) => { if (a) inner.push(a); if (b) outer.push(b); };
     const byId = id => this.state.levels.find(level => level.id === id);
@@ -6180,8 +6278,10 @@ class Component extends DCLogic {
     // two seats stand ready even before the drafter cuts anything.
     const sections = this.state.cuts.map(cutCard);
     for (let n = sections.length; n < 2; n += 1) {
-      sections.push(emptyCard(`S${n + 1}`, `S${n + 1}`,
-        `S${n + 1} — cut a section to fill this screen`));
+      const name = `S${n + 1}`;
+      sections.push(emptyCard(name, name,
+        `${name} — tap to cut a section into this screen`,
+        () => this._cutFromRailSeat(name)));
     }
     sections.forEach(card => {
       (inner.length <= outer.length ? inner : outer).push(card);
@@ -6209,6 +6309,7 @@ class Component extends DCLogic {
       }
       card.onclick = spec.onClick || null;
       card.classList.toggle('empty', Boolean(spec.empty));
+      card.classList.toggle('offer', Boolean(spec.offer));
       // Keep the column in seating order even when views come and go.
       if (box.children[i] !== card) box.insertBefore(card, box.children[i] || null);
       card.title = spec.title;
@@ -6683,6 +6784,7 @@ class Component extends DCLogic {
     }
     // ── Fixtures (kitchen / bath / laundry symbols riding their host walls) ──
     if (activeVisible) this._drawFixtures2D(ctx, toS);
+    if (activeVisible) this._drawElectricDevices2D(ctx, toS);
     // Stair opening ghost: once the interior face is anchored, the measured
     // rectangle previews toward the cursor's side until the second click.
     if (activeVisible && this.state.activeTool === 'fenestration' && !this._isPrinting
@@ -8874,6 +8976,10 @@ class Component extends DCLogic {
   _activeWalls() {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
+    // This filter is load-bearing beyond walls: _activeFixtures derives its
+    // set from these ids, so it is what keeps fixtures off a foreign layer
+    // view too. The courtesy escape below is safe because _selectLayerView
+    // clears those ids on every layer-set change, so none survive a switch.
     return this._walls.filter(wall => wall.levelId === levelId && (view == null || (wall.view || 'plan') === view
       || (!this._isPrinting && this._courtesyWallIds?.has(wall.id))));
   }
@@ -12837,6 +12943,11 @@ class Component extends DCLogic {
   // the mid-tour teardown, so an empty-wallet press never ends the tour
   // without building.
   _pressBuildHouse() {
+    // The coach is spent by the PRESS, not by the build. Pressing the bone is
+    // the user saying they have it; whether the press then builds a house,
+    // opens Gruff's window or asks for an outline first is a separate
+    // question, and the instruction has been followed either way.
+    this._dismissEntryCoach();
     this._ensureDrawingCollections();
     // Board #323: the bone is never gated behind finishing the interview.
     // Pressed mid-order it deals what Gruff has so far — program() fills
@@ -12934,43 +13045,17 @@ class Component extends DCLogic {
     }
   }
 
-  // The bone crunch: a short synthesized WebAudio crunch on spend — two
-  // quick noise bites through a falling bandpass, no shipped asset. It
-  // respects the wallet-sound toggle (personal SETTINGS) and fails
-  // silently everywhere: blocked audio must never break the spend.
+  // The bone crunch, from the shared synth in bone-sound.js so the two bones
+  // cannot drift apart. THIS IS THE SMALL ONE: a short soft crunch, because
+  // the build-row bone gets pressed over and over while somebody works and a
+  // sound that is right the first time is tiring the twentieth. The big bone
+  // -- entry page, and Gruff's window when it is wired -- takes the long one.
+  //
+  // Respects the wallet-sound toggle (personal SETTINGS) and fails silently
+  // everywhere: blocked audio must never break the spend.
   _playBoneCrunch() {
     if (this.state.walletSound === false) return;
-    try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      if (!this._audioCtx) this._audioCtx = new Ctx();
-      const ctx = this._audioCtx;
-      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-      const bite = (at, duration, freq) => {
-        const frames = Math.max(1, Math.floor(ctx.sampleRate * duration));
-        const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < frames; i++) {
-          data[i] = (Math.random() * 2 - 1) * (1 - i / frames) ** 2;
-        }
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        const band = ctx.createBiquadFilter();
-        band.type = 'bandpass';
-        band.frequency.setValueAtTime(freq, at);
-        band.frequency.exponentialRampToValueAtTime(freq * 0.4, at + duration);
-        band.Q.value = 0.9;
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.5, at);
-        gain.gain.exponentialRampToValueAtTime(0.001, at + duration);
-        source.connect(band).connect(gain).connect(ctx.destination);
-        source.start(at);
-        source.stop(at + duration);
-      };
-      const now = this._audioCtx.currentTime;
-      bite(now, 0.07, 900);         // cr—
-      bite(now + 0.08, 0.11, 500);  // —unch
-    } catch { /* audio blocked — the spend already happened, silently */ }
+    window.DraftBoneSound?.crunch();
   }
 
   // HOUSE on the top bar: select-first — arm the outline trace for an
@@ -13017,6 +13102,62 @@ class Component extends DCLogic {
         : 'RABBIT pace is coming soon — it will stay out of the way once you know the moves.',
       drawingMessageError: true,
     });
+  }
+
+  // ─── THE ENTRY COACH ────────────────────────────────────────────────────
+  //
+  // You arrive here by pressing the bone on the entry page. The logo does not
+  // come with you and the bone does, so the one thing you already know how to
+  // press is the one thing still on screen -- and a beat later everything
+  // around it dims and it gets named.
+  //
+  //   PRESS BUTTON TO BUILD HOUSE PLAN
+  //
+  // The first press taught you where it is. The second one builds a house.
+  // Nothing is asked, nothing is chosen, and the same button does both.
+
+  // The beat. Long enough to see the model area unobstructed, short enough
+  // that it reads as one movement rather than two screens.
+  static get ENTRY_COACH_DELAY_MS() { return 1000; }
+
+  _armEntryCoach() {
+    // ONCE, EVER. A coach that returns is a nag, and someone who has built a
+    // house does not need to be told where the bone is.
+    let seen = false;
+    try { seen = localStorage.getItem('draft-entry-coach-seen') === '1'; } catch (err) { seen = true; }
+    if (seen) return;
+    // Only over an empty sheet: "build a house" is nonsense pointed at a
+    // drawing that already has one, and someone reopening their own work is
+    // not on their first run whatever the flag says.
+    if (this._walls.length || this._outlines.length || this._lines.length) return;
+    clearTimeout(this._entryCoachTimer);
+    this._entryCoachTimer = setTimeout(() => {
+      if (this._walls.length || this._outlines.length || this._lines.length) return;
+      // Measured, not assumed: the bone is one button among several in a row
+      // that has already changed twice, so the arrows are aimed at where it
+      // really is on the day.
+      const bone = document.querySelector('[data-build-house]');
+      const at = bone ? bone.getBoundingClientRect() : null;
+      this.setState({
+        entryCoach: true,
+        entryCoachAt: at ? { x: Math.round(at.left + at.width / 2), y: Math.round(at.bottom + 12) } : null,
+      });
+      // Said AS the tint arrives, over the bone that is still lit -- the one
+      // moment in the app allowed to be a performance, because it is the only
+      // moment nobody has committed to anything yet. Quiet, and it fails
+      // silently: a browser that will not speak to a first-time visitor still
+      // shows the line on screen.
+      if (this.state.walletSound !== false) window.DraftBoneSound?.announce();
+    }, Component.ENTRY_COACH_DELAY_MS);
+  }
+
+  // Spent the moment it is followed OR waved away -- both are the user saying
+  // they have it, and neither is worth a second showing.
+  _dismissEntryCoach() {
+    clearTimeout(this._entryCoachTimer);
+    window.DraftBoneSound?.hush();   // mid-sentence is where an offer stops being one
+    try { localStorage.setItem('draft-entry-coach-seen', '1'); } catch (err) { /* private window */ }
+    if (this.state.entryCoach) this.setState({ entryCoach: false });
   }
 
   _buildHouse() {
@@ -13607,6 +13748,11 @@ class Component extends DCLogic {
     };
   }
 
+  // NOTE (electric sheet): this keys off the ids from _activeWalls, so a
+  // fixture inherits the layer-view exclusion rather than having one of its
+  // own. That inheritance is the ONLY thing keeping a sink unselectable on
+  // the ELECTRIC sheet -- loosen the filter in _activeWalls and this rule
+  // silently loses its guard. tests/electric-sheet.spec.js fails if it does.
   _activeFixtures() {
     const levelId = this._activeLevelId();
     const wallIds = new Set([...this._activeWalls(), ...this._sharedContextWalls()].map(wall => wall.id));
@@ -14084,6 +14230,127 @@ class Component extends DCLogic {
       closetDoorFor,
       CLOSET_CLOTHES_FT, CLOSET_ROD_FT, CLOSET_SHELF_FT, CLOSET_WALL_FT,
       COUNTER_OVERHANG_FT, FIXTURE_COLOR,
+    });
+  }
+
+  // ── Electric magnets (board: the electric plan) ──────────────────────
+  // A device being added snaps to where the rules WOULD have put it. That is
+  // electric-rules.js read a third way -- generate asks what goes here, the
+  // magnet asks where it would have gone -- so a plan the drafter adds to
+  // cannot drift from the plan the build wrote. Same table, same answer.
+  //
+  // The catch is the drafter's OWN snap zone (_nodeSnapRadius, from
+  // profile-manager's DEFAULT_SNAP_ZONE, which he has already tuned), never a
+  // private radius. Note it is a PIXEL radius, so the magnet loosens as he
+  // zooms out -- which is what he expects, and the reason not to reinvent it
+  // in feet.
+  //
+  // A magnet is a suggestion, not a rule: it says where along a wall an
+  // outlet sits, or where in a room a light lands. It does NOT decide whether
+  // a wall device is on a wall at all -- that is not a suggestion, it is the
+  // storage model, which has no way to hold one floating in a room.
+  _electricHouse() {
+    const levelId = this._activeLevelId();
+    const walls = this._walls.filter(wall => wall.levelId === levelId
+      && (wall.view || 'plan') === 'plan');
+    const loops = geo.roomLoops(walls.map(wall => {
+      const def = WALL_TYPES.find(type => type.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
+      return {
+        start: { x: wall.start.x, z: wall.start.z },
+        end: { x: wall.end.x, z: wall.end.z },
+        halfFt: def.totalIn / 24,
+      };
+    }), ROOM_TAG_JOIN_FT);
+    return {
+      rooms: loops.map((loop, index) => ({
+        id: `r${index}`,
+        polygon: (loop.points || []).map(pt => ({ x: pt.x, z: pt.z })),
+      })).filter(room => room.polygon.length >= 3),
+      walls: walls.map(wall => ({ id: wall.id, start: wall.start, end: wall.end })),
+    };
+  }
+
+  // The nearest candidate within the snap zone, or null. Wall candidates are
+  // measured at their point on the wall so the comparison is like for like.
+  _electricMagnet(worldPt) {
+    const rules = window.DraftElectricRules;
+    if (!rules || !worldPt) return null;
+    const reach = this._nodeSnapRadius();
+    const house = this._electricHouse();
+    const candidates = rules.candidates(house);
+    const wallsById = new Map(this._walls.map(wall => [wall.id, wall]));
+    const points = [
+      ...candidates.lights.map(c => ({ at: { x: c.x, z: c.z }, candidate: c })),
+      ...candidates.outlets.map(c => {
+        const frame = wallsById.has(c.wallId) && this._wallFrame(wallsById.get(c.wallId));
+        if (!frame) return null;
+        const pt = frame.at(c.offset, frame.endOff);
+        return { at: { x: pt.x, z: pt.z }, candidate: c };
+      }).filter(Boolean),
+    ];
+    let best = null;
+    let bestD = reach;
+    points.forEach(entry => {
+      const d = Math.hypot(entry.at.x - worldPt.x, entry.at.z - worldPt.z);
+      if (d < bestD) { bestD = d; best = entry; }
+    });
+    return best;
+  }
+
+  // ── Electric device rendering (board: the electric plan) ─────────────
+  // Everything electrical is red, over the plan in its normal colours: the
+  // plan below is context, not the subject. The marks themselves come from
+  // electric-symbols.js -- one mark drawn once and reused, with the FLR /
+  // CEIL label drawn by the same function so a caller cannot render the
+  // square and forget the text that is the only thing telling them apart.
+  ELECTRIC_DEVICE_FT = 0.5;   // the outlet circle's diameter, in feet
+
+  _activeElectricDevices() {
+    const levelId = this._activeLevelId();
+    return (this._electricDevices || []).filter(device => device.levelId === levelId);
+  }
+
+  // A wall device has NO stored geometry: its point is read from the wall it
+  // is on, every frame, so it rides a wall edit instead of being orphaned.
+  _electricDeviceAt(device) {
+    if (device.host !== 'wall') return { pt: device.at, rotation: 0 };
+    const wall = this._walls.find(w => w.id === device.wallId);
+    const frame = wall && this._wallFrame(wall);
+    if (!frame) return null;           // host gone: draw nothing, never guess
+    const face = device.side === -1 ? frame.startOff : frame.endOff;
+    const pt = frame.at(device.offset, face);
+    // +y points away from the mounting surface, so the mark turns with its
+    // wall and a floor or ceiling device draws upright.
+    return { pt: { x: pt.x, y: pt.y ?? 0, z: pt.z },
+      rotation: Math.atan2(frame.nz * device.side, frame.nx * device.side) };
+  }
+
+  _drawElectricDevices2D(ctx, toS) {
+    const symbols = window.DraftElectricSymbols;
+    if (!symbols) return;
+    const printable = layer => !this._isPrinting || this._layerStandard(layer).printable;
+    const devices = this._activeElectricDevices()
+      .filter(device => this._layerStandard(device.layer).visible && printable(device.layer));
+    if (!devices.length) return;
+    // Screen size of the mark, measured rather than assumed: the same two
+    // world points the plan is drawn with, so the symbol tracks zoom exactly.
+    const a = toS({ x: 0, y: 0, z: 0 });
+    const b = toS({ x: this.ELECTRIC_DEVICE_FT, y: 0, z: 0 });
+    const size = Math.max(3, Math.hypot(b.x - a.x, b.y - a.y));
+    const draw = {
+      outlet: symbols.wallOutlet, switch: symbols.wallOutlet,
+      vanity: symbols.wallOutlet, 'stove-outlet': symbols.wallOutlet,
+      'dryer-outlet': symbols.wallOutlet, pot: symbols.wallOutlet,
+      fan: symbols.wallOutlet, chandelier: symbols.wallOutlet,
+      smoke: symbols.wallOutlet, 'co-smoke': symbols.wallOutlet,
+      'floor-ac': symbols.floorOutlet, 'ceiling-ac': symbols.ceilingOutlet,
+    };
+    devices.forEach(device => {
+      const placed = this._electricDeviceAt(device);
+      if (!placed) return;
+      const sc = toS(placed.pt);
+      const paint = draw[device.kind] || symbols.wallOutlet;
+      symbols.drawDevice(ctx, (c, sz) => paint(c, sz), sc.x, sc.y, size, placed.rotation);
     });
   }
 
@@ -16153,6 +16420,25 @@ class Component extends DCLogic {
 
   // SELECT can engage one object type (the OBJECT TYPE chips); every pick
   // path then ignores everything else until the filter returns to ALL.
+  // The ELECTRIC sheet's "everything not electric is locked" rule needs no
+  // gate here, and adding one was wrong. MEASURED, not assumed: every
+  // active-set helper already excludes itself on a foreign layer view.
+  // _activeWalls, _activeLines, _activeDimensions, _activeRoomTags,
+  // _activeColumns and _activeBeams all filter on _activeLayerViewId, and
+  // _activeFixtures inherits it transitively -- it keys off the ids from
+  // _activeWalls, so no active wall means no active fixture. The courtesy
+  // ids that let an item from a neighbouring layer set linger are cleared on
+  // every layer-set change, so none survive the switch onto the sheet.
+  //
+  // A gate here would therefore have enforced nothing that was not already
+  // enforced -- and worse: with no selection branch asking for 'electric'
+  // yet, it made the sheet select NOTHING, devices included. The rule is
+  // pinned by tests/electric-sheet.spec.js instead, so it stays true if
+  // someone later makes one of those helpers view-independent.
+  _onElectricSheet() {
+    return !this.state.boneyardActive && this._activeLayerViewId() === 'e-power';
+  }
+
   _selectFilterAllows(type) {
     const filter = this.state.selectFilter || 'all';
     return filter === 'all' || filter === type;
@@ -20084,6 +20370,21 @@ class Component extends DCLogic {
   }
 
   // ─── Cut drawing ──────────────────────────────────────────────────────────────
+  // An empty section seat is an invitation, not a photograph of nothing.
+  // Tapping it does what the CUT tool key does, plus the two things a seat
+  // knows that a tool key does not: the cut is drawn in plan, so the view
+  // goes back to plan first, and the seat can name itself in the prompt. The
+  // elevation seats deliberately do not offer this — E1-E4 cut themselves
+  // when the house builds, so a tap there would draw a second front.
+  _cutFromRailSeat(name) {
+    if (this.state.activeView !== 'top') this._setView('top');
+    if (!this._activateContextTool('cut')) return;
+    this.setState({
+      drawingMessage: `${name}: click where the section line starts, then where it ends, then the side it looks toward.`,
+      drawingMessageError: false,
+    });
+  }
+
   _handleCutClick() {
     const pt = this._snapPt; if (!pt) return;
     const phase = this.state.cutPhase;
@@ -21299,6 +21600,22 @@ class Component extends DCLogic {
       onSelectHouse: () => this._toggleHouseMode(),
       onSelectSplit: () => this._pressSplitLevel(),
       onSelectTurtle: () => this._pressAssistLevel('turtle'),
+      entryCoachOn: this.state.entryCoach === true,
+      entryCoachX: this.state.entryCoachAt ? this.state.entryCoachAt.x : 0,
+      entryCoachY: this.state.entryCoachAt ? this.state.entryCoachAt.y : 0,
+      onDismissEntryCoach: () => this._dismissEntryCoach(),
+      // The bone is CUT OUT of the scrim rather than covered by it: an
+      // instruction you cannot follow is worse than no instruction. But ONLY
+      // the bone -- the cluster drops its own stacking context so the bone's
+      // wrapper can rise alone, and the rest of the row stays under the tint
+      // with everything else.
+      // The cluster has a transform, which makes a stacking context whatever
+      // its z-index says -- so the bone cannot rise out of it on its own. The
+      // whole row comes up through the scrim instead, and everything on it
+      // except the bone is dimmed to match the tint and made unpressable. The
+      // result is the one described: the bone is the only thing still lit.
+      buildClusterZ: this.state.entryCoach === true ? 61 : 6,
+      buildClusterClass: this.state.entryCoach === true ? 'coaching' : '',
       onSelectRabbit: () => this._pressAssistLevel('rabbit'),
       hasHouseMaster: houseExists,
       houseButtonHint: houseArmed

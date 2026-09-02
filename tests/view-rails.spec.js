@@ -86,9 +86,13 @@ test.describe('View galleries', () => {
       'E3 · BACK', 'E4 · RIGHT', 'SITE PLAN',
       '2ND FL LAYOUT (FLOOR)', 'MAIN FL LAYOUT (FLOOR)', 'BASEMENT (WALLS)', 'S2',
     ]);
-    // The empty seats are placeholders, not live buttons.
+    // The empty elevation seats are placeholders — E1-E4 cut themselves
+    // with the build, so tapping one would draw a second front. The section
+    // seats are the offer: nothing cuts an S1 but a hand.
     await expect(page.locator('[data-rail-key="empty:E1"]')).toHaveClass(/empty/);
+    await expect(page.locator('[data-rail-key="empty:E1"]')).not.toHaveClass(/offer/);
     await expect(page.locator('[data-rail-key="empty:S1"]')).toHaveClass(/empty/);
+    await expect(page.locator('[data-rail-key="empty:S1"]')).toHaveClass(/offer/);
     await expect(page.locator('[data-view-rail-3d]')).toBeVisible();
 
     await drawOutlineRect(page);
@@ -172,6 +176,38 @@ test.describe('View galleries', () => {
     await expect(page.locator('[data-rail-key="empty:S2"]')).toHaveCount(1);
     await expect(thumbByLabel(page, '.view-rail-right', 'S1')).toHaveClass(/empty/);
     await expect(thumbByLabel(page, '.view-rail-right', 'S2')).toHaveClass(/empty/);
+  });
+
+  test('tapping the empty S1 seat starts the cut, the same as pressing C', async ({ page }) => {
+    await h.openModel(page, { webgl: false, rails: false });
+    await drawOutlineRect(page);
+    await buildHouse(page);
+    await h.waitForSaved(page);
+    await page.waitForTimeout(400);
+
+    // The build leaves an elevation center stage; the seat has to bring the
+    // plan back, because a section line is drawn in plan.
+    await expect(page.locator('[data-model-title-detail]').last()).not.toHaveText('E1');
+    await page.locator('[data-rail-key="cut:E1"]').click();
+    await page.waitForTimeout(400);
+    await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
+
+    await page.locator('[data-rail-key="empty:S1"]').click();
+    await page.waitForTimeout(400);
+    await expect(page.locator('[data-model-title-detail]').last()).not.toHaveText('E1');
+    // It says what to do next and names the seat it will fill.
+    await expect(page.locator('[data-model-drawing-message]'))
+      .toHaveText(/^S1: click where the section line starts/);
+
+    // The three clicks a C-key cut takes, with no key pressed.
+    await h.clickWorld(page, -12, 0);
+    await h.clickWorld(page, 12, 0);
+    await h.clickWorld(page, 0, -6);
+    await page.waitForTimeout(400);
+
+    const thumb = thumbByLabel(page, '.view-rail-right', 'S1');
+    await expect(thumb).toBeVisible();
+    await expect(thumb).not.toHaveClass(/empty/);
   });
 
   test('the BASEMENT and FOUNDATION seats show different layer views', async ({ page }) => {

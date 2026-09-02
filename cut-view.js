@@ -904,6 +904,14 @@ if (!window.DraftCutView) {
     // between them, and a wall top standing in the clear air between the two
     // would be hidden by neither of them.
     const ROOF_COVER_EPS = 0.02;
+    // A wall only hides what stands behind it: an eave overhanging toward the
+    // viewer clears its own wall by the overhang, and a rake clears its gable
+    // wall the same way, so the margin only has to beat float noise.
+    const WALL_COVER_EPS = 0.05;
+    // A roof edge landing exactly on a wall's END is at the corner, not behind
+    // it: the flush cut where a garage roof dies into the house, and the ridge
+    // starting off that wall, both sit on that line and stay drawn.
+    const WALL_EDGE_EPS = 0.05;
     const fasciaFt = ROOF_FASCIA_IN / 12;
     const roofClippedTop = (pt, depth, top) => {
       if (!facesByRoof || !facesByRoof.size) return top;
@@ -1036,6 +1044,11 @@ if (!window.DraftCutView) {
     })).filter(span => span.hi - span.lo >= 0.5);
     const edgeVisible = (u, depth) => !houseSpans.some(other =>
       other.depth > depth + 1e-6 && other.lo < u - 0.05 && other.hi > u + 0.05);
+    // The rim bands are part of the opaque house face, so the roof pass reads
+    // them alongside the walls: between one storey's plate and the next
+    // storey's floor there is no wall face, and a roof behind the house at
+    // exactly that height would otherwise show through the joist band.
+    const rimBands = [];
     stack.floors.forEach(level => {
       const spans = houseSpans.filter(span => span.levelId === level.id);
       if (!spans.length) return;
@@ -1052,6 +1065,10 @@ if (!window.DraftCutView) {
       runs.forEach(run => {
         if (run.hi - run.lo < 0.5) return;
         ctx.fillRect(X(run.lo) - 1, yTopPx, (run.hi - run.lo) * pxPerFt + 2, yBotPx - yTopPx);
+        const depth = Math.max(...spans
+          .filter(span => span.hi > run.lo && span.lo < run.hi)
+          .map(span => span.depth));
+        rimBands.push({ lo: run.lo, hi: run.hi, bottom: level.floorBottom, top: level.floorTop, depth });
       });
       // Vertical edges through the band: the run boundaries plus any face
       // corner inside a run that isn't hidden behind a nearer face — a jog
@@ -1134,8 +1151,38 @@ if (!window.DraftCutView) {
       // fascia) up to the highest — the test `roofClippedTop` runs for walls.
       // A taller roof behind does not hide what passes under it, so each roof
       // is banded on its own rather than compared by height.
-      const hidden = (pt, elev) => {
+      // A roof standing behind a nearer WALL is not visible through it. The
+      // wall pass fills opaque and the roof pass strokes over it afterwards,
+      // so an attached garage's roof — which dies into the house wall with no
+      // eave on that side — drew its whole gable, fascia and all, straight
+      // through two storeys of house when the elevation was taken from the
+      // far side. Faces carry the tops the wall pass already worked out
+      // (plate, gable climb, roof clip), so the cover test is the wall's own
+      // painted profile read at the point's u.
+      const topAtU = (geom, u) => {
+        const tops = geom.tops;
+        if (u <= tops[0].u) return tops[0].top;
+        for (let i = 1; i < tops.length; i++) {
+          if (u > tops[i].u) continue;
+          const lo = tops[i - 1], hi = tops[i];
+          const t = (u - lo.u) / ((hi.u - lo.u) || 1);
+          return lo.top + (hi.top - lo.top) * t;
+        }
+        return tops[tops.length - 1].top;
+      };
+      const behindWall = (pt, u, elev) => {
         const depth = pt.x * dir.x + pt.z * dir.z;
+        return faceGeoms.some(geom => geom.face.depth > depth + WALL_COVER_EPS
+          && u > geom.loU + WALL_EDGE_EPS && u < geom.hiU - WALL_EDGE_EPS
+          && elev > geom.floor - ROOF_COVER_EPS
+          && elev < topAtU(geom, u) - ROOF_COVER_EPS)
+        || rimBands.some(band => band.depth > depth + WALL_COVER_EPS
+          && u > band.lo + WALL_EDGE_EPS && u < band.hi - WALL_EDGE_EPS
+          && elev > band.bottom - ROOF_COVER_EPS && elev < band.top + ROOF_COVER_EPS);
+      };
+      const hidden = (pt, elev, u) => {
+        const depth = pt.x * dir.x + pt.z * dir.z;
+        if (u != null && behindWall(pt, u, elev)) return true;
         const span = dHi - depth;
         if (span < 0.1) return false;
         // From just in front of the point, so a surface never hides itself.
@@ -1188,14 +1235,19 @@ if (!window.DraftCutView) {
               const pt = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
               const u = ua + (ub - ua) * t;
               const elev = ea + (eb - ea) * t;
-              if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, elev)) { run = null; continue; }
+              if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, elev, u)) { run = null; continue; }
               if (!run) { run = { u0: u, e0: elev, u1: u, e1: elev }; runs.push(run); }
               else { run.u1 = u; run.e1 = elev; }
             }
             const eave = Math.abs(ea - eaveTop) < 0.01 && Math.abs(eb - eaveTop) < 0.01;
             const rake = !eave && onGable(a, b);
-            runs.forEach(r => {
-              if (Math.abs(r.u1 - r.u0) < 0.05 && Math.abs(r.e1 - r.e0) < 0.05) return;
+            // A run of a single station paints nothing, and the corner it
+            // stands on is not "shown" for the soffit return either — a rake
+            // hidden behind the house all but its bottom point once hung its
+            // soffit line off that one surviving station.
+            const drawn = runs.filter(r =>
+              Math.abs(r.u1 - r.u0) > 0.05 || Math.abs(r.e1 - r.e0) > 0.05);
+            drawn.forEach(r => {
               if (eave) {
                 // An eave wears the fascia band: the light top line and the
                 // heavy shadow along its bottom, same inks as the silhouette's.
@@ -1244,7 +1296,7 @@ if (!window.DraftCutView) {
               }
             });
             const overhang = Number(roof.overhang) || 0;
-            if (rake && runs.length && overhang > 0.05) {
+            if (rake && drawn.length && overhang > 0.05) {
               // The metal soffit closes the corner: a line from the low
               // point of the rake fascia straight back to the house wall,
               // the flat soffit plane under the eave-overhang triangle.
@@ -1266,7 +1318,7 @@ if (!window.DraftCutView) {
                 ? (masterPt.x - lo.p.x) * rux + (masterPt.z - lo.p.z) * ruz : NaN;
               const reach = Number.isFinite(along) && along > 0.05 ? along : overhang;
               const wallU = (lo.p.x + rux * reach) * axis.x + (lo.p.z + ruz * reach) * axis.z;
-              const shown = runs.some(r => Math.min(r.u0, r.u1) - 0.1 <= lo.u
+              const shown = drawn.some(r => Math.min(r.u0, r.u1) - 0.1 <= lo.u
                 && lo.u <= Math.max(r.u0, r.u1) + 0.1);
               if (shown && reach > 0.05 && Math.abs(wallU - lo.u) > 0.2
                 && lo.u >= uMin - 0.01 && lo.u <= uMax + 0.01) {
@@ -1349,7 +1401,7 @@ if (!window.DraftCutView) {
           const l1 = Math.hypot(d1.x, d1.z), l2 = Math.hypot(d2.x, d2.z);
           if (l1 < 0.05 || l2 < 0.05 || Math.abs(cross) < 0.02 * l1 * l2) return;
           const u = pt.x * axis.x + pt.z * axis.z;
-          if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, eaveTop)) return;
+          if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, eaveTop, u)) return;
           ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
           ctx.beginPath();
           ctx.moveTo(X(u), Y(eaveTop));

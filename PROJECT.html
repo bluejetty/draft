@@ -22,8 +22,8 @@
     .brand { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:21px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
     .slash { color:rgba(29,31,32,.32); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:18px; }
     .section { color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
-    .back { margin-left:auto; color:rgba(29,31,32,.56); text-decoration:none; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
-    .back:hover { color:#5980a6; }
+    .back, .nav-away { margin-left:auto; color:rgba(29,31,32,.56); text-decoration:none; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
+    .back:hover, .nav-away:hover { color:#5980a6; }
     main { width:min(1180px, calc(100vw - 32px)); margin:30px auto 48px; }
     h1 { margin:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:27px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
     .intro { max-width:720px; margin:7px 0 0; color:rgba(29,31,32,.63); font-size:14px; line-height:1.5; }
@@ -54,6 +54,19 @@
     .zone-input { width:100%; height:26px; border:1px solid rgba(29,31,32,.28); background:#fafafa; color:#1d1f20; padding:3px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
     .zone-input:hover, .zone-input:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
     .zone-note { margin-top:9px; color:rgba(29,31,32,.5); font-size:11px; line-height:1.4; }
+    .table-card { margin-top:16px; }
+    .table-scroll { overflow-x:auto; }
+    table.section-table { border-collapse:collapse; font-family:'Barlow Condensed',system-ui,sans-serif; }
+    .section-table th, .section-table td { border:1px solid rgba(29,31,32,.14); padding:0; }
+    .section-table thead th { padding:5px 6px; background:rgba(89,128,166,.07); color:rgba(29,31,32,.62); font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; text-align:center; white-space:nowrap; }
+    .section-table th.row-head { min-width:132px; text-align:left; padding:6px 8px; background:#fff; font-size:11px; font-weight:600; letter-spacing:.05em; color:#1d1f20; }
+    .section-table td { width:78px; text-align:center; vertical-align:top; }
+    .section-table td.blank { background:repeating-linear-gradient(135deg, rgba(29,31,32,.05) 0 4px, transparent 4px 8px); }
+    .cell-input { width:100%; height:24px; border:0; background:transparent; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
+    .cell-input:hover, .cell-input:focus { background:rgba(89,128,166,.1); }
+    .cell-input.inherited { color:rgba(29,31,32,.42); }
+    .cell-derived { display:block; padding:4px; color:rgba(29,31,32,.6); font-size:11px; font-weight:600; }
+    .cell-note { display:block; padding:0 3px 3px; color:rgba(29,31,32,.42); font-size:9px; letter-spacing:.03em; white-space:nowrap; }
     .drop-slot { margin-top:16px; border:1.5px dashed rgba(29,31,32,.28); background:rgba(29,31,32,.02); padding:26px 16px; text-align:center; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
     .drop-slot small { display:block; margin-top:5px; text-transform:none; letter-spacing:0; font-family:'Barlow',system-ui,sans-serif; font-weight:400; font-size:11px; }
     #status { margin-top:14px; min-height:16px; color:#557a46; font-size:12px; }
@@ -65,7 +78,8 @@
     <div class="brand">Draft</div>
     <div class="slash">/</div>
     <div class="section">Project</div>
-    <a class="back" href="./MODEL.dc.html">&larr; Back to Model</a>
+    <a class="nav-away" data-nav-specs href="./SPECS.html">Specifications &rarr;</a>
+    <a class="back" style="margin-left:14px;" href="./MODEL.dc.html">&larr; Back to Model</a>
   </header>
   <main>
     <h1>Project</h1>
@@ -102,7 +116,7 @@
         <div class="card-title">Typical wall section &mdash; first 4 ft, cut inward</div>
         <div class="card-body">
           <div class="detail-wrap" id="detail-wrap">
-            <canvas id="detail-canvas" width="520" height="640" aria-label="Live typical wall section"></canvas>
+            <canvas id="detail-canvas" width="400" height="500" aria-label="Live typical wall section"></canvas>
           </div>
         </div>
       </section>
@@ -117,6 +131,16 @@
         </div>
       </section>
     </div>
+
+    <section class="card table-card" aria-label="Section table">
+      <div class="card-title">Section table &mdash; the numbers, by build type</div>
+      <div class="card-body">
+        <div class="table-scroll">
+          <table class="section-table" id="section-table"></table>
+        </div>
+        <div class="zone-note">HOUSE is this drawing&#8217;s live assembly &mdash; the same numbers the wall section and the level cards edit. The other rows are the office defaults for that build type; a grey number is inherited until you type over it, and a hatched cell is an item the type has no use for. Wall heights come from the stud: stud + 4&frac12;&Prime; of plates, so a height always lands on lumber you can buy.</div>
+      </div>
+    </section>
 
     <div class="drop-slot" id="drop-slot">
       Photos &middot; PDFs &middot; site plans
@@ -200,6 +224,7 @@
 
       let projectInfo = format.projectInfo(drawing?.projectInfo);
       let zoneHeights = format.zoneHeights(drawing?.zoneHeights);
+      let sectionTable = format.sectionTable(drawing?.sectionTable);
       const levelAssemblies = drawing?.levelAssemblies && typeof drawing.levelAssemblies === 'object'
         ? drawing.levelAssemblies : {};
       const levels = format.levels(drawing.levels || DEFAULT_LEVEL_LIST);
@@ -244,6 +269,7 @@
       const projectKeys = () => ({
         projectInfo,
         zoneHeights,
+        sectionTable,
         levelAssemblies,
         roofPitch,
         roofOverhang,
@@ -562,6 +588,225 @@
         }
       };
 
+      // ── The section table ───────────────────────────────────────────────
+      // A row per build type, a column per measured item. HOUSE reads and
+      // writes the drawing's LIVE assembly — the same numbers the detail
+      // above is drawn from — so the table and the section can never
+      // disagree. Every other row stores only what it overrides, and falls
+      // back to its type default and then to HOUSE, shown grey so it reads
+      // as inherited rather than typed.
+      const upperFloor = () => floorLevels[1] || null;
+      const mainFloor = () => floorLevels[0] || null;
+      const liveField = {
+        roofPitch: {
+          get: () => roofPitch,
+          set: value => { roofPitch = value; },
+        },
+        roofOverhangFt: {
+          get: () => roofOverhang,
+          set: value => { roofOverhang = value; },
+        },
+        mainWallHeightFt: {
+          get: () => mainFloor() && assembly(mainFloor().id).wallHeightFt,
+          set: value => setAssembly(mainFloor().id, 'wallHeightFt', value),
+        },
+        mainJoistDepthIn: {
+          get: () => mainFloor() && assembly(mainFloor().id).joistDepthIn,
+          set: value => setAssembly(mainFloor().id, 'joistDepthIn', value),
+        },
+        mainSheathingIn: {
+          get: () => mainFloor() && assembly(mainFloor().id).sheathingIn,
+          set: value => setAssembly(mainFloor().id, 'sheathingIn', value),
+        },
+        upperWallHeightFt: {
+          get: () => upperFloor() && assembly(upperFloor().id).wallHeightFt,
+          set: value => setAssembly(upperFloor().id, 'wallHeightFt', value),
+        },
+        upperJoistDepthIn: {
+          get: () => upperFloor() && assembly(upperFloor().id).joistDepthIn,
+          set: value => setAssembly(upperFloor().id, 'joistDepthIn', value),
+        },
+        fdnWallHeightFt: {
+          get: () => assembly(1).wallHeightFt,
+          set: value => setAssembly(1, 'wallHeightFt', value),
+        },
+        // A bungalow has no wood fill wall and no second floor — the cell is
+        // there, it simply has nothing behind it.
+        woodFillHeightFt: { get: () => null, set: () => {} },
+        slabThicknessIn: {
+          get: () => assembly(1).slabThicknessIn,
+          set: value => setAssembly(1, 'slabThicknessIn', value),
+        },
+        footingWidthIn: {
+          get: () => assembly(1).footingWidthIn ?? (fdnIsIcf() ? 24 : 20),
+          set: value => setAssembly(1, 'footingWidthIn', value),
+        },
+        footingDepthIn: {
+          get: () => assembly(1).footingDepthIn,
+          set: value => setAssembly(1, 'footingDepthIn', value),
+        },
+      };
+
+      // What a cell shows, and whether the number is its own or inherited.
+      const cellValue = (rowId, field) => {
+        if (rowId === 'house') return { value: liveField[field].get(), own: true };
+        const stored = sectionTable.rows[rowId]?.[field] ?? null;
+        if (stored != null) return { value: stored, own: true };
+        const fallback = projectPage.SECTION_TABLE_DEFAULTS[rowId]?.[field];
+        if (fallback != null) return { value: fallback, own: false };
+        return { value: liveField[field].get(), own: false };
+      };
+      const writeCell = (rowId, field, value) => {
+        if (rowId === 'house') { liveField[field].set(value); return; }
+        sectionTable = format.sectionTable({ rows: {
+          ...sectionTable.rows,
+          [rowId]: { ...sectionTable.rows[rowId], [field]: value },
+        } });
+      };
+
+      const unitFormat = {
+        pitch: value => String(value),
+        ftin: value => ftIn(value),
+        in: value => inchesOnly(value),
+        stud: value => inchesOnly(projectPage.studInFromWallHeightFt(value)),
+      };
+      const unitParse = {
+        pitch: text => {
+          const value = Number(text);
+          return Number.isFinite(value) && value > 0 && value <= 24 ? value : null;
+        },
+        ftin: text => parseFtIn(text),
+        in: text => parseInches(text),
+        stud: text => {
+          const inches = parseInches(text);
+          return inches == null ? null : projectPage.wallHeightFtFromStud(inches);
+        },
+      };
+
+      // The read-only cells, and the small print under an editable one: a
+      // stud reads back the wall it makes, a foundation wall the height to
+      // the top of its sill (plus the wood fill where the type has one).
+      const derivedText = (rowId, itemId) => {
+        if (itemId === 'heel') {
+          const pitch = cellValue(rowId, 'roofPitch').value;
+          const overhang = cellValue(rowId, 'roofOverhangFt').value;
+          return fmt.formatArchitecturalInches(
+            projectPage.roofHeelIn(ROOF_FASCIA_IN, overhang, pitch));
+        }
+        // What you stand under down there: the pour and everything framed on
+        // it, less the slab that buries the bottom of it.
+        if (itemId === 'basementClg') {
+          const fillItem = projectPage.SECTION_TABLE_ITEMS.find(entry => entry.id === 'woodFill');
+          const fillFt = fillItem.types.includes(rowId)
+            ? (cellValue(rowId, 'woodFillHeightFt').value || 0) : 0;
+          return fmt.formatArchitecturalInches(
+            cellValue(rowId, 'fdnWallHeightFt').value * 12 + projectPage.SILL_PLATE_IN
+            + fillFt * 12 - cellValue(rowId, 'slabThicknessIn').value);
+        }
+        return inchesOnly(projectPage.SILL_PLATE_IN);
+      };
+      const cellNote = (rowId, item) => {
+        if (item.unit === 'stud') return ftIn(cellValue(rowId, item.field).value);
+        // A fill wall doesn't get to pick its height — the pour and the floor
+        // above already fixed it — so it reports the stud it wants cut to.
+        if (item.field === 'woodFillHeightFt') {
+          return `${inchesOnly(projectPage.studInFromWallHeightFt(
+            cellValue(rowId, item.field).value))} STUD`;
+        }
+        if (item.field !== 'fdnWallHeightFt') return '';
+        // The pour and its sill: the height the floor above bears on.
+        return `${ftIn(cellValue(rowId, 'fdnWallHeightFt').value
+          + projectPage.SILL_PLATE_IN / 12)} TO SILL`;
+      };
+
+      const tableEl = document.querySelector('#section-table');
+      const cellEls = [];
+      {
+        const head = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        const corner = document.createElement('th');
+        corner.className = 'row-head';
+        corner.textContent = 'BUILD TYPE';
+        headRow.appendChild(corner);
+        projectPage.SECTION_TABLE_ITEMS.forEach(item => {
+          const th = document.createElement('th');
+          th.textContent = item.label;
+          th.dataset.sectionCol = item.id;
+          headRow.appendChild(th);
+        });
+        head.appendChild(headRow);
+        tableEl.appendChild(head);
+
+        const body = document.createElement('tbody');
+        projectPage.SECTION_TABLE_ROWS.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.dataset.sectionRow = row.id;
+          const label = document.createElement('th');
+          label.className = 'row-head';
+          label.textContent = row.label;
+          tr.appendChild(label);
+          projectPage.SECTION_TABLE_ITEMS.forEach(item => {
+            const td = document.createElement('td');
+            const key = `${row.id}.${item.id}`;
+            if (!item.types.includes(row.id)) {
+              td.className = 'blank';
+              td.dataset.sectionBlank = key;
+              tr.appendChild(td);
+              return;
+            }
+            if (item.unit === 'derived') {
+              const span = document.createElement('span');
+              span.className = 'cell-derived';
+              span.dataset.sectionCell = key;
+              td.appendChild(span);
+              cellEls.push({ row, item, el: span });
+            } else {
+              const input = document.createElement('input');
+              input.className = 'cell-input';
+              input.dataset.sectionCell = key;
+              input.setAttribute('aria-label', `${row.label} ${item.label}`);
+              input.disabled = readOnly;
+              const note = document.createElement('span');
+              note.className = 'cell-note';
+              note.dataset.sectionNote = key;
+              input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+              input.addEventListener('change', () => {
+                const parsed = unitParse[item.unit](input.value);
+                if (parsed != null) {
+                  writeCell(row.id, item.field, parsed);
+                  save(`${row.label} ${item.label} saved.`);
+                }
+                fillTable();
+                if (row.id === 'house') { repaint(); fillZones(); }
+                input.value = unitFormat[item.unit](cellValue(row.id, item.field).value);
+              });
+              td.appendChild(input);
+              td.appendChild(note);
+              cellEls.push({ row, item, el: input, note });
+            }
+            tr.appendChild(td);
+          });
+          body.appendChild(tr);
+        });
+        tableEl.appendChild(body);
+      }
+
+      const fillTable = () => {
+        cellEls.forEach(({ row, item, el, note }) => {
+          if (item.unit === 'derived') {
+            el.textContent = derivedText(row.id, item.id);
+            return;
+          }
+          const cell = cellValue(row.id, item.field);
+          el.classList.toggle('inherited', !cell.own);
+          el.title = cell.own ? '' : 'Inherited — type to give this type its own number.';
+          if (document.activeElement !== el) {
+            el.value = cell.value == null ? '' : unitFormat[item.unit](cell.value);
+          }
+          if (note) note.textContent = cell.value == null ? '' : cellNote(row.id, item);
+        });
+      };
+
       // ── Zone heights + grade ────────────────────────────────────────────
       const zoneRowsEl = document.querySelector('#zone-rows');
       document.querySelector('#zone-datum-note').textContent =
@@ -668,6 +913,7 @@
       };
 
       fillZones();
+      fillTable();
       repaint();
     })();
   </script>
