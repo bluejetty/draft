@@ -793,6 +793,57 @@ if (!window.DraftDrawingFormat) {
     };
   };
 
+  // PROJECT SPECIFICATIONS: what this job says that the office master does not.
+  // Only the differences persist — a project that accepts the master stores
+  // nothing, so improving a master section improves every drawing that never
+  // touched it. A copy of the whole master in every file would freeze each
+  // project at the master it was started from, which is the failure this shape
+  // exists to avoid.
+  //   off   — a master section this job does not use
+  //   body  — a master section this job rewords (the master text stays put)
+  //   added — a section this job has and the master does not; it carries its
+  //           own division and title, and its id is the drafter's number.
+  const specs = raw => {
+    const id = value => String(value ?? '').trim().slice(0, 40);
+    const line = value => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    const block = value => String(value ?? '').replace(/\r\n?/g, '\n').slice(0, 20000);
+    const division = value => {
+      const no = Number(value);
+      return Number.isInteger(no) && no >= 1 && no <= 99 ? no : null;
+    };
+    const seen = new Set();
+    const sections = (Array.isArray(raw?.sections) ? raw.sections : []).map(section => {
+      const sectionId = id(section?.id);
+      // A second entry for one id would make the page's answer depend on which
+      // copy it read first. The first wins and the rest are dropped.
+      if (!sectionId || seen.has(sectionId)) return null;
+      const added = section?.added === true;
+      const div = division(section?.div);
+      // An added section with no division has nowhere to print — it would load
+      // into the file and never appear on a page.
+      if (added && div === null) return null;
+      const off = section?.off === true;
+      const body = section?.body == null ? null : block(section.body);
+      const entry = { id: sectionId };
+      if (added) {
+        entry.added = true;
+        entry.div = div;
+        entry.title = line(section?.title);
+        entry.kind = oneOf(section?.kind, ['notes', 'terms', 'table', 'legend'], 'notes');
+        entry.body = body ?? '';
+      } else {
+        if (off) entry.off = true;
+        if (body !== null) entry.body = body;
+        // Neither off nor reworded: the job agrees with the master, so there is
+        // nothing to carry.
+        if (!off && body === null) return null;
+      }
+      seen.add(sectionId);
+      return entry;
+    }).filter(Boolean);
+    return { sections };
+  };
+
   // Backgrounds are at most two other levels, never the active one.
   const backgroundLevelIds = (rawIds, levelIds, activeLevelId) =>
     (Array.isArray(rawIds) ? rawIds : [])
@@ -824,6 +875,7 @@ if (!window.DraftDrawingFormat) {
     underlays,
     projectInfo,
     zoneHeights,
+    specs,
     layout,
     tour,
     roofIntent,
