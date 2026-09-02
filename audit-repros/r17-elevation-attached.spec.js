@@ -1,0 +1,23 @@
+const { test } = require('@playwright/test');
+const h = require('../tests/helpers.js');
+test('R17: elevation of a house with an attached garage', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  await h.selectTool(page, 'Outline');
+  for (const [x, z] of [[-8, -6], [8, -6], [8, 6], [-8, 6]]) await h.clickWorld(page, x, z);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  await h.climbTourToMain(page);
+  await h.selectTool(page, 'Outline');
+  await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
+  await page.keyboard.press('Enter');
+  for (const [x, z] of [[8, -4], [20, -4], [20, 4], [8, 4]]) await h.clickWorld(page, x, z);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  await h.selectTool(page, 'Outline');
+  await page.getByRole('button', { name: 'BUILD HOUSE' }).click();
+  await page.waitForTimeout(600);
+  await h.waitForSaved(page);
+  await page.locator('.cut-row', { hasText: 'E1' }).click({ position: { x: 18, y: 8 } });
+  await page.waitForTimeout(1000);
+  await page.locator('[data-model-canvas]').screenshot({ path: '/tmp/fc/elev-attached.png' });
+});
