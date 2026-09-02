@@ -107,7 +107,7 @@ Record each verdict here as it happens, with the PR that did it:
 
 | | |
 |---|---|
-| **ENTRY page** | the default house size per bedroom count. Not in the repo; only Movie has the width bands. |
+| **ENTRY page** | **nothing.** The ceremony carries a bedroom count, not a size — `gruff-interview.js` already supplies the defaults. It can start now. |
 | **new MODEL page** | nothing — `render-2d.js` and `drawing-format.js` are both `PORTABLE` and ready |
 | **BONEYARD** | MODEL space existing first; page-or-mode is undecided and does not block the three pure modules |
 | **`dc-runtime/` source** | the Replit project. Not urgent — `support.js` is readable and has never needed a change in 782 commits. |

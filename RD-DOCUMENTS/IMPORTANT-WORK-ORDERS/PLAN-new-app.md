@@ -104,10 +104,17 @@ The markup and styling for four stages, and the wiring from the bone press into
 **2–3 days.** It fixes a real complaint, it is the piece where "spotless"
 matters most, and it needs no canvas, no drawing format, no painters.
 
-### Still open before it can be finished
+### Nothing is blocking it
 
-The bone's one question needs a default house size per bedroom count. Those
-width bands are not in the repo and only Movie has them.
+An earlier draft of this plan said the ENTRY page waited on a default house
+size per bedroom count. **It does not.** The ceremony carries a bedroom count
+and a chosen way; it never sizes a house. `QUESTION.fallback` reads
+`interview.DEFAULTS.bedrooms` (3) and `clamp` bounds it 1..6, and the sizing is
+`build-house.js`'s job downstream, exactly as it is today.
+
+The width bands Movie has affect how good the bone's house is -- an existing
+question about MODEL -- not whether this page can be built. **ENTRY can start
+now.**
 
 ---
 
