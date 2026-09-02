@@ -47,8 +47,24 @@ test.describe('SPECS page', () => {
 
     const sheets = page.locator('.sheet');
     const sheetCount = await sheets.count();
+    // The column the document ENDS in is exempt from the fill rule: nothing
+    // follows it, so there is nothing it failed to pull up. That column is
+    // NOT always the third of the last sheet. The spec runs out where it runs
+    // out, and a last sheet holding one part-filled column and two empty ones
+    // is a correct set, not an under-packed one. Asserting otherwise held the
+    // tail column to a rule that only means something when text follows it.
+    const lastFilled = await page.evaluate(() => {
+      const columns = Array.from(document.querySelectorAll('.sheet-col'));
+      for (let i = columns.length - 1; i >= 0; i -= 1) {
+        if (columns[i].querySelector('.spec-item')) return i;
+      }
+      return -1;
+    });
     for (let s = 0; s < sheetCount; s += 1) {
       const columns = sheets.nth(s).locator('.sheet-col');
+      // Three to a sheet on every sheet, which is what makes the flat index
+      // below line up with the one `lastFilled` counted.
+      expect(await columns.count()).toBe(3);
       for (let c = 0; c < 3; c += 1) {
         const column = columns.nth(c);
         const items = column.locator('.spec-item');
@@ -62,9 +78,8 @@ test.describe('SPECS page', () => {
         expect(lastIsHeading).toBe(false);
 
         // The column is filled: what follows it could not have fitted here.
-        // Only checked where there IS something following in the same sheet.
-        const isLastColumnOfSet = s === sheetCount - 1 && c === 2;
-        if (isLastColumnOfSet) continue;
+        // Only checked where there IS something following.
+        if (s * 3 + c === lastFilled) continue;
         const used = await column.evaluate(node =>
           Array.from(node.children).reduce((sum, child) => sum + child.getBoundingClientRect().height, 0));
         const columnHeight = await column.evaluate(node => node.getBoundingClientRect().height);

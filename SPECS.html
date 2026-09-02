@@ -567,6 +567,23 @@
       document.querySelector('[data-zoom-out]').addEventListener('click', () => setZoom(zoom - 0.1));
       document.querySelector('[data-print]').addEventListener('click', () => window.print());
 
+      // MEASURE AFTER THE TYPE ARRIVES, or the page breaks in the wrong places.
+      //
+      // The flow is driven by measured heights, and a height is only true for
+      // the font actually rendering. Barlow Condensed is narrower than the
+      // fallback, so measuring early wraps every paragraph to more lines than
+      // it will really take: items come out taller, fewer fit per column, and
+      // the whole spec pads out over more sheets than it needs. Worse than
+      // wrong is unstable — whether the webfont beat the first paint decided
+      // where the breaks landed, so the same job printed differently on two
+      // machines, and the suite went green or red on the same commit
+      // depending on the runner. Found from CI: the run that FAILED was the
+      // one that had measured correctly.
+      //
+      // One await settles it. Guarded because `document.fonts` is optional in
+      // the standard, and a page that will not paint at all is a worse
+      // failure than one that paginates loosely.
+      try { await document.fonts.ready; } catch {}
       refresh();
       document.body.dataset.specsReady = '1';
     })();
