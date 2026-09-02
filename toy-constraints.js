@@ -14,9 +14,9 @@
 // version of this.
 if (!window.DraftToyConstraints) {
 (() => {
-  const geo = window.DraftGeometry2D;
-  const wallTypes = window.DraftWallTypes;
-  const standards = window.DraftRoomStandards;
+  const geo = () => window.DraftGeometry2D;
+  const wallTypes = () => window.DraftWallTypes;
+  const standards = () => window.DraftRoomStandards;
 
   // ── Tunables ──────────────────────────────────────────────────────────
   const FOOT_FT = 1;                 // the toy's unit: the user moves whole feet
@@ -75,8 +75,8 @@ if (!window.DraftToyConstraints) {
   // Thickness comes from the catalogue. A 2×6 wall is 5½" because WALL_TYPES
   // says so, and no number in this file is allowed to disagree with it.
   const thicknessFt = wall => {
-    const types = wallTypes.WALL_TYPES || [];
-    const legacy = wallTypes.LEGACY_WALL_TYPES || {};
+    const types = wallTypes().WALL_TYPES || [];
+    const legacy = wallTypes().LEGACY_WALL_TYPES || {};
     const id = wall && wall.wallType;
     const row = types.find(type => type.id === id)
       || types.find(type => type.id === legacy[id]);
@@ -116,7 +116,7 @@ if (!window.DraftToyConstraints) {
   };
 
   const endsTouch = (a, b) => [a.start, a.end].some(p =>
-    [b.start, b.end].some(q => geo.distance(p, q) <= WELD_TOL_FT));
+    [b.start, b.end].some(q => geo().distance(p, q) <= WELD_TOL_FT));
 
   // NON-ORTHOGONAL GEOMETRY IS INERT, and it spreads by contact: a square wall
   // touching an angled one cannot be reasoned about either, because moving it
@@ -246,7 +246,7 @@ if (!window.DraftToyConstraints) {
     rooms.forEach(room => {
       const width = num(room.clearWidthFt) ?? 0;
       const depth = num(room.clearDepthFt) ?? 0;
-      const verdict = standards.evaluateRoom({
+      const verdict = standards().evaluateRoom({
         category: room.category,
         insideSqFt: num(room.insideSqFt) ?? width * depth,
         minDimensionFt: num(room.minDimensionFt) ?? Math.min(width, depth),
@@ -261,7 +261,7 @@ if (!window.DraftToyConstraints) {
     openings.forEach(opening => {
       const host = walls.find(wall => wall.id === opening.wallId);
       if (!host) return;
-      const runFt = geo.distance(host.start, host.end);
+      const runFt = geo().distance(host.start, host.end);
       const start = num(opening.offsetFt) ?? 0;
       const width = num(opening.widthFt) ?? 0;
       if (start < OPENING_EDGE_FT || start + width > runFt - OPENING_EDGE_FT) {

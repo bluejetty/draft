@@ -10,7 +10,7 @@
 // #246 beam-edge gap, so `_stairAutoFit` finds nothing to nudge.
 if (!window.DraftAutoStair) {
 (() => {
-  const geo = window.DraftGeometry2D;
+  const geo = () => window.DraftGeometry2D;
 
   // The rulebook (stair-rules.js). The brains used to be the constants
   // below; they now live in a table with provenance and confidence on
@@ -469,7 +469,7 @@ if (!window.DraftAutoStair) {
     if (!Array.isArray(points) || points.length < 3 || !(runFt > 0)) {
       return { stair: null, report: { straight: 'no footprint or run', L: null, U: null } };
     }
-    const ring = geo.offsetOutline(points.map(pt => ({ x: pt.x, z: pt.z })), -insetFt);
+    const ring = geo().offsetOutline(points.map(pt => ({ x: pt.x, z: pt.z })), -insetFt);
     const lines = beamLines(beams);
     const target = circulationTarget(points, stamps);
     const finishFt = finishIn / 12, gapFt = gapIn / 12, uGapFt = uGapIn / 12;

@@ -4,7 +4,7 @@
 // links, collection writes); nothing here mints identity.
 if (!window.DraftBuildHouse) {
 (() => {
-  const geo = window.DraftGeometry2D;
+  const geo = () => window.DraftGeometry2D;
 
   // refLine that puts the wall body inside the ring, keeping the outline on
   // the exterior face: 'left' for counter-clockwise rings, 'right' for
@@ -36,8 +36,8 @@ if (!window.DraftBuildHouse) {
   const footingRings = (points, wallFt, projFt) => {
     const base = points.map(pt => ({ x: pt.x, z: pt.z }));
     return [
-      geo.offsetOutline(base, projFt),
-      geo.offsetOutline(base, -(wallFt + projFt)),
+      geo().offsetOutline(base, projFt),
+      geo().offsetOutline(base, -(wallFt + projFt)),
     ];
   };
 

@@ -15,7 +15,7 @@
 //
 // The second is why nothing here can trap anybody. Every stage has a way past
 // it, and skipping is never punished — a skipped question takes the same
-// default the bone would have used anyway, from gruff-interview.js, so the
+// default the bone would have used anyway, from gruff-interview().js, so the
 // ceremony has no numbers of its own to drift from the engine's.
 //
 // No DOM, no component state, node-loadable, frozen. What is here is the SHAPE
@@ -23,7 +23,7 @@
 // those, not to this.
 if (!window.DraftFirstRun) {
 (() => {
-  const interview = window.DraftGruffInterview;
+  const interview = () => window.DraftGruffInterview;
 
   // ── The stages, in order ──────────────────────────────────────────────
   const STAGE = Object.freeze({
@@ -63,7 +63,7 @@ if (!window.DraftFirstRun) {
     ask: 'How many bedrooms?',
     // Read from the engine, never restated. A skipped question and a bone
     // press must produce the same house, or skipping quietly costs something.
-    get fallback() { return interview.DEFAULTS.bedrooms; },
+    get fallback() { return interview().DEFAULTS.bedrooms; },
     least: 1,
     most: 6,
   });

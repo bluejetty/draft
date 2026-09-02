@@ -439,6 +439,50 @@ suggested which of these name their caller's duty, and that is a hint about
 where to read, not a finding. The captures decided verdicts 6–10 because they
 were *measured*, both directions, with a control.
 
+## Finding 4 — the seam: this gate covers 17 of 37, and the other 19 are the ones already proven
+
+The gate's criterion is *loaded by `MODEL.dc.html` and by nothing else*, chosen
+because those modules have never been exercised anywhere but MODEL. Measured
+against the whole set:
+
+```
+Draft modules at root        37
+  MODEL-only (this gate)     17
+  shared with another page   19
+  loaded by no page           1   (first-run.js)
+```
+
+**The exclusions are correct by the stated rule** — `cut-view.js` is loaded by
+MODEL *and* LAYOUT, `layout-plan.js` by LAYOUT only, so neither is "MODEL and
+nothing else."
+
+But the rule cuts the wrong way for one purpose. A module already used by two
+pages is **evidence that it travels** — it has been proven outside MODEL by
+running there. So the nineteen outside this gate are, for migration purposes,
+the *safest* group, and the seventeen inside it are the ones needing a verdict.
+The criterion is right; it just means this document answers half the question by
+design, and the better half is already answered by the fact of a second caller.
+
+**Where that stops being true is the captures.** `cut-view.js` carries three and
+`layout-plan.js` one, and being shared did not protect them — LAYOUT lists its
+scripts in an order that happens to work, exactly as MODEL does. So "proven by a
+second page" proves the *logic* travels, not that the *loading* does.
+
+### Three scopes, three right answers
+
+The capture count was argued three ways before it was clear that each question
+has its own number:
+
+```
+gate scope (the 17)        6 files,  9 captures
+repo-wide, plain form      7 files, 10 captures
+repo-wide, all shapes      8 files, 13 captures
+```
+
+Verdicts 6–10 rest on the first: `auto-stair`, `build-house`, `room-grow`,
+`toy-constraints`, `toy-context` — all in scope, all plain, all measured. The
+wider numbers change the size of the repo-wide fix, not those verdicts.
+
 ## Method note — a quieter failure than a collision
 
 Verdict 2 needed one more measurement: whether a drafter can actually draw a

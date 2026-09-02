@@ -24,7 +24,7 @@
 //   elevationDatum()         → true when labels read from the datum
 if (!window.DraftCutView) {
 (() => {
-  const geo = window.DraftGeometry2D;
+  const geo = () => window.DraftGeometry2D;
   const { WALL_TYPES } = window.DraftWallTypes;
   const { formatInchesOnly } = window.DraftFormatters;
 
@@ -150,7 +150,7 @@ if (!window.DraftCutView) {
   // wherever a far wing's eave line passed; a face only ever answers for
   // its own region. Callers doing many queries build the faces once and
   // pass them in.
-  function sectionRoofHeightAt(pt, roof, faces = geo.roofFaces(roof, geo.roofSkeleton(roof))) {
+  function sectionRoofHeightAt(pt, roof, faces = geo().roofFaces(roof, geo().roofSkeleton(roof))) {
     if (!roof.points || roof.points.length < 3) return null;
     for (const face of faces) {
       const poly = face.points;
@@ -160,7 +160,7 @@ if (!window.DraftCutView) {
         if ((pi.z > pt.z) !== (pj.z > pt.z)
           && pt.x < (pj.x - pi.x) * (pt.z - pi.z) / (pj.z - pi.z) + pi.x) inside = !inside;
       }
-      if (inside) return geo.roofFaceRise(face, pt, roof.pitch || 4);
+      if (inside) return geo().roofFaceRise(face, pt, roof.pitch || 4);
     }
     return null;
   }
@@ -187,9 +187,9 @@ if (!window.DraftCutView) {
     env.roofs().forEach(roof => {
       if (!roof.points || roof.points.length < 3) return;
       const base = roofBaseElev(roof, stack) + ROOF_FASCIA_IN / 12;
-      geo.roofFaces(roof, geo.roofSkeleton(roof)).forEach(face => {
+      geo().roofFaces(roof, geo().roofSkeleton(roof)).forEach(face => {
         face.points.forEach(pt => {
-          const elev = base + geo.roofFaceRise(face, pt, roof.pitch || 4);
+          const elev = base + geo().roofFaceRise(face, pt, roof.pitch || 4);
           if (roofTop === null || elev > roofTop) roofTop = elev;
         });
       });
@@ -263,15 +263,15 @@ if (!window.DraftCutView) {
         .filter(roof => roof.points && roof.points.length >= 3)
         .forEach(roof => {
           const base = roofBaseElev(roof, stack);
-          const profile = geo.roofProfile(
-            roof, geo.roofFaces(roof, geo.roofSkeleton(roof)),
+          const profile = geo().roofProfile(
+            roof, geo().roofFaces(roof, geo().roofSkeleton(roof)),
             cut.startPt, cut.endPt, axis)
             .map(pt => ({ u: pt.u, rise: base + fasciaFt + pt.rise }));
           if (profile.length < 2) return;
           profiles.push(profile);
           roofChords.push({ u0: profile[0].u, u1: profile[profile.length - 1].u, elev: base });
         });
-      geo.profileEnvelope(profiles).forEach(pt => {
+      geo().profileEnvelope(profiles).forEach(pt => {
         roofSamples.push({ u: pt.u, elev: pt.rise });
       });
     }
@@ -588,7 +588,7 @@ if (!window.DraftCutView) {
       // REAL faces — built once here, thousands of queries after.
       facesByRoof = new Map(roofs
         .filter(roof => roof.points && roof.points.length >= 3)
-        .map(roof => [roof, geo.roofFaces(roof, geo.roofSkeleton(roof))]));
+        .map(roof => [roof, geo().roofFaces(roof, geo().roofSkeleton(roof))]));
       const steps = 240, depthSteps = 40;
       for (let i = 0; i <= steps; i++) {
         const s = i / steps;
@@ -922,7 +922,7 @@ if (!window.DraftCutView) {
       facesByRoof.forEach((roofFaces, roof) => {
         const base = roofBaseElev(roof, stack) + fasciaFt;
         let lo = Infinity, hi = -Infinity;
-        geo.roofProfile(roof, roofFaces, pt, far, dir).forEach(p => {
+        geo().roofProfile(roof, roofFaces, pt, far, dir).forEach(p => {
           const elev = base + p.rise;
           if (elev > hi) hi = elev;
           if (elev < lo) lo = elev;
@@ -1193,7 +1193,7 @@ if (!window.DraftCutView) {
           if (covered) return;
           const base = roofBaseElev(roof, stack) + fasciaFt;
           let lo = Infinity, hi = -Infinity;
-          geo.roofProfile(roof, roofFaces, near, far, dir).forEach(p => {
+          geo().roofProfile(roof, roofFaces, near, far, dir).forEach(p => {
             const e = base + p.rise;
             if (e > hi) hi = e;
             if (e < lo) lo = e;
@@ -1222,8 +1222,8 @@ if (!window.DraftCutView) {
             const key = [a, b].map(p => `${p.x.toFixed(2)},${p.z.toFixed(2)}`).sort().join('|');
             if (seen.has(key)) continue;   // shared ridge/hip/valley: once is enough
             seen.add(key);
-            const ea = eaveTop + geo.roofFaceRise(face, a, pitch);
-            const eb = eaveTop + geo.roofFaceRise(face, b, pitch);
+            const ea = eaveTop + geo().roofFaceRise(face, a, pitch);
+            const eb = eaveTop + geo().roofFaceRise(face, b, pitch);
             const ua = a.x * axis.x + a.z * axis.z;
             const ub = b.x * axis.x + b.z * axis.z;
             if (Math.abs(ub - ua) < 0.05 && Math.abs(eb - ea) < 0.05) continue; // end-on: a point

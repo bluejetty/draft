@@ -18,8 +18,8 @@
 // can, in node, in all four directions.
 if (!window.DraftToyContext) {
 (() => {
-  const geo = window.DraftGeometry2D;
-  const toy = window.DraftToyConstraints;
+  const geo = () => window.DraftGeometry2D;
+  const toy = () => window.DraftToyConstraints;
 
   // MODEL's room-tag pass reads the same enclosures this does, with these
   // numbers. They are matched rather than chosen: different ones and the two
@@ -158,11 +158,11 @@ if (!window.DraftToyContext) {
 
     // halfFt comes from the catalogue through the constraint module's own
     // reader, so a 2x6 wall is 5½" here for exactly the reason it is there.
-    const loops = geo.roomLoops(plan.map(wall => ({
+    const loops = geo().roomLoops(plan.map(wall => ({
       id: wall.id,
       start: { x: wall.start.x, z: wall.start.z },
       end: { x: wall.end.x, z: wall.end.z },
-      halfFt: toy.thicknessFt(wall) / 2,
+      halfFt: toy().thicknessFt(wall) / 2,
     })), joinFt === undefined ? JOIN_FT : joinFt);
 
     const floor = minAreaSqFt === undefined ? MIN_AREA_SQFT : minAreaSqFt;
