@@ -305,6 +305,18 @@ So the rename stops at the serialization boundary: `this._masterWireframe` in
 the code we read daily, still written as `boneyardOutlines` in the JSON nobody
 reads, with a comment at the seam saying why the two differ.
 
+**The suite already catches this, which I first said it did not.** Twenty spec
+files read `saved.boneyardOutlines` off the drawing pulled back out of
+IndexedDB by `h.savedDrawing(page)` — `garage.spec.js`, `build-links.spec.js`
+and eighteen others. A rename that leaked into the format turns them red at
+once. The silent empty list cannot reach a merge.
+
+Worth knowing that they guard it **by accident**: they are testing garages and
+build links and happen to name the key. A short spec asserting the format's
+key names *on purpose*, with a header saying why, would turn that accident
+into a guarantee — and would survive the day somebody rewrites
+`garage.spec.js`.
+
 ## Still to settle
 
 - Is a roof **eave** an overhang for the purpose of the rules above? It is
