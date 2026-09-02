@@ -28,6 +28,8 @@
 <script src="./room-grow.js"></script>
 <script src="./gruff-interview.js"></script>
 <script src="./layer-views.js"></script>
+<script src="./electric-symbols.js"></script>
+<script src="./electric-rules.js"></script>
 <script src="./gruff-drivethru.js"></script>
 <script src="./pdf-scan.js"></script>
 <!-- Load the 3D dependencies once during document parsing. Template scripts
@@ -1979,6 +1981,7 @@ const LEVEL_OWNED_COLLECTIONS = [
   '_lines', '_walls', '_floors', '_shapes', '_roofs', '_outlines',
   '_surfaceOpenings', '_dimensions', '_columns', '_beams',
   '_fenestrations', '_fixtures', '_stairs', '_notes', '_roomTags',
+  '_electricDevices',
   // Underlays are level-owned by the format's own rule — `underlays(raw,
   // levelIds)` refuses one whose level is not in the set — so a deleted
   // level used to leave its traced PDF or photo behind, pointing at a level
@@ -2703,6 +2706,7 @@ class Component extends DCLogic {
     if (!Array.isArray(this._floors)) this._floors = [];
     if (!Array.isArray(this._fenestrations)) this._fenestrations = [];
     if (!Array.isArray(this._fixtures)) this._fixtures = [];
+    if (!Array.isArray(this._electricDevices)) this._electricDevices = [];
     if (!Array.isArray(this._surfaceOpenings)) this._surfaceOpenings = [];
     if (!Array.isArray(this._shapes)) this._shapes = [];
     if (!Array.isArray(this._roofs)) this._roofs = [];
@@ -2817,6 +2821,23 @@ class Component extends DCLogic {
         headHeight: opening.headHeight,
         garage: opening.garage === true,
         auto: opening.auto === true,
+      })),
+      // Electric devices. A wall-hosted one writes wallId + offset and NO
+      // geometry, so it redraws from the current wall; a point-hosted one
+      // writes its point, and which room holds it is derived at read time
+      // rather than stored (rooms are not entities in this format).
+      electricDevices: this._electricDevices.map(device => ({
+        id: device.id,
+        levelId: device.levelId,
+        view: device.view || 'plan',
+        kind: device.kind,
+        layer: device.layer,
+        host: device.host,
+        ...(device.host === 'wall'
+          ? { wallId: device.wallId, offset: device.offset, side: device.side }
+          : { at: { x: device.at.x, y: device.at.y, z: device.at.z } }),
+        ...(device.auto === true ? { auto: true } : {}),
+        ...(device.switchId ? { switchId: device.switchId } : {}),
       })),
       fixtures: this._fixtures.map(fixture => ({
         id: fixture.id,
@@ -5152,6 +5173,18 @@ class Component extends DCLogic {
         };
       }).filter(Boolean);
       skipped += damaged(saved.fixtures, this._fixtures.length);
+      // A wall device whose host is gone is dropped rather than left floating:
+      // there is no representation for one off a wall, which is the same rule
+      // that makes it ride a wall edit instead of being orphaned by it.
+      this._electricDevices = format.electricDevices(saved.electricDevices, ownerLevelIds)
+        .map(device => {
+          if (device.host === 'wall') {
+            const wall = wallsById.get(device.wallId);
+            if (!wall || wall.levelId !== device.levelId) return null;
+          }
+          return { ...device, id: this._storedItemId(device.id, 'electric', usedIds) };
+        }).filter(Boolean);
+      skipped += damaged(saved.electricDevices, this._electricDevices.length);
       const floorIds = new Set(this._floors.map(floor => floor.id));
       const roofIds = new Set(this._roofs.map(roof => roof.id));
       this._surfaceOpenings = format.surfaceOpenings(saved.surfaceOpenings, ownerLevelIds).map(opening => {
@@ -5793,6 +5826,7 @@ class Component extends DCLogic {
     this._floors     = []; // committed closed floor outlines
     this._fenestrations = []; // door/window openings hosted on walls
     this._fixtures   = []; // kitchen / bath / laundry symbols hosted on walls
+    this._electricDevices = []; // outlets, switches, lights, detectors (board: electric)
     this._surfaceOpenings = []; // free-form openings cut from a floor or roof
     this._roofs      = []; // roof footprints — edge-drawn or built from a shape
     this._dimensions = []; // two-point plan/floor dimensions
@@ -6685,6 +6719,7 @@ class Component extends DCLogic {
     }
     // ── Fixtures (kitchen / bath / laundry symbols riding their host walls) ──
     if (activeVisible) this._drawFixtures2D(ctx, toS);
+    if (activeVisible) this._drawElectricDevices2D(ctx, toS);
     // Stair opening ghost: once the interior face is anchored, the measured
     // rectangle previews toward the cursor's side until the second click.
     if (activeVisible && this.state.activeTool === 'fenestration' && !this._isPrinting
@@ -8827,6 +8862,10 @@ class Component extends DCLogic {
   _activeWalls() {
     const levelId = this._activeLevelId();
     const view = this._activeLayerViewId(levelId);
+    // This filter is load-bearing beyond walls: _activeFixtures derives its
+    // set from these ids, so it is what keeps fixtures off a foreign layer
+    // view too. The courtesy escape below is safe because _selectLayerView
+    // clears those ids on every layer-set change, so none survive a switch.
     return this._walls.filter(wall => wall.levelId === levelId && (view == null || (wall.view || 'plan') === view
       || (!this._isPrinting && this._courtesyWallIds?.has(wall.id))));
   }
@@ -13542,6 +13581,11 @@ class Component extends DCLogic {
     };
   }
 
+  // NOTE (electric sheet): this keys off the ids from _activeWalls, so a
+  // fixture inherits the layer-view exclusion rather than having one of its
+  // own. That inheritance is the ONLY thing keeping a sink unselectable on
+  // the ELECTRIC sheet -- loosen the filter in _activeWalls and this rule
+  // silently loses its guard. tests/electric-sheet.spec.js fails if it does.
   _activeFixtures() {
     const levelId = this._activeLevelId();
     const wallIds = new Set([...this._activeWalls(), ...this._sharedContextWalls()].map(wall => wall.id));
@@ -14000,6 +14044,127 @@ class Component extends DCLogic {
       closetDoorFor,
       CLOSET_CLOTHES_FT, CLOSET_ROD_FT, CLOSET_SHELF_FT, CLOSET_WALL_FT,
       COUNTER_OVERHANG_FT, FIXTURE_COLOR,
+    });
+  }
+
+  // ── Electric magnets (board: the electric plan) ──────────────────────
+  // A device being added snaps to where the rules WOULD have put it. That is
+  // electric-rules.js read a third way -- generate asks what goes here, the
+  // magnet asks where it would have gone -- so a plan the drafter adds to
+  // cannot drift from the plan the build wrote. Same table, same answer.
+  //
+  // The catch is the drafter's OWN snap zone (_nodeSnapRadius, from
+  // profile-manager's DEFAULT_SNAP_ZONE, which he has already tuned), never a
+  // private radius. Note it is a PIXEL radius, so the magnet loosens as he
+  // zooms out -- which is what he expects, and the reason not to reinvent it
+  // in feet.
+  //
+  // A magnet is a suggestion, not a rule: it says where along a wall an
+  // outlet sits, or where in a room a light lands. It does NOT decide whether
+  // a wall device is on a wall at all -- that is not a suggestion, it is the
+  // storage model, which has no way to hold one floating in a room.
+  _electricHouse() {
+    const levelId = this._activeLevelId();
+    const walls = this._walls.filter(wall => wall.levelId === levelId
+      && (wall.view || 'plan') === 'plan');
+    const loops = geo.roomLoops(walls.map(wall => {
+      const def = WALL_TYPES.find(type => type.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
+      return {
+        start: { x: wall.start.x, z: wall.start.z },
+        end: { x: wall.end.x, z: wall.end.z },
+        halfFt: def.totalIn / 24,
+      };
+    }), ROOM_TAG_JOIN_FT);
+    return {
+      rooms: loops.map((loop, index) => ({
+        id: `r${index}`,
+        polygon: (loop.points || []).map(pt => ({ x: pt.x, z: pt.z })),
+      })).filter(room => room.polygon.length >= 3),
+      walls: walls.map(wall => ({ id: wall.id, start: wall.start, end: wall.end })),
+    };
+  }
+
+  // The nearest candidate within the snap zone, or null. Wall candidates are
+  // measured at their point on the wall so the comparison is like for like.
+  _electricMagnet(worldPt) {
+    const rules = window.DraftElectricRules;
+    if (!rules || !worldPt) return null;
+    const reach = this._nodeSnapRadius();
+    const house = this._electricHouse();
+    const candidates = rules.candidates(house);
+    const wallsById = new Map(this._walls.map(wall => [wall.id, wall]));
+    const points = [
+      ...candidates.lights.map(c => ({ at: { x: c.x, z: c.z }, candidate: c })),
+      ...candidates.outlets.map(c => {
+        const frame = wallsById.has(c.wallId) && this._wallFrame(wallsById.get(c.wallId));
+        if (!frame) return null;
+        const pt = frame.at(c.offset, frame.endOff);
+        return { at: { x: pt.x, z: pt.z }, candidate: c };
+      }).filter(Boolean),
+    ];
+    let best = null;
+    let bestD = reach;
+    points.forEach(entry => {
+      const d = Math.hypot(entry.at.x - worldPt.x, entry.at.z - worldPt.z);
+      if (d < bestD) { bestD = d; best = entry; }
+    });
+    return best;
+  }
+
+  // ── Electric device rendering (board: the electric plan) ─────────────
+  // Everything electrical is red, over the plan in its normal colours: the
+  // plan below is context, not the subject. The marks themselves come from
+  // electric-symbols.js -- one mark drawn once and reused, with the FLR /
+  // CEIL label drawn by the same function so a caller cannot render the
+  // square and forget the text that is the only thing telling them apart.
+  ELECTRIC_DEVICE_FT = 0.5;   // the outlet circle's diameter, in feet
+
+  _activeElectricDevices() {
+    const levelId = this._activeLevelId();
+    return (this._electricDevices || []).filter(device => device.levelId === levelId);
+  }
+
+  // A wall device has NO stored geometry: its point is read from the wall it
+  // is on, every frame, so it rides a wall edit instead of being orphaned.
+  _electricDeviceAt(device) {
+    if (device.host !== 'wall') return { pt: device.at, rotation: 0 };
+    const wall = this._walls.find(w => w.id === device.wallId);
+    const frame = wall && this._wallFrame(wall);
+    if (!frame) return null;           // host gone: draw nothing, never guess
+    const face = device.side === -1 ? frame.startOff : frame.endOff;
+    const pt = frame.at(device.offset, face);
+    // +y points away from the mounting surface, so the mark turns with its
+    // wall and a floor or ceiling device draws upright.
+    return { pt: { x: pt.x, y: pt.y ?? 0, z: pt.z },
+      rotation: Math.atan2(frame.nz * device.side, frame.nx * device.side) };
+  }
+
+  _drawElectricDevices2D(ctx, toS) {
+    const symbols = window.DraftElectricSymbols;
+    if (!symbols) return;
+    const printable = layer => !this._isPrinting || this._layerStandard(layer).printable;
+    const devices = this._activeElectricDevices()
+      .filter(device => this._layerStandard(device.layer).visible && printable(device.layer));
+    if (!devices.length) return;
+    // Screen size of the mark, measured rather than assumed: the same two
+    // world points the plan is drawn with, so the symbol tracks zoom exactly.
+    const a = toS({ x: 0, y: 0, z: 0 });
+    const b = toS({ x: this.ELECTRIC_DEVICE_FT, y: 0, z: 0 });
+    const size = Math.max(3, Math.hypot(b.x - a.x, b.y - a.y));
+    const draw = {
+      outlet: symbols.wallOutlet, switch: symbols.wallOutlet,
+      vanity: symbols.wallOutlet, 'stove-outlet': symbols.wallOutlet,
+      'dryer-outlet': symbols.wallOutlet, pot: symbols.wallOutlet,
+      fan: symbols.wallOutlet, chandelier: symbols.wallOutlet,
+      smoke: symbols.wallOutlet, 'co-smoke': symbols.wallOutlet,
+      'floor-ac': symbols.floorOutlet, 'ceiling-ac': symbols.ceilingOutlet,
+    };
+    devices.forEach(device => {
+      const placed = this._electricDeviceAt(device);
+      if (!placed) return;
+      const sc = toS(placed.pt);
+      const paint = draw[device.kind] || symbols.wallOutlet;
+      symbols.drawDevice(ctx, (c, sz) => paint(c, sz), sc.x, sc.y, size, placed.rotation);
     });
   }
 
@@ -16069,6 +16234,25 @@ class Component extends DCLogic {
 
   // SELECT can engage one object type (the OBJECT TYPE chips); every pick
   // path then ignores everything else until the filter returns to ALL.
+  // The ELECTRIC sheet's "everything not electric is locked" rule needs no
+  // gate here, and adding one was wrong. MEASURED, not assumed: every
+  // active-set helper already excludes itself on a foreign layer view.
+  // _activeWalls, _activeLines, _activeDimensions, _activeRoomTags,
+  // _activeColumns and _activeBeams all filter on _activeLayerViewId, and
+  // _activeFixtures inherits it transitively -- it keys off the ids from
+  // _activeWalls, so no active wall means no active fixture. The courtesy
+  // ids that let an item from a neighbouring layer set linger are cleared on
+  // every layer-set change, so none survive the switch onto the sheet.
+  //
+  // A gate here would therefore have enforced nothing that was not already
+  // enforced -- and worse: with no selection branch asking for 'electric'
+  // yet, it made the sheet select NOTHING, devices included. The rule is
+  // pinned by tests/electric-sheet.spec.js instead, so it stays true if
+  // someone later makes one of those helpers view-independent.
+  _onElectricSheet() {
+    return !this.state.boneyardActive && this._activeLayerViewId() === 'e-power';
+  }
+
   _selectFilterAllows(type) {
     const filter = this.state.selectFilter || 'all';
     return filter === 'all' || filter === type;
