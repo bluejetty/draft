@@ -123,10 +123,19 @@ carries the floor once the overhang is gone.**
 > spends a budget that has a hard ceiling of 20'-0", and the toy already has
 > to know that ceiling to refuse the nudge. One number, two features.
 
-INFERRED, not stated: the reverse. Moving a foundation wall **inward** should
-*create or grow* an overhang by the same arithmetic, refused once it would
-exceed 20'-0". That is the only reading where the rule is reversible, but
-Movie has not said it and it is written here as my inference.
+~~INFERRED: moving inward should *create or grow* an overhang by the same
+arithmetic.~~ **Wrong, and corrected below.** Movie has since said what inward
+does, and it is not the mirror of outward: everything above comes in together
+and the overhang keeps its width. See "Inward: everything above comes with it".
+The guess was reasonable and it was still a guess; leaving the strike-through
+because the wrong symmetry is the obvious thing to assume and the next person
+will assume it too.
+
+INFERRED, and still open: what happens on an **outward** move when the
+overhang is *smaller* than the move. An overhang of 4'-0" cannot absorb a
+10'-0" push. The only reading that does not go negative is that it falls to
+zero and the remaining 6'-0" then moves the edge -- the level converting from
+hanging to flush partway through the move.
 
 ### It is not a foundation rule. It is a "lower floor" rule
 
@@ -192,36 +201,35 @@ rather than a rewrite.
 
 ---
 
-## Outward, stated precisely
+## Inward: everything above comes with it
 
-Movie, sharpening the earlier rule:
+> Movie: *"if it is moved **inward** whatever is hooked up inline above also
+> changes and the stuff hanging over the edge is brought inward the exact same
+> amount"*
 
-> *"if it is moved outward whatever is hooked up inline above also changes and
-> the stuff hanging over the edge is brought inward the exact same amount"*
+For an inward move of `d`, **everything above moves in by `d`** -- both what
+sits flush on the wall and what hangs past it. An overhang **keeps its width**
+and is carried along; its outer edge comes in by `d` like everything else.
 
-So it is not one sequence applied to the building. **Each thing above responds
-according to what it is**, and they can differ from each other in the same
-move. For an outward move of `d`:
+So inward is a translation. Nothing is absorbed, nothing is spent, and the
+whole building above the moved wall shifts as one.
 
-| what it is above the moved wall | what happens |
-|---|---|
-| **inline** -- sitting directly over the wall, flush | moves out by `d` |
-| **hanging over the edge** | its overhang reduces by **exactly `d`**; its outer edge does not move |
+### Which is why inward is the only way to shrink
 
-Which matches the worked example exactly: a floor overhanging 20'-0", a
-foundation moved out 10'-0", an overhang of 10'-0" left, and the floor's outer
-edge never moved.
+This is what rule *"the only way they can reduce footprint is in the boneyard
+using the bone or foundation"* is actually made of, and the two directions
+turn out to be genuinely different operations rather than one operation with a
+sign:
 
-The phrase to keep is **"the exact same amount"**. The overhang is not
-recalculated from the new geometry -- it is reduced by the distance moved. Same
-number, opposite sign.
+| | flush above | overhanging above | outermost edge of the building |
+|---|---|---|---|
+| **outward** `d` | moves out by `d` | overhang **shrinks** by `d`, outer edge stays | **unchanged**, until an overhang runs out |
+| **inward** `d` | moves in by `d` | overhang **keeps its width**, outer edge moves in by `d` | **moves in by `d`** |
 
-INFERRED, not stated: what happens when the overhang is *smaller* than the
-move. An overhang of 4'-0" and a push of 10'-0" cannot take 10 off 4. The only
-reading that does not go negative is that the overhang falls to zero and the
-remaining 6'-0" then moves the edge -- the level converting from "hanging" to
-"inline" partway through the move, and finishing as the first row of the
-table.
+Outward never reaches past where the building already reached -- it fills in
+underneath the overhang it already has. Inward moves the outer edge itself.
+That is the whole asymmetry, and it is why only one of the two reduces a
+footprint.
 
 <!-- next: -->
 
