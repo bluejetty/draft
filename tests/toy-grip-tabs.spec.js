@@ -64,14 +64,19 @@ async function drawTwoRoomHouse(page, partitionX = 0) {
   await drawWall(page, partitionX, -5, partitionX, 5);
 }
 
-// A closet makes the west room a BEDROOM, so it is graded against the company
-// minimums (97 sq ft, 9'-8" least dimension) instead of being an unrated room
-// the toy has no opinion about at all. Two clicks along the wall set its width.
-async function closetOnNorthWall(page, x1, x2) {
+// A sink makes the west room a KITCHEN, so it is graded against the company
+// minimums (40 sq ft, 5'-0" least dimension) instead of being an unrated room
+// the toy has no opinion about at all.
+//
+// It used to be a closet here, which read as a BEDROOM. That inference is gone
+// (Movie, 1 Sep): a closet is a RESULT of a room being a bedroom and never the
+// evidence for it, and a bedroom is now known by its program stamp. Nothing
+// about these specs changes except which rule does the refusing -- what is
+// being pinned is the grip tab stopping on a room minimum, not which minimum.
+async function kitchenIn(page, x, z) {
   await h.selectTool(page, 'Fixture');
-  await page.getByRole('button', { name: 'CLOSET', exact: true }).click();
-  await h.clickWorld(page, x1, -4.6);
-  await h.clickWorld(page, x2, -4.6);
+  await page.getByRole('button', { name: 'SINK', exact: true }).click();
+  await h.clickWorld(page, x, z);
   await h.waitForSaved(page);
 }
 
@@ -118,6 +123,17 @@ async function dragTabBy(page, spot, feet, { steps = 8, settle = 0, release = tr
   for (let i = 1; i <= steps; i++) {
     await page.mouse.move(spot.x + travel * i / steps, spot.y);
     if (settle) await page.waitForTimeout(settle);
+  }
+  // HELD AT THE FAR END. The blocker waits out a short hold before it speaks,
+  // so that a fast drag grazing a limit does not flash text at someone who
+  // never noticed -- which means a drag whose LAST step is the first blocked
+  // one has produced exactly one blocked frame and said nothing. Leaning on it
+  // for a few more is what a finger does anyway.
+  if (settle) {
+    for (let i = 0; i < 4; i++) {
+      await page.mouse.move(spot.x + travel - i, spot.y);
+      await page.waitForTimeout(settle);
+    }
   }
   if (release) { await page.mouse.up(); await h.waitForSaved(page); }
 }
@@ -221,7 +237,7 @@ test.describe('TOY MODE grip tabs', () => {
   test('a drag into a room minimum stops at the permitted foot, never at the finger', async ({ page }) => {
     await openToy(page);
     await drawTwoRoomHouse(page);
-    await closetOnNorthWall(page, -10, -6);
+    await kitchenIn(page, -10, -4.5);
     await page.waitForTimeout(200);
 
     // Ask for eight feet west. The bedroom cannot give that up, so while the
@@ -253,7 +269,7 @@ test.describe('TOY MODE grip tabs', () => {
   test('the refusal is in the room\'s words, and the blocker is highlighted', async ({ page }) => {
     await openToy(page);
     await drawTwoRoomHouse(page);
-    await closetOnNorthWall(page, -10, -6);
+    await kitchenIn(page, -10, -4.5);
     // Tag the rooms so the line can call the room by the name the user reads.
     await h.selectTool(page, 'Annotation');
     await page.locator('[data-room-tags]').click();
@@ -268,20 +284,22 @@ test.describe('TOY MODE grip tabs', () => {
     await expect(message(page)).toContainText(/would be under/i);
     const said = await message(page).textContent();
     expect(said).not.toMatch(/MIN_ROOM|NOT_ORTHOGONAL|CANTILEVER|OPENING_WOULD/);
-    expect(said).toMatch(/BEDR|ROOM/i);
+    expect(said).toMatch(/KITCHEN|ROOM/i);
     // A real dimension or a real area, never a bare code.
     expect(said).toMatch(/\d+'-\d+"|\d+ sq ft/);
 
-    // And the wall that stopped the drag wears the highlight.
-    const onWall = await h.worldToClient(page, -1, 0);
-    expect(await inkAt(page, onWall, BLOCK_ORANGE, 8)).toBeGreaterThan(0);
+    // And the wall that stopped the drag wears the highlight. Found rather
+    // than probed at a fixed column: where the wall came to rest depends on
+    // which minimum bit and how much room the house had, and this test is not
+    // about that arithmetic.
+    expect(await inkAnywhere(page, BLOCK_ORANGE)).toBeGreaterThan(0);
     await page.mouse.up();
   });
 
   test('the same rule leaned on twice in one drag speaks once', async ({ page }) => {
     await openToy(page);
     await drawTwoRoomHouse(page);
-    await closetOnNorthWall(page, -10, -6);
+    await kitchenIn(page, -10, -4.5);
     await page.waitForTimeout(200);
 
     const spot = await tabSpot(page, 0, -5, 0, 5);
@@ -334,7 +352,7 @@ test.describe('TOY MODE grip tabs', () => {
     // the one that stops the drag while the other is under the finger.
     await drawWall(page, 0, -5, 0, 0);
     await drawWall(page, 0, 0, 0, 5);
-    await closetOnNorthWall(page, -10, -6);
+    await kitchenIn(page, -10, -4.5);
     await page.waitForTimeout(200);
 
     // One tab between the two halves, because they are one group.
@@ -347,12 +365,34 @@ test.describe('TOY MODE grip tabs', () => {
       { release: false, steps: 6, settle: 90 });
     await expect(message(page)).toContainText(/would be under/i);
 
-    // Both halves now stand at the permitted foot, one above z=0 and one
-    // below, so which of them wears the highlight is readable off the canvas.
-    const permitted = -1;
-    const onNorth = await inkAt(page, await h.worldToClient(page, permitted, -2.5), BLOCK_ORANGE, 7);
-    const onSouth = await inkAt(page, await h.worldToClient(page, permitted, 2.5), BLOCK_ORANGE, 7);
+    // Both halves now stand at the permitted foot, one above z=0 and one below.
+    // WHERE that foot is depends on which minimum bit and how much room the
+    // house had, so the highlight is FOUND rather than assumed: every orange
+    // pixel on the overlay is sorted by which side of the room's mid-line it
+    // fell on. Pinning a column would make this test a hostage to arithmetic
+    // it is not about.
+    const mid = (await h.worldToClient(page, 0, 0)).y;
+    const { onNorth, onSouth } = await page.evaluate(midY => {
+      const canvas = document.querySelector('[data-model-overlay]');
+      const rect = canvas.getBoundingClientRect();
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      let north = 0, south = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] === 0) continue;
+        if (Math.abs(data[i] - 217) > 26 || Math.abs(data[i + 1] - 119) > 26
+          || Math.abs(data[i + 2] - 6) > 26) continue;
+        const y = Math.floor((i / 4) / canvas.width) + rect.top;
+        // The highlight is drawn with a round cap, so it bleeds a few pixels
+        // past the end of its own wall and into the other half's territory.
+        // The band around the join is ignored rather than the assertion
+        // loosened -- "one of them is lit" should stay a sharp claim.
+        if (Math.abs(y - midY) <= 8) continue;
+        if (y < midY) north += 1; else south += 1;
+      }
+      return { onNorth: north, onSouth: south };
+    }, mid);
     // Exactly one half is lit: the highlight is a wall, not the whole group.
+    expect(onNorth + onSouth).toBeGreaterThan(0);
     expect((onNorth > 0) !== (onSouth > 0)).toBe(true);
     // And it is the half that ISN'T under the finger. In a welded group the
     // wall that stops you is usually not the one you grabbed, and lighting up

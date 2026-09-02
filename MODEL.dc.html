@@ -19,6 +19,7 @@
 <script src="./room-standards.js"></script>
 <script src="./toy-constraints.js"></script>
 <script src="./toy-context.js"></script>
+<script src="./closets.js"></script>
 <script src="./bone-sound.js"></script>
 <script src="./fen-labels.js"></script>
 <script src="./build-house.js"></script>
@@ -2194,23 +2195,26 @@ const COUNTER_OVERHANG_FT = 1 / 12; // countertop edge past the cabinet face
 // Closets are small rooms drawn as a wall-hosted fixture: 2'-1" inside depth
 // behind 2x4 closet walls, a rod at 1'-0" off the back wall, the shelf edge at
 // 1'-6", hanging clothes as 1'-10" strokes centered on the rod, and a door
-// picked from the DD/D ladder by whatever width fits between the side walls.
-const CLOSET_INSIDE_DEPTH_FT = 2 + 1 / 12;
-const CLOSET_WALL_FT = 3.5 / 12;
-const CLOSET_ROD_FT = 1;
-const CLOSET_SHELF_FT = 1.5;
-const CLOSET_CLOTHES_FT = 22 / 12;
-const CLOSET_DOORS = [
-  { label: 'DD72', widthFt: 6 },
-  { label: 'DD60', widthFt: 5 },
-  { label: 'DD48', widthFt: 4 },
-  { label: 'D36',  widthFt: 3 },
-  { label: 'D30',  widthFt: 2.5 },
-  { label: 'D24',  widthFt: 2 },
-  { label: 'D18',  widthFt: 1.5 },
-];
-const closetDoorFor = insideWidthFt =>
-  CLOSET_DOORS.find(door => door.widthFt <= insideWidthFt - 4 / 12) || null;
+// picked from the DD/D ladder.
+//
+// THE NUMBERS LIVE IN closets.js AND ARE READ HERE. A depth option may be
+// offered later (Movie, 1 Sep), so 2'-1" has one home rather than being typed
+// at each use -- and the toy and the drafting side cannot drift apart about
+// what a closet is, because there is only one answer to drift from.
+const CLOSET_INSIDE_DEPTH_FT = window.DraftClosets.INSIDE_DEPTH_FT;
+const CLOSET_WALL_FT = window.DraftClosets.WALL_FT;
+const CLOSET_ROD_FT = window.DraftClosets.RAIL_FT;
+const CLOSET_SHELF_FT = window.DraftClosets.SHELF_FT;
+const CLOSET_CLOTHES_FT = window.DraftClosets.CLOTHES_FT;
+const CLOSET_DOORS = window.DraftClosets.DOORS;
+// TAKES THE OUTSIDE WIDTH. Movie's rule is 4" of trim each side ON THE OUTSIDE
+// FACE, and the inside face does not care -- so the door is sized against the
+// closet's own width rather than against what is left between its side walls.
+// That is a change: this used to take 4" off the INSIDE width, already 7"
+// narrower, so shipped closets carried doors sized for a closet 7" smaller
+// than the one drawn. The new rule is the more permissive of the two and never
+// returns a narrower door.
+const closetDoorFor = outsideWidthFt => window.DraftClosets.doorFor(outsideWidthFt);
 // The corner-L kitchen preset drops a whole kitchen off one corner click:
 // cabinets along both legs, sink + DW centered on the long leg, fridge at the
 // open end, range on the short leg — NKBA-standard bays (36" fridge, 30"
@@ -2980,6 +2984,7 @@ class Component extends DCLogic {
         ...(tag.stamped === true && tag.companionOf != null
           ? { companionOf: tag.companionOf } : {}),
         ...(tag.stamped === true && tag.auto === true ? { auto: true } : {}),
+        ...(tag.stamped === true && tag.closetDeclined === true ? { closetDeclined: true } : {}),
         underMin: tag.underMin === true,
         layer: ROOM_TAG_LAYER,
       })),
@@ -5519,6 +5524,13 @@ class Component extends DCLogic {
       // Readiness beacon for the test suite: set imperatively (not through
       // renderVals) so it flips the moment loading ends, independent of
       // render timing. data-save-seq / -dirty are kept by _markUnsaved.
+      // A plan being read is when the toy places what is missing. The real
+      // mode entry is step 5, so this trigger point is provisional: it fires
+      // on a plan being opened rather than after every edit, which means a
+      // closet the drafter deletes stays deleted for the session. Whether a
+      // deletion should survive a reopen needs a ruling and is not invented
+      // here.
+      if (this._toyModeOn()) this._toyAutoPlaceClosets();
       this._armEntryCoach();
       document.body.dataset.modelReady = '1';
       if (!document.body.dataset.saveSeq) document.body.dataset.saveSeq = '0';
@@ -13916,7 +13928,7 @@ class Component extends DCLogic {
       return;
     }
     const width = Math.abs(placement.along - start.along);
-    if (kind.id === 'closet' && !closetDoorFor(width - 2 * CLOSET_WALL_FT)) {
+    if (kind.id === 'closet' && !closetDoorFor(width)) {
       this.setState({ drawingMessage: 'Too narrow for a closet — the smallest door is a D18: click the other end farther along the wall.', drawingMessageError: true });
       return;
     }
@@ -14142,10 +14154,29 @@ class Component extends DCLogic {
     }));
   }
 
+  // A user's deletion is an INSTRUCTION. The room remembers that it was told
+  // no, so the auto-pass does not hand the closet back on the next open. It is
+  // stored on the room's own stamp, which is the room's identity and survives a
+  // rebuild that throws the geometry away -- remembering the CLOSET instead
+  // would lose the instruction the moment the walls were regenerated.
+  _declineClosetFor(fixture) {
+    if (!fixture || fixture.kind !== 'closet') return;
+    const centre = this._fixtureGeometry(fixture)?.center;
+    if (!centre) return;
+    const levelId = this._activeLevelId();
+    const room = this._toyContext().rooms.find(entry =>
+      this._polygonContains(entry.points, centre.x, centre.z));
+    if (!room) return;
+    const stamp = this._roomStamps().find(tag => tag.levelId === levelId
+      && this._polygonContains(room.points, tag.at.x, tag.at.z));
+    if (stamp) { stamp.closetDeclined = true; this._markUnsaved(); }
+  }
+
   _deleteLastFixture() {
     const fixtures = this._activeFixtures();
     if (!fixtures.length) return;
     const last = fixtures[fixtures.length - 1];
+    this._declineClosetFor(last);
     this._fixtures = this._fixtures.filter(fixture => fixture !== last);
     this._selectedFixtures?.delete(last);
     this._markUnsaved();
@@ -18717,11 +18748,116 @@ class Component extends DCLogic {
       if (centre && this._polygonContains(points, centre.x, centre.z)) kinds.add(fixture.kind);
     });
     const has = (...list) => list.some(kind => kinds.has(kind));
+    // A ROOM IS A BEDROOM BY ITS PROGRAM STAMP, NOT BY HAVING A CLOSET
+    // (Movie, 1 Sep). The closet is a RESULT of the room being a bedroom and
+    // never the evidence for it, so the fixture vote deliberately does not
+    // infer one: inferring it made auto-placement circular -- a room could not
+    // be seen as a bedroom until it already had the thing the pass exists to
+    // give it.
+    //
+    // The real test is an egress opening plus a door that closes, which is the
+    // egress board's to build. Until it lands the stamp is the whole answer
+    // here -- correct if incomplete, because it never calls something a
+    // bedroom that is not one.
+    //
+    // The drafting-side detector in _placeRoomTags still reads closet ->
+    // bedroom. That is the older rule and now the wrong way round, but
+    // changing it moves room tags on every existing drawing and belongs with
+    // the egress board, where the replacement test actually exists.
     return has('toilet', 'tub', 'shower', 'stall', 'vanity') ? 'wc'
       : has('washer', 'dryer') ? 'laundry'
       : has('sink', 'fridge', 'stove', 'cabinet') ? 'kitchen'
-      : has('closet') ? 'bedroom'
       : 'room';
+  }
+
+  // ── AUTO-PLACE A CLOSET IN EVERY SECONDARY BEDROOM, UNASKED ─────────────
+  // Movie's ruling, 1 Sep. The drafter may move it or delete it afterwards;
+  // the toy just never leaves one out, because a bedroom with no closet is the
+  // thing a beginner does not know to notice.
+  //
+  // TOY MODE ONLY. Auto-placement is the toy deciding for someone who did not
+  // ask; a drafter who opens the same file has asked for nothing and gets
+  // nothing. It runs when a plan is read, not after every drag, so a closet
+  // the drafter deletes stays deleted for the session -- whether a deletion
+  // should stick across a reopen needs a ruling and is not invented here.
+  //
+  // Which room is the primary suite comes from the tag numbering that already
+  // exists: BEDROOM 1 is the suite, and it gets an ensuite and a walk-in
+  // rather than this.
+  _toyAutoPlaceClosets() {
+    if (!this._toyModeOn()) return 0;
+    const context = this._toyContext();
+    const levelId = this._activeLevelId();
+    // WHICH ROOM IS THE SUITE. A tag says so outright when the rooms have been
+    // named; before that, the biggest bedroom is the suite -- which is not a
+    // guess but the same rule MODEL's own tag numbering already uses, since it
+    // numbers bedrooms biggest-first and BEDROOM 1 is the primary. Reading it
+    // this way means the toy does not have to wait for someone to press ROOM
+    // TAGS before it can leave the suite alone.
+    const bedrooms = context.rooms.filter(room => room.category === 'bedroom')
+      .slice().sort((a, b) => b.insideSqFt - a.insideSqFt);
+    const named = bedrooms.find(room => {
+      const tag = this._roomTags.find(entry => entry.levelId === levelId
+        && this._polygonContains(room.points, entry.at.x, entry.at.z));
+      return tag && /BEDR(OO)?M\s*1\b/i.test(tag.name || '');
+    });
+    const suite = named || bedrooms[0];
+    // A room that was told no is not missing a closet -- it has one fewer than
+    // it might, on purpose. Skipping it the same way the suite is skipped keeps
+    // one rule for "this room is not owed one".
+    const declined = new Set(this._roomStamps()
+      .filter(tag => tag.levelId === levelId && tag.closetDeclined === true)
+      .map(tag => (context.rooms.find(room =>
+        this._polygonContains(room.points, tag.at.x, tag.at.z)) || {}).id)
+      .filter(Boolean));
+    const rooms = context.rooms.map(room => ({
+      id: room.id,
+      category: room.category,
+      primary: (!!suite && room.id === suite.id) || declined.has(room.id),
+      wallIds: room.bounds.map(bound => bound.wallId),
+      points: room.points,
+    }));
+    const existing = this._fixtures
+      .filter(fixture => fixture.levelId === levelId && fixture.kind === 'closet')
+      .map(fixture => ({ roomId: (rooms.find(room =>
+        this._polygonContains(room.points, ...this._closetCentreOf(fixture))) || {}).id }))
+      .filter(entry => entry.roomId);
+    const run = window.DraftClosets.autoPlace({
+      rooms, walls: context.walls, openings: context.openings, existing,
+    });
+    run.placed.forEach(put => {
+      const wall = this._walls.find(entry => entry.id === put.wallId);
+      if (!wall) return;
+      this._fixtures.push({
+        id: this._newDrawingItemId('fixture'),
+        kind: 'closet',
+        wallId: wall.id,
+        levelId,
+        view: 'plan',
+        layer: FIXTURE_LAYER,
+        offset: put.offsetFt,
+        width: put.widthFt,
+        depth: put.depthFt,
+        side: 1,
+      });
+    });
+    // A refusal REPORTS rather than forcing a closet in: standing one over a
+    // window is worse than a bedroom without one, because the first is wrong
+    // and the second is merely unfinished.
+    if (run.refused.length) {
+      this.setState({
+        drawingMessage: `No wall free for a closet in ${run.refused.length === 1 ? 'a bedroom' : `${run.refused.length} bedrooms`} — a window, door or its swing covers every one.`,
+        drawingMessageError: false,
+      });
+    }
+    if (run.placed.length) { this._markUnsaved(); this._invalidate(); }
+    return run.placed.length;
+  }
+
+  // Where a placed closet's body sits, for asking which room holds it.
+  _closetCentreOf(fixture) {
+    const centre = this._fixtureGeometry(fixture)?.center;
+    return centre ? [centre.x, centre.z] : [NaN, NaN];
   }
 
   // The house as the constraint module reads it. The walls handed over are
@@ -18734,11 +18870,31 @@ class Component extends DCLogic {
       .map(wall => ({ ...wall,
         start: { x: wall.start.x, z: wall.start.z },
         end: { x: wall.end.x, z: wall.end.z } }));
-    return window.DraftToyContext.gather({
+    const levelId = this._activeLevelId();
+    const gathered = window.DraftToyContext.gather({
       walls,
       openings: this._fenestrations.filter(opening => (opening.view || 'plan') === 'plan'),
       categoryFor: loop => this._toyCategoryFor(loop.points),
     });
+    // Things standing IN the rooms, and the answer for whether they still fit.
+    // The constraint module never learns what a closet is -- it asks, and
+    // closets.js answers. Nothing refuses while the clear strip has no number.
+    gathered.objects = this._fixtures
+      .filter(fixture => fixture.levelId === levelId && fixture.kind === 'closet')
+      .map(fixture => {
+        const wall = gathered.walls.find(entry => entry.id === fixture.wallId);
+        const room = gathered.rooms.find(entry =>
+          this._polygonContains(entry.points, ...this._closetCentreOf(fixture)));
+        return {
+          id: fixture.id,
+          kind: 'closet',
+          roomId: room ? room.id : null,
+          dim: wall ? window.DraftClosets.dimEaten(wall) : 'depth',
+        };
+      })
+      .filter(object => object.roomId);
+    gathered.clearanceFor = window.DraftClosets.clearanceFor;
+    return gathered;
   }
 
   // ONE TAB PER WELD GROUP, not per wall: two tabs that always move together
@@ -20580,6 +20736,7 @@ class Component extends DCLogic {
           !this._selectedFenestrations.has(opening) && wallIds.has(opening.wallId));
         // Fixtures go with their own selection and with any deleted host wall —
         // a tub also needs its faucet-end wall to survive.
+        [...this._selectedFixtures].forEach(fixture => this._declineClosetFor(fixture));
         this._fixtures = this._fixtures.filter(fixture =>
           !this._selectedFixtures.has(fixture) && wallIds.has(fixture.wallId)
           && (!fixture.endWallId || wallIds.has(fixture.endWallId)));

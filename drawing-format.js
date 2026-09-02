@@ -526,6 +526,14 @@ if (!window.DraftDrawingFormat) {
         // theirs. Additive: old drawings load with the flag absent, i.e.
         // every existing stamp reads as the drafter's, which it is.
         ...(stamped && tag?.auto === true ? { auto: true } : {}),
+        // A DELETED CLOSET STAYS DELETED. The refusal is stored on the ROOM
+        // rather than on the closet, so it survives a reopen AND a rebuild --
+        // remembering the closet would lose the instruction the moment the
+        // geometry was regenerated. A user's deletion is an instruction, and
+        // an auto-pass that re-adds it is the app arguing with the drafter.
+        // Additive: absent means never declined, which is what every old
+        // drawing means.
+        ...(stamped && tag?.closetDeclined === true ? { closetDeclined: true } : {}),
         layer: 'ROOM-IDS-AREA',
       };
     }).filter(Boolean);

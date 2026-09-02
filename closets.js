@@ -58,20 +58,16 @@ if (!window.DraftClosets) {
     { label: 'D18',  widthFt: 1.5 },
   ]);
 
-  // ── OPEN QUESTION — MOVIE'S NUMBER, NOT OURS ──────────────────────────
+  // ── THE CLEAR STRIP IN FRONT OF A CLOSET ──────────────────────────────
   //
-  //   HOW MUCH CLEAR FLOOR MUST BE LEFT IN FRONT OF A CLOSET?
+  //   3'-0". Movie, 1 Sep.
   //
-  // The strip you stand in to open it. It is the rule that stops a bedroom
-  // being shrunk until its own closet cannot be opened, so nothing enforces
-  // that until this has a number — and the number is a builder's, which is why
-  // it is not being guessed here. Measured for context: a shallow reach-in
-  // leaves about 6ft of strip and a walk-in about 4ft, and Devin's
-  // recommendation to Movie was 3'-0", which clears both.
-  //
-  // Supplying it is a one-line change, and the clearance check below starts
-  // working the moment it stops being null.
-  const CLEAR_STRIP_MIN_FT = null;
+  // The floor you stand on to open it, and the rule that stops a bedroom being
+  // shrunk until its own closet will not open. A builder's number rather than
+  // a derived one, which is why it was asked for instead of guessed: measured
+  // for context while it was outstanding, a shallow reach-in leaves about 6ft
+  // of strip and a walk-in about 4ft, and 3'-0" clears both.
+  const CLEAR_STRIP_MIN_FT = 3;
 
   const num = value => (typeof value === 'number' && Number.isFinite(value) ? value : null);
   const lengthOf = wall => Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
@@ -262,7 +258,90 @@ if (!window.DraftClosets) {
     };
   };
 
+  // ── AUTO-PLACE, UNASKED ───────────────────────────────────────────────
+  // "Auto-place a closet in every secondary bedroom, unasked." (Movie, 1 Sep.)
+  // The drafter may move it or delete it afterwards; THE TOY JUST NEVER LEAVES
+  // ONE OUT. A bedroom without a closet is the thing a beginner does not know
+  // to notice, so the toy notices for them.
+  //
+  // The only non-placement is a REFUSAL -- no wall can take it without
+  // covering a window, a door or a swing -- and it is reported rather than
+  // forced in. A closet standing over a window is worse than a bedroom without
+  // one, because the first is wrong and the second is merely unfinished.
+  //
+  // The primary suite is skipped: it gets an ensuite and a walk-in, which are
+  // their own thing. Which room that is comes from the caller, because the
+  // numbering that decides it belongs to the plan and not to this file.
+  const DEFAULT_WIDTH_FT = 4;   // matches the shipped closet fixture's own default
+
+  const dimEaten = wall => {
+    const into = inward(wall);
+    if (!into) return 'depth';
+    return Math.abs(into.x) > Math.abs(into.z) ? 'width' : 'depth';
+  };
+
+  const autoPlace = ({ rooms, walls, openings, widthFt, existing } = {}) => {
+    const byId = new Map((walls || []).map(wall => [wall.id, wall]));
+    const already = existing || [];
+    const placed = [];
+    const refused = [];
+    (rooms || []).forEach(room => {
+      if (!room || room.category !== 'bedroom') return;
+      if (room.primary) return;
+      // Never a second one: the toy places what is missing, and a closet the
+      // drafter moved is still that room's closet.
+      if (already.some(closet => closet.roomId === room.id)) return;
+      const roomWalls = (room.wallIds || []).map(id => byId.get(id)).filter(Boolean);
+      if (!roomWalls.length) return;
+      const width = num(widthFt) ?? DEFAULT_WIDTH_FT;
+      const put = placeIn({ walls: roomWalls, openings, widthFt: width });
+      if (put.refused) { refused.push({ roomId: room.id, reason: put.refused }); return; }
+      placed.push({
+        ...put,
+        kind: 'closet',
+        roomId: room.id,
+        dim: dimEaten(byId.get(put.wallId)),
+      });
+    });
+    return { placed, refused };
+  };
+
+  // ── THE CLEAR STRIP: what the constraint module asks about ────────────
+  // `isLegal` knows nothing about closets. It asks whoever owns the object
+  // whether it still fits, and this is that answer for a closet.
+  //
+  // What a closet needs is floor to stand on while you open it. It occupies
+  // 2'-4 1/2" of the room measured across the wall it stands against, so what
+  // is left in front is the room's dimension on that axis less the closet --
+  // and the room dimensions in the configuration handed here are the PROPOSED
+  // ones, which is what makes this answer a constraint on a move rather than a
+  // description of the house at rest.
+  //
+  // WITH NO NUMBER SUPPLIED IT REFUSES NOTHING. That is the honest state while
+  // the minimum is still Movie's to give: the whole path is wired, and the day
+  // CLEAR_STRIP_MIN_FT stops being null it starts refusing, with no other
+  // change anywhere.
+  const clearanceFor = (object, config) => {
+    if (!object || object.kind !== 'closet') return { ok: true };
+    const room = ((config && config.rooms) || []).find(entry => entry.id === object.roomId);
+    if (!room) return { ok: true };
+    // The closet eats the dimension its wall faces across -- the same axis
+    // toy-context.js calls the wall's `dim`, and stored on the closet when it
+    // was placed so this never has to re-derive it.
+    const across = object.dim === 'width'
+      ? num(room.clearWidthFt)
+      : num(room.clearDepthFt);
+    if (across === null) return { ok: true };
+    const haveFt = across - FOOTPRINT_DEPTH_FT;
+    const needFt = CLEAR_STRIP_MIN_FT;
+    return { ok: haveFt >= needFt - 1e-9, haveFt, needFt };
+  };
+
   window.DraftClosets = Object.freeze({
+    autoPlace,
+    dimEaten,
+    DEFAULT_WIDTH_FT,
+    clearanceFor,
     placeIn,
     squarenessAfter,
     blockedByOpening,
