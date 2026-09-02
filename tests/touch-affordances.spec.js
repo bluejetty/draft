@@ -3,7 +3,7 @@
 // The pointer migration made the canvas accept touch. This file walks the
 // board's definition of done on a real touchscreen and pins the parts that
 // WORK, so they cannot quietly regress. The parts that do not work are not
-// asserted as failures here — they are recorded in TOUCH-NOTES.md, because
+// asserted as failures here — they are recorded in RD-DOCUMENTS/TOUCH-NOTES.md, because
 // the slice's rule is to fix only what hard-BLOCKS drawing, and to file the
 // rest rather than redesign it.
 //
