@@ -83,10 +83,19 @@ no undo of its own -- every edit has exactly one home, and it is the 2D side.
 > will want lifted later -- it is the thing that keeps the two windows from
 > disagreeing about what the building is.
 
-OPEN: does the 2D window edit that level's **master** on the shelf, or a
-copy? The boneyard stores masters and levels take copies
-(`_outlineCopyForLevel`), so "manipulate that floor" could mean either, and
-they behave very differently for every other level.
+ANSWERED by the movement rules further down, at least in part: an edit to a
+floor propagates **upward only** -- everything above responds, the floors
+below do nothing. So it is neither "just this level" nor "every level".
+
+> Skipper's note, and it matters for the estimate: **this is new machinery,
+> not the existing master mechanism.** `_propagateMasterOutline`
+> (`MODEL.dc.html:11235`) walks every outline whose `masterId` matches and
+> moves them all equally -- it has no notion of *above*, because it was built
+> for one master shared by copies rather than a stack with an order. The
+> boneyard rule needs levels sorted by elevation and a propagation that stops
+> at the moved one. The override machinery (`overriddenSrcIds`, `offX`/`offZ`)
+> is probably still the right way to carry a level that has been adjusted
+> locally, but the walk itself is a different walk.
 
 OPEN: does the wireframe follow a drag live, or redraw when the edit is
 committed? Live is nicer and costs a redraw per frame; on-commit matches how
@@ -131,11 +140,12 @@ The guess was reasonable and it was still a guess; leaving the strike-through
 because the wrong symmetry is the obvious thing to assume and the next person
 will assume it too.
 
-INFERRED, and still open: what happens on an **outward** move when the
-overhang is *smaller* than the move. An overhang of 4'-0" cannot absorb a
-10'-0" push. The only reading that does not go negative is that it falls to
-zero and the remaining 6'-0" then moves the edge -- the level converting from
-hanging to flush partway through the move.
+RULED 2 Sep: what happens on an **outward** move when the overhang is
+*smaller* than the move. The overhang is eaten to zero, the level stops
+hanging and becomes flush, and the remainder carries its edge out with the
+wall. So a 4'-0" overhang under a 10'-0" push absorbs 4'-0" and the edge then
+moves the other 6'-0". One move that changes behaviour halfway through, rather
+than a move that stops when the overhang is spent.
 
 ### It is not a foundation rule. It is a "lower floor" rule
 
