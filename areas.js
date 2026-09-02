@@ -9,6 +9,15 @@
 // level whose floor it is cut from. The building total is the sum of the
 // level nets, so a stairwell footprint counts exactly once: at the level
 // with solid floor beneath it.
+// SIMPLE POLYGON IN. Shoelace has no other meaning: a ring that crosses itself
+// has two lobes winding opposite ways, and they cancel to EXACTLY zero rather
+// than to a wrong-looking number. Ask `DraftGeometry2D.selfIntersects` first if
+// the ring came from somewhere untrusted.
+//
+// Not guarded here, on purpose (ruling, 2 Sep). MODEL refuses to commit a
+// crossing outline at `_commitOutline`, so the drafter cannot draw one; anyone
+// who arrives with one anyway went out of their way with the T-square stowed,
+// and that is their problem rather than a number this module should soften.
 if (!window.DraftAreas) {
 (() => {
   // Shoelace area of a plain {x, z} ring, sign dropped.

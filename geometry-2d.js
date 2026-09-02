@@ -99,6 +99,114 @@ if (!window.DraftGeometry2D) {
     };
   };
 
+  // Does a closed ring cross itself? Reuses segmentIntersection rather than
+  // repeating the math, and skips the pairs that always touch: adjacent edges
+  // share a corner, and the first and last edges share the closing one. Their
+  // shared endpoint lands inside segmentIntersection's own tolerance, so
+  // counting them would report every polygon as self-intersecting.
+  //
+  // WHAT THIS IS FOR, and what it deliberately is not. A self-intersecting
+  // outline is drawable today: the T-square forces segments onto an axis and
+  // hides it, but `t` stows the T-square. polygonArea then returns 0 for a
+  // bowtie, because the two lobes wind oppositely and cancel exactly -- the
+  // shoelace formula doing precisely what it says, and no way for the caller
+  // to tell that 0 from an honest zero.
+  //
+  // This answers only "does it cross itself". What the app should DO about one
+  // -- refuse the outline, warn and continue, or report the area as unknown --
+  // is a ruling nobody has made, so it is not made here.
+  const selfIntersects = points => {
+    if (!Array.isArray(points) || points.length < 4) return false;
+    const n = points.length;
+    // PROPER crossings only -- strict sign changes on both segments. Touching
+    // at a point and lying along each other are deliberately NOT crossings,
+    // and that distinction is the whole of this function.
+    //
+    // WHY, measured 2 Sep. The vertex magnet merges corners closer together
+    // than its screen-space reach, so a drafter's small jog becomes a
+    // ZERO-WIDTH SPIKE in the stored ring -- out and back along one line, as
+    // in (3,6) -> (3,3) -> (3,6). That spike is normal, permanent, and present
+    // in ordinary drawings. An earlier version of this function used
+    // segmentIntersection, whose tolerance counts a touch as a hit, so it
+    // called every spike a crossing and refused houses the app itself draws.
+    //
+    // The strict test separates them exactly: rectangle, L, T, deep C, U and
+    // spike ring all false; a bowtie true whether its lobes are equal or not.
+    // That last case matters -- an unequal bowtie defeats every area-ratio
+    // test, because a deep C encloses the same fraction of itself that one
+    // does.
+    const side = (a, b, p) => Math.sign((b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x));
+    for (let i = 0; i < n; i += 1) {
+      const a = points[i], b = points[(i + 1) % n];
+      for (let j = i + 2; j < n; j += 1) {
+        if (i === 0 && j === n - 1) continue;   // the closing pair share a corner
+        const c = points[j], d = points[(j + 1) % n];
+        if (side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0) return true;
+      }
+    }
+    return false;
+  };
+
+  // Is `inner` wholly inside `outer`? Both must be simple rings.
+  //
+  // Corner containment alone is NOT enough: on a concave host, every corner of
+  // the inner ring can sit inside while an edge between two of them leaves and
+  // comes back. So this asks twice — every corner inside, AND no edge of the
+  // inner ring crossing any edge of the outer one — and reuses
+  // segmentIntersection for the second question rather than repeating the math.
+  //
+  // WHY IT EXISTS. A floor opening is deducted from its host's area
+  // ARITHMETICALLY: the slab polygon is never cut, so nothing else ever asks
+  // whether the hole is actually in the floor it is charged against. Cutting
+  // the hole geometrically would have answered that for free; subtracting it
+  // has to ask out loud.
+  const ringInsideRing = (inner, outer) => {
+    if (!Array.isArray(inner) || !Array.isArray(outer)) return false;
+    if (inner.length < 3 || outer.length < 3) return false;
+    const EPS = 0.001;
+    // On the boundary counts as inside. A stair opening run flush to an
+    // exterior wall shares that wall's line exactly, and refusing it would
+    // force the drafter to leave the sliver of floor this design exists to
+    // make unnecessary.
+    const onEdge = pt => outer.some((a, i) => {
+      const b = outer[(i + 1) % outer.length];
+      const cross = (b.x - a.x) * (pt.z - a.z) - (b.z - a.z) * (pt.x - a.x);
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (len < EPS || Math.abs(cross) / len > EPS) return false;
+      const t = ((pt.x - a.x) * (b.x - a.x) + (pt.z - a.z) * (b.z - a.z)) / (len * len);
+      return t >= -EPS && t <= 1 + EPS;
+    });
+    const within = pt => {
+      if (onEdge(pt)) return true;
+      let hit = false;
+      for (let i = 0, j = outer.length - 1; i < outer.length; j = i, i += 1) {
+        const a = outer[i], b = outer[j];
+        if ((a.z > pt.z) !== (b.z > pt.z)
+          && pt.x < (b.x - a.x) * (pt.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    if (!inner.every(within)) return false;
+    // Corners alone are not enough on a CONCAVE host: a triangle with all three
+    // corners on an L-shaped floor can still run its long edge through the
+    // notch. So also require that no edge PROPERLY crosses a host edge —
+    // strict sign changes on both sides, which is deliberately false for edges
+    // that merely touch at a point or lie along each other. Collinear must not
+    // count: an opening flush to an exterior wall shares that wall's line, and
+    // that is the case this whole guard exists to keep legal.
+    const side = (a, b, p) => Math.sign((b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x));
+    const properlyCrosses = (a, b, c, d) =>
+      side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+    for (let i = 0; i < inner.length; i += 1) {
+      const a = inner[i], b = inner[(i + 1) % inner.length];
+      for (let j = 0; j < outer.length; j += 1) {
+        const c = outer[j], d = outer[(j + 1) % outer.length];
+        if (properlyCrosses(a, b, c, d)) return false;
+      }
+    }
+    return true;
+  };
+
   // Intersection nearest to where the user clicked along seg.
   const nearestIntersection = (seg, others, point) => {
     const hits = [];
@@ -741,6 +849,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     angleDeg,
     paramAlongSegment,
     segmentIntersection,
+    selfIntersects,
+    ringInsideRing,
     nearestIntersection,
     roomLoops,
     offsetOutline,

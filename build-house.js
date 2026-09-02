@@ -2,9 +2,16 @@
 // outline and return plain data — wall runs, footing rings, the interior
 // reference side. The component keeps the commit layer (vertex pool, srcId
 // links, collection writes); nothing here mints identity.
+// REQUIRES window.DraftGeometry2D -- resolved at CALL time, not at load. A page may list this
+// script before its dependency and still work; only footingRings needs the
+// dependency present by the time it is called.
+//
+// It was captured at load until 2 Sep, which meant a page whose script order
+// put this first got a module that loaded clean, reported every export, and
+// threw later from a call site naming a different file.
 if (!window.DraftBuildHouse) {
 (() => {
-  const geo = window.DraftGeometry2D;
+  const geo = () => window.DraftGeometry2D;
 
   // refLine that puts the wall body inside the ring, keeping the outline on
   // the exterior face: 'left' for counter-clockwise rings, 'right' for
@@ -36,8 +43,8 @@ if (!window.DraftBuildHouse) {
   const footingRings = (points, wallFt, projFt) => {
     const base = points.map(pt => ({ x: pt.x, z: pt.z }));
     return [
-      geo.offsetOutline(base, projFt),
-      geo.offsetOutline(base, -(wallFt + projFt)),
+      geo().offsetOutline(base, projFt),
+      geo().offsetOutline(base, -(wallFt + projFt)),
     ];
   };
 

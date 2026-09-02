@@ -10,6 +10,14 @@
 //   keyed by page number), selectedScale;
 //   transient handles (never persist): file, pdfDoc, pageCanvas,
 //   convertedBlob, previewUrl.
+// CALIBRATION EXPECTS A POSITIVE REAL LENGTH. `calibrateScale` does not check
+// `realInches`: zero gives a zero-width sheet and a negative gives a NEGATIVE
+// one, both reported as `{ ok: true }`, and every measurement taken off that
+// underlay afterwards is wrong with nothing on screen to say so.
+//
+// The guard lives in the caller -- `MODEL.dc.html`'s `_applyInsertCalibration`
+// refuses anything not positive before this is reached. A second caller must
+// bring its own; it cannot borrow that one.
 if (!window.DraftPdfScan) {
 (() => {
     async function inspectPdf(scan) {

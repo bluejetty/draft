@@ -11244,6 +11244,23 @@ class Component extends DCLogic {
   _commitOutline(points, closedGarage = false) {
     this._ensureDrawingCollections();
     if (points.length < 3) return null;
+    // A CROSSING OUTLINE IS REFUSED. It encloses no floor: two lobes wind
+    // oppositely and the shoelace area cancels to EXACTLY zero, which is the
+    // worse failure -- a sheet reading 47 sq ft where it should say 50 gets
+    // questioned; one reading 0 for a room plainly on the page reads as a
+    // rendering glitch and gets shrugged at.
+    //
+    // selfIntersects tests PROPER crossings only. That distinction is the
+    // whole reason this guard can exist: the vertex magnet merges a small jog
+    // into a zero-width spike, and an earlier tolerance-based test called
+    // every spike a crossing and refused houses the app itself draws.
+    if (window.DraftGeometry2D.selfIntersects(points)) {
+      this.setState({
+        drawingMessage: 'That outline crosses itself, so it encloses no floor area. Redraw it without the crossing.',
+        drawingMessageError: true,
+      });
+      return null;
+    }
     const shelf = this._activeBoneyardShelf();
     const shelfHasMaster = this._boneyardOutlines.some(outline => outline.shelfId === shelf.id && !outline.garage);
     const level = this.state.boneyardActive ? null : this._activeLevel();
@@ -14751,6 +14768,25 @@ class Component extends DCLogic {
   }
 
   _commitSurfaceOpening(host, points) {
+    // NOT GUARDED YET, and the measurement says why. The whole opening ought to
+    // be inside its host: an opening's area is deducted from its host
+    // ARITHMETICALLY -- the slab polygon is never cut -- so nothing downstream
+    // asks whether the hole is really in the floor it is charged against, and
+    // an overhang is deducted as though it were floor.
+    //
+    // `DraftGeometry2D.ringInsideRing` answers that question and is harnessed.
+    // Wiring it here turns three stair-opening specs red, and the captured
+    // geometry says they are not a tolerance or orientation quibble:
+    //
+    //   opening  [[2, 0.4583], [12.4167, 0.4583], [12.4167, 3.5417], [2, 3.5417]]
+    //   host     [[-10, 0],    [10, 0],           [10, 12],          [-10, 12]]
+    //
+    // The opening runs to x=12.4167; the floor's right edge is x=10. The stair
+    // tool builds a rough opening that overhangs its own slab by 2'-5", about
+    // 7.5 sq ft deducted from a level that never had it. Either that footprint
+    // is wrong and the specs pin a defect, or the scenario is artificial. That
+    // is a ruling, so the guard waits for one rather than turning green specs
+    // red on my reading of it.
     const layer = SURFACE_OPENING_LAYERS[host.type];
     this._surfaceOpenings.push({
       id: this._newDrawingItemId('opening'),
@@ -15007,6 +15043,15 @@ class Component extends DCLogic {
       const floor = this._floors.find(f => f.levelId === stair.levelId && f.structure !== 'slab'
         && f.points.length >= 3 && this._pointInOutline(f.points, centre));
       if (!floor) return;
+      // NOT GUARDED HERE, and deliberately so. The manual path checks the whole
+      // opening against its host (see _commitSurfaceOpening); this one is not
+      // drafter-drawn -- the footprint is generated from the stair and nudged
+      // in by _stairAutoFit -- and adding the same check refused every opening
+      // stair-opening.spec.js expects. Three specs went red, which says the
+      // generated footprint stands in a different relation to the floor
+      // polygon than a drawn one does (the opening is keyed to the wall FACE;
+      // the floor may be drawn to the centreline). That relation is unmeasured,
+      // so no guard goes here until it is.
       this._surfaceOpenings.push({
         id: this._newDrawingItemId('opening'),
         hostType: 'floor',

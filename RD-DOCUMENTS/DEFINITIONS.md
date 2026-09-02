@@ -317,6 +317,27 @@ key names *on purpose*, with a header saying why, would turn that accident
 into a guarantee — and would survive the day somebody rewrites
 `garage.spec.js`.
 
+## The T-SQUARE is DOWN by default, and `t` puts it AWAY
+
+Counterintuitive enough that it has cost two agents an hour between them, and
+worth writing where the next person looks.
+
+The T-square is **on when the app opens**. Pressing `t` does not enable it —
+it **stows** it. While it is down it squares every segment-drawing tool to 90°:
+`line`, `wall`, `floor`, `outline`, `shape`, `stair`, `cut`, `dimension`,
+`extend` and `copy` are all in `ORTHO_LOCK_TOOLS`.
+
+**Why it matters beyond a keystroke.** It silently changes what a drafter can
+draw, so a probe that never presses `t` measures a different app. Clicking a
+diagonal with it down gives `|dx| > |dz|`, so the segment snaps horizontal and
+the intended shape never exists. That is how a self-intersecting outline looked
+unreachable for an hour on 2 Sep: two agents each measured with the lock on,
+one concluded "the clicked route is closed", and the control — the same four
+clicks one keystroke apart — showed it wide open.
+
+Any measurement of what a drafter *can* draw states which way the T-square was
+pointing, or it is describing half the app.
+
 ## Still to settle
 
 - Is a roof **eave** an overhang for the purpose of the rules above? It is

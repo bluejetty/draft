@@ -16,10 +16,17 @@
 // the illegal one — a failure that looks exactly like working software from
 // the outside. Buried in a 21,000-line component it cannot be tested; here it
 // can, in node, in all four directions.
+// REQUIRES window.DraftGeometry2D and window.DraftToyConstraints -- resolved at CALL time, not at load. A page may list this
+// script before its dependency and still work; only the room read needs the
+// dependency present by the time it is called.
+//
+// It was captured at load until 2 Sep, which meant a page whose script order
+// put this first got a module that loaded clean, reported every export, and
+// threw later from a call site naming a different file.
 if (!window.DraftToyContext) {
 (() => {
-  const geo = window.DraftGeometry2D;
-  const toy = window.DraftToyConstraints;
+  const geo = () => window.DraftGeometry2D;
+  const toy = () => window.DraftToyConstraints;
 
   // MODEL's room-tag pass reads the same enclosures this does, with these
   // numbers. They are matched rather than chosen: different ones and the two
@@ -158,11 +165,11 @@ if (!window.DraftToyContext) {
 
     // halfFt comes from the catalogue through the constraint module's own
     // reader, so a 2x6 wall is 5½" here for exactly the reason it is there.
-    const loops = geo.roomLoops(plan.map(wall => ({
+    const loops = geo().roomLoops(plan.map(wall => ({
       id: wall.id,
       start: { x: wall.start.x, z: wall.start.z },
       end: { x: wall.end.x, z: wall.end.z },
-      halfFt: toy.thicknessFt(wall) / 2,
+      halfFt: toy().thicknessFt(wall) / 2,
     })), joinFt === undefined ? JOIN_FT : joinFt);
 
     const floor = minAreaSqFt === undefined ? MIN_AREA_SQFT : minAreaSqFt;

@@ -4,7 +4,6 @@
 // geometry and commits, exactly like build-house.js / auto-stair.js.
 if (!window.DraftRoomGrow) {
 (() => {
-  const geo = window.DraftGeometry2D;
 
   // ── Tunables ──────────────────────────────────────────────────────────
   const CORRIDOR_FT = 3;            // hall spine, clear width

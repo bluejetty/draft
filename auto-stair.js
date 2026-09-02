@@ -8,9 +8,16 @@
 // The suggestion is born legal: every candidate keeps its well (inflated
 // by half the finish allowance) inside the interior ring and holds the
 // #246 beam-edge gap, so `_stairAutoFit` finds nothing to nudge.
+// REQUIRES window.DraftGeometry2D -- resolved at CALL time, not at load. A page may list this
+// script before its dependency and still work; only the run/landing geometry needs the
+// dependency present by the time it is called.
+//
+// It was captured at load until 2 Sep, which meant a page whose script order
+// put this first got a module that loaded clean, reported every export, and
+// threw later from a call site naming a different file.
 if (!window.DraftAutoStair) {
 (() => {
-  const geo = window.DraftGeometry2D;
+  const geo = () => window.DraftGeometry2D;
 
   // The rulebook (stair-rules.js). The brains used to be the constants
   // below; they now live in a table with provenance and confidence on
@@ -469,7 +476,7 @@ if (!window.DraftAutoStair) {
     if (!Array.isArray(points) || points.length < 3 || !(runFt > 0)) {
       return { stair: null, report: { straight: 'no footprint or run', L: null, U: null } };
     }
-    const ring = geo.offsetOutline(points.map(pt => ({ x: pt.x, z: pt.z })), -insetFt);
+    const ring = geo().offsetOutline(points.map(pt => ({ x: pt.x, z: pt.z })), -insetFt);
     const lines = beamLines(beams);
     const target = circulationTarget(points, stamps);
     const finishFt = finishIn / 12, gapFt = gapIn / 12, uGapFt = uGapIn / 12;
