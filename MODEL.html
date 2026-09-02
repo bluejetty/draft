@@ -26,22 +26,47 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Rough Drafter — Model Space</title>
+<!-- Self-hosted (see vendor/fonts.css): no third-party request on the
+     drafter's behalf, and the OFL text ships beside the files. -->
+<link rel="stylesheet" href="vendor/fonts.css" />
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+
+    /* TYPE, DECLARED ONCE ON PURPOSE.
+       MODEL.dc.html carries 284 inline `font-family:` declarations and the
+       site 391 across seven files, so changing the typeface there is 391
+       edits and a find-and-replace through a 22,000-line file. Here it is
+       three lines. When the faces are redesigned, this block is the change
+       and every later tier inherits it.
+
+       Barlow / Barlow Condensed / DM Mono are all SIL OFL and vendored in
+       vendor/fonts/ with the licence beside them -- nothing is fetched
+       from a CDN. Each stack keeps a real fallback so the page is legible
+       before the woff2 lands, and if a face is ever swapped for one with
+       different metrics the fallback is what a reader sees mid-swap. */
+    --font-ui:   'Barlow Condensed', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-body: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'DM Mono', ui-monospace, Menlo, Consolas, monospace;
+  }
   html, body { margin:0; height:100%; background:#1d1f20; overflow:hidden;
-    font:13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font: 13px/1.45 var(--font-body);
     color:#e7e5e2; }
   #plan { display:block; width:100%; height:100%; cursor:grab; touch-action:none; }
   #plan.dragging { cursor:grabbing; }
 
   #readout { position:fixed; left:12px; bottom:12px; z-index:5;
     background:rgba(20,22,23,0.82); border:1px solid #3a3d3f; border-radius:6px;
-    padding:8px 11px; font-variant-numeric:tabular-nums; white-space:pre;
-    pointer-events:none; letter-spacing:0.01em; }
+    padding:8px 11px; white-space:pre; pointer-events:none;
+    /* Instrument text: tabular figures so the counts do not jitter as they
+       change, and the mono face so a column of numbers reads as a column. */
+    font-family: var(--font-mono); font-size:12px;
+    font-variant-numeric:tabular-nums; letter-spacing:0.01em; }
   #readout b { color:#f0b429; font-weight:600; }
 
   #hint { position:fixed; right:12px; bottom:12px; z-index:5; color:#8b8f92;
-    pointer-events:none; }
+    font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
+    text-transform:uppercase; pointer-events:none; }
 
   /* The empty and error states say what to do, because a black screen with
      nothing on it is indistinguishable from a page that failed to boot. */
@@ -49,9 +74,11 @@
     align-items:center; justify-content:center; padding:24px; text-align:center; }
   #notice.show { display:flex; }
   #notice div { max-width:34em; }
-  #notice h1 { font-size:17px; font-weight:600; margin:0 0 8px; color:#f0b429; }
+  #notice h1 { font-family: var(--font-ui); font-size:19px; font-weight:600;
+    letter-spacing:0.02em; margin:0 0 8px; color:#f0b429; }
   #notice p { margin:0 0 6px; color:#b9bcbe; }
-  #notice code { color:#e7e5e2; background:#2a2d2e; padding:1px 5px; border-radius:3px; }
+  #notice code { font-family: var(--font-mono); font-size:0.92em;
+    color:#e7e5e2; background:#2a2d2e; padding:1px 5px; border-radius:3px; }
 </style>
 </head>
 <body>
