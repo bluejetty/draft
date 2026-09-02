@@ -110,18 +110,57 @@ Do it while already in that code for another reason. On its own it is a large
 diff that changes no behaviour — poor value, and poor timing right before
 somebody starts reading the file.
 
+### 9. Drop the `.dc.` from the page filenames
+
+Movie's, and the reason is plain: `MODEL.dc.html` is an odd thing to type and
+an odd thing to explain. Four files carry it — `MODEL`, `LAYOUT`, `Notepad`,
+`SaveBox`.
+
+Measured before writing this down:
+
+```
+4    files named *.dc.html
+53   files reference those names
+93   occurrences across .js, .html, .dc.html and .md
+```
+
+**The framework does not need the extension.** `data-dc-tpl`,
+`data-dc-script`, `data-dc-canvas` and `DCLogic` are attribute and class
+names, unrelated to what the file is called; they stay exactly as they are.
+Nothing in the loader keys off `.dc.html` — the only references in `.js` are
+in comments.
+
+**The real cost is that these are live public URLs.** `MODEL.dc.html` is the
+app. Renaming it breaks every bookmark, every link anyone has shared, and
+anything pointing at it from outside this repository — and GitHub Pages will
+serve a 404 rather than anything helpful.
+
+Doable, and the shape is known:
+
+1. Rename the four files, `git mv`, so history follows.
+2. Repoint all 93 occurrences, including the entry page's own links and every
+   `page.goto` in the suite.
+3. **Leave a stub at each old name** — a one-line HTML redirect to the new
+   one. Old bookmarks keep working, and the stubs can be deleted in a year
+   once nothing asks for them.
+4. Full suite green before merge; the suite navigates to these pages
+   constantly, so it will find anything missed.
+
+Not hard, but not a five-minute job either, and step 3 is the part that stops
+it hurting someone.
+
 ---
 
 ## Judgement calls — not obviously worth doing
 
-### 8. `framing` already means two things
+### 9. `framing` already means two things
 
 Structural framing (`MODEL.dc.html:8666`, *"Structure lives with the framing —
 FLOOR or FOUNDATION"*) and UI panes (`:9981`, `:10124`, *"locked framing"* in
 the STAIR workspace). Mildly muddy. Renaming the UI sense would be clearer;
 whether it is worth the diff is a judgement.
 
-### 9. The 26 MB of PDFs
+### 10. The 26 MB of PDFs
 
 `BUILDING-CODES/` is 26 MB of the repository's 29. **Deleting them does not
 shrink the repo** — git keeps the blobs, so every clone still pays. Only a
@@ -131,7 +170,7 @@ and is ruled out by `BRANCHING.md` for good reasons.
 Recommended: **leave them.** 29 MB is not a large repository, and this is the
 one deletion where "I will remove it later" does not give what you expect.
 
-### 10. `REFACTOR-PLAN.md` steps 5 and 6
+### 11. `REFACTOR-PLAN.md` steps 5 and 6
 
 Read the plan before proposing further extraction from `MODEL.dc.html`. Steps
 1–4 are **done**. Step 5 (the vertex pool) is marked *"late, if ever"*; step 6
@@ -141,13 +180,13 @@ are the component"*.
 The plan's own rule also applies to timing: *"an extraction must not land under
 an in-flight feature that touches the same region."* TOY MODE is that feature.
 
-### 11. Six "coming soon" promises in the UI
+### 12. Six "coming soon" promises in the UI
 
 Six places tell the user something is coming. At least one stopped being true
 when the turtle landed. Worth an audit: each should either still be true or be
 removed.
 
-### 12. The entry coach shows once, ever
+### 13. The entry coach shows once, ever
 
 `draft-entry-coach-seen` in `localStorage`. It makes the sequence
 unreviewable without clearing site data — which is how it came to look like the
