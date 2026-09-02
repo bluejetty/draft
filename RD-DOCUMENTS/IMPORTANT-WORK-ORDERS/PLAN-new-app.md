@@ -170,6 +170,29 @@ movement rules from `HOW-THE-BONEYARD-WORKS.md`) is the real work either way.
 
 ---
 
+## Naming — no `.dc.` on anything new
+
+**New pages carry no `.dc.`**, because they are not DC pages and the suffix
+would be a lie:
+
+```
+ENTRY.html      MODEL.html      LAYOUT.html      BONEYARD.html
+```
+
+**Old pages keep `.dc.html` until they are deleted.** Do not rename them.
+`MODEL.dc.html` is linked from six pages, bookmarked, and named in twenty spec
+files; renaming it to tidy a name on a file that is being deleted anyway buys
+nothing and breaks all three.
+
+This gives the state away for free: **`.dc.` in a filename means the old app.**
+No tracker needed to know which one you are looking at, and the day the last
+`.dc.` disappears is the day DC is gone.
+
+It also settles deep-clean item 8, which wanted these renamed. The rename
+happens by replacement instead.
+
+---
+
 ## Where the pages live — one repo, and it is this one
 
 **`bluejetty/draft`, at the root, beside every other page. There is no new
