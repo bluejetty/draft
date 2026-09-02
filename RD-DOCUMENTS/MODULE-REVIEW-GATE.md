@@ -53,14 +53,59 @@ at all and is included because it is written and waiting.
 a pure module a harness is the stronger of the two — it runs in milliseconds
 without a browser, so it gets run.
 
-## Finding 1 — `pdf-scan.js` is the only unproven module
+## Verdict 1 — `pdf-scan.js`: **right but unclear**
 
-185 lines, no harness, no spec file, and no spec anywhere names `DraftPdfScan`.
-It also touches the DOM, so it is not node-testable as it stands.
+185 lines, and it was the only one of the seventeen with neither a harness nor
+a spec. It is also load-bearing: `MODEL.dc.html` calls it at **seven** sites —
+`inspectPdf`, `inspectPdfPage`, `inspectImage`, `parseScaleEntry`,
+`calibrateScale`, `worldSizeFromScan` ×2 — on the INSERT PHOTO/PDF path. It is
+the surviving capability of `PDF-MARKUP.dc.html`, this repo's original app,
+retired in `8926c4d`.
 
-This is the one module that cannot be carried across on evidence, because there
-is none. It is not a claim that it is broken — it is a claim that nobody can
-say either way, which is the same problem a new page would inherit.
+**It did not need refactoring to be proven.** The first reading — "touches the
+DOM, therefore not node-testable" — was too pessimistic. Its seven exports
+split, and the DOM lives entirely in three of them:
+
+| | exports |
+| --- | --- |
+| browser-bound | `inspectPdf`, `inspectPdfPage`, `inspectImage` |
+| **pure** | `detectScalesInText`, `parseScaleEntry`, `calibrateScale`, `worldSizeFromScan` |
+
+The whole file loads under plain `node` with a `window = {}` stub, because the
+DOM calls are inside functions a harness never invokes. `proto/pdf-scan-harness.js`
+now runs **17 checks**, and a `12` changed to a `10` inside `calibrateScale`
+fails it with exit 1.
+
+The pure four are the ones carrying the risk: they turn a scan into real-world
+dimensions, and a wrong number there is silently wrong on every measurement
+taken off that underlay afterwards. All six standard scales come back right —
+`1/8"→96`, `3/16"→64`, `1/4"→48`, `1/2"→24`, `1"→12`, `1:50→50` — and
+unparseable text returns `null` rather than guessing.
+
+### Why "unclear" and not "right as it is"
+
+**A precondition is enforced in the caller and written down nowhere.**
+
+`calibrateScale` accepts a zero or negative typed length and returns
+`{ ok: true, widthFt: -2 }` — a negative sheet. That cannot happen in the app
+today, because `MODEL.dc.html:3335` refuses it first:
+
+```js
+if (!parsed.ok || parsed.inches <= 0) { ...'The distance must be positive.'... return; }
+```
+
+So it is **not a defect in the shipped app** — and it is **not safe to carry**.
+A second page calling `calibrateScale` directly, which is the entire point of
+moving these modules, inherits a negative scale and no error unless somebody
+remembers to re-implement a guard they cannot see from the module.
+
+**Recorded, not changed.** Making the module self-guard would alter its contract
+to suit a page that does not exist yet, and inventing a rule nobody ruled on is
+its own failure. The harness pins the behaviour as it *is*, names the line that
+really guards it, and says plainly that a new caller must bring its own.
+
+That is what "right but unclear" means: correct where it sits, and correct only
+because of something outside it.
 
 ## Method note — two instrument errors, corrected
 
