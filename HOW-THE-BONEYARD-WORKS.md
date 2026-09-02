@@ -92,5 +92,45 @@ OPEN: does the wireframe follow a drag live, or redraw when the edit is
 committed? Live is nicer and costs a redraw per frame; on-commit matches how
 the stepped rotation already refuses to be continuous.
 
+---
+
+## Moving a foundation or boneyard wall
+
+**The foundation wall and the boneyard wall behave the same way.** Move either
+one outward and **the upper floors extend outward with it, and so does the
+roof.**
+
+**Unless a floor above already overhangs.** Then the move is *eaten into the
+overhang* instead. The floor's outer edge does not move -- the base catches up
+to it.
+
+Movie's own example:
+
+```
+before    upper floor cantilevered   20'-0"  past the foundation
+move      foundation out             10'-0"
+after     upper floor cantilevered   10'-0"  past the foundation
+
+the upper floor's outer edge has not moved. the overhang absorbed it.
+```
+
+So the rule in one line: **outward movement spends overhang first, and only
+carries the floor once the overhang is gone.**
+
+> Skipper's note: this is the same number as the pile ladder, arrived at from
+> the other direction. The maximum overhang is 20'-0" -- 18'-0" to the outer
+> beam plus the 2'-0" of joist past it. So a foundation wall moving outward
+> spends a budget that has a hard ceiling of 20'-0", and the toy already has
+> to know that ceiling to refuse the nudge. One number, two features.
+
+INFERRED, not stated: the reverse. Moving a foundation wall **inward** should
+*create or grow* an overhang by the same arithmetic, refused once it would
+exceed 20'-0". That is the only reading where the rule is reversible, but
+Movie has not said it and it is written here as my inference.
+
+OPEN: what happens to the roof when the overhang is what changed? The floor
+edge did not move, so presumably the roof does not either -- but "and the
+roof" was said about the extending case, not this one.
+
 <!-- next: -->
 
