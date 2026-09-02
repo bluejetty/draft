@@ -18,6 +18,7 @@
 <script src="./areas.js"></script>
 <script src="./room-standards.js"></script>
 <script src="./turtle.js"></script>
+<script src="./starter-shape.js"></script>
 <script src="./toy-constraints.js"></script>
 <script src="./toy-context.js"></script>
 <script src="./closets.js"></script>
@@ -44,6 +45,65 @@
 <script>if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf-3.11.174.worker.min.js';</script>
 </head>
 <body>
+
+<!-- THE BONE YOU PRESSED, STILL WHERE YOU PRESSED IT.
+     ==================================================================
+     You arrive here by pressing a 287px bone in the middle of the entry
+     page. Until now what greeted you was a 44px bone in the top bar --
+     the same picture, a sixth the size, somewhere else -- so something
+     had to draw arrows at it and say PRESS BUTTON TO BUILD HOUSE PLAN.
+     Movie, 2 Sep: keep the big one, in the same place, and no arrows
+     are needed. You press the thing you already pressed.
+
+     WHY THIS IS PLAIN HTML AND NOT PART OF THE COMPONENT: it has to be
+     on screen the instant the page turns. The component cannot help --
+     React, the DC runtime and 22,000 lines of class have to boot first,
+     and a bone that blinks out and back has already lost the thread it
+     exists to hold. Dead centre of the viewport is also the one
+     position that matches across two separate pages without depending
+     on any other layout, and the image is already in cache from the
+     entry page, so it draws immediately.
+
+     It reaches the component by dispatching an event the component
+     listens for. That is the only crossing, it goes one way, and
+     nothing here knows what a house is.
+
+     The scrim arrives a second later, UNDER this (z-index 61 over 60),
+     so the bone stays lit while everything else dims. -->
+<!-- display:none, NOT the `hidden` attribute. `hidden` is only a UA rule
+     ([hidden]{display:none}) and an author `display` in a style attribute
+     beats it -- so `hidden` plus `display:flex` left this element laid out
+     over the whole viewport, invisible, with its button still taking
+     presses. It ate every click aimed at the middle of the canvas and
+     failed 17 specs across five files. The script below turns it on. -->
+<div data-first-bone
+     style="position:fixed; inset:0; z-index:61; display:none; align-items:center; justify-content:center; pointer-events:none;">
+  <button data-first-bone-press aria-label="BUILD MY FIRST HOUSE"
+          style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; pointer-events:auto;">
+    <img src="./assets/btn-bone.png" alt="" width="287" height="275" style="display:block; max-width:60vw; height:auto;" />
+  </button>
+</div>
+<script>
+  // Shown only to somebody who has never built a house here. The flag is the
+  // one the coach has always used and MUST KEEP ITS NAME -- see item 16 in
+  // DEEP-CLEANUP-ITEMS.md: 127 spec files seed it, and every drafter with a
+  // house already built carries it. The name says "coach" and there is no
+  // coach any more; that is a comment's job to explain, not a rename's.
+  (() => {
+    const holder = document.querySelector('[data-first-bone]');
+    if (!holder) return;
+    let seen = true;
+    try { seen = localStorage.getItem('draft-entry-coach-seen') === '1'; } catch (err) { seen = true; }
+    if (seen) return;
+    holder.style.display = 'flex';
+    // The component decides what a press MEANS -- it is the only thing that
+    // knows whether the sheet is empty. This just says it happened.
+    holder.querySelector('[data-first-bone-press]').addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('draft:first-bone'));
+    });
+  })();
+</script>
+
 <x-dc>
 <helmet>
   <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
@@ -709,20 +769,25 @@
 <!-- THE FIRST PRESS TEACHES THE SECOND. You arrive here from the entry page
      by pressing the bone; the logo does not come with you and the bone does,
      so the one thing you already know how to press is the one thing still on
-     screen. A beat later everything else dims and it is named.
+     screen. A beat later everything else dims.
 
      The bone is CUT OUT of the tint rather than covered by it -- the build
      cluster rises above the scrim -- because an instruction you cannot follow
-     is worse than no instruction. -->
+     is worse than no instruction.
+
+     NO ARROWS AND NO WORDS (Movie, 2 Sep: "the user can figure it out").
+     They were here because the bone that came with you was the 44px one in
+     the top bar, a sixth the size of the 287px bone you pressed on the way
+     in and somewhere else on the screen -- not the same button to anyone
+     looking, which is why something had to explain where it went. Keep the
+     big bone on screen and the explanation has no job.
+
+     A PRESS ANYWHERE BUILDS. The whole scrim is the target: there is nothing
+     to aim at and nothing to miss. It generates a starter outline and hands
+     straight to the build, which is Movie's ruling -- not the guided tour,
+     which _commitOutline would otherwise start. -->
 <sc-if value="{{ entryCoachOn }}" hint-placeholder-val="{{ false }}">
-  <div data-entry-coach onClick="{{ onDismissEntryCoach }}" style="position:fixed; inset:0; z-index:60; background:rgba(29,31,32,0.62); cursor:pointer; animation:entry-coach-in 420ms ease-out both;">
-    <!-- Hung off the bone's own measured position rather than a guessed one,
-         so the arrows keep pointing at it when the build row changes. -->
-    <div data-entry-coach-call style="position:absolute; left:{{ entryCoachX }}px; top:{{ entryCoachY }}px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:none;">
-      <div data-entry-coach-arrows aria-hidden="true" style="font-size:26px; line-height:1; color:#f4c542; text-shadow:0 2px 8px rgba(0,0,0,0.55); letter-spacing:6px; animation:entry-coach-nudge 1.1s ease-in-out infinite;">&#9650;&#9650;&#9650;</div>
-      <div data-entry-coach-line style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:20px; font-weight:700; letter-spacing:0.14em; color:#fff; text-align:center; text-shadow:0 2px 10px rgba(0,0,0,0.5); white-space:nowrap;">PRESS BUTTON TO BUILD HOUSE PLAN</div>
-    </div>
-  </div>
+  <div data-entry-coach onClick="{{ onFirstHousePress }}" style="position:fixed; inset:0; z-index:60; background:rgba(29,31,32,0.62); cursor:pointer; animation:entry-coach-in 420ms ease-out both;"></div>
 </sc-if>
 
 <sc-if value="{{ roomTrayOpen }}" hint-placeholder-val="{{ false }}">
@@ -2672,6 +2737,7 @@ class Component extends DCLogic {
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
   componentDidMount() {
     this._ensureDrawingCollections();
+    this._bindFirstBone();
     requestAnimationFrame(() => requestAnimationFrame(() => this._init()));
     window.addEventListener('keydown', this._onKey  = e => {
       this._invalidate();
@@ -5507,6 +5573,47 @@ class Component extends DCLogic {
   // Returns { ok, reason }. A load that cannot be understood leaves the current
   // drawing and the stored copy untouched — nothing is imported and nothing is
   // overwritten — and reports the failure to the status bar.
+  // THE FRONT DOOR MEANS START SOMETHING NEW.
+  //
+  // Movie's ruling, 2 Sep. Arriving through the entry page is a person saying
+  // "let us draw a house"; typing MODEL.dc.html or using a bookmark is a
+  // person saying "let me get back to work". Same page, two intentions, and
+  // the difference is which door they came through.
+  //
+  // He chose a real delete over setting the old drawing aside, on the grounds
+  // that drawings are saved to .draft files. It is a deliberate loss of the
+  // browser's copy, not an accident, and it is why the entry links carry the
+  // flag rather than MODEL guessing from a referrer -- a guess would make this
+  // fire on a link somebody else wrote.
+  //
+  // THE PARAM IS STRIPPED THE MOMENT IT IS READ. Left in the address bar it
+  // would wipe again on every reload, and a bookmark taken after arriving
+  // would be a bookmark that eats your work every time it is opened. One
+  // replaceState turns a trap into a mechanism.
+  async _openDrawing() {
+    let fresh = false;
+    try {
+      const url = new URL(window.location.href);
+      fresh = url.searchParams.get('new') === '1';
+      if (fresh) {
+        url.searchParams.delete('new');
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      }
+    } catch (err) { fresh = false; }
+
+    if (fresh && window.SharedFileStore) {
+      try {
+        await window.SharedFileStore.clearSharedFile(MODEL_STORAGE_BUCKET);
+      } catch (error) {
+        // A refused clear must not cost them the page. They asked for an empty
+        // sheet and will get one on screen either way -- the stored drawing
+        // simply outlives the visit, which is the safe direction to fail in.
+        console.warn('Unable to clear the stored drawing on a fresh start:', error);
+      }
+    }
+    this._loadDrawing();
+  }
+
   async _loadDrawing(importedFile = null) {
     this._extendUndo = null;
     this._loadingDrawing = true;
@@ -5752,6 +5859,7 @@ class Component extends DCLogic {
       });
   }
   componentWillUnmount() {
+    if (this._onFirstBone) window.removeEventListener('draft:first-bone', this._onFirstBone);
     cancelAnimationFrame(this._raf);
     clearTimeout(this._layerRevealTimer);
     clearInterval(this._boneTick);
@@ -6176,7 +6284,7 @@ class Component extends DCLogic {
     this.setState({ webglUnavailable: !this._webglAvailable });
     // The pristine startup drawing, kept so NEW can hand back a blank sheet.
     this._blankDrawing = JSON.stringify(this._serializeDrawing());
-    this._loadDrawing();
+    this._openDrawing();
     // The free-bone gauge (board #261): read once now, then a minute tick
     // keeps the countdown and drip arrivals current without a reload.
     this._refreshBoneWallet();
@@ -13335,6 +13443,51 @@ class Component extends DCLogic {
     window.DraftBoneSound?.hush();   // mid-sentence is where an offer stops being one
     try { localStorage.setItem('draft-entry-coach-seen', '1'); } catch (err) { /* private window */ }
     if (this.state.entryCoach) this.setState({ entryCoach: false });
+  }
+
+  // THE FIRST HOUSE. A press anywhere on the scrim: a starter outline is
+  // invented, and the build follows immediately.
+  //
+  // Movie's ruling is straight to the house rather than the guided tour --
+  // so this hands off to _pressBuildHouse, the same path the bone button
+  // uses. That is not laziness about a second code path: _commitOutline
+  // starts the tour on a level outline, and _pressBuildHouse is already the
+  // thing that clears a running tour, builds, spends the bone and crunches.
+  // The first house and every later one go through one door.
+  // The big bone lives in plain HTML before <x-dc> so it can paint before this
+  // class exists. This is the only crossing, and it goes one way: the element
+  // says a press happened, the component decides what that means.
+  _bindFirstBone() {
+    this._onFirstBone = () => this._firstHousePress();
+    window.addEventListener('draft:first-bone', this._onFirstBone);
+    // It has no business on a sheet that already has a house on it. The flag
+    // alone cannot know that -- a drafter can have work saved and an unspent
+    // flag on a second browser -- so the component, which does know, takes it
+    // away.
+    if (this._walls.length || this._outlines.length || this._lines.length) this._retireFirstBone();
+  }
+
+  // Removed rather than hidden: it has done the one thing it exists for, and
+  // a fixed, full-screen element left lying about is a thing to trip over
+  // later even with pointer-events off.
+  _retireFirstBone() {
+    document.querySelector('[data-first-bone]')?.remove();
+  }
+
+  _firstHousePress() {
+    this._retireFirstBone();
+    // Spent whatever happens next. The press IS the answer, and a sequence
+    // that comes back is a nag -- the same reason the dismiss spent it.
+    this._dismissEntryCoach();
+    // _armEntryCoach already refuses to show over a drawing, but the beat is
+    // a second long and something could have been drawn inside it. A starter
+    // outline stamped on top of the drafter's own first line would be the
+    // app overwriting work it invited.
+    if (this._walls.length || this._outlines.length || this._lines.length) return;
+    const shape = window.DraftStarterShape?.generate();
+    if (!shape) return;
+    this._commitOutline(shape.points);
+    this._pressBuildHouse();
   }
 
   _buildHouse() {
@@ -21794,7 +21947,7 @@ class Component extends DCLogic {
       entryCoachOn: this.state.entryCoach === true,
       entryCoachX: this.state.entryCoachAt ? this.state.entryCoachAt.x : 0,
       entryCoachY: this.state.entryCoachAt ? this.state.entryCoachAt.y : 0,
-      onDismissEntryCoach: () => this._dismissEntryCoach(),
+      onFirstHousePress: () => this._firstHousePress(),
       // The bone is CUT OUT of the scrim rather than covered by it: an
       // instruction you cannot follow is worse than no instruction. But ONLY
       // the bone -- the cluster drops its own stacking context so the bone's
