@@ -182,6 +182,53 @@ it is right on purpose.
 
 **No change recommended.** Carry it across as it stands.
 
+## Verdict 4 — `stair-rules.js`: **right as it is** (and the standard to measure the rest against)
+
+395 lines, fifteen exports, and the only module so far that states **the
+epistemic status of its own data**. Stairs are code-regulated, so a wrong number
+here is a violation rather than a blemish — and this is the module that behaves
+as though it knows that.
+
+**It labels every number.** `PROVENANCE AND ITS LIMITS — read before trusting a
+number.` Every share and frequency is marked a model-synthesized estimate, not
+measured data. The dimensional entries carry it in the data itself:
+
+```
+source:  'IRC / NBC (unverified)'    confidence: 'MEDIUM'
+code:    'NBC 2020 9.8 (claimed, unverified)'
+dispute: 'Sources give 34", 36" and 860mm for the NBC minimum and do not
+          agree. VERIFY against the NBC text before this drives any validation.'
+```
+
+**It preserves dissent instead of averaging it away.** `DISAGREEMENTS` has seven
+entries — *"One source ranks U first at 42%; the other eight put it third at
+10–25%. Outlier recorded, not averaged."* `VERIFICATION_CHECKLIST` has nine
+items naming what would settle them.
+
+**And the warning is obeyed downstream.** The question that mattered was whether
+anything lets unverified numbers drive validation. Nothing does.
+`auto-stair.js:452` consumes the pack for **defaults only**, and says so at the
+call site: *"and only the DEFAULTS, so a caller passing explicit numbers (MODEL
+always passes widthFt) is untouched by it."* Where the two codes disagree it
+takes the value valid under both — *"36\" satisfies both IRC and NBC, and
+narrowing it would move every stair that leaves landingFt unset."*
+
+**The honesty is itself pinned by a spec.** `tests/stair-rules.spec.js:46`
+asserts every value in both packs is still marked unverified. Someone quietly
+promoting an estimate to a fact fails the suite.
+
+That is five things right at once: the numbers are labelled, the disagreements
+are kept, the consumer treats them as defaults, the tie-break is conservative,
+and a test guards the labelling. No other module in this set does more than one
+of those.
+
+**One live item, not a defect.** The §9 checklist is unworked, and it now can
+be: `RD-DOCUMENTS/BUILDING-CODES/` holds `CanadaNBC2020.pdf` and
+`CanadaNBC2020Sec9Illustrated.pdf`. The module asks to be verified against the
+NBC text and the NBC text is in the repo. Whoever works that checklist flips
+`verified: false` and settles the 34"/36"/860mm dispute — which is a research
+task with a citable source, not a judgement call.
+
 ## Method note — a quieter failure than a collision
 
 Verdict 2 needed one more measurement: whether a drafter can actually draw a
