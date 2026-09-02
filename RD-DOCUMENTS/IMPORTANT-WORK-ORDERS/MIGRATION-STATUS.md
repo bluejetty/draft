@@ -168,39 +168,71 @@ hoped.
 
 ### LOAD ORDER IS LOAD-BEARING — read before writing any new page
 
-Eight modules capture a global **at module scope**:
+**Corrected 2 Sep, twice.** The first version of this section said *eight files,
+eleven captures*. My own sweep had actually produced **seven files and ten**, and
+I overstated it; then Gilligan swept independently, and checking his numbers
+against mine exposed a second, larger error — my pattern matched only
+`const X = window.Y` and was blind to **destructuring**, which missed a whole
+file. Two mistakes pointing opposite ways, which is why the wrong total looked
+plausible. The measured answer:
+
+**8 files, 13 captures — 10 plain, 3 destructured.**
+
+| file | plain | destructured | depends on |
+|---|---|---|---|
+| `auto-stair.js` | 1 | — | geometry-2d |
+| `build-house.js` | 1 | — | geometry-2d |
+| `cut-view.js` | 1 | 2 | geometry-2d, wall-types, formatters |
+| `first-run.js` | 1 | — | gruff-interview |
+| `layout-plan.js` | — | 1 | wall-types |
+| `room-grow.js` | 1 | — | geometry-2d |
+| `toy-constraints.js` | 3 | — | geometry-2d, wall-types, room-standards |
+| `toy-context.js` | 2 | — | geometry-2d, toy-constraints |
+
+**The two shapes fail differently, and the difference matters:**
 
 ```
-auto-stair.js       const geo = window.DraftGeometry2D;
-build-house.js      const geo = window.DraftGeometry2D;
-cut-view.js         const geo = window.DraftGeometry2D;
-first-run.js        const interview = window.DraftGruffInterview;
-room-grow.js        const geo = window.DraftGeometry2D;
-toy-constraints.js  geometry-2d, wall-types, room-standards
-toy-context.js      geometry-2d, toy-constraints
+const { WALL_TYPES } = window.DraftWallTypes;   throws AT LOAD --
+                                                 "Cannot destructure property
+                                                 'WALL_TYPES' ... is undefined",
+                                                 naming the property and file
+
+const geo = window.DraftGeometry2D;             SILENT at load. geo is
+                                                 undefined; the module loads
+                                                 fine, exports fine, and throws
+                                                 later at a call site that looks
+                                                 unrelated
 ```
 
-`const geo = window.DraftGeometry2D;` binds when the file loads, so a
-dependency arriving **later never helps**. The module loads fine and exports
-fine, and throws only when the consuming function is finally called — an error
-that points at the wrong file entirely. Found by Gilligan in `build-house.js`
-(verdict 5), generalised here.
+So the destructured three are the **safer** pattern despite being on this list.
+The ten plain ones are the hazard, because the error surfaces far from its cause.
 
-`MODEL.dc.html` satisfies all nine edges today, but by growth rather than by
-design, and one is a near-miss: `toy-context.js` (script 16) needs
-`toy-constraints.js` (script 15). **Adjacent.** A single reordering breaks
-`footingRings`-style calls.
+**A false positive worth naming, so nobody re-files it:** `room-grow.js:108` is
+`window.DraftRoomStandards ? ... : null` **inside** `seedFor` — resolved at call
+time and guarded. Exemplary, not a hazard. `room-grow.js:7` is the real capture.
 
-None of tier 1's four modules is on that list — checked, not assumed. **Tier 2
-is where this bites**, and any new page must load these dependencies first:
+### Verified against both live pages — all 15 edges ok
+
+Neither `MODEL.dc.html` nor `LAYOUT.dc.html` is broken today. But both are by
+growth rather than design, and there are **two one-line near-misses**:
+
+| page | consumer | needs | gap |
+|---|---|---|---|
+| `MODEL.dc.html` | `toy-context.js` (16) | `toy-constraints.js` (15) | **adjacent** |
+| `LAYOUT.dc.html` | `cut-view.js` (11) | `formatters.js` (10) | **adjacent** |
+
+**Any new page must load these first:**
 
 ```
-geometry-2d.js, wall-types.js, room-standards.js   BEFORE
-auto-stair, build-house, cut-view, room-grow, toy-constraints
-toy-constraints.js                                 BEFORE  toy-context.js
-gruff-interview.js                                 BEFORE  first-run.js
+geometry-2d.js, wall-types.js, room-standards.js, formatters.js   BEFORE
+  auto-stair, build-house, cut-view, room-grow, toy-constraints, layout-plan
+toy-constraints.js    BEFORE  toy-context.js
+gruff-interview.js    BEFORE  first-run.js
 ```
+
+None of tier 1's four modules is on this list — checked with the corrected
+pattern, not assumed.
 
 The durable fix is to resolve these lazily inside the functions instead of at
-module scope, which is a change to the **old** app and belongs to the review
+module scope. That is a change to the **old** app and belongs to the review
 gate, not to the new page.
