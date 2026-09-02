@@ -239,63 +239,73 @@ gate, not to the new page.
 
 ---
 
-## THE SCOPE SEAM — the most-shared modules are the least-reviewed
+## THE SCOPE SEAM — corrected, and it is not simply "shared vs not"
 
-Found 2 Sep while reconciling two independent capture sweeps that disagreed.
-The disagreement turned out not to be an error on either side: we were counting
-in **different scopes**, and both numbers were right for their own question.
+Found 2 Sep reconciling two capture sweeps. **Corrected twice**, because my page
+map was wrong the first time: I matched `src="./name.js"` only, and six of the
+78 script tags on this site are written **bare** (`src="orientation-guard.js"`).
+That made the most-shared module in the repo look like a module no page loads.
+Gilligan's "one module loaded by nothing" was right; my "two" was not.
 
-| scope | files | captures |
-|---|---:|---:|
-| the gate's seventeen | 6 | 9 |
-| repo-wide, plain `const X = window.Y` only | 7 | 10 |
-| **repo-wide, all shapes (incl. destructuring)** | **8** | **13** |
+### The definitive map — 38 modules at root
 
-The review gate's rule is *"loaded by `MODEL.dc.html` and by nothing else"* — a
-sound criterion, and chosen for a good reason: nothing outside MODEL has ever
-exercised those modules, so they carry the highest risk of untested drift.
-`cut-view.js` (MODEL **and** LAYOUT) and `layout-plan.js` (LAYOUT only) are
-correctly outside it. Neither is an oversight.
+| pages | count | modules |
+|---:|---:|---|
+| 0 | 1 | `first-run.js` |
+| 1 | 22 | 17 MODEL-only, 5 anchored elsewhere |
+| 2 | 10 | `bone-sound` `cut-view` `electric-symbols` `fen-labels` `geometry-2d` `layer-views` `render-2d` `room-standards` `tour` `wall-types` |
+| 3 | 1 | `formatters` |
+| 4 | 3 | `drawing-format` `profile-manager` `shared-file-store` |
+| **6** | **1** | **`orientation-guard`** |
 
-**But the inverse of that criterion is the seam.** Of 38 modules at root:
+(Counted against the old site only; `MODEL.html` is excluded so these numbers
+describe what exists independently of the migration.)
 
-| | count | reviewed by the gate |
-|---|---:|---|
-| loaded by exactly 1 page | 22 | 17 of them |
-| **loaded by 2+ pages** | **14** | **none — by definition** |
-| loaded by no page | 2 | `first-run.js` only |
+### The correction that matters: "shared" is not one category
 
-The fourteen shared modules are the load-bearing ones:
+The gate reviews *"loaded by `MODEL.dc.html` and by nothing else"* — 17 modules.
+Everything else is 19 "shared". But **5 of those 19 have exactly one caller**:
 
 ```
-shared-file-store.js   5 pages      formatters.js        3 pages
-drawing-format.js      5 pages      render-2d.js         3 pages
-profile-manager.js     4 pages      wall-types.js        3 pages
-cut-view.js, geometry-2d.js, tour.js, layer-views.js,
-room-standards.js, bone-sound.js, electric-symbols.js,
-fen-labels.js                       2 pages each
+layout-plan.js   LAYOUT      spec-master.js   SPECS
+titleblock.js    LAYOUT      spec-pages.js    SPECS
+project-page.js  PROJECT
 ```
 
-A defect in any of these hurts more pages than a defect in any of the
-seventeen, and none of them has a gate.
+*A module two pages use has proven it travels* — true, and a good argument. It
+does **not** apply to these five. They are in exactly the epistemic position of
+the seventeen, anchored to a different page. **14 modules have genuinely proven
+they travel; 22 have not, not 17.**
 
-### And this is not abstract: tier 1 is built entirely on the ungated half
+### Two modules nobody's criterion reaches
 
-| tier 1 dependency | pages | in the gate |
-|---|---:|---|
-| `shared-file-store.js` | 5 | **no** |
-| `drawing-format.js` | 5 | **no** |
-| `render-2d.js` | 3 | **no** |
-| `wall-types.js` | 3 | **no** |
+- **`orientation-guard.js` — 6 pages, the most-shared module in the repo.** No
+  harness. It has `tests/orientation-lock.spec.js`, which is why this has never
+  hurt. Not MODEL-only, so outside the gate; nothing else gates it either.
+- **`starter-shape.js` — MODEL-only, and not in the gate's seventeen**, because
+  it was written after the gate was defined. It has `proto/starter-shape-harness.js`
+  (661 checks), so it is covered — but the gate's list is a snapshot, and a
+  snapshot goes stale the first time someone adds a module.
 
-Four for four. `MODEL.html` reads and never writes, so nothing here is urgent —
-but every later tier writes, and `shared-file-store.js` is the module a write
-goes through on five pages.
+### And being shared did not protect anyone from the captures
 
-**Suggested, not decided:** the natural next gate batch is those four, in that
-order. They are the shared core, they are what the new page runs on, and
-`render-2d.js` is already known to reach for zero globals — which is the
-strongest evidence yet that a *reviewed* shared module carries across cleanly.
+Gilligan's point, and it is the sharpest thing to come out of this: `cut-view.js`
+and `layout-plan.js` both have module-scope captures despite being shared.
+`LAYOUT.dc.html` orders its scripts in a way that happens to work, exactly as
+`MODEL.dc.html` does.
 
-The four captures outside the gate (`cut-view.js` ×3, `layout-plan.js` ×1) are
-recorded above and belong to whoever reviews the shared fourteen.
+**A second caller proves the logic travels. It does not prove the loading does.**
+
+### Where tier 1 sits
+
+| tier 1 dependency | pages (old site) | proven to travel | in the gate |
+|---|---:|---|---|
+| `shared-file-store.js` | 4 | yes | no |
+| `drawing-format.js` | 4 | yes | no |
+| `render-2d.js` | 2 | yes | no |
+| `wall-types.js` | 2 | yes | no |
+
+All four have travelled to at least one page other than MODEL, which is real
+evidence and the reason tier 1 went as smoothly as it did. None is gated.
+`MODEL.html` reads and never writes, so nothing is urgent — but later tiers
+write, and `shared-file-store.js` is the write path on four pages.
