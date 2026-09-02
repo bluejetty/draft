@@ -341,6 +341,51 @@ Four sites: `MODEL.dc.html:13304` and `:13336`, `tests/entry-coach.spec.js`,
 
 ---
 
+### 17. `dc-runtime`'s source does not exist anywhere you can reach
+
+**Stop looking. It has been looked for.**
+
+`support.js` says it is generated from `dc-runtime/src/*.ts` and rebuilt with
+`bun run build`. That source is in **none** of the three repositories:
+
+| | |
+|---|---|
+| `bluejetty/draft` | no `dc-runtime/`, no `parse.ts`, `compile.ts`, `logic.ts`, `boot.ts` |
+| `bluejetty/roughdrafter` | same, and it is an hourly mirror of draft anyway |
+| `bluejetty/pdf` | same -- and this is the original Replit project |
+
+`support.js` is **byte-identical in all three** (`md5 951ae391`), and nothing
+anywhere references `dc-runtime` except that file's own header comment. Two web
+searches for `dc-runtime`, `DCLogic`, `.dc.html`, `x-dc` and `StreamableLogic`
+found no public trace of any of them.
+
+And the toolchains disagree: `.replit` declares `stack = "PNPM_WORKSPACE"` on
+nodejs-24, while `support.js` was built with **bun**. It was not built in that
+project. It was dropped in as compiled output.
+
+**So it is Replit's runtime, not ours** -- their internal component system,
+injected into projects that use `.dc.html`. That explains the missing licence,
+the missing copyright, the missing author and the missing public presence, all
+of which looked alarming and are simply what an internal tool looks like from
+outside.
+
+Nothing to do. It has needed zero changes in 810 commits, and `support.js` is
+readable rather than minified (35 characters a line, 60 comments intact, 80
+named functions) if it ever does. This entry exists so that nobody spends
+another afternoon searching for a folder that was never theirs.
+
+See `IMPORTANT-WORK-ORDERS/PLAN-new-app.md` for what happens instead: nothing
+new gets built on DC, and the day the last `.dc.html` in this repository is
+deleted, `support.js` and React go with it -- 2,049 lines and 138 KB, because
+nothing else uses them.
+
+**One caveat on that finish line**, found by Gilligan: `pdf.bluejetty.ca` is a
+separate site, from `bluejetty/pdf`, running twenty-odd `.dc.html` pages of its
+own. Deleting draft's four ends DC *here*. It is not a statement about
+everything bluejetty runs.
+
+---
+
 ## Not cleanup. Please do not.
 
 - **Do not strip the comments from `MODEL.dc.html`.** The comments carry the

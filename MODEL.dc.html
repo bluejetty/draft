@@ -5573,6 +5573,47 @@ class Component extends DCLogic {
   // Returns { ok, reason }. A load that cannot be understood leaves the current
   // drawing and the stored copy untouched — nothing is imported and nothing is
   // overwritten — and reports the failure to the status bar.
+  // THE FRONT DOOR MEANS START SOMETHING NEW.
+  //
+  // Movie's ruling, 2 Sep. Arriving through the entry page is a person saying
+  // "let us draw a house"; typing MODEL.dc.html or using a bookmark is a
+  // person saying "let me get back to work". Same page, two intentions, and
+  // the difference is which door they came through.
+  //
+  // He chose a real delete over setting the old drawing aside, on the grounds
+  // that drawings are saved to .draft files. It is a deliberate loss of the
+  // browser's copy, not an accident, and it is why the entry links carry the
+  // flag rather than MODEL guessing from a referrer -- a guess would make this
+  // fire on a link somebody else wrote.
+  //
+  // THE PARAM IS STRIPPED THE MOMENT IT IS READ. Left in the address bar it
+  // would wipe again on every reload, and a bookmark taken after arriving
+  // would be a bookmark that eats your work every time it is opened. One
+  // replaceState turns a trap into a mechanism.
+  async _openDrawing() {
+    let fresh = false;
+    try {
+      const url = new URL(window.location.href);
+      fresh = url.searchParams.get('new') === '1';
+      if (fresh) {
+        url.searchParams.delete('new');
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      }
+    } catch (err) { fresh = false; }
+
+    if (fresh && window.SharedFileStore) {
+      try {
+        await window.SharedFileStore.clearSharedFile(MODEL_STORAGE_BUCKET);
+      } catch (error) {
+        // A refused clear must not cost them the page. They asked for an empty
+        // sheet and will get one on screen either way -- the stored drawing
+        // simply outlives the visit, which is the safe direction to fail in.
+        console.warn('Unable to clear the stored drawing on a fresh start:', error);
+      }
+    }
+    this._loadDrawing();
+  }
+
   async _loadDrawing(importedFile = null) {
     this._extendUndo = null;
     this._loadingDrawing = true;
@@ -6243,7 +6284,7 @@ class Component extends DCLogic {
     this.setState({ webglUnavailable: !this._webglAvailable });
     // The pristine startup drawing, kept so NEW can hand back a blank sheet.
     this._blankDrawing = JSON.stringify(this._serializeDrawing());
-    this._loadDrawing();
+    this._openDrawing();
     // The free-bone gauge (board #261): read once now, then a minute tick
     // keeps the countdown and drip arrivals current without a reload.
     this._refreshBoneWallet();
