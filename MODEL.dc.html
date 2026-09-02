@@ -114,6 +114,11 @@
     .view-thumb.active { border-color:#b04060; box-shadow:0 0 0 1px #b04060, 0 1px 5px rgba(29,31,32,0.12); }
     .view-thumb.empty { cursor:default; }
     .view-thumb.empty:hover { border-color:rgba(29,31,32,0.22); }
+    /* An empty seat that CAN be filled by hand reads as an invitation: the
+       elevations cut themselves, so only the section seats offer. */
+    .view-thumb.empty.offer { cursor:pointer; }
+    .view-thumb.empty.offer:hover { border-color:#5980a6; }
+    .view-thumb.empty.offer:hover .view-thumb-label { color:#365e86; }
     .view-thumb.empty .view-thumb-label { color:rgba(29,31,32,0.38); }
     .view-thumb canvas { display:block; width:116px; height:76px; background:#fafafa; }
     .view-thumb-label { display:flex; align-items:center; gap:4px; padding:2px 5px 3px; border-top:1px solid rgba(29,31,32,0.1); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; line-height:1; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.68); white-space:nowrap; overflow:hidden; }
@@ -1785,12 +1790,13 @@
        the drawing, and they are reachable by thumb at the bottom of the
        screen. They work with a mouse too — a desk feature that happens to
        save the tablet. -->
-  <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT, and the logo
+  <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT · SPECS, and the logo
        walks back out to the main page. The current page wears the dark face. -->
   <div data-nav-cluster style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
     <a data-nav-model href="./MODEL.dc.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">MODEL</a>
     <a data-nav-layout href="./LAYOUT.dc.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">LAYOUT</a>
     <a data-nav-project href="./PROJECT.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">PROJECT</a>
+    <a data-nav-specs href="./SPECS.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">SPECS</a>
     <a data-nav-home href="./index.html" title="Rough Drafter — back to the main page" style="display:inline-flex; align-items:center; height:20px; padding:0 2px; line-height:0;">
       <img src="./assets/rough-drafter-logo.png" alt="Rough Drafter home" style="height:24px; display:block;" />
     </a>
@@ -2979,6 +2985,9 @@ class Component extends DCLogic {
       // LAYOUT sheets ride the drawing untouched: the LAYOUT page owns them,
       // the Model Space only round-trips what it loaded.
       ...(this._layoutData ? { layout: this._layoutData } : {}),
+      // Same deal for the SPECS page's project overrides: written there, read
+      // there, and only carried here so a save from this page cannot drop them.
+      ...(this._specsData ? { specs: this._specsData } : {}),
       // Underlay binaries live in the shared file store keyed by underlay id;
       // the drawing only carries their placement and scale metadata.
       underlays: this._underlays.map(underlay => ({
@@ -4907,6 +4916,8 @@ class Component extends DCLogic {
       this._layoutData = saved.layout
         ? format.layout(saved.layout, levelIds, new Set(cuts.map(cut => cut.id)))
         : null;
+      // The SPECS page's overrides ride along the same way.
+      this._specsData = saved.specs ? format.specs(saved.specs) : null;
       let skipped = (Array.isArray(saved.cuts) ? saved.cuts.length : 0) - cuts.length;
       const storedDimensions = Array.isArray(saved.dimensions)
         ? saved.dimensions.map(dimension => ({ ...dimension, levelId: migrateLevelId(dimension?.levelId) }))
@@ -5568,6 +5579,7 @@ class Component extends DCLogic {
       try {
         const stored = JSON.parse(await at.file.text());
         if (stored && typeof stored.layout === 'object') this._layoutData = stored.layout;
+        if (stored && typeof stored.specs === 'object') this._specsData = stored.specs;
       } catch { /* unreadable — our own copy is the better one to keep */ }
     }
     // Rebuilt so the sheet we just took rides out with it.
@@ -6111,9 +6123,9 @@ class Component extends DCLogic {
     };
     // An empty seat: a dark screen holding the chair for a view that does
     // not exist yet, so the wall always shows the full seating chart.
-    const emptyCard = (key, label, title) => ({
-      key: `empty:${key}`, label, title, empty: true,
-      active: false, onClick: null, paint: () => {},
+    const emptyCard = (key, label, title, onClick = null) => ({
+      key: `empty:${key}`, label, title, empty: true, offer: Boolean(onClick),
+      active: false, onClick, paint: () => {},
     });
     const push = (a, b) => { if (a) inner.push(a); if (b) outer.push(b); };
     const byId = id => this.state.levels.find(level => level.id === id);
@@ -6139,8 +6151,10 @@ class Component extends DCLogic {
     // two seats stand ready even before the drafter cuts anything.
     const sections = this.state.cuts.map(cutCard);
     for (let n = sections.length; n < 2; n += 1) {
-      sections.push(emptyCard(`S${n + 1}`, `S${n + 1}`,
-        `S${n + 1} — cut a section to fill this screen`));
+      const name = `S${n + 1}`;
+      sections.push(emptyCard(name, name,
+        `${name} — tap to cut a section into this screen`,
+        () => this._cutFromRailSeat(name)));
     }
     sections.forEach(card => {
       (inner.length <= outer.length ? inner : outer).push(card);
@@ -6168,6 +6182,7 @@ class Component extends DCLogic {
       }
       card.onclick = spec.onClick || null;
       card.classList.toggle('empty', Boolean(spec.empty));
+      card.classList.toggle('offer', Boolean(spec.offer));
       // Keep the column in seating order even when views come and go.
       if (box.children[i] !== card) box.insertBefore(card, box.children[i] || null);
       card.title = spec.title;
@@ -19603,6 +19618,21 @@ class Component extends DCLogic {
   }
 
   // ─── Cut drawing ──────────────────────────────────────────────────────────────
+  // An empty section seat is an invitation, not a photograph of nothing.
+  // Tapping it does what the CUT tool key does, plus the two things a seat
+  // knows that a tool key does not: the cut is drawn in plan, so the view
+  // goes back to plan first, and the seat can name itself in the prompt. The
+  // elevation seats deliberately do not offer this — E1-E4 cut themselves
+  // when the house builds, so a tap there would draw a second front.
+  _cutFromRailSeat(name) {
+    if (this.state.activeView !== 'top') this._setView('top');
+    if (!this._activateContextTool('cut')) return;
+    this.setState({
+      drawingMessage: `${name}: click where the section line starts, then where it ends, then the side it looks toward.`,
+      drawingMessageError: false,
+    });
+  }
+
   _handleCutClick() {
     const pt = this._snapPt; if (!pt) return;
     const phase = this.state.cutPhase;
