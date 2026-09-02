@@ -8,7 +8,26 @@ on:
 jobs:
   playwright:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    # RAISED FROM 55, WHICH THE SUITE HAD JUST OUTGROWN.
+    #
+    # The run is serial by design -- workers: 1, fullyParallel: false -- so
+    # its wall clock is the sum of every spec, and it climbs with each board:
+    #
+    #   763 tests   51.8m   green
+    #   772 tests   53.3m   green
+    #   784 tests   --      CANCELLED at 55m02s, twice
+    #
+    # That is not a flake and not a hung job. Both cancellations landed two
+    # seconds past this limit, on main's own head and on a PR, and the second
+    # one had already been mistaken for a mystery. Adding checkout, npm ci and
+    # a browser install on top of the run left no room at all.
+    #
+    # 90 is headroom, not a target: it buys roughly another four hundred specs
+    # at the present rate. The real answer is to stop running an hour serially
+    # -- sharding is the obvious shape, since each shard gets its own runner
+    # and therefore its own origin, which is what workers: 1 is protecting --
+    # and that is a board of its own, not a line in this file.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
