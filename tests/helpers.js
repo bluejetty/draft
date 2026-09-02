@@ -10,7 +10,7 @@ const STORAGE_BUCKET = 'model-drawing';
 
 async function openModel(page, {
   webgl = true, rails = true, boneWallet = true, boneReveal = false, autoStairs = false, roomGrow = false,
-  autoWindows = false, search = '',
+  autoWindows = false, entryCoach = false, search = '',
 } = {}) {
   // Init scripts run on every navigation, so the flag keeps a reload inside a
   // test from wiping the drawing the test just made. The FAT TEST WALLET
@@ -54,6 +54,15 @@ async function openModel(page, {
       if (seed.autoWindows && !('autoWindows' in pkg.content.model)) pkg.content.model.autoWindows = false;
       localStorage.setItem(key, JSON.stringify(pkg));
     }, { boneReveal: !boneReveal, suggestStairs: !autoStairs, roomGrow: !roomGrow, autoWindows: !autoWindows });
+  }
+  // THE ENTRY COACH scrims the app a second after a first-ever open, and every
+  // spec runs on a fresh profile -- so without this every one of them would
+  // find its tools behind a tint. Seeded as ALREADY SEEN by default and opted
+  // back into by entry-coach.spec.js, which exercises the real path.
+  if (!entryCoach) {
+    await page.addInitScript(() => {
+      try { localStorage.setItem('draft-entry-coach-seen', '1'); } catch (err) { /* private window */ }
+    });
   }
   if (!webgl) {
     await page.addInitScript(() => {
