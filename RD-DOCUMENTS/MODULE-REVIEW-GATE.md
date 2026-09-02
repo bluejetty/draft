@@ -307,6 +307,63 @@ Not applied here. It is a change to shipped code that is correct today, and the
 gate's rule is that a wrong module gets fixed in the old app first — this one is
 not wrong, it is undefended. Worth a ruling, and a cheap one.
 
+## Finding 3 — the load-order trap is a pattern: **10 captures across 7 files**
+
+Verdict 5 found it in one module. It is not one module.
+
+```
+auto-stair.js:13      const geo        = window.DraftGeometry2D
+build-house.js:7      const geo        = window.DraftGeometry2D
+cut-view.js:27        const geo        = window.DraftGeometry2D
+first-run.js:26       const interview  = window.DraftGruffInterview
+room-grow.js:7        const geo        = window.DraftGeometry2D
+toy-constraints.js:17 const geo        = window.DraftGeometry2D
+toy-constraints.js:18 const wallTypes  = window.DraftWallTypes
+toy-constraints.js:19 const standards  = window.DraftRoomStandards
+toy-context.js:21     const geo        = window.DraftGeometry2D
+toy-context.js:22     const toy        = window.DraftToyConstraints
+```
+
+Each binds at **load** time, so a consumer listed before its dependency gets a
+module that loads clean, reports every export present, and throws only when the
+one dependent function is called.
+
+### The required order, and the live page against it
+
+```
+geometry-2d      must precede  auto-stair, build-house, cut-view, room-grow,
+                               toy-constraints, toy-context
+wall-types       must precede  toy-constraints
+room-standards   must precede  toy-constraints
+toy-constraints  must precede  toy-context
+gruff-interview  must precede  first-run          (first-run is script-tagged nowhere yet)
+```
+
+`MODEL.dc.html` satisfies **all of them**. The trap is real and latent, not
+firing.
+
+**The near-miss worth recording:** `toy-constraints` sits at index 14 and
+`toy-context` at 15. Adjacent. One line of reordering in that file breaks
+`toy-context` with an error naming `geometry-2d` — pointing at the wrong file
+entirely.
+
+### Two corrections to the count
+
+An earlier sweep — mine, then repeated — reported **11 captures across 8 files**.
+Both numbers were one too many:
+
+- **`room-grow.js:108` is not a capture.** It is inside `seedFor`, resolved at
+  call time, and guarded: `window.DraftRoomStandards ? …stampCategory(b) : null`.
+  That is the *pattern to copy*, not an instance of the problem.
+- The sweep that would have caught the mistake missed six rows of its own,
+  because `window\.Draft[A-Za-z]+` **does not match the `2` in
+  `DraftGeometry2D`**. A character class that forgot digits nearly cleared six
+  real hazards.
+
+`room-grow` shows the fix for all ten, and it is already in the repo: **resolve
+at call time and guard**. One line per capture, behaviour-identical wherever the
+order is already right.
+
 ## Method note — a quieter failure than a collision
 
 Verdict 2 needed one more measurement: whether a drafter can actually draw a
