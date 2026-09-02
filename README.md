@@ -4,7 +4,24 @@ A browser-based architectural drafting tool. No installs, no uploads — everyth
 
 Built on the DC framework. Hosted on GitHub Pages.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for how the app is put together and [BRANCHING.md](BRANCHING.md) for the branch/merge rules.
+See [ARCHITECTURE.md](RD-DOCUMENTS/ARCHITECTURE.md) for how the app is put together and [BRANCHING.md](RD-DOCUMENTS/BRANCHING.md) for the branch/merge rules.
+
+## Where the documentation is
+
+**Everything written lives in [`RD-DOCUMENTS/`](RD-DOCUMENTS/).** The repository root is kept for the site itself — the pages, the modules, and the folders they need — because GitHub Pages serves it directly with no build step, so anything at root is live. This README is the one document that stays, since GitHub shows it as the front page.
+
+| | |
+|---|---|
+| [`DEEP-CLEANUP-ITEMS.md`](RD-DOCUMENTS/DEEP-CLEANUP-ITEMS.md) | work deliberately left for a deep clean, with the traps already mapped |
+| [`DEFINITIONS.md`](RD-DOCUMENTS/DEFINITIONS.md) | **what our words mean here** — the terms we use in a particular way, and the ones that collide |
+| [`IMPORTANT-WORK-ORDERS/`](RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/) | what is being built now — TOY MODE's status, the turtle path, how the boneyard works |
+| [`ARCHITECTURE.md`](RD-DOCUMENTS/ARCHITECTURE.md) · [`BRANCHING.md`](RD-DOCUMENTS/BRANCHING.md) · [`REFACTOR-PLAN.md`](RD-DOCUMENTS/REFACTOR-PLAN.md) | how the app is put together, how work lands, and why `MODEL.dc.html` is the shape it is |
+| [`BOARDS.md`](RD-DOCUMENTS/BOARDS.md) and the `BOARD-*` files | the shared work list, and the boards written up in full |
+| [`SPECIFICATIONS/`](RD-DOCUMENTS/SPECIFICATIONS/) | the written half of a *drawing set* — product content, not software specs |
+| [`BUILDING-CODES/`](RD-DOCUMENTS/BUILDING-CODES/) | the national code PDFs the rules are drawn from |
+| [`DOG-EMPLOYEES/`](RD-DOCUMENTS/DOG-EMPLOYEES/) · [`LORE/`](RD-DOCUMENTS/LORE/) · [`ADVERTISEMENT/`](RD-DOCUMENTS/ADVERTISEMENT/) | the dogs, the history, and the advertising |
+
+Nothing in the app loads a document at runtime — no `fetch`, no `src`, no `href` points at one — so documents can be reorganised without touching the site. Where code names a document it is in a comment, and those are repointed when a file moves.
 
 Copyright (c) 2026 bluejetty. All rights reserved. This code is publicly viewable but proprietary — see [LICENSE](LICENSE).
 
@@ -15,7 +32,7 @@ The suite is end-to-end Playwright: it serves the repo over plain HTTP and drive
 ```sh
 npm install                       # @playwright/test (pinned in package.json)
 npx playwright install chromium   # once per machine, downloads the browser
-npm test                          # full suite (360 tests, one worker, serial)
+npm test                          # full suite (784 tests, one worker, serial)
 ```
 
 Requirements:

@@ -321,7 +321,7 @@ Two constraints on it:
   judgement is exactly this distinction.
 
 This is the same rule as TOY MODE and for the same reason — limit what he can
-do so that what he makes stays true. `SPEC-toy-mode-constraints.md` is the
+do so that what he makes stays true. `IMPORTANT-WORK-ORDERS/SPEC-toy-mode-constraints.md` is the
 precedent for how a refusal should read; nothing here needs to argue it again.
 It lands with #221 and is not on main yet — the precedent is worth reading, but
 nothing in this board waits on it.

@@ -8,7 +8,7 @@
 // inside the generator: written there, the check gets written a second time
 // and the two drift. Pure, no DOM, node-loadable, frozen.
 //
-// Every rule here is from SPEC-electric-plan.md and is Movie's. Nothing is
+// Every rule here is from RD-DOCUMENTS/SPEC-electric-plan.md and is Movie's. Nothing is
 // invented — in particular there is NO POT LIGHT GRID. Spacing alone cannot
 // tell a grid from a row, and how a grid fits a room is his rule, ungiven. A
 // room that wants one light gets one centred fixture; the 5-7 ft band is
