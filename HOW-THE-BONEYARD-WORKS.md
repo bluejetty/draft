@@ -58,5 +58,39 @@ words: *simpler*.
 OPEN: how big is a chunk? Four views (90 degrees) or eight (45)? Eight reads
 the corners of an L, four is fewer presses to get anywhere.
 
-<!-- next: the right window -->
+### Right window — the 2D area
+
+The other half is the **2D area**, and it is where the work happens.
+
+### How the two are joined
+
+**Click a floor in the 3D wireframe -- by its colour -- and the 2D window
+moves to that floor.** You then manipulate that floor in 2D, and the 3D
+wireframe changes to match.
+
+**The 3D is never edited directly. That is the rule.**
+
+> Movie: *"no changing the 3D model in boneyard"*.
+
+Which makes the left window two small things instead of one large one: a
+**picker** (which level did you click) and a **mirror** (draw the current
+state). No gizmos, no drag handling, no hit-testing against edges or faces,
+no undo of its own -- every edit has exactly one home, and it is the 2D side.
+
+> Skipper's note: this is what makes the whole idea tractable. An editable
+> 3D view is a project; a stepped wireframe that picks a level and redraws
+> when the level changes is a view. The rule is not a limitation someone
+> will want lifted later -- it is the thing that keeps the two windows from
+> disagreeing about what the building is.
+
+OPEN: does the 2D window edit that level's **master** on the shelf, or a
+copy? The boneyard stores masters and levels take copies
+(`_outlineCopyForLevel`), so "manipulate that floor" could mean either, and
+they behave very differently for every other level.
+
+OPEN: does the wireframe follow a drag live, or redraw when the edit is
+committed? Live is nicer and costs a redraw per frame; on-commit matches how
+the stepped rotation already refuses to be continuous.
+
+<!-- next: -->
 
