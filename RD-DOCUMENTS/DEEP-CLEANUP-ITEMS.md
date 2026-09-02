@@ -8,6 +8,11 @@ urgent** — that is the point of the list. It exists so the work is remembered
 instead of rediscovered, and so whoever does it starts with the traps already
 mapped.
 
+**How to do one of these, and it is Movie's rule:** take a zip of the whole
+repository first, then do the work, then prove it still works. In that order.
+Git history and a green suite cover most of it, but a zip on a disc covers the
+case they do not — and it costs a minute.
+
 Two health readings taken while writing this, worth knowing before anyone
 starts "improving" things:
 
@@ -153,14 +158,37 @@ it hurting someone.
 
 ## Judgement calls — not obviously worth doing
 
-### 9. `framing` already means two things
+### 9. Two pages nothing points at
+
+`Notepad.dc.html` and `SaveBox.dc.html` sit at root, are **linked from no
+page**, and are **used by no test**. Nothing in the repository references
+either.
+
+They may be reachable by typing the URL, they may be dev scratchpads, or they
+may be dead. Find out before deciding — an orphan page that someone uses by
+bookmark is not an orphan.
+
+If they are dead, deleting them is worth more than any file move: two fewer
+things at root, and two fewer pages a newcomer has to work out.
+
+Checked at the same time, so it is written down rather than re-derived:
+`first-run.js` is also loaded by nothing, but **that one is deliberate** — the
+ceremony module is unwired on purpose and says so in
+`IMPORTANT-WORK-ORDERS/TOY-MODE.md`. Do not "clean it up".
+
+And a caution, from getting it wrong while checking: `orientation-guard.js`
+looks unreferenced to a grep for `"./orientation-guard.js"` and is in fact
+loaded by three pages, because its script tag has no `./` prefix. **Match on
+the filename, not on the path**, or the sweep will report live modules as dead.
+
+### 10. `framing` already means two things
 
 Structural framing (`MODEL.dc.html:8666`, *"Structure lives with the framing —
 FLOOR or FOUNDATION"*) and UI panes (`:9981`, `:10124`, *"locked framing"* in
 the STAIR workspace). Mildly muddy. Renaming the UI sense would be clearer;
 whether it is worth the diff is a judgement.
 
-### 10. The 26 MB of PDFs
+### 11. The 26 MB of PDFs
 
 `BUILDING-CODES/` is 26 MB of the repository's 29. **Deleting them does not
 shrink the repo** — git keeps the blobs, so every clone still pays. Only a
@@ -170,7 +198,7 @@ and is ruled out by `BRANCHING.md` for good reasons.
 Recommended: **leave them.** 29 MB is not a large repository, and this is the
 one deletion where "I will remove it later" does not give what you expect.
 
-### 11. `REFACTOR-PLAN.md` steps 5 and 6
+### 12. `REFACTOR-PLAN.md` steps 5 and 6
 
 Read the plan before proposing further extraction from `MODEL.dc.html`. Steps
 1–4 are **done**. Step 5 (the vertex pool) is marked *"late, if ever"*; step 6
@@ -180,13 +208,13 @@ are the component"*.
 The plan's own rule also applies to timing: *"an extraction must not land under
 an in-flight feature that touches the same region."* TOY MODE is that feature.
 
-### 12. Six "coming soon" promises in the UI
+### 13. Six "coming soon" promises in the UI
 
 Six places tell the user something is coming. At least one stopped being true
 when the turtle landed. Worth an audit: each should either still be true or be
 removed.
 
-### 13. The entry coach shows once, ever
+### 14. The entry coach shows once, ever
 
 `draft-entry-coach-seen` in `localStorage`. It makes the sequence
 unreviewable without clearing site data — which is how it came to look like the
