@@ -364,6 +364,52 @@ Both numbers were one too many:
 at call time and guard**. One line per capture, behaviour-identical wherever the
 order is already right.
 
+## Verdicts 6–10 — the five modules carrying a capture: **right but unclear**
+
+Finding 3 is measured, not inferred, so it decides these five without further
+reading. Each one loads clean, reports every export present, and throws only
+when the dependent function is called — and none of them says so.
+
+| module | captures | held up by |
+| --- | --- | --- |
+| `auto-stair.js` | 1 | `geometry-2d` |
+| `room-grow.js` | 1 | `geometry-2d` |
+| `toy-constraints.js` | 3 | `geometry-2d`, `wall-types`, `room-standards` |
+| `toy-context.js` | 2 | `geometry-2d`, `toy-constraints` |
+| `first-run.js` | 1 | `gruff-interview` |
+
+All five pass their harnesses where they have one, and all five are correct in
+the shipped app, because `MODEL.dc.html` happens to list every dependency first.
+That is the whole of what holds them up.
+
+**`first-run.js` is the sharp one.** It is script-tagged *nowhere* — the only
+module in the seventeen that no page loads — so its capture cannot fire today.
+It fires the moment somebody adds the tag, which is exactly what the next page
+is for. A module written and waiting, with a trap that arms on first use.
+
+**`toy-context.js` is the near-miss.** Its dependency `toy-constraints` sits one
+line above it in `MODEL.dc.html`. A single reordering breaks it with an error
+naming `geometry-2d` — a file that is fine.
+
+**The fix for all ten captures is already in the repo**, in `room-grow.js:108`:
+resolve at call time and guard it. One line each, behaviour-identical wherever
+the order is right, and it deletes the whole class.
+
+## Still to read — seven
+
+`auto-windows`, `bone-wallet`, `closets`, `electric-rules`, `gruff-drivethru`,
+`gruff-interview`, `turtle`.
+
+Three of them — `auto-stair`, `bone-wallet`, `gruff-drivethru` — have no node
+harness, so a verdict on them means writing one first, as `pdf-scan` did. That
+is the cost of the verdict, and it is small: every one of the seventeen already
+loads under node.
+
+**No verdict is being given on grep evidence.** A keyword scan of the headers
+suggested which of these name their caller's duty, and that is a hint about
+where to read, not a finding. The captures decided verdicts 6–10 because they
+were *measured*, both directions, with a control.
+
 ## Method note — a quieter failure than a collision
 
 Verdict 2 needed one more measurement: whether a drafter can actually draw a
