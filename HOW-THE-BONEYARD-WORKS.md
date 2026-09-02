@@ -171,20 +171,47 @@ push out     7'-0"
 would leave  3'-0"   ILLEGAL
 ```
 
-OPEN -- three ways it could go, and the choice is Movie's:
+**RULED 2 Sep.** Movie:
 
-1. **Snap down to 2'-0"** -- eat more than was asked. The overhang jumps the
-   band in one move and lands as a free cantilever.
-2. **Snap up to 4'-6"** -- eat less than was asked. The push is short-changed
-   and the wall does not go as far as the finger.
-3. **Stop at 4'-6"** and say why. The drag halts at the last legal position,
-   and it takes a second press to cross the band.
+> *"once they get to past the 4'6 make it go straight to 2ft reduced on the
+> upper floors (remove 2'6 from upstairs floors)"*
 
-> Skipper's note: 3 is what the rest of the toy already does -- *"it stops
-> dead and the blocker says why. Never elastic"* (Movie, 1 Sep). And it falls
-> out of the 6" nudge nicely: pressing down from 4'-6" cannot land on 4'-0",
-> so that press jumps to 2'-0" -- the band crossed deliberately, in one
-> visible step, rather than slid through.
+The overhang **jumps the band**, and it does it by **trimming the floor
+above** rather than by moving the wall further or refusing the press:
+
+```
+overhang reaches   4'-6"     last legal piled width
+push continues
+upstairs floors    -2'-6"    their outer edge retreats
+overhang becomes   2'-0"     free cantilever, no piles
+```
+
+`4'-6" - 2'-0" = 2'-6"`, which is exactly the strip removed. The wall does not
+overshoot, is not short-changed and is never refused -- it keeps travelling
+the distance asked for. What absorbs the illegal band is **2'-6" of upstairs
+floor, taken off that edge.**
+
+Below 2'-0" the ordinary rule resumes: the free cantilever is eaten normally,
+and at zero the level goes flush and travels out with the wall.
+
+> Skipper's note: this is the only one of the four candidates where the finger
+> and the wall never disagree, which is why it fits a toy whose whole claim is
+> that it cannot show you an invalid house. The other three all either move
+> the wall somewhere it was not asked to go, or stop it somewhere it was.
+
+**The piles come out too.** At 2'-0" the overhang is a free cantilever, so
+whatever was carrying the old 4'-6" is no longer needed. Worth stating because
+it means one press deletes structure, not just floor.
+
+OPEN, and it is a consistency question rather than a design one: this trims
+upstairs floor area as a **side effect of an outward push**, while the rule
+elsewhere says *"the only way they can reduce footprint is in the boneyard
+using the bone or foundation."* Those can both be true -- the push is not the
+user reducing a footprint, it is a consequence of a legality band -- but it is
+the one place the two rules touch, and a beginner who loses 2'-6" of bedroom
+to a press they thought was making the house bigger deserves to be told.
+Whether that is a message, a preview, or just something the wireframe shows
+happening is not decided.
 
 
 ### It is not a foundation rule. It is a "lower floor" rule
