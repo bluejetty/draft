@@ -190,5 +190,38 @@ So they should not be built as two mechanisms that happen to agree; they
 should be **one mechanism with two names**, and the day they merge is a rename
 rather than a rewrite.
 
+---
+
+## Outward, stated precisely
+
+Movie, sharpening the earlier rule:
+
+> *"if it is moved outward whatever is hooked up inline above also changes and
+> the stuff hanging over the edge is brought inward the exact same amount"*
+
+So it is not one sequence applied to the building. **Each thing above responds
+according to what it is**, and they can differ from each other in the same
+move. For an outward move of `d`:
+
+| what it is above the moved wall | what happens |
+|---|---|
+| **inline** -- sitting directly over the wall, flush | moves out by `d` |
+| **hanging over the edge** | its overhang reduces by **exactly `d`**; its outer edge does not move |
+
+Which matches the worked example exactly: a floor overhanging 20'-0", a
+foundation moved out 10'-0", an overhang of 10'-0" left, and the floor's outer
+edge never moved.
+
+The phrase to keep is **"the exact same amount"**. The overhang is not
+recalculated from the new geometry -- it is reduced by the distance moved. Same
+number, opposite sign.
+
+INFERRED, not stated: what happens when the overhang is *smaller* than the
+move. An overhang of 4'-0" and a push of 10'-0" cannot take 10 off 4. The only
+reading that does not go negative is that the overhang falls to zero and the
+remaining 6'-0" then moves the edge -- the level converting from "hanging" to
+"inline" partway through the move, and finishing as the first row of the
+table.
+
 <!-- next: -->
 
