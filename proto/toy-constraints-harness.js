@@ -417,6 +417,81 @@ const wall = (id, x0, z0, x1, z1, extra = {}) => ({
   })());
 }
 
+// ── 10 · The exterior wall's half-foot ───────────────────────────────────
+// SIX INCHES, and it is the only step that is not a foot. A foot is a lot of
+// house to gain or lose in one press, and the outside wall is the one people
+// nudge to make a room work -- so an exterior wall carries its own `stepFt`
+// and everything else keeps the foot. Inches never enter: half a foot is the
+// finest the rounding ruling allows, and this stops there.
+{
+  const half = wall('x', 0, 0, 0, 20, { stepFt: 0.5 });
+  const ctx = { walls: [half], rooms: [], openings: [] };
+  check('a wall says its own step, and the foot is the default',
+    T.stepFor(half) === 0.5 && T.stepFor(wall('y', 0, 0, 0, 20)) === T.FOOT_FT);
+  check('an exterior wall moves six inches when asked for six',
+    T.allowedMove(half, 0.5, ctx).delta === T.HALF_FOOT_FT);
+  check('it rounds to the half foot, never to the inch',
+    T.allowedMove(half, 0.3, ctx).delta === 0.5
+    && T.allowedMove(half, 0.8, ctx).delta === 1,
+    `got ${T.allowedMove(half, 0.3, ctx).delta} and ${T.allowedMove(half, 0.8, ctx).delta}`);
+  check('under a quarter foot is still no move at all',
+    T.allowedMove(half, 0.2, ctx).reason === T.REASON.NO_MOVE);
+
+  // The step is a step, NOT a grid: the ruling that a wall never snaps to
+  // anything holds at six inches exactly as it holds at a foot.
+  const off = wall('x', -1.386, 0, -1.386, 20, { stepFt: 0.5 });
+  check('a wall off the foot moves half a foot from where it is',
+    near(T.allowedMove(off, 0.5, { walls: [off], rooms: [], openings: [] }).delta, 0.5));
+
+  // And the walk back stops on the half foot, which is the whole point: the
+  // whole-foot wall has to refuse this move outright because the only foot it
+  // could offer is already illegal.
+  const room = () => ({ id: 'r', category: 'bedroom', clearWidthFt: 10.5, clearDepthFt: 12,
+    bounds: [{ wallId: 'x', dim: 'width', sign: -1 }] });
+  const stopped = T.allowedMove(half, 2, { walls: [half], rooms: [room()], openings: [] });
+  const whole = wall('x', 0, 0, 0, 20);
+  const refused = T.allowedMove(whole, 2, { walls: [whole], rooms: [room()], openings: [] });
+  check('a partly-blocked exterior wall stops on the half foot',
+    stopped.delta === 0.5 && stopped.reason === T.REASON.MIN_ROOM,
+    JSON.stringify(stopped));
+  check('the same move on a whole-foot wall has nowhere legal to stop',
+    refused.delta === 0 && refused.reason === T.REASON.MIN_ROOM,
+    JSON.stringify(refused));
+}
+
+// ── 11 · Pushing the outside out costs a beam, not a cap ─────────────────
+// Joists span the short way. Pushing the LONG wall out changes no span and
+// costs nothing; pushing the short one out eventually needs a beam down the
+// middle and the columns under it. A flat distance cap would refuse the free
+// one and permit the expensive one, which is wrong on both counts.
+{
+  const w = wall('a', 0, 0, 0, 40);
+  const at = span => T.isLegal({ walls: [w], rooms: [], openings: [], shortSpanFt: span });
+  check('a span the joists can cross is legal and silent',
+    at(18).ok && at(T.BEAM_AT_FT).ok, `19 ft: ${JSON.stringify(at(T.BEAM_AT_FT).violations)}`);
+  check('past the span it names the beam rather than refusing the house',
+    !at(20).ok && at(20).violations[0].reason === T.REASON.NEEDS_A_BEAM
+    && at(20).violations[0].beams === 1);
+  check('past twice the span it is two beams, and two rows of columns',
+    at(40).violations[0].beams === 2 && at(2 * T.BEAM_AT_FT).violations[0].beams === 1,
+    `40: ${at(40).violations[0].beams}, 38: ${at(38).violations[0].beams}`);
+  check('no footprint offered, nothing checked -- the honest reading of silence',
+    T.isLegal({ walls: [w], rooms: [], openings: [] }).ok);
+
+  // Which wall grows the span is plan topology, so MODEL says. The wall that
+  // does not appear in `spanGrowsWith` runs the long way and moves for free.
+  const ctx = grows => ({ walls: [w], rooms: [], openings: [],
+    shortSpanFt: 18, spanGrowsWith: grows });
+  const across = T.allowedMove(w, 3, ctx([{ wallId: 'a', sign: 1 }]));
+  check('a wall that widens the span stops where the beam would start',
+    across.delta === 1 && across.reason === T.REASON.NEEDS_A_BEAM,
+    JSON.stringify(across));
+  check('the wall along the span moves the whole way, because nothing spans further',
+    T.allowedMove(w, 3, ctx([{ wallId: 'other', sign: 1 }])).delta === 3);
+  check('and pulling the short way in is never the beam that stops you',
+    T.allowedMove(w, -3, ctx([{ wallId: 'a', sign: 1 }])).delta === -3);
+}
+
 // ── Report ───────────────────────────────────────────────────────────────
 if (failures.length) {
   console.error(`\n  ${failures.length} FAILED, ${passed} passed\n`);

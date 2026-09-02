@@ -20,11 +20,24 @@ if (!window.DraftToyConstraints) {
 
   // ── Tunables ──────────────────────────────────────────────────────────
   const FOOT_FT = 1;                 // the toy's unit: the user moves whole feet
+  // THE ONE EXCEPTION TO THE FOOT, and it is a permitted one. The rounding
+  // rule allows half-feet before inches are ever allowed, and an EXTERIOR wall
+  // is where that earns its keep: a foot is a lot of house to gain or lose in
+  // one press, and the outside wall is the one people nudge to make a room
+  // work. Inches stay out of the input path entirely.
+  const HALF_FOOT_FT = 0.5;
   const CANTILEVER_FREE_FT = 2;      // up to here, silent
   const CANTILEVER_PILES_FT = 4.5;   // beyond here, bump out AND add piles
   const ORTHO_TOL_DEG = 0.5;         // how far off square still counts as square
   const WELD_TOL_FT = 1 / 12;        // ends this close share a corner, so weld
   const OPENING_EDGE_FT = 2 / 12;    // an opening needs this much wall each side
+  // WHERE THE STRUCTURE HAS TO CHANGE. Joists span the SHORT way, so a house
+  // whose short span passes this needs a beam down the long axis -- and two at
+  // third points past twice it, which is a second row of columns and a second
+  // set of piles. The number is build-house.js's `beamAtFt`, read rather than
+  // restated: the toy refusing at a foot the generator would happily have
+  // built is worse than not refusing at all.
+  const BEAM_AT_FT = 19;
 
   // ── Reason codes ──────────────────────────────────────────────────────
   // A NAMED SET, exported — never English assembled at the call site. A
@@ -39,6 +52,7 @@ if (!window.DraftToyConstraints) {
     CANTILEVER: 'CANTILEVER',
     GROUP_MEMBER_BLOCKED: 'GROUP_MEMBER_BLOCKED',
     OBJECT_CLEARANCE: 'OBJECT_CLEARANCE',
+    NEEDS_A_BEAM: 'NEEDS_A_BEAM',
     NO_MOVE: 'NO_MOVE',
   });
 
@@ -76,10 +90,17 @@ if (!window.DraftToyConstraints) {
   // −1 or 0. A beginner cannot be blamed for a wall shifting 4½" they never
   // asked to move, and old drawings continuing to open is a standing
   // constraint on this project. (Movie's ruling, 31 Aug.)
-  const quantiseFeet = delta => {
+  // A wall's own step. Everything moves by the foot unless it says otherwise,
+  // and only an exterior wall does -- passed in by MODEL rather than inferred,
+  // because which walls are exterior is plan topology and this module has
+  // never been in the business of working that out.
+  const stepFor = wall => num(wall && wall.stepFt) ?? FOOT_FT;
+
+  const quantiseFeet = (delta, stepFt = FOOT_FT) => {
     const d = num(delta);
     if (d === null) return 0;
-    return Math.round(d / FOOT_FT) * FOOT_FT;
+    const step = num(stepFt) || FOOT_FT;
+    return Math.round(d / step) * step;
   };
 
   // Square within tolerance, measured on the wall's own run. A curved wall is
@@ -261,6 +282,30 @@ if (!window.DraftToyConstraints) {
       violations.push({ reason: REASON.CANTILEVER, wallId: wall.id, band, cantileverFt: ft });
     });
 
+    // ── PUSHING THE OUTSIDE OUT ─────────────────────────────────────────
+    // It is not distance that stops an exterior wall, it is STRUCTURE. Joists
+    // span the short way, so pushing the LONG wall out costs nothing -- the
+    // span it crosses does not change -- while pushing the short one out
+    // eventually needs a beam down the middle and the columns under it.
+    //
+    // A flat cap would refuse the first and permit the second, which is the
+    // wrong way round on both counts. So the limit is the span itself, and the
+    // toy can say the true thing when it stops: past here it needs a beam.
+    //
+    // The footprint's own short span is MODEL's to measure; absent, nothing is
+    // checked, which is the honest reading of "no footprint was offered".
+    const shortSpanFt = num(config && config.shortSpanFt);
+    if (shortSpanFt !== null && shortSpanFt > BEAM_AT_FT) {
+      violations.push({
+        reason: REASON.NEEDS_A_BEAM,
+        shortSpanFt,
+        beamAtFt: BEAM_AT_FT,
+        // Past twice the span it is two beams at third points, which is a
+        // second row of columns and a second set of piles.
+        beams: shortSpanFt > BEAM_AT_FT * 2 ? 2 : 1,
+      });
+    }
+
     // ── THE SEAM FOR THINGS STANDING IN A ROOM ──────────────────────────
     // A closet is an OBJECT placed in a room, not a bite taken out of its
     // outline (Movie, 1 Sep). That ruling is what keeps every rule above
@@ -308,6 +353,13 @@ if (!window.DraftToyConstraints) {
       ? { ...wall, cantileverFt: num(wall.cantileverFt) === null
         ? wall.cantileverFt : num(wall.cantileverFt) + (wall.cantileverGrowsWithMove ? delta : 0) }
       : wall));
+    // The short span answers to a move the same way a room's dimensions do:
+    // MODEL says which walls grow it and by how much, because which wall faces
+    // across the short axis is plan topology.
+    const grows = (config.spanGrowsWith || []).filter(entry => groupIds.includes(entry.wallId));
+    const shortSpanFt = num(config.shortSpanFt) === null ? config.shortSpanFt
+      : num(config.shortSpanFt) + grows.reduce(
+        (sum, entry) => sum + (entry.sign < 0 ? -1 : 1) * delta, 0);
     const rooms = (config.rooms || []).map(room => {
       const bounds = (room.bounds || []).filter(bound => groupIds.includes(bound.wallId));
       if (!bounds.length) return room;
@@ -335,7 +387,7 @@ if (!window.DraftToyConstraints) {
       if (num(room.minDimensionFt) !== null) moved.minDimensionFt = Math.min(width, depth);
       return moved;
     });
-    return { ...config, walls, rooms };
+    return { ...config, walls, rooms, shortSpanFt };
   };
 
   // WHAT STOPPED THE SET — in the same words whether it stopped you dead or
@@ -390,7 +442,8 @@ if (!window.DraftToyConstraints) {
       if (inert) return { delta: 0, reason: inert, wallId: member.id, group: groupIds };
     }
 
-    const wanted = quantiseFeet(proposedDelta);
+    const stepFt = stepFor(wall);
+    const wanted = quantiseFeet(proposedDelta, stepFt);
     if (wanted === 0) return { delta: 0, reason: REASON.NO_MOVE, group: groupIds };
 
     // A GROUP'S PERMITTED DELTA IS THE SMALLEST PERMITTED DELTA OF ANY MEMBER:
@@ -399,10 +452,11 @@ if (!window.DraftToyConstraints) {
     // configuration accepts, so a partly-blocked drag still moves as far as it
     // legally can instead of refusing outright.
     const base = { walls, rooms: ctx.rooms, openings: ctx.openings, minimums: ctx.minimums, mode,
-      objects: ctx.objects, clearanceFor: ctx.clearanceFor };
-    const step = wanted > 0 ? FOOT_FT : -FOOT_FT;
+      objects: ctx.objects, clearanceFor: ctx.clearanceFor, shortSpanFt: ctx.shortSpanFt,
+      spanGrowsWith: ctx.spanGrowsWith };
+    const step = wanted > 0 ? stepFt : -stepFt;
     let blocked = null;
-    for (let d = wanted; Math.abs(d) >= FOOT_FT - 1e-9; d -= step) {
+    for (let d = wanted; Math.abs(d) >= stepFt - 1e-9; d -= step) {
       const verdict = isLegal(configAfterMove(base, groupIds, d));
       if (verdict.ok) {
         const result = { delta: d, group: groupIds };
@@ -446,6 +500,9 @@ if (!window.DraftToyConstraints) {
     BAND,
     MODE,
     FOOT_FT,
+    HALF_FOOT_FT,
+    BEAM_AT_FT,
+    stepFor,
     CANTILEVER_FREE_FT,
     CANTILEVER_PILES_FT,
     ORTHO_TOL_DEG,
