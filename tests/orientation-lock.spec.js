@@ -1,6 +1,6 @@
 // Landscape on every working screen (board #310).
 //
-// The ruling: MODEL, LAYOUT, PROJECT, STANDARDS and SETTINGS always present
+// The ruling: MODEL, LAYOUT, PROJECT, SPECS, STANDARDS and SETTINGS always present
 // landscape on a tablet. Portrait is blocked BOTH ways up, because upside-down
 // portrait is still portrait; both landscape directions are fine. ENTRY is the
 // one screen that may follow the device.
@@ -16,6 +16,7 @@ const WORK_PAGES = [
   '/MODEL.dc.html',
   '/LAYOUT.dc.html',
   '/PROJECT.html',
+  '/SPECS.html',
   '/STANDARDS.html',
   '/SETTINGS.html',
 ];

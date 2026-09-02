@@ -26,6 +26,7 @@ const PAGES = [
   '/MODEL.dc.html',
   '/LAYOUT.dc.html',
   '/PROJECT.html',
+  '/SPECS.html',
   '/SETTINGS.html',
   '/STANDARDS.html',
 ];

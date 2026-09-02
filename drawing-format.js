@@ -416,6 +416,76 @@ if (!window.DraftDrawingFormat) {
   // on ROOM-IDS-AREA, one per enclosed room found on a level's PLAN. Each
   // carries its computed inside area so the MAIN FL area readout can toggle
   // without re-running detection.
+  // ── Electric devices (board: the electric plan) ────────────────────────
+  // Two hosts and every device has exactly one.
+  //
+  // WALL-HOSTED devices copy the fixture pattern above VERBATIM: wallId,
+  // offset along the wall from its start, side, and NO STORED GEOMETRY, so a
+  // device redraws from the current wall and rides a wall edit instead of
+  // being orphaned by it. An outlet and a vanity are the same problem a
+  // fixture already solved; two patterns for it would drift.
+  //
+  // POINT-HOSTED devices (ceiling and floor) store a point on the level.
+  // The spec preferred storing them relative to the room that holds them, and
+  // that is not possible here: rooms are NOT entities in this format. There is
+  // no `rooms` key, and room polygons are derived at runtime by
+  // geometry-2d.js roomLoops() from the wall segments. The only room-ish thing
+  // carrying an id is a roomTag, which is a LABEL at a point rather than the
+  // room -- delete or move the tag and a device anchored to it is orphaned
+  // while the room is unchanged.
+  //
+  // The spec's reason for preferring room-relative still holds (TOY MODE has
+  // to ask a room how big it is), but it does not need a stored link:
+  // electric-rules.js answers "which room holds this point" by containment at
+  // read time. Derive the room from the point; do not store the room. Same
+  // argument as the derived bank, and the same failure avoided -- a stored
+  // link can be orphaned when its anchor goes, a derived one cannot exist to
+  // be.
+  const DEVICE_WALL_KINDS = ['outlet', 'switch', 'vanity', 'stove-outlet', 'dryer-outlet'];
+  const DEVICE_POINT_KINDS = ['pot', 'fan', 'chandelier', 'smoke', 'co-smoke', 'floor-ac', 'ceiling-ac'];
+  // Life safety rides its own layer so a drafter switching the electric off to
+  // work on something else cannot make the smokes vanish from a sheet.
+  const DEVICE_SAFETY_KINDS = ['smoke', 'co-smoke'];
+  // FLOOR AC and CEILING AC are two device kinds sharing one mark: the outlet
+  // circle in a square, told apart ONLY by the label FLR / CEIL. Nothing in
+  // the geometry distinguishes them, which is why they are separate kinds
+  // rather than one kind with a surface flag.
+  const DEVICE_HOSTS = { 'floor-ac': 'floor', 'ceiling-ac': 'ceiling' };
+
+  const electricDevices = (rawDevices, levelIds) => (Array.isArray(rawDevices) ? rawDevices : [])
+    .map(device => {
+      const deviceLevelId = levelId(device?.levelId, levelIds);
+      const kind = oneOf(device?.kind, [...DEVICE_WALL_KINDS, ...DEVICE_POINT_KINDS], null);
+      if (deviceLevelId == null || !kind) return null;
+      const layer = DEVICE_SAFETY_KINDS.includes(kind) ? 'E-SAFETY' : 'E-POWER';
+      const base = {
+        id: String(device?.id || '').trim(),
+        levelId: deviceLevelId,
+        view: 'plan',
+        kind,
+        layer,
+        // The bone's own devices, so a re-deal replaces its work and never the
+        // drafter's -- the same flag the auto windows carry (#169). Absent on
+        // anything he has touched, and on every drawing saved before this.
+        ...(device?.auto === true ? { auto: true } : {}),
+        // A fixture stores what switches it; the painter draws the curve from
+        // that. Banks are the lights grouped on this value, never a record.
+        ...(device?.switchId != null && String(device.switchId).trim()
+          ? { switchId: String(device.switchId).trim() } : {}),
+      };
+      if (DEVICE_WALL_KINDS.includes(kind)) {
+        const wallId = String(device?.wallId || '').trim();
+        const offset = num(device?.offset);
+        // No representation for a wall device floating in a room: it cannot be
+        // dropped off a wall because it cannot be stored off one.
+        if (!wallId || offset === null || offset < 0) return null;
+        return { ...base, host: 'wall', wallId, offset, side: device?.side === -1 ? -1 : 1 };
+      }
+      const at = point(device?.at);
+      if (!at) return null;
+      return { ...base, host: DEVICE_HOSTS[kind] || 'ceiling', at };
+    }).filter(Boolean);
+
   const roomTags = (rawTags, levelIds) => {
     const seen = new Set();
     return (Array.isArray(rawTags) ? rawTags : []).map(tag => {
@@ -727,6 +797,33 @@ if (!window.DraftDrawingFormat) {
     };
   };
 
+  // The PROJECT page's section table: the typical-section numbers, one row
+  // per BUILD TYPE. HOUSE is not stored here — HOUSE *is* the drawing's live
+  // assembly, edited through the level cards and the wall-section detail.
+  // The other types carry only what they differ in; null is "not set", which
+  // reads as the type's default, and a type simply has no cell for an item
+  // it cannot use (a garage has no upper floor, a house no wood fill wall).
+  const SECTION_TABLE_TYPES = Object.freeze([
+    'split', 'bilevel', 'modifiedBilevel', 'attachedGarage', 'detachedGarage',
+  ]);
+  const SECTION_TABLE_FIELDS = Object.freeze([
+    'roofPitch', 'roofOverhangFt',
+    'mainWallHeightFt', 'mainJoistDepthIn', 'mainSheathingIn',
+    'upperWallHeightFt', 'upperJoistDepthIn',
+    'fdnWallHeightFt', 'woodFillHeightFt',
+    'slabThicknessIn', 'footingWidthIn', 'footingDepthIn',
+  ]);
+  const sectionTable = raw => {
+    const stored = raw && typeof raw.rows === 'object' && raw.rows ? raw.rows : {};
+    return {
+      rows: Object.fromEntries(SECTION_TABLE_TYPES.map(type => {
+        const row = stored[type] && typeof stored[type] === 'object' ? stored[type] : {};
+        return [type, Object.fromEntries(SECTION_TABLE_FIELDS
+          .map(field => [field, positive(row[field], null)]))];
+      })),
+    };
+  };
+
   // LAYOUT (board #168): the sheet composition saved with the drawing. Paper
   // and orientation are the sheet's own; each viewport is a window onto model
   // space — kind picks the projection, pif the architectural scale (paper
@@ -793,6 +890,57 @@ if (!window.DraftDrawingFormat) {
     };
   };
 
+  // PROJECT SPECIFICATIONS: what this job says that the office master does not.
+  // Only the differences persist — a project that accepts the master stores
+  // nothing, so improving a master section improves every drawing that never
+  // touched it. A copy of the whole master in every file would freeze each
+  // project at the master it was started from, which is the failure this shape
+  // exists to avoid.
+  //   off   — a master section this job does not use
+  //   body  — a master section this job rewords (the master text stays put)
+  //   added — a section this job has and the master does not; it carries its
+  //           own division and title, and its id is the drafter's number.
+  const specs = raw => {
+    const id = value => String(value ?? '').trim().slice(0, 40);
+    const line = value => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    const block = value => String(value ?? '').replace(/\r\n?/g, '\n').slice(0, 20000);
+    const division = value => {
+      const no = Number(value);
+      return Number.isInteger(no) && no >= 1 && no <= 99 ? no : null;
+    };
+    const seen = new Set();
+    const sections = (Array.isArray(raw?.sections) ? raw.sections : []).map(section => {
+      const sectionId = id(section?.id);
+      // A second entry for one id would make the page's answer depend on which
+      // copy it read first. The first wins and the rest are dropped.
+      if (!sectionId || seen.has(sectionId)) return null;
+      const added = section?.added === true;
+      const div = division(section?.div);
+      // An added section with no division has nowhere to print — it would load
+      // into the file and never appear on a page.
+      if (added && div === null) return null;
+      const off = section?.off === true;
+      const body = section?.body == null ? null : block(section.body);
+      const entry = { id: sectionId };
+      if (added) {
+        entry.added = true;
+        entry.div = div;
+        entry.title = line(section?.title);
+        entry.kind = oneOf(section?.kind, ['notes', 'terms', 'table', 'legend'], 'notes');
+        entry.body = body ?? '';
+      } else {
+        if (off) entry.off = true;
+        if (body !== null) entry.body = body;
+        // Neither off nor reworded: the job agrees with the master, so there is
+        // nothing to carry.
+        if (!off && body === null) return null;
+      }
+      seen.add(sectionId);
+      return entry;
+    }).filter(Boolean);
+    return { sections };
+  };
+
   // Backgrounds are at most two other levels, never the active one.
   const backgroundLevelIds = (rawIds, levelIds, activeLevelId) =>
     (Array.isArray(rawIds) ? rawIds : [])
@@ -813,6 +961,7 @@ if (!window.DraftDrawingFormat) {
     stairs,
     notes,
     roomTags,
+    electricDevices,
     fenestrations,
     fixtures,
     surfaceOpenings,
@@ -824,6 +973,10 @@ if (!window.DraftDrawingFormat) {
     underlays,
     projectInfo,
     zoneHeights,
+    sectionTable,
+    SECTION_TABLE_TYPES,
+    SECTION_TABLE_FIELDS,
+    specs,
     layout,
     tour,
     roofIntent,
