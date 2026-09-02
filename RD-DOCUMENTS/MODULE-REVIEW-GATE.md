@@ -114,7 +114,53 @@ really guards it, and says plainly that a new caller must bring its own.
 That is what "right but unclear" means: correct where it sits, and correct only
 because of something outside it.
 
-## Verdict 2 — `areas.js`: **right but unclear**
+## Verdict 2 — `areas.js`: **WRONG** (revised 2 Sep)
+
+Filed first as *right but unclear* for `polygonArea`'s unstated contract, which
+still stands and is now documented. But a second measurement, prompted by a
+question about stair openings, found a real defect in `computeAreas` — the first
+of the seventeen.
+
+### An opening is deducted whether or not it is on the floor
+
+```
+floor 20x14 = 280 sq ft
+
+opening 10x4 fully inside        deducts 40   net 240   correct
+opening HALF off the edge        deducts 40   net 240   should be net 260
+opening ENTIRELY outside         deducts 40   net 240   should be net 280
+```
+
+`openingsSqFt += polygonArea(opening.points)` — the full area of every record
+whose `hostId` names the floor, with **no clipping to the host**. An opening
+floating outside the building still removes its area from the permit figure.
+
+**Why the design made this possible, and why it is still the right design.** An
+opening here is not a hole cut into the slab outline: the floor polygon is never
+cut, and the level's figure is `gross − openings − garage`, arithmetic rather
+than geometry. That is a deliberate and good choice — it is why the slab can
+never split in two or pinch itself, and why this app needs none of the sliver of
+floor an ArchiCAD drafter leaves between a stair opening and an exterior wall to
+keep the slab whole.
+
+The arithmetic simply never asks the question the geometry used to answer for
+free: *is this hole actually in that floor?*
+
+**Reachable in exactly the workflow that found it.** Running a stair opening out
+to the exterior wall — the move the sliver exists to avoid — and overshooting by
+a few inches deducts the overshoot as though it were floor. Silent, and smaller
+than the truth, on a number that goes on a permit application.
+
+**Not fixed here — the fix needs a ruling.** Clipping the opening to its host is
+geometrically correct but wants a polygon-intersection routine the repo does not
+have. Refusing an opening not fully inside its host is far cheaper —
+`electric-rules.js` already carries a point-in-polygon `contains` — and matches
+the habit the repo already follows in `closets.placeIn()` and `parseScaleEntry`,
+which refuse rather than answer wrongly. Which of those, and whether the refusal
+lands at draw time or as a flag on the level's figure, is a decision, not a
+measurement.
+
+## The original verdict 2 finding — `polygonArea`'s contract
 
 127 lines, four exports, pure shoelace, and it states its convention at the top
 where a drafter can read it — areas are as built, an opening is deducted from
