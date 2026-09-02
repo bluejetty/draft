@@ -308,6 +308,39 @@ not thereby true.** A shallow clone explains all three too, and it is the
 duller explanation, which is the one that was right. What broke it was not
 more reasoning — it was trying to restore the backup and watching it fail.
 
+### 16. `draft-entry-coach-seen` cannot be renamed, and the name will lie
+
+A persisted key, like the two in item 7, but with a sharper edge: **127 of the
+137 spec files depend on it.**
+
+`tests/helpers.js` seeds it as ALREADY SEEN on every `openModel` call, and says
+why:
+
+> THE ENTRY COACH scrims the app a second after a first-ever open, and every
+> spec runs on a fresh profile -- so without this every one of them would find
+> its tools behind a tint.
+
+So a rename, or a change to what reads it, does not fail one test. It puts a
+full-screen scrim in front of 127 spec files at once and the suite goes red
+across the board. `entry-coach.spec.js` is the single spec that opts back in
+and exercises the real path.
+
+The user-facing half is worse than the test half. It is a key on every real
+drafter's machine: rename it and everybody who has already built their first
+house is shown the first-house sequence again, as though they had never been
+here.
+
+**And the name is going to lie.** When the first-house work lands there is no
+coach any more -- no arrows, no text -- and the flag will be named after a
+thing that no longer exists. Rename it anyway and you break both halves above.
+Leave the name, and put a comment at each of the four sites saying the name is
+historical.
+
+Four sites: `MODEL.dc.html:13304` and `:13336`, `tests/entry-coach.spec.js`,
+`tests/helpers.js:64`.
+
+---
+
 ## Not cleanup. Please do not.
 
 - **Do not strip the comments from `MODEL.dc.html`.** The comments carry the

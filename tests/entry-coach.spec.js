@@ -1,24 +1,27 @@
-// THE ENTRY COACH — the first press teaches the second.
+// THE FIRST HOUSE — the first press teaches the second.
 //
-// You arrive in MODEL by pressing the bone on the entry page. The logo does
-// not come with you and the bone does, so the one thing you already know how
-// to press is the one thing still on screen. A beat later everything around it
-// dims and it gets named:
+// You arrive in MODEL by pressing a 287px bone in the middle of the entry
+// page, and THE SAME BONE IS STILL THERE, the same size, in the same place.
+// A beat later everything around it dims. Press it again and a house exists.
 //
-//   PRESS BUTTON TO BUILD HOUSE PLAN
+// Two presses of one button that never moved, and nothing is asked and nothing
+// is chosen — which is why this is a ceremony and not a form.
 //
-// Two presses of the same button, in the same place, and you have a house.
-// Nothing is asked and nothing is chosen — which is why this is a ceremony and
-// not a form.
+// NO ARROWS AND NO WORDS (Movie, 2 Sep: "the user can figure it out"). They
+// were here because the bone that came with you used to be the 44px one in the
+// top bar — the same picture, a sixth the size, somewhere else — and something
+// had to explain where it went. Keeping the big one deletes the question
+// rather than answering it, which is why this spec no longer looks for
+// PRESS BUTTON TO BUILD HOUSE PLAN.
 //
 // The beat matters and is not decoration: the model area is seen unobstructed
-// first, and only then pointed at. A scrim that arrived with the page would
-// read as a wall between you and the app.
+// first. A scrim that arrived with the page would read as a wall between you
+// and the app.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
 const coach = page => page.locator('[data-entry-coach]');
-const line = page => page.locator('[data-entry-coach-line]');
+const bigBone = page => page.locator('[data-first-bone-press]');
 const bone = page => page.locator('[data-build-house]');
 
 // The coach is once-ever, so a spec that wants to see it has to arrive as
@@ -30,14 +33,41 @@ const bone = page => page.locator('[data-build-house]');
 const asNewcomer = { webgl: false, rails: false, entryCoach: true };
 
 test.describe('The entry coach', () => {
-  test('waits a beat, then names the bone', async ({ page }) => {
+  test('the big bone is there from the start; the scrim waits a beat', async ({ page }) => {
     await h.openModel(page, asNewcomer);
 
-    // The beat is the point: the model area is unobstructed at first.
-    await expect(coach(page)).toHaveCount(0);
+    // The bone does not wait for anything. It is plain HTML before <x-dc>, so
+    // it is on screen before React, the DC runtime and the class have booted —
+    // which is the whole reason it is not part of the component.
+    await expect(bigBone(page)).toBeVisible();
 
+    // The scrim does wait. The beat is the point: the model area is seen
+    // unobstructed first.
+    await expect(coach(page)).toHaveCount(0);
     await expect(coach(page)).toBeVisible({ timeout: 4000 });
-    await expect(line(page)).toHaveText('PRESS BUTTON TO BUILD HOUSE PLAN');
+
+    // And nothing is said. No arrows, no line of text — the button that has
+    // not moved is the whole instruction.
+    await expect(page.locator('[data-entry-coach-line]')).toHaveCount(0);
+    await expect(page.locator('[data-entry-coach-arrows]')).toHaveCount(0);
+  });
+
+  test('pressing the big bone invents a shape and builds the house', async ({ page }) => {
+    await h.openModel(page, asNewcomer);
+    await expect(coach(page)).toBeVisible({ timeout: 4000 });
+
+    await bigBone(page).click();
+    await h.waitForSaved(page);
+
+    // The house is the assertion. Before this change the press dismissed the
+    // scrim and then asked for an outline nobody had drawn — which is the bug
+    // this whole board exists to fix.
+    const saved = await h.savedDrawing(page);
+    expect(saved.walls.length).toBeGreaterThan(0);
+
+    // And the bone has done its one job.
+    await expect(bigBone(page)).toHaveCount(0);
+    await expect(coach(page)).toHaveCount(0);
   });
 
   test('the bone is cut out of the tint, not covered by it', async ({ page }) => {
@@ -63,7 +93,7 @@ test.describe('The entry coach', () => {
     expect(overCanvas).toBe(true);
   });
 
-  test('the second press builds the house, and the coach is spent', async ({ page }) => {
+  test('the top-bar bone also builds, and the scrim is spent', async ({ page }) => {
     await h.openModel(page, asNewcomer);
     await expect(coach(page)).toBeVisible({ timeout: 4000 });
 
@@ -78,13 +108,18 @@ test.describe('The entry coach', () => {
     await expect(coach(page)).toHaveCount(0);
   });
 
-  test('it can be waved away, and stays away', async ({ page }) => {
+  test('a press anywhere on the scrim builds, and it stays away', async ({ page }) => {
     await h.openModel(page, asNewcomer);
     await expect(coach(page)).toBeVisible({ timeout: 4000 });
 
-    // Waving it away and following it are the same statement -- "I have it" --
-    // so neither earns a second showing.
+    // A press ANYWHERE on the scrim builds too. The bone is the target and the
+    // scrim is the forgiveness: with nothing to aim at there is nothing to
+    // miss, and a first-timer who stabs at the screen gets a house rather than
+    // a dismissal.
     await coach(page).click({ position: { x: 40, y: 40 } });
+    await h.waitForSaved(page);
+    const built = await h.savedDrawing(page);
+    expect(built.walls.length).toBeGreaterThan(0);
     await expect(coach(page)).toHaveCount(0);
 
     await page.reload();
