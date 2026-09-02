@@ -39,5 +39,24 @@ knows its parent point.
 The boneyard becomes **two windows sitting side by side** rather than the one
 shelf strip it is today.
 
-<!-- next: what is in each window, and what the pair is for -->
+### Left window — the ISO 3D wireframe
+
+An **isometric 3D wireframe** of the building, with **each floor level's
+outline in its own colour**. The bone, standing up, with the levels readable
+apart at a glance.
+
+**It rotates by arrows, and it rotates in chunks.** Not a smooth orbit --
+each press turns it to the next view and stops there. Movie's reason, in his
+words: *simpler*.
+
+> Skipper's note, not Movie's: that is the same instinct as everywhere else
+> in the toy. The turtle turns in quarters, walls move in whole feet, the
+> iPad nudge moves in six inches. A stepped view is one a beginner cannot
+> land in a bad place, and it needs no drag handling -- so it is also less
+> to build than an orbit, not more.
+
+OPEN: how big is a chunk? Four views (90 degrees) or eight (45)? Eight reads
+the corners of an L, four is fewer presses to get anywhere.
+
+<!-- next: the right window -->
 
