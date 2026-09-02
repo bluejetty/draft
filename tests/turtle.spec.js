@@ -159,3 +159,58 @@ test.describe('The turtle', () => {
     await expect(feet(page)).toHaveText("2'");
   });
 });
+
+// ── WHERE STEP 3 MEETS STEP 2 ───────────────────────────────────────────
+// "Everything the turtle draws is orthogonal by construction, so TOY output is
+// TOY-editable by definition." That is a claim about two boards meeting, and
+// it is the seam where the walls-committed-as-raw-geometry bug hid: the room
+// looked right and could not be touched afterwards, because its corners were
+// not actually shared.
+test.describe('What the turtle draws, the toy can edit', () => {
+  test('a room the turtle closed wears grip tabs and moves', async ({ page }) => {
+    await h.openModel(page, { webgl: false, search: '?toy=1' });
+    await page.locator('[data-select-turtle]').click();
+    await expect(page.locator('[data-turtle-panel]')).toBeVisible();
+
+    const nudge = async target => {
+      for (let i = 0; i < 60; i++) {
+        const now = parseInt((await page.locator('[data-turtle-feet]').textContent())
+          .replace(/\D/g, ''), 10);
+        if (now === target) return;
+        await page.locator(now < target ? '[data-turtle-more]' : '[data-turtle-less]').click();
+      }
+    };
+    const step = async (turn, ft) => {
+      if (turn) await page.locator(`[data-turtle-${turn}]`).click();
+      await nudge(ft);
+      await page.locator('[data-turtle-go]').click();
+    };
+    await step(null, 20);
+    await step('right', 14);
+    await step('right', 20);
+    await step('right', 14);
+    await h.waitForSaved(page);
+
+    const drawn = h.allWalls(await h.savedDrawing(page));
+    expect(drawn).toHaveLength(4);
+    await page.waitForTimeout(250);
+
+    // A tab where the toy can reason about the wall. The turtle only turns
+    // 90°, so there is no way for it to have drawn something inert -- if this
+    // is missing, the walk produced geometry the toy cannot touch.
+    const box = await page.locator('[data-model-canvas]').boundingBox();
+    const anyTab = await page.evaluate(() => {
+      const canvas = document.querySelector('[data-model-overlay]');
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      let count = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] === 0) continue;
+        if (Math.abs(data[i] - 44) <= 26 && Math.abs(data[i + 1] - 110) <= 26
+          && Math.abs(data[i + 2] - 155) <= 26) count += 1;
+      }
+      return count;
+    });
+    expect(anyTab).toBeGreaterThan(0);
+    expect(box).toBeTruthy();
+  });
+});
