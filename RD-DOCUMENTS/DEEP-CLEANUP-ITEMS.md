@@ -223,6 +223,51 @@ regardless of how the entry sequence question lands.
 
 ---
 
+### 15. main's history was rewritten, and git cannot see past it
+
+Found while trying to judge which old branches were safe to delete. It
+explains a lot and it will waste somebody's afternoon if it is not written
+down.
+
+```
+main's own log        453 commits
+the repository        755 commits
+```
+
+`main` does **not** contain the subject *"BUILD HOUSE: one click generates the
+starter shell from the outline"* — a commit whose work is plainly in the app.
+So the history was squashed or filtered at some point, and old branches share
+almost no ancestry with what `main` is now.
+
+Three consequences, each of which looks like a different problem until you
+know the cause:
+
+- **`git branch --merged` under-reports.** Branches whose PRs merged show as
+  unmerged, because their commits are not ancestors of `main` any more.
+- **Matching by commit subject fails too**, since the rewrite changed the
+  subjects it kept.
+- **GitHub disagrees with git**, and GitHub is right. Its branches page shows
+  `1 ahead` where git counts 319, because it is reading its own record of the
+  merge rather than walking ancestry.
+
+So: **to judge an old branch, read the PR badge on the branches page.** A
+merged PR is proof the work landed. Git cannot tell you, and neither can a
+commit message.
+
+Two worked examples, both of which looked alarming and were fine:
+
+- `claude/new-session-1wmbue` — 1 commit ahead, *"Elevations hide a wall
+  standing behind a nearer wing's roof"*. That work **is** in `main` as
+  `e66d412`, delivered by `skipper/elevation-occlusion`. Same change, two
+  SHAs.
+- `devin/1787701415-section-marks` — git says 319 ahead; its top commits
+  include *"Extract the four pure 2D painters into render-2d.js"*, and
+  `render-2d.js` is in `main`.
+
+Nothing needs fixing. The rewrite is done and rewriting it back would be far
+worse. This entry exists so the next person does not spend an hour proving
+git wrong.
+
 ## Not cleanup. Please do not.
 
 - **Do not strip the comments from `MODEL.dc.html`.** The comments carry the
