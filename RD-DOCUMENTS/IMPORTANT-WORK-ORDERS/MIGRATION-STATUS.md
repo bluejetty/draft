@@ -90,16 +90,39 @@ untested outside. These are the ones the review gate is really for.
 
 ## Review status
 
-**Nothing has been reviewed yet.** Under the moving-house rule in
+**Ten of seventeen reviewed.** Under the moving-house rule in
 `PLAN-new-app.md`, a module is read before a new page references it, and gets
 one of three verdicts: *right as it is*, *right but unclear*, or *wrong* — and
 a wrong one is fixed in the **old** app first, because that is where it runs.
 
-Record each verdict here as it happens, with the PR that did it:
+This table is the **index**. The reasoning, the measurements and the controls
+behind each verdict live in `RD-DOCUMENTS/MODULE-REVIEW-GATE.md` — one record,
+two levels, not two homes.
 
-| module | verdict | PR | note |
-|---|---|---|---|
-| — | — | — | nothing reviewed yet |
+| module | verdict | note |
+|---|---|---|
+| `auto-dims.js` | right as it is | names its caller's duty in its own header |
+| `stair-rules.js` | right as it is | labels every number's provenance; §9 checklist still unworked |
+| `pdf-scan.js` | right but unclear | negative-scale guard lives in `MODEL.dc.html:3335`; harness added |
+| `areas.js` | right but unclear | returns 0 for a crossing outline; audit M6, now CONFIRMED reachable |
+| `build-house.js` | right but unclear | load-order capture — **fixed**, resolves at call time |
+| `auto-stair.js` | right but unclear | load-order capture — **fixed** |
+| `room-grow.js` | right but unclear | capture was dead — **removed** |
+| `toy-constraints.js` | right but unclear | three load-order captures — **fixed** |
+| `toy-context.js` | right but unclear | two captures — **fixed**; was one line from breaking |
+| `first-run.js` | right but unclear | capture — **fixed**; script-tagged nowhere, so it armed on first use |
+| `auto-windows.js` | not read | |
+| `bone-wallet.js` | not read | no harness yet |
+| `closets.js` | not read | |
+| `electric-rules.js` | not read | |
+| `gruff-drivethru.js` | not read | no harness yet |
+| `gruff-interview.js` | not read | |
+| `turtle.js` | not read | |
+
+**The gate's finding so far:** eight of ten are *unclear* for one reason —
+correct in the app, and held up by something outside the module that the module
+does not mention. That is the answer to "can this cross over as-is": mostly
+yes, but not on its own.
 
 ---
 

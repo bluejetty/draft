@@ -24,6 +24,13 @@ page.
 caught by measuring rather than by reasoning harder. So each verdict below cites
 a harness, a spec, or a probe, and says what it reported.
 
+## Where this sits
+
+`MIGRATION-STATUS.md` already asked for verdicts to be recorded in its own
+table, and this file was written without filling it — two homes for one record,
+which is a doc bug of my own making. Collapsed: **that table is the index, this
+file is the reasoning.** A verdict is a row there and a section here.
+
 ## The seventeen, as measured
 
 Sixteen are loaded only by `MODEL.dc.html`; `first-run.js` is loaded by nothing
