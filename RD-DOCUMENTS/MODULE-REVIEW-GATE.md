@@ -255,6 +255,58 @@ NBC text and the NBC text is in the repo. Whoever works that checklist flips
 `verified: false` and settles the 34"/36"/860mm dispute — which is a research
 task with a citable source, not a judgement call.
 
+## Verdict 5 — `build-house.js`: **right but unclear** (and the trap is aimed at the move)
+
+300 lines, four exports, pure, and its header states ownership as well as
+`auto-dims` does: *"The component keeps the commit layer (vertex pool, srcId
+links, collection writes); nothing here mints identity."*
+
+What it does not state is a **load-order dependency**. Line 8:
+
+```js
+const geo = window.DraftGeometry2D;
+```
+
+That binds at **load** time, not at call time. `footingRings` is the only export
+that uses it, and geometry-2d arriving later does not repair the binding:
+
+```
+build-house loaded BEFORE geometry-2d  ->  footingRings THREW
+                                           "Cannot read properties of undefined
+                                            (reading 'offsetOutline')"
+geometry-2d first (MODEL's order)      ->  2 rings
+```
+
+`MODEL.dc.html` gets it right — geometry-2d at line 13, build-house at line 27 —
+so this is **not a defect in the shipped app**. It is enforced entirely by the
+order of two script tags, seventeen lines apart, in a file the module cannot
+see.
+
+### Why this one is worse than verdicts 1 and 2
+
+`pdf-scan`'s missing guard and `areas`'s missing precondition both need a caller
+to pass bad data. This needs nothing but a **different script-tag order** — and
+writing new pages with their own script tags is precisely what the migration
+consists of. The failure is also badly shaped: the module loads without
+complaint, reports all four exports present, and throws only when the one
+dependent function is called. A smoke test that checks the module loaded would
+pass.
+
+Three of the five modules read so far carry a precondition enforced somewhere
+else and written nowhere. That is now the gate's main finding, not an incidental
+one.
+
+**The fix is one line and behaviour-identical when the order is already right:**
+resolve at call time rather than at load —
+
+```js
+geo.offsetOutline(...)              ->   window.DraftGeometry2D.offsetOutline(...)
+```
+
+Not applied here. It is a change to shipped code that is correct today, and the
+gate's rule is that a wrong module gets fixed in the old app first — this one is
+not wrong, it is undefended. Worth a ruling, and a cheap one.
+
 ## Method note — a quieter failure than a collision
 
 Verdict 2 needed one more measurement: whether a drafter can actually draw a
