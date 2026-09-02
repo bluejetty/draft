@@ -142,9 +142,35 @@ ring. `areas.js` is a **second consumer of that one absent guard**, and it was
 not among M6's list.
 
 That changes M6's shape: it is not a defect in one function, it is a missing
-precondition shared by every path that accepts a drafted outline. Whether a
-drafter can actually draw one remains unproven — the same INFERRED that M6
-carried, and the right next measurement rather than the right next assumption.
+precondition shared by every path that accepts a drafted outline.
+
+### Reachability: CONFIRMED
+
+M6 carried `INFERRED` on reachability. It is now measured, and a drafter **can**
+draw one.
+
+The reason it looked unreachable is that the **T-square is down by default**, and
+it forces every segment onto an axis — clicking a diagonal from `(10,-8)` to
+`(-10,8)` gives `|dx| > |dz|`, so it snaps horizontal and the crossing collapses.
+A rectangle survives because its segments are already axial. Stow the T-square
+with `t` and the lock is gone:
+
+```
+asked for : [[-10,-8],[10,8],[10,-8],[-10,8]]
+drew      : [[-10,-8],[10,8],[10,-8],[-10,8]]   <- shape asserted before reading area
+area      : 0                                    two 8x10 lobes would be 160
+```
+
+So: a drafter presses `t`, draws a crossing outline, and the shipped area
+function reports **zero** for a shape with 160 sq ft of floor in it. Nothing
+errors and nothing warns.
+
+**M6 moves from INFERRED to CONFIRMED**, and `areas.js` is the consumer where it
+surfaces as a number on a permit application rather than a misdrawn line.
+
+Found by two agents in sequence: Skipper diagnosed the snapping that made it
+look unreachable, and the T-square's default-down behaviour came from an earlier
+board. Neither half would have got there alone.
 
 **Recommended, not done here:** `areas.js` has a spec but no harness, and its
 spec costs 92 seconds in a browser to prove arithmetic that node settles in
