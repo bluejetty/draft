@@ -80,20 +80,43 @@ it was never the problem.
 
 ---
 
-## Open
+## Ruled
 
-**What shapes?** A plain rectangle is safe and will look identical every visit,
-which undercuts "generated". A rectangle, an L and a T with varied proportions
-would read as different houses without the generator needing to be clever.
+**Three shapes: a rectangle, an L and a T.** All three at **~1500 sq ft**, all
+on whole feet, because the app quantises to whole feet and a starter house that
+arrives on a half-inch is a starter house that argues with its own rules.
 
-There is a size to aim at without asking anybody: `gruff-interview.js` already
-defaults to a 3-bedroom, 2-storey house, and `room-standards.js` holds the
-minimums a room has to satisfy. A shape that cannot hold three bedrooms is the
-wrong shape however random it is.
+```
+RECTANGLE   1500 sq ft   50' x 30'   4 corners
+L           1500 sq ft   40' x 45'   6 corners
+T           1500 sq ft   46' x 45'   8 corners
+```
 
-**Does the big bone come back?** Decided: it is for the first house. Whether it
-returns on a later visit with an empty drawing, or only ever appears once, is
-not settled.
+Pick one at random, then vary the proportions a little within it so the same
+shape twice is not the same house twice. The corner counts matter as much as
+the areas: four, six and eight corners exercise three different amounts of the
+wall-joining and roof code on a beginner's very first press, which is where a
+generated house is most likely to expose something.
+
+**No text and no arrows.** Movie: *"the user can figure it out."* The tint and
+a button that has not moved are the whole instruction.
+
+### One thing to confirm
+
+**1500 sq ft is the outline — the footprint.** `gruff-interview.js` defaults to
+**two storeys**, so that is a ~3000 sq ft house, which is large. If 1500 is
+meant to be the finished house rather than the ground it covers, the footprint
+wants to be about 750 sq ft and every dimension above comes down by roughly a
+third.
+
+Cheap either way -- the numbers live in one table in `starter-shape.js` -- but
+worth answering before anyone measures a starter house and finds it enormous.
+
+## Still open
+
+**Does the big bone come back?** It is for the first house. Whether it returns
+on a later visit to an empty drawing, or appears exactly once ever, is not
+settled.
 
 ---
 
