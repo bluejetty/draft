@@ -203,15 +203,42 @@ and at zero the level goes flush and travels out with the wall.
 whatever was carrying the old 4'-6" is no longer needed. Worth stating because
 it means one press deletes structure, not just floor.
 
-OPEN, and it is a consistency question rather than a design one: this trims
-upstairs floor area as a **side effect of an outward push**, while the rule
-elsewhere says *"the only way they can reduce footprint is in the boneyard
-using the bone or foundation."* Those can both be true -- the push is not the
-user reducing a footprint, it is a consequence of a legality band -- but it is
-the one place the two rules touch, and a beginner who loses 2'-6" of bedroom
-to a press they thought was making the house bigger deserves to be told.
-Whether that is a message, a preview, or just something the wireframe shows
-happening is not decided.
+**ANSWERED -- they watch it happen and decide.** Movie:
+
+> *"they should visually see it and decide at that point what to do (see on
+> 3dISO)"*
+
+So the 2'-6" coming off the upstairs floors is not announced in a line of text
+and not buried in the result. It happens **on the left window, in front of
+them**, and the decision of whether to accept it is theirs at that moment.
+
+> Skipper's note: that is the third distinct job the 3D iso is doing, and the
+> three together are the case for it. It **picks** a level to edit. It
+> **mirrors** the state so the two windows agree. And it is where a
+> consequence you did not ask for becomes visible before you live with it.
+> A warning dialog would do the third job worse -- nobody reads "this will
+> remove 2'-6" from the floor above", and everybody sees a floor get shorter.
+
+### It is the cantilever ladder, walked backwards
+
+> Movie: *"it will be like backwards going out with cantilever and piles
+> kindof hey"*
+
+Which removes a rule rather than adding one. Going **out** from the wall the
+ladder is: free cantilever to 2'-0", nothing until 4'-6", then piles out to
+20'-0". An overhang shrinking under an outward push walks **the same ladder in
+reverse** -- piled, down to 4'-6", then the drop to 2'-0" free.
+
+So there is no separate "dead band" rule to implement. There is **one ladder,
+and the overhang always sits on a rung of it.** The 2'-6" trim is not a
+special case; it is what "always on a rung" costs when the rung below is
+2'-0".
+
+> Skipper's note, for whoever builds it: this means the constraint module
+> needs one function, not two. The same rungs that decide whether an outward
+> nudge is legal decide where a shrinking overhang is allowed to land. Two
+> features, one table -- and the pile ladder Movie gave earlier (8'-0" then
+> 10'-0", 18'-0" to the outer beam, 2'-0" past it) is that table's upper half.
 
 
 ### It is not a foundation rule. It is a "lower floor" rule
