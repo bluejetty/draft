@@ -30,7 +30,7 @@ collision by a distance, and the one most worth fixing.
 | the BUILD HOUSE button | `data-build-house` | **the bone button** |
 | the big button on the entry page | `index.html`, `.enter-bone` | **the entry bone** |
 | a wall's movable unit in TOY MODE | `toy-constraints.js` — *"a wall has a bone"* | **weld group** (see below) |
-| the boneyard's master geometry | `_boneyardOutlines` | **the master wireframe** (see below) |
+| the boneyard's master geometry | `_boneyardOutlines` | **the master frame** (see below) |
 
 The first three are the same idea — a bone is what you spend and the button is
 what you spend it on — so they can share the word. The last two are unrelated
@@ -92,21 +92,28 @@ basement, two floor levels and a roof.
 **The area** — the level layer under the level stack, never printing. It is the
 place, not the thing in it. Holds the master wireframe on its shelves.
 
-### MASTER WIREFRAME
+### MASTER FRAME
 
-**The thing in it** — the whole 3D skeleton the building hangs off. Every
-level's outline takes a **copy** from it, and each of its points has a stable
+**The thing in it** — the whole skeleton the building hangs off. Every level's
+outline takes a **copy** from it, and each of its points has a stable
 `pointId`.
 
-Ruled 2 Sep. "Bone" is dropped from geometry entirely: a bone is what you
-spend, and a wireframe is what the house is built on. Nothing is lost, because
-"bone" was never saying anything about the geometry that "wireframe" does not
+*"The boneyard frame"* and *"the master frame"* are the same thing. Prefer
+**master frame**: it says what the thing is rather than where it is kept, and
+it still reads correctly once the boneyard is not the only place you can see
+it.
+
+Ruled 2 Sep. "Bone" is dropped from geometry entirely and keeps only its own
+meaning — what you spend, and the button you spend it on. Nothing is lost,
+because "bone" never said anything about the geometry that "frame" does not
 say better.
 
 ### <LEVEL> FRAME
 
-One level's outline within the master wireframe: **MAIN FLOOR FRAME**,
+One level's outline within the master frame: **MAIN FLOOR FRAME**,
 **FOUNDATION FRAME**, **ROOF FRAME**, and so on.
+
+So the whole family is `<qualifier> FRAME` — master, or a level name.
 
 **Always qualified by a level name, never bare.** "Frame" on its own is taken
 twice over in this codebase — it is a render frame in the draw loop over a
@@ -114,8 +121,11 @@ thousand times, and it is a building element (`MODEL.dc.html:6655`, *"2\"-wide
 frame blocks at each jamb"*, and the same in `layout-plan.js`). A level name in
 front of it removes both collisions; without one it walks straight into them.
 
-`wireframe`, by contrast, is free: every use of it in the repository is inside
-`vendor/`.
+`wireframe`, by contrast, is free — every use of it in the repository is
+inside `vendor/` — but it is **not a synonym for the master frame.** A
+wireframe is *how the frame is drawn* in the boneyard's left window: edges
+only, a colour per level. The frame is the geometry; the wireframe is a view
+of it. The same frame drawn solid would still be the frame.
 
 ### COPY
 
@@ -255,7 +265,7 @@ Nothing here is done yet. Each is a rename, not a behaviour change.
 | now | proposed | why |
 |---|---|---|
 | "a wall's bone" (toy) | **weld group** | already the real name for it; "bone" is the currency |
-| `_boneyardOutlines` | **`_masterWireframe`** | it is the skeleton, not a bone; and "boneyard" is the place it is kept, not the thing |
+| `_boneyardOutlines` | **`_masterFrame`** | it is the skeleton, not a bone; and "boneyard" is the place it is kept, not the thing |
 | `SPEC-*.md` | **`RULES-*.md`** | frees "specification" for the drawing-set meaning |
 | "node" for an object | **object placement** | Movie's ruling, already agreed |
 
@@ -264,8 +274,7 @@ Nothing here is done yet. Each is a rename, not a behaviour change.
 - Is a roof **eave** an overhang for the purpose of the rules above? It is
   geometry that projects, but it has a designed width.
 - ~~**"Bone" for the 3D skeleton in the boneyard.**~~ **Settled 2 Sep:** the
-  boneyard is the area, the master wireframe is the geometry, and a single
-  level's outline is a `<LEVEL> FRAME`. Which also names the merge in advance
-  — if the bone and the foundation wireframe become one thing, it is the
-  FOUNDATION FRAME of the master wireframe, and there is nothing left to
-  decide.
+  boneyard is the area, the master frame is the geometry, and a single level's
+  outline is a `<LEVEL> FRAME`. Which also names the merge in advance — if the
+  bone and the foundation wireframe become one thing, it is the FOUNDATION
+  FRAME of the master frame, and there is nothing left to decide.
