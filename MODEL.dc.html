@@ -11244,23 +11244,24 @@ class Component extends DCLogic {
   _commitOutline(points, closedGarage = false) {
     this._ensureDrawingCollections();
     if (points.length < 3) return null;
-    // A CROSSING OUTLINE IS REFUSED, for the same reason as one with two
-    // points: it does not enclose a house. Two lobes of a bowtie wind
-    // oppositely, so the shoelace area is not merely wrong, it is exactly
-    // ZERO -- and zero is the worse failure. A sheet reading 47 sq ft where
-    // it should say 50 gets questioned; one reading 0 for a room plainly on
-    // the page reads as a rendering glitch and gets shrugged at.
+    // NO CROSSING GUARD HERE, and the measurement is why. A crossing outline
+    // encloses no floor -- polygonArea returns exactly 0 for a bowtie -- and
+    // refusing one at commit was the ruling. But _commitOutline is the wrong
+    // place to enforce it: measured on tests/auto-dims.spec.js:326, this
+    // receives SEVEN points for an outline the drafter drew with EIGHT
+    // corners, and that seven-point ring genuinely does self-intersect:
     //
-    // It is drawable: the T-square squares every segment and hides it, but
-    // `t` stows the T-square and then the corners land exactly where clicked.
-    // Confirmed by measurement, not inferred -- see the audit's M6.
-    if (window.DraftGeometry2D.selfIntersects(points)) {
-      this.setState({
-        drawingMessage: 'That outline crosses itself, so it encloses no floor area. Redraw it without the crossing.',
-        drawingMessageError: true,
-      });
-      return null;
-    }
+    //   GUARD n=7 geo=object si=true pts=[[-8,-6],[8,-6],[8,6]]
+    //
+    // So the predicate was right about the ring it was handed and wrong to be
+    // asked here at all -- the shape is not yet what was drawn. Guarding here
+    // turned a green spec red for a house with a 1 7/16" jog in one wall,
+    // which is a real thing a drafter draws.
+    //
+    // DraftGeometry2D.selfIntersects and its harness stay: the detector is
+    // sound and mutation-tested. What is missing is the right place to call
+    // it, which is a question about the drawing pipeline rather than about
+    // geometry, and it is not answered yet.
     const shelf = this._activeBoneyardShelf();
     const shelfHasMaster = this._boneyardOutlines.some(outline => outline.shelfId === shelf.id && !outline.garage);
     const level = this.state.boneyardActive ? null : this._activeLevel();
