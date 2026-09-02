@@ -163,9 +163,33 @@ movement rules from `HOW-THE-BONEYARD-WORKS.md`) is the real work either way.
 
 ---
 
-## Where the pages live
+## Where the pages live — one repo, and it is this one
 
-Repository root, beside every other page. Same origin, which is not cosmetic:
+**`bluejetty/draft`, at the root, beside every other page. There is no new
+repository and no new domain.** Everything stays on `draft.bluejetty.ca`, and
+`roughdrafter.com` keeps mirroring it hourly as it already does.
+
+New pages arrive as NEW FILES. Nothing existing is edited, moved or deleted:
+
+```
+MODEL.dc.html    untouched, still the app
+LAYOUT.dc.html   untouched
+index.html       untouched until the new entry is ready to take over
+support.js       untouched -- DC keeps running what it runs
+
+ENTRY.html       new
+first-run.js     already here, finally loaded
+```
+
+**A separate repository would break this before it started.** GitHub Pages
+gives one domain per repository, and `localStorage` and IndexedDB are
+per-domain. A new page on a different domain could not read the bone wallet,
+and a new MODEL page could not open a drawing the old MODEL saved. Not awkward
+-- forbidden by the browser, with no bridge but exporting a file by hand.
+
+Building on the same lot is what makes the old house habitable while the new
+one goes up. Once the new app is complete and self-sufficient, splitting it
+into its own repository is a day's work and can be done then. Same origin, which is not cosmetic:
 `localStorage` and IndexedDB are per-domain, and a new page that cannot read
 the drawing MODEL saves cannot do its job.
 
