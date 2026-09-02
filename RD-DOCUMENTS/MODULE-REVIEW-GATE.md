@@ -107,6 +107,36 @@ really guards it, and says plainly that a new caller must bring its own.
 That is what "right but unclear" means: correct where it sits, and correct only
 because of something outside it.
 
+## Finding 2 — all seventeen load under plain `node`
+
+Checked with `document` explicitly undefined:
+
+```
+areas.js            OK DraftAreas          4 exports
+auto-dims.js        OK DraftAutoDims       1
+auto-stair.js       OK DraftAutoStair      7
+bone-wallet.js      OK DraftBoneWallet     9
+build-house.js      OK DraftBuildHouse     4
+gruff-drivethru.js  OK DraftGruffDrivethru 5
+stair-rules.js      OK DraftStairRules    15
+```
+
+The other ten already had harnesses, so **every one of the seventeen is
+node-loadable**. Where a module touches the browser it does so *inside a
+function*, never at module scope — `pdf-scan.js` keeps its DOM in three of
+seven exports, `bone-wallet.js` keeps `localStorage` inside two `try` blocks
+and says so in its own header.
+
+**What that means for the move:** the 20,000-line page needs a browser. Its
+logic does not. A harness is available for every module in this set without
+touching any of them, which makes "prove it before a new page references it"
+a cheap instruction rather than an aspiration.
+
+It is also the strongest evidence for the plan that I have measured. Rule 5 —
+*new logic starts in a module* — was not a style preference; it is the reason
+this migration is a re-render rather than a rewrite. That work was already
+done, quietly, before anyone called it a strategy.
+
 ## Method note — two instrument errors, corrected
 
 The first census of this table was wrong twice, and both are worth recording
