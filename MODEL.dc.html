@@ -15172,6 +15172,43 @@ class Component extends DCLogic {
     return Math.max(planIn, fdnIn + insulIn) / 12;
   }
 
+  // Does this stair's opening sit inside the walls? The ring is the house
+  // outline inset by ONE WALL ASSEMBLY -- the thickest wall actually standing
+  // along it, plus the insulation lining the foundation on the lowest floor --
+  // which is the same setback _stairNudgeInsideWalls pushes toward.
+  //
+  // WHY THIS EXISTS (ruling, 2 Sep). The nudge shifts a stair inward and gives
+  // up silently when it cannot fit: a 14-riser stair needs 10'-10" of run, and
+  // drawn across a 10' house it was accepted anyway, left hanging over the
+  // floor edge, and its opening then DEDUCTED from the level's area as though
+  // the overhang were floor. A run that does not fit is not a stair, so it is
+  // refused rather than placed.
+  //
+  // The AUTOMATIC placement already refuses -- "no legal stair position" -- and
+  // this brings the hand-drawn tool up to the same standard.
+  _stairFitsInsideWalls(stair) {
+    // Ask the question the app answers at BUILD HOUSE: not "does it fit where
+    // it was drawn" but "can it be made to fit at all". _stairAutoFit slides a
+    // stair off the beams and one wall assembly inside the exterior, so a run
+    // drawn straight at a wall is legal as long as it can slide back. Only a
+    // stair that cannot fit ANYWHERE along its line is refused -- which needs
+    // the house to be narrower than the run plus both setbacks.
+    //
+    // Run on a COPY: refusing must not move the drafter's stair, and accepting
+    // must leave the real nudge to BUILD HOUSE exactly as before.
+    stair = { ...stair, start: { ...stair.start }, end: { ...stair.end } };
+    this._stairAutoFit(stair);
+    const outline = this._houseOutline(stair.levelId);
+    if (!outline || outline.points.length < 3) return true;   // nothing to fit inside
+    const ring = window.DraftGeometry2D.offsetOutline(
+      outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      -this._stairOpeningSetbackFt(stair.levelId));
+    if (!ring || ring.length < 3) return true;
+    const poly = this._stairOpeningFootprint(stair);
+    if (!poly) return true;
+    return poly.every(pt => this._pointInOutline(ring, pt));
+  }
+
   // Push the stair inward until every opening corner sits inside the
   // interior ring — the outline inset by the real wall assembly.
   _stairNudgeInsideWalls(stair) {
@@ -18776,6 +18813,39 @@ class Component extends DCLogic {
     );
     const shape = this._stairShape();
     const winders = shape === 'L' ? this._stairWinders() : 0;
+    // A run that does not fit is not a stair. Checked before the id is spent,
+    // so a refusal costs nothing and leaves no gap in the numbering.
+    const candidate = {
+      id: this._nextStairId, start, end, levelId: this._activeLevelId(), view: 'plan',
+      widthFt: this.state.stairWidth, riseFt: layout.riseFt, rail: this._stairRail(),
+      shape, turn: this._stairTurn(), winders, layer: STAIR_LAYER,
+    };
+    if (!this._stairFitsInsideWalls(candidate)) {
+      // Do not refuse a house that fits. A floor with no room for a straight
+      // run often has room for an L or a U -- that is the whole point of the
+      // turn -- so every GENERATED shape is tried before the stair is refused,
+      // and the one that fits is NAMED. A refusal that only says "it doesn't
+      // fit" reads like a broken app; one that says which shape works tells
+      // the drafter exactly what to change.
+      //
+      // The shape is not switched for them: picking straight over an L is a
+      // drafting decision, not arithmetic.
+      const rules = window.DraftStairRules;
+      const alt = (rules && rules.GENERATED_SHAPES ? rules.GENERATED_SHAPES : ['straight', 'L', 'U'])
+        .filter(id => id !== shape)
+        .find(id => this._stairFitsInsideWalls({ ...candidate, shape: id }));
+      const label = { straight: 'straight run', L: 'L', U: 'U' };
+      const article = { straight: 'a straight run', L: 'an L', U: 'a U' };
+      this._stairStart = null;
+      this._lockAngle = null;
+      this.setState({
+        drawingMessage: alt
+          ? `That ${label[shape] || shape} needs ${this._ftIn(layout.runFt)} of run and does not fit inside the walls from there — but ${article[alt] || alt} does. Change the stair shape and draw it again.`
+          : `That run needs ${this._ftIn(layout.runFt)} and does not fit inside the walls from there — no straight, L or U run fits on this floor. Make the floor bigger, or start the run further back.`,
+        drawingMessageError: true,
+      });
+      return;
+    }
     this._stairs.push({
       id: this._nextStairId++,
       start,
