@@ -140,12 +140,16 @@ The guess was reasonable and it was still a guess; leaving the strike-through
 because the wrong symmetry is the obvious thing to assume and the next person
 will assume it too.
 
-RULED 2 Sep: what happens on an **outward** move when the overhang is
-*smaller* than the move. The overhang is eaten to zero, the level stops
-hanging and becomes flush, and the remainder carries its edge out with the
-wall. So a 4'-0" overhang under a 10'-0" push absorbs 4'-0" and the edge then
-moves the other 6'-0". One move that changes behaviour halfway through, rather
-than a move that stops when the overhang is spent.
+OPEN -- still Skipper's inference, awaiting Movie: what happens on an
+**outward** move when the overhang is *smaller* than the move. An overhang of
+4'-0" cannot absorb a 10'-0" push. My reading is that it is eaten to zero, the
+level stops hanging and becomes flush, and the remaining 6'-0" carries its edge
+out -- one move changing behaviour halfway through. The alternative is that
+the push simply stops when the overhang is spent, which is a refusal rather
+than a conversion.
+
+(Briefly written up here as RULED on 2 Sep. It was not -- I read an "ok" as an
+answer to it. Corrected the same minute.)
 
 ### It is not a foundation rule. It is a "lower floor" rule
 
