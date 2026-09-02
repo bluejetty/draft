@@ -307,7 +307,7 @@ Not applied here. It is a change to shipped code that is correct today, and the
 gate's rule is that a wrong module gets fixed in the old app first — this one is
 not wrong, it is undefended. Worth a ruling, and a cheap one.
 
-## Finding 3 — the load-order trap is a pattern: **10 captures across 7 files**
+## Finding 3 — the load-order trap is a pattern: **13 captures across 8 files**
 
 Verdict 5 found it in one module. It is not one module.
 
@@ -347,18 +347,47 @@ firing.
 `toy-context` with an error naming `geometry-2d` — pointing at the wrong file
 entirely.
 
-### Two corrections to the count
+### Three more, destructured — and they are the SAFER shape
 
-An earlier sweep — mine, then repeated — reported **11 captures across 8 files**.
-Both numbers were one too many:
+```
+cut-view.js:28     const { WALL_TYPES } = window.DraftWallTypes
+cut-view.js:29     const { formatInchesOnly } = window.DraftFormatters
+layout-plan.js:10  const { WALL_TYPES, LEGACY_WALL_TYPES } = window.DraftWallTypes
+```
 
-- **`room-grow.js:108` is not a capture.** It is inside `seedFor`, resolved at
-  call time, and guarded: `window.DraftRoomStandards ? …stampCategory(b) : null`.
-  That is the *pattern to copy*, not an instance of the problem.
-- The sweep that would have caught the mistake missed six rows of its own,
-  because `window\.Draft[A-Za-z]+` **does not match the `2` in
-  `DraftGeometry2D`**. A character class that forgot digits nearly cleared six
-  real hazards.
+```
+layout-plan without wall-types  ->  THREW AT LOAD
+with wall-types first           ->  loaded clean
+```
+
+Destructuring cannot bind `undefined`, so it fails **at load, in the file that
+is actually wrong**. The plain `const geo = window.DraftGeometry2D` form binds
+`undefined` silently and throws much later from a different function. So the
+thirteen split into ten hazards and three warnings, and **the three are the
+pattern to prefer** — louder, and correctly located.
+
+`layout-plan.js` is the eighth file. It is a LAYOUT module rather than one of
+MODEL's seventeen, which is why it belongs on this list: the trap is
+repo-wide, not gate-scoped.
+
+### How the count was got wrong three times
+
+The number went 11 → 10 → 13 before it was right, and every step was a
+measurement error rather than a disagreement:
+
+- **11** counted `room-grow.js:108` as a capture. It is not: it sits inside
+  `seedFor`, resolves at call time, and is guarded —
+  `window.DraftRoomStandards ? …stampCategory(b) : null`. That line is the
+  *pattern to copy*, not an instance of the problem.
+- **10** was mine, and I called it definitive. Two faults partly cancelled:
+  the sweep that caught `room-grow` missed six rows of its own because
+  `window\.Draft[A-Za-z]+` **does not match the `2` in `DraftGeometry2D`**,
+  and the pattern was blind to destructuring entirely.
+- **13** is measured, both forms, with `layout-plan.js` proven to throw at load
+  and to load clean when `wall-types` precedes it.
+
+A character class that forgot digits nearly cleared six real hazards, and a
+confident "definitive" corrected a colleague's number in the wrong direction.
 
 `room-grow` shows the fix for all ten, and it is already in the repo: **resolve
 at call time and guard**. One line per capture, behaviour-identical wherever the
