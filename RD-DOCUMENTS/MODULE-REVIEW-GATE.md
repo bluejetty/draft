@@ -497,6 +497,15 @@ instead of carrying it and a reload every 59 minutes drips nothing, ever.
 Mutation-tested — `lastDripAt = now` in place of the carry fails with the exact
 millisecond values.
 
+**The ceiling reading is confirmed, 2 Sep.** "Ten a day" and "a ceiling of ten"
+are different rules that agree only for somebody who never spends — measured
+before asking: never spends, 24h → 10; spends as they go, 24h → **24**. Put to
+the owner, and the answer is the **ceiling**: hold at most ten, and a bone spent
+at nine comes back the next hour. That is what `DRIP_CAP` does and what the
+harness pins, so no change was needed. Recorded because the daily-allowance
+reading is a natural misreading of the same sentence, and the next person to
+have it should find it already settled.
+
 **And its honesty is the reason it passes.** Its header calls it an honour
 system by design: localStorage, editable with devtools, real enforcement waiting
 on the server ledger (#52). So the harness pins the **arithmetic**, not the
