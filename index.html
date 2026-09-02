@@ -194,8 +194,15 @@
           leaving = true;
           event.preventDefault();
           window.DraftBoneSound.crunch({ big: true });
-          // Long enough to hear the bone go, short enough that nobody wonders
-          // whether the press landed. The navigation happens either way.
+          // HELD, BUT DELIBERATELY NOT FOR THE WHOLE BONE. The big crunch runs
+          // 710ms (DraftBoneSound.BIG: the last bite starts at 0.45 and lasts
+          // 0.26). This waits 420, so the navigation does cut the final low
+          // bite off. That is the trade and not an oversight: the press has to
+          // be heard landing, and a page that sits still for three quarters of
+          // a second after a press reads as a page that did not take it.
+          // Holding the full 710 is a one-number change if that is ever judged
+          // wrong -- entry-coach.spec.js pins that the hold EXISTS, because
+          // without it the crunch is cut at nothing and the sound is a lie.
           setTimeout(() => { window.location.href = bone.href; }, 420);
         });
       })();

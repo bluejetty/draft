@@ -117,3 +117,50 @@ test.describe('The entry coach', () => {
     await expect(coach(page)).toHaveCount(0);
   });
 });
+
+// THE ENTRY PRESS IS HELD. The bone on the entry page is an ordinary link, so
+// without help the navigation starts on the click and the crunch is torn out
+// mid-bite -- a sound cut off by a page turn is worse than no sound at all.
+// index.html therefore takes the click, plays the bone, and turns the page on
+// a timer.
+//
+// This pins that the hold EXISTS. It deliberately does not pin its length as
+// an upper bound: the hold is 420ms against a 710ms bone, a chosen truncation
+// recorded at the number itself, and asserting a ceiling on a measured
+// duration is how a suite starts failing on a loaded runner rather than on a
+// broken app. The floor is safe in a way a ceiling is not -- a timer can be
+// late, never early.
+test('the entry bone is heard before the page turns', async ({ page }) => {
+  // The stub goes in ahead of bone-sound.js, whose own `if (!window
+  // .DraftBoneSound)` guard then leaves it alone. Times are written to
+  // sessionStorage because the thing being measured is a navigation, and the
+  // page that starts it is gone by the time there is an answer.
+  await page.addInitScript(() => {
+    try { sessionStorage.setItem('arrived:' + location.pathname, String(Date.now())); } catch (err) { /* nothing to record */ }
+    window.DraftBoneSound = {
+      crunch: opts => {
+        try { sessionStorage.setItem('crunch', JSON.stringify({ at: Date.now(), big: !!(opts && opts.big) })); } catch (err) { /* nothing to record */ }
+      },
+      announce: () => false,
+      hush: () => {},
+    };
+  });
+
+  await page.goto('/index.html');
+  await page.locator('.enter-bone').click();
+  await page.waitForURL(/MODEL\.dc\.html/, { timeout: 15000 });
+
+  const timing = await page.evaluate(() => ({
+    crunch: JSON.parse(sessionStorage.getItem('crunch') || 'null'),
+    arrived: Number(sessionStorage.getItem('arrived:/MODEL.dc.html')),
+  }));
+
+  // The BIG bone, not the build row's small one: this is the press that starts
+  // something, and the two are kept apart in bone-sound.js so they cannot drift.
+  expect(timing.crunch).not.toBeNull();
+  expect(timing.crunch.big).toBe(true);
+
+  // Held. 250 is well under the 420 the page asks for, so this reports a hold
+  // that was removed rather than a runner that was busy.
+  expect(timing.arrived - timing.crunch.at).toBeGreaterThanOrEqual(250);
+});
