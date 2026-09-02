@@ -8,26 +8,51 @@ on:
 jobs:
   playwright:
     runs-on: ubuntu-latest
-    # RAISED FROM 55, WHICH THE SUITE HAD JUST OUTGROWN.
+    # FOUR SHARDS, BECAUSE AN HOUR SERIAL HAD RUN OUT OF ROAD.
     #
-    # The run is serial by design -- workers: 1, fullyParallel: false -- so
-    # its wall clock is the sum of every spec, and it climbs with each board:
+    # The suite is serial by design -- workers: 1, fullyParallel: false -- so
+    # its wall clock was the sum of every spec, and it climbed with each board:
     #
     #   763 tests   51.8m   green
     #   772 tests   53.3m   green
-    #   784 tests   --      CANCELLED at 55m02s, twice
+    #   784 tests   55.0m   CANCELLED at the old 55-minute wall, twice
+    #   784 tests   57.9m   green, after the wall went to 90
     #
-    # That is not a flake and not a hung job. Both cancellations landed two
-    # seconds past this limit, on main's own head and on a PR, and the second
-    # one had already been mistaken for a mystery. Adding checkout, npm ci and
-    # a browser install on top of the run left no room at all.
+    # workers: 1 is not timidity. The specs share an origin -- one server, one
+    # localStorage -- so parallel workers on one machine would clobber each
+    # other. A SHARD GETS ITS OWN RUNNER AND THEREFORE ITS OWN ORIGIN, which is
+    # the only way to go parallel without giving that protection up.
     #
-    # 90 is headroom, not a target: it buys roughly another four hundred specs
-    # at the present rate. The real answer is to stop running an hour serially
-    # -- sharding is the obvious shape, since each shard gets its own runner
-    # and therefore its own origin, which is what workers: 1 is protecting --
-    # and that is a board of its own, not a line in this file.
-    timeout-minutes: 90
+    # Four, measured rather than guessed. A full local run of all 137 files,
+    # split by Playwright's own file assignment:
+    #
+    #   4 shards   21.3  15.3  16.7  17.5 min      slowest 21.3 vs 17.7 ideal   3.33x
+    #   6 shards   14.6  12.5  9.5  11.6  10.8  11.9                            4.87x
+    #   8 shards   11.6  9.6  10.7  4.7  7.4  9.3  7.4  10.2                    6.09x
+    #
+    # Efficiency falls as shards are added -- 83%, 81%, 76% -- because the split
+    # is by file COUNT and the heavy files cluster. undo-history-hardening is
+    # the one that breaks it: 25s per test against a 5.6s suite average. More
+    # shards cannot fix that; only hand-ordering the files could, and that has
+    # to be re-done every time a spec is added.
+    #
+    # So 4, and stop. It is a real 3.3x. Six would buy about another four
+    # minutes for fifty per cent more runner time. If that trade ever becomes
+    # worth it, this is a one-character change in two places.
+    #
+    # Those figures are local, where the run summed to 70.9 minutes against
+    # CI's 46 -- treat the ratios as sound and scale the absolutes by about
+    # two thirds. Each shard re-pays checkout, npm ci and the browser install
+    # (23s last measured), but they pay it in parallel: +30s to the wall clock,
+    # not four times over.
+    timeout-minutes: 40
+    strategy:
+      # ALL FOUR RESULTS, ALWAYS. A failing shard must not cancel its siblings:
+      # three green and one red is a diagnosis, and one red and three cancelled
+      # is a mystery.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,10 +60,13 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test
+      - run: npx playwright test --shard=${{ matrix.shard }}/4
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-traces
+          # Unique per shard: upload-artifact v4 rejects a duplicate name
+          # outright, so a shared one would lose the traces of whichever shard
+          # finished second -- exactly when they are wanted.
+          name: playwright-traces-shard-${{ matrix.shard }}
           path: test-results/
           retention-days: 7
