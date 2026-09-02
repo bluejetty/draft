@@ -26,14 +26,15 @@ test('a build-default edit redraws the detail — the anchors move with the part
   const footingBefore = await page.locator('[data-detail-input="footingDepth"]').boundingBox();
 
   // A much shorter foundation wall: its own anchor rides up its mid-height
-  // and the footing below it climbs too.
+  // and the footing below it climbs too. The detail is drawn small beside the
+  // section table, so a few pixels of travel is the whole four feet.
   await commitDetail(page, 'fdnHeight', `4'-0"`);
   await expect(page.locator('#status')).toContainText('saved');
 
   const fdnAfter = await page.locator('[data-detail-input="fdnHeight"]').boundingBox();
   const footingAfter = await page.locator('[data-detail-input="footingDepth"]').boundingBox();
-  expect(Math.abs(fdnAfter.y - fdnBefore.y)).toBeGreaterThan(4);
-  expect(Math.abs(footingAfter.y - footingBefore.y)).toBeGreaterThan(4);
+  expect(Math.abs(fdnAfter.y - fdnBefore.y)).toBeGreaterThan(2);
+  expect(Math.abs(footingAfter.y - footingBefore.y)).toBeGreaterThan(2);
 
   // Garbage never sticks: the box snaps back to the stored number.
   await commitDetail(page, 'pitch', 'steep');

@@ -197,11 +197,102 @@ const rect = (w, d, ids = ['N', 'E', 'S', 'W']) => ([
 
 // ── 6 · The clearance in front is unset, and honestly so ─────────────────
 {
-  // OPEN: Movie's number. Nothing may refuse a move for want of a clear strip
-  // until it has one, and the constant is the single place it lands.
-  check('the clear strip in front has no number yet',
-    C.CLEAR_STRIP_MIN_FT === null,
-    'a number appeared here without Movie supplying it');
+  // Movie supplied it on 1 Sep: 3'-0". It has one home, so the day a depth
+  // option or a second kind of object arrives there is one number to revisit.
+  check('the clear strip has exactly one home',
+    near(C.CLEAR_STRIP_MIN_FT, 3));
+}
+
+// ── 7 · AUTO-PLACE, UNASKED ──────────────────────────────────────────────
+// The toy never leaves a closet out of a secondary bedroom. The drafter may
+// move or delete it afterwards -- what matters is that they are deciding
+// against something rather than being asked to remember.
+{
+  // Two bedrooms and a bathroom side by side, each a plain rectangle. Walls
+  // are shared where the rooms meet, which is the ordinary case rather than a
+  // contrived one.
+  const walls = [
+    ...rect(12, 14, ['b1N', 'b1E', 'b1S', 'b1W']),
+    ...rect(12, 14, ['b2N', 'b2E', 'b2S', 'b2W']),
+    ...rect(8, 10, ['wcN', 'wcE', 'wcS', 'wcW']),
+  ];
+  const rooms = [
+    { id: 'bed1', category: 'bedroom', primary: true, wallIds: ['b1N', 'b1E', 'b1S', 'b1W'] },
+    { id: 'bed2', category: 'bedroom', wallIds: ['b2N', 'b2E', 'b2S', 'b2W'] },
+    { id: 'wc1', category: 'wc', wallIds: ['wcN', 'wcE', 'wcS', 'wcW'] },
+  ];
+  const run = C.autoPlace({ rooms, walls, openings: [] });
+
+  check('a secondary bedroom gets a closet without being asked',
+    run.placed.length === 1 && run.placed[0].roomId === 'bed2',
+    JSON.stringify(run.placed.map(p => p.roomId)));
+  // The suite is skipped on purpose: it gets an ensuite and a walk-in, which
+  // are their own thing, and the numbering that decides which room that is
+  // belongs to the plan rather than to this module.
+  check('the primary suite is left alone', !run.placed.some(p => p.roomId === 'bed1'));
+  check('and a bathroom is not a bedroom', !run.placed.some(p => p.roomId === 'wc1'));
+  check('the placed closet knows which room dimension it eats',
+    run.placed[0].dim === 'width' || run.placed[0].dim === 'depth',
+    JSON.stringify(run.placed[0]));
+  check('and it carries a real door', run.placed[0].door && run.placed[0].door.label === 'D36',
+    JSON.stringify(run.placed[0].door));
+
+  // NEVER A SECOND ONE. The toy places what is missing; a closet the drafter
+  // moved is still that room's closet, and a pass that ran twice must not
+  // hand them another.
+  const again = C.autoPlace({ rooms, walls, openings: [], existing: run.placed });
+  check('running again places nothing, because nothing is missing',
+    again.placed.length === 0, JSON.stringify(again.placed));
+
+  // THE ONLY NON-PLACEMENT IS A REFUSAL, and it reports. A closet standing
+  // over a window is worse than a bedroom without one: the first is wrong,
+  // the second is merely unfinished.
+  const glazed = ['b2N', 'b2E', 'b2S', 'b2W'].map((id, i) =>
+    ({ id: `g${i}`, wallId: id, offsetFt: 1, widthFt: 10, type: 'window' }));
+  const blocked = C.autoPlace({ rooms, walls, openings: glazed });
+  check('a bedroom with no clear wall is refused, not given a closet anyway',
+    blocked.placed.length === 0 && blocked.refused.length === 1
+      && blocked.refused[0].roomId === 'bed2',
+    JSON.stringify(blocked));
+  check('and the refusal says why', blocked.refused[0].reason === 'NO_CLEAR_WALL');
+}
+
+// ── 8 · THE CLEAR STRIP, and the seam it answers ─────────────────────────
+// toy-constraints.js knows nothing about closets. It asks whoever owns the
+// object whether it still fits, and this is that answer -- which is what lets
+// a bedroom refuse to shrink past its own closet without the constraint module
+// ever learning what a closet is.
+{
+  const closet = { id: 'c1', kind: 'closet', roomId: 'bed2', dim: 'depth' };
+  const room = depth => ({ id: 'bed2', clearWidthFt: 12, clearDepthFt: depth });
+  const ask = depth => C.clearanceFor(closet, { rooms: [room(depth)] });
+
+  // Movie's number, 1 Sep: 3'-0" of floor to stand on. The closet's own
+  // 2'-4 1/2" plus that strip is 5'-4 1/2", so a room shallower than that
+  // cannot hold an openable closet.
+  check('the minimum is Movie\'s 3\'-0", not a derived number',
+    near(C.CLEAR_STRIP_MIN_FT, 3), `${C.CLEAR_STRIP_MIN_FT}`);
+  check('a room too shallow to open the closet is refused',
+    ask(5).ok === false, JSON.stringify(ask(5)));
+  check('and one with the strip intact is not',
+    ask(6).ok === true, JSON.stringify(ask(6)));
+  check('the refusal carries both what was needed and what was left',
+    near(ask(5).needFt, 3) && near(ask(5).haveFt, 5 - C.FOOTPRINT_DEPTH_FT),
+    JSON.stringify(ask(5)));
+
+  // What it MEASURES is right regardless, and is the half that can be checked
+  // now: a 12ft room less the closet's own 2'-4 1/2" leaves 9'-7 1/2" to stand
+  // in.
+  check('but the strip it reports is the floor actually left in front',
+    near(ask(12).haveFt, 12 - C.FOOTPRINT_DEPTH_FT), `${ask(12).haveFt}`);
+  check('and it measures across the wall the closet stands against',
+    near(C.clearanceFor({ ...closet, dim: 'width' }, { rooms: [room(30)] }).haveFt,
+      12 - C.FOOTPRINT_DEPTH_FT),
+    'a closet on the width axis measured the depth');
+
+  // A thing that is not a closet is not this module's to answer for.
+  check('anything that is not a closet is somebody else\'s answer',
+    C.clearanceFor({ id: 'x', kind: 'stair', roomId: 'bed2' }, { rooms: [room(4)] }).ok === true);
 }
 
 // ── Report ───────────────────────────────────────────────────────────────

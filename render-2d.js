@@ -498,7 +498,13 @@ if (!window.DraftRender2D) {
       if (!skip0) { rect(a0, a0 + wallFt, cBack, cFront); ctx.stroke(); }
       if (!skip1) { rect(a1 - wallFt, a1, cBack, cFront); ctx.stroke(); }
       const frontIn = cFront - dir * wallFt;
-      const door = env.closetDoorFor(in1 - in0);
+      // The door is sized from the closet's OWN width, not from what is left
+      // between its side walls: Movie's trim is 4" each side on the outside
+      // face and the inside face does not care. So a run snugged into a
+      // crossing wall -- which skips a side wall and widens the inside -- gets
+      // the same door as one that is not, which is what "follows the closet
+      // width" means.
+      const door = env.closetDoorFor(a1 - a0);
       const doorC = (in0 + in1) / 2;
       if (door) {
         const g0 = doorC - door.widthFt / 2, g1 = doorC + door.widthFt / 2;

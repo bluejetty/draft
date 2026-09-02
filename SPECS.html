@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Draft — Specifications</title>
+  <script src="./shared-file-store.js"></script>
+  <script src="./drawing-format.js"></script>
+  <script src="./spec-master.js"></script>
+  <script src="./spec-pages.js"></script>
+  <script src="./electric-symbols.js"></script>
+  <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
+       critical path of the page. -->
+  <link rel="stylesheet" href="vendor/fonts.css" />
+  <script src="orientation-guard.js"></script>
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:#f5f5f4; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; }
+    .topbar { height:52px; display:flex; align-items:center; gap:14px; padding:0 20px; border-bottom:1px solid rgba(29,31,32,.16); background:#fff; }
+    .brand { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:21px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    .slash { color:rgba(29,31,32,.32); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:18px; }
+    .section { color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
+    .back { margin-left:auto; color:rgba(29,31,32,.56); text-decoration:none; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
+    .back:hover { color:#5980a6; }
+    main { width:min(1560px, calc(100vw - 32px)); margin:24px auto 40px; }
+    h1 { margin:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:27px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+    .intro { max-width:760px; margin:7px 0 0; color:rgba(29,31,32,.63); font-size:14px; line-height:1.5; }
+    .notice { display:none; margin-top:18px; padding:10px 12px; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:rgba(29,31,32,.68); font-size:12px; line-height:1.45; }
+    .notice.visible { display:block; }
+    .columns { display:grid; grid-template-columns:250px minmax(0,1fr) 300px; gap:16px; align-items:start; margin-top:20px; }
+    .card { border:1px solid rgba(29,31,32,.17); background:#fff; }
+    .card-title { padding:9px 12px; border-bottom:1px solid rgba(29,31,32,.12); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#5980a6; display:flex; align-items:center; gap:8px; }
+    .card-title .count { margin-left:auto; color:rgba(29,31,32,.42); font-size:11px; }
+    .card-body { padding:12px; }
+    .card-body.tight { padding:0; }
+
+    /* ── The contents list ─────────────────────────────────────────────── */
+    .toc { max-height:70vh; overflow:auto; }
+    .toc-div { padding:7px 12px 3px; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; border-top:1px solid rgba(29,31,32,.08); }
+    .toc-div:first-child { border-top:0; }
+    .toc-row { display:flex; align-items:center; gap:7px; width:100%; padding:4px 12px; border:0; background:none; text-align:left; cursor:pointer; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.03em; color:#1d1f20; }
+    .toc-row:hover { background:rgba(89,128,166,.09); }
+    .toc-row[aria-current="true"] { background:rgba(89,128,166,.16); }
+    .toc-row .id { color:rgba(29,31,32,.42); min-width:30px; }
+    .toc-row .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .toc-row.off .name, .toc-row.off .id { color:rgba(29,31,32,.32); text-decoration:line-through; }
+    .dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .dot.verify { background:#a06035; }
+    .dot.edited { background:#5980a6; }
+    .dot.added { background:#557a46; }
+
+    /* ── The editor ────────────────────────────────────────────────────── */
+    .field-label { margin-top:11px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:rgba(29,31,32,.55); }
+    .field-label:first-child { margin-top:0; }
+    .field { width:100%; border:1px solid rgba(29,31,32,.25); background:#fafafa; padding:6px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none; }
+    .field:hover, .field:focus { border-color:#5980a6; background:rgba(89,128,166,.07); }
+    textarea.field { min-height:230px; resize:vertical; line-height:1.45; font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:11px; }
+    .btn { height:26px; padding:0 10px; border:1px solid rgba(29,31,32,.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; }
+    .btn:hover { border-color:#5980a6; color:#5980a6; }
+    .btn[disabled] { opacity:.4; cursor:default; }
+    .btn-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .flag { margin-top:10px; padding:8px 10px; font-size:11px; line-height:1.45; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:rgba(29,31,32,.7); }
+    .flag.master { border-left-color:#5980a6; background:rgba(89,128,166,.08); }
+    .empty { color:rgba(29,31,32,.45); font-size:12px; line-height:1.5; }
+
+    /* ── The paper ─────────────────────────────────────────────────────── */
+    /* 11 x 8.5 landscape at 96 dpi, the size the office spec pages are. */
+    .sheets { display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .sheet { position:relative; width:1056px; height:816px; background:#fff; border:1px solid rgba(29,31,32,.2); box-shadow:0 1px 3px rgba(0,0,0,.08); padding:36px 36px 30px; transform-origin:top center; }
+    .sheet-head { display:flex; align-items:baseline; gap:10px; border-bottom:1.5px solid #1d1f20; padding-bottom:5px; margin-bottom:9px; }
+    .sheet-head .title { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:16px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; }
+    .sheet-head .job { margin-left:auto; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:rgba(29,31,32,.6); }
+    .sheet-cols { display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; height:695px; }
+    .sheet-col { overflow:hidden; }
+    .sheet-foot { position:absolute; left:36px; right:36px; bottom:11px; display:flex; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:rgba(29,31,32,.5); }
+    .sheet-foot .no { margin-left:auto; }
+
+    /* Spec type. Small, tight, upper — the way a spec column is set. */
+    .spec-item { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9.5px; line-height:1.32; letter-spacing:.01em; }
+    .spec-head { font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding-top:6px; }
+    .spec-head:first-child { padding-top:0; }
+    .spec-div { font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; border-bottom:1px solid #1d1f20; padding:7px 0 2px; margin-bottom:2px; }
+    .spec-div:first-child { padding-top:0; }
+    .spec-line { white-space:pre-wrap; }
+    .spec-row { display:grid; grid-template-columns:78px minmax(0,1fr); gap:5px; }
+    .spec-row.legend { grid-template-columns:34px minmax(0,1fr); align-items:center; }
+    .spec-row .cell-a { font-weight:600; }
+    .spec-row canvas { display:block; }
+    .spec-blank { color:rgba(29,31,32,.35); }
+    .spec-item[data-hit] { cursor:pointer; }
+    .spec-item[data-hit]:hover { background:rgba(89,128,166,.11); }
+    .spec-item[data-selected="true"] { background:rgba(89,128,166,.16); }
+    /* Off-sheet measuring pen: same width as a column, out of sight. */
+    #measure { position:absolute; left:-4000px; top:0; width:326px; visibility:hidden; }
+
+    #status { margin-top:14px; min-height:16px; color:#557a46; font-size:12px; }
+    .zoom-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+    .zoom-row .spacer { flex:1; }
+
+    @media (max-width:1500px) { .columns { grid-template-columns:230px minmax(0,1fr); } .editor-card { grid-column:1 / -1; } }
+    @media (max-width:980px) { .columns { grid-template-columns:1fr; } }
+
+    /* Printing: the sheets alone, at their true size, one per page. */
+    @page { size:11in 8.5in; margin:0; }
+    @media print {
+      body { background:#fff; }
+      .topbar, h1, .intro, .notice, #status, .zoom-row, .toc-card, .editor-card { display:none !important; }
+      main { width:auto; margin:0; }
+      .columns { display:block; }
+      .sheets { gap:0; }
+      .sheet { width:11in; height:8.5in; border:0; box-shadow:none; transform:none !important; break-after:page; }
+      .sheet:last-child { break-after:auto; }
+      .spec-item[data-selected="true"] { background:none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Draft</div>
+    <div class="slash">/</div>
+    <div class="section">Specifications</div>
+    <a class="back" href="./MODEL.dc.html" data-nav-model>&larr; Back to Model</a>
+  </header>
+  <main>
+    <h1>Specifications</h1>
+    <p class="intro">The written half of the set. The office master is the same for every job &mdash; this page is where a job says what it does differently, and only the differences save with the drawing. Sections marked <strong>verify</strong> carry numbers that belong to a job rather than to the office, so they need an answer before the set goes out.</p>
+    <div class="notice" id="no-drawing-notice">Browser storage is unavailable &mdash; showing the office master, read-only.</div>
+
+    <div class="columns">
+      <section class="card toc-card" aria-label="Contents">
+        <div class="card-title">Contents <span class="count" data-toc-count></span></div>
+        <div class="card-body tight"><div class="toc" data-toc></div></div>
+      </section>
+
+      <section aria-label="Specification pages">
+        <div class="zoom-row">
+          <button class="btn" data-zoom-out title="Smaller">&minus;</button>
+          <button class="btn" data-zoom-in title="Bigger">+</button>
+          <span class="count" data-page-count style="color:rgba(29,31,32,.5); font-size:11px;"></span>
+          <span class="spacer"></span>
+          <button class="btn" data-print>Print</button>
+        </div>
+        <div class="sheets" data-sheets></div>
+      </section>
+
+      <section class="card editor-card" aria-label="Section editor">
+        <div class="card-title">Section</div>
+        <div class="card-body" data-editor>
+          <p class="empty">Pick a section from the contents, or click one on the page.</p>
+        </div>
+      </section>
+    </div>
+    <div id="status" role="status"></div>
+    <div id="measure" aria-hidden="true"></div>
+  </main>
+
+  <script>
+    (async () => {
+      const format = window.DraftDrawingFormat;
+      const master = window.DraftSpecMaster;
+      const pager = window.DraftSpecPages;
+      const symbols = window.DraftElectricSymbols;
+      const BUCKET = 'model-drawing';
+
+      // ── The drawing ──────────────────────────────────────────────────────
+      // Same bucket as everything else: the specification is part of the
+      // drawing, not a document beside it.
+      let drawing = null, fileName = 'model-drawing.json';
+      try {
+        const file = await window.SharedFileStore.loadSharedFile(BUCKET);
+        if (file) { drawing = JSON.parse(await file.text()); fileName = file.name || fileName; }
+      } catch { drawing = null; }
+      if (!drawing) drawing = { version: format.VERSION };
+      const readOnly = !window.SharedFileStore;
+      if (readOnly) document.querySelector('#no-drawing-notice').classList.add('visible');
+
+      let specs = format.specs(drawing.specs);
+      const projectInfo = format.projectInfo(drawing.projectInfo);
+      const jobLine = [projectInfo.name, projectInfo.address].filter(Boolean).join('  ·  ')
+        || 'Untitled project';
+
+      // ── Master + overrides = the sections this job prints ────────────────
+      // The master is never written to. An override is a small record against
+      // a master id, so a master section improved next year improves this job
+      // too unless this job said otherwise.
+      const overrideFor = id => specs.sections.find(section => section.id === id) || null;
+      const resolved = () => {
+        const out = master.sections().map(section => {
+          const over = overrideFor(section.id);
+          return {
+            ...section,
+            off: !!over?.off,
+            body: over && typeof over.body === 'string' ? over.body : section.body,
+            edited: !!(over && typeof over.body === 'string'),
+            added: false,
+          };
+        });
+        specs.sections.filter(section => section.added).forEach(section => {
+          out.push({
+            id: section.id,
+            div: section.div,
+            divTitle: master.divisionTitle(section.div) || `DIVISION ${section.div}`,
+            title: section.title,
+            kind: section.kind,
+            body: section.body,
+            verify: false,
+            note: null,
+            off: false,
+            edited: false,
+            added: true,
+          });
+        });
+        // Division order, then the drafter's own numbering inside it.
+        return out.sort((a, b) => a.div - b.div || a.id.localeCompare(b.id, 'en', { numeric: true }));
+      };
+
+      const statusEl = document.querySelector('#status');
+      let statusTimer = null;
+      const showStatus = text => {
+        statusEl.textContent = text;
+        clearTimeout(statusTimer);
+        if (text) statusTimer = setTimeout(() => { statusEl.textContent = ''; }, 4000);
+      };
+
+      // ── Saving ───────────────────────────────────────────────────────────
+      // The `specs` key is the only one this page may write. Re-read inside
+      // the queue and write guarded by the revision just read, so a house
+      // drawn in another tab while this one sits open is never flattened —
+      // the same guard PROJECT and LAYOUT use.
+      const writeSpecsToStore = async (triesLeft = 3) => {
+        const store = window.SharedFileStore;
+        const at = await store.loadSharedFileAt(BUCKET);
+        let base = null;
+        if (at.file) {
+          try { base = JSON.parse(await at.file.text()); } catch { base = null; }
+        }
+        if (!base || typeof base !== 'object') base = drawing;
+        const merged = { ...base, specs };
+        const file = new File([JSON.stringify(merged)], fileName, { type: 'application/json' });
+        try {
+          await store.saveSharedFile(file, BUCKET, { ifRev: at.rev });
+        } catch (error) {
+          if (!error?.stale || triesLeft <= 0) throw error;
+          return writeSpecsToStore(triesLeft - 1);
+        }
+        drawing = merged;
+      };
+
+      let saveQueue = Promise.resolve();
+      const save = note => {
+        if (readOnly) return;
+        saveQueue = saveQueue.catch(() => {})
+          .then(() => writeSpecsToStore())
+          .then(() => showStatus(note || 'Saved with the drawing.'))
+          .catch(error => {
+            console.warn('Unable to save the specifications:', error);
+            showStatus('Could not save — is browser storage available?');
+          });
+      };
+
+      // Every change goes through here: the override list is normalised on the
+      // way in, so what the page holds is exactly what a reload would give it.
+      const setOverride = (id, changes) => {
+        const rest = specs.sections.filter(section => section.id !== id);
+        const current = overrideFor(id) || { id };
+        specs = format.specs({ sections: [...rest, { ...current, ...changes }] });
+      };
+      const dropOverride = id => {
+        specs = format.specs({ sections: specs.sections.filter(section => section.id !== id) });
+      };
+
+      // ── Painting a section into column-width elements ────────────────────
+      // One element per line, because a line is the smallest thing a column
+      // break may land between. The section heading is `keepWithNext`.
+      const el = (cls, text) => {
+        const node = document.createElement('div');
+        node.className = cls;
+        if (text != null) node.textContent = text;
+        return node;
+      };
+
+      // Only symbols the electric painter actually knows are drawn. The rest
+      // print as an empty cell: the legend says what the mark means, and the
+      // mark arrives when the painter learns it.
+      const SYMBOL_PAINTERS = {
+        'outlet-110': (ctx, size) => symbols.wallOutlet(ctx, size),
+      };
+      const legendCell = kind => {
+        const painter = SYMBOL_PAINTERS[kind];
+        if (!painter || !symbols) return el('spec-blank', '');
+        const canvas = document.createElement('canvas');
+        canvas.width = 32; canvas.height = 18;
+        const ctx = canvas.getContext('2d');
+        // The mark's stem runs in +y, so the legend turns it a quarter to lie
+        // along the row the way it does on a wall running left to right.
+        symbols.drawDevice(ctx, painter, 11, 9, 8, -Math.PI / 2);
+        return canvas;
+      };
+
+      const itemsFor = section => {
+        const items = [];
+        items.push({ key: `${section.id}::head`, node: (() => {
+          const node = el('spec-item spec-head', `${section.id}  ${section.title}`);
+          return node;
+        })(), keepWithNext: true, id: section.id });
+        const lines = section.kind === 'notes'
+          ? String(section.body || '').split('\n')
+          : null;
+        if (lines) {
+          lines.forEach((line, index) => {
+            items.push({
+              key: `${section.id}::${index}`,
+              node: el('spec-item spec-line', line || ' '),
+              keepWithNext: false,
+              id: section.id,
+            });
+          });
+        } else {
+          master.rows(section.body).forEach((cells, index) => {
+            const row = el(`spec-item spec-row${section.kind === 'legend' ? ' legend' : ''}`);
+            if (section.kind === 'legend') {
+              row.appendChild(legendCell(cells[0]));
+              row.appendChild(el('cell-b', cells[1] || cells[0]));
+            } else if (cells.length > 1) {
+              row.appendChild(el('cell-a', cells[0]));
+              row.appendChild(el('cell-b', cells.slice(1).join(' ')));
+            } else {
+              const only = el('cell-b', cells[0]);
+              only.style.gridColumn = '1 / -1';
+              row.appendChild(only);
+            }
+            items.push({ key: `${section.id}::${index}`, node: row, keepWithNext: false, id: section.id });
+          });
+        }
+        return items;
+      };
+
+      // The whole document as flowable items, division rules included.
+      const buildItems = () => {
+        const items = [];
+        let lastDiv = null;
+        resolved().filter(section => !section.off).forEach(section => {
+          if (section.div !== lastDiv) {
+            lastDiv = section.div;
+            items.push({
+              key: `div::${section.div}`,
+              node: el('spec-item spec-div', `${section.div}. ${section.divTitle}`),
+              keepWithNext: true,
+              id: null,
+            });
+          }
+          itemsFor(section).forEach(item => items.push(item));
+        });
+        return items;
+      };
+
+      // ── Flow and paint ───────────────────────────────────────────────────
+      const sheetsEl = document.querySelector('[data-sheets]');
+      const measureEl = document.querySelector('#measure');
+      const COLUMN_HEIGHT = 695; // .sheet-cols height, in px at 96 dpi
+      let selectedId = null;
+      // The sheet is 1056 px wide at true size, which is wider than the middle
+      // column on a laptop — so it opens a little reduced and zooms up.
+      let zoom = 0.8;
+
+      const repaint = () => {
+        const items = buildItems();
+        // Measure at column width by putting the real nodes in a hidden box
+        // the same width — the type is what it is, so the only honest height
+        // is the one the browser gives it.
+        measureEl.textContent = '';
+        items.forEach(item => measureEl.appendChild(item.node));
+        const measured = items.map(item => ({
+          key: item.key,
+          h: item.node.getBoundingClientRect().height,
+          keepWithNext: item.keepWithNext,
+        }));
+        const pages = pager.flow(measured, COLUMN_HEIGHT, 3);
+        const byKey = new Map(items.map(item => [item.key, item]));
+
+        sheetsEl.textContent = '';
+        pages.forEach((page, pageIndex) => {
+          const sheet = el('sheet');
+          sheet.dataset.sheet = String(pageIndex + 1);
+          sheet.style.transform = `scale(${zoom})`;
+          if (zoom !== 1) sheet.style.marginBottom = `${(zoom - 1) * 816}px`;
+          const head = el('sheet-head');
+          head.appendChild(el('title', pageIndex === 0 ? 'Specifications' : 'Specifications (cont.)'));
+          head.appendChild(el('job', jobLine));
+          sheet.appendChild(head);
+          const cols = el('sheet-cols');
+          page.forEach(column => {
+            const col = el('sheet-col');
+            column.forEach(key => {
+              const item = byKey.get(key);
+              if (!item) return;
+              if (item.id) {
+                item.node.dataset.hit = item.id;
+                item.node.dataset.selected = String(item.id === selectedId);
+              }
+              col.appendChild(item.node);
+            });
+            cols.appendChild(col);
+          });
+          sheet.appendChild(cols);
+          const foot = el('sheet-foot');
+          foot.appendChild(el('who', 'Office master specification'));
+          foot.appendChild(el('no', `Page ${pageIndex + 1} of ${pages.length}`));
+          sheet.appendChild(foot);
+          sheetsEl.appendChild(sheet);
+        });
+        document.querySelector('[data-page-count]').textContent =
+          `${pages.length} page${pages.length === 1 ? '' : 's'}`;
+        measureEl.textContent = '';
+      };
+
+      sheetsEl.addEventListener('click', event => {
+        const hit = event.target.closest('[data-hit]');
+        if (!hit) return;
+        select(hit.dataset.hit);
+      });
+
+      // ── Contents ─────────────────────────────────────────────────────────
+      const tocEl = document.querySelector('[data-toc]');
+      const renderToc = () => {
+        const list = resolved();
+        tocEl.textContent = '';
+        let lastDiv = null;
+        list.forEach(section => {
+          if (section.div !== lastDiv) {
+            lastDiv = section.div;
+            tocEl.appendChild(el('toc-div', `${section.div}. ${section.divTitle}`));
+          }
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = `toc-row${section.off ? ' off' : ''}`;
+          row.dataset.tocRow = section.id;
+          row.setAttribute('aria-current', String(section.id === selectedId));
+          row.appendChild(el('id', section.id));
+          row.appendChild(el('name', section.title));
+          const flag = section.added ? 'added' : section.edited ? 'edited' : section.verify ? 'verify' : '';
+          if (flag) {
+            const dot = el(`dot ${flag}`);
+            dot.title = flag === 'verify' ? 'Needs a per-project answer'
+              : flag === 'edited' ? 'Reworded for this job' : 'Added for this job';
+            row.appendChild(dot);
+          }
+          row.addEventListener('click', () => select(section.id));
+          tocEl.appendChild(row);
+        });
+        const on = list.filter(section => !section.off).length;
+        document.querySelector('[data-toc-count]').textContent = `${on} of ${list.length}`;
+      };
+
+      // ── Editor ───────────────────────────────────────────────────────────
+      const editorEl = document.querySelector('[data-editor]');
+      const renderEditor = () => {
+        const section = resolved().find(entry => entry.id === selectedId);
+        editorEl.textContent = '';
+        if (!section) {
+          editorEl.appendChild(el('empty', 'Pick a section from the contents, or click one on the page.'));
+          return;
+        }
+        editorEl.appendChild(el('field-label', `${section.id} — ${section.divTitle}`));
+        const title = document.createElement('input');
+        title.className = 'field';
+        title.dataset.sectionTitle = '';
+        title.value = section.title;
+        title.disabled = !section.added || readOnly;
+        title.title = section.added ? '' : 'Master section titles are the office’s — reword the body instead.';
+        editorEl.appendChild(title);
+
+        editorEl.appendChild(el('field-label', 'Text'));
+        const body = document.createElement('textarea');
+        body.className = 'field';
+        body.dataset.sectionBody = '';
+        body.value = section.body || '';
+        body.disabled = readOnly;
+        editorEl.appendChild(body);
+
+        if (section.verify) {
+          editorEl.appendChild(el('flag',
+            'These numbers belong to a job, not to the office. Confirm them against this project before the set goes out.'));
+        }
+        if (section.note) editorEl.appendChild(el('flag master', section.note));
+
+        const buttons = el('btn-row');
+        const button = (label, dataset, handler, disabled) => {
+          const node = document.createElement('button');
+          node.type = 'button';
+          node.className = 'btn';
+          node.textContent = label;
+          node.dataset[dataset] = '';
+          node.disabled = !!disabled || readOnly;
+          node.addEventListener('click', handler);
+          buttons.appendChild(node);
+          return node;
+        };
+        button('Save text', 'saveBody', () => {
+          if (section.added) {
+            setOverride(section.id, { added: true, div: section.div, title: title.value, kind: section.kind, body: body.value });
+          } else if (body.value === master.sections().find(entry => entry.id === section.id).body) {
+            // Typed back to the master word for word: carry nothing.
+            const over = overrideFor(section.id);
+            if (over?.off) setOverride(section.id, { body: undefined, off: true });
+            else dropOverride(section.id);
+          } else {
+            setOverride(section.id, { body: body.value });
+          }
+          save('Section saved with the drawing.');
+          refresh();
+        });
+        if (!section.added) {
+          button(section.off ? 'Use this section' : 'Not on this job', 'toggleOff', () => {
+            setOverride(section.id, { off: !section.off });
+            save(section.off ? 'Section back on the set.' : 'Section left off this set.');
+            refresh();
+          });
+          button('Back to master', 'resetSection', () => {
+            dropOverride(section.id);
+            save('Section back to the office master.');
+            refresh();
+          }, !section.edited && !section.off);
+        } else {
+          button('Delete section', 'deleteSection', () => {
+            dropOverride(section.id);
+            selectedId = null;
+            save('Section deleted.');
+            refresh();
+          });
+        }
+        editorEl.appendChild(buttons);
+      };
+
+      const select = id => { selectedId = id; refresh(); };
+      const refresh = () => { renderToc(); renderEditor(); repaint(); };
+
+      // ── Adding a section this job has and the office does not ────────────
+      const addCard = document.querySelector('.editor-card .card-title');
+      const addButton = document.createElement('button');
+      addButton.type = 'button';
+      addButton.className = 'btn';
+      addButton.style.marginLeft = 'auto';
+      addButton.dataset.addSection = '';
+      addButton.textContent = 'Add';
+      addButton.disabled = readOnly;
+      addButton.addEventListener('click', () => {
+        const used = new Set(resolved().map(section => section.id));
+        // Job sections number from J1 up, so they can never collide with an
+        // office id and are obvious on the page as this job's own.
+        let n = 1;
+        while (used.has(`J${n}`)) n += 1;
+        const id = `J${n}`;
+        setOverride(id, { added: true, div: 1, title: 'NEW SECTION', kind: 'notes', body: '' });
+        selectedId = id;
+        save('Section added.');
+        refresh();
+      });
+      addCard.appendChild(addButton);
+
+      // ── Zoom and print ───────────────────────────────────────────────────
+      const setZoom = next => {
+        zoom = Math.min(1.4, Math.max(0.5, Math.round(next * 10) / 10));
+        repaint();
+      };
+      document.querySelector('[data-zoom-in]').addEventListener('click', () => setZoom(zoom + 0.1));
+      document.querySelector('[data-zoom-out]').addEventListener('click', () => setZoom(zoom - 0.1));
+      document.querySelector('[data-print]').addEventListener('click', () => window.print());
+
+      // MEASURE AFTER THE TYPE ARRIVES, or the page breaks in the wrong places.
+      //
+      // The flow is driven by measured heights, and a height is only true for
+      // the font actually rendering. Barlow Condensed is narrower than the
+      // fallback, so measuring early wraps every paragraph to more lines than
+      // it will really take: items come out taller, fewer fit per column, and
+      // the whole spec pads out over more sheets than it needs. Worse than
+      // wrong is unstable — whether the webfont beat the first paint decided
+      // where the breaks landed, so the same job printed differently on two
+      // machines, and the suite went green or red on the same commit
+      // depending on the runner. Found from CI: the run that FAILED was the
+      // one that had measured correctly.
+      //
+      // One await settles it. Guarded because `document.fonts` is optional in
+      // the standard, and a page that will not paint at all is a worse
+      // failure than one that paginates loosely.
+      try { await document.fonts.ready; } catch {}
+      refresh();
+      document.body.dataset.specsReady = '1';
+    })();
+  </script>
+  <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
+  <script src="./traffic-counter.js" defer></script>
+</body>
+</html>
