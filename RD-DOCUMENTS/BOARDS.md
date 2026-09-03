@@ -279,3 +279,41 @@ worth the trip; "probably fine" is what walked past the first floors bug. This
 is also why the readout says `0/3` and not `0` — Movie, 3 Sep: "i like all
 that info down in the left corner keep adding to it and don't delete."
 
+
+### 7 · A tolerant default makes every wrong name pass
+
+Gilligan's, 3 Sep, found while reading `_wallJoins` before extracting it. His
+own DEFINITIONS entry documented a join kind as `corner`. The builder emits
+`miter`. `corner` is not a value anything in the app produces.
+
+His harness had five checks exercising `type: 'corner'` and all five passed —
+because `drawWallSegs2D` branches on `tee` / `continuation` / `multi` / `none`
+and mitres **everything else**. The default branch swallowed the invented name
+and produced exactly the right behaviour under it.
+
+So the checks were true and useless in the same breath: they proved *what the
+painter does with an unrecognised type*, under a name nobody had noticed was
+unrecognised. A reader following the entry would have written `type: 'corner'`,
+watched it work, and shipped it — and it breaks the day someone tightens the
+branch.
+
+**The rule: a test that exercises a named case proves the behaviour, not the
+name.** Where a default branch accepts anything, every name is
+test-equivalent, so the suite cannot tell a real one from an invented one. The
+name has to be checked against the **producer** — grep what actually emits it —
+and pinned by its own check: an unrecognised type must paint identically to the
+real one *on purpose*, so the tolerance is findable rather than accidental.
+
+This is the third of its family today and the family is worth naming. Each was
+a document asserting something about code that nobody had read back:
+
+- Gilligan's `body` retraction — current usage written down as if permanent.
+- Skipper's "nothing prints millimetres" — inferred from a grep that tested
+  one polarity of a two-polarity condition.
+- This one — a name inferred from behaviour instead of read off the producer.
+
+All three passed review, and two of them passed a green suite. **A document
+that describes code is a claim about the code, and it needs the same
+verification the code gets.** The dictionary is the artifact meant to prevent
+exactly this, which is why an error in it costs more than an error in a
+comment.

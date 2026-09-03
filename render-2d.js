@@ -668,7 +668,18 @@ if (!window.DraftRender2D) {
     if (!datum) return;
     const o = toS({ x: datum.x, y: env.elev || 0, z: datum.z });
     ctx.save();
-    ctx.strokeStyle = '#557a46';
+    // The marker's green was hardcoded here, which made it the one painter a
+    // skinned page could not re-colour. Measured on the skins, that literal
+    // scores 2.94 over the night floor wash -- under the 3.0 non-text floor,
+    // and a datum is the drafter's FIRST CLICK, so it lands on the building
+    // far more often than on bare page.
+    //
+    // The fallback is the same literal, and that is not a placeholder hiding a
+    // gap: MODEL.dc.html has no skins and its ground is always light, so this
+    // value IS correct for that page -- it is the day skin's value too. A
+    // caller that supplies colours gets its own; the one that does not keeps
+    // exactly what it painted before.
+    ctx.strokeStyle = (env.colors && env.colors.origin) || '#557a46';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(o.x, o.y, 6, 0, Math.PI * 2);

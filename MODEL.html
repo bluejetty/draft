@@ -619,6 +619,31 @@
     dimensions().forEach(dimension => R.drawDimension2D(ctx, toS, dimension, {}, env));
   };
 
+  // THE DATUM MADE VISIBLE. Tier 2d anchored the grid to the datum but never
+  // showed the point itself, so the drafter saw a grid whose origin was
+  // inferable only by counting squares. Same three states as the grid, from
+  // the same gridDatum(): a point, the back-filled world origin, or nothing.
+  //
+  // MODEL.dc.html guards this with `!this._isPrinting`. This page never
+  // prints, so the guard is the constant `false` and the marker always shows
+  // when a datum exists -- which is the whole point of drawing it.
+  const paintOrigin = () => {
+    const R = window.DraftRender2D;
+    if (!R) {
+      throw new Error('MODEL.html: cannot paint the origin, render-2d.js did '
+        + 'not load. Check the script order in the page head.');
+    }
+    // elev is inert here and passed anyway: toS is a plan projection reading
+    // x and z only, so the y it builds is dropped. Supplied rather than
+    // omitted because the painter reads `env.elev || 0` and a caller should
+    // answer the whole interface, not the part that happens to be observable.
+    R.drawOrigin2D(ctx, toS, {
+      datum: gridDatum(),
+      elev: 0,
+      colors: { origin: skin['draw-origin'] },
+    });
+  };
+
   const paint = () => {
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -633,6 +658,10 @@
         // after the walls and lines (6960) so a string is never buried under
         // the geometry it measures.
         paintDimensions();
+        // The datum marker goes on top of everything, as it does in the old
+        // page (MODEL.dc.html:6956, immediately before the committed lines):
+        // it is the one point the drafter must always be able to find.
+        paintOrigin();
       }
     } catch (err) {
       // The throw above is only useful if someone SEES it. paint() runs on

@@ -130,6 +130,19 @@ for (const theme of P.THEMES) {
     const dimOnFloor = P.contrast(v['draw-dim'], v['draw-floor'], v['surface-page']);
     check(`${theme}/${mode}  draw-dim over a floor (witness lines)`,
       dimOnFloor >= 3.0, `${dimOnFloor.toFixed(2)} (min 3.0)`);
+
+    // The datum marker is a ring and crosshairs -- non-text, so 3.0. Both
+    // grounds again, and the wash is the one that matters: a datum is the
+    // drafter's FIRST CLICK, which normally lands on the building, so the
+    // marker sits on a slab far more often than on bare page. render-2d.js
+    // hardcoded #557a46 for this and it measured 2.94 over the night wash --
+    // under the floor, in the exact place the marker usually lands.
+    const origOnPage = P.contrast(v['draw-origin'], v['surface-page']);
+    const origOnFloor = P.contrast(v['draw-origin'], v['draw-floor'], v['surface-page']);
+    check(`${theme}/${mode}  draw-origin on the page`,
+      origOnPage >= 3.0, `${origOnPage.toFixed(2)} (min 3.0)`);
+    check(`${theme}/${mode}  draw-origin over a floor`,
+      origOnFloor >= 3.0, `${origOnFloor.toFixed(2)} (min 3.0)`);
   }
 }
 
