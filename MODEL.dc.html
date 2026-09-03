@@ -7409,120 +7409,37 @@ class Component extends DCLogic {
 
   // The OUTLINE guide never prints — it is drafting scaffolding, not linework.
   _drawOutlines2D(ctx, toS) {
-    if (this._isPrinting) return;
-    // Scope colours: RED on the BONEYARD, where an edit moves every level;
-    // BLUE on a floor level, where an edit stays local — the app's red/blue
-    // all-levels language. Garage outlines speak the same language one shade
-    // over: ORANGE on the BONEYARD, PURPLE on the levels.
-    const hex = this.state.boneyardActive ? '#b04050' : '#5980a6';
-    const garageHex = this.state.boneyardActive ? '#cf7a1f' : '#7d5ba6';
-    const outlines = this.state.boneyardActive ? this._activeBoneyardOutlines() : this._activeOutlines();
-    const showHandles = ['outline', 'select'].includes(this.state.activeTool);
-    ctx.save();
-    ctx.lineWidth = 2;
-    outlines.forEach(outline => {
-      if (outline.points.length < 2) return;
-      const selected = this._selectedOutlines?.has(outline) === true;
-      const colour = outline.garage ? garageHex : hex;
-      ctx.strokeStyle = colour;
-      ctx.fillStyle = colour;
-      ctx.lineWidth = selected ? 3.5 : 2;
-      ctx.setLineDash([9, 5]);
-      ctx.beginPath();
-      const count = this._outlineSegmentCount(outline);
-      for (let index = 0; index < count; index++) {
-        const seg = this._outlineSegment(outline, index);
-        const a = toS(seg.start), b = toS(seg.end);
-        if (!index) ctx.moveTo(a.x, a.y);
-        if (seg.bulge) {
-          const c = toS(this._lineControlPoint(seg));
-          ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
-        } else {
-          ctx.lineTo(b.x, b.y);
-        }
-      }
-      ctx.stroke();
-      ctx.setLineDash([]);
-      if (outline.garage) {
-        const centroid = outline.points.reduce(
-          (sum, point) => ({ x: sum.x + point.x, z: sum.z + point.z }),
-          { x: 0, z: 0 },
-        );
-        const s = toS({ x: centroid.x / outline.points.length, z: centroid.z / outline.points.length });
-        ctx.font = '600 11px "Barlow Condensed", system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('GARAGE', s.x, s.y);
-      }
-      if (showHandles) {
-        outline.points.forEach(point => {
-          const s = toS(point);
-          ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
-        });
-      }
-      // Fenestration marks live on masters only, so they show on the BONEYARD.
-      (outline.marks || []).forEach(mark => this._drawBoneyardMark2D(ctx, toS, outline, mark, colour));
+    window.DraftRender2D.drawOutlines2D(ctx, toS, {
+      isPrinting: this._isPrinting,
+      boneyardActive: this.state.boneyardActive,
+      outlines: this._activeOutlines(),
+      boneyardOutlines: this._activeBoneyardOutlines(),
+      showHandles: ['outline', 'select'].includes(this.state.activeTool),
+      isSelected: outline => this._selectedOutlines?.has(outline) === true,
+      segmentCount: outline => this._outlineSegmentCount(outline),
+      segment: (outline, index) => this._outlineSegment(outline, index),
+      controlPoint: seg => this._lineControlPoint(seg),
+      geometryFor: (o, m) => this._boneyardMarkGeometry(o, m),
+      markPlacement: pt => this._boneyardMarkPlacement(pt),
+      // Live interaction state. A caller working from a saved drawing passes
+      // none of it and the preview branches stay inert.
+      activeTool: this.state.activeTool,
+      fenestrationType: this.state.fenestrationType,
+      outlineGarage: this.state.outlineGarage,
+      snapPt: this._snapPt,
+      outlineDrawing: this._outlineDrawing,
+      outlinePoints: this._outlinePoints,
+      outlineStart: this._outlineStart,
+      frozenEnd: this.state.lengthFrozen && this._frozenTool === 'outline' ? this._frozenEnd : null,
+      colors: {
+        boneyard: '#b04050',
+        level: '#5980a6',
+        garageBoneyard: '#cf7a1f',
+        garageLevel: '#7d5ba6',
+        traceHouse: '#c0392b',
+        traceAttached: '#3f7fd6',
+      },
     });
-    // The FENESTRATION tool on the BONEYARD ghosts the mark it would place
-    // on the master edge under the cursor.
-    if (this.state.boneyardActive && this.state.activeTool === 'fenestration'
-        && this.state.fenestrationType !== 'stairs' && this._snapPt) {
-      const placement = this._boneyardMarkPlacement(this._snapPt);
-      if (placement && !placement.error) {
-        const ghost = {
-          edgeId: placement.edgeId,
-          offsetFt: placement.offsetFt,
-          widthFt: placement.widthFt,
-          type: this.state.fenestrationType === 'window' ? 'window' : 'door',
-        };
-        ctx.globalAlpha = 0.55;
-        this._drawBoneyardMark2D(ctx, toS, placement.outline, ghost, hex);
-        ctx.globalAlpha = 1;
-      }
-    }
-    // In-progress preview: placed corners plus a rubber band to the cursor,
-    // with a close ring on the start point once the outline can close.
-    if (this._outlineDrawing && this._outlinePoints.length) {
-      // The live trace wears its top-bar button's colour so the drafter
-      // always knows what they are drawing: HOUSE red, ATTACHED garage
-      // blue, DETACHED garage purple. Committed outlines fall back to the
-      // red/blue edit-scope language above.
-      const drawHex = this.state.outlineGarage === 'attached' ? '#3f7fd6'
-        : this.state.outlineGarage === 'detached' ? '#7d5ba6'
-        : '#c0392b';
-      ctx.strokeStyle = drawHex;
-      ctx.fillStyle = drawHex;
-      ctx.setLineDash([5, 4]);
-      ctx.beginPath();
-      this._outlinePoints.forEach((point, index) => {
-        const s = toS(point);
-        if (index) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
-      });
-      const cursor = this.state.lengthFrozen && this._frozenTool === 'outline' && this._frozenEnd
-        ? this._frozenEnd : this._snapPt;
-      if (cursor) { const s = toS(cursor); ctx.lineTo(s.x, s.y); }
-      ctx.stroke();
-      ctx.setLineDash([]);
-      this._outlinePoints.forEach(point => {
-        const s = toS(point);
-        ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
-      });
-      // An ATTACHED garage run finishes on its LAST point (double-click /
-      // Enter there); a DETACHED garage and a house outline close back on
-      // the START point, so those only ring the start.
-      const rings = [];
-      if (this._outlinePoints.length >= 3 && this._outlineStart) rings.push(this._outlineStart);
-      if (this.state.outlineGarage === 'attached' && this._outlinePoints.length >= 4) {
-        rings.push(this._outlinePoints[this._outlinePoints.length - 1]);
-      }
-      rings.forEach(ring => {
-        const sc = toS(ring);
-        ctx.beginPath(); ctx.arc(sc.x, sc.y, 7.5, 0, Math.PI * 2);
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      });
-    }
-    ctx.restore();
   }
 
   // A mark draws as a heavy stroke across its opening width with jamb ticks

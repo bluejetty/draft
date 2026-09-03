@@ -1011,6 +1011,137 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+
+  // ─── Outlines, their marks, and the trace in progress ─────────────────────
+  // Committed outlines dashed in the edit-scope colours -- RED on the
+  // BONEYARD where an edit moves every level, BLUE on a floor level where it
+  // stays local, and one shade over for garages -- plus their fenestration
+  // marks, the ghost mark under the cursor, and the rubber band while a new
+  // outline is being traced.
+  //
+  // The last of those reads live interaction state (snapPt, outlineDrawing,
+  // outlinePoints, activeTool). A caller working from a SAVED drawing has
+  // none of it: pass outlineDrawing false and snapPt null and those branches
+  // simply do not fire, leaving the committed outlines. That is why the
+  // painter is not split in two -- the preview half costs a caller nothing
+  // to ignore.
+  function drawOutlines2D(ctx, toS, env) {
+    if (env.isPrinting) return;
+    // Scope colours: RED on the BONEYARD, where an edit moves every level;
+    // BLUE on a floor level, where an edit stays local — the app's red/blue
+    // all-levels language. Garage outlines speak the same language one shade
+    // over: ORANGE on the BONEYARD, PURPLE on the levels.
+    const hex = env.boneyardActive ? env.colors.boneyard : env.colors.level;
+    const garageHex = env.boneyardActive ? env.colors.garageBoneyard : env.colors.garageLevel;
+    const outlines = env.boneyardActive ? env.boneyardOutlines : env.outlines;
+    const showHandles = env.showHandles;
+    ctx.save();
+    ctx.lineWidth = 2;
+    outlines.forEach(outline => {
+      if (outline.points.length < 2) return;
+      const selected = env.isSelected(outline);
+      const colour = outline.garage ? garageHex : hex;
+      ctx.strokeStyle = colour;
+      ctx.fillStyle = colour;
+      ctx.lineWidth = selected ? 3.5 : 2;
+      ctx.setLineDash([9, 5]);
+      ctx.beginPath();
+      const count = env.segmentCount(outline);
+      for (let index = 0; index < count; index++) {
+        const seg = env.segment(outline, index);
+        const a = toS(seg.start), b = toS(seg.end);
+        if (!index) ctx.moveTo(a.x, a.y);
+        if (seg.bulge) {
+          const c = toS(env.controlPoint(seg));
+          ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
+        } else {
+          ctx.lineTo(b.x, b.y);
+        }
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (outline.garage) {
+        const centroid = outline.points.reduce(
+          (sum, point) => ({ x: sum.x + point.x, z: sum.z + point.z }),
+          { x: 0, z: 0 },
+        );
+        const s = toS({ x: centroid.x / outline.points.length, z: centroid.z / outline.points.length });
+        ctx.font = '600 11px "Barlow Condensed", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('GARAGE', s.x, s.y);
+      }
+      if (showHandles) {
+        outline.points.forEach(point => {
+          const s = toS(point);
+          ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
+        });
+      }
+      // Fenestration marks live on masters only, so they show on the BONEYARD.
+      (outline.marks || []).forEach(mark => drawBoneyardMark2D(ctx, toS, outline, mark, colour, env));
+    });
+    // The FENESTRATION tool on the BONEYARD ghosts the mark it would place
+    // on the master edge under the cursor.
+    if (env.boneyardActive && env.activeTool === 'fenestration'
+        && env.fenestrationType !== 'stairs' && env.snapPt) {
+      const placement = env.markPlacement(env.snapPt);
+      if (placement && !placement.error) {
+        const ghost = {
+          edgeId: placement.edgeId,
+          offsetFt: placement.offsetFt,
+          widthFt: placement.widthFt,
+          type: env.fenestrationType === 'window' ? 'window' : 'door',
+        };
+        ctx.globalAlpha = 0.55;
+        drawBoneyardMark2D(ctx, toS, placement.outline, ghost, hex, env);
+        ctx.globalAlpha = 1;
+      }
+    }
+    // In-progress preview: placed corners plus a rubber band to the cursor,
+    // with a close ring on the start point once the outline can close.
+    if (env.outlineDrawing && env.outlinePoints.length) {
+      // The live trace wears its top-bar button's colour so the drafter
+      // always knows what they are drawing: HOUSE red, ATTACHED garage
+      // blue, DETACHED garage purple. Committed outlines fall back to the
+      // red/blue edit-scope language above.
+      const drawHex = env.outlineGarage === 'attached' ? env.colors.traceAttached
+        : env.outlineGarage === 'detached' ? env.colors.garageLevel
+        : env.colors.traceHouse;
+      ctx.strokeStyle = drawHex;
+      ctx.fillStyle = drawHex;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      env.outlinePoints.forEach((point, index) => {
+        const s = toS(point);
+        if (index) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
+      });
+      const cursor = env.frozenEnd
+        ? env.frozenEnd : env.snapPt;
+      if (cursor) { const s = toS(cursor); ctx.lineTo(s.x, s.y); }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      env.outlinePoints.forEach(point => {
+        const s = toS(point);
+        ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
+      });
+      // An ATTACHED garage run finishes on its LAST point (double-click /
+      // Enter there); a DETACHED garage and a house outline close back on
+      // the START point, so those only ring the start.
+      const rings = [];
+      if (env.outlinePoints.length >= 3 && env.outlineStart) rings.push(env.outlineStart);
+      if (env.outlineGarage === 'attached' && env.outlinePoints.length >= 4) {
+        rings.push(env.outlinePoints[env.outlinePoints.length - 1]);
+      }
+      rings.forEach(ring => {
+        const sc = toS(ring);
+        ctx.beginPath(); ctx.arc(sc.x, sc.y, 7.5, 0, Math.PI * 2);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+    }
+    ctx.restore();
+  }
+
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
@@ -1023,6 +1154,7 @@ if (!window.DraftRender2D) {
     drawFloor2D,
     drawBoneyardMark2D,
     drawDimension2D,
+    drawOutlines2D,
   });
 })();
 }
