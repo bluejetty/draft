@@ -8122,70 +8122,16 @@ class Component extends DCLogic {
   }
 
   _drawDimension2D(ctx, toS, dimension, options = {}) {
-    const a = toS(dimension.start);
-    const b = toS(dimension.end);
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const length = Math.hypot(dx, dy);
-    if (length < 1) return;
-    const nx = -dy / length;
-    const ny = dx / length;
-    const offset = options.preview ? 14 : 19;
-    const da = { x:a.x + nx * offset, y:a.y + ny * offset };
-    const db = { x:b.x + nx * offset, y:b.y + ny * offset };
-    const value = Math.hypot(dimension.end.x - dimension.start.x, dimension.end.z - dimension.start.z);
-    const label = this.state.units === 'imperial' ? this._ftIn(value) : this._metric(value);
-    const color = options.preview ? 'rgba(89,128,166,0.58)' : options.selected ? '#5980a6' : '#365e86';
-    const arrow = (point, angle) => {
-      const size = 5;
-      ctx.beginPath();
-      ctx.moveTo(point.x, point.y);
-      ctx.lineTo(point.x + size * Math.cos(angle + 2.65), point.y + size * Math.sin(angle + 2.65));
-      ctx.lineTo(point.x + size * Math.cos(angle - 2.65), point.y + size * Math.sin(angle - 2.65));
-      ctx.closePath();
-      ctx.fill();
-    };
-    ctx.save();
-    if (options.selected) {
-      ctx.strokeStyle = 'rgba(89,128,166,0.35)';
-      ctx.lineWidth = 7;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y);
-      ctx.stroke();
-      ctx.lineCap = 'butt';
-    }
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = options.selected ? 2 : 1;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y); ctx.lineTo(da.x, da.y);
-    ctx.moveTo(b.x, b.y); ctx.lineTo(db.x, db.y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y);
-    ctx.stroke();
-    const angle = Math.atan2(db.y - da.y, db.x - da.x);
-    arrow(da, angle);
-    arrow(db, angle + Math.PI);
-    const midX = (da.x + db.x) / 2;
-    const midY = (da.y + db.y) / 2;
-    // Aligned text: the label runs along the dimension line, normalized so it
-    // reads from the bottom or the right edge of the sheet, never the left.
-    let textAngle = angle;
-    while (textAngle >= Math.PI / 2) textAngle -= Math.PI;
-    while (textAngle < -Math.PI / 2) textAngle += Math.PI;
-    ctx.font = "600 11px 'Barlow Condensed', system-ui, sans-serif";
-    const textWidth = ctx.measureText(label).width;
-    ctx.translate(midX, midY);
-    ctx.rotate(textAngle);
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.fillRect(-textWidth / 2 - 3, -8, textWidth + 6, 15);
-    ctx.fillStyle = color;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, 0, 0);
-    ctx.restore();
+    window.DraftRender2D.drawDimension2D(ctx, toS, dimension, options, {
+      label: value => (this.state.units === 'imperial' ? this._ftIn(value) : this._metric(value)),
+      colors: {
+        stroke: '#365e86',
+        selected: '#5980a6',
+        selectedHalo: 'rgba(89,128,166,0.35)',
+        preview: 'rgba(89,128,166,0.58)',
+        labelBack: 'rgba(255,255,255,0.92)',
+      },
+    });
   }
 
   // Draws one note in screen space: the leader running from the text block to

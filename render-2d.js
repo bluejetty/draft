@@ -936,6 +936,81 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+
+  // ─── A dimension string ───────────────────────────────────────────────────
+  // Extension lines, the dimension line between them, an arrowhead at each
+  // end, and the measurement on a knocked-out label.
+  //
+  // The label arrives already formatted: env.label decides feet-and-inches or
+  // metres, because which units a drawing reads in is the page's business,
+  // not the painter's.
+  function drawDimension2D(ctx, toS, dimension, options = {}, env) {
+    const a = toS(dimension.start);
+    const b = toS(dimension.end);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 1) return;
+    const nx = -dy / length;
+    const ny = dx / length;
+    const offset = options.preview ? 14 : 19;
+    const da = { x:a.x + nx * offset, y:a.y + ny * offset };
+    const db = { x:b.x + nx * offset, y:b.y + ny * offset };
+    const value = Math.hypot(dimension.end.x - dimension.start.x, dimension.end.z - dimension.start.z);
+    const label = env.label(value);
+    const color = options.preview ? env.colors.preview : options.selected ? env.colors.selected : env.colors.stroke;
+    const arrow = (point, angle) => {
+      const size = 5;
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y);
+      ctx.lineTo(point.x + size * Math.cos(angle + 2.65), point.y + size * Math.sin(angle + 2.65));
+      ctx.lineTo(point.x + size * Math.cos(angle - 2.65), point.y + size * Math.sin(angle - 2.65));
+      ctx.closePath();
+      ctx.fill();
+    };
+    ctx.save();
+    if (options.selected) {
+      ctx.strokeStyle = env.colors.selectedHalo;
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+    }
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = options.selected ? 2 : 1;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y); ctx.lineTo(da.x, da.y);
+    ctx.moveTo(b.x, b.y); ctx.lineTo(db.x, db.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y);
+    ctx.stroke();
+    const angle = Math.atan2(db.y - da.y, db.x - da.x);
+    arrow(da, angle);
+    arrow(db, angle + Math.PI);
+    const midX = (da.x + db.x) / 2;
+    const midY = (da.y + db.y) / 2;
+    // Aligned text: the label runs along the dimension line, normalized so it
+    // reads from the bottom or the right edge of the sheet, never the left.
+    let textAngle = angle;
+    while (textAngle >= Math.PI / 2) textAngle -= Math.PI;
+    while (textAngle < -Math.PI / 2) textAngle += Math.PI;
+    ctx.font = "600 11px 'Barlow Condensed', system-ui, sans-serif";
+    const textWidth = ctx.measureText(label).width;
+    ctx.translate(midX, midY);
+    ctx.rotate(textAngle);
+    ctx.fillStyle = env.colors.labelBack;
+    ctx.fillRect(-textWidth / 2 - 3, -8, textWidth + 6, 15);
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+  }
+
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
@@ -947,6 +1022,7 @@ if (!window.DraftRender2D) {
     drawStairs2D,
     drawFloor2D,
     drawBoneyardMark2D,
+    drawDimension2D,
   });
 })();
 }
