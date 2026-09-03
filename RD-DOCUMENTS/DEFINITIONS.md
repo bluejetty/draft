@@ -280,6 +280,49 @@ Which line of a wall its stored geometry represents — `'left'`, `'right'` or
 turtle walks the **inside face** precisely so the number typed is the room you
 get.
 
+### JOIN, and its four kinds
+
+How two walls meet at a shared vertex, and what `drawWallSeg2D` does with the
+ends. The kind arrives in `joins`, a Map keyed by the **shared point object** —
+identity, not coordinates, so two walls at the same spot with separate point
+objects are not joined at all.
+
+| kind | what it means | what is drawn |
+|---|---|---|
+| `corner` | two walls meeting at an angle | ends **mitred** to the intersection; no cap |
+| `tee` | a stem running into a host that carries on through | host untouched; the stem clipped to the host's face |
+| `continuation` | one wall carrying on into the next, **collinear** | no cap; a face transition only where profiles differ |
+| `multi` | a crossing, more than two walls | as `continuation` — square at the vertex, no cap |
+| `none` | recorded but not a join | capped, exactly as an unjoined end |
+
+**CONTINUATION MEANS COLLINEAR.** This is the entry's reason for existing: it
+reads like "the wall continues round the corner", and it does not. A
+perpendicular pair is a `corner`. Written the wrong way round it produces a
+fixture that is not a join of any kind, and the painter is then blamed for the
+result — which is how this entry was earned, 3 Sep, building the join checks in
+`proto/render-2d-harness.js`.
+
+### MITRE LIMIT
+
+The point past which a mitre is refused and the end is capped square instead.
+Two nearly-collinear walls meeting at a shallow angle put the intersection of
+their faces a long way from the vertex, and drawn faithfully that is a spear
+sticking out of the corner. The painter allows eight times the thicker
+assembly and falls back to a cap beyond it.
+
+Not to be confused with the canvas `miterLimit` property, which is the same
+idea applied to a stroked path by the browser. Ours is computed in world feet
+before anything is stroked.
+
+### CAPPED vs MITRED
+
+A **capped** end is closed with a straight line across the assembly — what an
+unjoined wall gets. A **mitred** end has no cap: the layer boundaries run
+through the vertex and form the corner themselves. A cap is suppressed only
+when the join resolves for **both** faces of the assembly; a half-resolved
+join stays capped, because a cap through one face and open at the other is
+worse than a butt joint.
+
 ---
 
 ## Proposed renames
