@@ -1142,6 +1142,30 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+
+  // ─── A segment's path, straight or bulged ─────────────────────────────────
+  // Traces and strokes one segment. A bulged segment curves through its
+  // control point; a straight one is a line to its end.
+  //
+  // This is a PRIMITIVE, not a painter: it owns the path and nothing else.
+  // Colour, width, line cap and endpoint decoration stay with the caller,
+  // because the three callers in MODEL disagree on every one of them -- a
+  // reference segment is thin in the caller's colour with round dots, a
+  // committed line is LINE_COLOR with dots, a selected segment is a thick
+  // round-capped halo with square handles. The bulge maths is the only part
+  // they share, and it is the only part here.
+  function strokeSegPath2D(ctx, toS, seg, env) {
+    const a = toS(seg.start), b = toS(seg.end);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y);
+    if (seg.bulge) {
+      const c = toS(env.controlPoint(seg));
+      ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
+    } else {
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+  }
+
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
@@ -1155,6 +1179,7 @@ if (!window.DraftRender2D) {
     drawBoneyardMark2D,
     drawDimension2D,
     drawOutlines2D,
+    strokeSegPath2D,
   });
 })();
 }

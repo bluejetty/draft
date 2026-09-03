@@ -6636,17 +6636,13 @@ class Component extends DCLogic {
       ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
     };
     // Line segments may carry a bulge; arced ones stroke as quadratic curves.
-    const strokeLinePath = seg => {
-      const a = toS(seg.start), b = toS(seg.end);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y);
-      if (seg.bulge) {
-        const c = toS(this._lineControlPoint(seg));
-        ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
-      } else {
-        ctx.lineTo(b.x, b.y);
-      }
-      ctx.stroke();
-    };
+    // The path only. All three callers -- reference segments, committed
+    // lines, selected segments -- set their own colour, width and endpoint
+    // decoration around it, which is why the primitive owns none of that
+    // (render-2d.js carries the reasoning).
+    const strokeLinePath = seg => window.DraftRender2D.strokeSegPath2D(ctx, toS, seg, {
+      controlPoint: item => this._lineControlPoint(item),
+    });
     const drawDot = pt => {
       const s = toS(pt);
       ctx.beginPath(); ctx.arc(s.x, s.y, DOT_R, 0, Math.PI * 2); ctx.fill();
