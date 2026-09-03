@@ -1250,7 +1250,7 @@ if (!window.DraftRender2D) {
       .forEach(note => {
         const pane = note.pane === 'plan' ? 'plan' : 'section';
         if (!frame.rects[pane]) return;
-        paintNote(ctx, frame.paneScreen(pane, note.anchor), frame.paneScreen(pane, note.text), note);
+        paintNote(frame.paneScreen(pane, note.anchor), frame.paneScreen(pane, note.text), note);
       });
     const anchor = env.anchor;
     if (anchor && anchor.view === 'stair' && frame.rects[anchor.pane]) {
@@ -1258,7 +1258,7 @@ if (!window.DraftRender2D) {
       const hover = env.hover;
       if (hover && frame.paneAt(hover.x, hover.y) === anchor.pane
         && Math.hypot(hover.x - a.x, hover.y - a.y) > 1) {
-        paintNote(ctx, a, hover, env.previewStyle('…'), { preview: true });
+        paintNote(a, hover, env.previewStyle('…'), { preview: true });
       } else {
         ctx.save();
         ctx.strokeStyle = env.noteColor;
@@ -1269,7 +1269,6 @@ if (!window.DraftRender2D) {
     const pending = env.pending;
     if (pending && pending.view === 'stair' && frame.rects[pending.pane] && env.noteEditor) {
       paintNote(
-        ctx,
         frame.paneScreen(pending.pane, pending.anchor),
         frame.paneScreen(pending.pane, pending.text),
         env.previewStyle(env.noteDraft.trim() || '…'),
