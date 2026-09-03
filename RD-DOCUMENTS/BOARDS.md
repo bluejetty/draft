@@ -153,6 +153,19 @@ Deliberately **not** in the six:
 
 ## Standing rules
 
+- **Constraints that can be satisfied separately but not together belong in one
+  assertion.** The units control oscillated between two opposite bugs: hit
+  boxes big enough to tap (45px) swallowed their neighbour, and hit boxes small
+  enough not to overlap (31px) were too small to tap. Each bug was found by a
+  different check — a hand-written `elementFromPoint` probe and the standing
+  `touch-targets.spec.js` — and each fix satisfied its own check while breaking
+  the other's. **Neither check was wrong and neither was sufficient**, because
+  the layout could not satisfy both and separate assertions let you keep
+  choosing which bug to ship. The fix that ended it asserted both at once —
+  44px in both dimensions AND reachable at its own centre — which no tuning of
+  the number can pass and only a real layout change can. When two properties
+  trade off against each other, testing them apart measures the tuning; testing
+  them together measures the design.
 - **A move that changes behaviour is not a move.** Gilligan, 3 Sep, extracting
   `_metric` into `formatters.js` as `formatMetres`: he added a `Number.isFinite`
   guard so it matched its two neighbours, disclosed it as "a behaviour change,
