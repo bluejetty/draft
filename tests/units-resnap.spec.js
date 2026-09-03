@@ -34,8 +34,14 @@ const coords = drawing => [
   ...(drawing.boneyardOutlines || []).flatMap(o => o.points || []),
 ].flatMap(p => [p.x, p.z]);
 
+// ONE button that flips, so driving it means pressing the toggle and checking
+// where it landed rather than picking a named button out of a pair.
+const unitToggle = page => page.locator('[data-unit-toggle] button');
 const setUnits = async (page, name) => {
-  await page.getByRole('button', { name, exact: true }).click();
+  const toggle = unitToggle(page);
+  if ((await toggle.innerText()).includes(name)) return;   // already there
+  await toggle.click();
+  await expect(toggle).toHaveText(new RegExp(name));
   await h.waitForSaved(page);
 };
 
@@ -203,4 +209,39 @@ test('the move is announced, and names what actually moved', async ({ page }) =>
   // Not just the words "Re-snapped": the readout also has a "nothing moved"
   // form, which matched a looser regex even with the re-snap disabled.
   await expect(page.getByText(/Re-snapped to mm — \d+ nodes? .*moved, max /)).toBeVisible();
+});
+
+test('the toggle says which unit is in force, not which one a tap would bring', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  const toggle = unitToggle(page);
+  // One control, not two: the pair could not be made both disjoint and 44px.
+  await expect(toggle).toHaveCount(1);
+
+  // A lone button reading "METRIC" is ambiguous — it can name the state or the
+  // action. Naming the state as a statement is what removes the ambiguity, so
+  // the label must carry the noun and must not read as a command.
+  await expect(toggle).toHaveText(/^UNITS: IMPERIAL$/);
+  await expect(toggle).toHaveAttribute('title', /is in imperial/);
+
+  await toggle.click();
+  await h.waitForSaved(page);
+  await expect(toggle).toHaveText(/^UNITS: METRIC$/);
+  await expect(toggle).toHaveAttribute('title', /is in metric/);
+});
+
+test('the toggle is one 44px target, with nothing to overlap it', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  const box = await page.evaluate(() => {
+    const b = document.querySelector('[data-unit-toggle] button');
+    const r = b.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    // `hit === b` is the WRONG test: the label is a template interpolation, so
+    // the engine wraps it in a span and that span is what sits topmost. A
+    // press there still reaches the button. What must not happen is the point
+    // belonging to some OTHER control, which is how IMPERIAL was lost.
+    return { w: Math.round(r.width), h: Math.round(r.height), reachable: b.contains(hit) };
+  });
+  expect(box.reachable).toBe(true);
+  expect(box.h).toBeGreaterThanOrEqual(44);
+  expect(box.w).toBeGreaterThanOrEqual(44);
 });
