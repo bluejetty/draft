@@ -15586,67 +15586,12 @@ class Component extends DCLogic {
   // Two non-collinear walls form a miter; collinear pairs are continuous.
   // Three entries with a collinear pair form a T: the pair is the host and
   // the third is the butt stem. Larger nodes suppress ambiguous cap lines.
+  // The join classifier lives in geometry-2d.js so the new page can mitre too;
+  // it was already pure, so the move was a lift. Kept as a method because the
+  // default argument is the page's own wall list and three call sites rely on
+  // it.
   _wallJoins(walls = this._walls) {
-    const endpointGroups = new Map();
-    const add = (seg, pt, at) => {
-      if (!endpointGroups.has(pt)) endpointGroups.set(pt, []);
-      endpointGroups.get(pt).push({ seg, at });
-    };
-    walls.forEach(w => {
-      add(w, w.start, 'start');
-      add(w, w.end, 'end');
-    });
-    const joins = new Map();
-    const outward = entry => {
-      const vertex = entry.at === 'start' ? entry.seg.start : entry.seg.end;
-      const other = entry.at === 'start' ? entry.seg.end : entry.seg.start;
-      const dx = other.x - vertex.x, dz = other.z - vertex.z;
-      const len = Math.sqrt(dx * dx + dz * dz);
-      return len < 0.001 ? null : { x: dx / len, z: dz / len };
-    };
-    for (const [vertex, entries] of endpointGroups) {
-      if (entries.length === 2) {
-        const a = outward(entries[0]), b = outward(entries[1]);
-        if (a && b) {
-          if (Math.abs(a.x * b.z - a.z * b.x) > 0.001) {
-            joins.set(vertex, { type: 'miter', entries });
-          } else if (a.x * b.x + a.z * b.z < -0.995) {
-            joins.set(vertex, { type: 'continuation', entries });
-          }
-        }
-        continue;
-      }
-      if (entries.length === 3) {
-        let hostPair = null;
-        let strongestOpposition = -1;
-        for (let i = 0; i < entries.length; i++) {
-          for (let j = i + 1; j < entries.length; j++) {
-            const a = outward(entries[i]), b = outward(entries[j]);
-            if (!a || !b) continue;
-            const opposition = -(a.x * b.x + a.z * b.z);
-            if (opposition > strongestOpposition) {
-              strongestOpposition = opposition;
-              hostPair = [entries[i], entries[j]];
-            }
-          }
-        }
-        if (hostPair && strongestOpposition > 0.995) {
-          joins.set(vertex, {
-            type: 'tee',
-            host: hostPair,
-            stem: entries.find(entry => !hostPair.includes(entry)),
-          });
-        }
-        continue;
-      }
-      if (entries.length >= 4) {
-        // A cross or multi-stem node has no unambiguous two-wall miter. Keep
-        // every arm open to the shared vertex rather than drawing cap lines
-        // through it; the existing fill pass still draws every assembly.
-        joins.set(vertex, { type: 'multi', entries });
-      }
-    }
-    return joins;
+    return geo.wallJoins(walls);
   }
 
   // ─── Inside-face corners (board #303) ───────────────────────────────────────

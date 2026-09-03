@@ -838,6 +838,85 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     }).filter(pt => pt.rise != null);
   };
 
+  // ─── Where walls meet ─────────────────────────────────────────────────────
+  // Groups wall endpoints by the SHARED POINT OBJECT and classifies each
+  // vertex, returning a Map the wall painter reads to decide whether an end is
+  // mitred, clipped, continued or capped. Identity, not proximity: two walls
+  // at the same coordinate with separate point objects are not joined, which
+  // is what keeps a garage wall from splicing into a coincident house wall.
+  //
+  // The four kinds it emits are miter, tee, continuation and multi. It never
+  // emits `none` -- the painter honours that defensively, but nothing produces
+  // it. See DEFINITIONS, JOIN.
+  //
+  // Lifted verbatim out of MODEL.dc.html's _wallJoins, which was already pure:
+  // its only component reference was a default argument every caller
+  // overrode. It lives here so the NEW page can mitre too -- MODEL.html passes
+  // joins = null today, so every corner on it is a butt joint, and that is the
+  // last thing tier 2 owes.
+  function wallJoins(walls) {
+    const endpointGroups = new Map();
+    const add = (seg, pt, at) => {
+      if (!endpointGroups.has(pt)) endpointGroups.set(pt, []);
+      endpointGroups.get(pt).push({ seg, at });
+    };
+    walls.forEach(w => {
+      add(w, w.start, 'start');
+      add(w, w.end, 'end');
+    });
+    const joins = new Map();
+    const outward = entry => {
+      const vertex = entry.at === 'start' ? entry.seg.start : entry.seg.end;
+      const other = entry.at === 'start' ? entry.seg.end : entry.seg.start;
+      const dx = other.x - vertex.x, dz = other.z - vertex.z;
+      const len = Math.sqrt(dx * dx + dz * dz);
+      return len < 0.001 ? null : { x: dx / len, z: dz / len };
+    };
+    for (const [vertex, entries] of endpointGroups) {
+      if (entries.length === 2) {
+        const a = outward(entries[0]), b = outward(entries[1]);
+        if (a && b) {
+          if (Math.abs(a.x * b.z - a.z * b.x) > 0.001) {
+            joins.set(vertex, { type: 'miter', entries });
+          } else if (a.x * b.x + a.z * b.z < -0.995) {
+            joins.set(vertex, { type: 'continuation', entries });
+          }
+        }
+        continue;
+      }
+      if (entries.length === 3) {
+        let hostPair = null;
+        let strongestOpposition = -1;
+        for (let i = 0; i < entries.length; i++) {
+          for (let j = i + 1; j < entries.length; j++) {
+            const a = outward(entries[i]), b = outward(entries[j]);
+            if (!a || !b) continue;
+            const opposition = -(a.x * b.x + a.z * b.z);
+            if (opposition > strongestOpposition) {
+              strongestOpposition = opposition;
+              hostPair = [entries[i], entries[j]];
+            }
+          }
+        }
+        if (hostPair && strongestOpposition > 0.995) {
+          joins.set(vertex, {
+            type: 'tee',
+            host: hostPair,
+            stem: entries.find(entry => !hostPair.includes(entry)),
+          });
+        }
+        continue;
+      }
+      if (entries.length >= 4) {
+        // A cross or multi-stem node has no unambiguous two-wall miter. Keep
+        // every arm open to the shared vertex rather than drawing cap lines
+        // through it; the existing fill pass still draws every assembly.
+        joins.set(vertex, { type: 'multi', entries });
+      }
+    }
+    return joins;
+  }
+
   window.DraftGeometry2D = {
     distance,
     worldPerPixel,
@@ -861,6 +940,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     roofFaceRise,
     roofProfile,
     profileEnvelope,
+    wallJoins,
   };
 })();
 }
