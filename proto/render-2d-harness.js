@@ -890,6 +890,198 @@ suite('drawFixture2D', 'a tub is drawn over its own run, not the fixture run', R
   expect('and starts at the tub start, not zero', Math.min(...xs), 410);
 });
 
+// ── drawFloor2D: three modes, holes, and the garage note ──
+const RECT = [{ x: 0, z: 0 }, { x: 20, z: 0 }, { x: 20, z: 14 }, { x: 0, z: 14 }];
+const floorColors = {
+  fill: 'rgba(90,90,90,0.2)', fillPreview: 'rgba(90,90,90,0.1)',
+  stroke: '#345', strokePreview: '#9ab', selected: '#f60',
+};
+const floorEnv = over => ({
+  colors: floorColors,
+  surfaceOpeningsFor: () => [],
+  offsetOutline: (pts, by) => pts.map(p => ({ x: p.x - by, z: p.z - by })),
+  formatInchesOnly: inches => `${inches}"`,
+  garageEdgeDepthIn: 12, garageEdgeTaperRunIn: 12, garageSlabThicknessIn: 4,
+  ...over,
+});
+
+suite('drawFloor2D', 'a floor of one point is not a floor', R => {
+  const ctx = recordingCtx();
+  R.drawFloor2D(ctx, toS, { points: [{ x: 0, z: 0 }] }, {}, floorEnv());
+  expect('nothing painted', ctx.tape.length, 0);
+});
+
+suite('drawFloor2D', 'a committed slab fills, strokes and grows corner handles', R => {
+  const ctx = recordingCtx();
+  R.drawFloor2D(ctx, toS, { points: RECT }, {}, floorEnv());
+  expect('filled even-odd', calls(ctx, 'fill')[0][0], 'evenodd');
+  expect('in the page fill colour', sets(ctx, 'fillStyle').includes(floorColors.fill), true);
+  expect('one handle per corner', count(ctx, 'fillRect'), 4);
+});
+
+suite('drawFloor2D', 'a preview is dashed and grows no handles', R => {
+  const ctx = recordingCtx();
+  R.drawFloor2D(ctx, toS, { points: RECT }, { preview: true }, floorEnv());
+  expect('dashed', JSON.stringify(calls(ctx, 'setLineDash')[0][0]), '[6,4]');
+  expect('no handles', count(ctx, 'fillRect'), 0);
+  expect('and the preview fill', sets(ctx, 'fillStyle').includes(floorColors.fillPreview), true);
+});
+
+suite('drawFloor2D', 'a selected slab is drawn heavier, in the selected colour', R => {
+  const plain = recordingCtx();
+  R.drawFloor2D(plain, toS, { points: RECT }, {}, floorEnv());
+  const picked = recordingCtx();
+  R.drawFloor2D(picked, toS, { points: RECT }, { selected: true }, floorEnv());
+  expect('heavier', Math.max(...sets(picked, 'lineWidth')) > Math.max(...sets(plain, 'lineWidth')), true);
+  expect('and in the selected colour', sets(picked, 'strokeStyle').includes(floorColors.selected), true);
+});
+
+suite('drawFloor2D', 'a reference floor is dashed, faint, and stops before the handles', R => {
+  const ctx = recordingCtx();
+  R.drawFloor2D(ctx, toS, { points: RECT, garage: true, id: 'f1' }, { referenceColor: 'rgba(1,2,3,0.5)' }, floorEnv());
+  expect('no handles', count(ctx, 'fillRect'), 0);
+  expect('faded to 0.08', sets(ctx, 'fillStyle').includes('rgba(1,2,3,0.08)'), true);
+  expect('and no garage note, because it returns first', count(ctx, 'fillText'), 0);
+});
+
+suite('drawFloor2D', 'an opening is a hole in the fill, not a shape on top of it', R => {
+  const hole = [{ x: 5, z: 5 }, { x: 9, z: 5 }, { x: 9, z: 9 }, { x: 5, z: 9 }];
+  const ctx = recordingCtx();
+  R.drawFloor2D(ctx, toS, { points: RECT, id: 'f1' }, {},
+    floorEnv({ surfaceOpeningsFor: () => [{ points: hole }] }));
+  expect('one fill for both rings', count(ctx, 'fill'), 1);
+  expect('even-odd, so the hole reads as a hole', calls(ctx, 'fill')[0][0], 'evenodd');
+  expect('two closed rings', count(ctx, 'closePath'), 2);
+  expect('handles on the slab and on the hole', count(ctx, 'fillRect'), 8);
+});
+
+suite('drawFloor2D', 'a floor with no id is never asked for openings', R => {
+  let asked = 0;
+  R.drawFloor2D(recordingCtx(), toS, { points: RECT }, {},
+    floorEnv({ surfaceOpeningsFor: () => { asked += 1; return []; } }));
+  expect('not asked', asked, 0);
+});
+
+suite('drawFloor2D', 'a garage slab carries its pour note; a plain floor carries none', R => {
+  const plain = recordingCtx();
+  R.drawFloor2D(plain, toS, { points: RECT }, {}, floorEnv());
+  expect('no note on a plain floor', count(plain, 'fillText'), 0);
+  const garage = recordingCtx();
+  R.drawFloor2D(garage, toS, { points: RECT, garage: true }, {}, floorEnv());
+  expect('a garage says so', calls(garage, 'fillText')[0][0], '4" GARAGE SLAB');
+});
+
+suite('drawFloor2D', 'a sloped garage slab names the slope and where it falls to', R => {
+  const ctx = recordingCtx();
+  R.drawFloor2D(ctx, toS, { points: RECT, garage: true, slopeInPerFt: 1 / 8 }, {}, floorEnv());
+  expect('the eighth is written as a fraction', calls(ctx, 'fillText')[0][0],
+    '4" GARAGE SLAB — SLOPE 1/8"/FT TO DOOR');
+});
+
+suite('drawFloor2D', 'a thickened-edge slab reads level, and shows its taper ring', R => {
+  const ctx = recordingCtx();
+  R.drawFloor2D(ctx, toS, { points: RECT, garage: true, thickenedEdge: true }, {}, floorEnv());
+  expect('the note says level, not sloped', calls(ctx, 'fillText')[0][0],
+    '4" THICKENED-EDGE SLAB — LEVEL, 1\'-0" EDGE, 45° TAPER');
+  expect('and a dashed ring is drawn inside it',
+    calls(ctx, 'setLineDash').some(a => JSON.stringify(a[0]) === '[4,4]'), true);
+});
+
+// ── drawRoof2D ──
+const roofEnv = over => ({
+  isPrinting: false,
+  surfaceOpeningsFor: () => [],
+  offsetOutline: (pts, by) => pts.map(p => ({ x: p.x - by, z: p.z - by })),
+  roofSkeleton: () => [],
+  ...over,
+});
+const ROOF = { id: 'r1', points: RECT, edges: ['eave', 'eave', 'eave', 'eave'], overhang: 1 };
+
+suite('drawRoof2D', 'a roof needs three points', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, { ...ROOF, points: RECT.slice(0, 2) }, {}, roofEnv());
+  expect('nothing painted', ctx.tape.length, 0);
+});
+
+suite('drawRoof2D', 'a committed roof fills even-odd and dots its vertices', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, {}, roofEnv());
+  expect('filled even-odd', calls(ctx, 'fill')[0][0], 'evenodd');
+  expect('a dot per corner', count(ctx, 'arc'), 4);
+});
+
+suite('drawRoof2D', 'a reference roof is not filled and grows no dots', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, { referenceColor: '#888' }, roofEnv());
+  expect('no fill', count(ctx, 'fill'), 0);
+  expect('no vertex dots', count(ctx, 'arc'), 0);
+  expect('drawn in the reference colour', sets(ctx, 'strokeStyle').includes('#888'), true);
+});
+
+suite('drawRoof2D', 'printing keeps the roof but drops the vertex dots', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, {}, roofEnv({ isPrinting: true }));
+  expect('no dots', count(ctx, 'arc'), 0);
+  expect('the roof is still stroked', count(ctx, 'stroke') >= 1, true);
+});
+
+suite('drawRoof2D', 'a gable edge reads as a double line; an eave does not', R => {
+  const strokesFor = edges => {
+    const ctx = recordingCtx();
+    R.drawRoof2D(ctx, toS, { ...ROOF, edges }, {}, roofEnv());
+    return count(ctx, 'stroke');
+  };
+  const allEaves = strokesFor(['eave', 'eave', 'eave', 'eave']);
+  expect('one gable adds its wall line', strokesFor(['gable', 'eave', 'eave', 'eave']), allEaves + 1);
+  expect('two gables add two', strokesFor(['gable', 'eave', 'gable', 'eave']), allEaves + 2);
+});
+
+suite('drawRoof2D', 'with no overhang there is no second line to draw', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, { ...ROOF, edges: ['gable', 'eave', 'eave', 'eave'], overhang: 0 }, {}, roofEnv());
+  const eaves = recordingCtx();
+  R.drawRoof2D(eaves, toS, { ...ROOF, edges: ['eave', 'eave', 'eave', 'eave'], overhang: 0 }, {}, roofEnv());
+  expect('a gable with no overhang draws no wall ring', count(ctx, 'stroke'), count(eaves, 'stroke'));
+});
+
+suite('drawRoof2D', 'tagging labels every edge by what it is', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, { ...ROOF, edges: ['gable', 'eave', 'gable', 'eave'] },
+    { tagging: true }, roofEnv());
+  expect('four labels', count(ctx, 'fillText'), 4);
+  expect('naming each edge', calls(ctx, 'fillText').map(a => a[0]).join(','), 'GABLE,EAVE,GABLE,EAVE');
+});
+
+suite('drawRoof2D', 'a tagged reference roof is not labelled -- it is not the one being edited', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, { tagging: true, referenceColor: '#888' }, roofEnv());
+  expect('no labels', count(ctx, 'fillText'), 0);
+});
+
+suite('drawRoof2D', 'ridge, hip and valley guides are drawn dashed, from the skeleton', R => {
+  const skeleton = [
+    { a: { x: 0, z: 7 }, b: { x: 20, z: 7 } },
+    { a: { x: 0, z: 0 }, b: { x: 7, z: 7 } },
+  ];
+  const bare = recordingCtx();
+  R.drawRoof2D(bare, toS, ROOF, {}, roofEnv());
+  const withGuides = recordingCtx();
+  R.drawRoof2D(withGuides, toS, ROOF, {}, roofEnv({ roofSkeleton: () => skeleton }));
+  expect('each guide is one more stroke', count(withGuides, 'stroke'), count(bare, 'stroke') + 2);
+  expect('drawn dashed', calls(withGuides, 'setLineDash').some(a => JSON.stringify(a[0]) === '[8,5]'), true);
+});
+
+suite('drawRoof2D', 'an opening in a roof is a hole, dotted like the roof itself', R => {
+  const hole = [{ x: 5, z: 5 }, { x: 9, z: 5 }, { x: 9, z: 9 }, { x: 5, z: 9 }];
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, {}, roofEnv({ surfaceOpeningsFor: () => [{ points: hole }] }));
+  // Vertex dots are filled too, so count the even-odd body fill on its own
+  // rather than every fill on the tape.
+  expect('one even-odd fill covers both rings',
+    calls(ctx, 'fill').filter(a => a[0] === 'evenodd').length, 1);
+  expect('roof corners and hole corners are both dotted', count(ctx, 'arc'), 8);
+});
+
 // ─── Running ──────────────────────────────────────────────────────────────
 let current = null;
 function expect(label, got, want) {
