@@ -8234,6 +8234,15 @@ class Component extends DCLogic {
     // axis so the drafter picks the clearance when the default looks odd.
     this._eMarkHandleHits = [];
     if (!this._isPrinting && this.state.activeTool === 'select' && this.state.activeView === 'top') {
+      // The diamond's OUTLINE colour was inherited, not set: this block fills
+      // white and strokes, and the only strokeStyle assignment above it is the
+      // cut marks' own #b04060 (bubbleMark sets fillStyle four times and
+      // strokeStyle never). So the handle has always been drawn in the cut
+      // colour by accident of ordering. Stated explicitly here because the cut
+      // marks are moving to render-2d.js and taking that assignment with them
+      // — after which an inherited colour would silently become the canvas
+      // default. Same value, so this changes no pixel today.
+      ctx.strokeStyle = '#b04060';
       this._autoElevationCuts().forEach(cut => {
         const mid = toS({
           x: (cut.startPt.x + cut.endPt.x) / 2,
