@@ -228,11 +228,38 @@
   // The trap in the third rule: floors default to view 'floor', not 'plan'
   // (MODEL.dc.html:2905). Writing `view === 'plan'` hides every floor in the
   // drawing and reads exactly like a broken painter.
+  // ?view= PICKS THE DRAWING, and without it half the level is unreachable.
+  //
+  // Tier 2a defaulted the layer view and offered no way to change it, which
+  // quietly switched the floors off: MAIN FL and 2ND FL default to the walls
+  // plan, FOUNDATION to the concrete, and a floor saves with `view: 'floor'`
+  // (MODEL.dc.html:2905). So `(view || 'plan') === viewId` was false for every
+  // floor on every reachable view, paintFloors() drew nothing anywhere, and
+  // the readout said `floors 0` on a drawing that has them. Tier 1 painted
+  // them; tier 2a turned them off and no spec noticed, because the specs
+  // asserted walls.
+  //
+  // A level is not one drawing. Choosing the level and not the drawing is
+  // choosing half.
+  const activeViewId = () => {
+    const LV = window.DraftLayerViews;
+    const levelId = activeLevelId();
+    const views = LV.layerViewsForLevelId(levelId);
+    if (!views.length) return null;               // ROOF / SITE hold everything
+    const asked = params.get('view');
+    if (asked && views.some(v => v.id === asked)) return asked;
+    if (asked) {
+      console.warn(`MODEL: level ${levelId} has no view "${asked}"; using its `
+        + `default. Known: ${views.map(v => v.id).join(', ')}`);
+    }
+    return LV.defaultLayerViewId(levelId);
+  };
+
   const onActiveLevel = () => {
     const LV = window.DraftLayerViews;
     const levelId = activeLevelId();
     const views = LV.layerViewsForLevelId(levelId);
-    const viewId = LV.defaultLayerViewId(levelId);
+    const viewId = activeViewId();
     const onPlan = item => !views.length || (item.view || 'plan') === viewId;
     const byLevel = item => Number(item.levelId) === levelId;
     return { levelId, viewId, onPlan, byLevel };
@@ -447,14 +474,25 @@
   const levelName = () => (drawing?.levels || [])
     .find(level => Number(level.id) === activeLevelId())?.name || 'level';
 
+  // THE READOUT IS THE ONLY INSTRUMENT ON THIS PAGE. Movie, 3 Sep: keep adding
+  // to it, never prune -- he decides later what earns its place. So counts are
+  // shown as SHOWN/TOTAL rather than shown alone: `walls 13/24` says both what
+  // is painted and what the drawing holds, which makes the level filter
+  // visible instead of something you have to trust. `floors 0/3` is what would
+  // have shown the tier 2a floor bug on sight rather than after a screenshot.
+  const shownOfTotal = (shown, all) => `${shown}/${(all || []).length}`;
+
   const updateReadout = () => {
     if (!drawing) return;
     readout.innerHTML =
-      `walls <b>${walls().length}</b>   lines <b>${lines().length}</b>   `
-      + `floors <b>${floors().length}</b>   roofs <b>${roofs().length}</b>   `
-      + `shapes <b>${shapes().length}</b>\n`
+      `walls <b>${shownOfTotal(walls().length, drawing.walls)}</b>   `
+      + `lines <b>${shownOfTotal(lines().length, drawing.lines)}</b>   `
+      + `floors <b>${shownOfTotal(floors().length, drawing.floors)}</b>   `
+      + `roofs <b>${shownOfTotal(roofs().length, drawing.roofs)}</b>   `
+      + `shapes <b>${shownOfTotal(shapes().length, drawing.shapes)}</b>\n`
       + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
-      + `${onActiveLevel().viewId || 'all'}   `
+      + `view <b>${onActiveLevel().viewId || 'all'}</b>   `
+      + `${theme}/${mode}   `
       + `scale <b>${view.scale.toFixed(2)}</b> px/ft`;
   };
 

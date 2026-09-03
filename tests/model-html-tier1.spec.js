@@ -118,7 +118,7 @@ test.describe('MODEL.html tier 1', () => {
       .toBeGreaterThan(0);
     expect(onScreen, 'and it must NOT be every wall, or the filter is untested')
       .toBeLessThan(saved.walls.length);
-    await expect(readout(page)).toContainText(`walls ${onScreen}`);
+    await expect(readout(page)).toContainText(`walls ${onScreen}/`);
     await expect(notice(page)).not.toHaveClass(/show/);
 
     // And the WALLS are actually on the canvas -- not merely the grid.
