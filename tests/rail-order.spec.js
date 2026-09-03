@@ -3,7 +3,7 @@
 // The rail used to render the four automatic elevations and the drafter's
 // sections through one sc-for, so a section landed directly under E4 at the
 // top. The printed set runs elevations first and sections near the end, after
-// foundation and basement (paper-rules.md) — and a drafter who knows the set
+// foundation and basement (RD-DOCUMENTS/paper-rules.md) — and a drafter who knows the set
 // should not have to learn a second order for the screen.
 //
 // The split is at `auto`, which already told elevations from sections. No new
