@@ -258,8 +258,20 @@
        The bottom-LEFT PROJECT link has room, so it grows both ways. */
     [data-nav-cluster] a, [data-project-corner-bl] { padding:12px 10px !important;
       margin:-12px 0; box-sizing:content-box; }
-    [data-areas-open], [data-unit-toggle] button { padding-top:16px !important; padding-bottom:16px !important;
+    [data-areas-open] { padding-top:16px !important; padding-bottom:16px !important;
       margin-top:-16px; margin-bottom:-16px; box-sizing:content-box; }
+    /* STACKED buttons grow AWAY from each other, never both ways. IMPERIAL and
+       METRIC sit 14px apart in a 44px strip, so when each grew 16px in both
+       directions their hit boxes overlapped by 31px and the one later in the
+       DOM took the other's centre: METRIC intercepted every click aimed at
+       IMPERIAL, measured with elementFromPoint at the button's own centre.
+       Nothing looked wrong — the negative margins keep the layout exactly as
+       drawn — so a drafter could switch to metric and simply never get back.
+       Growing outward keeps a 33px target on each and leaves them disjoint. */
+    [data-unit-toggle] button:first-child { padding-top:16px !important;
+      margin-top:-16px; box-sizing:content-box; }
+    [data-unit-toggle] button:last-child { padding-bottom:16px !important;
+      margin-bottom:-16px; box-sizing:content-box; }
     /* The instrument chips grow VERTICALLY only. Widening them closes the
        10px gap between chips, and once the boxes touch, a press near an edge
        can land on the neighbour — bottom-strip.spec.js catches it as a hover
