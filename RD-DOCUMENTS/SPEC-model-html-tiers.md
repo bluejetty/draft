@@ -27,10 +27,9 @@ cost anyone a drawing.
 
 ## Tier 2 — the level filter first, then the rest of the plan
 
-**All five levels currently stack on top of each other.** The readout says
-`levels 5` and every one of them is painted at once. That is the first job,
-and everything else waits behind it, because the filter changes what the
-accessors return and every painter reads through them.
+*Tiers 2a and 2b are merged (PR #252). What follows records what they did and
+where the tier stopped, which is a seam worth understanding rather than a
+to-do list.*
 
 ### The filter is NOT `levelId === active`
 
@@ -78,16 +77,76 @@ read that rather than assuming `DEFAULT_LEVELS`.
 
 ### Order of work
 
-1. **Level filter.** Accessors take the active level id; default MAIN FL.
-2. **Roofs and shapes.** `render-2d.js` already exports `drawRoof2D` and
-   `drawShape2D` — no extraction needed.
+1. **Level filter** — *done, 2a.* Accessors take the active level id; MAIN FL
+   by default, `?level=` to switch.
+2. **Roofs and shapes** — *done, 2b.* No extraction needed; both painters were
+   already in `render-2d.js`.
 3. **Floors, properly.** Tier 1 hand-rolls a polygon wash; the real painter is
    `_drawFloor2D`, still inside `MODEL.dc.html`.
-4. **Mitred wall joins.** `drawWallSeg2D` takes `joins`, and tier 1 passes
+4. **Mitred wall joins.** `drawWallSeg2D` takes `joins`, and tier 2 passes
    `null` (capped ends). Real mitring needs MODEL's `_wallJoins()`.
+5. **Outlines, dimensions, fixtures.** All three the same story as 3 and 4.
 
-Steps 1-2 need nothing from board #1. Steps 3-4 do, and that is the seam where
-tier 2 naturally pauses for the painter extraction.
+---
+
+## THE TEST OF A FINISHED EXTRACTION
+
+Steps 3-5 are blocked, and measuring *why* produced the most useful thing
+either agent found on this job. It is recorded here because it applies to
+board #1 far more than it applies to this page.
+
+**Moving a painter into `render-2d.js` does not make it shared. Its `env` has
+to be reachable too.** Who can actually call each export today:
+
+```
+drawWallSeg2D    layout-plan.js   MODEL.dc.html   MODEL.html
+drawRoof2D                        MODEL.dc.html   MODEL.html
+drawShape2D                       MODEL.dc.html   MODEL.html
+drawFixture2D                     MODEL.dc.html                 ← one caller
+```
+
+Three are callable anywhere because their env comes from modules — `wallTypes`
+from `wall-types.js`, `roofSkeleton` / `offsetOutline` from `geometry-2d.js`,
+`flooringTypes` from `drawing-format.js`.
+
+`drawFixture2D` is callable by nobody else, and not because of the function.
+**All eleven of its env keys live only in `MODEL.dc.html`**: `fixtureGeometry`,
+`closetDoorFor`, `wallCross`, `wallFrame`, `CLOSET_CLOTHES_FT`,
+`CLOSET_ROD_FT`, `CLOSET_SHELF_FT`, `CLOSET_WALL_FT`, `COUNTER_OVERHANG_FT`,
+`FIXTURE_COLOR`, `walls`.
+
+So the criterion is not *"the function moved"* — it is **"someone else can call
+it."** `drawFixture2D` has passed the first test since before this session
+started and still fails the second. It moved house without changing address.
+
+**This is a scope question board #1 has to answer, not a defect.** Making the
+fixture painter genuinely shared means moving constants and accessors as well
+as painters — a second, larger job living inside the first. It should be
+decided out loud rather than drifted into. The honest interim is what is being
+done: extract with real envs, and record which keys are MODEL-only so the gap
+is visible rather than assumed closed.
+
+---
+
+## HOW MANY PAINTERS THERE ARE
+
+**31, not 28.** The 28 came from `grep -o "_draw[A-Za-z]*2D"` and was handed
+around as a measurement. It is a fact about the pattern.
+
+Counting by behaviour instead — any method whose first argument is `ctx` —
+finds three more:
+
+```
+_drawStairPlanPane        no 2D suffix
+_drawStairSectionPane     no 2D suffix
+_stairPaneHeader          does not even start with _draw
+```
+
+All three are in the stair-workspace cluster, so the miss was not harmless:
+it hid a dependency between painters that were being moved as a group.
+
+**Inventory by behaviour, not by name.** `first argument is ctx` cannot be
+defeated by someone naming a function `Pane`.
 
 **A level switcher is chrome, and chrome is tier 3.** Tier 2 picks a level and
 paints it correctly; it does not grow a UI to change it.
