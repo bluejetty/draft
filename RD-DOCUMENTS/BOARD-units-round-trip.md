@@ -114,7 +114,44 @@ always returns to the same sixteenth, because the return trip moves at most
 ten round trips give the same 1 mm as one. It is a fixed point, not a walk.
 That is what makes "change freely back and forth" safe.
 
-## SUPERSEDED BY DESIGN INTENT — Devin, 3 Sep
+## CURRENT RULING — Devin, 3 Sep (amends board #313)
+
+**The toggle re-snaps.** Movie's ask supersedes #313's soft-switch behaviour.
+The recommendation in this board stands; what follows below it is the history of
+how it got here, kept because the reasoning matters.
+
+Devin's reasoning, so the amendment does not read as a whim:
+
+- **#313's "never automatic" was aimed at SOFTWARE-initiated geometry movement.**
+  A drawing must never re-snap because it was opened, loaded or re-derived. A
+  drafter pressing the toggle is a deliberate act. The two were fused because
+  the re-snap was assumed to be a walk that accumulates.
+- **The measurements killed that assumption**: one settle under 1 mm, idempotent
+  both directions afterwards (0 of 7,681 points moved on the imperial round
+  trip), worst single move 0.79 mm against a framer's ±3 mm — which is the
+  "≤1/32", invisible" bar #313 itself set for the hard re-snap.
+- **The soft switch's safety was partly illusory.** Its justification was
+  "always safe", but it prints partials that do not sum to their overall with
+  no indication anything is approximate. *A display that quietly lies about sums
+  is less safe than a settle nobody can see.*
+
+### Three constraints kept from #313
+
+1. **`_resnapToUnits()` stays a pure, standalone function.** The toggle calls
+   it; it remains its own seam and could still become a separate command.
+2. **Load never re-snaps.** Opening a drawing, in either mode, moves nothing.
+   The drafter's toggle press is the only trigger. **Pin it with a spec.**
+3. **Record the amendment on #313 itself** — "toggle performs the re-snap
+   (Movie's ask, measured invisible-on-paper, 3 Sep); soft-only display retired"
+   — so the retired ruling does not become folklore that contradicts the code.
+
+> The distinction that survives is not *automatic vs commanded* but
+> **software-initiated vs drafter-initiated**. A load, a re-derive or an import
+> must never move geometry. A press may.
+
+---
+
+## Superseded: the soft-switch ruling this board was rewritten for
 
 **The toggle is a soft switch.** Board #313 / audit Q2 rules it display-only: it
 re-prints the drawing in the other system and does not touch geometry. A hard
