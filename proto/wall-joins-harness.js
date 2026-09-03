@@ -2,8 +2,14 @@
 //
 // The classifier the wall painter reads. It was inline in MODEL.dc.html and
 // therefore reachable only by the old page: MODEL.html passes joins = null, so
-// every corner on the new page is a butt joint. That is the last debt tier 2
-// owes, and it is why this moved rather than being covered where it sat.
+// every corner on the new page is a butt joint.
+//
+// Sharing this is HALF that debt. The other half is the vertex pool: identity
+// is the key here, and MODEL.html builds walls off parsed JSON, which restores
+// values rather than references -- so its coincident corners are separate
+// objects and this returns an empty Map. The check below named
+// "coincident endpoints in separate objects do not join" is the proof, and it
+// is the obstacle as much as the invariant.
 //
 // The four kinds it emits are miter, tee, continuation and multi. It never
 // emits `none`; the painter honours that defensively and nothing produces it.

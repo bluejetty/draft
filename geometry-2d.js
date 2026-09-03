@@ -850,10 +850,17 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // it. See DEFINITIONS, JOIN.
   //
   // Lifted verbatim out of MODEL.dc.html's _wallJoins, which was already pure:
-  // its only component reference was a default argument every caller
-  // overrode. It lives here so the NEW page can mitre too -- MODEL.html passes
-  // joins = null today, so every corner on it is a butt joint, and that is the
-  // last thing tier 2 owes.
+  // its only component reference was a default argument every caller overrode.
+  //
+  // THIS IS HALF OF WHAT THE NEW PAGE NEEDS, NOT ALL OF IT. MODEL.html passes
+  // joins = null today, so every corner on it is a butt joint -- but sharing
+  // this function does not by itself fix that. Identity is the key, and
+  // MODEL.html builds its walls straight off parsed JSON, which restores
+  // VALUES rather than references: its two walls at a shared corner hold
+  // separate point objects, so this classifier finds no join and returns an
+  // empty Map. Measured, not assumed. The other half is a vertex pool -- the
+  // old page's _mergeVertex, which hands back ONE vector per corner -- and
+  // until that moves too, the new page has nothing to pass here.
   function wallJoins(walls) {
     const endpointGroups = new Map();
     const add = (seg, pt, at) => {
