@@ -162,6 +162,18 @@ Deliberately **not** in the six:
   the same commit as the change, not in a follow-up — seventeen painters and
   1,080 lines are still to move, and the instrument that makes it cheap now
   exists.
+- **Current usage is a fact about the present tense, not about the design.**
+  Gilligan, 3 Sep, retracting a claim he had already sent: he measured `body`'s
+  33 call sites — 26 defaulting to `house`, 7 passing `garage`, nothing else
+  reaching the parameter — and reported it as "a closed two-value set". The
+  measurement was right and the conclusion was backwards: `body` exists so
+  garage walls stay unspliced from coincident house walls, and more bodies are
+  already boarded (detached garage, split-level, additions). **An enum with
+  exactly one non-default value is usually a set that has not grown yet, not a
+  set that cannot.** Had that gone unretracted it would have become a rule in
+  RULES-persisted-keys.md, and every future page would have been written
+  against it. Counting call sites answers "what does this do today"; it never
+  answers "what is this for".
 - **A suite's silence is a fact about the suite.** Gilligan, 3 Sep, after
   deleting the entire mitre-join path and watching 244 assertions stay green:
   *"I read 'no test noticed' as 'the code is dormant', when it meant 'the tests
