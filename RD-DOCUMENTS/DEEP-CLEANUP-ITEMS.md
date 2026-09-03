@@ -75,8 +75,9 @@ not for markdown pointing at one.
 - **"a wall's bone"** (TOY MODE) → **weld group**. Already the real name.
 - **"the toilet's node"** → **object placement**. Movie's ruling; nodes are
   for lines.
-- **"frame"** on its own → **wireframe**, qualified: MASTER WIREFRAME, MAIN
-  FLOOR WIREFRAME.
+- **"frame"** on its own → **boneframe**, qualified: MASTER BONEFRAME, MAIN
+  FLOOR BONEFRAME. (Was WIREFRAME; amended 3 Sep — WIREFRAME is the ISO 3D
+  *view* of these objects, not the objects. See DEFINITIONS, `OUTLINE`.)
 
 Comments and documents only. No behaviour, no risk.
 
@@ -119,10 +120,18 @@ saying why; `RD-DOCUMENTS/RULES-persisted-keys.md` carries the half a test
 cannot — what the contested names mean, the absent-vs-null distinctions, and
 the write gates a replacement page must clear before tier 3.
 
-### 7. `_boneyardOutlines` → `_masterWireframe`
+### 7. `_boneyardOutlines` → `_masterBoneframe`
+
+**Name corrected 3 Sep** to `_masterBoneframe`. Not because WIREFRAME
+collides — it does not; the ISO window renders these very objects
+(`HOW-THE-BONEYARD-WORKS.md:42`), so it is a VIEW of them. That is the
+distinction: BONEFRAME is the stored object, WIREFRAME is the 3D view of the
+stack. Item 3's MASTER / MAIN FLOOR qualifiers still apply, on the new noun.
+See DEFINITIONS, `OUTLINE`.
 
 **In memory only.** `boneyardOutlines` and `boneyardShelves` are persisted
-keys (`drawing-format.js:561` and `:979`, serialized at `MODEL.dc.html:3025`).
+keys (serialized at `MODEL.dc.html:3108`; the earlier `drawing-format.js:561`
+and `MODEL.dc.html:3025` citations had rotted — re-verified 3 Sep).
 Renaming those breaks every drawing ever saved, against the standing rule that
 old drawings open forever.
 

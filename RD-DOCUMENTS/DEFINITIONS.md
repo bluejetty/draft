@@ -669,6 +669,102 @@ worse than a butt joint.
 
 ---
 
+### OUTLINE — the object, and the word four other things borrow
+
+Earned the hard way. Skipper said the next painter to wire was `drawOutlines2D`
+and Movie read it as the outline of a fixture: *"if you are asking if the
+fixtures like toilets have outlines i don't think so."* He is right that they
+don't — and the misreading is the entry, because it is the obvious reading.
+
+An **OUTLINE** is one specific object: the closed footprint of the house or a
+garage, mastered on the BONEYARD and copied down to each level (`masterId`,
+`srcId` per point). It carries fenestration `marks`, a `garage` field of
+`attached` / `detached` / absent, and it is what `drawOutlines2D` paints. 60
+uses of `outlines` in MODEL.dc.html.
+
+The trouble is that "outline" is also plain English for *any closed run of
+points*, and the codebase uses it that way for four other things — every one of
+which has its own real name already:
+
+| said as | is actually | its own name |
+|---|---|---|
+| "closed construction outlines" (5 sites) | the drafter's scratch geometry | **SHAPE** |
+| "free-form closed outlines cut from a host floor" (2 sites) | a hole in a slab | **surface opening** |
+| "closed outlines owned by a whole level" | the roof's plan extent | **roof footprint** |
+| "the slab outline and its corner handles" (`palette.js:53`) | a floor's own edge | **slab edge** |
+
+So this is not a homonym fight and renaming is the wrong tool, exactly as with
+LAYOUT and VIEW. OUTLINE is a real named type with a painter, a normaliser and
+a master/copy relationship; the other four are English descriptions that
+happened to reach for the same noun.
+
+**Ruling: nobody keeps the word. The object becomes a BONEFRAME.**
+
+Skipper's first answer was that the object should keep "outline" and the other
+four should stop borrowing it. Movie's was better and it is worth saying why,
+because it generalises: asking *which of five senses keeps the contested word*
+accepts a premise it should have rejected. Every one of the other four already
+has a real name. So does the object, now. Nobody needs "outline" at all, and a
+word nobody needs is a word that cannot be misread.
+
+- The object is a **BONEFRAME** — the closed footprint of the house or a
+  garage, mastered on the BONEYARD and copied to each level.
+- The four borrowings say **shape**, **surface opening**, **roof footprint**
+  and **slab edge**. All four already exist as terms; this costs only the
+  habit.
+
+### BONEFRAME is the object; WIREFRAME is a view of it
+
+Skipper's first draft of this entry rejected WIREFRAME and the argument was
+wrong. It said the two collide because "both senses describe the same building,
+so context never separates them." They describe the same building because
+**they are the same object.** `HOW-THE-BONEYARD-WORKS.md:42` says the ISO
+window shows "each floor level's **outline** in its own colour" — the wireframe
+is the boneframes, drawn standing up. One thing and a view of it is not a
+collision, and demanding two unrelated words for them would have been the
+error.
+
+So the split is the one this dictionary already draws for LAYER and VIEW:
+
+- **BONEFRAME** — the *object*. A closed footprint: one MASTER BONEFRAME on the
+  BONEYARD, one copy per level, each copy's points linked back by `srcId`.
+- **WIREFRAME** — a *view* of them. The ISO 3D window, the stack seen standing
+  up, edges only. A camera angle and a render pass, not a stored thing.
+
+Qualify the object by scope, which is what Movie was reaching for with "MAIN
+WIREFRAME" and what `DEEP-CLEANUP-ITEMS.md:78` already proposed as MASTER
+WIREFRAME / MAIN FLOOR WIREFRAME: say **MASTER BONEFRAME** and **MAIN FLOOR
+BONEFRAME**. The qualifier names the scope; the noun names the thing.
+
+The one word that goes away is **frame** on its own, and **outline** with it.
+BONEFRAME is unused anywhere in the repo, so it cannot be misread; and it keeps
+the bone vocabulary SPEC-skins §6 holds in the code permanently. A frame of
+bones, on the boneyard.
+
+Movie's reason for wanting a distinct word, 3 Sep: *"makes it easy not to
+messup."* That is the whole test. A term earns its keep by being hard to say
+wrong, not by being precise on paper.
+
+### What this rename can and cannot touch
+
+`boneyardOutlines` is a **persisted key**, serialized at `MODEL.dc.html:3108`,
+and old drawings open forever. So the saved file keeps `outlines` and
+`boneyardOutlines` under those names regardless of what anything else calls
+them.
+
+That splits the work, and the cheap half is the half that matters:
+
+1. **Speech and prose — now, free.** This is what the dictionary is for:
+   Movie, 3 Sep, on why it exists at all — *"mostly for me or whoever is
+   talking to you to use the correct terms."*
+2. **Identifiers — later, in memory only**, stopping at the serializer with a
+   comment at the seam. Already logged as DEEP-CLEANUP item 7, to be done by
+   whoever is next in that code for another reason. On its own it is a large
+   diff that changes no behaviour.
+
+(Item 7 proposed `_masterWireframe`. Corrected to `_masterBoneframe` — it had
+not measured the WIREFRAME collision above.)
+
 ## Proposed renames
 
 Nothing here is done yet. Each is a rename, not a behaviour change.
