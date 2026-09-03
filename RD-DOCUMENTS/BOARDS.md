@@ -69,6 +69,55 @@ pool · `#331` NAHB room-program defaults · `#198` room stamping step ·
 `#321` entry page rework · `#318` tray door/window centreline snap ·
 `#2a` reorder the MODEL right-side menu to mirror the sheet order.
 
+### The drawing does not obey the skin — 18 hardcoded colours in render-2d.js
+
+Found 3 Sep while wiring `drawOrigin2D`, which hardcoded its green. It is not
+one painter. Five of them carry colour literals no caller can override:
+
+| painter | literals |
+|---|---|
+| `drawWallSeg2D` | 5 |
+| `drawRoof2D` | 6 |
+| `drawShape2D` | 4 |
+| `drawFixture2D` | 2 |
+| `drawOrigin2D` | 1 — **fixed**, now reads `env.colors.origin` |
+
+MODEL.html defaults to `mode=night`, so this is its default view. Measured
+against the skins' own `surface-page`:
+
+| painter | what | colour | night | day |
+|---|---|---|---|---|
+| `drawWallSeg2D` | wall stroke | `#1d1f20` | **1.00** | 14.79 |
+| `drawWallSeg2D` | wall fill | `#ffffff` | 16.55 | **1.12** |
+| `drawRoof2D` | roof stroke | `#7a4a21` | **2.23** | 6.64 |
+
+`#1d1f20` **is** `surface-page` on night. The wall outline is painted in
+exactly the colour of the page it sits on. And the mirror case is just as
+real: the white fill scores 1.12 on the day page. `drawWallSeg2D` is built for
+a light sheet — white paper, black ink — and half-fails on each skin, in
+opposite halves.
+
+**Why nothing caught it.** Every MODEL.html spec asserts geometry, counts, or
+grid colours; none asserts wall ink. On night the walls still appear, because
+the white fill is loud — only the edge that separates a wall from the page is
+gone. A page that looks populated is not a page that is right, and the suite
+was measuring the half that works.
+
+SPEC-skins promises "the chrome and the drawing move together and neither can
+drift from the other". Today the chrome moves and the drawing does not.
+
+**Not fixed here, deliberately, and it is two decisions not one:**
+
+1. **Which roles** — a wall needs a fill and a stroke, a roof needs its two
+   browns, a fixture its ink. Four or five new roles, mechanical once named.
+2. **What colours** — and SPEC-skins §9 lists "the actual colours of any of the
+   four skins" as explicitly undecided. Night is not a recolour of day: a wall
+   on a black sheet is not white paper with a black line around it, and
+   choosing what it *is* is Movie's, not a measurement.
+
+Do (1) blind and you invent (2) by accident, which is how `#557a46` came to be
+the datum's colour on a skin nobody had checked it against.
+
 ---
 
 ## 5 · Small — an hour or two each
