@@ -767,6 +767,26 @@ The second is correct. **MASTER is an inheritance word, not a position word.**
 So a MASTER BONEFRAME sits nowhere. It is not below the foundation, not above
 the roof, not in the stack at all.
 
+Which raises the next question, and Movie asked it: *"its alot like the
+foundation boneframe — we might not even need the one in the boneyard but why
+not."* They do look alike; a master and a level copy are the same shape. They
+differ in **lifetime and authority**, and both differences bite:
+
+- **A level can be deleted.** `_deleteLevel` guards only `levels.length <= 1`
+  — nothing protects FOUNDATION in particular. A master living on a level is
+  one that can be deleted out from under every other level. This is already
+  settled in the code: `_boneyardOutlines` is deliberately exempted from level
+  deletion, where fenestrations, fixtures, stairs, notes and roomTags are not,
+  with the reason stated — *"the BONEYARD master is storage, not a level."*
+- **Two gestures must stay distinguishable.** "Edit the master, move it
+  everywhere" and "edit this level, stay here" are only different operations
+  while the master is outside the stack. Make it the foundation's copy and
+  editing the foundation silently moves every floor — the local edit is gone,
+  and it is the more common one.
+
+So the BONEYARD master is not redundancy. It is the thing that makes a local
+edit safe.
+
 **And the file gives the wrong impression, in as many words.** Two comments
 disagree:
 
