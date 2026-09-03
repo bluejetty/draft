@@ -7528,32 +7528,9 @@ class Component extends DCLogic {
   // A mark draws as a heavy stroke across its opening width with jamb ticks
   // and a D / W tag beside the centre.
   _drawBoneyardMark2D(ctx, toS, outline, mark, hex) {
-    const at = this._boneyardMarkGeometry(outline, mark);
-    if (!at) return;
-    const half = mark.widthFt / 2;
-    const a = toS({ x: at.center.x - at.ux * half, z: at.center.z - at.uz * half });
-    const b = toS({ x: at.center.x + at.ux * half, z: at.center.z + at.uz * half });
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len, ny = dx / len;
-    ctx.save();
-    ctx.strokeStyle = hex;
-    ctx.fillStyle = hex;
-    ctx.setLineDash([]);
-    ctx.lineWidth = 3.5;
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    ctx.lineWidth = 1.5;
-    [a, b].forEach(p => {
-      ctx.beginPath();
-      ctx.moveTo(p.x - nx * 6, p.y - ny * 6);
-      ctx.lineTo(p.x + nx * 6, p.y + ny * 6);
-      ctx.stroke();
+    window.DraftRender2D.drawBoneyardMark2D(ctx, toS, outline, mark, hex, {
+      geometryFor: (o, m) => this._boneyardMarkGeometry(o, m),
     });
-    const c = toS(at.center);
-    ctx.font = '600 10px "Barlow Condensed", system-ui, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(mark.type === 'door' ? 'D' : mark.type === 'gable-bump' ? 'G' : 'W', c.x + nx * 11, c.y + ny * 11);
-    ctx.restore();
   }
 
   // Columns draw as a telepost square with a centre mark; on a FOUNDATION

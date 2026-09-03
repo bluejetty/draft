@@ -901,6 +901,41 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+
+  // ─── A boneyard mark on an outline edge ───────────────────────────────────
+  // The door / window / gable-bump stamp a drafter drops on an outline edge
+  // before the house exists: a heavy bar the width of the opening, a tick at
+  // each end, and a letter naming what it is. The colour arrives as an
+  // argument because the caller varies it by state, not by kind.
+  function drawBoneyardMark2D(ctx, toS, outline, mark, hex, env) {
+    const at = env.geometryFor(outline, mark);
+    if (!at) return;
+    const half = mark.widthFt / 2;
+    const a = toS({ x: at.center.x - at.ux * half, z: at.center.z - at.uz * half });
+    const b = toS({ x: at.center.x + at.ux * half, z: at.center.z + at.uz * half });
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    ctx.save();
+    ctx.strokeStyle = hex;
+    ctx.fillStyle = hex;
+    ctx.setLineDash([]);
+    ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.lineWidth = 1.5;
+    [a, b].forEach(p => {
+      ctx.beginPath();
+      ctx.moveTo(p.x - nx * 6, p.y - ny * 6);
+      ctx.lineTo(p.x + nx * 6, p.y + ny * 6);
+      ctx.stroke();
+    });
+    const c = toS(at.center);
+    ctx.font = '600 10px "Barlow Condensed", system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(mark.type === 'door' ? 'D' : mark.type === 'gable-bump' ? 'G' : 'W', c.x + nx * 11, c.y + ny * 11);
+    ctx.restore();
+  }
+
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
@@ -911,6 +946,7 @@ if (!window.DraftRender2D) {
     drawOrigin2D,
     drawStairs2D,
     drawFloor2D,
+    drawBoneyardMark2D,
   });
 })();
 }
