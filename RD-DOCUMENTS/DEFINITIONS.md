@@ -745,6 +745,44 @@ Movie's reason for wanting a distinct word, 3 Sep: *"makes it easy not to
 messup."* That is the whole test. A term earns its keep by being hard to say
 wrong, not by being precise on paper.
 
+### MASTER means controlling, not lowest
+
+Asked within a minute of agreeing the name, which is how fast a good term can
+still be misread: *"is the master boneframe the one under the foundation of the
+main floor boneframe"* — then, immediately, the right answer: *"i thought the
+master was the one that controls the other boneframes most."*
+
+The second is correct. **MASTER is an inheritance word, not a position word.**
+
+- A BONEYARD shelf is `{ id, name }` and nothing else (`drawing-format.js`,
+  `boneyardShelves`). **There is no elevation field**, so there is nothing for
+  "under" to refer to. The BONEYARD is storage, not a storey.
+- Every level holds a copy. Each copy's points carry `srcId` back to the master
+  point they came from.
+- Edit the MASTER and the linked points move **on every level**. Edit a level
+  copy and it stays local — that point takes an `offX`/`offZ` offset from its
+  master. The app says this itself when an outline closes
+  (`MODEL.dc.html:11142`).
+
+So a MASTER BONEFRAME sits nowhere. It is not below the foundation, not above
+the roof, not in the stack at all.
+
+**And the file gives the wrong impression, in as many words.** Two comments
+disagree:
+
+| `MODEL.dc.html:1736` | "never-printing shelf storage **snug under the level stack**" |
+| `MODEL.dc.html:13469` | "shelf storage **outside the level stack**" |
+
+13469 is right; 1736 is the one that produced the question above. It should
+lose "snug under the level stack" for "outside the level stack — a shelf has no
+elevation". Left for whoever is next in that file for another reason; it is a
+comment, and MODEL.dc.html is under a lock.
+
+This is worth more than a comment fix, because it is the general shape: **a
+term can be exactly right and still mislead through a neighbouring sentence.**
+The dictionary settles what a word means. It cannot settle what a stale comment
+implies, and the comment is what people read first.
+
 ### What this rename can and cannot touch
 
 `boneyardOutlines` is a **persisted key**, serialized at `MODEL.dc.html:3108`,
