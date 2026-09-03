@@ -680,6 +680,121 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+
+  // ─── The stair in plan ────────────────────────────────────────────────────
+  // Stringers, tread lines, handrail bars, the landing square with its winder
+  // fan, the U gap, and the downhill walk-line arrow with its DN label.
+  //
+  // Everything about the stair's geometry arrives already computed:
+  // env.layoutFor gives the riser/tread layout and env.partsFor turns that
+  // into runs, rails, landing, gap and walk line. This paints those parts; it
+  // does not work out where they go.
+  function drawStairs2D(ctx, toS, env) {
+    const std = env.layer;
+    if (!std.visible || (env.isPrinting && !std.printable)) return;
+    const stairs = env.stairs;
+    if (!stairs.length) return;
+    const font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+    const elev = env.elev || 0;
+    const origin = toS({ x: 0, y: elev, z: 0 });
+    const unit = toS({ x: 1, y: elev, z: 0 });
+    const pxPerFt = Math.max(0.001, Math.hypot(unit.x - origin.x, unit.y - origin.y));
+    stairs.forEach(stair => {
+      const layout = env.layoutFor(stair);
+      const parts = env.partsFor(stair, layout);
+      const y = stair.start.y || 0;
+      const pt = p => toS({ x: p.x, y, z: p.z });
+      const half = Math.max(2, (stair.widthFt / 2) * pxPerFt);
+      ctx.save();
+      ctx.strokeStyle = env.stairColor;
+      ctx.fillStyle = env.stairColor;
+      parts.runs.forEach(run => {
+        const a = pt(run.start);
+        const b = pt({ x: run.start.x + run.dir.x * run.lenFt, z: run.start.z + run.dir.z * run.lenFt });
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 1) return;
+        const ux = dx / len, uy = dy / len;
+        const px = -uy, py = ux; // right side walking down, in screen space
+        ctx.lineWidth = 1.5;
+        // Stringers
+        ctx.beginPath();
+        ctx.moveTo(a.x - px * half, a.y - py * half); ctx.lineTo(b.x - px * half, b.y - py * half);
+        ctx.moveTo(a.x + px * half, a.y + py * half); ctx.lineTo(b.x + px * half, b.y + py * half);
+        ctx.stroke();
+        // Tread lines at every run increment, top nosing included
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i <= run.treads; i++) {
+          const t = (i * env.treadRunIn / 12) * pxPerFt;
+          const cx = a.x + ux * t, cy = a.y + uy * t;
+          ctx.moveTo(cx - px * half, cy - py * half);
+          ctx.lineTo(cx + px * half, cy + py * half);
+        }
+        ctx.stroke();
+      });
+      // Handrail bars, 3" inside the stringer on the picked side(s), running
+      // continuously through a turn: level along the landing edge between the
+      // flights, and 36" above the walking surface the whole way.
+      if (parts.rails && parts.rails.length) {
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        parts.rails.forEach(path => {
+          path.map(pt).forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        });
+        ctx.stroke();
+      }
+      // Landing square, with winder division lines fanning from the inside
+      // corner when the landing converts to 2 or 3 winders.
+      if (parts.landing) {
+        const poly = parts.landing.poly.map(pt);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        poly.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        ctx.closePath();
+        ctx.stroke();
+        ctx.lineWidth = 1;
+        parts.landing.winderLines.forEach(line => {
+          const a = pt(line[0]), b = pt(line[1]);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        });
+      }
+      // The U gap line: the rail or wall the 4.5" between the runs is for.
+      if (parts.gap) {
+        const a = pt(parts.gap[0]), b = pt(parts.gap[1]);
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+      // Downhill walk-line arrow with the DN label and riser count
+      const walk = parts.walk.map(pt);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      walk.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.stroke();
+      const wa = walk[walk.length - 2], wb = walk[walk.length - 1];
+      const wd = Math.hypot(wb.x - wa.x, wb.y - wa.y) || 1;
+      const wux = (wb.x - wa.x) / wd, wuy = (wb.y - wa.y) / wd;
+      const wpx = -wuy, wpy = wux;
+      ctx.beginPath();
+      ctx.moveTo(wb.x - wux * 8 - wpx * 4, wb.y - wuy * 8 - wpy * 4); ctx.lineTo(wb.x, wb.y);
+      ctx.lineTo(wb.x - wux * 8 + wpx * 4, wb.y - wuy * 8 + wpy * 4);
+      ctx.stroke();
+      if (!env.isPrinting || std.printable) {
+        const a = walk[0], b = walk[1];
+        ctx.font = font;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.save();
+        ctx.translate((a.x + b.x) / 2, (a.y + b.y) / 2);
+        let angle = Math.atan2(b.y - a.y, b.x - a.x);
+        if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
+        ctx.rotate(angle);
+        ctx.fillText(`DN — ${layout.risers}R @ ${env.formatInchesOnly(layout.riserIn)}`, 0, -3);
+        ctx.restore();
+      }
+      ctx.restore();
+    });
+  }
+
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
@@ -688,6 +803,7 @@ if (!window.DraftRender2D) {
     drawUnderlays2D,
     drawGrid2D,
     drawOrigin2D,
+    drawStairs2D,
   });
 })();
 }
