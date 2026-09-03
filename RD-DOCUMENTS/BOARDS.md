@@ -153,6 +153,14 @@ Deliberately **not** in the six:
 
 ## Standing rules
 
+- **Check a new name against DEFINITIONS.md before you use it.** Gilligan, 3
+  Sep: a dictionary only works if it is consulted *before* naming things, or it
+  becomes a document that describes a problem nobody stopped having. The three
+  entries that cost real time — BONE, FLOOR, VIEW — were all written into the
+  code first and looked up afterwards. If a word you are about to reuse is
+  already in there, the entry names what to say instead; if it is a new word
+  covering a second kind of thing, that is the moment to pick a different one,
+  not after 137 call sites.
 - **One job per session, push at every milestone.** Four hours of reading that
   lives only in one agent's head costs a day when that agent stops.
 - **Old drawings must keep opening.** Standing check on every PR touching

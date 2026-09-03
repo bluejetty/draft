@@ -91,6 +91,40 @@ when the wall moves. It looks like it is pinned to a point; it is not.
 > Movie's ruling: **node for lines, object placement for objects.** Say
 > "object" or "object placement" and never "the toilet's node".
 
+### VIEW
+
+**Our worst collision by site count — 137, in three senses.** Measured 3 Sep
+across MODEL.dc.html:
+
+| sense | what it means | example | sites |
+|---|---|---|---|
+| the camera | which way the 3D scene is pointed | `activeView === 'top'` | ~52 |
+| the layer-set **selection** | which layer set you are looking at | `defaultLayerViewId(3)` → `'plan'` | ~60 |
+| the layer-set **membership** | which layer set an item belongs to | `view: 'stair'` | ~25 |
+
+Nothing about senses 2 and 3 is a view, a camera or a viewport. See LAYER /
+LAYER SET / LEVEL. Say **layer set** in prose and read `view` as its storage
+name; renaming the field would break every saved drawing.
+
+**Senses 2 and 3 each have a default, and they are different defaults.** This
+is the sharp edge, and it is where the tier-2a floors bug lived:
+
+- selection default — `defaultLayerViewId(levelId)`: `plan` on MAIN FL and
+  2ND FL, `foundation` on FOUNDATION, `null` on ROOF and SITE.
+- membership default — `(item.view || …)`: `floor` for floors, `plan` for
+  everything else.
+
+Both are legitimately "the default view". Tier 2a used the **selection**
+default as the **membership** default — `(floor.view || 'plan')` where the old
+page reads `(floor.view || 'floor')` — and that is a natural mistake precisely
+because one word names both. The two never agree for a floor: `plan` vs
+`floor` on MAIN FL, `foundation` vs `floor` on FOUNDATION.
+
+It stayed invisible because no fixture exercises either default — the old page
+always writes `view` explicitly on a floor, so the fallback is dead code until
+an older saved drawing turns up. `tests/model-html-floors.spec.js` builds that
+drawing by hand.
+
 ### FLOOR
 
 **Not a level and not a storey** — see the ruling under LEVEL / STOREY below.
