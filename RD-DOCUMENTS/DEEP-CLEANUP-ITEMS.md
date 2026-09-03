@@ -80,18 +80,13 @@ not for markdown pointing at one.
 
 Comments and documents only. No behaviour, no risk.
 
-### 4. `paper-rules.md` does not exist
+### 4. `paper-rules.md` does not exist — **DONE 3 Sep 2026**
 
-Cited in three places as though it does:
-
-```
-MODEL.dc.html:1685
-MODEL.dc.html:22214
-tests/rail-order.spec.js:6
-```
-
-Either write the document or drop the citation. **Movie's call** — a comment
-pointing at a missing file is worse than none, because someone will go looking.
+Written as `RD-DOCUMENTS/paper-rules.md` from the settled paper and sheet
+rules (Movie, 31 Aug 2026), and the three citations now point at the real
+path. Movie's call was to write it: a document cited by a test is
+load-bearing, and deleting the citation deletes the only record of why the
+test exists.
 
 ---
 
@@ -112,15 +107,17 @@ change.
 Best value on this list — it makes every later job cheaper, and it touches one
 file (`.github/workflows/test.yml`) so it cannot conflict with feature work.
 
-### 6. A spec that pins the saved format's key names
+### 6. A spec that pins the saved format's key names — **DONE 3 Sep 2026**
 
 Twenty spec files read `saved.boneyardOutlines` and would fail if the
 persisted key were renamed — but they guard it **by accident**, testing
 garages and build links and happening to name it. The guard disappears the day
 someone rewrites `garage.spec.js`.
 
-One short spec asserting the format's key names *on purpose*, with a header
-saying why, turns an accident into a guarantee. Cheap, and it protects item 7.
+`tests/persisted-format.spec.js` pins the names on purpose, with the header
+saying why; `RD-DOCUMENTS/RULES-persisted-keys.md` carries the half a test
+cannot — what the contested names mean, the absent-vs-null distinctions, and
+the write gates a replacement page must clear before tier 3.
 
 ### 7. `_boneyardOutlines` → `_masterWireframe`
 
