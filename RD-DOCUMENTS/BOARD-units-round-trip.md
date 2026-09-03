@@ -30,51 +30,55 @@ board NEW-5 rejected. Its own comment, four lines higher:
 Leaving geometry alone across a unit switch **recreates that exact bug in the
 other system.**
 
-## CORRECTION, same day: the direction was wrong, and the real bug is worse
+## The proof: three 12'-0" walls, shown in mm
 
-The first version of this board proved its case with three 12'-0" walls
-*shown in mm*: partials printing 3658 each, summing to 10974, against an
-overall printing 10973. **That cannot happen, because nothing in this app ever
-prints a millimetre.**
+Drawn on the sixteenth grid, relabelled to mm without re-snapping:
 
-Measured: `formatters.js` has eight functions and all are imperial —
-architectural inches and sixteenth fractions. Exactly four sites read
-`units === 'metric'`: save, load, `_gridStepFt()`, and LAYOUT's load. None of
-them formats anything.
+| | exact | printed |
+|---|---|---|
+| each segment | 3657.6 mm | **3658** |
+| overall | 10972.8 mm | **10973** |
+| partials as printed sum to | | **10974** |
 
-**So the METRIC toggle changes where nodes land and nothing about how the
-drawing reads.**
+**A 1 mm discrepancy on the sheet, with nothing wrong in the drawing.** The
+drafter's only fix is to nudge a wall by an amount that exists nowhere on
+screen — NEW-5's bug, verbatim.
 
-### Which produces the mirror bug, live on main today
+Re-snapped to the mm grid: 3658 × 3 = 10974 = the overall. Zero discrepancy.
+Total geometry movement: **1.20 mm over 36 feet.**
 
-In METRIC mode a node snaps to 1 mm and then prints rounded to the nearest
-sixteenth. Three walls, metric-snapped:
+## A correction that was itself wrong — read this before "fixing" the above
 
-| | |
-|---|---|
-| segment 1 | 3658 mm → **12'-0"** |
-| segment 2 | 3658 mm → **12'-0"** |
-| segment 3 | 3658 mm → **12'-0"** |
-| overall | 10974 mm → **36'-0 1/16"** |
+On 3 Sep this board was edited to say the worked example above could not
+happen, on the grounds that nothing in the app prints millimetres. **That edit
+was wrong and has been reverted.** The example is correct as written.
 
-**The partials print 36'-0". The overall prints 36'-0 1/16".** A sixteenth of
-an inch adrift on the sheet, with nothing wrong in the geometry — NEW-5's exact
-bug, alive right now, and it needs no unit switch to appear. Being in metric
-mode is enough.
+The error was a one-polarity grep. Searching `units === 'metric'` finds four
+sites — save, load, `_gridStepFt()`, LAYOUT's load — and none of them formats
+anything, which reads as "there is no metric display". **The display branches
+test the other side:**
 
-### What that does to this board's scope
+```js
+this.state.units === 'imperial' ? this._ftIn(value) : this._metric(value)
+```
 
-Re-snapping on a unit switch presumes **two working unit systems** to convert
-between. There is one. A drawing made tidy on the millimetre grid is still
-displayed in sixteenths, so the tidiness never reaches the sheet.
+Seven such sites, all invisible to that grep. And:
 
-**The prerequisite is a metric formatter**, not a re-snap. Once metric lengths
-print in millimetres, everything below applies unchanged and the re-snap is the
-right second step. Until then, metric mode is half-built: the snap grid respects
-the units and the display does not.
+```js
+_metric(feet) { return (feet * 0.3048).toFixed(3) + ' m'; }
+```
 
-The measurements below stand — they are about the two grids, not about which
-one is displayed.
+Metres to three decimals **is** millimetre precision — the app prints `3.658 m`
+where this board says `3658 mm`. Same number, different label.
+
+Two things follow, and both matter:
+
+- **Metric mode is not half-built.** The snap grid is 1 mm and the display
+  resolves to 1 mm. They agree.
+- **A grep for one side of a boolean is not a search for the concept.** A
+  fall-through branch is invisible to it, and an absence found that way is a
+  fact about the query. Caught by Gilligan reading the branch sites rather than
+  accepting the claim.
 
 ## The two grids do not divide each other
 
