@@ -322,9 +322,11 @@ test.describe('The curtain moment', () => {
     await page.keyboard.press('Enter');
     await h.waitForSaved(page);
     await page.locator('[data-tour-popup]').click(); // FOUNDATION DONE → MAIN
+    // Along the 16' axis: this house is only 12' deep and the run does not
+    // fit across that, so the app refuses it and the gate never lights.
     await h.selectTool(page, 'Stair');
-    await h.clickWorld(page, 2, -2);
-    await h.clickWorld(page, 2, 4);
+    await h.clickWorld(page, -2, 2);
+    await h.clickWorld(page, 4, 2);
     await h.waitForSaved(page);
     await page.keyboard.press('Enter');
     await page.locator('[data-tour-popup]').click(); // → the rooms pause (#198)

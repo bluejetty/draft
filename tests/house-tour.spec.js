@@ -156,7 +156,11 @@ test('a one-storey house presses STRAIGHT TO ROOF and the tour parks there', asy
   await h.openModel(page);
   await traceHouse(page, 16, 12);
   await page.locator('[data-tour-popup]').click();
-  await placeStairs(page, 0, -2, 0, 6);
+  // The stair runs along the 16' axis: this house is only 12' deep, and a
+  // 10'-10" run does not fit across that once a wall assembly comes off
+  // each side, so the app now refuses it. The stair is scaffolding to
+  // light the MAIN gate here, not the subject of the test.
+  await placeStairs(page, -2, 0, 6, 0);
 
   await page.keyboard.press('Enter'); // the lit gate answers the keyboard too
   await page.locator('[data-tour-popup]').click(); // → the rooms pause
