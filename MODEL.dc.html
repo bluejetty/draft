@@ -8048,7 +8048,15 @@ class Component extends DCLogic {
 
   _drawDimension2D(ctx, toS, dimension, options = {}) {
     window.DraftRender2D.drawDimension2D(ctx, toS, dimension, options, {
-      label: value => (this.state.units === 'imperial' ? this._ftIn(value) : this._metric(value)),
+      // IMPERIAL IS THE FALL-THROUGH, deliberately. Every display branch asks
+      // "is it metric?" rather than "is it imperial?", so a units value that
+      // is absent, null or unrecognised reads imperial -- which every drawing
+      // made before the field existed actually is. Two guards already make
+      // that unreachable (the initial state, and the loader's
+      // `saved.units === 'metric' ? 'metric' : 'imperial'`), but they are two
+      // lines and this is six; a third writer setting units should not be
+      // able to flip the whole sheet to metric by writing junk.
+      label: value => (this.state.units !== 'metric' ? this._ftIn(value) : this._metric(value)),
       colors: {
         stroke: '#365e86',
         selected: '#5980a6',
@@ -9521,6 +9529,19 @@ class Component extends DCLogic {
     return `Re-snapped to ${grid} — ${parts.join(' and ')} moved, max ${worst}.`;
   }
 
+  // Board #313 / audit Q2 ruled the toggle a SOFT switch -- display-only, with
+  // any hard re-snap a separate deliberate command -- on the assumption that
+  // re-snapping was a walk that would accumulate. AMENDED 3 Sep on Devin's
+  // authority after that assumption was measured dead: one settle of under a
+  // millimetre, then idempotent both ways (0 of 7,681 points move on an
+  // imperial round trip), worst single move 0.79 mm against a framer's ±3 mm.
+  // "Never automatic" was aimed at SOFTWARE-initiated movement -- opened,
+  // loaded, re-derived -- and a drafter pressing the toggle is a deliberate
+  // act. The soft switch's claim to be "always safe" was the weaker half: it
+  // leaves partials that do not sum to the overall with nothing on screen
+  // saying so, and a display that quietly lies about sums is less safe than a
+  // settle nobody can see.
+  //
   // The ONLY path that re-snaps. Loading a drawing sets state.units directly
   // (see the reader), and must keep doing so: opening an old drawing may not
   // rewrite it, or the standing rule "old drawings must keep opening" quietly
@@ -9786,7 +9807,7 @@ class Component extends DCLogic {
     }
     this.setState(newState);
 
-    const imp = this.state.units === 'imperial';
+    const imp = this.state.units !== 'metric';
     const el  = sel => document.querySelector(sel);
 
     const _setLen = (s, ept) => {
@@ -13564,7 +13585,7 @@ class Component extends DCLogic {
 
   _areaLabel(sqFt) {
     if (!(sqFt > 0)) return '';
-    return this.state.units === 'imperial'
+    return this.state.units !== 'metric'
       ? `${(Math.round(sqFt * 10) / 10).toLocaleString()} SQ FT`
       : `${(Math.round(sqFt * 0.09290304 * 100) / 100).toLocaleString()} m²`;
   }
@@ -20291,7 +20312,7 @@ class Component extends DCLogic {
     if (this._frozenTool === 'nodedrag') {
       const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
       if (parsed.ok) this._placeFrozenDrag(end);
-      const imperial = this.state.units === 'imperial';
+      const imperial = this.state.units !== 'metric';
       const lenEl = document.querySelector('[data-model-len]');
       if (lenEl) lenEl.textContent = parsed.ok ? '↔ ' + (imperial ? this._ftIn(total) : this._metric(total)) : '';
       const angEl = document.querySelector('[data-model-ang]');
@@ -20318,7 +20339,7 @@ class Component extends DCLogic {
     // typed endpoint to draw towards.
     this._frozenEnd = hasLength ? end : null;
     // Update status bar display
-    const imp = this.state.units === 'imperial';
+    const imp = this.state.units !== 'metric';
     const el = sel => document.querySelector(sel);
     if (el('[data-model-len]')) el('[data-model-len]').textContent = hasLength ? '↔ ' + (imp ? this._ftIn(total) : this._metric(total)) : '';
     const angDeg = Math.round(Math.atan2(-dirZ, dirX) * 180 / Math.PI);
@@ -21134,7 +21155,7 @@ class Component extends DCLogic {
   _metric(feet) { return (feet * 0.3048).toFixed(3) + ' m'; }
   _elevLabel(elev) {
     const sign = elev > 0 && !this.state.elevationDatum ? '+' : '';
-    return sign + (this.state.units === 'imperial' ? this._ftIn(elev) : this._metric(elev));
+    return sign + (this.state.units !== 'metric' ? this._ftIn(elev) : this._metric(elev));
   }
 
   _levelWallTopFt(levelId, view = 'plan') {

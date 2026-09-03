@@ -5,7 +5,22 @@ scale and just jump the nodes over a tiny tiny bit so the drawing actually
 changes in size slightly (under mm)… it actually fixes a drafting problem, it
 makes the mm to imperial conversions work better."*
 
-Status: **proposed, measured, not built.** The code lives in MODEL.dc.html.
+Status: **BUILT, 3 Sep.** The code lives in MODEL.dc.html — `_resnapToUnits()`,
+called from `_setUnits()`, covered by `tests/units-resnap.spec.js`.
+
+**Amendment to board #313 / audit Q2, 3 Sep, on Commander Devin's authority.**
+#313 ruled the units toggle a SOFT switch — display-only re-print, with any
+hard re-snap a separate deliberate command, never automatic. **The toggle now
+performs the re-snap.** "Never automatic" was aimed at SOFTWARE-initiated
+movement — a drawing must never re-snap because it was opened, loaded or
+re-derived — and a drafter pressing the toggle is a deliberate act. The ruling
+fused "automatic" with "on the toggle" on the assumption that re-snapping was a
+walk that would accumulate; the measurements below killed that assumption.
+Soft-only display is retired. Load still never re-snaps, and that is pinned by
+a spec.
+
+The old ruling is recorded here so it does not become folklore that contradicts
+the code.
 
 ---
 
@@ -44,8 +59,17 @@ Drawn on the sixteenth grid, relabelled to mm without re-snapping:
 drafter's only fix is to nudge a wall by an amount that exists nowhere on
 screen — NEW-5's bug, verbatim.
 
-Re-snapped to the mm grid: 3658 × 3 = 10974 = the overall. Zero discrepancy.
-Total geometry movement: **1.20 mm over 36 feet.**
+Re-snapped to the mm grid, the discrepancy is zero. Total geometry movement:
+**1.20 mm over 36 feet.**
+
+**Correction, 3 Sep (Gilligan, measured while building it).** This line first
+read "3658 × 3 = 10974 = the overall", and that is not what snapping every node
+from the datum produces. The nodes land on 0 / 3658 / 7315 / 10973 mm, so the
+segments print **3658, 3657, 3658** — summing to 10973, which IS the overall.
+The goal is met exactly; what is not preserved is the three walls being EQUAL.
+Getting 3658 × 3 would mean accumulating snapped segment *lengths* rather than
+snapping nodes, which is not requirement 1 below and would drift the far end of
+a long run. Requirement 1 is right; the illustration under it was wrong.
 
 ## The two grids do not divide each other
 
