@@ -27,10 +27,21 @@ const notice = page => page.locator('#notice');
 // with `paintWalls()` deleted, the original assertion still passed.
 //
 // So walls are counted by COLOUR. drawWallSeg2D fills #ffffff, rgb(182,182,182)
-// and rgb(205,228,248); the grid is #26292a and #34383a, plan lines are #7f8688
-// and the floor wash sits just off the #1d1f20 ground. Nothing but a wall puts
-// a red channel above 170 on this page.
+// and rgb(205,228,248); the grid, plan lines and floor wash are all far darker
+// than that on the night skin. Nothing but a wall puts a red channel above 170.
+//
+// THIS COUNT IS TRUE OF THE NIGHT SKIN ONLY, and that is now a real condition
+// rather than the only possibility. palette.js gives MODEL.html four skins
+// (RD-DOCUMENTS/SPEC-skins.md); on `?mode=day` the ground is #f2f2f3 and EVERY
+// pixel clears 170, so this helper would report a full canvas of walls on a
+// page that painted none. It therefore asserts the skin it depends on instead
+// of assuming it -- the same mistake, one file over, put 1/16" in a LAYOUT
+// comment for four days after it stopped being true.
 async function wallInk(page) {
+  const mode = await page.evaluate(() => document.documentElement.dataset.mode);
+  expect(mode, 'wallInk counts bright pixels, which only isolates walls on the '
+    + 'night skin — on day the ground itself clears the threshold')
+    .toBe('night');
   return page.evaluate(() => {
     const canvas = document.getElementById('plan');
     const { data } = canvas.getContext('2d')
@@ -43,15 +54,24 @@ async function wallInk(page) {
 
 // Any ink at all, for the empty state -- where the assertion is that the page
 // drew NOTHING, and the grid counts against that just as much as a wall would.
+//
+// "Not the ground" is asked of the SKIN's ground rather than of a literal, so
+// this one holds on all four. It reads --surface-page off the element
+// palette.js wrote it to, which is also a check that the palette was applied.
 async function anyInk(page) {
   return page.evaluate(() => {
+    const css = getComputedStyle(document.documentElement)
+      .getPropertyValue('--surface-page').trim();
+    const hex = css.replace('#', '');
+    const ground = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
+    if (ground.some(Number.isNaN)) throw new Error(`anyInk: unreadable ground "${css}"`);
     const canvas = document.getElementById('plan');
     const { data } = canvas.getContext('2d')
       .getImageData(0, 0, canvas.width, canvas.height);
     let ink = 0;
     for (let i = 0; i < data.length; i += 4) {
-      if (Math.abs(data[i] - 0x1d) > 8 || Math.abs(data[i + 1] - 0x1f) > 8
-        || Math.abs(data[i + 2] - 0x20) > 8) ink += 1;
+      if (Math.abs(data[i] - ground[0]) > 8 || Math.abs(data[i + 1] - ground[1]) > 8
+        || Math.abs(data[i + 2] - ground[2]) > 8) ink += 1;
     }
     return ink;
   });
@@ -109,10 +129,19 @@ test.describe('MODEL.html tier 1', () => {
     expect(frameworks.dc).toBe(0);
     expect(frameworks.scripts).not.toContain('./support.js');
 
-    // Four dependencies, and the list is the finding: render-2d.js reaches for
-    // no globals, so the wall painter costs one module.
+    // FIVE dependencies, and the list is the finding rather than a formality:
+    // render-2d.js reaches for no globals, so the wall painter still costs one
+    // module. palette.js joined on 3 Sep and is the only one that is not a
+    // painter -- it is loaded FIRST because the skin is applied at module
+    // scope, before first paint (RD-DOCUMENTS/SPEC-skins.md).
+    //
+    // Keep this exact rather than loosening it to a `toContain`. It caught the
+    // palette being added the same hour it was added, which is what an exact
+    // list is for: the migration's whole claim is that this page is cheap, and
+    // a dependency that arrives without anyone noticing is how that stops
+    // being true.
     expect(frameworks.scripts).toEqual([
-      './shared-file-store.js', './wall-types.js',
+      './palette.js', './shared-file-store.js', './wall-types.js',
       './drawing-format.js', './render-2d.js',
     ]);
   });

@@ -747,7 +747,14 @@ class Component extends DCLogic {
 
   // The largest scale on the ladder at which every view in the list fits the
   // region together (stacked for a pair, alone otherwise); the smallest rung
-  // is the floor — a view too big for even 1/16" still prints, clipped.
+  // is the floor — a view too big for even the last rung (3/32" for the
+  // architect ladder, 1"=40' for site) still prints, clipped. 1/16" left the
+  // ladder in 274c78f and is no longer a scale the composer can choose, only
+  // one a drafter can pick by hand from SCALES.
+  //
+  // This sentence named 1/16" as the floor for four days after that change,
+  // and on 3 Sep it was quoted back as evidence that 1/16" was still live.
+  // Name the rung, never the number.
   _autoScaleFor(views, region, axis = 'stack') {
     const family = SCALE_FAMILIES[scaleFamilyFor(views[0])] || SCALE_FAMILIES.architect;
     const fits = pif => {
