@@ -15,6 +15,64 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// THE TOUR IS PARKED, so there is no FOUNDATION DONE popup to wait on.
+//
+// These specs never wanted the popup as navigation -- they wanted it as a
+// SIGNAL. The reveal lands the beam at 400ms and the teleposts at 800ms, and
+// the popup arrived at 1200ms, so "popup is visible" meant "the reveal has
+// finished". With the escort switched off the structure still lands on the
+// same timers; only the announcement is gone.
+//
+// So wait for the thing itself. This is the better assertion anyway: it waits
+// on the beam this file is about, rather than on a banner that happened to
+// come after it.
+// WAIT FOR THE REVEAL TO SETTLE, not for one frame of it. The beam lands at
+// 400ms and the teleposts at 800ms, so waiting on the beam alone returns
+// halfway through and the column assertions read an empty list -- which is
+// exactly the mistake the first version of this helper made. Rather than
+// encode either timing, wait until two consecutive reads agree: the reveal is
+// done when it stops changing, whatever its frames are today.
+// WAIT FOR WHAT THE TEST ASSERTS, NOT FOR THINGS TO GO QUIET.
+//
+// The first version of this waited until two reads 150ms apart agreed. That
+// is not proof the auto-structure finished -- it is proof nothing changed in a
+// 150ms window, and the app builds in two waves: the mid-span beam at ~400ms
+// and its teleposts at ~800ms. In the ~400ms gap between them two reads agree
+// happily on "1 beam / 0 columns", so this exited early and the column
+// assertions read an empty list. It failed 2 runs in 3 locally and once on CI.
+//
+// That was the same mistake it was written to fix. The popup was a proxy for
+// "the structure is built"; so was settle-detection. Both answer a question
+// next to the one being asked. So each caller now states the counts its own
+// assertions need, and this waits for exactly those.
+//
+// It fails LOUDLY with what it actually saw (Gilligan, 3 Sep) rather than
+// letting the poll run into the 90s test timeout, where playwright would
+// report a locator error that says nothing about what the app built.
+//
+// Three callers ask for `columns: 1` while only asserting things ABOUT the
+// columns -- `autoColumns(saved).some(c => c.point.srcId)` and friends. That
+// is deliberate: `.some()` on an empty array is false, so those assertions
+// pass perfectly well when no telepost was built at all. Waiting for one to
+// exist is what makes them mean anything.
+async function waitForAutoBeams(page, { beams = 1, columns = 0, timeoutMs = 8000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let saw = 'nothing';
+  for (;;) {
+    const saved = await h.savedDrawing(page);
+    const gotBeams = (saved?.beams || []).filter(beam => beam.auto).length;
+    const gotColumns = (saved?.columns || []).filter(column => column.auto).length;
+    saw = `${gotBeams} beams / ${gotColumns} columns`;
+    if (gotBeams >= beams && gotColumns >= columns) break;
+    if (Date.now() > deadline) {
+      throw new Error(`auto structure never arrived within ${timeoutMs}ms: `
+        + `expected at least ${beams} beams / ${columns} columns, saw ${saw}`);
+    }
+    await page.waitForTimeout(100);
+  }
+  await h.waitForSaved(page);
+}
+
 // An L-plan, 30 x 24 overall with a 12 x 14 bite out of the east side: the
 // jog corner lands at (3, -2), 2' off the unsnapped mid-line z=0. The beam
 // snaps to z=-2, runs from the west wall to the corner (the shallow east
@@ -64,8 +122,7 @@ test('the auto beam snaps onto the jog corner, dead-ends there, and links to the
   await h.openModel(page);
   await traceLHouse(page);
 
-  await expect(page.locator('[data-tour-popup]')).toBeVisible();
-  await h.waitForSaved(page);
+  await waitForAutoBeams(page, { beams: 2, columns: 1 });
   const saved = await h.savedDrawing(page);
 
   // Snapped: every beam segment rides z=-2 (the corner), not the mid-line 0.
@@ -104,8 +161,7 @@ test('the auto beam snaps onto the jog corner, dead-ends there, and links to the
 test('dragging the master jog corner carries the linked beam end along', async ({ page }) => {
   await h.openModel(page);
   await traceLHouse(page);
-  await page.locator('[data-tour-popup]').click(); // FOUNDATION DONE → MAIN
-  await h.waitForSaved(page);
+  await waitForAutoBeams(page, { columns: 1 });
 
   await switchLevel(page, 'BONEYARD');
   await dragWorld(page, 3, -2, 6, -1);
@@ -128,8 +184,7 @@ test('dragging the master jog corner carries the linked beam end along', async (
 test('the corner link survives a reload — the revived beam still rides the master', async ({ page }) => {
   await h.openModel(page);
   await traceLHouse(page);
-  await page.locator('[data-tour-popup]').click();
-  await h.waitForSaved(page);
+  await waitForAutoBeams(page, { columns: 1 });
 
   await page.reload();
   await h.waitForModelReady(page);
@@ -150,8 +205,7 @@ test('the corner link survives a reload — the revived beam still rides the mas
 test('the stair re-derive keeps the corner snap and re-links through the second commit site', async ({ page }) => {
   await h.openModel(page);
   await traceLHouse(page);
-  await page.locator('[data-tour-popup]').click(); // → MAIN
-  await h.waitForSaved(page);
+  await waitForAutoBeams(page, { columns: 1 });
 
   // A stair well north of the corner: hole strip z 4..10, so the larger
   // clear strip becomes [-12, 4] (mid -4) — the corner at z=-2 is still

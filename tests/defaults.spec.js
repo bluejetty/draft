@@ -51,7 +51,7 @@ test('the shipping defaults draw a whole house and put it on a sheet', async ({ 
   // No seeds: boneWallet false leaves the real 3-bone grant, and asking for
   // BOTH boneReveal and autoStairs skips the settings seed entirely, so every
   // model setting sits at its shipped value.
-  await h.openModel(page, { boneWallet: false, boneReveal: true, autoStairs: true });
+  await h.openModel(page, { boneWallet: false, boneReveal: true, autoStairs: true, tourEscort: true });
 
   // ── trace ──────────────────────────────────────────────────────────────
   // 28 x 24: the 24' joist span passes the 19' trigger, so the foundation

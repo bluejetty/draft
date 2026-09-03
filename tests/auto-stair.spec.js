@@ -26,7 +26,7 @@ const autoStairs = saved => saved.stairs.filter(stair => stair.auto);
 const stairOpenings = saved => saved.surfaceOpenings.filter(opening => Number.isInteger(opening.stairId));
 
 test('the tour stair step arrives pre-placed, born legal, and the bone cuts its opening un-nudged', async ({ page }) => {
-  await h.openModel(page, { autoStairs: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   await traceHouse(page, L_PLAN);
   await expect(page.locator('[data-tour-popup]')).toBeVisible();
   await page.locator('[data-tour-popup]').click(); // FOUNDATION DONE → MAIN
@@ -59,7 +59,7 @@ test('the tour stair step arrives pre-placed, born legal, and the bone cuts its 
 });
 
 test('the 2ND floor stair stacks over the suggestion below, 6" wider beside the exterior wall (rule B)', async ({ page }) => {
-  await h.openModel(page, { autoStairs: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   // 14x16: no beam (14' span), the straight run cannot fit inside the
   // interior ring (the basement setback is the foundation wall plus its
   // insulation lining — ~1.2'), and the L folds into a ring corner —
@@ -96,7 +96,7 @@ test('the 2ND floor stair stacks over the suggestion below, 6" wider beside the 
 });
 
 test('outside the tour the bone parks on the suggestion first, then builds where it stands (Q2b)', async ({ page }) => {
-  await h.openModel(page, { autoStairs: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   await traceHouse(page, RECT);
   await expect(page.locator('[data-tour-popup]')).toBeVisible();
   await page.keyboard.press('Escape'); // leave the tour — no stairs placed
@@ -123,7 +123,7 @@ test('outside the tour the bone parks on the suggestion first, then builds where
 });
 
 test('deleting the suggestion is "no thanks" — the next press builds stairless (Q6)', async ({ page }) => {
-  await h.openModel(page, { autoStairs: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   await traceHouse(page, RECT);
   await expect(page.locator('[data-tour-popup]')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -156,7 +156,7 @@ test('deleting the suggestion is "no thanks" — the next press builds stairless
 test('an ENTRY stamp near the front wall wins the entry L, and the stacked stair mirrors it (rule A)', async ({ page }) => {
   // Suggestions stay OFF for the setup — the stamps get placed the
   // hand-drafter way first, and the toggle flips on for the finale.
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await page.evaluate(() => {
     const manager = window.DraftProfileManager;
     manager.saveActive(manager.createPackage('standards', 'entry-tray', {

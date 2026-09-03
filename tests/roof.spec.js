@@ -250,7 +250,7 @@ test('a roof survives a reload', async ({ page }) => {
 });
 
 test('PORK CHOP builds gable edges at half the eave overhang (board #252)', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await page.evaluate(() => {
     const m = window.DraftProfileManager;
     m.saveActive(m.createPackage('standards', 'test', { model: { structureStandards: { gableCorner: 'porkchop' } } }));

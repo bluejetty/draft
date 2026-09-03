@@ -88,7 +88,10 @@ async function traceHouse(page, points) {
 // bone pressed — the same path the shipped entry-L spec walks, with the house
 // and the stair's side of the plan as parameters.
 async function entryLSession(page, { house, stair, entryAt }) {
-  await h.openModel(page);
+  // The escort is parked (Movie, 2 Sep) and this session CLIMBS it -- it waits
+  // on [data-tour-popup] to step FOUNDATION -> MAIN. So it opts in, like every
+  // other tour-driving spec, rather than losing the coverage.
+  await h.openModel(page, { tourEscort: true });
   await page.evaluate(() => {
     const manager = window.DraftProfileManager;
     manager.saveActive(manager.createPackage('standards', 'entry-tray', {

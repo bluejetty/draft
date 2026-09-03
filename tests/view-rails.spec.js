@@ -9,6 +9,12 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// THE TOUR IS PARKED for drafters (Movie, 2 Sep) but this file drives it:
+// its setup helpers climb FOUNDATION -> MAIN -> rooms through the popup ladder,
+// so every test here turns the escort back on. The code is switched off, not
+// deleted, and a parked feature with no coverage is one flag from shipping with
+// nothing watching it.
+
 async function drawOutlineRect(page) {
   await h.selectTool(page, 'Outline');
   await h.clickWorld(page, -8, -6);
@@ -51,7 +57,7 @@ function thumbByLabel(page, column, label) {
 
 test.describe('Stretched level cards', () => {
   test('cards reach the rail edge and layer labels sit on one line', async ({ page }) => {
-    await h.openModel(page, { webgl: false });
+    await h.openModel(page, { tourEscort: true, webgl: false });
 
     // Every level card spans the rail — no unused strip on the right.
     const rail = await page.locator('[data-model-right]').boundingBox();
@@ -74,7 +80,7 @@ test.describe('Stretched level cards', () => {
 
 test.describe('View galleries', () => {
   test('the fixed seating chart fills both columns; E1-E4 arrive with the build', async ({ page }) => {
-    await h.openModel(page, { webgl: false, rails: false });
+    await h.openModel(page, { tourEscort: true, webgl: false, rails: false });
 
     // Nothing built — every seat is taken: empty E and S screens hold
     // their chairs, and the plans keep theirs.
@@ -133,7 +139,7 @@ test.describe('View galleries', () => {
   });
 
   test('a hand-cut section starts the next row, left cell first', async ({ page }) => {
-    await h.openModel(page, { webgl: false, rails: false });
+    await h.openModel(page, { tourEscort: true, webgl: false, rails: false });
     await drawOutlineRect(page);
     await buildHouse(page);
     await h.waitForSaved(page);
@@ -179,7 +185,7 @@ test.describe('View galleries', () => {
   });
 
   test('tapping the empty S1 seat starts the cut, the same as pressing C', async ({ page }) => {
-    await h.openModel(page, { webgl: false, rails: false });
+    await h.openModel(page, { tourEscort: true, webgl: false, rails: false });
     await drawOutlineRect(page);
     await buildHouse(page);
     await h.waitForSaved(page);
@@ -211,7 +217,7 @@ test.describe('View galleries', () => {
   });
 
   test('the BASEMENT and FOUNDATION seats show different layer views', async ({ page }) => {
-    await h.openModel(page, { webgl: false, rails: false });
+    await h.openModel(page, { tourEscort: true, webgl: false, rails: false });
     await drawOutlineRect(page);
     await buildHouse(page);
     await h.waitForSaved(page);
@@ -251,7 +257,7 @@ test.describe('View galleries', () => {
   });
 
   test('the FOUNDATION level lands on the concrete plan by default', async ({ page }) => {
-    await h.openModel(page, { webgl: false });
+    await h.openModel(page, { tourEscort: true, webgl: false });
 
     await page.locator('.level-row')
       .filter({ has: page.locator('.level-name', { hasText: 'FOUNDATION' }) })
@@ -261,7 +267,7 @@ test.describe('View galleries', () => {
   });
 
   test('the 3D screen stands top-left; the open toolbox covers it', async ({ page }) => {
-    await h.openModel(page, { webgl: false, rails: false });
+    await h.openModel(page, { tourEscort: true, webgl: false, rails: false });
 
     // Rails tucked: the 3D screen sits in the canvas's top-left corner.
     const threeD = page.locator('[data-view-rail-3d]');
@@ -280,7 +286,7 @@ test.describe('View galleries', () => {
   });
 
   test('the open LEVELS panel covers only the outer column; the inner keeps its seat', async ({ page }) => {
-    await h.openModel(page, { webgl: false, rails: false });
+    await h.openModel(page, { tourEscort: true, webgl: false, rails: false });
     await drawOutlineRect(page);
     await buildHouse(page);
     await h.waitForSaved(page);
@@ -310,7 +316,7 @@ test.describe('View galleries', () => {
 
 test.describe('The curtain moment', () => {
   test('the finale bone opens both rails and holds a beat before the house grows', async ({ page }) => {
-    await h.openModel(page, { boneReveal: true });
+    await h.openModel(page, { tourEscort: true, boneReveal: true });
 
     // The guided tour up to the finale: trace, stairs, rooms, roof, bone.
     await page.locator('[data-select-house]').click();

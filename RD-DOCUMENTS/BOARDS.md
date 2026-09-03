@@ -35,12 +35,12 @@ These are hours, not days, and each one unblocks something bigger.
 
 | Board | Item | Size | Blocks |
 | --- | --- | --- | --- |
-| **NEW-2** | **Note A — composition order.** Add site, roof, basement and electric sheets so the dealt set matches the approved sheet order. Also fix the auto scale. Today it deals elevations at 1/16" and they swim on an 11×17 — **but the ladder is not in the wrong order** (it already runs 1/4"→1/16" and takes the first rung that fits); the fault is that an elevation's measured height runs 2' below the footing to 2' above the ridge, so a basement house measures ~38' for ~25' of visible building and the pair drops a rung. One ruling from Movie, 1 Sep: **drop 1/16" off the ladder** (not a real drawing scale, clipped last resort only) and otherwise **leave the chooser alone** — largest-that-fits stays. A fill rule was considered and rejected: too big is self-evident, too small is an opinion, and largest-that-fits lands on mostly 1/8" and 3/16" anyway without a tuned threshold. **Fit must be measured on the annotated extent, not the building envelope** — dimension strings, elevation/level markers and the view title all sit outside the object, so a set that fits bare comes back one step too big the day dimensions land. **Views must be placed, not stacked into the corner** — one view centres in the working area; two sit side by side if the pair reads wider than tall, stacked if taller than wide, and the pair centres as a group. Same measurement as the fit test, so it comes almost free. Refine the balancing with a drafter's eye later; anything is better than upper-left. | 2–4 h | The whole default-set feature reads as half-finished until this lands. |
+| **NEW-2** | **Note A — composition order.** *Rev 2, 3 Sep — most of this landed; the board was read, the code was not.* **Already merged** (`274c78f`, `9548d44`, `0aa7cd1`, `e093c89`): 1/16" is off the ladder (`AUTO_SCALE_PREFS = [1/4, 3/16, 1/8, 3/32]`, last resort 3/32); largest-that-fits is untouched; the set deals in Movie's order (`_composeDefaultSet`, `LAYOUT.dc.html:793`); a single view centres and a pair rows-or-stacks and centres as a group; fit measures the annotated extent through `VIEW_ALLOWANCE_FT`, named and zero so adding dimension strings later moves the chosen scale by itself; and the elevation over-measure is gone — `_viewFootprintFt` takes `yTopDrawn`/`yBottomDrawn`, not footing-to-ridge. **What remains is slots 3, 4, 6 and 8 — SITE, ROOF, floor-layout, electrical — and it is not a scale problem at all.** The composer says so itself at `LAYOUT.dc.html:793`: *no painter*, and for S-SLAB / S-FDN / E-POWER *no entities in the drawing format to paint*. `kind: 'site'` appears in exactly one place in the repo — the scale-family selector — so `SITE_SCALE_PREFS` (1"=10'/20'/30'/40') is a ladder with nothing on it. **Movie's ruling, 3 Sep: those sheets are NOT done, and NEW-2 still owns them.** The composer's comment says *"they are their own boards, not silent omissions"*, and an agent read that as reassigning them out of NEW-2 — it does not. It explains why they are absent; it does not close the item. **NEW-2 stays open on the sheets alone.** What that costs is no longer 2–4 h: SITE and ROOF want a painter that is still inside `MODEL.dc.html` (board #1), and S-SLAB / S-FDN / E-POWER have no entities in `drawing-format.js` to paint at all, so they want a format board first. `kind: 'site'` appears in exactly one place in the repo — the scale-family selector — so `SITE_SCALE_PREFS` (1"=10'/20'/30'/40') is a ladder with nothing on it. | sheets only; **not** the old 2–4 h | SITE + ROOF blocked on #1. Structural + electrical blocked on a drawing-format board. |
 | **NEW-4** | **The build row lights up.** Turtle before HOUSE, rabbit after DETACHED, and the row's lamps inverted: **dim by default, bright while armed, softly lit once that thing exists in the drawing.** Lit state is derived from the model, not remembered — so it survives F5 and clears on a new drawing. **Each lamp reads its own object, so two, three or four can be lit at once** (house + split + both garages); there is no one-at-a-time rule. Art supplied by Movie, 1 Sep: turtle 1024², rabbit 330², both with real alpha. Today the buttons sit at full brightness always and only glow while armed; the bone is the only one that ever dims. | 3–5 h | Nothing waits on it, but it is the visible half of TOY MODE and the first thing anyone sees. |
 | **NEW-3** | **Note B — auto section-cut placement.** Cut 1 through the stair showing treads in length; cut 2 through house/garage where attached; cut 3 always, in the unused direction. | 4–6 h | Depends on stairs-in-section: `cut-view.js` does not draw treads beyond the cut plane, so a stair-oriented cut currently shows nothing. Fix that first or the rule is decorative. |
 | #4 (docs) | ~~Stale architecture docs.~~ **Landed as PR #206**, 31 Aug. `docs/ORIENTATION.md` landed alongside it as PR #207. | — | — |
 | — | ~~`playwright.config.js` hardcodes port 4173 with `reuseExistingServer`.~~ **Landed as PR #205**, 31 Aug, 677/0. Set `DRAFT_TEST_PORT` and you always get your own server. | — | Unblocks running two agents on one box, and so the MODEL split. |
-| — | **Board #311 `pointer/outline-entry`** is open as **PR #208**. Measured 633/0 on its old base; needs a re-run against current main before merge. | minutes + a suite run | — |
+| — | ~~**Board #311 `pointer/outline-entry`**, PR #208.~~ **Merged 1 Sep.** | — | — |
 
 ---
 
@@ -126,11 +126,14 @@ For the next day or two, in this order.
 
 1. **NEW-1 see-through elevations** — already out with Skipper. Live defect,
    about to be multiplied by four per job.
-2. **NEW-2 Note A composition order + the 3/16" scale ladder** — finishes the
-   feature that shipped this afternoon. Small, and it is the difference between
-   "the composer works" and "the composer does what the office does".
+2. **NEW-2 — the SITE and ROOF sheets.** The scale and placement halves
+   landed 1–2 Sep and must not be rebuilt; what is left is the sheets
+   themselves, which Movie confirmed on 3 Sep are still outstanding. They
+   wait on **#1**, so #1 goes first and NEW-2 follows it. The structural and
+   electrical sheets wait on a drawing-format board that does not exist yet.
 3. ~~**#4 stale architecture docs**~~ — landed, PR #206 and #207.
 4. ~~**The playwright port collision**~~ — landed, PR #205.
+   ~~**Board #311 pointer/outline-entry**~~ — landed, PR #208, 1 Sep.
 5. **#1 extract the plan painter** — mechanical, has a worked example, unblocks
    floor plans on sheets. Ideal overnight job for one agent alone in the big
    file.
@@ -156,6 +159,16 @@ Deliberately **not** in the six:
   `drawing-format.js`.
 - **Check main before starting.** Board #323 was built twice, in parallel, by
   two agents, because neither could see this file. That is what it is for.
+- **Then check the code, because this file lags it.** On 3 Sep an agent was
+  nearly sent to rebuild NEW-2's scale and placement work, which had merged two
+  days earlier while the board still described it as pending. Open the file an
+  entry names before starting.
+- **But the code is evidence, not the ruling.** The same agent then read a
+  source comment — *"they are their own boards"* — as closing NEW-2 entirely,
+  and edited this file to say so. Movie's answer was simply *"we didn't do
+  those sheets yet."* A comment explains what the code does; it does not decide
+  what is still owed. **Scope belongs to whoever owns the board.** Record what
+  you measured, and ask before striking an item.
 - **Never bug-check on `roughdrafter.com`** — it lags `main` by hours.
 - **A session that cannot push to the repo it is working on is not set up.**
   Run `git push --dry-run` on a throwaway branch before writing a line. Twice on

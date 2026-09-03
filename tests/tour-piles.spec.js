@@ -58,7 +58,7 @@ test('the ladder binds before the stairs too — a rule, never a cage', async ({
   // The stairs sequencing lives in the tour's popups and climb gate; node
   // editing stays free, so a pull made before the stairs still rides the
   // ladder and lands its piles — the structural rule is unconditional.
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachMain(page, 16, 12);
 
   await dragCorner(page, 8, 6, 13, 6); // no stairs yet — 5' out
@@ -72,7 +72,7 @@ test('the ladder binds before the stairs too — a rule, never a cage', async ({
 });
 
 test('the pile rides the corner, and the forbidden band snaps the pull back', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachMain(page, 16, 12);
   await placeStairs(page);
 
@@ -102,7 +102,7 @@ test('the pile rides the corner, and the forbidden band snaps the pull back', as
 });
 
 test('the pile parks at 8 with a cantilever past it, then two piles split evenly', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachMain(page, 16, 12);
   await placeStairs(page);
 
@@ -129,7 +129,7 @@ test('the pile parks at 8 with a cantilever past it, then two piles split evenly
 });
 
 test('18 feet is the ceiling: the corner clamps and the piles park at 8 and 16', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachMain(page, 16, 12);
   await placeStairs(page);
 
@@ -144,7 +144,7 @@ test('18 feet is the ceiling: the corner clamps and the piles park at 8 and 16',
 });
 
 test('a stair re-derive replaces teleposts but never the corner pile stubs', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachMain(page, 24, 20); // 20' clear span — the tour landed a beam
   await placeStairs(page);
 

@@ -56,7 +56,7 @@ const stamps = saved => saved.roomTags.filter(tag => tag.stamped);
 const names = saved => saved.roomTags.map(tag => tag.name).sort();
 
 test('the tray stamps on a chip-tap/plan-tap pair, disarms, and the step can skip straight to the roof', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachRoomsMain(page, 16, 12);
 
   await stamp(page, 'KITCHEN', 0, 0);
@@ -87,7 +87,7 @@ test('the primary brings the suite, ordinary bedrooms number from 2, and deletes
   // (ENSUITE + WALK-IN); the ordinary BEDROOM chip numbers from 2 with a
   // CLOSET each. The mechanics pinned here — companions attach, deletes
   // renumber and cascade, the survivor closet drops bare — are unchanged.
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachRoomsMain(page, 24, 18);
 
   await stamp(page, 'BEDROOM 1', -6, 0);
@@ -121,7 +121,7 @@ test('the primary brings the suite, ordinary bedrooms number from 2, and deletes
 });
 
 test('renames leave the numbering pool, drags claim companions, and everything survives a reload', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachRoomsMain(page, 24, 18);
 
   await stamp(page, 'BATH', -6, -4);
@@ -166,7 +166,7 @@ test('renames leave the numbering pool, drags claim companions, and everything s
 });
 
 test('a stamp names the room it sits in, grades UNDER MIN, and offsets the detector numbering', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachRoomsMain(page, 24, 18);
 
   // Two enclosed PLAN rooms inside the outline: a small 8x8 (under the 97
@@ -207,7 +207,7 @@ test('a stamp names the room it sits in, grades UNDER MIN, and offsets the detec
 });
 
 test('a mid-step bone press builds, ends the tour, and stamps the room counts into the project info', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachRoomsMain(page, 16, 12);
 
   await stamp(page, 'BEDROOM', -3, 0); // #276 pin update: brings a CLOSET

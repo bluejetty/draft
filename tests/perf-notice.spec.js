@@ -13,6 +13,20 @@ async function openModelRaw(page) {
     sessionStorage.setItem('draft-test-storage-cleared', '1');
     indexedDB.deleteDatabase('pdf-img-mgr-shared');
     localStorage.clear();
+    // THE NOTICE IS PARKED (Movie, 2 Sep): off for every drafter, but the
+    // markup, the three dismissal paths and the perfIntroOff preference are
+    // all still in the file. These specs turn it back on so that code keeps
+    // its coverage while it waits -- deleting them would leave a feature one
+    // flag from shipping with nothing watching it.
+    //
+    // Seeded AFTER localStorage.clear() in the same init script, because this
+    // spec opens raw (helpers.waitForModelReady would dismiss the notice
+    // before it could be asserted on) and so never reaches helpers' seeding.
+    localStorage.setItem('draft-active-package:settings', JSON.stringify({
+      format: 'draft-profile-package', version: 1, kind: 'settings',
+      name: 'perf-notice-spec', createdAt: new Date().toISOString(),
+      content: { model: { perfNoticeOn: true } },
+    }));
   });
   await page.goto('/MODEL.dc.html');
   await page.waitForFunction(() => document.body.dataset.modelReady === '1');

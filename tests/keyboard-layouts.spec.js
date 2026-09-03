@@ -59,6 +59,12 @@ test('the model space honours a preset binding', async ({ page }) => {
   await page.getByRole('button', { name: 'Revit style' }).click();
   await expect(activeKey(page, 'fenestration')).toHaveText('Shift+W');
 
+  // This spec reaches MODEL by its own goto rather than through openModel, so
+  // nothing has told the app the coach has been seen -- and a fresh profile
+  // with an empty sheet is exactly what arms it. It used to get away with that
+  // because waitForModelReady spent two seconds on the perf notice and the
+  // rails happened to open first; that is luck, not a guarantee. Say it.
+  await h.suppressEntryCoach(page);
   await page.goto('/MODEL.dc.html');
   await expect(page.locator('[data-model-canvas]')).toBeVisible();
   await h.waitForModelReady(page);

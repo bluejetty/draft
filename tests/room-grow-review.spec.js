@@ -8,6 +8,12 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// THE TOUR IS PARKED for drafters (Movie, 2 Sep) but this file drives it:
+// its setup helpers climb FOUNDATION -> MAIN -> rooms through the popup ladder,
+// so every test here turns the escort back on. The code is switched off, not
+// deleted, and a parked feature with no coverage is one flag from shipping with
+// nothing watching it.
+
 async function traceHouse(page, w, d) {
   await page.locator('[data-select-house]').click();
   await page.keyboard.press('Enter');
@@ -88,7 +94,7 @@ async function growFourRooms(page) {
 }
 
 test('deleting the stamps sweeps their grown walls on the next bone — no stale partitions', async ({ page }) => {
-  await h.openModel(page, { roomGrow: true });
+  await h.openModel(page, { tourEscort: true, roomGrow: true });
   await growFourRooms(page);
   let saved = await h.savedDrawing(page);
   expect(grownWalls(saved).length).toBeGreaterThan(2);
@@ -107,7 +113,7 @@ test('deleting the stamps sweeps their grown walls on the next bone — no stale
 });
 
 test('an ordinary drag promotes the grown wall, and the promoted wall survives the sweep', async ({ page }) => {
-  await h.openModel(page, { roomGrow: true });
+  await h.openModel(page, { tourEscort: true, roomGrow: true });
   await growFourRooms(page);
   let saved = await h.savedDrawing(page);
   const before = grownWalls(saved);
@@ -138,7 +144,7 @@ test('an ordinary drag promotes the grown wall, and the promoted wall survives t
 });
 
 test('a frozen drag keeps ownership through the preview; Escape restores wall and ownership', async ({ page }) => {
-  await h.openModel(page, { roomGrow: true });
+  await h.openModel(page, { tourEscort: true, roomGrow: true });
   await growFourRooms(page);
   let saved = await h.savedDrawing(page);
   const before = grownWalls(saved);
@@ -166,7 +172,7 @@ test('a frozen drag keeps ownership through the preview; Escape restores wall an
 });
 
 test('a frozen drag committed with Enter moves the endpoint and promotes the wall', async ({ page }) => {
-  await h.openModel(page, { roomGrow: true });
+  await h.openModel(page, { tourEscort: true, roomGrow: true });
   await growFourRooms(page);
   let saved = await h.savedDrawing(page);
   const before = grownWalls(saved);
@@ -193,7 +199,7 @@ test('a frozen drag committed with Enter moves the endpoint and promotes the wal
 });
 
 test('a deleted partition edge stays declined on its floor, and the same edge grows upstairs', async ({ page }) => {
-  await h.openModel(page, { roomGrow: true });
+  await h.openModel(page, { tourEscort: true, roomGrow: true });
   await reachRoomsMain(page, 28, 22);
   await stamp(page, 'KITCHEN', -9, -7);
   await stamp(page, 'BEDROOM 1', 9, 7);
