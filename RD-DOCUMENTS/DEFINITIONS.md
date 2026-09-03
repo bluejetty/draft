@@ -39,6 +39,49 @@ not the test; two referents is.
 
 ---
 
+## How a rename lands
+
+**Movie's plan, 3 Sep:** *"figure out all the names we use and if there are
+double or confusion we can rename stuff in the dc file before we put it into
+the new website"* — **and the new name goes into this dictionary.** So an entry
+is not a description of a mess; it is the record of a decision, written
+`old → new`, dated, with who ruled it.
+
+The migration is what makes the timing matter. Every name still in
+MODEL.dc.html when a painter is extracted is a name the new site inherits.
+
+**Three tiers, by what a rename actually costs:**
+
+1. **Free.** Internal methods and local variables — nothing persisted, nothing
+   a drafter reads. `_floorLevels` → `_storeys`, 24 sites. The acceptance test
+   is unusually crisp: the suite total must be **exactly** unchanged and all
+   green, because a pure rename that moves one test outcome was not a rename.
+2. **Free, and easier after extraction than before.** Names inside a painter
+   that has already moved to a module. A pure module is a few dozen lines, has
+   a node harness, and now has coverage — cheaper to rename than the same code
+   buried in a 22,000-line monolith. **So nobody should stop extracting in
+   order to rename first.** The window does not close when a painter moves; it
+   closes when MODEL.dc.html is deleted.
+3. **Constrained — needs a seam, not a find-and-replace.** Anything written
+   into the saved drawing: `view`, `levelId`, `layer`, and
+   `structure: 'floor' | 'slab'`. **Old drawings must keep opening** (BOARDS
+   standing rule), so the stored key stays and the code name changes, with one
+   translation on load and one on save.
+
+**The seam for tier 3 has a hole in it, measured 3 Sep.**
+`drawing-format.js` normalises more than thirty item types — `shapes`,
+`roofs`, `fixtures`, `stairs`, `outlines`, `underlays` and the rest — but
+**not `walls`, `lines` or `floors`**. Those three are inflated inline in
+MODEL.dc.html (5241, 5255, 5270) with an `Array.isArray` check and no
+validation. They are also the only three item types that carry `view`.
+
+So a `view` rename has nowhere to live until walls, lines and floors get
+normalisers of their own. That is worth doing regardless of any rename — the
+three most-used types in the format are the three with no validation on load —
+and it is the first job of any tier-3 rename, not an afterthought to it.
+
+---
+
 ## The overloaded ones — read these first
 
 ### BONE
