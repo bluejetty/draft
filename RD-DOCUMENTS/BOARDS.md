@@ -366,3 +366,39 @@ that describes code is a claim about the code, and it needs the same
 verification the code gets.** The dictionary is the artifact meant to prevent
 exactly this, which is why an error in it costs more than an error in a
 comment.
+
+### 8 · When the ground confounds the measurement, change the statistic — not the threshold
+
+Gilligan's generalisation, 3 Sep, of two failures on the same day: "find a
+statistic that can't be fooled by the ground, rather than a threshold tuned
+until it agrees."
+
+Both were measurements of anti-aliasing wearing the costume of measurements of
+ink.
+
+- **The grid.** Counting pixels at the grid's greys and asserting a ratio. The
+  no-grid render is not empty — it is anti-aliased wall ink, some of which
+  lands on a grid grey by coincidence. That stray count measured 1 locally,
+  306 in a different local house and 902 on a runner.
+- **The datum marker.** Three statistics, three grounds fooling all but the
+  last. Counting pixels near each skin's green failed because the two greens
+  sit on the same blend ray between marker and page, so a 1.5px stroke's halo
+  lands nearer the wrong one than its core lands to the right one. The peak
+  green *channel* was right on night and wrong on day, because blending toward
+  a light page RAISES the green channel.
+
+At every one of those the tempting repair is a knob: widen the tolerance, lift
+the floor, allow a margin. All of them keep the confound and buy agreement.
+
+**What worked both times was a quantity the ground cannot move.** For the grid:
+two renders differing only in the datum, so the difference *is* the grid and
+the assertion carries no number at all. For the marker: greenness,
+`g - max(r,b)`, which falls monotonically toward zero as any colour blends
+toward any grey ground, dark or light alike — so its maximum is the stroke's
+own colour whichever skin is up.
+
+**The test for whether you have found one: you can predict the number before
+you run it.** Greenness predicts 48 for `#6a9a57` and 37 for `#557a46`. The run
+returned 48 and 37, and 37 against 37 under both mutations. A tuned threshold
+can never do that, because it is chosen after seeing the data — which is
+exactly why it always agrees, and exactly why it proves nothing.
