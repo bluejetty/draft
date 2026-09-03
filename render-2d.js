@@ -643,10 +643,14 @@ if (!window.DraftRender2D) {
       ctx.stroke();
     };
 
+    // Colour comes from the caller, like drawShape2D's env.shapeColor two
+    // functions above. The greys were hardcoded here before the move; leaving
+    // them hardcoded would have baked page styling into the shared module and
+    // cost another pass through this file when the grid is skinned.
     const zoomed = halfH < 50;
-    if (zoomed) drawGridLines(1,   '#e8e8e8', 0.5); // 1ft fine
-    drawGridLines(10,  '#cccccc', 0.5);              // 10ft major / fine
-    if (!zoomed) drawGridLines(100, '#aaaaaa', 0.75);// 100ft major when zoomed out
+    if (zoomed) drawGridLines(1,   env.gridFine,   0.5);  // 1ft fine
+    drawGridLines(10,  env.gridMajor,  0.5);               // 10ft major / fine
+    if (!zoomed) drawGridLines(100, env.gridCoarse, 0.75); // 100ft when zoomed out
   }
 
   // The datum is the drawing's, not the world's, so the target stands on the

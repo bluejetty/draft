@@ -6553,6 +6553,12 @@ class Component extends DCLogic {
       halfH: this._orthoHalfH,
       camX: this._orthoCamX,
       camZ: this._orthoCamZ,
+      // The page owns the look. These are the values the module carried
+      // before the move, unchanged; a skin swaps them here, not in the
+      // shared module.
+      gridFine: '#e8e8e8',
+      gridMajor: '#cccccc',
+      gridCoarse: '#aaaaaa',
     });
   }
 
