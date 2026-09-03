@@ -19,6 +19,16 @@ const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
 const readout = page => page.locator('#readout');
+
+// What SHOULD be on screen, worked out here rather than by calling the module
+// the page calls. If this asked layer-views.js the same question MODEL.html
+// asks it, a wrong answer would agree with itself and pass. So the rule is
+// written out: MAIN FL is level id 3, its default layer view is the walls
+// plan, and an item with no `view` is a plan item.
+const MAIN_FL = 3;
+const onMainPlan = item => Number(item.levelId) === MAIN_FL
+  && (item.view || 'plan') === 'plan';
+
 const notice = page => page.locator('#notice');
 
 // TWO different measurements, and conflating them cost this spec its first
@@ -103,7 +113,12 @@ test.describe('MODEL.html tier 1', () => {
     await expect(readout(page)).toContainText('walls', { timeout: 5000 });
 
     // Same walls. Not "some walls" -- the count the old page wrote.
-    await expect(readout(page)).toContainText(`walls ${saved.walls.length}`);
+    const onScreen = saved.walls.filter(onMainPlan).length;
+    expect(onScreen, 'the fixture must put walls on MAIN FL, or this asserts nothing')
+      .toBeGreaterThan(0);
+    expect(onScreen, 'and it must NOT be every wall, or the filter is untested')
+      .toBeLessThan(saved.walls.length);
+    await expect(readout(page)).toContainText(`walls ${onScreen}`);
     await expect(notice(page)).not.toHaveClass(/show/);
 
     // And the WALLS are actually on the canvas -- not merely the grid.
@@ -129,7 +144,7 @@ test.describe('MODEL.html tier 1', () => {
     expect(frameworks.dc).toBe(0);
     expect(frameworks.scripts).not.toContain('./support.js');
 
-    // FIVE dependencies, and the list is the finding rather than a formality:
+    // SEVEN dependencies, and the list is the finding rather than a formality:
     // render-2d.js reaches for no globals, so the wall painter still costs one
     // module. palette.js joined on 3 Sep and is the only one that is not a
     // painter -- it is loaded FIRST because the skin is applied at module
@@ -141,8 +156,9 @@ test.describe('MODEL.html tier 1', () => {
     // a dependency that arrives without anyone noticing is how that stops
     // being true.
     expect(frameworks.scripts).toEqual([
-      './palette.js', './shared-file-store.js', './wall-types.js',
-      './drawing-format.js', './render-2d.js',
+      './palette.js', './layer-views.js', './geometry-2d.js',
+      './shared-file-store.js', './wall-types.js', './drawing-format.js',
+      './render-2d.js',
     ]);
   });
 

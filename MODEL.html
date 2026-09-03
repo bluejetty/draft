@@ -111,6 +111,8 @@
 <div id="notice"><div id="notice-body"></div></div>
 
 <script src="./palette.js"></script>
+<script src="./layer-views.js"></script>
+<script src="./geometry-2d.js"></script>
 <script src="./shared-file-store.js"></script>
 <script src="./wall-types.js"></script>
 <script src="./drawing-format.js"></script>
@@ -191,10 +193,63 @@
     z: (sy - cssH / 2) / view.scale + view.cz,
   });
 
+  // ── which level, and which drawing OF that level ──────────────────────────
+  // Tier 1 painted all five levels at once, stacked. A drafter looks at one
+  // level at a time, so this picks one -- and picking one is not
+  // `levelId === active`, because a level is not one drawing. MAIN FL has a
+  // walls plan, a floor layout, a stair drawing and an electrical plan;
+  // FOUNDATION has basement walls and the concrete below them. That table is
+  // layer-views.js, already shared with LAYOUT, so this reads it rather than
+  // restating it.
+  //
+  // MAIN_FLOOR is an ID (3), not an index. MODEL.dc.html's own
+  // state.activeLevelIdx is an INDEX into DEFAULT_LEVELS, and for the default
+  // list index 3 also happens to be id 3 -- they stop agreeing the moment a
+  // level is inserted. See RD-DOCUMENTS/SPEC-model-html-tiers.md.
+  const MAIN_FLOOR_LEVEL_ID = 3;
+  const levelIds = () => (drawing?.levels || []).map(level => Number(level.id));
+  const activeLevelId = () => {
+    const asked = Number(params.get('level'));
+    if (Number.isFinite(asked) && levelIds().includes(asked)) return asked;
+    if (params.get('level') !== null && drawing) {
+      console.warn(`MODEL: unknown level "${params.get('level')}"; using MAIN FL. `
+        + `Known: ${levelIds().join(', ')}`);
+    }
+    return levelIds().includes(MAIN_FLOOR_LEVEL_ID) ? MAIN_FLOOR_LEVEL_ID : levelIds()[0];
+  };
+
   // ── what is on the page ───────────────────────────────────────────────────
-  const walls = () => drawing?.walls || [];
-  const lines = () => drawing?.lines || [];
-  const floors = () => drawing?.floors || [];
+  // FIVE RULES, NOT ONE, measured from MODEL.dc.html:6505-6513:
+  //   walls / lines / floors  filter by level AND view
+  //   roofs / outlines        filter by level ONLY -- no view filter at all
+  //   and the view filter switches ITSELF OFF on a level that has no layer
+  //   views (ROOF, SITE), which show everything they hold.
+  //
+  // The trap in the third rule: floors default to view 'floor', not 'plan'
+  // (MODEL.dc.html:2905). Writing `view === 'plan'` hides every floor in the
+  // drawing and reads exactly like a broken painter.
+  const onActiveLevel = () => {
+    const LV = window.DraftLayerViews;
+    const levelId = activeLevelId();
+    const views = LV.layerViewsForLevelId(levelId);
+    const viewId = LV.defaultLayerViewId(levelId);
+    const onPlan = item => !views.length || (item.view || 'plan') === viewId;
+    const byLevel = item => Number(item.levelId) === levelId;
+    return { levelId, viewId, onPlan, byLevel };
+  };
+  const walls = () => (drawing?.walls || [])
+    .filter(w => { const f = onActiveLevel(); return f.byLevel(w) && f.onPlan(w); });
+  const lines = () => (drawing?.lines || [])
+    .filter(l => { const f = onActiveLevel(); return f.byLevel(l) && f.onPlan(l); });
+  const floors = () => (drawing?.floors || [])
+    .filter(x => { const f = onActiveLevel(); return f.byLevel(x) && f.onPlan(x); });
+  // Rules four and five: LEVEL ONLY. A roof footprint and a reference shape are
+  // level-wide -- every drawing of the level shows them -- so they take no view
+  // filter at all. Copying the walls line here would hide both on FOUNDATION.
+  const roofs = () => (drawing?.roofs || [])
+    .filter(r => onActiveLevel().byLevel(r));
+  const shapes = () => (drawing?.shapes || [])
+    .filter(sh => onActiveLevel().byLevel(sh));
 
   // Every point that defines the drawing's extent, for fit-to-content.
   const allPoints = () => {
@@ -277,6 +332,68 @@
     ctx.restore();
   };
 
+  // EVERYTHING A PAINTER READS ARRIVES THROUGH env. That is what lets
+  // render-2d.js serve this page and MODEL.dc.html from one copy: the module
+  // owns the drawing, not the state of whoever is calling. Built at call time
+  // from `skin` and the saved JSON, never captured at module scope.
+  //
+  // The contract is NINE keys, not the two that make a roof appear. It was
+  // found by reading every `env.` in render-2d.js at once, after supplying two
+  // and watching the page throw `env.roofSkeleton is not a function` -- which
+  // is exactly what the loud painter was for. Discovering an interface one
+  // exception at a time is how you end up believing you have finished.
+  //
+  //   drawWallSeg2D  wallTypes
+  //   drawRoof2D     isPrinting offsetOutline roofSkeleton surfaceOpeningsFor
+  //   drawShape2D    isPrinting areaLabel outlineAreaSqFt flooringTypes
+  //                  shapeColor
+  const paintEnv = () => ({
+    wallTypes: window.DraftWallTypes.WALL_TYPES,
+    shapeColor: skin['draw-shape'],
+    flooringTypes: window.DraftDrawingFormat.FLOORING_TYPES,
+    // This page never prints. When it does, this stops being a constant.
+    isPrinting: false,
+    offsetOutline: window.DraftGeometry2D.offsetOutline,
+    roofSkeleton: window.DraftGeometry2D.roofSkeleton,
+    // MODEL.dc.html also consults layer visibility and print flags here; this
+    // page has neither yet, so an opening is shown whenever it is real.
+    surfaceOpeningsFor: (hostType, hostId) => (drawing?.surfaceOpenings || [])
+      .filter(o => o.hostType === hostType && o.hostId === hostId
+        && (o.points || []).length >= 3),
+    // DUPLICATED FROM MODEL.dc.html, deliberately and temporarily. Both are
+    // pure -- a shoelace area and a unit label -- and both are needed by a
+    // painter that has ALREADY been extracted, which makes them extraction
+    // candidates rather than page code. Flagged to whoever holds board #1;
+    // when they move, this env reads them instead of restating them.
+    outlineAreaSqFt: points => {
+      if (!Array.isArray(points) || points.length < 3) return 0;
+      let doubled = 0;
+      for (let i = 0; i < points.length; i += 1) {
+        const a = points[i], b = points[(i + 1) % points.length];
+        doubled += a.x * b.z - b.x * a.z;
+      }
+      return Math.abs(doubled) / 2;
+    },
+    areaLabel: sqFt => (sqFt > 0
+      ? `${(Math.round(sqFt * 10) / 10).toLocaleString()} SQ FT` : ''),
+  });
+
+  const paintRoofs = () => {
+    const R = window.DraftRender2D;
+    roofs().forEach(roof => {
+      if ((roof.points || []).length < 3) return;
+      R.drawRoof2D(ctx, toS, roof, {}, paintEnv());
+    });
+  };
+
+  const paintShapes = () => {
+    const R = window.DraftRender2D;
+    shapes().forEach(shape => {
+      if ((shape.points || []).length < 2) return;
+      R.drawShape2D(ctx, toS, shape, {}, paintEnv());
+    });
+  };
+
   const paintWalls = () => {
     // Lazy, so a load-order change cannot bind these to undefined at parse
     // time -- but LOUD, not guarded. An earlier version returned quietly when
@@ -297,7 +414,7 @@
     // mitred corners. Mitring needs MODEL's _wallJoins(), which is tier 2.
     walls().forEach(wall => {
       if (!wall.start || !wall.end) return;
-      R.drawWallSeg2D(ctx, toS, wall, false, null, 'both', { wallTypes: WT.WALL_TYPES });
+      R.drawWallSeg2D(ctx, toS, wall, false, null, 'both', paintEnv());
     });
   };
 
@@ -308,7 +425,10 @@
     ctx.fillStyle = skin['surface-page'];
     ctx.fillRect(0, 0, cssW, cssH);
     try {
-      if (drawing) { paintGrid(); paintFloors(); paintLines(); paintWalls(); }
+      if (drawing) {
+        paintGrid(); paintFloors(); paintRoofs(); paintShapes();
+        paintLines(); paintWalls();
+      }
     } catch (err) {
       // The throw above is only useful if someone SEES it. paint() runs on
       // every pan, zoom and resize, so an uncaught error here would be a
@@ -324,12 +444,17 @@
     updateReadout();
   };
 
+  const levelName = () => (drawing?.levels || [])
+    .find(level => Number(level.id) === activeLevelId())?.name || 'level';
+
   const updateReadout = () => {
     if (!drawing) return;
     readout.innerHTML =
       `walls <b>${walls().length}</b>   lines <b>${lines().length}</b>   `
-      + `floors <b>${floors().length}</b>\n`
-      + `levels <b>${(drawing.levels || []).length}</b>   `
+      + `floors <b>${floors().length}</b>   roofs <b>${roofs().length}</b>   `
+      + `shapes <b>${shapes().length}</b>\n`
+      + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
+      + `${onActiveLevel().viewId || 'all'}   `
       + `scale <b>${view.scale.toFixed(2)}</b> px/ft`;
   };
 
