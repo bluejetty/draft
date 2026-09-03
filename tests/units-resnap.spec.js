@@ -77,44 +77,71 @@ test('switching to metric puts every stored coordinate on the millimetre grid', 
   expect(worst).toBeLessThan(1e-6);
 });
 
-test('the partials sum to the overall — the discrepancy the board measured', async ({ page }) => {
+test('every printed length is a whole millimetre, so the partials sum', async ({ page }) => {
   await h.openModel(page, { webgl: false });
   await drawRun(page);
 
-  // Before: each segment prints 3658 and the overall 10973, so the numbers
-  // on the sheet disagree by a millimetre.
-  const asPrinted = drawing => {
-    const pts = (drawing.lines || []).flatMap(l => [l.start, l.end]);
-    const xs = [...new Set(pts.map(p => p.x))].sort((a, b) => a - b);
-    const datum = drawing.drawingOrigin;
-    const at = x => Math.round(mm(x - datum.x));
-    const segments = xs.slice(1).map((x, i) => at(x) - at(xs[i]));
-    return { segments, overall: at(xs[xs.length - 1]) - at(xs[0]) };
+  // A dimension string rounds each LENGTH on its own — that is where the
+  // board's discrepancy comes from. Rounding the node positions and then
+  // subtracting them cannot reproduce it: differences of rounded numbers
+  // always sum to the rounded total, so an earlier version of this check
+  // passed with the re-snap disabled.
+  // THE APP'S OWN PRINT FUNCTION, not a stand-in: MODEL.dc.html's _metric is
+  // `(feet * 0.3048).toFixed(3) + ' m'`. Three decimals of a metre IS
+  // millimetre precision, so this is the string a drafter reads off the sheet.
+  const printed = feet => (feet * 0.3048).toFixed(3);
+  const strings = drawing => {
+    const xs = [...new Set((drawing.lines || []).flatMap(l => [l.start.x, l.end.x]))].sort((a, b) => a - b);
+    return {
+      segments: xs.slice(1).map((x, i) => printed(x - xs[i])),
+      overall: printed(xs[xs.length - 1] - xs[0]),
+    };
   };
+  const sumOf = segs => segs.reduce((total, s) => total + Number(s), 0).toFixed(3);
+
+  const before = strings(await h.savedDrawing(page));
+  // 12'-0" prints 3.658 m. Three of them sum to 10.974 against an overall of
+  // 10.973 — the board's millimetre, in the strings themselves.
+  expect(before.segments).toEqual(['3.658', '3.658', '3.658']);
+  expect(before.overall).toBe('10.973');
+  expect(sumOf(before.segments)).not.toBe(before.overall);
 
   await setUnits(page, 'METRIC');
-  const { segments, overall } = asPrinted(await h.savedDrawing(page));
-  expect(segments.length).toBe(3);
-  expect(segments.reduce((a, b) => a + b, 0)).toBe(overall);
+
+  const after = strings(await h.savedDrawing(page));
+  expect(sumOf(after.segments)).toBe(after.overall);
 });
 
 test('a window re-snaps its size and its offset, not only the wall it sits in', async ({ page }) => {
-  await h.openModel(page, { webgl: false });
-  await drawRun(page);
-  const opening = await page.evaluate(() => {
-    const el = document.querySelector('[data-model-overlay]');
-    return el ? true : false;
-  });
-  expect(opening).toBe(true);
+  // A real house with real windows: a fenestration stores width and an offset
+  // along its wall, and both print. Re-snapping only the node pool leaves a
+  // window measuring 914.4 mm inside a wall whose ends read whole millimetres.
+  await h.openModel(page, { autoWindows: true });
+  await h.selectTool(page, 'Outline');
+  for (const [x, z] of [[-20, -14], [20, -14], [20, 14], [-20, 14]]) await h.clickWorld(page, x, z);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  await h.selectTool(page, 'Outline');
+  await page.getByRole('button', { name: 'BUILD HOUSE' }).click();
+  await page.waitForTimeout(400);
+  await h.waitForSaved(page);
+
+  const built = await h.savedDrawing(page);
+  // Guard against a vacuous pass: with no windows there is nothing to assert,
+  // and forEach over an empty list is green for the wrong reason.
+  expect((built.fenestrations || []).length).toBeGreaterThan(0);
+  // A 30" window is 762.0 mm exactly, so WIDTH alone would not show this. The
+  // offset along the wall is the one that lands off-grid, which is why the
+  // check below covers every stored length rather than the obvious one.
 
   await setUnits(page, 'METRIC');
+
   const drawing = await h.savedDrawing(page);
-  // Whatever openings and fixtures the drawing holds, every stored size and
-  // offset is a whole number of millimetres once the switch has run.
   const lengths = [
     ...(drawing.fenestrations || []).flatMap(f => [f.offset, f.width, f.sillHeight, f.headHeight]),
     ...(drawing.fixtures || []).flatMap(f => [f.offset, f.width, f.depth]),
   ].filter(v => Number.isFinite(v));
+  expect(lengths.length).toBeGreaterThan(0);
   lengths.forEach(v => expect(offGrid(v, MM_FT)).toBeLessThan(1e-6));
 });
 
@@ -124,6 +151,11 @@ test('imperial to metric and back returns every node exactly where it started', 
   const before = coords(await h.savedDrawing(page));
 
   await setUnits(page, 'METRIC');
+  // Without this the test is vacuous: if nothing ever moved, "it came back"
+  // is trivially true and the check would pass with re-snapping disabled.
+  const metric = coords(await h.savedDrawing(page));
+  expect(metric).not.toEqual(before);
+
   await setUnits(page, 'IMPERIAL');
 
   const after = coords(await h.savedDrawing(page));
@@ -136,6 +168,11 @@ test('opening a drawing never re-snaps it — only the drafter switching does', 
   await drawRun(page);
   await setUnits(page, 'METRIC');
   const before = coords(await h.savedDrawing(page));
+  const datum = (await h.savedDrawing(page)).drawingOrigin;
+  // The switch really did move it onto the mm grid — otherwise "the reload
+  // changed nothing" would be true of a page that never snaps at all.
+  const lines = (await h.savedDrawing(page)).lines.flatMap(l => [l.start, l.end]);
+  lines.forEach(p => expect(offGrid(p.x - datum.x, MM_FT)).toBeLessThan(1e-6));
 
   await page.reload();
   await h.waitForModelReady(page);
@@ -159,9 +196,11 @@ test('the whole switch is one undo, geometry and units together', async ({ page 
   after.forEach((v, i) => expect(v).toBeCloseTo(before[i], 9));
 });
 
-test('the move is announced rather than made quietly', async ({ page }) => {
+test('the move is announced, and names what actually moved', async ({ page }) => {
   await h.openModel(page, { webgl: false });
   await drawRun(page);
   await setUnits(page, 'METRIC');
-  await expect(page.getByText(/Re-snapped to mm/)).toBeVisible();
+  // Not just the words "Re-snapped": the readout also has a "nothing moved"
+  // form, which matched a looser regex even with the re-snap disabled.
+  await expect(page.getByText(/Re-snapped to mm — \d+ nodes? .*moved, max /)).toBeVisible();
 });
