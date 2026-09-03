@@ -15,6 +15,28 @@ neighbour so you can pick deliberately.
 confused by it. Not before — a dictionary of words nobody misuses is a
 dictionary nobody reads.
 
+**How specific.** Movie, 3 Sep: *"should be specific as possible to our
+stuff."* An entry earns its place by naming OUR things — the identifier, the
+file, the count, the ruling and its date. Four tests, and an entry that fails
+any of them is not finished:
+
+1. **Does it name real identifiers?** `_floorLevels` (23) and `_activeFloors`
+   (12), not "the level function and the floor function".
+2. **Is the claim measured?** A count, a line number, a grep. "Used in a few
+   places" is not an entry, it is a memory.
+3. **Would it read the same in any other drafting app?** Then delete it. "A
+   layer groups drawing elements" is true of AutoCAD and tells our reader
+   nothing. "A layer set is carried on every item as `view`, and each layer in
+   it is showing-and-usable, background-only, or off" is ours.
+4. **Does it end in something you can do?** The `say instead` column, or a
+   ruling. A word explained but not decided will be argued about again.
+
+The counter-example worth keeping in mind: `stair` appears in 54 methods of
+MODEL.dc.html and does **not** belong here. One busy topic is not a collision.
+FLOOR belongs here because `_floorLevels()` returns storeys while
+`_activeFloors()` returns slabs — one word, two kinds of thing. Frequency is
+not the test; two referents is.
+
 ---
 
 ## The overloaded ones — read these first
