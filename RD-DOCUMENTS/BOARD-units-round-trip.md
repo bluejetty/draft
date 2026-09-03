@@ -135,6 +135,27 @@ Devin's reasoning, so the amendment does not read as a whim:
   no indication anything is approximate. *A display that quietly lies about sums
   is less safe than a settle nobody can see.*
 
+### The illustration in this board was wrong; the requirement was right
+
+Measured by Gilligan, 3 Sep, building it: re-snapping **each node from the
+datum** yields segments of **3658, 3657, 3658 mm — summing to 10973, which *is*
+the overall.** The goal is met *exactly*, not approximately.
+
+This board illustrated it as 3658 × 3 = 10974 matching an overall of 10974.
+That is not what the fix does, and the difference matters:
+
+- **Snapping positions telescopes.** The overall is the difference between the
+  first and last snapped node, so the partials sum to it *by construction*.
+  There is no residual error to argue about.
+- **Getting three equal 3658s would mean accumulating snapped LENGTHS**, which
+  is a different algorithm, is not requirement 1, and would drift the far end of
+  a long run.
+
+**The real cost is not a leftover millimetre in the sum. It is that three walls
+a drafter drew equal no longer print equal** — 3.658 / 3.657 / 3.658. That is
+the trade being made, and it is the one to put in the CONVERT confirmation,
+because it is the thing a drafter will notice.
+
 ### Three constraints kept from #313
 
 1. **`_resnapToUnits()` stays a pure, standalone function.** The toggle calls
