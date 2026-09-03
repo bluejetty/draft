@@ -1,7 +1,13 @@
-// Architectural length formatting and parsing shared by the Model Space.
+// Length formatting and parsing shared by the Model Space.
 // Everything here is pure — strings and numbers in, strings and numbers out:
-// no state, no DOM, no THREE. Values snap to the sixteenth-inch grid the
-// formatters print, so a parse → format round trip is stable.
+// no state, no DOM, no THREE. The ARCHITECTURAL functions snap to the
+// sixteenth-inch grid they print, so a parse → format round trip is stable.
+//
+// The metric side lives here too. It arrived late because the module was
+// imperial-only and nothing had asked it for metres: a page wiring the
+// dimension painter has to answer env.label, and that answer is
+// units-dependent, so a formatter module that cannot print metres sends every
+// caller back to the page it was extracted from.
 if (!window.DraftFormatters) {
 (() => {
   const SIXTEENTH_IN = 1 / 16;
@@ -43,6 +49,30 @@ if (!window.DraftFormatters) {
       body += body ? ` ${n}/${d}` : `${n}/${d}`;
     }
     return `${negative ? '-' : ''}${body}"`;
+  }
+
+  // Metres, to the millimetre. A metric drawing's grid IS the millimetre
+  // (board NEW-5), so three decimals is the whole precision of the system --
+  // not a display choice that could be widened later without changing what
+  // the drawing means.
+  //
+  // NO Number.isFinite GUARD, deliberately, and not an oversight. Its
+  // neighbours above return '' for a non-finite input and consistency argued
+  // for matching them -- but this function arrived by being MOVED out of
+  // MODEL.dc.html, and a move that changes behaviour is not a move. The old
+  // _metric printed 'NaN m'.
+  //
+  // The question is real and belongs to all three, not to this one: '' is
+  // silent, and a dimension that prints nothing looks like a dimension that
+  // is not there, while 'NaN m' tells a drafter something is wrong. Whether
+  // it can happen at all is half-answered: drawing-format.js rejects
+  // non-finite coordinates on load (num() at :14 returns null and the entity
+  // lands in `skipped`), so a LOADED drawing cannot reach here with a NaN.
+  // The live readouts during a drag are computed in memory and were not
+  // traced. Half a proof is not the unreachability argument, so the loud
+  // behaviour stays until someone rules on all three together.
+  function formatMetres(feet) {
+    return (feet * 0.3048).toFixed(3) + ' m';
   }
 
   function normalizeArchitecturalInches(totalInches) {
@@ -123,6 +153,7 @@ if (!window.DraftFormatters) {
   window.DraftFormatters = {
     formatArchitecturalInches,
     formatInchesOnly,
+    formatMetres,
     parseArchitecturalLength,
     parseAssemblyInches,
   };
