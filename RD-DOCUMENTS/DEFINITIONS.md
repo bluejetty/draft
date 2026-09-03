@@ -107,11 +107,31 @@ basement, two habitable levels and a roof.
 > build-up. See FLOOR below. This entry previously allowed "floor — loosely a
 > storey in conversation"; that is withdrawn.
 
-**The code does not obey this yet.** `_floorLevels()` is the exact deprecated
-usage and has 22 call sites; the level names `MAIN FL` and `2ND FL` are FLOOR
-as a storey in the UI a client sees. Neither is renamed here — the level names
-are in every saved drawing — but they are debt, not precedent. New code says
-level.
+**The code does not obey this yet, and the collision is symmetrical.** One
+word, two opposite meanings, both in MODEL.dc.html — measured 3 Sep:
+
+| FLOOR = storey | | FLOOR = slab | |
+|---|---|---|---|
+| `_floorLevels` | 23 | `this._floors` | 40 |
+| `floorLevels` | 1 | `_activeFloors` | 12 |
+| | | `_drawFloor2D` | 7 |
+
+`_floorLevels()` returns storeys and `_activeFloors()` returns slabs. Two
+methods, one word, and nothing in either name says which. 24 sites sit on the
+wrong side of the ruling.
+
+**Agreed remedy, not yet done:** rename `_floorLevels` → `_storeys` (24 sites,
+mechanical), and **leave `MAIN FL` / `2ND FL` alone** (29 label uses). Those
+labels are drafter-facing and `MAIN FL` is conventional on a real drawing
+sheet; the ruling is about code clarity, and what a builder reads is a separate
+question. The rename wants its own PR — a pure rename is the cheapest thing
+there is to review, and folding it into other work destroys that property. Its
+acceptance test is unusually crisp: the suite total must be **exactly**
+unchanged and every test green, because a rename that moves one test outcome
+was not a rename.
+
+Counting note: `grep -c` counts matching *lines*; these are occurrences via
+`grep -o | wc -l`. The two differ by 2 on `this._floors` alone.
 
 ### LAYER / LAYER SET / LEVEL
 
