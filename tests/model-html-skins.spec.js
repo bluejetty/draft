@@ -58,6 +58,25 @@ async function inkProfile(page) {
   });
 }
 
+// The palette's three grid weights, hardcoded. Reading them off the page and
+// then checking the page used them would be a tautology; if palette.js changes
+// these, this constant has to change with it, and that is the point.
+const NIGHT_GRID = [[0x26, 0x29, 0x2a], [0x34, 0x38, 0x3a], [0x45, 0x4a, 0x4c]];
+const DAY_GRID = [[0xe0, 0xe1, 0xe3], [0xcb, 0xcd, 0xcf], [0xb0, 0xb3, 0xb5]];
+
+async function colourPixels(page, targets) {
+  return page.evaluate(list => {
+    const c = document.getElementById('plan');
+    const { data } = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+    let hits = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (list.some(t => Math.max(Math.abs(data[i] - t[0]), Math.abs(data[i + 1] - t[1]),
+        Math.abs(data[i + 2] - t[2])) <= 2)) hits += 1;
+    }
+    return hits;
+  }, targets);
+}
+
 async function houseOnOldPage(page) {
   await h.openModel(page, { webgl: false, rails: false, entryCoach: true });
   await expect(page.locator('[data-entry-coach]')).toBeVisible({ timeout: 4000 });
@@ -138,27 +157,59 @@ test.describe('MODEL.html skins', () => {
       expect(nightGround[0]).toBeLessThan(80);
       expect(dayGround[0]).toBeGreaterThan(200);
 
-      // Both skins paint a grid: most of the canvas is ground, some is faint.
+      // THIS BLOCK USED TO ASSERT A GRID, and the grid was mine rather than
+      // the product's. Tier 1 hand-rolled a grid that drew always, anchored to
+      // world 0,0. The real page anchors it to the DRAWING DATUM -- the
+      // drafter's first click -- and draws none at all when there is no datum
+      // (tests/registration-grid.spec.js, "an untouched model space draws no
+      // grid, and the first node sets the datum").
       //
-      // Thresholds MEASURED, not invented. Ground share runs 0.499 (day) to
-      // 0.535 (night) on the default fit, and faint runs 399k-420k of 921k
-      // pixels. An earlier version of this line asked for 0.5, which day
-      // clears by 0.001 and fails the moment the fit shifts -- the same
-      // mistake as the modal-share check above, made twice in one file. A
-      // threshold belongs far from every observed value on the side that
-      // matters, not snug against the closest one.
+      // The generated house is never clicked into place, so it saves
+      // `drawingOrigin: null` and correctly gets NO GRID. `faint` measured
+      // 399k-420k of 921k pixels while the hand-rolled grid was there; it
+      // measures 28 now. So the old assertion was pinning a divergence, and
+      // its replacement pins the behaviour instead: a drawing with no datum
+      // has essentially nothing between the ground and the linework.
+      //
+      // The positive case -- a grid that appears BECAUSE a datum exists, in
+      // this skin's own greys -- is tests/model-html-grid.spec.js. It belongs
+      // there because it needs a drawing built with a datum, which this
+      // fixture cannot produce.
+      // MEASURED with the grid gone: ground 0.986 night / 0.979 day, strong
+      // 11,149px / 8,822px, faint 1,316px / 10,222px.
+      //
+      // NOTE WHAT faint DOES: it differs EIGHT-FOLD between the two skins,
+      // because dark ink anti-aliasing onto a light ground leaves far more
+      // intermediate pixels than the reverse. So no single faint threshold has
+      // a wide answer, and the first attempt at this line picked 0.01, which
+      // lands between 0.00143 and 0.01109 and fails on day. That is the fourth
+      // invented threshold in this suite's history. The cure is not a better
+      // number -- it is to stop asking a question whose answers are close
+      // together.
       for (const [name, p] of [['night', night], ['day', day]]) {
-        expect(p.groundPx, `${name}: the ground should dominate`)
-          .toBeGreaterThan(p.total * 0.25);
-        expect(p.faint, `${name}: the grid should be visible but quiet`)
-          .toBeGreaterThan(50000);
+        expect(p.groundPx / p.total, `${name}: the ground should dominate`)
+          .toBeGreaterThan(0.9);
+        expect(p.strong, `${name}: there must be real linework, far from the `
+          + 'ground -- a skin painting walls in the OTHER skin\'s ink would '
+          + 'land in groundPx instead')
+          .toBeGreaterThan(2000);
       }
 
-      // And the DAY grid is drawn in the day skin's own quiet grey. Night's
-      // grid (#34383a) on a #f2f2f3 ground would land in `strong`, not
-      // `faint` -- so a hardcoded grid colour fails right here.
-      expect(day.strong, 'day: nothing but walls should be far from the ground')
-        .toBeLessThan(day.faint);
+      // AND NO GRID -- but asserted through the readout, not by counting
+      // pixels. Night ink anti-aliasing onto the night ground manufactures
+      // pixels at the grid's own greys, so a colour count cannot separate a
+      // painted grid from a rendered edge (1 px in one house, 306 in
+      // another). The pixel evidence lives in model-html-grid.spec.js, where
+      // it is a RATIO against the same scene with a datum added.
+      for (const name of ['night', 'day']) {
+        await page.goto(`/MODEL.html?mode=${name}`);
+        await expect(page.locator('#readout')).toContainText('walls', { timeout: 5000 });
+        await expect(page.locator('#readout'),
+          `${name}: the generated house has no datum, so there is no grid to `
+          + 'anchor -- and the readout should say so rather than leave it a '
+          + 'mystery')
+          .toContainText('datum none');
+      }
     });
 
   test('the theme axis reaches the chrome, and only the brand moves', async ({ page }) => {

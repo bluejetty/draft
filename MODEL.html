@@ -110,11 +110,19 @@
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 <div id="notice"><div id="notice-body"></div></div>
 
+<!-- ORDER IS LOAD-BEARING, not tidiness. cut-view.js destructures
+     window.DraftWallTypes and window.DraftFormatters at MODULE SCOPE
+     (cut-view.js:28-29), so it throws while loading if either comes after
+     it -- and a page that throws in the head paints nothing at all. The
+     tier-1 spec pins this exact list, in this exact order, for that reason.
+     Everything else here is a lazy accessor and would not care. -->
 <script src="./palette.js"></script>
 <script src="./layer-views.js"></script>
 <script src="./geometry-2d.js"></script>
 <script src="./shared-file-store.js"></script>
 <script src="./wall-types.js"></script>
+<script src="./formatters.js"></script>
+<script src="./cut-view.js"></script>
 <script src="./drawing-format.js"></script>
 <script src="./render-2d.js"></script>
 
@@ -260,7 +268,20 @@
     const levelId = activeLevelId();
     const views = LV.layerViewsForLevelId(levelId);
     const viewId = activeViewId();
-    const onPlan = item => !views.length || (item.view || 'plan') === viewId;
+    // THE FALLBACK DIFFERS BY ITEM TYPE. Measured, not assumed: every
+    // `.view || '...'` in MODEL.dc.html reads 'plan' -- wall, line, stair,
+    // opening, fixture, device, seg, 20-odd sites -- EXCEPT floors, which
+    // read 'floor' (MODEL.dc.html:2905, 9029, 9089, 9098, 9162, 17025).
+    //
+    // A floor outline's home layer set is FLOOR, or FOUNDATION where it is a
+    // concrete slab; it was never a plan-set item. Defaulting floors to
+    // 'plan' put a view-less floor on the wrong layer set -- invisible on
+    // every fixture, because a floor drawn by the old page always carries an
+    // explicit `view`, and visible only on an older saved drawing whose
+    // floors predate the field. Those are exactly the drawings that have to
+    // keep opening, so the spec builds that case by hand.
+    const onPlan = (item, fallback = 'plan') =>
+      !views.length || (item.view || fallback) === viewId;
     const byLevel = item => Number(item.levelId) === levelId;
     return { levelId, viewId, onPlan, byLevel };
   };
@@ -269,7 +290,7 @@
   const lines = () => (drawing?.lines || [])
     .filter(l => { const f = onActiveLevel(); return f.byLevel(l) && f.onPlan(l); });
   const floors = () => (drawing?.floors || [])
-    .filter(x => { const f = onActiveLevel(); return f.byLevel(x) && f.onPlan(x); });
+    .filter(x => { const f = onActiveLevel(); return f.byLevel(x) && f.onPlan(x, 'floor'); });
   // Rules four and five: LEVEL ONLY. A roof footprint and a reference shape are
   // level-wide -- every drawing of the level shows them -- so they take no view
   // filter at all. Copying the walls line here would hide both on FOUNDATION.
@@ -307,44 +328,124 @@
   };
 
   // ── painting ──────────────────────────────────────────────────────────────
+  // THE DATUM IS THE DRAFTER'S ZERO, not the world's. MODEL.dc.html sets
+  // state.drawingOrigin from the drafter's FIRST CLICK (MODEL.dc.html:10360),
+  // so the point they start on reads as 0,0 from then on, and drawGrid2D
+  // anchors the grid to it. Movie, 3 Sep: "that way he always first clicks on
+  // 0,0."
+  //
+  // No click, no datum, and therefore NO GRID. That is deliberate, not a gap:
+  // tests/registration-grid.spec.js asserts it by name -- "an untouched model
+  // space draws no grid, and the first node sets the datum" -- and the grid
+  // cannot be anchored to a point the drafter has not chosen yet. Tier 1's
+  // hand-rolled grid drew always, aligned to world 0,0, which was a
+  // divergence from the old page rather than a feature.
+  //
+  // ABSENT AND NULL MEAN DIFFERENT THINGS. This is the tier-2a floors bug's
+  // exact shape, so it is spelled out rather than compressed. MODEL.dc.html
+  // :5160 reads:
+  //     'drawingOrigin' in saved ? normalise(saved.drawingOrigin) : {x:0,z:0}
+  // Absent = a drawing made before the datum existed. It was drawn on the
+  // world grid, so 0,0 is what leaves every coordinate where it is. Explicit
+  // null = "no origin yet", which is where NEW starts and how it avoids
+  // silently adopting 0,0.
+  //
+  // `drawing.drawingOrigin || null` would collapse the two and strip the grid
+  // from every old drawing -- and no fixture would catch it, because the old
+  // page always writes the key now.
+  const gridDatum = () => {
+    if (!drawing) return null;
+    if (!('drawingOrigin' in drawing)) return { x: 0, z: 0 };
+    const raw = drawing.drawingOrigin;
+    if (!raw || typeof raw !== 'object') return null;
+    const x = Number(raw.x), z = Number(raw.z);
+    return Number.isFinite(x) && Number.isFinite(z) ? { x, z } : null;
+  };
+
   const paintGrid = () => {
-    // One line per foot while they are far enough apart to read, else per ten.
-    const step = view.scale >= 9 ? 1 : view.scale >= 1.2 ? 10 : 100;
-    const tl = toWorld(0, 0), br = toWorld(cssW, cssH);
-    const x0 = Math.floor(tl.x / step) * step, x1 = Math.ceil(br.x / step) * step;
-    const z0 = Math.floor(tl.z / step) * step, z1 = Math.ceil(br.z / step) * step;
-    // A grid that redraws ten thousand lines at low zoom costs more than it
-    // tells anyone, so bail rather than crawl.
-    if ((x1 - x0) / step > 400 || (z1 - z0) / step > 400) return;
-    ctx.save();
-    ctx.lineWidth = 1;
-    for (let x = x0; x <= x1; x += step) {
-      const major = Math.abs(x % (step * 10)) < 1e-6;
-      ctx.strokeStyle = major ? skin['draw-grid-major'] : skin['draw-grid-minor'];
-      const s = toS({ x, z: 0 });
-      ctx.beginPath(); ctx.moveTo(s.x, 0); ctx.lineTo(s.x, cssH); ctx.stroke();
+    const R = window.DraftRender2D;
+    if (!R) {
+      throw new Error('MODEL.html: cannot paint the grid, render-2d.js did not '
+        + 'load. Check the script order in the page head.');
     }
-    for (let z = z0; z <= z1; z += step) {
-      const major = Math.abs(z % (step * 10)) < 1e-6;
-      ctx.strokeStyle = major ? skin['draw-grid-major'] : skin['draw-grid-minor'];
-      const s = toS({ x: 0, z });
-      ctx.beginPath(); ctx.moveTo(0, s.y); ctx.lineTo(cssW, s.y); ctx.stroke();
-    }
-    ctx.restore();
+    // drawGrid2D builds its own screen transform instead of taking toS, so it
+    // wants the camera in WORLD units. halfH is half the viewport height in
+    // FEET: cssH/2 pixels divided by px-per-foot. Getting this wrong scales
+    // the grid against everything else rather than hiding it, which is at
+    // least loud.
+    R.drawGrid2D(ctx, cssW, cssH, {
+      datum: gridDatum(),
+      halfH: cssH / 2 / view.scale,
+      camX: view.cx,
+      camZ: view.cz,
+      // Three weights, not two: 1ft fine, 10ft major, 100ft coarse. The page
+      // owns the look, as MODEL.dc.html:6559 does with its own greys.
+      gridFine: skin['draw-grid-minor'],
+      gridMajor: skin['draw-grid-major'],
+      gridCoarse: skin['draw-grid-coarse'],
+    });
+  };
+
+  // drawFloor2D's env, which is paintEnv() plus four keys only it reads.
+  // Kept separate rather than folded into paintEnv() because of `colors`:
+  // the name looks page-wide, but a grep of render-2d.js shows env.colors is
+  // read at 848-886 and nowhere else -- i.e. by this painter only. Parking a
+  // floor-specific five-colour set under a generic name in the shared env is
+  // how the next person ends up wondering why changing it moves nothing.
+  //
+  // All seven keys are supplied, including the three the garage branch needs.
+  // The default house has no garage slab, so that branch never runs HERE --
+  // but old drawings must keep opening, and a garage slab with an undefined
+  // taper offsets its dashed ring by NaN and silently draws nothing. Missing
+  // env keys are the tier-2b lesson: an interface satisfied for the fixture
+  // is not an interface satisfied.
+  const floorEnv = () => {
+    const S = window.DraftCutView.STANDARDS;
+    return {
+      ...paintEnv(),
+      formatInchesOnly: window.DraftFormatters.formatInchesOnly,
+      garageSlabThicknessIn: S.GARAGE_SLAB_THICKNESS_IN,
+      garageEdgeDepthIn: S.GARAGE_EDGE_DEPTH_IN,
+      // Derived exactly as MODEL.dc.html:1997 derives it -- at 45 degrees the
+      // taper runs (edge - field) inches in plan. STANDARDS exports the two
+      // depths but not this difference, so both pages compute it.
+      garageEdgeTaperRunIn: S.GARAGE_EDGE_DEPTH_IN - S.GARAGE_SLAB_THICKNESS_IN,
+      // drawFloor2D's own five-colour set. This page shows committed slabs
+      // only -- it has no draw tool and no selection -- so the preview and
+      // selected entries are wired to the committed look and to the brand
+      // accent. Deliberate placeholders, not omissions: were a preview ever
+      // to appear it would read as committed, which is visible and
+      // diagnosable, rather than throwing on an absent colour.
+      colors: {
+        fill: skin['draw-floor'],
+        fillPreview: skin['draw-floor'],
+        stroke: skin['draw-floor-edge'],
+        strokePreview: skin['draw-floor-edge'],
+        selected: skin['accent'],
+      },
+    };
   };
 
   const paintFloors = () => {
-    ctx.save();
-    ctx.fillStyle = skin['draw-floor'];
+    // Lazy and loud, like paintWalls. cut-view.js and formatters.js are new
+    // to this page and they carry the load-order trap named in the head.
+    const R = window.DraftRender2D;
+    const CV = window.DraftCutView;
+    const F = window.DraftFormatters;
+    const missing = [!R && 'render-2d.js', !CV && 'cut-view.js', !F && 'formatters.js']
+      .filter(Boolean);
+    if (missing.length) {
+      throw new Error(`MODEL.html: cannot paint floors, ${missing.join(' and ')} `
+        + 'did not load. Check the script order in the page head.');
+    }
+    const env = floorEnv();
     floors().forEach(floor => {
-      const pts = (floor.points || []).filter(p => Number.isFinite(p?.x));
-      if (pts.length < 3) return;
-      ctx.beginPath();
-      pts.forEach((p, i) => { const s = toS(p); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
-      ctx.closePath();
-      ctx.fill();
+      // drawFloor2D returns early under 2 points itself; this only skips the
+      // degenerate ones the hand-rolled wash used to skip, so the count in
+      // the readout keeps meaning the same thing.
+      if ((floor.points || []).length < 2) return;
+      R.drawFloor2D(ctx, toS, floor, {}, env);
     });
-    ctx.restore();
   };
 
   const paintLines = () => {
@@ -482,6 +583,15 @@
   // have shown the tier 2a floor bug on sight rather than after a screenshot.
   const shownOfTotal = (shown, all) => `${shown}/${(all || []).length}`;
 
+  // Three states, matching gridDatum(): a point, the back-filled world origin
+  // for a pre-datum drawing, or none at all -- and none means no grid.
+  const datumLabel = () => {
+    const d = gridDatum();
+    if (!d) return 'none — no grid';
+    const at = `${d.x.toFixed(2)},${d.z.toFixed(2)}`;
+    return (drawing && !('drawingOrigin' in drawing)) ? `${at} (world, back-filled)` : at;
+  };
+
   const updateReadout = () => {
     if (!drawing) return;
     readout.innerHTML =
@@ -493,7 +603,10 @@
       + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
       + `view <b>${onActiveLevel().viewId || 'all'}</b>   `
       + `${theme}/${mode}   `
-      + `scale <b>${view.scale.toFixed(2)}</b> px/ft`;
+      + `scale <b>${view.scale.toFixed(2)}</b> px/ft   `
+      // Why the grid is or is not there, so its absence reads as a fact about
+      // the drawing rather than a broken page.
+      + `datum <b>${datumLabel()}</b>`;
   };
 
   // ── pan and zoom ──────────────────────────────────────────────────────────

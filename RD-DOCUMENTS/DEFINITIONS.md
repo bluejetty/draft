@@ -15,6 +15,193 @@ neighbour so you can pick deliberately.
 confused by it. Not before — a dictionary of words nobody misuses is a
 dictionary nobody reads.
 
+**How specific.** Movie, 3 Sep: *"should be specific as possible to our
+stuff."* An entry earns its place by naming OUR things — the identifier, the
+file, the count, the ruling and its date. Four tests, and an entry that fails
+any of them is not finished:
+
+1. **Does it name real identifiers?** `_floorLevels` (23) and `_activeFloors`
+   (12), not "the level function and the floor function".
+2. **Is the claim measured?** A count, a line number, a grep. "Used in a few
+   places" is not an entry, it is a memory.
+3. **Would it read the same in any other drafting app?** Then delete it. "A
+   layer groups drawing elements" is true of AutoCAD and tells our reader
+   nothing. "A layer set is carried on every item as `view`, and each layer in
+   it is showing-and-usable, background-only, or off" is ours.
+4. **Does it end in something you can do?** The `say instead` column, or a
+   ruling. A word explained but not decided will be argued about again.
+
+The counter-example worth keeping in mind: `stair` appears in 54 methods of
+MODEL.dc.html and does **not** belong here. One busy topic is not a collision.
+FLOOR belongs here because `_floorLevels()` returns storeys while
+`_activeFloors()` returns slabs — one word, two kinds of thing. Frequency is
+not the test; two referents is.
+
+---
+
+## How a rename lands
+
+**Movie's plan, 3 Sep:** *"figure out all the names we use and if there are
+double or confusion we can rename stuff in the dc file before we put it into
+the new website"* — **and the new name goes into this dictionary.** So an entry
+is not a description of a mess; it is the record of a decision, written
+`old → new`, dated, with who ruled it.
+
+The migration is what makes the timing matter. Every name still in
+MODEL.dc.html when a painter is extracted is a name the new site inherits.
+
+**Three tiers, by what a rename actually costs:**
+
+1. **Free.** Internal methods and local variables — nothing persisted, nothing
+   a drafter reads. `_floorLevels` → `_storeys`, 24 sites. The acceptance test
+   is unusually crisp: the suite total must be **exactly** unchanged and all
+   green, because a pure rename that moves one test outcome was not a rename.
+2. **Free, and easier after extraction than before.** Names inside a painter
+   that has already moved to a module. A pure module is a few dozen lines, has
+   a node harness, and now has coverage — cheaper to rename than the same code
+   buried in a 22,000-line monolith. **So nobody should stop extracting in
+   order to rename first.** The window does not close when a painter moves; it
+   closes when MODEL.dc.html is deleted.
+3. **Constrained — needs a seam, not a find-and-replace.** Anything written
+   into the saved drawing: `view`, `levelId`, `layer`, and
+   `structure: 'floor' | 'slab'`. **Old drawings must keep opening** (BOARDS
+   standing rule), so the stored key stays and the code name changes, with one
+   translation on load and one on save.
+
+**The seam for tier 3 has a hole in it, measured 3 Sep.**
+`drawing-format.js` normalises more than thirty item types — `shapes`,
+`roofs`, `fixtures`, `stairs`, `outlines`, `underlays` and the rest — but
+**not `walls`, `lines` or `floors`**. Those three are inflated inline in
+MODEL.dc.html (5241, 5255, 5270) with an `Array.isArray` check and no
+validation. They are also the only three item types that carry `view`.
+
+So a `view` rename has nowhere to live until walls, lines and floors get
+normalisers of their own. That is worth doing regardless of any rename — the
+three most-used types in the format are the three with no validation on load —
+and it is the first job of any tier-3 rename, not an afterthought to it.
+
+---
+
+## Which fix a collision needs
+
+Movie, 3 Sep: *"there is 3 meanings that all use the same word quite often…
+quite often share characteristics though."*
+
+That second half is the test. **Do the senses share characteristics?** And in
+this codebase the answer is almost always yes — which means the fix is almost
+never a rename.
+
+### These are not homonyms
+
+A homonym is two unrelated things that happen to share a sound. Our overloaded
+words are not that. They are **one concept applied to different subjects**,
+which is exactly why the word keeps getting reused: it genuinely fits every
+time.
+
+| word | the one concept | its subjects |
+|---|---|---|
+| LAYOUT | arranging elements in a bounded area | views on a sheet · joists in a floor · icons on a page |
+| VIEW | a chosen way of looking at the model | through a camera · through a layer set · as a particular drawing |
+| FRAME / FRAMING | members assembled into a structural surround | a window frame · a framed wall |
+
+**So renaming is the wrong tool.** You cannot pick a better word for one of
+them, because the word is correct in all of them — any replacement is worse.
+That is why "framing" felt right to whoever wrote `locked framing`, and why
+Movie reached for "layout" to describe joists without hesitating.
+
+### The fix is a qualifier, not a new word
+
+    sheet layout   ·  floor layout  ·  print layout
+    camera view    ·  layer view    ·  drawing view
+    window frame   ·  wall framing
+
+Cheaper than renaming, and it keeps the word that actually fits. It also
+explains the tier-2a bug exactly: `(floor.view || 'floor')` carries **no
+qualifier**, so two of view's three subjects met in one expression with
+nothing to tell them apart.
+
+> **An entry for a word of this shape does not say "use X instead". It says
+> "this word has three subjects — always say which."**
+
+### When a sense does give up the word
+
+Only when **a better, unambiguous word already exists** for it. That is the
+FLOOR ruling: FLOOR stops meaning a storey not because the senses are
+unrelated — a storey is named after the surface you stand on, so they share
+plenty — but because LEVEL and STOREY are already sitting there, precise and
+unused. A qualifier is the default; handing the word over needs a ready
+replacement that is strictly better.
+
+### Rank by what shares, not by site count
+
+Earlier today we agreed to rank candidates by sites × senses. **That is
+wrong.** Site count measures what a rename would cost — and we have just
+established that renaming is mostly the wrong tool, so it measures the cost of
+the thing we are not going to do. It says nothing about how likely a word is
+to mislead.
+
+Rank by **how close the senses sit**, because near-misses are what get
+substituted for each other. Nobody confuses a camera with a layer set; the
+subjects are far apart and context sorts it out. But the layer-set
+*selection* and an item's layer-set *membership* are both truthfully "the
+layer view" — adjacent subjects, one concept, no qualifier — and that is the
+pair that shipped a bug past a review and past a spec written longhand to
+catch it.
+
+**In proportion:** one collision in one expression caused one bug, and it is
+fixed. What this file is doing now is preventing the next one, and a page of
+qualifiers does that as well as a month of renaming would. The honest state of
+the whole worry: FLOOR needed a ruling and has one, VIEW needs a label,
+FRAMING is four comments, and LAYOUT needs one sentence saying which subject
+we mean. That is an afternoon, and most of it is already written.
+
+---
+
+## Candidates — measured, not yet ruled
+
+Movie's purpose for this file, 3 Sep: *"agreed terms so we can talk clearly to
+each other… mostly for me or whoever is talking to you to use the correct
+terms, but also to not double anything up."* **The primary audience is the
+person talking to the agents, not the agents.** Coding is the secondary use.
+So an entry is finished when a human can read it and pick the right word —
+identifiers are evidence for that, not the point of it.
+
+Movie flagged WALL, PLAN and LAYOUT on sight. Measured 3 Sep, not yet ruled:
+
+**LAYOUT** — Movie's own word for how the joists and beams sit, and Movie's own
+doubt about it: *"layout is also a computer term so maybe bad choice."* The
+doubt is right, and it is worse than a generic-word worry:
+
+| sense | where |
+|---|---|
+| the drawing-sheet page | **`LAYOUT.dc.html`** — an entire page |
+| the sheet layout in the saved format | `layout` normaliser, `drawing-format.js` |
+| how the floor structure sits | `FLOOR LAYOUT (FLOOR)`, a layer-set label |
+
+**PLAN** — Movie's word for how the walls are arranged.
+
+| sense | count |
+|---|---|
+| a layer-set id / `view` value | `'plan'` ×150 in MODEL.dc.html |
+| how walls are arranged | `FLOOR PLAN (WALLS)` label |
+| a sheet type, against elevation and section | `ROOF PLAN` ×3 |
+| the Model Space canvas element | `id="plan"` in MODEL.html — mine, and the easiest to rename |
+
+**WALL** — `this._walls` ×93 (the items), `WALL_TYPES` ×37 and `wallType` ×53
+(the assembly, a different kind of thing from a wall).
+
+### The reframe these three suggest
+
+The layer-set labels **already speak Movie's language**: `FLOOR PLAN (WALLS)`
+is how walls are arranged, `FLOOR LAYOUT (FLOOR)` is how the floor structure
+sits. The product's words and the owner's words agree.
+
+So the fix is not to rename the labels. It is that those same two words are
+*also* doing unrelated jobs elsewhere — a page called LAYOUT, a canvas called
+`plan`, a format field called `layout`. **Rename the other uses, keep the
+labels.** That is the cheap direction and it is the one that leaves the
+drafter-facing vocabulary alone.
+
 ---
 
 ## The overloaded ones — read these first
@@ -69,19 +256,143 @@ when the wall moves. It looks like it is pinned to a point; it is not.
 > Movie's ruling: **node for lines, object placement for objects.** Say
 > "object" or "object placement" and never "the toilet's node".
 
+### VIEW
+
+**Our worst collision by site count — 137, in three senses.** Measured 3 Sep
+across MODEL.dc.html:
+
+| sense | what it means | example | sites |
+|---|---|---|---|
+| the camera | which way the 3D scene is pointed | `activeView === 'top'` | ~52 |
+| the layer-set **selection** | which layer set you are looking at | `defaultLayerViewId(3)` → `'plan'` | ~60 |
+| the layer-set **membership** | which layer set an item belongs to | `view: 'stair'` | ~25 |
+
+Nothing about senses 2 and 3 is a view, a camera or a viewport. See LAYER /
+LAYER SET / LEVEL. Say **layer set** in prose and read `view` as its storage
+name; renaming the field would break every saved drawing.
+
+**Senses 2 and 3 each have a default, and they are different defaults.** This
+is the sharp edge, and it is where the tier-2a floors bug lived:
+
+- selection default — `defaultLayerViewId(levelId)`: `plan` on MAIN FL and
+  2ND FL, `foundation` on FOUNDATION, `null` on ROOF and SITE.
+- membership default — `(item.view || …)`: `floor` for floors, `plan` for
+  everything else.
+
+Both are legitimately "the default view". Tier 2a used the **selection**
+default as the **membership** default — `(floor.view || 'plan')` where the old
+page reads `(floor.view || 'floor')` — and that is a natural mistake precisely
+because one word names both. The two never agree for a floor: `plan` vs
+`floor` on MAIN FL, `foundation` vs `floor` on FOUNDATION.
+
+It stayed invisible because no fixture exercises either default — the old page
+always writes `view` explicitly on a floor, so the fallback is dead code until
+an older saved drawing turns up. `tests/model-html-floors.spec.js` builds that
+drawing by hand.
+
+### FLOOR
+
+**Not a level and not a storey** — see the ruling under LEVEL / STOREY below.
+What is left is four things, and they collide inside single expressions:
+
+| what it is | in code | say |
+|---|---|---|
+| the assembly you stand on: joists, sheathing, finish | `assembly`, `DEFAULT_FLOOR_ASSEMBLY` (8 uses) | **floor assembly** |
+| framed-vs-concrete, as the drafter's choice | `floorStructure` (11 uses) | **floor structure** |
+| framed-vs-concrete, as one item's own fact | `structure: 'floor' \| 'slab'` (6 uses) | **framed floor** / **slab** |
+| a drawn floor outline, the item | `floors[]`, `drawFloor2D` | **floor outline**, or **slab** where it is concrete |
+| the FLOOR LAYOUT (FLOOR) layer set | `view: 'floor'` | **the FLOOR layer set** |
+
+**This collision has already cost a bug.** The tier-2a view filter read
+`(floor.view || 'plan')` where the old page reads `(floor.view || 'floor')`.
+The correct expression has three unrelated FLOORs in it: an item of type
+floor, a field named `view`, and the value `'floor'` naming a layer set. Nobody
+reviewing that line saw the wrong default, twice, including the spec written
+longhand to catch exactly that.
+
 ### LEVEL / STOREY / FLOOR
 
 - **level** — the app's stack of drawable planes, each with an `elev`. Includes
   things that are not storeys at all: FOUNDATION, BASEMENT, ROOF. `levels`,
-  `levelId`, `_floorLevels()`.
-- **storey** — a habitable floor of the house, as a *count*. What Gruff asks
+  `levelId`.
+- **storey** — a habitable level of the house, as a *count*. What Gruff asks
   for and the generator builds to. `storeys: 2`.
-- **floor** — the surface you stand on, or loosely a storey in conversation.
 
 Two storeys is not two levels. A two-storey house has a foundation, a
-basement, two floor levels and a roof.
+basement, two habitable levels and a roof.
 
-**Prefer "level" in code and "storey" in anything a client reads.**
+**Use "level" in code and "storey" in anything a client reads.**
+
+> **Movie's ruling, 3 Sep: never use FLOOR to mean a level or a storey.**
+> FLOOR is taken — it is the floor *structure*, the thing you stand on and its
+> build-up. See FLOOR below. This entry previously allowed "floor — loosely a
+> storey in conversation"; that is withdrawn.
+
+**The code does not obey this yet, and the collision is symmetrical.** One
+word, two opposite meanings, both in MODEL.dc.html — measured 3 Sep:
+
+| FLOOR = storey | | FLOOR = slab | |
+|---|---|---|---|
+| `_floorLevels` | 23 | `this._floors` | 40 |
+| `floorLevels` | 1 | `_activeFloors` | 12 |
+| | | `_drawFloor2D` | 7 |
+
+`_floorLevels()` returns storeys and `_activeFloors()` returns slabs. Two
+methods, one word, and nothing in either name says which. 24 sites sit on the
+wrong side of the ruling.
+
+**Agreed remedy, not yet done:** rename `_floorLevels` → `_storeys` (24 sites,
+mechanical), and **leave `MAIN FL` / `2ND FL` alone** (29 label uses). Those
+labels are drafter-facing and `MAIN FL` is conventional on a real drawing
+sheet; the ruling is about code clarity, and what a builder reads is a separate
+question. The rename wants its own PR — a pure rename is the cheapest thing
+there is to review, and folding it into other work destroys that property. Its
+acceptance test is unusually crisp: the suite total must be **exactly**
+unchanged and every test green, because a rename that moves one test outcome
+was not a rename.
+
+Counting note: `grep -c` counts matching *lines*; these are occurrences via
+`grep -o | wc -l`. The two differ by 2 on `this._floors` alone.
+
+### LAYER / LAYER SET / LEVEL
+
+**Three tiers, not two.** Nesting outward to inward:
+
+- **level** — a storey-or-not plane of the building. SITE, ROOF, 2ND FL,
+  MAIN FL, FOUNDATION; ids 8, 7, 5, 3, 1. See LEVEL / STOREY / FLOOR above.
+  Carried on every item as `levelId`.
+- **layer set** — a named working context *within one level*. On MAIN FL:
+  ELECTRIC, FLOOR PLAN (WALLS), FLOOR LAYOUT (FLOOR), STAIR. FOUNDATION has
+  its own three: ELECTRIC, BASEMENT (WALLS), FOUNDATION. Carried on every item
+  as **`view`**, and listed by `layerViewsForLevelId(levelId)`.
+- **layer** — the CAD layer a single item sits on. `A-WALL-EXT`, `A-FL`,
+  `S-SLAB`, `E-POWER`, `PLAN DIMENSION`. A layer set's `contents` is a *list of
+  these*.
+
+So a layer set is a named selection of layers, scoped to a level. "The floor is
+on FOUNDATION" is ambiguous on its own — FOUNDATION is both a level (id 1) and
+a layer set (on level 1). Name which.
+
+**`view` in code means LAYER SET.** It is the worst-named field in the drawing
+format: nothing about it is a view, a camera or a viewport. `item.view ===
+'plan'` reads as "this is the plan view" and means "this belongs to the FLOOR
+PLAN (WALLS) layer set of its level". Say **layer set** in prose and read
+`view` as its storage name. Renaming the field would break every saved
+drawing, so the name stays and this entry exists instead.
+
+**The fallback differs by item type.** Floors default to the `floor` layer set;
+every other item type defaults to `plan`. Tier 2a of MODEL.html defaulted
+everything to `plan` and no fixture could catch it, because the old page always
+writes the field explicitly.
+
+**A layer set's `contents` does not decide what gets drawn.** Membership is
+`item.view` alone. The `contents` list names layers for the layer panel — and
+most of those names appear nowhere else in the app: `A-FL` and `A-WALL-EXT`
+have zero references in MODEL.dc.html. `layersFor()` is exported by
+`layer-views.js` and called by nothing. So reasoning like "the plan set lists
+`A-FL`, therefore floors show on the plan set" is invalid twice over: the
+contents list is not a filter, and nothing is assigned to `A-FL` in the first
+place.
 
 ---
 

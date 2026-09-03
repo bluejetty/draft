@@ -80,12 +80,27 @@ console.log('\n--- the drawing ink separates from the ground it is drawn on');
 for (const theme of P.THEMES) {
   for (const mode of P.MODES) {
     const v = P.resolve(theme, mode);
-    [['draw-grid-minor', 1.05], ['draw-grid-major', 1.15], ['draw-line', 2.0]].forEach(([role, min]) => {
+    [['draw-grid-minor', 1.05], ['draw-grid-major', 1.15], ['draw-grid-coarse', 1.5],
+      ['draw-line', 2.0]].forEach(([role, min]) => {
       const ratio = P.contrast(v[role], v['surface-page']);
       check(`${theme}/${mode}  ${role}`, ratio >= min, `${ratio.toFixed(2)} (min ${min})`);
     });
-    check(`${theme}/${mode}  grid major reads above grid minor`,
-      P.contrast(v['draw-grid-major'], v['surface-page']) > P.contrast(v['draw-grid-minor'], v['surface-page']));
+    // The three grid weights must READ as three weights, in order. Asserting
+    // each against the ground separately would pass with all three identical.
+    const gw = r => P.contrast(v[r], v['surface-page']);
+    check(`${theme}/${mode}  grid weights are ordered fine < major < coarse`,
+      gw('draw-grid-minor') < gw('draw-grid-major')
+      && gw('draw-grid-major') < gw('draw-grid-coarse'),
+      `${gw('draw-grid-minor').toFixed(2)} < ${gw('draw-grid-major').toFixed(2)}`
+      + ` < ${gw('draw-grid-coarse').toFixed(2)}`);
+    // The slab outline is drawn ON TOP of the floor wash, so the wash
+    // composited over the page -- not the bare page -- is its real ground.
+    // Measured against the page instead, the edge scores better than it
+    // looks, which is the wrong answer arrived at comfortably. 3.0 is the
+    // WCAG non-text floor; these are lines, so that is the bar that applies.
+    const washed = P.contrast(v['draw-floor-edge'], v['draw-floor'], v['surface-page']);
+    check(`${theme}/${mode}  draw-floor-edge over its own wash`, washed >= 3.0,
+      `${washed.toFixed(2)} (min 3.0)`);
   }
 }
 
