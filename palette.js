@@ -42,6 +42,13 @@ if (!window.DraftPalette) {
                          // where the 1ft layer is off. Three weights, not two:
                          // fine 1ft / major 10ft / coarse 100ft.
     'draw-line',        // sketch lines: the drafter's own construction ink
+    'draw-dim',         // dimension strings, their witness lines and arrows.
+                        // The only drawing role that is TEXT as well as line,
+                        // so it answers to AA body contrast (4.5), not the 3.0
+                        // a line gets -- and on TWO grounds, because
+                        // drawDimension2D paints the label on a plate
+                        // (env.colors.labelBack) and the witness lines on the
+                        // page. Both values below clear 4.5 on both of theirs.
     'draw-floor',       // floor polygons, a wash rather than a fill
     'draw-floor-edge',  // the slab outline and its corner handles, drawn ON
                         // TOP of that wash -- so the wash, not the page, is
@@ -69,6 +76,7 @@ if (!window.DraftPalette) {
       'draw-grid-major': '#34383a',
       'draw-grid-coarse': '#454a4c',
       'draw-line':       '#7f8688',
+      'draw-dim':        '#6b93bd',   // 5.15 on the page, 5.56 on the plate
       'draw-floor':      'rgba(120,140,150,0.10)',
       'draw-floor-edge': '#5980a6',
       'draw-shape':      '#3f8f7a',
@@ -86,6 +94,7 @@ if (!window.DraftPalette) {
       'draw-grid-major': '#cbcdcf',
       'draw-grid-coarse': '#b0b3b5',
       'draw-line':       '#6b7274',
+      'draw-dim':        '#365e86',   // 6.05 on the page, 6.68 on the plate
       'draw-floor':      'rgba(90,110,120,0.10)',
       'draw-floor-edge': '#5980a6',
       'draw-shape':      '#2f6b5b',

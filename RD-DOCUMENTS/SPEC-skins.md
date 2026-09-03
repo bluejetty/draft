@@ -299,3 +299,72 @@ grounds with margin and is already the most-used blue in MODEL.
 One value serves both modes. Night and day are otherwise inverses, but the
 measurement says a single blue reads on both, and splitting it per mode would
 be a distinction with nothing behind it.
+
+## `draw-dim` added (3 Sep)
+
+Seventeen roles now. `drawDimension2D` paints a dimension string, its witness
+lines and two arrowheads, and tier 2e wired it into `MODEL.html`.
+
+**This is the first role that is TEXT as well as line, and it is the first
+with two grounds.** Every drawing role before it answered one question: does
+this ink separate from the thing under it? This one is drawn twice, on
+different things:
+
+- the **witness lines and arrows** go on the page, or on a floor wash
+- the **string** goes on a plate the painter fills first (`env.colors.labelBack`)
+
+So a value that reads on the page can still vanish on the plate, and asserting
+only one of them measures the easy half. The harness asserts both.
+
+### Why this one is a pair when `draw-floor-edge` is a single value
+
+`draw-floor-edge` clears 3.0 on both night and day with one blue, and the note
+above calls splitting it "a distinction with nothing behind it". That
+conclusion does not survive the higher bar. Measured against the page:
+
+| candidate | night | day | |
+|---|---|---|---|
+| `#5980a6` — the drafting blue that serves `draw-floor-edge` | 3.99 | 3.71 | fails **both** |
+| `#7fa8ce` | 6.61 | 2.24 | fails day |
+| `#2f5a86` | 2.31 | 6.41 | fails night |
+| `#6b93bd` | **5.15** | 2.87 | chosen for **night** |
+| `#365e86` — MODEL.dc.html's own dimension stroke | 2.44 | **6.05** | chosen for **day** |
+
+No single value clears 4.5 on both grounds. **The bar is what decides whether a
+role can be one value or must be a pair** — at 3.0 one blue served both, at 4.5
+none does. That is not a fact about blue; it is what a per-skin table is for,
+and it is the same finding the brand reds produced: a drawing colour is a pair,
+not a value.
+
+Chosen: night `#6b93bd`, day `#365e86`.
+
+| ground | night | day |
+|---|---|---|
+| the page — witness lines on bare ground | 5.15 | 6.05 |
+| the label plate — the string (`surface-panel` over the page) | 5.56 | 6.68 |
+| a floor wash — witness lines across a slab | 4.51 | 5.35 |
+
+### The floor row is asserted at 3.0, and that is the bar, not a softened one
+
+A dimension measures something, so in a real drawing it nearly always crosses a
+floor rather than bare page. The wash lifts the ground toward the ink and takes
+night from 5.15 to 4.51.
+
+4.51 clears 4.5 — by a hundredth. **Asserting it there would be exactly the
+mistake this document already names one section up**, where `#47779a` cleared
+its bar by 0.02 and was rejected for it: a value sitting on the line passes
+today and breaks on any tweak to the wash, for no legibility reason anyone
+could see.
+
+It is also the wrong rule. What crosses the wash is LINE work — the string is
+always on the plate, which is asserted at 4.5 in the row above. 3.0 is the WCAG
+non-text floor and it is the one that governs lines. So the harness asserts
+3.0 there and 4.5 on the two grounds where text actually lands.
+
+### The page supplies the plate, so the plate has to be the measured one
+
+`labelBack` is `surface-panel`, not a hardcoded white. MODEL.dc.html fills
+`rgba(255,255,255,0.92)` because it has no skins and its ground is always
+light; carrying that literal into a skinned page would paint a white card on a
+black drawing, and would mean the contrast the harness proves is a contrast
+against a colour the page never paints.
