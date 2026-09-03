@@ -191,3 +191,21 @@ Deliberately **not** in the six:
   to be relayed out by hand as a bundle.
 - **Say the total you expect before you run the suite, then the total you got.**
   A run that quietly loses a spec is green either way.
+**Longhand protects you from a module lying to you, not from being wrong about
+the module.** The tier-2a view filter was written out by hand on purpose, so
+that asking `layer-views.js` the same question the page asks it could not let a
+wrong answer agree with itself. It passed anyway: the rule and the code shared
+one misunderstanding, that every item type defaults to the `plan` view. Floors
+default to `floor`. What caught it was reading `_activeFloors` in
+MODEL.dc.html — the behaviour, not a restatement of it. A hand-written rule is
+still a reading (see the rule above); write it out AND go read the thing it
+claims to describe.
+
+**A 0/N in a readout is a question, not a bug and not a fine.** `floors 0/3`
+was chased on the suspicion it was the tier-2a floors bug again. It was
+correct: MAIN FL's slab lives on the FLOOR layer set. But chasing it found a
+real defect next door, in the fallback the same filter uses. Both outcomes are
+worth the trip; "probably fine" is what walked past the first floors bug. This
+is also why the readout says `0/3` and not `0` — Movie, 3 Sep: "i like all
+that info down in the left corner keep adding to it and don't delete."
+

@@ -144,21 +144,32 @@ test.describe('MODEL.html tier 1', () => {
     expect(frameworks.dc).toBe(0);
     expect(frameworks.scripts).not.toContain('./support.js');
 
-    // SEVEN dependencies, and the list is the finding rather than a formality:
+    // NINE dependencies, and the list is the finding rather than a formality:
     // render-2d.js reaches for no globals, so the wall painter still costs one
     // module. palette.js joined on 3 Sep and is the only one that is not a
     // painter -- it is loaded FIRST because the skin is applied at module
     // scope, before first paint (RD-DOCUMENTS/SPEC-skins.md).
     //
-    // Keep this exact rather than loosening it to a `toContain`. It caught the
+    // formatters.js and cut-view.js joined for tier 2c: drawFloor2D reads
+    // env.formatInchesOnly and the two garage-slab standards, and those are
+    // the modules that own them. Two scripts for a real painter, and they
+    // are the honest cost of not restating a construction standard.
+    //
+    // ORDER IS ASSERTED, NOT INCIDENTAL. cut-view.js:28-29 destructures
+    // window.DraftWallTypes and window.DraftFormatters at module scope, so it
+    // throws while loading if either follows it, and a head that throws
+    // paints nothing. This list is the only thing standing between that and a
+    // tidy-looking alphabetical sort.
+    //
+    // Keep it exact rather than loosening it to a `toContain`. It caught the
     // palette being added the same hour it was added, which is what an exact
     // list is for: the migration's whole claim is that this page is cheap, and
     // a dependency that arrives without anyone noticing is how that stops
     // being true.
     expect(frameworks.scripts).toEqual([
       './palette.js', './layer-views.js', './geometry-2d.js',
-      './shared-file-store.js', './wall-types.js', './drawing-format.js',
-      './render-2d.js',
+      './shared-file-store.js', './wall-types.js', './formatters.js',
+      './cut-view.js', './drawing-format.js', './render-2d.js',
     ]);
   });
 

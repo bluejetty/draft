@@ -86,6 +86,14 @@ for (const theme of P.THEMES) {
     });
     check(`${theme}/${mode}  grid major reads above grid minor`,
       P.contrast(v['draw-grid-major'], v['surface-page']) > P.contrast(v['draw-grid-minor'], v['surface-page']));
+    // The slab outline is drawn ON TOP of the floor wash, so the wash
+    // composited over the page -- not the bare page -- is its real ground.
+    // Measured against the page instead, the edge scores better than it
+    // looks, which is the wrong answer arrived at comfortably. 3.0 is the
+    // WCAG non-text floor; these are lines, so that is the bar that applies.
+    const washed = P.contrast(v['draw-floor-edge'], v['draw-floor'], v['surface-page']);
+    check(`${theme}/${mode}  draw-floor-edge over its own wash`, washed >= 3.0,
+      `${washed.toFixed(2)} (min 3.0)`);
   }
 }
 

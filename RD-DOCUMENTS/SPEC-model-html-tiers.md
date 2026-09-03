@@ -157,3 +157,71 @@ paints it correctly; it does not grow a UI to change it.
 
 Chrome, interaction, and the skins from `SPEC-skins.md`. Not specced here
 beyond that, because tier 2 will change what it should say.
+
+## Tier 2c — floors through the real painter (3 Sep)
+
+`paintFloors` now calls `drawFloor2D` instead of filling the outline by hand.
+Cost: two more scripts, `formatters.js` and `cut-view.js`, because the painter
+reads `env.formatInchesOnly` and the two garage-slab standards and those are
+the modules that own them. Nine scripts now, and **the order is asserted**:
+`cut-view.js:28-29` destructures `window.DraftWallTypes` and
+`window.DraftFormatters` at module scope, so it throws while loading if either
+follows it, and a head that throws paints nothing at all.
+
+### The five filter rules were four rules and a wrong one
+
+Tier 2a wrote the view filter as `(item.view || 'plan') === viewId` for every
+item type. Measured against MODEL.dc.html, **floors default to `'floor'`**
+(2905, 9029, 9089, 9098, 9162, 17025); every other type — wall, line, stair,
+opening, fixture, device, seg — defaults to `'plan'`. A floor outline's home
+layer set is FLOOR, or FOUNDATION where it is a concrete slab. It was never a
+plan-set item.
+
+Why no test caught it: the old page always writes an explicit `view` on a
+floor, so **no fixture can produce the failing case**. It shows only on an
+older saved drawing whose floors predate the field — precisely the drawings
+that have to keep opening. `tests/model-html-floors.spec.js` builds that
+drawing by rewriting the stored JSON, because waiting for one to turn up is
+not a test.
+
+The tier-2a spec asserted the rule longhand, deliberately not calling
+`layer-views.js`, so that a wrong answer could not agree with itself. It
+still passed: the rule and the implementation shared one misunderstanding.
+**Longhand protects against a module lying to you, not against being wrong
+about the module.** The thing that caught this was reading MODEL.dc.html's
+`_activeFloors` directly.
+
+### What `floors 0/3` on the default view means
+
+Correct, and chased as a bug before that was established. MAIN FL's slab lives
+on the FLOOR layer set, so the plan view shows none of it — the same answer
+`_activeFloors` gives. The `plan` view's contents list does include `A-FL`,
+which is what made it look wrong; that covers deck and flooring shapes on
+`A-FL-DECK` / `A-FL-FLOORING`, not floor outlines, which sit on `S-SLAB` and
+`A-FL-OPNG` in the FLOOR set.
+
+`_courtesyFloorIds` — MODEL.dc.html's rule for showing a floor outside its
+home view — is deliberately **not** implemented here. A courtesy floor is one
+drawn from another layer set during a session; the Set is runtime-only and
+never reaches the saved JSON, so a page that reads saved drawings has none to
+honour. Verified against the serialiser rather than assumed.
+
+### drawFloor2D's first coverage, and what is still uncovered
+
+Before this file, `drawFloor2D` had none: the existing floor specs assert the
+saved model — a slab exists, it has a thickness — and never that anything is
+painted from it. Three of the six painters extracted on 3 Sep were in that
+state.
+
+The assertion measures `draw-floor-edge` ink on the canvas: the slab
+**outline**, which only the real painter draws. The tier-2a wash filled and
+never stroked, so the test fails both if the painter stops painting and if
+someone quietly puts the wash back. Measured 0.002345 of the canvas with the
+painter, 0.000000 with it no-op'd — presence against absence, not a tuned
+constant.
+
+Still unreachable from the default fixture, and recorded rather than implied:
+the garage branch (pour note, dashed thickened-edge ring), floor openings cut
+even-odd as holes, `preview`, and `selected`. All four env keys those need are
+supplied anyway — an interface satisfied for the fixture is not an interface
+satisfied, which is the tier-2b lesson — but nothing exercises them here.

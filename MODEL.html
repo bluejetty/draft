@@ -110,11 +110,19 @@
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 <div id="notice"><div id="notice-body"></div></div>
 
+<!-- ORDER IS LOAD-BEARING, not tidiness. cut-view.js destructures
+     window.DraftWallTypes and window.DraftFormatters at MODULE SCOPE
+     (cut-view.js:28-29), so it throws while loading if either comes after
+     it -- and a page that throws in the head paints nothing at all. The
+     tier-1 spec pins this exact list, in this exact order, for that reason.
+     Everything else here is a lazy accessor and would not care. -->
 <script src="./palette.js"></script>
 <script src="./layer-views.js"></script>
 <script src="./geometry-2d.js"></script>
 <script src="./shared-file-store.js"></script>
 <script src="./wall-types.js"></script>
+<script src="./formatters.js"></script>
+<script src="./cut-view.js"></script>
 <script src="./drawing-format.js"></script>
 <script src="./render-2d.js"></script>
 
@@ -260,7 +268,20 @@
     const levelId = activeLevelId();
     const views = LV.layerViewsForLevelId(levelId);
     const viewId = activeViewId();
-    const onPlan = item => !views.length || (item.view || 'plan') === viewId;
+    // THE FALLBACK DIFFERS BY ITEM TYPE. Measured, not assumed: every
+    // `.view || '...'` in MODEL.dc.html reads 'plan' -- wall, line, stair,
+    // opening, fixture, device, seg, 20-odd sites -- EXCEPT floors, which
+    // read 'floor' (MODEL.dc.html:2905, 9029, 9089, 9098, 9162, 17025).
+    //
+    // A floor outline's home layer set is FLOOR, or FOUNDATION where it is a
+    // concrete slab; it was never a plan-set item. Defaulting floors to
+    // 'plan' put a view-less floor on the wrong layer set -- invisible on
+    // every fixture, because a floor drawn by the old page always carries an
+    // explicit `view`, and visible only on an older saved drawing whose
+    // floors predate the field. Those are exactly the drawings that have to
+    // keep opening, so the spec builds that case by hand.
+    const onPlan = (item, fallback = 'plan') =>
+      !views.length || (item.view || fallback) === viewId;
     const byLevel = item => Number(item.levelId) === levelId;
     return { levelId, viewId, onPlan, byLevel };
   };
@@ -269,7 +290,7 @@
   const lines = () => (drawing?.lines || [])
     .filter(l => { const f = onActiveLevel(); return f.byLevel(l) && f.onPlan(l); });
   const floors = () => (drawing?.floors || [])
-    .filter(x => { const f = onActiveLevel(); return f.byLevel(x) && f.onPlan(x); });
+    .filter(x => { const f = onActiveLevel(); return f.byLevel(x) && f.onPlan(x, 'floor'); });
   // Rules four and five: LEVEL ONLY. A roof footprint and a reference shape are
   // level-wide -- every drawing of the level shows them -- so they take no view
   // filter at all. Copying the walls line here would hide both on FOUNDATION.
@@ -333,18 +354,66 @@
     ctx.restore();
   };
 
+  // drawFloor2D's env, which is paintEnv() plus four keys only it reads.
+  // Kept separate rather than folded into paintEnv() because of `colors`:
+  // the name looks page-wide, but a grep of render-2d.js shows env.colors is
+  // read at 848-886 and nowhere else -- i.e. by this painter only. Parking a
+  // floor-specific five-colour set under a generic name in the shared env is
+  // how the next person ends up wondering why changing it moves nothing.
+  //
+  // All seven keys are supplied, including the three the garage branch needs.
+  // The default house has no garage slab, so that branch never runs HERE --
+  // but old drawings must keep opening, and a garage slab with an undefined
+  // taper offsets its dashed ring by NaN and silently draws nothing. Missing
+  // env keys are the tier-2b lesson: an interface satisfied for the fixture
+  // is not an interface satisfied.
+  const floorEnv = () => {
+    const S = window.DraftCutView.STANDARDS;
+    return {
+      ...paintEnv(),
+      formatInchesOnly: window.DraftFormatters.formatInchesOnly,
+      garageSlabThicknessIn: S.GARAGE_SLAB_THICKNESS_IN,
+      garageEdgeDepthIn: S.GARAGE_EDGE_DEPTH_IN,
+      // Derived exactly as MODEL.dc.html:1997 derives it -- at 45 degrees the
+      // taper runs (edge - field) inches in plan. STANDARDS exports the two
+      // depths but not this difference, so both pages compute it.
+      garageEdgeTaperRunIn: S.GARAGE_EDGE_DEPTH_IN - S.GARAGE_SLAB_THICKNESS_IN,
+      // drawFloor2D's own five-colour set. This page shows committed slabs
+      // only -- it has no draw tool and no selection -- so the preview and
+      // selected entries are wired to the committed look and to the brand
+      // accent. Deliberate placeholders, not omissions: were a preview ever
+      // to appear it would read as committed, which is visible and
+      // diagnosable, rather than throwing on an absent colour.
+      colors: {
+        fill: skin['draw-floor'],
+        fillPreview: skin['draw-floor'],
+        stroke: skin['draw-floor-edge'],
+        strokePreview: skin['draw-floor-edge'],
+        selected: skin['accent'],
+      },
+    };
+  };
+
   const paintFloors = () => {
-    ctx.save();
-    ctx.fillStyle = skin['draw-floor'];
+    // Lazy and loud, like paintWalls. cut-view.js and formatters.js are new
+    // to this page and they carry the load-order trap named in the head.
+    const R = window.DraftRender2D;
+    const CV = window.DraftCutView;
+    const F = window.DraftFormatters;
+    const missing = [!R && 'render-2d.js', !CV && 'cut-view.js', !F && 'formatters.js']
+      .filter(Boolean);
+    if (missing.length) {
+      throw new Error(`MODEL.html: cannot paint floors, ${missing.join(' and ')} `
+        + 'did not load. Check the script order in the page head.');
+    }
+    const env = floorEnv();
     floors().forEach(floor => {
-      const pts = (floor.points || []).filter(p => Number.isFinite(p?.x));
-      if (pts.length < 3) return;
-      ctx.beginPath();
-      pts.forEach((p, i) => { const s = toS(p); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
-      ctx.closePath();
-      ctx.fill();
+      // drawFloor2D returns early under 2 points itself; this only skips the
+      // degenerate ones the hand-rolled wash used to skip, so the count in
+      // the readout keeps meaning the same thing.
+      if ((floor.points || []).length < 2) return;
+      R.drawFloor2D(ctx, toS, floor, {}, env);
     });
-    ctx.restore();
   };
 
   const paintLines = () => {
