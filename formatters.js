@@ -55,8 +55,23 @@ if (!window.DraftFormatters) {
   // (board NEW-5), so three decimals is the whole precision of the system --
   // not a display choice that could be widened later without changing what
   // the drawing means.
+  //
+  // NO Number.isFinite GUARD, deliberately, and not an oversight. Its
+  // neighbours above return '' for a non-finite input and consistency argued
+  // for matching them -- but this function arrived by being MOVED out of
+  // MODEL.dc.html, and a move that changes behaviour is not a move. The old
+  // _metric printed 'NaN m'.
+  //
+  // The question is real and belongs to all three, not to this one: '' is
+  // silent, and a dimension that prints nothing looks like a dimension that
+  // is not there, while 'NaN m' tells a drafter something is wrong. Whether
+  // it can happen at all is half-answered: drawing-format.js rejects
+  // non-finite coordinates on load (num() at :14 returns null and the entity
+  // lands in `skipped`), so a LOADED drawing cannot reach here with a NaN.
+  // The live readouts during a drag are computed in memory and were not
+  // traced. Half a proof is not the unreachability argument, so the loud
+  // behaviour stays until someone rules on all three together.
   function formatMetres(feet) {
-    if (!Number.isFinite(feet)) return '';
     return (feet * 0.3048).toFixed(3) + ' m';
   }
 
