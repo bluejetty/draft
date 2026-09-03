@@ -371,6 +371,352 @@ suite('drawBoneyardMark2D', 'a mark is a bar with a tick at each end', R => {
   expect('the bar spans the mark width in screen units', bar[0] - calls(ctx, 'moveTo')[0][0], 40);
 });
 
+// ── drawNoteScreen2D: the leader, the box, and which way the block grows ──
+const noteEnv = { color: '#c33', fillColor: '#ffe' };
+const NOTE = { body: 'NOSING 1 IN', end: 'line', fill: false, outline: false };
+
+suite('drawNoteScreen2D', 'the body is painted, one fillText per line', R => {
+  const ctx = recordingCtx();
+  R.drawNoteScreen2D(ctx, { x: 100, y: 100 }, { x: 200, y: 60 }, { ...NOTE, body: 'TWO\nLINES' }, {}, noteEnv);
+  expect('two rows', count(ctx, 'fillText'), 2);
+  expect('first row', calls(ctx, 'fillText')[0][0], 'TWO');
+  expect('second row', calls(ctx, 'fillText')[1][0], 'LINES');
+  const firstY = calls(ctx, 'fillText')[0][2], secondY = calls(ctx, 'fillText')[1][2];
+  expect('the second row sits one line lower', secondY - firstY, 14);
+});
+
+suite('drawNoteScreen2D', 'the block grows away from the anchor', R => {
+  const leftOf = textX => {
+    const ctx = recordingCtx();
+    R.drawNoteScreen2D(ctx, { x: 100, y: 100 }, { x: textX, y: 100 }, { ...NOTE, outline: true }, {}, noteEnv);
+    return calls(ctx, 'roundRect')[0][0];
+  };
+  const toTheRight = leftOf(200);
+  const toTheLeft = leftOf(20);
+  expect('placed right of the anchor, the box starts at the text point', toTheRight, 200);
+  expect('placed left of it, the box ends there instead', toTheLeft < 20, true);
+});
+
+suite('drawNoteScreen2D', 'the leader meets the near edge of the block', R => {
+  const ctx = recordingCtx();
+  R.drawNoteScreen2D(ctx, { x: 100, y: 100 }, { x: 200, y: 60 }, NOTE, {}, noteEnv);
+  expect('one leader', count(ctx, 'lineTo'), 1);
+  expect('it ends on the anchor', JSON.stringify(calls(ctx, 'lineTo')[0]), '[100,100]');
+  expect('and starts at the near edge, not the far one', calls(ctx, 'moveTo')[0][0], 200);
+});
+
+suite('drawNoteScreen2D', 'end "none" draws no leader at all', R => {
+  const ctx = recordingCtx();
+  R.drawNoteScreen2D(ctx, { x: 100, y: 100 }, { x: 200, y: 60 }, { ...NOTE, end: 'none' }, {}, noteEnv);
+  expect('no leader', count(ctx, 'lineTo'), 0);
+  expect('but the text is still painted', count(ctx, 'fillText'), 1);
+});
+
+suite('drawNoteScreen2D', 'end "arrow" adds a filled head at the anchor', R => {
+  const plain = recordingCtx();
+  R.drawNoteScreen2D(plain, { x: 100, y: 100 }, { x: 200, y: 60 }, NOTE, {}, noteEnv);
+  const arrow = recordingCtx();
+  R.drawNoteScreen2D(arrow, { x: 100, y: 100 }, { x: 200, y: 60 }, { ...NOTE, end: 'arrow' }, {}, noteEnv);
+  expect('a plain leader fills nothing', count(plain, 'fill'), 0);
+  expect('an arrow head is filled', count(arrow, 'fill'), 1);
+  expect('and is built at the anchor', JSON.stringify(calls(arrow, 'moveTo').pop()), '[100,100]');
+});
+
+suite('drawNoteScreen2D', 'a filled note uses the fill colour at its own opacity', R => {
+  const ctx = recordingCtx();
+  R.drawNoteScreen2D(ctx, { x: 100, y: 100 }, { x: 200, y: 60 },
+    { ...NOTE, fill: true, fillOpacity: 0.25 }, {}, noteEnv);
+  expect('the box is filled', count(ctx, 'fill'), 1);
+  expect('in the fill colour', sets(ctx, 'fillStyle').includes('#ffe'), true);
+  expect('at the note opacity', sets(ctx, 'globalAlpha').includes(0.25), true);
+});
+
+suite('drawNoteScreen2D', 'a preview is drawn faint and dashed', R => {
+  const ctx = recordingCtx();
+  R.drawNoteScreen2D(ctx, { x: 100, y: 100 }, { x: 200, y: 60 }, NOTE, { preview: true }, noteEnv);
+  expect('faint', sets(ctx, 'globalAlpha')[0], 0.6);
+  expect('and the leader is dashed', JSON.stringify(calls(ctx, 'setLineDash')[0][0]), '[5,4]');
+});
+
+suite('drawNoteScreen2D', 'the bullnose cannot exceed half the box', R => {
+  const ctx = recordingCtx();
+  R.drawNoteScreen2D(ctx, { x: 100, y: 100 }, { x: 200, y: 60 },
+    { ...NOTE, outline: true, bullnose: 9999 }, {}, noteEnv);
+  const [, , boxW, boxH, radius] = calls(ctx, 'roundRect')[0];
+  expect('clamped to half the shorter side', radius, Math.min(boxH / 2, boxW / 2));
+});
+
+// ── drawStairNotes2D: the pane filter, and that a note reaches the painter ──
+const stairFrame = over => ({
+  stair: { levelId: 'L1' },
+  rects: { section: { x: 0, y: 0, w: 400, h: 300 }, plan: { x: 400, y: 0, w: 400, h: 300 } },
+  paneScreen: (pane, pt) => ({ x: pt.x + (pane === 'plan' ? 400 : 0), y: pt.y }),
+  paneAt: () => 'section',
+  ...over,
+});
+const stairEnv = over => ({
+  notes: [], anchor: null, hover: null, pending: null, noteEditor: false, noteDraft: '',
+  noteColor: '#c33', noteFillColor: '#ffe',
+  previewStyle: body => ({ body, end: 'arrow', fill: false, outline: false }),
+  ...over,
+});
+const COMMITTED = {
+  view: 'stair', levelId: 'L1', pane: 'section',
+  anchor: { x: 10, y: 10 }, text: { x: 120, y: 40 }, body: 'NOSING 1 IN', end: 'line',
+};
+
+suite('drawStairNotes2D', 'a committed note paints its own body', R => {
+  const ctx = recordingCtx();
+  R.drawStairNotes2D(ctx, stairFrame(), stairEnv({ notes: [COMMITTED] }));
+  expect('the text reaches the canvas', calls(ctx, 'fillText').map(a => a[0]).join('|'), 'NOSING 1 IN');
+});
+
+suite('drawStairNotes2D', 'a committed note is placed at its pane-projected points', R => {
+  const ctx = recordingCtx();
+  R.drawStairNotes2D(ctx, stairFrame(), stairEnv({ notes: [COMMITTED] }));
+  expect('the leader ends on the projected anchor', JSON.stringify(calls(ctx, 'lineTo')[0]), '[10,10]');
+});
+
+suite('drawStairNotes2D', 'a plan-pane note is projected into the plan pane', R => {
+  const ctx = recordingCtx();
+  R.drawStairNotes2D(ctx, stairFrame(), stairEnv({ notes: [{ ...COMMITTED, pane: 'plan' }] }));
+  expect('the anchor carries the plan pane offset', JSON.stringify(calls(ctx, 'lineTo')[0]), '[410,10]');
+});
+
+suite('drawStairNotes2D', 'notes belonging elsewhere are left alone', R => {
+  const paintedFor = note => {
+    const ctx = recordingCtx();
+    R.drawStairNotes2D(ctx, stairFrame(), stairEnv({ notes: [note] }));
+    return painted(ctx);
+  };
+  expect('another level', paintedFor({ ...COMMITTED, levelId: 'L2' }), false);
+  expect('another view', paintedFor({ ...COMMITTED, view: 'plan' }), false);
+  expect('but this one is painted', paintedFor(COMMITTED), true);
+});
+
+suite('drawStairNotes2D', 'a note on a pane this frame does not have is skipped', R => {
+  const ctx = recordingCtx();
+  R.drawStairNotes2D(ctx, stairFrame({ rects: { plan: { x: 0, y: 0 } } }),
+    stairEnv({ notes: [COMMITTED] }));
+  expect('nothing painted', painted(ctx), false);
+});
+
+suite('drawStairNotes2D', 'an anchor being placed with no hover is a bare ring', R => {
+  const ctx = recordingCtx();
+  R.drawStairNotes2D(ctx, stairFrame(),
+    stairEnv({ anchor: { view: 'stair', pane: 'section', pt: { x: 30, y: 40 } } }));
+  expect('a ring', count(ctx, 'arc'), 1);
+  expect('at the anchor', JSON.stringify(calls(ctx, 'arc')[0].slice(0, 2)), '[30,40]');
+  expect('and no note block', count(ctx, 'fillText'), 0);
+});
+
+suite('drawStairNotes2D', 'once the cursor moves off the anchor, a preview follows it', R => {
+  const ctx = recordingCtx();
+  R.drawStairNotes2D(ctx, stairFrame(), stairEnv({
+    anchor: { view: 'stair', pane: 'section', pt: { x: 30, y: 40 } },
+    hover: { x: 150, y: 90 },
+  }));
+  expect('no bare ring now', count(ctx, 'arc'), 0);
+  expect('a preview block instead', count(ctx, 'fillText'), 1);
+  expect('drawn faint, which only arrives as an option', sets(ctx, 'globalAlpha')[0], 0.6);
+});
+
+suite('drawStairNotes2D', 'the note being typed is painted only while the editor is open', R => {
+  const pending = { view: 'stair', pane: 'section', anchor: { x: 10, y: 10 }, text: { x: 120, y: 40 } };
+  const shut = recordingCtx();
+  R.drawStairNotes2D(shut, stairFrame(), stairEnv({ pending, noteEditor: false, noteDraft: 'RISER' }));
+  expect('editor shut, nothing painted', painted(shut), false);
+  const open = recordingCtx();
+  R.drawStairNotes2D(open, stairFrame(), stairEnv({ pending, noteEditor: true, noteDraft: 'RISER' }));
+  expect('editor open, the draft is painted', calls(open, 'fillText').map(a => a[0]).join('|'), 'RISER');
+});
+
+// ── drawDimension2D ──
+const dimColors = {
+  stroke: '#233', preview: '#39f', selected: '#f60', selectedHalo: '#fd8', labelBack: '#fff',
+};
+const dimEnv = { colors: dimColors, label: ft => `${ft.toFixed(1)}'` };
+
+suite('drawDimension2D', 'a dimension with no length is not drawn', R => {
+  const ctx = recordingCtx();
+  R.drawDimension2D(ctx, toS, { start: { x: 5, z: 5 }, end: { x: 5, z: 5 } }, {}, dimEnv);
+  expect('nothing painted', ctx.tape.length, 0);
+});
+
+suite('drawDimension2D', 'the measurement is the world distance, formatted by the page', R => {
+  const ctx = recordingCtx();
+  R.drawDimension2D(ctx, toS, { start: { x: 0, z: 0 }, end: { x: 12, z: 5 } }, {}, dimEnv);
+  expect('13 feet, through env.label', calls(ctx, 'fillText')[0][0], "13.0'");
+});
+
+suite('drawDimension2D', 'both ends carry an arrowhead', R => {
+  const ctx = recordingCtx();
+  R.drawDimension2D(ctx, toS, { start: { x: 0, z: 0 }, end: { x: 10, z: 0 } }, {}, dimEnv);
+  expect('two filled heads', count(ctx, 'fill'), 2);
+});
+
+suite('drawDimension2D', 'preview and selected wear their own colours', R => {
+  const colourOf = options => {
+    const ctx = recordingCtx();
+    R.drawDimension2D(ctx, toS, { start: { x: 0, z: 0 }, end: { x: 10, z: 0 } }, options, dimEnv);
+    return sets(ctx, 'strokeStyle');
+  };
+  expect('plain', colourOf({}).includes('#233'), true);
+  expect('preview', colourOf({ preview: true }).includes('#39f'), true);
+  expect('selected', colourOf({ selected: true }).includes('#f60'), true);
+  expect('and selected draws a halo behind it', colourOf({ selected: true }).includes('#fd8'), true);
+});
+
+suite('drawDimension2D', 'the label never reads from the left of the sheet', R => {
+  // Two dimensions drawn back to back: the text must not flip upside down.
+  const angleFor = end => {
+    const ctx = recordingCtx();
+    R.drawDimension2D(ctx, toS, { start: { x: 0, z: 0 }, end }, {}, dimEnv);
+    return calls(ctx, 'rotate')[0][0];
+  };
+  const rightwards = angleFor({ x: 10, z: 0 });
+  const leftwards = angleFor({ x: -10, z: 0 });
+  expect('running right, the text is level', rightwards, 0);
+  expect('running left, it is levelled too rather than upside down', leftwards, 0);
+  const steep = angleFor({ x: 0, z: 10 });
+  expect('a vertical dimension stays within a quarter turn', Math.abs(steep) <= Math.PI / 2, true);
+});
+
+// ── drawStairs2D: the layer gates, the tread ladder, and the parts ──
+const STAIR = { start: { x: 0, y: 0, z: 0 }, widthFt: 3 };
+const stairLayout = { risers: 14, riserIn: 7.5 };
+const stairParts = over => ({
+  runs: [{ start: { x: 0, z: 0 }, dir: { x: 1, z: 0 }, lenFt: 10, treads: 13 }],
+  rails: [], landing: null, gap: null,
+  walk: [{ x: 0.5, z: 1.5 }, { x: 9.5, z: 1.5 }],
+  ...over,
+});
+const stairsEnv = (over = {}, parts = {}) => ({
+  layer: { visible: true, printable: true },
+  stairs: [STAIR],
+  layoutFor: () => stairLayout,
+  partsFor: () => stairParts(parts),
+  elev: 0, stairColor: '#5a4', treadRunIn: 10,
+  formatInchesOnly: inches => `${inches}"`,
+  isPrinting: false,
+  ...over,
+});
+
+suite('drawStairs2D', 'a hidden layer paints nothing', R => {
+  const ctx = recordingCtx();
+  R.drawStairs2D(ctx, toS, stairsEnv({ layer: { visible: false, printable: true } }));
+  expect('nothing painted', ctx.tape.length, 0);
+});
+
+suite('drawStairs2D', 'a non-printable layer is dropped from a print, not from the screen', R => {
+  const onScreen = recordingCtx();
+  R.drawStairs2D(onScreen, toS, stairsEnv({ layer: { visible: true, printable: false } }));
+  expect('drawn on screen', painted(onScreen), true);
+  const printing = recordingCtx();
+  R.drawStairs2D(printing, toS, stairsEnv({ layer: { visible: true, printable: false }, isPrinting: true }));
+  expect('and dropped from the print', printing.tape.length, 0);
+});
+
+suite('drawStairs2D', 'no stairs, nothing drawn', R => {
+  const ctx = recordingCtx();
+  R.drawStairs2D(ctx, toS, stairsEnv({ stairs: [] }));
+  expect('nothing painted', ctx.tape.length, 0);
+});
+
+suite('drawStairs2D', 'a run draws two stringers and one tread line per tread, nosing included', R => {
+  const ctx = recordingCtx();
+  R.drawStairs2D(ctx, toS, stairsEnv({}, { runs: [{ start: { x: 0, z: 0 }, dir: { x: 1, z: 0 }, lenFt: 10, treads: 13 }] }));
+  // Stringers are one path of two lines; treads are one path of treads+1.
+  expect('14 tread lines for 13 treads', count(ctx, 'lineTo') >= 14, true);
+  expect('the run is stroked', count(ctx, 'stroke') >= 2, true);
+});
+
+suite('drawStairs2D', 'a run shorter than a pixel is skipped rather than drawn as a dot', R => {
+  const ctx = recordingCtx();
+  R.drawStairs2D(ctx, toS, stairsEnv({}, {
+    runs: [{ start: { x: 0, z: 0 }, dir: { x: 1, z: 0 }, lenFt: 0.01, treads: 0 }],
+    walk: [{ x: 0, z: 0 }, { x: 0.02, z: 0 }],
+  }));
+  expect('no stringers for it', calls(ctx, 'lineTo').length < 6, true);
+});
+
+suite('drawStairs2D', 'the tread ladder is spaced by the run increment, not by the tread count', R => {
+  const firstGap = treadRunIn => {
+    const ctx = recordingCtx();
+    R.drawStairs2D(ctx, toS, stairsEnv({ treadRunIn }, {
+      runs: [{ start: { x: 0, z: 0 }, dir: { x: 1, z: 0 }, lenFt: 10, treads: 3 }],
+    }));
+    const xs = calls(ctx, 'moveTo').map(a => a[0]);
+    return xs[3] - xs[2];
+  };
+  expect('a 10in run steps 10in worth of pixels', Math.round(firstGap(10)), Math.round(10 / 12 * 10));
+  expect('an 11in run steps further', Math.round(firstGap(11)), Math.round(11 / 12 * 10));
+});
+
+suite('drawStairs2D', 'rails, landing, winders and the U gap are each drawn only when present', R => {
+  const strokesFor = parts => {
+    const ctx = recordingCtx();
+    R.drawStairs2D(ctx, toS, stairsEnv({}, parts));
+    return count(ctx, 'stroke');
+  };
+  const bare = strokesFor({});
+  expect('a rail path adds a stroke', strokesFor({ rails: [[{ x: 0, z: 0 }, { x: 9, z: 0 }]] }) > bare, true);
+  expect('a landing adds strokes', strokesFor({
+    landing: { poly: [{ x: 0, z: 0 }, { x: 3, z: 0 }, { x: 3, z: 3 }, { x: 0, z: 3 }], winderLines: [] },
+  }) > bare, true);
+  expect('each winder line adds one more', strokesFor({
+    landing: {
+      poly: [{ x: 0, z: 0 }, { x: 3, z: 0 }, { x: 3, z: 3 }, { x: 0, z: 3 }],
+      winderLines: [[{ x: 0, z: 0 }, { x: 3, z: 3 }], [{ x: 0, z: 0 }, { x: 3, z: 1 }]],
+    },
+  }), strokesFor({
+    landing: { poly: [{ x: 0, z: 0 }, { x: 3, z: 0 }, { x: 3, z: 3 }, { x: 0, z: 3 }], winderLines: [] },
+  }) + 2);
+  expect('the U gap adds a stroke', strokesFor({ gap: [{ x: 0, z: 1.5 }, { x: 9, z: 1.5 }] }) > bare, true);
+});
+
+suite('drawStairs2D', 'the walk line carries the DN label with its riser count and rise', R => {
+  const ctx = recordingCtx();
+  R.drawStairs2D(ctx, toS, stairsEnv());
+  expect('one label', count(ctx, 'fillText'), 1);
+  expect('reading direction, count and rise', calls(ctx, 'fillText')[0][0], 'DN — 14R @ 7.5"');
+});
+
+suite('drawStairs2D', 'the label is levelled rather than drawn upside down', R => {
+  // The painter turns an upside-down label by adding a half turn, so the
+  // angle it ends on may be a full turn away from zero -- 2pi reads upright.
+  // Upright is therefore "within a quarter turn once the full turns are
+  // taken out", not "equal to zero". Reading it the strict way failed this
+  // check against correct code.
+  const uprightness = walk => {
+    const ctx = recordingCtx();
+    R.drawStairs2D(ctx, toS, stairsEnv({}, { walk }));
+    let angle = calls(ctx, 'rotate')[0][0] % (Math.PI * 2);
+    if (angle > Math.PI) angle -= Math.PI * 2;
+    if (angle <= -Math.PI) angle += Math.PI * 2;
+    return Math.abs(angle);
+  };
+  const quarterTurn = Math.PI / 2 + 1e-9;
+  expect('walking right', uprightness([{ x: 0, z: 0 }, { x: 9, z: 0 }]) <= quarterTurn, true);
+  expect('walking left', uprightness([{ x: 9, z: 0 }, { x: 0, z: 0 }]) <= quarterTurn, true);
+  expect('walking down the screen', uprightness([{ x: 0, z: 0 }, { x: 0, z: 9 }]) <= quarterTurn, true);
+  expect('and up-left, the diagonal case a single half turn has to cover',
+    uprightness([{ x: 9, z: 9 }, { x: 0, z: 0 }]) <= quarterTurn, true);
+});
+
+suite('drawStairs2D', 'the stair wears the colour the page handed it', R => {
+  const ctx = recordingCtx();
+  R.drawStairs2D(ctx, toS, stairsEnv({ stairColor: '#0f0f0f' }));
+  expect('stroke', sets(ctx, 'strokeStyle').includes('#0f0f0f'), true);
+  expect('and fill', sets(ctx, 'fillStyle').includes('#0f0f0f'), true);
+});
+
+suite('drawStairs2D', 'every stair in the list is drawn, not just the first', R => {
+  const ctx = recordingCtx();
+  R.drawStairs2D(ctx, toS, stairsEnv({ stairs: [STAIR, { ...STAIR, start: { x: 20, y: 0, z: 0 } }] }));
+  expect('two DN labels', count(ctx, 'fillText'), 2);
+});
+
 // ─── Running ──────────────────────────────────────────────────────────────
 let current = null;
 function expect(label, got, want) {
@@ -421,9 +767,15 @@ function coverage() {
     if (!mine.length) {
       verdict = 'NOTHING — no checks here';
     } else {
-      const results = runAll(load(noop(name)));
-      const caught = results.filter(r => r.failed || r.threw);
-      verdict = caught.length ? `${caught.length}/${mine.length} checks` : 'NOTHING — checks pass without it';
+      // Counted over every suite, not just this painter's own: a no-op also
+      // breaks the checks of a painter that calls it, and that is real
+      // coverage. drawNoteScreen2D is caught by drawStairNotes2D this way.
+      const caught = runAll(load(noop(name))).filter(r => r.failed || r.threw);
+      const own = caught.filter(r => r.painter === name).length;
+      const viaCallers = caught.length - own;
+      verdict = caught.length
+        ? `${own}/${mine.length} own${viaCallers ? `, +${viaCallers} via callers` : ''}`
+        : 'NOTHING — its own checks pass without it';
     }
     console.log(`${name.padEnd(24)} ${String(mine.length).padStart(6)}  ${verdict}`);
   }
