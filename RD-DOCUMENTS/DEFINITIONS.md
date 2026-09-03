@@ -631,13 +631,25 @@ ends. The kind arrives in `joins`, a Map keyed by the **shared point object** �
 identity, not coordinates, so two walls at the same spot with separate point
 objects are not joined at all.
 
-| kind | what it means | what is drawn |
-|---|---|---|
-| `corner` | two walls meeting at an angle | ends **mitred** to the intersection; no cap |
-| `tee` | a stem running into a host that carries on through | host untouched; the stem clipped to the host's face |
-| `continuation` | one wall carrying on into the next, **collinear** | no cap; a face transition only where profiles differ |
-| `multi` | a crossing, more than two walls | as `continuation` — square at the vertex, no cap |
-| `none` | recorded but not a join | capped, exactly as an unjoined end |
+| kind | emitted by `_wallJoins` | what it means | what is drawn |
+|---|---|---|---|
+| `miter` | yes | two walls meeting at an angle | ends **mitred** to the intersection; no cap |
+| `tee` | yes | a stem running into a host that carries on through | host untouched; the stem clipped to the host's face |
+| `continuation` | yes | one wall carrying on into the next, **collinear** | no cap; a face transition only where profiles differ |
+| `multi` | yes | a crossing, four or more arms | as `continuation` — square at the vertex, no cap |
+| `none` | **no** | a join recorded as deliberately not one | capped, exactly as an unjoined end |
+
+**`miter` is the name, not `corner`.** An earlier version of this entry said
+`corner`, which is a kind nothing produces. It reads as correct because
+`drawWallSeg2D` branches explicitly on `tee`, `continuation`, `multi` and
+`none` and lets EVERYTHING ELSE fall through to the mitring path — so an
+invented type works, silently, until someone tightens that fallback. The
+producer is the authority on the name; the painter's tolerance is not a
+licence to use another.
+
+`none` is the opposite case: the painter honours it, no producer emits it. It
+is a defensive branch, not a fifth kind, and a caller building joins by hand
+is the only thing that would ever set it.
 
 **CONTINUATION MEANS COLLINEAR.** This is the entry's reason for existing: it
 reads like "the wall continues round the corner", and it does not. A

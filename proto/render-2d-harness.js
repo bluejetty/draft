@@ -1501,7 +1501,7 @@ const endGeometry = (R, seg, joins) => {
 };
 
 suite('drawWallSeg2D', 'a corner join mitres the end instead of capping it square', R => {
-  const { a, joins } = joined('corner');
+  const { a, joins } = joined('miter');
   const butted = endGeometry(R, a, null);
   const mitred = endGeometry(R, a, joins);
   expect('the drawn geometry changes', butted.join(' ') === mitred.join(' '), false);
@@ -1512,10 +1512,23 @@ suite('drawWallSeg2D', 'a corner join mitres the end instead of capping it squar
 });
 
 suite('drawWallSeg2D', 'a resolved join suppresses the end cap; an unresolved one keeps it', R => {
-  const { a, joins } = joined('corner');
+  const { a, joins } = joined('miter');
   const capped = endGeometry(R, a, null).length;
   const resolved = endGeometry(R, a, joins).length;
   expect('the mitred end drops its cap line', resolved < capped, true);
+});
+
+suite('drawWallSeg2D', 'an unrecognised join type falls through to mitring', R => {
+  // The painter branches on tee / continuation / multi / none and lets
+  // everything else mitre. That tolerance is load-bearing -- _wallJoins emits
+  // `miter` and the painter never names it -- but it also means a MISSPELLED
+  // or invented type mitres silently. It hid a wrong type name in this very
+  // file, and in DEFINITIONS, for half a day. Pinned so the behaviour is a
+  // decision rather than an accident.
+  const { a, joins } = joined('miter');
+  const { a: a2, joins: j2 } = joined('corner');   // a kind nothing produces
+  expect('the invented kind is drawn exactly as a miter',
+    endGeometry(R, a2, j2).join(' '), endGeometry(R, a, joins).join(' '));
 });
 
 suite('drawWallSeg2D', 'a join of type none is no join at all', R => {
@@ -1524,9 +1537,9 @@ suite('drawWallSeg2D', 'a join of type none is no join at all', R => {
 });
 
 suite('drawWallSeg2D', 'a join naming other segments entirely is ignored', R => {
-  const { a, P1 } = joined('corner');
+  const { a, P1 } = joined('miter');
   const stranger = { start: { x: 50, z: 50 }, end: { x: 60, z: 50 }, wallType: 'stud_2x6' };
-  const joins = new Map([[P1, { type: 'corner', entries: [{ seg: stranger, at: 'start' }] }]]);
+  const joins = new Map([[P1, { type: 'miter', entries: [{ seg: stranger, at: 'start' }] }]]);
   expect('and the wall is capped as before',
     endGeometry(R, a, joins).join(' '), endGeometry(R, a, null).join(' '));
 });
@@ -1584,7 +1597,7 @@ suite('drawWallSeg2D', 'a mitre longer than the limit falls back to a square cap
   const P0 = { x: 0, z: 0 }, P1 = { x: 10, z: 0 }, P2 = { x: 20, z: 0.0005 };
   const a = { start: P0, end: P1, wallType: 'stud_2x6' };
   const b = { start: P1, end: P2, wallType: 'stud_2x6' };
-  const joins = new Map([[P1, { type: 'corner', entries: [{ seg: a, at: 'end' }, { seg: b, at: 'start' }] }]]);
+  const joins = new Map([[P1, { type: 'miter', entries: [{ seg: a, at: 'end' }, { seg: b, at: 'start' }] }]]);
   const drawn = endGeometry(R, a, joins);
   expect('nothing runs off to infinity',
     drawn.every(p => Math.abs(Number(p.split(',')[0])) < 1000), true);
