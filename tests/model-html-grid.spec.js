@@ -32,16 +32,22 @@ async function houseOnOldPage(page) {
   return h.savedDrawing(page);
 }
 
-const gridPixels = page => page.evaluate(list => {
+// A fingerprint of the WHOLE canvas. Not a colour count: counting pixels at
+// the grid's greys measures anti-aliasing as much as it measures the grid,
+// and the stray count is environment-dependent -- 1 px locally, 306 in
+// another local house, 902 on a CI runner. Two renders that differ only in
+// the datum differ only in the grid, so comparing them needs no threshold
+// at all.
+const canvasHash = page => page.evaluate(() => {
   const c = document.getElementById('plan');
   const { data } = c.getContext('2d').getImageData(0, 0, c.width, c.height);
-  let n = 0;
+  let h = 0x811c9dc5;
   for (let i = 0; i < data.length; i += 4) {
-    if (list.some(t => Math.max(Math.abs(data[i] - t[0]), Math.abs(data[i + 1] - t[1]),
-      Math.abs(data[i + 2] - t[2])) <= 2)) n += 1;
+    h ^= data[i] | (data[i + 1] << 8) | (data[i + 2] << 16);
+    h = Math.imul(h, 0x01000193) >>> 0;
   }
-  return n;
-}, NIGHT_GRID);
+  return `${h.toString(16)}:${c.width}x${c.height}`;
+});
 
 // Rewrite the stored drawing, then reload. MODEL.html only reads, so this goes
 // through the store directly.
@@ -59,15 +65,20 @@ async function rewriteStored(page, fn) {
 }
 
 test.describe('MODEL.html grid', () => {
-  // ONE test, self-controlled: the SAME page, the same walls, the same fit,
-  // measured with and without a datum. That matters because an absolute pixel
-  // count is not stable here -- night ink anti-aliasing onto the night ground
-  // passes THROUGH the grid greys, so the no-grid render scored 1 px in one
-  // house and 306 in another. Counting colours cannot tell a manufactured
-  // grey from a painted one; a ratio against the same scene can.
-  test('no datum means no grid, and a datum brings one', async ({ page }) => {
+  // THREE RENDERS THAT DIFFER ONLY IN THE DATUM, compared to each other.
+  //
+  // The first version of this counted pixels at the grid's greys and asked for
+  // a ratio. It failed on CI and the reason is worth keeping: the no-grid
+  // render is not empty, it is anti-aliased wall ink, some of which lands on a
+  // grid grey by coincidence. That stray count measured 1 locally, 306 in a
+  // different local house and 902 on a runner, so both an absolute threshold
+  // and a ratio against it are measuring the environment.
+  //
+  // These three renders have the same walls, the same fit and the same
+  // anti-aliasing. The ONLY thing that can differ between them is the grid.
+  // So the assertion is inequality, with no number in it.
+  test('the grid appears with a datum and moves with it', async ({ page }) => {
     const saved = await houseOnOldPage(page);
-    // Control: only meaningful while the fixture really has no datum.
     expect(saved.drawingOrigin,
       'the generated house is never clicked into place, so its datum is null')
       .toBeNull();
@@ -77,19 +88,30 @@ test.describe('MODEL.html grid', () => {
     await expect(page.locator('#readout'),
       'the readout says why, so an absent grid is not a mystery')
       .toContainText('datum none');
-    const without = await gridPixels(page);
+    const noDatum = await canvasHash(page);
+
+    // CONTROL, and the test is worthless without it: reloading the same state
+    // must repaint the same pixels. If the render were not deterministic,
+    // every inequality below would pass for the wrong reason.
+    await page.reload();
+    await expect(page.locator('#readout')).toContainText('datum none', { timeout: 6000 });
+    expect(await canvasHash(page),
+      'the same drawing must paint the same pixels twice, or nothing below '
+      + 'means anything')
+      .toBe(noDatum);
+
+    await rewriteStored(page, "d.drawingOrigin = { x: 0, z: 0 }; return d;");
+    await expect(page.locator('#readout')).toContainText('datum 0.00,0.00');
+    const atOrigin = await canvasHash(page);
+    expect(atOrigin, 'a datum must put a grid on the canvas')
+      .not.toBe(noDatum);
 
     await rewriteStored(page, "d.drawingOrigin = { x: 4, z: -7 }; return d;");
     await expect(page.locator('#readout')).toContainText('datum 4.00,-7.00');
-    const withDatum = await gridPixels(page);
-
-    // MEASURED: 6,418 with a datum against 1-306 without, so the ratio runs
-    // 21x at worst and 6,000x at best. Ten is clear of the bad end.
-    expect(withDatum, "the grid is painted in the skin's own three greys")
-      .toBeGreaterThan(2000);
-    expect(withDatum, 'and a datum must change the picture by an order of '
-      + 'magnitude, not by a handful of anti-aliased pixels')
-      .toBeGreaterThan(without * 10);
+    expect(await canvasHash(page),
+      'and the grid must be ANCHORED to the datum -- moving it moves the '
+      + 'lines, which is the whole reason the datum exists')
+      .not.toBe(atOrigin);
   });
 
   test('a drawing with no drawingOrigin KEY is back-filled to the world origin',
@@ -97,14 +119,16 @@ test.describe('MODEL.html grid', () => {
       await houseOnOldPage(page);
       await page.goto('/MODEL.html?mode=night');
       await expect(page.locator('#readout')).toContainText('walls', { timeout: 6000 });
+      const noDatum = await canvasHash(page);
+
       await rewriteStored(page, "delete d.drawingOrigin; return d;");
       await expect(page.locator('#readout'),
         'absent is not null: an old drawing was made on the world grid')
         .toContainText('0.00,0.00 (world, back-filled)');
-      expect(await gridPixels(page),
+      expect(await canvasHash(page),
         'and it gets a grid -- collapsing absent into null with `|| null` '
         + 'would strip the grid from every drawing made before the datum '
         + 'existed, which no fixture can catch')
-        .toBeGreaterThan(2000);
+        .not.toBe(noDatum);
     });
 });
