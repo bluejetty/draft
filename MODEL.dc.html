@@ -2691,6 +2691,12 @@ class Component extends DCLogic {
     boneWallet: { balance: 0, nextDripMs: null }, // the free-bone gauge (board #261)
     walletSound: true,         // the bone-crunch on spend; personal SETTINGS
     suggestStairs: true,       // board #260: the tour and the bone OFFER stair placements
+    // PARKED FEATURES, off by default (Movie, 2 Sep). Not deleted and not
+    // hardcoded: a switch, so the suite can still cover code that is still in
+    // the file. Deleting the tests for disabled code is how a parked feature
+    // rots quietly -- it stays one flag from shipping with nothing watching it.
+    tourEscort: false,         // the FOUNDATION DONE popup ladder and its level pulls
+    perfNoticeOn: false,       // the entry "close your other tabs" notice
     roomGrow: true,            // boards #275/#276: stamps preview + grow rooms on the bone
     autoWindows: true,         // board #169: the bone deals windows onto the exterior walls
     compassOn: false,          // polar tracking instrument — down by default; P picks it up
@@ -3803,6 +3809,8 @@ class Component extends DCLogic {
           walletSound: this.state.walletSound,
           boneReveal: this.state.boneReveal,
           suggestStairs: this.state.suggestStairs,
+          tourEscort: this.state.tourEscort,
+          perfNoticeOn: this.state.perfNoticeOn,
           roomGrow: this.state.roomGrow,
           autoWindows: this.state.autoWindows,
           buildIntroOff: this.state.buildIntroOff,
@@ -3844,6 +3852,8 @@ class Component extends DCLogic {
         ...(typeof values.walletSound === 'boolean' ? { walletSound: values.walletSound } : {}),
         ...(typeof values.boneReveal === 'boolean' ? { boneReveal: values.boneReveal } : {}),
         ...(typeof values.suggestStairs === 'boolean' ? { suggestStairs: values.suggestStairs } : {}),
+        ...(typeof values.tourEscort === 'boolean' ? { tourEscort: values.tourEscort } : {}),
+        ...(typeof values.perfNoticeOn === 'boolean' ? { perfNoticeOn: values.perfNoticeOn } : {}),
         ...(typeof values.roomGrow === 'boolean' ? { roomGrow: values.roomGrow } : {}),
         ...(typeof values.autoWindows === 'boolean' ? { autoWindows: values.autoWindows } : {}),
         ...(typeof values.buildIntroOff === 'boolean' ? { buildIntroOff: values.buildIntroOff } : {}),
@@ -3908,10 +3918,16 @@ class Component extends DCLogic {
     // (OPENing a file re-runs this) leave it alone.
     if (!this._perfNoticeChecked) {
       this._perfNoticeChecked = true;
-      // RETIRED (Movie, 2 Sep): the close-your-tabs notice does not open any
-      // more. The markup, the dismissal paths and the perfIntroOff preference
-      // are left in place so this is one line to undo rather than a rebuild.
-      patch.perfNotice = false;
+      // OFF BY DEFAULT (Movie, 2 Sep): the close-your-tabs notice does not
+      // greet anybody any more. perfNoticeOn restores it, and perf-notice.spec
+      // sets it so the notice keeps its coverage while it is parked.
+      const perfOff = typeof patch.perfIntroOff === 'boolean' ? patch.perfIntroOff : this.state.perfIntroOff;
+      // BOTH read the incoming patch first. This runs DURING the profile
+      // application, so the stored value is in `patch` and has not reached
+      // `this.state` yet -- reading state alone sees the default and the
+      // notice never opens for anyone, spec or drafter.
+      const perfOn = typeof patch.perfNoticeOn === 'boolean' ? patch.perfNoticeOn : this.state.perfNoticeOn;
+      patch.perfNotice = perfOn === true && !perfOff;
     }
     this.setState(patch);
   }
@@ -3957,11 +3973,26 @@ class Component extends DCLogic {
     // _advanceTour, _tourPopupPrimary, the step messages and the gate all
     // remain in this file, unreached. The tour is being redesigned; leaving
     // the machinery intact makes that a rearrangement rather than a rebuild.
+    const escort = this.state.tourEscort === true;
     const fdnIdx = this.state.levels.findIndex(lvl => lvl.id === BASEMENT_LEVEL_ID);
+    if (escort) {
+      this.setState({ tour: { step: 'foundation' }, tourPopup: false, tourPopupNote: '' },
+        () => this._markUnsaved());
+      if (fdnIdx >= 0) this._switchLevel(fdnIdx);
+    }
     const fdnLevel = this.state.levels[fdnIdx];
     const points = master.points.map(pt => ({ x: pt.x, z: pt.z }));
     const plan = window.DraftBuildHouse.midSpanBeams(points);
-    if (!plan.beams.length) return;
+    const showPopup = note => {
+      if (escort) this.setState({ tourPopup: 'foundation', tourPopupNote: note });
+    };
+    if (!plan.beams.length) {
+      if (escort) {
+        this._tourTimers = [setTimeout(() => showPopup(
+          'Every span is under 19\' — no mid-span beam needed. Press ENTER, SPACE, or tap to climb.'), 450)];
+      }
+      return;
+    }
     // The mini reveal, three staged frames: the beam lands, the teleposts
     // follow, then the popup — "the tool is working for you."
     const elev = fdnLevel ? fdnLevel.elev : 0;
@@ -3993,6 +4024,7 @@ class Component extends DCLogic {
         this._markUnsaved();
         this.setState({ drawingMessage: 'Teleposts on pad footings split the beam into working spans.', drawingMessageError: false });
       }, 800),
+      setTimeout(() => showPopup('Beam and teleposts are in — press ENTER, SPACE, or tap to climb.'), 1200),
     ];
   }
 

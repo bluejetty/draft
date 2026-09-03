@@ -38,7 +38,7 @@ async function reachRoof(page, w, d, beforeStairs) {
 }
 
 test('the E/G tag flips a whole edge and the bone frames it — no reveal mid-tour', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachRoof(page, 16, 12);
 
   // The bottom edge's tag floats outside its preview line (overhang 2' + 1.4').
@@ -58,7 +58,7 @@ test('the E/G tag flips a whole edge and the bone frames it — no reveal mid-to
 });
 
 test('GABLE places on the corner-counted grid, the chip drops to 6", and the bone splits the edge', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachRoof(page, 28, 24);
 
   await page.locator('[data-tour-gable]').click();
@@ -89,7 +89,7 @@ test('GABLE places on the corner-counted grid, the chip drops to 6", and the bon
 });
 
 test('a window below becomes a labeled anchor and the gable centers on it', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachRoof(page, 28, 24, async () => {
     // Free-form on MAIN: a wall along the south outline with a window at x=6.
     await h.selectTool(page, 'Wall');
@@ -115,7 +115,7 @@ test('a window below becomes a labeled anchor and the gable centers on it', asyn
 });
 
 test('edges pull OUT on the grid and refuse to tuck back under the house', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachRoof(page, 16, 12);
 
   // Drag the bottom preview edge (z=-8) out to 3' of overhang.
@@ -143,7 +143,7 @@ test('edges pull OUT on the grid and refuse to tuck back under the house', async
 });
 
 test('PRESS ▲ BONE hints, the bone glows, and the press grows the house in the front elevation', async ({ page }) => {
-  await h.openModel(page, { boneReveal: true });
+  await h.openModel(page, { tourEscort: true, boneReveal: true });
   await reachRoof(page, 16, 12);
 
   // The under-bone button reads PRESS ▲ BONE from the roof pause on.

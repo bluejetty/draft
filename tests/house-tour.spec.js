@@ -23,7 +23,7 @@ function activeLevel(page) {
 }
 
 test('a deep house pulls to FOUNDATION, grows beam + teleposts, and Enter climbs to MAIN', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   // 28 x 24: the 24' joist span passes 19', so one beam line rides the long
   // axis at mid-span — 28' splits into 3 working spans on 2 teleposts.
   await traceHouse(page, 28, 24);
@@ -53,7 +53,7 @@ test('a deep house pulls to FOUNDATION, grows beam + teleposts, and Enter climbs
 });
 
 test('a shallow house needs no beam and the popup itself is the button', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await traceHouse(page, 16, 12); // 12' span — under the 19' trigger
 
   await expect(activeLevel(page)).toHaveText(/FOUNDATION/);
@@ -71,7 +71,7 @@ test('a shallow house needs no beam and the popup itself is the button', async (
 });
 
 test('Esc leaves the tour and the level cards stay free', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await traceHouse(page, 28, 24);
   await expect(page.locator('[data-tour-popup]')).toBeVisible();
 
@@ -91,7 +91,7 @@ test('Esc leaves the tour and the level cards stay free', async ({ page }) => {
 });
 
 test('a parked tour resumes across a reload without duplicating the reveal', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await traceHouse(page, 28, 24);
   await expect(page.locator('[data-tour-popup]')).toBeVisible();
   await h.waitForSaved(page);
@@ -118,7 +118,7 @@ async function placeStairs(page, x, z, dx, dz) {
 }
 
 test('MAIN gates on stairs, both NEXT lights fire, and the choice popup climbs to 2ND', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await traceHouse(page, 28, 24);
   await page.locator('[data-tour-popup]').click(); // FOUNDATION DONE → MAIN
 
@@ -153,7 +153,7 @@ test('MAIN gates on stairs, both NEXT lights fire, and the choice popup climbs t
 });
 
 test('a one-storey house presses STRAIGHT TO ROOF and the tour parks there', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await traceHouse(page, 16, 12);
   await page.locator('[data-tour-popup]').click();
   // The stair runs along the 16' axis: this house is only 12' deep, and a
@@ -173,7 +173,7 @@ test('a one-storey house presses STRAIGHT TO ROOF and the tour parks there', asy
 });
 
 test('a MAIN stair re-lands the auto beam mid-span of the larger clear strip', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await traceHouse(page, 28, 24);
   await page.locator('[data-tour-popup]').click();
 
@@ -193,7 +193,7 @@ test('a MAIN stair re-lands the auto beam mid-span of the larger clear strip', a
 });
 
 test('2ND FLOOR stairs must launch from the run below: far clicks refuse, near ones snap', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await traceHouse(page, 28, 24);
   await page.locator('[data-tour-popup]').click();
   await placeStairs(page, 0, -2, 0, 6);

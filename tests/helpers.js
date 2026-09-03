@@ -11,6 +11,12 @@ const STORAGE_BUCKET = 'model-drawing';
 async function openModel(page, {
   webgl = true, rails = true, boneWallet = true, boneReveal = false, autoStairs = false, roomGrow = false,
   autoWindows = false, entryCoach = false, search = '',
+  // PARKED FEATURES, opt IN (Movie, 2 Sep). The tour escort and the entry
+  // performance notice are switched off for every drafter, so they are off
+  // here too -- but the code is still in the file, so the specs that cover it
+  // turn it back on rather than being deleted. A parked feature with no
+  // coverage is one flag from shipping with nothing watching it.
+  tourEscort = false, perfNotice = false,
 } = {}) {
   // Init scripts run on every navigation, so the flag keeps a reload inside a
   // test from wiping the drawing the test just made. The FAT TEST WALLET
@@ -36,7 +42,7 @@ async function openModel(page, {
   // back in ({ boneReveal: true } / { autoStairs: true } / { roomGrow:
   // true } / { autoWindows: true }), each exercising the real default-on
   // path.
-  if (!boneReveal || !autoStairs || !roomGrow || !autoWindows) {
+  if (!boneReveal || !autoStairs || !roomGrow || !autoWindows || tourEscort || perfNotice) {
     await page.addInitScript(seed => {
       const key = 'draft-active-package:settings';
       let pkg = null;
@@ -52,8 +58,14 @@ async function openModel(page, {
       if (seed.suggestStairs && !('suggestStairs' in pkg.content.model)) pkg.content.model.suggestStairs = false;
       if (seed.roomGrow && !('roomGrow' in pkg.content.model)) pkg.content.model.roomGrow = false;
       if (seed.autoWindows && !('autoWindows' in pkg.content.model)) pkg.content.model.autoWindows = false;
+      // These two are the other way round: default OFF in the app, so a spec
+      // that wants them says so and everything else inherits the drafter's
+      // experience unchanged.
+      if (seed.tourEscort) pkg.content.model.tourEscort = true;
+      if (seed.perfNotice) pkg.content.model.perfNoticeOn = true;
       localStorage.setItem(key, JSON.stringify(pkg));
-    }, { boneReveal: !boneReveal, suggestStairs: !autoStairs, roomGrow: !roomGrow, autoWindows: !autoWindows });
+    }, { boneReveal: !boneReveal, suggestStairs: !autoStairs, roomGrow: !roomGrow, autoWindows: !autoWindows,
+         tourEscort, perfNotice });
   }
   // THE ENTRY COACH scrims the app a second after a first-ever open, and every
   // spec runs on a fresh profile -- so without this every one of them would
