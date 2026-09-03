@@ -6636,17 +6636,13 @@ class Component extends DCLogic {
       ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
     };
     // Line segments may carry a bulge; arced ones stroke as quadratic curves.
-    const strokeLinePath = seg => {
-      const a = toS(seg.start), b = toS(seg.end);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y);
-      if (seg.bulge) {
-        const c = toS(this._lineControlPoint(seg));
-        ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
-      } else {
-        ctx.lineTo(b.x, b.y);
-      }
-      ctx.stroke();
-    };
+    // The path only. All three callers -- reference segments, committed
+    // lines, selected segments -- set their own colour, width and endpoint
+    // decoration around it, which is why the primitive owns none of that
+    // (render-2d.js carries the reasoning).
+    const strokeLinePath = seg => window.DraftRender2D.strokeSegPath2D(ctx, toS, seg, {
+      controlPoint: item => this._lineControlPoint(item),
+    });
     const drawDot = pt => {
       const s = toS(pt);
       ctx.beginPath(); ctx.arc(s.x, s.y, DOT_R, 0, Math.PI * 2); ctx.fill();
@@ -7409,120 +7405,37 @@ class Component extends DCLogic {
 
   // The OUTLINE guide never prints — it is drafting scaffolding, not linework.
   _drawOutlines2D(ctx, toS) {
-    if (this._isPrinting) return;
-    // Scope colours: RED on the BONEYARD, where an edit moves every level;
-    // BLUE on a floor level, where an edit stays local — the app's red/blue
-    // all-levels language. Garage outlines speak the same language one shade
-    // over: ORANGE on the BONEYARD, PURPLE on the levels.
-    const hex = this.state.boneyardActive ? '#b04050' : '#5980a6';
-    const garageHex = this.state.boneyardActive ? '#cf7a1f' : '#7d5ba6';
-    const outlines = this.state.boneyardActive ? this._activeBoneyardOutlines() : this._activeOutlines();
-    const showHandles = ['outline', 'select'].includes(this.state.activeTool);
-    ctx.save();
-    ctx.lineWidth = 2;
-    outlines.forEach(outline => {
-      if (outline.points.length < 2) return;
-      const selected = this._selectedOutlines?.has(outline) === true;
-      const colour = outline.garage ? garageHex : hex;
-      ctx.strokeStyle = colour;
-      ctx.fillStyle = colour;
-      ctx.lineWidth = selected ? 3.5 : 2;
-      ctx.setLineDash([9, 5]);
-      ctx.beginPath();
-      const count = this._outlineSegmentCount(outline);
-      for (let index = 0; index < count; index++) {
-        const seg = this._outlineSegment(outline, index);
-        const a = toS(seg.start), b = toS(seg.end);
-        if (!index) ctx.moveTo(a.x, a.y);
-        if (seg.bulge) {
-          const c = toS(this._lineControlPoint(seg));
-          ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
-        } else {
-          ctx.lineTo(b.x, b.y);
-        }
-      }
-      ctx.stroke();
-      ctx.setLineDash([]);
-      if (outline.garage) {
-        const centroid = outline.points.reduce(
-          (sum, point) => ({ x: sum.x + point.x, z: sum.z + point.z }),
-          { x: 0, z: 0 },
-        );
-        const s = toS({ x: centroid.x / outline.points.length, z: centroid.z / outline.points.length });
-        ctx.font = '600 11px "Barlow Condensed", system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('GARAGE', s.x, s.y);
-      }
-      if (showHandles) {
-        outline.points.forEach(point => {
-          const s = toS(point);
-          ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
-        });
-      }
-      // Fenestration marks live on masters only, so they show on the BONEYARD.
-      (outline.marks || []).forEach(mark => this._drawBoneyardMark2D(ctx, toS, outline, mark, colour));
+    window.DraftRender2D.drawOutlines2D(ctx, toS, {
+      isPrinting: this._isPrinting,
+      boneyardActive: this.state.boneyardActive,
+      outlines: this._activeOutlines(),
+      boneyardOutlines: this._activeBoneyardOutlines(),
+      showHandles: ['outline', 'select'].includes(this.state.activeTool),
+      isSelected: outline => this._selectedOutlines?.has(outline) === true,
+      segmentCount: outline => this._outlineSegmentCount(outline),
+      segment: (outline, index) => this._outlineSegment(outline, index),
+      controlPoint: seg => this._lineControlPoint(seg),
+      geometryFor: (o, m) => this._boneyardMarkGeometry(o, m),
+      markPlacement: pt => this._boneyardMarkPlacement(pt),
+      // Live interaction state. A caller working from a saved drawing passes
+      // none of it and the preview branches stay inert.
+      activeTool: this.state.activeTool,
+      fenestrationType: this.state.fenestrationType,
+      outlineGarage: this.state.outlineGarage,
+      snapPt: this._snapPt,
+      outlineDrawing: this._outlineDrawing,
+      outlinePoints: this._outlinePoints,
+      outlineStart: this._outlineStart,
+      frozenEnd: this.state.lengthFrozen && this._frozenTool === 'outline' ? this._frozenEnd : null,
+      colors: {
+        boneyard: '#b04050',
+        level: '#5980a6',
+        garageBoneyard: '#cf7a1f',
+        garageLevel: '#7d5ba6',
+        traceHouse: '#c0392b',
+        traceAttached: '#3f7fd6',
+      },
     });
-    // The FENESTRATION tool on the BONEYARD ghosts the mark it would place
-    // on the master edge under the cursor.
-    if (this.state.boneyardActive && this.state.activeTool === 'fenestration'
-        && this.state.fenestrationType !== 'stairs' && this._snapPt) {
-      const placement = this._boneyardMarkPlacement(this._snapPt);
-      if (placement && !placement.error) {
-        const ghost = {
-          edgeId: placement.edgeId,
-          offsetFt: placement.offsetFt,
-          widthFt: placement.widthFt,
-          type: this.state.fenestrationType === 'window' ? 'window' : 'door',
-        };
-        ctx.globalAlpha = 0.55;
-        this._drawBoneyardMark2D(ctx, toS, placement.outline, ghost, hex);
-        ctx.globalAlpha = 1;
-      }
-    }
-    // In-progress preview: placed corners plus a rubber band to the cursor,
-    // with a close ring on the start point once the outline can close.
-    if (this._outlineDrawing && this._outlinePoints.length) {
-      // The live trace wears its top-bar button's colour so the drafter
-      // always knows what they are drawing: HOUSE red, ATTACHED garage
-      // blue, DETACHED garage purple. Committed outlines fall back to the
-      // red/blue edit-scope language above.
-      const drawHex = this.state.outlineGarage === 'attached' ? '#3f7fd6'
-        : this.state.outlineGarage === 'detached' ? '#7d5ba6'
-        : '#c0392b';
-      ctx.strokeStyle = drawHex;
-      ctx.fillStyle = drawHex;
-      ctx.setLineDash([5, 4]);
-      ctx.beginPath();
-      this._outlinePoints.forEach((point, index) => {
-        const s = toS(point);
-        if (index) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
-      });
-      const cursor = this.state.lengthFrozen && this._frozenTool === 'outline' && this._frozenEnd
-        ? this._frozenEnd : this._snapPt;
-      if (cursor) { const s = toS(cursor); ctx.lineTo(s.x, s.y); }
-      ctx.stroke();
-      ctx.setLineDash([]);
-      this._outlinePoints.forEach(point => {
-        const s = toS(point);
-        ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
-      });
-      // An ATTACHED garage run finishes on its LAST point (double-click /
-      // Enter there); a DETACHED garage and a house outline close back on
-      // the START point, so those only ring the start.
-      const rings = [];
-      if (this._outlinePoints.length >= 3 && this._outlineStart) rings.push(this._outlineStart);
-      if (this.state.outlineGarage === 'attached' && this._outlinePoints.length >= 4) {
-        rings.push(this._outlinePoints[this._outlinePoints.length - 1]);
-      }
-      rings.forEach(ring => {
-        const sc = toS(ring);
-        ctx.beginPath(); ctx.arc(sc.x, sc.y, 7.5, 0, Math.PI * 2);
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      });
-    }
-    ctx.restore();
   }
 
   // A mark draws as a heavy stroke across its opening width with jamb ticks
@@ -8122,70 +8035,16 @@ class Component extends DCLogic {
   }
 
   _drawDimension2D(ctx, toS, dimension, options = {}) {
-    const a = toS(dimension.start);
-    const b = toS(dimension.end);
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const length = Math.hypot(dx, dy);
-    if (length < 1) return;
-    const nx = -dy / length;
-    const ny = dx / length;
-    const offset = options.preview ? 14 : 19;
-    const da = { x:a.x + nx * offset, y:a.y + ny * offset };
-    const db = { x:b.x + nx * offset, y:b.y + ny * offset };
-    const value = Math.hypot(dimension.end.x - dimension.start.x, dimension.end.z - dimension.start.z);
-    const label = this.state.units === 'imperial' ? this._ftIn(value) : this._metric(value);
-    const color = options.preview ? 'rgba(89,128,166,0.58)' : options.selected ? '#5980a6' : '#365e86';
-    const arrow = (point, angle) => {
-      const size = 5;
-      ctx.beginPath();
-      ctx.moveTo(point.x, point.y);
-      ctx.lineTo(point.x + size * Math.cos(angle + 2.65), point.y + size * Math.sin(angle + 2.65));
-      ctx.lineTo(point.x + size * Math.cos(angle - 2.65), point.y + size * Math.sin(angle - 2.65));
-      ctx.closePath();
-      ctx.fill();
-    };
-    ctx.save();
-    if (options.selected) {
-      ctx.strokeStyle = 'rgba(89,128,166,0.35)';
-      ctx.lineWidth = 7;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y);
-      ctx.stroke();
-      ctx.lineCap = 'butt';
-    }
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = options.selected ? 2 : 1;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y); ctx.lineTo(da.x, da.y);
-    ctx.moveTo(b.x, b.y); ctx.lineTo(db.x, db.y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y);
-    ctx.stroke();
-    const angle = Math.atan2(db.y - da.y, db.x - da.x);
-    arrow(da, angle);
-    arrow(db, angle + Math.PI);
-    const midX = (da.x + db.x) / 2;
-    const midY = (da.y + db.y) / 2;
-    // Aligned text: the label runs along the dimension line, normalized so it
-    // reads from the bottom or the right edge of the sheet, never the left.
-    let textAngle = angle;
-    while (textAngle >= Math.PI / 2) textAngle -= Math.PI;
-    while (textAngle < -Math.PI / 2) textAngle += Math.PI;
-    ctx.font = "600 11px 'Barlow Condensed', system-ui, sans-serif";
-    const textWidth = ctx.measureText(label).width;
-    ctx.translate(midX, midY);
-    ctx.rotate(textAngle);
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.fillRect(-textWidth / 2 - 3, -8, textWidth + 6, 15);
-    ctx.fillStyle = color;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, 0, 0);
-    ctx.restore();
+    window.DraftRender2D.drawDimension2D(ctx, toS, dimension, options, {
+      label: value => (this.state.units === 'imperial' ? this._ftIn(value) : this._metric(value)),
+      colors: {
+        stroke: '#365e86',
+        selected: '#5980a6',
+        selectedHalo: 'rgba(89,128,166,0.35)',
+        preview: 'rgba(89,128,166,0.58)',
+        labelBack: 'rgba(255,255,255,0.92)',
+      },
+    });
   }
 
   // Draws one note in screen space: the leader running from the text block to
@@ -8194,94 +8053,26 @@ class Component extends DCLogic {
   // OUTLINE / NO OUTLINE, and CORNER BULLNOSE corners. The plan overlay and
   // the STAIR workspace both feed their own screen points in.
   _drawNoteScreen2D(ctx, anchor, text, note, options = {}) {
-    const preview = options.preview === true;
-    const alpha = preview ? 0.6 : 1;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = NOTE_COLOR;
-    ctx.fillStyle = NOTE_COLOR;
-    ctx.lineWidth = 1;
-    ctx.font = "600 12px 'Barlow Condensed', system-ui, sans-serif";
-    const lines = String(note.body || '').split('\n');
-    const padX = 6, lineH = 14;
-    const boxW = Math.max(24, ...lines.map(line => ctx.measureText(line).width)) + padX * 2;
-    const boxH = lines.length * lineH + 8;
-    // The text block grows away from the anchor; the leader meets its near edge.
-    const left = text.x >= anchor.x ? text.x : text.x - boxW;
-    const top = text.y - boxH / 2;
-    const leaderX = text.x >= anchor.x ? left : left + boxW;
-    if (note.end !== 'none') {
-      if (preview) ctx.setLineDash([5, 4]);
-      ctx.beginPath();
-      ctx.moveTo(leaderX, text.y);
-      ctx.lineTo(anchor.x, anchor.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    if (note.end === 'arrow') {
-      const angle = Math.atan2(anchor.y - text.y, anchor.x - leaderX);
-      ctx.beginPath();
-      ctx.moveTo(anchor.x, anchor.y);
-      ctx.lineTo(anchor.x - 9 * Math.cos(angle - 0.3), anchor.y - 9 * Math.sin(angle - 0.3));
-      ctx.lineTo(anchor.x - 9 * Math.cos(angle + 0.3), anchor.y - 9 * Math.sin(angle + 0.3));
-      ctx.closePath();
-      ctx.fill();
-    }
-    if (note.fill || note.outline) {
-      const radius = Math.min(Math.max(0, Number(note.bullnose) || 0), boxH / 2, boxW / 2);
-      ctx.beginPath();
-      if (typeof ctx.roundRect === 'function') ctx.roundRect(left, top, boxW, boxH, radius);
-      else ctx.rect(left, top, boxW, boxH);
-      if (note.fill) {
-        ctx.save();
-        ctx.globalAlpha = alpha * Math.min(1, Math.max(0, note.fillOpacity ?? 0.85));
-        ctx.fillStyle = '#fafafa';
-        ctx.fill();
-        ctx.restore();
-      }
-      if (note.outline) ctx.stroke();
-    }
-    ctx.fillStyle = NOTE_COLOR;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    lines.forEach((line, i) => ctx.fillText(line, left + padX, top + 4 + lineH * i + lineH / 2));
-    ctx.restore();
+    window.DraftRender2D.drawNoteScreen2D(ctx, anchor, text, note, options, {
+      color: NOTE_COLOR,
+      fillColor: '#fafafa',
+    });
   }
 
   // STAIR-workspace notes and in-progress previews, drawn over the pane
   // framing from their pane-local coordinates.
   _drawStairNotes2D(ctx, frame) {
-    this._notes
-      .filter(note => note.view === 'stair' && note.levelId === frame.stair.levelId)
-      .forEach(note => {
-        const pane = note.pane === 'plan' ? 'plan' : 'section';
-        if (!frame.rects[pane]) return;
-        this._drawNoteScreen2D(ctx, frame.paneScreen(pane, note.anchor), frame.paneScreen(pane, note.text), note);
-      });
-    const anchor = this._noteAnchor;
-    if (anchor && anchor.view === 'stair' && frame.rects[anchor.pane]) {
-      const a = frame.paneScreen(anchor.pane, anchor.pt);
-      const hover = this._noteStairHover;
-      if (hover && frame.paneAt(hover.x, hover.y) === anchor.pane
-        && Math.hypot(hover.x - a.x, hover.y - a.y) > 1) {
-        this._drawNoteScreen2D(ctx, a, hover, this._notePreviewStyle('…'), { preview: true });
-      } else {
-        ctx.save();
-        ctx.strokeStyle = NOTE_COLOR;
-        ctx.beginPath(); ctx.arc(a.x, a.y, 4, 0, Math.PI * 2); ctx.stroke();
-        ctx.restore();
-      }
-    }
-    const pending = this._notePending;
-    if (pending && pending.view === 'stair' && frame.rects[pending.pane] && this.state.noteEditor) {
-      this._drawNoteScreen2D(
-        ctx,
-        frame.paneScreen(pending.pane, pending.anchor),
-        frame.paneScreen(pending.pane, pending.text),
-        this._notePreviewStyle(this.state.noteDraft.trim() || '…'),
-        { preview: true },
-      );
-    }
+    window.DraftRender2D.drawStairNotes2D(ctx, frame, {
+      notes: this._notes,
+      anchor: this._noteAnchor,
+      hover: this._noteStairHover,
+      pending: this._notePending,
+      previewStyle: text => this._notePreviewStyle(text),
+      noteEditor: this.state.noteEditor,
+      noteDraft: this.state.noteDraft,
+      noteColor: NOTE_COLOR,
+      noteFillColor: '#fafafa',
+    });
   }
 
   _drawArrow2D(ctx, toS, from, to) {

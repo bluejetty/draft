@@ -936,6 +936,348 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+
+  // ─── A dimension string ───────────────────────────────────────────────────
+  // Extension lines, the dimension line between them, an arrowhead at each
+  // end, and the measurement on a knocked-out label.
+  //
+  // The label arrives already formatted: env.label decides feet-and-inches or
+  // metres, because which units a drawing reads in is the page's business,
+  // not the painter's.
+  function drawDimension2D(ctx, toS, dimension, options = {}, env) {
+    const a = toS(dimension.start);
+    const b = toS(dimension.end);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 1) return;
+    const nx = -dy / length;
+    const ny = dx / length;
+    const offset = options.preview ? 14 : 19;
+    const da = { x:a.x + nx * offset, y:a.y + ny * offset };
+    const db = { x:b.x + nx * offset, y:b.y + ny * offset };
+    const value = Math.hypot(dimension.end.x - dimension.start.x, dimension.end.z - dimension.start.z);
+    const label = env.label(value);
+    const color = options.preview ? env.colors.preview : options.selected ? env.colors.selected : env.colors.stroke;
+    const arrow = (point, angle) => {
+      const size = 5;
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y);
+      ctx.lineTo(point.x + size * Math.cos(angle + 2.65), point.y + size * Math.sin(angle + 2.65));
+      ctx.lineTo(point.x + size * Math.cos(angle - 2.65), point.y + size * Math.sin(angle - 2.65));
+      ctx.closePath();
+      ctx.fill();
+    };
+    ctx.save();
+    if (options.selected) {
+      ctx.strokeStyle = env.colors.selectedHalo;
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+    }
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = options.selected ? 2 : 1;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y); ctx.lineTo(da.x, da.y);
+    ctx.moveTo(b.x, b.y); ctx.lineTo(db.x, db.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y);
+    ctx.stroke();
+    const angle = Math.atan2(db.y - da.y, db.x - da.x);
+    arrow(da, angle);
+    arrow(db, angle + Math.PI);
+    const midX = (da.x + db.x) / 2;
+    const midY = (da.y + db.y) / 2;
+    // Aligned text: the label runs along the dimension line, normalized so it
+    // reads from the bottom or the right edge of the sheet, never the left.
+    let textAngle = angle;
+    while (textAngle >= Math.PI / 2) textAngle -= Math.PI;
+    while (textAngle < -Math.PI / 2) textAngle += Math.PI;
+    ctx.font = "600 11px 'Barlow Condensed', system-ui, sans-serif";
+    const textWidth = ctx.measureText(label).width;
+    ctx.translate(midX, midY);
+    ctx.rotate(textAngle);
+    ctx.fillStyle = env.colors.labelBack;
+    ctx.fillRect(-textWidth / 2 - 3, -8, textWidth + 6, 15);
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, 0);
+    ctx.restore();
+  }
+
+
+  // ─── Outlines, their marks, and the trace in progress ─────────────────────
+  // Committed outlines dashed in the edit-scope colours -- RED on the
+  // BONEYARD where an edit moves every level, BLUE on a floor level where it
+  // stays local, and one shade over for garages -- plus their fenestration
+  // marks, the ghost mark under the cursor, and the rubber band while a new
+  // outline is being traced.
+  //
+  // The last of those reads live interaction state (snapPt, outlineDrawing,
+  // outlinePoints, activeTool). A caller working from a SAVED drawing has
+  // none of it: pass outlineDrawing false and snapPt null and those branches
+  // simply do not fire, leaving the committed outlines. That is why the
+  // painter is not split in two -- the preview half costs a caller nothing
+  // to ignore.
+  function drawOutlines2D(ctx, toS, env) {
+    if (env.isPrinting) return;
+    // Scope colours: RED on the BONEYARD, where an edit moves every level;
+    // BLUE on a floor level, where an edit stays local — the app's red/blue
+    // all-levels language. Garage outlines speak the same language one shade
+    // over: ORANGE on the BONEYARD, PURPLE on the levels.
+    const hex = env.boneyardActive ? env.colors.boneyard : env.colors.level;
+    const garageHex = env.boneyardActive ? env.colors.garageBoneyard : env.colors.garageLevel;
+    const outlines = env.boneyardActive ? env.boneyardOutlines : env.outlines;
+    const showHandles = env.showHandles;
+    ctx.save();
+    ctx.lineWidth = 2;
+    outlines.forEach(outline => {
+      if (outline.points.length < 2) return;
+      const selected = env.isSelected(outline);
+      const colour = outline.garage ? garageHex : hex;
+      ctx.strokeStyle = colour;
+      ctx.fillStyle = colour;
+      ctx.lineWidth = selected ? 3.5 : 2;
+      ctx.setLineDash([9, 5]);
+      ctx.beginPath();
+      const count = env.segmentCount(outline);
+      for (let index = 0; index < count; index++) {
+        const seg = env.segment(outline, index);
+        const a = toS(seg.start), b = toS(seg.end);
+        if (!index) ctx.moveTo(a.x, a.y);
+        if (seg.bulge) {
+          const c = toS(env.controlPoint(seg));
+          ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
+        } else {
+          ctx.lineTo(b.x, b.y);
+        }
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (outline.garage) {
+        const centroid = outline.points.reduce(
+          (sum, point) => ({ x: sum.x + point.x, z: sum.z + point.z }),
+          { x: 0, z: 0 },
+        );
+        const s = toS({ x: centroid.x / outline.points.length, z: centroid.z / outline.points.length });
+        ctx.font = '600 11px "Barlow Condensed", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('GARAGE', s.x, s.y);
+      }
+      if (showHandles) {
+        outline.points.forEach(point => {
+          const s = toS(point);
+          ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
+        });
+      }
+      // Fenestration marks live on masters only, so they show on the BONEYARD.
+      (outline.marks || []).forEach(mark => drawBoneyardMark2D(ctx, toS, outline, mark, colour, env));
+    });
+    // The FENESTRATION tool on the BONEYARD ghosts the mark it would place
+    // on the master edge under the cursor.
+    if (env.boneyardActive && env.activeTool === 'fenestration'
+        && env.fenestrationType !== 'stairs' && env.snapPt) {
+      const placement = env.markPlacement(env.snapPt);
+      if (placement && !placement.error) {
+        const ghost = {
+          edgeId: placement.edgeId,
+          offsetFt: placement.offsetFt,
+          widthFt: placement.widthFt,
+          type: env.fenestrationType === 'window' ? 'window' : 'door',
+        };
+        ctx.globalAlpha = 0.55;
+        drawBoneyardMark2D(ctx, toS, placement.outline, ghost, hex, env);
+        ctx.globalAlpha = 1;
+      }
+    }
+    // In-progress preview: placed corners plus a rubber band to the cursor,
+    // with a close ring on the start point once the outline can close.
+    if (env.outlineDrawing && env.outlinePoints.length) {
+      // The live trace wears its top-bar button's colour so the drafter
+      // always knows what they are drawing: HOUSE red, ATTACHED garage
+      // blue, DETACHED garage purple. Committed outlines fall back to the
+      // red/blue edit-scope language above.
+      const drawHex = env.outlineGarage === 'attached' ? env.colors.traceAttached
+        : env.outlineGarage === 'detached' ? env.colors.garageLevel
+        : env.colors.traceHouse;
+      ctx.strokeStyle = drawHex;
+      ctx.fillStyle = drawHex;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      env.outlinePoints.forEach((point, index) => {
+        const s = toS(point);
+        if (index) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
+      });
+      const cursor = env.frozenEnd
+        ? env.frozenEnd : env.snapPt;
+      if (cursor) { const s = toS(cursor); ctx.lineTo(s.x, s.y); }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      env.outlinePoints.forEach(point => {
+        const s = toS(point);
+        ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
+      });
+      // An ATTACHED garage run finishes on its LAST point (double-click /
+      // Enter there); a DETACHED garage and a house outline close back on
+      // the START point, so those only ring the start.
+      const rings = [];
+      if (env.outlinePoints.length >= 3 && env.outlineStart) rings.push(env.outlineStart);
+      if (env.outlineGarage === 'attached' && env.outlinePoints.length >= 4) {
+        rings.push(env.outlinePoints[env.outlinePoints.length - 1]);
+      }
+      rings.forEach(ring => {
+        const sc = toS(ring);
+        ctx.beginPath(); ctx.arc(sc.x, sc.y, 7.5, 0, Math.PI * 2);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+    }
+    ctx.restore();
+  }
+
+
+  // ─── A segment's path, straight or bulged ─────────────────────────────────
+  // Traces and strokes one segment. A bulged segment curves through its
+  // control point; a straight one is a line to its end.
+  //
+  // This is a PRIMITIVE, not a painter: it owns the path and nothing else.
+  // Colour, width, line cap and endpoint decoration stay with the caller,
+  // because the three callers in MODEL disagree on every one of them -- a
+  // reference segment is thin in the caller's colour with round dots, a
+  // committed line is LINE_COLOR with dots, a selected segment is a thick
+  // round-capped halo with square handles. The bulge maths is the only part
+  // they share, and it is the only part here.
+  function strokeSegPath2D(ctx, toS, seg, env) {
+    const a = toS(seg.start), b = toS(seg.end);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y);
+    if (seg.bulge) {
+      const c = toS(env.controlPoint(seg));
+      ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
+    } else {
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+  }
+
+
+  // ─── A leader note ────────────────────────────────────────────────────────
+  // The text block, its leader to the anchor, an optional arrowhead, and an
+  // optional filled / outlined box with a bullnose radius. The block grows
+  // away from the anchor so the leader always meets its near edge.
+  //
+  // Note that anchor and text arrive in SCREEN space, not world -- the caller
+  // has already projected them, because a note on the stair workspace is
+  // placed in pane coordinates rather than on the plan. So this painter needs
+  // no toS and reads nothing from the model: two colours are its whole env.
+  // It was callable from any page all along; only its location said otherwise.
+  function drawNoteScreen2D(ctx, anchor, text, note, options = {}, env) {
+    const preview = options.preview === true;
+    const alpha = preview ? 0.6 : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = env.color;
+    ctx.fillStyle = env.color;
+    ctx.lineWidth = 1;
+    ctx.font = "600 12px 'Barlow Condensed', system-ui, sans-serif";
+    const lines = String(note.body || '').split('\n');
+    const padX = 6, lineH = 14;
+    const boxW = Math.max(24, ...lines.map(line => ctx.measureText(line).width)) + padX * 2;
+    const boxH = lines.length * lineH + 8;
+    // The text block grows away from the anchor; the leader meets its near edge.
+    const left = text.x >= anchor.x ? text.x : text.x - boxW;
+    const top = text.y - boxH / 2;
+    const leaderX = text.x >= anchor.x ? left : left + boxW;
+    if (note.end !== 'none') {
+      if (preview) ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(leaderX, text.y);
+      ctx.lineTo(anchor.x, anchor.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (note.end === 'arrow') {
+      const angle = Math.atan2(anchor.y - text.y, anchor.x - leaderX);
+      ctx.beginPath();
+      ctx.moveTo(anchor.x, anchor.y);
+      ctx.lineTo(anchor.x - 9 * Math.cos(angle - 0.3), anchor.y - 9 * Math.sin(angle - 0.3));
+      ctx.lineTo(anchor.x - 9 * Math.cos(angle + 0.3), anchor.y - 9 * Math.sin(angle + 0.3));
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (note.fill || note.outline) {
+      const radius = Math.min(Math.max(0, Number(note.bullnose) || 0), boxH / 2, boxW / 2);
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') ctx.roundRect(left, top, boxW, boxH, radius);
+      else ctx.rect(left, top, boxW, boxH);
+      if (note.fill) {
+        ctx.save();
+        ctx.globalAlpha = alpha * Math.min(1, Math.max(0, note.fillOpacity ?? 0.85));
+        ctx.fillStyle = env.fillColor;
+        ctx.fill();
+        ctx.restore();
+      }
+      if (note.outline) ctx.stroke();
+    }
+    ctx.fillStyle = env.color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    lines.forEach((line, i) => ctx.fillText(line, left + padX, top + 4 + lineH * i + lineH / 2));
+    ctx.restore();
+  }
+
+
+  // ─── Notes on the stair workspace ─────────────────────────────────────────
+  // The committed notes for this stair, the anchor being placed, and the one
+  // being typed. Positions come from the frame's pane projections, because a
+  // stair note lives in pane coordinates -- section or plan -- rather than on
+  // the drawing.
+  //
+  // paintNote is drawNoteScreen2D directly: inside the module a painter calls
+  // its neighbour rather than going back out through the page.
+  function drawStairNotes2D(ctx, frame, env) {
+    const paintNote = (a, t, n, o) => drawNoteScreen2D(ctx, a, t, n, o || {}, {
+      color: env.noteColor, fillColor: env.noteFillColor,
+    });
+    env.notes
+      .filter(note => note.view === 'stair' && note.levelId === frame.stair.levelId)
+      .forEach(note => {
+        const pane = note.pane === 'plan' ? 'plan' : 'section';
+        if (!frame.rects[pane]) return;
+        paintNote(ctx, frame.paneScreen(pane, note.anchor), frame.paneScreen(pane, note.text), note);
+      });
+    const anchor = env.anchor;
+    if (anchor && anchor.view === 'stair' && frame.rects[anchor.pane]) {
+      const a = frame.paneScreen(anchor.pane, anchor.pt);
+      const hover = env.hover;
+      if (hover && frame.paneAt(hover.x, hover.y) === anchor.pane
+        && Math.hypot(hover.x - a.x, hover.y - a.y) > 1) {
+        paintNote(ctx, a, hover, env.previewStyle('…'), { preview: true });
+      } else {
+        ctx.save();
+        ctx.strokeStyle = env.noteColor;
+        ctx.beginPath(); ctx.arc(a.x, a.y, 4, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+    }
+    const pending = env.pending;
+    if (pending && pending.view === 'stair' && frame.rects[pending.pane] && env.noteEditor) {
+      paintNote(
+        ctx,
+        frame.paneScreen(pending.pane, pending.anchor),
+        frame.paneScreen(pending.pane, pending.text),
+        env.previewStyle(env.noteDraft.trim() || '…'),
+        { preview: true },
+      );
+    }
+  }
+
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
@@ -947,6 +1289,11 @@ if (!window.DraftRender2D) {
     drawStairs2D,
     drawFloor2D,
     drawBoneyardMark2D,
+    drawDimension2D,
+    drawOutlines2D,
+    strokeSegPath2D,
+    drawNoteScreen2D,
+    drawStairNotes2D,
   });
 })();
 }
