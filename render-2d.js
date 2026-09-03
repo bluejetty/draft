@@ -1232,6 +1232,52 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+
+  // ─── Notes on the stair workspace ─────────────────────────────────────────
+  // The committed notes for this stair, the anchor being placed, and the one
+  // being typed. Positions come from the frame's pane projections, because a
+  // stair note lives in pane coordinates -- section or plan -- rather than on
+  // the drawing.
+  //
+  // paintNote is drawNoteScreen2D directly: inside the module a painter calls
+  // its neighbour rather than going back out through the page.
+  function drawStairNotes2D(ctx, frame, env) {
+    const paintNote = (a, t, n, o) => drawNoteScreen2D(ctx, a, t, n, o || {}, {
+      color: env.noteColor, fillColor: env.noteFillColor,
+    });
+    env.notes
+      .filter(note => note.view === 'stair' && note.levelId === frame.stair.levelId)
+      .forEach(note => {
+        const pane = note.pane === 'plan' ? 'plan' : 'section';
+        if (!frame.rects[pane]) return;
+        paintNote(ctx, frame.paneScreen(pane, note.anchor), frame.paneScreen(pane, note.text), note);
+      });
+    const anchor = env.anchor;
+    if (anchor && anchor.view === 'stair' && frame.rects[anchor.pane]) {
+      const a = frame.paneScreen(anchor.pane, anchor.pt);
+      const hover = env.hover;
+      if (hover && frame.paneAt(hover.x, hover.y) === anchor.pane
+        && Math.hypot(hover.x - a.x, hover.y - a.y) > 1) {
+        paintNote(ctx, a, hover, env.previewStyle('…'), { preview: true });
+      } else {
+        ctx.save();
+        ctx.strokeStyle = env.noteColor;
+        ctx.beginPath(); ctx.arc(a.x, a.y, 4, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+    }
+    const pending = env.pending;
+    if (pending && pending.view === 'stair' && frame.rects[pending.pane] && env.noteEditor) {
+      paintNote(
+        ctx,
+        frame.paneScreen(pending.pane, pending.anchor),
+        frame.paneScreen(pending.pane, pending.text),
+        env.previewStyle(env.noteDraft.trim() || '…'),
+        { preview: true },
+      );
+    }
+  }
+
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
@@ -1247,6 +1293,7 @@ if (!window.DraftRender2D) {
     drawOutlines2D,
     strokeSegPath2D,
     drawNoteScreen2D,
+    drawStairNotes2D,
   });
 })();
 }
