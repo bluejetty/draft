@@ -144,7 +144,7 @@ test.describe('MODEL.html tier 1', () => {
     expect(frameworks.dc).toBe(0);
     expect(frameworks.scripts).not.toContain('./support.js');
 
-    // SIX dependencies, and the list is the finding rather than a formality:
+    // SEVEN dependencies, and the list is the finding rather than a formality:
     // render-2d.js reaches for no globals, so the wall painter still costs one
     // module. palette.js joined on 3 Sep and is the only one that is not a
     // painter -- it is loaded FIRST because the skin is applied at module
@@ -156,8 +156,9 @@ test.describe('MODEL.html tier 1', () => {
     // a dependency that arrives without anyone noticing is how that stops
     // being true.
     expect(frameworks.scripts).toEqual([
-      './palette.js', './layer-views.js', './shared-file-store.js',
-      './wall-types.js', './drawing-format.js', './render-2d.js',
+      './palette.js', './layer-views.js', './geometry-2d.js',
+      './shared-file-store.js', './wall-types.js', './drawing-format.js',
+      './render-2d.js',
     ]);
   });
 

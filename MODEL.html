@@ -112,6 +112,7 @@
 
 <script src="./palette.js"></script>
 <script src="./layer-views.js"></script>
+<script src="./geometry-2d.js"></script>
 <script src="./shared-file-store.js"></script>
 <script src="./wall-types.js"></script>
 <script src="./drawing-format.js"></script>
@@ -242,6 +243,13 @@
     .filter(l => { const f = onActiveLevel(); return f.byLevel(l) && f.onPlan(l); });
   const floors = () => (drawing?.floors || [])
     .filter(x => { const f = onActiveLevel(); return f.byLevel(x) && f.onPlan(x); });
+  // Rules four and five: LEVEL ONLY. A roof footprint and a reference shape are
+  // level-wide -- every drawing of the level shows them -- so they take no view
+  // filter at all. Copying the walls line here would hide both on FOUNDATION.
+  const roofs = () => (drawing?.roofs || [])
+    .filter(r => onActiveLevel().byLevel(r));
+  const shapes = () => (drawing?.shapes || [])
+    .filter(sh => onActiveLevel().byLevel(sh));
 
   // Every point that defines the drawing's extent, for fit-to-content.
   const allPoints = () => {
@@ -324,6 +332,68 @@
     ctx.restore();
   };
 
+  // EVERYTHING A PAINTER READS ARRIVES THROUGH env. That is what lets
+  // render-2d.js serve this page and MODEL.dc.html from one copy: the module
+  // owns the drawing, not the state of whoever is calling. Built at call time
+  // from `skin` and the saved JSON, never captured at module scope.
+  //
+  // The contract is NINE keys, not the two that make a roof appear. It was
+  // found by reading every `env.` in render-2d.js at once, after supplying two
+  // and watching the page throw `env.roofSkeleton is not a function` -- which
+  // is exactly what the loud painter was for. Discovering an interface one
+  // exception at a time is how you end up believing you have finished.
+  //
+  //   drawWallSeg2D  wallTypes
+  //   drawRoof2D     isPrinting offsetOutline roofSkeleton surfaceOpeningsFor
+  //   drawShape2D    isPrinting areaLabel outlineAreaSqFt flooringTypes
+  //                  shapeColor
+  const paintEnv = () => ({
+    wallTypes: window.DraftWallTypes.WALL_TYPES,
+    shapeColor: skin['draw-shape'],
+    flooringTypes: window.DraftDrawingFormat.FLOORING_TYPES,
+    // This page never prints. When it does, this stops being a constant.
+    isPrinting: false,
+    offsetOutline: window.DraftGeometry2D.offsetOutline,
+    roofSkeleton: window.DraftGeometry2D.roofSkeleton,
+    // MODEL.dc.html also consults layer visibility and print flags here; this
+    // page has neither yet, so an opening is shown whenever it is real.
+    surfaceOpeningsFor: (hostType, hostId) => (drawing?.surfaceOpenings || [])
+      .filter(o => o.hostType === hostType && o.hostId === hostId
+        && (o.points || []).length >= 3),
+    // DUPLICATED FROM MODEL.dc.html, deliberately and temporarily. Both are
+    // pure -- a shoelace area and a unit label -- and both are needed by a
+    // painter that has ALREADY been extracted, which makes them extraction
+    // candidates rather than page code. Flagged to whoever holds board #1;
+    // when they move, this env reads them instead of restating them.
+    outlineAreaSqFt: points => {
+      if (!Array.isArray(points) || points.length < 3) return 0;
+      let doubled = 0;
+      for (let i = 0; i < points.length; i += 1) {
+        const a = points[i], b = points[(i + 1) % points.length];
+        doubled += a.x * b.z - b.x * a.z;
+      }
+      return Math.abs(doubled) / 2;
+    },
+    areaLabel: sqFt => (sqFt > 0
+      ? `${(Math.round(sqFt * 10) / 10).toLocaleString()} SQ FT` : ''),
+  });
+
+  const paintRoofs = () => {
+    const R = window.DraftRender2D;
+    roofs().forEach(roof => {
+      if ((roof.points || []).length < 3) return;
+      R.drawRoof2D(ctx, toS, roof, {}, paintEnv());
+    });
+  };
+
+  const paintShapes = () => {
+    const R = window.DraftRender2D;
+    shapes().forEach(shape => {
+      if ((shape.points || []).length < 2) return;
+      R.drawShape2D(ctx, toS, shape, {}, paintEnv());
+    });
+  };
+
   const paintWalls = () => {
     // Lazy, so a load-order change cannot bind these to undefined at parse
     // time -- but LOUD, not guarded. An earlier version returned quietly when
@@ -344,7 +414,7 @@
     // mitred corners. Mitring needs MODEL's _wallJoins(), which is tier 2.
     walls().forEach(wall => {
       if (!wall.start || !wall.end) return;
-      R.drawWallSeg2D(ctx, toS, wall, false, null, 'both', { wallTypes: WT.WALL_TYPES });
+      R.drawWallSeg2D(ctx, toS, wall, false, null, 'both', paintEnv());
     });
   };
 
@@ -355,7 +425,10 @@
     ctx.fillStyle = skin['surface-page'];
     ctx.fillRect(0, 0, cssW, cssH);
     try {
-      if (drawing) { paintGrid(); paintFloors(); paintLines(); paintWalls(); }
+      if (drawing) {
+        paintGrid(); paintFloors(); paintRoofs(); paintShapes();
+        paintLines(); paintWalls();
+      }
     } catch (err) {
       // The throw above is only useful if someone SEES it. paint() runs on
       // every pan, zoom and resize, so an uncaught error here would be a
@@ -378,7 +451,8 @@
     if (!drawing) return;
     readout.innerHTML =
       `walls <b>${walls().length}</b>   lines <b>${lines().length}</b>   `
-      + `floors <b>${floors().length}</b>\n`
+      + `floors <b>${floors().length}</b>   roofs <b>${roofs().length}</b>   `
+      + `shapes <b>${shapes().length}</b>\n`
       + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
       + `${onActiveLevel().viewId || 'all'}   `
       + `scale <b>${view.scale.toFixed(2)}</b> px/ft`;

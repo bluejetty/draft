@@ -98,4 +98,82 @@ test.describe('MODEL.html levels', () => {
     expect(warnings.join(' '), 'a bad level must not blank the page silently')
       .toContain('99');
   });
+
+  // ── tier 2b: roofs and shapes ───────────────────────────────────────────
+  //
+  // Both painters already exist in render-2d.js -- drawRoof2D and drawShape2D
+  // were extracted for the sheet composer -- so this tier wires them up and
+  // supplies the `env` they read, rather than writing a painter.
+
+  test('the roof paints, and it lives on ROOF rather than the floor below',
+    async ({ page }) => {
+      const saved = await houseOnOldPage(page);
+
+      // Measured, not assumed: the bone press puts exactly one roof on level 7.
+      const roofsOnRoofLevel = (saved.roofs || []).filter(r => Number(r.levelId) === 7);
+      expect(roofsOnRoofLevel.length, 'the fixture must build a roof').toBe(1);
+
+      // MAIN FL does not show it. Rule four says roofs filter by LEVEL, so a
+      // roof on 7 is absent from 3 -- and if roofs were painted unfiltered the
+      // way tier 1 painted everything, this is the assertion that catches it.
+      await page.goto('/MODEL.html');
+      await expect(readout(page)).toContainText('MAIN FL', { timeout: 5000 });
+      await expect(readout(page)).toContainText('roofs 0');
+
+      await page.goto('/MODEL.html?level=7');
+      await expect(readout(page)).toContainText('ROOF', { timeout: 5000 });
+      await expect(readout(page)).toContainText('roofs 1');
+
+      // And it is INK, not just a count. drawRoof2D strokes #7a4a21 and fills a
+      // brown wash; nothing else on this page is brown, so red>green>blue with
+      // a real red channel isolates it.
+      const brown = await page.evaluate(() => {
+        const c = document.getElementById('plan');
+        const { data } = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+        let n = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i] > 90 && data[i] > data[i + 1] + 12 && data[i + 1] > data[i + 2] + 6) n += 1;
+        }
+        return n;
+      });
+      expect(brown, 'the roof must be painted, not merely counted').toBeGreaterThan(200);
+    });
+
+  test('a shape drawn on the old page paints on the new one', async ({ page }) => {
+    // Drawn with the REAL tool rather than seeded into the store: the whole
+    // claim of this page is that it reads what MODEL.dc.html actually saves,
+    // and a hand-written fixture would not test that. Nothing in the tour makes
+    // a shape, which is why this one is drawn by hand.
+    await h.openModel(page, { webgl: false, rails: false });
+    await h.waitForModelReady(page);
+    await h.selectTool(page, 'Shape');
+    await h.clickWorld(page, -8, -6);
+    await h.clickWorld(page, 8, -6);
+    await h.clickWorld(page, 8, 6);
+    await h.clickWorld(page, -8, 6);
+    await page.keyboard.press('Enter');
+    await h.waitForSaved(page);
+
+    const saved = await h.savedDrawing(page);
+    expect(saved.shapes, 'the shape tool must have committed one').toHaveLength(1);
+    const shapeLevel = Number(saved.shapes[0].levelId);
+
+    await page.goto(`/MODEL.html?level=${shapeLevel}`);
+    await expect(readout(page)).toContainText('shapes 1', { timeout: 5000 });
+
+    // drawShape2D takes its colour from env.shapeColor, which this page feeds
+    // from the palette -- so this also proves the env is wired, not just the
+    // painter. Teal: green and blue both well above red.
+    const teal = await page.evaluate(() => {
+      const c = document.getElementById('plan');
+      const { data } = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+      let n = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 1] > data[i] + 20 && data[i + 1] > 90 && data[i + 2] > data[i] + 10) n += 1;
+      }
+      return n;
+    });
+    expect(teal, 'the shape must be painted in the palette\'s shape colour')
+      .toBeGreaterThan(100);
+  });
 });
