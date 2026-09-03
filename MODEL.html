@@ -328,30 +328,62 @@
   };
 
   // ── painting ──────────────────────────────────────────────────────────────
+  // THE DATUM IS THE DRAFTER'S ZERO, not the world's. MODEL.dc.html sets
+  // state.drawingOrigin from the drafter's FIRST CLICK (MODEL.dc.html:10360),
+  // so the point they start on reads as 0,0 from then on, and drawGrid2D
+  // anchors the grid to it. Movie, 3 Sep: "that way he always first clicks on
+  // 0,0."
+  //
+  // No click, no datum, and therefore NO GRID. That is deliberate, not a gap:
+  // tests/registration-grid.spec.js asserts it by name -- "an untouched model
+  // space draws no grid, and the first node sets the datum" -- and the grid
+  // cannot be anchored to a point the drafter has not chosen yet. Tier 1's
+  // hand-rolled grid drew always, aligned to world 0,0, which was a
+  // divergence from the old page rather than a feature.
+  //
+  // ABSENT AND NULL MEAN DIFFERENT THINGS. This is the tier-2a floors bug's
+  // exact shape, so it is spelled out rather than compressed. MODEL.dc.html
+  // :5160 reads:
+  //     'drawingOrigin' in saved ? normalise(saved.drawingOrigin) : {x:0,z:0}
+  // Absent = a drawing made before the datum existed. It was drawn on the
+  // world grid, so 0,0 is what leaves every coordinate where it is. Explicit
+  // null = "no origin yet", which is where NEW starts and how it avoids
+  // silently adopting 0,0.
+  //
+  // `drawing.drawingOrigin || null` would collapse the two and strip the grid
+  // from every old drawing -- and no fixture would catch it, because the old
+  // page always writes the key now.
+  const gridDatum = () => {
+    if (!drawing) return null;
+    if (!('drawingOrigin' in drawing)) return { x: 0, z: 0 };
+    const raw = drawing.drawingOrigin;
+    if (!raw || typeof raw !== 'object') return null;
+    const x = Number(raw.x), z = Number(raw.z);
+    return Number.isFinite(x) && Number.isFinite(z) ? { x, z } : null;
+  };
+
   const paintGrid = () => {
-    // One line per foot while they are far enough apart to read, else per ten.
-    const step = view.scale >= 9 ? 1 : view.scale >= 1.2 ? 10 : 100;
-    const tl = toWorld(0, 0), br = toWorld(cssW, cssH);
-    const x0 = Math.floor(tl.x / step) * step, x1 = Math.ceil(br.x / step) * step;
-    const z0 = Math.floor(tl.z / step) * step, z1 = Math.ceil(br.z / step) * step;
-    // A grid that redraws ten thousand lines at low zoom costs more than it
-    // tells anyone, so bail rather than crawl.
-    if ((x1 - x0) / step > 400 || (z1 - z0) / step > 400) return;
-    ctx.save();
-    ctx.lineWidth = 1;
-    for (let x = x0; x <= x1; x += step) {
-      const major = Math.abs(x % (step * 10)) < 1e-6;
-      ctx.strokeStyle = major ? skin['draw-grid-major'] : skin['draw-grid-minor'];
-      const s = toS({ x, z: 0 });
-      ctx.beginPath(); ctx.moveTo(s.x, 0); ctx.lineTo(s.x, cssH); ctx.stroke();
+    const R = window.DraftRender2D;
+    if (!R) {
+      throw new Error('MODEL.html: cannot paint the grid, render-2d.js did not '
+        + 'load. Check the script order in the page head.');
     }
-    for (let z = z0; z <= z1; z += step) {
-      const major = Math.abs(z % (step * 10)) < 1e-6;
-      ctx.strokeStyle = major ? skin['draw-grid-major'] : skin['draw-grid-minor'];
-      const s = toS({ x: 0, z });
-      ctx.beginPath(); ctx.moveTo(0, s.y); ctx.lineTo(cssW, s.y); ctx.stroke();
-    }
-    ctx.restore();
+    // drawGrid2D builds its own screen transform instead of taking toS, so it
+    // wants the camera in WORLD units. halfH is half the viewport height in
+    // FEET: cssH/2 pixels divided by px-per-foot. Getting this wrong scales
+    // the grid against everything else rather than hiding it, which is at
+    // least loud.
+    R.drawGrid2D(ctx, cssW, cssH, {
+      datum: gridDatum(),
+      halfH: cssH / 2 / view.scale,
+      camX: view.cx,
+      camZ: view.cz,
+      // Three weights, not two: 1ft fine, 10ft major, 100ft coarse. The page
+      // owns the look, as MODEL.dc.html:6559 does with its own greys.
+      gridFine: skin['draw-grid-minor'],
+      gridMajor: skin['draw-grid-major'],
+      gridCoarse: skin['draw-grid-coarse'],
+    });
   };
 
   // drawFloor2D's env, which is paintEnv() plus four keys only it reads.
@@ -551,6 +583,15 @@
   // have shown the tier 2a floor bug on sight rather than after a screenshot.
   const shownOfTotal = (shown, all) => `${shown}/${(all || []).length}`;
 
+  // Three states, matching gridDatum(): a point, the back-filled world origin
+  // for a pre-datum drawing, or none at all -- and none means no grid.
+  const datumLabel = () => {
+    const d = gridDatum();
+    if (!d) return 'none — no grid';
+    const at = `${d.x.toFixed(2)},${d.z.toFixed(2)}`;
+    return (drawing && !('drawingOrigin' in drawing)) ? `${at} (world, back-filled)` : at;
+  };
+
   const updateReadout = () => {
     if (!drawing) return;
     readout.innerHTML =
@@ -562,7 +603,10 @@
       + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
       + `view <b>${onActiveLevel().viewId || 'all'}</b>   `
       + `${theme}/${mode}   `
-      + `scale <b>${view.scale.toFixed(2)}</b> px/ft`;
+      + `scale <b>${view.scale.toFixed(2)}</b> px/ft   `
+      // Why the grid is or is not there, so its absence reads as a fact about
+      // the drawing rather than a broken page.
+      + `datum <b>${datumLabel()}</b>`;
   };
 
   // ── pan and zoom ──────────────────────────────────────────────────────────
