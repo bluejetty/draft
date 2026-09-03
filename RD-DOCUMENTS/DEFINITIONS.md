@@ -82,6 +82,53 @@ and it is the first job of any tier-3 rename, not an afterthought to it.
 
 ---
 
+## Candidates — measured, not yet ruled
+
+Movie's purpose for this file, 3 Sep: *"agreed terms so we can talk clearly to
+each other… mostly for me or whoever is talking to you to use the correct
+terms, but also to not double anything up."* **The primary audience is the
+person talking to the agents, not the agents.** Coding is the secondary use.
+So an entry is finished when a human can read it and pick the right word —
+identifiers are evidence for that, not the point of it.
+
+Movie flagged WALL, PLAN and LAYOUT on sight. Measured 3 Sep, not yet ruled:
+
+**LAYOUT** — Movie's own word for how the joists and beams sit, and Movie's own
+doubt about it: *"layout is also a computer term so maybe bad choice."* The
+doubt is right, and it is worse than a generic-word worry:
+
+| sense | where |
+|---|---|
+| the drawing-sheet page | **`LAYOUT.dc.html`** — an entire page |
+| the sheet layout in the saved format | `layout` normaliser, `drawing-format.js` |
+| how the floor structure sits | `FLOOR LAYOUT (FLOOR)`, a layer-set label |
+
+**PLAN** — Movie's word for how the walls are arranged.
+
+| sense | count |
+|---|---|
+| a layer-set id / `view` value | `'plan'` ×150 in MODEL.dc.html |
+| how walls are arranged | `FLOOR PLAN (WALLS)` label |
+| a sheet type, against elevation and section | `ROOF PLAN` ×3 |
+| the Model Space canvas element | `id="plan"` in MODEL.html — mine, and the easiest to rename |
+
+**WALL** — `this._walls` ×93 (the items), `WALL_TYPES` ×37 and `wallType` ×53
+(the assembly, a different kind of thing from a wall).
+
+### The reframe these three suggest
+
+The layer-set labels **already speak Movie's language**: `FLOOR PLAN (WALLS)`
+is how walls are arranged, `FLOOR LAYOUT (FLOOR)` is how the floor structure
+sits. The product's words and the owner's words agree.
+
+So the fix is not to rename the labels. It is that those same two words are
+*also* doing unrelated jobs elsewhere — a page called LAYOUT, a canvas called
+`plan`, a format field called `layout`. **Rename the other uses, keep the
+labels.** That is the cheap direction and it is the one that leaves the
+drafter-facing vocabulary alone.
+
+---
+
 ## The overloaded ones — read these first
 
 ### BONE
