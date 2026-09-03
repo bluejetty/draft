@@ -114,6 +114,40 @@ always returns to the same sixteenth, because the return trip moves at most
 ten round trips give the same 1 mm as one. It is a fixed point, not a walk.
 That is what makes "change freely back and forth" safe.
 
+## SUPERSEDED BY DESIGN INTENT — Devin, 3 Sep
+
+**The toggle is a soft switch.** Board #313 / audit Q2 rules it display-only: it
+re-prints the drawing in the other system and does not touch geometry. A hard
+re-snap is a **separate, deliberate command** — never automatic, never a side
+effect of switching.
+
+That overrules this board's central recommendation, which was to re-snap on the
+toggle. It is the better design and for a reason I did not have: **a drafter who
+switches units to read something is not asking to have their drawing altered.**
+Announcing the change, which is what I proposed instead, is a worse answer to
+that than simply not making it.
+
+**What survives, unchanged:**
+
+- The problem is real. An imperial drawing read in metric shows partials that
+  do not sum to their overall — 3.658 × 3 against 10.973. A drafter sees it.
+- The measurements below stand: the two grids do not divide each other, worst
+  single re-snap is 0.79375 mm, and round-tripping is stable (imperial exactly,
+  metric settling once within 1 mm).
+
+**What changes:** those numbers now describe **what the deliberate command
+costs**, not what a toggle does behind the drafter's back. They are the answer
+to "what happens if I run CONVERT TO METRIC", which is a question a drafter is
+entitled to ask before pressing it — so they belong in that command's
+confirmation, not in a notice after the fact.
+
+> Worth recording plainly: every measurement on this board held up under
+> challenge, and both of its design opinions were wrong — first the direction,
+> then the trigger. Measurement lives in the code and can be checked. Intent
+> lives in the head of whoever designed it, and guessing at it produced a
+> confident, well-evidenced, wrong proposal twice running. **Ask the designer
+> before proposing; measure before believing.**
+
 ## What the build needs
 
 1. **Re-snap every node from the datum** on a unit switch, through the existing
