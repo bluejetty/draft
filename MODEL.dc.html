@@ -3908,8 +3908,10 @@ class Component extends DCLogic {
     // (OPENing a file re-runs this) leave it alone.
     if (!this._perfNoticeChecked) {
       this._perfNoticeChecked = true;
-      const perfOff = typeof patch.perfIntroOff === 'boolean' ? patch.perfIntroOff : this.state.perfIntroOff;
-      patch.perfNotice = !perfOff;
+      // RETIRED (Movie, 2 Sep): the close-your-tabs notice does not open any
+      // more. The markup, the dismissal paths and the perfIntroOff preference
+      // are left in place so this is one line to undo rather than a rebuild.
+      patch.perfNotice = false;
     }
     this.setState(patch);
   }
@@ -3939,19 +3941,27 @@ class Component extends DCLogic {
   // free, Esc leaves, and the parked step persists so a reload resumes.
   _startHouseTour(master) {
     this._clearTourTimers();
-    this.setState({ tour: { step: 'foundation' }, tourPopup: false, tourPopupNote: '' },
-      () => this._markUnsaved());
+    // THE TOUR IS PARKED (Movie, 2 Sep): "they draw the shape and press the
+    // button — that is the whole tour for now."
+    //
+    // What stops: the FOUNDATION DONE popup and every popup after it, the
+    // drop to the FOUNDATION level, and therefore the whole step ladder,
+    // since the popup was the only thing that advanced it.
+    //
+    // WHAT DOES NOT STOP, and is the reason this is not a delete: the beam
+    // and telepost growth below. A span over 19' still lands a mid-span beam
+    // and its teleposts on the foundation. That is structure the app builds,
+    // not ceremony, and turning it off with the popups would have been a
+    // silent change to what a drawing contains.
+    //
+    // _advanceTour, _tourPopupPrimary, the step messages and the gate all
+    // remain in this file, unreached. The tour is being redesigned; leaving
+    // the machinery intact makes that a rearrangement rather than a rebuild.
     const fdnIdx = this.state.levels.findIndex(lvl => lvl.id === BASEMENT_LEVEL_ID);
-    if (fdnIdx >= 0) this._switchLevel(fdnIdx);
     const fdnLevel = this.state.levels[fdnIdx];
     const points = master.points.map(pt => ({ x: pt.x, z: pt.z }));
     const plan = window.DraftBuildHouse.midSpanBeams(points);
-    const showPopup = note => this.setState({ tourPopup: 'foundation', tourPopupNote: note });
-    if (!plan.beams.length) {
-      this._tourTimers = [setTimeout(() => showPopup(
-        'Every span is under 19\' — no mid-span beam needed. Press ENTER, SPACE, or tap to climb.'), 450)];
-      return;
-    }
+    if (!plan.beams.length) return;
     // The mini reveal, three staged frames: the beam lands, the teleposts
     // follow, then the popup — "the tool is working for you."
     const elev = fdnLevel ? fdnLevel.elev : 0;
@@ -3983,7 +3993,6 @@ class Component extends DCLogic {
         this._markUnsaved();
         this.setState({ drawingMessage: 'Teleposts on pad footings split the beam into working spans.', drawingMessageError: false });
       }, 800),
-      setTimeout(() => showPopup('Beam and teleposts are in — press ENTER, SPACE, or tap to climb.'), 1200),
     ];
   }
 
