@@ -21,9 +21,14 @@ async function reachRoof(page, w, d, beforeStairs) {
   await traceHouse(page, w, d);
   await page.locator('[data-tour-popup]').click(); // FOUNDATION DONE → MAIN
   if (beforeStairs) await beforeStairs();
+  // Along the w axis, which is the longer side in every call. The 16x12
+  // houses are only 12' deep and a 10'-10" run does not fit across that
+  // once a wall assembly comes off each side, so the app refuses it and
+  // the MAIN gate never lights. The stair is scaffolding for reaching the
+  // roof here, not the subject of any test in this file.
   await h.selectTool(page, 'Stair');
-  await h.clickWorld(page, 2, -2);
-  await h.clickWorld(page, 2, 4);
+  await h.clickWorld(page, -2, 2);
+  await h.clickWorld(page, 4, 2);
   await h.waitForSaved(page);
   await page.keyboard.press('Enter'); // the lit gate opens MAIN FLOOR DONE
   await page.locator('[data-tour-popup]').click(); // → the rooms pause (#198)

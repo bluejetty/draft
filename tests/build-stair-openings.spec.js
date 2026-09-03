@@ -127,6 +127,80 @@ test('the opening pulls one real wall assembly inside the exterior', async ({ pa
   expect(Math.abs(saved.stairs[0].start.x - expectedStart)).toBeLessThan(0.05);
 });
 
+// A run that cannot fit ANYWHERE is refused rather than left overhanging.
+//
+// The house is 10' across and the run is 10'-5" (OPEN_LEN_FT), so even after
+// _stairAutoFit slides the stair as far back as it goes, the opening still
+// crosses the exterior wall. Before this refusal the stair was stored anyway,
+// its opening hung over the floor edge, and the overhang was then DEDUCTED
+// from the level's area as though it were floor.
+//
+// Contrast the test above: there the house is 16' and the same run fits once
+// it slides, so it is accepted. Fitting is judged after the slide, not before.
+test('a run with nowhere to fit is refused, not left hanging over the edge', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page, 5, 5);
+  await usePlanContext(page);
+
+  await h.selectTool(page, 'Stair');
+  await h.clickWorld(page, -4, 0);
+  await h.clickWorld(page, 4, 0);
+  await page.waitForTimeout(200);
+
+  await expect(page.locator('[data-model-drawing-message]'))
+    .toContainText(/does not fit inside the walls/i);
+  const saved = await h.savedDrawing(page);
+  expect(saved.stairs || []).toHaveLength(0);
+});
+
+// The refusal names the shape that WOULD fit, rather than just saying no.
+//
+// 12' across cannot take a 10'-10" run once both setbacks are off it, but an
+// L folds the second flight along the 20' length and fits. Measured, not
+// assumed: 13' across accepts the straight run and 10' fits no shape at all,
+// so this sits between the two and pins the middle branch of the three.
+//
+// Refusing this house outright would be refusing a plan the app can build.
+test('a straight run that will not fit is refused by naming the L that will', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page, 6, 10);
+  await usePlanContext(page);
+
+  await h.selectTool(page, 'Stair');
+  await h.clickWorld(page, -5, 0);
+  await h.clickWorld(page, 5, 0);
+  await page.waitForTimeout(200);
+
+  await expect(page.locator('[data-model-drawing-message]')).toContainText(/but an L does/i);
+  const saved = await h.savedDrawing(page);
+  expect(saved.stairs || []).toHaveLength(0);
+});
+
+// The U arm of the ladder fires too, and only a SHALLOW house reaches it.
+//
+// An L turns into the depth and runs out of floor; a U folds back parallel and
+// stays within it. So a house can be too shallow for an L while still taking a
+// U, which is the only way the third rung is ever reached.
+//
+// 11x9 is one such house at the app's own run of 10'-10". Swept rather than
+// guessed: of 1,089 house sizes from 8' to 40' square, 60 have L failing where
+// U fits, and every one of them is shallow. 13x9 takes a straight run, so the
+// window is narrow -- a U must beat an L here, not merely beat straight.
+test('a house too shallow for an L is refused by naming the U that fits', async ({ page }) => {
+  await h.openModel(page);
+  await drawOutlineRect(page, 5.5, 4.5);
+  await usePlanContext(page);
+
+  await h.selectTool(page, 'Stair');
+  await h.clickWorld(page, -4.5, 0);
+  await h.clickWorld(page, 4.5, 0);
+  await page.waitForTimeout(200);
+
+  await expect(page.locator('[data-model-drawing-message]')).toContainText(/but a U does/i);
+  const saved = await h.savedDrawing(page);
+  expect(saved.stairs || []).toHaveLength(0);
+});
+
 test('the opening keeps 2" clear of the beams carrying the floor', async ({ page }) => {
   await h.openModel(page);
   await drawOutlineRect(page);
@@ -183,3 +257,5 @@ test('an L stair cuts an L-shaped well over its landing and second run', async (
   // The turn side reaches across the landing and down the second run.
   expect(Math.abs(box.maxZ - (-4 - 1.5 + land + run2Cut + FINISH_FT))).toBeLessThan(0.02);
 });
+
+

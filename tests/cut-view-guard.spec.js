@@ -113,9 +113,13 @@ test('the finale reveal stands the drawing tool down before parking in E1', asyn
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
   await page.locator('[data-tour-popup]').click(); // FOUNDATION DONE → MAIN
+  // The stair runs along the 16' axis: this house is only 12' deep, and a
+  // 10'-10" run does not fit across that once a wall assembly comes off
+  // each side, so the app now refuses it. The stair is scaffolding to
+  // light the MAIN gate here, not the subject of the test.
   await h.selectTool(page, 'Stair');
-  await h.clickWorld(page, 2, -2);
-  await h.clickWorld(page, 2, 4);
+  await h.clickWorld(page, -2, 2);
+  await h.clickWorld(page, 4, 2);
   await h.waitForSaved(page);
   await page.keyboard.press('Enter');
   await page.locator('[data-tour-popup]').click(); // → the rooms pause (#198)

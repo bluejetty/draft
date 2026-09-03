@@ -19,10 +19,15 @@ async function traceHouse(page, w, d) {
   await h.waitForSaved(page);
 }
 
-async function placeStairs(page, x = 2, z = -2) {
+// Along the w axis, which is the longer side in every caller. The 16x12
+// houses are only 12' deep and a 10'-10" run does not fit across that once a
+// wall assembly comes off each side, so the app refuses the stair and the
+// MAIN gate never lights. The stair is scaffolding for reaching the rooms
+// step, not the subject of any test in this file.
+async function placeStairs(page, x = -2, z = 2) {
   await h.selectTool(page, 'Stair');
   await h.clickWorld(page, x, z);
-  await h.clickWorld(page, x, z + 6);
+  await h.clickWorld(page, x + 6, z);
   await h.waitForSaved(page);
 }
 
