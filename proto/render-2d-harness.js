@@ -717,6 +717,179 @@ suite('drawStairs2D', 'every stair in the list is drawn, not just the first', R 
   expect('two DN labels', count(ctx, 'fillText'), 2);
 });
 
+// ── drawFixture2D: fifteen kinds down one ladder ──
+// The frame is the identity, so "along" and "across" arrive at toS as x and z
+// and every assertion below is in plain feet.
+const fixtureGeo = over => ({
+  frame: { at: (along, across) => ({ x: along, z: across }) },
+  alongStart: 0, alongEnd: 4, backOff: 0, frontOff: 2,
+  tub: false, tubAlongStart: 0, tubAlongEnd: 5,
+  center: { x: 2, z: 1 }, faucetAlong: 0.4, decks: [], wall: null,
+  ...over,
+});
+const fixtureEnv = (over = {}, geo = {}) => ({
+  fixtureGeometry: () => fixtureGeo(geo),
+  FIXTURE_COLOR: '#4a6', COUNTER_OVERHANG_FT: 0.1,
+  CLOSET_WALL_FT: 0.29, CLOSET_ROD_FT: 1, CLOSET_SHELF_FT: 1.5, CLOSET_CLOTHES_FT: 1.83,
+  closetDoorFor: () => ({ widthFt: 2 }),
+  wallCross: () => null, wallFrame: () => ({ totalFt: 0.46 }), walls: [],
+  ...over,
+});
+const KINDS = ['cabinet', 'vanity', 'sink', 'stove', 'fridge', 'washer', 'dryer', 'dish',
+  'island', 'pantry', 'closet', 'toilet', 'tub', 'shower', 'stall'];
+
+// What a kind actually painted: the drawing operations in order, WITH their
+// arguments rounded to the tenth of a pixel. An op tally alone is too coarse
+// to be a picture -- a toilet and a tub both come out "one rect, one oval" and
+// differ only in where they put them, so counting ops alone reported them as
+// the same drawing when they are not.
+const signature = (R, kind, over, geo) => {
+  const ctx = recordingCtx();
+  R.drawFixture2D(ctx, toS, { kind }, {}, null, fixtureEnv(over, geo));
+  return ctx.tape.filter(e => e.op !== 'set').map(e => {
+    const args = (e.args || []).map(a => (typeof a === 'number' ? Math.round(a * 10) / 10 : String(a)));
+    return `${e.op}(${args.join(',')})`;
+  }).join(' ');
+};
+
+suite('drawFixture2D', 'a fixture with no geometry paints nothing', R => {
+  const ctx = recordingCtx();
+  R.drawFixture2D(ctx, toS, { kind: 'sink' }, {}, null, fixtureEnv({ fixtureGeometry: () => null }));
+  expect('nothing painted', ctx.tape.length, 0);
+});
+
+suite('drawFixture2D', 'every kind paints something', R => {
+  const silent = KINDS.filter(kind => {
+    const ctx = recordingCtx();
+    R.drawFixture2D(ctx, toS, { kind }, {}, null, fixtureEnv());
+    return !painted(ctx);
+  });
+  expect('no kind draws a blank', silent.join(',') || 'none', 'none');
+});
+
+// Two groups share a branch deliberately: the four appliances are one box
+// that differs only by its letter, and a stall IS a shower. Those pairs are
+// listed rather than asserted apart -- and listed here so that if one of them
+// ever grows its own drawing, this check says so instead of quietly allowing
+// it.
+const SAME_BY_DESIGN = [['fridge', 'washer', 'dryer', 'dish'], ['shower', 'stall']];
+
+suite('drawFixture2D', 'no two kinds paint the same picture, bar the ones that share a branch', R => {
+  // The ladder's real risk: drop a branch and that kind silently collapses
+  // onto the bare carcass every kind starts from. Equal signatures is what
+  // that looks like from outside.
+  const groupOf = kind => SAME_BY_DESIGN.findIndex(g => g.includes(kind));
+  const seen = new Map();
+  const collisions = [];
+  KINDS.forEach(kind => {
+    const sig = signature(R, kind);
+    const prior = seen.get(sig);
+    // The appliances differ by letter, so their signatures differ too; only a
+    // genuinely identical drawing lands here.
+    if (prior !== undefined && !(groupOf(kind) >= 0 && groupOf(kind) === groupOf(prior))) {
+      collisions.push(`${prior}=${kind}`);
+    } else if (prior === undefined) {
+      seen.set(sig, kind);
+    }
+  });
+  expect('each kind is distinguishable', collisions.join(', ') || 'none', 'none');
+});
+
+suite('drawFixture2D', 'a stall is drawn exactly as a shower is', R => {
+  expect('the same pan, curb and drain', signature(R, 'stall'), signature(R, 'shower'));
+});
+
+suite('drawFixture2D', 'the four appliances are one box that differs only by its letter', R => {
+  const withoutLetter = kind => signature(R, kind).replace(/fillText\([^)]*\)/, 'fillText(LETTER)');
+  expect('washer matches fridge', withoutLetter('washer'), withoutLetter('fridge'));
+  expect('dryer matches fridge', withoutLetter('dryer'), withoutLetter('fridge'));
+  expect('dishwasher matches fridge', withoutLetter('dish'), withoutLetter('fridge'));
+});
+
+suite('drawFixture2D', 'the four appliances carry their own letters', R => {
+  const letterFor = kind => {
+    const ctx = recordingCtx();
+    R.drawFixture2D(ctx, toS, { kind }, {}, null, fixtureEnv());
+    return calls(ctx, 'fillText').map(a => a[0]).join('');
+  };
+  expect('a fridge', letterFor('fridge'), 'REF');
+  expect('a washer', letterFor('washer'), 'W');
+  expect('a dryer', letterFor('dryer'), 'D');
+  expect('a dishwasher', letterFor('dish'), 'DW');
+});
+
+suite('drawFixture2D', 'a preview is drawn faint', R => {
+  const ctx = recordingCtx();
+  R.drawFixture2D(ctx, toS, { kind: 'sink' }, { preview: true }, null, fixtureEnv());
+  expect('faint', sets(ctx, 'globalAlpha')[0], 0.55);
+  const solid = recordingCtx();
+  R.drawFixture2D(solid, toS, { kind: 'sink' }, {}, null, fixtureEnv());
+  expect('and a committed one is not', sets(solid, 'globalAlpha')[0], 1);
+});
+
+suite('drawFixture2D', 'the fixture wears the colour the page handed it', R => {
+  const ctx = recordingCtx();
+  R.drawFixture2D(ctx, toS, { kind: 'cabinet' }, {}, null, fixtureEnv({ FIXTURE_COLOR: '#123456' }));
+  expect('stroked in it', sets(ctx, 'strokeStyle').includes('#123456'), true);
+});
+
+suite('drawFixture2D', 'a countertop edge runs past the cabinet face, on the front side', R => {
+  const frontEdge = frontOff => {
+    const ctx = recordingCtx();
+    R.drawFixture2D(ctx, toS, { kind: 'cabinet' }, {}, null,
+      fixtureEnv({ COUNTER_OVERHANG_FT: 0.5 }, { backOff: 0, frontOff }));
+    // The counter line is the first stroked pair after the carcass rect.
+    return calls(ctx, 'lineTo').map(a => a[1]);
+  };
+  expect('a front at +2ft puts the counter beyond it', frontEdge(2).includes(300 + 25), true);
+  expect('a fixture facing the other way overhangs the other way',
+    frontEdge(-2).includes(300 - 25), true);
+});
+
+suite('drawFixture2D', 'a closet door leaves a gap with a jamb line each side', R => {
+  const ctx = recordingCtx();
+  R.drawFixture2D(ctx, toS, { kind: 'closet' }, {}, null,
+    fixtureEnv({ closetDoorFor: () => ({ widthFt: 2 }) }, { alongStart: 0, alongEnd: 4 }));
+  const withDoor = count(ctx, 'stroke');
+  const solid = recordingCtx();
+  R.drawFixture2D(solid, toS, { kind: 'closet' }, {}, null,
+    fixtureEnv({ closetDoorFor: () => null }, { alongStart: 0, alongEnd: 4 }));
+  expect('a doorless closet strokes fewer times', count(solid, 'stroke') < withDoor, true);
+});
+
+suite('drawFixture2D', 'the door follows the closet width, not the space between its side walls', R => {
+  // Movie's ruling: a run snugged into a crossing wall skips a side wall and
+  // widens the inside, and still gets the same door.
+  let askedWith = null;
+  R.drawFixture2D(recordingCtx(), toS, { kind: 'closet' }, {}, null,
+    fixtureEnv({ closetDoorFor: w => { askedWith = w; return { widthFt: 2 }; } },
+      { alongStart: 0, alongEnd: 4 }));
+  expect('asked about the full 4ft run', askedWith, 4);
+});
+
+suite('drawFixture2D', 'a side wall is skipped where the run snugs into a crossing wall', R => {
+  const hostWall = { levelId: 'L1', view: 'plan' };
+  const strokesWhenCrossing = crossing => {
+    const ctx = recordingCtx();
+    R.drawFixture2D(ctx, toS, { kind: 'closet' }, {}, null, fixtureEnv({
+      walls: [hostWall, { levelId: 'L1', view: 'plan' }],
+      wallCross: () => (crossing ? { s: 0.5, along: 0 } : null),
+    }, { wall: hostWall, alongStart: 0, alongEnd: 4 }));
+    return count(ctx, 'stroke');
+  };
+  expect('snugged, one side wall fewer is drawn', strokesWhenCrossing(true) < strokesWhenCrossing(false), true);
+});
+
+suite('drawFixture2D', 'a tub is drawn over its own run, not the fixture run', R => {
+  const ctx = recordingCtx();
+  R.drawFixture2D(ctx, toS, { kind: 'tub' }, {}, null, fixtureEnv({}, {
+    tub: true, alongStart: 0, alongEnd: 4, tubAlongStart: 1, tubAlongEnd: 6,
+  }));
+  const xs = calls(ctx, 'moveTo').map(a => a[0]).concat(calls(ctx, 'lineTo').map(a => a[0]));
+  expect('it reaches the tub end at 6ft', Math.max(...xs), 460);
+  expect('and starts at the tub start, not zero', Math.min(...xs), 410);
+});
+
 // ─── Running ──────────────────────────────────────────────────────────────
 let current = null;
 function expect(label, got, want) {
