@@ -8053,58 +8053,10 @@ class Component extends DCLogic {
   // OUTLINE / NO OUTLINE, and CORNER BULLNOSE corners. The plan overlay and
   // the STAIR workspace both feed their own screen points in.
   _drawNoteScreen2D(ctx, anchor, text, note, options = {}) {
-    const preview = options.preview === true;
-    const alpha = preview ? 0.6 : 1;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = NOTE_COLOR;
-    ctx.fillStyle = NOTE_COLOR;
-    ctx.lineWidth = 1;
-    ctx.font = "600 12px 'Barlow Condensed', system-ui, sans-serif";
-    const lines = String(note.body || '').split('\n');
-    const padX = 6, lineH = 14;
-    const boxW = Math.max(24, ...lines.map(line => ctx.measureText(line).width)) + padX * 2;
-    const boxH = lines.length * lineH + 8;
-    // The text block grows away from the anchor; the leader meets its near edge.
-    const left = text.x >= anchor.x ? text.x : text.x - boxW;
-    const top = text.y - boxH / 2;
-    const leaderX = text.x >= anchor.x ? left : left + boxW;
-    if (note.end !== 'none') {
-      if (preview) ctx.setLineDash([5, 4]);
-      ctx.beginPath();
-      ctx.moveTo(leaderX, text.y);
-      ctx.lineTo(anchor.x, anchor.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    if (note.end === 'arrow') {
-      const angle = Math.atan2(anchor.y - text.y, anchor.x - leaderX);
-      ctx.beginPath();
-      ctx.moveTo(anchor.x, anchor.y);
-      ctx.lineTo(anchor.x - 9 * Math.cos(angle - 0.3), anchor.y - 9 * Math.sin(angle - 0.3));
-      ctx.lineTo(anchor.x - 9 * Math.cos(angle + 0.3), anchor.y - 9 * Math.sin(angle + 0.3));
-      ctx.closePath();
-      ctx.fill();
-    }
-    if (note.fill || note.outline) {
-      const radius = Math.min(Math.max(0, Number(note.bullnose) || 0), boxH / 2, boxW / 2);
-      ctx.beginPath();
-      if (typeof ctx.roundRect === 'function') ctx.roundRect(left, top, boxW, boxH, radius);
-      else ctx.rect(left, top, boxW, boxH);
-      if (note.fill) {
-        ctx.save();
-        ctx.globalAlpha = alpha * Math.min(1, Math.max(0, note.fillOpacity ?? 0.85));
-        ctx.fillStyle = '#fafafa';
-        ctx.fill();
-        ctx.restore();
-      }
-      if (note.outline) ctx.stroke();
-    }
-    ctx.fillStyle = NOTE_COLOR;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    lines.forEach((line, i) => ctx.fillText(line, left + padX, top + 4 + lineH * i + lineH / 2));
-    ctx.restore();
+    window.DraftRender2D.drawNoteScreen2D(ctx, anchor, text, note, options, {
+      color: NOTE_COLOR,
+      fillColor: '#fafafa',
+    });
   }
 
   // STAIR-workspace notes and in-progress previews, drawn over the pane

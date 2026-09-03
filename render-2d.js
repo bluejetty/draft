@@ -1166,6 +1166,72 @@ if (!window.DraftRender2D) {
     ctx.stroke();
   }
 
+
+  // ─── A leader note ────────────────────────────────────────────────────────
+  // The text block, its leader to the anchor, an optional arrowhead, and an
+  // optional filled / outlined box with a bullnose radius. The block grows
+  // away from the anchor so the leader always meets its near edge.
+  //
+  // Note that anchor and text arrive in SCREEN space, not world -- the caller
+  // has already projected them, because a note on the stair workspace is
+  // placed in pane coordinates rather than on the plan. So this painter needs
+  // no toS and reads nothing from the model: two colours are its whole env.
+  // It was callable from any page all along; only its location said otherwise.
+  function drawNoteScreen2D(ctx, anchor, text, note, options = {}, env) {
+    const preview = options.preview === true;
+    const alpha = preview ? 0.6 : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = env.color;
+    ctx.fillStyle = env.color;
+    ctx.lineWidth = 1;
+    ctx.font = "600 12px 'Barlow Condensed', system-ui, sans-serif";
+    const lines = String(note.body || '').split('\n');
+    const padX = 6, lineH = 14;
+    const boxW = Math.max(24, ...lines.map(line => ctx.measureText(line).width)) + padX * 2;
+    const boxH = lines.length * lineH + 8;
+    // The text block grows away from the anchor; the leader meets its near edge.
+    const left = text.x >= anchor.x ? text.x : text.x - boxW;
+    const top = text.y - boxH / 2;
+    const leaderX = text.x >= anchor.x ? left : left + boxW;
+    if (note.end !== 'none') {
+      if (preview) ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(leaderX, text.y);
+      ctx.lineTo(anchor.x, anchor.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (note.end === 'arrow') {
+      const angle = Math.atan2(anchor.y - text.y, anchor.x - leaderX);
+      ctx.beginPath();
+      ctx.moveTo(anchor.x, anchor.y);
+      ctx.lineTo(anchor.x - 9 * Math.cos(angle - 0.3), anchor.y - 9 * Math.sin(angle - 0.3));
+      ctx.lineTo(anchor.x - 9 * Math.cos(angle + 0.3), anchor.y - 9 * Math.sin(angle + 0.3));
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (note.fill || note.outline) {
+      const radius = Math.min(Math.max(0, Number(note.bullnose) || 0), boxH / 2, boxW / 2);
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') ctx.roundRect(left, top, boxW, boxH, radius);
+      else ctx.rect(left, top, boxW, boxH);
+      if (note.fill) {
+        ctx.save();
+        ctx.globalAlpha = alpha * Math.min(1, Math.max(0, note.fillOpacity ?? 0.85));
+        ctx.fillStyle = env.fillColor;
+        ctx.fill();
+        ctx.restore();
+      }
+      if (note.outline) ctx.stroke();
+    }
+    ctx.fillStyle = env.color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    lines.forEach((line, i) => ctx.fillText(line, left + padX, top + 4 + lineH * i + lineH / 2));
+    ctx.restore();
+  }
+
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
@@ -1180,6 +1246,7 @@ if (!window.DraftRender2D) {
     drawDimension2D,
     drawOutlines2D,
     strokeSegPath2D,
+    drawNoteScreen2D,
   });
 })();
 }
