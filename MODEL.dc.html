@@ -2106,6 +2106,7 @@ const LEVEL_OWNED_COLLECTIONS = [
 const {
   formatArchitecturalInches,
   formatInchesOnly,
+  formatMetres,
   parseArchitecturalLength,
   parseAssemblyInches,
 } = window.DraftFormatters;
@@ -21152,7 +21153,7 @@ class Component extends DCLogic {
   _ftIn(feet) {
     return formatArchitecturalInches(feet * 12);
   }
-  _metric(feet) { return (feet * 0.3048).toFixed(3) + ' m'; }
+  _metric(feet) { return formatMetres(feet); }
   _elevLabel(elev) {
     const sign = elev > 0 && !this.state.elevationDatum ? '+' : '';
     return sign + (this.state.units !== 'metric' ? this._ftIn(elev) : this._metric(elev));
