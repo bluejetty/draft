@@ -69,19 +69,89 @@ when the wall moves. It looks like it is pinned to a point; it is not.
 > Movie's ruling: **node for lines, object placement for objects.** Say
 > "object" or "object placement" and never "the toilet's node".
 
+### FLOOR
+
+**Not a level and not a storey** — see the ruling under LEVEL / STOREY below.
+What is left is four things, and they collide inside single expressions:
+
+| what it is | in code | say |
+|---|---|---|
+| the assembly you stand on: joists, sheathing, finish | `assembly`, `DEFAULT_FLOOR_ASSEMBLY` (8 uses) | **floor assembly** |
+| framed-vs-concrete, as the drafter's choice | `floorStructure` (11 uses) | **floor structure** |
+| framed-vs-concrete, as one item's own fact | `structure: 'floor' \| 'slab'` (6 uses) | **framed floor** / **slab** |
+| a drawn floor outline, the item | `floors[]`, `drawFloor2D` | **floor outline**, or **slab** where it is concrete |
+| the FLOOR LAYOUT (FLOOR) layer set | `view: 'floor'` | **the FLOOR layer set** |
+
+**This collision has already cost a bug.** The tier-2a view filter read
+`(floor.view || 'plan')` where the old page reads `(floor.view || 'floor')`.
+The correct expression has three unrelated FLOORs in it: an item of type
+floor, a field named `view`, and the value `'floor'` naming a layer set. Nobody
+reviewing that line saw the wrong default, twice, including the spec written
+longhand to catch exactly that.
+
 ### LEVEL / STOREY / FLOOR
 
 - **level** — the app's stack of drawable planes, each with an `elev`. Includes
   things that are not storeys at all: FOUNDATION, BASEMENT, ROOF. `levels`,
-  `levelId`, `_floorLevels()`.
-- **storey** — a habitable floor of the house, as a *count*. What Gruff asks
+  `levelId`.
+- **storey** — a habitable level of the house, as a *count*. What Gruff asks
   for and the generator builds to. `storeys: 2`.
-- **floor** — the surface you stand on, or loosely a storey in conversation.
 
 Two storeys is not two levels. A two-storey house has a foundation, a
-basement, two floor levels and a roof.
+basement, two habitable levels and a roof.
 
-**Prefer "level" in code and "storey" in anything a client reads.**
+**Use "level" in code and "storey" in anything a client reads.**
+
+> **Movie's ruling, 3 Sep: never use FLOOR to mean a level or a storey.**
+> FLOOR is taken — it is the floor *structure*, the thing you stand on and its
+> build-up. See FLOOR below. This entry previously allowed "floor — loosely a
+> storey in conversation"; that is withdrawn.
+
+**The code does not obey this yet.** `_floorLevels()` is the exact deprecated
+usage and has 22 call sites; the level names `MAIN FL` and `2ND FL` are FLOOR
+as a storey in the UI a client sees. Neither is renamed here — the level names
+are in every saved drawing — but they are debt, not precedent. New code says
+level.
+
+### LAYER / LAYER SET / LEVEL
+
+**Three tiers, not two.** Nesting outward to inward:
+
+- **level** — a storey-or-not plane of the building. SITE, ROOF, 2ND FL,
+  MAIN FL, FOUNDATION; ids 8, 7, 5, 3, 1. See LEVEL / STOREY / FLOOR above.
+  Carried on every item as `levelId`.
+- **layer set** — a named working context *within one level*. On MAIN FL:
+  ELECTRIC, FLOOR PLAN (WALLS), FLOOR LAYOUT (FLOOR), STAIR. FOUNDATION has
+  its own three: ELECTRIC, BASEMENT (WALLS), FOUNDATION. Carried on every item
+  as **`view`**, and listed by `layerViewsForLevelId(levelId)`.
+- **layer** — the CAD layer a single item sits on. `A-WALL-EXT`, `A-FL`,
+  `S-SLAB`, `E-POWER`, `PLAN DIMENSION`. A layer set's `contents` is a *list of
+  these*.
+
+So a layer set is a named selection of layers, scoped to a level. "The floor is
+on FOUNDATION" is ambiguous on its own — FOUNDATION is both a level (id 1) and
+a layer set (on level 1). Name which.
+
+**`view` in code means LAYER SET.** It is the worst-named field in the drawing
+format: nothing about it is a view, a camera or a viewport. `item.view ===
+'plan'` reads as "this is the plan view" and means "this belongs to the FLOOR
+PLAN (WALLS) layer set of its level". Say **layer set** in prose and read
+`view` as its storage name. Renaming the field would break every saved
+drawing, so the name stays and this entry exists instead.
+
+**The fallback differs by item type.** Floors default to the `floor` layer set;
+every other item type defaults to `plan`. Tier 2a of MODEL.html defaulted
+everything to `plan` and no fixture could catch it, because the old page always
+writes the field explicitly.
+
+**A layer set's `contents` does not decide what gets drawn.** Membership is
+`item.view` alone. The `contents` list names layers for the layer panel — and
+most of those names appear nowhere else in the app: `A-FL` and `A-WALL-EXT`
+have zero references in MODEL.dc.html. `layersFor()` is exported by
+`layer-views.js` and called by nothing. So reasoning like "the plan set lists
+`A-FL`, therefore floors show on the plan set" is invalid twice over: the
+contents list is not a filter, and nothing is assigned to `A-FL` in the first
+place.
 
 ---
 

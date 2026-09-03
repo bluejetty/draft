@@ -194,11 +194,22 @@ about the module.** The thing that caught this was reading MODEL.dc.html's
 ### What `floors 0/3` on the default view means
 
 Correct, and chased as a bug before that was established. MAIN FL's slab lives
-on the FLOOR layer set, so the plan view shows none of it — the same answer
-`_activeFloors` gives. The `plan` view's contents list does include `A-FL`,
-which is what made it look wrong; that covers deck and flooring shapes on
-`A-FL-DECK` / `A-FL-FLOORING`, not floor outlines, which sit on `S-SLAB` and
-`A-FL-OPNG` in the FLOOR set.
+on the FLOOR layer set, so the FLOOR PLAN (WALLS) set shows none of it — the
+same answer `_activeFloors` gives.
+
+What made it look wrong was that the `plan` layer set's `contents` lists
+`A-FL`. **That reasoning is invalid, and the first version of this document got
+it wrong twice over.** `contents` is not a filter: drawing membership is
+`item.view` alone, and `contents` names layers for the layer panel. And nothing
+is assigned to `A-FL` anyway — the string has zero references in MODEL.dc.html,
+as does `A-WALL-EXT`; `layersFor()` is exported by `layer-views.js` and called
+by nothing. The correct statement is that the contents list has no bearing on
+what any painter draws. See DEFINITIONS.md, LAYER / LAYER SET / LEVEL.
+
+The conclusion held only because it came from reading `_activeFloors` directly.
+The explanation attached to it was reconstructed afterwards and was wrong — a
+right answer with an invented reason behind it, which is worse than it looks,
+because the reason is what the next person reuses.
 
 `_courtesyFloorIds` — MODEL.dc.html's rule for showing a floor outside its
 home view — is deliberately **not** implemented here. A courtesy floor is one
