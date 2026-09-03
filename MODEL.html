@@ -278,9 +278,21 @@
   };
 
   const paintWalls = () => {
+    // Lazy, so a load-order change cannot bind these to undefined at parse
+    // time -- but LOUD, not guarded. An earlier version returned quietly when
+    // a module was missing, which turns a broken page into an empty drawing:
+    // no error, no warning, and a test asserting "nothing was drawn" passes
+    // while the drafter's walls silently vanish. Gilligan's call, 3 Sep, and
+    // it is the same shape as everything that cost this repo a night --
+    // _stairAutoFit giving up silently, the vertex magnet merging corners
+    // silently. A painter that cannot paint must say so.
     const WT = window.DraftWallTypes;
     const R = window.DraftRender2D;
-    if (!WT || !R) return;
+    const missing = [!WT && 'wall-types.js', !R && 'render-2d.js'].filter(Boolean);
+    if (missing.length) {
+      throw new Error(`MODEL.html: cannot paint walls, ${missing.join(' and ')} `
+        + 'did not load. Check the script order in the page head.');
+    }
     // joins is optional in drawWallSeg2D — null gives capped ends instead of
     // mitred corners. Mitring needs MODEL's _wallJoins(), which is tier 2.
     walls().forEach(wall => {
@@ -295,7 +307,19 @@
     ctx.clearRect(0, 0, cssW, cssH);
     ctx.fillStyle = skin['surface-page'];
     ctx.fillRect(0, 0, cssW, cssH);
-    if (drawing) { paintGrid(); paintFloors(); paintLines(); paintWalls(); }
+    try {
+      if (drawing) { paintGrid(); paintFloors(); paintLines(); paintWalls(); }
+    } catch (err) {
+      // The throw above is only useful if someone SEES it. paint() runs on
+      // every pan, zoom and resize, so an uncaught error here would be a
+      // console full of noise behind a blank page; this puts it on screen
+      // once, in the same notice the store errors use.
+      ctx.restore();
+      readout.textContent = 'painter failed';
+      say('The drawing could not be painted',
+        `<p><code>${String(err && err.message || err)}</code></p>`);
+      throw err;
+    }
     ctx.restore();
     updateReadout();
   };
