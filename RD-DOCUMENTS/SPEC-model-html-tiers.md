@@ -236,3 +236,102 @@ the garage branch (pour note, dashed thickened-edge ring), floor openings cut
 even-odd as holes, `preview`, and `selected`. All four env keys those need are
 supplied anyway — an interface satisfied for the fixture is not an interface
 satisfied, which is the tier-2b lesson — but nothing exercises them here.
+
+## Tier 2d — the grid, and what a datum is (3 Sep)
+
+`paintGrid` now calls `drawGrid2D`. Tier 1's version drew a grid ALWAYS,
+aligned to world 0,0. That was a divergence from the product, and it took
+three separate measurements to establish rather than to assume.
+
+### The datum is the drafter's zero
+
+MODEL.dc.html sets `state.drawingOrigin` from the drafter's **first click**
+(MODEL.dc.html:10360). Movie, 3 Sep: *"that way he always first clicks on
+0,0."* The grid is anchored there, and with no datum `drawGrid2D` returns
+before drawing anything.
+
+That is deliberate and already had a test — on the old page:
+`registration-grid.spec.js`, *"an untouched model space draws no grid, and the
+first node sets the datum"*.
+
+**The generated house has no datum.** It is never clicked into place, so it
+saves `drawingOrigin: null` and correctly gets no grid. Verified by pixels
+before it was believed: the old page's plan canvas measures 29.68% ink and
+0.00% grid grey, and the same detector finds grid grey on the sheet
+thumbnails, which use `_drawPlanThumb2D`. So the zero is a real absence, not a
+broken colour match.
+
+### ABSENT and NULL again
+
+The third time this shape has appeared, after the floors `view` fallback.
+MODEL.dc.html:5160:
+
+```js
+drawingOrigin: 'drawingOrigin' in saved
+  ? normaliseDrawingOrigin(saved.drawingOrigin)
+  : { x: 0, z: 0 }
+```
+
+Absent = a drawing made before the datum existed. It was drawn on the world
+grid, so `0,0` leaves every coordinate where it is. Explicit `null` = "no
+origin yet", which is where NEW starts. `drawing.drawingOrigin || null`
+collapses them and strips the grid from every pre-datum drawing — and no
+fixture can catch it, because the old page always writes the key now. The spec
+builds that drawing by deleting the key.
+
+### The readout says which
+
+`datum 4.00,-7.00` · `datum 0.00,0.00 (world, back-filled)` · `datum none — no
+grid`. An absent grid should read as a fact about the drawing rather than a
+broken page. Movie, 3 Sep: *"i like all that info down in the left corner keep
+adding to it and don't delete."*
+
+### Three grid weights, so three palette roles
+
+`drawGrid2D` draws 1ft fine, 10ft major and 100ft coarse; the palette had two.
+`draw-grid-coarse` makes sixteen roles. The harness asserts the three **read**
+as three, in order — checking each against the ground separately would pass
+with all three identical. Measured 1.13 < 1.40 < 1.84 night, 1.17 < 1.42 <
+1.88 day.
+
+### The assertion took three attempts, and the failures are the lesson
+
+The skins spec asserted *"the grid should be visible but quiet"* — `faint >
+50,000`. With the grid correctly gone it measures 28. **That assertion was
+pinning a divergence I had introduced**, which is what a test written against
+your own output does when the output is wrong.
+
+Two replacements failed before one worked:
+
+1. **`faint` as a ratio.** Rejected: it differs EIGHT-FOLD between skins —
+   0.00143 night against 0.01109 day — because dark ink anti-aliasing onto a
+   light ground leaves far more intermediate pixels than the reverse. No
+   threshold has a wide answer between those. The attempt picked 0.01, which
+   sits between them.
+2. **Counting grid-grey pixels.** Rejected: night ink anti-aliasing onto the
+   night ground passes THROUGH the grid greys, so the no-grid render scored
+   1 px in one house and 306 in another. A colour count cannot tell a
+   manufactured grey from a painted one.
+
+What landed is a **ratio against the same scene**: measure the page, add a
+datum, measure again — 6,418 against 1–306, so 21x at worst and 6,000x at
+best. Same walls, same fit, same anti-aliasing on both sides of the
+comparison, so the noise cancels instead of having to be thresholded.
+
+> The general form, now three times over in this file: **when an absolute
+> measurement has no wide answer, measure the same thing twice and compare.**
+> A control is cheaper than a constant, and it does not rot.
+
+### Where the extraction actually stands
+
+Measured 3 Sep by brace-matching every painter-shaped method in
+MODEL.dc.html and checking whether its body delegates:
+
+| | count | |
+|---|---|---|
+| delegated to `render-2d.js` | 14 | wrappers of 4–33 lines |
+| still carrying their own body | **17** | **1,080 lines** |
+
+The moved half is the leaves. What remains holds `_drawCuts2D` (246 lines),
+`_drawStairSectionPane` (163), `_drawStructure2D` (135),
+`_drawStairPlanPane` (119) and `_drawTourRoof2D` (98).
