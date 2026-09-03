@@ -217,6 +217,105 @@ if (!window.DraftDrawingFormat) {
     if (type == null) return null;
     return { type, thicknessIn: positive(raw?.thicknessIn, 3 / 8) };
   };
+  // ── walls, lines and floors ────────────────────────────────────────────────
+  // The three types MODEL.dc.html has always inflated inline (5241, 5255,
+  // 5270). Their FIELD RULES live here so a second page can reuse them; the
+  // vertex pooling and the stored-id assignment stay in MODEL, because a
+  // pooled vertex is MODEL's own identity mechanism and a reader does not want
+  // one. That is the seam: this module decides whether a wall is WELL FORMED,
+  // MODEL decides what it is CONNECTED TO.
+  //
+  // Every table these rules consult is passed in rather than read off `window`.
+  // Reading `window.DraftWallTypes` here would put a load-order dependency into
+  // the module that every page loads first -- the trap Finding 3 of the module
+  // review gate counted thirteen times.
+
+  // A segment is not geometry unless it has two valid ends, a level, and
+  // LENGTH. A zero-length segment has no direction, so it cannot be drawn,
+  // dimensioned, offset or joined, and it sits invisible in the drawing
+  // catching selections. MODEL rejects it on load; so does this.
+  // `levelIds` is a SET throughout this module -- levelId() calls .has() on it.
+  // Passing an array silently throws at the first item rather than returning
+  // nothing, which is at least loud.
+  const segmentCore = (raw, levelIds) => {
+    const start = point(raw?.start);
+    const end = point(raw?.end);
+    const segLevelId = levelId(raw?.levelId, levelIds);
+    if (!start || !end || segLevelId == null) return null;
+    if (Math.hypot(end.x - start.x, end.z - start.z) < 1e-6) return null;
+    return { start, end, levelId: segLevelId };
+  };
+
+  const LINE_VIEWS = ['plan', 'floor', 'e-power', 'foundation'];
+
+  const lines = (rawLines, levelIds, env = {}) => {
+    const knownLayers = env.knownLayerIds || new Set();
+    return (Array.isArray(rawLines) ? rawLines : []).map(line => {
+      const core = segmentCore(line, levelIds);
+      if (!core) return null;
+      const view = LINE_VIEWS.includes(line?.view) ? line.view : 'plan';
+      return {
+        id: String(line?.id || '').trim(),
+        ...core,
+        view,
+        // A known layer name survives the round trip; the e-power view still
+        // names its own lines; anything unknown falls to draft.
+        layer: knownLayers.has(line?.layer) ? line.layer
+          : (view === 'e-power' ? 'E-POWER' : 'draft'),
+        bulge: Number.isFinite(Number(line?.bulge)) ? Number(line.bulge) : 0,
+      };
+    }).filter(Boolean);
+  };
+
+  const walls = (rawWalls, levelIds, env = {}) => {
+    const types = env.wallTypes || [];
+    const legacy = env.legacyWallTypes || {};
+    const refLines = env.refLines || ['left', 'centre', 'right'];
+    const defaultType = env.defaultWallType || 'stud_2x6';
+    const defaultTop = env.defaultWallTopFt;
+    return (Array.isArray(rawWalls) ? rawWalls : []).map(wall => {
+      const core = segmentCore(wall, levelIds);
+      if (!core) return null;
+      return {
+        id: String(wall?.id || '').trim(),
+        ...core,
+        view: wall?.view === 'foundation' ? 'foundation' : 'plan',
+        ...(wall?.body === 'garage' ? { body: 'garage' } : {}),
+        wallType: types.some(type => type.id === wall?.wallType) ? wall.wallType
+          : (legacy[wall?.wallType] || defaultType),
+        baseHeight: number(wall?.baseHeight, 0),
+        topHeight: number(wall?.topHeight, defaultTop),
+        refLine: oneOf(wall?.refLine, refLines, 'left'),
+        // #275: grown interior walls stay auto until the drafter touches them
+        // -- regeneration replaces only still-tagged walls.
+        ...(wall?.auto === true ? { auto: true } : {}),
+      };
+    }).filter(Boolean);
+  };
+
+  const floors = (rawFloors, levelIds, env = {}) => (Array.isArray(rawFloors) ? rawFloors : [])
+    .map(floor => {
+      const floorLevelId = levelId(floor?.levelId, levelIds);
+      const points = (Array.isArray(floor?.points) ? floor.points : []).map(point).filter(Boolean);
+      if (floorLevelId == null || points.length < 3) return null;
+      return {
+        id: String(floor?.id || '').trim(),
+        points,
+        levelId: floorLevelId,
+        // THE FALLBACK IS 'floor', NOT 'plan'. A floor outline's home layer set
+        // is FLOOR, or FOUNDATION where it is a slab; it was never a plan-set
+        // item. MODEL.html got this wrong in tier 2a and no fixture could catch
+        // it, because the old page always writes the field explicitly.
+        view: floor?.view === 'foundation' ? 'foundation' : 'floor',
+        structure: floor?.structure === 'slab' ? 'slab' : 'floor',
+        garage: floor?.garage === true,
+        slopeInPerFt: Number(floor?.slopeInPerFt) || 0,
+        thickness: positive(floor?.thickness, env.defaultFloorThickness),
+        thickenedEdge: floor?.thickenedEdge === true,
+        assembly: { ...(env.defaultFloorAssembly || {}), ...(floor?.assembly || {}) },
+      };
+    }).filter(Boolean);
+
   const shapes = (rawShapes, levelIds) => (Array.isArray(rawShapes) ? rawShapes : [])
     .map(shape => {
       const shapeLevelId = levelId(shape?.levelId, levelIds);
@@ -975,6 +1074,9 @@ if (!window.DraftDrawingFormat) {
     surfaceOpenings,
     shapes,
     roofs,
+    walls,
+    lines,
+    floors,
     boneyardShelves,
     boneyardOutlines,
     outlines,
