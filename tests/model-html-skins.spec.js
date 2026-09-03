@@ -13,6 +13,16 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// What SHOULD be on screen, worked out here rather than by calling the module
+// the page calls. If this asked layer-views.js the same question MODEL.html
+// asks it, a wrong answer would agree with itself and pass. So the rule is
+// written out: MAIN FL is level id 3, its default layer view is the walls
+// plan, and an item with no `view` is a plan item.
+const MAIN_FL = 3;
+const onMainPlan = item => Number(item.levelId) === MAIN_FL
+  && (item.view || 'plan') === 'plan';
+
+
 // The ground the skin says it painted, read off the element palette.js wrote
 // it to. Also a check that apply() ran at all.
 async function ground(page) {
@@ -65,7 +75,8 @@ test.describe('MODEL.html skins', () => {
         const saved = await houseOnOldPage(page);
         await page.goto(`/MODEL.html?theme=${theme}&mode=${mode}`);
         await expect(page.locator('#readout')).toContainText('walls', { timeout: 5000 });
-        await expect(page.locator('#readout')).toContainText(`walls ${saved.walls.length}`);
+        await expect(page.locator('#readout'))
+          .toContainText(`walls ${saved.walls.filter(onMainPlan).length}`);
 
         // The page says which skin it is wearing.
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);

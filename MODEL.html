@@ -111,6 +111,7 @@
 <div id="notice"><div id="notice-body"></div></div>
 
 <script src="./palette.js"></script>
+<script src="./layer-views.js"></script>
 <script src="./shared-file-store.js"></script>
 <script src="./wall-types.js"></script>
 <script src="./drawing-format.js"></script>
@@ -191,10 +192,56 @@
     z: (sy - cssH / 2) / view.scale + view.cz,
   });
 
+  // ── which level, and which drawing OF that level ──────────────────────────
+  // Tier 1 painted all five levels at once, stacked. A drafter looks at one
+  // level at a time, so this picks one -- and picking one is not
+  // `levelId === active`, because a level is not one drawing. MAIN FL has a
+  // walls plan, a floor layout, a stair drawing and an electrical plan;
+  // FOUNDATION has basement walls and the concrete below them. That table is
+  // layer-views.js, already shared with LAYOUT, so this reads it rather than
+  // restating it.
+  //
+  // MAIN_FLOOR is an ID (3), not an index. MODEL.dc.html's own
+  // state.activeLevelIdx is an INDEX into DEFAULT_LEVELS, and for the default
+  // list index 3 also happens to be id 3 -- they stop agreeing the moment a
+  // level is inserted. See RD-DOCUMENTS/SPEC-model-html-tiers.md.
+  const MAIN_FLOOR_LEVEL_ID = 3;
+  const levelIds = () => (drawing?.levels || []).map(level => Number(level.id));
+  const activeLevelId = () => {
+    const asked = Number(params.get('level'));
+    if (Number.isFinite(asked) && levelIds().includes(asked)) return asked;
+    if (params.get('level') !== null && drawing) {
+      console.warn(`MODEL: unknown level "${params.get('level')}"; using MAIN FL. `
+        + `Known: ${levelIds().join(', ')}`);
+    }
+    return levelIds().includes(MAIN_FLOOR_LEVEL_ID) ? MAIN_FLOOR_LEVEL_ID : levelIds()[0];
+  };
+
   // ── what is on the page ───────────────────────────────────────────────────
-  const walls = () => drawing?.walls || [];
-  const lines = () => drawing?.lines || [];
-  const floors = () => drawing?.floors || [];
+  // FIVE RULES, NOT ONE, measured from MODEL.dc.html:6505-6513:
+  //   walls / lines / floors  filter by level AND view
+  //   roofs / outlines        filter by level ONLY -- no view filter at all
+  //   and the view filter switches ITSELF OFF on a level that has no layer
+  //   views (ROOF, SITE), which show everything they hold.
+  //
+  // The trap in the third rule: floors default to view 'floor', not 'plan'
+  // (MODEL.dc.html:2905). Writing `view === 'plan'` hides every floor in the
+  // drawing and reads exactly like a broken painter.
+  const onActiveLevel = () => {
+    const LV = window.DraftLayerViews;
+    const levelId = activeLevelId();
+    const views = LV.layerViewsForLevelId(levelId);
+    const viewId = LV.defaultLayerViewId(levelId);
+    const onPlan = item => !views.length || (item.view || 'plan') === viewId;
+    const byLevel = item => Number(item.levelId) === levelId;
+    return { levelId, viewId, onPlan, byLevel };
+  };
+  const walls = () => (drawing?.walls || [])
+    .filter(w => { const f = onActiveLevel(); return f.byLevel(w) && f.onPlan(w); });
+  const lines = () => (drawing?.lines || [])
+    .filter(l => { const f = onActiveLevel(); return f.byLevel(l) && f.onPlan(l); });
+  const floors = () => (drawing?.floors || [])
+    .filter(x => { const f = onActiveLevel(); return f.byLevel(x) && f.onPlan(x); });
 
   // Every point that defines the drawing's extent, for fit-to-content.
   const allPoints = () => {
@@ -324,12 +371,16 @@
     updateReadout();
   };
 
+  const levelName = () => (drawing?.levels || [])
+    .find(level => Number(level.id) === activeLevelId())?.name || 'level';
+
   const updateReadout = () => {
     if (!drawing) return;
     readout.innerHTML =
       `walls <b>${walls().length}</b>   lines <b>${lines().length}</b>   `
       + `floors <b>${floors().length}</b>\n`
-      + `levels <b>${(drawing.levels || []).length}</b>   `
+      + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
+      + `${onActiveLevel().viewId || 'all'}   `
       + `scale <b>${view.scale.toFixed(2)}</b> px/ft`;
   };
 
