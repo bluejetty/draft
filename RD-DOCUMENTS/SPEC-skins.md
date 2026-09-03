@@ -205,7 +205,44 @@ possibility now" turns into a week.
 
 ---
 
-## 8 · What is deliberately not decided here
+## 8 · Movie's brand direction, 3 Sep — recorded, not built
+
+Given in conversation while looking at tier 1 on the live site. **No code
+implements any of this yet**, by Movie's own call: *"I'll leave that stuff for
+later, but make sure we can change it around easy."*
+
+- **RUFF DRAFTER — red and white.**
+- **ROUGH DRAFTER — blue and light grey.**
+- **Gold on the length numbers**, and only there. *"They draw the eye nicely...
+  but not anything else."* So the gold is a **functional** role, not a brand
+  one — it means *this value is live*, and it does not change when the logo
+  does.
+
+Two measurements taken at the same time, because both constrain what can
+actually be picked later.
+
+**No single red clears WCAG AA on both grounds.** Contrast against the night
+and day page colours:
+
+| | on `#1d1f20` | on `#f2f2f3` |
+| --- | --- | --- |
+| `#c0392b` (already in the repo) | **3.04** | 4.86 |
+| `#ef5350` | 4.75 | **3.12** |
+
+That is arithmetic, not a bad palette: a mid-luminance colour cannot contrast
+strongly with both black and white. **A brand colour is therefore a PAIR — a
+lighter red on night, a deeper red on day** — which is what `THEME_OVERRIDES`
+being keyed by mode already allows. Blue behaves the same way.
+
+**And gold is a dark-ground colour.** `#f0b429` measures **8.88 on night** —
+which is why it looks as good as it does on screen — and **1.67 on day**, which
+is illegible. To survive into the day skin it has to deepen to roughly
+`#8a6207` (4.90), still recognisably gold but closer to bronze. Movie, seeing
+the numbers: *"you're right, it's no good on white."*
+
+---
+
+## 9 · What is deliberately not decided here
 
 - The actual colours of any of the four skins.
 - The logos and wordmarks.
@@ -213,5 +250,15 @@ possibility now" turns into a week.
 - Whether the setting is per-device or travels in the profile package.
 - Whether day or night is the default.
 
-All five are design decisions, and none of them changes the structure above.
-That is the test of whether this note did its job.
+All of them are design decisions, and none changes the structure above. That is
+the test of whether this note did its job.
+
+**How a colour actually gets changed**, so that "easy" is a procedure rather
+than a promise:
+
+1. Edit the value in `BASE` or `THEME_OVERRIDES` in `palette.js`. Nowhere else.
+2. Run `node proto/palette-harness.js`. It reports in about a second whether
+   the new value is still legible on the ground it sits on.
+3. Done. The stylesheet and the canvas painters both read that one table, so
+   the chrome and the drawing move together and neither can drift from the
+   other.
