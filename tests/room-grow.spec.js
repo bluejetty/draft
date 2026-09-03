@@ -11,6 +11,12 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// THE TOUR IS PARKED for drafters (Movie, 2 Sep) but this file drives it:
+// its setup helpers climb FOUNDATION -> MAIN -> rooms through the popup ladder,
+// so every test here turns the escort back on. The code is switched off, not
+// deleted, and a parked feature with no coverage is one flag from shipping with
+// nothing watching it.
+
 async function traceHouse(page, w, d) {
   await page.locator('[data-select-house]').click();
   await page.keyboard.press('Enter');
@@ -54,7 +60,7 @@ const names = saved => saved.roomTags.map(tag => tag.name).sort();
 const grownWalls = saved => saved.walls.filter(wall => wall.auto && wall.wallType === 'stud_2x4');
 
 test('stamps project dashed boundary claims — preview only, nothing saved until the bone', async ({ page }) => {
-  await h.openModel(page, { roomGrow: true });
+  await h.openModel(page, { tourEscort: true, roomGrow: true });
   await reachRoomsMain(page, 24, 18);
   await stamp(page, 'KITCHEN', -7, -5);
   await stamp(page, 'BEDROOM', 7, 5);
@@ -75,7 +81,7 @@ test('stamps project dashed boundary claims — preview only, nothing saved unti
 });
 
 test('the bone grows 2x4 interior walls from the stamp program and the rooms clear their minimums', async ({ page }) => {
-  await h.openModel(page, { roomGrow: true });
+  await h.openModel(page, { tourEscort: true, roomGrow: true });
   // 28x22: room for the four-stamp program at minimums beside the stair
   // well — a 26x20 genuinely cannot hold it, and the shrink-then-flag
   // path is the offline harness's case 7.
@@ -101,7 +107,7 @@ test('the bone grows 2x4 interior walls from the stamp program and the rooms cle
 });
 
 test('BEDROOM 1 demotes by rename and another room promotes — one primary at any instant', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachRoomsMain(page, 24, 18);
   await stamp(page, 'BEDROOM 1', -6, 0);
   await stamp(page, 'BEDROOM', 3, 0);
@@ -142,7 +148,7 @@ test('BEDROOM 1 demotes by rename and another room promotes — one primary at a
 });
 
 test('BEDROOM and WC ladders run house-wide — the 2ND floor continues, never restarts', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachRoomsMain(page, 24, 18);
   await stamp(page, 'BEDROOM 1', -6, 0);
   await stamp(page, 'BEDROOM', 0, 0);
@@ -168,7 +174,7 @@ test('BEDROOM and WC ladders run house-wide — the 2ND floor continues, never r
 });
 
 test('the WC number belongs to the room — fixtures never enter the stored name', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await reachRoomsMain(page, 24, 18);
   // An enclosed room with a toilet: detection names it WC 1.
   const wall = async (x1, z1, x2, z2) => {
@@ -230,7 +236,7 @@ async function traceLHouse(page) {
 }
 
 test('an L-shaped house grows nothing into the notch (board #290)', async ({ page }) => {
-  await h.openModel(page, { roomGrow: true });
+  await h.openModel(page, { tourEscort: true, roomGrow: true });
   await traceLHouse(page);
   await page.locator('[data-tour-popup]').click();       // FOUNDATION DONE → MAIN
   await placeStairs(page, -6, -3);                        // clear of the notch

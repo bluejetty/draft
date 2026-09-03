@@ -15,6 +15,12 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// THE TOUR IS PARKED for drafters (Movie, 2 Sep) but this file drives it:
+// its setup helpers climb FOUNDATION -> MAIN -> rooms through the popup ladder,
+// so every test here turns the escort back on. The code is switched off, not
+// deleted, and a parked feature with no coverage is one flag from shipping with
+// nothing watching it.
+
 test.use({ hasTouch: true });
 
 async function tapWorld(page, x, z) {
@@ -28,7 +34,7 @@ function levelRow(page, name) {
 }
 
 test('the tool rail, the level cards and the layer views all answer a tap', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
 
   // The rails come out by tap (they start tucked behind their pull tabs).
   await expect(page.locator('[data-model-left]')).toBeVisible();
@@ -50,7 +56,7 @@ test('the tool rail, the level cards and the layer views all answer a tap', asyn
 });
 
 test('a finger can run the tour: trace, climb, and stamp rooms', async ({ page }) => {
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await page.locator('[data-select-house]').tap();
   await page.keyboard.press('Enter'); // past PROFESSOR GRUFF
   for (const [x, z] of [[-14, -12], [14, -12], [14, 12], [-14, 12]]) await tapWorld(page, x, z);
@@ -75,7 +81,7 @@ test('a double tap ends a wall chain, so a finger needs no keyboard to draw one'
   // this suite pressing Enter to finish a chain is doing something a drafter
   // at the counter cannot do. The chain's other ending is a double click —
   // and two quick taps are what the browser turns into one.
-  await h.openModel(page);
+  await h.openModel(page, { tourEscort: true });
   await h.selectTool(page, 'Wall');
   await tapWorld(page, -6, -4);
   await tapWorld(page, 6, -4);
