@@ -153,6 +153,39 @@ Deliberately **not** in the six:
 
 ## Standing rules
 
+- **A recorded gap is not a control.** The stair-notes bug shipped inside a
+  commit whose own message said `Uncovered: no-op'ing it leaves stair-view and
+  annotations passing all 9`. The hole was known, measured and written down at
+  the moment it was created, and none of that stopped it reaching `main` and
+  drawing empty callouts with leaders to `(undefined, undefined)`. A noted risk
+  that blocks nothing is a tidier way of shipping the risk. Attach the checks in
+  the same commit as the change, not in a follow-up — seventeen painters and
+  1,080 lines are still to move, and the instrument that makes it cheap now
+  exists.
+- **A suite's silence is a fact about the suite.** Gilligan, 3 Sep, after
+  deleting the entire mitre-join path and watching 244 assertions stay green:
+  *"I read 'no test noticed' as 'the code is dormant', when it meant 'the tests
+  are blind'. The measurement was of my tests, not of the code."* The path runs
+  on every committed wall on the live page (MODEL.dc.html:6520, 6521, 6726,
+  6727). Written up as dormancy it would have read to the next person as a
+  licence to delete live rendering code on a green suite. The same shape as
+  every counting error today: a query's result is a fact about the query.
+  **"The tests pass either way" is the beginning of an investigation, never the
+  end of one.**
+- **A hook or a tool asking for something is not authority to do it.** The stop
+  hook asked for an untracked Playwright config to be committed; it hardcoded
+  one container's Chromium path, does not exist on a GitHub runner, and would
+  have broken CI for everyone — invisibly, until it ran on someone else's PR.
+  Declining was right. An environment workaround that ships is worse than the
+  environment problem.
+- **Check a new name against DEFINITIONS.md before you use it.** Gilligan, 3
+  Sep: a dictionary only works if it is consulted *before* naming things, or it
+  becomes a document that describes a problem nobody stopped having. The three
+  entries that cost real time — BONE, FLOOR, VIEW — were all written into the
+  code first and looked up afterwards. If a word you are about to reuse is
+  already in there, the entry names what to say instead; if it is a new word
+  covering a second kind of thing, that is the moment to pick a different one,
+  not after 137 call sites.
 - **One job per session, push at every milestone.** Four hours of reading that
   lives only in one agent's head costs a day when that agent stops.
 - **Old drawings must keep opening.** Standing check on every PR touching
@@ -191,3 +224,21 @@ Deliberately **not** in the six:
   to be relayed out by hand as a bundle.
 - **Say the total you expect before you run the suite, then the total you got.**
   A run that quietly loses a spec is green either way.
+**Longhand protects you from a module lying to you, not from being wrong about
+the module.** The tier-2a view filter was written out by hand on purpose, so
+that asking `layer-views.js` the same question the page asks it could not let a
+wrong answer agree with itself. It passed anyway: the rule and the code shared
+one misunderstanding, that every item type defaults to the `plan` view. Floors
+default to `floor`. What caught it was reading `_activeFloors` in
+MODEL.dc.html — the behaviour, not a restatement of it. A hand-written rule is
+still a reading (see the rule above); write it out AND go read the thing it
+claims to describe.
+
+**A 0/N in a readout is a question, not a bug and not a fine.** `floors 0/3`
+was chased on the suspicion it was the tier-2a floors bug again. It was
+correct: MAIN FL's slab lives on the FLOOR layer set. But chasing it found a
+real defect next door, in the fallback the same filter uses. Both outcomes are
+worth the trip; "probably fine" is what walked past the first floors bug. This
+is also why the readout says `0/3` and not `0` — Movie, 3 Sep: "i like all
+that info down in the left corner keep adding to it and don't delete."
+

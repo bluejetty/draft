@@ -38,8 +38,14 @@ if (!window.DraftPalette) {
     // Drawing -- what the painters put on the canvas
     'draw-grid-minor',
     'draw-grid-major',
+    'draw-grid-coarse',  // the 100ft lines drawGrid2D draws when zoomed OUT,
+                         // where the 1ft layer is off. Three weights, not two:
+                         // fine 1ft / major 10ft / coarse 100ft.
     'draw-line',        // sketch lines: the drafter's own construction ink
     'draw-floor',       // floor polygons, a wash rather than a fill
+    'draw-floor-edge',  // the slab outline and its corner handles, drawn ON
+                        // TOP of that wash -- so the wash, not the page, is
+                        // the ground it has to separate from
     'draw-shape',       // reference shapes: the drafter's own scratch geometry
     // Brand -- the family that actually differs between RUFF and ROUGH
     'accent',           // the one colour that carries the brand
@@ -61,8 +67,10 @@ if (!window.DraftPalette) {
       'ink-quiet':       '#8b8f92',
       'draw-grid-minor': '#26292a',
       'draw-grid-major': '#34383a',
+      'draw-grid-coarse': '#454a4c',
       'draw-line':       '#7f8688',
       'draw-floor':      'rgba(120,140,150,0.10)',
+      'draw-floor-edge': '#5980a6',
       'draw-shape':      '#3f8f7a',
       'accent-ink':      '#1d1f20',
     }),
@@ -76,8 +84,10 @@ if (!window.DraftPalette) {
       'ink-quiet':       '#666b6e',
       'draw-grid-minor': '#e0e1e3',
       'draw-grid-major': '#cbcdcf',
+      'draw-grid-coarse': '#b0b3b5',
       'draw-line':       '#6b7274',
       'draw-floor':      'rgba(90,110,120,0.10)',
+      'draw-floor-edge': '#5980a6',
       'draw-shape':      '#2f6b5b',
       'accent-ink':      '#ffffff',
     }),

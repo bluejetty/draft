@@ -262,3 +262,40 @@ than a promise:
 3. Done. The stylesheet and the canvas painters both read that one table, so
    the chrome and the drawing move together and neither can drift from the
    other.
+
+## `draw-floor-edge` added (3 Sep)
+
+Fifteen roles now. `drawFloor2D` needs an opaque colour for the slab outline
+and its corner handles, and `draw-floor` is a 0.10-alpha wash — a fill, not a
+line.
+
+Deriving the stroke by stripping the alpha off the fill was the alternative
+and was rejected: string surgery on a colour produces a value nothing
+measures. A named role gets measured by the harness, which is the whole point
+of the file.
+
+**The ground for this role is not the page.** The outline is drawn on top of
+the floor wash, so the wash composited over the page is what it has to
+separate from. Measured against the bare page instead, the edge scores better
+than it looks — the wrong answer, arrived at comfortably. The harness asserts
+`contrast(draw-floor-edge, draw-floor, surface-page)`, which composites in
+that order.
+
+Candidates, measured over the washed ground against the 3.0 WCAG non-text
+floor (these are lines, not text):
+
+| candidate | night | day | |
+|---|---|---|---|
+| `#47779a` — MODEL.dc.html's own floor stroke | **3.02** | 3.80 | passes by 0.02 |
+| `#5980a6` — the drafting blue, 81 uses in MODEL | **3.50** | 3.28 | chosen |
+| `#6b91b6` | 4.38 | **2.62** | fails day |
+
+`#47779a` is what the old page actually paints, and it clears the bar by two
+hundredths. That is the same shape as the two invented thresholds this repo
+has already been bitten by, just arrived at honestly: a value sitting on the
+line passes today and breaks on any tweak to the wash. `#5980a6` clears both
+grounds with margin and is already the most-used blue in MODEL.
+
+One value serves both modes. Night and day are otherwise inverses, but the
+measurement says a single blue reads on both, and splitting it per mode would
+be a distinction with nothing behind it.
