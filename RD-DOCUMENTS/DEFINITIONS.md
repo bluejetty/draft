@@ -84,50 +84,76 @@ and it is the first job of any tier-3 rename, not an afterthought to it.
 
 ## Which fix a collision needs
 
-Movie, 3 Sep, on the overloaded words: *"there is 3 meanings that all use the
-same word quite often… quite often share characteristics though."*
+Movie, 3 Sep: *"there is 3 meanings that all use the same word quite often…
+quite often share characteristics though."*
 
-That second half is the test, and it decides the fix. **Do the two meanings
-share characteristics?**
+That second half is the test. **Do the senses share characteristics?** And in
+this codebase the answer is almost always yes — which means the fix is almost
+never a rename.
 
-**They share characteristics — same idea, different thing it is applied to.**
-FRAMING of a wall, of a floor, of a roof: all of them mean how the boards go
-together. That is one real construction term doing its job three times, not a
-collision. **Fix: qualify it.** Say *wall framing*, *floor framing*, *roof
-framing*. Renaming here would be the damage — it would split one true concept
-into three fake ones.
+### These are not homonyms
 
-**They share nothing — two unrelated ideas wearing one word.** LAYOUT the
-sheet composer and LAYOUT the joist-and-beam arrangement have nothing in
-common. Neither do FLOOR the storey and FLOOR the concrete slab. **Fix: one of
-them gives up the word**, and it is whichever is cheaper to move — never the
-one written into saved drawings.
+A homonym is two unrelated things that happen to share a sound. Our overloaded
+words are not that. They are **one concept applied to different subjects**,
+which is exactly why the word keeps getting reused: it genuinely fits every
+time.
 
-### VIEW splits both ways, which is why it bit
+| word | the one concept | its subjects |
+|---|---|---|
+| LAYOUT | arranging elements in a bounded area | views on a sheet · joists in a floor · icons on a page |
+| VIEW | a chosen way of looking at the model | through a camera · through a layer set · as a particular drawing |
+| FRAME / FRAMING | members assembled into a structural surround | a window frame · a framed wall |
 
-- camera vs layer set — share nothing. A homonym. One gives up the word, and
-  it cannot be the stored field, so it is the camera sense that should move.
-- the layer-set **selection** vs an item's layer-set **membership** — both are
-  genuinely "the layer set". They share characteristics. Qualify: *the
-  selected layer set* and *the item's layer set*.
+**So renaming is the wrong tool.** You cannot pick a better word for one of
+them, because the word is correct in all of them — any replacement is worse.
+That is why "framing" felt right to whoever wrote `locked framing`, and why
+Movie reached for "layout" to describe joists without hesitating.
 
-**And the bug came from the second pair, not the first.** Nobody has ever
-confused the camera with a layer set; they share nothing, so context sorts it
-out instantly. But the selection default and the membership default are *both*
-truthfully "the default layer set" — which is exactly why substituting one for
-the other passed review, passed a longhand spec, and shipped.
+### The fix is a qualifier, not a new word
 
-> **So the dangerous collisions are the ones that share characteristics, not
-> the ones that do not.** This inverts the ranking: earlier today we agreed to
-> rank candidates by sites × senses. That is wrong. Site count measures how
-> much *renaming* a word would cost, not how likely it is to mislead someone.
-> Rank by **how much the senses share** — the near-misses are what get
-> substituted for each other.
+    sheet layout   ·  floor layout  ·  print layout
+    camera view    ·  layer view    ·  drawing view
+    window frame   ·  wall framing
 
-By that ranking: VIEW's selection/membership pair first (it has already cost a
-bug), FRAMING's three next (they share the most, so they need qualifying
-rather than renaming), and LAYOUT last despite having a whole page named after
-it, because nobody will ever mistake a sheet composer for a joist.
+Cheaper than renaming, and it keeps the word that actually fits. It also
+explains the tier-2a bug exactly: `(floor.view || 'floor')` carries **no
+qualifier**, so two of view's three subjects met in one expression with
+nothing to tell them apart.
+
+> **An entry for a word of this shape does not say "use X instead". It says
+> "this word has three subjects — always say which."**
+
+### When a sense does give up the word
+
+Only when **a better, unambiguous word already exists** for it. That is the
+FLOOR ruling: FLOOR stops meaning a storey not because the senses are
+unrelated — a storey is named after the surface you stand on, so they share
+plenty — but because LEVEL and STOREY are already sitting there, precise and
+unused. A qualifier is the default; handing the word over needs a ready
+replacement that is strictly better.
+
+### Rank by what shares, not by site count
+
+Earlier today we agreed to rank candidates by sites × senses. **That is
+wrong.** Site count measures what a rename would cost — and we have just
+established that renaming is mostly the wrong tool, so it measures the cost of
+the thing we are not going to do. It says nothing about how likely a word is
+to mislead.
+
+Rank by **how close the senses sit**, because near-misses are what get
+substituted for each other. Nobody confuses a camera with a layer set; the
+subjects are far apart and context sorts it out. But the layer-set
+*selection* and an item's layer-set *membership* are both truthfully "the
+layer view" — adjacent subjects, one concept, no qualifier — and that is the
+pair that shipped a bug past a review and past a spec written longhand to
+catch it.
+
+**In proportion:** one collision in one expression caused one bug, and it is
+fixed. What this file is doing now is preventing the next one, and a page of
+qualifiers does that as well as a month of renaming would. The honest state of
+the whole worry: FLOOR needed a ruling and has one, VIEW needs a label,
+FRAMING is four comments, and LAYOUT needs one sentence saying which subject
+we mean. That is an afternoon, and most of it is already written.
 
 ---
 
