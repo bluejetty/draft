@@ -30,22 +30,51 @@ board NEW-5 rejected. Its own comment, four lines higher:
 Leaving geometry alone across a unit switch **recreates that exact bug in the
 other system.**
 
-## The proof: three 12'-0" walls, shown in mm
+## CORRECTION, same day: the direction was wrong, and the real bug is worse
 
-Drawn on the sixteenth grid, relabelled to mm without re-snapping:
+The first version of this board proved its case with three 12'-0" walls
+*shown in mm*: partials printing 3658 each, summing to 10974, against an
+overall printing 10973. **That cannot happen, because nothing in this app ever
+prints a millimetre.**
 
-| | exact | printed |
-|---|---|---|
-| each segment | 3657.6 mm | **3658** |
-| overall | 10972.8 mm | **10973** |
-| partials as printed sum to | | **10974** |
+Measured: `formatters.js` has eight functions and all are imperial —
+architectural inches and sixteenth fractions. Exactly four sites read
+`units === 'metric'`: save, load, `_gridStepFt()`, and LAYOUT's load. None of
+them formats anything.
 
-**A 1 mm discrepancy on the sheet, with nothing wrong in the drawing.** The
-drafter's only fix is to nudge a wall by an amount that exists nowhere on
-screen — NEW-5's bug, verbatim.
+**So the METRIC toggle changes where nodes land and nothing about how the
+drawing reads.**
 
-Re-snapped to the mm grid: 3658 × 3 = 10974 = the overall. Zero discrepancy.
-Total geometry movement: **1.20 mm over 36 feet.**
+### Which produces the mirror bug, live on main today
+
+In METRIC mode a node snaps to 1 mm and then prints rounded to the nearest
+sixteenth. Three walls, metric-snapped:
+
+| | |
+|---|---|
+| segment 1 | 3658 mm → **12'-0"** |
+| segment 2 | 3658 mm → **12'-0"** |
+| segment 3 | 3658 mm → **12'-0"** |
+| overall | 10974 mm → **36'-0 1/16"** |
+
+**The partials print 36'-0". The overall prints 36'-0 1/16".** A sixteenth of
+an inch adrift on the sheet, with nothing wrong in the geometry — NEW-5's exact
+bug, alive right now, and it needs no unit switch to appear. Being in metric
+mode is enough.
+
+### What that does to this board's scope
+
+Re-snapping on a unit switch presumes **two working unit systems** to convert
+between. There is one. A drawing made tidy on the millimetre grid is still
+displayed in sixteenths, so the tidiness never reaches the sheet.
+
+**The prerequisite is a metric formatter**, not a re-snap. Once metric lengths
+print in millimetres, everything below applies unchanged and the re-snap is the
+right second step. Until then, metric mode is half-built: the snap grid respects
+the units and the display does not.
+
+The measurements below stand — they are about the two grids, not about which
+one is displayed.
 
 ## The two grids do not divide each other
 
