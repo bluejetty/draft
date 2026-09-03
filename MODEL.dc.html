@@ -258,6 +258,9 @@
        The bottom-LEFT PROJECT link has room, so it grows both ways. */
     [data-nav-cluster] a, [data-project-corner-bl] { padding:12px 10px !important;
       margin:-12px 0; box-sizing:content-box; }
+    /* Grow the hit area without moving the layout. Safe for a control with no
+       vertical neighbour — which the unit toggle now is, having been two
+       stacked buttons whose grown targets swallowed each other. */
     [data-areas-open], [data-unit-toggle] button { padding-top:16px !important; padding-bottom:16px !important;
       margin-top:-16px; margin-bottom:-16px; box-sizing:content-box; }
     /* The instrument chips grow VERTICALLY only. Widening them closes the
@@ -340,9 +343,16 @@
     <button onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
     <button onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
   </div>
-  <div data-unit-toggle style="display:flex; flex-direction:column; gap:1px; margin-left:8px;">
-    <button onClick="{{ setImperial }}" style="min-width:64px; border:1px solid {{ imperialBorder }}; background:{{ imperialBg }}; color:{{ imperialColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">IMPERIAL</button>
-    <button onClick="{{ setMetric }}" style="min-width:64px; border:1px solid {{ metricBorder }}; background:{{ metricBg }}; color:{{ metricColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">METRIC</button>
+  <!-- ONE button, not two. Units are a binary toggle — one control showing
+       the unit in force, which flips on tap — not two independent choices.
+       As two stacked buttons this control could not satisfy its own standards:
+       44px touch targets 14px apart overlap by 30px, so METRIC took every
+       click aimed at IMPERIAL, and shrinking them to stay disjoint dropped
+       them under the 44px minimum touch-targets.spec.js requires. Disjoint
+       AND 44px are mutually unsatisfiable at that spacing — one button removes
+       the neighbour instead of balancing the two bugs against each other. -->
+  <div data-unit-toggle style="display:flex; margin-left:8px;">
+    <button onClick="{{ toggleUnits }}" title="{{ unitsTitle }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">{{ unitsLabel }}</button>
   </div>
   <!-- AREAS reports and the underlay INSERT both compute against the live
        model, so they keep working buttons here while PROJECT is a page. -->
@@ -1747,7 +1757,7 @@
 
     <!-- SECTIONS — the drafter's cuts. The printed set runs elevations first
          and sections near the end, after foundation and basement
-         (paper-rules.md), so the rail does too. Below the LEVELS card, not
+         (RD-DOCUMENTS/paper-rules.md), so the rail does too. Below the LEVELS card, not
          inside it: BONEYARD is storage for a level, a section is not. -->
     <div style="padding:10px 12px; border-bottom:1px solid rgba(29,31,32,0.16);">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.55); margin-bottom:6px;">Sections</div>
@@ -2094,6 +2104,7 @@ const LEVEL_OWNED_COLLECTIONS = [
 const {
   formatArchitecturalInches,
   formatInchesOnly,
+  formatMetres,
   parseArchitecturalLength,
   parseAssemblyInches,
 } = window.DraftFormatters;
@@ -8036,7 +8047,15 @@ class Component extends DCLogic {
 
   _drawDimension2D(ctx, toS, dimension, options = {}) {
     window.DraftRender2D.drawDimension2D(ctx, toS, dimension, options, {
-      label: value => (this.state.units === 'imperial' ? this._ftIn(value) : this._metric(value)),
+      // IMPERIAL IS THE FALL-THROUGH, deliberately. Every display branch asks
+      // "is it metric?" rather than "is it imperial?", so a units value that
+      // is absent, null or unrecognised reads imperial -- which every drawing
+      // made before the field existed actually is. Two guards already make
+      // that unreachable (the initial state, and the loader's
+      // `saved.units === 'metric' ? 'metric' : 'imperial'`), but they are two
+      // lines and this is six; a third writer setting units should not be
+      // able to flip the whole sheet to metric by writing junk.
+      label: value => (this.state.units !== 'metric' ? this._ftIn(value) : this._metric(value)),
       colors: {
         stroke: '#365e86',
         selected: '#5980a6',
@@ -9335,9 +9354,28 @@ class Component extends DCLogic {
   // The grid follows the PROJECT'S units, because a grid only produces clean
   // numbers in the system it belongs to — a millimetre is not a sixteenth of
   // anything, so a metric drawing on a sixteenth grid would step in 1.5875 mm.
-  // Units are a property of the project rather than a view toggle: switching
-  // later re-labels the drawing and leaves the geometry where it is, which
-  // reads untidily in the new system and is not silently re-snapped.
+  //
+  // SWITCHING UNITS RE-SNAPS THE DRAWING. This comment used to rule the other
+  // way — that switching re-labels and leaves the geometry alone, because
+  // moving it silently was the harm. The facts were right and the conclusion
+  // was not. Leaving geometry alone recreates NEW-5's own bug in the other
+  // system: three 12'-0" walls relabelled to mm print 3658 each and 10973
+  // overall, and the partials sum to 10974. A 1 mm discrepancy on the sheet
+  // with nothing wrong in the drawing, fixable only by nudging a wall by an
+  // amount that exists nowhere on screen — which is the exact trade NEW-5
+  // rejected. A drawing is instructions to a builder, and the builder reads
+  // the numbers.
+  //
+  // There is no third grid to retreat to: 1/16" is 1.5875 mm exactly, and the
+  // finest grid holding both is 0.0125 mm, which is free-real geometry again.
+  // One system has to give, and it should be the one nobody is reading.
+  //
+  // Re-snapping is safe to do repeatedly because it settles rather than walks.
+  // Measured over ten round trips: imperial → metric → imperial moves ZERO of
+  // 7,681 points, because a sixteenth snapped to mm and back always returns to
+  // the same sixteenth (the return trip moves at most 0.5 mm; the next
+  // sixteenth is 1.0875 mm away). Metric → imperial → metric settles once, by
+  // at most 1 mm, then never moves again. A fixed point, not a walk.
   _gridStepFt() {
     return this.state.units === 'metric' ? 0.001 / 0.3048 : 1 / 192;
   }
@@ -9367,6 +9405,157 @@ class Component extends DCLogic {
   // alignment they exist to provide.
   _snap(pt) {
     return this._originSnapPoint(pt) || this._quantise(pt);
+  }
+
+  // ── Re-snapping the drawing when the project's units change ──
+  // The board (RD-DOCUMENTS/BOARD-units-round-trip.md) rules that a unit
+  // switch moves the geometry onto the new grid, because numbers that do not
+  // agree are worse than geometry that moved by less than a millimetre.
+  //
+  // WHAT MOVES: every stored quantity a drafter entered. WHAT DOES NOT: every
+  // quantity computed from those. "ROUND THE NODE, NEVER THE DERIVED" is easy
+  // to read as coordinates-versus-scalars, and that is not the line — a
+  // window's width and its offset along its wall are not coordinates, but the
+  // drafter typed them and they print as dimensions, so they re-snap too.
+  // Re-snapping the node pool alone leaves a window sitting at 1066.8 mm and
+  // measuring 914.4 mm inside a wall whose ends read whole millimetres. What
+  // must NOT be touched is anything recomputed at paint time: centrelines,
+  // join points, face offsets, stair layouts, and the level outline points
+  // that ride a boneyard master (their offset is the input, so that is what
+  // re-snaps, and _propagateMasterOutline recomputes the point).
+  //
+  // Counting is by point OBJECT, not by coordinate. The vertex pool is keyed
+  // by { levelId, viewId, body }, so the same x,z on a level's PLAN set and
+  // its FLOOR set are two different nodes and must count as two; while walls
+  // meeting at a corner share one pooled vector and must count as one. Object
+  // identity is the only key that gets both right.
+  _resnapToUnits() {
+    const step = this._gridStepFt();
+    const datum = this.state.drawingOrigin || { x: 0, z: 0 };
+    const onGrid = (value, from) => from + Math.round((value - from) / step) * step;
+    const seen = new Set();
+    let nodesMoved = 0, sizesMoved = 0, maxMoveFt = 0;
+
+    const movePoint = pt => {
+      if (!pt || seen.has(pt)) return;
+      seen.add(pt);
+      if (!Number.isFinite(pt.x) || !Number.isFinite(pt.z)) return;
+      const nx = onGrid(pt.x, datum.x), nz = onGrid(pt.z, datum.z);
+      const move = Math.hypot(nx - pt.x, nz - pt.z);
+      pt.x = nx; pt.z = nz;
+      if (move > 1e-12) { nodesMoved += 1; if (move > maxMoveFt) maxMoveFt = move; }
+    };
+
+    // A LENGTH, not a position: measured from zero rather than from the datum,
+    // so a 3'-0" window stays 3'-0" wide instead of inheriting the datum's
+    // fractional part. Same for an offset along a wall, which is a distance
+    // from that wall's start.
+    const moveLength = (owner, key) => {
+      if (!owner) return;
+      const value = Number(owner[key]);
+      if (!Number.isFinite(value)) return;
+      const next = Math.round(value / step) * step;
+      const move = Math.abs(next - value);
+      owner[key] = next;
+      if (move > 1e-12) { sizesMoved += 1; if (move > maxMoveFt) maxMoveFt = move; }
+    };
+
+    // The pool first: one move here carries every wall and line meeting there.
+    (this._vertices || []).forEach(movePoint);
+
+    this._lines.forEach(line => { movePoint(line.start); movePoint(line.end); });
+    this._walls.forEach(wall => { movePoint(wall.start); movePoint(wall.end); });
+    this._beams.forEach(beam => { movePoint(beam.start); movePoint(beam.end); });
+    this._dimensions.forEach(dim => { movePoint(dim.start); movePoint(dim.end); });
+    this._notes.forEach(note => { movePoint(note.anchor); movePoint(note.text); });
+    this._columns.forEach(column => movePoint(column.point));
+    this._roomTags.forEach(tag => movePoint(tag.at));
+    this._floors.forEach(floor => (floor.points || []).forEach(movePoint));
+    this._shapes.forEach(shape => (shape.points || []).forEach(movePoint));
+    this._roofs.forEach(roof => (roof.points || []).forEach(movePoint));
+    this._surfaceOpenings.forEach(opening => (opening.points || []).forEach(movePoint));
+    // A stair stores its start; its end and its whole layout are computed.
+    this._stairs.forEach(stair => { movePoint(stair.start); moveLength(stair, 'widthFt'); });
+    // A point-hosted device carries its own point; a wall-hosted one an offset.
+    this._electricDevices.forEach(device => {
+      if (device.host === 'wall') moveLength(device, 'offset');
+      else movePoint(device.at);
+    });
+
+    // Sizes and offsets the drafter entered, every one of which prints.
+    this._fenestrations.forEach(opening => {
+      ['offset', 'width', 'sillHeight', 'headHeight'].forEach(key => moveLength(opening, key));
+    });
+    this._fixtures.forEach(fixture => {
+      ['offset', 'width', 'depth', 'standoff'].forEach(key => moveLength(fixture, key));
+    });
+
+    // Masters move as points; the level copies that ride them move as offsets,
+    // so master + offset lands on the grid and the copy is then recomputed
+    // rather than snapped behind the propagation's back.
+    this._boneyardOutlines.forEach(outline => (outline.points || []).forEach(movePoint));
+    this._outlines.forEach(outline => (outline.points || []).forEach(point => {
+      if (point.srcId) {
+        if (Number.isFinite(point.offX)) point.offX = Math.round(point.offX / step) * step;
+        if (Number.isFinite(point.offZ)) point.offZ = Math.round(point.offZ / step) * step;
+        return;
+      }
+      movePoint(point);
+    }));
+    (this._vertices || []).forEach(vtx => {
+      if (!vtx.srcId) return;
+      if (Number.isFinite(vtx.offX)) vtx.offX = Math.round(vtx.offX / step) * step;
+      if (Number.isFinite(vtx.offZ)) vtx.offZ = Math.round(vtx.offZ / step) * step;
+    });
+    this._boneyardOutlines.forEach(master => this._propagateMasterOutline(master));
+
+    return { nodesMoved, sizesMoved, maxMoveFt };
+  }
+
+  // Said out loud, never done quietly. The old comment's one good instinct was
+  // that geometry must not move behind the drafter's back; the answer is to
+  // report the move, not to refuse it.
+  _resnapReadout({ nodesMoved, sizesMoved, maxMoveFt }) {
+    const metric = this.state.units === 'metric';
+    const grid = metric ? 'mm' : 'sixteenths';
+    if (!nodesMoved && !sizesMoved) return `Re-snapped to ${grid} — nothing moved; the drawing was already on the grid.`;
+    const parts = [];
+    if (nodesMoved) parts.push(`${nodesMoved} ${nodesMoved === 1 ? 'node' : 'nodes'}`);
+    if (sizesMoved) parts.push(`${sizesMoved} ${sizesMoved === 1 ? 'size' : 'sizes'}`);
+    const worst = metric
+      ? `${(maxMoveFt * 304.8).toFixed(2)} mm`
+      : `${(maxMoveFt * 12).toFixed(4)}"`;
+    return `Re-snapped to ${grid} — ${parts.join(' and ')} moved, max ${worst}.`;
+  }
+
+  // Board #313 / audit Q2 ruled the toggle a SOFT switch -- display-only, with
+  // any hard re-snap a separate deliberate command -- on the assumption that
+  // re-snapping was a walk that would accumulate. AMENDED 3 Sep on Devin's
+  // authority after that assumption was measured dead: one settle of under a
+  // millimetre, then idempotent both ways (0 of 7,681 points move on an
+  // imperial round trip), worst single move 0.79 mm against a framer's ±3 mm.
+  // "Never automatic" was aimed at SOFTWARE-initiated movement -- opened,
+  // loaded, re-derived -- and a drafter pressing the toggle is a deliberate
+  // act. The soft switch's claim to be "always safe" was the weaker half: it
+  // leaves partials that do not sum to the overall with nothing on screen
+  // saying so, and a display that quietly lies about sums is less safe than a
+  // settle nobody can see.
+  //
+  // The ONLY path that re-snaps. Loading a drawing sets state.units directly
+  // (see the reader), and must keep doing so: opening an old drawing may not
+  // rewrite it, or the standing rule "old drawings must keep opening" quietly
+  // becomes "old drawings keep changing". Only the drafter's own switch moves
+  // anything, and it moves everything in ONE undoable step — _markUnsaved
+  // records a single history entry covering both the units and the geometry.
+  _setUnits(units) {
+    if (units !== 'imperial' && units !== 'metric') return;
+    if (this.state.units === units) return;
+    this.setState({ units }, () => {
+      const result = this._resnapToUnits();
+      this._rememberActiveProfile('settings');
+      this._markUnsaved();
+      this.setState({ drawingMessage: this._resnapReadout(result), drawingMessageError: false });
+    });
   }
 
   // An engaged angle lock always owns the direction: a node or midpoint near
@@ -9617,7 +9806,7 @@ class Component extends DCLogic {
     }
     this.setState(newState);
 
-    const imp = this.state.units === 'imperial';
+    const imp = this.state.units !== 'metric';
     const el  = sel => document.querySelector(sel);
 
     const _setLen = (s, ept) => {
@@ -13395,7 +13584,7 @@ class Component extends DCLogic {
 
   _areaLabel(sqFt) {
     if (!(sqFt > 0)) return '';
-    return this.state.units === 'imperial'
+    return this.state.units !== 'metric'
       ? `${(Math.round(sqFt * 10) / 10).toLocaleString()} SQ FT`
       : `${(Math.round(sqFt * 0.09290304 * 100) / 100).toLocaleString()} m²`;
   }
@@ -20122,7 +20311,7 @@ class Component extends DCLogic {
     if (this._frozenTool === 'nodedrag') {
       const parsed = parseArchitecturalLength(this.state.frozenLengthInput);
       if (parsed.ok) this._placeFrozenDrag(end);
-      const imperial = this.state.units === 'imperial';
+      const imperial = this.state.units !== 'metric';
       const lenEl = document.querySelector('[data-model-len]');
       if (lenEl) lenEl.textContent = parsed.ok ? '↔ ' + (imperial ? this._ftIn(total) : this._metric(total)) : '';
       const angEl = document.querySelector('[data-model-ang]');
@@ -20149,7 +20338,7 @@ class Component extends DCLogic {
     // typed endpoint to draw towards.
     this._frozenEnd = hasLength ? end : null;
     // Update status bar display
-    const imp = this.state.units === 'imperial';
+    const imp = this.state.units !== 'metric';
     const el = sel => document.querySelector(sel);
     if (el('[data-model-len]')) el('[data-model-len]').textContent = hasLength ? '↔ ' + (imp ? this._ftIn(total) : this._metric(total)) : '';
     const angDeg = Math.round(Math.atan2(-dirZ, dirX) * 180 / Math.PI);
@@ -20962,10 +21151,10 @@ class Component extends DCLogic {
   _ftIn(feet) {
     return formatArchitecturalInches(feet * 12);
   }
-  _metric(feet) { return (feet * 0.3048).toFixed(3) + ' m'; }
+  _metric(feet) { return formatMetres(feet); }
   _elevLabel(elev) {
     const sign = elev > 0 && !this.state.elevationDatum ? '+' : '';
-    return sign + (this.state.units === 'imperial' ? this._ftIn(elev) : this._metric(elev));
+    return sign + (this.state.units !== 'metric' ? this._ftIn(elev) : this._metric(elev));
   }
 
   _levelWallTopFt(levelId, view = 'plan') {
@@ -22067,7 +22256,7 @@ class Component extends DCLogic {
       // and the drafter's sections through a single sc-for, so a section
       // landed directly under E4 at the top. The printed set reads
       // elevations first and sections near the end, after foundation and
-      // basement (paper-rules.md), and a drafter who knows the set should
+      // basement (RD-DOCUMENTS/paper-rules.md), and a drafter who knows the set should
       // not have to learn a second order for the screen.
       //
       // The split is at `auto`, which already carries the distinction --
@@ -22106,12 +22295,16 @@ class Component extends DCLogic {
       view3DBg:     activeView==='perspective' ? '#5980a6' : '#fff',
       view3DColor:  activeView==='perspective' ? '#fff'    : '#5980a6',
       view3DBorder: '#5980a6',
-      setImperial: ()=>this.setState({units:'imperial'}, () => { this._rememberActiveProfile('settings'); this._markUnsaved(); }),
-      setMetric:   ()=>this.setState({units:'metric'}, () => { this._rememberActiveProfile('settings'); this._markUnsaved(); }),
-      imperialBg: units==='imperial'?'#1d1f20':'#fff', imperialColor: units==='imperial'?'#f2f2f3':'#1d1f20',
-      metricBg:   units==='metric'  ?'#1d1f20':'#fff', metricColor:   units==='metric'  ?'#f2f2f3':'#1d1f20',
-      imperialBorder: units==='imperial'?'#1d1f20':'rgba(29,31,32,0.2)',
-      metricBorder: units==='metric'?'#1d1f20':'rgba(29,31,32,0.2)',
+      // "UNITS:" is load-bearing, not decoration. A lone toggle reading
+      // "METRIC" is ambiguous — it can mean the sheet IS metric, or that
+      // tapping WILL make it metric, and half of readers take it each way.
+      // The two-button version could not be misread because the active one
+      // was highlighted; one button has no neighbour to contrast against, so
+      // the label has to carry it. Naming the state as a statement cannot be
+      // read as a command. The title says what a tap does.
+      toggleUnits: ()=>this._setUnits(units==='metric'?'imperial':'metric'),
+      unitsLabel: units==='metric' ? 'UNITS: METRIC' : 'UNITS: IMPERIAL',
+      unitsTitle: units==='metric' ? 'The drawing is in metric — tap to switch to imperial' : 'The drawing is in imperial — tap to switch to metric',
       openProjectPage: () => this._openProjectPage(),
       areasDialogOpen: this.state.areasOpen === true,
       areasReport: this.state.areasOpen === true ? this._areasReport()

@@ -21,6 +21,14 @@ commit would fix C1 outright and would give beginners round houses. It would als
 mean the drawing silently moves a point by up to 1/32" behind the drafter's back.
 Was raw storage a decision, or just what happened?
 
+> **Ruled, and since amended.** Committed geometry snaps to the project's own
+> increment (board NEW-5). The follow-on ruling — that a units toggle is
+> display-only and any re-snap is a separate deliberate command — was **amended
+> on 3 Sep**: the toggle itself now re-snaps. See
+> `RD-DOCUMENTS/BOARD-units-round-trip.md` for the measurements that changed it
+> and the reasoning. Loading a drawing still moves nothing, in either mode.
+
+
 **Q3 — Is a 2" dimension fabrication acceptable on a permit set?**
 `AUTO_DIM_JOG_MERGE_FT = 2/12` merges near-coincident corners into one strung
 coordinate, and an *interior* cluster is replaced by the arithmetic mean of its
