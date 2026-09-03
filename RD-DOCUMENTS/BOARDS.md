@@ -153,6 +153,18 @@ Deliberately **not** in the six:
 
 ## Standing rules
 
+- **A move that changes behaviour is not a move.** Gilligan, 3 Sep, extracting
+  `_metric` into `formatters.js` as `formatMetres`: he added a `Number.isFinite`
+  guard so it matched its two neighbours, disclosed it as "a behaviour change,
+  just a defensible one", and then withdrew it. The guard may well be right —
+  `''` is silent, and a dimension printing nothing looks like a dimension that
+  is not there — but that is a design question belonging to all three
+  formatters together, and it was riding inside a commit whose entire job was to
+  relocate a function. **Extraction commits are behaviour-neutral or they are
+  not extractions**, because the whole value of "we only moved it" is that it
+  narrows what a later bisect has to consider. Record the open question at the
+  function for whoever rules on it; do not settle it for one of three by being
+  the one who happened to touch it.
 - **A recorded gap is not a control.** The stair-notes bug shipped inside a
   commit whose own message said `Uncovered: no-op'ing it leaves stair-view and
   annotations passing all 9`. The hole was known, measured and written down at
