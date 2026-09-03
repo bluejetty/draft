@@ -77,6 +77,22 @@ const dropBulge = src => {
   return out;
 };
 
+// The other named hole: drawWallSeg2D's mitre path. MODEL.html passes
+// joins = null, so every wall butts and this half of the painter does not run
+// in the live page at all -- which is exactly why it could rot unnoticed.
+const dropMitre = src => {
+  const before = src;
+  const out = src.replace(
+    `      if (!joins || !joins.has(pt)) return { point: fallback, resolved: false };
+      const join = joins.get(pt);
+      if (!join || join.type === 'none') return { point: fallback, resolved: false };`,
+    `      return { point: fallback, resolved: false };
+      const join = joins.get(pt);`,
+  );
+  if (out === before) throw new Error('dropMitre matched nothing -- joinPoint moved');
+  return out;
+};
+
 // ─── The recording ctx ────────────────────────────────────────────────────
 // A canvas context is a big surface and the painters use a lot of it, so this
 // records through a Proxy rather than enumerating methods: any call lands on
@@ -1448,6 +1464,123 @@ suite('drawWallSeg2D', 'an unjoined wall is capped at both ends', R => {
   expect('two end caps', across.length >= 2, true);
 });
 
+// ── drawWallSeg2D's joins: the half of the painter nothing reached ──
+// MODEL.html calls this painter with joins = null, so every wall butts and
+// the whole mitre path is unreachable in the live page. The checks above
+// passed null too, which meant the path was invisible from both directions:
+// it can be deleted outright with all 244 assertions still passing. It is
+// live code -- it runs the moment _wallJoins is wired -- so it is covered
+// here now rather than when someone tries to turn it on.
+//
+// joins is a Map keyed by the shared POINT OBJECT, and the painter compares
+// with ===, so two segments must literally share one endpoint object.
+const joined = (type, extra) => {
+  const P0 = { x: 0, z: 0 }, P1 = { x: 10, z: 0 }, P2 = { x: 10, z: 10 };
+  const a = { start: P0, end: P1, wallType: 'stud_2x6' };
+  const b = { start: P1, end: P2, wallType: 'stud_2x6' };
+  const join = type === 'tee'
+    ? { type: 'tee', host: [{ seg: b, at: 'start' }], stem: { seg: a, at: 'end' }, entries: [] }
+    : { type, entries: [{ seg: a, at: 'end' }, { seg: b, at: 'start' }] };
+  return { a, b, P1, joins: new Map([[P1, { ...join, ...extra }]]) };
+};
+const endGeometry = (R, seg, joins) => {
+  const ctx = recordingCtx();
+  R.drawWallSeg2D(ctx, toS, seg, false, joins, null, wallEnv);
+  return boundaryPass(ctx).tape
+    .filter(e => e.op === 'moveTo' || e.op === 'lineTo')
+    .map(e => `${Math.round(e.args[0] * 10) / 10},${Math.round(e.args[1] * 10) / 10}`);
+};
+
+suite('drawWallSeg2D', 'a corner join mitres the end instead of capping it square', R => {
+  const { a, joins } = joined('corner');
+  const butted = endGeometry(R, a, null);
+  const mitred = endGeometry(R, a, joins);
+  expect('the drawn geometry changes', butted.join(' ') === mitred.join(' '), false);
+  // A square cap puts every point at the shared end on one x; a mitre does not.
+  const atEnd = xs => xs.filter(p => Number(p.split(',')[0]) >= 499).length;
+  expect('the butted wall ends square on the vertex', atEnd(butted) > 0, true);
+  expect('the mitred one runs past it on one face', mitred.some(p => Number(p.split(',')[0]) > 500), true);
+});
+
+suite('drawWallSeg2D', 'a resolved join suppresses the end cap; an unresolved one keeps it', R => {
+  const { a, joins } = joined('corner');
+  const capped = endGeometry(R, a, null).length;
+  const resolved = endGeometry(R, a, joins).length;
+  expect('the mitred end drops its cap line', resolved < capped, true);
+});
+
+suite('drawWallSeg2D', 'a join of type none is no join at all', R => {
+  const { a, joins } = joined('none');
+  expect('drawn exactly as an unjoined wall', endGeometry(R, a, joins).join(' '), endGeometry(R, a, null).join(' '));
+});
+
+suite('drawWallSeg2D', 'a join naming other segments entirely is ignored', R => {
+  const { a, P1 } = joined('corner');
+  const stranger = { start: { x: 50, z: 50 }, end: { x: 60, z: 50 }, wallType: 'stud_2x6' };
+  const joins = new Map([[P1, { type: 'corner', entries: [{ seg: stranger, at: 'start' }] }]]);
+  expect('and the wall is capped as before',
+    endGeometry(R, a, joins).join(' '), endGeometry(R, a, null).join(' '));
+});
+
+// A continuation is COLLINEAR -- one wall carrying on into the next. Built
+// with a perpendicular peer it is not a continuation at all, and asserting
+// against that fixture failed against correct code.
+const collinear = (peerType = 'stud_2x6') => {
+  const P0 = { x: 0, z: 0 }, P1 = { x: 10, z: 0 }, P2 = { x: 20, z: 0 };
+  const a = { start: P0, end: P1, wallType: 'stud_2x6' };
+  const b = { start: P1, end: P2, wallType: peerType };
+  return {
+    a,
+    joins: new Map([[P1, {
+      type: 'continuation',
+      entries: [{ seg: a, at: 'end' }, { seg: b, at: 'start' }],
+    }]]),
+  };
+};
+
+suite('drawWallSeg2D', 'a continuation into an equal wall is seamless -- no cap, no transition', R => {
+  const { a, joins } = collinear();
+  const capped = endGeometry(R, a, null);
+  const continued = endGeometry(R, a, joins);
+  expect('the cap is gone', continued.length < capped.length, true);
+  expect('and nothing is drawn past the vertex',
+    continued.every(p => Number(p.split(',')[0]) <= 500), true);
+});
+
+suite('drawWallSeg2D', 'a continuation into a THICKER wall shows only the face transition', R => {
+  // The documented case: a full cap would cut through the other wall, and no
+  // transition at all would leave the wider profile hanging open.
+  const { a, joins } = collinear('icf');
+  const seamless = endGeometry(R, collinear().a, collinear().joins);
+  const stepped = endGeometry(R, a, joins);
+  expect('a step is drawn where the equal join drew nothing', stepped.length > seamless.length, true);
+  expect('and it reaches the thicker wall\'s face', stepped.some(p => {
+    const y = Number(p.split(',')[1]);
+    return Math.abs(y - 300) > (5.5 / 12 * 10) / 2 + 0.01;
+  }), true);
+});
+
+suite('drawWallSeg2D', 'a tee resolves for the host and clips the stem to its face', R => {
+  const { a, b, joins } = joined('tee');
+  const hostGeom = endGeometry(R, b, joins);
+  const stemGeom = endGeometry(R, a, joins);
+  expect('the host loses no geometry to the stem', hostGeom.length > 0, true);
+  expect('the stem is drawn differently from an unjoined wall',
+    stemGeom.join(' ') === endGeometry(R, a, null).join(' '), false);
+});
+
+suite('drawWallSeg2D', 'a mitre longer than the limit falls back to a square cap', R => {
+  // Two nearly collinear walls: the mitre spike runs away, and the painter
+  // refuses it past 8x the thicker assembly rather than drawing a spear.
+  const P0 = { x: 0, z: 0 }, P1 = { x: 10, z: 0 }, P2 = { x: 20, z: 0.0005 };
+  const a = { start: P0, end: P1, wallType: 'stud_2x6' };
+  const b = { start: P1, end: P2, wallType: 'stud_2x6' };
+  const joins = new Map([[P1, { type: 'corner', entries: [{ seg: a, at: 'end' }, { seg: b, at: 'start' }] }]]);
+  const drawn = endGeometry(R, a, joins);
+  expect('nothing runs off to infinity',
+    drawn.every(p => Math.abs(Number(p.split(',')[0])) < 1000), true);
+});
+
 // ─── Running ──────────────────────────────────────────────────────────────
 let current = null;
 function expect(label, got, want) {
@@ -1512,10 +1645,13 @@ function coverage() {
   }
   console.log('\nbranch mutations');
   console.log('─'.repeat(72));
-  const branchResults = runAll(load(dropBulge));
-  const caught = branchResults.filter(r => r.failed || r.threw);
-  console.log(`strokeSegPath2D bulge branch deleted     ${caught.length ? `caught by ${caught.length} check(s): ${caught.map(c => c.name).join('; ')}` : 'NOTHING NOTICED'}`);
-  return caught.length ? 0 : 1;
+  let missed = 0;
+  [['strokeSegPath2D bulge branch', dropBulge], ['drawWallSeg2D mitre path', dropMitre]].forEach(([label, mutate]) => {
+    const caught = runAll(load(mutate)).filter(r => r.failed || r.threw);
+    if (!caught.length) missed += 1;
+    console.log(`${(label + ' deleted').padEnd(40)} ${caught.length ? `caught by ${caught.length} check(s)` : 'NOTHING NOTICED'}`);
+  });
+  return missed ? 1 : 0;
 }
 
 if (process.argv.includes('--coverage')) {
