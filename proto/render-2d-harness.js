@@ -1465,12 +1465,21 @@ suite('drawWallSeg2D', 'an unjoined wall is capped at both ends', R => {
 });
 
 // ── drawWallSeg2D's joins: the half of the painter nothing reached ──
-// MODEL.html calls this painter with joins = null, so every wall butts and
-// the whole mitre path is unreachable in the live page. The checks above
-// passed null too, which meant the path was invisible from both directions:
-// it can be deleted outright with all 244 assertions still passing. It is
-// live code -- it runs the moment _wallJoins is wired -- so it is covered
-// here now rather than when someone tries to turn it on.
+// THIS PATH RUNS ON EVERY COMMITTED WALL IN THE LIVE PAGE. Do not delete it.
+//
+// MODEL.dc.html passes real joins at 6520/6521 and 6726/6727 -- every
+// committed wall, twice each, fill and stroke. joins = null appears only at
+// 6728 and 6731, the pending wall chain and the preview segment, so butted
+// ends are the exception for in-progress geometry rather than the rule.
+//
+// An earlier version of this comment had that backwards, and said the path
+// was unreachable. The measurement behind it was right and the conclusion
+// inverted: the checks above passed null too, so deleting mitring outright
+// left all 244 assertions passing. What that measured was the blindness of
+// the tests, NOT that the code was dormant -- and a comment claiming dormancy
+// is how live code gets deleted on a green suite. The most-used painter's
+// most intricate branch was exercised on every wall in production with
+// nothing testing it, which is the paintNote shape one level up.
 //
 // joins is a Map keyed by the shared POINT OBJECT, and the painter compares
 // with ===, so two segments must literally share one endpoint object.
