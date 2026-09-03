@@ -76,7 +76,7 @@ test.describe('MODEL.html skins', () => {
         await page.goto(`/MODEL.html?theme=${theme}&mode=${mode}`);
         await expect(page.locator('#readout')).toContainText('walls', { timeout: 5000 });
         await expect(page.locator('#readout'))
-          .toContainText(`walls ${saved.walls.filter(onMainPlan).length}`);
+          .toContainText(`walls ${saved.walls.filter(onMainPlan).length}/`);
 
         // The page says which skin it is wearing.
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);

@@ -169,6 +169,21 @@ Deliberately **not** in the six:
   those sheets yet."* A comment explains what the code does; it does not decide
   what is still owed. **Scope belongs to whoever owns the board.** Record what
   you measured, and ask before striking an item.
+- **Basics are required; perks are a bonus.** Movie, 3 Sep. Everything a
+  drawing set genuinely needs gets finished. A half-built extra is not a debt
+  to be preserved at any cost — it can be trimmed and rebuilt better later,
+  and he would rather rebuild it than have the rest of the work bend around
+  it. So an unfinished feature is a poor reason to take on a large job.
+  *Concrete case, same day:* board #1 nearly grew a second job inside it —
+  rehoming `FIXTURE_COLOR`, four `CLOSET_*` constants and four accessors out
+  of `MODEL.dc.html` so `drawFixture2D` could be called by someone other than
+  MODEL. Fixtures and cabinets are on Movie's own list to rework, so that
+  would have been carefully rehoming a graph about to be redesigned. Extract
+  around it, record the gap, move on.
+  **Trim is a ruling, not an inference.** Nothing gets deleted because an
+  agent judged it unfinished. Measure it and ask: fixtures alone is 242
+  references in `MODEL.dc.html`, 356 lines of `closets.js`, and ~130 tests
+  across 24 spec files including `persisted-format` and `store-integrity`.
 - **Never bug-check on `roughdrafter.com`** — it lags `main` by hours.
 - **A session that cannot push to the repo it is working on is not set up.**
   Run `git push --dry-run` on a throwaway branch before writing a line. Twice on

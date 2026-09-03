@@ -25,7 +25,7 @@ const onLevel = (item, levelId, viewId) => Number(item.levelId) === levelId
 
 const readout = page => page.locator('#readout');
 const wallCount = async page => Number(
-  (await readout(page).textContent()).match(/walls (\d+)/)?.[1] ?? -1);
+  (await readout(page).textContent()).match(/walls (\d+)\//)?.[1] ?? -1);
 
 async function houseOnOldPage(page) {
   await h.openModel(page, { webgl: false, rails: false, entryCoach: true });
@@ -118,11 +118,11 @@ test.describe('MODEL.html levels', () => {
       // way tier 1 painted everything, this is the assertion that catches it.
       await page.goto('/MODEL.html');
       await expect(readout(page)).toContainText('MAIN FL', { timeout: 5000 });
-      await expect(readout(page)).toContainText('roofs 0');
+      await expect(readout(page)).toContainText('roofs 0/');
 
       await page.goto('/MODEL.html?level=7');
       await expect(readout(page)).toContainText('ROOF', { timeout: 5000 });
-      await expect(readout(page)).toContainText('roofs 1');
+      await expect(readout(page)).toContainText('roofs 1/');
 
       // And it is INK, not just a count. drawRoof2D strokes #7a4a21 and fills a
       // brown wash; nothing else on this page is brown, so red>green>blue with
@@ -159,7 +159,7 @@ test.describe('MODEL.html levels', () => {
     const shapeLevel = Number(saved.shapes[0].levelId);
 
     await page.goto(`/MODEL.html?level=${shapeLevel}`);
-    await expect(readout(page)).toContainText('shapes 1', { timeout: 5000 });
+    await expect(readout(page)).toContainText('shapes 1/', { timeout: 5000 });
 
     // drawShape2D takes its colour from env.shapeColor, which this page feeds
     // from the palette -- so this also proves the env is wired, not just the
@@ -176,4 +176,61 @@ test.describe('MODEL.html levels', () => {
     expect(teal, 'the shape must be painted in the palette\'s shape colour')
       .toBeGreaterThan(100);
   });
+
+  // ── the regression tier 2a shipped ──────────────────────────────────────
+  //
+  // Tier 2a defaulted the layer view and gave no way to change it. MAIN FL
+  // defaults to the walls plan; a floor saves with `view: 'floor'`; so every
+  // floor was filtered out of every reachable view and paintFloors() drew
+  // nothing at all. It went unnoticed because the level specs asserted WALLS.
+  // Movie spotted `floors 0` on the live page.
+
+  test('a level is not one drawing: ?view= reaches the floor layout',
+    async ({ page }) => {
+      const saved = await houseOnOldPage(page);
+
+      // THE CONTROL. Without it this passes on a drawing with no floors at
+      // all, which is exactly the ambiguity the live screenshot had.
+      const floorsHere = (saved.floors || [])
+        .filter(f => Number(f.levelId) === MAIN_FL).length;
+      expect(floorsHere, 'the fixture must put a floor on MAIN FL, or this '
+        + 'test cannot tell "filtered out" from "not there"').toBeGreaterThan(0);
+
+      // The walls plan legitimately hides them — that is the rule, not a bug.
+      await page.goto('/MODEL.html?level=3');
+      await expect(readout(page)).toContainText('plan', { timeout: 5000 });
+      await expect(readout(page)).toContainText('floors 0/');
+
+      // The floor layout shows them. Before ?view= existed there was no URL
+      // that could reach this state.
+      await page.goto('/MODEL.html?level=3&view=floor');
+      await expect(readout(page)).toContainText('floor', { timeout: 5000 });
+      await expect(readout(page)).toContainText(`floors ${floorsHere}/`);
+
+      // And the floors are INK, not a count. The wash is a low-alpha blue-grey
+      // over the ground, so it reads as pixels that are off-ground but nowhere
+      // near wall-bright.
+      const wash = await page.evaluate(() => {
+        const c = document.getElementById('plan');
+        const { data } = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+        let n = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i] > 34 && data[i] < 90 && data[i + 2] > data[i]) n += 1;
+        }
+        return n;
+      });
+      expect(wash, 'the floor must be painted, not merely counted')
+        .toBeGreaterThan(500);
+    });
+
+  test('an unknown ?view falls back to the level default and says so',
+    async ({ page }) => {
+      await houseOnOldPage(page);
+      const warnings = [];
+      page.on('console', m => { if (m.type() === 'warning') warnings.push(m.text()); });
+
+      await page.goto('/MODEL.html?level=3&view=elevation');
+      await expect(readout(page)).toContainText('plan', { timeout: 5000 });
+      expect(warnings.join(' ')).toContain('elevation');
+    });
 });
