@@ -15707,100 +15707,22 @@ class Component extends DCLogic {
   }
 
   _drawFloor2D(ctx, toS, floor, options = {}) {
-    const points = floor?.points || [];
-    if (points.length < 2) return;
-    const { preview = false, referenceColor = null, selected = false } = options;
-    const screenPoints = points.map(toS);
-    // Openings cut from this floor render as holes in the fill (even-odd).
-    const holes = floor?.id
-      ? this._surfaceOpeningsFor('floor', floor.id).map(opening => opening.points.map(toS))
-      : [];
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(screenPoints[0].x, screenPoints[0].y);
-    screenPoints.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
-
-    if (referenceColor) {
-      if (points.length >= 3) {
-        ctx.closePath();
-        holes.forEach(hole => {
-          ctx.moveTo(hole[0].x, hole[0].y);
-          hole.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
-          ctx.closePath();
-        });
-        ctx.fillStyle = referenceColor.replace(/[\d.]+\)$/, '0.08)');
-        ctx.fill('evenodd');
-      }
-      ctx.strokeStyle = referenceColor;
-      ctx.lineWidth = 1.25;
-      ctx.setLineDash([5, 4]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-      return;
-    }
-
-    if (points.length >= 3) {
-      ctx.closePath();
-      holes.forEach(hole => {
-        ctx.moveTo(hole[0].x, hole[0].y);
-        hole.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
-        ctx.closePath();
-      });
-      ctx.fillStyle = preview ? 'rgba(89,128,166,0.12)' : 'rgba(89,128,166,0.16)';
-      ctx.fill('evenodd');
-    }
-    ctx.strokeStyle = selected ? '#5980a6' : (preview ? 'rgba(89,128,166,0.72)' : '#47779a');
-    ctx.lineWidth = selected ? 3 : 1.5;
-    if (preview) ctx.setLineDash([6, 4]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    if (!preview) {
-      ctx.fillStyle = selected ? '#5980a6' : '#47779a';
-      screenPoints.forEach(point => ctx.fillRect(point.x - 2.5, point.y - 2.5, 5, 5));
-      holes.forEach(hole => hole.forEach(point => ctx.fillRect(point.x - 2, point.y - 2, 4, 4)));
-    }
-    // A garage slab carries its pour + slope note so the plan reads the spec.
-    // A thickened-edge slab also shows a dashed inset ring where the 1'-0"
-    // perimeter edge and its 45° taper give way to the 4" field.
-    if (floor?.garage && points.length >= 3) {
-      if (floor.thickenedEdge === true) {
-        const inset = this._offsetOutline(
-          points.map(pt => ({ x: pt.x, z: pt.z })),
-          -((GARAGE_EDGE_DEPTH_IN + GARAGE_EDGE_TAPER_RUN_IN) / 12),
-        ).map(toS);
-        if (inset.length >= 3) {
-          ctx.beginPath();
-          ctx.moveTo(inset[0].x, inset[0].y);
-          inset.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
-          ctx.closePath();
-          ctx.strokeStyle = selected ? '#5980a6' : '#47779a';
-          ctx.lineWidth = 1;
-          ctx.setLineDash([4, 4]);
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
-      }
-      const centroid = screenPoints.reduce(
-        (sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }),
-        { x: 0, y: 0 },
-      );
-      ctx.fillStyle = '#47779a';
-      ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      const slope = Number(floor.slopeInPerFt) || 0;
-      const pour = formatInchesOnly(Math.round((floor.thickness || GARAGE_SLAB_THICKNESS_IN / 12) * 12));
-      const note = floor.thickenedEdge === true
-        ? `${pour} THICKENED-EDGE SLAB — LEVEL, 1'-0" EDGE, 45° TAPER`
-        : slope ? `${pour} GARAGE SLAB — SLOPE ${slope === 1 / 8 ? '1/8' : slope}"/FT TO DOOR` : `${pour} GARAGE SLAB`;
-      ctx.fillText(
-        note,
-        centroid.x / screenPoints.length,
-        centroid.y / screenPoints.length + 6,
-      );
-    }
-    ctx.restore();
+    window.DraftRender2D.drawFloor2D(ctx, toS, floor, options, {
+      surfaceOpeningsFor: (kind, id) => this._surfaceOpeningsFor(kind, id),
+      offsetOutline: (pts, dist) => this._offsetOutline(pts, dist),
+      garageEdgeDepthIn: GARAGE_EDGE_DEPTH_IN,
+      garageSlabThicknessIn: GARAGE_SLAB_THICKNESS_IN,
+      garageEdgeTaperRunIn: GARAGE_EDGE_TAPER_RUN_IN,
+      formatInchesOnly,
+      // The page owns the look, as with the grid greys.
+      colors: {
+        fill: 'rgba(89,128,166,0.16)',
+        fillPreview: 'rgba(89,128,166,0.12)',
+        stroke: '#47779a',
+        strokePreview: 'rgba(89,128,166,0.72)',
+        selected: '#5980a6',
+      },
+    });
   }
 
   // Build the shared-endpoint index used by the wall renderer. Identity is

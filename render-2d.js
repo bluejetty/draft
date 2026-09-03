@@ -795,6 +795,112 @@ if (!window.DraftRender2D) {
     });
   }
 
+
+  // ─── The floor slab in plan ───────────────────────────────────────────────
+  // Outline, fill, corner handles, and — for a garage slab — the dashed
+  // thickened-edge ring and the pour/slope note. Openings cut from the floor
+  // are holes in the fill, drawn even-odd rather than subtracted, so a hole
+  // reads as a hole at any zoom.
+  //
+  // Three modes share one path: a reference floor (another level shown
+  // faintly beneath), a preview while drawing, and the committed slab.
+  function drawFloor2D(ctx, toS, floor, options = {}, env) {
+    const points = floor?.points || [];
+    if (points.length < 2) return;
+    const { preview = false, referenceColor = null, selected = false } = options;
+    const screenPoints = points.map(toS);
+    // Openings cut from this floor render as holes in the fill (even-odd).
+    const holes = floor?.id
+      ? env.surfaceOpeningsFor('floor', floor.id).map(opening => opening.points.map(toS))
+      : [];
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(screenPoints[0].x, screenPoints[0].y);
+    screenPoints.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+
+    if (referenceColor) {
+      if (points.length >= 3) {
+        ctx.closePath();
+        holes.forEach(hole => {
+          ctx.moveTo(hole[0].x, hole[0].y);
+          hole.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+          ctx.closePath();
+        });
+        ctx.fillStyle = referenceColor.replace(/[\d.]+\)$/, '0.08)');
+        ctx.fill('evenodd');
+      }
+      ctx.strokeStyle = referenceColor;
+      ctx.lineWidth = 1.25;
+      ctx.setLineDash([5, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      return;
+    }
+
+    if (points.length >= 3) {
+      ctx.closePath();
+      holes.forEach(hole => {
+        ctx.moveTo(hole[0].x, hole[0].y);
+        hole.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+        ctx.closePath();
+      });
+      ctx.fillStyle = preview ? env.colors.fillPreview : env.colors.fill;
+      ctx.fill('evenodd');
+    }
+    ctx.strokeStyle = selected ? env.colors.selected : (preview ? env.colors.strokePreview : env.colors.stroke);
+    ctx.lineWidth = selected ? 3 : 1.5;
+    if (preview) ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (!preview) {
+      ctx.fillStyle = selected ? env.colors.selected : env.colors.stroke;
+      screenPoints.forEach(point => ctx.fillRect(point.x - 2.5, point.y - 2.5, 5, 5));
+      holes.forEach(hole => hole.forEach(point => ctx.fillRect(point.x - 2, point.y - 2, 4, 4)));
+    }
+    // A garage slab carries its pour + slope note so the plan reads the spec.
+    // A thickened-edge slab also shows a dashed inset ring where the 1'-0"
+    // perimeter edge and its 45° taper give way to the 4" field.
+    if (floor?.garage && points.length >= 3) {
+      if (floor.thickenedEdge === true) {
+        const inset = env.offsetOutline(
+          points.map(pt => ({ x: pt.x, z: pt.z })),
+          -((env.garageEdgeDepthIn + env.garageEdgeTaperRunIn) / 12),
+        ).map(toS);
+        if (inset.length >= 3) {
+          ctx.beginPath();
+          ctx.moveTo(inset[0].x, inset[0].y);
+          inset.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+          ctx.closePath();
+          ctx.strokeStyle = selected ? env.colors.selected : env.colors.stroke;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+      const centroid = screenPoints.reduce(
+        (sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }),
+        { x: 0, y: 0 },
+      );
+      ctx.fillStyle = env.colors.stroke;
+      ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      const slope = Number(floor.slopeInPerFt) || 0;
+      const pour = env.formatInchesOnly(Math.round((floor.thickness || env.garageSlabThicknessIn / 12) * 12));
+      const note = floor.thickenedEdge === true
+        ? `${pour} THICKENED-EDGE SLAB — LEVEL, 1'-0" EDGE, 45° TAPER`
+        : slope ? `${pour} GARAGE SLAB — SLOPE ${slope === 1 / 8 ? '1/8' : slope}"/FT TO DOOR` : `${pour} GARAGE SLAB`;
+      ctx.fillText(
+        note,
+        centroid.x / screenPoints.length,
+        centroid.y / screenPoints.length + 6,
+      );
+    }
+    ctx.restore();
+  }
+
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
@@ -804,6 +910,7 @@ if (!window.DraftRender2D) {
     drawGrid2D,
     drawOrigin2D,
     drawStairs2D,
+    drawFloor2D,
   });
 })();
 }
