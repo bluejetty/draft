@@ -82,6 +82,55 @@ and it is the first job of any tier-3 rename, not an afterthought to it.
 
 ---
 
+## Which fix a collision needs
+
+Movie, 3 Sep, on the overloaded words: *"there is 3 meanings that all use the
+same word quite often… quite often share characteristics though."*
+
+That second half is the test, and it decides the fix. **Do the two meanings
+share characteristics?**
+
+**They share characteristics — same idea, different thing it is applied to.**
+FRAMING of a wall, of a floor, of a roof: all of them mean how the boards go
+together. That is one real construction term doing its job three times, not a
+collision. **Fix: qualify it.** Say *wall framing*, *floor framing*, *roof
+framing*. Renaming here would be the damage — it would split one true concept
+into three fake ones.
+
+**They share nothing — two unrelated ideas wearing one word.** LAYOUT the
+sheet composer and LAYOUT the joist-and-beam arrangement have nothing in
+common. Neither do FLOOR the storey and FLOOR the concrete slab. **Fix: one of
+them gives up the word**, and it is whichever is cheaper to move — never the
+one written into saved drawings.
+
+### VIEW splits both ways, which is why it bit
+
+- camera vs layer set — share nothing. A homonym. One gives up the word, and
+  it cannot be the stored field, so it is the camera sense that should move.
+- the layer-set **selection** vs an item's layer-set **membership** — both are
+  genuinely "the layer set". They share characteristics. Qualify: *the
+  selected layer set* and *the item's layer set*.
+
+**And the bug came from the second pair, not the first.** Nobody has ever
+confused the camera with a layer set; they share nothing, so context sorts it
+out instantly. But the selection default and the membership default are *both*
+truthfully "the default layer set" — which is exactly why substituting one for
+the other passed review, passed a longhand spec, and shipped.
+
+> **So the dangerous collisions are the ones that share characteristics, not
+> the ones that do not.** This inverts the ranking: earlier today we agreed to
+> rank candidates by sites × senses. That is wrong. Site count measures how
+> much *renaming* a word would cost, not how likely it is to mislead someone.
+> Rank by **how much the senses share** — the near-misses are what get
+> substituted for each other.
+
+By that ranking: VIEW's selection/membership pair first (it has already cost a
+bug), FRAMING's three next (they share the most, so they need qualifying
+rather than renaming), and LAYOUT last despite having a whole page named after
+it, because nobody will ever mistake a sheet composer for a joist.
+
+---
+
 ## Candidates — measured, not yet ruled
 
 Movie's purpose for this file, 3 Sep: *"agreed terms so we can talk clearly to
