@@ -82,11 +82,18 @@ const dropBulge = src => {
 // records through a Proxy rather than enumerating methods: any call lands on
 // the tape as { op, args }, any assignment as { op: 'set', prop, value }.
 //
-// Two things it cannot fake away. measureText must return a width or every
+// Three things it cannot fake away. measureText must return a width or every
 // painter that centres a label divides by undefined -- it returns a
 // proportional stand-in, so tests may assert that a box is drawn around the
-// text but never its exact pixel width. And drawing state that a painter
-// reads back must have a plausible default, hence the seeded values.
+// text but never its exact pixel width. Drawing state that a painter reads
+// back must have a plausible default, hence the seeded values.
+//
+// And clip() is RECORDED BUT NOT ENFORCED. A real canvas clips drawing to the
+// current path; a tape cannot. drawWallSeg2D fills each layer band, clips to
+// it, then rules diagonal hatch lines far outside it and lets the clip cut
+// them back -- so the hatch geometry on the tape runs well past the wall.
+// Measuring a wall's thickness off the whole tape therefore reads too wide.
+// Geometry assertions use boundaryPass() below, which is the unclipped pass.
 function recordingCtx() {
   const tape = [];
   const state = {
@@ -125,6 +132,22 @@ const calls = (ctx, op) => ctx.tape.filter(e => e.op === op).map(e => e.args);
 const count = (ctx, op) => calls(ctx, op).length;
 const sets = (ctx, prop) => ctx.tape.filter(e => e.op === 'set' && e.prop === prop).map(e => e.value);
 const painted = ctx => ctx.tape.some(e => ['stroke', 'fill', 'fillText', 'fillRect', 'drawImage', 'strokeRect'].includes(e.op));
+
+// Everything after the last restore(): for drawWallSeg2D that is the boundary
+// lines, end caps and endpoint dots -- the part drawn with no clip in force,
+// and so the only part whose coordinates a tape can be trusted on.
+const boundaryPass = ctx => {
+  let last = -1;
+  ctx.tape.forEach((e, i) => { if (e.op === 'restore') last = i; });
+  const slice = ctx.tape.slice(last + 1);
+  return { tape: slice, ...Object.fromEntries([]) };
+};
+const spanY = ctx => {
+  const ys = boundaryPass(ctx).tape
+    .filter(e => e.op === 'moveTo' || e.op === 'lineTo')
+    .map(e => e.args[1]);
+  return { min: Math.min(...ys), max: Math.max(...ys) };
+};
 
 // A world→screen transform with a real scale and offset, so a painter that
 // forgets to project is visible: unprojected world feet would land near zero.
@@ -1080,6 +1103,349 @@ suite('drawRoof2D', 'an opening in a roof is a hole, dotted like the roof itself
   expect('one even-odd fill covers both rings',
     calls(ctx, 'fill').filter(a => a[0] === 'evenodd').length, 1);
   expect('roof corners and hole corners are both dotted', count(ctx, 'arc'), 8);
+});
+
+// ── drawOutlines2D: the scope colours, the marks, and the live trace ──
+const OUT_COLORS = {
+  boneyard: '#c33', level: '#36c',
+  garageBoneyard: '#e83', garageLevel: '#93c',
+  traceHouse: '#d22', traceAttached: '#28d',
+};
+const square = (x, z, w) => [{ x, z }, { x: x + w, z }, { x: x + w, z: z + w }, { x, z: z + w }];
+const OUTLINE = { id: 'o1', points: square(0, 0, 10) };
+const outlinesEnv = over => ({
+  isPrinting: false,
+  boneyardActive: false,
+  colors: OUT_COLORS,
+  outlines: [OUTLINE],
+  boneyardOutlines: [],
+  isSelected: () => false,
+  showHandles: false,
+  segmentCount: outline => outline.points.length,
+  segment: (outline, i) => ({
+    start: outline.points[i],
+    end: outline.points[(i + 1) % outline.points.length],
+  }),
+  controlPoint: () => ({ x: 0, z: 0 }),
+  geometryFor: () => ({ center: { x: 5, z: 0 }, ux: 1, uz: 0 }),
+  label: () => '',
+  activeTool: 'select', fenestrationType: 'window', snapPt: null,
+  markPlacement: () => null,
+  outlineDrawing: false, outlinePoints: [], outlineStart: null, outlineGarage: null,
+  frozenEnd: null,
+  ...over,
+});
+
+suite('drawOutlines2D', 'outlines are a working aid, not part of a print', R => {
+  const ctx = recordingCtx();
+  R.drawOutlines2D(ctx, toS, outlinesEnv({ isPrinting: true }));
+  expect('nothing painted', ctx.tape.length, 0);
+});
+
+suite('drawOutlines2D', 'the scope colours are the red/blue all-levels language', R => {
+  const strokeOn = (boneyardActive, garage) => {
+    const ctx = recordingCtx();
+    R.drawOutlines2D(ctx, toS, outlinesEnv({
+      boneyardActive,
+      outlines: [{ ...OUTLINE, garage }],
+      boneyardOutlines: [{ ...OUTLINE, garage }],
+    }));
+    return sets(ctx, 'strokeStyle');
+  };
+  expect('a level edit is local, so BLUE', strokeOn(false, false).includes(OUT_COLORS.level), true);
+  expect('a boneyard edit moves every level, so RED', strokeOn(true, false).includes(OUT_COLORS.boneyard), true);
+  expect('a garage on a level is one shade over', strokeOn(false, true).includes(OUT_COLORS.garageLevel), true);
+  expect('and on the boneyard likewise', strokeOn(true, true).includes(OUT_COLORS.garageBoneyard), true);
+});
+
+suite('drawOutlines2D', 'the boneyard shows the masters, not the level outlines', R => {
+  const ctx = recordingCtx();
+  let askedFor = [];
+  R.drawOutlines2D(ctx, toS, outlinesEnv({
+    boneyardActive: true,
+    outlines: [{ ...OUTLINE, id: 'level' }],
+    boneyardOutlines: [{ ...OUTLINE, id: 'master' }],
+    segmentCount: outline => { askedFor.push(outline.id); return outline.points.length; },
+  }));
+  expect('only the master is drawn', [...new Set(askedFor)].join(','), 'master');
+});
+
+suite('drawOutlines2D', 'a half-drawn outline of one point is skipped', R => {
+  const ctx = recordingCtx();
+  R.drawOutlines2D(ctx, toS, outlinesEnv({ outlines: [{ id: 'o', points: [{ x: 0, z: 0 }] }] }));
+  expect('nothing painted', painted(ctx), false);
+});
+
+suite('drawOutlines2D', 'a selected outline is drawn heavier', R => {
+  const widthWhen = selected => {
+    const ctx = recordingCtx();
+    R.drawOutlines2D(ctx, toS, outlinesEnv({ isSelected: () => selected }));
+    return Math.max(...sets(ctx, 'lineWidth'));
+  };
+  expect('heavier when picked', widthWhen(true) > widthWhen(false), true);
+});
+
+suite('drawOutlines2D', 'a bulged edge curves; a straight one does not', R => {
+  const ctx = recordingCtx();
+  R.drawOutlines2D(ctx, toS, outlinesEnv({
+    segment: (outline, i) => ({
+      start: outline.points[i],
+      end: outline.points[(i + 1) % outline.points.length],
+      bulge: i === 0 ? 0.4 : 0,
+    }),
+    controlPoint: () => ({ x: 5, z: -3 }),
+  }));
+  expect('one edge curves', count(ctx, 'quadraticCurveTo'), 1);
+  expect('through its control point', JSON.stringify(calls(ctx, 'quadraticCurveTo')[0].slice(0, 2)), '[450,270]');
+});
+
+suite('drawOutlines2D', 'a garage outline says GARAGE on itself', R => {
+  const plain = recordingCtx();
+  R.drawOutlines2D(plain, toS, outlinesEnv());
+  expect('a house does not', count(plain, 'fillText'), 0);
+  const garage = recordingCtx();
+  R.drawOutlines2D(garage, toS, outlinesEnv({ outlines: [{ ...OUTLINE, garage: true }] }));
+  expect('a garage does', calls(garage, 'fillText')[0][0], 'GARAGE');
+});
+
+suite('drawOutlines2D', 'handles appear only when the page asks for them', R => {
+  const handlesWhen = showHandles => {
+    const ctx = recordingCtx();
+    R.drawOutlines2D(ctx, toS, outlinesEnv({ showHandles }));
+    return count(ctx, 'fillRect');
+  };
+  expect('off', handlesWhen(false), 0);
+  expect('on, one per corner', handlesWhen(true), 4);
+});
+
+suite('drawOutlines2D', 'an outline carries its own fenestration marks', R => {
+  const ctx = recordingCtx();
+  R.drawOutlines2D(ctx, toS, outlinesEnv({
+    outlines: [{ ...OUTLINE, marks: [{ widthFt: 3, type: 'door' }, { widthFt: 3, type: 'window' }] }],
+  }));
+  expect('both marks lettered', calls(ctx, 'fillText').map(a => a[0]).join(''), 'DW');
+});
+
+// The ghost mark under the cursor: four separate conditions gate it.
+const ghostEnv = over => outlinesEnv({
+  boneyardActive: true,
+  boneyardOutlines: [OUTLINE],
+  activeTool: 'fenestration',
+  fenestrationType: 'window',
+  snapPt: { x: 5, z: 0 },
+  markPlacement: () => ({ edgeId: 'e0', offsetFt: 2, widthFt: 3, outline: OUTLINE }),
+  ...over,
+});
+
+suite('drawOutlines2D', 'the fenestration ghost is drawn faint under the cursor', R => {
+  const ctx = recordingCtx();
+  R.drawOutlines2D(ctx, toS, ghostEnv());
+  expect('a ghost letter', calls(ctx, 'fillText').map(a => a[0]).join(''), 'W');
+  expect('drawn faint', sets(ctx, 'globalAlpha').includes(0.55), true);
+  expect('and the alpha is put back', sets(ctx, 'globalAlpha').pop(), 1);
+});
+
+suite('drawOutlines2D', 'each of the ghost gates turns it off on its own', R => {
+  const ghosted = over => {
+    const ctx = recordingCtx();
+    R.drawOutlines2D(ctx, toS, ghostEnv(over));
+    return sets(ctx, 'globalAlpha').includes(0.55);
+  };
+  expect('off the boneyard', ghosted({ boneyardActive: false, outlines: [OUTLINE] }), false);
+  expect('with another tool', ghosted({ activeTool: 'select' }), false);
+  expect('placing stairs rather than an opening', ghosted({ fenestrationType: 'stairs' }), false);
+  expect('with nothing under the cursor', ghosted({ snapPt: null }), false);
+  expect('where the placement is refused', ghosted({ markPlacement: () => ({ error: 'no edge' }) }), false);
+  expect('but on, with all five satisfied', ghosted({}), true);
+});
+
+// The live trace.
+const traceEnv = over => outlinesEnv({
+  outlines: [],
+  outlineDrawing: true,
+  outlinePoints: square(0, 0, 10).slice(0, 3),
+  outlineStart: { x: 0, z: 0 },
+  snapPt: { x: 12, z: 8 },
+  ...over,
+});
+
+suite('drawOutlines2D', 'the trace wears its own top-bar colour, not the edit-scope one', R => {
+  const traceColour = outlineGarage => {
+    const ctx = recordingCtx();
+    R.drawOutlines2D(ctx, toS, traceEnv({ outlineGarage }));
+    return sets(ctx, 'strokeStyle');
+  };
+  expect('a house trace is HOUSE red', traceColour(null).includes(OUT_COLORS.traceHouse), true);
+  expect('an attached garage is BLUE', traceColour('attached').includes(OUT_COLORS.traceAttached), true);
+  expect('a detached one is PURPLE', traceColour('detached').includes(OUT_COLORS.garageLevel), true);
+});
+
+suite('drawOutlines2D', 'a rubber band runs from the last corner to the cursor', R => {
+  const ctx = recordingCtx();
+  R.drawOutlines2D(ctx, toS, traceEnv());
+  expect('the band reaches the cursor', JSON.stringify(calls(ctx, 'lineTo').pop()), '[520,380]');
+});
+
+suite('drawOutlines2D', 'a frozen end wins over the cursor, so a typed length holds', R => {
+  const ctx = recordingCtx();
+  R.drawOutlines2D(ctx, toS, traceEnv({ frozenEnd: { x: 4, z: 0 } }));
+  expect('the band goes to the frozen end', JSON.stringify(calls(ctx, 'lineTo').pop()), '[440,300]');
+});
+
+suite('drawOutlines2D', 'with no cursor at all the trace is just its placed corners', R => {
+  const ctx = recordingCtx();
+  R.drawOutlines2D(ctx, toS, traceEnv({ snapPt: null }));
+  expect('two lines for three corners', count(ctx, 'lineTo'), 2);
+});
+
+suite('drawOutlines2D', 'a house rings its start once it can close; an attached garage also rings its end', R => {
+  const rings = over => {
+    const ctx = recordingCtx();
+    R.drawOutlines2D(ctx, toS, traceEnv(over));
+    return count(ctx, 'arc');
+  };
+  expect('two corners cannot close yet', rings({ outlinePoints: square(0, 0, 10).slice(0, 2) }), 0);
+  expect('three corners ring the start', rings({}), 1);
+  expect('an attached garage of three rings only the start', rings({ outlineGarage: 'attached' }), 1);
+  expect('at four it rings its last point too, because it finishes there',
+    rings({ outlineGarage: 'attached', outlinePoints: square(0, 0, 10) }), 2);
+  expect('a detached garage of four still rings only the start',
+    rings({ outlineGarage: 'detached', outlinePoints: square(0, 0, 10) }), 1);
+});
+
+// ── drawWallSeg2D: the assembly, the reference line, and the two modes ──
+// The real wall table, not a stub: an ICF's three layers and a stud wall's
+// one are the thing being drawn, so inventing a table here would test the
+// invention. wall-types.js reads nothing but its own window slot.
+const WALL_TYPES = (() => {
+  const w = {};
+  new Function('window', fs.readFileSync(path.join(__dirname, '..', 'wall-types.js'), 'utf8'))(w);
+  return w.DraftWallTypes.WALL_TYPES;
+})();
+const wallEnv = { wallTypes: WALL_TYPES };
+const WALL = { start: { x: 0, z: 0 }, end: { x: 10, z: 0 } };
+const typeOf = id => WALL_TYPES.find(w => w.id === id);
+
+suite('drawWallSeg2D', 'a wall with no length is not drawn', R => {
+  const ctx = recordingCtx();
+  R.drawWallSeg2D(ctx, toS, { start: { x: 5, z: 5 }, end: { x: 5, z: 5 } }, false, null, null, wallEnv);
+  expect('nothing painted', ctx.tape.length, 0);
+});
+
+suite('drawWallSeg2D', 'an unknown wall type falls back to the 2x6 stud wall', R => {
+  const spanOf = wallType => {
+    const ctx = recordingCtx();
+    R.drawWallSeg2D(ctx, toS, { ...WALL, wallType }, false, null, null, wallEnv);
+    const { min, max } = spanY(ctx);
+    return max - min;
+  };
+  expect('a wall type nobody defined is drawn as the default',
+    spanOf('no_such_wall'), spanOf('stud_2x6'));
+  expect('and that default is the second entry, not the first',
+    spanOf('no_such_wall') === spanOf('stud_2x4'), false);
+});
+
+suite('drawWallSeg2D', 'the assembly is drawn its own thickness wide', R => {
+  const spanOf = wallType => {
+    const ctx = recordingCtx();
+    R.drawWallSeg2D(ctx, toS, { ...WALL, wallType }, false, null, null, wallEnv);
+    const { min, max } = spanY(ctx);
+    return Math.round((max - min) * 100) / 100;
+  };
+  // 10 screen px per foot, so inches/12*10 px.
+  expect('a 2x4 is 3.5in wide', spanOf('stud_2x4'), Math.round(3.5 / 12 * 10 * 100) / 100);
+  expect('an ICF is 11.25in wide', spanOf('icf'), Math.round(11.25 / 12 * 10 * 100) / 100);
+});
+
+suite('drawWallSeg2D', 'the reference line says which side of the drawn line the wall fills', R => {
+  const bandFor = refLine => {
+    const ctx = recordingCtx();
+    R.drawWallSeg2D(ctx, toS, { ...WALL, wallType: 'concrete_8', refLine }, false, null, null, wallEnv);
+    return spanY(ctx);
+  };
+  // The drawn line runs along z=0, which projects to y=300.
+  const left = bandFor('left'), right = bandFor('right'), centre = bandFor('center');
+  // 'left' means the drawn line is the exterior left face and the body fills
+  // to +perp, which for a wall running east is the LOW screen-y edge. Reading
+  // that the other way round failed this check against correct code.
+  expect('left-referenced, the line IS the face the body grows from', left.min, 300);
+  expect('right-referenced, the body grows the other way', right.max, 300);
+  expect('centred, the line is in the middle', Math.round((centre.min + centre.max) / 2), 300);
+  expect('and all three are the same thickness',
+    Math.round(left.max - left.min), Math.round(right.max - right.min));
+});
+
+suite('drawWallSeg2D', 'every layer edge is drawn, so a three-layer wall has four', R => {
+  // Counted on the boundary pass: the hatch inside each layer strokes too,
+  // and counting those made an ICF look like five extra boundaries.
+  const edgesFor = wallType => {
+    const ctx = recordingCtx();
+    R.drawWallSeg2D(ctx, toS, { ...WALL, wallType }, false, null, null, wallEnv);
+    const lines = boundaryPass(ctx).tape.filter(e => e.op === 'lineTo');
+    // Two of them are the end caps; the rest are layer boundaries.
+    return lines.length - 2;
+  };
+  expect('a one-layer wall has two faces', edgesFor('stud_2x6'), 2);
+  expect('a three-layer ICF has four', edgesFor('icf'), 4);
+  expect('and an insulated wall likewise', edgesFor('insulation_6'),
+    typeOf('insulation_6').layers.length + 1);
+});
+
+suite('drawWallSeg2D', 'fill mode stops before the black boundary lines', R => {
+  const full = recordingCtx();
+  R.drawWallSeg2D(full, toS, { ...WALL, wallType: 'icf' }, false, null, null, wallEnv);
+  const filled = recordingCtx();
+  R.drawWallSeg2D(filled, toS, { ...WALL, wallType: 'icf' }, false, null, 'fill', wallEnv);
+  expect('the full pass draws the ink', sets(full, 'strokeStyle').includes('#1d1f20'), true);
+  expect('fill mode does not', sets(filled, 'strokeStyle').includes('#1d1f20'), false);
+  expect('and it draws no endpoint dots either', count(filled, 'arc'), 0);
+});
+
+suite('drawWallSeg2D', 'stroke mode draws the lines without the layer fills', R => {
+  const stroked = recordingCtx();
+  R.drawWallSeg2D(stroked, toS, { ...WALL, wallType: 'concrete_8' }, false, null, 'stroke', wallEnv);
+  const full = recordingCtx();
+  R.drawWallSeg2D(full, toS, { ...WALL, wallType: 'concrete_8' }, false, null, null, wallEnv);
+  expect('the full pass fills the concrete', count(full, 'fill') > count(stroked, 'fill'), true);
+  expect('stroke mode still draws the boundaries', sets(stroked, 'strokeStyle').includes('#1d1f20'), true);
+});
+
+suite('drawWallSeg2D', 'each layer material is filled in its own colour', R => {
+  const ctx = recordingCtx();
+  R.drawWallSeg2D(ctx, toS, { ...WALL, wallType: 'icf' }, false, null, null, wallEnv);
+  const fills = sets(ctx, 'fillStyle');
+  expect('concrete grey', fills.some(f => String(f).startsWith('rgba(182,182,182')), true);
+  expect('insulation blue', fills.some(f => String(f).startsWith('rgba(205,228,248')), true);
+});
+
+suite('drawWallSeg2D', 'a stud bay is white, not tinted, so it reads as a cavity', R => {
+  const ctx = recordingCtx();
+  R.drawWallSeg2D(ctx, toS, { ...WALL, wallType: 'stud_2x6' }, false, null, null, wallEnv);
+  expect('white', sets(ctx, 'fillStyle').includes('#ffffff'), true);
+});
+
+suite('drawWallSeg2D', 'a preview is faint and carries no endpoint dots', R => {
+  const preview = recordingCtx();
+  R.drawWallSeg2D(preview, toS, { ...WALL, wallType: 'stud_2x6' }, true, null, null, wallEnv);
+  expect('no dots', count(preview, 'arc'), 0);
+  expect('and the ink is faint', sets(preview, 'strokeStyle').includes('rgba(29,31,32,0.45)'), true);
+});
+
+suite('drawWallSeg2D', 'a committed wall dots both ends of its centreline', R => {
+  const ctx = recordingCtx();
+  R.drawWallSeg2D(ctx, toS, { ...WALL, wallType: 'stud_2x6' }, false, null, null, wallEnv);
+  expect('two dots', count(ctx, 'arc'), 2);
+  const centres = calls(ctx, 'arc').map(a => `${a[0]},${a[1]}`).join(' ');
+  expect('one on each end, on the drawn line', centres, '400,300 500,300');
+});
+
+suite('drawWallSeg2D', 'an unjoined wall is capped at both ends', R => {
+  const ctx = recordingCtx();
+  R.drawWallSeg2D(ctx, toS, { ...WALL, wallType: 'stud_2x6' }, false, null, null, wallEnv);
+  // Both caps run across the assembly at x=400 and x=500 respectively.
+  const across = calls(ctx, 'moveTo').filter((a, i) => calls(ctx, 'lineTo')[i]
+    && calls(ctx, 'lineTo')[i][0] === a[0]);
+  expect('two end caps', across.length >= 2, true);
 });
 
 // ─── Running ──────────────────────────────────────────────────────────────
