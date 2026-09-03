@@ -153,6 +153,31 @@ Deliberately **not** in the six:
 
 ## Standing rules
 
+- **Constraints that can be satisfied separately but not together belong in one
+  assertion.** The units control oscillated between two opposite bugs: hit
+  boxes big enough to tap (45px) swallowed their neighbour, and hit boxes small
+  enough not to overlap (31px) were too small to tap. Each bug was found by a
+  different check — a hand-written `elementFromPoint` probe and the standing
+  `touch-targets.spec.js` — and each fix satisfied its own check while breaking
+  the other's. **Neither check was wrong and neither was sufficient**, because
+  the layout could not satisfy both and separate assertions let you keep
+  choosing which bug to ship. The fix that ended it asserted both at once —
+  44px in both dimensions AND reachable at its own centre — which no tuning of
+  the number can pass and only a real layout change can. When two properties
+  trade off against each other, testing them apart measures the tuning; testing
+  them together measures the design.
+- **A move that changes behaviour is not a move.** Gilligan, 3 Sep, extracting
+  `_metric` into `formatters.js` as `formatMetres`: he added a `Number.isFinite`
+  guard so it matched its two neighbours, disclosed it as "a behaviour change,
+  just a defensible one", and then withdrew it. The guard may well be right —
+  `''` is silent, and a dimension printing nothing looks like a dimension that
+  is not there — but that is a design question belonging to all three
+  formatters together, and it was riding inside a commit whose entire job was to
+  relocate a function. **Extraction commits are behaviour-neutral or they are
+  not extractions**, because the whole value of "we only moved it" is that it
+  narrows what a later bisect has to consider. Record the open question at the
+  function for whoever rules on it; do not settle it for one of three by being
+  the one who happened to touch it.
 - **A recorded gap is not a control.** The stair-notes bug shipped inside a
   commit whose own message said `Uncovered: no-op'ing it leaves stair-view and
   annotations passing all 9`. The hole was known, measured and written down at
@@ -162,6 +187,18 @@ Deliberately **not** in the six:
   the same commit as the change, not in a follow-up — seventeen painters and
   1,080 lines are still to move, and the instrument that makes it cheap now
   exists.
+- **Current usage is a fact about the present tense, not about the design.**
+  Gilligan, 3 Sep, retracting a claim he had already sent: he measured `body`'s
+  33 call sites — 26 defaulting to `house`, 7 passing `garage`, nothing else
+  reaching the parameter — and reported it as "a closed two-value set". The
+  measurement was right and the conclusion was backwards: `body` exists so
+  garage walls stay unspliced from coincident house walls, and more bodies are
+  already boarded (detached garage, split-level, additions). **An enum with
+  exactly one non-default value is usually a set that has not grown yet, not a
+  set that cannot.** Had that gone unretracted it would have become a rule in
+  RULES-persisted-keys.md, and every future page would have been written
+  against it. Counting call sites answers "what does this do today"; it never
+  answers "what is this for".
 - **A suite's silence is a fact about the suite.** Gilligan, 3 Sep, after
   deleting the entire mitre-join path and watching 244 assertions stay green:
   *"I read 'no test noticed' as 'the code is dormant', when it meant 'the tests

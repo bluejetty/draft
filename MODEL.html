@@ -172,6 +172,7 @@
   // came from, so tier 1 owes three.js nothing.
   const view = { cx: 0, cz: 0, scale: 6 };
   let drawing = null;
+  let dropped = 0;   // items the format module rejected on load
 
   const say = (title, body) => {
     noticeBody.innerHTML = `<h1>${title}</h1>${body}`;
@@ -606,7 +607,10 @@
       + `scale <b>${view.scale.toFixed(2)}</b> px/ft   `
       // Why the grid is or is not there, so its absence reads as a fact about
       // the drawing rather than a broken page.
-      + `datum <b>${datumLabel()}</b>`;
+      + `datum <b>${datumLabel()}</b>`
+      // Malformed geometry is dropped on load, as the old page drops it. Say
+      // how much, so a thinner drawing is a fact rather than a mystery.
+      + (dropped ? `   <b>${dropped} dropped</b>` : '');
   };
 
   // ── pan and zoom ──────────────────────────────────────────────────────────
@@ -696,7 +700,33 @@
       return;
     }
 
-    drawing = parsed;
+    // VALIDATE THE THREE TYPES NOTHING VALIDATED. Every other item type on a
+    // saved drawing goes through drawing-format.js on load; walls, lines and
+    // floors were inflated inline in MODEL.dc.html, so this page read them raw
+    // -- no view whitelist, no wallType check, no zero-length rejection. The
+    // rules now live in the shared module (drawing-format.js) and this is the
+    // first caller of them.
+    //
+    // Rejected items are DROPPED, exactly as the old page drops them, and the
+    // readout says how many so a malformed drawing reads as a fact rather than
+    // as a page that quietly lost geometry.
+    const F = window.DraftDrawingFormat;
+    const levelIds = new Set((parsed.levels || []).map(level => Number(level.id)));
+    const WT = window.DraftWallTypes;
+    const raw = { walls: parsed.walls, lines: parsed.lines, floors: parsed.floors };
+    drawing = {
+      ...parsed,
+      walls: F.walls(parsed.walls, levelIds, {
+        wallTypes: WT.WALL_TYPES,
+        legacyWallTypes: WT.LEGACY_WALL_TYPES,
+        defaultWallTopFt: 8,
+      }),
+      lines: F.lines(parsed.lines, levelIds, {}),
+      floors: F.floors(parsed.floors, levelIds, { defaultFloorThickness: 0.75 }),
+    };
+    dropped = ['walls', 'lines', 'floors']
+      .map(k => (Array.isArray(raw[k]) ? raw[k].length : 0) - drawing[k].length)
+      .reduce((a, b) => a + b, 0);
     fit();
     paint();
   };

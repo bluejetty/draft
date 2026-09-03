@@ -71,6 +71,39 @@ Getting 3658 × 3 would mean accumulating snapped segment *lengths* rather than
 snapping nodes, which is not requirement 1 below and would drift the far end of
 a long run. Requirement 1 is right; the illustration under it was wrong.
 
+## A correction that was itself wrong — read this before "fixing" the above
+
+On 3 Sep this board was edited to say the worked example above could not
+happen, on the grounds that nothing in the app prints millimetres. **That edit
+was wrong and has been reverted.** The example is correct as written.
+
+The error was a one-polarity grep. Searching `units === 'metric'` finds four
+sites — save, load, `_gridStepFt()`, LAYOUT's load — and none of them formats
+anything, which reads as "there is no metric display". **The display branches
+test the other side:**
+
+```js
+this.state.units === 'imperial' ? this._ftIn(value) : this._metric(value)
+```
+
+Seven such sites, all invisible to that grep. And:
+
+```js
+_metric(feet) { return (feet * 0.3048).toFixed(3) + ' m'; }
+```
+
+Metres to three decimals **is** millimetre precision — the app prints `3.658 m`
+where this board says `3658 mm`. Same number, different label.
+
+Two things follow, and both matter:
+
+- **Metric mode is not half-built.** The snap grid is 1 mm and the display
+  resolves to 1 mm. They agree.
+- **A grep for one side of a boolean is not a search for the concept.** A
+  fall-through branch is invisible to it, and an absence found that way is a
+  fact about the query. Caught by Gilligan reading the branch sites rather than
+  accepting the claim.
+
 ## The two grids do not divide each other
 
 1/16" = **1.5875 mm** exactly. The finest grid that represents both is
@@ -104,6 +137,98 @@ always returns to the same sixteenth, because the return trip moves at most
 **A metric drawing settles once**, by at most 1 mm, and then never moves again —
 ten round trips give the same 1 mm as one. It is a fixed point, not a walk.
 That is what makes "change freely back and forth" safe.
+
+## CURRENT RULING — Devin, 3 Sep (amends board #313)
+
+**The toggle re-snaps.** Movie's ask supersedes #313's soft-switch behaviour.
+The recommendation in this board stands; what follows below it is the history of
+how it got here, kept because the reasoning matters.
+
+Devin's reasoning, so the amendment does not read as a whim:
+
+- **#313's "never automatic" was aimed at SOFTWARE-initiated geometry movement.**
+  A drawing must never re-snap because it was opened, loaded or re-derived. A
+  drafter pressing the toggle is a deliberate act. The two were fused because
+  the re-snap was assumed to be a walk that accumulates.
+- **The measurements killed that assumption**: one settle under 1 mm, idempotent
+  both directions afterwards (0 of 7,681 points moved on the imperial round
+  trip), worst single move 0.79 mm against a framer's ±3 mm — which is the
+  "≤1/32", invisible" bar #313 itself set for the hard re-snap.
+- **The soft switch's safety was partly illusory.** Its justification was
+  "always safe", but it prints partials that do not sum to their overall with
+  no indication anything is approximate. *A display that quietly lies about sums
+  is less safe than a settle nobody can see.*
+
+### The illustration in this board was wrong; the requirement was right
+
+Measured by Gilligan, 3 Sep, building it: re-snapping **each node from the
+datum** yields segments of **3658, 3657, 3658 mm — summing to 10973, which *is*
+the overall.** The goal is met *exactly*, not approximately.
+
+This board illustrated it as 3658 × 3 = 10974 matching an overall of 10974.
+That is not what the fix does, and the difference matters:
+
+- **Snapping positions telescopes.** The overall is the difference between the
+  first and last snapped node, so the partials sum to it *by construction*.
+  There is no residual error to argue about.
+- **Getting three equal 3658s would mean accumulating snapped LENGTHS**, which
+  is a different algorithm, is not requirement 1, and would drift the far end of
+  a long run.
+
+**The real cost is not a leftover millimetre in the sum. It is that three walls
+a drafter drew equal no longer print equal** — 3.658 / 3.657 / 3.658. That is
+the trade being made, and it is the one to put in the CONVERT confirmation,
+because it is the thing a drafter will notice.
+
+### Three constraints kept from #313
+
+1. **`_resnapToUnits()` stays a pure, standalone function.** The toggle calls
+   it; it remains its own seam and could still become a separate command.
+2. **Load never re-snaps.** Opening a drawing, in either mode, moves nothing.
+   The drafter's toggle press is the only trigger. **Pin it with a spec.**
+3. **Record the amendment on #313 itself** — "toggle performs the re-snap
+   (Movie's ask, measured invisible-on-paper, 3 Sep); soft-only display retired"
+   — so the retired ruling does not become folklore that contradicts the code.
+
+> The distinction that survives is not *automatic vs commanded* but
+> **software-initiated vs drafter-initiated**. A load, a re-derive or an import
+> must never move geometry. A press may.
+
+---
+
+## Superseded: the soft-switch ruling this board was rewritten for
+
+**The toggle is a soft switch.** Board #313 / audit Q2 rules it display-only: it
+re-prints the drawing in the other system and does not touch geometry. A hard
+re-snap is a **separate, deliberate command** — never automatic, never a side
+effect of switching.
+
+That overrules this board's central recommendation, which was to re-snap on the
+toggle. It is the better design and for a reason I did not have: **a drafter who
+switches units to read something is not asking to have their drawing altered.**
+Announcing the change, which is what I proposed instead, is a worse answer to
+that than simply not making it.
+
+**What survives, unchanged:**
+
+- The problem is real. An imperial drawing read in metric shows partials that
+  do not sum to their overall — 3.658 × 3 against 10.973. A drafter sees it.
+- The measurements below stand: the two grids do not divide each other, worst
+  single re-snap is 0.79375 mm, and round-tripping is stable (imperial exactly,
+  metric settling once within 1 mm).
+
+**What changes:** those numbers now describe **what the deliberate command
+costs**, not what a toggle does behind the drafter's back. They are the answer
+to "what happens if I run CONVERT TO METRIC", which is a question a drafter is
+entitled to ask before pressing it — so they belong in that command's
+confirmation, not in a notice after the fact.
+
+> Worth recording plainly: every measurement on this board held up under
+> challenge, and both of its design opinions were wrong — first the direction,
+> then the trigger. Measurement lives in the code and can be checked. Intent
+> lives in the head of whoever designed it, and guessing at it produced a
+> confident, well-evidenced, wrong proposal twice running. **Ask the designer
+> before proposing; measure before believing.**
 
 ## What the build needs
 

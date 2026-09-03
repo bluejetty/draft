@@ -256,6 +256,39 @@ when the wall moves. It looks like it is pinned to a point; it is not.
 > Movie's ruling: **node for lines, object placement for objects.** Say
 > "object" or "object placement" and never "the toilet's node".
 
+### 1/16" — TWO OF THEM, and they are not related
+
+Movie, 3 Sep, reading a ruling about paper scales: *"he's talking about the
+layouts ok i was thinking th 1/16" snap."* Both readings are correct English and
+they are different quantities.
+
+| written | what it is | where it lives |
+|---|---|---|
+| **1/16"** | a sixteenth of an inch **of building** — the finest increment a node can land on | `_gridStepFt()` = `1/192` ft, `formatters.js` `SIXTEENTH_IN` |
+| **1/16" = 1'-0"** | a sixteenth of an inch **of paper** standing for one foot of building | `LAYOUT.dc.html` `SCALES`, `AUTO_SCALE_PREFS` |
+
+Say **the sixteenth grid** or **the modelling floor** for the first, and always
+write the second in full — `1/16" = 1'-0"`, never bare. The scale is a ratio and
+the snap is a length; the only thing they share is the notation.
+
+**Why this one is dangerous despite the senses being far apart.** Everything
+else in this file collides because two meanings sit *close* together. These two
+sit nowhere near each other — a building dimension against a paper ratio — and
+are confused anyway, because the written form is identical and both are inches
+inside a drafting program. Context does not separate them: a sentence about
+scale and a sentence about snapping both read as "sixteenths of an inch".
+
+> **A second axis for ranking candidates.** Adjacent senses of one word are one
+> hazard. **Identical notation for unrelated quantities is another, and
+> proximity ranking cannot see it** — these two would rank as no risk at all.
+> When the same string means two things measured in the same unit, it belongs
+> here however far apart the concepts are.
+
+For the record, the automatic ladder holds no 1/16" at all: `AUTO_SCALE_PREFS`
+stops at 3/32" and `AUTO_SCALE_LAST_RESORT` is also 3/32". `1/16" = 1'-0"` is a
+manual pick, deliberately — it reads too small to draft from when dealt
+silently.
+
 ### VIEW
 
 **Our worst collision by site count — 137, in three senses.** Measured 3 Sep
