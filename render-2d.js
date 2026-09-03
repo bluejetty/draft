@@ -581,11 +581,109 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+
+  // ─── Chrome: what sits under and around the drawing ───────────────────────
+  // Three painters with no geometry of their own — the scanned underlay, the
+  // measuring grid, and the datum marker. They move first because they read
+  // the least: between them the env is nine plain values, no model objects.
+
+  // Underlays sit beneath everything drawn: over the grid, under geometry.
+  // Only the active level's, and never on a print — a scan is a tracing aid,
+  // not part of the drawing.
+  function drawUnderlays2D(ctx, toS, env) {
+    if (env.isPrinting) return;
+    const underlays = env.underlays || [];
+    if (!underlays.length || !env.activeLevel) return;
+    for (const underlay of underlays) {
+      if (underlay.levelId !== env.activeLevel.id) continue;
+      const image = env.imageFor(underlay.id);
+      if (!image) continue;
+      const halfW = underlay.widthFt / 2, halfH = underlay.heightFt / 2;
+      const a = toS({ x: underlay.x - halfW, y: 0, z: underlay.z - halfH });
+      const b = toS({ x: underlay.x + halfW, y: 0, z: underlay.z + halfH });
+      const left = Math.min(a.x, b.x), top = Math.min(a.y, b.y);
+      const width = Math.abs(b.x - a.x), height = Math.abs(b.y - a.y);
+      if (width < 1 || height < 1) continue;
+      ctx.save();
+      ctx.globalAlpha = underlay.opacity;
+      ctx.drawImage(image, left, top, width, height);
+      ctx.restore();
+    }
+  }
+
+  // No datum, no grid: an untouched model space has nothing to measure from,
+  // and a grid drawn from the world's 0,0 would be measuring from a point
+  // that means nothing to this drawing. The look is unchanged once there is
+  // one — only what it counts from moves.
+  //
+  // Top view only; the caller decides that and passes no datum otherwise.
+  function drawGrid2D(ctx, w, h, env) {
+    const datum = env.datum;
+    if (!datum) return;
+    const halfH = env.halfH;
+    const halfW = halfH * (w / h);
+    const camX = env.camX || 0;
+    const camZ = env.camZ || 0;
+
+    // World → screen (top-down ortho, up=(0,0,-1) so +Z = down on screen)
+    const sx = wx => (wx - camX + halfW) / (2 * halfW) * w;
+    const sy = wz => (wz - camZ + halfH) / (2 * halfH) * h;
+
+    const drawGridLines = (unit, color, lineWidth) => {
+      ctx.beginPath();
+      ctx.strokeStyle = color; ctx.lineWidth = lineWidth;
+      const x0 = datum.x + Math.ceil((camX - halfW - datum.x) / unit) * unit;
+      const z0 = datum.z + Math.ceil((camZ - halfH - datum.z) / unit) * unit;
+      for (let x = x0; x <= camX + halfW + unit; x += unit) {
+        ctx.moveTo(sx(x), 0); ctx.lineTo(sx(x), h);
+      }
+      for (let z = z0; z <= camZ + halfH + unit; z += unit) {
+        ctx.moveTo(0, sy(z)); ctx.lineTo(w, sy(z));
+      }
+      ctx.stroke();
+    };
+
+    const zoomed = halfH < 50;
+    if (zoomed) drawGridLines(1,   '#e8e8e8', 0.5); // 1ft fine
+    drawGridLines(10,  '#cccccc', 0.5);              // 10ft major / fine
+    if (!zoomed) drawGridLines(100, '#aaaaaa', 0.75);// 100ft major when zoomed out
+  }
+
+  // The datum is the drawing's, not the world's, so the target stands on the
+  // first node placed rather than on 0,0 — and on nothing at all before one
+  // exists. It moves to the SITE level when that plan can draw the house
+  // (board NEW-5 part 3); until then it stays visible here, because the
+  // origin still has hold of the cursor and an unseen snap target is worse
+  // than a marker sitting on a node the drafter placed themselves.
+  //
+  // The point goes to toS as a plain object rather than a THREE.Vector3: toS
+  // reads x / y || 0 / z off whatever it is given and builds its own vector,
+  // so the two are identical and the painter carries no THREE dependency.
+  function drawOrigin2D(ctx, toS, env) {
+    const datum = env.datum;
+    if (!datum) return;
+    const o = toS({ x: datum.x, y: env.elev || 0, z: datum.z });
+    ctx.save();
+    ctx.strokeStyle = '#557a46';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(o.x, o.y, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(o.x - 12, o.y); ctx.lineTo(o.x + 12, o.y);
+    ctx.moveTo(o.x, o.y - 12); ctx.lineTo(o.x, o.y + 12);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
     drawShape2D,
     drawFixture2D,
+    drawUnderlays2D,
+    drawGrid2D,
+    drawOrigin2D,
   });
 })();
 }

@@ -3566,26 +3566,12 @@ class Component extends DCLogic {
   // Reference-only: underlays sit under the plan on their level, never print,
   // and never join selection.
   _drawUnderlays2D(ctx, toS) {
-    if (this._isPrinting) return;
-    const underlays = this._underlays || [];
-    if (!underlays.length) return;
-    const level = this.state.levels[this.state.activeLevelIdx];
-    if (!level) return;
-    for (const underlay of underlays) {
-      if (underlay.levelId !== level.id) continue;
-      const image = this._underlayImages.get(underlay.id);
-      if (!image) continue;
-      const halfW = underlay.widthFt / 2, halfH = underlay.heightFt / 2;
-      const a = toS({ x: underlay.x - halfW, y: 0, z: underlay.z - halfH });
-      const b = toS({ x: underlay.x + halfW, y: 0, z: underlay.z + halfH });
-      const left = Math.min(a.x, b.x), top = Math.min(a.y, b.y);
-      const width = Math.abs(b.x - a.x), height = Math.abs(b.y - a.y);
-      if (width < 1 || height < 1) continue;
-      ctx.save();
-      ctx.globalAlpha = underlay.opacity;
-      ctx.drawImage(image, left, top, width, height);
-      ctx.restore();
-    }
+    window.DraftRender2D.drawUnderlays2D(ctx, toS, {
+      isPrinting: this._isPrinting,
+      underlays: this._underlays,
+      activeLevel: this.state.levels[this.state.activeLevelIdx],
+      imageFor: id => this._underlayImages.get(id),
+    });
   }
 
   _formatByteSize(bytes) {
@@ -6562,39 +6548,12 @@ class Component extends DCLogic {
   _drawGrid2D(ctx, w, h) {
     // Only meaningful for top / plan view
     if (this.state.activeView !== 'top') return;
-    // No datum, no grid: an untouched model space has nothing to measure from,
-    // and a grid drawn from the world's 0,0 would be measuring from a point
-    // that means nothing to this drawing. The look is unchanged once there is
-    // one — only what it counts from moves.
-    const datum = this.state.drawingOrigin;
-    if (!datum) return;
-    const halfH = this._orthoHalfH;
-    const halfW = halfH * (w / h);
-    const camX  = this._orthoCamX || 0;
-    const camZ  = this._orthoCamZ || 0;
-
-    // World → screen (top-down ortho, up=(0,0,-1) so +Z = down on screen)
-    const sx = wx => (wx - camX + halfW) / (2 * halfW) * w;
-    const sy = wz => (wz - camZ + halfH) / (2 * halfH) * h;
-
-    const drawGridLines = (unit, color, lineWidth) => {
-      ctx.beginPath();
-      ctx.strokeStyle = color; ctx.lineWidth = lineWidth;
-      const x0 = datum.x + Math.ceil((camX - halfW - datum.x) / unit) * unit;
-      const z0 = datum.z + Math.ceil((camZ - halfH - datum.z) / unit) * unit;
-      for (let x = x0; x <= camX + halfW + unit; x += unit) {
-        ctx.moveTo(sx(x), 0); ctx.lineTo(sx(x), h);
-      }
-      for (let z = z0; z <= camZ + halfH + unit; z += unit) {
-        ctx.moveTo(0, sy(z)); ctx.lineTo(w, sy(z));
-      }
-      ctx.stroke();
-    };
-
-    const zoomed = halfH < 50;
-    if (zoomed) drawGridLines(1,   '#e8e8e8', 0.5); // 1ft fine
-    drawGridLines(10,  '#cccccc', 0.5);              // 10ft major / fine
-    if (!zoomed) drawGridLines(100, '#aaaaaa', 0.75);// 100ft major when zoomed out
+    window.DraftRender2D.drawGrid2D(ctx, w, h, {
+      datum: this.state.drawingOrigin,
+      halfH: this._orthoHalfH,
+      camX: this._orthoCamX,
+      camZ: this._orthoCamZ,
+    });
   }
 
   // While a typed length is open the cursor is ignored, so the rubber band has
@@ -8265,26 +8224,10 @@ class Component extends DCLogic {
   // The 0,0 origin: a small circle-and-crosshair target on the grid paper.
   // Always snappable, never printed — a drafting datum, not linework.
   _drawOrigin2D(ctx, toS) {
-    // The datum is the drawing's, not the world's, so the target stands on the
-    // first node placed rather than on 0,0 — and on nothing at all before one
-    // exists. It moves to the SITE level when that plan can draw the house
-    // (board NEW-5 part 3); until then it stays visible here, because the
-    // origin still has hold of the cursor and an unseen snap target is worse
-    // than a marker sitting on a node the drafter placed themselves.
-    const datum = this.state.drawingOrigin;
-    if (!datum) return;
-    const o = toS(new THREE.Vector3(datum.x, this._drawElev || 0, datum.z));
-    ctx.save();
-    ctx.strokeStyle = '#557a46';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(o.x, o.y, 6, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(o.x - 12, o.y); ctx.lineTo(o.x + 12, o.y);
-    ctx.moveTo(o.x, o.y - 12); ctx.lineTo(o.x, o.y + 12);
-    ctx.stroke();
-    ctx.restore();
+    window.DraftRender2D.drawOrigin2D(ctx, toS, {
+      datum: this.state.drawingOrigin,
+      elev: this._drawElev,
+    });
   }
 
   _drawDimension2D(ctx, toS, dimension, options = {}) {
