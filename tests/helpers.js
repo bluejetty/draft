@@ -112,14 +112,47 @@ async function openRails(page) {
 // drawing load finish — a condition wait instead of a fixed settle, so a
 // slow machine waits longer and a fast one doesn't wait at all. Use after
 // page.reload() too.
+// The entry coach scrims the app one second after a FIRST-EVER open over an
+// empty sheet. openModel seeds it away for every spec that does not ask for
+// it; a spec that reaches MODEL by its own page.goto never passes through
+// there, so it needs this before navigating. Deliberately NOT folded into
+// waitForModelReady: a helper that dismissed the coach would make
+// entry-coach.spec.js's "once, ever" assertions pass whatever the app did.
+async function suppressEntryCoach(page) {
+  await page.addInitScript(() => {
+    try { localStorage.setItem('draft-entry-coach-seen', '1'); } catch (err) { /* private window */ }
+  });
+}
+
 async function waitForModelReady(page, { rails = true } = {}) {
   await page.waitForFunction(() => document.body.dataset.modelReady === '1');
-  // The entry performance notice pops right after the profile restore that
-  // follows model-ready; put it away so it never covers the top-bar build
-  // cluster mid-test. perf-notice.spec.js exercises the notice itself with
-  // its own inline waits instead of this helper.
-  const gotIt = page.locator('[data-perf-notice-continue]');
-  try { await gotIt.click({ timeout: 2000 }); } catch { /* opted out or already gone */ }
+  // THE PERF-NOTICE CLICK USED TO LIVE HERE, AND REMOVING IT IS THE FIX.
+  //
+  // It waited up to 2000ms for [data-perf-notice-continue]. While the notice
+  // was on by default that click landed in milliseconds; once the notice was
+  // parked (Movie, 2 Sep) it never appeared, so every call sat out the full
+  // two seconds and swallowed the timeout. That window is longer than
+  // Component.ENTRY_COACH_DELAY_MS (1000ms), so on a fresh profile the entry
+  // coach scrim went up mid-wait and then intercepted the rail-tab click
+  // below -- five specs on CI, none of them ones this branch touched.
+  //
+  // main was not passing because it was right; it was passing because the
+  // notice happened to close the window before the coach opened it. The fix
+  // is to delete the race rather than re-tune it: a shorter timeout would
+  // restore the luck and fail again on a slower runner.
+  //
+  // Nothing is lost. perf-notice.spec.js is the only spec that turns the
+  // notice on, and it opens raw precisely BECAUSE this helper would dismiss
+  // it -- so for every caller here the notice is off and there was nothing to
+  // click.
+  //
+  // THAT IS A DEPENDENCY, SO IT IS WRITTEN DOWN: this helper is correct only
+  // while perfNoticeOn defaults FALSE. If that default is ever flipped back,
+  // the notice starts covering the build cluster again and this must dismiss
+  // it once more -- and the failure will look like a mysterious intercepted
+  // click rather than a settings change, which is the twenty minutes this
+  // cost tonight. Gilligan's flag, 3 Sep.
+  //
   // Both side rails start tucked behind their pull tabs (#242); nearly every
   // spec works the rails, so pull them out unless the test opts out.
   if (rails) await openRails(page);
@@ -276,6 +309,7 @@ module.exports = {
   openModel,
   openRails,
   waitForModelReady,
+  suppressEntryCoach,
   worldToClient,
   moveTo,
   clickWorld,
