@@ -238,9 +238,28 @@ Deliberately **not** in the six:
 
 ### 0 · Before believing a measurement, make it come out wrong on purpose
 
-Gilligan's, 4 Sep, at the end of an evening that produced eight of these. It is
-first because it is the general form of several of the rules below, and because
-**every one of the eight would have been caught by this single habit.**
+Gilligan's, 4 Sep. It is first because it is the general form of several of the
+rules below.
+
+**It covers half of the evening's eight instances and not the other half, and
+the split matters because the two halves need opposite responses.** The first
+draft of this entry claimed all eight — written ten minutes after the rule
+requiring a re-read, and corrected by one.
+
+- **A measurement that cannot come out wrong** — this rule. A `10/10` from a
+  harness with no mutation engine, `stall === shower` where both sides are
+  `''`, refusals with no control, a `< 6` threshold that `0` satisfies, a
+  `--mutate` flag silently ignored, an `exit=$?` reading a pipe. The instrument
+  was never able to report failure.
+- **A value that went stale silently** — rule 2, not this one. Superseded CI
+  webhooks, a forty-minute-old merge dry-run, deleted branches' tracking refs.
+  The instrument was fine and the subject moved underneath it.
+
+Both present as *a green result you should not trust*, which is why they blur.
+But staleness is fixed by asking again, and blindness is not: **a second look
+at a blind instrument returns the same answer with more confidence.** Advice
+that merges them tells you to re-read at exactly the cases where re-reading is
+useless.
 
 The structural reason they cluster: **verification code has no verifier.** You
 check the subject with the harness and you check the harness with nothing. The
