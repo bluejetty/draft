@@ -236,6 +236,40 @@ Deliberately **not** in the six:
 
 ## Standing rules
 
+### 0 · Before believing a measurement, make it come out wrong on purpose
+
+Gilligan's, 4 Sep, at the end of an evening that produced eight of these. It is
+first because it is the general form of several of the rules below, and because
+**every one of the eight would have been caught by this single habit.**
+
+The structural reason they cluster: **verification code has no verifier.** You
+check the subject with the harness and you check the harness with nothing. The
+regress stops there — and it stops precisely at the code written fastest,
+because by the time you are writing it the interesting problem feels solved.
+
+So make the instrument produce a failure once, deliberately, and watch it say
+so. Mutation testing is this rule applied to a test suite. A control beside a
+refusal is this rule applied to a fixture. Re-reading a rule against the figure
+it cites is this rule applied to prose. Each is the same move: **manufacture
+the negative, because a passing run never demonstrates that failing was
+possible.**
+
+Two worked examples from the night it was written, both found within minutes of
+each other:
+
+- A harness summary line that read `5/5` was fed a deliberately inert mutation
+  and dropped to `5/6`, exit 1. Without that, `5/5` and "the summary is
+  hardcoded" are the same output.
+- An `exit=$?` written after a pipe reported `0` on a **deliberately broken**
+  harness, because it was reading `tail`'s status. Unpiped, the same harness
+  reported `1`. The check was written in the act of verifying a fix for an
+  earlier instance of this rule.
+
+Cheap, and it is the only thing on this page that reliably catches the others
+before they ship.
+
+---
+
 - **Constraints that can be satisfied separately but not together belong in one
   assertion.** The units control oscillated between two opposite bugs: hit
   boxes big enough to tap (45px) swallowed their neighbour, and hit boxes small
