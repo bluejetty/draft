@@ -683,6 +683,28 @@ one field changed, asserted against the same fixture without it: **a refusal
 only means something if its control draws.** 5/5 after, and the table stopped
 misreporting the suite's weakest row.
 
+**A SELF-COMPARISON IS THE THIRD WAY TO PASS WHILE ASSERTING NOTHING, and the
+hardest to spot, because it reads as the strongest claim on the page.**
+Gilligan, 4 Sep, in `drawFixture2D`:
+
+    expect('the same pan, curb and drain',
+      signature(R, 'stall'), signature(R, 'shower'));
+
+Delete the painter and both sides are `''`. The check passes. It is not a
+refusal — it asserts a rich structural equivalence between two fixtures — and
+**any constant function satisfies it**, a broken one included. This morning's
+units bug was the same shape: both sides of the comparison derived from the
+same numbers, so the comparison could not disagree with itself.
+
+An equality between two derived values needs **an inequality beside it**:
+something that must come out different, computed the same way. Without it the
+assertion has no failing input and is unfalsifiable — which is not a weak test
+but a decoration.
+
+The tell is worth memorising, because it applies to a refusal and a
+self-comparison alike: **ask what this check does when the subject is deleted.**
+If the answer is "passes", the check is measuring the harness, not the code.
+
 **Pick the control near the boundary it defends.** For the sub-pixel skip he
 used a 1 ft underlay that must still draw, not the 20 ft default, because the
 risk is a cut-off that is too eager. A 20 ft control would only have proved
