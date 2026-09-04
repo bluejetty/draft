@@ -1979,15 +1979,29 @@ function coverage() {
   console.log('\nbranch mutations');
   console.log('─'.repeat(72));
   let missed = 0;
-  [['strokeSegPath2D bulge branch', dropBulge],
-   ['drawWallSeg2D mitre path', dropMitre],
-   ['drawOrigin2D env colour', dropOriginEnvColour],
-   ['drawOrigin2D colour fallback', dropOriginFallback],
-   ['drawFixture2D kind dispatch (constant painter)', constantFixture]].forEach(([label, mutate]) => {
+  const BRANCH_MUTATIONS = [
+    ['strokeSegPath2D bulge branch', dropBulge],
+    ['drawWallSeg2D mitre path', dropMitre],
+    ['drawOrigin2D env colour', dropOriginEnvColour],
+    ['drawOrigin2D colour fallback', dropOriginFallback],
+    ['drawFixture2D kind dispatch (constant painter)', constantFixture],
+  ];
+  BRANCH_MUTATIONS.forEach(([label, mutate]) => {
     const caught = runAll(load(mutate)).filter(r => r.failed || r.threw);
     if (!caught.length) missed += 1;
-    console.log(`${(label + ' deleted').padEnd(40)} ${caught.length ? `caught by ${caught.length} check(s)` : 'NOTHING NOTICED'}`);
+    console.log(`${(label + ' deleted').padEnd(56)} ${caught.length ? `caught by ${caught.length} check(s)` : 'NOTHING NOTICED'}`);
   });
+  // SAY the all-caught state, don't leave it to be inferred. Every row here
+  // reads "caught by N check(s)" when things are well, so a healthy run is
+  // signalled only by the ABSENCE of the word NOTHING -- the reader has to
+  // scan for something that is not there, and a row quietly dropped from the
+  // list above looks exactly like a row that passed. The other two harnesses
+  // print their total; this one did not. Same shape as the checks this file
+  // exists to catch, one level up in the reporting. (Skipper's catch.)
+  console.log(`\n${BRANCH_MUTATIONS.length - missed}/${BRANCH_MUTATIONS.length} branch mutations caught`);
+  const unchecked = all.filter(name => !SUITES.some(s => s.painter === name));
+  console.log(`${all.length - unchecked.length}/${all.length} painters have checks`
+    + (unchecked.length ? ` -- MISSING: ${unchecked.join(', ')}` : ''));
   return missed ? 1 : 0;
 }
 
