@@ -61,6 +61,7 @@
     .sched-head { padding:0 4px 4px; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
     .sched-row { display:grid; grid-template-columns:minmax(0,1fr) 78px; gap:8px; align-items:center; padding:3px 4px; border-bottom:1px solid rgba(29,31,32,.07); }
     .sched-row:last-child { border-bottom:0; }
+    .sched-row[hidden] { display:none; }
     .sched-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:rgba(29,31,32,.66); line-height:1.15; }
     input.sched-value, select.sched-value { width:100%; height:23px; border:1px solid rgba(29,31,32,.28); background:#fafafa; color:#1d1f20; padding:2px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; }
     input.sched-value:hover, input.sched-value:focus, select.sched-value:hover, select.sched-value:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
@@ -699,7 +700,15 @@
       // somewhere else: it is a ZONE HEIGHT, because it is a height relative
       // to MAIN FL rather than a property of the garage's assembly.
       const garageControls = [];
-      const addGarage = (key, name, get, set) => garageControls.push({ key, name, get, set });
+      const addGarage = (key, name, get, set, kind) =>
+        garageControls.push({ key, name, get, set, kind });
+
+      const garageFoundation = () =>
+        sectionTable.rows.attachedGarage?.garageFoundation || 'gradebeam';
+      addGarage('garageFoundationType', 'Garage foundation',
+        garageFoundation,
+        value => { writeCell('attachedGarage', 'garageFoundation', value); return true; },
+        'choice');
       addGarage('garageOffset', 'Garage floor off main fl',
         () => signedFtIn(zoneHeights.zones.attachedGarage.offsetFt),
         text => {
@@ -725,13 +734,28 @@
       // not a foundation type this page offers yet.
       addGarage('garageVoidForm', 'Void form under beam',
         () => inchesOnly(projectPage.VOID_FORM_IN), () => false);
+      addGarage('garageFooting', 'Footing — level with the house',
+        () => {
+          const asm = assembly(1);
+          const w = asm.footingWidthIn ?? (fdnIsIcf() ? 24 : 20);
+          return `${inchesOnly(w)} x ${inchesOnly(asm.footingDepthIn)}`;
+        }, () => false);
 
       garageControls.forEach(control => {
         const tag = document.createElement('span');
         tag.className = 'detail-tag';
         tag.textContent = control.name.replace(/^Garage /, '').toUpperCase();
         garageWrap.appendChild(tag);
-        const input = document.createElement('input');
+        const input = control.kind === 'choice'
+          ? document.createElement('select') : document.createElement('input');
+        if (control.kind === 'choice') {
+          projectPage.GARAGE_FOUNDATIONS.attachedGarage.forEach(id => {
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = projectPage.GARAGE_FOUNDATION_LABEL[id];
+            input.appendChild(option);
+          });
+        }
         input.className = 'sched-value';
         input.dataset.detailInput = control.key;
         input.setAttribute('aria-label', control.name);
@@ -751,8 +775,20 @@
       // The garage's shape, drawn from the same numbers its schedule edits.
       const garageValues = () => {
         const cell = field => cellValue('attachedGarage', field).value;
+        // Where the HOUSE's footing top sits, so a frost wall can land its own
+        // footing at the same elevation. Derived from the same numbers the
+        // house section is drawn from, so the two cannot disagree: the wall
+        // section puts MAIN FL at 0, the foundation top one floor depth below
+        // it, and the footing top a wall height below that.
+        const asm = assembly(1);
+        const main = floorLevels[0] && assembly(floorLevels[0].id);
+        const mainDepthFt = main ? (main.joistDepthIn + main.sheathingIn) / 12 : 0;
         return {
           garage: {
+            foundation: garageFoundation(),
+            houseFootingTopFt: -mainDepthFt - asm.wallHeightFt,
+            footingWidthIn: asm.footingWidthIn ?? (fdnIsIcf() ? 24 : 20),
+            footingDepthIn: asm.footingDepthIn,
             floorOffsetFt: zoneHeights.zones.attachedGarage.offsetFt,
             wallHeightFt: cell('mainWallHeightFt'),
             fdnWallHeightFt: cell('fdnWallHeightFt'),
@@ -773,6 +809,17 @@
         controlEls.forEach(({ control, el, tag }, key) => {
           const at = anchors[key];
           const row = el.closest('.sched-row');
+          if (!at && control.kind === 'choice') {
+            // A MODE, not a dimension. The hide-without-an-anchor rule below
+            // is right for a measurement -- if the drawing has no such part,
+            // offering a number for it is a lie -- but a foundation TYPE is
+            // not a part, it is which parts get drawn at all. Hiding it made
+            // the one control that changes the drawing most disappear.
+            tag.style.display = 'none';
+            if (row) row.hidden = false;
+            if (document.activeElement !== el) el.value = control.get();
+            return;
+          }
           if (!at) {
             // No anchor means the drawing does not contain this part on this
             // build -- hide the label AND the row, or the schedule offers a
@@ -859,6 +906,15 @@
         return { value: liveField[field].get(), own: false };
       };
       const writeCell = (rowId, field, value) => {
+        if (typeof value === 'string') {
+          // A CHOICE, not a measurement. It never touches liveField -- there
+          // is no live "garage foundation" on the drawing to write through to.
+          sectionTable = format.sectionTable({ rows: {
+            ...sectionTable.rows,
+            [rowId]: { ...sectionTable.rows[rowId], [field]: value },
+          } });
+          return;
+        }
         if (rowId === 'house') { liveField[field].set(value); return; }
         sectionTable = format.sectionTable({ rows: {
           ...sectionTable.rows,

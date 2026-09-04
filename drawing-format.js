@@ -946,13 +946,50 @@ if (!window.DraftDrawingFormat) {
     'fdnWallHeightFt', 'woodFillHeightFt',
     'slabThicknessIn', 'footingWidthIn', 'footingDepthIn',
   ]);
+  // Not every per-type value is a measurement. A garage's foundation is a
+  // CHOICE between two things it can be, and `positive()` would quietly turn
+  // 'frostwall' into null -- a stored answer that reads as "never set".
+  // Choices are validated by name against their own list.
+  // THREE, not two. Movie, 4 Sep: "detached garage could be THICKENED, GRADE
+  // BEAM, or FROST WALL", while an attached one is grade beam or frost wall --
+  // thickened edge is a detached-only slab. The format accepts the union and
+  // the page offers each row only the ones its type can be, the same way
+  // SECTION_TABLE_ITEMS scopes a column to the types that use it.
+  //
+  // This is also why it could not ride on the model's existing key. A garage's
+  // foundation is stored there as `floor.thickenedEdge`, a BOOLEAN -- two
+  // states for a thing that has three. The moment a detached garage can be a
+  // frost wall that boolean is one bit short, whatever this page does.
+  //
+  // AND AN ATTACHED GARAGE MAY NOT BE THICKENED EDGE. Movie, 4 Sep:
+  // "ATTACHED GARAGE - THICKENED EDGE not adequate because it will move /
+  // the house foundation is solid and will cause cracking." A thickened-edge
+  // slab floats; the house it is fastened to does not. That is a structural
+  // reason, not a UI preference, so it is enforced HERE rather than only in
+  // the page's dropdown -- a hand-edited file, an older save, or a second
+  // page must not be able to store it either. Written down because an
+  // absence with no stated reason is the kind of thing someone later
+  // "completes".
+  const SECTION_TABLE_CHOICES = Object.freeze({
+    garageFoundation: Object.freeze(['gradebeam', 'frostwall', 'thickened']),
+  });
+  const SECTION_TABLE_CHOICES_BY_TYPE = Object.freeze({
+    attachedGarage: Object.freeze({ garageFoundation: Object.freeze(['gradebeam', 'frostwall']) }),
+  });
+  const SECTION_TABLE_CHOICE_FIELDS = Object.freeze(Object.keys(SECTION_TABLE_CHOICES));
   const sectionTable = raw => {
     const stored = raw && typeof raw.rows === 'object' && raw.rows ? raw.rows : {};
     return {
       rows: Object.fromEntries(SECTION_TABLE_TYPES.map(type => {
         const row = stored[type] && typeof stored[type] === 'object' ? stored[type] : {};
-        return [type, Object.fromEntries(SECTION_TABLE_FIELDS
-          .map(field => [field, positive(row[field], null)]))];
+        return [type, {
+          ...Object.fromEntries(SECTION_TABLE_FIELDS
+            .map(field => [field, positive(row[field], null)])),
+          ...Object.fromEntries(SECTION_TABLE_CHOICE_FIELDS
+            .map(field => [field, oneOf(row[field],
+              SECTION_TABLE_CHOICES_BY_TYPE[type]?.[field] || SECTION_TABLE_CHOICES[field],
+              null)])),
+        }];
       })),
     };
   };
@@ -1112,6 +1149,9 @@ if (!window.DraftDrawingFormat) {
     sectionTable,
     SECTION_TABLE_TYPES,
     SECTION_TABLE_FIELDS,
+    SECTION_TABLE_CHOICES,
+    SECTION_TABLE_CHOICES_BY_TYPE,
+    SECTION_TABLE_CHOICE_FIELDS,
     specs,
     layout,
     tour,

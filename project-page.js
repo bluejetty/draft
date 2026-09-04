@@ -105,6 +105,19 @@ if (!window.DraftProjectPage) {
   // table's own TO SILL note adds to every row, so writing 33.5 here would
   // count the sill twice and read 2'-11" to bearing instead of 2'-9 1/2".
   const GARAGE_GRADE_BEAM_IN = 32;
+  // Which foundations each garage may be, in the order the drafter should see
+  // them. Detached: all three. Attached: NOT thickened edge -- Movie, 4 Sep,
+  // "it will move / the house foundation is solid and will cause cracking".
+  // A floating slab fastened to something that does not float cracks at the
+  // joint. drawing-format.js refuses to store it for an attached garage, so
+  // this list is the drafter's view of a rule, not the rule itself.
+  const GARAGE_FOUNDATIONS = Object.freeze({
+    attachedGarage: Object.freeze(['gradebeam', 'frostwall']),
+    detachedGarage: Object.freeze(['thickened', 'gradebeam', 'frostwall']),
+  });
+  const GARAGE_FOUNDATION_LABEL = Object.freeze({
+    gradebeam: 'GRADE BEAM', frostwall: 'FROST WALL', thickened: 'THICKENED EDGE',
+  });
   const SECTION_TABLE_DEFAULTS = Object.freeze({
     split: SPLIT_BASE,
     bilevel: SPLIT_BASE,
@@ -259,15 +272,41 @@ if (!window.DraftProjectPage) {
     rect(cut, floorY - slabFt, GARAGE_CUT_FT - fdnFt, slabFt, 1);
     anchors.garageSlab = { x: cut * 0.62, y: floorY - slabFt - 0.5 };
 
-    // Foundation wall down from the slab, footing centred under it.
+    // TWO FOUNDATIONS, ONE TOP. Movie, 4 Sep: "that should actually be an
+    // option to switch from grade beam to frost wall on these drawings...
+    // add onto the bottom of the grade beam to depth of footing and add
+    // footing if they select frost wall", and "let's make the footings line
+    // up".
+    //
+    // So a frost wall is not a different foundation drawn in a different
+    // place: it is THIS beam continued down until its footing sits at the
+    // same elevation as the house's. The top does not move -- the slab still
+    // bears where it bore -- and nothing above the beam changes.
+    //
+    // The depth is DERIVED, never typed. "Footings line up" is the whole
+    // rule, so the wall spans from the beam top to the top of the house's
+    // footing, whatever those happen to be. A typed frost-wall height would
+    // be a number that agrees with the house until one of them moved.
+    const frostWall = g.foundation === 'frostwall';
     const fdnTop = floorY;
-    const fdnBot = fdnTop - g.fdnWallHeightFt;
-    rect(-fdnFt, fdnBot, fdnFt, g.fdnWallHeightFt, 2);
-    anchors.garageFdnHeight = { x: -fdnFt - 0.9, y: fdnTop - g.fdnWallHeightFt / 2 };
-    // 4" void form under the beam, between the piles: the beam is cast on it
-    // and the form collapses, so heaving soil lifts nothing.
-    rect(-fdnFt, fdnBot - VOID_FORM_IN / 12, fdnFt, VOID_FORM_IN / 12, 1);
-    anchors.garageVoidForm = { x: -fdnFt - 0.9, y: fdnBot - VOID_FORM_IN / 24 };
+    const fdnBot = frostWall ? g.houseFootingTopFt : fdnTop - g.fdnWallHeightFt;
+    rect(-fdnFt, fdnBot, fdnFt, fdnTop - fdnBot, 2);
+    anchors.garageFdnHeight = { x: -fdnFt - 0.9, y: (fdnTop + fdnBot) / 2 };
+
+    let lowest;
+    if (frostWall) {
+      // A footing, the house's own size, its bottom level with the house's.
+      const footW = g.footingWidthIn / 12, footD = g.footingDepthIn / 12;
+      rect(-fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);
+      anchors.garageFooting = { x: -fdnFt / 2 - footW / 2 - 0.85, y: fdnBot - footD / 2 };
+      lowest = fdnBot - footD;
+    } else {
+      // 4" void form under the beam, between the piles: the beam is cast on
+      // it and the form crushes, so heaving soil lifts nothing.
+      rect(-fdnFt, fdnBot - VOID_FORM_IN / 12, fdnFt, VOID_FORM_IN / 12, 1);
+      anchors.garageVoidForm = { x: -fdnFt - 0.9, y: fdnBot - VOID_FORM_IN / 24 };
+      lowest = fdnBot - VOID_FORM_IN / 12;
+    }
     // NO FOOTING. Movie, 4 Sep: "why does your garage have a footing?" -- it
     // does not. A grade beam bears on drilled piles at about 8 ft on centre,
     // over a 4" void form between them; there is no spread footing under it.
@@ -300,7 +339,7 @@ if (!window.DraftProjectPage) {
     line(0, plateY, cut, plateY, 2);
 
     const topY = plateY;
-    parts.push({ kind: 'break', x: cut, y1: fdnBot - VOID_FORM_IN / 12 - 0.3, y2: topY + 0.3 });
+    parts.push({ kind: 'break', x: cut, y1: lowest - 0.3, y2: topY + 0.3 });
 
     return {
       parts,
@@ -309,7 +348,7 @@ if (!window.DraftProjectPage) {
         minX: cut - 1.1,
         maxX: 0,      // the shared wall face: the house's own extents carry on
                       // from here, and the two together are one drawing
-        minY: fdnBot - VOID_FORM_IN / 12 - 1.1,
+        minY: lowest - 1.1,
         maxY: topY + 1.1,
       },
     };
@@ -436,6 +475,8 @@ if (!window.DraftProjectPage) {
     SECTION_TABLE_ITEMS,
     SECTION_TABLE_DEFAULTS,
     GARAGE_GRADE_BEAM_IN,
+    GARAGE_FOUNDATIONS,
+    GARAGE_FOUNDATION_LABEL,
     VOID_FORM_IN,
     STUD_LENGTHS_IN,
     HALF_STUD_IN,
