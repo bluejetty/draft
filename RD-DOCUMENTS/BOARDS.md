@@ -69,6 +69,40 @@ pool · `#331` NAHB room-program defaults · `#198` room stamping step ·
 `#321` entry page rework · `#318` tray door/window centreline snap ·
 `#2a` reorder the MODEL right-side menu to mirror the sheet order.
 
+### CI runs no harness — 20 of them, and not one is guarded
+
+Gilligan's, 4 Sep, sharpening a smaller finding of Skipper's. Skipper had
+measured that ten of the harnesses load their module through `require()` and so
+cannot mutate their own source in-process. True, and beside the larger point:
+**`test.yml` runs `npx playwright test` and nothing else.** No harness is
+invoked by CI at all.
+
+Measured on 4 Sep: 20 harnesses under `proto/`, all passing, carrying 500-plus
+visible assertions — `render-2d` 281 across 140 checks, `gruff-interview` 73,
+`room-grow` 69, `auto-windows` 45, `elevation` 21, `wall-joins` 14. Their
+greenness is only ever as current as the last person who typed `node proto/…`.
+
+**The failure mode is worse than "untested", and that is the part worth
+keeping.** A harness that a change breaks does not go red. It goes **green in
+CI while broken**, and stays that way until a human happens to run it. A test
+that fails for a person but passes for the machine is worse than no test at
+all: with no test you know you are unguarded, and with this one you believe you
+are not.
+
+It is what stopped a real push today. Gilligan had a finished `drawOrigin2D`
+colour suite and held it in a patch file rather than pushing, precisely because
+pushing it would have looked green either way and taught nobody anything.
+
+The fix is a step, not a project:
+
+    - run: for f in proto/*harness*.js; do node "$f" || exit 1; done
+
+Not done here because it is a repository-infrastructure change and belongs in
+its own PR, not bolted onto one already in CI — and because it should land when
+someone can watch what it turns red. Every harness passes today, so the honest
+expectation is that it lands green and stays useful from the next change
+onward.
+
 ### The drawing does not obey the skin — 18 hardcoded colours in render-2d.js
 
 Found 3 Sep while wiring `drawOrigin2D`, which hardcoded its green. It is not
