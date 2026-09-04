@@ -19,24 +19,11 @@ const fs = require('fs');
 const path = require('path');
 const SRC = path.join(__dirname, '..', 'geometry-2d.js');
 
-// ARG GUARD, copied from wall-joins-harness.js rather than shared. Each
-// harness declares its own flag set and rejects anything else, because a
-// harness that silently ignores an unrecognised flag runs the wrong mode and
-// prints a green result -- the same absence-that-looks-like-a-pass these files
-// exist to catch, aimed at their own front door. Exit 2 marks a usage fault so
-// a CI step can tell "you typed it wrong" from "the checks failed" (1).
-//
-// Copied, not lifted into proto/harness-args.js: two files is duplication,
-// three is a module. Whoever writes the third should do the lift.
-const FLAGS = new Set(['--coverage', '--mutate']);
-const ARGS = process.argv.slice(2);
-const unknownArgs = ARGS.filter(a => !FLAGS.has(a));
-if (unknownArgs.length) {
-  console.error(`unknown argument(s): ${unknownArgs.join(', ')}`);
-  console.error(`usage: node ${path.basename(__filename)} [--coverage|--mutate]`);
-  process.exit(2);
-}
-const MUTATION_MODE = ARGS.some(a => FLAGS.has(a));
+// Argument handling is shared: proto/harness-args.js. Both --coverage and
+// --mutate work here, and anything else exits 2 rather than running the wrong
+// mode quietly. That module is require()d, not source-loaded -- see its header
+// for why it is the one file here that must not be mutable by the tests.
+const MUTATION_MODE = require('./harness-args.js').mutationMode();
 
 function load(mutate) {
   let src = fs.readFileSync(SRC, 'utf8');
