@@ -753,10 +753,20 @@ const stairsEnv = (over = {}, parts = {}) => ({
   ...over,
 });
 
-suite('drawStairs2D', 'a hidden layer paints nothing', R => {
+// Each refusal carries its control: the same env with the disqualifying field
+// flipped back, proving the fixture would otherwise have drawn. Without that,
+// every one of these passes on a painter that has been deleted -- they assert
+// an absence, and an absence is what a deleted painter is best at.
+const stairsPaints = (R, over, stair) => {
   const ctx = recordingCtx();
-  R.drawStairs2D(ctx, toS, stairsEnv({ layer: { visible: false, printable: true } }));
-  expect('nothing painted', ctx.tape.length, 0);
+  R.drawStairs2D(ctx, toS, stairsEnv(over, stair));
+  return ctx.tape.length;
+};
+
+suite('drawStairs2D', 'a hidden layer paints nothing', R => {
+  expect('nothing painted', stairsPaints(R, { layer: { visible: false, printable: true } }), 0);
+  expect('but the same stair on a visible layer does',
+    stairsPaints(R, { layer: { visible: true, printable: true } }) > 0, true);
 });
 
 suite('drawStairs2D', 'a non-printable layer is dropped from a print, not from the screen', R => {
@@ -769,9 +779,8 @@ suite('drawStairs2D', 'a non-printable layer is dropped from a print, not from t
 });
 
 suite('drawStairs2D', 'no stairs, nothing drawn', R => {
-  const ctx = recordingCtx();
-  R.drawStairs2D(ctx, toS, stairsEnv({ stairs: [] }));
-  expect('nothing painted', ctx.tape.length, 0);
+  expect('nothing painted', stairsPaints(R, { stairs: [] }), 0);
+  expect('but the same page with a stair on it draws', stairsPaints(R, {}) > 0, true);
 });
 
 suite('drawStairs2D', 'a run draws two stringers and one tread line per tread, nosing included', R => {
@@ -782,13 +791,20 @@ suite('drawStairs2D', 'a run draws two stringers and one tread line per tread, n
   expect('the run is stroked', count(ctx, 'stroke') >= 2, true);
 });
 
+// A THRESHOLD refusal needs its control more than a plain `=== 0` does, not
+// less: `0 < 6` is true for a deleted painter too, so the assertion is
+// satisfied by the painter doing nothing at all.
 suite('drawStairs2D', 'a run shorter than a pixel is skipped rather than drawn as a dot', R => {
-  const ctx = recordingCtx();
-  R.drawStairs2D(ctx, toS, stairsEnv({}, {
-    runs: [{ start: { x: 0, z: 0 }, dir: { x: 1, z: 0 }, lenFt: 0.01, treads: 0 }],
-    walk: [{ x: 0, z: 0 }, { x: 0.02, z: 0 }],
-  }));
-  expect('no stringers for it', calls(ctx, 'lineTo').length < 6, true);
+  const stringersFor = lenFt => {
+    const ctx = recordingCtx();
+    R.drawStairs2D(ctx, toS, stairsEnv({}, {
+      runs: [{ start: { x: 0, z: 0 }, dir: { x: 1, z: 0 }, lenFt, treads: 0 }],
+      walk: [{ x: 0, z: 0 }, { x: lenFt * 2, z: 0 }],
+    }));
+    return calls(ctx, 'lineTo').length;
+  };
+  expect('no stringers for a sub-pixel run', stringersFor(0.01) < 6, true);
+  expect('but a real run draws them', stringersFor(8) >= 6, true);
 });
 
 suite('drawStairs2D', 'the tread ladder is spaced by the run increment, not by the tread count', R => {
@@ -907,6 +923,9 @@ suite('drawFixture2D', 'a fixture with no geometry paints nothing', R => {
   const ctx = recordingCtx();
   R.drawFixture2D(ctx, toS, { kind: 'sink' }, {}, null, fixtureEnv({ fixtureGeometry: () => null }));
   expect('nothing painted', ctx.tape.length, 0);
+  const withGeo = recordingCtx();
+  R.drawFixture2D(withGeo, toS, { kind: 'sink' }, {}, null, fixtureEnv());
+  expect('but the same sink with geometry does', withGeo.tape.length > 0, true);
 });
 
 suite('drawFixture2D', 'every kind paints something', R => {
@@ -946,8 +965,21 @@ suite('drawFixture2D', 'no two kinds paint the same picture, bar the ones that s
   expect('each kind is distinguishable', collisions.join(', ') || 'none', 'none');
 });
 
+// The two checks below assert that two fixtures draw the SAME thing, and an
+// equality holds trivially when both sides are nothing: delete the painter and
+// every signature is the empty string, so `stall === shower` passes while the
+// drawing is gone. That is a third species of vacuous check, distinct from the
+// absence-assertions above and more deceptive -- this one reads as a strong
+// structural claim.
+//
+// The control is a differential rather than a length threshold: the same
+// signature function must also tell a stall APART from a sink. That proves it
+// discriminates at all, which a "not empty" assertion does not, and it needs
+// no magic number.
 suite('drawFixture2D', 'a stall is drawn exactly as a shower is', R => {
-  expect('the same pan, curb and drain', signature(R, 'stall'), signature(R, 'shower'));
+  const stall = signature(R, 'stall');
+  expect('the same pan, curb and drain', stall, signature(R, 'shower'));
+  expect('and the signature is not blind -- a sink differs', stall === signature(R, 'sink'), false);
 });
 
 suite('drawFixture2D', 'the four appliances are one box that differs only by its letter', R => {
@@ -955,6 +987,8 @@ suite('drawFixture2D', 'the four appliances are one box that differs only by its
   expect('washer matches fridge', withoutLetter('washer'), withoutLetter('fridge'));
   expect('dryer matches fridge', withoutLetter('dryer'), withoutLetter('fridge'));
   expect('dishwasher matches fridge', withoutLetter('dish'), withoutLetter('fridge'));
+  expect('and the box is a real box -- a sink is not one of them',
+    withoutLetter('fridge') === withoutLetter('sink'), false);
 });
 
 suite('drawFixture2D', 'the four appliances carry their own letters', R => {
@@ -1902,6 +1936,7 @@ function coverage() {
   for (const name of all) {
     const mine = SUITES.filter(s => s.painter === name);
     let verdict;
+    let survivors = [];
     if (!mine.length) {
       verdict = 'NOTHING — no checks here';
     } else {
@@ -1914,8 +1949,17 @@ function coverage() {
       verdict = caught.length
         ? `${own}/${mine.length} own${viaCallers ? `, +${viaCallers} via callers` : ''}`
         : 'NOTHING — its own checks pass without it';
+      // NAME the survivors, don't just count them. "8/11 own" is a number
+      // nobody can act on: it says three checks pass without the painter but
+      // not which three, so the first thing any reader does is recompute by
+      // hand what this loop already knew and threw away. Some survivors are
+      // fine -- a refusal check SHOULD pass when nothing is drawn -- and the
+      // only way to tell those from a real gap is to read their names.
+      const caughtOwn = new Set(caught.filter(r => r.painter === name).map(r => r.name));
+      survivors = mine.filter(s => !caughtOwn.has(s.name)).map(s => s.name);
     }
     console.log(`${name.padEnd(24)} ${String(mine.length).padStart(6)}  ${verdict}`);
+    for (const s of survivors) console.log(`${' '.repeat(34)}· ${s}`);
   }
   console.log('\nbranch mutations');
   console.log('─'.repeat(72));
