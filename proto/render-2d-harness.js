@@ -1999,10 +1999,26 @@ function coverage() {
   // print their total; this one did not. Same shape as the checks this file
   // exists to catch, one level up in the reporting. (Skipper's catch.)
   console.log(`\n${BRANCH_MUTATIONS.length - missed}/${BRANCH_MUTATIONS.length} branch mutations caught`);
+  // This one GATES, it does not merely report. Skipper caught that the line
+  // printed "16/17 -- MISSING: drawGrid2D" and still exited 0: the mutation
+  // count drove the status and the painter count did not. A warning that
+  // cannot fail is the thing this whole file exists to catch -- it would have
+  // scrolled past in a log and the run would have stayed green.
+  //
+  // `all` is every export, not a curated list, and that is deliberate: the
+  // module's convention is that helpers stay at module scope (cutSnap,
+  // cutDashedSeg and cutChoiceMark are not exported for exactly this reason).
+  // So an export with no checks is either a painter nobody tested or a
+  // convention being broken, and both are worth stopping for.
+  //
+  // Note this gates --coverage only. CI should run the PLAIN mode, which is
+  // unaffected, so adding a painter before its checks does not block anyone
+  // mid-work; only a run that explicitly asks "is the coverage complete?"
+  // gets a non-zero answer, which is the honest reply to that question.
   const unchecked = all.filter(name => !SUITES.some(s => s.painter === name));
   console.log(`${all.length - unchecked.length}/${all.length} painters have checks`
     + (unchecked.length ? ` -- MISSING: ${unchecked.join(', ')}` : ''));
-  return missed ? 1 : 0;
+  return missed || unchecked.length ? 1 : 0;
 }
 
 if (MUTATION_MODE) {
