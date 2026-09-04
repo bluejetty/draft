@@ -8,10 +8,12 @@ Rough Drafter, from the logo to a house on the paper.
 ## The sequence
 
 ```
-ENTRY        the logo, and the big bone under it
+ENTRY        the logo, and nothing else. (Movie, 4 Sep: nobody sees a
+             bone until they are in model space. The big bone used to sit
+             under the logo here; the logo is now the one way in.)
 
-press   →    MODEL SPACE loads. THE BIG BONE IS STILL THERE --
-             same size, same place on the screen.
+press   →    MODEL SPACE loads. THE BIG BONE IS THERE --
+             dead centre, the first bone anyone sees.
 
 ~1s     →    the screen tints behind it. No text. No arrows.
 
@@ -37,13 +39,20 @@ why something had to explain where it went.
 **Keep the big bone on screen and the explanation is not needed.** You press
 the thing you already pressed. Arrows and text come out.
 
+*Amended 4 Sep.* The entry page no longer shows the bone, so "the thing you
+already pressed" is no longer literally true: the big bone in model space is
+the first bone anyone sees. The rest of the argument stands -- a 287px bone
+dead centre with the screen tinted behind it needs no arrow -- and nothing
+above about model space changes. What the entry page kept is the image: it
+preloads `btn-bone.png` so the big bone still paints without a blink.
+
 ---
 
 ## What already exists
 
 | step | state |
 |---|---|
-| logo and big bone on entry | `index.html`, `287x275`, centred |
+| logo on entry | `index.html`; the bone came off it 4 Sep, and the page preloads `btn-bone.png` so the model-space bone still paints from cache |
 | the tint | the coach's `rgba(29,31,32,0.62)`, 420ms fade-in |
 | press anywhere | the coach is `position:fixed; inset:0` with a click handler |
 | build a house from an outline | `build-house.js` — walls, slab, roof, footings |

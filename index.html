@@ -10,6 +10,14 @@
     <meta property="og:description" content="Rough Drafter: draw the outline, stamp the rooms, build the house." />
     <meta property="og:type" content="website" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <!-- THE BONE IS NOT ON THIS PAGE, BUT ITS IMAGE IS. Model space shows the
+         big bone to a first-time drafter, dead centre, painted before its
+         runtime boots -- and it paints with no blink only because this page
+         used to put btn-bone.png in the cache. The bone came off this page
+         (Movie, 4 Sep: nobody sees a bone until they are in model space), so
+         the cache is warmed here instead. Remove this and nothing fails; the
+         first bone anyone sees just flickers in. -->
+    <link rel="preload" as="image" href="assets/btn-bone.png" />
     <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
          critical path of the page. -->
     <link rel="stylesheet" href="vendor/fonts.css" />
@@ -58,23 +66,20 @@
       }
 
       /* The logo's rendered width is the ONE number this page sizes from.
-         The bone is a fraction of it, expressed as a calc off the same
-         custom property rather than a second clamp — so the ratio holds at
-         every breakpoint by construction, including the <=760px rule
-         below, instead of relying on two sets of numbers being kept in
-         step.
+         It used to size a bone beneath it too, as a fraction of the same
+         custom property; the bone is gone from this page and the logo is
+         the only way in, but the rule stands for anything that joins it.
 
          Sizes are set from what the page actually PAINTS, not from the
-         box: the logo is 450px and the bone 115px, which is double and
-         half of the 225px / 231px that were really on screen before.
+         box: the logo is 450px, double the 225px that was really on
+         screen before.
 
-         Those two numbers were not the box numbers. The <img> carried a
-         height attribute, which pins the box height, so `aspect-ratio`
-         never applied and `object-fit: contain` letterboxed the art —
-         the logo painted 225px wide no matter what width the box was
-         given, and widening the box only added empty space either side.
-         That is why the bone (231px painted) was wider than the logo.
-         `height: auto` below hands sizing back to the width. */
+         That number was not the box number. The <img> carried a height
+         attribute, which pins the box height, so `aspect-ratio` never
+         applied and `object-fit: contain` letterboxed the art — the logo
+         painted 225px wide no matter what width the box was given, and
+         widening the box only added empty space either side. `height:
+         auto` below hands sizing back to the width. */
       /* 460, not 450: the logo art fills 90.9% of its square canvas where the
          old wordmark filled 92.9%, so the wider box paints the mark at the
          same visible size. One file serves the entry page, the home links
@@ -85,17 +90,16 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        /* Half what it was. The logo art carries its own transparent margin
-           inside an 800x800 square, so the gap you SEE is this number plus
-           that -- which is why closing it up reads as a smaller move than the
-           number suggests, and why it is set here rather than guessed at from
-           a screenshot. */
+        /* One child now, so the gap has nothing to separate; it is kept
+           so a second element added under the logo lands at the spacing
+           that was measured when there was one. The logo art carries its
+           own transparent margin inside an 800x800 square, so the gap you
+           SEE is this number plus that. */
         gap: 9px;
       }
 
-      /* Two SIBLING links, not one nested inside the other: the logo and
-         the bone are separate targets that happen to share a destination,
-         and a link inside a link is invalid besides. */
+      /* One link: the logo is the way in. It was two siblings, logo and
+         bone, sharing a destination; the bone now waits in model space. */
       .enter-link {
         display: block;
         width: fit-content;
@@ -111,8 +115,7 @@
         outline: 2px solid var(--blue-medium);
         outline-offset: 12px;
       }
-      .enter-logo,
-      .enter-bone {
+      .enter-logo {
         display: block;
         /* The width is the size; the height follows the image's own
            proportions. Without this the height attribute wins and the art
@@ -123,18 +126,12 @@
         transition: filter 160ms ease;
       }
       .enter-link:hover .enter-logo,
-      .enter-link:focus-visible .enter-logo,
-      .enter-link:hover .enter-bone,
-      .enter-link:focus-visible .enter-bone {
+      .enter-link:focus-visible .enter-logo {
         filter: drop-shadow(0 24px 38px rgba(22, 54, 83, 0.3));
       }
       .enter-logo {
         width: var(--logo-w);
         aspect-ratio: 1;               /* the logo is square, 800x800 */
-      }
-      .enter-bone {
-        width: calc(var(--logo-w) * 0.2567);
-        aspect-ratio: 287 / 275;       /* the bone's own proportions, undistorted */
       }
 
       /* A short window (a laptop with browser chrome eating the height) gets
@@ -149,7 +146,7 @@
         .shell { width: min(100% - 32px, 540px); }
         main { padding: 32px 0; }
         /* --logo-w needs no override: min(460px, 88vw) already shrinks to
-           fit a phone, and the bone follows it down. */
+           fit a phone. */
       }
     </style>
   </head>
@@ -162,51 +159,20 @@
                  width="225" height="225"
                  alt="Rough Drafter: a rolled blueprint lettered ROUGH DRAFTER" />
           </a>
-          <!-- The bone is the same art MODEL's BUILD HOUSE button wears, so
-               the way in looks like the thing it opens. The link carries the
-               words; the image is decorative inside it, hence alt="". -->
-          <a class="enter-link" href="MODEL.dc.html?new=1" aria-label="Press the bone to open Rough Drafter model space">
-            <img class="enter-bone" src="assets/btn-bone.png"
-                 width="287" height="275" alt="" />
-          </a>
         </div>
       </main>
     </div>
 
 
-    <!-- THE BIG BONE'S CRUNCH. The entry bone is the big one, so it gets the
-         long crunch rather than the model's short one -- and the press is held
-         for the length of it before the page turns, because a sound cut off by
-         a navigation is worse than no sound.
-
-         PROGRESSIVE: these are ordinary links and stay ordinary. If the script
-         never loads, never runs, or the browser refuses to make a noise, the
-         press navigates exactly as it does today. Nothing here is on the path
+    <!-- No sound on this page. The big crunch used to play here, on the
+         bone press, held 420ms before the page turned. The bone is in model
+         space now, and a logo that crunched would be borrowing a sound from
+         a thing that is not there yet. Note what that leaves: the big crunch
+         (DraftBoneSound.crunch({ big: true })) is played NOWHERE today -- the
+         model-space first-house press goes through _pressBuildHouse and its
+         short crunch. Whether the big bone there takes the long one is that
+         page's call. The link is an ordinary link and nothing is on the path
          to getting in. -->
-    <script src="./bone-sound.js"></script>
-    <script>
-      (() => {
-        const bone = document.querySelector('.enter-bone')?.closest('a');
-        if (!bone || !window.DraftBoneSound) return;
-        let leaving = false;
-        bone.addEventListener('click', event => {
-          if (leaving || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
-          leaving = true;
-          event.preventDefault();
-          window.DraftBoneSound.crunch({ big: true });
-          // HELD, BUT DELIBERATELY NOT FOR THE WHOLE BONE. The big crunch runs
-          // 710ms (DraftBoneSound.BIG: the last bite starts at 0.45 and lasts
-          // 0.26). This waits 420, so the navigation does cut the final low
-          // bite off. That is the trade and not an oversight: the press has to
-          // be heard landing, and a page that sits still for three quarters of
-          // a second after a press reads as a page that did not take it.
-          // Holding the full 710 is a one-number change if that is ever judged
-          // wrong -- entry-coach.spec.js pins that the hold EXISTS, because
-          // without it the crunch is cut at nothing and the sound is a lie.
-          setTimeout(() => { window.location.href = bone.href; }, 420);
-        });
-      })();
-    </script>
 
     <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
   <script src="./traffic-counter.js" defer></script>
