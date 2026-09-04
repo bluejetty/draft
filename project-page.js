@@ -208,6 +208,20 @@ if (!window.DraftProjectPage) {
   // sloping pair, the garage ALONG its slope and gets four level lines.
   const GARAGE_CAVITY_FT = 4;
 
+  // FOR BAND 2 ONLY, not built. Movie, 4 Sep: "put the EXT WALL HEIGHT on
+  // each floor under 2ND FL WALL HEIGHT, MAIN FL WALL HEIGHT, and above
+  // FOUNDATION WALL -- not on this version but on the BILEVEL versions."
+  //
+  // So the bilevel and modified bilevel sections carry an extra row per
+  // level that the bungalow and 2 storey do not. Which fits what a bilevel
+  // is: its floors are half a storey apart, so the height of the EXTERIOR
+  // wall at a level is not the same as the floor-to-ceiling height the level
+  // card already carries, and the two would be one number on any other type.
+  //
+  // Recorded here rather than added now because the row is per BUILD TYPE
+  // and no drawing stores one yet -- NEW-5. Adding it to every section would
+  // put a row on the bungalow that Movie explicitly said should not have it.
+
   // HOW THE FRAMING IS HELD DOWN TO THE FOUNDATION. Movie, 4 Sep. Two ways,
   // and they bear at the SAME height on purpose, so switching between them
   // moves nothing above the foundation:
