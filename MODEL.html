@@ -318,6 +318,10 @@
       && (f.viewId == null || d.view === f.viewId); });
   const shapes = () => (drawing?.shapes || [])
     .filter(sh => onActiveLevel().byLevel(sh));
+  // Outlines take the same LEVEL-ONLY rule as roofs -- rule four above. They
+  // are the room and garage footprints, level-wide, so no view filter.
+  const outlines = () => (drawing?.outlines || [])
+    .filter(o => onActiveLevel().byLevel(o));
 
   // Every point that defines the drawing's extent, for fit-to-content.
   const allPoints = () => {
@@ -542,6 +546,70 @@
     });
   };
 
+  // OUTLINES. The painter has been in render-2d.js since the extraction; what
+  // kept it unreachable was three env keys resolving to `this._` methods on the
+  // old page. They now live in geometry-2d.js and this page reads them from
+  // there -- which is the whole difference between a painter that moved and a
+  // painter that is shared.
+  //
+  // THE LIVE-EDITING KEYS ARE PASSED EXPLICITLY AS FALSE AND EMPTY, not left
+  // undefined and not deleted. Two blocks of the painter are guarded on them --
+  // the fenestration ghost (`boneyardActive && activeTool === 'fenestration'
+  // && snapPt`) and the in-progress outline (`outlineDrawing &&
+  // outlinePoints.length`) -- and this page, which reads and never writes, can
+  // never enter either. MODEL.dc.html's own env says as much: "a caller working
+  // from a saved drawing passes none of it and the preview branches stay
+  // inert." Naming them here rather than relying on undefined means the day
+  // this page grows an outline tool, the keys to fill are already listed and
+  // the branches are already wired -- instead of a reader concluding the
+  // painter has no preview and quietly building a second one.
+  //
+  // The six colours are copied verbatim from MODEL.dc.html:7441. They are
+  // hardcoded in BOTH pages now, which is one literal set too many -- flagged
+  // for whoever takes the palette work, not fixed here, because moving a colour
+  // into palette.js is a decision about the drawing rather than about this lift.
+  const paintOutlines = () => {
+    const R = window.DraftRender2D;
+    const G = window.DraftGeometry2D;
+    R.drawOutlines2D(ctx, toS, {
+      isPrinting: false,
+      // No boneyard on this page: it holds no unplaced geometry and offers no
+      // way to switch to it. The false is what selects the LEVEL colours below.
+      boneyardActive: false,
+      outlines: outlines(),
+      boneyardOutlines: [],
+      // Handles belong to the outline and select tools. This page has neither.
+      showHandles: false,
+      // Nothing is selectable yet, so nothing is selected. Returning false is
+      // the honest answer; omitting the key would throw.
+      isSelected: () => false,
+      segmentCount: G.outlineSegmentCount,
+      segment: G.outlineSegment,
+      controlPoint: G.lineControlPoint,
+      // Boneyard marks only. Unreachable with boneyardActive false, and present
+      // so the reader can see the branch exists rather than infer it is gone.
+      geometryFor: () => null,
+      markPlacement: () => null,
+      // Live interaction state -- inert here, listed here. See above.
+      activeTool: null,
+      fenestrationType: null,
+      outlineGarage: null,
+      snapPt: null,
+      outlineDrawing: false,
+      outlinePoints: [],
+      outlineStart: null,
+      frozenEnd: null,
+      colors: {
+        boneyard: '#b04050',
+        level: '#5980a6',
+        garageBoneyard: '#cf7a1f',
+        garageLevel: '#7d5ba6',
+        traceHouse: '#c0392b',
+        traceAttached: '#3f7fd6',
+      },
+    });
+  };
+
   // drawWallSeg2D's two colours, plus the two preview entries it also reads.
   // Same split floorEnv and dimensionEnv use: this page has no draw tool, so
   // `preview` is the constant false at the call below and both preview
@@ -704,6 +772,7 @@
     try {
       if (drawing) {
         paintGrid(); paintFloors(); paintRoofs(); paintShapes();
+        paintOutlines();
         paintLines(); paintWalls();
         // LAST, because dimensions are annotation: MODEL.dc.html paints them
         // after the walls and lines (6960) so a string is never buried under
@@ -757,6 +826,7 @@
       + `floors <b>${shownOfTotal(floors().length, drawing.floors)}</b>   `
       + `roofs <b>${shownOfTotal(roofs().length, drawing.roofs)}</b>   `
       + `shapes <b>${shownOfTotal(shapes().length, drawing.shapes)}</b>   `
+      + `outlines <b>${shownOfTotal(outlines().length, drawing.outlines)}</b>   `
       + `dims <b>${shownOfTotal(dimensions().length, drawing.dimensions)}</b>\n`
       + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
       + `view <b>${onActiveLevel().viewId || 'all'}</b>   `

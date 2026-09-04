@@ -968,6 +968,53 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     return v;
   }
 
+  // THE THREE OUTLINE ACCESSORS, LIFTED VERBATIM FROM MODEL.dc.html.
+  //
+  // drawOutlines2D has been in render-2d.js since the painters moved, and no
+  // page but MODEL.dc.html could call it -- not because of the painter, but
+  // because three of its env keys resolved to `this._` methods on the model.
+  // That is the distinction the tier spec draws: a painter that moved house
+  // without changing address. These are the address.
+  //
+  // All three are pure -- no `this`, no module state, no canvas -- which is
+  // why the lift is a copy rather than a rewrite. Nothing is "improved" on
+  // the way across: a silent behaviour change here would show up as a
+  // mis-drawn arc on one page and not the other, which is the most expensive
+  // kind of difference to find. The names lose their underscore to match this
+  // file; the bodies are byte-for-byte what MODEL.dc.html ran.
+  //
+  // geometry-2d.js rather than a new module on purpose: wall-joins-harness.js
+  // source-loads this file and mutates it, so anything landing here is already
+  // inside a mutation engine. A new file would be a new file with no coverage.
+
+  // Outline segments are keyed to their starting point: points[index] carries
+  // the bulge of the edge running to the next point (wrapping at the close).
+  // An OPEN outline (attached garage) has no closing segment: the last point
+  // has no outgoing edge, so it owns one fewer segment than it has points.
+  function outlineSegment(outline, index) {
+    const points = outline.points;
+    const start = points[index];
+    const end = outline.open === true ? (points[index + 1] || start) : points[(index + 1) % points.length];
+    return { start, end, bulge: start.bulge || 0 };
+  }
+
+  function outlineSegmentCount(outline) {
+    return outline.open === true ? outline.points.length - 1 : outline.points.length;
+  }
+
+  // Arc segments are quadratic curves: the control point sits at the segment
+  // midpoint, offset along the left normal by the line's bulge (in feet).
+  function lineControlPoint(seg) {
+    const bulge = seg.bulge || 0;
+    const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return {
+      x: (seg.start.x + seg.end.x) / 2 + (-dz / len) * bulge,
+      y: ((seg.start.y || 0) + (seg.end.y || 0)) / 2,
+      z: (seg.start.z + seg.end.z) / 2 + (dx / len) * bulge,
+    };
+  }
+
   window.DraftGeometry2D = {
     distance,
     worldPerPixel,
@@ -993,6 +1040,9 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     roofProfile,
     profileEnvelope,
     wallJoins,
+    outlineSegment,
+    outlineSegmentCount,
+    lineControlPoint,
   };
 })();
 }
