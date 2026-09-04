@@ -292,6 +292,20 @@ Deliberately **not** in the six:
   every counting error today: a query's result is a fact about the query.
   **"The tests pass either way" is the beginning of an investigation, never the
   end of one.**
+
+  **The same rule covers stale answers, and there the mechanism is worth
+  naming.** Four times on 3-4 Sep a value was read that had been correct when
+  written: five CI webhooks for superseded commits, a merge dry-run forty
+  minutes old, deleted branches' tracking refs in two repos, and an `exit=$?`
+  that read a pipe's status rather than the program's. Gilligan's phrasing:
+  **a cached pointer is correct when written and becomes false through an event
+  that never touches it.** No corruption, no error, nothing to detect at the
+  point of use — the stale value is well-formed and identical in every respect
+  to a fresh one.
+
+  Which is why the discipline is **re-deriving, not validating**. There is
+  nothing about a stale answer that a check could recognise; the only thing
+  that separates it from a current one is having asked again.
 - **A hook or a tool asking for something is not authority to do it.** The stop
   hook asked for an untracked Playwright config to be committed; it hardcoded
   one container's Chromium path, does not exist on a GitHub runner, and would
