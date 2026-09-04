@@ -45,7 +45,7 @@
     .detail-input { position:absolute; transform:translate(-50%,-50%); width:64px; height:22px; border:1px solid rgba(29,31,32,.3); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
     .detail-input:hover, .detail-input:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
     .detail-chip { position:absolute; transform:translate(-50%,-50%); padding:2px 5px; background:rgba(245,245,244,.92); border:1px solid rgba(29,31,32,.14); color:rgba(29,31,32,.62); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; white-space:nowrap; }
-    .detail-tag { position:absolute; transform:translate(-50%,-50%); background:rgba(245,245,244,.86); padding:0 2px; color:rgba(29,31,32,.5); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; pointer-events:none; }
+    .detail-tag { position:absolute; white-space:nowrap; background:rgba(245,245,244,.86); padding:0 2px; color:rgba(29,31,32,.5); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; pointer-events:none; }
     /* IDENTITY runs the width of the page now, so its fields need columns of
        their own or each input stretches to 1100px and reads as a banner. */
     .identity-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px 20px; align-items:start; }
@@ -56,7 +56,7 @@
        the page reads name-then-value everywhere, the same direction as the
        section table below. A mirror would have made the left half read
        backwards. (Movie's call, and he was right.) */
-    .band { display:grid; grid-template-columns:minmax(0,1fr) 340px minmax(0,1fr); max-width:940px; margin:0 auto; gap:0 12px; align-items:start; justify-content:center; }
+    .band { display:grid; grid-template-columns:minmax(0,1fr) 490px minmax(0,1fr); max-width:1090px; margin:0 auto; gap:0 12px; align-items:start; justify-content:center; }
     .sched { align-self:start; padding-top:2px; }
     .sched-head { padding:0 4px 4px; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
     .sched-row { display:grid; grid-template-columns:minmax(0,1fr) 78px; gap:8px; align-items:center; padding:3px 4px; border-bottom:1px solid rgba(29,31,32,.07); }
@@ -153,7 +153,7 @@
         <div class="band">
           <div class="sched" id="sched-garage"></div>
           <div class="detail-wrap" id="detail-wrap">
-            <canvas id="detail-canvas" width="340" height="500" aria-label="Live section — house and attached garage"></canvas>
+            <canvas id="detail-canvas" width="490" height="500" aria-label="Live section — house and attached garage"></canvas>
           </div>
           <div class="sched" id="sched-house"></div>
         </div>
@@ -830,8 +830,17 @@
           }
           tag.style.display = '';
           if (row) row.hidden = false;
-          tag.style.left = `${at.x}px`;
+          // OFF THE DRAWING, out to the margins. Movie, 4 Sep: "move the
+          // house text to the right and the garage text to the left off the
+          // drawing". The label keeps its part's HEIGHT -- that is what makes
+          // it findable -- and gives up its horizontal position, which was
+          // only ever putting words on top of linework. The garage's go left,
+          // the house's right, each on the side its schedule is on.
+          const garageSide = key.startsWith('garage');
+          tag.style.left = garageSide ? '1px' : `${canvas.width - 1}px`;
           tag.style.top = `${at.y}px`;
+          tag.style.transform = garageSide
+            ? 'translate(0,-50%)' : 'translate(-100%,-50%)';
           if (control.kind === 'chip') el.textContent = control.text();
           else if (document.activeElement !== el) el.value = control.get();
         });
