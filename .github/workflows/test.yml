@@ -30,20 +30,31 @@ jobs:
   # twenty minutes. A red here arrives before the shards have finished
   # installing chromium.
   #
-  # PLAIN MODE, no flags, deliberately. The mutation and coverage modes gate
-  # on things a branch is allowed to be mid-way through -- render-2d's
-  # --coverage exits non-zero when a painter has no checks yet -- and a
-  # contributor adding the painter before its checks should not be blocked by
-  # CI. Plain mode asks the one question that is always fair: do the checks
-  # pass?
+  # PLAIN MODE FOR THE LOOP, deliberately. Plain mode asks the one question
+  # that is always fair of every harness: do the checks pass?
   #
-  # The cost of that choice, stated rather than left to be discovered: the
-  # MUTATION ENGINES ARE NOT EXERCISED HERE. A broken mutation engine still
-  # rots unnoticed. Running them would need every harness to reject flags it
-  # does not honour -- today four of the twenty-one carry that guard, so a
-  # loop passing --mutate would run seventeen of them in plain mode and print
-  # a green table. That is the same defect this job exists to prevent, so it
-  # is not being added until the guard is universal.
+  # THE MUTATION ENGINES RUN IN A SECOND STEP, BY NAME. Three harnesses carry
+  # a real engine -- merge-vertex, render-2d, wall-joins -- and each is run
+  # with --mutate below, so a rotted engine goes red here instead of decaying
+  # unnoticed. They are NAMED, not globbed: not every harness rejects a flag
+  # it does not honour (four of the twenty-one do today), so a loop passing
+  # --mutate would run the rest in plain mode and print a green table for a
+  # mode that never ran. That loop is the defect this job exists to prevent,
+  # and an earlier version of this comment made it the prerequisite -- "not
+  # until the guard is universal". The conclusion did not follow: nobody has
+  # to use a loop. Three named lines need no guard on the other eighteen.
+  #
+  # ONE OF THE THREE GATES ON MORE THAN MUTATIONS. In render-2d-harness.js
+  # --mutate and --coverage are ONE mode, byte-identical output, and it exits
+  # non-zero when any painter has no checks as well as when a mutant survives
+  # (`return missed || unchecked.length ? 1 : 0`). So a contributor adding a
+  # painter before its checks gets a red from the line labelled "mutate", and
+  # that red is a coverage failure, not a mutation one. The table says which:
+  # read the "painters have checks" line before the mutation rows. Kept as one
+  # gate on purpose -- splitting the modes is a real change to that harness
+  # and can wait -- but it has to be stated, or the next person debugs a
+  # mutation failure that is actually a coverage failure. Green today at
+  # 17/17. wall-joins and merge-vertex have no painter gate.
   harnesses:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -130,6 +141,27 @@ jobs:
 
           echo
           echo "$(( ${#harnesses[@]} - failed ))/${#harnesses[@]} harnesses passed"
+          [ "$failed" -eq 0 ]
+
+      - name: Run the mutation engines
+        run: |
+          # NAMED, NOT GLOBBED -- see the job comment. These three are the
+          # harnesses that both reject flags they do not honour and act on
+          # --mutate. Same captured-never-piped pattern as the loop above, so
+          # a non-zero exit is never lost behind a pipe.
+          failed=0
+          for h in proto/merge-vertex-harness.js \
+                   proto/render-2d-harness.js \
+                   proto/wall-joins-harness.js; do
+            out=$(node "$h" --mutate 2>&1) && code=0 || code=$?
+            if [ "$code" -eq 0 ]; then
+              printf 'ok    %s --mutate\n' "$h"
+            else
+              failed=$((failed + 1))
+              printf 'FAIL  %s --mutate  (exit %s)\n' "$h" "$code"
+              echo "$out" | tail -40 | sed 's/^/      /'
+            fi
+          done
           [ "$failed" -eq 0 ]
 
   playwright:
