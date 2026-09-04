@@ -462,8 +462,19 @@ two conclusions, and they call for opposite work:
 
 Telling them apart is one step: **show that the mutated code produces a
 different value on some input before believing anything about the tests.**
-Where the mutation sits under a guard, that input may not be reachable at all,
-which is the case above.
+
+And that step has a companion, which is Gilligan's amendment to the first
+draft of this rule and the part that makes it usable: **ask what the guard
+upstream has already narrowed the input to.** Inertness is not visible in the
+mutated line. `< 1` reads as a real loosening in isolation; it is inert only
+because the cross-product test above it guarantees the dot product is already
+±1 by the time that line runs. You cannot see that by staring at the line you
+changed — only by asking which inputs still reach it.
+
+The zero-length guard is the same trap running backwards: deleting real code
+changed nothing, because `NaN` falls every comparison downstream. In one case a
+weaker condition was inert; in the other a deleted guard was. Both because
+something else had already decided the answer for every input that arrives.
 
 The two real gaps it then exposed are both worth keeping as examples of what a
 useless check looks like:
