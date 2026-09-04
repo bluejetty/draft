@@ -22,8 +22,17 @@ test('a build-default edit redraws the detail — the anchors move with the part
   await h.openModel(page);
   await openProjectPage(page);
 
-  const fdnBefore = await page.locator('[data-detail-input="fdnHeight"]').boundingBox();
-  const footingBefore = await page.locator('[data-detail-input="footingDepth"]').boundingBox();
+  // MEASURE THE LABEL, NOT THE BOX. The numbers moved off the drawing into a
+  // schedule beside it, so an input sits in a fixed row and cannot travel --
+  // asserting on the box here would fail for the layout rather than for the
+  // painter, and pinning it to zero travel would then pass with the redraw
+  // removed entirely. What still rides the anchor is the grey part label, so
+  // that is what this measures. Same claim as before: change a number and the
+  // drawing re-anchors.
+  const tagY = async name => (await page
+    .locator(`.detail-tag`, { hasText: name }).first().boundingBox()).y;
+  const fdnBefore = await tagY('FDN WALL HT');
+  const footingBefore = await tagY('FTG DEPTH');
 
   // A much shorter foundation wall: its own anchor rides up its mid-height
   // and the footing below it climbs too. The detail is drawn small beside the
@@ -31,10 +40,8 @@ test('a build-default edit redraws the detail — the anchors move with the part
   await commitDetail(page, 'fdnHeight', `4'-0"`);
   await expect(page.locator('#status')).toContainText('saved');
 
-  const fdnAfter = await page.locator('[data-detail-input="fdnHeight"]').boundingBox();
-  const footingAfter = await page.locator('[data-detail-input="footingDepth"]').boundingBox();
-  expect(Math.abs(fdnAfter.y - fdnBefore.y)).toBeGreaterThan(2);
-  expect(Math.abs(footingAfter.y - footingBefore.y)).toBeGreaterThan(2);
+  expect(Math.abs(await tagY('FDN WALL HT') - fdnBefore)).toBeGreaterThan(2);
+  expect(Math.abs(await tagY('FTG DEPTH') - footingBefore)).toBeGreaterThan(2);
 
   // Garbage never sticks: the box snaps back to the stored number.
   await commitDetail(page, 'pitch', 'steep');

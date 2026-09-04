@@ -191,16 +191,130 @@ if (!window.DraftProjectPage) {
     };
   };
 
+  // ── The attached garage, quasi-attached ─────────────────────────────────
+  //
+  // Movie, 4 Sep: "'quasi attached' only because it will move up and down as
+  // the user enters new heights for it". So the garage is joined to the house
+  // HORIZONTALLY and free VERTICALLY: x = 0 is the shared wall face for both
+  // drawings, and y stays the house's datum -- MAIN FL floor surface at 0 --
+  // with the garage floor sitting at whatever ZONE HEIGHTS says its offset is.
+  // Type a new offset and the whole garage slides against a house that has not
+  // moved, which is the relationship the zone panel's number could not show as
+  // a number.
+  //
+  // Only CUT_DEPTH_FT of it, measured from the house wall outward, which is
+  // the same 4 ft the house section is cut at -- one constant, so the two
+  // drawings can never disagree about how much of a building a section shows.
+  //
+  // X RUNS NEGATIVE HERE, into the garage. The house's own x runs positive
+  // inward from the same face, so the two share an origin and read outward in
+  // opposite directions without either needing to be mirrored at paint time.
+  // A mirrored painter would flip the break line's jog and the footing's
+  // taper the wrong way round, which looks like a drafting error rather than
+  // a transform.
+  const buildGarageSection = values => {
+    const g = values.garage;
+    const parts = [];
+    const anchors = {};
+    const line = (x1, y1, x2, y2, weight = 1.5) => parts.push({ kind: 'line', x1, y1, x2, y2, weight });
+    const rect = (x, y, w, h, weight = 1.5) => parts.push({ kind: 'rect', x, y, w, h, weight });
+
+    const cut = -CUT_DEPTH_FT;                 // the break edge, 4 ft out
+    const wallFt = g.wallThicknessIn / 12;
+    const fdnFt = g.thicknessIn / 12;
+    const slabFt = g.slabIn / 12;
+
+    // The floor surface, on the HOUSE's datum. Everything below hangs off it.
+    const floorY = g.floorOffsetFt;
+    anchors.garageOffset = { x: cut / 2, y: floorY + 0.62 };
+
+    // Slab on grade, poured against the inside face of the wall.
+    rect(cut, floorY - slabFt, CUT_DEPTH_FT - fdnFt, slabFt, 1);
+    anchors.garageSlab = { x: cut * 0.62, y: floorY - slabFt - 0.5 };
+
+    // Foundation wall down from the slab, footing centred under it.
+    const fdnTop = floorY;
+    const fdnBot = fdnTop - g.fdnWallHeightFt;
+    rect(-fdnFt, fdnBot, fdnFt, g.fdnWallHeightFt, 2);
+    anchors.garageFdnHeight = { x: -fdnFt - 0.9, y: fdnTop - g.fdnWallHeightFt / 2 };
+    const footW = g.footingWidthIn / 12, footD = g.footingDepthIn / 12;
+    rect(-fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);
+    anchors.garageFootingWidth = { x: -fdnFt / 2, y: fdnBot - footD - 0.5 };
+    anchors.garageFootingDepth = { x: -fdnFt / 2 - footW / 2 - 0.85, y: fdnBot - footD / 2 };
+
+    // The stud wall standing on the foundation, and its far face.
+    const plateY = floorY + g.wallHeightFt;
+    line(0, floorY, 0, plateY, 2);                        // shared face, house side
+    line(-wallFt, floorY, -wallFt, plateY, 1.5);          // garage side
+    anchors.garageWallHeight = { x: -wallFt - 0.9, y: floorY + g.wallHeightFt / 2 };
+
+    // The roof falls AWAY from the house across the cut. No overhang here:
+    // it is 4 ft from the wall, and the eave is out at the far side of a
+    // garage this section deliberately does not reach.
+    const riseAt = x => Math.abs(x) * (g.pitch / 12);
+    line(0, plateY, cut, plateY + riseAt(cut), 2);
+    anchors.garagePitch = { x: cut * 0.5, y: plateY + riseAt(cut * 0.5) + 0.55 };
+
+    const topY = plateY + riseAt(cut);
+    parts.push({ kind: 'break', x: cut, y1: fdnBot - footD - 0.3, y2: topY + 0.3 });
+
+    return {
+      parts,
+      anchors,
+      extents: {
+        minX: cut - 1.1,
+        maxX: 1.0,
+        minY: fdnBot - footD - 1.1,
+        maxY: topY + 1.1,
+      },
+    };
+  };
+
+  // ONE VERTICAL MAPPING ACROSS SEVERAL CANVASES.
+  //
+  // The house and its garage are drawn on separate canvases so each can carry
+  // its own schedule, but they are one section: an elevation has to land on
+  // the same pixel row in both, or the garage's offset -- the whole point of
+  // it being free vertically -- reads as a drawing error instead of a height.
+  // So the scale and the y origin are computed once across every section and
+  // handed to each paint call.
+  //
+  // The scale is the SMALLEST that fits them all: each canvas must hold its
+  // own width, and the tallest section must fit the shared height. Taking the
+  // largest, or each canvas's own fit, is what makes two drawings that agree
+  // about feet disagree about pixels.
+  const sectionView = entries => {
+    const minY = Math.min(...entries.map(e => e.section.extents.minY));
+    const maxY = Math.max(...entries.map(e => e.section.extents.maxY));
+    return {
+      minY,
+      scale: Math.min(
+        ...entries.map(e => e.canvas.width / (e.section.extents.maxX - e.section.extents.minX)),
+        ...entries.map(e => e.canvas.height / (maxY - minY))),
+    };
+  };
+
   // Fit the section into the canvas, paint it, and hand back each anchor in
   // CANVAS pixels so the page can park the matching input beside its part.
-  const paintWallSection = (canvas, values) => {
-    const section = buildWallSection(values);
+  //
+  // `view` is OPTIONAL and omitting it is the old behaviour exactly -- fit
+  // this section to this canvas alone. A single drawing has nothing to line
+  // up with, and a caller that passes nothing should not silently get a
+  // different picture than it got before.
+  // `align` decides where the leftover width goes: 0 packs the drawing
+  // left, 1 right, 0.5 centres it. The garage is pushed RIGHT and the house
+  // LEFT so the two meet at the shared wall face -- they are one building
+  // shown in two canvases, and a gap down the middle would say they are two.
+  const paintSection = (canvas, section, view, align = 0.5) => {
     const ctx = canvas.getContext('2d');
     const { extents } = section;
     const w = canvas.width, h = canvas.height;
-    const scale = Math.min(w / (extents.maxX - extents.minX), h / (extents.maxY - extents.minY));
-    const X = x => (x - extents.minX) * scale;
-    const Y = y => h - (y - extents.minY) * scale;
+    const scale = view ? view.scale
+      : Math.min(w / (extents.maxX - extents.minX), h / (extents.maxY - extents.minY));
+    const baseY = view ? view.minY : extents.minY;
+    const slack = view ? (w - (extents.maxX - extents.minX) * scale) * align : 0;
+    const X = x => (x - extents.minX) * scale + slack;
+    const Y = y => h - (y - baseY) * scale;
     ctx.clearRect(0, 0, w, h);
     ctx.strokeStyle = '#1d1f20';
     ctx.lineJoin = 'miter';
@@ -229,6 +343,11 @@ if (!window.DraftProjectPage) {
     return { anchors, scale };
   };
 
+  const paintWallSection = (canvas, values, view, align) =>
+    paintSection(canvas, buildWallSection(values), view, align);
+  const paintGarageSection = (canvas, values, view, align) =>
+    paintSection(canvas, buildGarageSection(values), view, align);
+
   window.DraftProjectPage = Object.freeze({
     ZONE_ROWS,
     CUT_DEPTH_FT,
@@ -244,7 +363,11 @@ if (!window.DraftProjectPage) {
     studInFromWallHeightFt,
     roofHeelIn,
     buildWallSection,
+    buildGarageSection,
+    sectionView,
+    paintSection,
     paintWallSection,
+    paintGarageSection,
   });
 })();
 }

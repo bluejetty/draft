@@ -45,7 +45,33 @@
     .detail-input { position:absolute; transform:translate(-50%,-50%); width:64px; height:22px; border:1px solid rgba(29,31,32,.3); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
     .detail-input:hover, .detail-input:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
     .detail-chip { position:absolute; transform:translate(-50%,-50%); padding:2px 5px; background:rgba(245,245,244,.92); border:1px solid rgba(29,31,32,.14); color:rgba(29,31,32,.62); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; white-space:nowrap; }
-    .detail-tag { position:absolute; transform:translate(-50%,-130%); color:rgba(29,31,32,.5); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; pointer-events:none; }
+    .detail-tag { position:absolute; transform:translate(-50%,-50%); background:rgba(245,245,244,.86); padding:0 2px; color:rgba(29,31,32,.5); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; pointer-events:none; }
+    /* IDENTITY runs the width of the page now, so its fields need columns of
+       their own or each input stretches to 1100px and reads as a banner. */
+    .identity-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px 20px; align-items:start; }
+    .stack-card { margin-top:16px; }
+
+    /* BAND 1 — the garage's schedule, the garage, the house, the house's
+       schedule. Names always to the LEFT of their values on both sides, so
+       the page reads name-then-value everywhere, the same direction as the
+       section table below. A mirror would have made the left half read
+       backwards. (Movie's call, and he was right.) */
+    .band { display:grid; grid-template-columns:228px 238px 400px 228px; gap:0 12px; align-items:start; justify-content:center; }
+    .sched { align-self:start; padding-top:2px; }
+    .sched-head { padding:0 4px 4px; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
+    .sched-row { display:grid; grid-template-columns:minmax(0,1fr) 78px; gap:8px; align-items:center; padding:3px 4px; border-bottom:1px solid rgba(29,31,32,.07); }
+    .sched-row:last-child { border-bottom:0; }
+    .sched-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:rgba(29,31,32,.66); line-height:1.15; }
+    input.sched-value, select.sched-value { width:100%; height:23px; border:1px solid rgba(29,31,32,.28); background:#fafafa; color:#1d1f20; padding:2px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; }
+    input.sched-value:hover, input.sched-value:focus, select.sched-value:hover, select.sched-value:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
+    /* A derived value is shown, never typed — greyed and unboxed so it reads
+       as an answer rather than a field, the same convention the section
+       table uses for a cell it inherited instead of being given. */
+    span.sched-value { display:block; height:23px; line-height:23px; text-align:center; color:rgba(29,31,32,.5); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; }
+    /* The numbers left the drawing, so the drawing lost the thing that said
+       which part each one measured. Hover restores it in both directions. */
+    .sched-row.lit { background:rgba(89,128,166,.13); }
+    .detail-tag.lit { color:#5980a6; font-size:9px; }
     .zone-row { display:grid; grid-template-columns:minmax(0,1fr) 84px 84px; gap:6px; align-items:center; padding:7px 0; border-bottom:1px solid rgba(29,31,32,.08); }
     .zone-row:last-child { border-bottom:0; }
     .zone-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.04em; }
@@ -70,7 +96,8 @@
     .drop-slot { margin-top:16px; border:1.5px dashed rgba(29,31,32,.28); background:rgba(29,31,32,.02); padding:26px 16px; text-align:center; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
     .drop-slot small { display:block; margin-top:5px; text-transform:none; letter-spacing:0; font-family:'Barlow',system-ui,sans-serif; font-weight:400; font-size:11px; }
     #status { margin-top:14px; min-height:16px; color:#557a46; font-size:12px; }
-    @media (max-width:980px) { .columns { grid-template-columns:1fr; } }
+    @media (max-width:1180px) { .band { grid-template-columns:1fr; justify-items:center; } .sched { width:min(420px,100%); } }
+    @media (max-width:980px) { .identity-grid { grid-template-columns:1fr 1fr; } }
   </style>
 </head>
 <body>
@@ -86,18 +113,22 @@
     <p class="intro">The project&#8217;s home base. Identity and build defaults save with this drawing &mdash; the office-wide numbers live in COMPANY STANDARDS. The wall-section detail is drawn from the same assembly values the sidebar level cards edit: change a number here and the level cards show it too.</p>
     <div class="notice" id="no-drawing-notice">Browser storage is unavailable &mdash; showing the office defaults, read-only.</div>
 
-    <div class="columns">
-      <section class="card" aria-label="Project identity">
-        <div class="card-title">Identity</div>
-        <div class="card-body">
+    <section class="card" aria-label="Project identity">
+      <div class="card-title">Identity</div>
+      <div class="card-body identity-grid">
+        <div>
           <div class="field-label">Project name</div>
           <input class="field" data-project-name aria-label="Project name" />
           <div class="field-label">Owner</div>
           <input class="field" data-project-owner aria-label="Owner" />
+        </div>
+        <div>
           <div class="field-label">Contractor</div>
           <input class="field" data-project-contractor aria-label="Contractor" />
           <div class="field-label">Civic address</div>
           <input class="field" data-project-civic aria-label="Civic address" />
+        </div>
+        <div>
           <div class="field-label">Legal land description</div>
           <div class="legal-grid">
             <input class="field" data-legal-block placeholder="BLOCK" aria-label="Legal block" />
@@ -106,22 +137,32 @@
             <input class="field" data-legal-parcel placeholder="PARCEL" aria-label="Legal parcel" />
           </div>
           <input class="field" data-legal-other placeholder="OTHER ID" aria-label="Legal other id" style="margin-top:6px;" />
+        </div>
+        <div>
           <textarea class="field" data-project-legal rows="2" placeholder="Freeform description, if the lot needs one" aria-label="Legal land description freeform" style="margin-top:6px;"></textarea>
           <div class="field-label">Rooms &mdash; from the plan&#8217;s stamps</div>
           <div class="zone-note" data-room-counts>Counted when the bone builds &mdash; the room stamps are the latest word.</div>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <section class="card" aria-label="Typical wall section">
-        <div class="card-title">Typical wall section &mdash; first 4 ft, cut inward</div>
-        <div class="card-body">
+    <section class="card stack-card" aria-label="Typical wall section">
+      <div class="card-title">Typical wall section &mdash; first 4 ft, cut inward</div>
+      <div class="card-body">
+        <div class="band">
+          <div class="sched" id="sched-garage"></div>
+          <div class="detail-wrap" id="garage-wrap">
+            <canvas id="garage-canvas" width="238" height="500" aria-label="Live attached garage section"></canvas>
+          </div>
           <div class="detail-wrap" id="detail-wrap">
             <canvas id="detail-canvas" width="400" height="500" aria-label="Live typical wall section"></canvas>
           </div>
+          <div class="sched" id="sched-house"></div>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <section class="card" aria-label="Zone heights">
+    <section class="card stack-card" aria-label="Zone heights">
         <div class="card-title">Zone heights</div>
         <div class="card-body">
           <div class="zone-head"><span></span><span>Local elev</span><span>Off main fl</span></div>
@@ -129,8 +170,8 @@
           <div class="zone-note" id="zone-datum-note"></div>
           <div class="zone-note">Zones are areas whose floors do not sit at MAIN FL. The garage rows feed BUILD HOUSE&#8217;s garage generation in a follow-up; the bilevel rows wait on the split-level feature.</div>
         </div>
-      </section>
-    </div>
+    </section>
+
 
     <section class="card table-card" aria-label="Section table">
       <div class="card-title">Section table &mdash; the numbers, by build type</div>
@@ -421,7 +462,7 @@
       };
       const controls = [];
       const addInput = (key, tag, opts) => controls.push({ key, tag, kind: 'input', ...opts });
-      const addChip = (key, text) => controls.push({ key, kind: 'chip', text });
+      const addChip = (key, tag, text) => controls.push({ key, tag, kind: 'chip', text });
 
       addInput('pitch', 'PITCH :12', {
         name: 'pitch',
@@ -451,7 +492,7 @@
             return false;
           },
         });
-        addInput(`floor-${level.id}`, `${level.name} FL JST`, {
+        addInput(`floor-${level.id}`, `${level.name} JST`, {
           name: `floor-${level.id}`,
           get: () => inchesOnly(assembly(level.id).joistDepthIn),
           set: text => {
@@ -497,9 +538,9 @@
           return false;
         },
       });
-      addChip('fascia', () => `FASCIA ${inchesOnly(ROOF_FASCIA_IN)}`);
-      addChip('heel', () => `HEEL ${fmt.formatArchitecturalInches(ROOF_FASCIA_IN + roofOverhang * roofPitch)}`);
-      addChip('fdnThickness', () => `${inchesOnly(fdnThicknessIn())} FDN`);
+      addChip('fascia', 'FASCIA', () => inchesOnly(ROOF_FASCIA_IN));
+      addChip('heel', 'HEEL', () => fmt.formatArchitecturalInches(ROOF_FASCIA_IN + roofOverhang * roofPitch));
+      addChip('fdnThickness', 'FDN', () => inchesOnly(fdnThicknessIn()));
       addInput('grade', 'GRADE OFF FDN TOP', {
         name: 'grade',
         get: () => signedFtIn(zoneHeights.gradeOffsetFt),
@@ -511,10 +552,66 @@
         },
       });
 
-      // The exterior wall type select sits on the wall body.
+      // THE NUMBERS COME OFF THE DRAWING.
+      //
+      // Movie, 4 Sep: "move the numbers to the right of the section and keep
+      // the grey labels on the section... line the measurements that can be
+      // changed in a column on the right and on the left a column with the
+      // name of what they are changing". So an anchor stops being where a box
+      // sits and becomes where its LABEL sits -- the drawing still says which
+      // part is which, and the values line up in a schedule beside it where
+      // there is room to name them properly.
+      //
+      // Names always left of values, on BOTH sides of the band. That is not a
+      // mirror -- a mirror would make the garage's half read value-then-name,
+      // backwards from every other column on the page, including the section
+      // table below.
+      const houseSched = document.querySelector('#sched-house');
+      const garageSched = document.querySelector('#sched-garage');
+      const garageWrap = document.querySelector('#garage-wrap');
+      const garageCanvas = document.querySelector('#garage-canvas');
+      garageWrap.style.width = garageCanvas.width + 'px';
+
+      // A floating label has to be three words; a column can say what the
+      // number is. The drawing keeps the short grey tag, this is the
+      // schedule's name for the same thing.
+      //
+      // It also fixes a doubling nobody could see at 8px: the tag template is
+      // `${level.name} FL JST` and the levels are named MAIN FL and 2ND FL,
+      // so the section has been drawing "MAIN FL FL JST" all along.
+      const FULL_NAME = {
+        pitch: 'Roof pitch : 12',
+        overhang: 'Roof overhang',
+        fdnHeight: 'Foundation wall height',
+        grade: 'Grade below foundation top',
+        slab: 'Slab thickness',
+        footingWidth: 'Footing width',
+        footingDepth: 'Footing depth',
+        fascia: 'Fascia depth',
+        heel: 'Roof heel',
+        fdnThickness: 'Foundation thickness',
+      };
+      const fullName = control => FULL_NAME[control.key]
+        || control.tag.replace('FL JST', 'joist depth').replace('WALL HT', 'wall height');
+
+      const schedRow = (host, key, name, valueEl) => {
+        const row = document.createElement('div');
+        row.className = 'sched-row';
+        row.dataset.schedRow = key;
+        const label = document.createElement('span');
+        label.className = 'sched-name';
+        label.textContent = name;
+        row.appendChild(label);
+        row.appendChild(valueEl);
+        host.appendChild(row);
+        return row;
+      };
+
+      // The exterior wall type governs the whole section, so it heads the
+      // house's schedule rather than floating on the wall body it used to sit
+      // against.
       const wallTypeSelect = document.createElement('select');
-      wallTypeSelect.className = 'detail-input';
-      wallTypeSelect.style.width = '96px';
+      wallTypeSelect.className = 'sched-value';
       wallTypeSelect.dataset.detailInput = 'wallType';
       wallTypeSelect.setAttribute('aria-label', 'Exterior wall type');
       EXTERIOR_CHOICES.forEach(id => {
@@ -538,54 +635,172 @@
       });
 
       const controlEls = new Map();
+
+      // Hover a row and its part lights up on the drawing; hover the part and
+      // the row lights up. The numbers used to sit ON the thing they measured
+      // -- this is what replaces the connection that move cost.
+      const link = (row, tag) => {
+        const on = () => { row.classList.add('lit'); if (tag) tag.classList.add('lit'); };
+        const off = () => { row.classList.remove('lit'); if (tag) tag.classList.remove('lit'); };
+        row.addEventListener('mouseenter', on);
+        row.addEventListener('mouseleave', off);
+        if (tag) { tag.addEventListener('mouseenter', on); tag.addEventListener('mouseleave', off); }
+      };
+
+      const schedHead = (host, text) => {
+        const head = document.createElement('div');
+        head.className = 'sched-head';
+        head.textContent = text;
+        host.appendChild(head);
+      };
+
+      schedHead(garageSched, 'Attached garage');
+      schedHead(houseSched, 'House');
+
+      schedRow(houseSched, 'wallType', 'Exterior wall type', wallTypeSelect);
+
       controls.forEach(control => {
+        const tag = document.createElement('span');
+        tag.className = 'detail-tag';
+        tag.textContent = control.tag;
+        wrap.appendChild(tag);
         if (control.kind === 'input') {
           const input = document.createElement('input');
-          input.className = 'detail-input';
+          input.className = 'sched-value';
           input.dataset.detailInput = control.name;
           input.setAttribute('aria-label', control.tag);
           input.disabled = readOnly;
-          const tag = document.createElement('span');
-          tag.className = 'detail-tag';
-          tag.textContent = control.tag;
           input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
           input.addEventListener('change', () => {
-            if (control.set(input.value)) {
-              save('Build default saved.');
-            }
+            if (control.set(input.value)) save('Build default saved.');
             repaint();
             fillZones(); // grade + assemblies feed the zone readouts too
+            fillTable(); // and the section table reads the same live numbers
             // repaint skips the focused box, so a rejected edit snaps back here
             input.value = control.get();
           });
-          wrap.appendChild(input); wrap.appendChild(tag);
-          controlEls.set(control.key, { control, el: input, tag });
+          link(schedRow(houseSched, control.key, fullName(control), input), tag);
+          controlEls.set(control.key, { control, el: input, tag, host: wrap });
         } else {
+          // DERIVED, so it is shown and never typed. Movie: "derived values
+          // also with the other numbers". A span rather than a disabled input
+          // -- a greyed box still looks like somewhere to put a number.
           const chip = document.createElement('span');
-          chip.className = 'detail-chip';
+          chip.className = 'sched-value';
           chip.dataset.detailChip = control.key;
-          wrap.appendChild(chip);
-          controlEls.set(control.key, { control, el: chip });
+          link(schedRow(houseSched, control.key, fullName(control), chip), tag);
+          controlEls.set(control.key, { control, el: chip, tag, host: wrap });
         }
       });
-      wrap.appendChild(wallTypeSelect);
+
+      // ── The attached garage's own numbers ────────────────────────────────
+      //
+      // Every one of these reads and writes the ATTACHED GARAGE row of the
+      // section table below -- cellValue/writeCell, the same pair the table
+      // uses. There is one number, shown twice, so the drawing and the table
+      // cannot disagree about a garage. Only the floor offset comes from
+      // somewhere else: it is a ZONE HEIGHT, because it is a height relative
+      // to MAIN FL rather than a property of the garage's assembly.
+      const garageControls = [];
+      const addGarage = (key, name, get, set) => garageControls.push({ key, name, get, set });
+      addGarage('garageOffset', 'Garage floor off main fl',
+        () => signedFtIn(zoneHeights.zones.attachedGarage.offsetFt),
+        text => {
+          const value = parseSignedFtIn(text);
+          if (value == null) return false;
+          zoneHeights = format.zoneHeights({ ...zoneHeights,
+            zones: { ...zoneHeights.zones, attachedGarage: { offsetFt: value } } });
+          return true;
+        });
+      const garageCell = (key, name, field, show, parse) => addGarage(key, name,
+        () => show(cellValue('attachedGarage', field).value),
+        text => {
+          const value = parse(text);
+          if (value == null) return false;
+          writeCell('attachedGarage', field, value);
+          return true;
+        });
+      garageCell('garageWallHeight', 'Garage wall height', 'mainWallHeightFt', ftIn, parseFtIn);
+      garageCell('garageFdnHeight', 'Garage foundation wall height', 'fdnWallHeightFt', ftIn, parseFtIn);
+      garageCell('garageSlab', 'Garage slab thickness', 'slabThicknessIn', inchesOnly, parseInches);
+      garageCell('garageFootingWidth', 'Garage footing width', 'footingWidthIn', inchesOnly, parseInches);
+      garageCell('garageFootingDepth', 'Garage footing depth', 'footingDepthIn', inchesOnly, parseInches);
+      garageCell('garagePitch', 'Garage roof pitch : 12', 'roofPitch', String, text => {
+        const value = Number(text);
+        return Number.isFinite(value) && value > 0 && value <= 24 ? value : null;
+      });
+
+      garageControls.forEach(control => {
+        const tag = document.createElement('span');
+        tag.className = 'detail-tag';
+        tag.textContent = control.name.replace(/^Garage /, '').toUpperCase();
+        garageWrap.appendChild(tag);
+        const input = document.createElement('input');
+        input.className = 'sched-value';
+        input.dataset.detailInput = control.key;
+        input.setAttribute('aria-label', control.name);
+        input.disabled = readOnly;
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+        input.addEventListener('change', () => {
+          if (control.set(input.value)) save('Garage default saved.');
+          repaint();
+          fillZones();
+          fillTable();
+          input.value = control.get();
+        });
+        link(schedRow(garageSched, control.key, control.name, input), tag);
+        controlEls.set(control.key, { control, el: input, tag, host: garageWrap });
+      });
+
+      // The garage's shape, drawn from the same numbers its schedule edits.
+      const garageValues = () => {
+        const cell = field => cellValue('attachedGarage', field).value;
+        return {
+          garage: {
+            floorOffsetFt: zoneHeights.zones.attachedGarage.offsetFt,
+            wallHeightFt: cell('mainWallHeightFt'),
+            fdnWallHeightFt: cell('fdnWallHeightFt'),
+            slabIn: cell('slabThicknessIn'),
+            footingWidthIn: cell('footingWidthIn'),
+            footingDepthIn: cell('footingDepthIn'),
+            pitch: cell('roofPitch'),
+            thicknessIn: fdnThicknessIn(),
+            wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
+          },
+        };
+      };
 
       const repaint = () => {
-        const painted = projectPage.paintWallSection(canvas, detailValues());
+        // Built first, painted second: the two sections have to agree on a
+        // scale and a y origin BEFORE either is drawn, or the garage's offset
+        // reads as a drawing error rather than a height.
+        const house = projectPage.buildWallSection(detailValues());
+        const garage = projectPage.buildGarageSection(garageValues());
+        const view = projectPage.sectionView([
+          { section: house, canvas },
+          { section: garage, canvas: garageCanvas },
+        ]);
+        const painted = projectPage.paintSection(canvas, house, view, 0);
+        const paintedGarage = projectPage.paintSection(garageCanvas, garage, view, 1);
+        const anchors = { ...painted.anchors, ...paintedGarage.anchors };
         controlEls.forEach(({ control, el, tag }, key) => {
-          const at = painted.anchors[key];
-          if (!at) { el.style.display = 'none'; if (tag) tag.style.display = 'none'; return; }
-          el.style.display = '';
-          el.style.left = `${at.x}px`; el.style.top = `${at.y}px`;
-          if (tag) { tag.style.display = ''; tag.style.left = `${at.x}px`; tag.style.top = `${at.y - 13}px`; }
-          if (control.kind === 'input' && document.activeElement !== el) el.value = control.get();
+          const at = anchors[key];
+          const row = el.closest('.sched-row');
+          if (!at) {
+            // No anchor means the drawing does not contain this part on this
+            // build -- hide the label AND the row, or the schedule offers a
+            // number for something that is not there.
+            tag.style.display = 'none';
+            if (row) row.hidden = true;
+            return;
+          }
+          tag.style.display = '';
+          if (row) row.hidden = false;
+          tag.style.left = `${at.x}px`;
+          tag.style.top = `${at.y}px`;
           if (control.kind === 'chip') el.textContent = control.text();
+          else if (document.activeElement !== el) el.value = control.get();
         });
-        const wallAt = painted.anchors.wallType;
-        if (wallAt) {
-          wallTypeSelect.style.left = `${wallAt.x - 62}px`;
-          wallTypeSelect.style.top = `${wallAt.y}px`;
-        }
       };
 
       // ── The section table ───────────────────────────────────────────────
