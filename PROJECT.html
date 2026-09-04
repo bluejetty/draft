@@ -720,8 +720,11 @@
       garageCell('garageWallHeight', 'Garage wall height', 'mainWallHeightFt', ftIn, parseFtIn);
       garageCell('garageFdnHeight', 'Garage foundation wall height', 'fdnWallHeightFt', ftIn, parseFtIn);
       garageCell('garageSlab', 'Garage slab thickness', 'slabThicknessIn', inchesOnly, parseInches);
-      garageCell('garageFootingWidth', 'Garage footing width', 'footingWidthIn', inchesOnly, parseInches);
-      garageCell('garageFootingDepth', 'Garage footing depth', 'footingDepthIn', inchesOnly, parseInches);
+      // No footing rows: a grade beam on piles has no spread footing. A FROST
+      // WALL garage would -- that is the variant that gets one -- and it is
+      // not a foundation type this page offers yet.
+      addGarage('garageVoidForm', 'Void form under beam',
+        () => inchesOnly(projectPage.VOID_FORM_IN), () => false);
 
       garageControls.forEach(control => {
         const tag = document.createElement('span');
@@ -754,8 +757,6 @@
             wallHeightFt: cell('mainWallHeightFt'),
             fdnWallHeightFt: cell('fdnWallHeightFt'),
             slabIn: cell('slabThicknessIn'),
-            footingWidthIn: cell('footingWidthIn'),
-            footingDepthIn: cell('footingDepthIn'),
             thicknessIn: fdnThicknessIn(),
           },
         };

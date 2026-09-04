@@ -125,6 +125,10 @@ if (!window.DraftProjectPage) {
   // the cut" -- shorter than the house's 4 ft because the thing being drawn
   // is a connection, and 2 ft of it is all there is to see.
   const GARAGE_CUT_FT = 2;
+  // spec-master.js already says it: "4" POLYSTYRENE VOID FORM UNDER, BETWEEN
+  // PILES". The beam is cast on it and it crushes, so frost heave lifts the
+  // soil and not the garage.
+  const VOID_FORM_IN = 4;
 
   // Section geometry in world feet: x = 0 at the exterior wall face,
   // positive inward; y = elevation with the MAIN FL floor surface at 0.
@@ -260,10 +264,19 @@ if (!window.DraftProjectPage) {
     const fdnBot = fdnTop - g.fdnWallHeightFt;
     rect(-fdnFt, fdnBot, fdnFt, g.fdnWallHeightFt, 2);
     anchors.garageFdnHeight = { x: -fdnFt - 0.9, y: fdnTop - g.fdnWallHeightFt / 2 };
-    const footW = g.footingWidthIn / 12, footD = g.footingDepthIn / 12;
-    rect(-fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);
-    anchors.garageFootingWidth = { x: -fdnFt / 2, y: fdnBot - footD - 0.5 };
-    anchors.garageFootingDepth = { x: -fdnFt / 2 - footW / 2 - 0.85, y: fdnBot - footD / 2 };
+    // 4" void form under the beam, between the piles: the beam is cast on it
+    // and the form collapses, so heaving soil lifts nothing.
+    rect(-fdnFt, fdnBot - VOID_FORM_IN / 12, fdnFt, VOID_FORM_IN / 12, 1);
+    anchors.garageVoidForm = { x: -fdnFt - 0.9, y: fdnBot - VOID_FORM_IN / 24 };
+    // NO FOOTING. Movie, 4 Sep: "why does your garage have a footing?" -- it
+    // does not. A grade beam bears on drilled piles at about 8 ft on centre,
+    // over a 4" void form between them; there is no spread footing under it.
+    // The first draft copied the house's foundation pattern, which put a
+    // strip footing under a beam that is deliberately hung off piles.
+    //
+    // The piles themselves are not drawn here either, and that is correct
+    // rather than missing: at 8 ft o.c. and a 2 ft cut, the first pile is
+    // beyond the break. (Movie: "first pile won't be shown too far".)
 
     // THE GARAGE HAS NO WALL HERE. This is the junction: the house's exterior
     // wall IS the wall at this cut, and the house section next door draws it.
@@ -287,7 +300,7 @@ if (!window.DraftProjectPage) {
     line(0, plateY, cut, plateY, 2);
 
     const topY = plateY;
-    parts.push({ kind: 'break', x: cut, y1: fdnBot - footD - 0.3, y2: topY + 0.3 });
+    parts.push({ kind: 'break', x: cut, y1: fdnBot - VOID_FORM_IN / 12 - 0.3, y2: topY + 0.3 });
 
     return {
       parts,
@@ -296,7 +309,7 @@ if (!window.DraftProjectPage) {
         minX: cut - 1.1,
         maxX: 0,      // the shared wall face: the house's own extents carry on
                       // from here, and the two together are one drawing
-        minY: fdnBot - footD - 1.1,
+        minY: fdnBot - VOID_FORM_IN / 12 - 1.1,
         maxY: topY + 1.1,
       },
     };
@@ -423,6 +436,7 @@ if (!window.DraftProjectPage) {
     SECTION_TABLE_ITEMS,
     SECTION_TABLE_DEFAULTS,
     GARAGE_GRADE_BEAM_IN,
+    VOID_FORM_IN,
     STUD_LENGTHS_IN,
     HALF_STUD_IN,
     PLATE_STACK_IN,
