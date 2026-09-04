@@ -294,8 +294,8 @@ if (!window.DraftProjectPage) {
       anchors,
       extents: {
         minX: cut - 1.1,
-        maxX: 0.06,   // the shared face IS the right edge -- a hair of room
-                      // only so the beam's own line is not clipped in half
+        maxX: 0,      // the shared wall face: the house's own extents carry on
+                      // from here, and the two together are one drawing
         minY: fdnBot - footD - 1.1,
         maxY: topY + 1.1,
       },
@@ -315,14 +315,28 @@ if (!window.DraftProjectPage) {
   // own width, and the tallest section must fit the shared height. Taking the
   // largest, or each canvas's own fit, is what makes two drawings that agree
   // about feet disagree about pixels.
+  // Movie's mockup, 4 Sep: the house and its garage are ONE section. A single
+  // wall stack, with the garage's floor, beam and roof dying into it -- not
+  // two drawings placed side by side. The first build put them on separate
+  // canvases, which made the junction impossible to draw honestly: the garage
+  // grew a wall of its own a few inches from the house's, because there was
+  // nowhere for one wall to belong to both.
+  //
+  // They already share an origin -- x = 0 is the house's exterior wall face
+  // for both builders, y = 0 is MAIN FL -- so the union of their extents is a
+  // real drawing, not a montage. This returns ONE mapping: shared scale,
+  // shared minX, shared minY.
   const sectionView = entries => {
-    const minY = Math.min(...entries.map(e => e.section.extents.minY));
-    const maxY = Math.max(...entries.map(e => e.section.extents.maxY));
+    const ex = entries.map(e => e.section.extents);
+    const minX = Math.min(...ex.map(e => e.minX));
+    const maxX = Math.max(...ex.map(e => e.maxX));
+    const minY = Math.min(...ex.map(e => e.minY));
+    const maxY = Math.max(...ex.map(e => e.maxY));
+    const canvas = entries[0].canvas;
     return {
-      minY,
-      scale: Math.min(
-        ...entries.map(e => e.canvas.width / (e.section.extents.maxX - e.section.extents.minX)),
-        ...entries.map(e => e.canvas.height / (maxY - minY))),
+      minX, minY,
+      span: maxX - minX,
+      scale: Math.min(canvas.width / (maxX - minX), canvas.height / (maxY - minY)),
     };
   };
 
@@ -337,17 +351,23 @@ if (!window.DraftProjectPage) {
   // left, 1 right, 0.5 centres it. The garage is pushed RIGHT and the house
   // LEFT so the two meet at the shared wall face -- they are one building
   // shown in two canvases, and a gap down the middle would say they are two.
-  const paintSection = (canvas, section, view, align = 0.5) => {
+  const paintSection = (canvas, section, view, align = 0.5, clear = true) => {
     const ctx = canvas.getContext('2d');
     const { extents } = section;
     const w = canvas.width, h = canvas.height;
     const scale = view ? view.scale
       : Math.min(w / (extents.maxX - extents.minX), h / (extents.maxY - extents.minY));
     const baseY = view ? view.minY : extents.minY;
-    const slack = view ? (w - (extents.maxX - extents.minX) * scale) * align : 0;
-    const X = x => (x - extents.minX) * scale + slack;
+    // Under a shared view every section is placed from the SAME origin, so
+    // the garage lands where it belongs against the house rather than being
+    // fitted to its own box. `align` only spends the leftover width of the
+    // whole drawing, once.
+    const baseX = view ? view.minX : extents.minX;
+    const span = view ? view.span : (extents.maxX - extents.minX);
+    const slack = view ? (w - span * scale) * align : 0;
+    const X = x => (x - baseX) * scale + slack;
     const Y = y => h - (y - baseY) * scale;
-    ctx.clearRect(0, 0, w, h);
+    if (clear) ctx.clearRect(0, 0, w, h);
     ctx.strokeStyle = '#1d1f20';
     ctx.lineJoin = 'miter';
     section.parts.forEach(part => {
@@ -375,6 +395,21 @@ if (!window.DraftProjectPage) {
     return { anchors, scale };
   };
 
+  // Several sections, ONE canvas, one coordinate system: the view is computed
+  // across all of them, the canvas is cleared once, and each is painted into
+  // the same mapping. Painting them one at a time with paintSection would have
+  // the second clear the first -- which is the kind of thing that looks like a
+  // painter bug and is really an argument default.
+  const paintSections = (canvas, sections, align = 0.5) => {
+    const view = sectionView(sections.map(section => ({ section, canvas })));
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    const anchors = {};
+    sections.forEach(section => {
+      Object.assign(anchors, paintSection(canvas, section, view, align, false).anchors);
+    });
+    return { anchors, scale: view.scale };
+  };
+
   const paintWallSection = (canvas, values, view, align) =>
     paintSection(canvas, buildWallSection(values), view, align);
   const paintGarageSection = (canvas, values, view, align) =>
@@ -399,6 +434,7 @@ if (!window.DraftProjectPage) {
     buildGarageSection,
     sectionView,
     paintSection,
+    paintSections,
     paintWallSection,
     paintGarageSection,
   });

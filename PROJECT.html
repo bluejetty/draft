@@ -56,7 +56,7 @@
        the page reads name-then-value everywhere, the same direction as the
        section table below. A mirror would have made the left half read
        backwards. (Movie's call, and he was right.) */
-    .band { display:grid; grid-template-columns:250px 150px 400px 250px; gap:0 12px; align-items:start; justify-content:center; }
+    .band { display:grid; grid-template-columns:minmax(0,1fr) 340px minmax(0,1fr); max-width:940px; margin:0 auto; gap:0 12px; align-items:start; justify-content:center; }
     .sched { align-self:start; padding-top:2px; }
     .sched-head { padding:0 4px 4px; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
     .sched-row { display:grid; grid-template-columns:minmax(0,1fr) 78px; gap:8px; align-items:center; padding:3px 4px; border-bottom:1px solid rgba(29,31,32,.07); }
@@ -151,11 +151,8 @@
       <div class="card-body">
         <div class="band">
           <div class="sched" id="sched-garage"></div>
-          <div class="detail-wrap" id="garage-wrap">
-            <canvas id="garage-canvas" width="150" height="500" aria-label="Live attached garage section"></canvas>
-          </div>
           <div class="detail-wrap" id="detail-wrap">
-            <canvas id="detail-canvas" width="400" height="500" aria-label="Live typical wall section"></canvas>
+            <canvas id="detail-canvas" width="340" height="500" aria-label="Live section — house and attached garage"></canvas>
           </div>
           <div class="sched" id="sched-house"></div>
         </div>
@@ -568,9 +565,9 @@
       // table below.
       const houseSched = document.querySelector('#sched-house');
       const garageSched = document.querySelector('#sched-garage');
-      const garageWrap = document.querySelector('#garage-wrap');
-      const garageCanvas = document.querySelector('#garage-canvas');
-      garageWrap.style.width = garageCanvas.width + 'px';
+      // One drawing, so one wrap: every part label -- house or garage --
+      // is positioned over the same canvas.
+      const garageWrap = wrap;
 
       // A floating label has to be three words; a column can say what the
       // number is. The drawing keeps the short grey tag, this is the
@@ -768,15 +765,10 @@
         // Built first, painted second: the two sections have to agree on a
         // scale and a y origin BEFORE either is drawn, or the garage's offset
         // reads as a drawing error rather than a height.
-        const house = projectPage.buildWallSection(detailValues());
-        const garage = projectPage.buildGarageSection(garageValues());
-        const view = projectPage.sectionView([
-          { section: house, canvas },
-          { section: garage, canvas: garageCanvas },
+        const { anchors } = projectPage.paintSections(canvas, [
+          projectPage.buildGarageSection(garageValues()),
+          projectPage.buildWallSection(detailValues()),
         ]);
-        const painted = projectPage.paintSection(canvas, house, view, 0);
-        const paintedGarage = projectPage.paintSection(garageCanvas, garage, view, 1);
-        const anchors = { ...painted.anchors, ...paintedGarage.anchors };
         controlEls.forEach(({ control, el, tag }, key) => {
           const at = anchors[key];
           const row = el.closest('.sched-row');
