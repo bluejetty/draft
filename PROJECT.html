@@ -274,6 +274,10 @@
       let roofPitch = positive(drawing?.roofPitch, 4);
       let roofOverhang = positive(drawing?.roofOverhang, 2);
       let activeWallType = WALL_TYPE_VIEW[drawing?.activeWallType] ? drawing.activeWallType : 'stud_2x6';
+      // A page-owned key of its own, not a section-table cell: the table's
+      // HOUSE row is `live: true` and reads the drawing's ASSEMBLY, and how
+      // the framing is fastened down is a detail, not an assembly value.
+      let foundationAttachment = drawing?.foundationAttachment === 'ladder' ? 'ladder' : 'sill';
       const datumFt = Number(drawing?.elevationDatum) === 100 ? 100 : 0;
 
       const assembly = levelId => normaliseAssembly(levelAssemblies[levelId]);
@@ -313,6 +317,7 @@
         roofPitch,
         roofOverhang,
         activeWallType,
+        foundationAttachment,
       });
 
       // This page used to write `drawing` — the whole file as it read it when
@@ -432,6 +437,7 @@
             footingWidthIn: asm.footingWidthIn ?? (fdnIsIcf() ? 24 : 20),
             footingDepthIn: asm.footingDepthIn,
             gradeOffsetFt: gradeOffsetFt(),
+            attachment: attachmentChoice(),
           };
         })(),
         roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN },
@@ -504,6 +510,32 @@
             return false;
           },
         });
+      });
+      // SILL OR LADDER, and ICF gets no choice. Movie, 4 Sep: "it will work
+      // for the 8" concrete wall but the sill plate is the only option for
+      // the ICF walls". An ICF wall's top is foam either side of a poured
+      // core -- there is no form to set a ladder into.
+      //
+      // ENFORCED HERE AND NOT IN drawing-format.js, unlike the garage's
+      // foundation list, and the difference is real: that one is gated by
+      // BUILD TYPE, which the section table carries, and this one by WALL
+      // TYPE, which it does not -- the validator sees the table alone and
+      // cannot tell an ICF wall from an 8" pour. So a stored 'ladder' on an
+      // ICF drawing is coerced on read rather than refused on write. Said
+      // out loud because the file's own comment promises the opposite for
+      // its neighbours.
+      const attachmentChoice = () => (fdnIsIcf() ? 'sill' : foundationAttachment);
+      addInput('attachment', 'ATTACHMENT', {
+        name: 'attachment',
+        kind: 'choice',
+        choices: () => (fdnIsIcf() ? ['sill'] : projectPage.FOUNDATION_ATTACHMENTS)
+          .map(id => ({ id, label: projectPage.ATTACHMENT_LABEL[id] })),
+        get: attachmentChoice,
+        set: value => {
+          if (!projectPage.FOUNDATION_ATTACHMENTS.includes(value)) return false;
+          foundationAttachment = value;
+          return true;
+        },
       });
       addInput('fdnHeight', 'FDN WALL HT', {
         name: 'fdnHeight',
@@ -687,8 +719,21 @@
         tag.className = 'detail-tag';
         tag.textContent = control.tag;
         wrap.appendChild(tag);
-        if (control.kind === 'input') {
-          const input = document.createElement('input');
+        if (control.kind === 'input' || control.kind === 'choice') {
+          // A choice is an input whose values are a list. The garage side grew
+          // its own copy of this when the foundation dropdown landed; rather
+          // than a third, the two branches now differ only in the element and
+          // whether options get filled.
+          const input = document.createElement(
+            control.kind === 'choice' ? 'select' : 'input');
+          if (control.kind === 'choice') {
+            control.choices().forEach(({ id, label }) => {
+              const option = document.createElement('option');
+              option.value = id;
+              option.textContent = label;
+              input.appendChild(option);
+            });
+          }
           input.className = 'sched-value';
           input.dataset.detailInput = control.name;
           input.setAttribute('aria-label', control.tag);
@@ -906,6 +951,23 @@
           tag.style.top = `${at.y}px`;
           tag.style.transform = 'translate(0,-50%)';
           if (control.kind === 'annotation') return;   // the label IS the whole control
+          if (control.kind === 'choice' && control.choices) {
+            // OPTIONS ARE REBUILT, NOT BUILT ONCE. The ICF gate depends on the
+            // wall type, which the drafter can change after the dropdown was
+            // created -- so a list filled at construction shows LADDER on an
+            // ICF wall forever. The gate has to be re-asked every repaint or
+            // it is not a gate, it is a first impression.
+            const want = control.choices();
+            const have = [...el.options].map(o => o.value).join(',');
+            if (have !== want.map(o => o.id).join(',')) {
+              el.textContent = '';
+              want.forEach(({ id, label }) => {
+                const option = document.createElement('option');
+                option.value = id; option.textContent = label;
+                el.appendChild(option);
+              });
+            }
+          }
           if (control.kind === 'chip') el.textContent = control.text();
           else if (document.activeElement !== el) el.value = control.get();
         });

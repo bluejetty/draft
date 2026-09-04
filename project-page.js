@@ -155,6 +155,36 @@ if (!window.DraftProjectPage) {
   // office default sits at 1'-0", comfortably under it; this is the line the
   // drafter cannot type past.
   const GRADE_MIN_BELOW_CONCRETE_IN = 8;
+
+  // HOW THE FRAMING IS HELD DOWN TO THE FOUNDATION. Movie, 4 Sep. Two ways,
+  // and they bear at the SAME height on purpose, so switching between them
+  // moves nothing above the foundation:
+  //
+  //   'sill'   -- a 1 1/2" sill plate on top of the concrete, held by
+  //               embedded anchor bolts every 4 ft. The bolts are the detail;
+  //               the plate is just what they hold.
+  //   'ladder' -- a PT SPF 2x6 "ladder": two 2x6 ON EDGE at the wall faces
+  //               with 2x6 separators every 2 ft, 8" outside to outside, set
+  //               into the top of the form and the concrete poured around it.
+  //               Standing 1 1/2" proud, so 4" of its 5 1/2" is embedded.
+  //
+  // The 1 1/2" proud is a choice, not a constraint -- it could stand higher.
+  // Movie keeps it at the sill plate's thickness so the two are
+  // interchangeable and nothing downstream has to know which was used.
+  // Movie, 4 Sep, on where this is heading: "in the future I will probably
+  // split this into a simplified version for each -- bungalow with or without
+  // garage, and bilevel and modified bilevel separate -- but this will be
+  // excellent to start with, and maybe keep using and not change that much,
+  // we will see." So one section that draws every case is the deliberate
+  // starting point, not an accident of not having split it yet. If it does
+  // split, the split is by BUILD TYPE, which is NEW-5 again.
+  const FOUNDATION_ATTACHMENTS = Object.freeze(['sill', 'ladder']);
+  const ATTACHMENT_LABEL = Object.freeze({
+    sill: 'SILL PLATE', ladder: 'PT SPF 2x6 LADDER',
+  });
+  const LADDER_MEMBER_IN = 1.5;   // a 2x6 on edge, its thickness
+  const LADDER_DEPTH_IN = 5.5;    // and its width, standing vertical
+  const LADDER_WIDTH_IN = 8;      // outside to outside, the wall's own 8"
   const CUT_DEPTH_FT = 4; // "the first 4 ft of the exterior wall cut inward"
   // Movie, 4 Sep: the garage panel is the JUNCTION, not a garage -- it is cut
   // where the garage meets the house. His own drawing dimensions 4'-6" out
@@ -177,6 +207,22 @@ if (!window.DraftProjectPage) {
   // Section geometry in world feet: x = 0 at the exterior wall face,
   // positive inward; y = elevation with the MAIN FL floor surface at 0.
   // Returns line/rect parts plus one anchor per annotated value.
+  // Draws whichever hold-down was chosen, in the 1 1/2" band above the
+  // concrete. Shared by the house and the garage so the two can never drift
+  // into drawing the same detail differently.
+  const attachment = (rect, line, kind, x, concTop, wallFt) => {
+    const proudFt = SILL_PLATE_IN / 12;
+    if (kind !== 'ladder') { rect(x, concTop, wallFt, proudFt, 1.5); return; }
+    // Two members on edge at the wall faces, most of them below the pour.
+    const memberFt = LADDER_MEMBER_IN / 12, deepFt = LADDER_DEPTH_IN / 12;
+    const topFt = concTop + proudFt;
+    [x, x + wallFt - memberFt].forEach(mx =>
+      rect(mx, topFt - deepFt, memberFt, deepFt, 1.5));
+    // The separator behind the cut, and the wood the pour stops against.
+    line(x + memberFt, concTop, x + wallFt - memberFt, concTop, 0.75);
+    line(x, topFt, x + wallFt, topFt, 1.5);
+  };
+
   const buildWallSection = values => {
     const floors = values.floors; // bottom-up: [{id, name, wallHeightFt, joistDepthIn, sheathingIn}]
     const fdn = values.foundation; // {wallHeightFt, thicknessIn, slabIn, footingWidthIn, footingDepthIn}
@@ -237,9 +283,16 @@ if (!window.DraftProjectPage) {
 
     // Foundation: wall top carries the main floor, footing centered under
     // it, slab pouring against the wall at the footing.
+    // The house gets the band it has always been missing: the concrete stopped
+    // at the bearing line and the plate was drawn nowhere, exactly as the
+    // garage's was until Movie asked where it had gone.
     const fdnTop = -mainDepthFt;
-    const fdnBot = fdnTop - fdn.wallHeightFt;
-    rect(0, fdnBot, fdnFt, fdn.wallHeightFt, 2);
+    const attachFt = SILL_PLATE_IN / 12;
+    const concTopFt = fdnTop - attachFt;
+    const fdnBot = concTopFt - fdn.wallHeightFt;
+    rect(0, fdnBot, fdnFt, concTopFt - fdnBot, 2);
+    attachment(rect, line, fdn.attachment, 0, concTopFt, fdnFt);
+    anchors.attachment = { x: fdnFt / 2, y: concTopFt + attachFt / 2 };
     anchors.fdnHeight = { x: fdnFt + 0.9, y: fdnTop - fdn.wallHeightFt / 2 };
     anchors.fdnThickness = { x: fdnFt / 2, y: fdnTop + 0.45 };
     const footW = fdn.footingWidthIn / 12, footD = fdn.footingDepthIn / 12;
@@ -575,6 +628,9 @@ if (!window.DraftProjectPage) {
     GARAGE_BEAM_ABOVE_GRADE_IN,
     GARAGE_SILL_BELOW_HOUSE_FT,
     GRADE_MIN_BELOW_CONCRETE_IN,
+    FOUNDATION_ATTACHMENTS,
+    ATTACHMENT_LABEL,
+    LADDER_WIDTH_IN,
     SECTION_TABLE_ROWS,
     SECTION_TABLE_ITEMS,
     SECTION_TABLE_DEFAULTS,

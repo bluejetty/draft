@@ -1018,6 +1018,13 @@ if (!window.DraftDrawingFormat) {
   // "completes".
   const SECTION_TABLE_CHOICES = Object.freeze({
     garageFoundation: Object.freeze(['gradebeam', 'frostwall', 'thickened']),
+    // How the framing is held down to the foundation. Movie, 4 Sep: a
+    // 1 1/2" sill plate on embedded anchor bolts every 4 ft, or a PT SPF 2x6
+    // ladder set into the top of the pour with the floor header and joists
+    // screwed to it. Both bear at the same height, so the choice changes the
+    // detail and nothing above it. Sill is the default -- Movie: "sill plate
+    // stronger attachment I think / I prefer".
+    foundationAttachment: Object.freeze(['sill', 'ladder']),
   });
   const SECTION_TABLE_CHOICES_BY_TYPE = Object.freeze({
     attachedGarage: Object.freeze({ garageFoundation: Object.freeze(['gradebeam', 'frostwall']) }),
