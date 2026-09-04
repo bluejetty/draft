@@ -542,7 +542,7 @@ claim, re-read its name as though you were trying to break the claim instead.
 Twice today that would have caught a wrong sentence before it shipped — this
 one, and `body` documented as permanent when it was only current.
 
-### 10 · A surviving mutant is one of three things, and only one is a coverage gap
+### 10 · A surviving mutant is a coverage gap, an inert mutation, or a property guarded twice
 
 Gilligan's, 4 Sep, caught on his own audit of the `wallJoins` harness — and it
 governs the technique this repo leans on hardest, so it earns a rule of its
@@ -557,8 +557,8 @@ that changes nothing reports a gap that is not there.** `< 2` is the one that
 discriminates, and under it the real gaps appeared.
 
 Mutation testing is an instrument, and this rule is the instrument reading
-itself — the day's theme once more. A surviving mutant licenses one of THREE
-conclusions, and they call for different work:
+itself — the day's theme once more. A surviving mutant licenses exactly one of
+three conclusions, and they call for different work:
 
 - **the tests are weak** → write the check that distinguishes them
 - **the mutant is inert** → write a harsher mutant; the tests were fine
