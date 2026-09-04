@@ -49,15 +49,40 @@ const notice = page => page.locator('#notice');
 // comment for four days after it stopped being true.
 async function wallInk(page) {
   const mode = await page.evaluate(() => document.documentElement.dataset.mode);
-  expect(mode, 'wallInk counts bright pixels, which only isolates walls on the '
-    + 'night skin — on day the ground itself clears the threshold')
+  expect(mode, 'wallInk looks for the night skin\'s wall edge specifically, and '
+    + 'the tolerance below was checked against that skin\'s other inks')
     .toBe('night');
+  // ASKED OF THE PALETTE, not of a literal -- the same move anyInk makes just
+  // below, and for a reason this function learned the hard way.
+  //
+  // It used to count pixels with red >= 170, which isolated walls only because
+  // drawWallSeg2D hardcoded '#ffffff'. When walls were given draw-wall /
+  // draw-wall-edge, night's edge became #a7aeb1 -- red 167 -- and this
+  // returned ZERO. Three counts under a threshold tuned to a colour that no
+  // longer existed. A number calibrated against a constant somewhere else is
+  // only ever right until that constant moves.
+  //
+  // Reading --draw-wall-edge means the skin can be redesigned without touching
+  // this file, and it is also a check that the palette reached the document.
+  // Night-only, and the window is safe there: the nearest other night ink is
+  // draw-line #7f8688, more than 28 per channel away, so nothing else on the
+  // canvas can land inside it.
   return page.evaluate(() => {
+    const css = getComputedStyle(document.documentElement)
+      .getPropertyValue('--draw-wall-edge').trim();
+    const hex = css.replace('#', '');
+    const want = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
+    if (want.some(Number.isNaN)) throw new Error(`wallInk: unreadable edge "${css}"`);
+    const TOL = 12;
     const canvas = document.getElementById('plan');
     const { data } = canvas.getContext('2d')
       .getImageData(0, 0, canvas.width, canvas.height);
     let ink = 0;
-    for (let i = 0; i < data.length; i += 4) if (data[i] >= 170) ink += 1;
+    for (let i = 0; i < data.length; i += 4) {
+      if (Math.abs(data[i] - want[0]) <= TOL
+        && Math.abs(data[i + 1] - want[1]) <= TOL
+        && Math.abs(data[i + 2] - want[2]) <= TOL) ink += 1;
+    }
     return ink;
   });
 }
