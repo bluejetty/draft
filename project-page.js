@@ -197,7 +197,12 @@ if (!window.DraftProjectPage) {
     anchors.pitch = { x: CUT_DEPTH_FT * 0.45, y: plateY + riseAt(CUT_DEPTH_FT * 0.45) + 0.55 };
     anchors.overhang = { x: -roof.overhangFt / 2, y: plateY - 0.55 };
     anchors.fascia = { x: -roof.overhangFt - 0.55, y: plateY + fasciaFt / 2 };
-    anchors.heel = { x: 0.45, y: plateY + riseAt(0) / 2 };
+    // Movie, 4 Sep: the heel reads UNDER the overhang and OVER the 2nd floor
+    // wall. Since a label now keeps only its height, the heel sitting at its
+    // own mid-height put it above the fascia and overhang -- above the things
+    // it is measured from. Dropped below the plate, it falls into the order
+    // the eye works down: pitch, fascia, overhang, heel, then the wall.
+    anchors.heel = { x: 0.45, y: plateY - 1.3 };
     line(0, plateY, 0, plateY + riseAt(0), 1);                  // heel at the wall face
 
     // Foundation: wall top carries the main floor, footing centered under

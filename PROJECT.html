@@ -480,7 +480,12 @@
           return false;
         },
       });
-      floorLevels.forEach(level => {
+      // TOP DOWN, like the drawing. floorLevels runs bottom-up -- MAIN FL then
+      // 2ND FL -- which put the main floor's rows ABOVE the second floor's in
+      // a schedule sitting beside a section where the second floor is higher.
+      // Reading across from a row to its part meant crossing over. (Movie:
+      // "move the main floor stuff under the 2nd fl stuff".)
+      [...floorLevels].reverse().forEach(level => {
         addInput(`wallHeight-${level.id}`, `${level.name} WALL HT`, {
           name: `wallHeight-${level.id}`,
           get: () => ftIn(assembly(level.id).wallHeightFt),
