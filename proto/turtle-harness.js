@@ -16,6 +16,14 @@
 // entered, which is exactly the confusion a toy exists to prevent. So the
 // turtle walks the inside face and thickness goes outward, and the check that
 // proves it asks the constraint module rather than restating the arithmetic.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node turtle-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 const fs = require('fs');
 const path = require('path');
 

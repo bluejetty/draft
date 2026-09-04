@@ -12,6 +12,14 @@
 // dies quietly in the third, when someone adds "while we are here, how many
 // bathrooms?" to a screen that already asks something, or makes one stage the
 // exception that has to be answered. Written down here so that costs a test.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node first-run-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 const fs = require('fs');
 const path = require('path');
 

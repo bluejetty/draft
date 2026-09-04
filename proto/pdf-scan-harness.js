@@ -15,6 +15,14 @@
 //
 // This was the one module of MODEL's seventeen with neither a harness nor a
 // spec. It did not need refactoring to get one.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node pdf-scan-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 global.window = global.window || {};
 require('../pdf-scan.js');
 const S = global.window.DraftPdfScan;

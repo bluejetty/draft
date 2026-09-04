@@ -10,6 +10,14 @@
 // editable with devtools, real enforcement waiting on the server ledger (#52).
 // So these checks pin the ARITHMETIC, not the security, which is exactly the
 // claim the module makes for itself.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node bone-wallet-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 global.window = global.window || {};
 require('../bone-wallet.js');
 const W = global.window.DraftBoneWallet;

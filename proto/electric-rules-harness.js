@@ -8,6 +8,14 @@
 //   node proto/electric-rules-harness.js
 //
 // Exit 0 = every check passed.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node electric-rules-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 const R = require('../electric-rules.js');
 
 let failures = 0;

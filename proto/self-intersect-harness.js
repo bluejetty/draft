@@ -7,6 +7,14 @@
 //
 // This proves only the detector. What the app should DO about a crossing
 // outline is unruled and is not decided here.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node self-intersect-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 global.window = global.window || {};
 require('../geometry-2d.js');
 require('../areas.js');            // polygonArea lives here, not in geometry-2d

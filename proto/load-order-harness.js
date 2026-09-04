@@ -11,6 +11,14 @@
 //
 // Answer: 8 files, 13 captures -- 10 plain, 3 destructured (cut-view x2,
 // layout-plan x1). See RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/MIGRATION-STATUS.md.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node load-order-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 global.window = global;
 
 console.log('--- layout-plan.js WITHOUT wall-types.js loaded first');
