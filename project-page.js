@@ -244,7 +244,6 @@ if (!window.DraftProjectPage) {
     const rect = (x, y, w, h, weight = 1.5) => parts.push({ kind: 'rect', x, y, w, h, weight });
 
     const cut = -GARAGE_CUT_FT;                // the break edge, 2 ft out
-    const wallFt = g.wallThicknessIn / 12;
     const fdnFt = g.thicknessIn / 12;
     const slabFt = g.slabIn / 12;
 
@@ -266,11 +265,17 @@ if (!window.DraftProjectPage) {
     anchors.garageFootingWidth = { x: -fdnFt / 2, y: fdnBot - footD - 0.5 };
     anchors.garageFootingDepth = { x: -fdnFt / 2 - footW / 2 - 0.85, y: fdnBot - footD / 2 };
 
-    // The stud wall standing on the foundation, and its far face.
+    // THE GARAGE HAS NO WALL HERE. This is the junction: the house's exterior
+    // wall IS the wall at this cut, and the house section next door draws it.
+    // The first version drew the garage its own studs a few inches away, which
+    // read as two buildings standing beside each other rather than one joined
+    // to the other -- and put a second line where there is one wall.
+    //
+    // The height still matters and still gets an anchor: it is the garage's
+    // clear height AT the house, slab to roof, measured against the shared
+    // face rather than against a wall of its own.
     const plateY = floorY + g.wallHeightFt;
-    line(0, floorY, 0, plateY, 2);                        // shared face, house side
-    line(-wallFt, floorY, -wallFt, plateY, 1.5);          // garage side
-    anchors.garageWallHeight = { x: -wallFt - 0.9, y: floorY + g.wallHeightFt / 2 };
+    anchors.garageWallHeight = { x: -0.75, y: floorY + g.wallHeightFt / 2 };
 
     // STRAIGHT, and no grade. Movie: "no roof slop just 2ft of straight roof
     // until the cut... we want to show where the connection happens". The
@@ -289,7 +294,8 @@ if (!window.DraftProjectPage) {
       anchors,
       extents: {
         minX: cut - 1.1,
-        maxX: 1.0,
+        maxX: 0.06,   // the shared face IS the right edge -- a hair of room
+                      // only so the beam's own line is not clipped in half
         minY: fdnBot - footD - 1.1,
         maxY: topY + 1.1,
       },
