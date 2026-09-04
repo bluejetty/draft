@@ -900,6 +900,7 @@ if (!window.DraftDrawingFormat) {
     return { edges, gables };
   };
 
+  const ATTACHED_GARAGE_DROP_FT = -2;
   const zoneHeights = raw => {
     const zones = raw && typeof raw.zones === 'object' && raw.zones ? raw.zones : {};
     // Real numbers only, here as everywhere else: `Number(null)` is 0, and a
@@ -913,7 +914,19 @@ if (!window.DraftDrawingFormat) {
       // land here.
       gradeOffsetFt: num(raw?.gradeOffsetFt) ?? -1,
       zones: {
-        attachedGarage: { offsetFt: offset(zones.attachedGarage?.offsetFt) },
+        // A GARAGE STARTS 2'-0" DOWN. Movie, 4 Sep: "on the bungalow we
+        // should not line them up make it 2ft dropped on the bungalow", and
+        // "the 95% will be our default". A garage floor level with the house
+        // is the unusual case, not the starting one, and zero was only ever
+        // the value a number takes when nobody has picked one.
+        //
+        // A MODIFIED BILEVEL wants a different start -- its sills line up
+        // with the house's about 95% of the time -- but that default cannot
+        // be chosen here yet, because nothing on the drawing says which build
+        // type it is. That is NEW-5. Until then every drawing starts at 2'-0"
+        // and the drafter types over it, which is exactly what a default is
+        // for.
+        attachedGarage: { offsetFt: num(zones.attachedGarage?.offsetFt) ?? ATTACHED_GARAGE_DROP_FT },
         // The detached garage DERIVES from grade until overridden — null
         // means derive (top of the garage grade beam sits ~8" above grade
         // at the house); a stored number is the drafter's override.
@@ -1146,6 +1159,7 @@ if (!window.DraftDrawingFormat) {
     underlays,
     projectInfo,
     zoneHeights,
+    ATTACHED_GARAGE_DROP_FT,
     sectionTable,
     SECTION_TABLE_TYPES,
     SECTION_TABLE_FIELDS,

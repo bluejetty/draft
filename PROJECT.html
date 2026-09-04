@@ -713,6 +713,16 @@
       const addGarage = (key, name, get, set, kind) =>
         garageControls.push({ key, name, get, set, kind });
 
+      // The bottom of the house's foundation wall -- the top of its footing.
+      // Derived from the same numbers the house section is drawn from: MAIN FL
+      // is 0, the foundation top sits one floor depth below it, and the wall
+      // runs down from there.
+      const houseFootingTopFt = () => {
+        const main = floorLevels[0] && assembly(floorLevels[0].id);
+        const mainDepthFt = main ? (main.joistDepthIn + main.sheathingIn) / 12 : 0;
+        return -mainDepthFt - assembly(1).wallHeightFt;
+      };
+
       const garageFoundation = () =>
         sectionTable.rows.attachedGarage?.garageFoundation || 'gradebeam';
       addGarage('garageFoundationType', 'Garage foundation',
@@ -724,6 +734,27 @@
         text => {
           const value = parseSignedFtIn(text);
           if (value == null) return false;
+          // ONLY DOWN, AND ONLY AS FAR AS THERE IS FOUNDATION. Movie, 4 Sep:
+          // "the garage is adjustable compared to the house for both but only
+          // down on the foundation (can't go up)", and "needs foundation to
+          // attach to".
+          //
+          // Both ends are derived rather than typed. The top is MAIN FL: a
+          // garage floor above the house's does not step down to anything.
+          // The bottom is where the house's foundation wall stops, because
+          // the garage's beam is fastened to that wall -- past its bottom
+          // there is nothing to fasten to. A deeper basement therefore lets
+          // the garage go lower, with no second number to keep in step.
+          if (value > 0) {
+            showStatus('A garage floor only steps DOWN from MAIN FL, never up.');
+            return false;
+          }
+          const lowest = houseFootingTopFt();
+          if (value < lowest) {
+            showStatus(`Nothing to attach to below ${signedFtIn(lowest)} — `
+              + 'that is where the house foundation stops.');
+            return false;
+          }
           zoneHeights = format.zoneHeights({ ...zoneHeights,
             zones: { ...zoneHeights.zones, attachedGarage: { offsetFt: value } } });
           return true;
@@ -793,12 +824,10 @@
         // section puts MAIN FL at 0, the foundation top one floor depth below
         // it, and the footing top a wall height below that.
         const asm = assembly(1);
-        const main = floorLevels[0] && assembly(floorLevels[0].id);
-        const mainDepthFt = main ? (main.joistDepthIn + main.sheathingIn) / 12 : 0;
         return {
           garage: {
             foundation: garageFoundation(),
-            houseFootingTopFt: -mainDepthFt - asm.wallHeightFt,
+            houseFootingTopFt: houseFootingTopFt(),
             footingWidthIn: asm.footingWidthIn ?? (fdnIsIcf() ? 24 : 20),
             footingDepthIn: asm.footingDepthIn,
             floorOffsetFt: zoneHeights.zones.attachedGarage.offsetFt,
