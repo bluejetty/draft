@@ -24,6 +24,28 @@ const fs = require('fs');
 const path = require('path');
 const SRC = path.join(__dirname, '..', 'geometry-2d.js');
 
+// ─── Arguments ────────────────────────────────────────────────────────────
+// Two harnesses grew two names for the same mode -- this one took --coverage,
+// wall-joins-harness.js took --mutate -- so a loop over proto/*.js with either
+// name ran half the harnesses in PLAIN mode and printed a green tick for it.
+// The mode silently not taken is the worst kind of pass: the author believes
+// mutations ran, the output looks identical, and the exit code agrees.
+//
+// So both names work in both harnesses, and anything else is an ERROR rather
+// than a shrug. An unrecognised flag must never be indistinguishable from no
+// flag -- that is the same absence-that-looks-like-a-pass this harness exists
+// to catch, aimed at its own front door. Exit 2 marks it as a usage fault, so
+// a CI step can tell "you typed it wrong" from "the checks failed" (1).
+const FLAGS = new Set(['--coverage', '--mutate']);
+const ARGS = process.argv.slice(2);
+const unknownArgs = ARGS.filter(a => !FLAGS.has(a));
+if (unknownArgs.length) {
+  console.error(`unknown argument(s): ${unknownArgs.join(', ')}`);
+  console.error(`usage: node ${require('path').basename(__filename)} [--coverage|--mutate]`);
+  process.exit(2);
+}
+const MUTATION_MODE = ARGS.some(a => FLAGS.has(a));
+
 // Load from SOURCE TEXT, not require(). To be exact about what that buys,
 // because the looser version of this claim is wrong: require() does NOT stop a
 // mutant reaching the module. Edit geometry-2d.js on disk and re-run, and the
@@ -191,7 +213,7 @@ const MUTATIONS = [
       'const canon = new Map();\n    const add = (seg, pt0, at) => {\n      const ck = pt0.x + "," + pt0.z;\n      if (!canon.has(ck)) canon.set(ck, pt0);\n      const pt = canon.get(ck);')],
 ];
 
-if (process.argv.includes('--mutate')) {
+if (MUTATION_MODE) {
   console.log('\n' + 'mutation'.padEnd(74) + 'caught by');
   let survivors = 0;
   for (const [label, mutate] of MUTATIONS) {
