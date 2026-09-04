@@ -279,8 +279,34 @@ if (!window.DraftDrawingFormat) {
       return {
         id: String(wall?.id || '').trim(),
         ...core,
+        // TWO COLLAPSES ON ADJACENT LINES, AND ONLY ONE OF THEM IS RIGHT.
+        //
+        // view folds e-power and floor onto plan, and that is correct: it is
+        // the same physical wall seen from different layer sets, so they
+        // share a corner and should mitre into one another.
         view: wall?.view === 'foundation' ? 'foundation' : 'plan',
-        ...(wall?.body === 'garage' ? { body: 'garage' } : {}),
+        // body is the opposite. It distinguishes different physical
+        // STRUCTURES, so collapsing it merges two buildings. This line used to
+        // read `wall?.body === 'garage' ? { body: 'garage' } : {}` -- lifted
+        // verbatim from MODEL.dc.html's inline inflation -- which silently
+        // dropped every body but one. A shed wall then arrived with no body at
+        // all, pooled as house, and would splice onto a house corner: the
+        // exact failure geometry-2d's vertex pool exists to prevent.
+        //
+        // NOT a known-set membership test with a fallback, which is how
+        // lines() handles `layer` twenty lines up. That shape is right there
+        // and wrong here: an unknown LAYER must land on a real layer or it
+        // stops being visible, so a default is a rescue. An unknown BODY has
+        // no safe default -- falling back to house is the bug itself. An
+        // unrecognised body pooling on its own is the safe direction, because
+        // the walls merely stay butt-jointed instead of joining a building
+        // they are not part of.
+        //
+        // Every consumer in the repo tests `=== 'garage'` or `!== 'garage'`
+        // and none enumerates a set, so carrying an unknown string past here
+        // changes nothing for any of them.
+        ...(String(wall?.body ?? '').trim()
+          ? { body: String(wall.body).trim() } : {}),
         wallType: types.some(type => type.id === wall?.wallType) ? wall.wallType
           : (legacy[wall?.wallType] || defaultType),
         baseHeight: number(wall?.baseHeight, 0),

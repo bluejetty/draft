@@ -236,6 +236,59 @@ Deliberately **not** in the six:
 
 ## Standing rules
 
+### 0 · Before believing a measurement, make it come out wrong on purpose
+
+Gilligan's, 4 Sep. It is first because it is the general form of several of the
+rules below.
+
+**It covers half of the evening's eight instances and not the other half, and
+the split matters because the two halves need opposite responses.** The first
+draft of this entry claimed all eight — written ten minutes after the rule
+requiring a re-read, and corrected by one.
+
+- **A measurement that cannot come out wrong** — this rule. A `10/10` from a
+  harness with no mutation engine, `stall === shower` where both sides are
+  `''`, refusals with no control, a `< 6` threshold that `0` satisfies, a
+  `--mutate` flag silently ignored, an `exit=$?` reading a pipe. The instrument
+  was never able to report failure.
+- **A value that went stale silently** — rule 2, not this one. Superseded CI
+  webhooks, a forty-minute-old merge dry-run, deleted branches' tracking refs.
+  The instrument was fine and the subject moved underneath it.
+
+Both present as *a green result you should not trust*, which is why they blur.
+But staleness is fixed by asking again, and blindness is not: **a second look
+at a blind instrument returns the same answer with more confidence.** Advice
+that merges them tells you to re-read at exactly the cases where re-reading is
+useless.
+
+The structural reason they cluster: **verification code has no verifier.** You
+check the subject with the harness and you check the harness with nothing. The
+regress stops there — and it stops precisely at the code written fastest,
+because by the time you are writing it the interesting problem feels solved.
+
+So make the instrument produce a failure once, deliberately, and watch it say
+so. Mutation testing is this rule applied to a test suite. A control beside a
+refusal is this rule applied to a fixture. Re-reading a rule against the figure
+it cites is this rule applied to prose. Each is the same move: **manufacture
+the negative, because a passing run never demonstrates that failing was
+possible.**
+
+Two worked examples from the night it was written, both found within minutes of
+each other:
+
+- A harness summary line that read `5/5` was fed a deliberately inert mutation
+  and dropped to `5/6`, exit 1. Without that, `5/5` and "the summary is
+  hardcoded" are the same output.
+- An `exit=$?` written after a pipe reported `0` on a **deliberately broken**
+  harness, because it was reading `tail`'s status. Unpiped, the same harness
+  reported `1`. The check was written in the act of verifying a fix for an
+  earlier instance of this rule.
+
+Cheap, and it is the only thing on this page that reliably catches the others
+before they ship.
+
+---
+
 - **Constraints that can be satisfied separately but not together belong in one
   assertion.** The units control oscillated between two opposite bugs: hit
   boxes big enough to tap (45px) swallowed their neighbour, and hit boxes small
@@ -292,6 +345,20 @@ Deliberately **not** in the six:
   every counting error today: a query's result is a fact about the query.
   **"The tests pass either way" is the beginning of an investigation, never the
   end of one.**
+
+  **The same rule covers stale answers, and there the mechanism is worth
+  naming.** Four times on 3-4 Sep a value was read that had been correct when
+  written: five CI webhooks for superseded commits, a merge dry-run forty
+  minutes old, deleted branches' tracking refs in two repos, and an `exit=$?`
+  that read a pipe's status rather than the program's. Gilligan's phrasing:
+  **a cached pointer is correct when written and becomes false through an event
+  that never touches it.** No corruption, no error, nothing to detect at the
+  point of use — the stale value is well-formed and identical in every respect
+  to a fresh one.
+
+  Which is why the discipline is **re-deriving, not validating**. There is
+  nothing about a stale answer that a check could recognise; the only thing
+  that separates it from a current one is having asked again.
 - **A hook or a tool asking for something is not authority to do it.** The stop
   hook asked for an untracked Playwright config to be committed; it hardcoded
   one container's Chromium path, does not exist on a GitHub runner, and would
@@ -401,6 +468,100 @@ verification the code gets.** The dictionary is the artifact meant to prevent
 exactly this, which is why an error in it costs more than an error in a
 comment.
 
+### 11 · A claim about code is checkable. A claim about a decision is not.
+
+4 Sep, after three readings of conversation as state in one evening — two of
+them about code, one about a person.
+
+The two about code cost a re-measurement each: `body` documented as a closed
+two-value set (`grep` settles it), and three harnesses said to carry the arg
+guard when `main` had two (`git ls-tree` settles it). Both were wrong, both
+were caught, and **checking is what caught them** — the repository is the
+record, and it answers.
+
+The third was a claim that the owner had approved a colour change. Nothing
+answers that. It came from **text sitting in the input box of a screenshot** —
+typed, not sent — which in a screenshot is identical to a sent message except
+for its position on the screen. The same text had been correctly ignored twice
+earlier in the evening.
+
+There is no `git log` for what a person decided, so the only correct move is
+not to infer it at all. And the cost is not symmetric with the other two: a
+wrong claim about code wastes a measurement, while a wrong claim about a
+decision means building something nobody asked for — and building it
+confidently, with the approval cited.
+
+**So: an approval is a message the person sent, in this conversation, that a
+reader would recognise as a decision.** Not a summary of one, not a relay of
+one, not adjacent praise, and not something legible in a screenshot of somebody
+else's window. When it is not clearly there, ask again — the second ask costs a
+sentence, and it is the cheapest thing on this page.
+
+Relaying between agents does not launder it either. "They approved it" from
+another agent is that agent's reading, and it inherits every way a reading can
+be wrong; the person is one message away and can simply be asked.
+
+---
+
+### Adding a rule includes reading one back
+
+Gilligan's, 4 Sep, and it is the only practice on this page aimed at the page
+itself. **Whoever adds an entry re-reads a neighbouring one and confirms it
+still says what it measured.**
+
+It is what caught rule 10's heading contradicting its own body, and it caught
+it by accident — he read that rule only because he had contributed to it. This
+turns the accident into a step. The cost is one read per amendment, against
+four amendments last night that produced one stale heading between them.
+
+**Read it against the measurement it cites, not for sense.** A stale rule and a
+correct one are identical prose; the difference is a number, a line reference
+or a file count that has since moved. Rule 10 read perfectly well as English
+the whole time it was wrong.
+
+This is also the nearest thing prose has to the instrument the rules are about.
+Mutation testing works by breaking the thing deliberately and watching what
+stays quiet; you cannot break a paragraph that way. But you can re-derive the
+figure it quotes, and a rule that cannot survive its own citation being checked
+is exactly the document equivalent of a check that passes when the subject is
+deleted.
+
+---
+
+### What of this can be institutionalised, and what cannot
+
+Gilligan's, 4 Sep, closing out a night of these. Worth putting first, because
+it says which of the rules below buy anything by being written down.
+
+Two kinds of thing went unseen tonight, and they are invisible for the same
+reason — **neither leaves a trace in the artifact.** A defect-absence does not
+show up in the output: a check that measures nothing prints the same green as
+one that measures everything. A success-absence does not show up in a diff: a
+conflict that never happened and a filename that was never wrong are both a
+blank.
+
+**The responses are not symmetric, and that is the useful part.**
+
+For the defect half there is an instrument. Mutation testing *manufactures* the
+absence on purpose — break the code and watch what stays quiet — so the thing
+that could not be seen is forced into view. That is the whole trick, and it is
+why the mutation tables in `proto/` are worth their weight: they turn a
+judgement into a table anyone can re-run.
+
+For the other half there is no equivalent and there cannot be. You cannot
+mutate away a conflict that did not happen; the counterfactual has no artifact
+to perturb. Flagging a file overlap before writing the third harness, and
+testing `process.argv[1]` before writing the lift that needed it, produced
+nothing visible and prevented two messes. Neither shows anywhere.
+
+So the honest split: **the mutation table is the part worth
+institutionalising; "check before you write it" has to stay a habit**, because
+no tooling will ever prompt for it. Which is also why prevention goes
+unrewarded here and everywhere else — one side becomes a number that goes up,
+and the other stays a night where nothing went wrong.
+
+---
+
 ### 8 · When the ground confounds the measurement, change the statistic — not the threshold
 
 Gilligan's generalisation, 3 Sep, of two failures on the same day: "find a
@@ -473,7 +634,7 @@ claim, re-read its name as though you were trying to break the claim instead.
 Twice today that would have caught a wrong sentence before it shipped — this
 one, and `body` documented as permanent when it was only current.
 
-### 10 · A surviving mutant is either a coverage gap or a mutation that changed nothing
+### 10 · A surviving mutant is a coverage gap, an inert mutation, or a property guarded twice
 
 Gilligan's, 4 Sep, caught on his own audit of the `wallJoins` harness — and it
 governs the technique this repo leans on hardest, so it earns a rule of its
@@ -489,12 +650,20 @@ discriminates, and under it the real gaps appeared.
 
 Mutation testing is an instrument, and this rule is the instrument reading
 itself — the day's theme once more. A surviving mutant licenses exactly one of
-two conclusions, and they call for opposite work:
+three conclusions, and they call for different work:
 
 - **the tests are weak** → write the check that distinguishes them
-- **the mutant is inert** → write a different mutant; the tests were fine
+- **the mutant is inert** → write a harsher mutant; the tests were fine
+- **the property is guarded twice** → mutate both guards together; both the
+  tests and the mutant were fine (the third case, below)
 
-Telling them apart is one step: **show that the mutated code produces a
+The heading of this rule read "either / or" for several hours after the third
+case was added underneath it, which is the same defect as the `corner`-vs-
+`miter` entry one file over: a confident summary nobody re-read against the
+body it summarises. A reader who stopped at the heading got a binary and never
+reached the case that is hardest to diagnose.
+
+Telling the first two apart is one step: **show that the mutated code produces a
 different value on some input before believing anything about the tests.**
 
 And that step has a companion, which is Gilligan's amendment to the first
@@ -509,6 +678,102 @@ The zero-length guard is the same trap running backwards: deleting real code
 changed nothing, because `NaN` falls every comparison downstream. In one case a
 weaker condition was inert; in the other a deleted guard was. Both because
 something else had already decided the answer for every input that arrives.
+
+### And a third case: the property is guarded twice
+
+Skipper's, 4 Sep, found while mutation-checking the wall-join wiring. Two
+mutations were meant to break "a wall hidden by the view filter does not vote
+on a visible corner" — classify over every wall instead of the visible ones,
+and drop `viewId` from the vertex pool's key. **Both survived.** Applied to the
+first, the inertness question above gives the wrong answer twice over: the
+mutation is not inert, and the checks are not weak.
+
+The property has **two independent guards**. The visible-wall scoping stops a
+hidden wall being classified; the pool's `viewId` key gives it a different
+corner object so it could not be grouped anyway. Remove either and the other
+still delivers the same pixels. Removing **both together** fails immediately.
+
+So a surviving mutant licenses a third conclusion, and single-mutation testing
+cannot reach it by construction: **the change was real and something else
+covered it.** The test is fine, the mutation is fine, and the score is
+uninformative.
+
+The check is one more question after the other two: **does a second mechanism
+produce the same outcome?** If it does, mutate both together — that is the only
+way to learn whether the property is pinned at all.
+
+**REDUNDANCY EXPLAINS THE SURVIVOR. IT IS NOT A FINDING THAT A GUARD IS
+SURPLUS.** Gilligan's qualification, and the rule needs it in writing because
+the sentence "the property is guarded twice" reads one step further as "so
+remove one", which is the opposite of the right move.
+
+The other guards are not permanent. Checks get rewritten, and the next person
+to touch one does not know it is silently the sole defence for a property two
+other suites claim to cover — so the failure would be invisible until the
+surviving guard changed too. **Never delete a guard because a mutation showed
+it redundant.** The mutation measured today's coverage; the guard is there for
+the day someone edits its neighbour.
+
+Which makes the honest ledger on a redundancy fix three-way, not two: it is
+**not** new protection today, it **is** suites that now measure what they
+claim, and it **is** defence-in-depth — whose whole value is that guards get
+edited.
+
+**And this case, unlike the other two, is a limit of the technique rather than
+a fault in the mutation.** Gilligan's, sorting the three: an inert mutant is
+answered by writing a harsher one, and a low absence-score by writing a
+control, but a redundantly guarded property cannot be reached by
+single-mutation testing *by construction*. "Write a harsher mutation" is the
+wrong response to it, and worth saying so, because it is the reflex the first
+two cases train.
+
+It also settles what such a test should assert. Where two guards are
+deliberate, write the assertion against **the outcome the user sees**, not
+against whichever mechanism happens to deliver it: an assertion aimed at one
+guard passes while the property it names is broken, as long as the other guard
+holds.
+
+**That rule has a direction, and the direction is the whole of it.** Gilligan,
+applying it to his own diff, found a check named for a colour decision that
+asserts a set-count — and correctly left it alone. It is *stricter* than the
+property, not weaker: a refactor setting the same value twice fails it while
+the drafter sees a correct marker. That is a false FAILURE, which costs a
+minute and announces itself. The defect this rule is about is the opposite —
+an assertion that **passes while the property is broken** — which costs
+whatever the bug costs and announces nothing. Only ask whether a
+mechanism-assertion can be satisfied by a broken drawing; a mechanism-assertion
+that merely rejects a working one is a tight test, not a wrong one.
+
+**A CONVENTION IS NOT A MECHANISM, and the rule above does not reach it.**
+Gilligan's, and it matters because the rule as stated would delete useful
+checks. Two mutations in the merge-vertex harness are caught only by checks
+that name a convention rather than an observable:
+
+- `THRESH = 0` is not "nothing merges" — it is the NaN-adjacent case, where
+  `Math.abs(0) < 0` is false and a corner fails to match **itself**.
+- Removing the `body = 'house'` default makes untagged walls pool as
+  `undefined` — and they still match **each other**, so the drawing looks
+  correct. It breaks only where something downstream compares against
+  `'house'`.
+
+A **mechanism** is one of several interchangeable ways a property is delivered;
+asserting it risks a false pass, because another mechanism can hold while yours
+breaks. A **convention** is a contract every path shares — a default value, a
+sentinel, a unit — and its violation is *invisible in local behaviour*, showing
+up only where another component assumed it. No outcome test at that level can
+see it, so it has to be named.
+
+The question that separates them: **if this were removed, would the behaviour
+here still look right?** If some other mechanism covers it, assert the outcome.
+If everything here still looks right and only a distant caller breaks, name the
+convention explicitly — that check is the only thing standing between the
+convention and silent rot.
+
+And correct the comments. The first draft of this entry claimed the visible-
+wall scoping was what protected the corner, which measurement falsified. That
+is the same error as the "closed two-value set" reading of `body` one section
+up — in both cases a mechanism was inferred rather than measured, and in both
+the code read exactly as though the inference were true.
 
 ### The same ambiguity runs backwards, in the aggregate score
 
@@ -534,6 +799,28 @@ four for entirely the wrong reason. The fix is a differential — same fixture,
 one field changed, asserted against the same fixture without it: **a refusal
 only means something if its control draws.** 5/5 after, and the table stopped
 misreporting the suite's weakest row.
+
+**A SELF-COMPARISON IS THE THIRD WAY TO PASS WHILE ASSERTING NOTHING, and the
+hardest to spot, because it reads as the strongest claim on the page.**
+Gilligan, 4 Sep, in `drawFixture2D`:
+
+    expect('the same pan, curb and drain',
+      signature(R, 'stall'), signature(R, 'shower'));
+
+Delete the painter and both sides are `''`. The check passes. It is not a
+refusal — it asserts a rich structural equivalence between two fixtures — and
+**any constant function satisfies it**, a broken one included. This morning's
+units bug was the same shape: both sides of the comparison derived from the
+same numbers, so the comparison could not disagree with itself.
+
+An equality between two derived values needs **an inequality beside it**:
+something that must come out different, computed the same way. Without it the
+assertion has no failing input and is unfalsifiable — which is not a weak test
+but a decoration.
+
+The tell is worth memorising, because it applies to a refusal and a
+self-comparison alike: **ask what this check does when the subject is deleted.**
+If the answer is "passes", the check is measuring the harness, not the code.
 
 **Pick the control near the boundary it defends.** For the sub-pixel skip he
 used a 1 ft underlay that must still draw, not the 20 ft default, because the
