@@ -231,13 +231,18 @@ if (!window.DraftProjectPage) {
     rect(fdnFt, fdnBot, CUT_DEPTH_FT - fdnFt, slabFt, 1);
     anchors.slab = { x: CUT_DEPTH_FT * 0.62, y: fdnBot + slabFt + 0.5 };
 
-    // Grade on the exterior side, with soil ticks — GRADE LEVEL is stored
-    // relative to the top of the foundation wall (default 1'-0" below).
+    // GRADE RUNS THE WHOLE WIDTH, DOTTED. Movie, 4 Sep: "for the grade line
+    // just show a dotted line where the grade height is across the full width
+    // of the section". It was a short solid line with soil ticks on the
+    // exterior side only, which stopped at the wall face -- so with a garage
+    // drawn on the other side of that face, grade appeared to stop existing
+    // where the building started.
+    //
+    // A `grade` part carries only its elevation; the painter draws it across
+    // whatever the drawing turns out to be wide, so it spans the garage and
+    // the house without either builder knowing about the other.
     const gradeY = fdnTop + fdn.gradeOffsetFt;
-    line(-roof.overhangFt - 0.6, gradeY, 0, gradeY, 1.5);
-    for (let gx = -roof.overhangFt - 0.5; gx < -0.15; gx += 0.35) {
-      line(gx, gradeY, gx - 0.22, gradeY - 0.26, 0.75);
-    }
+    parts.push({ kind: 'grade', y: gradeY });
     anchors.grade = { x: -roof.overhangFt - 0.6, y: gradeY - 0.55 };
 
     // The cut's break edge: everything stops at 4 ft with a jog.
@@ -486,6 +491,17 @@ if (!window.DraftProjectPage) {
         ctx.beginPath(); ctx.moveTo(X(part.x1), Y(part.y1)); ctx.lineTo(X(part.x2), Y(part.y2)); ctx.stroke();
       } else if (part.kind === 'rect') {
         ctx.strokeRect(X(part.x), Y(part.y + part.h), part.w * scale, part.h * scale);
+      } else if (part.kind === 'grade') {
+        // Full canvas width, not the section's: grade does not stop at the
+        // edge of what has been drawn.
+        ctx.save();
+        ctx.setLineDash([4, 3]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, Y(part.y));
+        ctx.lineTo(w, Y(part.y));
+        ctx.stroke();
+        ctx.restore();
       } else if (part.kind === 'break') {
         // The section's cut edge — a drafting break line with a mid jog.
         const midY = (part.y1 + part.y2) / 2;
