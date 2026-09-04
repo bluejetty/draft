@@ -133,11 +133,19 @@ if (!window.DraftProjectPage) {
   // the derive rule the ZONE HEIGHTS panel applies until overridden.
   const GARAGE_BEAM_ABOVE_GRADE_IN = 8;
   const CUT_DEPTH_FT = 4; // "the first 4 ft of the exterior wall cut inward"
-  // Movie, 4 Sep: the garage panel is the JUNCTION, not a garage. It is cut
-  // where the garage meets the house, so it shows "2ft of straight roof until
-  // the cut" -- shorter than the house's 4 ft because the thing being drawn
-  // is a connection, and 2 ft of it is all there is to see.
-  const GARAGE_CUT_FT = 2;
+  // Movie, 4 Sep: the garage panel is the JUNCTION, not a garage -- it is cut
+  // where the garage meets the house. His own drawing dimensions 4'-6" out
+  // from the house wall face, so that is what the section shows.
+  //
+  // Measured off the PDF rather than guessed: the 4'-6" label carries a
+  // HORIZONTAL dimension line from x=107.8 to x=157.0, and x=157 is the wall
+  // face. At 1.0925 in/pt (taken from the 8'-1 1/8" wall drawn 88.9pt tall)
+  // that run is 53.7" -- 4'-6". An earlier "2 ft of straight roof until the
+  // cut" was about the ROOF, and 2 ft of roof sits inside a 4'-6" cut.
+  //
+  // One constant, so if 4'-6" turns out to show too much, every section moves
+  // together and nothing has to be re-measured.
+  const GARAGE_CUT_FT = 4.5;
   // spec-master.js already says it: "4" POLYSTYRENE VOID FORM UNDER, BETWEEN
   // PILES". The beam is cast on it and it crushes, so frost heave lifts the
   // soil and not the garage.
