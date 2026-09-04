@@ -198,17 +198,38 @@ const MUTATIONS = [
 ];
 
 if (MUTATION_MODE) {
+  // TWO THINGS THIS LOOP REFUSES TO CALL A PASS. Shape ported from
+  // outline-accessors-harness.js, where both were found by forcing them.
+  //
+  // A MUTATION THAT WILL NOT APPLY IS NOT A CAUGHT MUTATION. The older shape
+  // of this loop turned the load() throw into a `missed` entry -- the counter
+  // for "a check noticed" -- so a drifted anchor printed "load: mutation
+  // matched nothing" IN THE CAUGHT COLUMN, kept the total at N/N, and exited
+  // 0. Measured by pointing one replace at text that does not exist. Broken
+  // mutations are counted separately, shown in the table, and are fatal.
+  //
+  // AN EMPTY LIST IS NOT A CLEAN SWEEP. With no mutations this printed "0/0
+  // mutations caught" and exited 0: the absence-that-reads-as-a-pass this
+  // harness exists to prevent, one layer in.
   console.log('\n' + 'mutation'.padEnd(74) + 'caught by');
   let survivors = 0;
+  let broken = 0;
   for (const [label, mutate] of MUTATIONS) {
-    let missed;
-    try { missed = run(load(mutate)); } catch (err) { missed = [{ label: `load: ${err.message}` }]; }
-    if (!missed.length) survivors += 1;
-    const by = missed.length ? missed.map(m => m.label).join('\n' + ' '.repeat(74)) : '*** NOTHING ***';
+    let missed, by;
+    try {
+      missed = run(load(mutate));
+      if (!missed.length) survivors += 1;
+      by = missed.length ? missed.map(m => m.label).join('\n' + ' '.repeat(74)) : '*** NOTHING ***';
+    } catch (err) {
+      broken += 1;
+      by = `!!! MUTATION DID NOT APPLY: ${err.message}`;
+    }
     console.log(`${label.padEnd(74)}${by}`);
   }
-  console.log(`\n${MUTATIONS.length - survivors}/${MUTATIONS.length} mutations caught`);
-  process.exit(baseline.length || survivors ? 1 : 0);
+  console.log(`\n${MUTATIONS.length - survivors - broken}/${MUTATIONS.length} mutations caught`);
+  if (broken) console.log(`${broken} mutation(s) never applied -- they prove nothing`);
+  if (!MUTATIONS.length) console.log('NO MUTATIONS DEFINED -- this table proves nothing');
+  process.exit(baseline.length || survivors || broken || !MUTATIONS.length ? 1 : 0);
 }
 
 process.exit(baseline.length ? 1 : 0);
