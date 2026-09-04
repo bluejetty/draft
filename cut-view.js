@@ -35,6 +35,12 @@ if (!window.DraftCutView) {
   // the top of concrete 1'-0" above grade — level with the top of the house
   // foundation wall at the default grade.
   const GARAGE_BEAM_PLATE_IN = 1.5;
+  // The concrete half of that stack. It sat alone in MODEL.dc.html while its
+  // own comment there described the pair -- 32" concrete + 1.5" sill plate =
+  // 33.5" -- with the sill half already living here. Two halves of one
+  // dimension in two files is how they drift; PROJECT.html had meanwhile
+  // grown a third copy of the 32.
+  const GARAGE_BEAM_CONCRETE_IN = 32;
   // GRADE: drawn 1'-0" below the top of the foundation wall — the
   // conservative LOW case, so the site fills UP to the drawn grade (real
   // grade usually sits 6"-8" below the foundation top). Garages hang off
@@ -1425,6 +1431,7 @@ if (!window.DraftCutView) {
     STANDARDS: Object.freeze({
       GARAGE_SLAB_THICKNESS_IN,
       GARAGE_BEAM_PLATE_IN,
+    GARAGE_BEAM_CONCRETE_IN,
       GRADE_BELOW_FOUNDATION_TOP_FT,
       GARAGE_BEAM_ABOVE_GRADE_FT,
       DETACHED_BEAM_ABOVE_GRADE_IN,

@@ -1993,6 +1993,7 @@ const DEFAULT_SLAB_THICKNESS_IN = 4;
 const {
   GARAGE_SLAB_THICKNESS_IN,
   GARAGE_BEAM_PLATE_IN,
+  GARAGE_BEAM_CONCRETE_IN,
   GRADE_BELOW_FOUNDATION_TOP_FT,
   GARAGE_BEAM_ABOVE_GRADE_FT,
   DETACHED_BEAM_ABOVE_GRADE_IN,
@@ -2001,8 +2002,6 @@ const {
 } = window.DraftCutView.STANDARDS;
 // Garage slab slopes 1/8" per foot toward the doors, over the grade beam.
 const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;
-// Attached-garage grade beam stack: 32" concrete + 1.5" sill plate = 33.5".
-const GARAGE_BEAM_CONCRETE_IN = 32;
 // At 45° the thickened-edge taper runs (edge − field) inches in plan.
 const GARAGE_EDGE_TAPER_RUN_IN = GARAGE_EDGE_DEPTH_IN - GARAGE_SLAB_THICKNESS_IN;
 // A press on an existing node only turns into a GRAB after this hold; a
