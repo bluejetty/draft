@@ -911,6 +911,18 @@ if (!window.DraftDrawingFormat) {
       // is the conservative LOW case and the site crew fills up to it, which
       // leaves fill to play with for drainage. Old saves carry no value and
       // land here.
+      // GRADE HERE IS AN IMAGINARY LINE, and that is what makes deriving it
+      // legitimate. Movie, 4 Sep: "the grade line is an 'imaginary' line.
+      // There will later be a landscape grade plan added where the actual
+      // grade can be drawn if it is required for submission."
+      //
+      // So this is a drafting reference the building establishes, not a site
+      // condition measured on the ground. A surveyed grade would be data
+      // about the lot, and deriving THAT from a garage beam would be
+      // nonsense -- the beam would be dictating the shape of the earth. Real
+      // grade belongs on the landscape plan when one exists, and this line
+      // should not be mistaken for it.
+      //
       // GRADE DERIVES FROM THE GARAGE. Movie, 4 Sep: "the house will need the
       // grade at that location exactly, we will need to adjust the house
       // based on the garage if it has an attached garage", and "if 8" grade
