@@ -23,22 +23,39 @@
 const path = require('path');
 
 const FLAGS = new Set(['--coverage', '--mutate']);
+const NO_FLAGS = new Set();
 
-// True when the caller should run its mutation/coverage mode. Both spellings
-// work in every harness, so a loop is correct whichever the author types.
-//
-// Exits 2 on anything unrecognised -- distinct from 1, which means the checks
-// failed. A CI step that cannot tell "you typed it wrong" from "the code is
-// broken" will eventually report the first as the second, and someone will
-// go looking for a defect in a passing harness.
-function mutationMode(argv = process.argv.slice(2)) {
-  const unknown = argv.filter(a => !FLAGS.has(a));
+// Exits 2 on anything outside `accepted` -- distinct from 1, which means the
+// checks failed. A CI step that cannot tell "you typed it wrong" from "the
+// code is broken" will eventually report the first as the second, and someone
+// will go looking for a defect in a passing harness.
+function reject(argv, accepted) {
+  const unknown = argv.filter(a => !accepted.has(a));
   if (unknown.length) {
     console.error(`unknown argument(s): ${unknown.join(', ')}`);
-    console.error(`usage: node ${path.basename(process.argv[1])} [--coverage|--mutate]`);
+    const usage = accepted.size ? ` [${[...accepted].join('|')}]` : ' (takes no arguments)';
+    console.error(`usage: node ${path.basename(process.argv[1])}${usage}`);
     process.exit(2);
   }
+}
+
+// True when the caller should run its mutation/coverage mode. Both spellings
+// work in every harness that HAS one, so a loop is correct whichever the
+// author types.
+function mutationMode(argv = process.argv.slice(2)) {
+  reject(argv, FLAGS);
   return argv.some(a => FLAGS.has(a));
 }
 
-module.exports = { FLAGS, mutationMode };
+// For a harness with NO mutation mode. It accepts nothing at all, and that is
+// the point: calling mutationMode() there would accept --mutate, hand back a
+// true the harness has no code to act on, and print a green run for a mode
+// that does not exist. That is the same absence-that-looks-like-a-pass one
+// layer in from the hole this module was written to close, so the distinction
+// is load-bearing rather than tidy.
+function noFlags(argv = process.argv.slice(2)) {
+  reject(argv, NO_FLAGS);
+}
+
+
+module.exports = { FLAGS, mutationMode, noFlags };
