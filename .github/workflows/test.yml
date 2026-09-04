@@ -8,7 +8,7 @@ on:
 jobs:
   # THE NODE HARNESSES, WHICH NOTHING HAS EVER RUN AUTOMATICALLY.
   #
-  # Twenty-one files under proto/, each one written to pin down a defect that
+  # The harness files under proto/, each one written to pin down a defect that
   # had already cost a session, and not one of them was executed by anything
   # but a person remembering to. A harness nobody runs is a test suite that
   # decays silently: it keeps passing on the author's machine right up until
@@ -36,13 +36,16 @@ jobs:
   # THE MUTATION ENGINES RUN IN A SECOND STEP, BY NAME. Three harnesses carry
   # a real engine -- merge-vertex, render-2d, wall-joins -- and each is run
   # with --mutate below, so a rotted engine goes red here instead of decaying
-  # unnoticed. They are NAMED, not globbed: not every harness rejects a flag
-  # it does not honour (four of the twenty-one do today), so a loop passing
-  # --mutate would run the rest in plain mode and print a green table for a
-  # mode that never ran. That loop is the defect this job exists to prevent,
-  # and an earlier version of this comment made it the prerequisite -- "not
-  # until the guard is universal". The conclusion did not follow: nobody has
-  # to use a loop. Three named lines need no guard on the other eighteen.
+  # unnoticed. They are NAMED, not globbed, and the reason is stated without
+  # a count, because the count has already changed once while this comment
+  # was being written: any harness that does not reject a flag it does not
+  # honour would take --mutate, run plain mode, and print a green table for a
+  # mode that never ran. A loop passing --mutate is therefore only as honest
+  # as the least-guarded file in the glob. That loop is the defect this job
+  # exists to prevent, and an earlier version of this comment made it the
+  # prerequisite -- "not until the guard is universal". The conclusion did
+  # not follow: nobody has to use a loop. Three named lines need no guard on
+  # anything else, and stay correct however many harnesses join the glob.
   #
   # ONE OF THE THREE GATES ON MORE THAN MUTATIONS. In render-2d-harness.js
   # --mutate and --coverage are ONE mode, byte-identical output, and it exits
