@@ -774,8 +774,8 @@
       // somewhere else: it is a ZONE HEIGHT, because it is a height relative
       // to MAIN FL rather than a property of the garage's assembly.
       const garageControls = [];
-      const addGarage = (key, name, get, set, kind) =>
-        garageControls.push({ key, name, get, set, kind });
+      const addGarage = (key, name, get, set, kind, offSection) =>
+        garageControls.push({ key, name, get, set, kind, offSection });
 
       // The bottom of the house's foundation wall -- the top of its footing.
       // Derived from the same numbers the house section is drawn from: MAIN FL
@@ -835,14 +835,43 @@
             zones: { ...zoneHeights.zones, attachedGarage: { offsetFt: value } } });
           return true;
         });
-      const garageCell = (key, name, field, show, parse) => addGarage(key, name,
+      const garageCell = (key, name, field, show, parse, offSection) => addGarage(key, name,
         () => show(cellValue('attachedGarage', field).value),
         text => {
           const value = parse(text);
           if (value == null) return false;
           writeCell('attachedGarage', field, value);
           return true;
-        });
+        }, undefined, offSection);
+
+      // THE GARAGE'S ROOF BLOCK, mirroring the house's. Movie, 4 Sep: "we
+      // should make sure there is a roof entry area for the attached garages
+      // too... an area to add roof pitch / information", then "roof heel",
+      // "eave overhang", "should be similar to the roof information for
+      // house". So the same three the house carries, named the same way.
+      //
+      // I had REMOVED the garage's pitch row when its roof went level, which
+      // was the wrong read: the roof is pitched, the cut just runs along the
+      // slope so none of it shows here. A number you cannot see in one view
+      // is still the drafter's to set -- it feeds the elevations and the roof
+      // plan -- so the rows show with no grey label rather than not at all.
+      //
+      // All three read and write the ATTACHED GARAGE row of the table below:
+      // one pitch for the garage, not two that agree until someone edits one.
+      garageCell('garagePitch', 'Garage roof pitch : 12', 'roofPitch', String, text => {
+        const value = Number(text);
+        return Number.isFinite(value) && value > 0 && value <= 24 ? value : null;
+      }, true);
+      garageCell('garageOverhang', 'Garage eave overhang', 'roofOverhangFt', ftIn,
+        text => { const v = parseFtIn(text); return v != null && v <= 6 ? v : null; }, true);
+      // Derived like the house's: fascia plus the rise gained across the
+      // overhang, through the module's own rule rather than restated here.
+      addGarage('garageHeel', 'Garage roof heel',
+        () => fmt.formatArchitecturalInches(projectPage.roofHeelIn(
+          ROOF_FASCIA_IN,
+          cellValue('attachedGarage', 'roofOverhangFt').value,
+          cellValue('attachedGarage', 'roofPitch').value)),
+        () => false, undefined, true);
       garageCell('garageWallHeight', 'Garage wall height', 'mainWallHeightFt', ftIn, parseFtIn);
       garageCell('garageFdnHeight', 'Garage foundation wall height', 'fdnWallHeightFt', ftIn, parseFtIn);
       garageCell('garageSlab', 'Garage slab thickness', 'slabThicknessIn', inchesOnly, parseInches);
@@ -926,6 +955,19 @@
         controlEls.forEach(({ control, el, tag }, key) => {
           const at = anchors[key];
           const row = el.closest ? el.closest('.sched-row') : null;
+          if (!at && control.offSection) {
+            // OFF-SECTION, which is the honest word for it. The hide rule
+            // below is right for a measurement the drawing does not contain,
+            // but these ARE the garage's roof -- pitch, eave, heel -- and the
+            // only reason none shows is that the cut runs ALONG the slope
+            // instead of across it. Hiding them would say a garage has no
+            // roof numbers; showing them without a grey label says what is
+            // true: real values, not visible in this view.
+            tag.style.display = 'none';
+            if (row) row.hidden = false;
+            if (document.activeElement !== el) el.value = control.get();
+            return;
+          }
           if (!at && control.kind === 'choice') {
             // A MODE, not a dimension. The hide-without-an-anchor rule below
             // is right for a measurement -- if the drawing has no such part,
