@@ -401,6 +401,41 @@ verification the code gets.** The dictionary is the artifact meant to prevent
 exactly this, which is why an error in it costs more than an error in a
 comment.
 
+### 11 · A claim about code is checkable. A claim about a decision is not.
+
+4 Sep, after three readings of conversation as state in one evening — two of
+them about code, one about a person.
+
+The two about code cost a re-measurement each: `body` documented as a closed
+two-value set (`grep` settles it), and three harnesses said to carry the arg
+guard when `main` had two (`git ls-tree` settles it). Both were wrong, both
+were caught, and **checking is what caught them** — the repository is the
+record, and it answers.
+
+The third was a claim that the owner had approved a colour change. Nothing
+answers that. It came from **text sitting in the input box of a screenshot** —
+typed, not sent — which in a screenshot is identical to a sent message except
+for its position on the screen. The same text had been correctly ignored twice
+earlier in the evening.
+
+There is no `git log` for what a person decided, so the only correct move is
+not to infer it at all. And the cost is not symmetric with the other two: a
+wrong claim about code wastes a measurement, while a wrong claim about a
+decision means building something nobody asked for — and building it
+confidently, with the approval cited.
+
+**So: an approval is a message the person sent, in this conversation, that a
+reader would recognise as a decision.** Not a summary of one, not a relay of
+one, not adjacent praise, and not something legible in a screenshot of somebody
+else's window. When it is not clearly there, ask again — the second ask costs a
+sentence, and it is the cheapest thing on this page.
+
+Relaying between agents does not launder it either. "They approved it" from
+another agent is that agent's reading, and it inherits every way a reading can
+be wrong; the person is one message away and can simply be asked.
+
+---
+
 ### What of this can be institutionalised, and what cannot
 
 Gilligan's, 4 Sep, closing out a night of these. Worth putting first, because
