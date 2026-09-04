@@ -9707,11 +9707,20 @@ class Component extends DCLogic {
     const imp = this.state.units !== 'metric';
     const el  = sel => document.querySelector(sel);
 
+    // THE WRITER RECORDS THAT IT RAN. The clear at the end of this handler used
+    // to re-enumerate the tools that set the length, which meant the list had
+    // to be kept in step with the calls below by hand -- and it drifted: the
+    // line tool set the length and had it wiped on the same mousemove, because
+    // it was never added to the exempt list. Asking "did anything set it this
+    // frame?" cannot drift, and a tool added later gets a live readout for
+    // free instead of being forgotten out of an exempt list.
+    let lenWritten = false;
     const _setLen = (s, ept) => {
       const len = Math.sqrt((ept.x-s.x)**2+(ept.z-s.z)**2);
       const ang = this._angleDeg(s, ept);
       if (el('[data-model-len]')) el('[data-model-len]').textContent = len > 0.001 ? '↔ ' + (imp ? this._ftIn(len) : this._metric(len)) : '';
       if (el('[data-model-ang]')) el('[data-model-ang]').textContent = ang != null ? '∠ ' + ang + '°' : '';
+      lenWritten = true;
     };
 
     // Wall preview — cross-section drawn on 2D overlay; just update status bar here
@@ -9738,6 +9747,16 @@ class Component extends DCLogic {
       _setLen(this._surfaceOpeningPoints[this._surfaceOpeningPoints.length - 1], finalPt);
     }
 
+    // Outline had no branch here at all -- not a drifted exemption like the
+    // line tool, a missing call. Tracing a HOUSE outline showed no live length
+    // even though the frozen-length path already reads _outlinePoints, so the
+    // tool accepted a typed length and showed nothing while pointing. Same
+    // shape as every other multi-point tool: measure from the last placed
+    // point.
+    if (tool === 'outline' && this._outlineDrawing && this._outlinePoints.length) {
+      _setLen(this._outlinePoints[this._outlinePoints.length - 1], finalPt);
+    }
+
     // Cut preview
     if (tool === 'cut' && this.state.cutPhase === 'placing' && this._cutStart3) {
       const s = this._cutStart3, p = this._cutPreviewGeo.attributes.position;
@@ -9756,12 +9775,15 @@ class Component extends DCLogic {
       if (hover !== this._cutHoverSide) { this._cutHoverSide = hover; this._invalidate(); }
     }
 
-    if ((tool !== 'wall' || !this._wallDrawing)
-      && (tool !== 'floor' || !this._floorDrawing)
-      && (tool !== 'shape' || !this._shapeDrawing)
-      && (tool !== 'fenestration' || !this._surfaceOpeningDrawing)) {
+    // Clear only if nothing above wrote. The cut carve-out stays, and it is a
+    // real one rather than a forgotten entry: while the drafter is CHOOSING the
+    // cut direction nothing recomputes the length, and the distance they just
+    // placed is exactly what they still need to see. One named hold beats four
+    // negated tool tests that have to be maintained.
+    const holdingCutLength = tool === 'cut' && this.state.cutPhase !== 'idle';
+    if (!lenWritten && !holdingCutLength) {
       const lenEl = el('[data-model-len]');
-      if (tool !== 'cut' || this.state.cutPhase === 'idle') if (lenEl) lenEl.textContent = '';
+      if (lenEl) lenEl.textContent = '';
     }
 
   }
