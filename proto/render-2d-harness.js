@@ -139,6 +139,21 @@ const dropOriginFallback = src => {
   return out;
 };
 
+// A CONSTANT painter: every fixture draws a stall. Not a deleted painter --
+// this one still draws, and draws something real -- it just ignores what it
+// was asked for. This is the mutation the two equality checks in
+// drawFixture2D exist to catch, and the reason their control is a
+// differential rather than "the tape is not empty": an equality between two
+// outputs of one function is satisfied by ANY constant function, of which a
+// broken one returning nothing is only the loudest case. A "not empty" guard
+// would let this one straight through.
+const constantFixture = src => {
+  const before = src;
+  const out = src.replace('    const kind = fixture.kind;', "    const kind = 'stall';");
+  if (out === before) throw new Error('constantFixture matched nothing -- the kind dispatch moved');
+  return out;
+};
+
 // ─── The recording ctx ────────────────────────────────────────────────────
 // A canvas context is a big surface and the painters use a lot of it, so this
 // records through a Proxy rather than enumerating methods: any call lands on
@@ -1967,7 +1982,8 @@ function coverage() {
   [['strokeSegPath2D bulge branch', dropBulge],
    ['drawWallSeg2D mitre path', dropMitre],
    ['drawOrigin2D env colour', dropOriginEnvColour],
-   ['drawOrigin2D colour fallback', dropOriginFallback]].forEach(([label, mutate]) => {
+   ['drawOrigin2D colour fallback', dropOriginFallback],
+   ['drawFixture2D kind dispatch (constant painter)', constantFixture]].forEach(([label, mutate]) => {
     const caught = runAll(load(mutate)).filter(r => r.failed || r.threw);
     if (!caught.length) missed += 1;
     console.log(`${(label + ' deleted').padEnd(40)} ${caught.length ? `caught by ${caught.length} check(s)` : 'NOTHING NOTICED'}`);
