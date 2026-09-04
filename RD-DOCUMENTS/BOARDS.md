@@ -287,6 +287,50 @@ each other:
 Cheap, and it is the only thing on this page that reliably catches the others
 before they ship.
 
+A third example, from later the same night, in the work of the person who had
+just written the two above:
+
+- A spec asserting that MODEL.html paints walls **through the skin** passed.
+  Then the page was broken on purpose — `paintWalls` made to stop supplying the
+  colours, which is the exact regression the spec exists to catch — and it
+  passed again. Both tests. The statistic counted pixels at 240-or-brighter and
+  called them "the wall body", but **the day page is `#f2f2f3` — 242 on every
+  channel** — so it was counting nine hundred thousand pixels of paper. Against
+  a number that large, `night < day` is true whatever night does: an unskinned
+  night canvas scored 12106 against 897487 and satisfied it.
+
+Rule 8's move fixed it — change the statistic, not the threshold. The
+replacement is the *brightest ink the walls add*, differenced against the same
+canvas with the walls stripped: anti-aliasing blends wall ink toward the page,
+and on night the page is darker than both wall colours, so a halo can only
+lower that number and never inflate it. Its maximum is therefore the lightest
+colour the walls really paint. Broken on purpose a second time, both tests went
+red.
+
+**And the family has one benign member, which is worth being able to name.**
+Gilligan's, 4 Sep. The same night, `model-html-tier1.spec.js` measured walls as
+*pixels with red ≥ 170* — a threshold that isolated walls only because the
+painter hardcoded `#ffffff`. The new roles moved night's wall edge to `#a7aeb1`,
+red **167**, and the count went to zero. Three under a threshold tuned to a
+constant in another file.
+
+That is the same disease — a test passing for a reason unrelated to what it
+claimed — but it is the one instance all evening that **announced itself**.
+Every other instance stayed green: the empty-signature equality, the refusal
+with no control, the mode that never ran, the summary that could not fail. This
+one went red the moment the constant moved.
+
+> **A test miscoupled to a constant is loud when the coupling breaks. A test
+> coupled to nothing is silent forever.**
+
+Which gives the preference between the two failure modes, and the fix that gets
+you the good one: **read the value from its source rather than copying it.**
+`wallInk` now reads `--draw-wall-edge` off the document, the same move `anyInk`
+already made for the page ground. That turns a number carried in the test into
+a mechanism-derived proxy for the actual question, and it means the skin can be
+redesigned again without editing the spec — and that a palette which failed to
+reach the page throws, rather than quietly counting nothing.
+
 ---
 
 - **Constraints that can be satisfied separately but not together belong in one
