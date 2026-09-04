@@ -438,3 +438,45 @@ Cheap to apply, and it fits in the existing habit: when a check supports your
 claim, re-read its name as though you were trying to break the claim instead.
 Twice today that would have caught a wrong sentence before it shipped — this
 one, and `body` documented as permanent when it was only current.
+
+### 10 · A surviving mutant is either a coverage gap or a mutation that changed nothing
+
+Gilligan's, 4 Sep, caught on his own audit of the `wallJoins` harness — and it
+governs the technique this repo leans on hardest, so it earns a rule of its
+own.
+
+He mutated the collinearity test from `< -0.995` to `< 1` and the mutant
+survived. Read as a coverage gap, that says the test never exercises
+collinearity. It says no such thing. Given the branch guard above it, `< 1` is
+very nearly a no-op, and a same-direction pair has a dot product of exactly
+`1.0` — so the mutant computes the same answers as the original. **A mutation
+that changes nothing reports a gap that is not there.** `< 2` is the one that
+discriminates, and under it the real gaps appeared.
+
+Mutation testing is an instrument, and this rule is the instrument reading
+itself — the day's theme once more. A surviving mutant licenses exactly one of
+two conclusions, and they call for opposite work:
+
+- **the tests are weak** → write the check that distinguishes them
+- **the mutant is inert** → write a different mutant; the tests were fine
+
+Telling them apart is one step: **show that the mutated code produces a
+different value on some input before believing anything about the tests.**
+Where the mutation sits under a guard, that input may not be reachable at all,
+which is the case above.
+
+The two real gaps it then exposed are both worth keeping as examples of what a
+useless check looks like:
+
+- **The dot-product test was only reachable by parallel or antiparallel arms.**
+  A bent pair exits through the mitre branch above it, so the only thing the
+  test decides is opposed-versus-same-direction — and nothing exercised
+  same-direction. The test could have been **deleted outright** and every check
+  would still have passed.
+- **The zero-length guard was invisible to the zero-length check.** At exactly
+  zero the arithmetic gives `NaN`, and every comparison against `NaN` is false,
+  so removing the guard gives the same answer by coincidence. It becomes
+  visible only on a wall that is short but non-zero — which is also the case
+  that matters, since a bad snap should not steer a mitre.
+
+Both closed: 7/7 mutations, 14/14 checks.
