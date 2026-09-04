@@ -297,6 +297,20 @@
   // filter at all. Copying the walls line here would hide both on FOUNDATION.
   const roofs = () => (drawing?.roofs || [])
     .filter(r => onActiveLevel().byLevel(r));
+  // DIMENSIONS TAKE NO FALLBACK, and that is not an oversight -- it is the
+  // one collection whose invariant is guaranteed upstream. MODEL.dc.html:8929
+  // filters `dimension.view === view` with no `|| 'plan'`, because
+  // format.dimensions (drawing-format.js:101) DROPS any dimension whose view
+  // is not one of plan/floor/e-power/foundation. By the time anything filters
+  // them, every survivor carries an explicit view.
+  //
+  // So copying the walls line here would be worse than redundant: `|| 'plan'`
+  // can only fire on a dimension the normaliser already rejected, which means
+  // it would only ever run on geometry that is not in the array. Writing the
+  // filter to match the guarantee is what makes the guarantee readable.
+  const dimensions = () => (drawing?.dimensions || [])
+    .filter(d => { const f = onActiveLevel(); return f.byLevel(d)
+      && (f.viewId == null || d.view === f.viewId); });
   const shapes = () => (drawing?.shapes || [])
     .filter(sh => onActiveLevel().byLevel(sh));
 
@@ -547,6 +561,89 @@
     });
   };
 
+  // drawDimension2D reads exactly two things: a label function and five
+  // colours. Small, but the label is the one place this page can silently
+  // diverge from the product, so the polarity below is copied and not
+  // rewritten.
+  const dimensionEnv = () => ({
+    // IMPERIAL IS THE FALL-THROUGH, DELIBERATELY -- MODEL.dc.html:8058 reads
+    // `units !== 'metric'`, not `units === 'imperial'`. Nothing normalises
+    // `units`: drawing-format.js has no rule for it, so it arrives here raw
+    // off the saved JSON, where it can be absent, null, or a string from a
+    // drawing older than the toggle. Every one of those has to print SOMETHING
+    // a drafter can read, and feet-and-inches is this app's home unit.
+    //
+    // Inverting it to `=== 'imperial'` reads identically on the fixture and
+    // sends every one of those drawings to metres. This is the same polarity
+    // that hid seven metric display sites from a grep earlier today: a test
+    // for one value is not a test for the other when a third case exists.
+    label: value => (drawing?.units !== 'metric'
+      ? window.DraftFormatters.formatArchitecturalInches(value * 12)
+      : window.DraftFormatters.formatMetres(value)),
+    // Only `stroke` and `labelBack` ever paint here. This page has no
+    // dimension tool and no selection, so drawDimension2D's `options` is
+    // always `{}` and the preview and selected branches are unreachable --
+    // but they must still be DEFINED, or wiring selection up later would read
+    // `undefined`, paint transparent black, and look like a geometry bug.
+    //
+    // Placeholders follow floorEnv's split: preview takes the committed look,
+    // selection takes the accent. The accent is the loud choice, and loud is
+    // the point -- a placeholder that fires should be obviously wrong rather
+    // than quietly plausible. Wiring the halo to `surface-panel` was the first
+    // attempt and was the opposite: a page-coloured 7px band under the line,
+    // which is the placeholder that HIDES. (On rough/day the accent happens to
+    // equal draw-dim, so there the two would not be told apart -- harmless
+    // while the branch is dead, and not worth a role of its own until
+    // selection is real.)
+    colors: {
+      stroke: skin['draw-dim'],
+      selected: skin['accent'],
+      selectedHalo: skin['accent'],
+      preview: skin['draw-dim'],
+      // The plate the label is drawn ON. It has to be the ground draw-dim was
+      // measured against, or the contrast the palette harness proves is a
+      // contrast against something this page never paints.
+      labelBack: skin['surface-panel'],
+    },
+  });
+
+  const paintDimensions = () => {
+    const R = window.DraftRender2D;
+    const F = window.DraftFormatters;
+    const missing = [!R && 'render-2d.js', !F && 'formatters.js'].filter(Boolean);
+    if (missing.length) {
+      throw new Error(`MODEL.html: cannot paint dimensions, ${missing.join(' and ')} `
+        + 'did not load. Check the script order in the page head.');
+    }
+    const env = dimensionEnv();
+    dimensions().forEach(dimension => R.drawDimension2D(ctx, toS, dimension, {}, env));
+  };
+
+  // THE DATUM MADE VISIBLE. Tier 2d anchored the grid to the datum but never
+  // showed the point itself, so the drafter saw a grid whose origin was
+  // inferable only by counting squares. Same three states as the grid, from
+  // the same gridDatum(): a point, the back-filled world origin, or nothing.
+  //
+  // MODEL.dc.html guards this with `!this._isPrinting`. This page never
+  // prints, so the guard is the constant `false` and the marker always shows
+  // when a datum exists -- which is the whole point of drawing it.
+  const paintOrigin = () => {
+    const R = window.DraftRender2D;
+    if (!R) {
+      throw new Error('MODEL.html: cannot paint the origin, render-2d.js did '
+        + 'not load. Check the script order in the page head.');
+    }
+    // elev is inert here and passed anyway: toS is a plan projection reading
+    // x and z only, so the y it builds is dropped. Supplied rather than
+    // omitted because the painter reads `env.elev || 0` and a caller should
+    // answer the whole interface, not the part that happens to be observable.
+    R.drawOrigin2D(ctx, toS, {
+      datum: gridDatum(),
+      elev: 0,
+      colors: { origin: skin['draw-origin'] },
+    });
+  };
+
   const paint = () => {
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -557,6 +654,14 @@
       if (drawing) {
         paintGrid(); paintFloors(); paintRoofs(); paintShapes();
         paintLines(); paintWalls();
+        // LAST, because dimensions are annotation: MODEL.dc.html paints them
+        // after the walls and lines (6960) so a string is never buried under
+        // the geometry it measures.
+        paintDimensions();
+        // The datum marker goes on top of everything, as it does in the old
+        // page (MODEL.dc.html:6956, immediately before the committed lines):
+        // it is the one point the drafter must always be able to find.
+        paintOrigin();
       }
     } catch (err) {
       // The throw above is only useful if someone SEES it. paint() runs on
@@ -600,7 +705,8 @@
       + `lines <b>${shownOfTotal(lines().length, drawing.lines)}</b>   `
       + `floors <b>${shownOfTotal(floors().length, drawing.floors)}</b>   `
       + `roofs <b>${shownOfTotal(roofs().length, drawing.roofs)}</b>   `
-      + `shapes <b>${shownOfTotal(shapes().length, drawing.shapes)}</b>\n`
+      + `shapes <b>${shownOfTotal(shapes().length, drawing.shapes)}</b>   `
+      + `dims <b>${shownOfTotal(dimensions().length, drawing.dimensions)}</b>\n`
       + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
       + `view <b>${onActiveLevel().viewId || 'all'}</b>   `
       + `${theme}/${mode}   `
@@ -713,7 +819,10 @@
     const F = window.DraftDrawingFormat;
     const levelIds = new Set((parsed.levels || []).map(level => Number(level.id)));
     const WT = window.DraftWallTypes;
-    const raw = { walls: parsed.walls, lines: parsed.lines, floors: parsed.floors };
+    const raw = {
+      walls: parsed.walls, lines: parsed.lines,
+      floors: parsed.floors, dimensions: parsed.dimensions,
+    };
     drawing = {
       ...parsed,
       walls: F.walls(parsed.walls, levelIds, {
@@ -723,8 +832,12 @@
       }),
       lines: F.lines(parsed.lines, levelIds, {}),
       floors: F.floors(parsed.floors, levelIds, { defaultFloorThickness: 0.75 }),
+      // Dimensions already had a rule; this page just never called it. Running
+      // it is what lets the view filter above trust that every dimension in
+      // the array carries a real view.
+      dimensions: F.dimensions(parsed.dimensions, levelIds),
     };
-    dropped = ['walls', 'lines', 'floors']
+    dropped = ['walls', 'lines', 'floors', 'dimensions']
       .map(k => (Array.isArray(raw[k]) ? raw[k].length : 0) - drawing[k].length)
       .reduce((a, b) => a + b, 0);
     fit();

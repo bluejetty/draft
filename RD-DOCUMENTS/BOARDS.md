@@ -69,6 +69,89 @@ pool · `#331` NAHB room-program defaults · `#198` room stamping step ·
 `#321` entry page rework · `#318` tray door/window centreline snap ·
 `#2a` reorder the MODEL right-side menu to mirror the sheet order.
 
+### CI runs no harness — 20 of them, and not one is guarded
+
+Gilligan's, 4 Sep, sharpening a smaller finding of Skipper's. Skipper had
+measured that ten of the harnesses load their module through `require()` and so
+cannot mutate their own source in-process. True, and beside the larger point:
+**`test.yml` runs `npx playwright test` and nothing else.** No harness is
+invoked by CI at all.
+
+Measured on 4 Sep: 20 harnesses under `proto/`, all passing, carrying 500-plus
+visible assertions — `render-2d` 281 across 140 checks, `gruff-interview` 73,
+`room-grow` 69, `auto-windows` 45, `elevation` 21, `wall-joins` 14. Their
+greenness is only ever as current as the last person who typed `node proto/…`.
+
+**The failure mode is worse than "untested", and that is the part worth
+keeping.** A harness that a change breaks does not go red. It goes **green in
+CI while broken**, and stays that way until a human happens to run it. A test
+that fails for a person but passes for the machine is worse than no test at
+all: with no test you know you are unguarded, and with this one you believe you
+are not.
+
+It is what stopped a real push today. Gilligan had a finished `drawOrigin2D`
+colour suite and held it in a patch file rather than pushing, precisely because
+pushing it would have looked green either way and taught nobody anything.
+
+The fix is a step, not a project:
+
+    - run: for f in proto/*harness*.js; do node "$f" || exit 1; done
+
+Not done here because it is a repository-infrastructure change and belongs in
+its own PR, not bolted onto one already in CI — and because it should land when
+someone can watch what it turns red. Every harness passes today, so the honest
+expectation is that it lands green and stays useful from the next change
+onward.
+
+### The drawing does not obey the skin — 18 hardcoded colours in render-2d.js
+
+Found 3 Sep while wiring `drawOrigin2D`, which hardcoded its green. It is not
+one painter. Five of them carry colour literals no caller can override:
+
+| painter | literals |
+|---|---|
+| `drawWallSeg2D` | 5 |
+| `drawRoof2D` | 6 |
+| `drawShape2D` | 4 |
+| `drawFixture2D` | 2 |
+| `drawOrigin2D` | 1 — **fixed**, now reads `env.colors.origin` |
+
+MODEL.html defaults to `mode=night`, so this is its default view. Measured
+against the skins' own `surface-page`:
+
+| painter | what | colour | night | day |
+|---|---|---|---|---|
+| `drawWallSeg2D` | wall stroke | `#1d1f20` | **1.00** | 14.79 |
+| `drawWallSeg2D` | wall fill | `#ffffff` | 16.55 | **1.12** |
+| `drawRoof2D` | roof stroke | `#7a4a21` | **2.23** | 6.64 |
+
+`#1d1f20` **is** `surface-page` on night. The wall outline is painted in
+exactly the colour of the page it sits on. And the mirror case is just as
+real: the white fill scores 1.12 on the day page. `drawWallSeg2D` is built for
+a light sheet — white paper, black ink — and half-fails on each skin, in
+opposite halves.
+
+**Why nothing caught it.** Every MODEL.html spec asserts geometry, counts, or
+grid colours; none asserts wall ink. On night the walls still appear, because
+the white fill is loud — only the edge that separates a wall from the page is
+gone. A page that looks populated is not a page that is right, and the suite
+was measuring the half that works.
+
+SPEC-skins promises "the chrome and the drawing move together and neither can
+drift from the other". Today the chrome moves and the drawing does not.
+
+**Not fixed here, deliberately, and it is two decisions not one:**
+
+1. **Which roles** — a wall needs a fill and a stroke, a roof needs its two
+   browns, a fixture its ink. Four or five new roles, mechanical once named.
+2. **What colours** — and SPEC-skins §9 lists "the actual colours of any of the
+   four skins" as explicitly undecided. Night is not a recolour of day: a wall
+   on a black sheet is not white paper with a black line around it, and
+   choosing what it *is* is Movie's, not a measurement.
+
+Do (1) blind and you invent (2) by accident, which is how `#557a46` came to be
+the datum's colour on a skin nobody had checked it against.
+
 ---
 
 ## 5 · Small — an hour or two each
@@ -279,3 +362,197 @@ worth the trip; "probably fine" is what walked past the first floors bug. This
 is also why the readout says `0/3` and not `0` — Movie, 3 Sep: "i like all
 that info down in the left corner keep adding to it and don't delete."
 
+
+### 7 · A tolerant default makes every wrong name pass
+
+Gilligan's, 3 Sep, found while reading `_wallJoins` before extracting it. His
+own DEFINITIONS entry documented a join kind as `corner`. The builder emits
+`miter`. `corner` is not a value anything in the app produces.
+
+His harness had five checks exercising `type: 'corner'` and all five passed —
+because `drawWallSegs2D` branches on `tee` / `continuation` / `multi` / `none`
+and mitres **everything else**. The default branch swallowed the invented name
+and produced exactly the right behaviour under it.
+
+So the checks were true and useless in the same breath: they proved *what the
+painter does with an unrecognised type*, under a name nobody had noticed was
+unrecognised. A reader following the entry would have written `type: 'corner'`,
+watched it work, and shipped it — and it breaks the day someone tightens the
+branch.
+
+**The rule: a test that exercises a named case proves the behaviour, not the
+name.** Where a default branch accepts anything, every name is
+test-equivalent, so the suite cannot tell a real one from an invented one. The
+name has to be checked against the **producer** — grep what actually emits it —
+and pinned by its own check: an unrecognised type must paint identically to the
+real one *on purpose*, so the tolerance is findable rather than accidental.
+
+This is the third of its family today and the family is worth naming. Each was
+a document asserting something about code that nobody had read back:
+
+- Gilligan's `body` retraction — current usage written down as if permanent.
+- Skipper's "nothing prints millimetres" — inferred from a grep that tested
+  one polarity of a two-polarity condition.
+- This one — a name inferred from behaviour instead of read off the producer.
+
+All three passed review, and two of them passed a green suite. **A document
+that describes code is a claim about the code, and it needs the same
+verification the code gets.** The dictionary is the artifact meant to prevent
+exactly this, which is why an error in it costs more than an error in a
+comment.
+
+### 8 · When the ground confounds the measurement, change the statistic — not the threshold
+
+Gilligan's generalisation, 3 Sep, of two failures on the same day: "find a
+statistic that can't be fooled by the ground, rather than a threshold tuned
+until it agrees."
+
+Both were measurements of anti-aliasing wearing the costume of measurements of
+ink.
+
+- **The grid.** Counting pixels at the grid's greys and asserting a ratio. The
+  no-grid render is not empty — it is anti-aliased wall ink, some of which
+  lands on a grid grey by coincidence. That stray count measured 1 locally,
+  306 in a different local house and 902 on a runner.
+- **The datum marker.** Three statistics, three grounds fooling all but the
+  last. Counting pixels near each skin's green failed because the two greens
+  sit on the same blend ray between marker and page, so a 1.5px stroke's halo
+  lands nearer the wrong one than its core lands to the right one. The peak
+  green *channel* was right on night and wrong on day, because blending toward
+  a light page RAISES the green channel.
+
+At every one of those the tempting repair is a knob: widen the tolerance, lift
+the floor, allow a margin. All of them keep the confound and buy agreement.
+
+**What worked both times was a quantity the ground cannot move.** For the grid:
+two renders differing only in the datum, so the difference *is* the grid and
+the assertion carries no number at all. For the marker: greenness,
+`g - max(r,b)`, which falls monotonically toward zero as any colour blends
+toward any grey ground, dark or light alike — so its maximum is the stroke's
+own colour whichever skin is up.
+
+**The test for whether you have found one: you can predict the number before
+you run it.** Greenness predicts 48 for `#6a9a57` and 37 for `#557a46`. The run
+returned 48 and 37, and 37 against 37 under both mutations. A tuned threshold
+can never do that, because it is chosen after seeing the data — which is
+exactly why it always agrees, and exactly why it proves nothing.
+
+### 9 · The same fact reads as a guarantee or as a blocker, depending on which you came looking for
+
+Gilligan's, 4 Sep, and he caught it on himself.
+
+He wrote that lifting `wallJoins` into `geometry-2d.js` lets the new page mitre.
+It does not: `wallJoins` keys endpoints by object identity, JSON restores values
+and not references, so on JSON-restored walls the classifier returns an empty
+Map and every corner stays a butt joint — silently, with no error.
+
+The evidence was already in his own harness. One of his checks is named:
+
+> *coincident endpoints in separate objects do not join*
+
+He wrote it to pin a real invariant — it is what stops a garage wall splicing
+into a coincident house wall — and it states the obstacle **exactly as
+precisely**. His words: "I read it as an invariant and not as a blocker because
+I was looking for one and not the other. Same evidence, two readings, and I
+took the one that suited the story I was telling."
+
+That is not carelessness, and calling it that would lose the lesson. A test
+name is a sentence about behaviour; whether it reads as *the system protects
+this* or *the system cannot do that* is supplied by the reader's question, not
+by the sentence. Both readings are correct. Only one of them was load-bearing
+for the claim he was making.
+
+**So: when a fact confirms the thing you are arguing, check what it forbids.**
+The strongest evidence for a design is usually also the sharpest statement of
+its limits, because both come from the same constraint. A guarantee about what
+cannot accidentally happen is a blocker for anyone who needs it to happen on
+purpose.
+
+Cheap to apply, and it fits in the existing habit: when a check supports your
+claim, re-read its name as though you were trying to break the claim instead.
+Twice today that would have caught a wrong sentence before it shipped — this
+one, and `body` documented as permanent when it was only current.
+
+### 10 · A surviving mutant is either a coverage gap or a mutation that changed nothing
+
+Gilligan's, 4 Sep, caught on his own audit of the `wallJoins` harness — and it
+governs the technique this repo leans on hardest, so it earns a rule of its
+own.
+
+He mutated the collinearity test from `< -0.995` to `< 1` and the mutant
+survived. Read as a coverage gap, that says the test never exercises
+collinearity. It says no such thing. Given the branch guard above it, `< 1` is
+very nearly a no-op, and a same-direction pair has a dot product of exactly
+`1.0` — so the mutant computes the same answers as the original. **A mutation
+that changes nothing reports a gap that is not there.** `< 2` is the one that
+discriminates, and under it the real gaps appeared.
+
+Mutation testing is an instrument, and this rule is the instrument reading
+itself — the day's theme once more. A surviving mutant licenses exactly one of
+two conclusions, and they call for opposite work:
+
+- **the tests are weak** → write the check that distinguishes them
+- **the mutant is inert** → write a different mutant; the tests were fine
+
+Telling them apart is one step: **show that the mutated code produces a
+different value on some input before believing anything about the tests.**
+
+And that step has a companion, which is Gilligan's amendment to the first
+draft of this rule and the part that makes it usable: **ask what the guard
+upstream has already narrowed the input to.** Inertness is not visible in the
+mutated line. `< 1` reads as a real loosening in isolation; it is inert only
+because the cross-product test above it guarantees the dot product is already
+±1 by the time that line runs. You cannot see that by staring at the line you
+changed — only by asking which inputs still reach it.
+
+The zero-length guard is the same trap running backwards: deleting real code
+changed nothing, because `NaN` falls every comparison downstream. In one case a
+weaker condition was inert; in the other a deleted guard was. Both because
+something else had already decided the answer for every input that arrives.
+
+### The same ambiguity runs backwards, in the aggregate score
+
+Gilligan again, later the same day, and it is the other half of this rule. His
+coverage table put `drawUnderlays2D` at **1/5** — the worst row in the suite,
+and an obvious instruction to go and strengthen its checks.
+
+Four of those five are **refusal** checks, asserting `count === 0`: this
+painter must draw nothing for a picture that is missing, hidden, off-level or
+sub-pixel. **A deleted painter satisfies every one of them trivially.** So 1/5
+is not a statement about the checks' strength at all — it is what a suite of
+absence-assertions scores by construction, and the number cannot tell the two
+apart.
+
+So a **low no-op score licenses the same two conclusions a surviving mutant
+does**, and reading it the obvious way would have sent the next person to
+rewrite checks that were already correct.
+
+There was a real weakness underneath, and it was not the one the number
+pointed at: each refusal proved that nothing drew, and none proved the fixture
+**would otherwise have drawn**. A malformed `underlayEnv` would have passed all
+four for entirely the wrong reason. The fix is a differential — same fixture,
+one field changed, asserted against the same fixture without it: **a refusal
+only means something if its control draws.** 5/5 after, and the table stopped
+misreporting the suite's weakest row.
+
+**Pick the control near the boundary it defends.** For the sub-pixel skip he
+used a 1 ft underlay that must still draw, not the 20 ft default, because the
+risk is a cut-off that is too eager. A 20 ft control would only have proved
+that something large draws, which was never in doubt. A control chosen
+comfortably inside the boundary tests nothing that was ever at risk.
+
+The two real gaps it then exposed are both worth keeping as examples of what a
+useless check looks like:
+
+- **The dot-product test was only reachable by parallel or antiparallel arms.**
+  A bent pair exits through the mitre branch above it, so the only thing the
+  test decides is opposed-versus-same-direction — and nothing exercised
+  same-direction. The test could have been **deleted outright** and every check
+  would still have passed.
+- **The zero-length guard was invisible to the zero-length check.** At exactly
+  zero the arithmetic gives `NaN`, and every comparison against `NaN` is false,
+  so removing the guard gives the same answer by coincidence. It becomes
+  visible only on a wall that is short but non-zero — which is also the case
+  that matters, since a bad snap should not steer a mitre.
+
+Both closed: 7/7 mutations, 14/14 checks.
