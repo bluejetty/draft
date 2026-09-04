@@ -119,8 +119,6 @@ check('the three split rows share one default, by value', P => {
 check('the split default pours a 5\'-0" wall', P => [P.SECTION_TABLE_DEFAULTS.split.fdnWallHeightFt, 5]);
 check('the split fill wall is the half stud plus the plate stack', P =>
   [near(P.SECTION_TABLE_DEFAULTS.split.woodFillHeightFt, (P.HALF_STUD_IN + P.PLATE_STACK_IN) / 12), true]);
-check('no other type carries a default', P =>
-  [Object.keys(P.SECTION_TABLE_DEFAULTS).sort().join(','), [...SPLIT_FAMILY].sort().join(',')]);
 
 // The kerf is a contract, not a number: an 8' precut sawn in two loses one
 // 1/8" blade, so each half is 46 1/4", not 46 5/16".
@@ -268,6 +266,9 @@ const MUTATIONS = [
     s => s.replace('const roofHeelIn = (fasciaIn, overhangFt, pitch) => fasciaIn + overhangFt * pitch;', 'const roofHeelIn = (fasciaIn, overhangFt, pitch) => fasciaIn;')],
   ['stud from wall height forgets the plates',
     s => s.replace('const studInFromWallHeightFt = wallHeightFt => wallHeightFt * 12 - PLATE_STACK_IN;', 'const studInFromWallHeightFt = wallHeightFt => wallHeightFt * 12;')],
+  // Caught by the shared-default rule, not by a count of who has defaults:
+  // a garage growing a default of its own is legitimate and must not read
+  // as a failure here.
   ['the mod bilevel loses its default (falls back to the house)',
     s => s.replace('    modifiedBilevel: SPLIT_BASE,\n', '')],
   ['the footing is hung off the wall face instead of centred',
