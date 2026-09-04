@@ -681,7 +681,11 @@
       // it. Not everything worth naming is a number the drafter sets -- the
       // attic is a space, not a dimension, and giving it a row would offer an
       // edit that does not exist.
-      const ANNOTATIONS = [{ key: 'attic', text: 'ATTIC SPACE' }];
+      const ANNOTATIONS = [
+        { key: 'attic', text: 'ATTIC SPACE' },
+        { key: 'garageCavity', text: 'ATTIC SPACE' },
+        { key: 'garagePile', text: '(PILE)' },
+      ];
 
       // Hover a row and its part lights up on the drawing; hover the part and
       // the row lights up. The numbers used to sit ON the thing they measured
@@ -777,10 +781,22 @@
       // Derived from the same numbers the house section is drawn from: MAIN FL
       // is 0, the foundation top sits one floor depth below it, and the wall
       // runs down from there.
+      // THE SAME 1 1/2" AGAIN, third time today. Movie: "frost wall not
+      // lining up footingwise". This is where the garage's frost wall stops,
+      // and it has to be the same elevation the house section actually draws
+      // its foundation bottom at -- which moved down by the sill plate when
+      // the house finally got one, because the concrete now starts BELOW the
+      // bearing line rather than at it. This function was still measuring
+      // from the bearing line, so a frost wall bottomed out 1 1/2" high and
+      // the two footings missed each other by exactly the plate.
+      //
+      // Mirrors project-page.js's own `concTopFt = fdnTop - attachFt` then
+      // `fdnBot = concTopFt - wallHeightFt`. Two places computing one
+      // elevation is how it went wrong; they at least now agree.
       const houseFootingTopFt = () => {
         const main = floorLevels[0] && assembly(floorLevels[0].id);
         const mainDepthFt = main ? (main.joistDepthIn + main.sheathingIn) / 12 : 0;
-        return -mainDepthFt - assembly(1).wallHeightFt;
+        return -mainDepthFt - projectPage.SILL_PLATE_IN / 12 - assembly(1).wallHeightFt;
       };
 
       const garageFoundation = () =>
@@ -945,6 +961,18 @@
           // the canvas edge pushed the labels away from what they name.
           const left = (canvas.width - view.span * view.scale) / 2;
           const right = left + view.span * view.scale;
+          // AN ANNOTATION SITS BY ITS OWN THING, not out in the margin. A
+          // schedule label is one of a stack that has to line up with the
+          // rows beside it, so it belongs in a column. An annotation names
+          // one piece of the drawing -- Movie: "add the word (PILE) on the
+          // left of it" -- and a column would put it a hundred pixels from
+          // the line it names, reading as another row in the list.
+          if (control.kind === 'annotation') {
+            tag.style.left = `${at.x - 6}px`;
+            tag.style.top = `${at.y}px`;
+            tag.style.transform = 'translate(-100%,-50%)';
+            return;
+          }
           const garageSide = key.startsWith('garage');
           tag.style.left = garageSide
             ? `${Math.max(2, left - GREY_COL)}px` : `${right + GREY_GAP}px`;

@@ -155,6 +155,37 @@ if (!window.DraftProjectPage) {
   // office default sits at 1'-0", comfortably under it; this is the line the
   // drafter cannot type past.
   const GRADE_MIN_BELOW_CONCRETE_IN = 8;
+  // The truss top chord, drawn as a member rather than as a line. Movie,
+  // 4 Sep: draw the roof "with 2 x 3.5" separated lines to show the roof
+  // chords". Measured off his own drawing to be sure: its two roof lines sit
+  // 3.3pt apart vertically at slope -0.333, which is 3.13pt perpendicular =
+  // 3.42" at that sheet's scale. A 2x4 chord.
+  const ROOF_CHORD_IN = 3.5;
+  // One face of a drilled pile, shown dotted because the pile is BEYOND the
+  // cut -- at ~8 ft on centre the section almost never lands on one, so what
+  // is drawn is where the nearest one would be, not one that is there. Movie,
+  // 4 Sep: "a dotted line about 5 inches in from the garage section line
+  // (which will represent one side of the pile)... extend down further than
+  // the footing by about 8"".
+  const PILE_FACE_FROM_CUT_IN = 5;
+  const PILE_BELOW_LOWEST_IN = 8;
+  // The attached garage's roof cavity. Movie, 4 Sep: "the roof cavity with
+  // 3.5" top and bottom chords could also be shown with 4' space between
+  // ceiling height and top of top chord", then "just flat section", "talking
+  // about attached garage".
+  //
+  // THE ROOF IS NOT FLAT. Movie: "it is sloped but not the direction we are
+  // cutting" -- the garage roof falls across this section rather than along
+  // it, so the cut runs parallel to its ridge and every chord projects level.
+  // Worth saying, because "drawn level" and "is level" are different claims
+  // and only the first one is true here; someone reading this later should
+  // not come away thinking a garage has a flat roof, or "fix" the drawing by
+  // adding a pitch to it.
+  //
+  // It is also why the house and the garage draw the same members
+  // differently on one sheet: the house is cut ACROSS its slope and gets the
+  // sloping pair, the garage ALONG its slope and gets four level lines.
+  const GARAGE_CAVITY_FT = 4;
 
   // HOW THE FRAMING IS HELD DOWN TO THE FOUNDATION. Movie, 4 Sep. Two ways,
   // and they bear at the SAME height on purpose, so switching between them
@@ -262,7 +293,22 @@ if (!window.DraftProjectPage) {
     const riseAt = x => fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);
     rect(-roof.overhangFt - 0.1, plateY, 0.1, fasciaFt, 1.5);   // fascia board
     line(-roof.overhangFt, plateY, 0, plateY, 1);               // soffit
+    // TWO LINES, NOT ONE. The offset is PERPENDICULAR to the slope -- a chord
+    // is 3 1/2" thick measured across itself, not measured vertically -- so
+    // the vertical drop between the two lines grows with the pitch. At 4:12
+    // that is 3.55" of vertical for 3 1/2" of chord; at 12:12 it would be
+    // 4.95". Dropping both lines by a flat 3 1/2" would draw a chord that
+    // gets thinner as the roof gets steeper.
+    const chordDropFt = (ROOF_CHORD_IN / 12)
+      * Math.hypot(1, roof.pitch / 12);
     line(-roof.overhangFt, plateY + fasciaFt, CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT), 2);
+    // The underside runs from the fascia's inner face to the cut, and stops
+    // at the exterior wall face on the way -- the same break Movie's drawing
+    // has, where the top plate interrupts it.
+    line(-roof.overhangFt, plateY + fasciaFt - chordDropFt,
+      0, plateY + riseAt(0) - chordDropFt, 1);
+    line(wallFt, plateY + riseAt(wallFt) - chordDropFt,
+      CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT) - chordDropFt, 1);
     anchors.pitch = { x: CUT_DEPTH_FT * 0.45, y: plateY + riseAt(CUT_DEPTH_FT * 0.45) + 0.55 };
     anchors.overhang = { x: -roof.overhangFt / 2, y: plateY - 0.55 };
     anchors.fascia = { x: -roof.overhangFt - 0.55, y: plateY + fasciaFt / 2 };
@@ -273,11 +319,17 @@ if (!window.DraftProjectPage) {
     // the eye works down: pitch, fascia, overhang, heel, then the wall.
     anchors.heel = { x: 0.45, y: plateY - 1.3 };
 
-    // The ceiling, and the attic over it. Movie, 4 Sep: "you can add a roof
-    // area, just some separation line that says attic space maybe". Without
-    // it the roof reads as sitting straight on the wall, with no room between
-    // -- the space that carries insulation and venting looked like nothing.
+    // The ceiling, and the truss over it. Movie, 4 Sep: first "you can add a
+    // roof area, just some separation line that says attic space maybe", then
+    // "the roof cavity with 3.5" top and bottom chords". Without the ceiling
+    // line the roof read as sitting straight on the wall with no room
+    // between; without the bottom chord the ceiling read as a line rather
+    // than as the member the drywall hangs off.
+    //
+    // The chord's UNDERSIDE is the ceiling plane -- that is the face the
+    // finish attaches to -- so the member sits above it, not straddling it.
     line(0, plateY, CUT_DEPTH_FT, plateY, 1);
+    line(0, plateY + ROOF_CHORD_IN / 12, CUT_DEPTH_FT, plateY + ROOF_CHORD_IN / 12, 1);
     anchors.attic = { x: CUT_DEPTH_FT * 0.55, y: plateY + riseAt(CUT_DEPTH_FT * 0.55) / 2 };
     line(0, plateY, 0, plateY + riseAt(0), 1);                  // heel at the wall face
 
@@ -482,10 +534,28 @@ if (!window.DraftProjectPage) {
     // garage is standing there, so soil ticks would draw earth inside a
     // building. The house's own section still carries grade, because a
     // typical exterior wall does have some.
+    // Ceiling, bottom chord, cavity, top chord. The bottom chord's UNDERSIDE
+    // is the ceiling plane -- the face the finish hangs off -- and the 4'-0"
+    // is measured from that plane to the TOP of the top chord, so the cavity
+    // between the two members is 4'-0" less both chords.
+    const chordFt = ROOF_CHORD_IN / 12;
+    const cavityTop = plateY + GARAGE_CAVITY_FT;
     line(0, plateY, cut, plateY, 2);
+    line(0, plateY + chordFt, cut, plateY + chordFt, 1);
+    line(0, cavityTop - chordFt, cut, cavityTop - chordFt, 1);
+    line(0, cavityTop, cut, cavityTop, 2);
+    anchors.garageCavity = { x: cut * 0.42, y: plateY + GARAGE_CAVITY_FT / 2 };
 
-    const topY = plateY;
-    parts.push({ kind: 'break', x: cut, y1: lowest - 0.3, y2: topY + 0.3 });
+    const topY = cavityTop;
+    // The pile face, dotted, running past everything above it. It has no
+    // bottom in this drawing on purpose: a pile is drilled to depth per the
+    // soils report, so a drawn end would be a number nobody has.
+    const pileX = cut + PILE_FACE_FROM_CUT_IN / 12;
+    const pileBot = lowest - PILE_BELOW_LOWEST_IN / 12;
+    parts.push({ kind: 'dashed', x1: pileX, y1: concTop, x2: pileX, y2: pileBot });
+    anchors.garagePile = { x: pileX, y: (fdnBot + pileBot) / 2 };
+
+    parts.push({ kind: 'break', x: cut, y1: pileBot - 0.3, y2: topY + 0.3 });
 
     return {
       parts,
@@ -494,7 +564,7 @@ if (!window.DraftProjectPage) {
         minX: cut - 1.1,
         maxX: 0,      // the shared wall face: the house's own extents carry on
                       // from here, and the two together are one drawing
-        minY: lowest - 1.1,
+        minY: pileBot - 1.1,
         maxY: topY + 1.1,
       },
     };
@@ -574,6 +644,15 @@ if (!window.DraftProjectPage) {
         ctx.beginPath(); ctx.moveTo(X(part.x1), Y(part.y1)); ctx.lineTo(X(part.x2), Y(part.y2)); ctx.stroke();
       } else if (part.kind === 'rect') {
         ctx.strokeRect(X(part.x), Y(part.y + part.h), part.w * scale, part.h * scale);
+      } else if (part.kind === 'dashed') {
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(X(part.x1), Y(part.y1));
+        ctx.lineTo(X(part.x2), Y(part.y2));
+        ctx.stroke();
+        ctx.restore();
       } else if (part.kind === 'grade') {
         // Full canvas width, not the section's: grade does not stop at the
         // edge of what has been drawn.
