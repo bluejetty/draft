@@ -57,6 +57,16 @@ if (!window.DraftPalette) {
     'draw-floor-edge',  // the slab outline and its corner handles, drawn ON
                         // TOP of that wash -- so the wash, not the page, is
                         // the ground it has to separate from
+    'draw-wall',        // the wall body -- poche, not a signal. It is barely
+                        // distinct from the page on BOTH skins on purpose
+                        // (1.30 night, 1.12 day): a plan does not shout its
+                        // walls with fill, it draws them with line.
+    'draw-wall-edge',   // layer boundaries, end caps and the centreline
+                        // endpoint dots -- the line that actually carries the
+                        // wall. Two grounds like draw-floor-edge: the
+                        // draw-wall fill it usually sits on, and the page
+                        // wherever an end cap crosses bare paper. Both values
+                        // clear 3.0 on both of theirs.
     'draw-shape',       // reference shapes: the drafter's own scratch geometry
     // Brand -- the family that actually differs between RUFF and ROUGH
     'accent',           // the one colour that carries the brand
@@ -84,6 +94,8 @@ if (!window.DraftPalette) {
       'draw-origin':     '#6a9a57',   // 5.02 page / 4.40 over a floor wash
       'draw-floor':      'rgba(120,140,150,0.10)',
       'draw-floor-edge': '#5980a6',
+      'draw-wall':       '#2f3335',   // 1.30 on the page -- poche, deliberately quiet
+      'draw-wall-edge':  '#a7aeb1',   // 5.67 on the wall, 7.35 on the page
       'draw-shape':      '#3f8f7a',
       'accent-ink':      '#1d1f20',
     }),
@@ -103,6 +115,10 @@ if (!window.DraftPalette) {
       'draw-origin':     '#557a46',   // 4.41 page / 3.90 wash -- the old page's own green
       'draw-floor':      'rgba(90,110,120,0.10)',
       'draw-floor-edge': '#5980a6',
+      'draw-wall':       '#ffffff',   // 1.12 on the page -- the same quiet relationship
+      'draw-wall-edge':  '#1d1f20',   // 16.55 on the wall, 14.79 on the page. Both
+                                      // values are what render-2d.js hardcoded before
+                                      // this role existed, so DAY IS UNCHANGED.
       'draw-shape':      '#2f6b5b',
       'accent-ink':      '#ffffff',
     }),
