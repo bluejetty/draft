@@ -268,30 +268,52 @@ const underlayEnv = over => ({
   ...over,
 });
 
-suite('drawUnderlays2D', 'a printing page draws no underlay', R => {
+// Each refusal below is stated as a DIFFERENTIAL: the same fixture with one
+// field changed, asserted against the same fixture without it. A bare
+// "nothing was drawn" is the weakest assertion in the harness -- it passes on
+// a painter that has been deleted, on a fixture that was silently malformed,
+// and on a refusal for entirely the wrong reason. Pairing each one with its
+// control is what makes it evidence rather than an absence.
+//
+// It also stops the coverage table lying about this painter. Refusal-only
+// checks scored it 1/5 against a no-op, the worst row in the suite, when the
+// truth was that four of its five checks assert absence and a deleted painter
+// satisfies them for free. A low no-op score licenses two readings -- weak
+// checks, or checks that assert absence -- and the number cannot tell them
+// apart. These pairs settle it: after this, a no-op breaks all five.
+const underlayDraws = (R, over) => {
   const ctx = recordingCtx();
-  R.drawUnderlays2D(ctx, toS, underlayEnv({ isPrinting: true }));
-  expect('nothing is painted', ctx.tape.length, 0);
+  R.drawUnderlays2D(ctx, toS, underlayEnv(over));
+  return { images: count(ctx, 'drawImage'), painted: ctx.tape.length };
+};
+
+suite('drawUnderlays2D', 'a printing page draws no underlay', R => {
+  expect('nothing is painted', underlayDraws(R, { isPrinting: true }).painted, 0);
+  expect('but the same page prints one when it is not printing',
+    underlayDraws(R, {}).images, 1);
 });
 
 suite('drawUnderlays2D', 'an underlay belonging to another level is skipped', R => {
-  const ctx = recordingCtx();
-  R.drawUnderlays2D(ctx, toS, underlayEnv({ activeLevel: { id: 'L2' } }));
-  expect('nothing is drawn', count(ctx, 'drawImage'), 0);
+  expect('nothing is drawn', underlayDraws(R, { activeLevel: { id: 'L2' } }).images, 0);
+  expect('and the same underlay draws on its own level',
+    underlayDraws(R, { activeLevel: { id: 'L1' } }).images, 1);
 });
 
 suite('drawUnderlays2D', 'an underlay whose image has not loaded is skipped', R => {
-  const ctx = recordingCtx();
-  R.drawUnderlays2D(ctx, toS, underlayEnv({ imageFor: () => null }));
-  expect('nothing is drawn', count(ctx, 'drawImage'), 0);
+  expect('nothing is drawn', underlayDraws(R, { imageFor: () => null }).images, 0);
+  expect('and the same underlay draws once its image arrives',
+    underlayDraws(R, { imageFor: () => ({ tag: 'image' }) }).images, 1);
 });
 
+// The threshold matters as much as the refusal: too eager and a legitimately
+// small underlay vanishes. So the control here is a SMALL one that still
+// draws, not the 20ft default -- that is what pins the cut-off in place.
 suite('drawUnderlays2D', 'a sub-pixel underlay is skipped rather than drawn as a smear', R => {
-  const ctx = recordingCtx();
-  R.drawUnderlays2D(ctx, toS, underlayEnv({
-    underlays: [{ id: 'u1', levelId: 'L1', x: 0, z: 0, widthFt: 0.05, heightFt: 0.05, opacity: 1 }],
-  }));
-  expect('nothing is drawn', count(ctx, 'drawImage'), 0);
+  const at = (widthFt, heightFt) => underlayDraws(R, {
+    underlays: [{ id: 'u1', levelId: 'L1', x: 0, z: 0, widthFt, heightFt, opacity: 1 }],
+  }).images;
+  expect('nothing is drawn for a sub-pixel one', at(0.05, 0.05), 0);
+  expect('but a small one above the cut-off still draws', at(1, 1), 1);
 });
 
 suite('drawUnderlays2D', 'a real underlay is drawn at its own opacity', R => {
