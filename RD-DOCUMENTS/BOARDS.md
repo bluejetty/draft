@@ -16,12 +16,13 @@ next time he is awake.
 
 ## 1 · Critical — something is wrong on the live site
 
-Only one thing in the whole list qualifies. Everything else is missing work,
-not broken work.
+**Nothing. NEW-1 closed 4 Sep** — see below. Everything else on this board is
+missing work, not broken work, and that is now literally true rather than
+nearly true.
 
 | Board | Item | Size | State |
 | --- | --- | --- | --- |
-| **NEW-1** | **Elevations read as see-through in E2/E4.** *Rev 5, 31 Aug — the wrong ink located by measurement.* The far ridge plateau at 22.005 is **legitimate**. What is wrong is that **the near wing's rake terminates in mid-air at exactly that elevation** — 29 px inboard of its own wall corner and 8 px above it — instead of running on to its eave and overhanging by the roof's 2'. **The fix draws more, not less.** Five earlier root causes disproven by measurement (wall occluders: 744 calls, 0 hits; ternary search: 100× denser scan, identical to 3 dp; walls vs silhouette: near tops 21.0–21.6, below the envelope). | ½–1 day | **Out with Skipper now**, in a session scoped to the repo so he can push his own PR. Rev 5 order + `repro-L-house.draft` delivered. |
+| ~~**NEW-1**~~ | ~~**Elevations read as see-through in E2/E4.**~~ **DONE — and the entry was stale for three days.** The Rev 5 fix was in the tree by the 1 Sep squash merge and this board was never updated. Measured 4 Sep, not inferred: `proto/elevation-harness.js` pins the exact Rev 5 order — *"E4: the near wing's left rake runs ridge to eave, past its wall corner"* (to u = −4.15, past the corner at −2.14, the 2' overhang the board said was missing), the right rake likewise, and the far wing's ridge across the plateau. 21 checks green, and green on every CI run. **A rake that stopped in mid-air would fail the first of those by name.** The entry said *"out with Skipper now"* long after the session that owned it had ended — which is how a closed item reads as an open one: nobody lies, the note simply outlives the work. | — | Closed. |
 
 Why it is the only critical one: auto-compose now deals E1–E4 onto every
 default sheet set, so this defect appears four times on every job and reads as
@@ -37,6 +38,7 @@ These are hours, not days, and each one unblocks something bigger.
 | --- | --- | --- | --- |
 | **NEW-2** | **Note A — composition order.** *Rev 2, 3 Sep — most of this landed; the board was read, the code was not.* **Already merged** (`274c78f`, `9548d44`, `0aa7cd1`, `e093c89`): 1/16" is off the ladder (`AUTO_SCALE_PREFS = [1/4, 3/16, 1/8, 3/32]`, last resort 3/32); largest-that-fits is untouched; the set deals in Movie's order (`_composeDefaultSet`, `LAYOUT.dc.html:793`); a single view centres and a pair rows-or-stacks and centres as a group; fit measures the annotated extent through `VIEW_ALLOWANCE_FT`, named and zero so adding dimension strings later moves the chosen scale by itself; and the elevation over-measure is gone — `_viewFootprintFt` takes `yTopDrawn`/`yBottomDrawn`, not footing-to-ridge. **What remains is slots 3, 4, 6 and 8 — SITE, ROOF, floor-layout, electrical — and it is not a scale problem at all.** The composer says so itself at `LAYOUT.dc.html:793`: *no painter*, and for S-SLAB / S-FDN / E-POWER *no entities in the drawing format to paint*. `kind: 'site'` appears in exactly one place in the repo — the scale-family selector — so `SITE_SCALE_PREFS` (1"=10'/20'/30'/40') is a ladder with nothing on it. **Movie's ruling, 3 Sep: those sheets are NOT done, and NEW-2 still owns them.** The composer's comment says *"they are their own boards, not silent omissions"*, and an agent read that as reassigning them out of NEW-2 — it does not. It explains why they are absent; it does not close the item. **NEW-2 stays open on the sheets alone.** What that costs is no longer 2–4 h: SITE and ROOF want a painter that is still inside `MODEL.dc.html` (board #1), and S-SLAB / S-FDN / E-POWER have no entities in `drawing-format.js` to paint at all, so they want a format board first. `kind: 'site'` appears in exactly one place in the repo — the scale-family selector — so `SITE_SCALE_PREFS` (1"=10'/20'/30'/40') is a ladder with nothing on it. | sheets only; **not** the old 2–4 h | SITE + ROOF blocked on #1. Structural + electrical blocked on a drawing-format board. |
 | **NEW-4** | **The build row lights up.** Turtle before HOUSE, rabbit after DETACHED, and the row's lamps inverted: **dim by default, bright while armed, softly lit once that thing exists in the drawing.** Lit state is derived from the model, not remembered — so it survives F5 and clears on a new drawing. **Each lamp reads its own object, so two, three or four can be lit at once** (house + split + both garages); there is no one-at-a-time rule. Art supplied by Movie, 1 Sep: turtle 1024², rabbit 330², both with real alpha. Today the buttons sit at full brightness always and only glow while armed; the bone is the only one that ever dims. | 3–5 h | Nothing waits on it, but it is the visible half of TOY MODE and the first thing anyone sees. |
+| **NEW-5** | **The build row names the build, and the build type becomes real.** *Movie via Skipper, 4 Sep.* The row beside the bone becomes, in this order and all visible from the start: **BUNGALOW / 2 STOREY / BILEVEL / MODIFIED BILEVEL / DETACHED GARAGE**, with **ATTACHED GARAGE** appearing once a house exists, gated as it is today. Four visible house buttons, **no menu** — a drafter knows what a two-storey house or a bilevel is; nobody knows what "SPLIT LEVEL" means in this app, and a menu hides the first choice behind a click. **The button sets the build type up front, so the tour stops asking climb-or-roof** — one decision, made at the start, never asked again. `BUNGALOW` and `2 STOREY` is the pairing the repo already uses: bungalow means one storey in `tests/dynamic-levels.spec.js:27` and `project-page.js:24`, so nothing needs rewording and nobody should "fix" it later. **WHY IT IS HERE AND NOT JUST A RENAME.** The PROJECT page's section table **drives nothing**: `sectionTable` appears 11 times in the repo — 5 in `PROJECT.html`, 3 in `MODEL.dc.html` (all `format.sectionTable`: init, save, load), 2 in `drawing-format.js` — and **nothing outside `PROJECT.html` reads its rows**. Five of its six rows save with the drawing and change nothing that gets built. HOUSE is the exception, and only because it is `live: true` and writes the real assembly. The cause is not a missing wire: **BUILD HOUSE has no idea which build type it is building**, because there is no build type to read. A type chosen on the button is therefore not a cost of the rename, it is the missing input — it makes the other five rows mean something for the first time. New persisted key (`buildType` on the drawing) → a line in `RULES-persisted-keys.md` and an entry in `drawing-format.js`, same shape as the wall `position` field. **A bungalow is a 2 STOREY with the upper floor deleted** — that is already how `dynamic-levels.spec.js` makes one — so the button needs no new geometry, only to say which one it is. That is why this is a day and not a week. Changes the same row as NEW-4, which changes its **lamps**; this changes its **names and meaning**. They do not conflict and can land in either order. | 1–1.5 d | The PROJECT page's section table becoming real; bands 2 and 3 of the wall sections meaning anything |
 | **NEW-3** | **Note B — auto section-cut placement.** Cut 1 through the stair showing treads in length; cut 2 through house/garage where attached; cut 3 always, in the unused direction. | 4–6 h | Depends on stairs-in-section: `cut-view.js` does not draw treads beyond the cut plane, so a stair-oriented cut currently shows nothing. Fix that first or the rule is decorative. |
 | #4 (docs) | ~~Stale architecture docs.~~ **Landed as PR #206**, 31 Aug. `docs/ORIENTATION.md` landed alongside it as PR #207. | — | — |
 | — | ~~`playwright.config.js` hardcodes port 4173 with `reuseExistingServer`.~~ **Landed as PR #205**, 31 Aug, 677/0. Set `DRAFT_TEST_PORT` and you always get your own server. | — | Unblocks running two agents on one box, and so the MODEL split. |
@@ -120,18 +122,51 @@ entry predicted, found the moment something other than a person ran them.
 The order matters: make the guard universal first, then a CI loop can pass
 `--mutate` and mean it.
 
-### The drawing does not obey the skin — 18 hardcoded colours in render-2d.js
+### The drawing does not obey the skin — 13 colours with no role, down from 18
 
 Found 3 Sep while wiring `drawOrigin2D`, which hardcoded its green. It is not
 one painter. Five of them carry colour literals no caller can override:
 
-| painter | literals |
-|---|---|
-| `drawWallSeg2D` | 5 |
-| `drawRoof2D` | 6 |
-| `drawShape2D` | 4 |
-| `drawFixture2D` | 2 |
-| `drawOrigin2D` | 1 — **fixed**, now reads `env.colors.origin` |
+**Recounted on merged main, 4 Sep, and the recount separates two things the
+first count did not.** A literal sitting behind a role read — `wallColors.wall
+|| '#ffffff'` — is a *default*: a caller who supplies the role overrides it,
+and the harness proves the role is read. A literal with no role at all cannot
+be overridden by anyone. Only the second kind is the defect, and counting them
+together made the problem look larger and less tractable than it is.
+
+| painter | fallback behind a role | no role at all |
+|---|---|---|
+| `drawWallSeg2D` | 4 | 4 — the underlay tints, computed alpha |
+| `drawRoof2D` | 2 | 0 — **fixed 4 Sep**, `draw-roof` + `draw-roof-guide` |
+| `drawShape2D` | 0 | 1 — a white label back |
+| `drawFixture2D` | 0 | 2 |
+| `drawOrigin2D` | 1 | 0 — fixed 3 Sep |
+| `cutChoiceMark` | 0 | 2 |
+| `drawCutMarks2D` | 0 | 2 |
+| `drawCutPreview2D` | 0 | 2 |
+| **total** | **7** | **13** |
+
+**What is left is thirteen, and none of it is a refactor.** Each needs a night
+AND a day value *chosen* — the cut-mark family (`#ff3366`, `#994466`,
+`#b04060`), the underlay tints, the white label backs. That is Movie's call,
+not an agent's, which is why they have sat: the code change is trivial and the
+decision is not.
+
+**The rule the roof taught, worth having before picking any of them:** a colour
+can stay ONE value if it is mid-tone — `draw-floor-edge` (#5980a6, 3.99 night /
+3.71 day) and `draw-roof-guide` (#a3703f, 3.90 / 3.79) both clear the floor on
+either ground, which is why neither ever needed a twin. A colour near either
+end needs a pair. `#7a4a21` was dark, worked on day, and was 2.23 on night —
+one shade too dark to serve both, and that was the entire bug.
+
+**And drafter-chosen colours was considered and DROPPED, 4 Sep.** The palette
+is not a preference: `draw-wall` is deliberately quiet at 1.30/1.12 because *a
+plan does not shout its walls with fill*, the three grid weights must read in
+order, and the roof guides must stay under the roof. A contrast validator
+enforces the floor; it cannot stop someone picking a bright poche and a dim
+edge, which is a legible drawing made illegible by taste. If the real need
+appears it is a designed colourblind-safe skin — one table, validated by the
+harness — not twenty-two pickers.
 
 MODEL.html defaults to `mode=night`, so this is its default view. Measured
 against the skins' own `surface-page`:
@@ -224,8 +259,10 @@ reveal · `#240` scan-to-house · `#213` US regions.
 
 For the next day or two, in this order.
 
-1. **NEW-1 see-through elevations** — already out with Skipper. Live defect,
-   about to be multiplied by four per job.
+1. ~~**NEW-1 see-through elevations**~~ — **done**, in the tree since the
+   1 Sep squash and pinned by `proto/elevation-harness.js`. Confirmed by
+   measurement 4 Sep, after the entry had read *"out with Skipper now"* for
+   three days past the end of that session.
 2. **NEW-2 — the SITE and ROOF sheets.** The scale and placement halves
    landed 1–2 Sep and must not be rebuilt; what is left is the sheets
    themselves, which Movie confirmed on 3 Sep are still outstanding. They

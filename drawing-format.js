@@ -911,9 +911,55 @@ if (!window.DraftDrawingFormat) {
       // is the conservative LOW case and the site crew fills up to it, which
       // leaves fill to play with for drainage. Old saves carry no value and
       // land here.
-      gradeOffsetFt: num(raw?.gradeOffsetFt) ?? -1,
+      // GRADE HERE IS AN IMAGINARY LINE, and that is what makes deriving it
+      // legitimate. Movie, 4 Sep: "the grade line is an 'imaginary' line.
+      // There will later be a landscape grade plan added where the actual
+      // grade can be drawn if it is required for submission."
+      //
+      // So this is a drafting reference the building establishes, not a site
+      // condition measured on the ground. A surveyed grade would be data
+      // about the lot, and deriving THAT from a garage beam would be
+      // nonsense -- the beam would be dictating the shape of the earth. Real
+      // grade belongs on the landscape plan when one exists, and this line
+      // should not be mistaken for it.
+      //
+      // GRADE DERIVES FROM THE GARAGE. Movie, 4 Sep: "the house will need the
+      // grade at that location exactly, we will need to adjust the house
+      // based on the garage if it has an attached garage", and "if 8" grade
+      // on garage grade beam, it's 2'-8" on a bungalow default".
+      //
+      // An attached garage's beam has to sit 8" above grade, and the garage
+      // sits 2'-0" below the house -- so the garage decides where grade is,
+      // and the house takes it. A stored -1'-0" would be the house choosing
+      // on its own and quietly disagreeing with the beam beside it.
+      //
+      // null means derive, a number is the drafter's override, and the null
+      // check comes before Number() so a re-normalise never turns "derive"
+      // into an explicit 0. Same shape as both garages' offsets.
+      gradeOffsetFt: raw?.gradeOffsetFt == null ? null
+        : Number.isFinite(Number(raw.gradeOffsetFt)) ? Number(raw.gradeOffsetFt) : null,
       zones: {
-        attachedGarage: { offsetFt: offset(zones.attachedGarage?.offsetFt) },
+        // The attached garage DERIVES like the detached one — null means
+        // derive, a stored number is the drafter's override. Movie, 4 Sep:
+        // "2 ft below the house sill (house sill drops 2 ft to meet garage
+        // sill)".
+        //
+        // It cannot be a constant HERE, and that is the whole reason for the
+        // null. The drop is measured from the HOUSE SILL, which sits one
+        // floor package below MAIN FL -- and the floor package is the
+        // drafter's joist depth plus sheathing, which this module cannot see.
+        // A fixed -2'-0" off MAIN FL would be right only while nobody touched
+        // the joists: change an 11 7/8" joist to a 2x10 and the garage would
+        // quietly stop being 2 ft below the sill while still reading -2'-0".
+        //
+        // Number(null) is 0, so the null check comes first here as it does
+        // for the detached garage: a re-normalise must never turn "derive"
+        // into an explicit 0.
+        attachedGarage: {
+          offsetFt: zones.attachedGarage?.offsetFt == null ? null
+            : Number.isFinite(Number(zones.attachedGarage.offsetFt))
+              ? Number(zones.attachedGarage.offsetFt) : null,
+        },
         // The detached garage DERIVES from grade until overridden — null
         // means derive (top of the garage grade beam sits ~8" above grade
         // at the house); a stored number is the drafter's override.
@@ -946,13 +992,57 @@ if (!window.DraftDrawingFormat) {
     'fdnWallHeightFt', 'woodFillHeightFt',
     'slabThicknessIn', 'footingWidthIn', 'footingDepthIn',
   ]);
+  // Not every per-type value is a measurement. A garage's foundation is a
+  // CHOICE between two things it can be, and `positive()` would quietly turn
+  // 'frostwall' into null -- a stored answer that reads as "never set".
+  // Choices are validated by name against their own list.
+  // THREE, not two. Movie, 4 Sep: "detached garage could be THICKENED, GRADE
+  // BEAM, or FROST WALL", while an attached one is grade beam or frost wall --
+  // thickened edge is a detached-only slab. The format accepts the union and
+  // the page offers each row only the ones its type can be, the same way
+  // SECTION_TABLE_ITEMS scopes a column to the types that use it.
+  //
+  // This is also why it could not ride on the model's existing key. A garage's
+  // foundation is stored there as `floor.thickenedEdge`, a BOOLEAN -- two
+  // states for a thing that has three. The moment a detached garage can be a
+  // frost wall that boolean is one bit short, whatever this page does.
+  //
+  // AND AN ATTACHED GARAGE MAY NOT BE THICKENED EDGE. Movie, 4 Sep:
+  // "ATTACHED GARAGE - THICKENED EDGE not adequate because it will move /
+  // the house foundation is solid and will cause cracking." A thickened-edge
+  // slab floats; the house it is fastened to does not. That is a structural
+  // reason, not a UI preference, so it is enforced HERE rather than only in
+  // the page's dropdown -- a hand-edited file, an older save, or a second
+  // page must not be able to store it either. Written down because an
+  // absence with no stated reason is the kind of thing someone later
+  // "completes".
+  const SECTION_TABLE_CHOICES = Object.freeze({
+    garageFoundation: Object.freeze(['gradebeam', 'frostwall', 'thickened']),
+    // How the framing is held down to the foundation. Movie, 4 Sep: a
+    // 1 1/2" sill plate on embedded anchor bolts every 4 ft, or a PT SPF 2x6
+    // ladder set into the top of the pour with the floor header and joists
+    // screwed to it. Both bear at the same height, so the choice changes the
+    // detail and nothing above it. Sill is the default -- Movie: "sill plate
+    // stronger attachment I think / I prefer".
+    foundationAttachment: Object.freeze(['sill', 'ladder']),
+  });
+  const SECTION_TABLE_CHOICES_BY_TYPE = Object.freeze({
+    attachedGarage: Object.freeze({ garageFoundation: Object.freeze(['gradebeam', 'frostwall']) }),
+  });
+  const SECTION_TABLE_CHOICE_FIELDS = Object.freeze(Object.keys(SECTION_TABLE_CHOICES));
   const sectionTable = raw => {
     const stored = raw && typeof raw.rows === 'object' && raw.rows ? raw.rows : {};
     return {
       rows: Object.fromEntries(SECTION_TABLE_TYPES.map(type => {
         const row = stored[type] && typeof stored[type] === 'object' ? stored[type] : {};
-        return [type, Object.fromEntries(SECTION_TABLE_FIELDS
-          .map(field => [field, positive(row[field], null)]))];
+        return [type, {
+          ...Object.fromEntries(SECTION_TABLE_FIELDS
+            .map(field => [field, positive(row[field], null)])),
+          ...Object.fromEntries(SECTION_TABLE_CHOICE_FIELDS
+            .map(field => [field, oneOf(row[field],
+              SECTION_TABLE_CHOICES_BY_TYPE[type]?.[field] || SECTION_TABLE_CHOICES[field],
+              null)])),
+        }];
       })),
     };
   };
@@ -1112,6 +1202,9 @@ if (!window.DraftDrawingFormat) {
     sectionTable,
     SECTION_TABLE_TYPES,
     SECTION_TABLE_FIELDS,
+    SECTION_TABLE_CHOICES,
+    SECTION_TABLE_CHOICES_BY_TYPE,
+    SECTION_TABLE_CHOICE_FIELDS,
     specs,
     layout,
     tour,

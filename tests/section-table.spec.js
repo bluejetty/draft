@@ -86,10 +86,18 @@ test('a type only shows the items it uses', async ({ page }) => {
   await h.openModel(page);
   await openProjectPage(page);
 
-  // A bilevel has no second floor and no wood fill wall above its pour; a
-  // modified bilevel has both.
+  // A bilevel has no second floor. It DOES have a wood fill wall, and this
+  // test used to say otherwise -- Movie, 4 Sep: "both SPLIT have default 5ft
+  // con foundation with 4ft infill wall default". A SPLIT is not a third
+  // build type, it is the family name for the two, and both pour the same
+  // 5'-0" wall and make the rest of the basement height up in wood above it.
+  // What a MOD BILEVEL adds to a BILEVEL is the storey over the garage, not
+  // the fill wall.
+  //
+  // The hatched cell was the defect: not blank, not an error, a plausible
+  // "this type has no use for it" that nobody squints at.
   await expect(page.locator('[data-section-blank="bilevel.upperStud"]')).toHaveCount(1);
-  await expect(page.locator('[data-section-blank="bilevel.woodFill"]')).toHaveCount(1);
+  await expect(cell(page, 'bilevel.woodFill')).toHaveCount(1);
   await expect(cell(page, 'modifiedBilevel.upperStud')).toHaveCount(1);
   await expect(cell(page, 'modifiedBilevel.woodFill')).toHaveCount(1);
   await expect(cell(page, 'split.woodFill')).toHaveCount(1);

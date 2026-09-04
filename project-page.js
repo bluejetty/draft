@@ -21,14 +21,25 @@ if (!window.DraftProjectPage) {
   // ── The section table ────────────────────────────────────────────────
   // A row per BUILD TYPE, a column per measured item. HOUSE is the drawing's
   // own live assembly; the rest carry only what they differ in and show only
-  // the items their type uses — a garage has no floor joists, a bungalow no
-  // second floor, a bilevel no wood fill wall.
+  // the items their type uses — a garage has no floor joists or wood fill,
+  // a bungalow no second floor.
   //
   // Wall heights are DERIVED FROM THE STUD, never typed: a wall is a stud
   // plus two top plates and one bottom plate, so the height that wastes no
   // lumber is a precut length plus 4½". Type the stud, read the wall.
   const PLATE_STACK_IN = 1.5 * 3;
   const STUD_LENGTHS_IN = Object.freeze([92.625, 104.625, 116.625]);
+  // Which precut a build type starts on. Movie, 4 Sep: "8'1-1/8" is default
+  // wall height for bungalow, for bilevel we are going with 9'-1 1/8" ceiling
+  // height / walls (both are about 50% common in both)".
+  //
+  // Nothing to add for it: 9'-1 1/8" is simply the NEXT PRECUT, 104 5/8" plus
+  // the same three plates, and MAIN FL STUD already takes it and reads the
+  // wall back. What is missing is only which one a type STARTS on, and that
+  // needs a build type on the drawing -- NEW-5.
+  //
+  // And 50/50 is not a rule in either direction, so both stay typeable: a
+  // bungalow with 9' walls and a bilevel with 8' walls are both ordinary.
   // A basement fill wall doesn't get to choose its height, so it takes the
   // offcut instead: an 8' precut sawn in two, rounded off the sixteenth.
   const HALF_STUD_IN = 46.25;
@@ -46,6 +57,13 @@ if (!window.DraftProjectPage) {
 
   const ALL_TYPES = SECTION_TABLE_ROWS.map(row => row.id);
   const HOUSE_LIKE = ['house', 'split', 'bilevel', 'modifiedBilevel'];
+  // Movie, 4 Sep: a SPLIT is not a third build type, it is the family name
+  // for the two — a BILEVEL or a MODIFIED BILEVEL. Both pour the same 5'-0"
+  // wall and make the rest of the basement height up in wood above it, so
+  // WOOD FILL HT belongs to all three rows and BILEVEL's cell was hatched by
+  // mistake. What a MOD BILEVEL adds to a BILEVEL is the storey over the
+  // garage, not the fill wall.
+  const SPLIT_TYPES = ['split', 'bilevel', 'modifiedBilevel'];
   const SILL_PLATE_IN = 1.5;
   const item = (id, label, unit, field, types, extra) =>
     Object.freeze({ id, label, unit, field, types: Object.freeze(types), ...extra });
@@ -63,7 +81,7 @@ if (!window.DraftProjectPage) {
     item('mainSheathing', 'MAIN FL SHEATHING', 'in', 'mainSheathingIn', HOUSE_LIKE),
     item('fdnWall', 'FDN WALL HT', 'ftin', 'fdnWallHeightFt', ALL_TYPES),
     item('sill', 'SILL PLATE', 'derived', null, ALL_TYPES),
-    item('woodFill', 'WOOD FILL HT', 'ftin', 'woodFillHeightFt', ['split', 'modifiedBilevel']),
+    item('woodFill', 'WOOD FILL HT', 'ftin', 'woodFillHeightFt', SPLIT_TYPES),
     item('slab', 'SLAB', 'in', 'slabThicknessIn', ALL_TYPES),
     item('basementClg', 'BSMT CLG HT', 'derived', null, HOUSE_LIKE),
     item('footingWidth', 'FTG WIDTH', 'in', 'footingWidthIn', ALL_TYPES),
@@ -76,16 +94,46 @@ if (!window.DraftProjectPage) {
   // basement height is made up with a 2x6 wood wall above the concrete
   // rather than a taller pour. A field absent here falls back to the
   // HOUSE's live value.
+  const SPLIT_BASE = Object.freeze({
+    fdnWallHeightFt: 5,
+    woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,
+  });
+  // A GARAGE DOES NOT HAVE A BASEMENT WALL, and until now the table said it
+  // did. Neither garage row carried a default, so both fell back to the
+  // HOUSE's live value and the ATTACHED GARAGE read 8'-1 1/8" of foundation
+  // -- a basement wall under a garage, shown grey as though it had been
+  // inherited on purpose. Not blank, not an error: a plausible number from
+  // the wrong parent, which is the kind that survives because nobody squints
+  // at an inherited cell. The same shape as the bilevel's hatched wood fill.
+  //
+  // Movie, 4 Sep: "the garage section should have a grade beam with 32" conc
+  // and 1.5" sill plate grade beam (33.5")", and "32" conc for garage grade
+  // beam is DEFAULT - changeable". So it goes here, where a default is a
+  // starting number the drafter types over, rather than into the drawing as
+  // a constant no one can reach.
+  //
+  // 32" only. The 1 1/2" sill is NOT added in: SILL_PLATE_IN is what the
+  // table's own TO SILL note adds to every row, so writing 33.5 here would
+  // count the sill twice and read 2'-11" to bearing instead of 2'-9 1/2".
+  const GARAGE_GRADE_BEAM_IN = 32;
+  // Which foundations each garage may be, in the order the drafter should see
+  // them. Detached: all three. Attached: NOT thickened edge -- Movie, 4 Sep,
+  // "it will move / the house foundation is solid and will cause cracking".
+  // A floating slab fastened to something that does not float cracks at the
+  // joint. drawing-format.js refuses to store it for an attached garage, so
+  // this list is the drafter's view of a rule, not the rule itself.
+  const GARAGE_FOUNDATIONS = Object.freeze({
+    attachedGarage: Object.freeze(['gradebeam', 'frostwall']),
+    detachedGarage: Object.freeze(['thickened', 'gradebeam', 'frostwall']),
+  });
+  const GARAGE_FOUNDATION_LABEL = Object.freeze({
+    gradebeam: 'GRADE BEAM', frostwall: 'FROST WALL', thickened: 'THICKENED EDGE',
+  });
   const SECTION_TABLE_DEFAULTS = Object.freeze({
-    split: Object.freeze({
-      fdnWallHeightFt: 5,
-      woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,
-    }),
-    bilevel: Object.freeze({ fdnWallHeightFt: 5 }),
-    modifiedBilevel: Object.freeze({
-      fdnWallHeightFt: 5,
-      woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,
-    }),
+    split: SPLIT_BASE,
+    bilevel: SPLIT_BASE,
+    modifiedBilevel: SPLIT_BASE,
+    attachedGarage: Object.freeze({ fdnWallHeightFt: GARAGE_GRADE_BEAM_IN / 12 }),
   });
 
   // The heel is the fascia plus the rise the roof gains across the overhang
@@ -95,11 +143,152 @@ if (!window.DraftProjectPage) {
   // The detached garage's grade beam rides ~8" above grade at the house —
   // the derive rule the ZONE HEIGHTS panel applies until overridden.
   const GARAGE_BEAM_ABOVE_GRADE_IN = 8;
+  // How far the garage sill sits below the house's. Movie, 4 Sep: "2 ft below
+  // the house sill (house sill drops 2 ft to meet garage sill)". Measured
+  // sill to sill, not floor to floor, so it holds when the floor package
+  // changes.
+  const GARAGE_SILL_BELOW_HOUSE_FT = 2;
+  // Movie, 4 Sep: "the grade line will always be min. 8" below the level of
+  // top of concrete (where it meets sill plate)". Not a default -- a floor.
+  // Grade higher than this puts soil against the sill plate and the framing
+  // above it, which is a wood-to-earth detail nobody draws on purpose. The
+  // office default sits at 1'-0", comfortably under it; this is the line the
+  // drafter cannot type past.
+  const GRADE_MIN_BELOW_CONCRETE_IN = 8;
+  // WHERE IT IS ACTUALLY DRAWN, which is not the same as the minimum. Movie,
+  // 4 Sep: "let's move our grade line down further than 8". If the house is
+  // higher out of the ground it is easier to regrade afterwards if there is
+  // space. If it's too low it can cause additional problems, so better
+  // higher. Let's move it to 1'-2" grade to top of concrete so they have 6"
+  // to slope around the perimeter."
+  //
+  // So the two numbers do different jobs and both are needed: 8" is the line
+  // a drafter cannot type past, 1'-2" is where the drawing puts it, and the
+  // 6" between them is the room the site crew has to fall away from the
+  // building. Collapsing them to one number would either forbid a legal 8"
+  // or draw a building with no slope to give.
+  const GRADE_BELOW_CONCRETE_IN = 14;
+  // The truss top chord, drawn as a member rather than as a line. Movie,
+  // 4 Sep: draw the roof "with 2 x 3.5" separated lines to show the roof
+  // chords". Measured off his own drawing to be sure: its two roof lines sit
+  // 3.3pt apart vertically at slope -0.333, which is 3.13pt perpendicular =
+  // 3.42" at that sheet's scale. A 2x4 chord.
+  const ROOF_CHORD_IN = 3.5;
+  // One face of a drilled pile, shown dotted because the pile is BEYOND the
+  // cut -- at ~8 ft on centre the section almost never lands on one, so what
+  // is drawn is where the nearest one would be, not one that is there. Movie,
+  // 4 Sep: "a dotted line about 5 inches in from the garage section line
+  // (which will represent one side of the pile)... extend down further than
+  // the footing by about 8"".
+  const PILE_FACE_FROM_CUT_IN = 5;
+  const PILE_BELOW_LOWEST_IN = 8;
+  // How far the pile's top end shows above the void form. Movie, 4 Sep: "the
+  // dotted line should start above the 4" void form under the concrete grade
+  // beam". It ran from the TOP of the beam's concrete before, the full depth
+  // of the pour -- but a pile does not pass through the beam, the beam bears
+  // ON it, so the line starting at the top drew a pile going up through
+  // concrete it never reaches. Starting just above the void form shows the
+  // pile arriving at the beam's underside, which is what it does.
+  const PILE_TOP_ABOVE_VOID_IN = 4;
+  // The attached garage's roof cavity. Movie, 4 Sep: "the roof cavity with
+  // 3.5" top and bottom chords could also be shown with 4' space between
+  // ceiling height and top of top chord", then "just flat section", "talking
+  // about attached garage".
+  //
+  // THE ROOF IS NOT FLAT. Movie: "it is sloped but not the direction we are
+  // cutting" -- the garage roof falls across this section rather than along
+  // it, so the cut runs parallel to its ridge and every chord projects level.
+  // Worth saying, because "drawn level" and "is level" are different claims
+  // and only the first one is true here; someone reading this later should
+  // not come away thinking a garage has a flat roof, or "fix" the drawing by
+  // adding a pitch to it.
+  //
+  // It is also why the house and the garage draw the same members
+  // differently on one sheet: the house is cut ACROSS its slope and gets the
+  // sloping pair, the garage ALONG its slope and gets four level lines.
+  const GARAGE_CAVITY_FT = 4;
+
+  // FOR BAND 2 ONLY, not built. Movie, 4 Sep: "put the EXT WALL HEIGHT on
+  // each floor under 2ND FL WALL HEIGHT, MAIN FL WALL HEIGHT, and above
+  // FOUNDATION WALL -- not on this version but on the BILEVEL versions."
+  //
+  // So the bilevel and modified bilevel sections carry an extra row per
+  // level that the bungalow and 2 storey do not. Which fits what a bilevel
+  // is: its floors are half a storey apart, so the height of the EXTERIOR
+  // wall at a level is not the same as the floor-to-ceiling height the level
+  // card already carries, and the two would be one number on any other type.
+  //
+  // Recorded here rather than added now because the row is per BUILD TYPE
+  // and no drawing stores one yet -- NEW-5. Adding it to every section would
+  // put a row on the bungalow that Movie explicitly said should not have it.
+
+  // HOW THE FRAMING IS HELD DOWN TO THE FOUNDATION. Movie, 4 Sep. Two ways,
+  // and they bear at the SAME height on purpose, so switching between them
+  // moves nothing above the foundation:
+  //
+  //   'sill'   -- a 1 1/2" sill plate on top of the concrete, held by
+  //               embedded anchor bolts every 4 ft. The bolts are the detail;
+  //               the plate is just what they hold.
+  //   'ladder' -- a PT SPF 2x6 "ladder": two 2x6 ON EDGE at the wall faces
+  //               with 2x6 separators every 2 ft, 8" outside to outside, set
+  //               into the top of the form and the concrete poured around it.
+  //               Standing 1 1/2" proud, so 4" of its 5 1/2" is embedded.
+  //
+  // The 1 1/2" proud is a choice, not a constraint -- it could stand higher.
+  // Movie keeps it at the sill plate's thickness so the two are
+  // interchangeable and nothing downstream has to know which was used.
+  // Movie, 4 Sep, on where this is heading: "in the future I will probably
+  // split this into a simplified version for each -- bungalow with or without
+  // garage, and bilevel and modified bilevel separate -- but this will be
+  // excellent to start with, and maybe keep using and not change that much,
+  // we will see." So one section that draws every case is the deliberate
+  // starting point, not an accident of not having split it yet. If it does
+  // split, the split is by BUILD TYPE, which is NEW-5 again.
+  const FOUNDATION_ATTACHMENTS = Object.freeze(['sill', 'ladder']);
+  const ATTACHMENT_LABEL = Object.freeze({
+    sill: 'SILL PLATE', ladder: 'PT SPF 2x6 LADDER',
+  });
+  const LADDER_MEMBER_IN = 1.5;   // a 2x6 on edge, its thickness
+  const LADDER_DEPTH_IN = 5.5;    // and its width, standing vertical
+  const LADDER_WIDTH_IN = 8;      // outside to outside, the wall's own 8"
   const CUT_DEPTH_FT = 4; // "the first 4 ft of the exterior wall cut inward"
+  // Movie, 4 Sep: the garage panel is the JUNCTION, not a garage -- it is cut
+  // where the garage meets the house. His own drawing dimensions 4'-6" out
+  // from the house wall face, so that is what the section shows.
+  //
+  // Measured off the PDF rather than guessed: the 4'-6" label carries a
+  // HORIZONTAL dimension line from x=107.8 to x=157.0, and x=157 is the wall
+  // face. At 1.0925 in/pt (taken from the 8'-1 1/8" wall drawn 88.9pt tall)
+  // that run is 53.7" -- 4'-6". An earlier "2 ft of straight roof until the
+  // cut" was about the ROOF, and 2 ft of roof sits inside a 4'-6" cut.
+  //
+  // One constant, so if 4'-6" turns out to show too much, every section moves
+  // together and nothing has to be re-measured.
+  const GARAGE_CUT_FT = 4.5;
+  // spec-master.js already says it: "4" POLYSTYRENE VOID FORM UNDER, BETWEEN
+  // PILES". The beam is cast on it and it crushes, so frost heave lifts the
+  // soil and not the garage.
+  const VOID_FORM_IN = 4;
 
   // Section geometry in world feet: x = 0 at the exterior wall face,
   // positive inward; y = elevation with the MAIN FL floor surface at 0.
   // Returns line/rect parts plus one anchor per annotated value.
+  // Draws whichever hold-down was chosen, in the 1 1/2" band above the
+  // concrete. Shared by the house and the garage so the two can never drift
+  // into drawing the same detail differently.
+  const attachment = (rect, line, kind, x, concTop, wallFt) => {
+    const proudFt = SILL_PLATE_IN / 12;
+    if (kind !== 'ladder') { rect(x, concTop, wallFt, proudFt, 1.5); return; }
+    // Two members on edge at the wall faces, most of them below the pour.
+    const memberFt = LADDER_MEMBER_IN / 12, deepFt = LADDER_DEPTH_IN / 12;
+    const topFt = concTop + proudFt;
+    [x, x + wallFt - memberFt].forEach(mx =>
+      rect(mx, topFt - deepFt, memberFt, deepFt, 1.5));
+    // The separator behind the cut, and the wood the pour stops against.
+    line(x + memberFt, concTop, x + wallFt - memberFt, concTop, 0.75);
+    line(x, topFt, x + wallFt, topFt, 1.5);
+  };
+
   const buildWallSection = values => {
     const floors = values.floors; // bottom-up: [{id, name, wallHeightFt, joistDepthIn, sheathingIn}]
     const fdn = values.foundation; // {wallHeightFt, thicknessIn, slabIn, footingWidthIn, footingDepthIn}
@@ -139,20 +328,78 @@ if (!window.DraftProjectPage) {
     const riseAt = x => fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);
     rect(-roof.overhangFt - 0.1, plateY, 0.1, fasciaFt, 1.5);   // fascia board
     line(-roof.overhangFt, plateY, 0, plateY, 1);               // soffit
+    // TWO LINES, NOT ONE. The offset is PERPENDICULAR to the slope -- a chord
+    // is 3 1/2" thick measured across itself, not measured vertically -- so
+    // the vertical drop between the two lines grows with the pitch. At 4:12
+    // that is 3.55" of vertical for 3 1/2" of chord; at 12:12 it would be
+    // 4.95". Dropping both lines by a flat 3 1/2" would draw a chord that
+    // gets thinner as the roof gets steeper.
+    const chordDropFt = (ROOF_CHORD_IN / 12)
+      * Math.hypot(1, roof.pitch / 12);
     line(-roof.overhangFt, plateY + fasciaFt, CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT), 2);
+    // The underside runs from the fascia's inner face to the cut, and stops
+    // at the exterior wall face on the way -- the same break Movie's drawing
+    // has, where the top plate interrupts it.
+    line(-roof.overhangFt, plateY + fasciaFt - chordDropFt,
+      0, plateY + riseAt(0) - chordDropFt, 1);
+    line(wallFt, plateY + riseAt(wallFt) - chordDropFt,
+      CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT) - chordDropFt, 1);
     anchors.pitch = { x: CUT_DEPTH_FT * 0.45, y: plateY + riseAt(CUT_DEPTH_FT * 0.45) + 0.55 };
     anchors.overhang = { x: -roof.overhangFt / 2, y: plateY - 0.55 };
     anchors.fascia = { x: -roof.overhangFt - 0.55, y: plateY + fasciaFt / 2 };
-    anchors.heel = { x: 0.45, y: plateY + riseAt(0) / 2 };
+    // Movie, 4 Sep: the heel reads UNDER the overhang and OVER the 2nd floor
+    // wall. Since a label now keeps only its height, the heel sitting at its
+    // own mid-height put it above the fascia and overhang -- above the things
+    // it is measured from. Dropped below the plate, it falls into the order
+    // the eye works down: pitch, fascia, overhang, heel, then the wall.
+    // Labels keep only their height, so their order down the page IS the
+    // reading order -- and it has to match the schedule beside it. Movie
+    // wants PITCH / HEEL / FASCIA / OVERHANG, so the heel sits between the
+    // pitch above it and the fascia below.
+    anchors.heel = { x: 0.45, y: plateY + fasciaFt / 2 + 0.8 };
+
+    // The ceiling, and the truss over it. Movie, 4 Sep: first "you can add a
+    // roof area, just some separation line that says attic space maybe", then
+    // "the roof cavity with 3.5" top and bottom chords". Without the ceiling
+    // line the roof read as sitting straight on the wall with no room
+    // between; without the bottom chord the ceiling read as a line rather
+    // than as the member the drywall hangs off.
+    //
+    // The chord's UNDERSIDE is the ceiling plane -- that is the face the
+    // finish attaches to -- so the member sits above it, not straddling it.
+    line(0, plateY, CUT_DEPTH_FT, plateY, 1);
+    line(0, plateY + ROOF_CHORD_IN / 12, CUT_DEPTH_FT, plateY + ROOF_CHORD_IN / 12, 1);
+    // BETWEEN THE PITCH AND THE HEEL, by construction. Movie, 4 Sep: "put
+    // attic space under pitch over heel". Placed as the midpoint of the two
+    // rather than at a height of its own, so it stays between them at any
+    // pitch -- a fixed number would be right at 4:12 and drift out of order
+    // the moment the roof got steeper, which is exactly how the label order
+    // went wrong the first time.
+    anchors.attic = {
+      x: CUT_DEPTH_FT * 0.55,
+      y: (anchors.pitch.y + anchors.heel.y) / 2,
+    };
     line(0, plateY, 0, plateY + riseAt(0), 1);                  // heel at the wall face
 
     // Foundation: wall top carries the main floor, footing centered under
     // it, slab pouring against the wall at the footing.
+    // The house gets the band it has always been missing: the concrete stopped
+    // at the bearing line and the plate was drawn nowhere, exactly as the
+    // garage's was until Movie asked where it had gone.
     const fdnTop = -mainDepthFt;
-    const fdnBot = fdnTop - fdn.wallHeightFt;
-    rect(0, fdnBot, fdnFt, fdn.wallHeightFt, 2);
+    const attachFt = SILL_PLATE_IN / 12;
+    const concTopFt = fdnTop - attachFt;
+    const fdnBot = concTopFt - fdn.wallHeightFt;
+    rect(0, fdnBot, fdnFt, concTopFt - fdnBot, 2);
+    attachment(rect, line, fdn.attachment, 0, concTopFt, fdnFt);
+    anchors.attachment = { x: fdnFt / 2, y: concTopFt + attachFt / 2 };
     anchors.fdnHeight = { x: fdnFt + 0.9, y: fdnTop - fdn.wallHeightFt / 2 };
-    anchors.fdnThickness = { x: fdnFt / 2, y: fdnTop + 0.45 };
+    // BELOW the sill, not above it. Labels keep only their height now, so
+    // three of them -- the floor joists, the attachment, and this -- were
+    // landing within a few inches of each other and reading as one string.
+    // The foundation's thickness is as true half a foot down the wall as it
+    // is at the top, and down there it has the space to itself.
+    anchors.fdnThickness = { x: fdnFt / 2, y: concTopFt - 0.55 };
     const footW = fdn.footingWidthIn / 12, footD = fdn.footingDepthIn / 12;
     rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);
     anchors.footingWidth = { x: fdnFt / 2, y: fdnBot - footD - 0.5 };
@@ -161,13 +408,18 @@ if (!window.DraftProjectPage) {
     rect(fdnFt, fdnBot, CUT_DEPTH_FT - fdnFt, slabFt, 1);
     anchors.slab = { x: CUT_DEPTH_FT * 0.62, y: fdnBot + slabFt + 0.5 };
 
-    // Grade on the exterior side, with soil ticks — GRADE LEVEL is stored
-    // relative to the top of the foundation wall (default 1'-0" below).
+    // GRADE RUNS THE WHOLE WIDTH, DOTTED. Movie, 4 Sep: "for the grade line
+    // just show a dotted line where the grade height is across the full width
+    // of the section". It was a short solid line with soil ticks on the
+    // exterior side only, which stopped at the wall face -- so with a garage
+    // drawn on the other side of that face, grade appeared to stop existing
+    // where the building started.
+    //
+    // A `grade` part carries only its elevation; the painter draws it across
+    // whatever the drawing turns out to be wide, so it spans the garage and
+    // the house without either builder knowing about the other.
     const gradeY = fdnTop + fdn.gradeOffsetFt;
-    line(-roof.overhangFt - 0.6, gradeY, 0, gradeY, 1.5);
-    for (let gx = -roof.overhangFt - 0.5; gx < -0.15; gx += 0.35) {
-      line(gx, gradeY, gx - 0.22, gradeY - 0.26, 0.75);
-    }
+    parts.push({ kind: 'grade', y: gradeY });
     anchors.grade = { x: -roof.overhangFt - 0.6, y: gradeY - 0.55 };
 
     // The cut's break edge: everything stops at 4 ft with a jog.
@@ -186,17 +438,258 @@ if (!window.DraftProjectPage) {
     };
   };
 
+  // ── The attached garage, quasi-attached ─────────────────────────────────
+  //
+  // Movie, 4 Sep: "'quasi attached' only because it will move up and down as
+  // the user enters new heights for it". So the garage is joined to the house
+  // HORIZONTALLY and free VERTICALLY: x = 0 is the shared wall face for both
+  // drawings, and y stays the house's datum -- MAIN FL floor surface at 0 --
+  // with the garage floor sitting at whatever ZONE HEIGHTS says its offset is.
+  // Type a new offset and the whole garage slides against a house that has not
+  // moved, which is the relationship the zone panel's number could not show as
+  // a number.
+  //
+  // Only CUT_DEPTH_FT of it, measured from the house wall outward, which is
+  // the same 4 ft the house section is cut at -- one constant, so the two
+  // drawings can never disagree about how much of a building a section shows.
+  //
+  // X RUNS NEGATIVE HERE, into the garage. The house's own x runs positive
+  // inward from the same face, so the two share an origin and read outward in
+  // opposite directions without either needing to be mirrored at paint time.
+  // A mirrored painter would flip the break line's jog and the footing's
+  // taper the wrong way round, which looks like a drafting error rather than
+  // a transform.
+  const buildGarageSection = values => {
+    const g = values.garage;
+    const parts = [];
+    const anchors = {};
+    const line = (x1, y1, x2, y2, weight = 1.5) => parts.push({ kind: 'line', x1, y1, x2, y2, weight });
+    const rect = (x, y, w, h, weight = 1.5) => parts.push({ kind: 'rect', x, y, w, h, weight });
+
+    const cut = -GARAGE_CUT_FT;                // the break edge, 2 ft out
+    const fdnFt = g.thicknessIn / 12;
+    const slabFt = g.slabIn / 12;
+
+    // The floor surface, on the HOUSE's datum. Everything below hangs off it.
+    const floorY = g.floorOffsetFt;
+    anchors.garageOffset = { x: cut / 2, y: floorY + 0.62 };
+
+    // The slab is INBOARD of the beam -- behind the cut plane, into the page --
+    // so it does not appear as linework here. Its anchor stays, because the
+    // number is still the garage's and the schedule should still carry it.
+    anchors.garageSlab = { x: cut * 0.62, y: floorY - slabFt - 0.5 };
+
+    // TWO FOUNDATIONS, ONE TOP. Movie, 4 Sep: "that should actually be an
+    // option to switch from grade beam to frost wall on these drawings...
+    // add onto the bottom of the grade beam to depth of footing and add
+    // footing if they select frost wall", and "let's make the footings line
+    // up".
+    //
+    // So a frost wall is not a different foundation drawn in a different
+    // place: it is THIS beam continued down until its footing sits at the
+    // same elevation as the house's. The top does not move -- the slab still
+    // bears where it bore -- and nothing above the beam changes.
+    //
+    // The depth is DERIVED, never typed. "Footings line up" is the whole
+    // rule, so the wall spans from the beam top to the top of the house's
+    // footing, whatever those happen to be. A typed frost-wall height would
+    // be a number that agrees with the house until one of them moved.
+    // THE SILL PLATE. Movie, 4 Sep: "look on my drawing see the sill plate,
+    // where is your sill plate?" -- there wasn't one. His spec was "32" conc
+    // and 1.5" sill plate grade beam (33.5")", and I had stored the 32 and
+    // let the section table's TO SILL note add the plate, so the number was
+    // right everywhere it was written and the plate was drawn nowhere. A
+    // dimension that exists only in a footnote is not a part.
+    //
+    // It bears on top of the concrete and the wall bears on IT, so the top of
+    // the stack does not move: 32" of concrete now tops out 1 1/2" lower and
+    // the plate makes the difference up.
+    //
+    // FOR BAND 2, not built yet, and the distinction matters more than the
+    // fact. Movie, 4 Sep: "they line up between house and garage on the
+    // bilevel", then "on the house if the foundation is deep they also line
+    // up on a house but not too often".
+    //
+    // NEITHER IS A RULE. Movie, 4 Sep: "on bilevel could change but not
+    // often, 95% inline", "on bungalow 95% not inline (opposite)".
+    //
+    // So it is one editable number with two different starting points:
+    // a MODIFIED BILEVEL defaults to the offset that puts this sill level
+    // with the house's, a BUNGALOW defaults to whatever the drafter's own
+    // grade gives. Both stay typeable.
+    //
+    // The first version of this note called the bilevel case a RULE and
+    // derived it. That would have been right 95% of the time and impossible
+    // to draw the other 5% -- the shape of defect this project keeps finding,
+    // where a number that is usually correct is welded in so the unusual
+    // drawing cannot be made at all. A 95% answer is a DEFAULT, and a default
+    // is something you can type over.
+    // THE CUT RUNS ALONG THE BEAM, NOT ACROSS IT. Movie, 4 Sep: "you drew the
+    // grade beam sideways it should extend out and meet the section cut line
+    // approx 4-6 out, the 4" void form will also go that way".
+    //
+    // The first version drew the beam as an 8"-wide stub hanging at the house
+    // wall -- the beam seen END ON, which is what you get cutting across it.
+    // This section is cut ALONG the garage's side wall, so the beam runs out
+    // from the house and is cut lengthwise: it reads as a band the full width
+    // of the drawing, ending at the break. The void form does the same,
+    // because it is cast under the beam for its whole run.
+    const frostWall = g.foundation === 'frostwall';
+    const sillFt = SILL_PLATE_IN / 12;
+    const fdnTop = floorY;
+    const concTop = fdnTop - sillFt;
+    const fdnBot = frostWall ? g.houseFootingTopFt : concTop - g.fdnWallHeightFt;
+    rect(cut, fdnBot, GARAGE_CUT_FT, concTop - fdnBot, 2);
+    rect(cut, concTop, GARAGE_CUT_FT, sillFt, 1.5);
+    anchors.garageFdnHeight = { x: cut * 0.5, y: (concTop + fdnBot) / 2 };
+    anchors.garageSill = { x: cut * 0.5, y: concTop + sillFt / 2 };
+
+    let lowest;
+    if (frostWall) {
+      // A footing, the house's own size, its bottom level with the house's.
+      const footD = g.footingDepthIn / 12;
+      rect(cut, fdnBot - footD, GARAGE_CUT_FT, footD, 1.5);
+      anchors.garageFooting = { x: cut * 0.5, y: fdnBot - footD / 2 };
+      lowest = fdnBot - footD;
+    } else {
+      // 4" void form under the beam, between the piles: the beam is cast on
+      // it and the form crushes, so heaving soil lifts nothing.
+      rect(cut, fdnBot - VOID_FORM_IN / 12, GARAGE_CUT_FT, VOID_FORM_IN / 12, 1);
+      anchors.garageVoidForm = { x: cut * 0.5, y: fdnBot - VOID_FORM_IN / 24 };
+      lowest = fdnBot - VOID_FORM_IN / 12;
+    }
+    // NO FOOTING. Movie, 4 Sep: "why does your garage have a footing?" -- it
+    // does not. A grade beam bears on drilled piles at about 8 ft on centre,
+    // over a 4" void form between them; there is no spread footing under it.
+    // The first draft copied the house's foundation pattern, which put a
+    // strip footing under a beam that is deliberately hung off piles.
+    //
+    // The piles themselves are not drawn here either, and that is correct
+    // rather than missing: at 8 ft o.c. and a 2 ft cut, the first pile is
+    // beyond the break. (Movie: "first pile won't be shown too far".)
+
+    // THE GARAGE HAS NO WALL HERE. This is the junction: the house's exterior
+    // wall IS the wall at this cut, and the house section next door draws it.
+    // The first version drew the garage its own studs a few inches away, which
+    // read as two buildings standing beside each other rather than one joined
+    // to the other -- and put a second line where there is one wall.
+    //
+    // The height still matters and still gets an anchor: it is the garage's
+    // clear height AT the house, slab to roof, measured against the shared
+    // face rather than against a wall of its own.
+    const plateY = floorY + g.wallHeightFt;
+    anchors.garageWallHeight = { x: -0.75, y: floorY + g.wallHeightFt / 2 };
+
+    // STRAIGHT, and no grade. Movie: "no roof slop just 2ft of straight roof
+    // until the cut... we want to show where the connection happens". The
+    // slope and the eave belong to a garage; what happens AT the house is a
+    // level run into the wall. And no grade line on this side at all -- the
+    // garage is standing there, so soil ticks would draw earth inside a
+    // building. The house's own section still carries grade, because a
+    // typical exterior wall does have some.
+    // Ceiling, bottom chord, cavity, top chord. The bottom chord's UNDERSIDE
+    // is the ceiling plane -- the face the finish hangs off -- and the 4'-0"
+    // is measured from that plane to the TOP of the top chord, so the cavity
+    // between the two members is 4'-0" less both chords.
+    const chordFt = ROOF_CHORD_IN / 12;
+    const cavityTop = plateY + GARAGE_CAVITY_FT;
+    line(0, plateY, cut, plateY, 2);
+    line(0, plateY + chordFt, cut, plateY + chordFt, 1);
+    line(0, cavityTop - chordFt, cut, cavityTop - chordFt, 1);
+    line(0, cavityTop, cut, cavityTop, 2);
+    anchors.garageCavity = { x: cut * 0.42, y: plateY + GARAGE_CAVITY_FT / 2 };
+
+    const topY = cavityTop;
+    // The pile face, dotted, running past everything above it. It has no
+    // bottom in this drawing on purpose: a pile is drilled to depth per the
+    // soils report, so a drawn end would be a number nobody has.
+    const pileX = cut + PILE_FACE_FROM_CUT_IN / 12;
+    const pileBot = lowest - PILE_BELOW_LOWEST_IN / 12;
+    const pileTop = fdnBot + PILE_TOP_ABOVE_VOID_IN / 12;
+    parts.push({ kind: 'dashed', x1: pileX, y1: pileTop, x2: pileX, y2: pileBot });
+    anchors.garagePile = { x: pileX, y: (pileTop + pileBot) / 2 };
+
+    parts.push({ kind: 'break', x: cut, y1: pileBot - 0.3, y2: topY + 0.3 });
+
+    return {
+      parts,
+      anchors,
+      extents: {
+        minX: cut - 1.1,
+        maxX: 0,      // the shared wall face: the house's own extents carry on
+                      // from here, and the two together are one drawing
+        minY: pileBot - 1.1,
+        maxY: topY + 1.1,
+      },
+    };
+  };
+
+  // ONE VERTICAL MAPPING ACROSS SEVERAL CANVASES.
+  //
+  // The house and its garage are drawn on separate canvases so each can carry
+  // its own schedule, but they are one section: an elevation has to land on
+  // the same pixel row in both, or the garage's offset -- the whole point of
+  // it being free vertically -- reads as a drawing error instead of a height.
+  // So the scale and the y origin are computed once across every section and
+  // handed to each paint call.
+  //
+  // The scale is the SMALLEST that fits them all: each canvas must hold its
+  // own width, and the tallest section must fit the shared height. Taking the
+  // largest, or each canvas's own fit, is what makes two drawings that agree
+  // about feet disagree about pixels.
+  // Movie's mockup, 4 Sep: the house and its garage are ONE section. A single
+  // wall stack, with the garage's floor, beam and roof dying into it -- not
+  // two drawings placed side by side. The first build put them on separate
+  // canvases, which made the junction impossible to draw honestly: the garage
+  // grew a wall of its own a few inches from the house's, because there was
+  // nowhere for one wall to belong to both.
+  //
+  // They already share an origin -- x = 0 is the house's exterior wall face
+  // for both builders, y = 0 is MAIN FL -- so the union of their extents is a
+  // real drawing, not a montage. This returns ONE mapping: shared scale,
+  // shared minX, shared minY.
+  const sectionView = entries => {
+    const ex = entries.map(e => e.section.extents);
+    const minX = Math.min(...ex.map(e => e.minX));
+    const maxX = Math.max(...ex.map(e => e.maxX));
+    const minY = Math.min(...ex.map(e => e.minY));
+    const maxY = Math.max(...ex.map(e => e.maxY));
+    const canvas = entries[0].canvas;
+    return {
+      minX, minY,
+      span: maxX - minX,
+      scale: Math.min(canvas.width / (maxX - minX), canvas.height / (maxY - minY)),
+    };
+  };
+
   // Fit the section into the canvas, paint it, and hand back each anchor in
   // CANVAS pixels so the page can park the matching input beside its part.
-  const paintWallSection = (canvas, values) => {
-    const section = buildWallSection(values);
+  //
+  // `view` is OPTIONAL and omitting it is the old behaviour exactly -- fit
+  // this section to this canvas alone. A single drawing has nothing to line
+  // up with, and a caller that passes nothing should not silently get a
+  // different picture than it got before.
+  // `align` decides where the leftover width goes: 0 packs the drawing
+  // left, 1 right, 0.5 centres it. The garage is pushed RIGHT and the house
+  // LEFT so the two meet at the shared wall face -- they are one building
+  // shown in two canvases, and a gap down the middle would say they are two.
+  const paintSection = (canvas, section, view, align = 0.5, clear = true) => {
     const ctx = canvas.getContext('2d');
     const { extents } = section;
     const w = canvas.width, h = canvas.height;
-    const scale = Math.min(w / (extents.maxX - extents.minX), h / (extents.maxY - extents.minY));
-    const X = x => (x - extents.minX) * scale;
-    const Y = y => h - (y - extents.minY) * scale;
-    ctx.clearRect(0, 0, w, h);
+    const scale = view ? view.scale
+      : Math.min(w / (extents.maxX - extents.minX), h / (extents.maxY - extents.minY));
+    const baseY = view ? view.minY : extents.minY;
+    // Under a shared view every section is placed from the SAME origin, so
+    // the garage lands where it belongs against the house rather than being
+    // fitted to its own box. `align` only spends the leftover width of the
+    // whole drawing, once.
+    const baseX = view ? view.minX : extents.minX;
+    const span = view ? view.span : (extents.maxX - extents.minX);
+    const slack = view ? (w - span * scale) * align : 0;
+    const X = x => (x - baseX) * scale + slack;
+    const Y = y => h - (y - baseY) * scale;
+    if (clear) ctx.clearRect(0, 0, w, h);
     ctx.strokeStyle = '#1d1f20';
     ctx.lineJoin = 'miter';
     section.parts.forEach(part => {
@@ -205,6 +698,33 @@ if (!window.DraftProjectPage) {
         ctx.beginPath(); ctx.moveTo(X(part.x1), Y(part.y1)); ctx.lineTo(X(part.x2), Y(part.y2)); ctx.stroke();
       } else if (part.kind === 'rect') {
         ctx.strokeRect(X(part.x), Y(part.y + part.h), part.w * scale, part.h * scale);
+      } else if (part.kind === 'dashed') {
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(X(part.x1), Y(part.y1));
+        ctx.lineTo(X(part.x2), Y(part.y2));
+        ctx.stroke();
+        ctx.restore();
+      } else if (part.kind === 'grade') {
+        // THE DRAWING PLUS A TAIL, not the whole canvas. It has to cross both
+        // sections -- grade does not stop where a building starts -- but it
+        // was running the full canvas width, which set the page's width from
+        // a dashed line rather than from anything drawn. Movie: "could delete
+        // some grade line width there". The tail is what makes it read as
+        // continuing past the section rather than stopping at it.
+        const tail = 14;
+        const from = view ? slack - tail : 0;
+        const to = view ? slack + span * scale + tail : w;
+        ctx.save();
+        ctx.setLineDash([4, 3]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(Math.max(0, from), Y(part.y));
+        ctx.lineTo(Math.min(w, to), Y(part.y));
+        ctx.stroke();
+        ctx.restore();
       } else if (part.kind === 'break') {
         // The section's cut edge — a drafting break line with a mid jog.
         const midY = (part.y1 + part.y2) / 2;
@@ -224,13 +744,40 @@ if (!window.DraftProjectPage) {
     return { anchors, scale };
   };
 
+  // Several sections, ONE canvas, one coordinate system: the view is computed
+  // across all of them, the canvas is cleared once, and each is painted into
+  // the same mapping. Painting them one at a time with paintSection would have
+  // the second clear the first -- which is the kind of thing that looks like a
+  // painter bug and is really an argument default.
+  const paintSections = (canvas, sections, align = 0.5) => {
+    const view = sectionView(sections.map(section => ({ section, canvas })));
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    const anchors = {};
+    sections.forEach(section => {
+      Object.assign(anchors, paintSection(canvas, section, view, align, false).anchors);
+    });
+    // The view goes back with the anchors so the page can put labels against
+    // the DRAWING's edges rather than the canvas's -- the two are not the same
+    // once the canvas is wider than the section needs.
+    return { anchors, scale: view.scale, view };
+  };
+
   window.DraftProjectPage = Object.freeze({
     ZONE_ROWS,
     CUT_DEPTH_FT,
     GARAGE_BEAM_ABOVE_GRADE_IN,
+    GARAGE_SILL_BELOW_HOUSE_FT,
+    GRADE_MIN_BELOW_CONCRETE_IN,
+    GRADE_BELOW_CONCRETE_IN,
+    FOUNDATION_ATTACHMENTS,
+    ATTACHMENT_LABEL,
+    LADDER_WIDTH_IN,
     SECTION_TABLE_ROWS,
     SECTION_TABLE_ITEMS,
     SECTION_TABLE_DEFAULTS,
+    GARAGE_FOUNDATIONS,
+    GARAGE_FOUNDATION_LABEL,
+    VOID_FORM_IN,
     STUD_LENGTHS_IN,
     HALF_STUD_IN,
     PLATE_STACK_IN,
@@ -239,7 +786,8 @@ if (!window.DraftProjectPage) {
     studInFromWallHeightFt,
     roofHeelIn,
     buildWallSection,
-    paintWallSection,
+    buildGarageSection,
+    paintSections,
   });
 })();
 }
