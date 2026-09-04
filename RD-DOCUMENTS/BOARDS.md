@@ -402,3 +402,39 @@ you run it.** Greenness predicts 48 for `#6a9a57` and 37 for `#557a46`. The run
 returned 48 and 37, and 37 against 37 under both mutations. A tuned threshold
 can never do that, because it is chosen after seeing the data — which is
 exactly why it always agrees, and exactly why it proves nothing.
+
+### 9 · The same fact reads as a guarantee or as a blocker, depending on which you came looking for
+
+Gilligan's, 4 Sep, and he caught it on himself.
+
+He wrote that lifting `wallJoins` into `geometry-2d.js` lets the new page mitre.
+It does not: `wallJoins` keys endpoints by object identity, JSON restores values
+and not references, so on JSON-restored walls the classifier returns an empty
+Map and every corner stays a butt joint — silently, with no error.
+
+The evidence was already in his own harness. One of his checks is named:
+
+> *coincident endpoints in separate objects do not join*
+
+He wrote it to pin a real invariant — it is what stops a garage wall splicing
+into a coincident house wall — and it states the obstacle **exactly as
+precisely**. His words: "I read it as an invariant and not as a blocker because
+I was looking for one and not the other. Same evidence, two readings, and I
+took the one that suited the story I was telling."
+
+That is not carelessness, and calling it that would lose the lesson. A test
+name is a sentence about behaviour; whether it reads as *the system protects
+this* or *the system cannot do that* is supplied by the reader's question, not
+by the sentence. Both readings are correct. Only one of them was load-bearing
+for the claim he was making.
+
+**So: when a fact confirms the thing you are arguing, check what it forbids.**
+The strongest evidence for a design is usually also the sharpest statement of
+its limits, because both come from the same constraint. A guarantee about what
+cannot accidentally happen is a blocker for anyone who needs it to happen on
+purpose.
+
+Cheap to apply, and it fits in the existing habit: when a check supports your
+claim, re-read its name as though you were trying to break the claim instead.
+Twice today that would have caught a wrong sentence before it shipped — this
+one, and `body` documented as permanent when it was only current.
