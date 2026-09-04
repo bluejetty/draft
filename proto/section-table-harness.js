@@ -209,18 +209,18 @@ check('the concrete top sits one sill below the floor package', P => {
 // heel to a line that no longer exists made the check a snapshot of the
 // painter, not a statement about the roof -- so the heel is now read off the
 // top chord where it crosses the wall, and the member gets a check of its own.
-const topChordFace = s => {
-  const plateY = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
-  return s.parts.find(p => p.kind === 'line'
-    && near(p.x1, -ASSEMBLY.roof.overhangFt)
-    && near(p.y1, plateY + ASSEMBLY.roof.fasciaIn / 12));
-};
-const topChordUnder = s => {
-  const plateY = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
-  const face = topChordFace(s);
-  return s.parts.find(p => p.kind === 'line' && p !== face
-    && near(p.x1, -ASSEMBLY.roof.overhangFt) && !near(p.y1, plateY));
-};
+// Three lines leave the eave: the soffit, which stops at the wall, and the
+// chord's two faces, which run to the cut. Of the two that reach the cut the
+// upper is the top surface. Deliberately NOT located by a height above the
+// plate -- a raised heel moves the eave, so a plate-anchored finder reports
+// "no top chord" on a drawing that is right, which is the mistake this file
+// has now made once.
+const chordLines = s => s.parts
+  .filter(p => p.kind === 'line' && near(p.x1, -ASSEMBLY.roof.overhangFt) && near(p.x2, CUT))
+  .sort((a, b) => b.y1 - a.y1);
+const topChordFace = s => chordLines(s)[0];
+const topChordUnder = s => chordLines(s)[1];
+const CUT = 4;
 const atX = (l, x) => l.y1 + (x - l.x1) * (l.y2 - l.y1) / (l.x2 - l.x1);
 
 check('the roof stands the reported heel above the plate at the wall face', P => {
@@ -245,6 +245,24 @@ check('the heel web stands 3 1/2\" in and meets both chords', P => {
   if (webs.length !== 1) return [`${webs.length} verticals 3 1/2" in from the outside`, 'exactly one'];
   if (!under) return ['no top chord underside to meet', 'exactly one'];
   return [near(webs[0].y1, plateY + chordFt) && near(webs[0].y2, atX(under, chordFt)), true];
+});
+// THE OVERRIDE, WITH THE CONTROL THAT MUST MOVE BESIDE IT. Movie, 5 Sep:
+// the heel is calculated, and typeable. A check that only proved the derived
+// case still draws would pass on a build that ignored the override entirely,
+// so the two are asserted together: null draws the calculation, and a number
+// lifts the eave off the plate by exactly the difference -- a raised heel,
+// not a fatter fascia.
+check('a null heel draws the calculation, and a raised heel lifts the eave', P => {
+  const R = ASSEMBLY.roof;
+  const plateY = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
+  const derived = P.roofHeelIn(R.fasciaIn, R.overhangFt, R.pitch);
+  const eaveY = a => {
+    const chord = topChordFace(P.buildWallSection({ ...ASSEMBLY, roof: { ...R, heelIn: a } }));
+    return chord ? chord.y1 - R.fasciaIn / 12 : NaN;
+  };
+  const flat = eaveY(null);
+  const raised = eaveY(derived + 6);
+  return [near(flat, plateY) && near(raised - flat, 0.5), true];
 });
 check('the plate is the two walls plus the floor between them', P => {
   const s = section(P);
@@ -316,7 +334,7 @@ const MUTATIONS = [
   ['the bilevel zone row goes live before the feature does',
     s => s.replace("{ id: 'bilevel', label: 'BILEVEL', reserved: true }", "{ id: 'bilevel', label: 'BILEVEL', reserved: false }")],
   ['the roof rises at pitch per foot instead of pitch per twelve',
-    s => s.replace('const riseAt = x => fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);', 'const riseAt = x => fasciaFt + (roof.overhangFt + x) * roof.pitch;')],
+    s => s.replace('(roof.overhangFt + x) * (roof.pitch / 12);', '(roof.overhangFt + x) * roof.pitch;')],
   ['the foundation forgets the floor it carries',
     s => s.replace('const fdnTop = -mainDepthFt;', 'const fdnTop = 0;')],
   ['the heel forgets the overhang',
@@ -337,6 +355,13 @@ const MUTATIONS = [
   ['the heel web is dropped a flat 3 1/2" and stops short of the top chord',
     s => s.replace('ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - chordDropFt, 1);',
       'ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - ROOF_CHORD_IN / 12, 1);')],
+  ['a raised heel is ignored and the roof stays on the plate',
+    s => s.replace('const heelLiftFt = roof.heelIn == null ? 0', 'const heelLiftFt = true ? 0')],
+  // The plausible misreading of "raise the heel": deepen the board instead of
+  // lifting the roof. It puts the top chord in the right place and leaves the
+  // soffit sitting on the plate, so only a check that watches the EAVE sees it.
+  ['a raised heel fattens the fascia instead of lifting the roof',
+    s => s.replace('const eaveY = plateY + heelLiftFt;', 'const eaveY = plateY;')],
   ['the footing is hung off the wall face instead of centred',
     s => s.replace('rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);', 'rect(0, fdnBot - footD, footW, footD, 1.5);')],
 ];

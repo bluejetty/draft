@@ -73,7 +73,15 @@ if (!window.DraftProjectPage) {
   const SECTION_TABLE_ITEMS = Object.freeze([
     item('pitch', 'PITCH :12', 'pitch', 'roofPitch', ALL_TYPES),
     item('overhang', 'OVERHANG', 'ftin', 'roofOverhangFt', ALL_TYPES),
-    item('heel', 'ROOF HEEL', 'derived', null, ALL_TYPES),
+    // A CALCULATED NUMBER YOU CAN STILL TYPE OVER. Movie, 5 Sep: "we should
+    // actually be able to change that -- is it possible to put in the
+    // calculated number but allow them to change it". The default is the
+    // fascia plus the rise across the overhang and it is right nearly always,
+    // which is exactly why it must not be welded in: a raised heel is ordered
+    // by the truss plant, not derived, and a derived-only cell makes that
+    // drawing impossible to draw. Null here means DERIVE; a number is the
+    // override.
+    item('heel', 'ROOF HEEL', 'in', 'roofHeelIn', ALL_TYPES),
     item('upperStud', '2ND FL STUD', 'stud', 'upperWallHeightFt', ['house', 'modifiedBilevel']),
     item('upperJoists', '2ND FL JOISTS', 'in', 'upperJoistDepthIn', ['house', 'modifiedBilevel']),
     item('mainStud', 'MAIN FL STUD', 'stud', 'mainWallHeightFt', ALL_TYPES),
@@ -352,9 +360,19 @@ if (!window.DraftProjectPage) {
     // face is fascia depth plus the rise gained across the overhang — the
     // same rule the roof tool documents.
     const fasciaFt = roof.fasciaIn / 12;
-    const riseAt = x => fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);
-    rect(-roof.overhangFt - 0.1, plateY, 0.1, fasciaFt, 1.5);   // fascia board
-    line(-roof.overhangFt, plateY, 0, plateY, 1);               // soffit
+    // A RAISED HEEL LIFTS THE ROOF; IT DOES NOT FATTEN THE FASCIA. By default
+    // the fascia's bottom is level with the top of the top plate (Movie,
+    // 5 Sep) and the heel comes out at fascia + rise. Type a bigger heel and
+    // the whole roof -- chords, fascia, soffit -- rises by the difference,
+    // which is what a raised-heel truss actually does: the soffit line goes
+    // up and the extra room over the plate is what the insulation goes in.
+    // The fascia stays a 2x6, because it is a board.
+    const heelLiftFt = roof.heelIn == null ? 0
+      : (roof.heelIn - roofHeelIn(roof.fasciaIn, roof.overhangFt, roof.pitch)) / 12;
+    const eaveY = plateY + heelLiftFt;
+    const riseAt = x => heelLiftFt + fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);
+    rect(-roof.overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);    // fascia board
+    line(-roof.overhangFt, eaveY, 0, eaveY, 1);                 // soffit
     // TWO LINES, NOT ONE. The offset is PERPENDICULAR to the slope -- a chord
     // is 3 1/2" thick measured across itself, not measured vertically -- so
     // the vertical drop between the two lines grows with the pitch. At 4:12
@@ -363,18 +381,18 @@ if (!window.DraftProjectPage) {
     // gets thinner as the roof gets steeper.
     const chordDropFt = (ROOF_CHORD_IN / 12)
       * Math.hypot(1, roof.pitch / 12);
-    line(-roof.overhangFt, plateY + fasciaFt, CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT), 2);
+    line(-roof.overhangFt, eaveY + fasciaFt, CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT), 2);
     // ONE UNBROKEN UNDERSIDE, out to the eave. Movie: "the top chord extends
     // to the eave". It had been drawn in two pieces with a gap at the wall,
     // which is what the top PLATE does to a rafter -- but this is a truss:
     // the top chord passes over the wall in one piece and the heel web below
     // it carries the load down. Breaking it drew a rafter's detail on a
     // truss.
-    line(-roof.overhangFt, plateY + fasciaFt - chordDropFt,
+    line(-roof.overhangFt, eaveY + fasciaFt - chordDropFt,
       CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT) - chordDropFt, 1);
     anchors.pitch = { x: CUT_DEPTH_FT * 0.45, y: plateY + riseAt(CUT_DEPTH_FT * 0.45) + 0.55 };
-    anchors.overhang = { x: -roof.overhangFt / 2, y: plateY - 0.55 };
-    anchors.fascia = { x: -roof.overhangFt - 0.55, y: plateY + fasciaFt / 2 };
+    anchors.overhang = { x: -roof.overhangFt / 2, y: eaveY - 0.55 };
+    anchors.fascia = { x: -roof.overhangFt - 0.55, y: eaveY + fasciaFt / 2 };
     // Movie, 4 Sep: the heel reads UNDER the overhang and OVER the 2nd floor
     // wall. Since a label now keeps only its height, the heel sitting at its
     // own mid-height put it above the fascia and overhang -- above the things
@@ -384,7 +402,7 @@ if (!window.DraftProjectPage) {
     // reading order -- and it has to match the schedule beside it. Movie
     // wants PITCH / HEEL / FASCIA / OVERHANG, so the heel sits between the
     // pitch above it and the fascia below.
-    anchors.heel = { x: 0.45, y: plateY + fasciaFt / 2 + 0.8 };
+    anchors.heel = { x: 0.45, y: eaveY + fasciaFt / 2 + 0.8 };
 
     // The ceiling, and the truss over it. Movie, 4 Sep: first "you can add a
     // roof area, just some separation line that says attic space maybe", then

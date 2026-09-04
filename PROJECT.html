@@ -278,6 +278,12 @@
       const floorLevels = levels.filter(level => ![1, 7, 8].includes(level.id))
         .sort((a, b) => a.elev - b.elev);
       let roofPitch = positive(drawing?.roofPitch, 4);
+      // NULL MEANS DERIVE, A NUMBER IS AN OVERRIDE -- the same contract the
+      // garage offset and the grade line already keep. Read through
+      // roofHeelIn() below, never directly, so that a re-normalise cannot
+      // turn "derive" into a typed-in coincidence.
+      let roofHeelOverrideIn = Number.isFinite(Number(drawing?.roofHeelIn))
+        && drawing?.roofHeelIn != null ? Number(drawing.roofHeelIn) : null;
       let roofOverhang = positive(drawing?.roofOverhang, 2);
       let activeWallType = WALL_TYPE_VIEW[drawing?.activeWallType] ? drawing.activeWallType : 'stud_2x6';
       // A page-owned key of its own, not a section-table cell: the table's
@@ -322,6 +328,7 @@
         levelAssemblies,
         roofPitch,
         roofOverhang,
+        roofHeelIn: roofHeelOverrideIn,
         activeWallType,
         foundationAttachment,
       });
@@ -446,7 +453,7 @@
             attachment: attachmentChoice(),
           };
         })(),
-        roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN },
+        roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN, heelIn: roofHeelIn() },
         wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
       });
 
@@ -492,7 +499,7 @@
       // grouped them by HOW they are produced rather than by what they
       // describe. A roof is four numbers and they belong together, typed or
       // not. The drawing's labels take the same order below.
-      addChip('heel', 'HEEL', () => fmt.formatArchitecturalInches(ROOF_FASCIA_IN + roofOverhang * roofPitch));
+      addChip('heel', 'HEEL', () => fmt.formatArchitecturalInches(roofHeelIn()));
       addChip('fascia', 'FASCIA', () => inchesOnly(ROOF_FASCIA_IN));
       addInput('overhang', 'OVERHANG', {
         name: 'overhang',
@@ -1158,6 +1165,12 @@
           get: () => roofOverhang,
           set: value => { roofOverhang = value; },
         },
+        // Clearing the box stores null, which puts the cell back on the
+        // calculation -- the only way back, so it has to stay reachable.
+        roofHeelIn: {
+          get: () => roofHeelIn(),
+          set: value => { roofHeelOverrideIn = value; },
+        },
         mainWallHeightFt: {
           get: () => mainFloor() && assembly(mainFloor().id).wallHeightFt,
           set: value => setAssembly(mainFloor().id, 'wallHeightFt', value),
@@ -1248,12 +1261,6 @@
       // stud reads back the wall it makes, a foundation wall the height to
       // the top of its sill (plus the wood fill where the type has one).
       const derivedText = (rowId, itemId) => {
-        if (itemId === 'heel') {
-          const pitch = cellValue(rowId, 'roofPitch').value;
-          const overhang = cellValue(rowId, 'roofOverhangFt').value;
-          return fmt.formatArchitecturalInches(
-            projectPage.roofHeelIn(ROOF_FASCIA_IN, overhang, pitch));
-        }
         // What you stand under down there: the pour and everything framed on
         // it, less the slab that buries the bottom of it.
         if (itemId === 'basementClg') {
@@ -1268,6 +1275,12 @@
       };
       const cellNote = (rowId, item) => {
         if (item.unit === 'stud') return ftIn(cellValue(rowId, item.field).value);
+        // Says which of the two a heel is. Without it the calculated number
+        // and a typed one look identical in the box, and nobody can tell
+        // whether the cell is still following the pitch or has stopped.
+        if (item.field === 'roofHeelIn') {
+          return rowId === 'house' && roofHeelOverrideIn == null ? 'CALCULATED' : 'RAISED';
+        }
         // A fill wall doesn't get to pick its height — the pour and the floor
         // above already fixed it — so it reports the stud it wants cut to.
         if (item.field === 'woodFillHeightFt') {
@@ -1409,6 +1422,17 @@
       // every drawing anyone happens to open, and is wrong on half of them.
       // When NEW-5 lands, this gains its second branch and nothing else moves.
       // (Skipper's catch.)
+      // THE HEEL IS CALCULATED AND TYPEABLE. Movie, 5 Sep: a 2x6 fascia with
+      // its bottom level with the top of the top plate, and the roof climbing
+      // at the pitch across the eave overhang -- 13 1/2" at the office
+      // default. Right nearly always, which is why it is a DEFAULT and not a
+      // rule: a raised heel is ordered from the truss plant, and a cell that
+      // could only ever show the calculation would make that drawing
+      // impossible.
+      const derivedRoofHeelIn = () =>
+        projectPage.roofHeelIn(ROOF_FASCIA_IN, roofOverhang, roofPitch);
+      const roofHeelIn = () => roofHeelOverrideIn ?? derivedRoofHeelIn();
+
       const derivedAttachedOffsetFt = () =>
         houseSillFt() - projectPage.GARAGE_SILL_BELOW_HOUSE_FT;
       const attachedOffsetFt = () =>
