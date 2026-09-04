@@ -542,7 +542,7 @@ claim, re-read its name as though you were trying to break the claim instead.
 Twice today that would have caught a wrong sentence before it shipped — this
 one, and `body` documented as permanent when it was only current.
 
-### 10 · A surviving mutant is either a coverage gap or a mutation that changed nothing
+### 10 · A surviving mutant is one of three things, and only one is a coverage gap
 
 Gilligan's, 4 Sep, caught on his own audit of the `wallJoins` harness — and it
 governs the technique this repo leans on hardest, so it earns a rule of its
@@ -557,13 +557,21 @@ that changes nothing reports a gap that is not there.** `< 2` is the one that
 discriminates, and under it the real gaps appeared.
 
 Mutation testing is an instrument, and this rule is the instrument reading
-itself — the day's theme once more. A surviving mutant licenses exactly one of
-two conclusions, and they call for opposite work:
+itself — the day's theme once more. A surviving mutant licenses one of THREE
+conclusions, and they call for different work:
 
 - **the tests are weak** → write the check that distinguishes them
-- **the mutant is inert** → write a different mutant; the tests were fine
+- **the mutant is inert** → write a harsher mutant; the tests were fine
+- **the property is guarded twice** → mutate both guards together; both the
+  tests and the mutant were fine (the third case, below)
 
-Telling them apart is one step: **show that the mutated code produces a
+The heading of this rule read "either / or" for several hours after the third
+case was added underneath it, which is the same defect as the `corner`-vs-
+`miter` entry one file over: a confident summary nobody re-read against the
+body it summarises. A reader who stopped at the heading got a binary and never
+reached the case that is hardest to diagnose.
+
+Telling the first two apart is one step: **show that the mutated code produces a
 different value on some input before believing anything about the tests.**
 
 And that step has a companion, which is Gilligan's amendment to the first
