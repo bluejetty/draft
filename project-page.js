@@ -193,16 +193,20 @@ if (!window.DraftProjectPage) {
   // this comment: "the typical is the calculated one where the fascia bottom
   // is equal to the top of the top plate". So the usual drawing does not type
   // a heel at all -- it takes fascia + rise, 13 1/2" at the office default,
-  // and the box reads CALCULATED. Raising it is the exception, and Movie's
-  // 30" ("it wouldn't be increased more than 30" in most cases") describes
-  // how far that exception usually goes, not what a heel usually is.
+  // and the box reads CALCULATED. Raising it at all is the exception.
   //
-  // THREE NUMBERS, AND ONLY ONE OF THEM REFUSES ANYTHING. 13 1/2" is what the
-  // arithmetic gives, 30" is where the exception tops out in practice, 20' is
-  // the typo catch. Written down together because they get confused in one
-  // direction: someone reads 20' as a design target, or trims the ceiling
-  // back to a number describing typical practice -- which would turn a 95%
-  // answer into a rule and make the unusual drawing impossible to draw.
+  // THREE NUMBERS ON A SCALE OF HOW UNUSUAL, AND ONLY THE LAST ONE REFUSES
+  // ANYTHING. 13 1/2" is what the arithmetic gives and what nearly every
+  // drawing uses. 30" is already EXTREME -- Movie, 5 Sep: "30" not typical it
+  // is extreme but less extreme than 20ft" -- the outer edge of what somebody
+  // would really build, reached by choice and not often. 20' is past absurd,
+  // and that is its whole job: a ceiling only earns its place by never
+  // arguing with a real drawing, so it is set where no real drawing reaches.
+  //
+  // The confusion runs one way, which is why all three are written down: a
+  // number describing what people actually do gets mistaken for a limit, the
+  // ceiling is trimmed back to it, and the unusual drawing becomes impossible
+  // to draw. Neither 13 1/2" nor 30" bounds anything here, and neither should.
   const ROOF_HEEL_MIN_IN = 5.5;
   const ROOF_HEEL_MAX_IN = 20 * 12;
   const roofHeelInBand = inches => Number.isFinite(inches)
