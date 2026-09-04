@@ -101,6 +101,48 @@ for (const theme of P.THEMES) {
     const washed = P.contrast(v['draw-floor-edge'], v['draw-floor'], v['surface-page']);
     check(`${theme}/${mode}  draw-floor-edge over its own wash`, washed >= 3.0,
       `${washed.toFixed(2)} (min 3.0)`);
+
+    // draw-dim is the one drawing role that is TEXT as well as line, so it
+    // answers to 4.5 (WCAG AA body), not the 3.0 above -- and to it TWICE.
+    // drawDimension2D paints the witness lines and arrows on the page, then
+    // fills a plate behind the label and paints the string on THAT. Two
+    // grounds, one colour: asserting only the page would pass a colour that
+    // vanishes on the plate, and vice versa. The plate is surface-panel,
+    // which carries alpha, so the page has to be composited under it.
+    const dimOnPage = P.contrast(v['draw-dim'], v['surface-page']);
+    const dimOnPlate = P.contrast(v['draw-dim'], v['surface-panel'], v['surface-page']);
+    check(`${theme}/${mode}  draw-dim on the page (witness lines)`,
+      dimOnPage >= 4.5, `${dimOnPage.toFixed(2)} (min 4.5)`);
+    check(`${theme}/${mode}  draw-dim on its label plate (the string)`,
+      dimOnPlate >= 4.5, `${dimOnPlate.toFixed(2)} (min 4.5)`);
+    // THE GROUND THE WITNESS LINES ARE USUALLY ACTUALLY ON. A dimension
+    // measures something, so in a real drawing it is nearly always drawn
+    // across a floor, not across bare page. Asserting only the page measures
+    // the easy case: the wash lifts the ground toward the ink and takes night
+    // from 5.15 to 4.51.
+    //
+    // 3.0, not 4.5, and that is not a softened bar -- it is the bar that
+    // applies. What crosses the wash is LINE work; the string is on the plate
+    // above, which is asserted at 4.5. Demanding 4.5 here would assert a
+    // WCAG rule against something it does not govern, and it would ride on a
+    // 0.01 margin that any tweak to the floor wash flips red for no real
+    // legibility reason.
+    const dimOnFloor = P.contrast(v['draw-dim'], v['draw-floor'], v['surface-page']);
+    check(`${theme}/${mode}  draw-dim over a floor (witness lines)`,
+      dimOnFloor >= 3.0, `${dimOnFloor.toFixed(2)} (min 3.0)`);
+
+    // The datum marker is a ring and crosshairs -- non-text, so 3.0. Both
+    // grounds again, and the wash is the one that matters: a datum is the
+    // drafter's FIRST CLICK, which normally lands on the building, so the
+    // marker sits on a slab far more often than on bare page. render-2d.js
+    // hardcoded #557a46 for this and it measured 2.94 over the night wash --
+    // under the floor, in the exact place the marker usually lands.
+    const origOnPage = P.contrast(v['draw-origin'], v['surface-page']);
+    const origOnFloor = P.contrast(v['draw-origin'], v['draw-floor'], v['surface-page']);
+    check(`${theme}/${mode}  draw-origin on the page`,
+      origOnPage >= 3.0, `${origOnPage.toFixed(2)} (min 3.0)`);
+    check(`${theme}/${mode}  draw-origin over a floor`,
+      origOnFloor >= 3.0, `${origOnFloor.toFixed(2)} (min 3.0)`);
   }
 }
 

@@ -681,6 +681,160 @@ worse than a butt joint.
 
 ---
 
+### OUTLINE — the object, and the word four other things borrow
+
+Earned the hard way. Skipper said the next painter to wire was `drawOutlines2D`
+and Movie read it as the outline of a fixture: *"if you are asking if the
+fixtures like toilets have outlines i don't think so."* He is right that they
+don't — and the misreading is the entry, because it is the obvious reading.
+
+An **OUTLINE** is one specific object: the closed footprint of the house or a
+garage, mastered on the BONEYARD and copied down to each level (`masterId`,
+`srcId` per point). It carries fenestration `marks`, a `garage` field of
+`attached` / `detached` / absent, and it is what `drawOutlines2D` paints. 60
+uses of `outlines` in MODEL.dc.html.
+
+The trouble is that "outline" is also plain English for *any closed run of
+points*, and the codebase uses it that way for four other things — every one of
+which has its own real name already:
+
+| said as | is actually | its own name |
+|---|---|---|
+| "closed construction outlines" (5 sites) | the drafter's scratch geometry | **SHAPE** |
+| "free-form closed outlines cut from a host floor" (2 sites) | a hole in a slab | **surface opening** |
+| "closed outlines owned by a whole level" | the roof's plan extent | **roof footprint** |
+| "the slab outline and its corner handles" (`palette.js:53`) | a floor's own edge | **slab edge** |
+
+So this is not a homonym fight and renaming is the wrong tool, exactly as with
+LAYOUT and VIEW. OUTLINE is a real named type with a painter, a normaliser and
+a master/copy relationship; the other four are English descriptions that
+happened to reach for the same noun.
+
+**Ruling: nobody keeps the word. The object becomes a BONEFRAME.**
+
+Skipper's first answer was that the object should keep "outline" and the other
+four should stop borrowing it. Movie's was better and it is worth saying why,
+because it generalises: asking *which of five senses keeps the contested word*
+accepts a premise it should have rejected. Every one of the other four already
+has a real name. So does the object, now. Nobody needs "outline" at all, and a
+word nobody needs is a word that cannot be misread.
+
+- The object is a **BONEFRAME** — the closed footprint of the house or a
+  garage, mastered on the BONEYARD and copied to each level.
+- The four borrowings say **shape**, **surface opening**, **roof footprint**
+  and **slab edge**. All four already exist as terms; this costs only the
+  habit.
+
+### BONEFRAME is the object; WIREFRAME is a view of it
+
+Skipper's first draft of this entry rejected WIREFRAME and the argument was
+wrong. It said the two collide because "both senses describe the same building,
+so context never separates them." They describe the same building because
+**they are the same object.** `HOW-THE-BONEYARD-WORKS.md:42` says the ISO
+window shows "each floor level's **outline** in its own colour" — the wireframe
+is the boneframes, drawn standing up. One thing and a view of it is not a
+collision, and demanding two unrelated words for them would have been the
+error.
+
+So the split is the one this dictionary already draws for LAYER and VIEW:
+
+- **BONEFRAME** — the *object*. A closed footprint: one MASTER BONEFRAME on the
+  BONEYARD, one copy per level, each copy's points linked back by `srcId`.
+- **WIREFRAME** — a *view* of them. The ISO 3D window, the stack seen standing
+  up, edges only. A camera angle and a render pass, not a stored thing.
+
+Qualify the object by scope, which is what Movie was reaching for with "MAIN
+WIREFRAME" and what `DEEP-CLEANUP-ITEMS.md:78` already proposed as MASTER
+WIREFRAME / MAIN FLOOR WIREFRAME: say **MASTER BONEFRAME** and **MAIN FLOOR
+BONEFRAME**. The qualifier names the scope; the noun names the thing.
+
+The one word that goes away is **frame** on its own, and **outline** with it.
+BONEFRAME is unused anywhere in the repo, so it cannot be misread; and it keeps
+the bone vocabulary SPEC-skins §6 holds in the code permanently. A frame of
+bones, on the boneyard.
+
+Movie's reason for wanting a distinct word, 3 Sep: *"makes it easy not to
+messup."* That is the whole test. A term earns its keep by being hard to say
+wrong, not by being precise on paper.
+
+### MASTER means controlling, not lowest
+
+Asked within a minute of agreeing the name, which is how fast a good term can
+still be misread: *"is the master boneframe the one under the foundation of the
+main floor boneframe"* — then, immediately, the right answer: *"i thought the
+master was the one that controls the other boneframes most."*
+
+The second is correct. **MASTER is an inheritance word, not a position word.**
+
+- A BONEYARD shelf is `{ id, name }` and nothing else (`drawing-format.js`,
+  `boneyardShelves`). **There is no elevation field**, so there is nothing for
+  "under" to refer to. The BONEYARD is storage, not a storey.
+- Every level holds a copy. Each copy's points carry `srcId` back to the master
+  point they came from.
+- Edit the MASTER and the linked points move **on every level**. Edit a level
+  copy and it stays local — that point takes an `offX`/`offZ` offset from its
+  master. The app says this itself when an outline closes
+  (`MODEL.dc.html:11142`).
+
+So a MASTER BONEFRAME sits nowhere. It is not below the foundation, not above
+the roof, not in the stack at all.
+
+Which raises the next question, and Movie asked it: *"its alot like the
+foundation boneframe — we might not even need the one in the boneyard but why
+not."* They do look alike; a master and a level copy are the same shape. They
+differ in **lifetime and authority**, and both differences bite:
+
+- **A level can be deleted.** `_deleteLevel` guards only `levels.length <= 1`
+  — nothing protects FOUNDATION in particular. A master living on a level is
+  one that can be deleted out from under every other level. This is already
+  settled in the code: `_boneyardOutlines` is deliberately exempted from level
+  deletion, where fenestrations, fixtures, stairs, notes and roomTags are not,
+  with the reason stated — *"the BONEYARD master is storage, not a level."*
+- **Two gestures must stay distinguishable.** "Edit the master, move it
+  everywhere" and "edit this level, stay here" are only different operations
+  while the master is outside the stack. Make it the foundation's copy and
+  editing the foundation silently moves every floor — the local edit is gone,
+  and it is the more common one.
+
+So the BONEYARD master is not redundancy. It is the thing that makes a local
+edit safe.
+
+**And the file gives the wrong impression, in as many words.** Two comments
+disagree:
+
+| `MODEL.dc.html:1736` | "never-printing shelf storage **snug under the level stack**" |
+| `MODEL.dc.html:13469` | "shelf storage **outside the level stack**" |
+
+13469 is right; 1736 is the one that produced the question above. It should
+lose "snug under the level stack" for "outside the level stack — a shelf has no
+elevation". Left for whoever is next in that file for another reason; it is a
+comment, and MODEL.dc.html is under a lock.
+
+This is worth more than a comment fix, because it is the general shape: **a
+term can be exactly right and still mislead through a neighbouring sentence.**
+The dictionary settles what a word means. It cannot settle what a stale comment
+implies, and the comment is what people read first.
+
+### What this rename can and cannot touch
+
+`boneyardOutlines` is a **persisted key**, serialized at `MODEL.dc.html:3108`,
+and old drawings open forever. So the saved file keeps `outlines` and
+`boneyardOutlines` under those names regardless of what anything else calls
+them.
+
+That splits the work, and the cheap half is the half that matters:
+
+1. **Speech and prose — now, free.** This is what the dictionary is for:
+   Movie, 3 Sep, on why it exists at all — *"mostly for me or whoever is
+   talking to you to use the correct terms."*
+2. **Identifiers — later, in memory only**, stopping at the serializer with a
+   comment at the seam. Already logged as DEEP-CLEANUP item 7, to be done by
+   whoever is next in that code for another reason. On its own it is a large
+   diff that changes no behaviour.
+
+(Item 7 proposed `_masterWireframe`. Corrected to `_masterBoneframe` — it had
+not measured the WIREFRAME collision above.)
+
 ## Proposed renames
 
 Nothing here is done yet. Each is a rename, not a behaviour change.
