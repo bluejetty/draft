@@ -483,6 +483,17 @@
           return false;
         },
       });
+      // PITCH / HEEL / FASCIA / OVERHANG, in that order. Movie, 4 Sep:
+      // "order them PITCH :12 / HEEL / FASCIA / OVERHANG in that order for
+      // the identification titles and for the measurement input text area",
+      // "move heel and fascia up", "on both house and garage".
+      //
+      // The two derived ones sat at the bottom with the other chips, which
+      // grouped them by HOW they are produced rather than by what they
+      // describe. A roof is four numbers and they belong together, typed or
+      // not. The drawing's labels take the same order below.
+      addChip('heel', 'HEEL', () => fmt.formatArchitecturalInches(ROOF_FASCIA_IN + roofOverhang * roofPitch));
+      addChip('fascia', 'FASCIA', () => inchesOnly(ROOF_FASCIA_IN));
       addInput('overhang', 'OVERHANG', {
         name: 'overhang',
         get: () => ftIn(roofOverhang),
@@ -579,8 +590,6 @@
           return false;
         },
       });
-      addChip('fascia', 'FASCIA', () => inchesOnly(ROOF_FASCIA_IN));
-      addChip('heel', 'HEEL', () => fmt.formatArchitecturalInches(ROOF_FASCIA_IN + roofOverhang * roofPitch));
       addChip('fdnThickness', 'FDN', () => inchesOnly(fdnThicknessIn()));
       addInput('grade', 'GRADE OFF FDN TOP', {
         name: 'grade',
@@ -640,6 +649,9 @@
       };
       const fullName = control => FULL_NAME[control.key]
         || control.tag.replace('FL JST', 'joist depth').replace('WALL HT', 'wall height');
+
+      const nameOf = control =>
+        typeof control.name === 'function' ? control.name() : control.name;
 
       const schedRow = (host, key, name, valueEl) => {
         const row = document.createElement('div');
@@ -813,6 +825,54 @@
 
       const garageFoundation = () =>
         sectionTable.rows.attachedGarage?.garageFoundation || 'gradebeam';
+      const garageCell = (key, name, field, show, parse, offSection) => addGarage(key, name,
+        () => show(cellValue('attachedGarage', field).value),
+        text => {
+          const value = parse(text);
+          if (value == null) return false;
+          writeCell('attachedGarage', field, value);
+          return true;
+        }, undefined, offSection);
+
+      // THE GARAGE'S ROOF BLOCK, mirroring the house's. Movie, 4 Sep: "we
+      // should make sure there is a roof entry area for the attached garages
+      // too... an area to add roof pitch / information", then "roof heel",
+      // "eave overhang", "should be similar to the roof information for
+      // house". So the same three the house carries, named the same way.
+      //
+      // I had REMOVED the garage's pitch row when its roof went level, which
+      // was the wrong read: the roof is pitched, the cut just runs along the
+      // slope so none of it shows here. A number you cannot see in one view
+      // is still the drafter's to set -- it feeds the elevations and the roof
+      // plan -- so the rows show with no grey label rather than not at all.
+      //
+      // All three read and write the ATTACHED GARAGE row of the table below:
+      // one pitch for the garage, not two that agree until someone edits one.
+      garageCell('garagePitch', 'Garage roof pitch : 12', 'roofPitch', String, text => {
+        const value = Number(text);
+        return Number.isFinite(value) && value > 0 && value <= 24 ? value : null;
+      }, true);
+      // Derived like the house's: fascia plus the rise gained across the
+      // overhang, through the module's own rule rather than restated here.
+      addGarage('garageHeel', 'Garage roof heel',
+        () => fmt.formatArchitecturalInches(projectPage.roofHeelIn(
+          ROOF_FASCIA_IN,
+          cellValue('attachedGarage', 'roofOverhangFt').value,
+          cellValue('attachedGarage', 'roofPitch').value)),
+        () => false, undefined, true);
+      // The garage had no fascia row at all. Movie asked for the four in one
+      // order "on both house and garage", and a set of four with one missing
+      // is not the same set -- so it gains the row the house already had.
+      addGarage('garageFascia', 'Garage fascia depth',
+        () => inchesOnly(ROOF_FASCIA_IN), () => false, undefined, true);
+      garageCell('garageOverhang', 'Garage eave overhang', 'roofOverhangFt', ftIn,
+        text => { const v = parseFtIn(text); return v != null && v <= 6 ? v : null; }, true);
+
+      garageCell('garageWallHeight', 'Garage wall height', 'mainWallHeightFt', ftIn, parseFtIn);
+      // THE FOUNDATION BLOCK, read top down like the drawing. Movie, 4 Sep:
+      // "the 2 up top GARAGE FOUNDATION and GARAGE FLOOR OFF MAIN, put over
+      // the SILL PLATE (on top), bring them down." At the top of the list
+      // they were the first thing read and the last thing drawn.
       addGarage('garageFoundationType', 'Garage foundation',
         garageFoundation,
         value => { writeCell('attachedGarage', 'garageFoundation', value); return true; },
@@ -847,51 +907,26 @@
             zones: { ...zoneHeights.zones, attachedGarage: { offsetFt: value } } });
           return true;
         });
-      const garageCell = (key, name, field, show, parse, offSection) => addGarage(key, name,
-        () => show(cellValue('attachedGarage', field).value),
-        text => {
-          const value = parse(text);
-          if (value == null) return false;
-          writeCell('attachedGarage', field, value);
-          return true;
-        }, undefined, offSection);
 
-      // THE GARAGE'S ROOF BLOCK, mirroring the house's. Movie, 4 Sep: "we
-      // should make sure there is a roof entry area for the attached garages
-      // too... an area to add roof pitch / information", then "roof heel",
-      // "eave overhang", "should be similar to the roof information for
-      // house". So the same three the house carries, named the same way.
+      addGarage('garageSill', 'Sill plate on the beam',
+        () => inchesOnly(projectPage.SILL_PLATE_IN), () => false);
+      // NOT "FOUNDATION WALL". Movie: "call it GARAGE GRADE BEAM HEIGHT, not
+      // 'foundation wall'". With the sill directly above it the two rows read
+      // as the 33 1/2" stack, which is the reading the old wording invited
+      // people to get wrong.
       //
-      // I had REMOVED the garage's pitch row when its roof went level, which
-      // was the wrong read: the roof is pitched, the cut just runs along the
-      // slope so none of it shows here. A number you cannot see in one view
-      // is still the drafter's to set -- it feeds the elevations and the roof
-      // plan -- so the rows show with no grey label rather than not at all.
-      //
-      // All three read and write the ATTACHED GARAGE row of the table below:
-      // one pitch for the garage, not two that agree until someone edits one.
-      garageCell('garagePitch', 'Garage roof pitch : 12', 'roofPitch', String, text => {
-        const value = Number(text);
-        return Number.isFinite(value) && value > 0 && value <= 24 ? value : null;
-      }, true);
-      garageCell('garageOverhang', 'Garage eave overhang', 'roofOverhangFt', ftIn,
-        text => { const v = parseFtIn(text); return v != null && v <= 6 ? v : null; }, true);
-      // Derived like the house's: fascia plus the rise gained across the
-      // overhang, through the module's own rule rather than restated here.
-      addGarage('garageHeel', 'Garage roof heel',
-        () => fmt.formatArchitecturalInches(projectPage.roofHeelIn(
-          ROOF_FASCIA_IN,
-          cellValue('attachedGarage', 'roofOverhangFt').value,
-          cellValue('attachedGarage', 'roofPitch').value)),
-        () => false, undefined, true);
-      garageCell('garageWallHeight', 'Garage wall height', 'mainWallHeightFt', ftIn, parseFtIn);
-      garageCell('garageFdnHeight', 'Garage foundation wall height', 'fdnWallHeightFt', ftIn, parseFtIn);
+      // The name follows the CHOICE: this same 2'-8" field is a frost wall
+      // when the dropdown says so, and a row labelled "grade beam" on a frost
+      // wall is a plausible wrong word -- the defect shape this page has been
+      // shedding all day.
+      garageCell('garageFdnHeight',
+        () => (garageFoundation() === 'frostwall'
+          ? 'Garage frost wall height' : 'Garage grade beam height'),
+        'fdnWallHeightFt', ftIn, parseFtIn);
       garageCell('garageSlab', 'Garage slab thickness', 'slabThicknessIn', inchesOnly, parseInches);
       // No footing rows: a grade beam on piles has no spread footing. A FROST
       // WALL garage would -- that is the variant that gets one -- and it is
       // not a foundation type this page offers yet.
-      addGarage('garageSill', 'Sill plate on the beam',
-        () => inchesOnly(projectPage.SILL_PLATE_IN), () => false);
       addGarage('garageVoidForm', 'Void form under beam',
         () => inchesOnly(projectPage.VOID_FORM_IN), () => false);
       addGarage('garageFooting', 'Footing — level with the house',
@@ -904,7 +939,7 @@
       garageControls.forEach(control => {
         const tag = document.createElement('span');
         tag.className = 'detail-tag';
-        tag.textContent = control.name.replace(/^Garage /, '').toUpperCase();
+        tag.textContent = nameOf(control).replace(/^Garage /, '').toUpperCase();
         garageWrap.appendChild(tag);
         const input = control.kind === 'choice'
           ? document.createElement('select') : document.createElement('input');
@@ -928,7 +963,7 @@
           fillTable();
           input.value = control.get();
         });
-        link(schedRow(garageSched, control.key, control.name, input), tag);
+        link(schedRow(garageSched, control.key, nameOf(control), input), tag);
         controlEls.set(control.key, { control, el: input, tag, host: garageWrap });
       });
 
@@ -1049,6 +1084,18 @@
                 el.appendChild(option);
               });
             }
+          }
+          if (typeof control.name === 'function') {
+            // ONLY A FUNCTION, never a plain string. A house control's `name`
+            // is its input's name ATTRIBUTE -- 'pitch', 'fdnHeight' -- not a
+            // label, so re-asking every control rewrote the house's rows with
+            // field names. Only a row whose label genuinely changes under the
+            // drafter supplies a function, and only those get re-asked.
+            const label = nameOf(control);
+            const nameEl = row && row.querySelector('.sched-name');
+            if (nameEl && nameEl.textContent !== label) nameEl.textContent = label;
+            const short = label.replace(/^Garage /, '').toUpperCase();
+            if (tag && tag.textContent !== short) tag.textContent = short;
           }
           if (control.kind === 'chip') el.textContent = control.text();
           else if (document.activeElement !== el) el.value = control.get();

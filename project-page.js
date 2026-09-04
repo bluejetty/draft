@@ -352,7 +352,11 @@ if (!window.DraftProjectPage) {
     // own mid-height put it above the fascia and overhang -- above the things
     // it is measured from. Dropped below the plate, it falls into the order
     // the eye works down: pitch, fascia, overhang, heel, then the wall.
-    anchors.heel = { x: 0.45, y: plateY - 1.3 };
+    // Labels keep only their height, so their order down the page IS the
+    // reading order -- and it has to match the schedule beside it. Movie
+    // wants PITCH / HEEL / FASCIA / OVERHANG, so the heel sits between the
+    // pitch above it and the fascia below.
+    anchors.heel = { x: 0.45, y: plateY + fasciaFt / 2 + 0.8 };
 
     // The ceiling, and the truss over it. Movie, 4 Sep: first "you can add a
     // roof area, just some separation line that says attic space maybe", then
@@ -365,7 +369,16 @@ if (!window.DraftProjectPage) {
     // finish attaches to -- so the member sits above it, not straddling it.
     line(0, plateY, CUT_DEPTH_FT, plateY, 1);
     line(0, plateY + ROOF_CHORD_IN / 12, CUT_DEPTH_FT, plateY + ROOF_CHORD_IN / 12, 1);
-    anchors.attic = { x: CUT_DEPTH_FT * 0.55, y: plateY + riseAt(CUT_DEPTH_FT * 0.55) / 2 };
+    // BETWEEN THE PITCH AND THE HEEL, by construction. Movie, 4 Sep: "put
+    // attic space under pitch over heel". Placed as the midpoint of the two
+    // rather than at a height of its own, so it stays between them at any
+    // pitch -- a fixed number would be right at 4:12 and drift out of order
+    // the moment the roof got steeper, which is exactly how the label order
+    // went wrong the first time.
+    anchors.attic = {
+      x: CUT_DEPTH_FT * 0.55,
+      y: (anchors.pitch.y + anchors.heel.y) / 2,
+    };
     line(0, plateY, 0, plateY + riseAt(0), 1);                  // heel at the wall face
 
     // Foundation: wall top carries the main floor, footing centered under
