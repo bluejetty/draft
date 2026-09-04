@@ -558,6 +558,31 @@ whatever the bug costs and announces nothing. Only ask whether a
 mechanism-assertion can be satisfied by a broken drawing; a mechanism-assertion
 that merely rejects a working one is a tight test, not a wrong one.
 
+**A CONVENTION IS NOT A MECHANISM, and the rule above does not reach it.**
+Gilligan's, and it matters because the rule as stated would delete useful
+checks. Two mutations in the merge-vertex harness are caught only by checks
+that name a convention rather than an observable:
+
+- `THRESH = 0` is not "nothing merges" — it is the NaN-adjacent case, where
+  `Math.abs(0) < 0` is false and a corner fails to match **itself**.
+- Removing the `body = 'house'` default makes untagged walls pool as
+  `undefined` — and they still match **each other**, so the drawing looks
+  correct. It breaks only where something downstream compares against
+  `'house'`.
+
+A **mechanism** is one of several interchangeable ways a property is delivered;
+asserting it risks a false pass, because another mechanism can hold while yours
+breaks. A **convention** is a contract every path shares — a default value, a
+sentinel, a unit — and its violation is *invisible in local behaviour*, showing
+up only where another component assumed it. No outcome test at that level can
+see it, so it has to be named.
+
+The question that separates them: **if this were removed, would the behaviour
+here still look right?** If some other mechanism covers it, assert the outcome.
+If everything here still looks right and only a distant caller breaks, name the
+convention explicitly — that check is the only thing standing between the
+convention and silent rot.
+
 And correct the comments. The first draft of this entry claimed the visible-
 wall scoping was what protected the corner, which measurement falsified. That
 is the same error as the "closed two-value set" reading of `body` one section
