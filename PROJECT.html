@@ -45,7 +45,7 @@
     .detail-input { position:absolute; transform:translate(-50%,-50%); width:64px; height:22px; border:1px solid rgba(29,31,32,.3); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
     .detail-input:hover, .detail-input:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
     .detail-chip { position:absolute; transform:translate(-50%,-50%); padding:2px 5px; background:rgba(245,245,244,.92); border:1px solid rgba(29,31,32,.14); color:rgba(29,31,32,.62); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; white-space:nowrap; }
-    .detail-tag { position:absolute; white-space:nowrap; background:rgba(245,245,244,.86); padding:0 2px; color:rgba(29,31,32,.5); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:8px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; pointer-events:none; }
+    .detail-tag { position:absolute; white-space:nowrap; background:rgba(245,245,244,.86); padding:0 2px; color:rgba(29,31,32,.65); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; pointer-events:none; }
     /* IDENTITY runs the width of the page now, so its fields need columns of
        their own or each input stretches to 1100px and reads as a banner. */
     .identity-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px 20px; align-items:start; }
@@ -56,19 +56,25 @@
        the page reads name-then-value everywhere, the same direction as the
        section table below. A mirror would have made the left half read
        backwards. (Movie's call, and he was right.) */
-    .band { display:grid; grid-template-columns:minmax(0,1fr) 580px minmax(0,1fr); max-width:1180px; margin:0 auto; gap:0 12px; align-items:start; justify-content:center; }
+    .band { display:grid; grid-template-columns:minmax(0,1fr) 600px minmax(0,1fr); max-width:1090px; margin:0 auto; gap:0 12px; align-items:start; justify-content:center; }
     .sched { align-self:start; padding-top:2px; }
-    .sched-head { padding:0 4px 4px; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
-    .sched-row { display:grid; grid-template-columns:minmax(0,1fr) 78px; gap:8px; align-items:center; padding:3px 4px; border-bottom:1px solid rgba(29,31,32,.07); }
+    .sched-head { padding:0 4px 5px; color:rgba(29,31,32,.65); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
+    /* A VALUE BOX AND A DROPDOWN ARE NOT THE SAME WIDTH. 58px fits the
+       longest measurement on the page, 8'-1 1/8" -- but a select also has to
+       hold a WORD plus its arrow, and squeezing both into one track clipped
+       GRADE BEAM to "GRADE" and SILL PLATE to "SILL PL". A clipped label on
+       a control that changes the drawing is worse than a wide column. */
+    .sched-row:has(select) { grid-template-columns:minmax(0,1fr) 104px; }
+    .sched-row { display:grid; grid-template-columns:minmax(0,1fr) 58px; gap:7px; align-items:center; padding:3px 4px; border-bottom:1px solid rgba(29,31,32,.07); }
     .sched-row:last-child { border-bottom:0; }
     .sched-row[hidden] { display:none; }
-    .sched-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:rgba(29,31,32,.66); line-height:1.15; }
+    .sched-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:rgba(29,31,32,.65); line-height:1.15; }
     input.sched-value, select.sched-value { width:100%; height:23px; border:1px solid rgba(29,31,32,.28); background:#fafafa; color:#1d1f20; padding:2px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; }
     input.sched-value:hover, input.sched-value:focus, select.sched-value:hover, select.sched-value:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
     /* A derived value is shown, never typed — greyed and unboxed so it reads
        as an answer rather than a field, the same convention the section
        table uses for a cell it inherited instead of being given. */
-    span.sched-value { display:block; height:23px; line-height:23px; text-align:center; color:rgba(29,31,32,.5); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; }
+    span.sched-value { display:block; height:23px; line-height:23px; text-align:center; color:rgba(29,31,32,.65); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; }
     /* The numbers left the drawing, so the drawing lost the thing that said
        which part each one measured. Hover restores it in both directions. */
     .sched-row.lit { background:rgba(89,128,166,.13); }
@@ -91,9 +97,9 @@
     .section-table td.blank { background:repeating-linear-gradient(135deg, rgba(29,31,32,.05) 0 4px, transparent 4px 8px); }
     .cell-input { width:100%; height:24px; border:0; background:transparent; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
     .cell-input:hover, .cell-input:focus { background:rgba(89,128,166,.1); }
-    .cell-input.inherited { color:rgba(29,31,32,.42); }
-    .cell-derived { display:block; padding:4px; color:rgba(29,31,32,.6); font-size:11px; font-weight:600; }
-    .cell-note { display:block; padding:0 3px 3px; color:rgba(29,31,32,.42); font-size:9px; letter-spacing:.03em; white-space:nowrap; }
+    .cell-input.inherited { color:rgba(29,31,32,.65); }
+    .cell-derived { display:block; padding:4px; color:rgba(29,31,32,.65); font-size:12px; font-weight:600; }
+    .cell-note { display:block; padding:0 3px 3px; color:rgba(29,31,32,.65); font-size:9px; letter-spacing:.03em; white-space:nowrap; }
     .drop-slot { margin-top:16px; border:1.5px dashed rgba(29,31,32,.28); background:rgba(29,31,32,.02); padding:26px 16px; text-align:center; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
     .drop-slot small { display:block; margin-top:5px; text-transform:none; letter-spacing:0; font-family:'Barlow',system-ui,sans-serif; font-weight:400; font-size:11px; }
     #status { margin-top:14px; min-height:16px; color:#557a46; font-size:12px; }
@@ -153,7 +159,7 @@
         <div class="band">
           <div class="sched" id="sched-garage"></div>
           <div class="detail-wrap" id="detail-wrap">
-            <canvas id="detail-canvas" width="580" height="500" aria-label="Live section — house and attached garage"></canvas>
+            <canvas id="detail-canvas" width="600" height="500" aria-label="Live section — house and attached garage"></canvas>
           </div>
           <div class="sched" id="sched-house"></div>
         </div>
@@ -605,8 +611,8 @@
       // How far the left-hand grey column starts back from the drawing, and
       // how far the right-hand one sits off it. One pair of numbers, so the
       // two sides stay symmetric when the drawing's width changes.
-      const GREY_COL = 104;
-      const GREY_GAP = 8;
+      const GREY_COL = 132;
+      const GREY_GAP = 5;
       const houseSched = document.querySelector('#sched-house');
       const garageSched = document.querySelector('#sched-garage');
       // One drawing, so one wrap: every part label -- house or garage --
@@ -681,10 +687,16 @@
       // it. Not everything worth naming is a number the drafter sets -- the
       // attic is a space, not a dimension, and giving it a row would offer an
       // edit that does not exist.
+      // `beside` decides which of the two an annotation is. Most line up in
+      // the label column with everything else -- Movie, 4 Sep: "put the
+      // 'attic space' note with the other words lined up" -- because a name
+      // for a whole region reads as one of the drawing's labels. (PILE) is
+      // the exception he asked for by hand: it names a single line, and out
+      // in the column it would be a hundred pixels from the line it names.
       const ANNOTATIONS = [
         { key: 'attic', text: 'ATTIC SPACE' },
         { key: 'garageCavity', text: 'ATTIC SPACE' },
-        { key: 'garagePile', text: '(PILE)' },
+        { key: 'garagePile', text: '(PILE)', beside: true },
       ];
 
       // Hover a row and its part lights up on the drawing; hover the part and
@@ -710,12 +722,12 @@
 
       schedRow(houseSched, 'wallType', 'Exterior wall type', wallTypeSelect);
 
-      ANNOTATIONS.forEach(({ key, text }) => {
+      ANNOTATIONS.forEach(({ key, text, beside }) => {
         const tag = document.createElement('span');
         tag.className = 'detail-tag';
         tag.textContent = text;
         wrap.appendChild(tag);
-        controlEls.set(key, { control: { kind: 'annotation' }, el: tag, tag });
+        controlEls.set(key, { control: { kind: 'annotation', beside }, el: tag, tag });
       });
 
       controls.forEach(control => {
@@ -1009,7 +1021,7 @@
           // one piece of the drawing -- Movie: "add the word (PILE) on the
           // left of it" -- and a column would put it a hundred pixels from
           // the line it names, reading as another row in the list.
-          if (control.kind === 'annotation') {
+          if (control.kind === 'annotation' && control.beside) {
             tag.style.left = `${at.x - 6}px`;
             tag.style.top = `${at.y}px`;
             tag.style.transform = 'translate(-100%,-50%)';

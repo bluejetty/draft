@@ -182,6 +182,14 @@ if (!window.DraftProjectPage) {
   // the footing by about 8"".
   const PILE_FACE_FROM_CUT_IN = 5;
   const PILE_BELOW_LOWEST_IN = 8;
+  // How far the pile's top end shows above the void form. Movie, 4 Sep: "the
+  // dotted line should start above the 4" void form under the concrete grade
+  // beam". It ran from the TOP of the beam's concrete before, the full depth
+  // of the pour -- but a pile does not pass through the beam, the beam bears
+  // ON it, so the line starting at the top drew a pile going up through
+  // concrete it never reaches. Starting just above the void form shows the
+  // pile arriving at the beam's underside, which is what it does.
+  const PILE_TOP_ABOVE_VOID_IN = 4;
   // The attached garage's roof cavity. Movie, 4 Sep: "the roof cavity with
   // 3.5" top and bottom chords could also be shown with 4' space between
   // ceiling height and top of top chord", then "just flat section", "talking
@@ -359,7 +367,12 @@ if (!window.DraftProjectPage) {
     attachment(rect, line, fdn.attachment, 0, concTopFt, fdnFt);
     anchors.attachment = { x: fdnFt / 2, y: concTopFt + attachFt / 2 };
     anchors.fdnHeight = { x: fdnFt + 0.9, y: fdnTop - fdn.wallHeightFt / 2 };
-    anchors.fdnThickness = { x: fdnFt / 2, y: fdnTop + 0.45 };
+    // BELOW the sill, not above it. Labels keep only their height now, so
+    // three of them -- the floor joists, the attachment, and this -- were
+    // landing within a few inches of each other and reading as one string.
+    // The foundation's thickness is as true half a foot down the wall as it
+    // is at the top, and down there it has the space to itself.
+    anchors.fdnThickness = { x: fdnFt / 2, y: concTopFt - 0.55 };
     const footW = fdn.footingWidthIn / 12, footD = fdn.footingDepthIn / 12;
     rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);
     anchors.footingWidth = { x: fdnFt / 2, y: fdnBot - footD - 0.5 };
@@ -565,8 +578,9 @@ if (!window.DraftProjectPage) {
     // soils report, so a drawn end would be a number nobody has.
     const pileX = cut + PILE_FACE_FROM_CUT_IN / 12;
     const pileBot = lowest - PILE_BELOW_LOWEST_IN / 12;
-    parts.push({ kind: 'dashed', x1: pileX, y1: concTop, x2: pileX, y2: pileBot });
-    anchors.garagePile = { x: pileX, y: (fdnBot + pileBot) / 2 };
+    const pileTop = fdnBot + PILE_TOP_ABOVE_VOID_IN / 12;
+    parts.push({ kind: 'dashed', x1: pileX, y1: pileTop, x2: pileX, y2: pileBot });
+    anchors.garagePile = { x: pileX, y: (pileTop + pileBot) / 2 };
 
     parts.push({ kind: 'break', x: cut, y1: pileBot - 0.3, y2: topY + 0.3 });
 
@@ -667,14 +681,21 @@ if (!window.DraftProjectPage) {
         ctx.stroke();
         ctx.restore();
       } else if (part.kind === 'grade') {
-        // Full canvas width, not the section's: grade does not stop at the
-        // edge of what has been drawn.
+        // THE DRAWING PLUS A TAIL, not the whole canvas. It has to cross both
+        // sections -- grade does not stop where a building starts -- but it
+        // was running the full canvas width, which set the page's width from
+        // a dashed line rather than from anything drawn. Movie: "could delete
+        // some grade line width there". The tail is what makes it read as
+        // continuing past the section rather than stopping at it.
+        const tail = 14;
+        const from = view ? slack - tail : 0;
+        const to = view ? slack + span * scale + tail : w;
         ctx.save();
         ctx.setLineDash([4, 3]);
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(0, Y(part.y));
-        ctx.lineTo(w, Y(part.y));
+        ctx.moveTo(Math.max(0, from), Y(part.y));
+        ctx.lineTo(Math.min(w, to), Y(part.y));
         ctx.stroke();
         ctx.restore();
       } else if (part.kind === 'break') {
