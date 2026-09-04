@@ -1169,7 +1169,14 @@
         // calculation -- the only way back, so it has to stay reachable.
         roofHeelIn: {
           get: () => roofHeelIn(),
-          set: value => { roofHeelOverrideIn = value; },
+          // Null is always allowed -- it is the way back to the calculation,
+          // and a band that could trap somebody on a typed number would be a
+          // worse bug than the typo it was catching. Out of band, nothing is
+          // stored and the re-render puts the old number back.
+          set: value => {
+            if (value == null) { roofHeelOverrideIn = null; return; }
+            if (projectPage.roofHeelInBand(value)) roofHeelOverrideIn = value;
+          },
         },
         mainWallHeightFt: {
           get: () => mainFloor() && assembly(mainFloor().id).wallHeightFt,
@@ -1279,7 +1286,9 @@
         // and a typed one look identical in the box, and nobody can tell
         // whether the cell is still following the pitch or has stopped.
         if (item.field === 'roofHeelIn') {
-          return rowId === 'house' && roofHeelOverrideIn == null ? 'CALCULATED' : 'RAISED';
+          if (rowId === 'house' && roofHeelOverrideIn == null) return 'CALCULATED';
+          return `RAISED · ${inchesOnly(projectPage.ROOF_HEEL_MIN_IN)}\u2013${
+            inchesOnly(projectPage.ROOF_HEEL_MAX_IN)}`;
         }
         // A fill wall doesn't get to pick its height — the pour and the floor
         // above already fixed it — so it reports the stud it wants cut to.

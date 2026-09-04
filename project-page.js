@@ -169,6 +169,38 @@ if (!window.DraftProjectPage) {
   // above it, which is a wood-to-earth detail nobody draws on purpose. The
   // office default sits at 1'-0", comfortably under it; this is the line the
   // drafter cannot type past.
+  // THE HEEL'S BAND. Movie, 5 Sep: "the min heel is 3.5" in reality but lets
+  // make ours 5.5" min", then "the max how about 30" max", then "actually the
+  // max should be more". So the floor is an OFFICE rule, not a physical one --
+  // the trusses will do 3 1/2" and the office will not draw it -- which is the
+  // reason to name it rather than bury a 5.5 in a comparison: the day somebody
+  // wants the real minimum they need to find it, and see that it was a choice.
+  // It coincides with the fascia depth, and that coincidence is not the rule:
+  // a deeper fascia does not move this number.
+  //
+  // THE CEILING IS A TYPO CATCH, NOT A DESIGN LIMIT. Movie, 5 Sep: "actually
+  // the max should be more ... in case of large overhangs ... lets make it
+  // 20ft max haha". The laugh is the point. THE HEEL IS NOT A FREE NUMBER --
+  // it is what the roof has climbed by the time it reaches the wall, so a big
+  // overhang on a steep pitch DERIVES a heel far past anything anyone would
+  // type. The drawing allows 6' of overhang at 24:12, which calculates to
+  // 12'-5 1/2" all on its own. A 4'-0" ceiling would have refused numbers the
+  // app itself had just worked out -- the bound arguing with the arithmetic
+  // behind it, which is the worst kind. 20' clears every derivable heel with
+  // room to spare and still stops a fat-fingered 3000.
+  //
+  // 30" IS THE TYPICAL RAISED HEEL AND IS NOT THIS NUMBER. Movie: "it
+  // wouldn't be increased more than 30" in most cases", and "shouldn't need
+  // more than that or even close to that" of the 20'. Two different things,
+  // and the reason to write both down is that they get confused in exactly
+  // one direction: someone reads 20' as a design target, or trims the ceiling
+  // to the typical case and turns a 95% answer into a rule. The typical
+  // number belongs in nothing that refuses input.
+  const ROOF_HEEL_MIN_IN = 5.5;
+  const ROOF_HEEL_MAX_IN = 20 * 12;
+  const roofHeelInBand = inches => Number.isFinite(inches)
+    && inches >= ROOF_HEEL_MIN_IN && inches <= ROOF_HEEL_MAX_IN;
+
   const GRADE_MIN_BELOW_CONCRETE_IN = 8;
   // WHERE IT IS ACTUALLY DRAWN, which is not the same as the minimum. Movie,
   // 4 Sep: "let's move our grade line down further than 8". If the house is
@@ -370,6 +402,13 @@ if (!window.DraftProjectPage) {
     const heelLiftFt = roof.heelIn == null ? 0
       : (roof.heelIn - roofHeelIn(roof.fasciaIn, roof.overhangFt, roof.pitch)) / 12;
     const eaveY = plateY + heelLiftFt;
+    // WHAT THE LIFT COSTS, DRAWN. Movie, 5 Sep: "the fascia will lift up and
+    // down they will need extra or less sheathing on the wall". The exterior
+    // face stops at the top plate, so a raised heel opened a gap between the
+    // plate and the soffit with nothing in it -- the section showed the roof
+    // higher and said nothing about the wall that now has to reach it. Same
+    // weight as the face below it, because it is the same face.
+    if (heelLiftFt > 0) line(0, plateY, 0, eaveY, 2);
     const riseAt = x => heelLiftFt + fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);
     rect(-roof.overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);    // fascia board
     line(-roof.overhangFt, eaveY, 0, eaveY, 1);                 // soffit
@@ -839,6 +878,9 @@ if (!window.DraftProjectPage) {
     ZONE_ROWS,
     CUT_DEPTH_FT,
     ROOF_CHORD_IN,
+    ROOF_HEEL_MIN_IN,
+    ROOF_HEEL_MAX_IN,
+    roofHeelInBand,
     GARAGE_BEAM_ABOVE_GRADE_IN,
     GARAGE_SILL_BELOW_HOUSE_FT,
     GRADE_MIN_BELOW_CONCRETE_IN,

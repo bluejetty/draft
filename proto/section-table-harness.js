@@ -137,6 +137,21 @@ check('an 8\' precut makes an 8\'-1 1/8" wall', P => [near(P.wallHeightFtFromStu
 // Movie, 5 Sep: the fascia is a 2x6 with its BOTTOM level with the top of the
 // top plate, so the heel is 5 1/2" plus what the roof climbs across the
 // overhang -- 13 1/2" at the office default of 4:12 over 2 ft.
+// THE BAND MUST NOT ARGUE WITH THE ARITHMETIC BEHIND IT. Movie's ceiling
+// exists to catch a typo, and the heel is DERIVED, so the ceiling has to
+// clear the largest heel the drawing can compute or it would refuse a number
+// the app itself produced. The caps are drawing-format.js's (overhang <= 6',
+// pitch <= 24:12) -- named here as literals on purpose, because that is the
+// contract this file cannot see and the one that breaks silently if it moves.
+check('the ceiling clears the steepest, deepest roof the drawing allows', P =>
+  [P.ROOF_HEEL_MAX_IN > P.roofHeelIn(5.5, 6, 24), true]);
+// The floor is an office rule ABOVE the real one: 3 1/2" is buildable and the
+// office will not draw it. Pinned as an inequality so nobody "corrects" ours
+// back down to the physical minimum.
+check('the floor sits above the 3 1/2" the trusses would actually do', P =>
+  [P.ROOF_HEEL_MIN_IN > 3.5 && P.roofHeelInBand(P.ROOF_HEEL_MIN_IN), true]);
+check('the office default heel is inside its own band', P =>
+  [P.roofHeelInBand(P.roofHeelIn(5.5, 2, 4)), true]);
 check('the heel is the fascia plus the rise across the overhang', P => [P.roofHeelIn(5.5, 2, 4), 13.5]);
 
 // Which items a type has a use for. A garage has no floor joists, no
@@ -362,6 +377,12 @@ const MUTATIONS = [
   // soffit sitting on the plate, so only a check that watches the EAVE sees it.
   ['a raised heel fattens the fascia instead of lifting the roof',
     s => s.replace('const eaveY = plateY + heelLiftFt;', 'const eaveY = plateY;')],
+  ['the ceiling drops back to something a big overhang can derive past',
+    s => s.replace('const ROOF_HEEL_MAX_IN = 20 * 12;', 'const ROOF_HEEL_MAX_IN = 48;')],
+  ['the floor is "corrected" to the real-world 3 1/2" minimum',
+    s => s.replace('const ROOF_HEEL_MIN_IN = 5.5;', 'const ROOF_HEEL_MIN_IN = 3.5;')],
+  ['the band is checked exclusively, so its own endpoints fall outside it',
+    s => s.replace('inches >= ROOF_HEEL_MIN_IN && inches <= ROOF_HEEL_MAX_IN', 'inches > ROOF_HEEL_MIN_IN && inches < ROOF_HEEL_MAX_IN')],
   ['the footing is hung off the wall face instead of centred',
     s => s.replace('rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);', 'rect(0, fdnBot - footD, footW, footD, 1.5);')],
 ];
