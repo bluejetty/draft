@@ -201,11 +201,14 @@ check('the cut breaks at CUT_DEPTH_FT and every part lies inside the extents', P
   const s = section(P);
   const brk = s.parts.find(p => p.kind === 'break');
   const e = s.extents;
-  const inside = s.parts.every(p => {
-    if (p.kind === 'line') return [p.x1, p.x2].every(x => x >= e.minX && x <= e.maxX) && [p.y1, p.y2].every(y => y >= e.minY && y <= e.maxY);
-    if (p.kind === 'rect') return p.x >= e.minX && p.x + p.w <= e.maxX && p.y >= e.minY && p.y + p.h <= e.maxY;
-    return p.y1 >= e.minY && p.y2 <= e.maxY;
-  });
+  // Kind-agnostic on purpose: a part is tested on whatever coordinates it
+  // carries, so a new kind (the grade line arrived with only a y) is checked
+  // rather than misread as outside. A check that enumerates kinds is a
+  // snapshot of the painter on the day it was written.
+  const xs = p => [p.x, p.x1, p.x2, p.x != null && p.w != null ? p.x + p.w : undefined].filter(Number.isFinite);
+  const ys = p => [p.y, p.y1, p.y2, p.y != null && p.h != null ? p.y + p.h : undefined].filter(Number.isFinite);
+  const inside = s.parts.every(p =>
+    xs(p).every(x => x >= e.minX && x <= e.maxX) && ys(p).every(y => y >= e.minY && y <= e.maxY));
   return [brk && near(brk.x, P.CUT_DEPTH_FT) && inside, true];
 });
 check('the footing is centred under the foundation wall', P => {
