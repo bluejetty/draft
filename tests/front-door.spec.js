@@ -66,12 +66,15 @@ test('the flag does not survive arrival, so a reload is safe', async ({ page, ba
   expect(h.allLines(await h.savedDrawing(page))).toHaveLength(1);
 });
 
-// The entry page is the front door, so its links must carry the flag -- both
-// of them. The logo and the bone are separate links that share a destination.
-test('both entry links carry the flag', async ({ page, baseURL }) => {
+// The entry page is the front door, so its link must carry the flag. It was
+// two links, logo and bone, sharing a destination; the bone came off the
+// entry page on 4 Sep (nobody sees a bone until model space), so the logo is
+// the one way in and this pins that there is exactly one, not that there are
+// still two.
+test('the entry link carries the flag', async ({ page, baseURL }) => {
   await page.goto(`${baseURL}/index.html`);
   const hrefs = await page.locator('a.enter-link').evaluateAll(
     els => els.map(el => el.getAttribute('href')));
-  expect(hrefs).toHaveLength(2);
+  expect(hrefs).toHaveLength(1);
   for (const href of hrefs) expect(href).toContain('new=1');
 });

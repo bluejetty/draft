@@ -66,42 +66,36 @@ test('a blocked counter host leaves the page complete and quiet', async ({ page,
 
   await page.goto('https://draft.test/index.html');
   await page.waitForLoadState('load');
-  // The entry page is the new logo above the bone, and nothing else — the
-  // name text span this used to assert on came off with that change
-  // (the logo carries its own lettering now). What still has to be true is
-  // that the way in is THERE and still goes where it went: both images
-  // resolve, and both links point at the model space.
+  // The entry page is the logo, and nothing else. The name text span this
+  // used to assert on came off when the logo took its own lettering, and
+  // the bone beneath it came off on 4 Sep (nobody sees a bone until model
+  // space). What still has to be true is that the way in is THERE and
+  // still goes where it went: the image resolves, and the one link points
+  // at the model space. Exactly one -- a bone that crept back would be a
+  // second link, and this would say so.
   const logo = page.locator('.enter-logo');
-  const bone = page.locator('.enter-bone');
   await expect(logo).toBeVisible();
-  await expect(bone).toBeVisible();
-  for (const image of [logo, bone]) {
-    // naturalWidth is 0 for an image that 404'd, so this catches a missing
-    // or misnamed asset rather than merely a present <img> tag.
-    await expect.poll(() => image.evaluate(el => el.complete && el.naturalWidth > 0)).toBe(true);
-  }
+  await expect(page.locator('.enter-bone')).toHaveCount(0);
+  // naturalWidth is 0 for an image that 404'd, so this catches a missing
+  // or misnamed asset rather than merely a present <img> tag.
+  await expect.poll(() => logo.evaluate(el => el.complete && el.naturalWidth > 0)).toBe(true);
   const targets = await page.locator('.enter-link').evaluateAll(
     links => links.map(link => new URL(link.href).pathname.split('/').pop()));
-  expect(targets).toEqual(['MODEL.dc.html', 'MODEL.dc.html']);
+  expect(targets).toEqual(['MODEL.dc.html']);
 
-  // The logo must PAINT bigger than the bone, not merely occupy a wider
-  // box. With object-fit: contain the two differ: a height attribute pins
-  // the box, aspect-ratio stops applying, and the art is letterboxed
-  // inside a box it never fills — which is how the entry page once shipped
-  // with a 231px bone beside a 225px logo while every box measurement
-  // looked right. Measure what the eye sees.
-  const painted = await page.evaluate(() => {
-    const art = el => {
-      const r = el.getBoundingClientRect();
-      const scale = Math.min(r.width / el.naturalWidth, r.height / el.naturalHeight);
-      return el.naturalWidth * scale;
-    };
-    return {
-      logo: art(document.querySelector('.enter-logo')),
-      bone: art(document.querySelector('.enter-bone')),
-    };
+  // The logo must PAINT the width of its box, not merely occupy it. With
+  // object-fit: contain the two differ: a height attribute pins the box,
+  // aspect-ratio stops applying, and the art is letterboxed inside a box
+  // it never fills — which is how the entry page once shipped with a 231px
+  // bone beside a 225px logo while every box measurement looked right.
+  // The bone is gone, so the comparison is the logo against its own box:
+  // measure what the eye sees, and it has to fill what it was given.
+  const painted = await page.locator('.enter-logo').evaluate(el => {
+    const r = el.getBoundingClientRect();
+    const scale = Math.min(r.width / el.naturalWidth, r.height / el.naturalHeight);
+    return { art: el.naturalWidth * scale, box: r.width };
   });
-  expect(painted.logo).toBeGreaterThan(painted.bone * 2);
+  expect(painted.art).toBeGreaterThan(painted.box * 0.95);
 
   // And the mark must not be UPSCALED. #200 doubled the painted logo to
   // 450px without checking its source, which was 225x225 — so the brand
