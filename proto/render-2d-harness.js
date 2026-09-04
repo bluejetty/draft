@@ -139,6 +139,40 @@ const dropOriginFallback = src => {
   return out;
 };
 
+const dropWallEnvColours = src => {
+  const before = src;
+  const out = src
+    .replace("const wallFill      = wallColors.wall            || '#ffffff';",
+             "const wallFill      = '#ffffff';")
+    .replace("const wallEdge      = wallColors.wallEdge        || '#1d1f20';",
+             "const wallEdge      = '#1d1f20';");
+  if (out === before) throw new Error('dropWallEnvColours matched nothing -- the resolver moved');
+  return out;
+};
+
+// The opposite slip: the env is read but nothing catches a caller that
+// supplies none. MODEL.dc.html is exactly that caller today, so this one
+// would blank every wall on the live page rather than in a test.
+const dropWallColourFallback = src => {
+  const before = src;
+  const out = src
+    .replace("wallColors.wall            || '#ffffff'", 'wallColors.wall')
+    .replace("wallColors.wallEdge        || '#1d1f20'", 'wallColors.wallEdge');
+  if (out === before) throw new Error('dropWallColourFallback matched nothing -- the resolver moved');
+  return out;
+};
+
+// The body and the boundary are two decisions, not one. A skin that darkens
+// the poche and lightens the line is exactly the case where confusing them
+// paints the dots into the wall they are meant to mark.
+const wallDotsTakeTheFill = src => {
+  const before = src;
+  const out = src.replace('      ctx.fillStyle = wallEdge;\n      const DOT_R = 2.5;',
+                          '      ctx.fillStyle = wallFill;\n      const DOT_R = 2.5;');
+  if (out === before) throw new Error('wallDotsTakeTheFill matched nothing -- the dot fill moved');
+  return out;
+};
+
 // A CONSTANT painter: every fixture draws a stall. Not a deleted painter --
 // this one still draws, and draws something real -- it just ignores what it
 // was asked for. This is the mutation the two equality checks in
@@ -1625,6 +1659,54 @@ suite('drawWallSeg2D', 'an unjoined wall is capped at both ends', R => {
   expect('two end caps', across.length >= 2, true);
 });
 
+// ── drawWallSeg2D's two colours: the skin this painter used to ignore ──
+//
+// The night page is '#1d1f20' and so was the hardcoded boundary line.
+// Contrast 1.00 -- an end cap crossing bare paper was drawn in invisible ink,
+// and the wall read as a bare white slab on a black page. These checks are
+// what makes the pair a decision the CALLER owns.
+//
+// The three suites above -- white stud bay, faint preview ink, dotted ends --
+// pass `wallEnv`, which carries no colours at all. They are therefore already
+// the fallback checks, and they are left exactly as they were on purpose: the
+// fallbacks ARE the old literals, so an untouched check still passing is the
+// evidence that the day skin did not move.
+const wallSkin = {
+  ...wallEnv,
+  colors: {
+    wall: '#112233', wallPreview: '#445566',
+    wallEdge: '#778899', wallEdgePreview: '#aabbcc',
+  },
+};
+
+suite('drawWallSeg2D', 'the body and the boundary take their colours from the env', R => {
+  const ctx = recordingCtx();
+  R.drawWallSeg2D(ctx, toS, { ...WALL, wallType: 'stud_2x6' }, false, null, null, wallSkin);
+  expect('the stud bay is filled with draw-wall', sets(ctx, 'fillStyle').includes('#112233'), true);
+  expect('the boundary is stroked with draw-wall-edge', sets(ctx, 'strokeStyle').includes('#778899'), true);
+  expect('and the white literal is gone', sets(ctx, 'fillStyle').includes('#ffffff'), false);
+  expect('as is the black one', sets(ctx, 'strokeStyle').includes('#1d1f20'), false);
+});
+
+suite('drawWallSeg2D', 'a preview takes the preview pair, not the committed one', R => {
+  const ctx = recordingCtx();
+  R.drawWallSeg2D(ctx, toS, { ...WALL, wallType: 'stud_2x6' }, true, null, null, wallSkin);
+  expect('faint body', sets(ctx, 'fillStyle').includes('#445566'), true);
+  expect('faint boundary', sets(ctx, 'strokeStyle').includes('#aabbcc'), true);
+  expect('the committed body is not used', sets(ctx, 'fillStyle').includes('#112233'), false);
+});
+
+// The dots sit ON the wall body, so they must follow the line, not the poche.
+// Under the night skin the body is nearly the page and the line is nearly the
+// ink: take the wrong one and both dots vanish into the wall they mark.
+suite('drawWallSeg2D', 'the endpoint dots follow the edge colour, not the body', R => {
+  const ctx = recordingCtx();
+  R.drawWallSeg2D(ctx, toS, { ...WALL, wallType: 'stud_2x6' }, false, null, null, wallSkin);
+  const fills = sets(ctx, 'fillStyle');
+  expect('two dots drawn', count(ctx, 'arc'), 2);
+  expect('the last fill set is the edge colour', fills[fills.length - 1], '#778899');
+});
+
 // ── drawWallSeg2D's joins: the half of the painter nothing reached ──
 // THIS PATH RUNS ON EVERY COMMITTED WALL IN THE LIVE PAGE. Do not delete it.
 //
@@ -1985,6 +2067,9 @@ function coverage() {
     ['drawOrigin2D env colour', dropOriginEnvColour],
     ['drawOrigin2D colour fallback', dropOriginFallback],
     ['drawFixture2D kind dispatch (constant painter)', constantFixture],
+    ['drawWallSeg2D env colours', dropWallEnvColours],
+    ['drawWallSeg2D colour fallbacks', dropWallColourFallback],
+    ['drawWallSeg2D dots take the body colour', wallDotsTakeTheFill],
   ];
   BRANCH_MUTATIONS.forEach(([label, mutate]) => {
     const caught = runAll(load(mutate)).filter(r => r.failed || r.threw);

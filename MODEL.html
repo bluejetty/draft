@@ -542,6 +542,26 @@
     });
   };
 
+  // drawWallSeg2D's two colours, plus the two preview entries it also reads.
+  // Same split floorEnv and dimensionEnv use: this page has no draw tool, so
+  // `preview` is the constant false at the call below and both preview
+  // branches are unreachable -- but they are DEFINED, because a caller should
+  // answer the whole interface, and because wiring a draw tool up later must
+  // not be the moment someone discovers the key was missing.
+  //
+  // Preview takes the committed look rather than the accent here, unlike the
+  // dimension placeholders. A preview wall is the same wall a moment earlier,
+  // so committed-looking is the honest placeholder; loud would be wrong.
+  const wallEnv = () => ({
+    ...paintEnv(),
+    colors: {
+      wall: skin['draw-wall'],
+      wallPreview: skin['draw-wall'],
+      wallEdge: skin['draw-wall-edge'],
+      wallEdgePreview: skin['draw-wall-edge'],
+    },
+  });
+
   const paintWalls = () => {
     // Lazy, so a load-order change cannot bind these to undefined at parse
     // time -- but LOUD, not guarded. An earlier version returned quietly when
@@ -588,7 +608,7 @@
     const joins = G.wallJoins(shown);
     shown.forEach(wall => {
       if (!wall.start || !wall.end) return;
-      R.drawWallSeg2D(ctx, toS, wall, false, joins, 'both', paintEnv());
+      R.drawWallSeg2D(ctx, toS, wall, false, joins, 'both', wallEnv());
     });
   };
 
