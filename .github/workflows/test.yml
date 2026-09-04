@@ -148,21 +148,63 @@ jobs:
 
       - name: Run the mutation engines
         run: |
-          # NAMED, NOT GLOBBED -- see the job comment. These three are the
-          # harnesses that both reject flags they do not honour and act on
-          # --mutate. Same captured-never-piped pattern as the loop above, so
-          # a non-zero exit is never lost behind a pipe.
+          # DERIVED, NOT LISTED. The first version of this step named three
+          # engines by hand, and a fourth existed on a sibling branch before
+          # it merged: a hand-kept list is a claim about the present that
+          # nothing enforces. So the list is derived from the one fact that
+          # makes a file an engine -- it calls mutationMode() from the shared
+          # guard. The grep keys on the CALL FORM, require(...).mutationMode(),
+          # because the bare name appears in comments in twenty harnesses
+          # that have no engine at all. Every file this selects carries the
+          # guard by construction, so the "least-guarded file in the glob"
+          # objection to a glob does not apply here.
+          shopt -s nullglob
+          engines=()
+          for h in proto/*-harness.js; do
+            grep -qF "harness-args.js').mutationMode()" "$h" && engines+=("$h")
+          done
+
+          # A FLOOR, NOT AN INVENTORY. The derived list must contain every
+          # engine known when this was written. Its job is to make "the grep
+          # matched nothing" and "the grep matched fewer than we know exist"
+          # impossible -- a rename or a moved require goes red here instead
+          # of silently dropping an engine from a green run. It is a MINIMUM:
+          # a fifth engine is picked up by the grep without touching this
+          # list, and the list goes stale only in the safe direction.
           failed=0
-          for h in proto/merge-vertex-harness.js \
-                   proto/render-2d-harness.js \
-                   proto/wall-joins-harness.js; do
+          for must in proto/merge-vertex-harness.js \
+                      proto/outline-accessors-harness.js \
+                      proto/render-2d-harness.js \
+                      proto/wall-joins-harness.js; do
+            if ! printf '%s\n' "${engines[@]}" | grep -qx "$must"; then
+              failed=$((failed + 1))
+              echo "FAIL  $must is a known engine and the derived list does not contain it"
+            fi
+          done
+          if [ ${#engines[@]} -eq 0 ]; then
+            echo "no harness declares a mutation mode -- nothing ran"
+            exit 1
+          fi
+          echo "${#engines[@]} engines"
+
+          # EXIT 0 IS NOT ENOUGH. The grep sees a file that declares the mode,
+          # not one that honours it: a harness that calls mutationMode() and
+          # never wraps its loop in the result prints no table and exits 0.
+          # So each engine must also print its table -- the "mutations caught"
+          # line every engine ends on -- or the step is red. Same captured-
+          # never-piped pattern as the loop above.
+          for h in "${engines[@]}"; do
             out=$(node "$h" --mutate 2>&1) && code=0 || code=$?
-            if [ "$code" -eq 0 ]; then
-              printf 'ok    %s --mutate\n' "$h"
-            else
+            if [ "$code" -ne 0 ]; then
               failed=$((failed + 1))
               printf 'FAIL  %s --mutate  (exit %s)\n' "$h" "$code"
               echo "$out" | tail -40 | sed 's/^/      /'
+            elif ! echo "$out" | grep -q "mutations caught"; then
+              failed=$((failed + 1))
+              printf 'FAIL  %s --mutate  exited 0 without printing a mutation table\n' "$h"
+              echo "$out" | tail -20 | sed 's/^/      /'
+            else
+              printf 'ok    %s --mutate  %s\n' "$h" "$(echo "$out" | grep "mutations caught" | tail -1)"
             fi
           done
           [ "$failed" -eq 0 ]
