@@ -300,11 +300,39 @@ if (!window.DraftProjectPage) {
     // rule, so the wall spans from the beam top to the top of the house's
     // footing, whatever those happen to be. A typed frost-wall height would
     // be a number that agrees with the house until one of them moved.
+    // THE SILL PLATE. Movie, 4 Sep: "look on my drawing see the sill plate,
+    // where is your sill plate?" -- there wasn't one. His spec was "32" conc
+    // and 1.5" sill plate grade beam (33.5")", and I had stored the 32 and
+    // let the section table's TO SILL note add the plate, so the number was
+    // right everywhere it was written and the plate was drawn nowhere. A
+    // dimension that exists only in a footnote is not a part.
+    //
+    // It bears on top of the concrete and the wall bears on IT, so the top of
+    // the stack does not move: 32" of concrete now tops out 1 1/2" lower and
+    // the plate makes the difference up.
+    //
+    // FOR BAND 2, not built yet, and the distinction matters more than the
+    // fact. Movie, 4 Sep: "they line up between house and garage on the
+    // bilevel", then "on the house if the foundation is deep they also line
+    // up on a house but not too often".
+    //
+    // On a MODIFIED BILEVEL that is a RULE: the garage's floor offset is not
+    // a free number there, it is whatever puts this sill level with the
+    // house's, and typing it would be a value that agreed until one of them
+    // moved. On a plain HOUSE it is a COINCIDENCE -- it happens when the
+    // foundation is deep enough and usually does not -- so the offset stays a
+    // number the drafter types, and a house whose sills happen to align is
+    // not evidence of anything. Deriving it there would silently move a
+    // garage every time someone deepened a basement.
     const frostWall = g.foundation === 'frostwall';
+    const sillFt = SILL_PLATE_IN / 12;
     const fdnTop = floorY;
-    const fdnBot = frostWall ? g.houseFootingTopFt : fdnTop - g.fdnWallHeightFt;
-    rect(-fdnFt, fdnBot, fdnFt, fdnTop - fdnBot, 2);
-    anchors.garageFdnHeight = { x: -fdnFt - 0.9, y: (fdnTop + fdnBot) / 2 };
+    const concTop = fdnTop - sillFt;
+    const fdnBot = frostWall ? g.houseFootingTopFt : concTop - g.fdnWallHeightFt;
+    rect(-fdnFt, fdnBot, fdnFt, concTop - fdnBot, 2);
+    rect(-fdnFt, concTop, fdnFt, sillFt, 1.5);
+    anchors.garageFdnHeight = { x: -fdnFt - 0.9, y: (concTop + fdnBot) / 2 };
+    anchors.garageSill = { x: -fdnFt - 0.9, y: concTop + sillFt / 2 };
 
     let lowest;
     if (frostWall) {

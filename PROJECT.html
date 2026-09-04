@@ -742,6 +742,8 @@
       // No footing rows: a grade beam on piles has no spread footing. A FROST
       // WALL garage would -- that is the variant that gets one -- and it is
       // not a foundation type this page offers yet.
+      addGarage('garageSill', 'Sill plate on the beam',
+        () => inchesOnly(projectPage.SILL_PLATE_IN), () => false);
       addGarage('garageVoidForm', 'Void form under beam',
         () => inchesOnly(projectPage.VOID_FORM_IN), () => false);
       addGarage('garageFooting', 'Footing — level with the house',
