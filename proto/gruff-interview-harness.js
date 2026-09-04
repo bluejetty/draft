@@ -2,6 +2,14 @@
 // no browser in the way. One line per check, in the house style.
 //
 //   node proto/gruff-interview-harness.js
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node gruff-interview-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 global.window = global.window || {};
 require('../gruff-interview.js');
 const G = window.DraftGruffInterview;

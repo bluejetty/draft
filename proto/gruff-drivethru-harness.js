@@ -5,6 +5,14 @@
 // That is the fact worth pinning: a percentage that no longer lands on a whole
 // pixel of the source art is a number somebody nudged by eye, and nudging by
 // eye is how a panel drifts off the drawing underneath it.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node gruff-drivethru-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 global.window = global.window || {};
 require('../gruff-drivethru.js');
 const G = global.window.DraftGruffDrivethru;

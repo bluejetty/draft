@@ -16,6 +16,14 @@
 // minimum while blocking them from making it bigger. It cannot be caught by
 // looking at the screen, which is why the mapping is a module and why the
 // first thing proved here is all four directions.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node toy-context-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 const fs = require('fs');
 const path = require('path');
 

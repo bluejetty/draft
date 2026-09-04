@@ -14,6 +14,14 @@
 // floor there to keep the slab one measurable piece; this app never cuts the
 // slab, so the sliver is unnecessary — and a containment test that refused a
 // flush edge would put it straight back.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node ring-inside-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 global.window = global.window || {};
 require('../geometry-2d.js');
 const G = global.window.DraftGeometry2D;

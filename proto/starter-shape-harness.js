@@ -3,6 +3,14 @@
 // Every shape at every width, checked in node without a browser. The point of
 // this harness is the SWEEP: generate() picks a width at random, so a bug that
 // only bites at 47' would otherwise surface on a stranger's first press.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node starter-shape-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 const fs = require('fs');
 const path = require('path');
 const root = path.join(__dirname, '..');

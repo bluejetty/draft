@@ -19,6 +19,14 @@
 //
 // So there is no neck measurement here and there must never be one. If a room
 // in this file is not a rectangle, something upstream has gone wrong.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node closets-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 const fs = require('fs');
 const path = require('path');
 

@@ -10,6 +10,14 @@
 //
 // Exit code 0 = every check passed. The Playwright specs pin the commit
 // layer (tests/room-grow.spec.js); this pins the math.
+
+// No mutation mode here, so this harness accepts no arguments at all. It
+// used to read none: `node room-grow-harness.js --mutate` printed a full
+// passing run and exited 0, having mutated nothing. noFlags(), not
+// mutationMode() -- the latter would accept --mutate and print green for a
+// mode that does not exist.
+require('./harness-args.js').noFlags();
+
 const fs = require('fs');
 const path = require('path');
 
