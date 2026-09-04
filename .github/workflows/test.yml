@@ -48,9 +48,44 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # @v7 ON ALL THREE ACTIONS, AND THE MAJOR WAS CHECKED PER ACTION.
+      #
+      # The @v4 tags declare `using: node20` in their own action.yml. GitHub is
+      # retiring that runtime and already force-runs them on Node 24; today a
+      # warning, later a hard failure. This is about the runtime the ACTIONS
+      # execute in -- `node-version` below is a different thing entirely, the
+      # Node our harnesses run under, and is deliberately left alone.
+      #
+      # The obvious fix was wrong. Bumping every @v4 to @v5 looks like it
+      # addresses the deprecation and passes review, but:
+      #
+      #   upload-artifact@v4      node20   what we pinned
+      #   upload-artifact@v5      node20   the obvious bump -- changes NOTHING
+      #   upload-artifact@v7.0.1  node24   the actual fix
+      #
+      # A version bump indistinguishable from a real one except by the thing it
+      # was supposed to change. The warning would keep firing and the next
+      # person would assume it had been handled.
+      #
+      # And three-for-three on v7 is a COINCIDENCE, not a pattern: three repos
+      # with independent release cadences that happen to have converged this
+      # week. When the next deprecation comes round, or a fourth action joins
+      # this file, the per-action action.yml check is still the only thing that
+      # answers it. Do not infer the major from a sibling.
+      #
+      # Two more traps worth naming, both hit while getting this right:
+      # the deprecation WARNING enumerates the actions that RAN, and
+      # upload-artifact only runs `if: failure()` -- so reading the fix off a
+      # green log gives two of the three. The file is the enumeration.
+      # And do NOT set ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: it forces the
+      # old runtime back, which is the wrong direction, and the word is in the
+      # variable name for a reason.
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
+          # The Node the HARNESSES run under, unrelated to the above. Held at
+          # 20 deliberately: it is the version this code is tested against, and
+          # moving it is a decision about the code, not about a runner warning.
           node-version: 20
       - name: Run every proto harness
         run: |
@@ -145,14 +180,14 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --shard=${{ matrix.shard }}/4
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           # Unique per shard: upload-artifact v4 rejects a duplicate name
