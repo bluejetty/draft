@@ -56,7 +56,7 @@
        the page reads name-then-value everywhere, the same direction as the
        section table below. A mirror would have made the left half read
        backwards. (Movie's call, and he was right.) */
-    .band { display:grid; grid-template-columns:minmax(0,1fr) 490px minmax(0,1fr); max-width:1090px; margin:0 auto; gap:0 12px; align-items:start; justify-content:center; }
+    .band { display:grid; grid-template-columns:minmax(0,1fr) 580px minmax(0,1fr); max-width:1180px; margin:0 auto; gap:0 12px; align-items:start; justify-content:center; }
     .sched { align-self:start; padding-top:2px; }
     .sched-head { padding:0 4px 4px; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
     .sched-row { display:grid; grid-template-columns:minmax(0,1fr) 78px; gap:8px; align-items:center; padding:3px 4px; border-bottom:1px solid rgba(29,31,32,.07); }
@@ -153,7 +153,7 @@
         <div class="band">
           <div class="sched" id="sched-garage"></div>
           <div class="detail-wrap" id="detail-wrap">
-            <canvas id="detail-canvas" width="490" height="500" aria-label="Live section — house and attached garage"></canvas>
+            <canvas id="detail-canvas" width="580" height="500" aria-label="Live section — house and attached garage"></canvas>
           </div>
           <div class="sched" id="sched-house"></div>
         </div>
@@ -569,6 +569,11 @@
       // mirror -- a mirror would make the garage's half read value-then-name,
       // backwards from every other column on the page, including the section
       // table below.
+      // How far the left-hand grey column starts back from the drawing, and
+      // how far the right-hand one sits off it. One pair of numbers, so the
+      // two sides stay symmetric when the drawing's width changes.
+      const GREY_COL = 104;
+      const GREY_GAP = 8;
       const houseSched = document.querySelector('#sched-house');
       const garageSched = document.querySelector('#sched-garage');
       // One drawing, so one wrap: every part label -- house or garage --
@@ -807,7 +812,7 @@
         // Built first, painted second: the two sections have to agree on a
         // scale and a y origin BEFORE either is drawn, or the garage's offset
         // reads as a drawing error rather than a height.
-        const { anchors } = projectPage.paintSections(canvas, [
+        const { anchors, view } = projectPage.paintSections(canvas, [
           projectPage.buildGarageSection(garageValues()),
           projectPage.buildWallSection(detailValues()),
         ]);
@@ -841,11 +846,19 @@
           // it findable -- and gives up its horizontal position, which was
           // only ever putting words on top of linework. The garage's go left,
           // the house's right, each on the side its schedule is on.
+          // Movie, 4 Sep: "bring the grey text so it is close to the section
+          // ... aligned on left on both sides but close to the section
+          // drawing". Both columns start at the same edge of themselves and
+          // run right, and both sit against the DRAWING rather than against
+          // the canvas -- which is wider than the section needs, so pinning to
+          // the canvas edge pushed the labels away from what they name.
+          const left = (canvas.width - view.span * view.scale) / 2;
+          const right = left + view.span * view.scale;
           const garageSide = key.startsWith('garage');
-          tag.style.left = garageSide ? '1px' : `${canvas.width - 1}px`;
+          tag.style.left = garageSide
+            ? `${Math.max(2, left - GREY_COL)}px` : `${right + GREY_GAP}px`;
           tag.style.top = `${at.y}px`;
-          tag.style.transform = garageSide
-            ? 'translate(0,-50%)' : 'translate(-100%,-50%)';
+          tag.style.transform = 'translate(0,-50%)';
           if (control.kind === 'chip') el.textContent = control.text();
           else if (document.activeElement !== el) el.value = control.get();
         });

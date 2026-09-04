@@ -472,7 +472,10 @@ if (!window.DraftProjectPage) {
     sections.forEach(section => {
       Object.assign(anchors, paintSection(canvas, section, view, align, false).anchors);
     });
-    return { anchors, scale: view.scale };
+    // The view goes back with the anchors so the page can put labels against
+    // the DRAWING's edges rather than the canvas's -- the two are not the same
+    // once the canvas is wider than the section needs.
+    return { anchors, scale: view.scale, view };
   };
 
   const paintWallSection = (canvas, values, view, align) =>
