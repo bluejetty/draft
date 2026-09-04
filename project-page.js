@@ -163,20 +163,24 @@ if (!window.DraftProjectPage) {
   // sill to sill, not floor to floor, so it holds when the floor package
   // changes.
   const GARAGE_SILL_BELOW_HOUSE_FT = 2;
-  // Movie, 4 Sep: "the grade line will always be min. 8" below the level of
-  // top of concrete (where it meets sill plate)". Not a default -- a floor.
-  // Grade higher than this puts soil against the sill plate and the framing
-  // above it, which is a wood-to-earth detail nobody draws on purpose. The
-  // office default sits at 1'-0", comfortably under it; this is the line the
-  // drafter cannot type past.
   // THE HEEL'S BAND. Movie, 5 Sep: "the min heel is 3.5" in reality but lets
   // make ours 5.5" min", then "the max how about 30" max", then "actually the
   // max should be more". So the floor is an OFFICE rule, not a physical one --
   // the trusses will do 3 1/2" and the office will not draw it -- which is the
   // reason to name it rather than bury a 5.5 in a comparison: the day somebody
   // wants the real minimum they need to find it, and see that it was a choice.
-  // It coincides with the fascia depth, and that coincidence is not the rule:
-  // a deeper fascia does not move this number.
+  //
+  // AND IT IS BUILDABLE AT ANY PITCH, WHICH IS NOT OBVIOUS. A 3 1/2" chord is
+  // 3 1/2" measured SQUARE ACROSS ITSELF, so the vertical it makes grows with
+  // the pitch: 3.69" at 4:12, 4.95" at 12:12, 6.90" at 24:12. Read that way
+  // the physical floor would overtake this one around 14 1/2:12, and above
+  // that a 5 1/2" heel would drive the chord through the top plate. It does
+  // not, because the chord does not arrive uncut -- Movie, 5 Sep: "cut the
+  // bottom off flat so the fascia will be 5.5"". The tail is cut to make that
+  // face, so 5 1/2" is reachable on any roof and this floor is rightly a
+  // constant rather than a function of pitch. The fascia matching it is the
+  // same cut and not a coincidence; it is still not the rule, and a deeper
+  // fascia does not move this number.
   //
   // THE CEILING IS A TYPO CATCH, NOT A DESIGN LIMIT. Movie, 5 Sep: "actually
   // the max should be more ... in case of large overhangs ... lets make it
@@ -215,6 +219,12 @@ if (!window.DraftProjectPage) {
   const roofHeelInBand = inches => Number.isFinite(inches)
     && inches >= ROOF_HEEL_MIN_IN && inches <= ROOF_HEEL_MAX_IN;
 
+  // Movie, 4 Sep: "the grade line will always be min. 8" below the level of
+  // top of concrete (where it meets sill plate)". Not a default -- a floor.
+  // Grade higher than this puts soil against the sill plate and the framing
+  // above it, which is a wood-to-earth detail nobody draws on purpose. The
+  // office default sits at 1'-0", comfortably under it; this is the line the
+  // drafter cannot type past.
   const GRADE_MIN_BELOW_CONCRETE_IN = 8;
   // WHERE IT IS ACTUALLY DRAWN, which is not the same as the minimum. Movie,
   // 4 Sep: "let's move our grade line down further than 8". If the house is
@@ -412,6 +422,11 @@ if (!window.DraftProjectPage) {
     // the whole roof -- chords, fascia, soffit -- rises by the difference,
     // which is what a raised-heel truss actually does: the soffit line goes
     // up and the extra room over the plate is what the insulation goes in.
+    // A RIGID LIFT. Movie, 5 Sep: "when heel is raised or lowered the fascia
+    // will raise or lower and peak at the same up down rate" -- one
+    // translation applied to the whole roof, so nothing about its shape
+    // changes. The ceiling does not come with it: it is set by the wall
+    // height, so the attic gains exactly the lift.
     // The fascia stays a 2x6, because it is a board.
     const heelLiftFt = roof.heelIn == null ? 0
       : (roof.heelIn - roofHeelIn(roof.fasciaIn, roof.overhangFt, roof.pitch)) / 12;
