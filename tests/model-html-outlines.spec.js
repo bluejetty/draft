@@ -140,6 +140,17 @@ test.describe('MODEL.html outlines', () => {
       // The first draft of this line used 0.0002, which is 45% of the
       // measured value -- a number tuned just past one reading, which is how
       // two earlier canvas checks in this suite went flaky within a day.
+      //
+      // AND THE STATISTIC ONLY ANSWERS "IS IT THERE". Ink share is not
+      // scale-free: fit-to-content picks its zoom from whatever else is in the
+      // drawing, so the same outline measured 0.000443, 0.000486 and 0.000680
+      // across three runs -- a 50% spread with nothing changed but the
+      // fixture's neighbours. Harmless for a question whose other answer is
+      // exactly 0 and any positive floor separates them; useless for "how much
+      // of the outline drew". A later spec wanting that should count the
+      // readout's SHOWN/TOTAL, which does not move with the zoom. Tightening
+      // this number toward "all of it" would be reading a quantity out of a
+      // statistic that does not carry one. (Skipper's point.)
       const ink = await inkShare(page, GARAGE);
       expect(ink, 'the garage outline must be on the canvas in #7d5ba6')
         .toBeGreaterThan(0.00005);
