@@ -232,7 +232,11 @@ const check = (name, condition, detail) => {
   failures.push(detail ? `${name}\n      ${detail}` : name);
 };
 
-const file = process.argv[2] || path.join(ROOT, 'proto', 'repro-L-house.draft');
+// The one optional positional, through the shared guard, so a flag is
+// rejected BEFORE anything treats argv as a path. Before this the line read
+// process.argv[2] directly and `--mutate` died on ENOENT with exit 1 -- the
+// one harness of twenty-two that answered a wrong flag with "checks failed".
+const file = require('./harness-args.js').optionalPositional() || path.join(ROOT, 'proto', 'repro-L-house.draft');
 const win = loadDraftModules();
 const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
 const env = buildEnv(win, saved);

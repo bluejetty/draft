@@ -57,5 +57,30 @@ function noFlags(argv = process.argv.slice(2)) {
   reject(argv, NO_FLAGS);
 }
 
+// For a harness that takes ONE OPTIONAL POSITIONAL -- a file to check -- and
+// no flags. It cannot use noFlags(), which would reject the file, and it
+// cannot read process.argv[2] first: that is what elevation-harness.js did,
+// so `--mutate` was consumed AS A FILENAME and the run died on ENOENT --
+// exit 1, "the checks failed", for what was a usage error. The ORDER here is
+// the point. Flags are rejected before the positional is looked at, so a
+// flag never reaches the code that treats argv as a path.
+//
+// Anything starting with '-' is a flag. That rules out a file whose name
+// begins with a hyphen, and that is accepted: no harness input is named that
+// way, and a rule with an exception is the kind of guard this file exists to
+// not have.
+function optionalPositional(argv = process.argv.slice(2)) {
+  const flags = argv.filter(a => a.startsWith('-'));
+  const rest = argv.filter(a => !a.startsWith('-'));
+  const problem = flags.length ? `unknown argument(s): ${flags.join(', ')}`
+    : rest.length > 1 ? `expected at most one argument, got ${rest.length}: ${rest.join(', ')}`
+    : null;
+  if (problem) {
+    console.error(problem);
+    console.error(`usage: node ${path.basename(process.argv[1])} [file]`);
+    process.exit(2);
+  }
+  return rest[0];
+}
 
-module.exports = { FLAGS, mutationMode, noFlags };
+module.exports = { FLAGS, mutationMode, noFlags, optionalPositional };
