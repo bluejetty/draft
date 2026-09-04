@@ -436,6 +436,31 @@ be wrong; the person is one message away and can simply be asked.
 
 ---
 
+### Adding a rule includes reading one back
+
+Gilligan's, 4 Sep, and it is the only practice on this page aimed at the page
+itself. **Whoever adds an entry re-reads a neighbouring one and confirms it
+still says what it measured.**
+
+It is what caught rule 10's heading contradicting its own body, and it caught
+it by accident — he read that rule only because he had contributed to it. This
+turns the accident into a step. The cost is one read per amendment, against
+four amendments last night that produced one stale heading between them.
+
+**Read it against the measurement it cites, not for sense.** A stale rule and a
+correct one are identical prose; the difference is a number, a line reference
+or a file count that has since moved. Rule 10 read perfectly well as English
+the whole time it was wrong.
+
+This is also the nearest thing prose has to the instrument the rules are about.
+Mutation testing works by breaking the thing deliberately and watching what
+stays quiet; you cannot break a paragraph that way. But you can re-derive the
+figure it quotes, and a rule that cannot survive its own citation being checked
+is exactly the document equivalent of a check that passes when the subject is
+deleted.
+
+---
+
 ### What of this can be institutionalised, and what cannot
 
 Gilligan's, 4 Sep, closing out a night of these. Worth putting first, because
