@@ -6,6 +6,97 @@ on:
     branches: [main]
 
 jobs:
+  # THE NODE HARNESSES, WHICH NOTHING HAS EVER RUN AUTOMATICALLY.
+  #
+  # Twenty-one files under proto/, each one written to pin down a defect that
+  # had already cost a session, and not one of them was executed by anything
+  # but a person remembering to. A harness nobody runs is a test suite that
+  # decays silently: it keeps passing on the author's machine right up until
+  # the day it cannot run at all, and nothing says so.
+  #
+  # Two were in that state when this job was written. load-order-harness.js
+  # and palette-harness.js required their subjects by ABSOLUTE path --
+  # /home/user/draft/palette.js -- which resolves on exactly one machine. CI
+  # checks out to /home/runner/work/draft/draft, so both would have failed
+  # here on the first run with MODULE_NOT_FOUND. Measured before this job was
+  # added, by pointing the baked prefix at a root that does not exist:
+  #
+  #   load-order-harness.js   exit=1   Cannot find module '.../layout-plan.js'
+  #   palette-harness.js      exit=1   Cannot find module '.../palette.js'
+  #
+  # SEPARATE JOB, not a step in the shards below. It needs no browser and no
+  # npm install -- the harnesses require only fs, path, vm and files in this
+  # repo, measured -- so it finishes in about two seconds against the suite's
+  # twenty minutes. A red here arrives before the shards have finished
+  # installing chromium.
+  #
+  # PLAIN MODE, no flags, deliberately. The mutation and coverage modes gate
+  # on things a branch is allowed to be mid-way through -- render-2d's
+  # --coverage exits non-zero when a painter has no checks yet -- and a
+  # contributor adding the painter before its checks should not be blocked by
+  # CI. Plain mode asks the one question that is always fair: do the checks
+  # pass?
+  #
+  # The cost of that choice, stated rather than left to be discovered: the
+  # MUTATION ENGINES ARE NOT EXERCISED HERE. A broken mutation engine still
+  # rots unnoticed. Running them would need every harness to reject flags it
+  # does not honour -- today four of the twenty-one carry that guard, so a
+  # loop passing --mutate would run seventeen of them in plain mode and print
+  # a green table. That is the same defect this job exists to prevent, so it
+  # is not being added until the guard is universal.
+  harnesses:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run every proto harness
+        run: |
+          # nullglob so an unmatched pattern gives an EMPTY ARRAY rather than
+          # the literal string 'proto/*-harness.js' -- without it the loop
+          # would run node against a filename that does not exist, and the
+          # difference between "nothing matched" and "one thing failed" would
+          # be lost.
+          shopt -s nullglob
+          harnesses=(proto/*-harness.js)
+
+          # A LOOP THAT MATCHES NOTHING PASSES. That is the failure this job
+          # is least able to notice about itself: rename the files, or move
+          # them, and every run afterwards is green having executed nothing.
+          # So the empty case is an explicit error, not a silent success.
+          if [ ${#harnesses[@]} -eq 0 ]; then
+            echo "no harnesses matched proto/*-harness.js -- nothing ran"
+            exit 1
+          fi
+          echo "${#harnesses[@]} harnesses"
+          echo
+
+          # The glob is '*-harness.js', with the hyphen. proto/harness-args.js
+          # is a MODULE, not a harness: running it directly defines its
+          # exports and exits 0, which would sit in this list as a permanent
+          # false pass. The hyphen excludes it by construction rather than by
+          # a name in a list that someone has to maintain.
+          failed=0
+          for h in "${harnesses[@]}"; do
+            # Captured, never piped. `exit=$?` after a pipe reads the LAST
+            # command's status, which is how a deliberately broken harness
+            # once reported success in this repo.
+            out=$(node "$h" 2>&1) && code=0 || code=$?
+            if [ "$code" -eq 0 ]; then
+              printf 'ok    %s\n' "$h"
+            else
+              failed=$((failed + 1))
+              printf 'FAIL  %s  (exit %s)\n' "$h" "$code"
+              echo "$out" | tail -40 | sed 's/^/      /'
+            fi
+          done
+
+          echo
+          echo "$(( ${#harnesses[@]} - failed ))/${#harnesses[@]} harnesses passed"
+          [ "$failed" -eq 0 ]
+
   playwright:
     runs-on: ubuntu-latest
     # FOUR SHARDS, BECAUSE AN HOUR SERIAL HAD RUN OUT OF ROAD.

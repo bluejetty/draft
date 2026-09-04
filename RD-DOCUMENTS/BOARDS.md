@@ -69,39 +69,56 @@ pool · `#331` NAHB room-program defaults · `#198` room stamping step ·
 `#321` entry page rework · `#318` tray door/window centreline snap ·
 `#2a` reorder the MODEL right-side menu to mirror the sheet order.
 
-### CI runs no harness — 20 of them, and not one is guarded
+### CI runs the harnesses now — in plain mode, and 17 of 21 still take flags they ignore
 
-Gilligan's, 4 Sep, sharpening a smaller finding of Skipper's. Skipper had
-measured that ten of the harnesses load their module through `require()` and so
-cannot mutate their own source in-process. True, and beside the larger point:
-**`test.yml` runs `npx playwright test` and nothing else.** No harness is
-invoked by CI at all.
+**Done 4 Sep**, as a separate `harnesses` job in `test.yml`. Kept here rather
+than deleted, because what it does NOT cover is the part someone will assume.
 
-Measured on 4 Sep: 20 harnesses under `proto/`, all passing, carrying 500-plus
-visible assertions — `render-2d` 281 across 140 checks, `gruff-interview` 73,
-`room-grow` 69, `auto-windows` 45, `elevation` 21, `wall-joins` 14. Their
-greenness is only ever as current as the last person who typed `node proto/…`.
-
-**The failure mode is worse than "untested", and that is the part worth
-keeping.** A harness that a change breaks does not go red. It goes **green in
-CI while broken**, and stays that way until a human happens to run it. A test
-that fails for a person but passes for the machine is worse than no test at
-all: with no test you know you are unguarded, and with this one you believe you
-are not.
-
-It is what stopped a real push today. Gilligan had a finished `drawOrigin2D`
-colour suite and held it in a patch file rather than pushing, precisely because
-pushing it would have looked green either way and taught nobody anything.
-
-The fix is a step, not a project:
+The entry below stood when nothing ran them at all. Three details of the
+one-line fix it proposed turned out to be wrong, and each was found by trying
+it rather than reading it:
 
     - run: for f in proto/*harness*.js; do node "$f" || exit 1; done
 
-Not done here because it is a repository-infrastructure change and belongs in
-its own PR, not bolted onto one already in CI — and because it should land when
-someone can watch what it turns red. Every harness passes today, so the honest
-expectation is that it lands green and stays useful from the next change
-onward.
+- **`*harness*` matches `proto/harness-args.js`**, which is a module, not a
+  harness. Run directly it defines its exports and exits 0 — a permanent false
+  pass sitting in the list. `*-harness.js`, with the hyphen, excludes it by
+  construction rather than by a name someone has to maintain.
+- **`|| exit 1` stops at the first failure**, so three broken harnesses look
+  like one. Same reasoning as `fail-fast: false` on the shards: three green and
+  one red is a diagnosis.
+- **A glob that matches nothing runs nothing and exits 0.** Rename the files
+  and every run afterwards is green having executed no code. The empty case is
+  now an explicit error — this job's own instance of rule 0, and the one thing
+  it is least able to notice about itself.
+
+**Two harnesses could not have run here at all.** `load-order-harness.js` and
+`palette-harness.js` required their subjects by absolute path —
+`/home/user/draft/palette.js` — which resolves on exactly one machine. Pointed
+at a root that does not exist, as CI's would be, both exit 1 with
+MODULE_NOT_FOUND. They passed for a year because the only thing that ever ran
+them was standing in the right directory. That is precisely the decay this
+entry predicted, found the moment something other than a person ran them.
+
+**What is still open, and it is not small:**
+
+- **The mutation engines are not exercised.** Plain mode asks "do the checks
+  pass?"; it never asks "can these checks fail?" A mutation engine that stopped
+  mutating would sail through this job forever.
+- **Seventeen of the twenty-one accept flags they do not honour.** Four carry
+  the guard lifted into `proto/harness-args.js`. The rest take `--mutate`,
+  ignore it, and print a green run — so a CI loop passing that flag would
+  report seventeen passes for a mode that never ran. That is this entry's own
+  failure mode, one level in, and it is why the job passes no flags.
+- **`palette-harness.js` never reads `argv` at all.** `--total-nonsense` exits
+  0 with a full green run. And the obvious fix is wrong in a subtler way, which
+  is Gilligan's catch: `mutationMode()` accepts `--mutate` because it is in
+  `FLAGS`, and the palette harness has no mutation mode to run, so it would
+  take the flag and ignore it. **A harness with no mutation mode must reject
+  all flags, not just unknown ones.**
+
+The order matters: make the guard universal first, then a CI loop can pass
+`--mutate` and mean it.
 
 ### The drawing does not obey the skin — 18 hardcoded colours in render-2d.js
 
@@ -571,6 +588,20 @@ be wrong; the person is one message away and can simply be asked.
 
 ---
 
+**The cost is a bad artefact, not a bad sentence.** Gilligan, 4 Sep, on the
+second occurrence — a screenshot whose input box read "270 merged and branch
+deleted", unsent, while `main` had not moved. He measured instead of reading,
+and named what acting on it would have cost: not a wrong statement in a
+conversation, but a wrong **patch**. His lift was built against `main` plus his
+own branch; applying it to a base without that branch means three call sites
+whose surrounding context differs by eighty-five lines. That does not fail
+loudly. It applies with fuzz, or lands in the wrong place — **and the harnesses
+print a green table afterwards.**
+
+Which is the sharper form of this rule. The first occurrence cost a false claim
+that a person corrected in a minute. The second would have cost a silently
+misapplied diff that nothing downstream could see.
+
 ### Adding a rule includes reading one back
 
 Gilligan's, 4 Sep, and it is the only practice on this page aimed at the page
@@ -595,6 +626,18 @@ is exactly the document equivalent of a check that passes when the subject is
 deleted.
 
 ---
+
+**Against its neighbours, not just itself.** Gilligan, 4 Sep, and it is an
+exact parallel to rule 10's third case. A redundantly guarded property cannot
+be found by mutating one guard at a time; a self-contradicting document cannot
+be found by reading one entry at a time. Both are invisible to one-at-a-time
+inspection and appear only when two things are held together.
+
+Re-reading an entry on its own cannot surface a collision with an entry three
+hundred lines away. That is how "mechanism" came to carry two opposite
+instructions in this file for about an hour — each sentence correct, the pair
+contradictory. So the practice is: read the new entry **against the rules it
+sits beside**, and specifically against any rule that shares its vocabulary.
 
 ### What of this can be institutionalised, and what cannot
 

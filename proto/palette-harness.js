@@ -9,7 +9,7 @@
 // Movie, 2 Sep: "the texts and numbers will change, we will make them more
 // visible." So legibility is asserted, and a skin that fails it fails here.
 global.window = global;
-require('/home/user/draft/palette.js');
+require('../palette.js');
 const P = window.DraftPalette;
 
 // This harness has no mutation mode, so it accepts no arguments at all.
