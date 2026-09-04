@@ -155,6 +155,19 @@ if (!window.DraftProjectPage) {
   // office default sits at 1'-0", comfortably under it; this is the line the
   // drafter cannot type past.
   const GRADE_MIN_BELOW_CONCRETE_IN = 8;
+  // WHERE IT IS ACTUALLY DRAWN, which is not the same as the minimum. Movie,
+  // 4 Sep: "let's move our grade line down further than 8". If the house is
+  // higher out of the ground it is easier to regrade afterwards if there is
+  // space. If it's too low it can cause additional problems, so better
+  // higher. Let's move it to 1'-2" grade to top of concrete so they have 6"
+  // to slope around the perimeter."
+  //
+  // So the two numbers do different jobs and both are needed: 8" is the line
+  // a drafter cannot type past, 1'-2" is where the drawing puts it, and the
+  // 6" between them is the room the site crew has to fall away from the
+  // building. Collapsing them to one number would either forbid a legal 8"
+  // or draw a building with no slope to give.
+  const GRADE_BELOW_CONCRETE_IN = 14;
   // The truss top chord, drawn as a member rather than as a line. Movie,
   // 4 Sep: draw the roof "with 2 x 3.5" separated lines to show the roof
   // chords". Measured off his own drawing to be sure: its two roof lines sit
@@ -707,6 +720,7 @@ if (!window.DraftProjectPage) {
     GARAGE_BEAM_ABOVE_GRADE_IN,
     GARAGE_SILL_BELOW_HOUSE_FT,
     GRADE_MIN_BELOW_CONCRETE_IN,
+    GRADE_BELOW_CONCRETE_IN,
     FOUNDATION_ATTACHMENTS,
     ATTACHMENT_LABEL,
     LADDER_WIDTH_IN,

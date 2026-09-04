@@ -1326,7 +1326,7 @@
       // further and grade follows it down.
       const derivedGradeOffsetFt = () =>
         attachedOffsetFt() - houseSillFt()
-        - projectPage.GRADE_MIN_BELOW_CONCRETE_IN / 12;
+        - projectPage.GRADE_BELOW_CONCRETE_IN / 12;
       const gradeOffsetFt = () =>
         zoneHeights.gradeOffsetFt ?? derivedGradeOffsetFt();
 
