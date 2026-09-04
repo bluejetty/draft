@@ -644,6 +644,12 @@
 
       const controlEls = new Map();
 
+      // ANNOTATIONS: a grey label on the drawing with no schedule row behind
+      // it. Not everything worth naming is a number the drafter sets -- the
+      // attic is a space, not a dimension, and giving it a row would offer an
+      // edit that does not exist.
+      const ANNOTATIONS = [{ key: 'attic', text: 'ATTIC SPACE' }];
+
       // Hover a row and its part lights up on the drawing; hover the part and
       // the row lights up. The numbers used to sit ON the thing they measured
       // -- this is what replaces the connection that move cost.
@@ -666,6 +672,14 @@
       schedHead(houseSched, 'House');
 
       schedRow(houseSched, 'wallType', 'Exterior wall type', wallTypeSelect);
+
+      ANNOTATIONS.forEach(({ key, text }) => {
+        const tag = document.createElement('span');
+        tag.className = 'detail-tag';
+        tag.textContent = text;
+        wrap.appendChild(tag);
+        controlEls.set(key, { control: { kind: 'annotation' }, el: tag, tag });
+      });
 
       controls.forEach(control => {
         const tag = document.createElement('span');
@@ -849,7 +863,7 @@
         ]);
         controlEls.forEach(({ control, el, tag }, key) => {
           const at = anchors[key];
-          const row = el.closest('.sched-row');
+          const row = el.closest ? el.closest('.sched-row') : null;
           if (!at && control.kind === 'choice') {
             // A MODE, not a dimension. The hide-without-an-anchor rule below
             // is right for a measurement -- if the drawing has no such part,
@@ -890,6 +904,7 @@
             ? `${Math.max(2, left - GREY_COL)}px` : `${right + GREY_GAP}px`;
           tag.style.top = `${at.y}px`;
           tag.style.transform = 'translate(0,-50%)';
+          if (control.kind === 'annotation') return;   // the label IS the whole control
           if (control.kind === 'chip') el.textContent = control.text();
           else if (document.activeElement !== el) el.value = control.get();
         });

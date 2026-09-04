@@ -214,6 +214,13 @@ if (!window.DraftProjectPage) {
     // it is measured from. Dropped below the plate, it falls into the order
     // the eye works down: pitch, fascia, overhang, heel, then the wall.
     anchors.heel = { x: 0.45, y: plateY - 1.3 };
+
+    // The ceiling, and the attic over it. Movie, 4 Sep: "you can add a roof
+    // area, just some separation line that says attic space maybe". Without
+    // it the roof reads as sitting straight on the wall, with no room between
+    // -- the space that carries insulation and venting looked like nothing.
+    line(0, plateY, CUT_DEPTH_FT, plateY, 1);
+    anchors.attic = { x: CUT_DEPTH_FT * 0.55, y: plateY + riseAt(CUT_DEPTH_FT * 0.55) / 2 };
     line(0, plateY, 0, plateY + riseAt(0), 1);                  // heel at the wall face
 
     // Foundation: wall top carries the main floor, footing centered under
@@ -297,8 +304,9 @@ if (!window.DraftProjectPage) {
     const floorY = g.floorOffsetFt;
     anchors.garageOffset = { x: cut / 2, y: floorY + 0.62 };
 
-    // Slab on grade, poured against the inside face of the wall.
-    rect(cut, floorY - slabFt, GARAGE_CUT_FT - fdnFt, slabFt, 1);
+    // The slab is INBOARD of the beam -- behind the cut plane, into the page --
+    // so it does not appear as linework here. Its anchor stays, because the
+    // number is still the garage's and the schedule should still carry it.
     anchors.garageSlab = { x: cut * 0.62, y: floorY - slabFt - 0.5 };
 
     // TWO FOUNDATIONS, ONE TOP. Movie, 4 Sep: "that should actually be an
@@ -346,28 +354,38 @@ if (!window.DraftProjectPage) {
     // where a number that is usually correct is welded in so the unusual
     // drawing cannot be made at all. A 95% answer is a DEFAULT, and a default
     // is something you can type over.
+    // THE CUT RUNS ALONG THE BEAM, NOT ACROSS IT. Movie, 4 Sep: "you drew the
+    // grade beam sideways it should extend out and meet the section cut line
+    // approx 4-6 out, the 4" void form will also go that way".
+    //
+    // The first version drew the beam as an 8"-wide stub hanging at the house
+    // wall -- the beam seen END ON, which is what you get cutting across it.
+    // This section is cut ALONG the garage's side wall, so the beam runs out
+    // from the house and is cut lengthwise: it reads as a band the full width
+    // of the drawing, ending at the break. The void form does the same,
+    // because it is cast under the beam for its whole run.
     const frostWall = g.foundation === 'frostwall';
     const sillFt = SILL_PLATE_IN / 12;
     const fdnTop = floorY;
     const concTop = fdnTop - sillFt;
     const fdnBot = frostWall ? g.houseFootingTopFt : concTop - g.fdnWallHeightFt;
-    rect(-fdnFt, fdnBot, fdnFt, concTop - fdnBot, 2);
-    rect(-fdnFt, concTop, fdnFt, sillFt, 1.5);
-    anchors.garageFdnHeight = { x: -fdnFt - 0.9, y: (concTop + fdnBot) / 2 };
-    anchors.garageSill = { x: -fdnFt - 0.9, y: concTop + sillFt / 2 };
+    rect(cut, fdnBot, GARAGE_CUT_FT, concTop - fdnBot, 2);
+    rect(cut, concTop, GARAGE_CUT_FT, sillFt, 1.5);
+    anchors.garageFdnHeight = { x: cut * 0.5, y: (concTop + fdnBot) / 2 };
+    anchors.garageSill = { x: cut * 0.5, y: concTop + sillFt / 2 };
 
     let lowest;
     if (frostWall) {
       // A footing, the house's own size, its bottom level with the house's.
-      const footW = g.footingWidthIn / 12, footD = g.footingDepthIn / 12;
-      rect(-fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);
-      anchors.garageFooting = { x: -fdnFt / 2 - footW / 2 - 0.85, y: fdnBot - footD / 2 };
+      const footD = g.footingDepthIn / 12;
+      rect(cut, fdnBot - footD, GARAGE_CUT_FT, footD, 1.5);
+      anchors.garageFooting = { x: cut * 0.5, y: fdnBot - footD / 2 };
       lowest = fdnBot - footD;
     } else {
       // 4" void form under the beam, between the piles: the beam is cast on
       // it and the form crushes, so heaving soil lifts nothing.
-      rect(-fdnFt, fdnBot - VOID_FORM_IN / 12, fdnFt, VOID_FORM_IN / 12, 1);
-      anchors.garageVoidForm = { x: -fdnFt - 0.9, y: fdnBot - VOID_FORM_IN / 24 };
+      rect(cut, fdnBot - VOID_FORM_IN / 12, GARAGE_CUT_FT, VOID_FORM_IN / 12, 1);
+      anchors.garageVoidForm = { x: cut * 0.5, y: fdnBot - VOID_FORM_IN / 24 };
       lowest = fdnBot - VOID_FORM_IN / 12;
     }
     // NO FOOTING. Movie, 4 Sep: "why does your garage have a footing?" -- it
@@ -539,11 +557,6 @@ if (!window.DraftProjectPage) {
     return { anchors, scale: view.scale, view };
   };
 
-  const paintWallSection = (canvas, values, view, align) =>
-    paintSection(canvas, buildWallSection(values), view, align);
-  const paintGarageSection = (canvas, values, view, align) =>
-    paintSection(canvas, buildGarageSection(values), view, align);
-
   window.DraftProjectPage = Object.freeze({
     ZONE_ROWS,
     CUT_DEPTH_FT,
@@ -551,7 +564,6 @@ if (!window.DraftProjectPage) {
     SECTION_TABLE_ROWS,
     SECTION_TABLE_ITEMS,
     SECTION_TABLE_DEFAULTS,
-    GARAGE_GRADE_BEAM_IN,
     GARAGE_FOUNDATIONS,
     GARAGE_FOUNDATION_LABEL,
     VOID_FORM_IN,
@@ -564,11 +576,7 @@ if (!window.DraftProjectPage) {
     roofHeelIn,
     buildWallSection,
     buildGarageSection,
-    sectionView,
-    paintSection,
     paintSections,
-    paintWallSection,
-    paintGarageSection,
   });
 })();
 }
