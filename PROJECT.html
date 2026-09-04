@@ -542,7 +542,7 @@
       // out loud because the file's own comment promises the opposite for
       // its neighbours.
       const attachmentChoice = () => (fdnIsIcf() ? 'sill' : foundationAttachment);
-      addInput('attachment', 'ATTACHMENT', {
+      addInput('attachment', 'FND ATTACHMENT', {
         name: 'attachment',
         kind: 'choice',
         choices: () => (fdnIsIcf() ? ['sill'] : projectPage.FOUNDATION_ATTACHMENTS)
@@ -650,6 +650,37 @@
       const fullName = control => FULL_NAME[control.key]
         || control.tag.replace('FL JST', 'joist depth').replace('WALL HT', 'wall height');
 
+      // WHAT THE DRAWING CALLS A PART, which is not what the schedule calls
+      // it. Movie struck words off the section by hand: FLOOR OFF MAIN FL
+      // gone entirely, "SILL PLATE ON THE BEAM" down to SILL PLATE, "FROST
+      // WALL HEIGHT" to FROST WALL, "GRADE OFF FDN TOP" to GRADE, "FOOTING —
+      // LEVEL WITH THE HOUSE" to FOOTING, ATTACHMENT struck and replaced by
+      // the thing itself.
+      //
+      // A row name has to say what you are typing; a label on the drawing
+      // only has to name the part your eye is already on. The schedule keeps
+      // the longer wording, the drawing gets the short one, and `null` means
+      // the part needs no label at all.
+      //
+      // Two of them follow the attachment choice, so the section says SILL
+      // PLATE or PT LADDER rather than the category the control belongs to.
+      const attachmentTag = () =>
+        (attachmentChoice() === 'ladder' ? 'PT LADDER' : 'SILL PLATE');
+      const DRAW_TAG = {
+        garageOffset: null,
+        garageSill: attachmentTag,
+        garageFdnHeight: () =>
+          (garageFoundation() === 'frostwall' ? 'FROST WALL' : 'GRADE BEAM'),
+        garageFooting: 'FOOTING',
+        grade: 'GRADE',
+        attachment: attachmentTag,
+      };
+      const drawTagFor = (key, fallback) => {
+        if (!(key in DRAW_TAG)) return fallback;
+        const t = DRAW_TAG[key];
+        return typeof t === 'function' ? t() : t;
+      };
+
       const nameOf = control =>
         typeof control.name === 'function' ? control.name() : control.name;
 
@@ -745,7 +776,7 @@
       controls.forEach(control => {
         const tag = document.createElement('span');
         tag.className = 'detail-tag';
-        tag.textContent = control.tag;
+        tag.textContent = drawTagFor(control.key, control.tag) || '';
         wrap.appendChild(tag);
         if (control.kind === 'input' || control.kind === 'choice') {
           // A choice is an input whose values are a list. The garage side grew
@@ -908,7 +939,7 @@
           return true;
         });
 
-      addGarage('garageSill', 'Sill plate on the beam',
+      addGarage('garageSill', 'Sill plate',
         () => inchesOnly(projectPage.SILL_PLATE_IN), () => false);
       // NOT "FOUNDATION WALL". Movie: "call it GARAGE GRADE BEAM HEIGHT, not
       // 'foundation wall'". With the sill directly above it the two rows read
@@ -939,7 +970,8 @@
       garageControls.forEach(control => {
         const tag = document.createElement('span');
         tag.className = 'detail-tag';
-        tag.textContent = nameOf(control).replace(/^Garage /, '').toUpperCase();
+        tag.textContent =
+          drawTagFor(control.key, nameOf(control).replace(/^Garage /, '').toUpperCase()) || '';
         garageWrap.appendChild(tag);
         const input = control.kind === 'choice'
           ? document.createElement('select') : document.createElement('input');
@@ -1034,8 +1066,14 @@
             if (row) row.hidden = true;
             return;
           }
-          tag.style.display = '';
+          // A part Movie struck off the section carries no label, but its
+          // row stays: the number is still his to set, it just does not need
+          // naming twice on a drawing he can already read.
+          const drawn = drawTagFor(key, tag.textContent);
+          tag.style.display = drawn ? '' : 'none';
+          if (tag.textContent !== (drawn || '')) tag.textContent = drawn || '';
           if (row) row.hidden = false;
+          if (!drawn) return;
           // OFF THE DRAWING, out to the margins. Movie, 4 Sep: "move the
           // house text to the right and the garage text to the left off the
           // drawing". The label keeps its part's HEIGHT -- that is what makes
@@ -1094,7 +1132,7 @@
             const label = nameOf(control);
             const nameEl = row && row.querySelector('.sched-name');
             if (nameEl && nameEl.textContent !== label) nameEl.textContent = label;
-            const short = label.replace(/^Garage /, '').toUpperCase();
+            const short = drawTagFor(key, label.replace(/^Garage /, '').toUpperCase()) || '';
             if (tag && tag.textContent !== short) tag.textContent = short;
           }
           if (control.kind === 'chip') el.textContent = control.text();

@@ -133,7 +133,14 @@ if (!window.DraftProjectPage) {
     split: SPLIT_BASE,
     bilevel: SPLIT_BASE,
     modifiedBilevel: SPLIT_BASE,
-    attachedGarage: Object.freeze({ fdnWallHeightFt: GARAGE_GRADE_BEAM_IN / 12 }),
+    // A GARAGE SLAB IS 4", not the house's 3". The row had no default at all,
+    // so it inherited HOUSE and the schedule read 3" -- the same shape as the
+    // basement wall a garage was inheriting before this default existed.
+    // cut-view.js has said GARAGE_SLAB_THICKNESS_IN = 4 all along.
+    attachedGarage: Object.freeze({
+      fdnWallHeightFt: GARAGE_GRADE_BEAM_IN / 12,
+      slabThicknessIn: 4,
+    }),
   });
 
   // The heel is the fascia plus the rise the roof gains across the overhang
@@ -207,6 +214,23 @@ if (!window.DraftProjectPage) {
   // differently on one sheet: the house is cut ACROSS its slope and gets the
   // sloping pair, the garage ALONG its slope and gets four level lines.
   const GARAGE_CAVITY_FT = 4;
+  // The garage slab, from Movie, 4 Sep: "draw the 4" sloping slab in there,
+  // 5" down from the top and then slope down to the cut line at 1/8" per ft",
+  // then exactly: "4" down from top of CONCRETE, 5.5" down from top of GRADE
+  // BEAM". Both readings are the same line -- the sill plate is 1 1/2" thick
+  // -- and he gave both because "top of grade beam" is the phrase that has
+  // been catching us all day.
+  //
+  // Measured from the CONCRETE here, because that is the face the slab is
+  // actually poured against; the sill plate is above it and has nothing to do
+  // with where a slab sits.
+  const GARAGE_SLAB_BELOW_CONCRETE_IN = 4;
+  // DUPLICATED, and saying so. MODEL.dc.html carries the same 1/8" as
+  // GARAGE_SLAB_SLOPE_IN_PER_FT. It belongs in cut-view.js STANDARDS with the
+  // beam and the sill -- but PROJECT.html does not load cut-view yet, which
+  // is the deferred tidy-up. Until it does, this is a second copy of a number
+  // that must agree with a first, which is exactly what happened to the 32".
+  const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;
 
   // FOR BAND 2 ONLY, not built. Movie, 4 Sep: "put the EXT WALL HEIGHT on
   // each floor under 2ND FL WALL HEIGHT, MAIN FL WALL HEIGHT, and above
@@ -245,8 +269,11 @@ if (!window.DraftProjectPage) {
   // starting point, not an accident of not having split it yet. If it does
   // split, the split is by BUILD TYPE, which is NEW-5 again.
   const FOUNDATION_ATTACHMENTS = Object.freeze(['sill', 'ladder']);
+  // Short enough for a dropdown and for a label on the drawing. The full
+  // material -- a PT SPF 2x6 ladder -- is in the comment above and in the
+  // commit that added it; a picker does not need to carry the spec.
   const ATTACHMENT_LABEL = Object.freeze({
-    sill: 'SILL PLATE', ladder: 'PT SPF 2x6 LADDER',
+    sill: 'SILL PLATE', ladder: 'PT LADDER',
   });
   const LADDER_MEMBER_IN = 1.5;   // a 2x6 on edge, its thickness
   const LADDER_DEPTH_IN = 5.5;    // and its width, standing vertical
@@ -337,12 +364,13 @@ if (!window.DraftProjectPage) {
     const chordDropFt = (ROOF_CHORD_IN / 12)
       * Math.hypot(1, roof.pitch / 12);
     line(-roof.overhangFt, plateY + fasciaFt, CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT), 2);
-    // The underside runs from the fascia's inner face to the cut, and stops
-    // at the exterior wall face on the way -- the same break Movie's drawing
-    // has, where the top plate interrupts it.
+    // ONE UNBROKEN UNDERSIDE, out to the eave. Movie: "the top chord extends
+    // to the eave". It had been drawn in two pieces with a gap at the wall,
+    // which is what the top PLATE does to a rafter -- but this is a truss:
+    // the top chord passes over the wall in one piece and the heel web below
+    // it carries the load down. Breaking it drew a rafter's detail on a
+    // truss.
     line(-roof.overhangFt, plateY + fasciaFt - chordDropFt,
-      0, plateY + riseAt(0) - chordDropFt, 1);
-    line(wallFt, plateY + riseAt(wallFt) - chordDropFt,
       CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT) - chordDropFt, 1);
     anchors.pitch = { x: CUT_DEPTH_FT * 0.45, y: plateY + riseAt(CUT_DEPTH_FT * 0.45) + 0.55 };
     anchors.overhang = { x: -roof.overhangFt / 2, y: plateY - 0.55 };
@@ -379,7 +407,14 @@ if (!window.DraftProjectPage) {
       x: CUT_DEPTH_FT * 0.55,
       y: (anchors.pitch.y + anchors.heel.y) / 2,
     };
-    line(0, plateY, 0, plateY + riseAt(0), 1);                  // heel at the wall face
+    // THE HEEL WEB. A 2x4 standing at the wall with its outer face flush
+    // with the outside, so what shows in section is its INNER face, 3 1/2"
+    // in, running from the bottom chord up to the underside of the top
+    // chord. It replaces a line drawn on the wall face itself that ran the
+    // full height of the heel -- which drew the outside of the building, not
+    // a member.
+    line(ROOF_CHORD_IN / 12, plateY + ROOF_CHORD_IN / 12,
+      ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - chordDropFt, 1);
 
     // Foundation: wall top carries the main floor, footing centered under
     // it, slab pouring against the wall at the footing.
@@ -474,10 +509,6 @@ if (!window.DraftProjectPage) {
     const floorY = g.floorOffsetFt;
     anchors.garageOffset = { x: cut / 2, y: floorY + 0.62 };
 
-    // The slab is INBOARD of the beam -- behind the cut plane, into the page --
-    // so it does not appear as linework here. Its anchor stays, because the
-    // number is still the garage's and the schedule should still carry it.
-    anchors.garageSlab = { x: cut * 0.62, y: floorY - slabFt - 0.5 };
 
     // TWO FOUNDATIONS, ONE TOP. Movie, 4 Sep: "that should actually be an
     // option to switch from grade beam to frost wall on these drawings...
@@ -544,11 +575,35 @@ if (!window.DraftProjectPage) {
     anchors.garageFdnHeight = { x: cut * 0.5, y: (concTop + fdnBot) / 2 };
     anchors.garageSill = { x: cut * 0.5, y: concTop + sillFt / 2 };
 
+    // THE SLAB, sloping to the doors. Its top starts 4" below the top of the
+    // beam's concrete at the house end and falls 1/8" per foot toward the
+    // cut -- the doors are out past the break, so within this section it only
+    // ever goes down. Three sides: it runs into the beam at the house end
+    // rather than stopping against it, the same way the footing does.
+    const slabTopHouse = concTop - GARAGE_SLAB_BELOW_CONCRETE_IN / 12;
+    const slabFall = GARAGE_CUT_FT * GARAGE_SLAB_SLOPE_IN_PER_FT / 12;
+    const slabTopCut = slabTopHouse - slabFall;
+    line(cut, slabTopCut, 0, slabTopHouse, 1);
+    line(cut, slabTopCut - slabFt, 0, slabTopHouse - slabFt, 1);
+    line(cut, slabTopCut - slabFt, cut, slabTopCut, 1);
+    anchors.garageSlab = { x: cut * 0.55, y: slabTopCut - slabFt - 0.45 };
+
     let lowest;
     if (frostWall) {
       // A footing, the house's own size, its bottom level with the house's.
+      // NO RIGHT-HAND EDGE. Movie struck a line off the footing in red, and
+      // this was it: a closed rectangle drew its own end at the shared wall
+      // face -- x = 0 -- and the HOUSE's footing spans -0.500 to 1.167 at the
+      // same depth, so that edge landed as a vertical straight through the
+      // middle of it. The two are one continuous pour; a line where they meet
+      // says they are two that happen to touch.
+      //
+      // Three sides, not four. The garage's footing simply runs off into the
+      // house's, which is what it does.
       const footD = g.footingDepthIn / 12;
-      rect(cut, fdnBot - footD, GARAGE_CUT_FT, footD, 1.5);
+      line(cut, fdnBot - footD, 0, fdnBot - footD, 1.5);   // underside
+      line(cut, fdnBot, 0, fdnBot, 1.5);                   // top
+      line(cut, fdnBot - footD, cut, fdnBot, 1.5);         // the cut end
       anchors.garageFooting = { x: cut * 0.5, y: fdnBot - footD / 2 };
       lowest = fdnBot - footD;
     } else {
