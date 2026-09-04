@@ -102,9 +102,28 @@ if (!window.DraftProjectPage) {
   // basement height is made up with a 2x6 wood wall above the concrete
   // rather than a taller pour. A field absent here falls back to the
   // HOUSE's live value.
+  //
+  // AND THE SPLIT FRAMES A FOOT TALLER THAN THE BUNGALOW. Movie, 4 Sep:
+  // "8'1-1/8" is default wall height for bungalow[;] for bilevel we are going
+  // with 9-1 1/8" ceiling height / walls", and 5 Sep: "for default make the
+  // main floor 9-1 1/8", 2nd fl over garage 9-1 1/8"". Without these the
+  // split rows fell back to the HOUSE's live wall -- the bungalow's 8'-1 1/8"
+  // -- and read as though somebody had chosen it. The absent default that
+  // reads as a decision, the same shape as the garage's basement wall below.
+  //
+  // Written as THE PRECUT ONE STEP UP, not as 9.09375. It is a stock stud
+  // (104 5/8" plus three plates), and naming it that way means the wall stays
+  // a real order if the plate stack ever changes, instead of quietly becoming
+  // a height nobody can buy.
+  const SPLIT_WALL_FT = wallHeightFtFromStud(STUD_LENGTHS_IN[1]);
   const SPLIT_BASE = Object.freeze({
     fdnWallHeightFt: 5,
     woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,
+    mainWallHeightFt: SPLIT_WALL_FT,
+    // The storey over the garage that makes a MOD BILEVEL a MOD BILEVEL. The
+    // BILEVEL row has no cell for it, so this sits unused there rather than
+    // wrongly -- one shared default, as the harness requires.
+    upperWallHeightFt: SPLIT_WALL_FT,
   });
   // A GARAGE DOES NOT HAVE A BASEMENT WALL, and until now the table said it
   // did. Neither garage row carried a default, so both fell back to the
@@ -907,6 +926,7 @@ if (!window.DraftProjectPage) {
     ZONE_ROWS,
     CUT_DEPTH_FT,
     ROOF_CHORD_IN,
+    SPLIT_WALL_FT,
     ROOF_HEEL_MIN_IN,
     ROOF_HEEL_MAX_IN,
     roofHeelInBand,

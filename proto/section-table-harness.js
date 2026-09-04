@@ -118,6 +118,23 @@ check('the three split rows share one default, by value', P => {
   return [same(d.split, d.bilevel) && same(d.bilevel, d.modifiedBilevel), true];
 });
 check('the split default pours a 5\'-0" wall', P => [P.SECTION_TABLE_DEFAULTS.split.fdnWallHeightFt, 5]);
+// Movie, 4 and 5 Sep: the bungalow frames 8'-1 1/8" and the split frames
+// 9'-1 1/8" -- main floor and the storey over the garage alike. Pinned as THE
+// PRECUT ONE STEP UP rather than as 9.09375, because that is the claim: a
+// stock stud, not a height that merely happens to be right today. A literal
+// would still pass with the plate stack broken underneath it.
+check('the split frames the precut one step above the bungalow', P =>
+  [near(P.SECTION_TABLE_DEFAULTS.split.mainWallHeightFt,
+    P.wallHeightFtFromStud(P.STUD_LENGTHS_IN[1])), true]);
+check('the storey over the garage frames the same wall as the floor below', P =>
+  [near(P.SECTION_TABLE_DEFAULTS.modifiedBilevel.upperWallHeightFt,
+    P.SECTION_TABLE_DEFAULTS.modifiedBilevel.mainWallHeightFt), true]);
+// The inequality beside them: the split's wall must NOT be the house's, which
+// is the failure it was written to close. Two equalities agreeing about a
+// number they both inherit would prove nothing.
+check('the split wall is a foot clear of the bungalow it fell back to', P =>
+  [near(P.SECTION_TABLE_DEFAULTS.split.mainWallHeightFt
+    - P.wallHeightFtFromStud(P.STUD_LENGTHS_IN[0]), 1), true]);
 check('the split fill wall is the half stud plus the plate stack', P =>
   [near(P.SECTION_TABLE_DEFAULTS.split.woodFillHeightFt, (P.HALF_STUD_IN + P.PLATE_STACK_IN) / 12), true]);
 
@@ -383,6 +400,10 @@ const MUTATIONS = [
     s => s.replace('const ROOF_HEEL_MIN_IN = 5.5;', 'const ROOF_HEEL_MIN_IN = 3.5;')],
   ['the band is checked exclusively, so its own endpoints fall outside it',
     s => s.replace('inches >= ROOF_HEEL_MIN_IN && inches <= ROOF_HEEL_MAX_IN', 'inches > ROOF_HEEL_MIN_IN && inches < ROOF_HEEL_MAX_IN')],
+  ['the split falls back to the bungalow wall again',
+    s => s.replace('const SPLIT_WALL_FT = wallHeightFtFromStud(STUD_LENGTHS_IN[1]);', 'const SPLIT_WALL_FT = wallHeightFtFromStud(STUD_LENGTHS_IN[0]);')],
+  ['the storey over the garage loses its default',
+    s => s.replace('    upperWallHeightFt: SPLIT_WALL_FT,\n', '')],
   ['the footing is hung off the wall face instead of centred',
     s => s.replace('rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);', 'rect(0, fdnBot - footD, footW, footD, 1.5);')],
 ];
