@@ -8110,130 +8110,35 @@ class Component extends DCLogic {
   // Cuts are Three.js objects, and nothing renders that scene without WebGL:
   // the overlay is the only place 2D-only drafting can see them.
   _drawCuts2D(ctx, toS) {
-    // Hairlines land on the half-pixel grid so the dashes stay crisp at any
-    // canvas size instead of antialiasing into two washed-out rows.
-    const snap = v => Math.round(v - 0.5) + 0.5;
-    const dashedSeg = (start, end) => {
-      const a = toS(start), b = toS(end);
-      ctx.setLineDash([8, 5]);
-      ctx.beginPath(); ctx.moveTo(snap(a.x), snap(a.y)); ctx.lineTo(snap(b.x), snap(b.y)); ctx.stroke();
-      ctx.setLineDash([]);
-    };
-    // Direction choice previews as the mark itself: a small blank bubble
-    // wearing the tucked triangle, one per side, each pointing the way
-    // that side's view would look. The cursor's side glows.
-    const choiceMark = (mid, dir, hot) => {
-      const mS = toS(mid);
-      const dS = toS({ x: mid.x + dir.x, y: mid.y, z: mid.z + dir.z });
-      let vx = dS.x - mS.x, vy = dS.y - mS.y;
-      const vLen = Math.hypot(vx, vy) || 1;
-      vx /= vLen; vy /= vLen;
-      const ux = -vy, uy = vx;
-      const R = 6, ink = hot ? '#ff3366' : '#994466';
-      const cx = mS.x + vx * 18, cy = mS.y + vy * 18;
-      const reach = R + 6, wing = R + 4, back = 2;
-      ctx.beginPath();
-      ctx.moveTo(cx + vx * reach, cy + vy * reach);
-      ctx.lineTo(cx - ux * wing - vx * back, cy - uy * wing - vy * back);
-      ctx.lineTo(cx + ux * wing - vx * back, cy + uy * wing - vy * back);
-      ctx.closePath();
-      ctx.fillStyle = ink; ctx.fill();
-      ctx.strokeStyle = ink;
-      ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff'; ctx.fill();
-      ctx.stroke();
-    };
-
-    // Classic drafting marks: a labelled bubble at each end of the dashed
-    // cut line, wearing a filled triangle that points the view direction.
-    // The office picks the triangle style: TUCKED slides it behind the
-    // bubble with its back edge on the cut line and just the point showing;
-    // PROUD wears the small triangle out on the bubble's rim.
-    const bubbleStyle = normaliseStructureStandards(this.state.structureStandards).cutBubbleStyle;
-    const bubbleMark = cut => {
-      const y = cut.elev + 0.02;
-      let start = { x: cut.startPt.x, y, z: cut.startPt.z };
-      let end = { x: cut.endPt.x, y, z: cut.endPt.z };
-      // A hand-placed cut draws as an infinite line: it runs clear across the
-      // plan whatever the drafter drew — never dying halfway through the
-      // house — and stops in the gap between the walls and the first
-      // dimension string, landing the bubbles there. The standard elevations
-      // already sit in that gap, so they keep their drawn ends.
-      if (!cut.auto) {
-        const span = this._cutLineSpan(start, end);
-        start = span.start;
-        end = span.end;
-      }
-      dashedSeg(start, end);
-
-      const a = toS(start), b = toS(end);
-      const lineLen = Math.hypot(b.x - a.x, b.y - a.y);
-      if (lineLen < 2) return;
-      const ux = (b.x - a.x) / lineLen, uy = (b.y - a.y) / lineLen;
-      // The viewer stands on +dirVec, so the sight line is the opposite way.
-      const mid = { x: (start.x + end.x) / 2, y, z: (start.z + end.z) / 2 };
-      const mS = toS(mid);
-      const vS = toS({ x: mid.x - cut.dirVec.x, y, z: mid.z - cut.dirVec.z });
-      let vx = vS.x - mS.x, vy = vS.y - mS.y;
-      const vLen = Math.hypot(vx, vy) || 1;
-      vx /= vLen; vy /= vLen;
-
-      const R = 8, ink = ctx.strokeStyle;
-      [[a, -1], [b, 1]].forEach(([p, side]) => {
-        const cx = p.x + ux * side * (R + 2), cy = p.y + uy * side * (R + 2);
-        if (bubbleStyle === 'tucked') {
-          // Triangle first, tucked behind the circle — but wide enough that
-          // all three points clear the rim: the apex shows in the view
-          // direction and both back corners poke out either side, so the
-          // whole triangle reads instead of a lone spike.
-          const reach = R + 8, wing = R + 6, back = 2;
-          ctx.beginPath();
-          ctx.moveTo(cx + vx * reach, cy + vy * reach);
-          ctx.lineTo(cx - ux * wing - vx * back, cy - uy * wing - vy * back);
-          ctx.lineTo(cx + ux * wing - vx * back, cy + uy * wing - vy * back);
-          ctx.closePath();
-          ctx.fillStyle = ink; ctx.fill();
-        }
-        ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
-        ctx.fillStyle = '#fff'; ctx.fill();
-        ctx.stroke();
-        if (bubbleStyle === 'proud') {
-          const tx = cx + vx * R, ty = cy + vy * R;
-          ctx.beginPath();
-          ctx.moveTo(tx + vx * 8, ty + vy * 8);
-          ctx.lineTo(tx - vy * 5.5, ty + vx * 5.5);
-          ctx.lineTo(tx + vy * 5.5, ty - vx * 5.5);
-          ctx.closePath();
-          ctx.fillStyle = ink; ctx.fill();
-        }
-        // The circle never grows: long names shrink their letters to fit.
-        const label = cut.name || '';
-        let fontPx = 10;
-        ctx.font = `600 ${fontPx}px "Barlow Condensed", system-ui, sans-serif`;
-        const maxW = (R - 1.5) * 2;
-        const w = ctx.measureText(label).width;
-        if (w > maxW) {
-          fontPx = Math.max(5, Math.floor(fontPx * maxW / w * 10) / 10);
-          ctx.font = `600 ${fontPx}px "Barlow Condensed", system-ui, sans-serif`;
-        }
-        ctx.fillStyle = ink;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(label, cx, cy + 0.5);
-      });
-      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    };
+    // The committed cuts and, further down, the one being placed: both now
+    // painted by render-2d.js. They are called in their original positions
+    // rather than together, because the elevation-mark handles below are
+    // painted BETWEEN them and fusing the two calls would lift the preview
+    // above the handles in z-order.
+    window.DraftRender2D.drawCutMarks2D(ctx, toS, {
+      bubbleStyle: normaliseStructureStandards(this.state.structureStandards).cutBubbleStyle,
+      lineSpan: (start, end) => this._cutLineSpan(start, end),
+      autoCuts: this._autoElevationCuts(),
+      cuts: this.state.cuts,
+    });
 
     ctx.save();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = '#b04060';
-    ctx.fillStyle = '#b04060';
-    [...this._autoElevationCuts(), ...this.state.cuts].forEach(bubbleMark);
 
     // Each standard elevation mark wears a grab handle at mid-line under the
     // SELECT tool (board #263): press-and-drag slides the mark along its own
     // axis so the drafter picks the clearance when the default looks odd.
     this._eMarkHandleHits = [];
     if (!this._isPrinting && this.state.activeTool === 'select' && this.state.activeView === 'top') {
+      // The diamond's OUTLINE colour AND WIDTH were inherited, not set: it fills
+      // white and strokes, and the only strokeStyle assignment above it is the
+      // cut marks' own #b04060 (bubbleMark sets fillStyle four times and
+      // strokeStyle never). So the handle has always been drawn in the cut
+      // colour by accident of ordering. Stated explicitly because the cut marks
+      // have since moved to render-2d.js and taken those assignments with them,
+      // after which an inherited colour would have become the canvas default.
+      // Set to the values that were already in force, so no pixel changed.
+      ctx.strokeStyle = '#b04060';
+      ctx.lineWidth = 1;
       this._autoElevationCuts().forEach(cut => {
         const mid = toS({
           x: (cut.startPt.x + cut.endPt.x) / 2,
@@ -8251,23 +8156,16 @@ class Component extends DCLogic {
       });
     }
 
-    const phase = this.state.cutPhase;
-    if (phase !== 'idle' && this._cutStart3) {
-      const y = (this._drawElev || 0) + 0.05;
-      const start = { x: this._cutStart3.x, y, z: this._cutStart3.z };
-      const pending = phase === 'placing' ? this._snapPt : this._cutEnd3;
-      if (pending) {
-        const end = { x: pending.x, y, z: pending.z };
-        ctx.strokeStyle = '#994466';
-        ctx.fillStyle = '#994466';
-        dashedSeg(start, end);
-        if (phase === 'choosing' && this._cutDirLeft && this._cutDirRight) {
-          const mid = { x: (start.x + end.x) / 2, y, z: (start.z + end.z) / 2 };
-          choiceMark(mid, this._cutDirLeft,  this._cutHoverSide === 'left');
-          choiceMark(mid, this._cutDirRight, this._cutHoverSide === 'right');
-        }
-      }
-    }
+    window.DraftRender2D.drawCutPreview2D(ctx, toS, {
+      phase: this.state.cutPhase,
+      cutStart: this._cutStart3,
+      cutEnd: this._cutEnd3,
+      snapPt: this._snapPt,
+      drawElev: this._drawElev,
+      dirLeft: this._cutDirLeft,
+      dirRight: this._cutDirRight,
+      hoverSide: this._cutHoverSide,
+    });
 
     // THE TURTLE ON SCREEN (turtle path step 3), and the legs it has walked so
     // far. The walk is not committed until it closes, so what is drawn here is
@@ -15688,67 +15586,12 @@ class Component extends DCLogic {
   // Two non-collinear walls form a miter; collinear pairs are continuous.
   // Three entries with a collinear pair form a T: the pair is the host and
   // the third is the butt stem. Larger nodes suppress ambiguous cap lines.
+  // The join classifier lives in geometry-2d.js so the new page can mitre too;
+  // it was already pure, so the move was a lift. Kept as a method because the
+  // default argument is the page's own wall list and three call sites rely on
+  // it.
   _wallJoins(walls = this._walls) {
-    const endpointGroups = new Map();
-    const add = (seg, pt, at) => {
-      if (!endpointGroups.has(pt)) endpointGroups.set(pt, []);
-      endpointGroups.get(pt).push({ seg, at });
-    };
-    walls.forEach(w => {
-      add(w, w.start, 'start');
-      add(w, w.end, 'end');
-    });
-    const joins = new Map();
-    const outward = entry => {
-      const vertex = entry.at === 'start' ? entry.seg.start : entry.seg.end;
-      const other = entry.at === 'start' ? entry.seg.end : entry.seg.start;
-      const dx = other.x - vertex.x, dz = other.z - vertex.z;
-      const len = Math.sqrt(dx * dx + dz * dz);
-      return len < 0.001 ? null : { x: dx / len, z: dz / len };
-    };
-    for (const [vertex, entries] of endpointGroups) {
-      if (entries.length === 2) {
-        const a = outward(entries[0]), b = outward(entries[1]);
-        if (a && b) {
-          if (Math.abs(a.x * b.z - a.z * b.x) > 0.001) {
-            joins.set(vertex, { type: 'miter', entries });
-          } else if (a.x * b.x + a.z * b.z < -0.995) {
-            joins.set(vertex, { type: 'continuation', entries });
-          }
-        }
-        continue;
-      }
-      if (entries.length === 3) {
-        let hostPair = null;
-        let strongestOpposition = -1;
-        for (let i = 0; i < entries.length; i++) {
-          for (let j = i + 1; j < entries.length; j++) {
-            const a = outward(entries[i]), b = outward(entries[j]);
-            if (!a || !b) continue;
-            const opposition = -(a.x * b.x + a.z * b.z);
-            if (opposition > strongestOpposition) {
-              strongestOpposition = opposition;
-              hostPair = [entries[i], entries[j]];
-            }
-          }
-        }
-        if (hostPair && strongestOpposition > 0.995) {
-          joins.set(vertex, {
-            type: 'tee',
-            host: hostPair,
-            stem: entries.find(entry => !hostPair.includes(entry)),
-          });
-        }
-        continue;
-      }
-      if (entries.length >= 4) {
-        // A cross or multi-stem node has no unambiguous two-wall miter. Keep
-        // every arm open to the shared vertex rather than drawing cap lines
-        // through it; the existing fill pass still draws every assembly.
-        joins.set(vertex, { type: 'multi', entries });
-      }
-    }
-    return joins;
+    return geo.wallJoins(walls);
   }
 
   // ─── Inside-face corners (board #303) ───────────────────────────────────────

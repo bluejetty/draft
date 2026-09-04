@@ -1501,7 +1501,7 @@ const endGeometry = (R, seg, joins) => {
 };
 
 suite('drawWallSeg2D', 'a corner join mitres the end instead of capping it square', R => {
-  const { a, joins } = joined('corner');
+  const { a, joins } = joined('miter');
   const butted = endGeometry(R, a, null);
   const mitred = endGeometry(R, a, joins);
   expect('the drawn geometry changes', butted.join(' ') === mitred.join(' '), false);
@@ -1512,10 +1512,23 @@ suite('drawWallSeg2D', 'a corner join mitres the end instead of capping it squar
 });
 
 suite('drawWallSeg2D', 'a resolved join suppresses the end cap; an unresolved one keeps it', R => {
-  const { a, joins } = joined('corner');
+  const { a, joins } = joined('miter');
   const capped = endGeometry(R, a, null).length;
   const resolved = endGeometry(R, a, joins).length;
   expect('the mitred end drops its cap line', resolved < capped, true);
+});
+
+suite('drawWallSeg2D', 'an unrecognised join type falls through to mitring', R => {
+  // The painter branches on tee / continuation / multi / none and lets
+  // everything else mitre. That tolerance is load-bearing -- _wallJoins emits
+  // `miter` and the painter never names it -- but it also means a MISSPELLED
+  // or invented type mitres silently. It hid a wrong type name in this very
+  // file, and in DEFINITIONS, for half a day. Pinned so the behaviour is a
+  // decision rather than an accident.
+  const { a, joins } = joined('miter');
+  const { a: a2, joins: j2 } = joined('corner');   // a kind nothing produces
+  expect('the invented kind is drawn exactly as a miter',
+    endGeometry(R, a2, j2).join(' '), endGeometry(R, a, joins).join(' '));
 });
 
 suite('drawWallSeg2D', 'a join of type none is no join at all', R => {
@@ -1524,9 +1537,9 @@ suite('drawWallSeg2D', 'a join of type none is no join at all', R => {
 });
 
 suite('drawWallSeg2D', 'a join naming other segments entirely is ignored', R => {
-  const { a, P1 } = joined('corner');
+  const { a, P1 } = joined('miter');
   const stranger = { start: { x: 50, z: 50 }, end: { x: 60, z: 50 }, wallType: 'stud_2x6' };
-  const joins = new Map([[P1, { type: 'corner', entries: [{ seg: stranger, at: 'start' }] }]]);
+  const joins = new Map([[P1, { type: 'miter', entries: [{ seg: stranger, at: 'start' }] }]]);
   expect('and the wall is capped as before',
     endGeometry(R, a, joins).join(' '), endGeometry(R, a, null).join(' '));
 });
@@ -1584,10 +1597,150 @@ suite('drawWallSeg2D', 'a mitre longer than the limit falls back to a square cap
   const P0 = { x: 0, z: 0 }, P1 = { x: 10, z: 0 }, P2 = { x: 20, z: 0.0005 };
   const a = { start: P0, end: P1, wallType: 'stud_2x6' };
   const b = { start: P1, end: P2, wallType: 'stud_2x6' };
-  const joins = new Map([[P1, { type: 'corner', entries: [{ seg: a, at: 'end' }, { seg: b, at: 'start' }] }]]);
+  const joins = new Map([[P1, { type: 'miter', entries: [{ seg: a, at: 'end' }, { seg: b, at: 'start' }] }]]);
   const drawn = endGeometry(R, a, joins);
   expect('nothing runs off to infinity',
     drawn.every(p => Math.abs(Number(p.split(',')[0])) < 1000), true);
+});
+
+// ── drawCutMarks2D / drawCutPreview2D ──
+// Lifted out of _drawCuts2D, which was four unrelated things in one function:
+// the cuts, the elevation-mark grab handles, the turtle, and TOY MODE's grip
+// tabs -- two of them clearing and rebuilding hit regions on the same
+// traversal. Only the cuts came; hit-region building is component state and
+// does not belong in a module whose contract forbids it.
+const CUT = {
+  id: 1, name: 'S1', elev: 0, auto: false,
+  startPt: { x: 0, z: 0 }, endPt: { x: 20, z: 0 }, dirVec: { x: 0, z: -1 },
+};
+const cutEnv = over => ({
+  bubbleStyle: 'tucked',
+  lineSpan: (start, end) => ({ start, end }),
+  autoCuts: [],
+  cuts: [CUT],
+  ...over,
+});
+
+suite('drawCutMarks2D', 'no cuts, nothing painted', R => {
+  const ctx = recordingCtx();
+  R.drawCutMarks2D(ctx, toS, cutEnv({ cuts: [] }));
+  expect('nothing on the tape but the save/restore pair', painted(ctx), false);
+});
+
+suite('drawCutMarks2D', 'a cut is a dashed line with a bubble at each end', R => {
+  const ctx = recordingCtx();
+  R.drawCutMarks2D(ctx, toS, cutEnv());
+  expect('the line is dashed', calls(ctx, 'setLineDash').some(a => JSON.stringify(a[0]) === '[8,5]'), true);
+  expect('two bubbles', count(ctx, 'arc'), 2);
+  expect('each labelled with the cut name', calls(ctx, 'fillText').map(a => a[0]).join(','), 'S1,S1');
+});
+
+suite('drawCutMarks2D', 'hairlines land on the half-pixel grid', R => {
+  const ctx = recordingCtx();
+  R.drawCutMarks2D(ctx, toS, cutEnv());
+  // The dashed run is the first moveTo/lineTo pair; both must sit on .5 so the
+  // dashes stay crisp instead of antialiasing into two washed-out rows.
+  const first = calls(ctx, 'moveTo')[0];
+  expect('x on the half pixel', Math.abs(first[0] % 1), 0.5);
+  expect('y on the half pixel', Math.abs(first[1] % 1), 0.5);
+});
+
+suite('drawCutMarks2D', 'a hand-placed cut runs clear across the plan; a standard elevation keeps its ends', R => {
+  let askedFor = 0;
+  R.drawCutMarks2D(recordingCtx(), toS, cutEnv({
+    lineSpan: (start, end) => { askedFor += 1; return { start, end }; },
+  }));
+  expect('the span is asked for', askedFor, 1);
+  askedFor = 0;
+  R.drawCutMarks2D(recordingCtx(), toS, cutEnv({
+    cuts: [], autoCuts: [{ ...CUT, auto: true }],
+    lineSpan: () => { askedFor += 1; return { start: CUT.startPt, end: CUT.endPt }; },
+  }));
+  expect('and never for a standard elevation', askedFor, 0);
+});
+
+suite('drawCutMarks2D', 'the office picks the triangle style, and the two differ', R => {
+  const shapeOf = bubbleStyle => {
+    const ctx = recordingCtx();
+    R.drawCutMarks2D(ctx, toS, cutEnv({ bubbleStyle }));
+    return ctx.tape.filter(e => e.op !== 'set').map(e => e.op).join(' ');
+  };
+  expect('tucked and proud paint differently', shapeOf('tucked') === shapeOf('proud'), false);
+});
+
+suite('drawCutMarks2D', 'a long name shrinks to fit rather than growing the bubble', R => {
+  const fontFor = name => {
+    const ctx = recordingCtx();
+    R.drawCutMarks2D(ctx, toS, cutEnv({ cuts: [{ ...CUT, name }] }));
+    return sets(ctx, 'font').pop();
+  };
+  const short = fontFor('S1');
+  const long = fontFor('SECTION-THROUGH-STAIR');
+  expect('the long name is set smaller', short === long, false);
+  expect('and never below the 5px floor',
+    Number(long.match(/(\d+(?:\.\d+)?)px/)[1]) >= 5, true);
+});
+
+suite('drawCutMarks2D', 'the painter cleans up after itself', R => {
+  const ctx = recordingCtx();
+  R.drawCutMarks2D(ctx, toS, cutEnv());
+  expect('saves and restores in pairs', count(ctx, 'save'), count(ctx, 'restore'));
+  expect('and leaves no dash pattern running',
+    JSON.stringify(calls(ctx, 'setLineDash').pop()[0]), '[]');
+});
+
+// ── the cut being placed ──
+const previewEnv = over => ({
+  phase: 'placing', cutStart: { x: 0, z: 0 }, cutEnd: null,
+  snapPt: { x: 10, z: 0 }, drawElev: 0,
+  dirLeft: null, dirRight: null, hoverSide: null,
+  ...over,
+});
+
+suite('drawCutPreview2D', 'idle paints nothing', R => {
+  const ctx = recordingCtx();
+  R.drawCutPreview2D(ctx, toS, previewEnv({ phase: 'idle' }));
+  expect('nothing painted', painted(ctx), false);
+});
+
+suite('drawCutPreview2D', 'no start point, nothing to rubber-band from', R => {
+  const ctx = recordingCtx();
+  R.drawCutPreview2D(ctx, toS, previewEnv({ cutStart: null }));
+  expect('nothing painted', painted(ctx), false);
+});
+
+suite('drawCutPreview2D', 'while placing, the band follows the cursor', R => {
+  const ctx = recordingCtx();
+  R.drawCutPreview2D(ctx, toS, previewEnv({ snapPt: { x: 10, z: 0 } }));
+  expect('a dashed band', calls(ctx, 'setLineDash').some(a => JSON.stringify(a[0]) === '[8,5]'), true);
+  expect('reaching the cursor', calls(ctx, 'lineTo')[0][0], 500.5);
+});
+
+suite('drawCutPreview2D', 'once placed, it holds the committed end instead of the cursor', R => {
+  const ctx = recordingCtx();
+  R.drawCutPreview2D(ctx, toS, previewEnv({
+    phase: 'choosing', cutEnd: { x: 6, z: 0 }, snapPt: { x: 99, z: 0 },
+  }));
+  expect('the band ends at the committed point, not the cursor', calls(ctx, 'lineTo')[0][0], 460.5);
+});
+
+suite('drawCutPreview2D', 'choosing offers one bubble per side, and the cursor side glows', R => {
+  const ctx = recordingCtx();
+  R.drawCutPreview2D(ctx, toS, previewEnv({
+    phase: 'choosing', cutEnd: { x: 10, z: 0 },
+    dirLeft: { x: 0, z: -1 }, dirRight: { x: 0, z: 1 }, hoverSide: 'left',
+  }));
+  expect('two choice bubbles', count(ctx, 'arc'), 2);
+  const inks = sets(ctx, 'strokeStyle');
+  expect('the hovered side is hot', inks.includes('#ff3366'), true);
+  expect('the other is not', inks.includes('#994466'), true);
+});
+
+suite('drawCutPreview2D', 'no directions offered means no bubbles, just the band', R => {
+  const ctx = recordingCtx();
+  R.drawCutPreview2D(ctx, toS, previewEnv({ phase: 'choosing', cutEnd: { x: 10, z: 0 } }));
+  expect('no bubbles', count(ctx, 'arc'), 0);
+  expect('but the band is drawn', count(ctx, 'stroke') >= 1, true);
 });
 
 // ─── Running ──────────────────────────────────────────────────────────────

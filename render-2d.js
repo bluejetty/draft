@@ -1277,6 +1277,168 @@ if (!window.DraftRender2D) {
     }
   }
 
+  // ─── The drafter's cuts ───────────────────────────────────────────────────
+  // A cut is a section line: a dashed run across the plan with a labelled
+  // bubble at each end wearing a filled triangle that points the way the view
+  // looks. TWO painters, not one, and the reason is paint order rather than
+  // taste — on the page these two are separated by the elevation-mark grab
+  // handles, so fusing them here would lift the in-progress preview above the
+  // handles in z-order. The caller keeps them in its own order.
+  //
+  // What did NOT come with them: the hit regions. The page function these were
+  // lifted out of also cleared and rebuilt _eMarkHandleHits and _toyTabHits on
+  // the same traversal, which is component state and cannot live in a module
+  // whose contract is "no component state, no THREE, no DOM beyond the ctx".
+  // Building hit regions is not painting; they are separable concerns that
+  // happen to want the same geometry.
+  const cutSnap = v => Math.round(v - 0.5) + 0.5;
+
+  // Hairlines land on the half-pixel grid so the dashes stay crisp at any
+  // canvas size instead of antialiasing into two washed-out rows.
+  function cutDashedSeg(ctx, toS, start, end) {
+    const a = toS(start), b = toS(end);
+    ctx.setLineDash([8, 5]);
+    ctx.beginPath();
+    ctx.moveTo(cutSnap(a.x), cutSnap(a.y));
+    ctx.lineTo(cutSnap(b.x), cutSnap(b.y));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Direction choice previews as the mark itself: a small blank bubble wearing
+  // the tucked triangle, one per side, each pointing the way that side's view
+  // would look. The cursor's side glows.
+  function cutChoiceMark(ctx, toS, mid, dir, hot) {
+    const mS = toS(mid);
+    const dS = toS({ x: mid.x + dir.x, y: mid.y, z: mid.z + dir.z });
+    let vx = dS.x - mS.x, vy = dS.y - mS.y;
+    const vLen = Math.hypot(vx, vy) || 1;
+    vx /= vLen; vy /= vLen;
+    const ux = -vy, uy = vx;
+    const R = 6, ink = hot ? '#ff3366' : '#994466';
+    const cx = mS.x + vx * 18, cy = mS.y + vy * 18;
+    const reach = R + 6, wing = R + 4, back = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + vx * reach, cy + vy * reach);
+    ctx.lineTo(cx - ux * wing - vx * back, cy - uy * wing - vy * back);
+    ctx.lineTo(cx + ux * wing - vx * back, cy + uy * wing - vy * back);
+    ctx.closePath();
+    ctx.fillStyle = ink; ctx.fill();
+    ctx.strokeStyle = ink;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.stroke();
+  }
+
+  // The committed cuts: every standard elevation plus every cut the drafter
+  // has placed. env.lineSpan runs a hand-placed cut clear across the plan --
+  // a section line never dies halfway through the house -- while the standard
+  // elevations already sit in the gap outside the walls and keep their ends.
+  function drawCutMarks2D(ctx, toS, env) {
+    const bubbleMark = cut => {
+      const y = cut.elev + 0.02;
+      let start = { x: cut.startPt.x, y, z: cut.startPt.z };
+      let end = { x: cut.endPt.x, y, z: cut.endPt.z };
+      // A hand-placed cut draws as an infinite line: it runs clear across the
+      // plan whatever the drafter drew — never dying halfway through the
+      // house — and stops in the gap between the walls and the first
+      // dimension string, landing the bubbles there. The standard elevations
+      // already sit in that gap, so they keep their drawn ends.
+      if (!cut.auto) {
+        const span = env.lineSpan(start, end);
+        start = span.start;
+        end = span.end;
+      }
+      cutDashedSeg(ctx, toS, start, end);
+
+      const a = toS(start), b = toS(end);
+      const lineLen = Math.hypot(b.x - a.x, b.y - a.y);
+      if (lineLen < 2) return;
+      const ux = (b.x - a.x) / lineLen, uy = (b.y - a.y) / lineLen;
+      // The viewer stands on +dirVec, so the sight line is the opposite way.
+      const mid = { x: (start.x + end.x) / 2, y, z: (start.z + end.z) / 2 };
+      const mS = toS(mid);
+      const vS = toS({ x: mid.x - cut.dirVec.x, y, z: mid.z - cut.dirVec.z });
+      let vx = vS.x - mS.x, vy = vS.y - mS.y;
+      const vLen = Math.hypot(vx, vy) || 1;
+      vx /= vLen; vy /= vLen;
+
+      const R = 8, ink = ctx.strokeStyle;
+      [[a, -1], [b, 1]].forEach(([p, side]) => {
+        const cx = p.x + ux * side * (R + 2), cy = p.y + uy * side * (R + 2);
+        if (env.bubbleStyle === 'tucked') {
+          // Triangle first, tucked behind the circle — but wide enough that
+          // all three points clear the rim: the apex shows in the view
+          // direction and both back corners poke out either side, so the
+          // whole triangle reads instead of a lone spike.
+          const reach = R + 8, wing = R + 6, back = 2;
+          ctx.beginPath();
+          ctx.moveTo(cx + vx * reach, cy + vy * reach);
+          ctx.lineTo(cx - ux * wing - vx * back, cy - uy * wing - vy * back);
+          ctx.lineTo(cx + ux * wing - vx * back, cy + uy * wing - vy * back);
+          ctx.closePath();
+          ctx.fillStyle = ink; ctx.fill();
+        }
+        ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.stroke();
+        if (env.bubbleStyle === 'proud') {
+          const tx = cx + vx * R, ty = cy + vy * R;
+          ctx.beginPath();
+          ctx.moveTo(tx + vx * 8, ty + vy * 8);
+          ctx.lineTo(tx - vy * 5.5, ty + vx * 5.5);
+          ctx.lineTo(tx + vy * 5.5, ty - vx * 5.5);
+          ctx.closePath();
+          ctx.fillStyle = ink; ctx.fill();
+        }
+        // The circle never grows: long names shrink their letters to fit.
+        const label = cut.name || '';
+        let fontPx = 10;
+        ctx.font = `600 ${fontPx}px "Barlow Condensed", system-ui, sans-serif`;
+        const maxW = (R - 1.5) * 2;
+        const w = ctx.measureText(label).width;
+        if (w > maxW) {
+          fontPx = Math.max(5, Math.floor(fontPx * maxW / w * 10) / 10);
+          ctx.font = `600 ${fontPx}px "Barlow Condensed", system-ui, sans-serif`;
+        }
+        ctx.fillStyle = ink;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(label, cx, cy + 0.5);
+      });
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    };
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#b04060';
+    ctx.fillStyle = '#b04060';
+    [...env.autoCuts, ...env.cuts].forEach(bubbleMark);
+    ctx.restore();
+  }
+
+  // The cut being placed: the rubber-band line, and once both ends are down,
+  // the two direction bubbles the drafter picks between.
+  function drawCutPreview2D(ctx, toS, env) {
+    ctx.save();
+    const phase = env.phase;
+    if (phase !== 'idle' && env.cutStart) {
+      const y = (env.drawElev || 0) + 0.05;
+      const start = { x: env.cutStart.x, y, z: env.cutStart.z };
+      const pending = phase === 'placing' ? env.snapPt : env.cutEnd;
+      if (pending) {
+        const end = { x: pending.x, y, z: pending.z };
+        ctx.strokeStyle = '#994466';
+        ctx.fillStyle = '#994466';
+        cutDashedSeg(ctx, toS, start, end);
+        if (phase === 'choosing' && env.dirLeft && env.dirRight) {
+          const mid = { x: (start.x + end.x) / 2, y, z: (start.z + end.z) / 2 };
+          cutChoiceMark(ctx, toS, mid, env.dirLeft,  env.hoverSide === 'left');
+          cutChoiceMark(ctx, toS, mid, env.dirRight, env.hoverSide === 'right');
+        }
+      }
+    }
+    ctx.restore();
+  }
+
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
@@ -1293,6 +1455,8 @@ if (!window.DraftRender2D) {
     strokeSegPath2D,
     drawNoteScreen2D,
     drawStairNotes2D,
+    drawCutMarks2D,
+    drawCutPreview2D,
   });
 })();
 }
