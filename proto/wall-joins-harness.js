@@ -24,9 +24,18 @@ const fs = require('fs');
 const path = require('path');
 const SRC = path.join(__dirname, '..', 'geometry-2d.js');
 
-// Load from SOURCE TEXT, not require(), so a mutant can be applied to the
-// bytes before evaluation. A green harness is not evidence that it measures
-// anything; the mutation table below is.
+// Load from SOURCE TEXT, not require(). To be exact about what that buys,
+// because the looser version of this claim is wrong: require() does NOT stop a
+// mutant reaching the module. Edit geometry-2d.js on disk and re-run, and the
+// harness reads the mutant -- measured, not assumed. What require() stops is a
+// harness carrying its own mutations IN PROCESS. The module is resolved and
+// evaluated once, before any check runs, so mutations have to be applied from
+// outside by hand, and they leave nothing behind in the repo.
+//
+// That is the difference between this file before and after. It was not
+// unmutatable; it was unmeasured, and nothing had ever measured it. A green
+// harness is not evidence that it measures anything -- the committed, rerunnable
+// mutation table below is.
 function load(mutate) {
   let src = fs.readFileSync(SRC, 'utf8');
   if (mutate) {
