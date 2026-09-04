@@ -87,10 +87,29 @@ if (!window.DraftProjectPage) {
     fdnWallHeightFt: 5,
     woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,
   });
+  // A GARAGE DOES NOT HAVE A BASEMENT WALL, and until now the table said it
+  // did. Neither garage row carried a default, so both fell back to the
+  // HOUSE's live value and the ATTACHED GARAGE read 8'-1 1/8" of foundation
+  // -- a basement wall under a garage, shown grey as though it had been
+  // inherited on purpose. Not blank, not an error: a plausible number from
+  // the wrong parent, which is the kind that survives because nobody squints
+  // at an inherited cell. The same shape as the bilevel's hatched wood fill.
+  //
+  // Movie, 4 Sep: "the garage section should have a grade beam with 32" conc
+  // and 1.5" sill plate grade beam (33.5")", and "32" conc for garage grade
+  // beam is DEFAULT - changeable". So it goes here, where a default is a
+  // starting number the drafter types over, rather than into the drawing as
+  // a constant no one can reach.
+  //
+  // 32" only. The 1 1/2" sill is NOT added in: SILL_PLATE_IN is what the
+  // table's own TO SILL note adds to every row, so writing 33.5 here would
+  // count the sill twice and read 2'-11" to bearing instead of 2'-9 1/2".
+  const GARAGE_GRADE_BEAM_IN = 32;
   const SECTION_TABLE_DEFAULTS = Object.freeze({
     split: SPLIT_BASE,
     bilevel: SPLIT_BASE,
     modifiedBilevel: SPLIT_BASE,
+    attachedGarage: Object.freeze({ fdnWallHeightFt: GARAGE_GRADE_BEAM_IN / 12 }),
   });
 
   // The heel is the fascia plus the rise the roof gains across the overhang
@@ -362,6 +381,7 @@ if (!window.DraftProjectPage) {
     SECTION_TABLE_ROWS,
     SECTION_TABLE_ITEMS,
     SECTION_TABLE_DEFAULTS,
+    GARAGE_GRADE_BEAM_IN,
     STUD_LENGTHS_IN,
     HALF_STUD_IN,
     PLATE_STACK_IN,
