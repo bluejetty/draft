@@ -15,7 +15,7 @@ global.window = global;
 
 console.log('--- layout-plan.js WITHOUT wall-types.js loaded first');
 try {
-  require('/home/user/draft/layout-plan.js');
+  require('../layout-plan.js');
   console.log('    loaded fine  <- would mean it is NOT load-order-sensitive');
 } catch (e) {
   console.log(`    ${e.constructor.name}: ${e.message}`);
@@ -24,9 +24,9 @@ try {
 
 console.log('--- and WITH wall-types.js loaded first');
 delete global.DraftLayoutPlan;
-require('/home/user/draft/wall-types.js');
+require('../wall-types.js');
 try {
-  require('/home/user/draft/layout-plan.js');
+  require('../layout-plan.js');
   console.log('    loaded fine  <- order is the only difference');
 } catch (e) {
   console.log(`    still failed: ${e.message}`);
