@@ -22,9 +22,10 @@
 //               1/8" blade, halved), not as 46.25 -- a check against the
 //               literal passes with the value hardcoded.
 //   GEOMETRY    buildWallSection with one fixed assembly: the anchors the
-//               page parks its inputs on all exist, the foundation top sits
-//               one floor depth below MAIN FL 0, the heel at the wall face
-//               is the same number roofHeelIn reports.
+//               page parks its inputs on all exist, the floor bears on a sill
+//               one floor package below MAIN FL 0 with the concrete one sill
+//               below that, the heel at the wall face is the same number
+//               roofHeelIn reports.
 //
 // PINS THE 4 SEP RULE, NOT MAIN AS IT STOOD. WOOD FILL HT belongs to all
 // three split rows (Gilligan's fce138d). On a main that still hatches the
@@ -163,9 +164,11 @@ check('the detached garage beam rides 8" above grade at the house', P => [P.GARA
 
 // ── Geometry ───────────────────────────────────────────────────────────
 // One fixed two-storey assembly, in the shape the page hands the builder.
+// The main floor is the office package from Movie's reference section:
+// 11 7/8" I-joist + 3/4" sheathing = 1'-5/8", under an 8' precut wall.
 const ASSEMBLY = Object.freeze({
   floors: [
-    { id: 'main', name: 'MAIN FL', wallHeightFt: 97.125 / 12, joistDepthIn: 11.25, sheathingIn: 0.75 },
+    { id: 'main', name: 'MAIN FL', wallHeightFt: 97.125 / 12, joistDepthIn: 11.875, sheathingIn: 0.75 },
     { id: 'upper', name: '2ND FL', wallHeightFt: 97.125 / 12, joistDepthIn: 9.25, sheathingIn: 0.75 },
   ],
   foundation: { wallHeightFt: 8, thicknessIn: 8, slabIn: 4, footingWidthIn: 20, footingDepthIn: 8, gradeOffsetFt: -1 },
@@ -181,9 +184,19 @@ check('every editable number has an anchor to park beside', P => {
   const have = section(P).anchors;
   return [want.filter(k => !have[k]).join(','), ''];
 });
-check('the foundation top sits one main-floor depth below MAIN FL 0', P => {
+// The main floor bears on the SILL, and the sill on the concrete. Movie, 4
+// Sep: "where is your sill plate?" -- the section had none until #281, and
+// this check pinned the concrete top one floor package below zero, which was
+// the pre-sill shape. Now both facts are pinned: the sill's top is one floor
+// package below MAIN FL 0, and the concrete top is one sill below that.
+check('the main floor bears on a sill that sits one floor package below MAIN FL 0', P => {
+  const pkg = (11.875 + 0.75) / 12;
+  const sill = rects(section(P)).find(r => near(r.h, P.SILL_PLATE_IN / 12) && near(r.w, ASSEMBLY.foundation.thicknessIn / 12));
+  return [sill ? near(sill.y + sill.h, -pkg) : 'no sill rect on the foundation', true];
+});
+check('the concrete top sits one sill below the floor package', P => {
   const fdn = rects(section(P)).find(r => near(r.h, ASSEMBLY.foundation.wallHeightFt));
-  return [fdn ? near(fdn.y + fdn.h, -(11.25 + 0.75) / 12) : 'no foundation rect', true];
+  return [fdn ? near(fdn.y + fdn.h, -((11.875 + 0.75 + P.SILL_PLATE_IN) / 12)) : 'no foundation rect', true];
 });
 check('the heel at the wall face is the same number roofHeelIn reports', P => {
   const s = section(P);
@@ -219,7 +232,7 @@ check('the footing is centred under the foundation wall', P => {
 });
 check('grade is measured from the top of the foundation wall', P => {
   const s = section(P);
-  const fdnTop = -(11.25 + 0.75) / 12;
+  const fdnTop = -(11.875 + 0.75) / 12;
   return [near(s.anchors.grade.y, fdnTop + ASSEMBLY.foundation.gradeOffsetFt - 0.55), true];
 });
 
