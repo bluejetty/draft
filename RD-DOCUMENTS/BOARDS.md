@@ -635,6 +635,23 @@ The check is one more question after the other two: **does a second mechanism
 produce the same outcome?** If it does, mutate both together — that is the only
 way to learn whether the property is pinned at all.
 
+**REDUNDANCY EXPLAINS THE SURVIVOR. IT IS NOT A FINDING THAT A GUARD IS
+SURPLUS.** Gilligan's qualification, and the rule needs it in writing because
+the sentence "the property is guarded twice" reads one step further as "so
+remove one", which is the opposite of the right move.
+
+The other guards are not permanent. Checks get rewritten, and the next person
+to touch one does not know it is silently the sole defence for a property two
+other suites claim to cover — so the failure would be invisible until the
+surviving guard changed too. **Never delete a guard because a mutation showed
+it redundant.** The mutation measured today's coverage; the guard is there for
+the day someone edits its neighbour.
+
+Which makes the honest ledger on a redundancy fix three-way, not two: it is
+**not** new protection today, it **is** suites that now measure what they
+claim, and it **is** defence-in-depth — whose whole value is that guards get
+edited.
+
 **And this case, unlike the other two, is a limit of the technique rather than
 a fault in the mutation.** Gilligan's, sorting the three: an inert mutant is
 answered by writing a harsher one, and a low absence-score by writing a
