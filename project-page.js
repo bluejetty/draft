@@ -820,6 +820,7 @@ if (!window.DraftProjectPage) {
   window.DraftProjectPage = Object.freeze({
     ZONE_ROWS,
     CUT_DEPTH_FT,
+    ROOF_CHORD_IN,
     GARAGE_BEAM_ABOVE_GRADE_IN,
     GARAGE_SILL_BELOW_HOUSE_FT,
     GRADE_MIN_BELOW_CONCRETE_IN,

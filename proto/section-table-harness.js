@@ -24,8 +24,8 @@
 //   GEOMETRY    buildWallSection with one fixed assembly: the anchors the
 //               page parks its inputs on all exist, the floor bears on a sill
 //               one floor package below MAIN FL 0 with the concrete one sill
-//               below that, the heel at the wall face is the same number
-//               roofHeelIn reports.
+//               below that, the roof stands the reported heel above the plate
+//               at the wall face, and the heel web meets both chords.
 //
 // PINS THE 4 SEP RULE, NOT MAIN AS IT STOOD. WOOD FILL HT belongs to all
 // three split rows (Gilligan's fce138d). On a main that still hatches the
@@ -134,7 +134,10 @@ check('precuts step by a foot from 7\'-8 5/8"', P => {
 check('wall height from stud and stud from wall height are inverses on every precut', P =>
   [P.STUD_LENGTHS_IN.every(s => near(P.studInFromWallHeightFt(P.wallHeightFtFromStud(s)), s)), true]);
 check('an 8\' precut makes an 8\'-1 1/8" wall', P => [near(P.wallHeightFtFromStud(92.625), 97.125 / 12), true]);
-check('the heel is the fascia plus the rise across the overhang', P => [P.roofHeelIn(6, 2, 4), 14]);
+// Movie, 5 Sep: the fascia is a 2x6 with its BOTTOM level with the top of the
+// top plate, so the heel is 5 1/2" plus what the roof climbs across the
+// overhang -- 13 1/2" at the office default of 4:12 over 2 ft.
+check('the heel is the fascia plus the rise across the overhang', P => [P.roofHeelIn(5.5, 2, 4), 13.5]);
 
 // Which items a type has a use for. A garage has no floor joists, no
 // sheathing over them, no fill wall and no basement; only HOUSE and the MOD
@@ -172,7 +175,7 @@ const ASSEMBLY = Object.freeze({
     { id: 'upper', name: '2ND FL', wallHeightFt: 97.125 / 12, joistDepthIn: 9.25, sheathingIn: 0.75 },
   ],
   foundation: { wallHeightFt: 8, thicknessIn: 8, slabIn: 4, footingWidthIn: 20, footingDepthIn: 8, gradeOffsetFt: -1 },
-  roof: { pitch: 4, overhangFt: 2, fasciaIn: 6 },
+  roof: { pitch: 4, overhangFt: 2, fasciaIn: 5.5 },
   wallThicknessIn: 5.5,
 });
 const section = P => P.buildWallSection(ASSEMBLY);
@@ -198,12 +201,50 @@ check('the concrete top sits one sill below the floor package', P => {
   const fdn = rects(section(P)).find(r => near(r.h, ASSEMBLY.foundation.wallHeightFt));
   return [fdn ? near(fdn.y + fdn.h, -((11.875 + 0.75 + P.SILL_PLATE_IN) / 12)) : 'no foundation rect', true];
 });
-check('the heel at the wall face is the same number roofHeelIn reports', P => {
+// THE HEEL, AND THE WEB UNDER IT -- two facts, and this was one check until
+// 5 Sep. It looked for a vertical AT the wall face whose length was the heel,
+// which is the shape the section had before Movie's correction: that line ran
+// the full height of the heel on x = 0, so it drew the outside of the
+// building rather than a member, and it went out with 6ebf942. Pinning the
+// heel to a line that no longer exists made the check a snapshot of the
+// painter, not a statement about the roof -- so the heel is now read off the
+// top chord where it crosses the wall, and the member gets a check of its own.
+const topChordFace = s => {
+  const plateY = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
+  return s.parts.find(p => p.kind === 'line'
+    && near(p.x1, -ASSEMBLY.roof.overhangFt)
+    && near(p.y1, plateY + ASSEMBLY.roof.fasciaIn / 12));
+};
+const topChordUnder = s => {
+  const plateY = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
+  const face = topChordFace(s);
+  return s.parts.find(p => p.kind === 'line' && p !== face
+    && near(p.x1, -ASSEMBLY.roof.overhangFt) && !near(p.y1, plateY));
+};
+const atX = (l, x) => l.y1 + (x - l.x1) * (l.y2 - l.y1) / (l.x2 - l.x1);
+
+check('the roof stands the reported heel above the plate at the wall face', P => {
+  const plateY = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
+  const chord = topChordFace(section(P));
+  const R = ASSEMBLY.roof;
+  const want = P.roofHeelIn(R.fasciaIn, R.overhangFt, R.pitch) / 12;
+  return [chord ? near(atX(chord, 0) - plateY, want) : 'no top chord', true];
+});
+// Movie, 4 Sep: "the purple line thats the 3 1/2\" from the outside to connect
+// the top and bottom chords". A 2x4 standing at the wall with its outer face
+// flush with the outside, so what shows in section is its INNER face. Pinned
+// by WHERE IT LANDS -- top of the bottom chord up to the underside of the top
+// chord -- and not by a length, because the length grows with the pitch and a
+// number here would only be true at 4:12.
+check('the heel web stands 3 1/2\" in and meets both chords', P => {
   const s = section(P);
   const plateY = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
-  const heel = s.parts.find(p => p.kind === 'line' && near(p.x1, 0) && near(p.x2, 0) && near(p.y1, plateY));
-  const want = P.roofHeelIn(6, 2, 4) / 12;
-  return [heel ? near(heel.y2 - heel.y1, want) : 'no heel line at the plate', true];
+  const chordFt = P.ROOF_CHORD_IN / 12;
+  const webs = s.parts.filter(p => p.kind === 'line' && near(p.x1, chordFt) && near(p.x2, chordFt));
+  const under = topChordUnder(s);
+  if (webs.length !== 1) return [`${webs.length} verticals 3 1/2" in from the outside`, 'exactly one'];
+  if (!under) return ['no top chord underside to meet', 'exactly one'];
+  return [near(webs[0].y1, plateY + chordFt) && near(webs[0].y2, atX(under, chordFt)), true];
 });
 check('the plate is the two walls plus the floor between them', P => {
   const s = section(P);
@@ -287,6 +328,15 @@ const MUTATIONS = [
   // as a failure here.
   ['the mod bilevel loses its default (falls back to the house)',
     s => s.replace('    modifiedBilevel: SPLIT_BASE,\n', '')],
+  ['the heel web goes back on the wall face (the line Movie struck out)',
+    s => s.replace('line(ROOF_CHORD_IN / 12, plateY + ROOF_CHORD_IN / 12,\n      ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - chordDropFt, 1);',
+      'line(0, plateY + ROOF_CHORD_IN / 12,\n      0, plateY + riseAt(0) - chordDropFt, 1);')],
+  // The flat-drop mistake the module's own comment warns about, made on the
+  // web instead of the chord: it stops short of the top chord's underside by
+  // an amount that is zero at 0:12 and grows with the pitch.
+  ['the heel web is dropped a flat 3 1/2" and stops short of the top chord',
+    s => s.replace('ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - chordDropFt, 1);',
+      'ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - ROOF_CHORD_IN / 12, 1);')],
   ['the footing is hung off the wall face instead of centred',
     s => s.replace('rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);', 'rect(0, fdnBot - footD, footW, footD, 1.5);')],
 ];
