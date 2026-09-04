@@ -85,7 +85,14 @@ read that rather than assuming `DEFAULT_LEVELS`.
    `_drawFloor2D`, still inside `MODEL.dc.html`.
 4. **Mitred wall joins.** `drawWallSeg2D` takes `joins`, and tier 2 passes
    `null` (capped ends). Real mitring needs MODEL's `_wallJoins()`.
-5. **Outlines, dimensions, fixtures.** All three the same story as 3 and 4.
+5. **Outlines, dimensions, fixtures.** Dimensions *done*. Outlines *done, 2h*
+   — the block was three `this._` methods, not the painter: `_outlineSegment`,
+   `_outlineSegmentCount` and `_lineControlPoint`, nineteen lines between them
+   and pure. They are `outlineSegment` / `outlineSegmentCount` /
+   `lineControlPoint` in `geometry-2d.js` now, with checks
+   (`proto/outline-accessors-harness.js`) they had never had, and MODEL.html
+   paints outlines through the real painter. **Fixtures remain**, and are
+   cheaper than the paragraph below said — see the correction there.
 
 ---
 
@@ -110,18 +117,45 @@ from `wall-types.js`, `roofSkeleton` / `offsetOutline` from `geometry-2d.js`,
 `flooringTypes` from `drawing-format.js`.
 
 `drawFixture2D` is callable by nobody else, and not because of the function.
-**All eleven of its env keys live only in `MODEL.dc.html`**: `fixtureGeometry`,
-`closetDoorFor`, `wallCross`, `wallFrame`, `CLOSET_CLOTHES_FT`,
-`CLOSET_ROD_FT`, `CLOSET_SHELF_FT`, `CLOSET_WALL_FT`, `COUNTER_OVERHANG_FT`,
-`FIXTURE_COLOR`, `walls`.
+Its env keys resolve on `MODEL.dc.html` — but **not all eleven live there, and
+the original claim on this line that they did was wrong.** Measured 4 Sep:
+
+```
+CLOSET_WALL_FT      = window.DraftClosets.WALL_FT          already shared
+CLOSET_ROD_FT       = window.DraftClosets.RAIL_FT           already shared
+CLOSET_SHELF_FT     = window.DraftClosets.SHELF_FT          already shared
+CLOSET_CLOTHES_FT   = window.DraftClosets.CLOTHES_FT        already shared
+closetDoorFor       = window.DraftClosets.doorFor(…)        already shared
+COUNTER_OVERHANG_FT = 1 / 12                                MODEL literal
+FIXTURE_COLOR       = '#1d1f20'                             MODEL literal
+fixtureGeometry     → this._fixtureGeometry                 MODEL method
+wallCross           → this._wallCross                       MODEL method
+wallFrame           → this._wallFrame                       MODEL method
+walls               → this._walls.map(…)                    state; MODEL.html has it
+```
+
+Five of the eleven are one-line aliases over `window.DraftClosets`, which
+`closets.js` froze and exported before this page existed —
+`MODEL.dc.html:2294` says so in its own comment. The genuine MODEL-only set is
+**three methods and two literals**, and the missing piece for another page is a
+`<script src="./closets.js">` tag.
+
+That correction is the point rather than the arithmetic: the sentence was
+accurate when written and was falsified by a later change to `closets.js` that
+never touched this file. A number in prose has no test, so nothing failed when
+it stopped being true — and for months it was the number that made this job
+look too big to start.
 
 So the criterion is not *"the function moved"* — it is **"someone else can call
 it."** `drawFixture2D` has passed the first test since before this session
 started and still fails the second. It moved house without changing address.
 
-**This is a scope question board #1 has to answer, not a defect.** Making the
-fixture painter genuinely shared means moving constants and accessors as well
-as painters — a second, larger job living inside the first. It should be
+**This is a scope question board #1 has to answer, not a defect** — but it is a
+smaller question than it was. Making the fixture painter genuinely shared means
+moving two literals and deciding whether three single-caller methods are worth
+extracting at all; "extracting code for a hypothetical second caller" is its own
+way for a shared module to rot, and the honest trigger is the tier that needs
+them, measured against the old painter. It should be
 decided out loud rather than drifted into. The honest interim is what is being
 done: extract with real envs, and record which keys are MODEL-only so the gap
 is visible rather than assumed closed.
