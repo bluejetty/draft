@@ -68,6 +68,18 @@ if (!window.DraftPalette) {
                         // wherever an end cap crosses bare paper. Both values
                         // clear 3.0 on both of theirs.
     'draw-shape',       // reference shapes: the drafter's own scratch geometry
+    'draw-roof',        // the roof footprint outline, its fill wash and its
+                        // GABLE / EAVE tags. The wash and the tag text are
+                        // DERIVED from this one value at low alpha rather
+                        // than stored, so a roof cannot end up outlined in
+                        // one brown and washed in another.
+    'draw-roof-guide',  // the generated ridge / hip / valley guides, dashed.
+                        // A SECOND role rather than an alpha of draw-roof,
+                        // because the guides are a different kind of thing --
+                        // computed rather than drawn -- and they must stay
+                        // QUIETER than the footprint they belong to. That
+                        // ordering is the check: guide contrast below roof
+                        // contrast, on both skins.
     // Brand -- the family that actually differs between RUFF and ROUGH
     'accent',           // the one colour that carries the brand
     'accent-ink',       // text that sits ON the accent
@@ -97,6 +109,14 @@ if (!window.DraftPalette) {
       'draw-wall':       '#2f3335',   // 1.30 on the page -- poche, deliberately quiet
       'draw-wall-edge':  '#a7aeb1',   // 5.67 on the wall, 7.35 on the page
       'draw-shape':      '#3f8f7a',
+      // 5.95 on the page. The old value was #7a4a21 on BOTH skins, which is
+      // 2.23 here -- under the 3.0 non-text floor, and the last colour in the
+      // app that was actually broken rather than merely quiet. It also
+      // inverted the hierarchy: the guides below are 3.90, so the dashed
+      // helpers were LOUDER than the footprint they help. This restores the
+      // reading day always had.
+      'draw-roof':       '#c4915a',
+      'draw-roof-guide': '#a3703f',   // 3.90 -- clears 3.0, sits under the roof's 5.95
       'accent-ink':      '#1d1f20',
     }),
     day: Object.freeze({
@@ -120,6 +140,10 @@ if (!window.DraftPalette) {
                                       // values are what render-2d.js hardcoded before
                                       // this role existed, so DAY IS UNCHANGED.
       'draw-shape':      '#2f6b5b',
+      'draw-roof':       '#7a4a21',   // 6.64 on the page
+      'draw-roof-guide': '#a3703f',   // 3.79 -- under the roof's 6.64, same as night's ordering.
+                                      // Both values are what render-2d.js hardcoded before this
+                                      // role existed, so DAY IS UNCHANGED.
       'accent-ink':      '#ffffff',
     }),
   });

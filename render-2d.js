@@ -271,6 +271,19 @@ if (!window.DraftRender2D) {
     }
   }
 
+  // A hex at an alpha. The roof's wash and its GABLE / EAVE tags used to be
+  // three separate literals -- #7a4a21, rgba(122,74,33,0.07), rgba(122,74,33,0.7)
+  // -- which is one colour written three ways, and the decimal spelling is
+  // invisible to a search for the hex. Deriving them means the roof cannot end
+  // up outlined in one brown and washed in another, and it means a palette
+  // change reaches all three.
+  function atAlpha(hex, alpha) {
+    const h = String(hex || '').trim();
+    if (h[0] !== '#' || h.length !== 7) return h;   // already rgba, or a caller's own value
+    const n = parseInt(h.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+  }
+
   function drawRoof2D(ctx, toS, roof, options = {}, env) {
     const pts = roof.points.map(pt => toS(pt));
     if (pts.length < 3) return;
@@ -287,8 +300,13 @@ if (!window.DraftRender2D) {
       hole.forEach((pt, index) => (index ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)));
       ctx.closePath();
     });
-    if (!referenceColor) { ctx.fillStyle = 'rgba(122,74,33,0.07)'; ctx.fill('evenodd'); }
-    ctx.strokeStyle = referenceColor || '#7a4a21';
+    // draw-roof carries the outline; the wash is the same colour at 0.07.
+    // The fallbacks are the DAY values, matching drawOrigin2D's convention --
+    // a page that forgets the key gets a sane drawing rather than none, and
+    // the harness is what proves the env value is actually read.
+    const roofColor = (env.colors && env.colors.roof) || '#7a4a21';
+    if (!referenceColor) { ctx.fillStyle = atAlpha(roofColor, 0.07); ctx.fill('evenodd'); }
+    ctx.strokeStyle = referenceColor || roofColor;
     ctx.lineWidth = referenceColor ? 1.25 : (options.selected ? 3.5 : 2);
     ctx.stroke();
     ctx.lineWidth = referenceColor ? 1.25 : 2;
@@ -318,12 +336,14 @@ if (!window.DraftRender2D) {
         ctx.font = '10px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = isGable ? '#7a4a21' : 'rgba(122,74,33,0.7)';
+        ctx.fillStyle = isGable ? roofColor : atAlpha(roofColor, 0.7);
         ctx.fillText(isGable ? 'GABLE' : 'EAVE', (a.x + b.x) / 2 - dy / len * 12, (a.y + b.y) / 2 + dx / len * 12);
       }
     }
     // Generated ridge / hip / valley guides.
-    ctx.strokeStyle = referenceColor || '#a3703f';
+    // The guides are their own role, not an alpha of the roof: they must stay
+    // quieter than the footprint on both skins, and palette.js pins that.
+    ctx.strokeStyle = referenceColor || (env.colors && env.colors.roofGuide) || '#a3703f';
     ctx.lineWidth = referenceColor ? 1 : 1.5;
     ctx.setLineDash([8, 5]);
     env.roofSkeleton(roof).forEach(seg => {
@@ -332,7 +352,10 @@ if (!window.DraftRender2D) {
     });
     ctx.setLineDash([]);
     if (!env.isPrinting && !referenceColor) {
-      ctx.fillStyle = '#7a4a21';
+      // The corner handles. Same role as the outline they sit on -- this was
+      // a sixth literal, and it is the one my own count missed, because the
+      // grep that found the others was piped through `head`.
+      ctx.fillStyle = roofColor;
       pts.forEach(pt => {
         ctx.beginPath(); ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2); ctx.fill();
       });
@@ -354,10 +377,16 @@ if (!window.DraftRender2D) {
     screenPoints.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
     if (points.length >= 3) {
       ctx.closePath();
-      ctx.fillStyle = preview ? 'rgba(63,143,122,0.06)' : 'rgba(63,143,122,0.09)';
+      // Derived from the skin's own shape colour, like the roof's wash. These
+      // three were rgba(63,143,122,...) -- #3f8f7a, which is draw-shape's
+      // NIGHT value -- while the committed stroke below already read
+      // env.shapeColor. So on the day page a shape was previewed in the night
+      // green and changed colour the moment it was committed: 4.27 becoming
+      // 5.56 against the same ground, visible as a shift rather than a fault.
+      ctx.fillStyle = atAlpha(env.shapeColor, preview ? 0.06 : 0.09);
       ctx.fill();
     }
-    ctx.strokeStyle = preview ? 'rgba(63,143,122,0.72)' : env.shapeColor;
+    ctx.strokeStyle = preview ? atAlpha(env.shapeColor, 0.72) : env.shapeColor;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([7, 4]);
     ctx.stroke();

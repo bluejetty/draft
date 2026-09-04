@@ -152,6 +152,29 @@ for (const theme of P.THEMES) {
       origOnPage >= 3.0, `${origOnPage.toFixed(2)} (min 3.0)`);
     check(`${theme}/${mode}  draw-origin over a floor`,
       origOnFloor >= 3.0, `${origOnFloor.toFixed(2)} (min 3.0)`);
+
+    // THE ROOF, AND THE ORDER IT HAS TO KEEP.
+    //
+    // draw-roof was #7a4a21 on BOTH skins until 4 Sep -- 6.64 on the day page
+    // and 2.23 on the night one, the last colour in the app that was under
+    // the floor rather than merely quiet. Night is #c4915a now; day is
+    // untouched.
+    //
+    // The second check is the one worth having. Asserting each role against
+    // the ground separately passes with the guides brighter than the roof,
+    // which is what night actually had: footprint 2.23, dashed guides 3.90.
+    // The generated helpers were louder than the thing they help. So the
+    // ordering is pinned, not just the floor -- the same shape as the grid
+    // weights above, and for the same reason.
+    const roofOnPage = P.contrast(v['draw-roof'], v['surface-page']);
+    const guideOnPage = P.contrast(v['draw-roof-guide'], v['surface-page']);
+    check(`${theme}/${mode}  draw-roof on the page`,
+      roofOnPage >= 3.0, `${roofOnPage.toFixed(2)} (min 3.0)`);
+    check(`${theme}/${mode}  draw-roof-guide on the page`,
+      guideOnPage >= 3.0, `${guideOnPage.toFixed(2)} (min 3.0)`);
+    check(`${theme}/${mode}  the roof guides stay quieter than the roof`,
+      guideOnPage < roofOnPage,
+      `guide ${guideOnPage.toFixed(2)} < roof ${roofOnPage.toFixed(2)}`);
   }
 }
 
