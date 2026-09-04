@@ -189,13 +189,20 @@ if (!window.DraftProjectPage) {
   // behind it, which is the worst kind. 20' clears every derivable heel with
   // room to spare and still stops a fat-fingered 3000.
   //
-  // 30" IS THE TYPICAL RAISED HEEL AND IS NOT THIS NUMBER. Movie: "it
-  // wouldn't be increased more than 30" in most cases", and "shouldn't need
-  // more than that or even close to that" of the 20'. Two different things,
-  // and the reason to write both down is that they get confused in exactly
-  // one direction: someone reads 20' as a design target, or trims the ceiling
-  // to the typical case and turns a 95% answer into a rule. The typical
-  // number belongs in nothing that refuses input.
+  // THE TYPICAL HEEL IS THE CALCULATED ONE. Movie, 5 Sep, correcting exactly
+  // this comment: "the typical is the calculated one where the fascia bottom
+  // is equal to the top of the top plate". So the usual drawing does not type
+  // a heel at all -- it takes fascia + rise, 13 1/2" at the office default,
+  // and the box reads CALCULATED. Raising it is the exception, and Movie's
+  // 30" ("it wouldn't be increased more than 30" in most cases") describes
+  // how far that exception usually goes, not what a heel usually is.
+  //
+  // THREE NUMBERS, AND ONLY ONE OF THEM REFUSES ANYTHING. 13 1/2" is what the
+  // arithmetic gives, 30" is where the exception tops out in practice, 20' is
+  // the typo catch. Written down together because they get confused in one
+  // direction: someone reads 20' as a design target, or trims the ceiling
+  // back to a number describing typical practice -- which would turn a 95%
+  // answer into a rule and make the unusual drawing impossible to draw.
   const ROOF_HEEL_MIN_IN = 5.5;
   const ROOF_HEEL_MAX_IN = 20 * 12;
   const roofHeelInBand = inches => Number.isFinite(inches)
