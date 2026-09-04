@@ -911,7 +911,21 @@ if (!window.DraftDrawingFormat) {
       // is the conservative LOW case and the site crew fills up to it, which
       // leaves fill to play with for drainage. Old saves carry no value and
       // land here.
-      gradeOffsetFt: num(raw?.gradeOffsetFt) ?? -1,
+      // GRADE DERIVES FROM THE GARAGE. Movie, 4 Sep: "the house will need the
+      // grade at that location exactly, we will need to adjust the house
+      // based on the garage if it has an attached garage", and "if 8" grade
+      // on garage grade beam, it's 2'-8" on a bungalow default".
+      //
+      // An attached garage's beam has to sit 8" above grade, and the garage
+      // sits 2'-0" below the house -- so the garage decides where grade is,
+      // and the house takes it. A stored -1'-0" would be the house choosing
+      // on its own and quietly disagreeing with the beam beside it.
+      //
+      // null means derive, a number is the drafter's override, and the null
+      // check comes before Number() so a re-normalise never turns "derive"
+      // into an explicit 0. Same shape as both garages' offsets.
+      gradeOffsetFt: raw?.gradeOffsetFt == null ? null
+        : Number.isFinite(Number(raw.gradeOffsetFt)) ? Number(raw.gradeOffsetFt) : null,
       zones: {
         // The attached garage DERIVES like the detached one — null means
         // derive, a stored number is the drafter's override. Movie, 4 Sep:

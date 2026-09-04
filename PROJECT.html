@@ -431,7 +431,7 @@
             slabIn: asm.slabThicknessIn,
             footingWidthIn: asm.footingWidthIn ?? (fdnIsIcf() ? 24 : 20),
             footingDepthIn: asm.footingDepthIn,
-            gradeOffsetFt: zoneHeights.gradeOffsetFt,
+            gradeOffsetFt: gradeOffsetFt(),
           };
         })(),
         roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN },
@@ -546,7 +546,7 @@
       addChip('fdnThickness', 'FDN', () => inchesOnly(fdnThicknessIn()));
       addInput('grade', 'GRADE OFF FDN TOP', {
         name: 'grade',
-        get: () => signedFtIn(zoneHeights.gradeOffsetFt),
+        get: () => signedFtIn(gradeOffsetFt()),
         set: text => {
           const value = parseSignedFtIn(text);
           if (value == null) return false;
@@ -1185,8 +1185,21 @@
       const attachedOffsetFt = () =>
         zoneHeights.zones.attachedGarage.offsetFt ?? derivedAttachedOffsetFt();
 
+      // WHERE THE GARAGE PUTS GRADE. The beam's concrete top sits 8" above
+      // grade; the beam top is one sill plate below the garage floor; the
+      // garage floor is 2'-0" below the house's sill. The two sill plates
+      // cancel, so measured from the house's foundation top -- which is what
+      // gradeOffsetFt is stored against -- it comes out as simply the garage
+      // drop plus the 8", or 2'-8" at the standard drop. Drop the garage
+      // further and grade follows it down.
+      const derivedGradeOffsetFt = () =>
+        attachedOffsetFt() - houseSillFt()
+        - projectPage.GRADE_MIN_BELOW_CONCRETE_IN / 12;
+      const gradeOffsetFt = () =>
+        zoneHeights.gradeOffsetFt ?? derivedGradeOffsetFt();
+
       const derivedDetachedOffsetFt = () =>
-        fdnTopLocalFt() - datumFt + zoneHeights.gradeOffsetFt
+        fdnTopLocalFt() - datumFt + gradeOffsetFt()
         + projectPage.GARAGE_BEAM_ABOVE_GRADE_IN / 12;
       const zoneOffsetFt = zone => zone.id === 'attachedGarage'
         ? attachedOffsetFt()
@@ -1281,8 +1294,8 @@
         });
         if (gradeInputs) {
           gradeInputs.local.value =
-            signedFtIn(fdnTopLocalFt() + zoneHeights.gradeOffsetFt).replace(/^\+/, '');
-          gradeInputs.offset.value = signedFtIn(zoneHeights.gradeOffsetFt);
+            signedFtIn(fdnTopLocalFt() + gradeOffsetFt()).replace(/^\+/, '');
+          gradeInputs.offset.value = signedFtIn(gradeOffsetFt());
         }
       };
 

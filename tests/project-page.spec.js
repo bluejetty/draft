@@ -6,6 +6,19 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// The module's own constants, loaded the way proto/ loads it: from source,
+// under a stub window. Asserting a derive against numbers typed into this
+// file would only prove the two agree today.
+const P = (() => {
+  const saved = global.window;
+  global.window = {};
+  delete require.cache[require.resolve('../project-page.js')];
+  require('../project-page.js');
+  const api = global.window.DraftProjectPage;
+  global.window = saved;
+  return api;
+})();
+
 async function openProjectPage(page) {
   await page.locator('[data-project-open]').click();
   await page.waitForURL(/PROJECT\.html/);
@@ -84,7 +97,7 @@ test('zone heights edit both ways against the elevation datum and persist', asyn
   await expect(page.locator('[data-zone-local="attachedGarage"]')).toHaveValue(`97'-6"`);
 });
 
-test('grade defaults a foot below foundation top and drives the detached garage until overridden', async ({ page }) => {
+test('grade derives from the attached garage beam and drives the detached garage until overridden', async ({ page }) => {
   await h.openModel(page);
   await page.evaluate(async bucket => {
     const file = await window.SharedFileStore.loadSharedFile(bucket);
@@ -97,13 +110,30 @@ test('grade defaults a foot below foundation top and drives the detached garage 
   }, h.STORAGE_BUCKET);
   await page.goto('/PROJECT.html');
 
-  // Default: grade 1'-0" below the top of the foundation wall, which sits
-  // one main-floor assembly (11 7/8" + 3/4") under MAIN FL's 100'-0".
-  await expect(page.locator('[data-grade-offset]')).toHaveValue(`-1'-0"`);
-  await expect(page.locator('[data-grade-local]')).toHaveValue(`97'-11 3/8"`);
-  // Detached garage derives until overridden: beam top 8" above grade.
+  // GRADE IS NO LONGER A NUMBER OF ITS OWN. It used to default to a flat
+  // 1'-0" below the foundation top; an attached garage's beam has to sit 8"
+  // above grade, so the garage decides where grade is and the house takes
+  // it. The garage drops 2'-0" from the house's sill, its beam top is one
+  // sill plate below its floor, grade is 8" under that -- and the two sill
+  // plates cancel, leaving 2'-0" + 8" = 2'-8" below the foundation top.
+  //
+  // Two assertions, deliberately. The first pins the ARITHMETIC against the
+  // module's own constants, so moving either one fails here naming which.
+  // The second pins what the box actually READS, because a derive that
+  // computes correctly and renders wrong is still wrong. Asserting only the
+  // second would pass with 2'-8" hardcoded anywhere in the chain.
+  expect(-(P.GARAGE_SILL_BELOW_HOUSE_FT + P.GRADE_MIN_BELOW_CONCRETE_IN / 12))
+    .toBeCloseTo(-2 - 8 / 12, 6);
+  await expect(page.locator('[data-grade-offset]')).toHaveValue(`-2'-8"`);
+  // Local reads off the datum: MAIN FL 100'-0", the foundation top one
+  // main-floor assembly (11 7/8" + 3/4") below it, grade 2'-8" under that.
+  await expect(page.locator('[data-grade-local]')).toHaveValue(`96'-3 3/8"`);
+  // Detached garage derives until overridden: beam top 8" above grade. It
+  // moved with grade -- which is the point: the attached garage sets grade,
+  // and the detached one is measured off grade, so a chain runs from the
+  // attached garage's floor all the way to the detached garage's beam.
   const detachedLocal = page.locator('[data-zone-local="detachedGarage"]');
-  await expect(detachedLocal).toHaveValue(`98'-7 3/8"`);
+  await expect(detachedLocal).toHaveValue(`96'-11 3/8"`);
 
   // Dropping grade a foot drops the derived garage the same foot.
   await page.locator('[data-grade-offset]').fill(`-2'-0"`);
