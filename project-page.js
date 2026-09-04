@@ -101,6 +101,11 @@ if (!window.DraftProjectPage) {
   // the derive rule the ZONE HEIGHTS panel applies until overridden.
   const GARAGE_BEAM_ABOVE_GRADE_IN = 8;
   const CUT_DEPTH_FT = 4; // "the first 4 ft of the exterior wall cut inward"
+  // Movie, 4 Sep: the garage panel is the JUNCTION, not a garage. It is cut
+  // where the garage meets the house, so it shows "2ft of straight roof until
+  // the cut" -- shorter than the house's 4 ft because the thing being drawn
+  // is a connection, and 2 ft of it is all there is to see.
+  const GARAGE_CUT_FT = 2;
 
   // Section geometry in world feet: x = 0 at the exterior wall face,
   // positive inward; y = elevation with the MAIN FL floor surface at 0.
@@ -219,7 +224,7 @@ if (!window.DraftProjectPage) {
     const line = (x1, y1, x2, y2, weight = 1.5) => parts.push({ kind: 'line', x1, y1, x2, y2, weight });
     const rect = (x, y, w, h, weight = 1.5) => parts.push({ kind: 'rect', x, y, w, h, weight });
 
-    const cut = -CUT_DEPTH_FT;                 // the break edge, 4 ft out
+    const cut = -GARAGE_CUT_FT;                // the break edge, 2 ft out
     const wallFt = g.wallThicknessIn / 12;
     const fdnFt = g.thicknessIn / 12;
     const slabFt = g.slabIn / 12;
@@ -229,7 +234,7 @@ if (!window.DraftProjectPage) {
     anchors.garageOffset = { x: cut / 2, y: floorY + 0.62 };
 
     // Slab on grade, poured against the inside face of the wall.
-    rect(cut, floorY - slabFt, CUT_DEPTH_FT - fdnFt, slabFt, 1);
+    rect(cut, floorY - slabFt, GARAGE_CUT_FT - fdnFt, slabFt, 1);
     anchors.garageSlab = { x: cut * 0.62, y: floorY - slabFt - 0.5 };
 
     // Foundation wall down from the slab, footing centred under it.
@@ -248,14 +253,16 @@ if (!window.DraftProjectPage) {
     line(-wallFt, floorY, -wallFt, plateY, 1.5);          // garage side
     anchors.garageWallHeight = { x: -wallFt - 0.9, y: floorY + g.wallHeightFt / 2 };
 
-    // The roof falls AWAY from the house across the cut. No overhang here:
-    // it is 4 ft from the wall, and the eave is out at the far side of a
-    // garage this section deliberately does not reach.
-    const riseAt = x => Math.abs(x) * (g.pitch / 12);
-    line(0, plateY, cut, plateY + riseAt(cut), 2);
-    anchors.garagePitch = { x: cut * 0.5, y: plateY + riseAt(cut * 0.5) + 0.55 };
+    // STRAIGHT, and no grade. Movie: "no roof slop just 2ft of straight roof
+    // until the cut... we want to show where the connection happens". The
+    // slope and the eave belong to a garage; what happens AT the house is a
+    // level run into the wall. And no grade line on this side at all -- the
+    // garage is standing there, so soil ticks would draw earth inside a
+    // building. The house's own section still carries grade, because a
+    // typical exterior wall does have some.
+    line(0, plateY, cut, plateY, 2);
 
-    const topY = plateY + riseAt(cut);
+    const topY = plateY;
     parts.push({ kind: 'break', x: cut, y1: fdnBot - footD - 0.3, y2: topY + 0.3 });
 
     return {

@@ -56,7 +56,7 @@
        the page reads name-then-value everywhere, the same direction as the
        section table below. A mirror would have made the left half read
        backwards. (Movie's call, and he was right.) */
-    .band { display:grid; grid-template-columns:228px 238px 400px 228px; gap:0 12px; align-items:start; justify-content:center; }
+    .band { display:grid; grid-template-columns:250px 150px 400px 250px; gap:0 12px; align-items:start; justify-content:center; }
     .sched { align-self:start; padding-top:2px; }
     .sched-head { padding:0 4px 4px; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
     .sched-row { display:grid; grid-template-columns:minmax(0,1fr) 78px; gap:8px; align-items:center; padding:3px 4px; border-bottom:1px solid rgba(29,31,32,.07); }
@@ -152,7 +152,7 @@
         <div class="band">
           <div class="sched" id="sched-garage"></div>
           <div class="detail-wrap" id="garage-wrap">
-            <canvas id="garage-canvas" width="238" height="500" aria-label="Live attached garage section"></canvas>
+            <canvas id="garage-canvas" width="150" height="500" aria-label="Live attached garage section"></canvas>
           </div>
           <div class="detail-wrap" id="detail-wrap">
             <canvas id="detail-canvas" width="400" height="500" aria-label="Live typical wall section"></canvas>
@@ -725,10 +725,6 @@
       garageCell('garageSlab', 'Garage slab thickness', 'slabThicknessIn', inchesOnly, parseInches);
       garageCell('garageFootingWidth', 'Garage footing width', 'footingWidthIn', inchesOnly, parseInches);
       garageCell('garageFootingDepth', 'Garage footing depth', 'footingDepthIn', inchesOnly, parseInches);
-      garageCell('garagePitch', 'Garage roof pitch : 12', 'roofPitch', String, text => {
-        const value = Number(text);
-        return Number.isFinite(value) && value > 0 && value <= 24 ? value : null;
-      });
 
       garageControls.forEach(control => {
         const tag = document.createElement('span');
@@ -763,7 +759,6 @@
             slabIn: cell('slabThicknessIn'),
             footingWidthIn: cell('footingWidthIn'),
             footingDepthIn: cell('footingDepthIn'),
-            pitch: cell('roofPitch'),
             thicknessIn: fdnThicknessIn(),
             wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
           },
