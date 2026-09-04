@@ -890,14 +890,31 @@
         const value = Number(text);
         return Number.isFinite(value) && value > 0 && value <= 24 ? value : null;
       }, true);
-      // Derived like the house's: fascia plus the rise gained across the
-      // overhang, through the module's own rule rather than restated here.
+      // SAME RULE AS THE HOUSE, and same band. Movie, 5 Sep: "garage roof
+      // should act the same yes". Calculated by default from fascia + rise,
+      // typeable when somebody raises it, and cleared back to the calculation
+      // by emptying the box -- through the module's own rule and the module's
+      // own band, not a second heel that agrees with the house's until one of
+      // them is edited. It writes the ATTACHED GARAGE row, so the garage
+      // carries its own raised heel without touching the house's.
+      const derivedGarageHeelIn = () => projectPage.roofHeelIn(
+        ROOF_FASCIA_IN,
+        cellValue('attachedGarage', 'roofOverhangFt').value,
+        cellValue('attachedGarage', 'roofPitch').value);
+      const garageHeelIn = () =>
+        sectionTable.rows.attachedGarage?.roofHeelIn ?? derivedGarageHeelIn();
       addGarage('garageHeel', 'Garage roof heel',
-        () => fmt.formatArchitecturalInches(projectPage.roofHeelIn(
-          ROOF_FASCIA_IN,
-          cellValue('attachedGarage', 'roofOverhangFt').value,
-          cellValue('attachedGarage', 'roofPitch').value)),
-        () => false, undefined, true);
+        () => fmt.formatArchitecturalInches(garageHeelIn()),
+        text => {
+          const value = parseInches(text);
+          // Empty is not a rejection here: it is how the cell goes back to
+          // following the pitch, and it has to stay reachable or a typo can
+          // strand the garage on a number nobody wanted.
+          if (value == null) { writeCell('attachedGarage', 'roofHeelIn', null); return true; }
+          if (!projectPage.roofHeelInBand(value)) return false;
+          writeCell('attachedGarage', 'roofHeelIn', value);
+          return true;
+        }, undefined, true);
       // The garage had no fascia row at all. Movie asked for the four in one
       // order "on both house and garage", and a set of four with one missing
       // is not the same set -- so it gains the row the house already had.
