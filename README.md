@@ -17,6 +17,7 @@ See [ARCHITECTURE.md](RD-DOCUMENTS/ARCHITECTURE.md) for how the app is put toget
 | [`IMPORTANT-WORK-ORDERS/`](RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/) | what is being built now — TOY MODE's status, the turtle path, how the boneyard works |
 | [`ARCHITECTURE.md`](RD-DOCUMENTS/ARCHITECTURE.md) · [`BRANCHING.md`](RD-DOCUMENTS/BRANCHING.md) · [`REFACTOR-PLAN.md`](RD-DOCUMENTS/REFACTOR-PLAN.md) | how the app is put together, how work lands, and why `MODEL.dc.html` is the shape it is |
 | [`BOARDS.md`](RD-DOCUMENTS/BOARDS.md) and the `BOARD-*` files | the shared work list, and the boards written up in full |
+| [`HANDOFF-SKIPPER.md`](RD-DOCUMENTS/HANDOFF-SKIPPER.md) | who is who, the standing constraints, and the traps a session actually hit — read before the boards |
 | [`SPECIFICATIONS/`](RD-DOCUMENTS/SPECIFICATIONS/) | the written half of a *drawing set* — product content, not software specs |
 | [`BUILDING-CODES/`](RD-DOCUMENTS/BUILDING-CODES/) | the national code PDFs the rules are drawn from |
 | [`DOG-EMPLOYEES/`](RD-DOCUMENTS/DOG-EMPLOYEES/) · [`LORE/`](RD-DOCUMENTS/LORE/) · [`ADVERTISEMENT/`](RD-DOCUMENTS/ADVERTISEMENT/) | the dogs, the history, and the advertising |
