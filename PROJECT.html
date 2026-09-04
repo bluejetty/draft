@@ -550,6 +550,7 @@
         set: text => {
           const value = parseSignedFtIn(text);
           if (value == null) return false;
+          if (gradeTooHigh(value)) { gradeRefusal(); return false; }
           zoneHeights = format.zoneHeights({ ...zoneHeights, gradeOffsetFt: value });
           return true;
         },
@@ -1150,6 +1151,18 @@
       };
       // The detached garage derives from grade until overridden: beam top
       // ~8" above grade at the house (offset from MAIN FL).
+      // Grade is stored relative to the TOP OF THE FOUNDATION WALL, which is
+      // the concrete the sill plate sits on -- so the floor is a plain
+      // comparison, no conversion. Both places grade can be typed go through
+      // this, because a rule enforced in one of two entry points is not a
+      // rule, it is a coincidence of which box you used.
+      const GRADE_FLOOR_FT = -projectPage.GRADE_MIN_BELOW_CONCRETE_IN / 12;
+      const gradeTooHigh = value => value > GRADE_FLOOR_FT;
+      const gradeRefusal = () => showStatus(
+        `Grade sits at least ${fmt.formatArchitecturalInches(
+          projectPage.GRADE_MIN_BELOW_CONCRETE_IN)} below the top of concrete —`
+        + ' any higher puts soil against the sill plate.');
+
       // The house's sill plate: one floor package below MAIN FL, which is
       // where the main floor bears. The garage's sill drops 2'-0" from it.
       const houseSillFt = () => {
@@ -1202,8 +1215,14 @@
         const commitGrade = (input, toOffset) => {
           const value = parseSignedFtIn(input.value);
           if (value != null) {
-            zoneHeights = format.zoneHeights({ ...zoneHeights, gradeOffsetFt: toOffset(value) });
-            save('Grade level saved.');
+            // No early return: fillZones() below is what snaps a refused box
+            // back to the stored value, so bailing here would leave the bad
+            // number sitting in the field looking accepted.
+            if (gradeTooHigh(toOffset(value))) gradeRefusal();
+            else {
+              zoneHeights = format.zoneHeights({ ...zoneHeights, gradeOffsetFt: toOffset(value) });
+              save('Grade level saved.');
+            }
           }
           fillZones();
           repaint();

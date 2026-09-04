@@ -148,6 +148,13 @@ if (!window.DraftProjectPage) {
   // sill to sill, not floor to floor, so it holds when the floor package
   // changes.
   const GARAGE_SILL_BELOW_HOUSE_FT = 2;
+  // Movie, 4 Sep: "the grade line will always be min. 8" below the level of
+  // top of concrete (where it meets sill plate)". Not a default -- a floor.
+  // Grade higher than this puts soil against the sill plate and the framing
+  // above it, which is a wood-to-earth detail nobody draws on purpose. The
+  // office default sits at 1'-0", comfortably under it; this is the line the
+  // drafter cannot type past.
+  const GRADE_MIN_BELOW_CONCRETE_IN = 8;
   const CUT_DEPTH_FT = 4; // "the first 4 ft of the exterior wall cut inward"
   // Movie, 4 Sep: the garage panel is the JUNCTION, not a garage -- it is cut
   // where the garage meets the house. His own drawing dimensions 4'-6" out
@@ -567,6 +574,7 @@ if (!window.DraftProjectPage) {
     CUT_DEPTH_FT,
     GARAGE_BEAM_ABOVE_GRADE_IN,
     GARAGE_SILL_BELOW_HOUSE_FT,
+    GRADE_MIN_BELOW_CONCRETE_IN,
     SECTION_TABLE_ROWS,
     SECTION_TABLE_ITEMS,
     SECTION_TABLE_DEFAULTS,
