@@ -316,14 +316,20 @@ if (!window.DraftProjectPage) {
     // bilevel", then "on the house if the foundation is deep they also line
     // up on a house but not too often".
     //
-    // On a MODIFIED BILEVEL that is a RULE: the garage's floor offset is not
-    // a free number there, it is whatever puts this sill level with the
-    // house's, and typing it would be a value that agreed until one of them
-    // moved. On a BUNGALOW it is a COINCIDENCE -- it happens when the
-    // foundation is deep enough and usually does not -- so the offset stays a
-    // number the drafter types, and a bungalow whose sills happen to align is
-    // not evidence of anything. Deriving it there would silently move a
-    // garage every time someone deepened a basement.
+    // NEITHER IS A RULE. Movie, 4 Sep: "on bilevel could change but not
+    // often, 95% inline", "on bungalow 95% not inline (opposite)".
+    //
+    // So it is one editable number with two different starting points:
+    // a MODIFIED BILEVEL defaults to the offset that puts this sill level
+    // with the house's, a BUNGALOW defaults to whatever the drafter's own
+    // grade gives. Both stay typeable.
+    //
+    // The first version of this note called the bilevel case a RULE and
+    // derived it. That would have been right 95% of the time and impossible
+    // to draw the other 5% -- the shape of defect this project keeps finding,
+    // where a number that is usually correct is welded in so the unusual
+    // drawing cannot be made at all. A 95% answer is a DEFAULT, and a default
+    // is something you can type over.
     const frostWall = g.foundation === 'frostwall';
     const sillFt = SILL_PLATE_IN / 12;
     const fdnTop = floorY;
