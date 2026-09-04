@@ -533,12 +533,36 @@ The check is one more question after the other two: **does a second mechanism
 produce the same outcome?** If it does, mutate both together — that is the only
 way to learn whether the property is pinned at all.
 
+**And this case, unlike the other two, is a limit of the technique rather than
+a fault in the mutation.** Gilligan's, sorting the three: an inert mutant is
+answered by writing a harsher one, and a low absence-score by writing a
+control, but a redundantly guarded property cannot be reached by
+single-mutation testing *by construction*. "Write a harsher mutation" is the
+wrong response to it, and worth saying so, because it is the reflex the first
+two cases train.
+
 It also settles what such a test should assert. Where two guards are
 deliberate, write the assertion against **the outcome the user sees**, not
 against whichever mechanism happens to deliver it: an assertion aimed at one
 guard passes while the property it names is broken, as long as the other guard
-holds. And correct the comments — the first draft of this one claimed the
-scoping was what protected the corner, which measurement falsified.
+holds.
+
+**That rule has a direction, and the direction is the whole of it.** Gilligan,
+applying it to his own diff, found a check named for a colour decision that
+asserts a set-count — and correctly left it alone. It is *stricter* than the
+property, not weaker: a refactor setting the same value twice fails it while
+the drafter sees a correct marker. That is a false FAILURE, which costs a
+minute and announces itself. The defect this rule is about is the opposite —
+an assertion that **passes while the property is broken** — which costs
+whatever the bug costs and announces nothing. Only ask whether a
+mechanism-assertion can be satisfied by a broken drawing; a mechanism-assertion
+that merely rejects a working one is a tight test, not a wrong one.
+
+And correct the comments. The first draft of this entry claimed the visible-
+wall scoping was what protected the corner, which measurement falsified. That
+is the same error as the "closed two-value set" reading of `body` one section
+up — in both cases a mechanism was inferred rather than measured, and in both
+the code read exactly as though the inference were true.
 
 ### The same ambiguity runs backwards, in the aggregate score
 
