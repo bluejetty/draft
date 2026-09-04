@@ -16,12 +16,13 @@ next time he is awake.
 
 ## 1 · Critical — something is wrong on the live site
 
-Only one thing in the whole list qualifies. Everything else is missing work,
-not broken work.
+**Nothing. NEW-1 closed 4 Sep** — see below. Everything else on this board is
+missing work, not broken work, and that is now literally true rather than
+nearly true.
 
 | Board | Item | Size | State |
 | --- | --- | --- | --- |
-| **NEW-1** | **Elevations read as see-through in E2/E4.** *Rev 5, 31 Aug — the wrong ink located by measurement.* The far ridge plateau at 22.005 is **legitimate**. What is wrong is that **the near wing's rake terminates in mid-air at exactly that elevation** — 29 px inboard of its own wall corner and 8 px above it — instead of running on to its eave and overhanging by the roof's 2'. **The fix draws more, not less.** Five earlier root causes disproven by measurement (wall occluders: 744 calls, 0 hits; ternary search: 100× denser scan, identical to 3 dp; walls vs silhouette: near tops 21.0–21.6, below the envelope). | ½–1 day | **Out with Skipper now**, in a session scoped to the repo so he can push his own PR. Rev 5 order + `repro-L-house.draft` delivered. |
+| ~~**NEW-1**~~ | ~~**Elevations read as see-through in E2/E4.**~~ **DONE — and the entry was stale for three days.** The Rev 5 fix was in the tree by the 1 Sep squash merge and this board was never updated. Measured 4 Sep, not inferred: `proto/elevation-harness.js` pins the exact Rev 5 order — *"E4: the near wing's left rake runs ridge to eave, past its wall corner"* (to u = −4.15, past the corner at −2.14, the 2' overhang the board said was missing), the right rake likewise, and the far wing's ridge across the plateau. 21 checks green, and green on every CI run. **A rake that stopped in mid-air would fail the first of those by name.** The entry said *"out with Skipper now"* long after the session that owned it had ended — which is how a closed item reads as an open one: nobody lies, the note simply outlives the work. | — | Closed. |
 
 Why it is the only critical one: auto-compose now deals E1–E4 onto every
 default sheet set, so this defect appears four times on every job and reads as
@@ -120,18 +121,51 @@ entry predicted, found the moment something other than a person ran them.
 The order matters: make the guard universal first, then a CI loop can pass
 `--mutate` and mean it.
 
-### The drawing does not obey the skin — 18 hardcoded colours in render-2d.js
+### The drawing does not obey the skin — 13 colours with no role, down from 18
 
 Found 3 Sep while wiring `drawOrigin2D`, which hardcoded its green. It is not
 one painter. Five of them carry colour literals no caller can override:
 
-| painter | literals |
-|---|---|
-| `drawWallSeg2D` | 5 |
-| `drawRoof2D` | 6 |
-| `drawShape2D` | 4 |
-| `drawFixture2D` | 2 |
-| `drawOrigin2D` | 1 — **fixed**, now reads `env.colors.origin` |
+**Recounted on merged main, 4 Sep, and the recount separates two things the
+first count did not.** A literal sitting behind a role read — `wallColors.wall
+|| '#ffffff'` — is a *default*: a caller who supplies the role overrides it,
+and the harness proves the role is read. A literal with no role at all cannot
+be overridden by anyone. Only the second kind is the defect, and counting them
+together made the problem look larger and less tractable than it is.
+
+| painter | fallback behind a role | no role at all |
+|---|---|---|
+| `drawWallSeg2D` | 4 | 4 — the underlay tints, computed alpha |
+| `drawRoof2D` | 2 | 0 — **fixed 4 Sep**, `draw-roof` + `draw-roof-guide` |
+| `drawShape2D` | 0 | 1 — a white label back |
+| `drawFixture2D` | 0 | 2 |
+| `drawOrigin2D` | 1 | 0 — fixed 3 Sep |
+| `cutChoiceMark` | 0 | 2 |
+| `drawCutMarks2D` | 0 | 2 |
+| `drawCutPreview2D` | 0 | 2 |
+| **total** | **7** | **13** |
+
+**What is left is thirteen, and none of it is a refactor.** Each needs a night
+AND a day value *chosen* — the cut-mark family (`#ff3366`, `#994466`,
+`#b04060`), the underlay tints, the white label backs. That is Movie's call,
+not an agent's, which is why they have sat: the code change is trivial and the
+decision is not.
+
+**The rule the roof taught, worth having before picking any of them:** a colour
+can stay ONE value if it is mid-tone — `draw-floor-edge` (#5980a6, 3.99 night /
+3.71 day) and `draw-roof-guide` (#a3703f, 3.90 / 3.79) both clear the floor on
+either ground, which is why neither ever needed a twin. A colour near either
+end needs a pair. `#7a4a21` was dark, worked on day, and was 2.23 on night —
+one shade too dark to serve both, and that was the entire bug.
+
+**And drafter-chosen colours was considered and DROPPED, 4 Sep.** The palette
+is not a preference: `draw-wall` is deliberately quiet at 1.30/1.12 because *a
+plan does not shout its walls with fill*, the three grid weights must read in
+order, and the roof guides must stay under the roof. A contrast validator
+enforces the floor; it cannot stop someone picking a bright poche and a dim
+edge, which is a legible drawing made illegible by taste. If the real need
+appears it is a designed colourblind-safe skin — one table, validated by the
+harness — not twenty-two pickers.
 
 MODEL.html defaults to `mode=night`, so this is its default view. Measured
 against the skins' own `surface-page`:
@@ -224,8 +258,10 @@ reveal · `#240` scan-to-house · `#213` US regions.
 
 For the next day or two, in this order.
 
-1. **NEW-1 see-through elevations** — already out with Skipper. Live defect,
-   about to be multiplied by four per job.
+1. ~~**NEW-1 see-through elevations**~~ — **done**, in the tree since the
+   1 Sep squash and pinned by `proto/elevation-harness.js`. Confirmed by
+   measurement 4 Sep, after the entry had read *"out with Skipper now"* for
+   three days past the end of that session.
 2. **NEW-2 — the SITE and ROOF sheets.** The scale and placement halves
    landed 1–2 Sep and must not be rebuilt; what is left is the sheets
    themselves, which Movie confirmed on 3 Sep are still outstanding. They
