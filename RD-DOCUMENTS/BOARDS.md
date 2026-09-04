@@ -326,10 +326,34 @@ one went red the moment the constant moved.
 Which gives the preference between the two failure modes, and the fix that gets
 you the good one: **read the value from its source rather than copying it.**
 `wallInk` now reads `--draw-wall-edge` off the document, the same move `anyInk`
-already made for the page ground. That turns a number carried in the test into
-a mechanism-derived proxy for the actual question, and it means the skin can be
-redesigned again without editing the spec — and that a palette which failed to
-reach the page throws, rather than quietly counting nothing.
+already made for the page ground. The skin can be redesigned again without
+editing the spec, and a palette that failed to reach the page throws rather
+than quietly counting nothing.
+
+**Do not read that as licence to assert the mechanism.** The first draft of this
+paragraph did, in the word itself — it called the token a *mechanism-derived
+proxy*, which is the exact thing the mechanism-versus-outcome rule below
+forbids. Gilligan caught it, 4 Sep, by reading the entry back against the rule
+it sits beside: one word doing two opposite jobs in one rule set, so that read
+cold, this paragraph licensed what that one prohibits.
+
+The distinction that actually holds is **three-way, not two**:
+
+- **The contract** — the skin defines the wall edge and the painter honours it.
+  *This* is what you want to assert, and reading the token off the document
+  asserts exactly it.
+- **A snapshot of the contract's value** — `#a7aeb1`, or `red >= 170`. Right on
+  the day it is written and silently wrong afterwards. This is the coupling the
+  rule above is about.
+- **Which internal path delivers it** — the guard, the exempt list, the
+  `walls()` scoping. Also true, also not what you meant, and the false pass the
+  mechanism rule exists to prevent.
+
+Reading a token off the document is the first, not the third. It is the same
+category as `_frozenTotalFt` being safe *by construction*: you assert the
+relationship rather than a value or a route. Prefer **contract** or **source of
+truth** for this sense, and keep **mechanism** for the third — the two rules
+give opposite answers, so the word cannot be allowed to float between them.
 
 ---
 
