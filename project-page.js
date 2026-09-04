@@ -29,6 +29,17 @@ if (!window.DraftProjectPage) {
   // lumber is a precut length plus 4½". Type the stud, read the wall.
   const PLATE_STACK_IN = 1.5 * 3;
   const STUD_LENGTHS_IN = Object.freeze([92.625, 104.625, 116.625]);
+  // Which precut a build type starts on. Movie, 4 Sep: "8'1-1/8" is default
+  // wall height for bungalow, for bilevel we are going with 9'-1 1/8" ceiling
+  // height / walls (both are about 50% common in both)".
+  //
+  // Nothing to add for it: 9'-1 1/8" is simply the NEXT PRECUT, 104 5/8" plus
+  // the same three plates, and MAIN FL STUD already takes it and reads the
+  // wall back. What is missing is only which one a type STARTS on, and that
+  // needs a build type on the drawing -- NEW-5.
+  //
+  // And 50/50 is not a rule in either direction, so both stay typeable: a
+  // bungalow with 9' walls and a bilevel with 8' walls are both ordinary.
   // A basement fill wall doesn't get to choose its height, so it takes the
   // offcut instead: an 8' precut sawn in two, rounded off the sixteenth.
   const HALF_STUD_IN = 46.25;
