@@ -115,6 +115,30 @@ const dropMitre = src => {
   return out;
 };
 
+// drawOrigin2D's colour contract has two halves and they fail differently, so
+// they get a mutation each: one page loses its skin, the other loses its
+// marker. A single mutation deleting the whole expression would be caught by
+// either check and would not tell them apart.
+const dropOriginEnvColour = src => {
+  const before = src;
+  const out = src.replace(
+    "ctx.strokeStyle = (env.colors && env.colors.origin) || '#557a46';",
+    "ctx.strokeStyle = '#557a46';",
+  );
+  if (out === before) throw new Error('dropOriginEnvColour matched nothing -- the colour line moved');
+  return out;
+};
+
+const dropOriginFallback = src => {
+  const before = src;
+  const out = src.replace(
+    "ctx.strokeStyle = (env.colors && env.colors.origin) || '#557a46';",
+    'ctx.strokeStyle = env.colors && env.colors.origin;',
+  );
+  if (out === before) throw new Error('dropOriginFallback matched nothing -- the colour line moved');
+  return out;
+};
+
 // ─── The recording ctx ────────────────────────────────────────────────────
 // A canvas context is a big surface and the painters use a lot of it, so this
 // records through a Proxy rather than enumerating methods: any call lands on
@@ -279,6 +303,50 @@ suite('drawOrigin2D', 'the marker stands on the datum', R => {
   expect('centred on the projected datum x', cx, 500);
   expect('centred on the projected datum z', cy, 500);
   expect('with a crosshair through it', count(ctx, 'moveTo'), 2);
+});
+
+// The datum marker was the one painter a skinned page could not re-colour: its
+// green was a literal. Now it reads env.colors.origin and keeps the literal as
+// the fallback. Both halves need pinning, and separately -- a check that only
+// proves the supplied colour wins would pass on a painter that had lost its
+// fallback, and vice versa.
+//
+// This is also why the assertion is on the tape and not on pixels: the browser
+// spec for this marker measured ANTI-ALIASING around the ring rather than the
+// stroke colour, which is why it could fail on a clean tree. A recorded
+// strokeStyle has no such ambiguity.
+suite('drawOrigin2D', 'a caller that supplies a colour gets it', R => {
+  const ctx = recordingCtx();
+  R.drawOrigin2D(ctx, toS, {
+    datum: { x: 0, z: 0 }, elev: 0, colors: { origin: '#ff00aa' },
+  });
+  expect('the marker is stroked in the skin colour', sets(ctx, 'strokeStyle')[0], '#ff00aa');
+});
+
+suite('drawOrigin2D', 'a caller that supplies none keeps the literal', R => {
+  const ctx = recordingCtx();
+  R.drawOrigin2D(ctx, toS, { datum: { x: 0, z: 0 }, elev: 0 });
+  expect('the fallback is the day value', sets(ctx, 'strokeStyle')[0], '#557a46');
+});
+
+// A colors object is not the same as an origin colour in it. The page that
+// skins SOME painters and not this one must still get a visible marker.
+suite('drawOrigin2D', 'a colours object without an origin key still falls back', R => {
+  const ctx = recordingCtx();
+  R.drawOrigin2D(ctx, toS, { datum: { x: 0, z: 0 }, elev: 0, colors: { grid: '#123456' } });
+  expect('the fallback still applies', sets(ctx, 'strokeStyle')[0], '#557a46');
+});
+
+// Ring and crosshair are one colour decision, not two. If a later edit gives
+// the crosshair its own strokeStyle, a skinned page could re-colour half the
+// marker -- which is the original defect back in a smaller form.
+suite('drawOrigin2D', 'the whole marker is one colour decision', R => {
+  const ctx = recordingCtx();
+  R.drawOrigin2D(ctx, toS, {
+    datum: { x: 0, z: 0 }, elev: 0, colors: { origin: '#ff00aa' },
+  });
+  expect('strokeStyle is set exactly once', sets(ctx, 'strokeStyle').length, 1);
+  expect('both strokes use it', count(ctx, 'stroke'), 2);
 });
 
 // ── drawUnderlays2D: four separate refusals ──
@@ -1852,7 +1920,10 @@ function coverage() {
   console.log('\nbranch mutations');
   console.log('─'.repeat(72));
   let missed = 0;
-  [['strokeSegPath2D bulge branch', dropBulge], ['drawWallSeg2D mitre path', dropMitre]].forEach(([label, mutate]) => {
+  [['strokeSegPath2D bulge branch', dropBulge],
+   ['drawWallSeg2D mitre path', dropMitre],
+   ['drawOrigin2D env colour', dropOriginEnvColour],
+   ['drawOrigin2D colour fallback', dropOriginFallback]].forEach(([label, mutate]) => {
     const caught = runAll(load(mutate)).filter(r => r.failed || r.threw);
     if (!caught.length) missed += 1;
     console.log(`${(label + ' deleted').padEnd(40)} ${caught.length ? `caught by ${caught.length} check(s)` : 'NOTHING NOTICED'}`);
