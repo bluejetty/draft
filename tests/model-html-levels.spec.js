@@ -124,9 +124,16 @@ test.describe('MODEL.html levels', () => {
       await expect(readout(page)).toContainText('ROOF', { timeout: 5000 });
       await expect(readout(page)).toContainText('roofs 1/');
 
-      // And it is INK, not just a count. drawRoof2D strokes #7a4a21 and fills a
-      // brown wash; nothing else on this page is brown, so red>green>blue with
-      // a real red channel isolates it.
+      // And it is INK, not just a count. drawRoof2D strokes the draw-roof role
+      // and fills a wash derived from it; nothing else on this page is brown,
+      // so red>green>blue with a real red channel isolates it.
+      //
+      // DELIBERATELY A FAMILY, NOT A VALUE. The role is #7a4a21 on day and
+      // #c4915a on night, and both satisfy this predicate -- so a skin change
+      // cannot turn this red for a non-defect, while a roof that stops being
+      // painted still does. The named hex used to be in this comment and it
+      // went stale the moment the night value was added; the comment is the
+      // only place it lived, which is why nothing failed.
       const brown = await page.evaluate(() => {
         const c = document.getElementById('plan');
         const { data } = c.getContext('2d').getImageData(0, 0, c.width, c.height);

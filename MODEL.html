@@ -497,11 +497,27 @@
   //
   //   drawWallSeg2D  wallTypes
   //   drawRoof2D     isPrinting offsetOutline roofSkeleton surfaceOpeningsFor
+  //                  colors.roof colors.roofGuide
   //   drawShape2D    isPrinting areaLabel outlineAreaSqFt flooringTypes
   //                  shapeColor
   const paintEnv = () => ({
     wallTypes: window.DraftWallTypes.WALL_TYPES,
     shapeColor: skin['draw-shape'],
+    // THE ROOF READS THE SKIN, and that is the whole point of the pair.
+    // drawRoof2D used one brown for both skins -- #7a4a21, which is 6.64 on
+    // the day page and 2.23 on the night one, under the 3.0 non-text floor.
+    // It also left the dashed guides at 3.90, LOUDER than the footprint they
+    // belong to, which inverts the reading day always had. The old page has
+    // no night skin at all, so it keeps the literals through the painter's
+    // fallbacks and is untouched; this page is the one that has two grounds.
+    //
+    // The fill wash and the GABLE / EAVE tags are DERIVED from colors.roof
+    // inside the painter rather than passed, so they cannot drift apart from
+    // the outline. Only the two roles cross this boundary.
+    colors: {
+      roof: skin['draw-roof'],
+      roofGuide: skin['draw-roof-guide'],
+    },
     flooringTypes: window.DraftDrawingFormat.FLOORING_TYPES,
     // This page never prints. When it does, this stops being a constant.
     isPrinting: false,

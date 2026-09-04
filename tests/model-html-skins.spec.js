@@ -140,6 +140,51 @@ test.describe('MODEL.html skins', () => {
     }
   }
 
+  // THE ROOF FOLLOWS THE SKIN, and until 4 Sep it did not.
+  //
+  // drawRoof2D used one brown on both skins -- #7a4a21, which is 6.64 on the
+  // day page and 2.23 on the night one, under the 3.0 non-text floor. It was
+  // the last colour in the app that was actually broken rather than quiet.
+  // palette.js pins the contrast; this pins that the value reaches the canvas,
+  // which is a different claim and the one a page can fail on its own.
+  //
+  // Counted as exact pixels of each brown rather than a family predicate: the
+  // question here is WHICH brown, so a test that accepts any brown answers a
+  // question nobody asked. Presence of one against total absence of the other,
+  // measured on the same drawing at the same level.
+  const ROOF_LEVEL = 7;
+  const NIGHT_ROOF = [0xc4, 0x91, 0x5a];
+  const DAY_ROOF = [0x7a, 0x4a, 0x21];
+  const exact = (page, rgb) => page.evaluate(t => {
+    const c = document.getElementById('plan');
+    const { data } = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] === t[0] && data[i + 1] === t[1] && data[i + 2] === t[2]) n += 1;
+    }
+    return n;
+  }, rgb);
+
+  for (const [mode, mine, theirs, name] of [
+    ['night', NIGHT_ROOF, DAY_ROOF, '#c4915a'],
+    ['day', DAY_ROOF, NIGHT_ROOF, '#7a4a21'],
+  ]) {
+    test(`the roof is painted in ${name} on ${mode}, and never in the other skin's brown`,
+      async ({ page }) => {
+        await houseOnOldPage(page);
+        await page.goto(`/MODEL.html?level=${ROOF_LEVEL}&mode=${mode}`);
+        await expect(page.locator('#readout')).toContainText('roofs 1/', { timeout: 6000 });
+
+        // The fixture first: no roof on the level means both counts are zero
+        // and the absence assertion below passes for the wrong reason.
+        const ours = await exact(page, mine);
+        expect(ours, `the roof must be painted in ${name}`).toBeGreaterThan(50);
+
+        const other = await exact(page, theirs);
+        expect(other, "the other skin's roof brown must not appear").toBe(0);
+      });
+  }
+
   test('night and day are genuinely different paintings, not just different chrome',
     async ({ page }) => {
       await houseOnOldPage(page);
