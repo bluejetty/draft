@@ -924,6 +924,50 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     return joins;
   }
 
+  // THE OTHER HALF OF wallJoins, and the reason it could not mitre on the new
+  // page. wallJoins keys endpoints by OBJECT IDENTITY; JSON restores values,
+  // not references, so a drawing read back off disk has a separate point
+  // object at every corner and the classifier finds nothing. This rebuilds the
+  // identity, which is what MODEL.dc.html's load path calls "restoring
+  // reference equality at shared corners instead of merely restoring values".
+  //
+  // THE KEY IS (levelId, viewId, body), NOT THE COORDINATE. Two walls may sit
+  // on the same point and still be different buildings -- that is what keeps a
+  // garage wall from splicing into a coincident house wall, and it is why the
+  // body argument matters more than it looks. Pass the body through; do not
+  // collapse it to a known set on the way in. An unrecognised body pools
+  // separately, which is the safe direction: the walls stay butt-jointed
+  // rather than joining something they are not part of.
+  //
+  // Lifted from MODEL.dc.html's _mergeVertex with two deliberate differences.
+  // It builds a plain object rather than a THREE.Vector3, because nothing here
+  // needs a vector and the new page loads no three.js; and it stores the body
+  // on every vertex instead of only on non-house ones, because the original's
+  // `(v._draftBody || 'house') === body` dance saves a field and costs a
+  // reader. y is carried but not used by anything downstream -- wallJoins
+  // reads x and z, and a plan projection drops y -- so it is not the pool's
+  // job to know a level's elevation.
+  function mergeVertex(pool, pt, levelId, viewId, body = 'house') {
+    const THRESH = 0.001;   // snapped points are exact; this is for float dust
+    for (const v of pool) {
+      if (v._draftLevelId === levelId
+        && v._draftViewId === viewId
+        && v._draftBody === body
+        && Math.abs(v.x - pt.x) < THRESH
+        && Math.abs(v.z - pt.z) < THRESH) return v;
+    }
+    const v = {
+      x: pt.x,
+      y: Number.isFinite(pt.y) ? pt.y : 0,
+      z: pt.z,
+      _draftLevelId: levelId,
+      _draftViewId: viewId,
+      _draftBody: body,
+    };
+    pool.push(v);
+    return v;
+  }
+
   window.DraftGeometry2D = {
     distance,
     worldPerPixel,
@@ -943,6 +987,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     offsetOutlineVariable,
     gableOverhangFt,
     roofSkeleton,
+    mergeVertex,
     roofFaces,
     roofFaceRise,
     roofProfile,

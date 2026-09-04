@@ -172,6 +172,11 @@
   // came from, so tier 1 owes three.js nothing.
   const view = { cx: 0, cz: 0, scale: 6 };
   let drawing = null;
+  // One shared object per corner, rebuilt on every load. Only wall endpoints
+  // go in it today, because mitring is the only thing that needs identity;
+  // MODEL.dc.html pools lines, floors and roofs too, and this grows to match
+  // when something on this page needs them to share a corner.
+  let vertexPool = [];
   let dropped = 0;   // items the format module rejected on load
 
   const say = (title, body) => {
@@ -548,16 +553,42 @@
     // silently. A painter that cannot paint must say so.
     const WT = window.DraftWallTypes;
     const R = window.DraftRender2D;
-    const missing = [!WT && 'wall-types.js', !R && 'render-2d.js'].filter(Boolean);
+    const G = window.DraftGeometry2D;
+    const missing = [!WT && 'wall-types.js', !R && 'render-2d.js',
+      !G && 'geometry-2d.js'].filter(Boolean);
     if (missing.length) {
       throw new Error(`MODEL.html: cannot paint walls, ${missing.join(' and ')} `
         + 'did not load. Check the script order in the page head.');
     }
-    // joins is optional in drawWallSeg2D — null gives capped ends instead of
-    // mitred corners. Mitring needs MODEL's _wallJoins(), which is tier 2.
-    walls().forEach(wall => {
+    // MITRED, at last. This page passed `null` for joins from tier 1 until
+    // now, which gives capped ends: every corner closed with a straight line
+    // across the assembly instead of the layer boundaries running through the
+    // vertex. The classifier was extracted before the thing it needs -- it
+    // keys on object identity, and the pool that rebuilds identity at shared
+    // corners is built in the load path above.
+    //
+    // Classified over the WALLS ON SCREEN rather than every wall in the
+    // drawing -- but that scoping is a BELT, and the pool is the braces.
+    //
+    // Measured, after a first version of this comment claimed the scoping was
+    // what stops an invisible wall voting on a visible corner. It is not, on
+    // its own: the pool keys on (levelId, viewId, body), so a wall on another
+    // level, another layer set or another body already holds a DIFFERENT
+    // corner object and cannot be grouped with these whatever list is passed
+    // in. Swapping `shown` for `drawing.walls` changes no pixel, and dropping
+    // viewId from the pool key changes none either -- each mutation alone
+    // survives because the other mechanism still delivers the answer. Only
+    // removing both together turns the corner into a tee.
+    //
+    // Kept anyway, and not as decoration: it is the cheaper of the two to
+    // reason about, it keeps the classifier's input the same set the painter
+    // iterates, and a redundant guard on "the drawing mitres the way it looks"
+    // is worth its two words.
+    const shown = walls();
+    const joins = G.wallJoins(shown);
+    shown.forEach(wall => {
       if (!wall.start || !wall.end) return;
-      R.drawWallSeg2D(ctx, toS, wall, false, null, 'both', paintEnv());
+      R.drawWallSeg2D(ctx, toS, wall, false, joins, 'both', paintEnv());
     });
   };
 
@@ -840,6 +871,34 @@
     dropped = ['walls', 'lines', 'floors', 'dimensions']
       .map(k => (Array.isArray(raw[k]) ? raw[k].length : 0) - drawing[k].length)
       .reduce((a, b) => a + b, 0);
+
+    // REBUILD REFERENCE EQUALITY AT SHARED CORNERS. Everything above restores
+    // VALUES: JSON has no way to say "these two walls end at the same point",
+    // only "these two walls end at points that happen to be equal". So a
+    // drawing read back off disk holds a separate object at every corner --
+    // and geometryJoins() keys on OBJECT IDENTITY, so without this pass it
+    // finds nothing and every corner stays a butt joint. Silently: no error,
+    // no warning, just capped ends on a house that should be mitred.
+    //
+    // MODEL.dc.html does the same thing on its own load path and describes it
+    // the same way: "restores reference equality at shared corners instead of
+    // merely restoring values."
+    //
+    // The key is the pool's, not this page's: (levelId, viewId, body). The
+    // view is folded to two values because a wall on the e-power or floor set
+    // is the same physical wall as the one on plan and shares its corner. The
+    // BODY IS PASSED THROUGH UNTOUCHED -- collapsing it is what would let a
+    // garage, or a shed, splice onto a house corner, and the normaliser is
+    // already the place that decides what a body may be.
+    const G = window.DraftGeometry2D;
+    vertexPool = [];
+    drawing.walls.forEach(wall => {
+      const view = wall.view === 'foundation' ? 'foundation' : 'plan';
+      const body = wall.body || 'house';
+      wall.start = G.mergeVertex(vertexPool, wall.start, wall.levelId, view, body);
+      wall.end = G.mergeVertex(vertexPool, wall.end, wall.levelId, view, body);
+    });
+
     fit();
     paint();
   };

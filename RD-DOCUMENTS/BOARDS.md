@@ -510,6 +510,36 @@ changed nothing, because `NaN` falls every comparison downstream. In one case a
 weaker condition was inert; in the other a deleted guard was. Both because
 something else had already decided the answer for every input that arrives.
 
+### And a third case: the property is guarded twice
+
+Skipper's, 4 Sep, found while mutation-checking the wall-join wiring. Two
+mutations were meant to break "a wall hidden by the view filter does not vote
+on a visible corner" — classify over every wall instead of the visible ones,
+and drop `viewId` from the vertex pool's key. **Both survived.** Applied to the
+first, the inertness question above gives the wrong answer twice over: the
+mutation is not inert, and the checks are not weak.
+
+The property has **two independent guards**. The visible-wall scoping stops a
+hidden wall being classified; the pool's `viewId` key gives it a different
+corner object so it could not be grouped anyway. Remove either and the other
+still delivers the same pixels. Removing **both together** fails immediately.
+
+So a surviving mutant licenses a third conclusion, and single-mutation testing
+cannot reach it by construction: **the change was real and something else
+covered it.** The test is fine, the mutation is fine, and the score is
+uninformative.
+
+The check is one more question after the other two: **does a second mechanism
+produce the same outcome?** If it does, mutate both together — that is the only
+way to learn whether the property is pinned at all.
+
+It also settles what such a test should assert. Where two guards are
+deliberate, write the assertion against **the outcome the user sees**, not
+against whichever mechanism happens to deliver it: an assertion aimed at one
+guard passes while the property it names is broken, as long as the other guard
+holds. And correct the comments — the first draft of this one claimed the
+scoping was what protected the corner, which measurement falsified.
+
 ### The same ambiguity runs backwards, in the aggregate score
 
 Gilligan again, later the same day, and it is the other half of this rule. His
