@@ -401,6 +401,40 @@ verification the code gets.** The dictionary is the artifact meant to prevent
 exactly this, which is why an error in it costs more than an error in a
 comment.
 
+### What of this can be institutionalised, and what cannot
+
+Gilligan's, 4 Sep, closing out a night of these. Worth putting first, because
+it says which of the rules below buy anything by being written down.
+
+Two kinds of thing went unseen tonight, and they are invisible for the same
+reason — **neither leaves a trace in the artifact.** A defect-absence does not
+show up in the output: a check that measures nothing prints the same green as
+one that measures everything. A success-absence does not show up in a diff: a
+conflict that never happened and a filename that was never wrong are both a
+blank.
+
+**The responses are not symmetric, and that is the useful part.**
+
+For the defect half there is an instrument. Mutation testing *manufactures* the
+absence on purpose — break the code and watch what stays quiet — so the thing
+that could not be seen is forced into view. That is the whole trick, and it is
+why the mutation tables in `proto/` are worth their weight: they turn a
+judgement into a table anyone can re-run.
+
+For the other half there is no equivalent and there cannot be. You cannot
+mutate away a conflict that did not happen; the counterfactual has no artifact
+to perturb. Flagging a file overlap before writing the third harness, and
+testing `process.argv[1]` before writing the lift that needed it, produced
+nothing visible and prevented two messes. Neither shows anywhere.
+
+So the honest split: **the mutation table is the part worth
+institutionalising; "check before you write it" has to stay a habit**, because
+no tooling will ever prompt for it. Which is also why prevention goes
+unrewarded here and everywhere else — one side becomes a number that goes up,
+and the other stays a night where nothing went wrong.
+
+---
+
 ### 8 · When the ground confounds the measurement, change the statistic — not the threshold
 
 Gilligan's generalisation, 3 Sep, of two failures on the same day: "find a
