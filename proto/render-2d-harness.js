@@ -113,6 +113,56 @@ const dropOriginEnvColour = src => {
   return out;
 };
 
+// THE ROOF'S COLOUR, AND THE THREE THINGS DERIVED FROM IT.
+//
+// Until 4 Sep drawRoof2D hardcoded #7a4a21 in FOUR places -- the outline, the
+// GABLE tag, the corner dots -- plus the wash and the EAVE tag as
+// rgba(122,74,33,...), the same colour in decimal, which no search for the hex
+// finds. It is one role now, and the wash and tags are derived from it inside
+// the painter. These mutations break each half of that separately, because a
+// check that only looked at the outline would pass with the wash left behind
+// on the old brown, which is a roof outlined in one colour and filled in
+// another.
+const dropRoofEnvColour = src => {
+  const before = src;
+  const out = src.replace(
+    "const roofColor = (env.colors && env.colors.roof) || '#7a4a21';",
+    "const roofColor = '#7a4a21';",
+  );
+  if (out === before) throw new Error('dropRoofEnvColour matched nothing -- the colour line moved');
+  return out;
+};
+
+const dropRoofGuideEnvColour = src => {
+  const before = src;
+  const out = src.replace(
+    "ctx.strokeStyle = referenceColor || (env.colors && env.colors.roofGuide) || '#a3703f';",
+    "ctx.strokeStyle = referenceColor || '#a3703f';",
+  );
+  if (out === before) throw new Error('dropRoofGuideEnvColour matched nothing -- the guide line moved');
+  return out;
+};
+
+const unDeriveRoofWash = src => {
+  const before = src;
+  const out = src.replace(
+    "ctx.fillStyle = atAlpha(roofColor, 0.07);",
+    "ctx.fillStyle = 'rgba(122,74,33,0.07)';",
+  );
+  if (out === before) throw new Error('unDeriveRoofWash matched nothing -- the wash line moved');
+  return out;
+};
+
+const unDeriveShapePreview = src => {
+  const before = src;
+  const out = src.replace(
+    "ctx.strokeStyle = preview ? atAlpha(env.shapeColor, 0.72) : env.shapeColor;",
+    "ctx.strokeStyle = preview ? 'rgba(63,143,122,0.72)' : env.shapeColor;",
+  );
+  if (out === before) throw new Error('unDeriveShapePreview matched nothing -- the preview line moved');
+  return out;
+};
+
 const dropOriginFallback = src => {
   const before = src;
   const out = src.replace(
@@ -461,6 +511,43 @@ const shapeEnv = over => ({
   ...over,
 });
 const TRI = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 10 }];
+
+// THE PREVIEW AND THE COMMITTED SHAPE ARE THE SAME COLOUR.
+//
+// They were not. The committed stroke read env.shapeColor; the preview stroke
+// and both washes were rgba(63,143,122,...) -- #3f8f7a, which is draw-shape's
+// NIGHT value -- so on the day page a shape was drawn in one green and
+// committed in another, and the preview measured 3.46 against the day ground
+// where the committed shape measures 5.56. Fainter AND a different hue, which
+// reads as the app changing its mind rather than as a fault.
+//
+// The sentinel is a colour no skin contains, for the same reason as the roof:
+// asserting against #3f8f7a would pass with the literal still in place.
+const SENTINEL_SHAPE = '#0088ff';
+
+suite('drawShape2D', 'the preview is the committed colour at a lower alpha, not a second green', R => {
+  const ctx = recordingCtx();
+  R.drawShape2D(ctx, toS, { points: TRI }, { preview: true },
+    shapeEnv({ shapeColor: SENTINEL_SHAPE }));
+  const strokes = sets(ctx, 'strokeStyle').map(String);
+  const fills = sets(ctx, 'fillStyle').map(String);
+  // #0088ff is rgb(0,136,255).
+  expect('the preview stroke is the skin colour at 0.72',
+    strokes.includes('rgba(0,136,255,0.72)'), true);
+  expect('the preview wash is the same colour at 0.06',
+    fills.includes('rgba(0,136,255,0.06)'), true);
+  expect('and no second green survives',
+    [...strokes, ...fills].some(v => v.includes('63,143,122')), false);
+});
+
+suite('drawShape2D', 'and a committed shape uses the same colour at full strength', R => {
+  const ctx = recordingCtx();
+  R.drawShape2D(ctx, toS, { points: TRI }, {}, shapeEnv({ shapeColor: SENTINEL_SHAPE }));
+  expect('stroked in the skin colour itself',
+    sets(ctx, 'strokeStyle').includes(SENTINEL_SHAPE), true);
+  expect('washed in it at 0.09',
+    sets(ctx, 'fillStyle').map(String).includes('rgba(0,136,255,0.09)'), true);
+});
 
 suite('drawShape2D', 'a shape of one point is not a shape', R => {
   const ctx = recordingCtx();
@@ -1289,6 +1376,66 @@ suite('drawRoof2D', 'ridge, hip and valley guides are drawn dashed, from the ske
   expect('drawn dashed', calls(withGuides, 'setLineDash').some(a => JSON.stringify(a[0]) === '[8,5]'), true);
 });
 
+// THE SKIN REACHES THE ROOF -- and the sentinel is what makes that provable.
+//
+// SENTINEL_ROOF is not #c4915a. If it were, a painter that hardcoded the new
+// night brown would satisfy every assertion below and the checks would prove
+// only that somebody typed the same string twice. A colour no palette contains
+// can only arrive through env.
+const SENTINEL_ROOF = '#00ff88';
+const SENTINEL_GUIDE = '#ff00cc';
+const skinnedRoofEnv = over => roofEnv({ colors: { roof: SENTINEL_ROOF, roofGuide: SENTINEL_GUIDE }, ...over });
+
+suite('drawRoof2D', 'the outline, the tags and the corner dots all take the skin colour', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, { ...ROOF, edges: ['gable', 'eave', 'eave', 'eave'] },
+    { tagging: true }, skinnedRoofEnv());
+  expect('the outline is stroked in it', sets(ctx, 'strokeStyle').includes(SENTINEL_ROOF), true);
+  expect('the GABLE tag is filled in it', sets(ctx, 'fillStyle').includes(SENTINEL_ROOF), true);
+  expect('and the old day brown appears nowhere',
+    [...sets(ctx, 'strokeStyle'), ...sets(ctx, 'fillStyle')]
+      .some(v => String(v).toLowerCase().includes('7a4a21')), false);
+});
+
+suite('drawRoof2D', 'the wash and the EAVE tag are DERIVED from it, not stored beside it', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, { tagging: true }, skinnedRoofEnv());
+  const fills = sets(ctx, 'fillStyle').map(String);
+  // #00ff88 is rgb(0,255,136). The wash and the tag must be that colour at
+  // their own alphas -- not a second brown that happens to sit under it.
+  expect('the fill wash is the skin colour at 0.07',
+    fills.includes('rgba(0,255,136,0.07)'), true);
+  expect('the EAVE tag is the same colour at 0.7',
+    fills.includes('rgba(0,255,136,0.7)'), true);
+  expect('and nothing is painted in the old decimal spelling',
+    fills.some(v => v.includes('122,74,33')), false);
+});
+
+suite('drawRoof2D', 'the guides take their own role, not the roof colour', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, {}, skinnedRoofEnv({
+    roofSkeleton: () => [{ a: { x: 0, z: 0 }, b: { x: 4, z: 4 } }],
+  }));
+  const strokes = sets(ctx, 'strokeStyle');
+  expect('the guide colour is used', strokes.includes(SENTINEL_GUIDE), true);
+  // The control. Without it, a painter that drew the guides in the ROOF
+  // colour would still satisfy "the guide colour is used" -- because the
+  // outline set it earlier in the same tape.
+  expect('and it is a different value from the roof itself',
+    SENTINEL_GUIDE !== SENTINEL_ROOF && strokes.includes(SENTINEL_ROOF), true);
+});
+
+suite('drawRoof2D', 'a reference colour still overrides the skin entirely', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, { referenceColor: '#888' }, skinnedRoofEnv({
+    roofSkeleton: () => [{ a: { x: 0, z: 0 }, b: { x: 4, z: 4 } }],
+  }));
+  const all = [...sets(ctx, 'strokeStyle'), ...sets(ctx, 'fillStyle')].map(String);
+  expect('everything is drawn in the reference colour', all.every(v => v === '#888'), true);
+  expect('the skin does not leak through',
+    all.some(v => v.includes('00ff88') || v.includes('ff00cc')), false);
+});
+
 suite('drawRoof2D', 'an opening in a roof is a hole, dotted like the roof itself', R => {
   const hole = [{ x: 5, z: 5 }, { x: 9, z: 5 }, { x: 9, z: 9 }, { x: 5, z: 9 }];
   const ctx = recordingCtx();
@@ -2050,6 +2197,10 @@ function coverage() {
     ['drawWallSeg2D mitre path', dropMitre],
     ['drawOrigin2D env colour', dropOriginEnvColour],
     ['drawOrigin2D colour fallback', dropOriginFallback],
+    ['drawRoof2D ignores the skin and keeps the day brown', dropRoofEnvColour],
+    ['drawRoof2D guides ignore the skin', dropRoofGuideEnvColour],
+    ['drawRoof2D wash left on the old brown while the outline moves', unDeriveRoofWash],
+    ['drawShape2D preview back on the hardcoded night green', unDeriveShapePreview],
     ['drawFixture2D kind dispatch (constant painter)', constantFixture],
     ['drawWallSeg2D env colours', dropWallEnvColours],
     ['drawWallSeg2D colour fallbacks', dropWallColourFallback],
