@@ -1286,7 +1286,11 @@
         // and a typed one look identical in the box, and nobody can tell
         // whether the cell is still following the pitch or has stopped.
         if (item.field === 'roofHeelIn') {
-          if (rowId === 'house' && roofHeelOverrideIn == null) return 'CALCULATED';
+          // TYPICAL, not CALCULATED. Movie, 5 Sep: "there is a calculation to
+          // find the heel ... to find the TYPICAL HEEL". The calculation is
+          // not a separate mode the cell is in -- it is how the typical heel
+          // is arrived at, and TYP is the word that goes on a drawing.
+          if (rowId === 'house' && roofHeelOverrideIn == null) return 'TYPICAL';
           return `RAISED · ${inchesOnly(projectPage.ROOF_HEEL_MIN_IN)}\u2013${
             inchesOnly(projectPage.ROOF_HEEL_MAX_IN)}`;
         }

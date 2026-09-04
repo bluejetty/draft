@@ -193,7 +193,10 @@ if (!window.DraftProjectPage) {
   // this comment: "the typical is the calculated one where the fascia bottom
   // is equal to the top of the top plate". So the usual drawing does not type
   // a heel at all -- it takes fascia + rise, 13 1/2" at the office default,
-  // and the box reads CALCULATED. Raising it at all is the exception.
+  // and the box reads TYPICAL. Movie, 5 Sep: "there is a calculation to find
+  // the heel ... to find the TYPICAL HEEL" -- the arithmetic is not a mode
+  // the cell is in, it is how the typical heel is arrived at. Raising it at
+  // all is the exception.
   //
   // THREE NUMBERS ON A SCALE OF HOW UNUSUAL, AND ONLY THE LAST ONE REFUSES
   // ANYTHING. 13 1/2" is what the arithmetic gives and what nearly every
