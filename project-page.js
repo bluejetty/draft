@@ -319,9 +319,9 @@ if (!window.DraftProjectPage) {
     // On a MODIFIED BILEVEL that is a RULE: the garage's floor offset is not
     // a free number there, it is whatever puts this sill level with the
     // house's, and typing it would be a value that agreed until one of them
-    // moved. On a plain HOUSE it is a COINCIDENCE -- it happens when the
+    // moved. On a BUNGALOW it is a COINCIDENCE -- it happens when the
     // foundation is deep enough and usually does not -- so the offset stays a
-    // number the drafter types, and a house whose sills happen to align is
+    // number the drafter types, and a bungalow whose sills happen to align is
     // not evidence of anything. Deriving it there would silently move a
     // garage every time someone deepened a basement.
     const frostWall = g.foundation === 'frostwall';
