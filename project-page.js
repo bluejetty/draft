@@ -21,8 +21,8 @@ if (!window.DraftProjectPage) {
   // ── The section table ────────────────────────────────────────────────
   // A row per BUILD TYPE, a column per measured item. HOUSE is the drawing's
   // own live assembly; the rest carry only what they differ in and show only
-  // the items their type uses — a garage has no floor joists, a bungalow no
-  // second floor, a bilevel no wood fill wall.
+  // the items their type uses — a garage has no floor joists or wood fill,
+  // a bungalow no second floor.
   //
   // Wall heights are DERIVED FROM THE STUD, never typed: a wall is a stud
   // plus two top plates and one bottom plate, so the height that wastes no
@@ -46,6 +46,13 @@ if (!window.DraftProjectPage) {
 
   const ALL_TYPES = SECTION_TABLE_ROWS.map(row => row.id);
   const HOUSE_LIKE = ['house', 'split', 'bilevel', 'modifiedBilevel'];
+  // Movie, 4 Sep: a SPLIT is not a third build type, it is the family name
+  // for the two — a BILEVEL or a MODIFIED BILEVEL. Both pour the same 5'-0"
+  // wall and make the rest of the basement height up in wood above it, so
+  // WOOD FILL HT belongs to all three rows and BILEVEL's cell was hatched by
+  // mistake. What a MOD BILEVEL adds to a BILEVEL is the storey over the
+  // garage, not the fill wall.
+  const SPLIT_TYPES = ['split', 'bilevel', 'modifiedBilevel'];
   const SILL_PLATE_IN = 1.5;
   const item = (id, label, unit, field, types, extra) =>
     Object.freeze({ id, label, unit, field, types: Object.freeze(types), ...extra });
@@ -63,7 +70,7 @@ if (!window.DraftProjectPage) {
     item('mainSheathing', 'MAIN FL SHEATHING', 'in', 'mainSheathingIn', HOUSE_LIKE),
     item('fdnWall', 'FDN WALL HT', 'ftin', 'fdnWallHeightFt', ALL_TYPES),
     item('sill', 'SILL PLATE', 'derived', null, ALL_TYPES),
-    item('woodFill', 'WOOD FILL HT', 'ftin', 'woodFillHeightFt', ['split', 'modifiedBilevel']),
+    item('woodFill', 'WOOD FILL HT', 'ftin', 'woodFillHeightFt', SPLIT_TYPES),
     item('slab', 'SLAB', 'in', 'slabThicknessIn', ALL_TYPES),
     item('basementClg', 'BSMT CLG HT', 'derived', null, HOUSE_LIKE),
     item('footingWidth', 'FTG WIDTH', 'in', 'footingWidthIn', ALL_TYPES),
@@ -76,16 +83,14 @@ if (!window.DraftProjectPage) {
   // basement height is made up with a 2x6 wood wall above the concrete
   // rather than a taller pour. A field absent here falls back to the
   // HOUSE's live value.
+  const SPLIT_BASE = Object.freeze({
+    fdnWallHeightFt: 5,
+    woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,
+  });
   const SECTION_TABLE_DEFAULTS = Object.freeze({
-    split: Object.freeze({
-      fdnWallHeightFt: 5,
-      woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,
-    }),
-    bilevel: Object.freeze({ fdnWallHeightFt: 5 }),
-    modifiedBilevel: Object.freeze({
-      fdnWallHeightFt: 5,
-      woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,
-    }),
+    split: SPLIT_BASE,
+    bilevel: SPLIT_BASE,
+    modifiedBilevel: SPLIT_BASE,
   });
 
   // The heel is the fascia plus the rise the roof gains across the overhang
