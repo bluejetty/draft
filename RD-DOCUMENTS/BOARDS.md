@@ -510,6 +510,37 @@ changed nothing, because `NaN` falls every comparison downstream. In one case a
 weaker condition was inert; in the other a deleted guard was. Both because
 something else had already decided the answer for every input that arrives.
 
+### The same ambiguity runs backwards, in the aggregate score
+
+Gilligan again, later the same day, and it is the other half of this rule. His
+coverage table put `drawUnderlays2D` at **1/5** — the worst row in the suite,
+and an obvious instruction to go and strengthen its checks.
+
+Four of those five are **refusal** checks, asserting `count === 0`: this
+painter must draw nothing for a picture that is missing, hidden, off-level or
+sub-pixel. **A deleted painter satisfies every one of them trivially.** So 1/5
+is not a statement about the checks' strength at all — it is what a suite of
+absence-assertions scores by construction, and the number cannot tell the two
+apart.
+
+So a **low no-op score licenses the same two conclusions a surviving mutant
+does**, and reading it the obvious way would have sent the next person to
+rewrite checks that were already correct.
+
+There was a real weakness underneath, and it was not the one the number
+pointed at: each refusal proved that nothing drew, and none proved the fixture
+**would otherwise have drawn**. A malformed `underlayEnv` would have passed all
+four for entirely the wrong reason. The fix is a differential — same fixture,
+one field changed, asserted against the same fixture without it: **a refusal
+only means something if its control draws.** 5/5 after, and the table stopped
+misreporting the suite's weakest row.
+
+**Pick the control near the boundary it defends.** For the sub-pixel skip he
+used a 1 ft underlay that must still draw, not the 20 ft default, because the
+risk is a cut-off that is too eager. A 20 ft control would only have proved
+that something large draws, which was never in doubt. A control chosen
+comfortably inside the boundary tests nothing that was ever at risk.
+
 The two real gaps it then exposed are both worth keeping as examples of what a
 useless check looks like:
 
