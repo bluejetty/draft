@@ -1483,7 +1483,7 @@
 
       const derivedDetachedOffsetFt = () =>
         fdnTopLocalFt() - datumFt + gradeOffsetFt()
-        + projectPage.GARAGE_BEAM_ABOVE_GRADE_IN / 12;
+        + projectPage.DETACHED_BEAM_ABOVE_GRADE_IN / 12;
       const zoneOffsetFt = zone => zone.id === 'attachedGarage'
         ? attachedOffsetFt()
         : zone.id === 'detachedGarage'

@@ -174,9 +174,20 @@ if (!window.DraftProjectPage) {
   // — the same rule the detail draws it with.
   const roofHeelIn = (fasciaIn, overhangFt, pitch) => fasciaIn + overhangFt * pitch;
 
-  // The detached garage's grade beam rides ~8" above grade at the house —
+  // The detached garage's grade beam rides ~8" above grade at the house --
   // the derive rule the ZONE HEIGHTS panel applies until overridden.
-  const GARAGE_BEAM_ABOVE_GRADE_IN = 8;
+  //
+  // NAMED DETACHED, BECAUSE IT IS ONLY THE DETACHED RULE. It was
+  // GARAGE_BEAM_ABOVE_GRADE_IN until 5 Sep, which is a general name over a
+  // specific number -- and cut-view.js, one file away, has both facts spelt
+  // out: "an attached beam tops out 1'-0" above it, a detached grade beam
+  // 8"". So a reader wanting the ATTACHED rule found a plausibly-named
+  // constant here holding the detached one, four inches wrong, and grep
+  // agreed with them. Not a duplicate: a near-collision, which is worse,
+  // because a duplicate that drifts looks wrong and this looks right. The
+  // name now matches cut-view.js's DETACHED_BEAM_ABOVE_GRADE_IN exactly,
+  // so the two read as the one fact they are.
+  const DETACHED_BEAM_ABOVE_GRADE_IN = 8;
   // How far the garage sill sits below the house's. Movie, 4 Sep: "2 ft below
   // the house sill (house sill drops 2 ft to meet garage sill)". Measured
   // sill to sill, not floor to floor, so it holds when the floor package
@@ -930,7 +941,7 @@ if (!window.DraftProjectPage) {
     ROOF_HEEL_MIN_IN,
     ROOF_HEEL_MAX_IN,
     roofHeelInBand,
-    GARAGE_BEAM_ABOVE_GRADE_IN,
+    DETACHED_BEAM_ABOVE_GRADE_IN,
     GARAGE_SILL_BELOW_HOUSE_FT,
     GRADE_MIN_BELOW_CONCRETE_IN,
     GRADE_BELOW_CONCRETE_IN,

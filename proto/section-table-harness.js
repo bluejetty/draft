@@ -195,7 +195,7 @@ check('the bilevel zone rows are reserved', P =>
 check('the garage zone rows are live', P =>
   [P.ZONE_ROWS.filter(z => !z.reserved).map(z => z.id).sort().join(','), 'attachedGarage,detachedGarage']);
 check('the section is cut 4 ft into the wall', P => [P.CUT_DEPTH_FT, 4]);
-check('the detached garage beam rides 8" above grade at the house', P => [P.GARAGE_BEAM_ABOVE_GRADE_IN, 8]);
+check('the detached garage beam rides 8" above grade at the house', P => [P.DETACHED_BEAM_ABOVE_GRADE_IN, 8]);
 
 // ── Geometry ───────────────────────────────────────────────────────────
 // One fixed two-storey assembly, in the shape the page hands the builder.
