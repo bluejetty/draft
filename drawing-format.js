@@ -900,7 +900,6 @@ if (!window.DraftDrawingFormat) {
     return { edges, gables };
   };
 
-  const ATTACHED_GARAGE_DROP_FT = -2;
   const zoneHeights = raw => {
     const zones = raw && typeof raw.zones === 'object' && raw.zones ? raw.zones : {};
     // Real numbers only, here as everywhere else: `Number(null)` is 0, and a
@@ -914,19 +913,27 @@ if (!window.DraftDrawingFormat) {
       // land here.
       gradeOffsetFt: num(raw?.gradeOffsetFt) ?? -1,
       zones: {
-        // A GARAGE STARTS 2'-0" DOWN. Movie, 4 Sep: "on the bungalow we
-        // should not line them up make it 2ft dropped on the bungalow", and
-        // "the 95% will be our default". A garage floor level with the house
-        // is the unusual case, not the starting one, and zero was only ever
-        // the value a number takes when nobody has picked one.
+        // The attached garage DERIVES like the detached one — null means
+        // derive, a stored number is the drafter's override. Movie, 4 Sep:
+        // "2 ft below the house sill (house sill drops 2 ft to meet garage
+        // sill)".
         //
-        // A MODIFIED BILEVEL wants a different start -- its sills line up
-        // with the house's about 95% of the time -- but that default cannot
-        // be chosen here yet, because nothing on the drawing says which build
-        // type it is. That is NEW-5. Until then every drawing starts at 2'-0"
-        // and the drafter types over it, which is exactly what a default is
-        // for.
-        attachedGarage: { offsetFt: num(zones.attachedGarage?.offsetFt) ?? ATTACHED_GARAGE_DROP_FT },
+        // It cannot be a constant HERE, and that is the whole reason for the
+        // null. The drop is measured from the HOUSE SILL, which sits one
+        // floor package below MAIN FL -- and the floor package is the
+        // drafter's joist depth plus sheathing, which this module cannot see.
+        // A fixed -2'-0" off MAIN FL would be right only while nobody touched
+        // the joists: change an 11 7/8" joist to a 2x10 and the garage would
+        // quietly stop being 2 ft below the sill while still reading -2'-0".
+        //
+        // Number(null) is 0, so the null check comes first here as it does
+        // for the detached garage: a re-normalise must never turn "derive"
+        // into an explicit 0.
+        attachedGarage: {
+          offsetFt: zones.attachedGarage?.offsetFt == null ? null
+            : Number.isFinite(Number(zones.attachedGarage.offsetFt))
+              ? Number(zones.attachedGarage.offsetFt) : null,
+        },
         // The detached garage DERIVES from grade until overridden — null
         // means derive (top of the garage grade beam sits ~8" above grade
         // at the house); a stored number is the drafter's override.
@@ -1159,7 +1166,6 @@ if (!window.DraftDrawingFormat) {
     underlays,
     projectInfo,
     zoneHeights,
-    ATTACHED_GARAGE_DROP_FT,
     sectionTable,
     SECTION_TABLE_TYPES,
     SECTION_TABLE_FIELDS,

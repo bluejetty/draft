@@ -143,6 +143,11 @@ if (!window.DraftProjectPage) {
   // The detached garage's grade beam rides ~8" above grade at the house —
   // the derive rule the ZONE HEIGHTS panel applies until overridden.
   const GARAGE_BEAM_ABOVE_GRADE_IN = 8;
+  // How far the garage sill sits below the house's. Movie, 4 Sep: "2 ft below
+  // the house sill (house sill drops 2 ft to meet garage sill)". Measured
+  // sill to sill, not floor to floor, so it holds when the floor package
+  // changes.
+  const GARAGE_SILL_BELOW_HOUSE_FT = 2;
   const CUT_DEPTH_FT = 4; // "the first 4 ft of the exterior wall cut inward"
   // Movie, 4 Sep: the garage panel is the JUNCTION, not a garage -- it is cut
   // where the garage meets the house. His own drawing dimensions 4'-6" out
@@ -561,6 +566,7 @@ if (!window.DraftProjectPage) {
     ZONE_ROWS,
     CUT_DEPTH_FT,
     GARAGE_BEAM_ABOVE_GRADE_IN,
+    GARAGE_SILL_BELOW_HOUSE_FT,
     SECTION_TABLE_ROWS,
     SECTION_TABLE_ITEMS,
     SECTION_TABLE_DEFAULTS,

@@ -744,7 +744,7 @@
         value => { writeCell('attachedGarage', 'garageFoundation', value); return true; },
         'choice');
       addGarage('garageOffset', 'Garage floor off main fl',
-        () => signedFtIn(zoneHeights.zones.attachedGarage.offsetFt),
+        () => signedFtIn(attachedOffsetFt()),
         text => {
           const value = parseSignedFtIn(text);
           if (value == null) return false;
@@ -844,7 +844,7 @@
             houseFootingTopFt: houseFootingTopFt(),
             footingWidthIn: asm.footingWidthIn ?? (fdnIsIcf() ? 24 : 20),
             footingDepthIn: asm.footingDepthIn,
-            floorOffsetFt: zoneHeights.zones.attachedGarage.offsetFt,
+            floorOffsetFt: attachedOffsetFt(),
             wallHeightFt: cell('mainWallHeightFt'),
             fdnWallHeightFt: cell('fdnWallHeightFt'),
             slabIn: cell('slabThicknessIn'),
@@ -1150,10 +1150,34 @@
       };
       // The detached garage derives from grade until overridden: beam top
       // ~8" above grade at the house (offset from MAIN FL).
+      // The house's sill plate: one floor package below MAIN FL, which is
+      // where the main floor bears. The garage's sill drops 2'-0" from it.
+      const houseSillFt = () => {
+        const main = floorLevels[0] && assembly(floorLevels[0].id);
+        return main ? -(main.joistDepthIn + main.sheathingIn) / 12 : 0;
+      };
+      // THE INTERIM, CHOSEN OUT LOUD. The real rule branches on build type:
+      // a BILEVEL drops the garage sill LEVEL with the house's, a BUNGALOW or
+      // 2 STOREY drops it 2'-0" below. There is no build type stored on a
+      // drawing yet -- that is NEW-5 -- so this derive can only be one of
+      // them, and it is the bungalow / 2 storey rule.
+      //
+      // Written down because the alternative is a hidden assumption: a derive
+      // that silently applies the bungalow rule to a bilevel looks correct on
+      // every drawing anyone happens to open, and is wrong on half of them.
+      // When NEW-5 lands, this gains its second branch and nothing else moves.
+      // (Skipper's catch.)
+      const derivedAttachedOffsetFt = () =>
+        houseSillFt() - projectPage.GARAGE_SILL_BELOW_HOUSE_FT;
+      const attachedOffsetFt = () =>
+        zoneHeights.zones.attachedGarage.offsetFt ?? derivedAttachedOffsetFt();
+
       const derivedDetachedOffsetFt = () =>
         fdnTopLocalFt() - datumFt + zoneHeights.gradeOffsetFt
         + projectPage.GARAGE_BEAM_ABOVE_GRADE_IN / 12;
-      const zoneOffsetFt = zone => zone.id === 'detachedGarage'
+      const zoneOffsetFt = zone => zone.id === 'attachedGarage'
+        ? attachedOffsetFt()
+        : zone.id === 'detachedGarage'
         ? (zoneHeights.zones.detachedGarage.offsetFt ?? derivedDetachedOffsetFt())
         : zoneHeights.zones[zone.id].offsetFt;
       let gradeInputs = null;
