@@ -2128,6 +2128,22 @@ const DEFAULT_WINDOW_WIDTH_FT = 4;
 const DEFAULT_WINDOW_SILL_FT = 2.5;
 const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
 const FENESTRATION_LAYERS = Object.freeze({ door: 'A-DOOR', window: 'A-GLAZ' });
+// BEARING AT THE ENDS OF A LINTEL. NBC Table 9.23.12.3.-A note (4): "provide
+// minimum 38 mm bearing for lintel spans up to 3 m, or minimum 76 mm bearing
+// for lintel spans greater than 3 m". 38 mm is 1 1/2", 76 mm is 3" -- and 3"
+// is the figure Movie gave from the yard on 5 Sep before either of us had
+// opened the code book, which is a good sign for both.
+//
+// It is what an opening must keep back from the end of its wall, and until now
+// that was 0.01 ft -- an eighth of an inch, which is nothing. A window could
+// sit hard against a corner with no wood under the lintel to carry it.
+//
+// SPAN-DEPENDENT, not a flat 3". A 3'-0" window and a 16'-0" garage door do not
+// need the same bearing, and rounding every opening up to the long-span figure
+// would refuse narrow walls that build perfectly well.
+const OPENING_BEARING_SHORT_IN = 1.5;
+const OPENING_BEARING_LONG_IN = 3;
+const OPENING_BEARING_SPAN_FT = 3 / 0.3048;   // the code's 3 m, 9'-10 1/8"
 // Auto garage doors — BUILD HOUSE hangs the overhead door on the longest open
 // leg (16' × 7', dropping to 9' when the leg is short) and a 2'-8" man door
 // on another leg, cutting both the garage stud wall and the grade beam,
@@ -13719,14 +13735,28 @@ class Component extends DCLogic {
     return Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
   }
 
-  // Keep the whole opening on the wall, with a small jamb left at each end.
-  // Returns null when the wall is too short for the width.
+  // What this opening must keep back from each end of its wall, so the lintel
+  // has wood to bear on. See OPENING_BEARING_* above for the code reference.
+  _openingBearingFt(width) {
+    return (width > OPENING_BEARING_SPAN_FT
+      ? OPENING_BEARING_LONG_IN : OPENING_BEARING_SHORT_IN) / 12;
+  }
+
+  // Keep the whole opening on the wall, with its bearing left at each end.
+  // Returns null when the wall is too short for the width plus both bearings.
+  //
+  // Ten callers share this, which is why the rule lives here and not at any of
+  // them: placement, the boneyard marks, auto-windows, the garage doors, and
+  // restore all inherit it at once. Movie, 5 Sep, on the drawings already saved
+  // when the bearing went from an eighth of an inch to this: "the saved
+  // drawings don't matter" -- so an old opening within the new bearing slides
+  // in on load, and one on a wall too short for it is dropped, deliberately.
   _clampOpeningToWall(wall, offset, width) {
-    const JAMB_FT = 0.01;
+    const bearing = this._openingBearingFt(width);
     const len = this._wallLength(wall);
-    if (!(width > 0) || len < width + JAMB_FT * 2) return null;
+    if (!(width > 0) || len < width + bearing * 2) return null;
     const half = width / 2;
-    return { offset: Math.min(Math.max(offset, half + JAMB_FT), len - half - JAMB_FT) };
+    return { offset: Math.min(Math.max(offset, half + bearing), len - half - bearing) };
   }
 
   _fenestrationWidth(type = this.state.fenestrationType) {
