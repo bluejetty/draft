@@ -192,6 +192,44 @@ one deck can run it is one level; where it cannot it is two.
 A plain modified bilevel needs only 2ND FL, because its garage storey is its
 only upper floor -- nothing for it to fail to line up with.
 
+### OVER GARAGE: 20" joists, and a ceiling height that falls out of them
+
+Movie, 5 Sep: *"the joist depth over the garage we should make 20" deep...
+default... and allow them to adjust."*
+
+A house floor lands on an interior wall every dozen feet. A garage has none to
+land on, so the 11 7/8" that works over a bedroom will not cross a double bay.
+This is the third garage row that would have silently taken a house number if
+nobody named one -- after the 3" slab and the basement wall under a garage --
+and it is the worst of the three, because 11 7/8" over a garage draws
+perfectly and does not stand up.
+
+With the 20" joist named, the garage ceiling stops being a guess. Everything
+in the chain is already known, so there is one height that lands the deck:
+
+| | |
+|---|---|
+| MAIN FL wall (bungalow precut) | 8'-1 1/8" |
+| house 2nd floor package | 1'-0 5/8" |
+| **top of 2nd floor sheathing** | **9'-1 3/4"** |
+| garage floor (house sill, less the 2'-0" drop) | -3'-0 5/8" |
+| garage floor to that deck | 12'-2 3/8" |
+| OVER GARAGE package (20" + 3/4") | 1'-8 3/4" |
+| **=> GARAGE WALL** | **10'-5 5/8"** (stud 10'-1 1/8") |
+
+Two things to notice before trusting it.
+
+**The raise is 2'-4 1/2".** A garage on the ordinary 8'-1 1/8" wall would put
+its deck at 6'-9 1/4", well under the house's 9'-1 3/4". That gap is what
+Movie means by *"fill in the extra"*, and half of it is the deep joist paying
+for its own span.
+
+**The stud is not a precut.** 10'-1 1/8" is past the tallest in
+STUD_LENGTHS_IN (9'-8 5/8"), so this wall is ordered or built up rather than
+pulled off the pile. That is a real cost of the type, not an error in the
+arithmetic -- but it is the number to check first if the drop or the package
+ever turns out to be wrong.
+
 **This entry was rewritten three times.** It proposed OVER GARAGE for the
 bungalow (wrong -- named for what it stands on rather than where it sits),
 then abolished it entirely (wrong -- over-corrected, and the bilevel case
