@@ -463,11 +463,26 @@ which side of the `??` you are talking about:
 5 Sep: *"his TYP could also be 9-1 1/8" or 10-1 1/8", depends on what the MAIN
 construction is."* So a building framed throughout at 9'-1 1/8" has that as
 its TYP from the first drawing -- it was never our 8'-1 1/8" and did not
-"become" anything. The relationship is one-way and weaker than it looks: on a
-plan nobody has touched, our DEFAULT is also the TYPICAL, because it is what
-predominates there by not being changed. That coincidence on the blank drawing
-is the whole reason the words blur, and it is the only case where they name
-the same thing.
+"become" anything.
+
+**They do start out the same, though, on every house.** Movie: *"at the
+beginning when they make the house our default will be the typical unless they
+change it."* So the overlap is not a curiosity, it is where every drawing
+begins -- our DEFAULT predominates by not having been changed yet, which makes
+it that plan's TYPICAL too. It stops being ours the moment they type over it,
+and from then on the plan's TYP is theirs while our default sits unused.
+
+That is the whole reason the words blur: for the first minutes of every
+building they are the same number.
+
+**The page marks the moment for every row except the one that matters most.**
+A section-table cell falling back gets `el.classList.toggle('inherited',
+!cell.own)` and the title *"Inherited -- type to give this type its own
+number"* (`PROJECT.html:1405-1406`). But `cellValue` returns `own: true`
+unconditionally for the HOUSE row, because HOUSE has no stored row -- HOUSE
+*is* the live drawing. So on the row a drafter uses first, our untouched
+DEFAULT and their deliberate TYPICAL look identical, and the distinction this
+entry draws is invisible exactly where it is easiest to trip over.
 
 **And TYP does not mean "everywhere".** Movie, same evening: *"there may be a
 couple odd ball features which won't be typical."* That is the reason TYP is
