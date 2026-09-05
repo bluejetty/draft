@@ -544,12 +544,34 @@ if (!window.DraftProjectPage) {
     // The house gets the band it has always been missing: the concrete stopped
     // at the bearing line and the plate was drawn nowhere, exactly as the
     // garage's was until Movie asked where it had gone.
+    // THE SPLIT'S WOOD FILL WALL, and it is why this is one builder and not
+    // two. A bilevel is not a different section: it is this section with a
+    // SHORTER POUR and a stud wall making up the rest (Movie, 5 Sep: "a
+    // couple extra pieces added on and moved a bit, shorter foundation").
+    // 5'-0" of concrete plus 4'-2 3/4" of wall gets to the same bearing line
+    // the bungalow reaches with 8'-1 1/8" of pour.
+    //
+    // Null, not zero, for a type that has no fill wall -- the same
+    // null-means-derive discipline the rest of the page keeps. A 0 here would
+    // draw a zero-height rect and a plate on top of nothing.
+    const fillFt = fdn.woodFillHeightFt ?? null;
     const fdnTop = -mainDepthFt;
     const attachFt = SILL_PLATE_IN / 12;
-    const concTopFt = fdnTop - attachFt;
+    // The bearing line does not move: the floor still lands one attachment
+    // below MAIN FL. What changes is how far down the CONCRETE starts, since
+    // the fill wall now occupies the top of that distance.
+    const concTopFt = fdnTop - attachFt - (fillFt || 0);
     const fdnBot = concTopFt - fdn.wallHeightFt;
     rect(0, fdnBot, fdnFt, concTopFt - fdnBot, 2);
     attachment(rect, line, fdn.attachment, 0, concTopFt, fdnFt);
+    // The fill wall stands on the attachment, its own faces at the wall's
+    // thickness rather than the concrete's -- it is framing, not pour.
+    if (fillFt) {
+      const fillBot = concTopFt + attachFt;
+      line(0, fillBot, 0, fillBot + fillFt, 2);
+      line(wallFt, fillBot, wallFt, fillBot + fillFt, 1.5);
+      anchors.woodFill = { x: wallFt + 0.9, y: fillBot + fillFt / 2 };
+    }
     anchors.attachment = { x: fdnFt / 2, y: concTopFt + attachFt / 2 };
     anchors.fdnHeight = { x: fdnFt + 0.9, y: fdnTop - fdn.wallHeightFt / 2 };
     // BELOW the sill, not above it. Labels keep only their height now, so
