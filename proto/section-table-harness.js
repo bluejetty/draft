@@ -205,6 +205,37 @@ check('the bilevel zone rows are reserved', P =>
 check('the garage zone rows are live', P =>
   [P.ZONE_ROWS.filter(z => !z.reserved).map(z => z.id).sort().join(','), 'attachedGarage,detachedGarage']);
 check('the section is cut 4 ft into the wall', P => [P.CUT_DEPTH_FT, 4]);
+
+// THE GARAGE'S OFFSET IS A SILL, NOT A FLOOR, and it is worth a check because
+// the field spent its whole life called floorOffsetFt with a comment saying
+// "the floor surface". It never was: the builder does fdnTop = sillY, puts the
+// concrete a sill plate below that, and the slab 4" below the concrete. The
+// floor is 5 1/2" under the number.
+//
+// Pinned as the two ends of that gap rather than as one number, because the
+// failure this guards against is somebody "correcting" the value to mean what
+// the name used to say. Then the sill lands where the slab belongs, the whole
+// garage rises 5 1/2", and every part of it still draws in the right order --
+// which is exactly the kind of wrong that looks right.
+check('the garage offset is the SILL TOP, with the concrete a sill plate under it', P => {
+  const top = Math.max(...P.buildGarageSection(GARAGE).parts
+    .filter(p => p.kind === 'rect').map(p => p.y + p.h));
+  return [top, GARAGE.garage.sillOffsetFt];
+});
+check('the garage SLAB sits 5 1/2" below that offset, not on it', P => {
+  // Two traps here, both hit on the way to this line. The slab FALLS toward
+  // the door, so its lines are sloped and a horizontal-line filter finds none
+  // of them -- take the y where each meets the house wall at x = 0, the end
+  // that shares the datum. And the garage HAS A ROOF, so an unbounded max over
+  // those picks the ridge and reports the slab 12 ft above its own sill.
+  const atHouse = garage(P).parts.filter(p => p.kind === 'line')
+    .filter(l => l.x1 === 0 || l.x2 === 0)
+    .map(l => (l.x1 === 0 ? l.y1 : l.y2))
+    .filter(y => y < GARAGE.garage.sillOffsetFt);
+  const slabTop = Math.max(...atHouse);
+  return [Math.round((GARAGE.garage.sillOffsetFt - slabTop) * 12 * 16) / 16,
+    P.SILL_PLATE_IN + 4];
+});
 check('the detached garage beam rides 8" above grade at the house', P => [P.DETACHED_BEAM_ABOVE_GRADE_IN, 8]);
 
 // ── Geometry ───────────────────────────────────────────────────────────
@@ -222,6 +253,18 @@ const ASSEMBLY = Object.freeze({
 });
 const section = P => P.buildWallSection(ASSEMBLY);
 const rects = s => s.parts.filter(p => p.kind === 'rect');
+
+// The garage, in the shape garageValues() hands it over. Its one offset is
+// deliberately a round -2 so the numbers below read as arithmetic rather than
+// coincidence.
+const GARAGE = Object.freeze({
+  garage: Object.freeze({
+    foundation: 'gradebeam', houseFootingTopFt: -9.5, footingWidthIn: 20, footingDepthIn: 8,
+    sillOffsetFt: -2, wallHeightFt: 97.125 / 12, fdnWallHeightFt: 32 / 12,
+    slabIn: 4, thicknessIn: 8,
+  }),
+});
+const garage = P => P.buildGarageSection(GARAGE);
 
 check('every editable number has an anchor to park beside', P => {
   const want = ['pitch', 'overhang', 'fascia', 'heel', 'fdnHeight', 'fdnThickness', 'footingWidth',
