@@ -465,3 +465,65 @@ state on the first check.
 5. `drawUnderlays2D` — four keys, but `imageFor` reads a decoded-bitmap cache
    and MODEL.html has no loader. Four keys is not four keys of work. Measure
    the loader before committing to it.
+
+---
+
+## Tier 2j — the five painters share one blocker, and it is colour (5 Sep)
+
+Tier 2i costed the five remaining painters from their call sites and found the
+env reachable in every case. That was true and it was not the whole story.
+
+**None of the five is skin-aware, and four of them fail the night page.**
+Measured against `palette.js`'s two skins:
+
+```
+painter     where the colour lives     hex        night    day
+notes       NOTE_COLOR, env            #1d1f20      1.00  14.79   under 3.0
+fixtures    FIXTURE_COLOR, env         #1d1f20      1.00  14.79   under 3.0
+stairs      STAIR_COLOR, env           #5d4a8a      2.22   6.68   under 3.0
+cut marks   hardcoded IN the painter   #b04060      2.95   5.01   under 3.0
+underlays   hardcoded IN the painter   #557a46      3.36   4.41
+```
+
+`1.00` is not a rounding of "poor". The night skin's `surface-page` is
+`#1d1f20` and `NOTE_COLOR` is `#1d1f20` — **the identical hex**. A note would
+be painted in exactly the colour of the page behind it.
+
+### Why nothing is broken today
+
+`MODEL.dc.html` has no skins. It is one light page, every one of these reads
+fine on it, and no check could have caught otherwise because there is no second
+ground to test against. MODEL.html **is** skinned, so the defect is created by
+the port rather than found by it — which is the same shape as `drawRoof2D`'s
+`#7a4a21`, right down to the fix: that brown moved out of the painter into
+`env.colors.roof` and got a value per skin.
+
+### Two of them cannot be fixed from the call site
+
+`stairs` and `notes` and `fixtures` take their colour through `env`, so a
+caller can pass whatever the skin says and the painter never changes.
+
+`cut marks` and `underlays` hardcode theirs **inside `render-2d.js`**. Those
+need the painter changed to read `env`, which means a `render-2d-harness.js`
+check in the same PR or the mutation step goes red — the harness's own rule.
+
+Worth noticing what `underlays` hardcodes: `#557a46`, which is `draw-origin`'s
+DAY value, sitting as a literal in a second file. A palette key copied into a
+painter is the 32" all over again.
+
+### So the order in Tier 2i is right and its costing was low
+
+Notes still goes first — it is two env keys — but the "two colour keys, nearly
+free" line assumed a colour existed to pass. It does not. **The real first step
+is one palette decision**, and it unblocks all five at once rather than being
+five separate problems:
+
+- `ink-primary` (13.16 night / 14.79 day) for notes and fixtures, if annotation
+  should read as text. Already in both skins; needs no new key.
+- `draw-dim` (5.15 / 6.05) if annotation should sit in a visibly different
+  family from body text.
+- New keys for stairs, cut marks and underlays either way, since none of those
+  maps onto an existing role.
+
+**Bring measured candidates, do not guess a colour.** The `drawRoof2D` entry in
+`HANDOFF-SKIPPER.md` has said so since 4 Sep and it applies to all five.
