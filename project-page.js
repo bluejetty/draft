@@ -27,6 +27,13 @@ if (!window.DraftProjectPage) {
   // Wall heights are DERIVED FROM THE STUD, never typed: a wall is a stud
   // plus two top plates and one bottom plate, so the height that wastes no
   // lumber is a precut length plus 4½". Type the stud, read the wall.
+  //
+  // TWO ON TOP, AND THE REASON MATTERS. Movie, 5 Sep: "top plate needs 2 so
+  // they can overlap for strength" -- the second plate laps the joints in the
+  // first, tying the walls together at the corners and over the studs. It is
+  // structure, not a stack of arbitrary thickness, so 3 is not a number to
+  // round off. Anybody reading 1.5 * 3 and wondering why not two now has the
+  // answer without having to ask a framer.
   const PLATE_STACK_IN = 1.5 * 3;
   const STUD_LENGTHS_IN = Object.freeze([92.625, 104.625, 116.625]);
   // Which precut a build type starts on. Movie, 4 Sep: "8'1-1/8" is default

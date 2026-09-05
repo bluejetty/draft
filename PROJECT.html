@@ -222,8 +222,28 @@
       // Same defaults the level cards fall back to (normaliseLevelAssembly
       // in the Model Space) — display safety only: MODEL re-normalises on
       // its own load, so a number that slips past here cannot corrupt it.
-      const assemblyDefaults = () => ({
-        wallHeightFt: (8 * 12 + 1 + 1 / 8) / 12,
+      // A POUR IS A ROUND NUMBER; A FRAMED WALL IS A STUD PLUS PLATES. Movie,
+      // 5 Sep: "the foundation is never 8-1 1/8"... default 8ft +1.5" sill
+      // plate 8-1.5"". Until then every level shared one wallHeightFt, so the
+      // FOUNDATION defaulted to 8'-1 1/8" -- a 92 5/8" stock stud plus three
+      // 1 1/2" plates, an arithmetic that means nothing to concrete. The
+      // number was inherited, not chosen, which is the same defect as the
+      // garage inheriting a basement wall and the split rows showing the
+      // bungalow's: one default reaching a level it does not describe.
+      //
+      // 8'-0" of pour with the 1 1/2" sill on top is 8'-1 1/2" to bearing,
+      // the mirror of the split's 5'-0" and 5'-1 1/2". Both pours are round;
+      // only framed walls come off the precut ladder.
+      //
+      // AND 9'-0" IS THE OTHER HALF OF THE TRADE. Movie, 5 Sep: "some people
+      // like it 9ft which will be about 50% of the time... 9-1.5"". So this
+      // is a DEFAULT in the strongest sense -- not a 95% answer but a coin
+      // flip, and the drafter types the other one about as often as they
+      // accept this one. Anybody tempted to weld 8'-0" in as a rule is
+      // choosing wrong for half of all houses.
+      const FOUNDATION_POUR_FT = 8;
+      const assemblyDefaults = levelId => ({
+        wallHeightFt: levelId === 1 ? FOUNDATION_POUR_FT : (8 * 12 + 1 + 1 / 8) / 12,
         joistDepthIn: 11 + 7 / 8,
         sheathingIn: 3 / 4,
         slabThicknessIn: 3,
@@ -232,8 +252,8 @@
       });
       const positive = (value, fallback) =>
         Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
-      const normaliseAssembly = raw => {
-        const base = assemblyDefaults();
+      const normaliseAssembly = (raw, levelId) => {
+        const base = assemblyDefaults(levelId);
         if (!raw || typeof raw !== 'object') return base;
         return {
           ...raw,
@@ -303,7 +323,7 @@
       let foundationAttachment = drawing?.foundationAttachment === 'ladder' ? 'ladder' : 'sill';
       const datumFt = Number(drawing?.elevationDatum) === 100 ? 100 : 0;
 
-      const assembly = levelId => normaliseAssembly(levelAssemblies[levelId]);
+      const assembly = levelId => normaliseAssembly(levelAssemblies[levelId], levelId);
       const setAssembly = (levelId, field, value) => {
         levelAssemblies[levelId] = { ...assembly(levelId), [field]: value };
       };
