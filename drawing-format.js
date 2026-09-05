@@ -880,11 +880,11 @@ if (!window.DraftDrawingFormat) {
   const BUILD_TYPES = Object.freeze(['bungalow', 'twoStorey', 'bilevel', 'modifiedBilevel']);
   const buildType = raw => oneOf(raw, BUILD_TYPES, null);
   // Which section-table row the type reads on the PROJECT page. The page's
-  // row ids are HOUSE, SPLIT, BILEVEL, MOD BILEVEL and the two garages
-  // (project-page.js SECTION_TABLE_ROWS, six); SECTION_TABLE_TYPES below is
-  // the five that are STORED, because HOUSE is the live assembly and has no
-  // cells of its own. A bungalow or two-storey is that live row; the split
-  // family reads its own row, SPLIT being the family name and not a type.
+  // rows (project-page.js SECTION_TABLE_ROWS) are HOUSE plus the stored
+  // types below; HOUSE is not in SECTION_TABLE_TYPES because it is the live
+  // assembly and has no cells of its own. A bungalow or two-storey is that
+  // live row; a bilevel or modified bilevel reads the row of its own name.
+  // (SPLIT is the family name for those two, not a type -- Movie, 4 Sep.)
   const sectionRowForBuildType = type => (
     type === 'bungalow' || type === 'twoStorey' ? 'house'
       : type === 'bilevel' || type === 'modifiedBilevel' ? type : null);
