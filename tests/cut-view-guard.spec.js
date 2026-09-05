@@ -104,7 +104,7 @@ test('the finale reveal stands the drawing tool down before parking in E1', asyn
 
   // The guided tour up to the roof pause, drawing the outline WITH the wall
   // tool armed later: trace, stairs, straight to roof, ROOF DONE, bone.
-  await page.locator('[data-select-house]').click();
+  await page.locator('[data-select-build="bungalow"]').click();
   await page.keyboard.press('Enter');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);
@@ -124,7 +124,7 @@ test('the finale reveal stands the drawing tool down before parking in E1', asyn
   await page.keyboard.press('Enter');
   await page.locator('[data-tour-popup]').click(); // → the rooms pause (#198)
   await page.keyboard.press('Enter'); // the always-lit rooms gate
-  await page.locator('[data-tour-popup] [data-tour-next-roof]').click();
+  await page.locator('[data-tour-popup]').click(); // a BUNGALOW climbs to the ROOF, no choice asked (NEW-5)
   await expect(page.locator('[data-tour-gable]')).toBeVisible();
 
   // The drafter's last tool before the finish is WALL — the classic trap.

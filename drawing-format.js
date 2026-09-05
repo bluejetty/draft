@@ -869,6 +869,32 @@ if (!window.DraftDrawingFormat) {
       ['foundation', 'main', 'rooms-main', 'second', 'rooms-second', 'roof', 'finale'], null),
   });
 
+  // BUILD TYPE (NEW-5): which house the drafter pressed on the build row.
+  // Absent or unknown is "not chosen" -- every drawing older than the key,
+  // and every hand-edited one that says something else, reads as not chosen
+  // rather than as a guess. The writer stores only what this list allows.
+  // The type does not move geometry: BUILD HOUSE still pours the outline as
+  // drawn, whichever lamp is lit. What reads it today is the build row's
+  // lamp, the tour's main-floor question, and the PROJECT page's section
+  // table, through the two translations below.
+  const BUILD_TYPES = Object.freeze(['bungalow', 'twoStorey', 'bilevel', 'modifiedBilevel']);
+  const buildType = raw => oneOf(raw, BUILD_TYPES, null);
+  // Which section-table row the type reads on the PROJECT page. The page's
+  // rows (project-page.js SECTION_TABLE_ROWS) are HOUSE plus the stored
+  // types below; HOUSE is not in SECTION_TABLE_TYPES because it is the live
+  // assembly and has no cells of its own. A bungalow or two-storey is that
+  // live row; a bilevel or modified bilevel reads the row of its own name.
+  // (SPLIT is the family name for those two, not a type -- Movie, 4 Sep.)
+  const sectionRowForBuildType = type => (
+    type === 'bungalow' || type === 'twoStorey' ? 'house'
+      : type === 'bilevel' || type === 'modifiedBilevel' ? type : null);
+  // Whether the type carries a floor above MAIN: the tour's climb-or-roof
+  // question. null is "the type does not say" (the split family's upper
+  // half is not a second storey in the bungalow sense), and the tour asks as
+  // it always has.
+  const upperFloorForBuildType = type => (
+    type === 'bungalow' ? false : type === 'twoStorey' ? true : null);
+
   // Roof INTENT (board #238): the tour's roof pause edits intent, not
   // geometry — the bone consumes it when it builds the roof. Edges and
   // gables key by the MASTER outline's point ids (fromSrc → toSrc), which
@@ -1220,6 +1246,10 @@ if (!window.DraftDrawingFormat) {
     layout,
     tour,
     roofIntent,
+    buildType,
+    BUILD_TYPES,
+    sectionRowForBuildType,
+    upperFloorForBuildType,
     backgroundLevelIds,
     oneOf,
     number,

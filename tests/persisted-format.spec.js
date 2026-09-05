@@ -44,7 +44,7 @@ const PERSISTED_KEYS = [
   'nextDimensionId', 'columns', 'nextColumnId', 'beams', 'nextBeamId',
   'stairs', 'nextStairId', 'notes', 'nextNoteId', 'roomTags', 'nextRoomTagId',
   'roomAreasOn', 'projectInfo', 'tour', 'roofIntent', 'zoneHeights',
-  'sectionTable', 'boneyardShelves', 'activeBoneyardShelfId',
+  'sectionTable', 'buildType', 'boneyardShelves', 'activeBoneyardShelfId',
   'nextBoneyardShelfId', 'boneyardOutlines', 'outlines', 'levels',
   'activeLevelIdx', 'levelLayerViews', 'nextLevelId', 'backgroundLevelIds',
   'backgroundLevelViews', 'contextBackgrounds', 'backgroundMode', 'units',
@@ -171,5 +171,55 @@ test.describe('the saved format', () => {
     // clears; it has to survive the round trip or the composer re-deals a
     // hand-arranged sheet.
     expect(after.layout.auto).toBe(true);
+  });
+
+  // NEW-5: `buildType` is exactly bungalow / twoStorey / bilevel /
+  // modifiedBilevel, and the reader normalises anything else to "not
+  // chosen" rather than guessing. The two translations beside it are what
+  // the PROJECT page and the tour read, so a rename there breaks a page.
+  test('buildType: the reader normalises what it does not know, and the writer never emits it', async ({ page }) => {
+    const saved = await houseAndSave(page);
+    // The entry coach's first press stores no type — it is the starter
+    // house, not a choice — so a fresh file says "not chosen".
+    expect(saved.buildType).toBeNull();
+
+    expect(await page.evaluate(() => {
+      const f = window.DraftDrawingFormat;
+      return {
+        vocabulary: f.BUILD_TYPES,
+        unknown: ['castle', 'HOUSE', 'split', 0, {}].map(v => f.buildType(v)),
+        rows: f.BUILD_TYPES.map(t => f.sectionRowForBuildType(t)),
+        upper: f.BUILD_TYPES.map(t => f.upperFloorForBuildType(t)),
+        none: [f.sectionRowForBuildType(null), f.upperFloorForBuildType(null)],
+      };
+    })).toEqual({
+      vocabulary: ['bungalow', 'twoStorey', 'bilevel', 'modifiedBilevel'],
+      unknown: [null, null, null, null, null],
+      // A bungalow or two-storey is the live HOUSE row; the split family
+      // reads its own stored row.
+      rows: ['house', 'house', 'bilevel', 'modifiedBilevel'],
+      // The tour's climb-or-roof answer: only the bungalow pair says.
+      upper: [false, true, null, null],
+      none: [null, null],
+    });
+
+    // A hand-edited file with a type the app does not know loads as "not
+    // chosen", and the next save writes that rather than echoing the word.
+    await page.evaluate(async () => {
+      const file = await window.SharedFileStore.loadSharedFile('model-drawing');
+      const d = JSON.parse(await file.text());
+      d.buildType = 'castle';
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(d)], 'drawing.json', { type: 'application/json' }),
+        'model-drawing');
+    });
+    await page.reload();
+    await h.waitForModelReady(page);
+    expect(await page.evaluate(() => [...document.querySelectorAll('[data-select-build]')]
+      .filter(el => el.style.background === 'rgb(29, 31, 32)').length)).toBe(0);
+    // A units toggle is the cheapest edit that goes through the writer.
+    await page.locator('[data-unit-toggle] button').first().click();
+    await h.waitForSaved(page);
+    expect((await h.savedDrawing(page)).buildType).toBeNull();
   });
 });

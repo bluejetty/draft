@@ -329,13 +329,15 @@
       [data-save-controls] select { max-width:58px; }
       [data-build-cluster] img { height:30px !important; }
       [data-build-cluster] [data-build-house] img { height:36px !important; }
+      [data-build-cluster] [data-select-build] { height:26px !important; padding:0 5px !important; font-size:9px !important; }
     }
   </style>
 </helmet>
 
 <!-- TOP BAR: PROJECT and the profile stacks park on the left, the building
-     buttons own the center (HOUSE · SPLIT · BONE · ATTACHED · DETACHED —
-     pick the type, draw its outline in that colour, the bone builds it),
+     buttons own the center (BUNGALOW · 2 STOREY · BILEVEL · MODIFIED
+     BILEVEL · BONE · ATTACHED · DETACHED — pick the type, draw its outline,
+     the bone builds it),
      and the file controls sit on the far right. -->
 <div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff; position:relative;">
   <button data-project-open onClick="{{ openProjectPage }}" style="height:35px; min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">PROJECT</button>
@@ -376,14 +378,15 @@
     <button data-select-turtle onClick="{{ onSelectTurtle }}" aria-label="TURTLE PACE" title="TURTLE — guided pace, explains each step (coming soon)" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0;">
       <img src="./assets/btn-turtle.png" alt="" style="height:38px; display:block;" />
     </button>
-    <button data-select-house onClick="{{ onSelectHouse }}" aria-label="HOUSE OUTLINE" title="{{ houseButtonHint }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ houseButtonGlow }};">
-      <img src="{{ houseButtonSrc }}" alt="" style="height:38px; display:block;" />
-    </button>
-    <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
-      <button data-select-split onClick="{{ onSelectSplit }}" aria-label="SPLIT LEVEL" title="SPLIT LEVEL — mark a split-level zone (coming soon)" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ splitButtonGlow }};">
-        <img src="{{ splitButtonSrc }}" alt="" style="height:38px; display:block;" />
-      </button>
-    </sc-if>
+    <!-- THE HOUSE TYPES (NEW-5): four text buttons, one per build type, all
+         present from the start. The lit one is the type stored on the
+         drawing, read on every render and never a second flag; the halo is
+         the outline trace armed under it. Text rather than lamp art because
+         the words are the point -- Movie: "make it easier to understand for
+         the user" -- and a label carries no image to fetch. -->
+    <sc-for list="{{ buildTypeBtns }}" as="bt" hint-placeholder-count="4">
+      <button data-select-build="{{ bt.id }}" onClick="{{ bt.onSelect }}" aria-label="{{ bt.label }}" title="{{ bt.title }}" style="height:30px; border:1px solid {{ bt.border }}; background:{{ bt.bg }}; color:{{ bt.color }}; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; cursor:pointer; white-space:nowrap; filter:{{ bt.glow }};">{{ bt.label }}</button>
+    </sc-for>
     <!-- THE BONE ALONE RISES. While the entry coach is up the cluster stops
          making a stacking context of its own, so this wrapper -- and nothing
          else on the row -- comes through the scrim. The one thing you already
@@ -406,11 +409,17 @@
     </div>
     <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
       <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" aria-label="{{ attachedGarageLabel }}" title="{{ attachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ attachedButtonGlow }};">
-        <img src="{{ attachedButtonSrc }}" alt="" style="height:38px; display:block;" />
+        <!-- Lit and dark are two pieces of art. A bound src would be fetched
+             literally by the parser once per load ({{ ... }} as a URL, a 404)
+             before the binding resolved; two literal sources under a switch
+             fetch only what they show. -->
+        <sc-if value="{{ attachedLit }}" hint-placeholder-val="{{ false }}"><img src="./assets/btn-attached.png" alt="" style="height:38px; display:block;" /></sc-if>
+        <sc-if value="{{ attachedDark }}" hint-placeholder-val="{{ true }}"><img src="./assets/attachedout.png" alt="" style="height:38px; display:block;" /></sc-if>
       </button>
     </sc-if>
     <button data-mark-detached-garage onClick="{{ onMarkDetachedGarage }}" aria-label="{{ detachedGarageLabel }}" title="{{ detachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ detachedButtonGlow }};">
-      <img src="{{ detachedButtonSrc }}" alt="" style="height:38px; display:block;" />
+      <sc-if value="{{ detachedLit }}" hint-placeholder-val="{{ false }}"><img src="./assets/btn-detached.png" alt="" style="height:38px; display:block;" /></sc-if>
+      <sc-if value="{{ detachedDark }}" hint-placeholder-val="{{ true }}"><img src="./assets/detachedout.png" alt="" style="height:38px; display:block;" /></sc-if>
     </button>
     <button data-select-rabbit onClick="{{ onSelectRabbit }}" aria-label="RABBIT PACE" title="RABBIT — quick pace, stays out of the way (coming soon)" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0;">
       <img src="./assets/btn-rabbit.png" alt="" style="height:38px; display:block;" />
@@ -2444,6 +2453,17 @@ const migrateStoredLevels = rawLevels => {
   });
   return merged;
 };
+// The build row's house types (NEW-5), in row order. Ids are the persisted
+// vocabulary (drawing-format.js BUILD_TYPES); labels are Movie's words --
+// "BUNGALOW / 2 STOREY / BILEVEL / MODIFIED BILEVEL" -- and the buttons wear
+// them rather than lamp art.
+const BUILD_TYPE_BUTTONS = Object.freeze([
+  Object.freeze({ id: 'bungalow', label: 'BUNGALOW' }),
+  Object.freeze({ id: 'twoStorey', label: '2 STOREY' }),
+  Object.freeze({ id: 'bilevel', label: 'BILEVEL' }),
+  Object.freeze({ id: 'modifiedBilevel', label: 'MODIFIED BILEVEL' }),
+]);
+
 const DEFAULT_LEVELS = [
   { id:8, name:'SITE',         elev:  0, visible:true },
   { id:7, name:'ROOF',         elev: 18, visible:true },
@@ -2638,6 +2658,7 @@ class Component extends DCLogic {
     projectInfo: format.projectInfo(null),
     zoneHeights: format.zoneHeights(null), // board #221 — PROJECT page zone rows
     sectionTable: format.sectionTable(null), // PROJECT page section table — per build type
+    buildType: format.buildType(null), // NEW-5 — the build row's lit lamp; null is not chosen
     tour: format.tour(null),  // board #230 — the guided full-house flow's parked step
     roofIntent: format.roofIntent(null), // board #238 — the roof pause edits intent, the bone builds it
     tourRoofIncrements: window.DraftTour.normaliseTourRoofIncrements(null),
@@ -3101,6 +3122,7 @@ class Component extends DCLogic {
       zoneHeights: { zones: Object.fromEntries(Object.entries(this.state.zoneHeights.zones)
         .map(([id, zone]) => [id, { ...zone }])) },
       sectionTable: format.sectionTable(this.state.sectionTable),
+      buildType: format.buildType(this.state.buildType),
       boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
       activeBoneyardShelfId: this.state.activeBoneyardShelfId,
       nextBoneyardShelfId: this.state.nextBoneyardShelfId,
@@ -4034,13 +4056,24 @@ class Component extends DCLogic {
   // the two-button choice (NEXT: 2ND FLOOR / STRAIGHT TO ROOF) so a
   // one-storey house answers by pressing the button it means — no
   // inference, no setting. Enter/Space fire the primary.
+  // Whether the house has a floor above MAIN, as far as the drawing says
+  // (NEW-5): false for a BUNGALOW, true for a 2 STOREY, null when no type
+  // is stored or the type does not say (the split family). The tour's
+  // climb-or-roof question is answered by this when it can be, and asked
+  // when it cannot.
+  _tourUpperFloor() {
+    return format.upperFloorForBuildType(this.state.buildType);
+  }
+
   _tourPopupPrimary() {
     const popup = this.state.tourPopup;
     if (popup === 'foundation') this._advanceTour('main');
     else if (popup === 'main') this._advanceTour('rooms-main');
     // rooms-main is the CHOICE popup (2ND FLOOR vs straight to ROOF for a
-    // one-storey house) — Enter takes the primary, the red button.
-    else if (popup === 'rooms-main') this._advanceTour('second');
+    // one-storey house) — Enter takes the primary, the red button. A stored
+    // type has already answered it: a BUNGALOW goes to the ROOF and the
+    // popup shows no choice at all.
+    else if (popup === 'rooms-main') this._advanceTour(this._tourUpperFloor() === false ? 'roof' : 'second');
     else if (popup === 'second') this._advanceTour('rooms-second');
     else if (popup === 'rooms-second') this._advanceTour('roof');
     else if (popup === 'roof') {
@@ -4118,7 +4151,11 @@ class Component extends DCLogic {
     const step = this.state.tour.step;
     const notes = {
       main: 'Stairs are in. Tap room names into rough spots next — the stamps are the room program the bone reads.',
-      'rooms-main': 'Rooms stamped (or skipped — that’s fine). Climb to the 2ND FLOOR, or go straight to the ROOF for a one-storey house.',
+      'rooms-main': this._tourUpperFloor() === false
+        ? 'Rooms stamped (or skipped — that’s fine). A BUNGALOW has no floor above: on to the ROOF.'
+        : this._tourUpperFloor() === true
+          ? 'Rooms stamped (or skipped — that’s fine). Climb to the 2ND FLOOR.'
+          : 'Rooms stamped (or skipped — that’s fine). Climb to the 2ND FLOOR, or go straight to the ROOF for a one-storey house.',
       second: 'Stairs stack over the run below — headroom holds. This floor’s rooms are next.',
       'rooms-second': 'The floors are set — on to the ROOF.',
       roof: 'The roof is set — the house is ready. Press the BONE and watch it grow from the ground up.',
@@ -5206,6 +5243,7 @@ class Component extends DCLogic {
         projectInfo: format.projectInfo(saved.projectInfo),
         zoneHeights: format.zoneHeights(saved.zoneHeights),
         sectionTable: format.sectionTable(saved.sectionTable),
+        buildType: format.buildType(saved.buildType),
         tour: format.tour(saved.tour),
         roofIntent: format.roofIntent(saved.roofIntent),
         tourPopup: format.tour(saved.tour).step === 'foundation' ? 'foundation' : false,
@@ -13013,35 +13051,42 @@ class Component extends DCLogic {
     window.DraftBoneSound?.crunch();
   }
 
-  // HOUSE on the top bar: select-first — arm the outline trace for an
-  // ordinary house outline (PROFESSOR GRUFF points at PROJECT the first
-  // time). Pressing it again while armed stands the trace down.
-  _toggleHouseMode() {
-    if (this.state.activeTool === 'outline' && !this.state.outlineGarage) {
+  // A house type on the top bar (NEW-5): select-first, as HOUSE was. The
+  // press stores the type on the drawing and arms the outline trace
+  // (PROFESSOR GRUFF points at PROJECT the first time). The type is a label
+  // the bone does not read yet -- BUILD HOUSE pours the outline as drawn
+  // under every lamp -- so it may change after a build, and the PROJECT
+  // page's section table follows it. Pressing the lit type while its trace
+  // is armed stands the trace down; pressing another type mid-trace keeps
+  // the legs, because a house outline is the same outline under every type
+  // (a garage run is not, which is why _toggleGarageMode drops its trace).
+  _pressBuildType(type) {
+    const label = BUILD_TYPE_BUTTONS.find(button => button.id === type)?.label || 'HOUSE';
+    const armed = this.state.activeTool === 'outline' && !this.state.outlineGarage;
+    if (armed && this.state.buildType === type) {
       this._cancelOutline();
       this.setState({
         activeTool: 'select',
-        drawingMessage: 'HOUSE trace off.',
+        drawingMessage: `${label} trace off.`,
         drawingMessageError: false,
       });
       return;
     }
-    if (!this._activateContextTool('outline')) return;
+    if (!armed && !this._activateContextTool('outline')) return;
+    const changed = this.state.buildType !== type;
     this.setState({
+      buildType: format.buildType(type),
       outlineGarage: null,
-      projectCallout: !this.state.buildIntroOff,
-      drawingMessage: 'HOUSE — trace the outline corner to corner and close it on the first point (or press Enter), then press the bone to grow the shell.',
-      drawingMessageError: false,
-    });
-  }
-
-  // SPLIT LEVEL is a declared-but-not-built zone for now: the button holds
-  // its place in the strip (it only appears once a house exists) and says
-  // what is coming instead of silently doing nothing.
-  _pressSplitLevel() {
-    this.setState({
-      drawingMessage: 'SPLIT LEVEL zones are coming soon — they mark a stepped area of the house with its own floor heights.',
-      drawingMessageError: true,
+      projectCallout: armed ? this.state.projectCallout : !this.state.buildIntroOff,
+    }, () => {
+      // The type is part of the file, so a change is an edit: it goes into
+      // history and the save. _markUnsaved clears the message, so it is set
+      // after.
+      if (changed) this._markUnsaved();
+      this.setState({
+        drawingMessage: `${label} — trace the outline corner to corner and close it on the first point (or press Enter), then press the bone to grow the shell.`,
+        drawingMessageError: false,
+      });
     });
   }
 
@@ -21233,13 +21278,13 @@ class Component extends DCLogic {
     // stale behind an F5.
     //
     // Scoped to the ACTIVE BONEYARD SHELF, following _shelfHasHouseMaster:
-    // SPLIT and ATTACHED only exist in the DOM while that helper is true, so
-    // a drawing-wide lamp could light for something the row is not showing.
-    // Each lamp has TWO pieces of art — lit, and the same button with its
-    // light off — so "off" is drawn rather than approximated. A CSS
+    // ATTACHED only exists in the DOM while that helper is true, so a
+    // drawing-wide lamp could light for something the row is not showing.
+    // Each garage lamp has TWO pieces of art — lit, and the same button with
+    // its light off — so "off" is drawn rather than approximated. A CSS
     // desaturate turned every dark lamp the same grey and cost each button
-    // the colour that says which button it is.
-    const lampArt = (name, on) => `./assets/${on ? `btn-${name}` : `${name}out`}.png`;
+    // the colour that says which button it is. The house types are words,
+    // and their lit state is a fill rather than art.
     const houseArmed = this.state.activeTool === 'outline' && !this.state.outlineGarage;
     const houseExists = this._shelfHasHouseMaster();
     const attachedExists = this._shelfHasGarageMaster(false);
@@ -21523,15 +21568,23 @@ class Component extends DCLogic {
       dismissProjectCallout: () => this._dismissProjectCallout(false),
       tourPopupOpen: !!this.state.tourPopup,
       tourPopupTitle: this.state.tourPopup === 'main' ? 'MAIN FLOOR DONE \u2014 STAMP THE ROOMS'
-        : this.state.tourPopup === 'rooms-main' ? 'MAIN ROOMS DONE'
+        : this.state.tourPopup === 'rooms-main'
+          ? (this._tourUpperFloor() === false ? 'MAIN ROOMS DONE, GOING TO ROOF'
+            : this._tourUpperFloor() === true ? 'MAIN ROOMS DONE, GOING TO 2ND FLOOR'
+            : 'MAIN ROOMS DONE')
         : this.state.tourPopup === 'second' ? '2ND FLOOR DONE \u2014 STAMP THE ROOMS'
         : this.state.tourPopup === 'rooms-second' ? '2ND FLOOR ROOMS DONE, GOING TO ROOF'
         : this.state.tourPopup === 'roof' ? 'ROOF DONE'
         : 'FOUNDATION DONE, GOING TO MAIN FLOOR',
-      tourPopupChoice: this.state.tourPopup === 'rooms-main',
-      tourPopupSingle: this.state.tourPopup !== 'rooms-main',
+      // The choice card asks only when the drawing has not answered: no
+      // stored type, or a type that does not say (NEW-5). A BUNGALOW or a
+      // 2 STOREY gets the single card and climbs where its type goes.
+      tourPopupChoice: this.state.tourPopup === 'rooms-main' && this._tourUpperFloor() == null,
+      tourPopupSingle: !(this.state.tourPopup === 'rooms-main' && this._tourUpperFloor() == null),
       tourPopupNote: this.state.tourPopupNote,
-      advanceTour: () => { if (this.state.tourPopup !== 'rooms-main') this._tourPopupPrimary(); },
+      advanceTour: () => {
+        if (!(this.state.tourPopup === 'rooms-main' && this._tourUpperFloor() == null)) this._tourPopupPrimary();
+      },
       tourNextSecond: e => { e.stopPropagation(); this._advanceTour('second'); },
       tourNextRoof: e => { e.stopPropagation(); this._advanceTour('roof'); },
       // The under-bone climb button: NEXT ▲ FLOOR while a floor's gate is
@@ -21683,8 +21736,6 @@ class Component extends DCLogic {
       onGarageIntroOffToggle: e => this._onGarageIntroOffToggle(e.target.checked),
       onMarkAttachedGarage: () => this._toggleGarageMode('attached'),
       onMarkDetachedGarage: () => this._toggleGarageMode('detached'),
-      onSelectHouse: () => this._toggleHouseMode(),
-      onSelectSplit: () => this._pressSplitLevel(),
       onSelectTurtle: () => this._pressAssistLevel('turtle'),
       turtleWalking: !!this.state.turtleWalk,
       turtleFacing: this.state.turtleWalk
@@ -21718,28 +21769,37 @@ class Component extends DCLogic {
       buildClusterClass: this.state.entryCoach === true ? 'coaching' : '',
       onSelectRabbit: () => this._pressAssistLevel('rabbit'),
       hasHouseMaster: houseExists,
-      houseButtonHint: houseArmed
-        ? 'HOUSE — tracing; click to cancel' : 'HOUSE — press, then trace the outline; the bone builds it',
-      // Armed beats lit: while you trace, the tool state is the one worth
-      // showing, and it is the louder of the two so a press never reads as
-      // switching something off. A halo means "this is happening now" and is
-      // only ever on one button; the art means "this exists" and is routinely
-      // on three or four at once.
-      houseButtonSrc: lampArt('house', houseExists || houseArmed),
-      houseButtonGlow: houseArmed ? 'drop-shadow(0 0 5px rgba(192,57,43,0.9))' : 'none',
-      // SPLIT wears its off art permanently, and that is correct rather than
-      // a defect: _pressSplitLevel is a stub, so there is no split geometry,
-      // no split tool and no arm state — the button holds its place and reads
-      // as unavailable, which is what it is. Both of these become the same
-      // expressions as its neighbours when split zones land.
-      splitButtonSrc: lampArt('split', false),
-      splitButtonGlow: 'none',
-      attachedButtonSrc: lampArt('attached',
-        attachedExists || this.state.outlineGarage === 'attached'),
+      // The house types: LIT is the type stored on the drawing, derived from
+      // state on every render and never a second flag, so F5 keeps it and NEW
+      // clears it for free. ARMED is the outline trace live under the lit
+      // type, and wears the halo HOUSE wore. Armed beats lit: while you trace,
+      // the tool state is the one worth showing, and it is the louder of the
+      // two so a press never reads as switching something off.
+      buildTypeBtns: BUILD_TYPE_BUTTONS.map(button => {
+        const lit = this.state.buildType === button.id;
+        const armed = lit && houseArmed;
+        return {
+          id: button.id,
+          label: button.label,
+          title: armed
+            ? `${button.label} — tracing; click to cancel`
+            : `${button.label} — press, then trace the outline; the bone builds it`,
+          border: lit ? '#1d1f20' : 'rgba(29,31,32,0.35)',
+          bg: lit ? '#1d1f20' : '#fff',
+          color: lit ? '#fff' : '#1d1f20',
+          glow: armed ? 'drop-shadow(0 0 5px rgba(192,57,43,0.9))' : 'none',
+          onSelect: () => this._pressBuildType(button.id),
+        };
+      }),
+      // The garage lamps: lit art means "this exists", and is routinely on
+      // both at once; the halo means "this is happening now" and is only
+      // ever on one button.
+      attachedLit: attachedExists || this.state.outlineGarage === 'attached',
+      attachedDark: !(attachedExists || this.state.outlineGarage === 'attached'),
       attachedButtonGlow: this.state.outlineGarage === 'attached'
         ? 'drop-shadow(0 0 5px rgba(63,127,214,0.9))' : 'none',
-      detachedButtonSrc: lampArt('detached',
-        detachedExists || this.state.outlineGarage === 'detached'),
+      detachedLit: detachedExists || this.state.outlineGarage === 'detached',
+      detachedDark: !(detachedExists || this.state.outlineGarage === 'detached'),
       detachedButtonGlow: this.state.outlineGarage === 'detached'
         ? 'drop-shadow(0 0 5px rgba(125,91,166,0.95))' : 'none',
       attachedGarageLabel: this.state.outlineGarage === 'attached'

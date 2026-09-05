@@ -7,7 +7,7 @@ const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
 async function traceHouse(page, w, d) {
-  await page.locator('[data-select-house]').click();
+  await page.locator('[data-select-build="bungalow"]').click();
   await page.keyboard.press('Enter');
   await h.clickWorld(page, -w / 2, -d / 2);
   await h.clickWorld(page, w / 2, -d / 2);
@@ -33,7 +33,7 @@ async function reachRoof(page, w, d, beforeStairs) {
   await page.keyboard.press('Enter'); // the lit gate opens MAIN FLOOR DONE
   await page.locator('[data-tour-popup]').click(); // → the rooms pause (#198)
   await page.keyboard.press('Enter'); // the always-lit rooms gate
-  await page.locator('[data-tour-popup] [data-tour-next-roof]').click();
+  await page.locator('[data-tour-popup]').click(); // a BUNGALOW climbs to the ROOF, no choice asked (NEW-5)
   await expect(page.locator('[data-tour-gable]')).toBeVisible();
 }
 

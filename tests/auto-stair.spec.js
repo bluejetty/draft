@@ -11,8 +11,10 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// 2 STOREY: the first test climbs to the 2ND FLOOR on Enter, and since
+// NEW-5 the stored type answers that climb (a BUNGALOW would go to the ROOF).
 async function traceHouse(page, points) {
-  await page.locator('[data-select-house]').click();
+  await page.locator('[data-select-build="twoStorey"]').click();
   await page.keyboard.press('Enter'); // past PROFESSOR GRUFF
   for (const [x, z] of points) await h.clickWorld(page, x, z);
   await page.keyboard.press('Enter');

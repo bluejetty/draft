@@ -14,8 +14,11 @@ const h = require('./helpers');
 // deleted, and a parked feature with no coverage is one flag from shipping with
 // nothing watching it.
 
+// 2 STOREY: the upstairs tests climb to the 2ND FLOOR on Enter at MAIN
+// ROOMS DONE, and since NEW-5 the stored type answers that climb (a
+// BUNGALOW goes to the ROOF instead).
 async function traceHouse(page, w, d) {
-  await page.locator('[data-select-house]').click();
+  await page.locator('[data-select-build="twoStorey"]').click();
   await page.keyboard.press('Enter');
   await h.clickWorld(page, -w / 2, -d / 2);
   await h.clickWorld(page, w / 2, -d / 2);
@@ -204,9 +207,9 @@ test('a deleted partition edge stays declined on its floor, and the same edge gr
   await stamp(page, 'KITCHEN', -9, -7);
   await stamp(page, 'BEDROOM 1', 9, 7);
 
-  await page.keyboard.press('Enter'); // rooms gate → choice popup
+  await page.keyboard.press('Enter'); // rooms gate → MAIN ROOMS DONE
   await expect(page.locator('[data-tour-popup]')).toBeVisible();
-  await page.keyboard.press('Enter'); // primary → 2ND FLOOR
+  await page.keyboard.press('Enter'); // a 2 STOREY climbs to the 2ND FLOOR, no choice asked (NEW-5)
   await placeStairs(page); // stacked in the opening
   await page.keyboard.press('Enter');
   await page.locator('[data-tour-popup]').click(); // → rooms-second

@@ -7,8 +7,8 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
-async function traceHouse(page, w, d) {
-  await page.locator('[data-select-house]').click();
+async function traceHouse(page, w, d, type = 'bungalow') {
+  await page.locator(`[data-select-build="${type}"]`).click();
   await page.keyboard.press('Enter'); // past PROFESSOR GRUFF
   await h.clickWorld(page, -w / 2, -d / 2);
   await h.clickWorld(page, w / 2, -d / 2);
@@ -117,7 +117,7 @@ async function placeStairs(page, x, z, dx, dz) {
   await h.waitForSaved(page);
 }
 
-test('MAIN gates on stairs, both NEXT lights fire, and the choice popup climbs to 2ND', async ({ page }) => {
+test('MAIN gates on stairs, both NEXT lights fire, and the card climbs where the stored type says', async ({ page }) => {
   await h.openModel(page, { tourEscort: true });
   await traceHouse(page, 28, 24);
   await page.locator('[data-tour-popup]').click(); // FOUNDATION DONE → MAIN
@@ -141,18 +141,67 @@ test('MAIN gates on stairs, both NEXT lights fire, and the choice popup climbs t
   await expect(popup).toContainText('MAIN FLOOR DONE');
   await popup.click(); // → the rooms pause (board #198); the choice moved there
   await page.keyboard.press('Enter'); // the always-lit rooms gate
-  await expect(popup).toContainText('MAIN ROOMS DONE');
-  await expect(popup.locator('[data-tour-next-second]')).toBeVisible();
-  await expect(popup.locator('[data-tour-next-roof]')).toBeVisible();
+  // The drawing is a BUNGALOW, so the card does not ask (NEW-5): it says
+  // where it is going, and it goes there on the ordinary tap.
+  await expect(popup).toContainText('MAIN ROOMS DONE, GOING TO ROOF');
+  await expect(popup.locator('[data-tour-next-second]')).toHaveCount(0);
+  await expect(popup.locator('[data-tour-next-roof]')).toHaveCount(0);
 
-  await popup.locator('[data-tour-next-second]').click();
+  await popup.click();
+  await expect(activeLevel(page)).toHaveText(/ROOF/);
+  await h.waitForSaved(page);
+  expect((await h.savedDrawing(page)).tour.step).toBe('roof');
+});
+
+test('a 2 STOREY climbs to the 2ND FLOOR without being asked', async ({ page }) => {
+  await h.openModel(page, { tourEscort: true });
+  await traceHouse(page, 28, 24, 'twoStorey');
+  await page.locator('[data-tour-popup]').click();
+  await placeStairs(page, 0, -2, 0, 6);
+  await page.keyboard.press('Enter'); // the lit gate
+  const popup = page.locator('[data-tour-popup]');
+  await popup.click(); // → the rooms pause
+  await page.keyboard.press('Enter'); // the always-lit rooms gate
+  await expect(popup).toContainText('MAIN ROOMS DONE, GOING TO 2ND FLOOR');
+  await expect(popup.locator('[data-tour-next-second]')).toHaveCount(0);
+
+  await page.keyboard.press('Enter'); // the keyboard takes the same climb
   await expect(activeLevel(page)).toHaveText(/2ND FL/);
   await expect(page.locator('[data-model-drawing-message]')).toContainText(/stairs stack over the run below/i);
   await h.waitForSaved(page);
   expect((await h.savedDrawing(page)).tour.step).toBe('second');
 });
 
-test('a one-storey house presses STRAIGHT TO ROOF and the tour parks there', async ({ page }) => {
+test('a house with no stored type is still asked: 2ND FLOOR or STRAIGHT TO ROOF', async ({ page }) => {
+  await h.openModel(page, { tourEscort: true });
+  // The Outline tool straight from the keypad stores no type -- the path an
+  // older drawing, or a drafter who never pressed a type button, arrives by.
+  await h.selectTool(page, 'Outline');
+  for (const [x, z] of [[-14, -12], [14, -12], [14, 12], [-14, 12]]) await h.clickWorld(page, x, z);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  expect((await h.savedDrawing(page)).buildType).toBeNull();
+
+  await page.locator('[data-tour-popup]').click();
+  await placeStairs(page, 0, -2, 0, 6);
+  await page.keyboard.press('Enter');
+  const popup = page.locator('[data-tour-popup]');
+  await popup.click(); // → the rooms pause
+  await page.keyboard.press('Enter');
+  await expect(popup).toContainText('MAIN ROOMS DONE');
+  await expect(popup.locator('[data-tour-next-second]')).toBeVisible();
+  await expect(popup.locator('[data-tour-next-roof]')).toBeVisible();
+  // The card itself is not an answer while it is asking.
+  await popup.click();
+  await expect(popup).toBeVisible();
+
+  await popup.locator('[data-tour-next-second]').click();
+  await expect(activeLevel(page)).toHaveText(/2ND FL/);
+  await h.waitForSaved(page);
+  expect((await h.savedDrawing(page)).tour.step).toBe('second');
+});
+
+test('a one-storey house climbs to the ROOF on the card itself and the tour parks there', async ({ page }) => {
   await h.openModel(page, { tourEscort: true });
   await traceHouse(page, 16, 12);
   await page.locator('[data-tour-popup]').click();
@@ -165,7 +214,7 @@ test('a one-storey house presses STRAIGHT TO ROOF and the tour parks there', asy
   await page.keyboard.press('Enter'); // the lit gate answers the keyboard too
   await page.locator('[data-tour-popup]').click(); // → the rooms pause
   await page.keyboard.press('Enter');
-  await page.locator('[data-tour-popup] [data-tour-next-roof]').click();
+  await page.locator('[data-tour-popup]').click(); // a BUNGALOW climbs to the ROOF, no choice asked (NEW-5)
   await expect(activeLevel(page)).toHaveText(/ROOF/);
   await expect(page.locator('[data-model-drawing-message]')).toContainText(/dashed footprint is live/i);
   await h.waitForSaved(page);
@@ -194,13 +243,13 @@ test('a MAIN stair re-lands the auto beam mid-span of the larger clear strip', a
 
 test('2ND FLOOR stairs must launch from the run below: far clicks refuse, near ones snap', async ({ page }) => {
   await h.openModel(page, { tourEscort: true });
-  await traceHouse(page, 28, 24);
+  await traceHouse(page, 28, 24, 'twoStorey');
   await page.locator('[data-tour-popup]').click();
   await placeStairs(page, 0, -2, 0, 6);
   await page.locator('[data-tour-next]').click();
   await page.locator('[data-tour-popup]').click(); // → the rooms pause
   await page.keyboard.press('Enter');
-  await page.locator('[data-tour-popup] [data-tour-next-second]').click();
+  await page.locator('[data-tour-popup]').click(); // a 2 STOREY climbs to the 2ND FLOOR, no choice asked (NEW-5)
   await expect(activeLevel(page)).toHaveText(/2ND FL/);
 
   // Far from the opening: refused with the reason, nothing placed.

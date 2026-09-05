@@ -319,7 +319,7 @@ test.describe('The curtain moment', () => {
     await h.openModel(page, { tourEscort: true, boneReveal: true });
 
     // The guided tour up to the finale: trace, stairs, rooms, roof, bone.
-    await page.locator('[data-select-house]').click();
+    await page.locator('[data-select-build="bungalow"]').click();
     await page.keyboard.press('Enter');
     await h.clickWorld(page, -8, -6);
     await h.clickWorld(page, 8, -6);
@@ -337,7 +337,7 @@ test.describe('The curtain moment', () => {
     await page.keyboard.press('Enter');
     await page.locator('[data-tour-popup]').click(); // → the rooms pause (#198)
     await page.keyboard.press('Enter'); // the always-lit rooms gate
-    await page.locator('[data-tour-popup] [data-tour-next-roof]').click();
+    await page.locator('[data-tour-popup]').click(); // a BUNGALOW climbs to the ROOF, no choice asked (NEW-5)
     await expect(page.locator('[data-tour-gable]')).toBeVisible();
     await page.locator('[data-tour-next]').click(); // PRESS ▲ BONE
     await page.keyboard.press('Enter');

@@ -100,6 +100,18 @@ identifiers are persisted style keys and never renamed), `northArrow`,
 E1–E4) with its own `pif` scale and `sheet` integer. Paper and scale rules
 live in `paper-rules.md`.
 
+### `buildType`
+
+The build row's lit lamp (NEW-5): exactly `bungalow`, `twoStorey`, `bilevel`
+or `modifiedBilevel`, and these identifiers never change. Missing, null, or
+anything else reads as "not chosen" -- every drawing older than the key has
+no build type, and the reader must not guess one from the geometry. The
+writer only ever emits a listed value or null. The type is a label, not a
+geometry: BUILD HOUSE pours the outline as drawn whichever lamp is lit, and
+the PROJECT page reads it through `sectionRowForBuildType` (a bungalow or
+two-storey is the live HOUSE row; a bilevel or modified bilevel is its own
+stored row).
+
 ### `units`, and null-means-derive
 
 `units` reads as metric only when it says `'metric'`; anything else —

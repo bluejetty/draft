@@ -260,7 +260,7 @@ test('PORK CHOP builds gable edges at half the eave overhang (board #252)', asyn
 
   // The tour authors the gable as roof INTENT, so the bone derives the
   // footprint with the halved gable offset.
-  await page.locator('[data-select-house]').click();
+  await page.locator('[data-select-build="bungalow"]').click();
   await page.keyboard.press('Enter');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);
@@ -278,14 +278,9 @@ test('PORK CHOP builds gable edges at half the eave overhang (board #252)', asyn
   await h.clickWorld(page, 4, 2);
   await h.waitForSaved(page);
   await page.keyboard.press('Enter'); // the lit gate opens the climb popup
-  // Tolerant of the rooms pause (#198): older flows offer STRAIGHT TO ROOF
-  // on this popup, newer ones one popup later.
-  const nextRoof = page.locator('[data-tour-popup] [data-tour-next-roof]');
-  if (!(await nextRoof.count())) {
-    await page.locator('[data-tour-popup]').click();
-    await page.keyboard.press('Enter');
-  }
-  await nextRoof.click();
+  await page.locator('[data-tour-popup]').click(); // → the rooms pause (#198)
+  await page.keyboard.press('Enter'); // the always-lit rooms gate
+  await page.locator('[data-tour-popup]').click(); // a BUNGALOW climbs to the ROOF, no choice asked (NEW-5)
   await expect(page.locator('[data-tour-gable]')).toBeVisible();
 
   // Flip the south edge GABLE (its tag floats outside the preview line),

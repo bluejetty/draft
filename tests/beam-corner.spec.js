@@ -78,7 +78,7 @@ async function waitForAutoBeams(page, { beams = 1, columns = 0, timeoutMs = 8000
 // snaps to z=-2, runs from the west wall to the corner (the shallow east
 // wing spans 10' on its own), and splits once at x=-6.
 async function traceLHouse(page) {
-  await page.locator('[data-select-house]').click();
+  await page.locator('[data-select-build="bungalow"]').click();
   await page.keyboard.press('Enter'); // past PROFESSOR GRUFF
   await h.clickWorld(page, -15, -12);
   await h.clickWorld(page, 15, -12);

@@ -9,7 +9,7 @@ const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
 async function traceHouse(page, w, d) {
-  await page.locator('[data-select-house]').click();
+  await page.locator('[data-select-build="bungalow"]').click();
   await page.keyboard.press('Enter');
   await h.clickWorld(page, -w / 2, -d / 2);
   await h.clickWorld(page, w / 2, -d / 2);
@@ -74,9 +74,10 @@ test('the tray stamps on a chip-tap/plan-tap pair, disarms, and the step can ski
   saved = await h.savedDrawing(page);
   expect(stamps(saved)).toHaveLength(1);
 
-  // MAIN ROOMS DONE carries the one-storey fork: straight to the ROOF.
+  // MAIN ROOMS DONE: the stored BUNGALOW answers the one-storey fork, so
+  // the card climbs straight to the ROOF without asking (NEW-5).
   await page.keyboard.press('Enter');
-  await page.locator('[data-tour-popup] [data-tour-next-roof]').click();
+  await page.locator('[data-tour-popup]').click();
   await h.waitForSaved(page);
   saved = await h.savedDrawing(page);
   expect(saved.tour.step).toBe('roof');
