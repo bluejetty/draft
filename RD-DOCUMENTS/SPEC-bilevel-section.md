@@ -144,11 +144,12 @@ Movie: on a bungalow *"[it] would be called 2nd floor because they would line
 up"*; on the bilevel *"the modified bilevel with 2nd floor needs OVER GARAGE
 and 2ND FLOOR"*.
 
-The reason is the garage's own height, and this part is inference rather than
-his words: a bilevel's garage sits at the ENTRY level, a half-storey down, so
-a storey standing on it lands below a storey standing on MAIN. A bungalow's
-garage is close enough to line up. Where they line up it is one level; where
-they cannot it is two.
+And he confirmed it directly rather than leaving it to be inferred: *"the
+2ND FLOOR won't line up with the lower down 2nd floor in the bilevel."* The
+reason is the garage's own height -- a bilevel's garage sits at the ENTRY
+level, a half-storey down, so a storey standing on it lands below a storey
+standing on MAIN. A bungalow's garage is close enough to line up. Where they
+line up it is one level; where they cannot it is two.
 
 A plain modified bilevel needs only 2ND FL, because its garage storey is its
 only upper floor -- nothing for it to fail to line up with.
