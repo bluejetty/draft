@@ -799,6 +799,135 @@ if (!window.DraftProjectPage) {
   // X RUNS POSITIVE INWARD from the exterior face, matching the house section
   // rather than buildGarageSection's negative run -- there is no second
   // drawing beside this one for it to read outward from.
+  // ─── THE THREE FOUNDATIONS, SIDE BY SIDE ──────────────────────────────────
+  // The section above draws the BUILDING and the foundation comes out about
+  // 25px tall at the bottom of it -- which is honest at that scale and useless
+  // for the one thing this band exists to show. A 45 degree taper and a 4"
+  // field against a 1'-0" edge are simply not visible in a drawing that also
+  // has to hold a 9'-1 1/8" wall and a roof.
+  //
+  // So the three get their own strip, at their own scale, side by side. Movie
+  // asked for "the 3 way split"; the section screenshot is the argument for it.
+  //
+  // ONE SHARED SCALE, WHICH IS THE ENTIRE POINT. paintSections computes a
+  // single view across every section handed to it, so three details at x
+  // offsets are drawn to one scale without asking. Giving each its own would
+  // make them compact and readable and destroy the comparison, which is the
+  // only reason to put them in a row.
+  //
+  // THE DATUM IS THE GARAGE FLOOR on all three, y = 0, and that is what makes
+  // the row legible: the floor does not move between foundations, so the three
+  // slabs line up across the strip and the concrete under them is the only
+  // thing that changes. Grade is DETACHED_SLAB_ABOVE_GRADE_IN below it in all
+  // three, for the same reason.
+  // Tuned against the drawing, not guessed: at pitch 7 / wall 1.4 the row fits
+  // by HEIGHT and left ~200px of the canvas unused, so every detail came out
+  // small enough that the taper -- the thing the row exists to show -- was
+  // back to being a squiggle. Tightening the y span is what grows the scale.
+  const DETAIL_PITCH_FT = 6;          // centre-to-centre spacing in the row
+  const DETAIL_WALL_FT = 0.75;        // how much wall each detail carries
+  const DETAIL_RUN_FT = 2.6;          // how far into the building each runs
+  const DETAIL_FROST_BREAK_FT = -2.3; // where a frost wall runs off, not ends
+  const DETAIL_CAPTION_FT = -2.75;    // one baseline under the deepest detail
+  const buildDetachedFoundationDetail = ({ kind, slabIn, index = 0 }) => {
+    const parts = [];
+    const anchors = {};
+    const x0 = index * DETAIL_PITCH_FT;
+    const line = (x1, y1, x2, y2, weight = 1.5) =>
+      parts.push({ kind: 'line', x1: x0 + x1, y1, x2: x0 + x2, y2, weight });
+
+    const slabFt = slabIn / 12;
+    const gradeY = -DETACHED_SLAB_ABOVE_GRADE_IN / 12;
+    const run = DETAIL_RUN_FT;
+
+    // Common to all three: the floor line, the slab underside, and grade
+    // outside. Drawn first so they read as the shared datums they are.
+    line(0, 0, run, 0, 2);
+    line(-1.1, gradeY, 0, gradeY, 2);
+    anchors[`grade${index}`] = { x: x0 - 0.75, y: gradeY - 0.28 };
+    anchors[`floor${index}`] = { x: x0 + run * 0.6, y: 0.3 };
+
+    if (kind === 'thickened') {
+      // ONE POUR. The slab IS the foundation, so there is no joint anywhere in
+      // this outline -- 4" in the field, deepening to 1'-0" at the perimeter,
+      // the two joined at 45 degrees. The taper's run equals its drop because
+      // that is what 45 degrees means; it is computed, not written as 8".
+      const edgeFt = GARAGE_EDGE_DEPTH_IN / 12;
+      const taper = edgeFt - slabFt;
+      line(0, 0, 0, -edgeFt, 2);
+      line(0, -edgeFt, edgeFt, -edgeFt, 2);
+      line(edgeFt, -edgeFt, edgeFt + taper, -slabFt, 1.5);
+      line(edgeFt + taper, -slabFt, run, -slabFt, 1.5);
+      anchors[`edge${index}`] = { x: x0 + edgeFt * 0.5, y: -edgeFt * 0.55 };
+    } else {
+      // GRADE BEAM AND FROST WALL both stand their concrete PROUD of the slab:
+      // the top of concrete is 1'-2" above grade and the slab sits
+      // GARAGE_SLAB_BELOW_CONCRETE_IN under that, which is why the floor lands
+      // at grade + 10" and matches the thickened edge. The slab is poured
+      // INSIDE them, so the concrete shows above the floor.
+      const concTop = gradeY + GRADE_BELOW_CONCRETE_IN / 12;
+      const widthFt = (kind === 'frostwall' ? 8 : 12) / 12;
+      const bottom = kind === 'frostwall'
+        ? DETAIL_FROST_BREAK_FT                   // broken, not ended -- see below
+        : concTop - GARAGE_GRADE_BEAM_IN / 12;
+      line(0, concTop, widthFt, concTop, 2);
+      line(0, concTop, 0, bottom, 2);
+      line(widthFt, concTop, widthFt, bottom, 2);
+      if (kind === 'gradebeam') line(0, bottom, widthFt, bottom, 2);
+      // THE SLAB BEARS ON FILL, not on the concrete: the beam is a PERIMETER
+      // member with gravel inside it. Drawn as the slab running to the face of
+      // the concrete and stopping there.
+      line(widthFt, -slabFt, run, -slabFt, 1.5);
+      line(widthFt, 0, widthFt, -slabFt, 1);
+      anchors[`conc${index}`] = { x: x0 + widthFt * 0.5, y: (concTop + Math.max(bottom, -2.4)) / 2 };
+      // A FROST WALL HAS NO BOTTOM IN THIS DRAWING, which is the convention
+      // this file already uses for the pile: "a pile is drilled to depth per
+      // the soils report, so a drawn end would be a number nobody has." A
+      // frost wall is the same -- it runs to the HOUSE's footing depth, which
+      // varies per drawing and is several times the beam beside it. Drawing it
+      // to length would fill the strip with empty concrete and shrink the
+      // taper this row exists to show.
+      //
+      // The first attempt used a 'break' part. That kind draws a full-height
+      // break line down a section, not a small symbol at the end of a member,
+      // so at 4" long it rendered as an arrowhead. Two lines running off the
+      // bottom say "continues" without inventing a glyph.
+    }
+    // WHERE THE NAME GOES, and it is not "near the floor". The first version
+    // hung each caption off the floor anchor and they landed squarely on the
+    // slab and grade lines -- legible in the DOM, unreadable on the drawing.
+    // A caption belongs under everything its detail draws, so the anchor is
+    // computed from the parts rather than from a datum that happens to be
+    // handy.
+    // ON ONE BASELINE, not each under its own detail. Hanging every caption
+    // off its own lowest point put THICKENED EDGE most of a foot above the
+    // other two, because a 1'-0" edge is shallower than a 32" beam -- three
+    // captions at three heights read as three drawings that happen to be near
+    // each other rather than as a row to compare. DETAIL_CAPTION_FT is below
+    // the deepest of the three, so the row shares a line the way a sheet does.
+    anchors[`caption${index}`] = { x: x0 + DETAIL_RUN_FT * 0.25, y: DETAIL_CAPTION_FT };
+    return { parts, anchors };
+  };
+
+  // The row, built in the order GARAGE_FOUNDATIONS lists them -- which is the
+  // order the drafter should see them, with the default first.
+  const buildDetachedFoundationRow = (slabIn = 4) =>
+    GARAGE_FOUNDATIONS.detachedGarage.map((kind, index) => {
+      const detail = buildDetachedFoundationDetail({ kind, slabIn, index });
+      const xs = detail.parts.flatMap(part =>
+        part.kind === 'break' ? [part.x] : [part.x1, part.x2]);
+      const ys = detail.parts.flatMap(part =>
+        part.kind === 'break' ? [part.y1, part.y2] : [part.y1, part.y2]);
+      return {
+        ...detail,
+        kind,
+        extents: {
+          minX: Math.min(...xs) - 0.5, maxX: Math.max(...xs) + 0.5,
+          minY: Math.min(...ys) - 0.85, maxY: Math.max(...ys) + DETAIL_WALL_FT,
+        },
+      };
+    });
+
   const buildDetachedGarageSection = values => {
     const g = values.garage;
     const roof = values.roof;
@@ -1274,6 +1403,8 @@ if (!window.DraftProjectPage) {
     buildWallSection,
     buildGarageSection,
     buildDetachedGarageSection,
+    buildDetachedFoundationDetail,
+    buildDetachedFoundationRow,
     paintSections,
   });
 })();

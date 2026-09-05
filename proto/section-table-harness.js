@@ -314,6 +314,72 @@ check('that same door does NOT clear on the house wall it used to inherit', P =>
 check('the head drop is two top plates, an 11 7/8" LVL and the RO plate, rounded up', P =>
   [P.OPENING_HEAD_DROP_IN >= 3 + 11.875 + 1.5 && P.OPENING_HEAD_DROP_IN <= 3 + 11.875 + 1.5 + 0.25, true]);
 
+// ── The three foundations, side by side ─────────────────────────────────
+// THE ROW EXISTS BECAUSE THE SECTION CANNOT SHOW THIS. In the band 3 section
+// the thickened edge comes out about 25px tall, so a 45 degree taper and a 4"
+// field against a 1'-0" edge are simply not visible. The row draws the three
+// at one scale, and these checks hold the properties that make it a
+// comparison rather than three drawings that happen to be adjacent.
+const row = P => P.buildDetachedFoundationRow(4);
+
+check('the row draws all three foundations', P => [row(P).length, 3]);
+// IN THE ORDER THE DRAFTER SHOULD SEE THEM, DEFAULT FIRST -- and written out,
+// not derived. The first version of this check compared the row against
+// P.GARAGE_FOUNDATIONS.detachedGarage, which is the array the row is built
+// FROM: reordering it moved the result and the expectation together and the
+// check passed. The mutation engine caught it as *** NOTHING ***, which is the
+// only reason it is not still sitting here looking green.
+//
+// So the order is spelt out, because it IS the contract rather than a snapshot
+// of it: Movie, 5 Sep, "the detached garage will have default thickened edge
+// slab", with grade beam and frost wall as the other two options.
+check('the row leads with the thickened edge, the default', P =>
+  [row(P)[0].kind, 'thickened']);
+check('and offers the other two behind it', P =>
+  [row(P).map(d => d.kind).join(), 'thickened,gradebeam,frostwall']);
+// THE FLOOR IS THE SHARED DATUM, and this is what makes the row legible: the
+// garage floor does not move between foundations, so the three slabs line up
+// across the strip and the concrete under them is the only thing that changes.
+check('all three put the garage floor on the same line', P => {
+  const tops = row(P).map(detail => detail.parts.find(part =>
+    part.kind === 'line' && part.y1 === 0 && part.y2 === 0).y1);
+  return [new Set(tops).size, 1];
+});
+check('and all three put grade the same distance below it', P => {
+  const grades = row(P).map(detail => detail.parts.find(part =>
+    part.kind === 'line' && part.y1 === part.y2 && part.y1 < 0).y1);
+  return [[new Set(grades).size, grades[0]].join(),
+    [1, -P.DETACHED_SLAB_ABOVE_GRADE_IN / 12].join()];
+});
+// ONE CAPTION BASELINE. Hung off each detail's own lowest point, THICKENED
+// EDGE sat most of a foot above the other two -- three captions at three
+// heights read as three drawings, not as a row.
+check('the three captions share one baseline', P => {
+  const ys = row(P).map((detail, index) => detail.anchors[`caption${index}`].y);
+  return [new Set(ys).size, 1];
+});
+// A FROST WALL HAS NO BOTTOM, the convention this file already uses for the
+// pile: it runs to the HOUSE's footing depth, a number that varies per
+// drawing. The grade beam DOES have one, and the pair is the point -- without
+// the second half this passes on a row that caps neither.
+check('the frost wall runs off the bottom; the grade beam is closed', P => {
+  const closed = kind => {
+    const detail = row(P).find(d => d.kind === kind);
+    const lowest = Math.min(...detail.parts.flatMap(part => [part.y1, part.y2]));
+    return detail.parts.some(part =>
+      part.y1 === part.y2 && Math.abs(part.y1 - lowest) < 1e-9);
+  };
+  return [[closed('frostwall'), closed('gradebeam')].join(), 'false,true'];
+});
+// The taper is the whole reason for the row, so it is checked here too and as
+// the equality rather than as inches -- at 45 degrees the run IS the drop.
+check('the thickened edge still tapers at 45 in the row', P => {
+  const detail = row(P).find(d => d.kind === 'thickened');
+  const taper = detail.parts.find(part =>
+    part.y1 !== part.y2 && part.x1 !== part.x2);
+  return [Math.abs(Math.abs(taper.x2 - taper.x1) - Math.abs(taper.y2 - taper.y1)) < 1e-9, true];
+});
+
 // ── Geometry ───────────────────────────────────────────────────────────
 // One fixed two-storey assembly, in the shape the page hands the builder.
 // The main floor is the office package from Movie's reference section:
@@ -695,6 +761,20 @@ const MUTATIONS = [
     s => s.replace('    const edgeBot = -edgeFt;', '    const edgeBot = -slabFt;')],
   ['the taper is cut at something other than 45 degrees',
     s => s.replace('    const taperRun = edgeFt - slabFt;', '    const taperRun = (edgeFt - slabFt) * 2;')],
+  ['the foundation row loses a foundation',
+    s => s.replace("    detachedGarage: Object.freeze(['thickened', 'gradebeam', 'frostwall']),",
+      "    detachedGarage: Object.freeze(['thickened', 'gradebeam']),")],
+  ['the row stops leading with the default',
+    s => s.replace("    detachedGarage: Object.freeze(['thickened', 'gradebeam', 'frostwall']),",
+      "    detachedGarage: Object.freeze(['gradebeam', 'thickened', 'frostwall']),")],
+  ['the details stop sharing a floor line',
+    s => s.replace('    line(0, 0, run, 0, 2);', '    line(0, index * 0.1, run, index * 0.1, 2);')],
+  ['the captions go back under their own details',
+    s => s.replace('    anchors[`caption${index}`] = { x: x0 + DETAIL_RUN_FT * 0.25, y: DETAIL_CAPTION_FT };',
+      '    anchors[`caption${index}`] = { x: x0 + DETAIL_RUN_FT * 0.25, y: Math.min(...parts.map(part => part.y1)) - 0.28 };')],
+  ['the frost wall gets a bottom it cannot know',
+    s => s.replace("      if (kind === 'gradebeam') line(0, bottom, widthFt, bottom, 2);",
+      "      line(0, bottom, widthFt, bottom, 2);")],
   ['the overhead door head forgets the head drop',
     s => s.replace('    const headY = plateY - OPENING_HEAD_DROP_IN / 12;', '    const headY = plateY;')],
   // And the one that would fuse the two garages back together: a grade line
