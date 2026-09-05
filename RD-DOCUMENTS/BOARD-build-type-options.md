@@ -81,6 +81,11 @@ follows the cut line the drafter places, not the type, so a side split cut
 the short way just shows what is there. One BILEVEL button. No new type, no
 new row, nothing to build.
 
+Movie settled it in his own words, 5 Sep: *"the design the user makes will
+determine side or back split house if they want one."* The app offers a
+bilevel; the drafter's walls, levels and cut line make it a side or a back
+split. Nothing asks, nothing stores it, nothing needs to.
+
 Where the extra levels come from is the LEVEL CARDS, which already vary
 independently of the type: a BUNGALOW is a 2 STOREY with the 2ND FL card
 deleted, which is how `tests/dynamic-levels.spec.js:27` makes one. A
