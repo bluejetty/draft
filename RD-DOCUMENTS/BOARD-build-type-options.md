@@ -57,6 +57,16 @@ people actually ask for:
 for a split entry with one floor over main. The grid is what the code
 stores; the names are what the row says.
 
+**SIDE SPLIT AND BACK SPLIT ARE NOT TYPES.** Movie, 5 Sep: *"we can do one
+bilevel and they should be able to split it side or back won't matter."*
+Which way the split runs is how the drafter draws the outline, not a
+different house: same entry, same floors, same garage relationship. So one
+BILEVEL button covers both, and there is no stored answer for orientation.
+
+Recorded because the alternative reading -- side and back as two more
+buttons -- is the obvious one to reach for, and it would put two more
+corners on a grid that is already eight.
+
 ---
 
 ## The rule: a button asks only what its own name leaves open
