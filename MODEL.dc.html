@@ -12888,7 +12888,19 @@ class Component extends DCLogic {
   // (deleting the 2ND FL card makes a bungalow) — the attached garage stops
   // sharing the house roof and gets its own single-storey roof, flush-cut
   // at the upper-storey wall face. A single-storey house keeps the splice.
+  //
+  // The stored build type answers first (NEW-5). A BILEVEL is a MODIFIED
+  // BILEVEL with the storey over the garage deleted (Movie, 4 Sep), so its
+  // garage is one storey beside a taller house and always drops. A MODIFIED
+  // BILEVEL puts that storey over the garage and will share the house roof
+  // -- but the bone does not build that storey yet, and a shared roof over a
+  // garage with nothing under it is a hollow, so until it does a MODIFIED
+  // BILEVEL keeps the floor-count rule and its garage gets a real roof of
+  // its own. Flipping that is the storey's own change, with its spec. A
+  // bungalow, a 2 storey and an untyped drawing keep the floor-count rule,
+  // which already tells those two apart.
   _garageRoofDrops() {
+    if (this.state.buildType === 'bilevel') return true;
     return this._floorLevels().length > 1;
   }
 
