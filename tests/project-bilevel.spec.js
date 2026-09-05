@@ -152,3 +152,35 @@ test('band 2 schedule reads the split stack', async ({ page }) => {
   // and a test that shrugged would let the schedule and the spec drift apart.
   expect(rows['ENTRY WALL']).toBe(String.raw`3'-4 3/4"`);
 });
+
+// LABELS MUST NOT LAND ON EACH OTHER. Five tags stacked at the roof, three at
+// the sill, three at the footing: each placed correctly at the height of the
+// part it names, and together unreadable. Every other test in this repo passed
+// throughout -- a canvas does not care that the words over it are illegible,
+// and neither does a screenshot comparison.
+//
+// Both bands, because the de-collision pass is shared and band 2 exercises the
+// tighter stack: POUR and FILL WALL are 6 3/4" apart in the drawing.
+for (const [label, host] of [['band 1', '#detail-wrap'], ['band 2', '#bilevel-wrap']]) {
+  test(`${label} labels do not overlap each other`, async ({ page }) => {
+    await page.goto('/PROJECT.html');
+    await expect(page.locator(`${host} .detail-tag`).first()).toBeAttached();
+    const boxes = await page.evaluate(sel => [...document.querySelectorAll(`${sel} .detail-tag`)]
+      .filter(t => t.style.display !== 'none' && t.textContent.trim())
+      .map(t => { const r = t.getBoundingClientRect();
+        return { text: t.textContent, x: Math.round(r.left), top: r.top, bottom: r.bottom }; }), host);
+
+    expect(boxes.length).toBeGreaterThan(3);
+    const collisions = [];
+    for (let i = 0; i < boxes.length; i += 1) {
+      for (let j = i + 1; j < boxes.length; j += 1) {
+        const a = boxes[i]; const b = boxes[j];
+        // Same column and vertically overlapping. Different columns are free to
+        // share a height -- that is the whole point of having two.
+        if (Math.abs(a.x - b.x) > 4) continue;
+        if (a.top < b.bottom && b.top < a.bottom) collisions.push(`${a.text} / ${b.text}`);
+      }
+    }
+    expect(collisions).toEqual([]);
+  });
+}

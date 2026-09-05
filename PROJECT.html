@@ -504,6 +504,7 @@
       // ── The live detail ─────────────────────────────────────────────────
       const canvas = document.querySelector('#detail-canvas');
       const bilevelCanvas = document.querySelector('#bilevel-canvas');
+      const detailWrap = document.querySelector('#detail-wrap');
       const wrap = document.querySelector('#detail-wrap');
       wrap.style.width = canvas.width + 'px';
       const ftIn = ft => fmt.formatArchitecturalInches(ft * 12);
@@ -656,10 +657,18 @@
             { row, el: value, tag, node: schedRow(hosts[row.side], row.key, row.name, value) });
         });
       };
-      const fillBilevel = anchors => {
+      const fillBilevel = ({ anchors, view }) => {
         if (!bilevelEls.size) return;
         const values = bilevelValues();
-        bilevelEls.forEach(({ row, el, tag, node }, key) => {
+        // TWO COLUMNS OFF THE DRAWING, the same rule band 1 follows. The first
+        // version put each tag six pixels from its own anchor, which reads fine
+        // as a sentence and fails twice: labels land on the linework, and POUR
+        // and FILL WALL end up at different x, so nothing recognises them as a
+        // column and the de-collision pass leaves them on top of each other.
+        // A label's HEIGHT is what makes it findable; its x is free.
+        const left = (bilevelCanvas.width - view.span * view.scale) / 2;
+        const right = left + view.span * view.scale;
+        bilevelEls.forEach(({ row, el, tag, node }) => {
           const ft = row.get(values);
           // A row with no number is a row this type has no use for — the plain
           // BILEVEL has nothing over the garage — so it leaves rather than
@@ -667,14 +676,52 @@
           const has = Number.isFinite(ft);
           node.hidden = !has;
           el.textContent = has ? fmt.formatArchitecturalInches(ft * 12) : '';
-          const at = has && anchors[key];
+          const at = has && anchors[row.key];
           tag.style.display = at ? '' : 'none';
           if (!at) return;
           tag.textContent = row.name;
-          tag.style.left = row.side === 'left' ? `${at.x - 6}px` : `${at.x + 6}px`;
+          tag.style.left = row.side === 'left'
+            ? `${Math.max(2, left - GREY_COL)}px` : `${right + GREY_GAP}px`;
           tag.style.top = `${at.y}px`;
-          tag.style.transform = row.side === 'left'
-            ? 'translate(-100%,-50%)' : 'translate(0,-50%)';
+          tag.style.transform = 'translate(0,-50%)';
+        });
+        spreadTags(document.querySelector('#bilevel-wrap'));
+      };
+
+      // LABELS THAT LAND ON EACH OTHER SAY NOTHING. Five tags stacked at the
+      // roof (PITCH / ATTIC SPACE / HEEL / FASCIA / OVERHANG), three at the
+      // sill, three at the footing: each was placed correctly, at the height of
+      // the part it names, and the result was unreadable. The parts really are
+      // that close together, so this is not a placement bug to fix at the
+      // source -- a 5 1/2" fascia and a 1'-1 1/2" heel are inches apart and
+      // both deserve to sit by their own line.
+      //
+      // So the tags are pushed apart AFTER placement, per column, and the run
+      // is then slid back so it stays centred on where it wanted to be rather
+      // than drifting down off a tall stack. Height is what makes a label
+      // findable, so the rule is to give up as little of it as possible, not to
+      // keep it exactly.
+      const TAG_MIN_GAP = 13;
+      const spreadTags = host => {
+        if (!host) return;
+        const cols = new Map();
+        host.querySelectorAll('.detail-tag').forEach(tag => {
+          if (tag.style.display === 'none' || !tag.textContent) return;
+          const x = Math.round(parseFloat(tag.style.left) || 0);
+          if (!cols.has(x)) cols.set(x, []);
+          cols.get(x).push({ tag, y: parseFloat(tag.style.top) || 0 });
+        });
+        cols.forEach(list => {
+          if (list.length < 2) return;
+          list.sort((a, b) => a.y - b.y);
+          const wanted = list.map(i => i.y);
+          for (let i = 1; i < list.length; i += 1) {
+            if (list[i].y - list[i - 1].y < TAG_MIN_GAP) {
+              list[i].y = list[i - 1].y + TAG_MIN_GAP;
+            }
+          }
+          const drift = list.reduce((sum, it, i) => sum + (it.y - wanted[i]), 0) / list.length;
+          list.forEach(it => { it.tag.style.top = `${it.y - drift}px`; });
         });
       };
 
@@ -1289,7 +1336,7 @@
           bilevelCanvas.paintedSection = projectPage.paintSections(bilevelCanvas, [
             projectPage.buildWallSection(bilevelValues()),
           ]);
-          fillBilevel(bilevelCanvas.paintedSection.anchors);
+          fillBilevel(bilevelCanvas.paintedSection);
         }
         controlEls.forEach(({ control, el, tag }, key) => {
           const at = anchors[key];
@@ -1398,6 +1445,7 @@
           if (control.kind === 'chip') el.textContent = control.text();
           else if (document.activeElement !== el) el.value = control.get();
         });
+        spreadTags(detailWrap);
       };
 
       // ── The section table ───────────────────────────────────────────────
