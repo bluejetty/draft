@@ -316,6 +316,16 @@
   const dimensions = () => (drawing?.dimensions || [])
     .filter(d => { const f = onActiveLevel(); return f.byLevel(d)
       && (f.viewId == null || d.view === f.viewId); });
+  // NOTES TAKE THE DIMENSION RULE -- level, plus view where the level has views
+  // -- and then one exclusion the bone applies on top of it. MODEL.dc.html:7025
+  // filters `note.view !== 'stair'` AFTER _activeNotes(), which reads redundant
+  // beside the view match and is not: a level with NO layer views matches every
+  // note it holds, stair ones included, and the STAIR workspace is a separate
+  // surface with its own painter (drawStairNotes2D, tier 3).
+  const notes = () => (drawing?.notes || [])
+    .filter(n => { const f = onActiveLevel(); return f.byLevel(n)
+      && (f.viewId == null || n.view === f.viewId)
+      && n.view !== 'stair'; });
   const shapes = () => (drawing?.shapes || [])
     .filter(sh => onActiveLevel().byLevel(sh));
   // Outlines take the same LEVEL-ONLY rule as roofs -- rule four above. They
@@ -754,6 +764,30 @@
     dimensions().forEach(dimension => R.drawDimension2D(ctx, toS, dimension, {}, env));
   };
 
+  // LEADER NOTES. Two env keys, and until #302 there was no colour to put in
+  // them: NOTE_COLOR is '#1d1f20' and the night skin's surface-page is
+  // '#1d1f20' -- the identical hex, contrast 1.00, a note painted in exactly
+  // the colour of the page behind it. MODEL.dc.html never saw it because that
+  // page has one light ground and no second one to be wrong against, so the
+  // port creates the defect rather than finding it. draw-note is the key now,
+  // and it answers to 4.5 rather than 3.0 because a note is text.
+  //
+  // The painter takes SCREEN points, not world ones -- it is the only one here
+  // that does. Both the anchor and the text block come through toS.
+  const paintNotes = () => {
+    const R = window.DraftRender2D;
+    if (!R) {
+      throw new Error('MODEL.html: cannot paint notes, render-2d.js did not '
+        + 'load. Check the script order in the page head.');
+    }
+    const env = { color: skin['draw-note'], fillColor: skin['surface-page'] };
+    // options is {} here: preview and pending are in-progress states of the
+    // annotation TOOL, and this page has no tools. A committed note is the
+    // only kind it can hold.
+    notes().forEach(note =>
+      R.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, {}, env));
+  };
+
   // THE DATUM MADE VISIBLE. Tier 2d anchored the grid to the datum but never
   // showed the point itself, so the drafter saw a grid whose origin was
   // inferable only by counting squares. Same three states as the grid, from
@@ -794,6 +828,10 @@
         // after the walls and lines (6960) so a string is never buried under
         // the geometry it measures.
         paintDimensions();
+        // Notes ride with the dimensions, for the same reason and in the same
+        // place the bone puts them (MODEL.dc.html:7025, immediately after the
+        // dimension pass): annotation goes over the geometry it annotates.
+        paintNotes();
         // The datum marker goes on top of everything, as it does in the old
         // page (MODEL.dc.html:6956, immediately before the committed lines):
         // it is the one point the drafter must always be able to find.
