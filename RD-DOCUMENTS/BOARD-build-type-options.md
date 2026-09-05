@@ -110,6 +110,13 @@ on it lands below one standing on MAIN -- too far for a ceiling to absorb,
 so they stay two levels with stairs between. On a bungalow the garage
 ceiling is RAISED until the two meet, so one card serves.
 
+A BUNGALOW GETS ONE TOO. Movie, 5 Sep: *"a bungalow also need the 'floor
+over garage'."* It is the easier of the two cases, being one card rather
+than two, and it is the one where the ceiling height stops being typed and
+starts being derived -- there is exactly one height that lands the ply
+flat, so derive it and let it be overridden, the same `stored ?? derived()`
+contract as ROOF HEEL.
+
 **The test is the sheathing, not the elevation.** Movie: *"the 3/4" ply
 floor will be continuous through the bungalow -- 2nd floor over the garage
 and over the main floor areas."* Where one deck can run it is one level;
@@ -226,8 +233,10 @@ built.
   derived from the type.** Derived is fewer keys and cannot disagree with
   itself; stored is what makes it an option on a 2 STOREY at all. Probably
   stored, but it is the kind of thing that reads obvious and is not.
-- **Whether a BUNGALOW may have a storey over its garage.** The grid says
-  yes and Movie has said garage height matters to him — *"10 garage wall
-  nice… lots of bungalows have extra space there"* — but a storey over a
-  bungalow's garage is a house taller than the house, and nobody has said
-  whether that is drawn or refused.
+~~Whether a BUNGALOW may have a storey over its garage.~~ **ANSWERED**,
+Movie, 5 Sep: *"a bungalow also need the 'floor over garage'."* Yes. The
+worry written here first -- that it draws a house taller than the house --
+was misplaced, and SPEC-bilevel-section.md already had the geometry: on a
+bungalow the garage ceiling is RAISED until the deck is continuous with the
+floor over the main area, so it is one level, not a tower beside a
+bungalow. One card, 2ND FL.
