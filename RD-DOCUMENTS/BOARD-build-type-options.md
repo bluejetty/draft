@@ -57,15 +57,39 @@ people actually ask for:
 for a split entry with one floor over main. The grid is what the code
 stores; the names are what the row says.
 
-**SIDE SPLIT AND BACK SPLIT ARE NOT TYPES.** Movie, 5 Sep: *"we can do one
+**SIDE SPLIT AND BACK SPLIT GET NO BUTTONS.** Movie, 5 Sep: *"we can do one
 bilevel and they should be able to split it side or back won't matter."*
-Which way the split runs is how the drafter draws the outline, not a
-different house: same entry, same floors, same garage relationship. So one
-BILEVEL button covers both, and there is no stored answer for orientation.
 
-Recorded because the alternative reading -- side and back as two more
-buttons -- is the obvious one to reach for, and it would put two more
-corners on a grid that is already eight.
+This section was wrong twice before it was right, and both wrong versions
+are worth keeping because they are the two obvious readings.
+
+**First wrong version:** they are the same house drawn a different way,
+"same entry, same floors". Gilligan drew the three and killed it: a BILEVEL
+splits up and down and is TWO levels; a SIDE SPLIT steps across the front
+and a BACK SPLIT steps front to back, and both carry THREE or FOUR, each
+half a flight off the one beside it. Which one you call "main" is naming.
+They are not orientations of one house.
+
+**Second wrong version, mine:** so the grid is short an axis -- it asks
+"one floor over main, or two?" and a four-level back split cannot answer.
+
+**What is actually true, Gilligan's:** the grid needs no extra axis, because
+a build type decides only three things -- which section row it reads on the
+PROJECT page, whether there is a floor over main, and whether the garage
+roof drops. Split DIRECTION changes none of them. The section already
+follows the cut line the drafter places, not the type, so a side split cut
+the short way just shows what is there. One BILEVEL button. No new type, no
+new row, nothing to build.
+
+Where the extra levels come from is the LEVEL CARDS, which already vary
+independently of the type: a BUNGALOW is a 2 STOREY with the 2ND FL card
+deleted, which is how `tests/dynamic-levels.spec.js:27` makes one. A
+three-level side split is the BILEVEL button plus a level.
+
+The lesson under it, since it caught both of us in opposite directions: a
+grid that looks complete invites you to add rows to it. The question worth
+asking first is whether the thing being added changes any answer the code
+actually reads.
 
 ---
 
