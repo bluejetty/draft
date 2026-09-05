@@ -86,7 +86,36 @@ determine side or back split house if they want one."* The app offers a
 bilevel; the drafter's walls, levels and cut line make it a side or a back
 split. Nothing asks, nothing stores it, nothing needs to.
 
-Where the extra levels come from is the LEVEL CARDS, which already vary
+**BUT THE STOREY OVER THE GARAGE IS NOT JUST ANOTHER CARD.** Movie, 5 Sep:
+*"modified bilevel it could be ADD a level you're right, the 2nd floor over
+garage will need a special one though."*
+
+He had already ruled this and SPEC-bilevel-section.md § "Types that do not
+exist yet" carries it; this file was talking past it. The rule there, and
+the test that decides it:
+
+| type | levels |
+|---|---|
+| modified bilevel | FOUNDATION · ENTRY · MAIN · 2ND FL |
+| bungalow, storey over the garage | FOUNDATION · MAIN · 2ND FL |
+| modified bilevel with a 2nd floor | FOUNDATION · ENTRY · MAIN · **OVER GARAGE** · **2ND FLOOR** |
+
+A bilevel's garage sits at ENTRY, a half storey down, so a storey standing
+on it lands below one standing on MAIN -- too far for a ceiling to absorb,
+so they stay two levels with stairs between. On a bungalow the garage
+ceiling is RAISED until the two meet, so one card serves.
+
+**The test is the sheathing, not the elevation.** Movie: *"the 3/4" ply
+floor will be continuous through the bungalow -- 2nd floor over the garage
+and over the main floor areas."* Where one deck can run it is one level;
+where it cannot it is two. Falsifiable in a way "close enough" is not.
+
+So an ordinary card does not express it: a card is one elevation across the
+whole building, and OVER GARAGE is a floor over part of it at its own
+height. That is the special one, and it is the piece of this board with real
+work in it.
+
+Where the OTHER extra levels come from is the LEVEL CARDS, which already vary
 independently of the type: a BUNGALOW is a 2 STOREY with the 2ND FL card
 deleted, which is how `tests/dynamic-levels.spec.js:27` makes one. A
 three-level side split is the BILEVEL button plus a level.
