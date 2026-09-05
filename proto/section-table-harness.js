@@ -46,6 +46,20 @@ const path = require('path');
 const MUTATION_MODE = require('./harness-args.js').mutationMode();
 const SRC = path.join(__dirname, '..', 'project-page.js');
 
+// cut-view.js's own STANDARDS, loaded for real rather than regexed out of the
+// source. It reads three globals at module scope and none of them matter for
+// the numbers, so three stubs are enough -- and loading it means a rename or a
+// restructure over there fails HERE, which a regex would have sailed past.
+const CUT_VIEW = (() => {
+  const w = {
+    DraftFormatters: { formatInchesOnly: () => '', formatFeetInches: () => '' },
+    DraftWallTypes: { WALL_TYPES: [] },
+    DraftGeometry: { offsetOutline: () => [], polygonArea: () => 0 },
+  };
+  new Function('window', fs.readFileSync(path.join(__dirname, '..', 'cut-view.js'), 'utf8'))(w);
+  return w.DraftCutView.STANDARDS;
+})();
+
 function load(mutate) {
   let src = fs.readFileSync(SRC, 'utf8');
   if (mutate) {
@@ -409,6 +423,46 @@ check('grade is measured from the top of the foundation wall', P => {
   return [near(s.anchors.grade.y, fdnTop + ASSEMBLY.foundation.gradeOffsetFt - 0.55), true];
 });
 
+// ── DETACHED GARAGE, and the copies it forced ──────────────────────────
+// THE ROW EXISTS AT ALL. SECTION_TABLE_DEFAULTS held bilevel, modifiedBilevel
+// and attachedGarage; a row absent here falls through cellValue() to the
+// HOUSE's live value, which is how the attached garage came to read a 3" slab
+// before #293. Its neighbour was left that way.
+check('DETACHED GARAGE has its own defaults row', P =>
+  [P.SECTION_TABLE_DEFAULTS.detachedGarage != null, true]);
+check('a detached garage slab is 4", not the house 3"', P =>
+  [P.SECTION_TABLE_DEFAULTS.detachedGarage.slabThicknessIn, 4]);
+// FDN WALL HT IS THE EDGE DEPTH on this row: on a monolithic slab the thickened
+// edge IS the foundation, so 1'-0" -- the depth cut-view.js tapers against -- is
+// what that cell is measuring, not a substitute for a wall that isn't there.
+check('FDN WALL HT on the detached row is the 1\'-0" thickened edge', P =>
+  [P.SECTION_TABLE_DEFAULTS.detachedGarage.fdnWallHeightFt, P.GARAGE_EDGE_DEPTH_IN / 12]);
+// THE INEQUALITY THAT MAKES THE WALL ROW MEAN SOMETHING. A 7'-0" overhead door
+// needs the head drop above it. The garage wall carries it; the house precut
+// this row used to inherit leaves 6'-8 5/8" and will not take the door at all.
+check('a 7\'-0" door clears the head drop on the detached row\'s wall', P =>
+  [P.SECTION_TABLE_DEFAULTS.detachedGarage.mainWallHeightFt * 12 - P.OPENING_HEAD_DROP_IN >= 84, true]);
+check('it did NOT clear on the house wall the row used to inherit', P => {
+  const house = P.wallHeightFtFromStud(P.STUD_LENGTHS_IN[0]);
+  return [house * 12 - P.OPENING_HEAD_DROP_IN >= 84, false];
+});
+// THE COPIES, HELD TO THEIR ORIGINALS. project-page.js keeps its own copy of
+// four numbers cut-view.js owns, because loading cut-view into PROJECT.html
+// would mean three more scripts on a page that never paints a cut view. The
+// duplication was never the defect -- the 32" drifted because nobody noticed
+// it had, under two different names. These fail the moment they disagree.
+check('the thickened edge depth agrees with cut-view.js', P =>
+  [P.GARAGE_EDGE_DEPTH_IN, CUT_VIEW.GARAGE_EDGE_DEPTH_IN]);
+check('the grade beam depth agrees with cut-view.js GARAGE_BEAM_CONCRETE_IN', P =>
+  [P.GARAGE_GRADE_BEAM_IN, CUT_VIEW.GARAGE_BEAM_CONCRETE_IN]);
+check('the detached beam height agrees with cut-view.js', P =>
+  [P.DETACHED_BEAM_ABOVE_GRADE_IN, CUT_VIEW.DETACHED_BEAM_ABOVE_GRADE_IN]);
+check('the garage sill drop agrees with cut-view.js', P =>
+  [P.GARAGE_SILL_BELOW_HOUSE_FT, CUT_VIEW.GARAGE_SILL_BELOW_HOUSE_FT]);
+check('the garage slab thickness agrees with cut-view.js', P =>
+  [P.SECTION_TABLE_DEFAULTS.detachedGarage.slabThicknessIn, CUT_VIEW.GARAGE_SLAB_THICKNESS_IN]);
+
+
 // ── Run ────────────────────────────────────────────────────────────────
 function run(P) {
   const missed = [];
@@ -510,6 +564,27 @@ const MUTATIONS = [
       '  const SECTION_TABLE_DEFAULTS = Object.freeze({\n    split: SPLIT_BASE,')],
   ['the footing is hung off the wall face instead of centred',
     s => s.replace('rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);', 'rect(0, fdnBot - footD, footW, footD, 1.5);')],
+  // THE DETACHED ROW GOES BACK TO INHERITING. Anchored on the three fields it
+  // sets, NOT on the Object.freeze around them -- an anchor that matched a whole
+  // literal is what rotted when ZONE_ROWS gained a `datum` field, and CI caught
+  // it as "1 mutation(s) never applied" rather than as a red check.
+  ['the detached garage row loses its defaults again',
+    s => s.replace('      fdnWallHeightFt: GARAGE_EDGE_DEPTH_IN / 12,\n      slabThicknessIn: 4,\n      mainWallHeightFt: GARAGE_WALL_FT,', '      slabThicknessIn: 4,')],
+  // ANCHORED ON THE EDGE-DEPTH LINE, which only the detached row has. The three
+  // fields below it are byte-identical to the attached garage's, and
+  // String.replace takes the FIRST match -- so the obvious anchor mutates the
+  // attached row, the attached row's own checks catch it, and the table reports
+  // green for a detached-row mutation that never touched the detached row.
+  ['the detached garage slab drops back to the house 3"',
+    s => s.replace('      fdnWallHeightFt: GARAGE_EDGE_DEPTH_IN / 12,\n      slabThicknessIn: 4,', '      fdnWallHeightFt: GARAGE_EDGE_DEPTH_IN / 12,\n      slabThicknessIn: 3,')],
+  ['the detached garage inherits the house precut it cannot fit a door in',
+    s => s.replace('      fdnWallHeightFt: GARAGE_EDGE_DEPTH_IN / 12,\n      slabThicknessIn: 4,\n      mainWallHeightFt: GARAGE_WALL_FT,',
+      '      fdnWallHeightFt: GARAGE_EDGE_DEPTH_IN / 12,\n      slabThicknessIn: 4,\n      mainWallHeightFt: wallHeightFtFromStud(STUD_LENGTHS_IN[0]),')],
+  // The drift itself, which is the whole reason the copies are allowed to stay.
+  ["this file's thickened edge drifts from cut-view.js",
+    s => s.replace('  const GARAGE_EDGE_DEPTH_IN = 12;', '  const GARAGE_EDGE_DEPTH_IN = 13;')],
+  ['the grade beam drifts from cut-view.js, the way the 32" already did once',
+    s => s.replace('  const GARAGE_GRADE_BEAM_IN = 32;', '  const GARAGE_GRADE_BEAM_IN = 30;')],
 ];
 
 if (MUTATION_MODE) {
