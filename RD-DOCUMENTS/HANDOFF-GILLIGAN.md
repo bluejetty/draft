@@ -9,11 +9,32 @@ the worst-placed one to write a careful handoff.
 
 ## Lane
 
-`PROJECT.html`, `project-page.js`, `MODEL.html`, `geometry-2d.js`, and the
-specs under `tests/` for them. `MODEL.dc.html` is Skipper's; Movie opened it to
-me twice today while Skipper was out, and both times it was for a change small
-enough to name in a sentence. Branch `claude/gilligan-greeting-ls9w2n`, reset
-onto `main` under the same name after each merge.
+AGREED WITH SKIPPER 5 SEP, ratified by nobody yet — Movie or Devin still owe a
+word on it. It amends Devin's 4 Sep ruling in two places, because that ruling
+had `MODEL.dc.html` with Gilligan and `proto/` entire with Skipper, and both of
+us had been working the other way round all day without noticing:
+
+```
+Skipper   proto/ (less section-table-harness.js), test.yml, MODEL.dc.html
+Gilligan  MODEL.html, PROJECT.html, project-page.js,
+          proto/section-table-harness.js
+SHARED    cut-view.js, drawing-format.js, geometry-2d.js -- announce first
+```
+
+**Specs follow the file they exercise** (Skipper's amendment, and the better
+half of it): detached-garage, garage, garage-callout, garage-piles,
+garage-elevation-occlusion, garage-roof-drop and section-view with
+`MODEL.dc.html`; project-bilevel, project-info, project-page, project-detached
+and section-table with the PROJECT page.
+
+**A list is checkable and a feature is a judgement call every time** — that is
+why we kept the list after trying to redraw it by feature. But announce-first
+is what actually protected us all day, not the list, so the list is a
+convenience and the announcement is the mechanism.
+
+Branch `claude/gilligan-greeting-ls9w2n`, reset onto `main` under the same name
+after each merge. Prune the remote ref when Movie deletes the branch, or the
+stop hook reports the merge commit as unpushed.
 
 ## Merged today
 
@@ -26,7 +47,20 @@ onto `main` under the same name after each merge.
 #293  the garage's own wall height, and SPEC-lintels.md
 #294  an opening keeps NBC bearing back from the end of its wall --
       1 1/2" under 3 m, 3" over, ten callers share the clamp
+#295  the tier 2i measurement, and this document
+#296  the DETACHED GARAGE defaults row; every garage foundation 1'-2" above
+      grade; the thickened edge's 10" exception; SPEC-garage-foundations.md
+#297  the opening clamp measures from the ADJACENT wall's inside face, not
+      from the endpoint -- 5 1/2" + 3" = 8 1/2", and a 6x6 post where nothing
+      stands. Restore keeps the old rule: load repairs damaged files, it does
+      not re-rule sound ones (Skipper's point, and he was right)
+#298  band 3 -- the detached garage section and the three foundations at one
+      scale
+#299  GARAGE_DEPTH_FT = 24, the fall composed from it, and the strip captioned
+      with its station
 ```
+
+Skipper merged #286, #289, #291 and #300 the same day.
 
 ## Open, with the measuring already done
 
@@ -42,10 +76,25 @@ onto `main` under the same name after each merge.
    the brush carries what a thing IS, never where it is; the target decides
    the verb. It lives in `MODEL.dc.html`, so it is chrome in Skipper's lane
    and it is parked until tier 2 is closed.
-3. **Awaiting a word from Movie**: the brush's name (DRAFTING BRUSH vs dusting
-   brush); whether the rough-opening plate is a 2x flat at 1 1/2"; whether any
-   zone row should inherit a wall height at all, after #293 found the garage
-   inheriting an unbuildable one.
+3. **Awaiting a word from Movie**, in the order they block work:
+
+   - **THE PALETTE PASS, and it blocks all five tier 2 painters.** See
+     SPEC-model-html-tiers.md § Tier 2j. Notes and fixtures need a colour that
+     is not the night page's own background; stairs, cut marks and underlays
+     need keys that do not exist. Candidates are measured there. Nothing about
+     tier 2 proceeds without this, and it is one decision rather than five.
+   - **Should grade keep deriving from the attached garage?**
+     `derivedGradeOffsetFt` computes a SITE fact from a BUILDING. It works, and
+     it is the only path by which the house reaches the detached garage.
+   - **Ratify the lane map**, agreed between Skipper and Gilligan and official
+     from neither. Recorded in HANDOFF-SKIPPER.md.
+   - **The brush's name**: DRAFTING BRUSH or dusting brush.
+
+   ANSWERED 5 SEP, kept here because the reasoning outlived the question: the
+   rough-opening plate is a 2x flat and 1 1/2" is a MINIMUM ("can't be less");
+   and no zone row should inherit a wall height -- every row states its own,
+   which is what #296 did for the detached garage after #293 did it for the
+   attached one.
 
 ## Traps this session actually hit
 
@@ -105,6 +154,14 @@ onto `main` under the same name after each merge.
   expectation together. It read green. `--mutate` reported `*** NOTHING ***`,
   which is the only reason it is not still sitting there looking fine. Assert
   the contract, spelt out; never derive the expectation from the subject.
+
+- **A literal inside a function is not evidence of a hardcode.** I grepped
+  `drawUnderlays2D`'s line range for a hex, found `#557a46`, and published it
+  as hardcoded in a table meant to steer the next day's work. The line reads
+  `(env.colors && env.colors.origin) || '#557a46'` — env-driven, literal as a
+  fallback, with a comment explaining exactly that. Read the line, not the
+  range. Third instance of this exact shape in one day, after `_wallCross` and
+  after costing painter envs by line range.
 
 ## The habit
 
