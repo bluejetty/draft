@@ -434,8 +434,10 @@ test.describe('Generated section view', () => {
     await h.clickWorld(page, 14, 5);
     await h.clickWorld(page, 14, -5);
     await expect(page.locator('[data-detached-foundation-prompt]')).toBeVisible();
-    await page.locator(foundation === 'thickened'
-      ? '[data-detached-thickened-edge]' : '[data-detached-grade-beam]').click();
+    await page.locator({
+      thickened: '[data-detached-thickened-edge]',
+      frostwall: '[data-detached-frost-wall]',
+    }[foundation] || '[data-detached-grade-beam]').click();
     await h.waitForSaved(page);
     await buildHouse(page);
     await h.waitForSaved(page);
@@ -537,6 +539,20 @@ test.describe('Generated section view', () => {
       .toBeLessThan((scan.houseDeepest - scan.gradeY) * 0.35);
     // The slab face sits proud of grade under the walls.
     expect(scan.garageFace).toBeGreaterThan(30);
+    expect(scan.gapFaint).toBeLessThan(10);
+  });
+
+  test('a detached frost-wall garage elevation goes down to a footing like the house', async ({ page }) => {
+    const scan = await detachedElevationScan(page, 'frostwall');
+    expect(scan.gradeY).toBeGreaterThan(0);
+    expect(scan.gapHi - scan.gapLo).toBeGreaterThan(20);
+    // Not a hung band: the buried outline reaches the house's own depth,
+    // wall plus footing, within a footing's tolerance.
+    expect(scan.garageDeepest - scan.gradeY)
+      .toBeGreaterThan((scan.houseDeepest - scan.gradeY) * 0.9);
+    expect(scan.garageBuried).toBeGreaterThan(50);
+    // The exposed 8" of concrete stands on grade.
+    expect(scan.garageFace).toBeGreaterThan(50);
     expect(scan.gapFaint).toBeLessThan(10);
   });
 
