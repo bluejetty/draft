@@ -45,14 +45,19 @@ test('a wall is entered as a stud and reads back as the wall that stud makes', a
   await expect(page.locator('[data-detail-input="wallHeight-3"]')).toHaveValue(`9'-1 1/8"`);
 });
 
-test('SPLIT defaults to a 5\'-0" pour and keeps its own number once typed', async ({ page }) => {
+// ON BILEVEL, NOT SPLIT. The SPLIT row went on 5 Sep (option A): it was the
+// family name, no build type could ever select it, and anything typed into it
+// was stored unread. The claim is unchanged and now sits on a row a drafter
+// can actually be building -- which is the point of moving it rather than
+// deleting it.
+test('BILEVEL defaults to a 5\'-0" pour and keeps its own number once typed', async ({ page }) => {
   await h.openModel(page);
   await openProjectPage(page);
 
-  const split = cell(page, 'split.fdnWall');
+  const split = cell(page, 'bilevel.fdnWall');
   await expect(split).toHaveValue(`5'-0"`);
   await expect(split).toHaveClass(/inherited/);
-  await expect(page.locator('[data-section-note="split.fdnWall"]')).toHaveText(`5'-1 1/2" TO SILL`);
+  await expect(page.locator('[data-section-note="bilevel.fdnWall"]')).toHaveText(`5'-1 1/2" TO SILL`);
 
   // The house's foundation is not the split's: editing one leaves the other.
   const house = cell(page, 'house.fdnWall');
@@ -65,21 +70,24 @@ test('SPLIT defaults to a 5\'-0" pour and keeps its own number once typed', asyn
   await expect(split).not.toHaveClass(/inherited/);
 
   await page.reload();
-  await expect(cell(page, 'split.fdnWall')).toHaveValue(`5'-6"`);
+  await expect(cell(page, 'bilevel.fdnWall')).toHaveValue(`5'-6"`);
   await expect(cell(page, 'house.fdnWall')).toHaveValue(`7'-0"`);
 });
 
-test('the split fills to the ceiling with half a precut', async ({ page }) => {
+// Also moved off the departed SPLIT row. The family arithmetic is the same on
+// either of the two rows that survive it -- they share SPLIT_BASE by value,
+// which the harness pins.
+test('a bilevel fills to the ceiling with half a precut', async ({ page }) => {
   await h.openModel(page);
   await openProjectPage(page);
 
   // 5'-0" pour + 1 1/2" sill, then a fill wall of half a 92 5/8" precut
   // (46 1/4" once the saw takes its kerf) and its 4 1/2" of plates.
-  await expect(cell(page, 'split.woodFill')).toHaveValue(`4'-2 3/4"`);
-  await expect(page.locator('[data-section-note="split.woodFill"]')).toHaveText('46 1/4" STUD');
+  await expect(cell(page, 'bilevel.woodFill')).toHaveValue(`4'-2 3/4"`);
+  await expect(page.locator('[data-section-note="bilevel.woodFill"]')).toHaveText('46 1/4" STUD');
   // Standing height down there: everything framed on the pour, less the slab
   // poured against the bottom of it.
-  await expect(page.locator('[data-section-cell="split.basementClg"]')).toHaveText(`9'-1 1/4"`);
+  await expect(page.locator('[data-section-cell="bilevel.basementClg"]')).toHaveText(`9'-1 1/4"`);
 });
 
 test('a type only shows the items it uses', async ({ page }) => {
@@ -100,7 +108,7 @@ test('a type only shows the items it uses', async ({ page }) => {
   await expect(cell(page, 'bilevel.woodFill')).toHaveCount(1);
   await expect(cell(page, 'modifiedBilevel.upperStud')).toHaveCount(1);
   await expect(cell(page, 'modifiedBilevel.woodFill')).toHaveCount(1);
-  await expect(cell(page, 'split.woodFill')).toHaveCount(1);
+  await expect(cell(page, 'bilevel.woodFill')).toHaveCount(1);
 
   // A garage has no floor framing over a basement and no second storey.
   await expect(page.locator('[data-section-blank="detachedGarage.mainJoists"]')).toHaveCount(1);

@@ -982,8 +982,14 @@ if (!window.DraftDrawingFormat) {
   // The other types carry only what they differ in; null is "not set", which
   // reads as the type's default, and a type simply has no cell for an item
   // it cannot use (a garage has no upper floor, a house no wood fill wall).
+  // 'split' was here until 5 Sep and is deliberately gone: it is the family
+  // name for BILEVEL and MODIFIED BILEVEL, not a build anybody makes, so no
+  // build type could ever select it and anything stored under it was unread
+  // by construction. A drawing that carries an old split row loses it on the
+  // next normalise, which costs nothing -- those numbers never reached the
+  // page or the build.
   const SECTION_TABLE_TYPES = Object.freeze([
-    'split', 'bilevel', 'modifiedBilevel', 'attachedGarage', 'detachedGarage',
+    'bilevel', 'modifiedBilevel', 'attachedGarage', 'detachedGarage',
   ]);
   const SECTION_TABLE_FIELDS = Object.freeze([
     // roofHeelIn is null-until-overridden like every field here, and for once
