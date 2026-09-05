@@ -12041,12 +12041,46 @@ class Component extends DCLogic {
   // tops carry the same relation -- but the rule is the sills, and this
   // stays true if the two attachments ever stop sharing a plate. A
   // detached frost wall has no house sill to meet; it tops out where its
-  // grade beam would, DETACHED_BEAM_ABOVE_GRADE_IN above grade. The typed
-  // PROJECT offset is not read here yet -- that is a later piece.
+  // grade beam would, DETACHED_BEAM_ABOVE_GRADE_IN above grade.
+  //
+  // THE TYPED OFFSET BEATS BOTH, and it is a DEFAULT that it beats. Movie,
+  // 4 Sep: level "95% inline" on a bilevel, dropped "95% not inline" on a
+  // bungalow -- so the build type picks which way to lean and the drafter
+  // still gets the last word. The ATTACHED GARAGE zone row stores offsetFt
+  // as the garage SILL measured off MAIN FL 0 (project-page.js ZONE_ROWS,
+  // datum: 'sill'), which is the same line PROJECT.html's houseSillFt()
+  // reports for the house. Two sill lines, so the sill plates cancel and
+  // the concrete tops carry the difference unchanged:
+  //
+  //     concrete top = houseTop + (typed sill - house sill)
+  //
+  // That expression IS the sill-to-sill rule, so it needs no branch on build
+  // type: with the cell empty the page derives the typed value as
+  // houseSill - (split ? 0 : GARAGE_SILL_BELOW_HOUSE_FT), and feeding that
+  // back through gives houseTop - (split ? 0 : ...) exactly. The null branch
+  // below is that same answer reached without the page, so a drawing nobody
+  // has typed into does not move.
+  //
+  // DETACHED IS NOT THE MIRROR OF THIS, and assuming it was is the trap
+  // here: its zone row's datum is 'beam top', not 'sill', so its typed
+  // number names the concrete top directly and the plates do NOT cancel.
+  // Wiring it wants PROJECT.html's own derive read against this datum
+  // first, which is Gilligan's arithmetic, so it stays on its rule.
   _garageFrostWallTopFt(garage, houseTop, grade) {
     if (this._garageDetached(garage)) return grade + DETACHED_BEAM_ABOVE_GRADE_IN / 12;
+    const typed = this.state.zoneHeights?.zones?.attachedGarage?.offsetFt;
+    if (typed != null) return houseTop + (typed - this._houseSillOffsetFt());
     const split = format.SPLIT_BUILD_TYPES.includes(this.state.buildType);
     return houseTop - (split ? 0 : GARAGE_SILL_BELOW_HOUSE_FT);
+  }
+
+  // The house's sill, on the PROJECT page's datum: one floor package below
+  // MAIN FL 0, which is where the main floor bears. PROJECT.html's
+  // houseSillFt() is the same line off the same two numbers; the round trip
+  // in the spec is what keeps them in step, not this sentence.
+  _houseSillOffsetFt() {
+    const main = this._floorLevels()[0];
+    return main ? -this._levelFloorFt(main.id) : 0;
   }
 
   _garageDetached(garage) {
