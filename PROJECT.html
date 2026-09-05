@@ -166,6 +166,20 @@
       </div>
     </section>
 
+    <section class="card stack-card" aria-label="Modified bilevel wall section">
+      <div class="card-title">Modified bilevel &mdash; office defaults, not this drawing</div>
+      <div class="card-body">
+        <div class="band">
+          <div class="sched"></div>
+          <div class="detail-wrap">
+            <canvas id="bilevel-canvas" width="600" height="500" aria-label="Modified bilevel section — the office default split"></canvas>
+          </div>
+          <div class="sched"></div>
+        </div>
+        <div class="zone-note">The MOD BILEVEL row of the section table, drawn. A short pour with a wood fill wall on it reaches the same bearing line the bungalow reaches with one tall pour, and the ENTRY landing sits a half flight below MAIN FL. These are the office defaults for the type &mdash; typing here comes with the split-level feature; the numbers above still describe <em>this</em> drawing.</div>
+      </div>
+    </section>
+
     <section class="card stack-card" aria-label="Zone heights">
         <div class="card-title">Zone heights</div>
         <div class="card-body">
@@ -489,6 +503,7 @@
 
       // ── The live detail ─────────────────────────────────────────────────
       const canvas = document.querySelector('#detail-canvas');
+      const bilevelCanvas = document.querySelector('#bilevel-canvas');
       const wrap = document.querySelector('#detail-wrap');
       wrap.style.width = canvas.width + 'px';
       const ftIn = ft => fmt.formatArchitecturalInches(ft * 12);
@@ -515,6 +530,78 @@
         roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN, heelIn: roofHeelIn() },
         wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
       });
+
+      // ── BAND 2: the modified bilevel ────────────────────────────────────
+      // Movie, 5 Sep: "copy the other one you made and we can adjust to match
+      // this one... a couple extra pieces added on and moved a bit, shorter
+      // foundation."
+      //
+      // NOT THIS DRAWING. Band 1 paints the live assembly — every number in it
+      // is the drafter's, and typing in it saves. Band 2 paints the OFFICE
+      // DEFAULTS for a type this drawing may not even be, so it reads
+      // SECTION_TABLE_DEFAULTS rather than the level cards, and nothing in it
+      // is typeable yet. Sharing detailValues() would have been fewer lines
+      // and would have quietly made a bungalow's stored heights masquerade as
+      // the split's.
+      //
+      // What it borrows on purpose is the three things that are the OFFICE's
+      // rather than the build type's: the roof (one pitch and eave for the
+      // job), the wall type, and how far grade sits below the concrete. A
+      // bilevel drawn with a different pitch than the bungalow beside it would
+      // be comparing two drawings, not two types.
+      const BILEVEL_TYPE = 'modifiedBilevel';
+      const bilevelLevel = (id, name, wallHeightFt) => {
+        const base = assemblyDefaults(id);
+        return { id, name, wallHeightFt,
+          joistDepthIn: base.joistDepthIn, sheathingIn: base.sheathingIn };
+      };
+      const bilevelValues = () => {
+        const split = projectPage.SECTION_TABLE_DEFAULTS[BILEVEL_TYPE];
+        const fdnBase = assemblyDefaults(1);
+        const entry = assemblyDefaults(ENTRY_LEVEL_ID);
+        // THE ENTRY WALL IS DERIVED, and it is the one number here that is not
+        // simply looked up. The fill wall and the entry joists stand on the
+        // same sill plate, and both reach the main floor's bearing line, so
+        // what is left between the two floor packages is the fill wall less
+        // the entry package: 4'-2 3/4" - 10" = 3'-4 3/4".
+        //
+        // That is NOT a ceiling height and should not be read as one. ENTRY is
+        // a landing — in the front door, then half a flight up to MAIN or half
+        // a flight down — and the foyer above it is open, which is the same
+        // fact as the front wall running unbroken to 13'-6 1/2". Storing a
+        // typed 3'-4 3/4" somewhere would invite exactly the correction that
+        // breaks the stack.
+        //
+        // It disagrees with Movie's PDF, which dimensions this wall 5'-1 1/8",
+        // by 1'-8 3/8" — and that is NOT the known fill-wall error on the same
+        // sheet, which runs the other way at 1'-2 3/4". Drawn derived because
+        // derived is what closes against the 4'-5 3/8" drop; see
+        // RD-DOCUMENTS/SPEC-bilevel-section.md, which carries both sides.
+        const entryPkgFt = (entry.joistDepthIn + entry.sheathingIn) / 12;
+        return {
+          floors: [
+            bilevelLevel(ENTRY_LEVEL_ID, 'ENTRY', split.woodFillHeightFt - entryPkgFt),
+            bilevelLevel(3, 'MAIN FL', split.mainWallHeightFt),
+            bilevelLevel(5, '2ND FL', split.upperWallHeightFt),
+          ],
+          // MAIN FL is the datum on every drawing, and here it is not floors[0]
+          // — the entry landing is below it and belongs at a negative height.
+          datumIndex: 1,
+          foundation: {
+            wallHeightFt: split.fdnWallHeightFt,
+            woodFillHeightFt: split.woodFillHeightFt,
+            thicknessIn: fdnThicknessIn(),
+            slabIn: fdnBase.slabThicknessIn,
+            footingWidthIn: fdnIsIcf() ? 24 : 20,
+            footingDepthIn: fdnBase.footingDepthIn,
+            gradeOffsetFt: gradeOffsetFt(),
+            attachment: attachmentChoice(),
+          },
+          roof: { pitch: roofPitch, overhangFt: roofOverhang,
+            fasciaIn: ROOF_FASCIA_IN, heelIn: roofHeelIn() },
+          wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
+        };
+      };
 
       // One control per anchor. get/set/text describe the value; commit
       // parses, clamps softly, saves, and repaints — repainting is what
@@ -1114,6 +1201,22 @@
           projectPage.buildGarageSection(garageValues()),
           projectPage.buildWallSection(detailValues()),
         ]);
+        // Band 2 rides along on every repaint. It shares the roof, the wall
+        // type and the grade offset with band 1, so a pitch or eave change up
+        // there has to move down here too or the two bands stop being
+        // comparable — which is the only reason to draw them on one page.
+        if (bilevelCanvas) {
+          // The anchors are kept on the element rather than dropped. Band 2
+          // has no schedule to place them into yet, so nothing on the page
+          // reads them — but a canvas can only be checked as pixels, and
+          // pixels cannot tell a correct bilevel from a plausible one. Two
+          // ways to draw a WRONG bilevel both survived a screenshot test:
+          // losing the fill wall, and putting the entry landing at the datum
+          // instead of below it. Both are visible here in feet.
+          bilevelCanvas.paintedSection = projectPage.paintSections(bilevelCanvas, [
+            projectPage.buildWallSection(bilevelValues()),
+          ]);
+        }
         controlEls.forEach(({ control, el, tag }, key) => {
           const at = anchors[key];
           const row = el.closest ? el.closest('.sched-row') : null;
