@@ -480,6 +480,7 @@ Measured against `palette.js`'s two skins:
 painter     how the colour is reached          hex        night    day
 notes       env, NOTE_COLOR                    #1d1f20      1.00  14.79   under 3.0
 fixtures    env, FIXTURE_COLOR                 #1d1f20      1.00  14.79   under 3.0
+            AND A SECOND COLOUR THIS ROW MISSED -- see Tier 2k
 stairs      env, STAIR_COLOR                   #5d4a8a      2.22   6.68   under 3.0
 cut marks   BARE LITERAL in the painter        #b04060      2.95   5.01   under 3.0
 underlays   env.colors.origin, literal fallback #557a46     3.36   4.41
@@ -502,6 +503,13 @@ painter is not evidence of a hardcode; the line it sits on is.
 **So one painter needs changing, not two.** Only cut marks
 (`render-2d.js:1469-1470`) assigns `ctx.strokeStyle` and `ctx.fillStyle`
 without consulting env at all.
+
+> **That sentence was wrong, and Tier 2k is where it was found.** It counted
+> one colour per painter. `drawFixture2D` sets two — the linework from
+> `env.FIXTURE_COLOR`, and a body fill that was a bare
+> `rgba(255,255,255,0.65)`. The row above is right about the colour it
+> looked at and silent about the one it did not. Two painters needed
+> changing.
 
 Underlays has a different defect, and a more interesting one: it reads
 `env.colors.origin` — **the origin marker's key** — so a tracing underlay and
@@ -552,3 +560,120 @@ five separate problems:
 
 **Bring measured candidates, do not guess a colour.** The `drawRoof2D` entry in
 `HANDOFF-SKIPPER.md` has said so since 4 Sep and it applies to all five.
+
+
+## Tier 2k — fixtures, and the four functions that had to come with them (5 Sep)
+
+Fixtures is the painter tier 2i costed as expensive, and it was: two new
+script tags where the walls cost one, and a new module. It is also the one
+that removes code rather than adding it — `MODEL.dc.html` is 86 lines shorter
+than it was.
+
+### Why a module and not a call
+
+`drawFixture2D` is the only painter here that **does not know where its
+subject is**. Every other one takes geometry and draws it; this one takes a
+fixture and asks its caller three questions — `fixtureGeometry`, `wallFrame`,
+`wallCross` — because a fixture is stored as an offset along a wall and has to
+be resolved against that wall's assembly before anything can be drawn.
+
+Those answers were methods on `MODEL.dc.html`'s component, so they were
+reachable from exactly one page. That, and not the painter, is why this page
+drew no fixtures through two tiers.
+
+**It is four methods, not three.** `_fixtureGeometry` hands the tub case to
+`_tubGeometry`, which needs the other two to find the end of the alcove. The
+four are a closure; splitting any one out moves the dependency rather than
+removing it.
+
+`fixture-geometry.js` is those four as pure functions over a `walls` array.
+`MODEL.dc.html` keeps its method names and delegates in one line each.
+
+### The measurement that made it a module rather than a copy
+
+All four are pure — the only `this` inside their own bodies is each other and
+`this._walls`.
+
+**And that is the third time a line range has lied about a function here.** A
+grep over `_fixtureGeometry`'s neighbourhood reports `this._canvas`,
+`this._orthoHalfH`, `this._activeWalls` and `this._distToLineSeg`, which would
+have made it component-bound and unextractable. All four are in the *next*
+method, past the closing brace. Brace-match before believing a range; the rule
+is in Tier 2j and it needed applying again the same day.
+
+### The extraction was proved, once, and the proof is not kept
+
+Before `MODEL.dc.html` was touched, a differential ran the module against the
+live methods while both copies existed: **8421 comparisons across 2994
+fixtures — every wall type, every `refLine`, both sides, standoffs, degenerate
+walls, and tubs at every alcove length — identical.**
+
+It caught a real defect on its first run. `_tubGeometry`'s return carries a
+`corners:` line and the transcription dropped it: the method had been read
+through two windows that did not meet, and one line fell in the gap. Every
+number beside it was right, so a tub would have painted its two decks and no
+body.
+
+**A function read through two windows is not read until the windows are proved
+to touch.** Same family as the line-range trap, and it is the reason the
+differential existed rather than a spot check.
+
+That differential is **recorded here and deliberately not committed**.
+`MODEL.dc.html` delegates now, so the same comparison would be the module
+against itself, and a check that reads the thing it is checking cannot fail.
+What is committed instead is `proto/fixture-geometry-harness.js` — the
+contract, 52 checks, 27 mutations, all caught — including `a tub returns four
+corners`, which is the dropped line turned into a standing check.
+
+### The colour, and the row Tier 2j got wrong
+
+Tier 2j read one colour per painter and cleared fixtures on that basis:
+`FIXTURE_COLOR` comes through env, so no painter change. Brace-matching
+`drawFixture2D` (`render-2d.js:419-628`) finds two colour literals in it:
+
+```
+:449  ctx.fillStyle = 'rgba(255,255,255,0.65)'   the body fill, EVERY fixture
+:624  ctx.strokeStyle = '#5980a6'                the selection stroke
+```
+
+The second is inside `if (options.selected)` and this page has no selection,
+so it never fires here. The first fires on every fixture, and it is the same
+defect as the leader note one layer in: a translucent white body on a
+`#1d1f20` ground, under `#e7e5e2` linework. The fixture is erased.
+
+So it becomes `env.fixtureFill`, **with no fallback**. A
+`|| 'rgba(255,255,255,0.65)'` would let a caller keep the literal by saying
+nothing, which is the drift the change exists to remove. `MODEL.dc.html` now
+names the white it has always drawn — no pixel moves there — and MODEL.html
+passes its own ground at the same 0.65, spelled as an appended hex alpha byte
+(`#1d1f20` + `a6`), guarded by the shape of the value so a skin that ever
+returns an `rgba()` falls through opaque instead of producing nonsense.
+
+### The selection rule is inheritance, and it has to be
+
+A fixture **carries no view of its own**: `drawing-format.js:179` stamps every
+one `'plan'` whatever was saved. So filtering on `fixture.view` would be
+filtering on a constant, and a fixture on a hidden wall would come back.
+
+The bone's rule (`_activeFixtures`, with the note above it saying so in as
+many words) is that a fixture inherits its host wall's visibility. MODEL.html
+keys off its own `walls()` for exactly that reason, which gives the same rule
+against a smaller set — this page paints no shared-context walls yet, and
+follows them with no edit when it does.
+
+`tests/model-html-fixtures.spec.js` pins the case that tells the two apart: a
+wall on the FOUNDATION layer set, on the level being viewed, holding a fixture
+stamped `plan`.
+
+### The bill
+
+| | |
+|---|---|
+| new module | `fixture-geometry.js`, four functions plus the tub and counter specs |
+| `MODEL.dc.html` | **-86 lines**, four one-line delegations, two constants re-pointed |
+| painter | one line, `env.fixtureFill`, no fallback |
+| script tags | `fixture-geometry.js`, `closets.js` — the tier-1 exact list goes 9 to 11 |
+| checks | 52 + 27 mutations (module), 1 + discriminator (painter), 6 page tests |
+
+Two of the five painters are done. Stairs, cut marks and underlays remain, and
+cut marks is the only one left that still needs the painter itself changed.

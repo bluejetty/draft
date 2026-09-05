@@ -125,6 +125,14 @@
 <script src="./cut-view.js"></script>
 <script src="./drawing-format.js"></script>
 <script src="./render-2d.js"></script>
+<!-- Fixtures. fixture-geometry.js after wall-types.js (it reads the assembly
+     width lazily, so this is convention rather than a hard order) and
+     closets.js for the four closet dimensions and the door table the painter
+     asks for. Neither is a painter: they are the ANSWERS drawFixture2D wants
+     from its caller, which lived in MODEL.dc.html until now and are the whole
+     reason this page drew no fixtures. -->
+<script src="./fixture-geometry.js"></script>
+<script src="./closets.js"></script>
 
 <script>
 (() => {
@@ -326,6 +334,27 @@
     .filter(n => { const f = onActiveLevel(); return f.byLevel(n)
       && (f.viewId == null || n.view === f.viewId)
       && n.view !== 'stair'; });
+  // FIXTURES INHERIT THEIR WALL'S VISIBILITY -- they do not carry a view rule
+  // of their own. MODEL.dc.html:_activeFixtures keeps a fixture whose levelId
+  // matches AND whose wallId is in the set of walls the page is showing, and
+  // the note above it says why in as many words: "a fixture inherits the
+  // layer-view exclusion rather than having one of its own", and that
+  // inheritance is the only thing keeping a sink unselectable on the ELECTRIC
+  // sheet. Filtering on `fixture.view` here would look equivalent and would
+  // not be -- a fixture on a hidden wall would come back.
+  //
+  // ONE DIFFERENCE, STATED RATHER THAN HIDDEN. The bone unions in
+  // _sharedContextWalls() -- the foundation walls it ghosts under a plan, the
+  // plan walls it ghosts under e-power. This page paints no context walls at
+  // all (walls() is the plain view filter), so keying off walls() gives it the
+  // same RULE against a smaller set: a fixture shows when its host wall shows
+  // HERE. When context walls arrive, this follows them with no edit, which is
+  // the reason it reads walls() rather than repeating the filter.
+  const fixtures = () => {
+    const shown = new Set(walls().map(w => w.id));
+    return (drawing?.fixtures || [])
+      .filter(fx => onActiveLevel().byLevel(fx) && shown.has(fx.wallId));
+  };
   const shapes = () => (drawing?.shapes || [])
     .filter(sh => onActiveLevel().byLevel(sh));
   // Outlines take the same LEVEL-ONLY rule as roofs -- rule four above. They
@@ -788,6 +817,70 @@
       R.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, {}, env));
   };
 
+  // The fixture body is filled with the page's own ground so the wall hatch
+  // shows faintly through it -- which is what the painter's old literal white
+  // meant on a light page, and the opposite of what it meant on a dark one.
+  //
+  // THE ALPHA IS APPENDED AS A HEX BYTE rather than parsed: 0.65 * 255 = 166 =
+  // 0xa6, and canvas takes 8-digit hex. Guarded by the shape of the value, so
+  // a skin that ever hands back an rgba() or a named colour falls through
+  // opaque instead of producing '#f2f2f3a6'-shaped nonsense that silently
+  // paints black. palette.js's own parse() reads 8-digit hex, so this is the
+  // repo's spelling for the same idea, not a new one.
+  const fixtureFill = () => {
+    const ground = skin['surface-page'];
+    return /^#[0-9a-f]{6}$/i.test(ground) ? `${ground}a6` : ground;
+  };
+
+  // FIXTURES -- kitchen, bath and laundry symbols riding their host walls.
+  //
+  // ELEVEN ENV KEYS, and only two of them are colours; the rest are ANSWERS.
+  // drawFixture2D does not know where a fixture is: it asks its caller through
+  // fixtureGeometry, wallFrame and wallCross. Those three (four, with the tub)
+  // lived as methods on MODEL.dc.html's component and were therefore reachable
+  // only from that page, which is why this one drew no fixtures through two
+  // tiers. They are fixture-geometry.js now, one copy, both boards.
+  //
+  // The extraction was proved by a differential run while both copies existed
+  // -- 8421 comparisons over 2994 fixtures, identical -- and that proof is
+  // recorded in proto/fixture-geometry-harness.js rather than kept, because
+  // MODEL.dc.html delegates here now and the same comparison would be the
+  // module against itself.
+  //
+  // WALLS IS EVERY WALL, not fixtures()' filtered set, and the difference is
+  // load-bearing: the tub scans for the wall that closes its alcove and does
+  // its OWN level and view filtering while it scans (fixture-geometry.js).
+  // Handing it a pre-filtered list would be filtering twice and would drop the
+  // foundation wall a ground-floor tub can legitimately end against.
+  const paintFixtures = () => {
+    const R = window.DraftRender2D;
+    const FG = window.DraftFixtureGeometry;
+    const CL = window.DraftClosets;
+    const missing = [!R && 'render-2d.js', !FG && 'fixture-geometry.js',
+      !CL && 'closets.js'].filter(Boolean);
+    if (missing.length) {
+      throw new Error(`MODEL.html: cannot paint fixtures, ${missing.join(' and ')} `
+        + 'did not load. Check the script order in the page head.');
+    }
+    const all = drawing?.walls || [];
+    const env = {
+      fixtureGeometry: (fx, wl) => FG.fixtureGeometry(all, fx, wl),
+      wallCross: (a, frame, b) => FG.wallCross(a, frame, b),
+      wallFrame: wl => FG.wallFrame(wl),
+      walls: all,
+      closetDoorFor: outsideWidthFt => CL.doorFor(outsideWidthFt),
+      CLOSET_WALL_FT: CL.WALL_FT, CLOSET_ROD_FT: CL.RAIL_FT,
+      CLOSET_SHELF_FT: CL.SHELF_FT, CLOSET_CLOTHES_FT: CL.CLOTHES_FT,
+      COUNTER_OVERHANG_FT: FG.COUNTER_OVERHANG_FT,
+      FIXTURE_COLOR: skin['draw-fixture'],
+      fixtureFill: fixtureFill(),
+    };
+    // options is {} for the same reason it is on notes: preview and selected
+    // are states of the fixture TOOL, and this page has no tools.
+    fixtures().forEach(fixture => R.drawFixture2D(ctx, toS, fixture, {},
+      all.find(w => w.id === fixture.wallId), env));
+  };
+
   // THE DATUM MADE VISIBLE. Tier 2d anchored the grid to the datum but never
   // showed the point itself, so the drafter saw a grid whose origin was
   // inferable only by counting squares. Same three states as the grid, from
@@ -824,6 +917,11 @@
         paintGrid(); paintFloors(); paintRoofs(); paintShapes();
         paintOutlines();
         paintLines(); paintWalls();
+        // Fixtures ride ON the walls, so they go after them and before the
+        // annotation -- the slot the bone puts them in (MODEL.dc.html:6993,
+        // straight after the wall and opening passes and well before the
+        // dimensions at 6960's tail).
+        paintFixtures();
         // LAST, because dimensions are annotation: MODEL.dc.html paints them
         // after the walls and lines (6960) so a string is never buried under
         // the geometry it measures.

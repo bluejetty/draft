@@ -169,7 +169,7 @@ test.describe('MODEL.html tier 1', () => {
     expect(frameworks.dc).toBe(0);
     expect(frameworks.scripts).not.toContain('./support.js');
 
-    // NINE dependencies, and the list is the finding rather than a formality:
+    // ELEVEN dependencies, and the list is the finding rather than a formality:
     // render-2d.js reaches for no globals, so the wall painter still costs one
     // module. palette.js joined on 3 Sep and is the only one that is not a
     // painter -- it is loaded FIRST because the skin is applied at module
@@ -186,15 +186,30 @@ test.describe('MODEL.html tier 1', () => {
     // paints nothing. This list is the only thing standing between that and a
     // tidy-looking alphabetical sort.
     //
+    // fixture-geometry.js and closets.js joined for tier 2k, and they are the
+    // most expensive pair on this list -- two modules for one painter, where
+    // the walls cost one. Worth naming why rather than letting the number
+    // creep: drawFixture2D is the only painter that does not know where its
+    // subject IS. It asks the caller through fixtureGeometry, wallFrame and
+    // wallCross, and those answers were methods on MODEL.dc.html's component
+    // -- reachable from exactly one page, which is why this one drew no
+    // fixtures through two tiers. fixture-geometry.js is those answers, one
+    // copy, both boards. closets.js is the four closet dimensions and the door
+    // table the same painter asks for, and it was already in the repo.
+    //
+    // Neither is a painter and neither is new code: this pair is the price of
+    // NOT duplicating geometry, which is the cheaper bill.
+    //
     // Keep it exact rather than loosening it to a `toContain`. It caught the
-    // palette being added the same hour it was added, which is what an exact
-    // list is for: the migration's whole claim is that this page is cheap, and
-    // a dependency that arrives without anyone noticing is how that stops
-    // being true.
+    // palette being added the same hour it was added, and it caught these two
+    // the same hour as well, which is what an exact list is for: the
+    // migration's whole claim is that this page is cheap, and a dependency
+    // that arrives without anyone noticing is how that stops being true.
     expect(frameworks.scripts).toEqual([
       './palette.js', './layer-views.js', './geometry-2d.js',
       './shared-file-store.js', './wall-types.js', './formatters.js',
       './cut-view.js', './drawing-format.js', './render-2d.js',
+      './fixture-geometry.js', './closets.js',
     ]);
   });
 

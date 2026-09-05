@@ -10,6 +10,7 @@
 <script src="./shared-file-store.js"></script>
 <script src="./drawing-format.js"></script>
 <script src="./wall-types.js"></script>
+<script src="./fixture-geometry.js"></script>
 <script src="./geometry-2d.js"></script>
 <script src="./formatters.js"></script>
 <script src="./auto-dims.js"></script>
@@ -2315,9 +2316,10 @@ const NOTE_END_OPTIONS = [
 const FIXTURE_LAYER = 'A-FIXT';
 const CASEWORK_LAYER = 'A-CASE';
 const FIXTURE_COLOR = '#1d1f20';
-const TUB_STRETCH_MAX_FT = 0.5;    // the tub grows up to 6" past standard; the rest is deck
-const TUB_MIN_LENGTH_FT = 4;       // an alcove shorter than this can't take the tub
-const COUNTER_OVERHANG_FT = 1 / 12; // countertop edge past the cabinet face
+// The tub's spec lives in fixture-geometry.js with the maths that reads it,
+// so the refusal message below cannot quote a minimum the geometry does not use.
+const { TUB_STRETCH_MAX_FT, TUB_MIN_LENGTH_FT } = window.DraftFixtureGeometry;
+const { COUNTER_OVERHANG_FT } = window.DraftFixtureGeometry;
 // Closets are small rooms drawn as a wall-hosted fixture: 2'-1" inside depth
 // behind 2x4 closet walls, a rod at 1'-0" off the back wall, the shelf edge at
 // 1'-6", hanging clothes as 1'-10" strokes centered on the rod, and a door
@@ -14132,23 +14134,7 @@ class Component extends DCLogic {
   // 6" past standard, and any leftover draws as a deck strip — sliding the
   // tub picks which end the deck lands on.
   _wallFrame(wall) {
-    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
-    const len = Math.hypot(dx, dz);
-    if (len < 0.01) return null;
-    const ux = dx / len, uz = dz / len;
-    const nx = -uz, nz = ux;
-    const def = WALL_TYPES.find(w => w.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
-    const totalFt = def.totalIn / 12;
-    const refLine = wall.refLine || 'center';
-    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
-    return {
-      ux, uz, nx, nz, len, totalFt, startOff, endOff: startOff + totalFt,
-      at: (along, across) => ({
-        x: wall.start.x + ux * along + nx * across,
-        y: wall.start.y || 0,
-        z: wall.start.z + uz * along + nz * across,
-      }),
-    };
+    return window.DraftFixtureGeometry.wallFrame(wall);
   }
 
   // NOTE (electric sheet): this keys off the ids from _activeWalls, so a
@@ -14166,87 +14152,15 @@ class Component extends DCLogic {
   // host wall, plus the crossing parameter on the other wall (0..1 inside it).
   // Null when the walls are parallel.
   _wallCross(wall, frame, other) {
-    const vx = other.end.x - other.start.x, vz = other.end.z - other.start.z;
-    const denom = frame.ux * vz - frame.uz * vx;
-    if (Math.abs(denom) < 1e-6) return null;
-    const rx = other.start.x - wall.start.x, rz = other.start.z - wall.start.z;
-    return {
-      along: (rx * vz - rz * vx) / denom,
-      s: (frame.uz * rx - frame.ux * rz) / denom,
-    };
+    return window.DraftFixtureGeometry.wallCross(wall, frame, other);
   }
 
-  _fixtureGeometry(fixture, wall = this._walls.find(w => w.id === fixture.wallId)) {
-    if (!wall) return null;
-    const frame = this._wallFrame(wall);
-    if (!frame) return null;
-    if (fixture.kind === 'tub' && fixture.endWallId) return this._tubGeometry(fixture, wall, frame);
-    const width = Math.min(fixture.width, Math.max(frame.len - 0.02, 0.5));
-    const half = width / 2;
-    const along = Math.min(Math.max(fixture.offset, half + 0.01), Math.max(frame.len - half - 0.01, half + 0.01));
-    // A standoff floats the body clear of the wall face (the island's aisle).
-    const backOff = (fixture.side === -1 ? frame.startOff : frame.endOff) + fixture.side * (fixture.standoff || 0);
-    const frontOff = backOff + fixture.side * fixture.depth;
-    return {
-      wall, frame,
-      along, alongStart: along - half, alongEnd: along + half,
-      backOff, frontOff, width, side: fixture.side,
-      corners: [
-        frame.at(along - half, backOff),
-        frame.at(along + half, backOff),
-        frame.at(along + half, frontOff),
-        frame.at(along - half, frontOff),
-      ],
-      center: frame.at(along, (backOff + frontOff) / 2),
-    };
+  _fixtureGeometry(fixture, wall) {
+    return window.DraftFixtureGeometry.fixtureGeometry(this._walls, fixture, wall);
   }
-
   _tubGeometry(fixture, wall, frame) {
-    const endWall = this._walls.find(w => w.id === fixture.endWallId);
-    if (!endWall) return null;
-    const cross = this._wallCross(wall, frame, endWall);
-    if (!cross || cross.s < -0.2 || cross.s > 1.2) return null;
-    const dir = fixture.dir === -1 ? -1 : 1;
-    const face = cross.along + dir * ((this._wallFrame(endWall)?.totalFt || 0) / 2);
-    // The alcove's far bound: the nearest crossing wall past the faucet wall,
-    // or the end of the back wall itself.
-    let farFace = dir > 0 ? frame.len : 0;
-    this._walls.forEach(other => {
-      if (other === wall || other === endWall) return;
-      if (other.levelId !== wall.levelId || (other.view || 'plan') !== (wall.view || 'plan')) return;
-      const hit = this._wallCross(wall, frame, other);
-      if (!hit || hit.s < -0.05 || hit.s > 1.05) return;
-      const otherFace = hit.along - dir * ((this._wallFrame(other)?.totalFt || 0) / 2);
-      if (dir * (otherFace - face) > 0.5 && dir * (otherFace - face) < dir * (farFace - face)) farFace = otherFace;
-    });
-    const alcove = dir * (farFace - face);
-    if (alcove < TUB_MIN_LENGTH_FT) return null;
-    const tubLen = Math.min(alcove, fixture.width + TUB_STRETCH_MAX_FT);
-    const gap = Math.max(alcove - tubLen, 0);
-    const slide = Math.min(Math.max(fixture.offset, 0), gap);
-    const near = face + dir * slide;
-    const far = near + dir * tubLen;
-    const backOff = fixture.side === -1 ? frame.startOff : frame.endOff;
-    const frontOff = backOff + fixture.side * fixture.depth;
-    const rect = (a0, a1) => [
-      frame.at(a0, backOff), frame.at(a1, backOff), frame.at(a1, frontOff), frame.at(a0, frontOff),
-    ];
-    const decks = [];
-    if (slide > 0.04) decks.push(rect(Math.min(face, near), Math.max(face, near)));
-    if (gap - slide > 0.04) decks.push(rect(Math.min(far, farFace), Math.max(far, farFace)));
-    return {
-      wall, frame, tub: true, dir, face, farFace, alcove, tubLen, gap, slide,
-      faucetAlong: near,
-      along: (near + far) / 2,
-      alongStart: Math.min(face, farFace), alongEnd: Math.max(face, farFace),
-      tubAlongStart: Math.min(near, far), tubAlongEnd: Math.max(near, far),
-      backOff, frontOff, width: tubLen, side: fixture.side,
-      corners: rect(Math.min(near, far), Math.max(near, far)),
-      decks,
-      center: frame.at((near + far) / 2, (backOff + frontOff) / 2),
-    };
+    return window.DraftFixtureGeometry.tubGeometry(this._walls, fixture, wall, frame);
   }
-
   // Nearest editable wall within the pick radius → { wall, frame, along, side }
   // with side read from which face of the wall the cursor sits on.
   _fixturePlacement(worldPt) {
@@ -14633,6 +14547,10 @@ class Component extends DCLogic {
       closetDoorFor,
       CLOSET_CLOTHES_FT, CLOSET_ROD_FT, CLOSET_SHELF_FT, CLOSET_WALL_FT,
       COUNTER_OVERHANG_FT, FIXTURE_COLOR,
+      // The literal this page has always drawn, now said out loud rather than
+      // baked into the painter. Unchanged on purpose -- this board has one
+      // light ground and the white is right against it.
+      fixtureFill: 'rgba(255,255,255,0.65)',
     });
   }
 

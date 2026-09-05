@@ -1016,7 +1016,7 @@ const fixtureGeo = over => ({
 });
 const fixtureEnv = (over = {}, geo = {}) => ({
   fixtureGeometry: () => fixtureGeo(geo),
-  FIXTURE_COLOR: '#4a6', COUNTER_OVERHANG_FT: 0.1,
+  FIXTURE_COLOR: '#4a6', COUNTER_OVERHANG_FT: 0.1, fixtureFill: '#0f0f0f',
   CLOSET_WALL_FT: 0.29, CLOSET_ROD_FT: 1, CLOSET_SHELF_FT: 1.5, CLOSET_CLOTHES_FT: 1.83,
   closetDoorFor: () => ({ widthFt: 2 }),
   wallCross: () => null, wallFrame: () => ({ totalFt: 0.46 }), walls: [],
@@ -1136,6 +1136,20 @@ suite('drawFixture2D', 'the fixture wears the colour the page handed it', R => {
   const ctx = recordingCtx();
   R.drawFixture2D(ctx, toS, { kind: 'cabinet' }, {}, null, fixtureEnv({ FIXTURE_COLOR: '#123456' }));
   expect('stroked in it', sets(ctx, 'strokeStyle').includes('#123456'), true);
+});
+
+// The body fill was a literal white until the night page needed it not to be.
+// Checked SEPARATELY from FIXTURE_COLOR above, and not folded into it: they are
+// two different colours off two different palette keys -- linework and ground --
+// and one check reading both would pass while either was wired to the other.
+suite('drawFixture2D', 'and the body is filled with the ground the page handed it', R => {
+  const ctx = recordingCtx();
+  R.drawFixture2D(ctx, toS, { kind: 'cabinet' }, {}, null, fixtureEnv({ fixtureFill: '#abcdef' }));
+  expect('filled in it', sets(ctx, 'fillStyle').includes('#abcdef'), true);
+  // The discriminator: a fill that is still the old literal would also pass a
+  // bare "something was filled" assertion.
+  expect('and not in the white it used to be',
+    sets(ctx, 'fillStyle').includes('rgba(255,255,255,0.65)'), false);
 });
 
 suite('drawFixture2D', 'a countertop edge runs past the cabinet face, on the front side', R => {
