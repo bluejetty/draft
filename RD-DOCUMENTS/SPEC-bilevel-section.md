@@ -127,38 +127,42 @@ floor-to-floor level. The garage slab sits 4" below the top of its concrete,
 which is 5 1/2" below the top of its sill, while the entry floor sits ABOVE
 the same sill. Level sills, floors about 15 1/2" apart.
 
-## Types that do not exist yet, and the level they do NOT need
+## Types that do not exist yet, and when a garage storey needs its own level
 
 Movie, 5 Sep: *"later on we should actually make a 2 storey bilevel and also
 a 2 storey bungalow with a 2nd floor over the garage."* Neither is being
-built. They are recorded because working out what they need took three
-attempts here, and the answer is: nothing new.
+built.
 
 | type | levels |
 |---|---|
 | modified bilevel | FOUNDATION · ENTRY · MAIN · 2ND FL |
-| two-storey bilevel | FOUNDATION · ENTRY · MAIN · 2ND FL |
 | bungalow, storey over the garage | FOUNDATION · MAIN · 2ND FL |
+| **modified bilevel with a 2nd floor** | FOUNDATION · ENTRY · MAIN · **OVER GARAGE** · **2ND FLOOR** |
 
-**One upper level, called 2ND FL, in every case.** A storey over the garage
-lines up with the storey over the house -- Movie: *"the 2nd floor has to line
-up with the over garage floor in that situation"*, and on a bungalow
-*"[it] would be called 2nd floor because they would line up"*. Things that
-line up are one level.
+**The test is whether the garage storey can reach the house's second floor.**
+Movie: on a bungalow *"[it] would be called 2nd floor because they would line
+up"*; on the bilevel *"the modified bilevel with 2nd floor needs OVER GARAGE
+and 2ND FLOOR"*.
 
-This file proposed a separate OVER GARAGE level at id 4 twice before landing
-here, and both times for the same reason: naming a level after **what it
-stands on** rather than **where it sits**. The garage storey stands on the
-garage and sits at the second floor. Where it sits is what a level is.
+The reason is the garage's own height, and this part is inference rather than
+his words: a bilevel's garage sits at the ENTRY level, a half-storey down, so
+a storey standing on it lands below a storey standing on MAIN. A bungalow's
+garage is close enough to line up. Where they line up it is one level; where
+they cannot it is two.
 
-So the rule is short: **a level exists when two things need different
-heights.** None of the three types produces that above MAIN FL.
+A plain modified bilevel needs only 2ND FL, because its garage storey is its
+only upper floor -- nothing for it to fail to line up with.
 
-What DOES change is the stair. Movie: *"the bilevel will have more stairs up
-to the higher up 2nd floor"* -- the flight starts from a lower entry, so it
-takes more risers to reach the same 2ND FL. A bilevel's difference is
-entirely below MAIN FL: the shorter pour, the fill wall, the entry level.
-Above it, only the stair.
+**This entry was rewritten three times.** It proposed OVER GARAGE for the
+bungalow (wrong -- named for what it stands on rather than where it sits),
+then abolished it entirely (wrong -- over-corrected, and the bilevel case
+does need it). The rule underneath survived all three: **a level exists when
+two things need different heights.** What kept changing was which types
+actually produce that, and the answer is one of them.
+
+And the stair varies separately from any of this. Movie: *"the bilevel will
+have more stairs up to the higher up 2nd floor"* -- the flight starts from a
+lower entry, so it takes more risers to reach the same floor.
 
 ## Still unknown
 
