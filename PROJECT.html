@@ -701,6 +701,13 @@
       // than drifting down off a tall stack. Height is what makes a label
       // findable, so the rule is to give up as little of it as possible, not to
       // keep it exactly.
+      // One place that writes a control's value into its box, because there are
+      // two ways out of the repaint loop and only one of them used to do it.
+      const syncValue = (control, el) => {
+        if (control.kind === 'chip') { el.textContent = control.text(); return; }
+        if (document.activeElement !== el) el.value = control.get();
+      };
+
       const TAG_MIN_GAP = 13;
       const spreadTags = host => {
         if (!host) return;
@@ -1211,7 +1218,22 @@
         garageFoundation,
         value => { writeCell('attachedGarage', 'garageFoundation', value); return true; },
         'choice');
-      addGarage('garageOffset', 'Garage floor off main fl',
+      // THE TYPED NUMBER IS THE SILL. It was labelled "Garage floor off main
+      // fl" and it has never been the floor -- the section reads it as
+      // sillOffsetFt, puts the concrete a sill plate under it and the slab 4"
+      // under that, so the floor a drafter pictures is 5 1/2" lower.
+      //
+      // STORAGE DID NOT MOVE, deliberately. Movie's whole vocabulary for this
+      // is sill to sill -- GARAGE_SILL_BELOW_HOUSE_FT, "95% inline" on a
+      // bilevel -- and derivedAttachedOffsetFt computes it FROM houseSillFt().
+      // Storing the floor instead would fight that derivation and need every
+      // saved drawing migrated 5 1/2", to fix a word. The box was wrong, not
+      // the number.
+      //
+      // The floor did not just lose its label though: it gets its own derived
+      // row below, so the number the old name promised is still on the page,
+      // now attached to the thing it names.
+      addGarage('garageOffset', 'Garage sill off main fl',
         () => signedFtIn(attachedOffsetFt()),
         text => {
           const value = parseSignedFtIn(text);
@@ -1222,13 +1244,13 @@
           // attach to".
           //
           // Both ends are derived rather than typed. The top is MAIN FL: a
-          // garage floor above the house's does not step down to anything.
+          // garage sill above the house's does not step down to anything.
           // The bottom is where the house's foundation wall stops, because
           // the garage's beam is fastened to that wall -- past its bottom
           // there is nothing to fasten to. A deeper basement therefore lets
           // the garage go lower, with no second number to keep in step.
           if (value > 0) {
-            showStatus('A garage floor only steps DOWN from MAIN FL, never up.');
+            showStatus('A garage sill only steps DOWN from MAIN FL, never up.');
             return false;
           }
           const lowest = houseFootingTopFt();
@@ -1241,6 +1263,15 @@
             zones: { ...zoneHeights.zones, attachedGarage: { offsetFt: value } } });
           return true;
         });
+
+      // THE FLOOR, DERIVED, sitting directly under the sill it hangs from so
+      // the pair reads as the drop it is. Not typeable: there is exactly one
+      // floor for a given sill, and a second box would be a number that agrees
+      // with the first until somebody edits one of them.
+      const garageFloorOffsetFt = () => attachedOffsetFt()
+        - (projectPage.SILL_PLATE_IN + projectPage.GARAGE_SLAB_BELOW_CONCRETE_IN) / 12;
+      addGarage('garageFloor', 'Garage floor off main fl',
+        () => signedFtIn(garageFloorOffsetFt()), () => false);
 
       addGarage('garageSill', 'Sill plate',
         () => inchesOnly(projectPage.SILL_PLATE_IN), () => false);
@@ -1391,7 +1422,22 @@
           tag.style.display = drawn ? '' : 'none';
           if (tag.textContent !== (drawn || '')) tag.textContent = drawn || '';
           if (row) row.hidden = false;
-          if (!drawn) return;
+          if (!drawn) {
+            // ITS ROW STAYS, SO ITS NUMBER MUST TOO. The comment above says a
+            // struck-off part keeps its row because "the number is still his to
+            // set" -- and then this returned before anything wrote the number
+            // in, so GARAGE SILL OFF MAIN FL has been an empty box since the
+            // day its tag was removed. A row with a name, an editable field and
+            // no value reads as a number nobody has entered yet, which is
+            // exactly wrong: it has a value, and it is the one that positions
+            // the whole garage.
+            //
+            // Only the TAG work below needs skipping. Everything past this
+            // point places a label on the drawing; the value belongs to the
+            // schedule and does not care whether the section names the part.
+            syncValue(control, el);
+            return;
+          }
           // OFF THE DRAWING, out to the margins. Movie, 4 Sep: "move the
           // house text to the right and the garage text to the left off the
           // drawing". The label keeps its part's HEIGHT -- that is what makes
@@ -1453,8 +1499,7 @@
             const short = drawTagFor(key, label.replace(/^Garage /, '').toUpperCase()) || '';
             if (tag && tag.textContent !== short) tag.textContent = short;
           }
-          if (control.kind === 'chip') el.textContent = control.text();
-          else if (document.activeElement !== el) el.value = control.get();
+          syncValue(control, el);
         });
         spreadTags(detailWrap);
       };
@@ -1845,7 +1890,12 @@
         const local = document.createElement('input');
         local.className = 'zone-input';
         local.dataset.zoneLocal = zone.id;
-        local.setAttribute('aria-label', `${zone.label} local floor elevation`);
+        // "local floor elevation" for every row was wrong on the two that are
+        // live: both garages hold a bearing line, not a floor. ZONE_ROWS now
+        // carries what each number measures, and the reserved rows say nothing
+        // rather than guess.
+        local.setAttribute('aria-label',
+          `${zone.label} local ${zone.datum ? zone.datum + ' ' : ''}elevation`);
         const offset = document.createElement('input');
         offset.className = 'zone-input';
         offset.dataset.zoneOffset = zone.id;
