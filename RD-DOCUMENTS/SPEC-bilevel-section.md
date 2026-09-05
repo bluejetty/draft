@@ -152,15 +152,42 @@ standing on MAIN.
 
 **On a bungalow they are MADE to line up, which is not the same as lining up.**
 Movie: *"a bungalow is usually deeper so the second floor higher... or the
-garage ceiling will need to get higher to fill in the extra."* The house's
-second floor sits above where a standard garage storey would reach, and the
-gap is closed by raising the GARAGE CEILING until it does. A design action,
-not a coincidence -- so the drafter has a number to set, and the app has to
-let them set it.
+garage ceiling will need to get higher to fill in the extra"*, *"the garage
+ceiling higher in the bungalow, so it will align the 2nd floor."*
 
-On a bilevel the same gap is a half-storey, which is too much to absorb that
-way, so the two floors stay apart and need levels of their own. Where they
-can be made to meet it is one level; where they cannot it is two.
+The chain runs from the pour. *"The bungalow foundation is 8ft deep, the
+bilevel is 5ft, determining grade depth."* Two things come off that one
+number:
+
+- **Grade.** Grade sits a fixed distance below the top of the concrete
+  (GRADE_BELOW_CONCRETE_IN, 1'-2"), so a deeper pour buries more wall. A
+  bungalow's 8 ft puts the whole basement under ground. A bilevel's 5 ft
+  leaves the wood fill wall standing above it -- which is exactly where the
+  lower level gets its windows, and why the fill wall exists at all.
+- **How high the second floor lands.** The bungalow's floors start on top of
+  8 ft of concrete rather than 5, so its second floor ends up above where a
+  storey on a standard-height garage reaches. The garage ceiling is raised
+  until the two meet.
+
+**The test of "lining up" is the sheathing, not the elevation.** Movie: *"the
+3/4" ply floor will be continuous through the bungalow -- 2nd floor over the
+garage and over the main floor areas."* One deck runs across both. That is
+what makes them one floor and not two floors at a similar height, and it is
+falsifiable in a way "close enough" is not: if a single sheet cannot run
+across, they are separate levels no matter how near they sit.
+
+**So the garage ceiling is derived, not typed.** An earlier draft of this
+paragraph said the drafter "has a number to set". That is backwards. On a
+bungalow with a storey over the garage there is exactly one ceiling height
+that lands the deck flat, and the app knows it -- the same `stored ??
+derived()` contract as ROOF HEEL. Derive it so the ply is continuous; let it
+be overridden by someone who wants otherwise.
+
+On a bilevel the same gap is a half-storey, too much for a ceiling to absorb,
+so the two floors stay apart and keep levels of their own -- with more stairs
+between OVER GARAGE and 2ND FLOOR. Movie, naming it: *"2ND FLOOR only for the
+bungalow; OVER GARAGE and more stairs up to 2ND FLOOR in a bilevel."* Where
+one deck can run it is one level; where it cannot it is two.
 
 A plain modified bilevel needs only 2ND FL, because its garage storey is its
 only upper floor -- nothing for it to fail to line up with.
