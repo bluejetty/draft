@@ -166,6 +166,20 @@
       </div>
     </section>
 
+    <section class="card stack-card" aria-label="Modified bilevel wall section">
+      <div class="card-title">Modified bilevel &mdash; office defaults, not this drawing</div>
+      <div class="card-body">
+        <div class="band">
+          <div class="sched" id="sched-bilevel-left"></div>
+          <div class="detail-wrap" id="bilevel-wrap">
+            <canvas id="bilevel-canvas" width="600" height="500" aria-label="Modified bilevel section — the office default split"></canvas>
+          </div>
+          <div class="sched" id="sched-bilevel-right"></div>
+        </div>
+        <div class="zone-note">The MOD BILEVEL row of the section table, drawn. A short pour with a wood fill wall on it reaches the same bearing line the bungalow reaches with one tall pour, and the ENTRY landing sits a half flight below MAIN FL. These are the office defaults for the type &mdash; typing here comes with the split-level feature; the numbers above still describe <em>this</em> drawing. <strong>ENTRY WALL is provisional:</strong> measured off Movie&#8217;s section it is 5'-1&#8539;&Prime;, because the entry floor bears on its own frost wall about 1'-8&frac38;&Prime; below the fill wall &mdash; which the section cannot draw yet, so it shows the derived 3'-4&frac34;&Prime; instead.</div>
+      </div>
+    </section>
+
     <section class="card stack-card" aria-label="Zone heights">
         <div class="card-title">Zone heights</div>
         <div class="card-body">
@@ -222,9 +236,57 @@
       // Same defaults the level cards fall back to (normaliseLevelAssembly
       // in the Model Space) — display safety only: MODEL re-normalises on
       // its own load, so a number that slips past here cannot corrupt it.
-      const assemblyDefaults = () => ({
-        wallHeightFt: (8 * 12 + 1 + 1 / 8) / 12,
-        joistDepthIn: 11 + 7 / 8,
+      // A POUR IS A ROUND NUMBER; A FRAMED WALL IS A STUD PLUS PLATES. Movie,
+      // 5 Sep: "the foundation is never 8-1 1/8"... default 8ft +1.5" sill
+      // plate 8-1.5"". Until then every level shared one wallHeightFt, so the
+      // FOUNDATION defaulted to 8'-1 1/8" -- a 92 5/8" stock stud plus three
+      // 1 1/2" plates, an arithmetic that means nothing to concrete. The
+      // number was inherited, not chosen, which is the same defect as the
+      // garage inheriting a basement wall and the split rows showing the
+      // bungalow's: one default reaching a level it does not describe.
+      //
+      // 8'-0" of pour with the 1 1/2" sill on top is 8'-1 1/2" to bearing,
+      // the mirror of the split's 5'-0" and 5'-1 1/2". Both pours are round;
+      // only framed walls come off the precut ladder.
+      //
+      // AND 9'-0" IS THE OTHER HALF OF THE TRADE. Movie, 5 Sep: "some people
+      // like it 9ft which will be about 50% of the time... 9-1.5"". So this
+      // is a DEFAULT in the strongest sense -- not a 95% answer but a coin
+      // flip, and the drafter types the other one about as often as they
+      // accept this one. Anybody tempted to weld 8'-0" in as a rule is
+      // choosing wrong for half of all houses.
+      const FOUNDATION_POUR_FT = 8;
+      // THE ENTRY LEVEL FRAMES IN 2x10, NOT I-JOIST. Movie, 5 Sep: "the entry
+      // floor i put 2x10 typical with 3/4" ply sheathing". It is a level of
+      // its own (id 2, the gap the list left between FOUNDATION and MAIN FL),
+      // so its package belongs here with every other level's rather than in
+      // the section table -- one place to set it, edited by its own card.
+      const ENTRY_LEVEL_ID = 2;
+      const ENTRY_JOIST_IN = 9.25;
+      // OVER GARAGE SPANS CLEAR, so it does not get the house's joist.
+      // Movie, 5 Sep: "the joist depth over the garage we should make 20"
+      // deep... default... and allow them to adjust." A house floor lands on
+      // interior walls every dozen feet; a garage has none to land on, so the
+      // same 11 7/8" that works over a bedroom will not cross a double bay.
+      //
+      // It is the third time a garage row would have quietly taken a house
+      // number if nobody named one -- the 3" slab and the basement wall under
+      // a garage were the first two -- and this one is the worst of the three,
+      // because 11 7/8" over a garage draws perfectly and does not stand up.
+      //
+      // 20" is a DEFAULT, not a rule: it is right for the ordinary two-car
+      // bay, and `positive(raw.joistDepthIn, ...)` below already lets a
+      // stored number beat it, the same contract as every other cell.
+      const OVER_GARAGE_LEVEL_ID = 4;
+      const OVER_GARAGE_JOIST_IN = 20;
+      const defaultJoistDepthIn = levelId => {
+        if (levelId === ENTRY_LEVEL_ID) return ENTRY_JOIST_IN;
+        if (levelId === OVER_GARAGE_LEVEL_ID) return OVER_GARAGE_JOIST_IN;
+        return 11 + 7 / 8;
+      };
+      const assemblyDefaults = levelId => ({
+        wallHeightFt: levelId === 1 ? FOUNDATION_POUR_FT : (8 * 12 + 1 + 1 / 8) / 12,
+        joistDepthIn: defaultJoistDepthIn(levelId),
         sheathingIn: 3 / 4,
         slabThicknessIn: 3,
         footingDepthIn: 8,
@@ -232,8 +294,8 @@
       });
       const positive = (value, fallback) =>
         Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
-      const normaliseAssembly = raw => {
-        const base = assemblyDefaults();
+      const normaliseAssembly = (raw, levelId) => {
+        const base = assemblyDefaults(levelId);
         if (!raw || typeof raw !== 'object') return base;
         return {
           ...raw,
@@ -303,7 +365,7 @@
       let foundationAttachment = drawing?.foundationAttachment === 'ladder' ? 'ladder' : 'sill';
       const datumFt = Number(drawing?.elevationDatum) === 100 ? 100 : 0;
 
-      const assembly = levelId => normaliseAssembly(levelAssemblies[levelId]);
+      const assembly = levelId => normaliseAssembly(levelAssemblies[levelId], levelId);
       const setAssembly = (levelId, field, value) => {
         levelAssemblies[levelId] = { ...assembly(levelId), [field]: value };
       };
@@ -441,6 +503,8 @@
 
       // ── The live detail ─────────────────────────────────────────────────
       const canvas = document.querySelector('#detail-canvas');
+      const bilevelCanvas = document.querySelector('#bilevel-canvas');
+      const detailWrap = document.querySelector('#detail-wrap');
       const wrap = document.querySelector('#detail-wrap');
       wrap.style.width = canvas.width + 'px';
       const ftIn = ft => fmt.formatArchitecturalInches(ft * 12);
@@ -467,6 +531,199 @@
         roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN, heelIn: roofHeelIn() },
         wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
       });
+
+      // ── BAND 2: the modified bilevel ────────────────────────────────────
+      // Movie, 5 Sep: "copy the other one you made and we can adjust to match
+      // this one... a couple extra pieces added on and moved a bit, shorter
+      // foundation."
+      //
+      // NOT THIS DRAWING. Band 1 paints the live assembly — every number in it
+      // is the drafter's, and typing in it saves. Band 2 paints the OFFICE
+      // DEFAULTS for a type this drawing may not even be, so it reads
+      // SECTION_TABLE_DEFAULTS rather than the level cards, and nothing in it
+      // is typeable yet. Sharing detailValues() would have been fewer lines
+      // and would have quietly made a bungalow's stored heights masquerade as
+      // the split's.
+      //
+      // What it borrows on purpose is the three things that are the OFFICE's
+      // rather than the build type's: the roof (one pitch and eave for the
+      // job), the wall type, and how far grade sits below the concrete. A
+      // bilevel drawn with a different pitch than the bungalow beside it would
+      // be comparing two drawings, not two types.
+      const BILEVEL_TYPE = 'modifiedBilevel';
+      const bilevelLevel = (id, name, wallHeightFt) => {
+        const base = assemblyDefaults(id);
+        return { id, name, wallHeightFt,
+          joistDepthIn: base.joistDepthIn, sheathingIn: base.sheathingIn };
+      };
+      const bilevelValues = () => {
+        const split = projectPage.SECTION_TABLE_DEFAULTS[BILEVEL_TYPE];
+        const fdnBase = assemblyDefaults(1);
+        const entry = assemblyDefaults(ENTRY_LEVEL_ID);
+        // THE ENTRY WALL IS DERIVED, and it is the one number here that is not
+        // simply looked up. The fill wall and the entry joists stand on the
+        // same sill plate, and both reach the main floor's bearing line, so
+        // what is left between the two floor packages is the fill wall less
+        // the entry package: 4'-2 3/4" - 10" = 3'-4 3/4".
+        //
+        // That is NOT a ceiling height and should not be read as one. ENTRY is
+        // a landing — in the front door, then half a flight up to MAIN or half
+        // a flight down — and the foyer above it is open, which is the same
+        // fact as the front wall running unbroken to 13'-6 1/2". Storing a
+        // typed 3'-4 3/4" somewhere would invite exactly the correction that
+        // breaks the stack.
+        //
+        // It disagrees with Movie's PDF, which dimensions this wall 5'-1 1/8",
+        // by 1'-8 3/8" — and that is NOT the known fill-wall error on the same
+        // sheet, which runs the other way at 1'-2 3/4". Drawn derived because
+        // derived is what closes against the 4'-5 3/8" drop; see
+        // RD-DOCUMENTS/SPEC-bilevel-section.md, which carries both sides.
+        const entryPkgFt = (entry.joistDepthIn + entry.sheathingIn) / 12;
+        return {
+          floors: [
+            bilevelLevel(ENTRY_LEVEL_ID, 'ENTRY', split.woodFillHeightFt - entryPkgFt),
+            bilevelLevel(3, 'MAIN FL', split.mainWallHeightFt),
+            bilevelLevel(5, '2ND FL', split.upperWallHeightFt),
+          ],
+          // MAIN FL is the datum on every drawing, and here it is not floors[0]
+          // — the entry landing is below it and belongs at a negative height.
+          datumIndex: 1,
+          foundation: {
+            wallHeightFt: split.fdnWallHeightFt,
+            woodFillHeightFt: split.woodFillHeightFt,
+            thicknessIn: fdnThicknessIn(),
+            slabIn: fdnBase.slabThicknessIn,
+            footingWidthIn: fdnIsIcf() ? 24 : 20,
+            footingDepthIn: fdnBase.footingDepthIn,
+            gradeOffsetFt: gradeOffsetFt(),
+            attachment: attachmentChoice(),
+          },
+          roof: { pitch: roofPitch, overhangFt: roofOverhang,
+            fasciaIn: ROOF_FASCIA_IN, heelIn: roofHeelIn() },
+          wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
+        };
+      };
+
+      // BAND 2'S NUMBERS, READ-ONLY. Movie's reason for wanting the bilevel
+      // drawn was "copy the other one you made and we can adjust to match this
+      // one" — which cannot be done against an unlabelled picture. These are
+      // the dimensions that make a split a split, so the drawing can be held
+      // against his ArchiCAD section line for line.
+      //
+      // Read-only rather than typeable, and not as a shortcut: MOD BILEVEL is a
+      // live:false row. Its numbers are the office's defaults for the type, so
+      // a box here would either edit every drawing's defaults or silently edit
+      // nothing. Typing arrives with the split-level feature; a span says so by
+      // being a span.
+      const bilevelRows = [
+        { side: 'left', key: 'fdnHeight', name: 'POUR',
+          get: v => v.foundation.wallHeightFt },
+        { side: 'left', key: 'woodFill', name: 'FILL WALL',
+          get: v => v.foundation.woodFillHeightFt },
+        { side: 'left', key: 'slab', name: 'SLAB',
+          get: v => v.foundation.slabIn / 12 },
+        { side: 'right', key: 'floor-2', name: 'ENTRY FL',
+          get: v => pkgFt(v.floors[0]) },
+        // The disputed one. See RD-DOCUMENTS/SPEC-bilevel-section.md — derived
+        // at 3'-4 3/4", drawn 5'-1 1/8" on Movie's PDF, unreconciled. It is on
+        // the schedule precisely so the disagreement is visible on the page
+        // rather than only in a document nobody has open.
+        { side: 'right', key: 'wallHeight-2', name: 'ENTRY WALL',
+          get: v => v.floors[0].wallHeightFt },
+        { side: 'right', key: 'floor-3', name: 'MAIN FL JST',
+          get: v => pkgFt(v.floors[1]) },
+        { side: 'right', key: 'wallHeight-3', name: 'MAIN FL WALL',
+          get: v => v.floors[1].wallHeightFt },
+        { side: 'right', key: 'wallHeight-5', name: 'OVER GAR WALL',
+          get: v => v.floors[2] && v.floors[2].wallHeightFt },
+      ];
+      const pkgFt = level => (level.joistDepthIn + level.sheathingIn) / 12;
+      const bilevelEls = new Map();
+      const buildBilevelSched = () => {
+        const hosts = {
+          left: document.querySelector('#sched-bilevel-left'),
+          right: document.querySelector('#sched-bilevel-right'),
+        };
+        const wrap = document.querySelector('#bilevel-wrap');
+        if (!hosts.left || !hosts.right || !wrap) return;
+        bilevelRows.forEach(row => {
+          const value = document.createElement('span');
+          value.className = 'sched-value';
+          value.dataset.bilevelValue = row.key;
+          const tag = document.createElement('span');
+          tag.className = 'detail-tag';
+          wrap.appendChild(tag);
+          bilevelEls.set(row.key,
+            { row, el: value, tag, node: schedRow(hosts[row.side], row.key, row.name, value) });
+        });
+      };
+      const fillBilevel = ({ anchors, view }) => {
+        if (!bilevelEls.size) return;
+        const values = bilevelValues();
+        // TWO COLUMNS OFF THE DRAWING, the same rule band 1 follows. The first
+        // version put each tag six pixels from its own anchor, which reads fine
+        // as a sentence and fails twice: labels land on the linework, and POUR
+        // and FILL WALL end up at different x, so nothing recognises them as a
+        // column and the de-collision pass leaves them on top of each other.
+        // A label's HEIGHT is what makes it findable; its x is free.
+        const left = (bilevelCanvas.width - view.span * view.scale) / 2;
+        const right = left + view.span * view.scale;
+        bilevelEls.forEach(({ row, el, tag, node }) => {
+          const ft = row.get(values);
+          // A row with no number is a row this type has no use for — the plain
+          // BILEVEL has nothing over the garage — so it leaves rather than
+          // showing a blank that reads as zero.
+          const has = Number.isFinite(ft);
+          node.hidden = !has;
+          el.textContent = has ? fmt.formatArchitecturalInches(ft * 12) : '';
+          const at = has && anchors[row.key];
+          tag.style.display = at ? '' : 'none';
+          if (!at) return;
+          tag.textContent = row.name;
+          tag.style.left = row.side === 'left'
+            ? `${Math.max(2, left - GREY_COL)}px` : `${right + GREY_GAP}px`;
+          tag.style.top = `${at.y}px`;
+          tag.style.transform = 'translate(0,-50%)';
+        });
+        spreadTags(document.querySelector('#bilevel-wrap'));
+      };
+
+      // LABELS THAT LAND ON EACH OTHER SAY NOTHING. Five tags stacked at the
+      // roof (PITCH / ATTIC SPACE / HEEL / FASCIA / OVERHANG), three at the
+      // sill, three at the footing: each was placed correctly, at the height of
+      // the part it names, and the result was unreadable. The parts really are
+      // that close together, so this is not a placement bug to fix at the
+      // source -- a 5 1/2" fascia and a 1'-1 1/2" heel are inches apart and
+      // both deserve to sit by their own line.
+      //
+      // So the tags are pushed apart AFTER placement, per column, and the run
+      // is then slid back so it stays centred on where it wanted to be rather
+      // than drifting down off a tall stack. Height is what makes a label
+      // findable, so the rule is to give up as little of it as possible, not to
+      // keep it exactly.
+      const TAG_MIN_GAP = 13;
+      const spreadTags = host => {
+        if (!host) return;
+        const cols = new Map();
+        host.querySelectorAll('.detail-tag').forEach(tag => {
+          if (tag.style.display === 'none' || !tag.textContent) return;
+          const x = Math.round(parseFloat(tag.style.left) || 0);
+          if (!cols.has(x)) cols.set(x, []);
+          cols.get(x).push({ tag, y: parseFloat(tag.style.top) || 0 });
+        });
+        cols.forEach(list => {
+          if (list.length < 2) return;
+          list.sort((a, b) => a.y - b.y);
+          const wanted = list.map(i => i.y);
+          for (let i = 1; i < list.length; i += 1) {
+            if (list[i].y - list[i - 1].y < TAG_MIN_GAP) {
+              list[i].y = list[i - 1].y + TAG_MIN_GAP;
+            }
+          }
+          const drift = list.reduce((sum, it, i) => sum + (it.y - wanted[i]), 0) / list.length;
+          list.forEach(it => { it.tag.style.top = `${it.y - drift}px`; });
+        });
+      };
 
       // One control per anchor. get/set/text describe the value; commit
       // parses, clamps softly, saves, and repaints — repainting is what
@@ -657,7 +914,18 @@
         pitch: 'Roof pitch : 12',
         overhang: 'Roof overhang',
         fdnHeight: 'Foundation wall height',
-        grade: 'Grade below foundation top',
+        // "BELOW" AND A MINUS SIGN CANCEL. This row read "Grade below
+        // foundation top: -3'-2"", which says grade is 3'-2" ABOVE the
+        // concrete -- the opposite of both the drawing and the stored number.
+        // The value is a SIGNED OFFSET (signedFtIn / parseSignedFtIn, and the
+        // zone rows beside it work the same way), so the name has to be
+        // offset language too. The drawing's own tag has said GRADE OFF FDN
+        // TOP all along; the schedule was the one disagreeing.
+        //
+        // Renamed rather than re-signed: flipping the number to a positive
+        // "below" would have to flip the parser, the zone rows' convention and
+        // whatever is already stored in people's drawings, to fix a word.
+        grade: 'Grade off foundation top',
         slab: 'Slab thickness',
         footingWidth: 'Footing width',
         footingDepth: 'Footing depth',
@@ -1066,6 +1334,21 @@
           projectPage.buildGarageSection(garageValues()),
           projectPage.buildWallSection(detailValues()),
         ]);
+        // Band 2 rides along on every repaint. It shares the roof, the wall
+        // type and the grade offset with band 1, so a pitch or eave change up
+        // there has to move down here too or the two bands stop being
+        // comparable — which is the only reason to draw them on one page.
+        if (bilevelCanvas) {
+          // The anchors are kept on the element as well as used below. A canvas
+          // can only be checked as pixels otherwise, and pixels cannot tell a
+          // correct bilevel from a plausible one: losing the fill wall and
+          // putting the entry landing at the datum both survived a screenshot
+          // test. Both are obvious in feet.
+          bilevelCanvas.paintedSection = projectPage.paintSections(bilevelCanvas, [
+            projectPage.buildWallSection(bilevelValues()),
+          ]);
+          fillBilevel(bilevelCanvas.paintedSection);
+        }
         controlEls.forEach(({ control, el, tag }, key) => {
           const at = anchors[key];
           const row = el.closest ? el.closest('.sched-row') : null;
@@ -1173,6 +1456,7 @@
           if (control.kind === 'chip') el.textContent = control.text();
           else if (document.activeElement !== el) el.value = control.get();
         });
+        spreadTags(detailWrap);
       };
 
       // ── The section table ───────────────────────────────────────────────
@@ -1614,6 +1898,8 @@
 
       fillZones();
       fillTable();
+      // Built before the first repaint, because repaint() is what fills it.
+      buildBilevelSched();
       repaint();
     })();
   </script>
