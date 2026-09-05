@@ -179,6 +179,19 @@ That is consistent with the front wall being a second exterior condition
 anyway: one section cannot be captioned as covering both, and this says which
 way the split goes.
 
+**That section shows STUDS AND BEAMS, which no view we have draws.** Movie:
+*"the engineer usually likes to see the studs and beams drawn into that -- I
+might have to figure something out later."* Worth writing down now because it
+is a different KIND of drawing, not a variant of one we already make. Our
+typical section is a cut: it shows what a saw would pass through, once, and
+every stud in the wall collapses to the one the cut happens to hit. An
+engineer checking a tall wall wants the members themselves -- each stud, the
+header over the opening, the beams -- which is an elevation of the framing,
+laid out along the wall rather than across it.
+
+So the framing is not hiding in the section waiting to be turned on. Nothing
+in the app currently knows where an individual stud is.
+
 **Owner: Movie, later.** Not the typical section's problem, not blocking
 band 2.
 
