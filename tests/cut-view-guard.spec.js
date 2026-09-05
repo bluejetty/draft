@@ -124,7 +124,7 @@ test('the finale reveal stands the drawing tool down before parking in E1', asyn
   await page.keyboard.press('Enter');
   await page.locator('[data-tour-popup]').click(); // → the rooms pause (#198)
   await page.keyboard.press('Enter'); // the always-lit rooms gate
-  await page.locator('[data-tour-popup] [data-tour-next-roof]').click();
+  await page.locator('[data-tour-popup]').click(); // a BUNGALOW climbs to the ROOF, no choice asked (NEW-5)
   await expect(page.locator('[data-tour-gable]')).toBeVisible();
 
   // The drafter's last tool before the finish is WALL — the classic trap.

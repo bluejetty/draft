@@ -4056,13 +4056,24 @@ class Component extends DCLogic {
   // the two-button choice (NEXT: 2ND FLOOR / STRAIGHT TO ROOF) so a
   // one-storey house answers by pressing the button it means — no
   // inference, no setting. Enter/Space fire the primary.
+  // Whether the house has a floor above MAIN, as far as the drawing says
+  // (NEW-5): false for a BUNGALOW, true for a 2 STOREY, null when no type
+  // is stored or the type does not say (the split family). The tour's
+  // climb-or-roof question is answered by this when it can be, and asked
+  // when it cannot.
+  _tourUpperFloor() {
+    return format.upperFloorForBuildType(this.state.buildType);
+  }
+
   _tourPopupPrimary() {
     const popup = this.state.tourPopup;
     if (popup === 'foundation') this._advanceTour('main');
     else if (popup === 'main') this._advanceTour('rooms-main');
     // rooms-main is the CHOICE popup (2ND FLOOR vs straight to ROOF for a
-    // one-storey house) — Enter takes the primary, the red button.
-    else if (popup === 'rooms-main') this._advanceTour('second');
+    // one-storey house) — Enter takes the primary, the red button. A stored
+    // type has already answered it: a BUNGALOW goes to the ROOF and the
+    // popup shows no choice at all.
+    else if (popup === 'rooms-main') this._advanceTour(this._tourUpperFloor() === false ? 'roof' : 'second');
     else if (popup === 'second') this._advanceTour('rooms-second');
     else if (popup === 'rooms-second') this._advanceTour('roof');
     else if (popup === 'roof') {
@@ -4140,7 +4151,11 @@ class Component extends DCLogic {
     const step = this.state.tour.step;
     const notes = {
       main: 'Stairs are in. Tap room names into rough spots next — the stamps are the room program the bone reads.',
-      'rooms-main': 'Rooms stamped (or skipped — that’s fine). Climb to the 2ND FLOOR, or go straight to the ROOF for a one-storey house.',
+      'rooms-main': this._tourUpperFloor() === false
+        ? 'Rooms stamped (or skipped — that’s fine). A BUNGALOW has no floor above: on to the ROOF.'
+        : this._tourUpperFloor() === true
+          ? 'Rooms stamped (or skipped — that’s fine). Climb to the 2ND FLOOR.'
+          : 'Rooms stamped (or skipped — that’s fine). Climb to the 2ND FLOOR, or go straight to the ROOF for a one-storey house.',
       second: 'Stairs stack over the run below — headroom holds. This floor’s rooms are next.',
       'rooms-second': 'The floors are set — on to the ROOF.',
       roof: 'The roof is set — the house is ready. Press the BONE and watch it grow from the ground up.',
@@ -21553,15 +21568,23 @@ class Component extends DCLogic {
       dismissProjectCallout: () => this._dismissProjectCallout(false),
       tourPopupOpen: !!this.state.tourPopup,
       tourPopupTitle: this.state.tourPopup === 'main' ? 'MAIN FLOOR DONE \u2014 STAMP THE ROOMS'
-        : this.state.tourPopup === 'rooms-main' ? 'MAIN ROOMS DONE'
+        : this.state.tourPopup === 'rooms-main'
+          ? (this._tourUpperFloor() === false ? 'MAIN ROOMS DONE, GOING TO ROOF'
+            : this._tourUpperFloor() === true ? 'MAIN ROOMS DONE, GOING TO 2ND FLOOR'
+            : 'MAIN ROOMS DONE')
         : this.state.tourPopup === 'second' ? '2ND FLOOR DONE \u2014 STAMP THE ROOMS'
         : this.state.tourPopup === 'rooms-second' ? '2ND FLOOR ROOMS DONE, GOING TO ROOF'
         : this.state.tourPopup === 'roof' ? 'ROOF DONE'
         : 'FOUNDATION DONE, GOING TO MAIN FLOOR',
-      tourPopupChoice: this.state.tourPopup === 'rooms-main',
-      tourPopupSingle: this.state.tourPopup !== 'rooms-main',
+      // The choice card asks only when the drawing has not answered: no
+      // stored type, or a type that does not say (NEW-5). A BUNGALOW or a
+      // 2 STOREY gets the single card and climbs where its type goes.
+      tourPopupChoice: this.state.tourPopup === 'rooms-main' && this._tourUpperFloor() == null,
+      tourPopupSingle: !(this.state.tourPopup === 'rooms-main' && this._tourUpperFloor() == null),
       tourPopupNote: this.state.tourPopupNote,
-      advanceTour: () => { if (this.state.tourPopup !== 'rooms-main') this._tourPopupPrimary(); },
+      advanceTour: () => {
+        if (!(this.state.tourPopup === 'rooms-main' && this._tourUpperFloor() == null)) this._tourPopupPrimary();
+      },
       tourNextSecond: e => { e.stopPropagation(); this._advanceTour('second'); },
       tourNextRoof: e => { e.stopPropagation(); this._advanceTour('roof'); },
       // The under-bone climb button: NEXT ▲ FLOOR while a floor's gate is

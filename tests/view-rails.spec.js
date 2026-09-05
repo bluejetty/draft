@@ -337,7 +337,7 @@ test.describe('The curtain moment', () => {
     await page.keyboard.press('Enter');
     await page.locator('[data-tour-popup]').click(); // → the rooms pause (#198)
     await page.keyboard.press('Enter'); // the always-lit rooms gate
-    await page.locator('[data-tour-popup] [data-tour-next-roof]').click();
+    await page.locator('[data-tour-popup]').click(); // a BUNGALOW climbs to the ROOF, no choice asked (NEW-5)
     await expect(page.locator('[data-tour-gable]')).toBeVisible();
     await page.locator('[data-tour-next]').click(); // PRESS ▲ BONE
     await page.keyboard.press('Enter');

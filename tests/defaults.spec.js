@@ -85,9 +85,10 @@ test('the shipping defaults draw a whole house and put it on a sheet', async ({ 
   await expect(popup).toContainText('MAIN ROOMS DONE');
 
   // ── the roof ───────────────────────────────────────────────────────────
-  // One storey: STRAIGHT TO ROOF, and the preview is accepted as it comes -
-  // a plain hip, the shipped answer for a drafter who changes nothing.
-  await popup.locator('[data-tour-next-roof]').click();
+  // One storey: the stored BUNGALOW climbs straight to the ROOF without
+  // asking (NEW-5), and the preview is accepted as it comes - a plain hip,
+  // the shipped answer for a drafter who changes nothing.
+  await popup.click();
   await expect(page.locator('.level-row.active .level-name')).toHaveText(/ROOF/);
   await expect(page.locator('[data-tour-gable]')).toBeVisible();
   await page.locator('[data-tour-next]').click();
