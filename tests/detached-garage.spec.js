@@ -31,8 +31,10 @@ async function drawDetachedGarage(page, foundation) {
   await h.clickWorld(page, 14, 5);
   await h.clickWorld(page, 14, -5);
   await expect(page.locator('[data-detached-foundation-prompt]')).toBeVisible();
-  await page.locator(foundation === 'thickened'
-    ? '[data-detached-thickened-edge]' : '[data-detached-grade-beam]').click();
+  await page.locator({
+    thickened: '[data-detached-thickened-edge]',
+    frostwall: '[data-detached-frost-wall]',
+  }[foundation] || '[data-detached-grade-beam]').click();
   await h.waitForSaved(page);
 }
 
@@ -153,6 +155,62 @@ test('BUILD HOUSE grade beam: full perimeter beam, sloped 4" slab, walls, doors,
   expect(doors.filter(door => door.view === 'foundation')).toHaveLength(2);
   const widths = doors.map(door => door.width);
   expect(widths).toContain(9); // narrow overhead on the 12' front leg
+});
+
+test('the frost wall choice lands on the master and its copies', async ({ page }) => {
+  await h.openModel(page);
+  await drawDetachedGarage(page, 'frostwall');
+  const saved = await h.savedDrawing(page);
+  expect(saved.boneyardOutlines[0].foundation).toBe('frostwall');
+  saved.outlines.filter(outline => outline.garage)
+    .forEach(copy => expect(copy.foundation).toBe('frostwall'));
+  await expect(page.locator('[data-model-drawing-message]')).toContainText('frost wall all around');
+});
+
+test('BUILD HOUSE frost wall: walls to the footing, footing lines, sloped slab, no piles', async ({ page }) => {
+  await h.openModel(page);
+  // A house too, so the garage's heights are read against the house's own
+  // foundation wall rather than a number typed here -- the foundation
+  // default is a fact of the drawing, not of this spec.
+  await drawHouseOutline(page);
+  await drawDetachedGarage(page, 'frostwall');
+  await buildHouse(page);
+
+  const saved = await h.savedDrawing(page);
+  const inGarage = item => Math.min(item.start.x, item.end.x) >= 13.5;
+  const fdnWalls = saved.walls.filter(wall => wall.levelId === 1);
+  const houseWall = fdnWalls.find(wall => !inGarage(wall));
+  const garageWalls = fdnWalls.filter(inGarage);
+
+  // Concrete all the way round the loop, and unlike the grade beam it does
+  // not hang: it stands on the footing at the house's footing depth, so its
+  // base is the house wall's base. Its top is where the grade beam's would
+  // be -- 8" above the drawn grade, which is 1'-0" below the house wall's
+  // top -- since a detached wall has no house sill to meet.
+  expect(garageWalls).toHaveLength(4);
+  garageWalls.forEach(wall => {
+    expect(wall.wallType).toBe('concrete_8');
+    expect(wall.baseHeight).toBe(houseWall.baseHeight);
+    expect(wall.topHeight).toBeCloseTo(houseWall.topHeight - 1 + 8 / 12, 3);
+  });
+
+  // A strip footing under it: two rings of S-FOOTING lines, the way the
+  // house gets its own. A grade beam draws none.
+  const footings = saved.lines.filter(line => line.levelId === 1 && line.layer === 'S-FOOTING');
+  expect(footings.filter(inGarage)).toHaveLength(8);
+
+  // The same sloped 4" slab as a grade beam, not a monolithic pour.
+  const slab = saved.floors.find(floor => floor.garage);
+  expect(slab.thickness * 12).toBeCloseTo(4, 5);
+  expect(slab.slopeInPerFt).toBeCloseTo(1 / 8, 5);
+  expect(slab.thickenedEdge).toBeFalsy();
+
+  // Nothing to carry on piles: the wall bears on its footing.
+  expect(saved.columns.filter(column => column.levelId === 1 && column.point.x >= 13.5)).toHaveLength(0);
+
+  // The rest of the garage rises as it does on any foundation.
+  expect(saved.walls.filter(wall => wall.levelId === 3 && inGarage(wall))).toHaveLength(4);
+  expect(saved.roofs.filter(roof => roof.garage)).toHaveLength(1);
 });
 
 test('BUILD HOUSE thickened edge: no beam, LEVEL FLAT monolithic slab', async ({ page }) => {

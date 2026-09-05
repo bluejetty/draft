@@ -20,6 +20,14 @@ if (!window.DraftDrawingFormat) {
   };
   const number = (value, fallback) => num(value) ?? fallback;
 
+  // What a garage's foundation can be, on the outline that draws it:
+  // a grade beam hung off grade, a thickened-edge monolithic slab, or a
+  // FROST WALL -- concrete on a strip footing at the house's footing depth
+  // (Movie, 4 Sep: "same as other concrete walls"). Absent is "not asked":
+  // an attached garage has no prompt, and the PROJECT page's GARAGE
+  // FOUNDATION cell answers for it (SECTION_TABLE_CHOICES below).
+  const GARAGE_FOUNDATIONS = Object.freeze(['gradebeam', 'thickened', 'frostwall']);
+
   // { ok } when the object is a drawing of this exact version, otherwise a
   // reason: 'version' only for drawings from a newer Draft, 'invalid' for the rest.
   const checkEnvelope = saved => {
@@ -729,7 +737,7 @@ if (!window.DraftDrawingFormat) {
         garage: outline?.garage === true,
         open,
         detached: outline?.detached === true,
-        foundation: oneOf(outline?.foundation, ['gradebeam', 'thickened'], null),
+        foundation: oneOf(outline?.foundation, GARAGE_FOUNDATIONS, null),
         cornerStubs: (Array.isArray(outline?.cornerStubs) ? outline.cornerStubs : []).map(stub => {
           const pointId = String(stub?.pointId || '').trim();
           const lengthIn = Number(stub?.lengthIn);
@@ -775,7 +783,7 @@ if (!window.DraftDrawingFormat) {
         garage: outline?.garage === true,
         open: outline?.open === true,
         detached: outline?.detached === true,
-        foundation: oneOf(outline?.foundation, ['gradebeam', 'thickened'], null),
+        foundation: oneOf(outline?.foundation, GARAGE_FOUNDATIONS, null),
         points,
         overriddenSrcIds: (Array.isArray(outline?.overriddenSrcIds) ? outline.overriddenSrcIds : [])
           .map(id => String(id || '').trim()).filter(Boolean),
@@ -878,6 +886,9 @@ if (!window.DraftDrawingFormat) {
   // lamp, the tour's main-floor question, and the PROJECT page's section
   // table, through the two translations below.
   const BUILD_TYPES = Object.freeze(['bungalow', 'twoStorey', 'bilevel', 'modifiedBilevel']);
+  // The split family -- Movie, 4 Sep: SPLIT is the family name for these
+  // two, not a third type. Exported so MODEL and PROJECT read one list.
+  const SPLIT_BUILD_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);
   const buildType = raw => oneOf(raw, BUILD_TYPES, null);
   // Which section-table row the type reads on the PROJECT page. The page's
   // rows (project-page.js SECTION_TABLE_ROWS) are HOUSE plus the stored
@@ -887,7 +898,7 @@ if (!window.DraftDrawingFormat) {
   // (SPLIT is the family name for those two, not a type -- Movie, 4 Sep.)
   const sectionRowForBuildType = type => (
     type === 'bungalow' || type === 'twoStorey' ? 'house'
-      : type === 'bilevel' || type === 'modifiedBilevel' ? type : null);
+      : SPLIT_BUILD_TYPES.includes(type) ? type : null);
   // Whether the type carries a floor above MAIN: the tour's climb-or-roof
   // question. null is "the type does not say" (the split family's upper
   // half is not a second storey in the bungalow sense), and the tour asks as
@@ -1248,6 +1259,8 @@ if (!window.DraftDrawingFormat) {
     roofIntent,
     buildType,
     BUILD_TYPES,
+    SPLIT_BUILD_TYPES,
+    GARAGE_FOUNDATIONS,
     sectionRowForBuildType,
     upperFloorForBuildType,
     backgroundLevelIds,

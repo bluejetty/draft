@@ -145,8 +145,9 @@ function buildEnv(win, saved) {
     garageOutlines: id => outlines.filter(o => o.levelId === id && o.garage && o.points.length >= 3),
     garageFoundation: g => {
       const mode = g?.foundation || masters.find(m => m.id === g?.masterId)?.foundation;
-      return mode === 'thickened' ? 'thickened' : 'gradebeam';
+      return mode === 'thickened' || mode === 'frostwall' ? mode : 'gradebeam';
     },
+    buildType: () => null,
     edgeOnOutline: (a, b, outline, eps = 0.1) => {
       if (!outline) return false;
       const count = outline.open ? outline.points.length - 1 : outline.points.length;
