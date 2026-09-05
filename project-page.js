@@ -439,8 +439,18 @@ if (!window.DraftProjectPage) {
     // Climb the floor stack. Each level's band is ITS OWN floor assembly
     // (the same numbers the level card's FL JST box edits), the wall above
     // it that level's wall height.
-    let y = 0;
-    const mainDepthFt = (floors[0].joistDepthIn + floors[0].sheathingIn) / 12;
+    // WHICH FLOOR IS THE DATUM. Movie has been firm that 0.0 / 100.0 is the
+    // top of MAIN FL sheathing on every drawing, and until now that could be
+    // assumed to be floors[0] because nothing framed below the main floor.
+    // A bilevel does: its ENTRY floor is a storey in the stack, below main.
+    // So the stack still climbs bottom-up, but the datum is named rather than
+    // assumed -- floors[datumIndex] is what sits at 0, and everything below
+    // it comes out negative, which is where a bilevel's entry floor belongs.
+    const datumIndex = values.datumIndex ?? 0;
+    const below = floors.slice(0, datumIndex).reduce((sum, level) =>
+      sum + level.wallHeightFt + (level.joistDepthIn + level.sheathingIn) / 12, 0);
+    let y = -below;
+    const mainDepthFt = (floors[datumIndex].joistDepthIn + floors[datumIndex].sheathingIn) / 12;
     floors.forEach((level, index) => {
       const depthFt = (level.joistDepthIn + level.sheathingIn) / 12;
       rect(0, y - depthFt, CUT_DEPTH_FT, depthFt, 1);           // floor band
