@@ -56,6 +56,10 @@
        the page reads name-then-value everywhere, the same direction as the
        section table below. A mirror would have made the left half read
        backwards. (Movie's call, and he was right.) */
+    .strip-wrap { position:relative; max-width:1090px; margin:14px auto 0; }
+    .strip-wrap canvas { width:100%; height:auto; display:block; }
+    .strip-tag { position:absolute; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px;
+      font-weight:600; letter-spacing:.06em; color:rgba(29,31,32,.62); white-space:nowrap; pointer-events:none; }
     .band { display:grid; grid-template-columns:minmax(0,1fr) 600px minmax(0,1fr); max-width:1090px; margin:0 auto; gap:0 12px; align-items:start; justify-content:center; }
     .sched { align-self:start; padding-top:2px; }
     .sched-head { padding:0 4px 5px; color:rgba(29,31,32,.65); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
@@ -177,6 +181,23 @@
           <div class="sched" id="sched-bilevel-right"></div>
         </div>
         <div class="zone-note">The MOD BILEVEL row of the section table, drawn. A short pour with a wood fill wall on it reaches the same bearing line the bungalow reaches with one tall pour, and the ENTRY landing sits a half flight below MAIN FL. These are the office defaults for the type &mdash; typing here comes with the split-level feature; the numbers above still describe <em>this</em> drawing. <strong>ENTRY WALL is derived</strong> at 3'-4&frac34;&Prime; &mdash; fill wall less the entry package, both landing on the 5'-0&Prime; pour&#8217;s sill. Movie&#8217;s section carries a 5'-1&#8539;&Prime; dimension near the entry that is 1'-8&#8540;&Prime; adrift and not yet accounted for.</div>
+      </div>
+    </section>
+
+    <section class="card stack-card" aria-label="Detached garage wall section">
+      <div class="card-title">Detached garage &mdash; thickened-edge slab, the office default</div>
+      <div class="card-body">
+        <div class="band">
+          <div class="sched" id="sched-detached-left"></div>
+          <div class="detail-wrap" id="detached-wrap">
+            <canvas id="detached-canvas" width="600" height="500" aria-label="Detached garage section — thickened-edge slab on grade"></canvas>
+          </div>
+          <div class="sched" id="sched-detached-right"></div>
+        </div>
+        <div class="strip-wrap" id="detached-strip-wrap">
+          <canvas id="detached-strip" width="1090" height="250" aria-label="The three detached garage foundations at one scale — thickened edge, grade beam, frost wall"></canvas>
+        </div>
+        <div class="zone-note">The DETACHED GARAGE row of the section table, drawn. <strong>A building of its own</strong> &mdash; so unlike the garage in band 1 it has its own wall, its own grade line and its own roof, and it is set out from the top of its slab rather than from the house&#8217;s main floor. The default foundation is a <strong>thickened-edge slab</strong>: one monolithic pour, 4&Prime; in the field deepening to 1&#8242;-0&Prime; at the perimeter with a 45&deg; taper. Grade sits 10&Prime; below the floor &mdash; the same height a grade beam would put it, so switching foundation moves the concrete and leaves the door and apron where they are. Grade beam and frost wall are the other two options and are not drawn here yet. See <em>SPEC-garage-foundations.md</em>.</div>
       </div>
     </section>
 
@@ -504,6 +525,8 @@
       // ── The live detail ─────────────────────────────────────────────────
       const canvas = document.querySelector('#detail-canvas');
       const bilevelCanvas = document.querySelector('#bilevel-canvas');
+      const detachedCanvas = document.querySelector('#detached-canvas');
+      const detachedStrip = document.querySelector('#detached-strip');
       const detailWrap = document.querySelector('#detail-wrap');
       const wrap = document.querySelector('#detail-wrap');
       wrap.style.width = canvas.width + 'px';
@@ -686,6 +709,124 @@
           tag.style.transform = 'translate(0,-50%)';
         });
         spreadTags(document.querySelector('#bilevel-wrap'));
+      };
+
+      // ── BAND 3: THE DETACHED GARAGE ──────────────────────────────────────
+      // Its numbers come from the section table's own row, not from the live
+      // drawing: this band is the office default for the type, the same
+      // contract band 2 keeps. The roof is borrowed from band 1 for the same
+      // reason band 2 borrows it -- a garage roof pitch is a drawing-wide
+      // choice, not a per-type one.
+      const detachedValues = () => {
+        const row = projectPage.SECTION_TABLE_DEFAULTS.detachedGarage;
+        return {
+          wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
+          garage: { slabIn: row.slabThicknessIn, wallHeightFt: row.mainWallHeightFt },
+          // HEEL null, NOT roofHeelIn(). A typed heel is this drawing's house
+          // roof; a detached garage is a separate building and takes the
+          // derived heel for its own pitch and overhang. Borrowing the pitch
+          // and the fascia is right -- those are office-wide -- but borrowing
+          // a lift someone typed for the house would raise a roof on a
+          // building that never asked for it.
+          roof: { pitch: roofPitch, overhangFt: roofOverhang,
+            fasciaIn: ROOF_FASCIA_IN, heelIn: null },
+        };
+      };
+      const detachedRows = [
+        { side: 'left', key: 'slabAboveGrade', name: 'FLOOR OVER GRADE',
+          get: () => projectPage.DETACHED_SLAB_ABOVE_GRADE_IN / 12 },
+        { side: 'left', key: 'edgeDepth', name: 'THICKENED EDGE',
+          get: () => projectPage.GARAGE_EDGE_DEPTH_IN / 12 },
+        { side: 'left', key: 'slabThickness', name: 'SLAB',
+          get: v => v.garage.slabIn / 12 },
+        { side: 'right', key: 'wallHeight', name: 'WALL HT',
+          get: v => v.garage.wallHeightFt },
+        { side: 'right', key: 'doorHead', name: 'DOOR HEAD',
+          get: v => v.garage.wallHeightFt - projectPage.OPENING_HEAD_DROP_IN / 12 },
+        { side: 'right', key: 'fascia', name: 'FASCIA',
+          get: v => v.roof.fasciaIn / 12 },
+        { side: 'right', key: 'overhang', name: 'OVERHANG',
+          get: v => v.roof.overhangFt },
+      ];
+      const detachedEls = new Map();
+      const buildDetachedSched = () => {
+        const hosts = {
+          left: document.querySelector('#sched-detached-left'),
+          right: document.querySelector('#sched-detached-right'),
+        };
+        const wrap = document.querySelector('#detached-wrap');
+        if (!hosts.left || !hosts.right || !wrap) return;
+        detachedRows.forEach(row => {
+          const value = document.createElement('span');
+          value.className = 'sched-value';
+          value.dataset.detachedValue = row.key;
+          const tag = document.createElement('span');
+          tag.className = 'detail-tag';
+          wrap.appendChild(tag);
+          detachedEls.set(row.key,
+            { row, el: value, tag, node: schedRow(hosts[row.side], row.key, row.name, value) });
+        });
+      };
+      // The strip's captions. Named under each detail rather than in a grey
+      // column, because there is no column here -- three drawings share the
+      // width and each needs its own name where it stands.
+      const STRIP_LABEL = { thickened: 'THICKENED EDGE', gradebeam: 'GRADE BEAM', frostwall: 'FROST WALL' };
+      const STRIP_NOTE = {
+        thickened: `4" field, 1'-0" edge, 45° taper — one pour`,
+        gradebeam: `32" beam, slab on fill inside it`,
+        frostwall: `8" wall to the house footing depth`,
+      };
+      const labelStrip = (row, painted) => {
+        const wrap = document.querySelector('#detached-strip-wrap');
+        if (!wrap) return;
+        wrap.querySelectorAll('.strip-tag').forEach(node => node.remove());
+        const shown = detachedStrip.getBoundingClientRect().width || detachedStrip.width;
+        const k = shown / detachedStrip.width;
+        row.forEach((detail, index) => {
+          // The caption anchor, not the floor one -- see the note on it in
+          // project-page.js. Hanging these off the floor put them on the slab.
+          const at = painted.anchors[`caption${index}`];
+          if (!at) return;
+          const name = document.createElement('span');
+          name.className = 'strip-tag';
+          name.dataset.stripLabel = detail.kind;
+          name.textContent = STRIP_LABEL[detail.kind];
+          name.style.left = `${at.x * k}px`;
+          name.style.top = `${at.y * k}px`;
+          name.style.transform = 'translate(-50%,0)';
+          wrap.appendChild(name);
+          const note = document.createElement('span');
+          note.className = 'strip-tag';
+          note.dataset.stripNote = detail.kind;
+          note.textContent = STRIP_NOTE[detail.kind];
+          note.style.left = `${at.x * k}px`;
+          note.style.top = `${(at.y + 13) * k}px`;
+          note.style.opacity = '0.72';
+          note.style.transform = 'translate(-50%,0)';
+          wrap.appendChild(note);
+        });
+      };
+
+      const fillDetached = ({ anchors, view }) => {
+        if (!detachedEls.size) return;
+        const values = detachedValues();
+        const left = (detachedCanvas.width - view.span * view.scale) / 2;
+        const right = left + view.span * view.scale;
+        detachedEls.forEach(({ row, el, tag, node }) => {
+          const ft = row.get(values);
+          const has = Number.isFinite(ft);
+          node.hidden = !has;
+          el.textContent = has ? fmt.formatArchitecturalInches(ft * 12) : '';
+          const at = has && anchors[row.key];
+          tag.style.display = at ? '' : 'none';
+          if (!at) return;
+          tag.textContent = row.name;
+          tag.style.left = row.side === 'left'
+            ? `${Math.max(2, left - GREY_COL)}px` : `${right + GREY_GAP}px`;
+          tag.style.top = `${at.y}px`;
+          tag.style.transform = 'translate(0,-50%)';
+        });
+        spreadTags(document.querySelector('#detached-wrap'));
       };
 
       // LABELS THAT LAND ON EACH OTHER SAY NOTHING. Five tags stacked at the
@@ -1380,6 +1521,23 @@
           ]);
           fillBilevel(bilevelCanvas.paintedSection);
         }
+        if (detachedCanvas) {
+          detachedCanvas.paintedSection = projectPage.paintSections(detachedCanvas, [
+            projectPage.buildDetachedGarageSection(detachedValues()),
+          ]);
+          fillDetached(detachedCanvas.paintedSection);
+        }
+        if (detachedStrip) {
+          // ONE paintSections CALL WITH ALL THREE, which is the whole point:
+          // it computes a single view across everything handed to it, so the
+          // three details share a scale without being asked to. Three separate
+          // calls would give each its own and quietly destroy the comparison
+          // the row exists for.
+          const row = projectPage.buildDetachedFoundationRow(
+            projectPage.SECTION_TABLE_DEFAULTS.detachedGarage.slabThicknessIn);
+          detachedStrip.paintedRow = projectPage.paintSections(detachedStrip, row);
+          labelStrip(row, detachedStrip.paintedRow);
+        }
         controlEls.forEach(({ control, el, tag }, key) => {
           const at = anchors[key];
           const row = el.closest ? el.closest('.sched-row') : null;
@@ -1950,6 +2108,7 @@
       fillTable();
       // Built before the first repaint, because repaint() is what fills it.
       buildBilevelSched();
+      buildDetachedSched();
       repaint();
     })();
   </script>
