@@ -188,6 +188,47 @@ if (!window.DraftProjectPage) {
   const GARAGE_FOUNDATION_LABEL = Object.freeze({
     gradebeam: 'GRADE BEAM', frostwall: 'FROST WALL', thickened: 'THICKENED EDGE',
   });
+  // WHAT THE HEAD OF AN OPENING COSTS, top of wall downward: two top plates,
+  // the lintel, and the rough-opening plate under it. On the deep case that is
+  // 3" + 11 7/8" + 1 1/2" = 1'-4 3/8", and Movie rounds it up an eighth and
+  // uses it for EVERY opening rather than branching on span. 5 Sep: "we should
+  // make the deep 1'-4 1/2" lintel default... will cause less problems", and
+  // "let's go with least chance of people getting into a bind".
+  //
+  // A shallow opening really does take a 2-ply 2x10 in the field -- 9 1/4" plus
+  // the same 4 1/2" is 1'-1 3/4" -- and reserving the deep stack anyway costs
+  // 2 3/4" of cripples. That is not waste: it lands EVERY head in the building
+  // at one elevation, which is what a drafter wants anyway, instead of a house
+  // where the patio door head sits below the windows beside it.
+  //
+  // MIND THE 4 1/2". It is two TOP plates (3") plus the rough-opening plate
+  // (1 1/2"), and it is NOT PLATE_STACK_IN, which is also 4 1/2" and is two top
+  // plates plus a BOTTOM plate. Different members, same sum, sixty lines apart.
+  // Anyone who reuses one for the other gets the right answer today and a wrong
+  // one the moment either changes. See RD-DOCUMENTS/SPEC-lintels.md.
+  const OPENING_HEAD_DROP_IN = 16.5;
+
+  // A GARAGE WALL IS TALLER THAN THE HOUSE'S, and until now it WAS the house's.
+  // Nothing set mainWallHeightFt for the attached garage, so it fell through to
+  // HOUSE and the schedule read 8'-1 1/8". Movie, 5 Sep: "good thing the garage
+  // is usually taller walls than the house."
+  //
+  // It is not a missing default, it is a WRONG one, and the arithmetic says so
+  // rather than taste: a 7'-0" overhead door needs OPENING_HEAD_DROP_IN above
+  // its head, so the wall has to reach 8'-4 1/2". The house precut is 8'-1 1/8".
+  // The default garage could not be built as drawn.
+  //
+  // The next rung up the precut ladder is the answer -- 9'-1 1/8" leaves
+  // 8 5/8" of cripples over a 7'-0" door -- and three unrelated things now
+  // point at the same wall: this, the storey over the garage needing its deck
+  // at 10'-5 5/8", and "lots of bungalows have extra space there".
+  //
+  // FOURTH GARAGE ROW TO INHERIT A HOUSE NUMBER, after the 3" slab, the
+  // basement wall under a garage, and the 11 7/8" joists that should be 20".
+  // They keep arriving because the fallback is silent: no default means HOUSE,
+  // and HOUSE is always plausible.
+  const GARAGE_WALL_FT = wallHeightFtFromStud(STUD_LENGTHS_IN[1]);
+
   const SECTION_TABLE_DEFAULTS = Object.freeze({
     bilevel: SPLIT_BASE,
     modifiedBilevel: SPLIT_BASE,
@@ -198,6 +239,7 @@ if (!window.DraftProjectPage) {
     attachedGarage: Object.freeze({
       fdnWallHeightFt: GARAGE_GRADE_BEAM_IN / 12,
       slabThicknessIn: 4,
+      mainWallHeightFt: GARAGE_WALL_FT,
     }),
   });
 
@@ -1034,6 +1076,8 @@ if (!window.DraftProjectPage) {
     DETACHED_BEAM_ABOVE_GRADE_IN,
     GARAGE_SILL_BELOW_HOUSE_FT,
     GARAGE_SLAB_BELOW_CONCRETE_IN,
+    GARAGE_WALL_FT,
+    OPENING_HEAD_DROP_IN,
     GRADE_MIN_BELOW_CONCRETE_IN,
     GRADE_BELOW_CONCRETE_IN,
     FOUNDATION_ATTACHMENTS,
