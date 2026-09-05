@@ -27,6 +27,13 @@ if (!window.DraftProjectPage) {
   // Wall heights are DERIVED FROM THE STUD, never typed: a wall is a stud
   // plus two top plates and one bottom plate, so the height that wastes no
   // lumber is a precut length plus 4½". Type the stud, read the wall.
+  //
+  // TWO ON TOP, AND THE REASON MATTERS. Movie, 5 Sep: "top plate needs 2 so
+  // they can overlap for strength" -- the second plate laps the joints in the
+  // first, tying the walls together at the corners and over the studs. It is
+  // structure, not a stack of arbitrary thickness, so 3 is not a number to
+  // round off. Anybody reading 1.5 * 3 and wondering why not two now has the
+  // answer without having to ask a framer.
   const PLATE_STACK_IN = 1.5 * 3;
   const STUD_LENGTHS_IN = Object.freeze([92.625, 104.625, 116.625]);
   // Which precut a build type starts on. Movie, 4 Sep: "8'1-1/8" is default
@@ -93,6 +100,12 @@ if (!window.DraftProjectPage) {
     item('upperStud', '2ND FL STUD', 'stud', 'upperWallHeightFt', ['house', 'modifiedBilevel']),
     item('upperJoists', '2ND FL JOISTS', 'in', 'upperJoistDepthIn', ['house', 'modifiedBilevel']),
     item('mainStud', 'MAIN FL STUD', 'stud', 'mainWallHeightFt', ALL_TYPES),
+    // NO ENTRY FLOOR ROWS HERE, deliberately. They were added to this table
+    // on 5 Sep and taken out the same evening once Movie settled that ENTRY
+    // is a LEVEL rather than an area of the main one. Every other floor's
+    // package lives in its LEVEL ASSEMBLY -- the numbers the level cards edit
+    // -- so a pair of rows here would have been a second place to set one
+    // fact, and the two would disagree the first time anybody used the card.
     item('mainJoists', 'MAIN FL JOISTS', 'in', 'mainJoistDepthIn', HOUSE_LIKE),
     item('mainSheathing', 'MAIN FL SHEATHING', 'in', 'mainSheathingIn', HOUSE_LIKE),
     item('fdnWall', 'FDN WALL HT', 'ftin', 'fdnWallHeightFt', ALL_TYPES),
@@ -432,8 +445,18 @@ if (!window.DraftProjectPage) {
     // Climb the floor stack. Each level's band is ITS OWN floor assembly
     // (the same numbers the level card's FL JST box edits), the wall above
     // it that level's wall height.
-    let y = 0;
-    const mainDepthFt = (floors[0].joistDepthIn + floors[0].sheathingIn) / 12;
+    // WHICH FLOOR IS THE DATUM. Movie has been firm that 0.0 / 100.0 is the
+    // top of MAIN FL sheathing on every drawing, and until now that could be
+    // assumed to be floors[0] because nothing framed below the main floor.
+    // A bilevel does: its ENTRY floor is a storey in the stack, below main.
+    // So the stack still climbs bottom-up, but the datum is named rather than
+    // assumed -- floors[datumIndex] is what sits at 0, and everything below
+    // it comes out negative, which is where a bilevel's entry floor belongs.
+    const datumIndex = values.datumIndex ?? 0;
+    const below = floors.slice(0, datumIndex).reduce((sum, level) =>
+      sum + level.wallHeightFt + (level.joistDepthIn + level.sheathingIn) / 12, 0);
+    let y = -below;
+    const mainDepthFt = (floors[datumIndex].joistDepthIn + floors[datumIndex].sheathingIn) / 12;
     floors.forEach((level, index) => {
       const depthFt = (level.joistDepthIn + level.sheathingIn) / 12;
       rect(0, y - depthFt, CUT_DEPTH_FT, depthFt, 1);           // floor band
@@ -544,12 +567,34 @@ if (!window.DraftProjectPage) {
     // The house gets the band it has always been missing: the concrete stopped
     // at the bearing line and the plate was drawn nowhere, exactly as the
     // garage's was until Movie asked where it had gone.
+    // THE SPLIT'S WOOD FILL WALL, and it is why this is one builder and not
+    // two. A bilevel is not a different section: it is this section with a
+    // SHORTER POUR and a stud wall making up the rest (Movie, 5 Sep: "a
+    // couple extra pieces added on and moved a bit, shorter foundation").
+    // 5'-0" of concrete plus 4'-2 3/4" of wall gets to the same bearing line
+    // the bungalow reaches with 8'-1 1/8" of pour.
+    //
+    // Null, not zero, for a type that has no fill wall -- the same
+    // null-means-derive discipline the rest of the page keeps. A 0 here would
+    // draw a zero-height rect and a plate on top of nothing.
+    const fillFt = fdn.woodFillHeightFt ?? null;
     const fdnTop = -mainDepthFt;
     const attachFt = SILL_PLATE_IN / 12;
-    const concTopFt = fdnTop - attachFt;
+    // The bearing line does not move: the floor still lands one attachment
+    // below MAIN FL. What changes is how far down the CONCRETE starts, since
+    // the fill wall now occupies the top of that distance.
+    const concTopFt = fdnTop - attachFt - (fillFt || 0);
     const fdnBot = concTopFt - fdn.wallHeightFt;
     rect(0, fdnBot, fdnFt, concTopFt - fdnBot, 2);
     attachment(rect, line, fdn.attachment, 0, concTopFt, fdnFt);
+    // The fill wall stands on the attachment, its own faces at the wall's
+    // thickness rather than the concrete's -- it is framing, not pour.
+    if (fillFt) {
+      const fillBot = concTopFt + attachFt;
+      line(0, fillBot, 0, fillBot + fillFt, 2);
+      line(wallFt, fillBot, wallFt, fillBot + fillFt, 1.5);
+      anchors.woodFill = { x: wallFt + 0.9, y: fillBot + fillFt / 2 };
+    }
     anchors.attachment = { x: fdnFt / 2, y: concTopFt + attachFt / 2 };
     anchors.fdnHeight = { x: fdnFt + 0.9, y: fdnTop - fdn.wallHeightFt / 2 };
     // BELOW the sill, not above it. Labels keep only their height now, so
