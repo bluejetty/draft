@@ -90,6 +90,7 @@
     .zone-head { display:grid; grid-template-columns:minmax(0,1fr) 84px 84px; gap:6px; padding-bottom:4px; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
     .zone-input { width:100%; height:26px; border:1px solid rgba(29,31,32,.28); background:#fafafa; color:#1d1f20; padding:3px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
     .zone-input:hover, .zone-input:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
+    .strip-caption { max-width:1090px; margin:6px auto 0; text-align:center; color:rgba(29,31,32,.55); font-size:12px; line-height:1.45; }
     .zone-note { margin-top:9px; color:rgba(29,31,32,.5); font-size:11px; line-height:1.4; }
     .table-card { margin-top:16px; }
     .table-scroll { overflow-x:auto; }
@@ -195,9 +196,10 @@
           <div class="sched" id="sched-detached-right"></div>
         </div>
         <div class="strip-wrap" id="detached-strip-wrap">
-          <canvas id="detached-strip" width="1090" height="250" aria-label="The three detached garage foundations at one scale — thickened edge, grade beam, frost wall"></canvas>
+          <canvas id="detached-strip" width="1090" height="250" aria-label="The three detached garage foundations at one scale, cut at the back of the garage — thickened edge, grade beam, frost wall"></canvas>
         </div>
-        <div class="zone-note">The DETACHED GARAGE row of the section table, drawn. <strong>A building of its own</strong> &mdash; so unlike the garage in band 1 it has its own wall, its own grade line and its own roof, and it is set out from the top of its slab rather than from the house&#8217;s main floor. The default foundation is a <strong>thickened-edge slab</strong>: one monolithic pour, 4&Prime; in the field deepening to 1&#8242;-0&Prime; at the perimeter with a 45&deg; taper. Grade sits 10&Prime; below the floor &mdash; the same height a grade beam would put it, so switching foundation moves the concrete and leaves the door and apron where they are. Grade beam and frost wall are the other two options and are not drawn here yet. See <em>SPEC-garage-foundations.md</em>.</div>
+        <div class="strip-caption">The three foundations at one scale, <strong>cut at the back of the garage</strong> &mdash; where a sloping slab meets the top of its concrete, and the one station at which all three floors agree.</div>
+        <div class="zone-note">The DETACHED GARAGE row of the section table, drawn. <strong>A building of its own</strong> &mdash; so unlike the garage in band 1 it has its own wall, its own grade line and its own roof, and it is set out from the top of its slab rather than from the house&#8217;s main floor. The default foundation is a <strong>thickened-edge slab</strong>: one monolithic pour, 4&Prime; in the field deepening to 1&#8242;-0&Prime; at the perimeter with a 45&deg; taper. Grade sits 10&Prime; below the floor &mdash; the same height a grade beam would put it, so switching foundation moves the concrete and leaves the door and apron where they are. <strong>At the back.</strong> A grade beam and a frost wall take a slab sloping &#8539;&Prime;/ft to the door and a thickened edge is level, so on a typical 24&#8242; garage the two sloped floors finish 3&Prime; lower at the door than the level one. The strip below shows all three, cut at that back station. See <em>SPEC-garage-foundations.md</em>.</div>
       </div>
     </section>
 
