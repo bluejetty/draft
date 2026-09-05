@@ -238,6 +238,35 @@ check('the garage SLAB sits 5 1/2" below that offset, not on it', P => {
 });
 check('the detached garage beam rides 8" above grade at the house', P => [P.DETACHED_BEAM_ABOVE_GRADE_IN, 8]);
 
+// ── The garage wall carries its own opening ────────────────────────────
+// GARAGE_OVERHEAD_HEAD_FT lives in MODEL.dc.html and is repeated here as a
+// literal 7, for the same reason GARAGE_SILL_BELOW_HOUSE_FT is repeated in two
+// files: this module cannot reach STANDARDS. Stated so the duplication is a
+// known one rather than a discovered one.
+const GARAGE_DOOR_HEAD_IN = 7 * 12;
+
+check('the garage frames a taller wall than the house', P => {
+  const house = P.wallHeightFtFromStud(P.STUD_LENGTHS_IN[0]);
+  return [P.GARAGE_WALL_FT > house, true];
+});
+check('the garage default sets its own wall, not HOUSE\'s', P =>
+  [P.SECTION_TABLE_DEFAULTS.attachedGarage.mainWallHeightFt, P.GARAGE_WALL_FT]);
+// THE REASON, not just the number. A 7'-0" overhead door needs the head drop
+// above it -- two top plates, an 11 7/8" LVL and the rough-opening plate -- so
+// the wall has to reach 8'-4 1/2". This is the check that would fail if anyone
+// trimmed the garage back toward the house precut.
+check('a 7\'-0" overhead door clears the head drop on the garage wall', P =>
+  [P.GARAGE_WALL_FT * 12 - P.OPENING_HEAD_DROP_IN >= GARAGE_DOOR_HEAD_IN, true]);
+// And the inequality beside it: it did NOT clear on the wall the garage used to
+// inherit. Without this the pair above passes on any tall-enough number and
+// says nothing about why the default moved.
+check('that same door does NOT clear on the house wall it used to inherit', P => {
+  const house = P.wallHeightFtFromStud(P.STUD_LENGTHS_IN[0]);
+  return [house * 12 - P.OPENING_HEAD_DROP_IN >= GARAGE_DOOR_HEAD_IN, false];
+});
+check('the head drop is two top plates, an 11 7/8" LVL and the RO plate, rounded up', P =>
+  [P.OPENING_HEAD_DROP_IN >= 3 + 11.875 + 1.5 && P.OPENING_HEAD_DROP_IN <= 3 + 11.875 + 1.5 + 0.25, true]);
+
 // ── Geometry ───────────────────────────────────────────────────────────
 // One fixed two-storey assembly, in the shape the page hands the builder.
 // The main floor is the office package from Movie's reference section:
@@ -422,6 +451,13 @@ const MUTATIONS = [
   // does not apply proves nothing while still reading as a line in the table.
   // `label: 'BILEVEL'` cannot hit MODIFIED BILEVEL: the prefix is inside the
   // quotes, so the two labels share no substring at that boundary.
+  ['the garage falls back to the house wall again',
+    s => s.replace('      mainWallHeightFt: GARAGE_WALL_FT,\n', '')],
+  ['the head drop forgets the rough-opening plate',
+    s => s.replace('const OPENING_HEAD_DROP_IN = 16.5;', 'const OPENING_HEAD_DROP_IN = 15;')],
+  ['the garage wall drops to the house precut',
+    s => s.replace('const GARAGE_WALL_FT = wallHeightFtFromStud(STUD_LENGTHS_IN[1]);',
+      'const GARAGE_WALL_FT = wallHeightFtFromStud(STUD_LENGTHS_IN[0]);')],
   ['the bilevel zone row goes live before the feature does',
     s => s.replace("label: 'BILEVEL', reserved: true", "label: 'BILEVEL', reserved: false")],
   ['the roof rises at pitch per foot instead of pitch per twelve',
