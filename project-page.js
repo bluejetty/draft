@@ -48,7 +48,6 @@ if (!window.DraftProjectPage) {
 
   const SECTION_TABLE_ROWS = Object.freeze([
     Object.freeze({ id: 'house', label: 'HOUSE', live: true }),
-    Object.freeze({ id: 'split', label: 'SPLIT', live: false }),
     Object.freeze({ id: 'bilevel', label: 'BILEVEL', live: false }),
     Object.freeze({ id: 'modifiedBilevel', label: 'MOD BILEVEL', live: false }),
     Object.freeze({ id: 'attachedGarage', label: 'ATTACHED GARAGE', live: false }),
@@ -56,14 +55,23 @@ if (!window.DraftProjectPage) {
   ]);
 
   const ALL_TYPES = SECTION_TABLE_ROWS.map(row => row.id);
-  const HOUSE_LIKE = ['house', 'split', 'bilevel', 'modifiedBilevel'];
+  const HOUSE_LIKE = ['house', 'bilevel', 'modifiedBilevel'];
   // Movie, 4 Sep: a SPLIT is not a third build type, it is the family name
-  // for the two — a BILEVEL or a MODIFIED BILEVEL. Both pour the same 5'-0"
+  // for the two -- a BILEVEL or a MODIFIED BILEVEL. Both pour the same 5'-0"
   // wall and make the rest of the basement height up in wood above it, so
-  // WOOD FILL HT belongs to all three rows and BILEVEL's cell was hatched by
-  // mistake. What a MOD BILEVEL adds to a BILEVEL is the storey over the
-  // garage, not the fill wall.
-  const SPLIT_TYPES = ['split', 'bilevel', 'modifiedBilevel'];
+  // WOOD FILL HT belongs to both and BILEVEL's cell was hatched by mistake.
+  // What a MOD BILEVEL adds to a BILEVEL is the storey over the garage, not
+  // the fill wall.
+  //
+  // AND THE FAMILY NAME IS NO LONGER A ROW, 5 Sep, Movie's option A. SPLIT
+  // was a complete section-table row: visible, in HOUSE_LIKE, with a WOOD
+  // FILL cell, its own default, and storable in drawing-format.js -- so a
+  // drafter could type numbers into it that persisted and that nothing could
+  // ever read. A drawing is ONE building, the build type picks the live row,
+  // and no build type is SPLIT, precisely because of the sentence above it.
+  // The family name stays as SPLIT_BASE, which is what it always was: the
+  // defaults the two real rows start from.
+  const SPLIT_TYPES = ['bilevel', 'modifiedBilevel'];
   const SILL_PLATE_IN = 1.5;
   const item = (id, label, unit, field, types, extra) =>
     Object.freeze({ id, label, unit, field, types: Object.freeze(types), ...extra });
@@ -157,7 +165,6 @@ if (!window.DraftProjectPage) {
     gradebeam: 'GRADE BEAM', frostwall: 'FROST WALL', thickened: 'THICKENED EDGE',
   });
   const SECTION_TABLE_DEFAULTS = Object.freeze({
-    split: SPLIT_BASE,
     bilevel: SPLIT_BASE,
     modifiedBilevel: SPLIT_BASE,
     // A GARAGE SLAB IS 4", not the house's 3". The row had no default at all,
