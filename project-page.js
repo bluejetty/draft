@@ -306,18 +306,26 @@ if (!window.DraftProjectPage) {
   // name now matches cut-view.js's DETACHED_BEAM_ABOVE_GRADE_IN exactly,
   // so the two read as the one fact they are.
   const DETACHED_BEAM_ABOVE_GRADE_IN = 14;
-  // THE THICKENED EDGE IS THE EXCEPTION, and it is the concrete's own depth
-  // that makes it one. Every other foundation here tops out 1'-2" above grade.
-  // A thickened edge is GARAGE_EDGE_DEPTH_IN -- 1'-0" -- of concrete total, so
-  // a top 1'-2" up would stand the entire edge above ground with 2" of air
-  // under it. At 8" the slab top clears grade and 4" of edge is in the ground.
+  // THE THICKENED EDGE CANNOT TAKE THE 1'-2", and it is the concrete's own
+  // depth that stops it. Every other foundation here tops out 1'-2" above
+  // grade. A thickened edge is GARAGE_EDGE_DEPTH_IN -- 1'-0" -- of concrete
+  // TOTAL, so a top 1'-2" up would stand the whole edge above ground with 2"
+  // of air under it.
   //
-  // SO THE FLOOR DOES MOVE between foundations, by design and only here. A
-  // grade beam puts the slab top at grade + 1'-2" less the 4" the slab sits
-  // below the concrete = grade + 10"; this puts it at grade + 8". Two inches,
-  // and unavoidable at this depth -- the alternative is an edge bearing on
-  // almost nothing.
-  const DETACHED_SLAB_ABOVE_GRADE_IN = 8;
+  // AND YET THE FLOOR DOES NOT MOVE, which is the point of 10" rather than a
+  // smaller number. A grade beam tops out at grade + 1'-2" and its slab sits
+  // GARAGE_SLAB_BELOW_CONCRETE_IN under that, so its floor is grade + 10". A
+  // thickened edge IS its own top of concrete -- there is nothing above the
+  // slab -- so 10" here puts the two floors at the SAME height. Switching a
+  // detached garage between grade beam and thickened edge moves the
+  // foundation and leaves the door, the apron and the driveway where they
+  // were. Movie, 5 Sep: "a little higher sure better for drainage" -- and the
+  // drainage is the reason he gave, the matching floor is what it buys.
+  //
+  // The cost is 2" of edge in the ground instead of 4". Acceptable on a
+  // floating slab bearing on gravel; a garage that needs frost protection
+  // takes the frost wall option, which is what that option is for.
+  const DETACHED_SLAB_ABOVE_GRADE_IN = 10;
   // How far the garage sill sits below the house's. Movie, 4 Sep: "2 ft below
   // the house sill (house sill drops 2 ft to meet garage sill)". Measured
   // sill to sill, not floor to floor, so it holds when the floor package

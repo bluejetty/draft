@@ -263,6 +263,14 @@ check('the thickened edge sits lower than every other foundation', P =>
   [P.DETACHED_SLAB_ABOVE_GRADE_IN < P.DETACHED_BEAM_ABOVE_GRADE_IN, true]);
 check('and it keeps concrete in the ground -- the edge is not left floating', P =>
   [P.DETACHED_SLAB_ABOVE_GRADE_IN < P.GARAGE_EDGE_DEPTH_IN, true]);
+// THE FLOOR DOES NOT MOVE BETWEEN FOUNDATIONS, which is what 10" buys and the
+// reason it is not a smaller number. A grade beam tops out 1'-2" above grade
+// with its slab GARAGE_SLAB_BELOW_CONCRETE_IN below that; a thickened edge IS
+// its own top of concrete. The two floors land at the same height, so changing
+// foundation leaves the door and the apron where they were.
+check('a thickened edge and a grade beam put the garage floor at the same height', P =>
+  [P.DETACHED_SLAB_ABOVE_GRADE_IN,
+   P.DETACHED_BEAM_ABOVE_GRADE_IN - P.GARAGE_SLAB_BELOW_CONCRETE_IN]);
 // THE PAIR THAT DRIFTED FOR A WEEK. project-page.js took Movie's 1'-2" on
 // 4 Sep (e3593a0); cut-view.js sat on 1'-0" from the 30 Aug extraction until
 // 5 Sep, so the section painter and the PROJECT page drew grade 2" apart and
