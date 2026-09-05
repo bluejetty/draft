@@ -217,18 +217,19 @@ in the chain is already known, so there is one height that lands the deck:
 | OVER GARAGE package (20" + 3/4") | 1'-8 3/4" |
 | **=> GARAGE WALL** | **10'-5 5/8"** (stud 10'-1 1/8") |
 
-Two things to notice before trusting it.
-
 **The raise is 2'-4 1/2".** A garage on the ordinary 8'-1 1/8" wall would put
 its deck at 6'-9 1/4", well under the house's 9'-1 3/4". That gap is what
-Movie means by *"fill in the extra"*, and half of it is the deep joist paying
+Movie means by *"fill in the extra"*, and part of it is the deep joist paying
 for its own span.
 
-**The stud is not a precut.** 10'-1 1/8" is past the tallest in
-STUD_LENGTHS_IN (9'-8 5/8"), so this wall is ordered or built up rather than
-pulled off the pile. That is a real cost of the type, not an error in the
-arithmetic -- but it is the number to check first if the drop or the package
-ever turns out to be wrong.
+**The tall wall is the point, not a symptom.** 10'-5 5/8" was put to Movie as
+the thing to check first, on the grounds that its 10'-1 1/8" stud is past the
+tallest precut we carry (9'-8 5/8"). He took it the other way: *"10 garage
+wall nice... even more is nice too... lots of bungalows have extra space
+there."* A garage under a storey is a garage people store things in, and the
+height is wanted. So the stud being ordered rather than pulled off the pile
+is a cost of the type, not evidence the arithmetic is wrong -- and nothing
+here should clamp the ceiling to a precut.
 
 **This entry was rewritten three times.** It proposed OVER GARAGE for the
 bungalow (wrong -- named for what it stands on rather than where it sits),
