@@ -250,7 +250,32 @@ check('the garage SLAB sits 5 1/2" below that offset, not on it', P => {
   return [Math.round((GARAGE.garage.sillOffsetFt - slabTop) * 12 * 16) / 16,
     P.SILL_PLATE_IN + 4];
 });
-check('the detached garage beam rides 8" above grade at the house', P => [P.DETACHED_BEAM_ABOVE_GRADE_IN, 8]);
+// 1'-2", not the 8" this carried until 5 Sep. Movie moved every garage
+// foundation out to the house's own height above grade -- "for the grade beam
+// or frost wall", on "all 3 detached" -- so a beam tops out level with the
+// house foundation instead of 6" under it.
+check('the detached garage beam rides 1\'-2" above grade, level with the house', P =>
+  [P.DETACHED_BEAM_ABOVE_GRADE_IN, 14]);
+// THE THICKENED EDGE CANNOT FOLLOW, and the reason is arithmetic rather than
+// preference: it is 1'-0" of concrete, so a top 1'-2" above grade leaves the
+// whole edge in the air. This is the one foundation whose floor sits lower.
+check('the thickened edge sits lower than every other foundation', P =>
+  [P.DETACHED_SLAB_ABOVE_GRADE_IN < P.DETACHED_BEAM_ABOVE_GRADE_IN, true]);
+check('and it keeps concrete in the ground -- the edge is not left floating', P =>
+  [P.DETACHED_SLAB_ABOVE_GRADE_IN < P.GARAGE_EDGE_DEPTH_IN, true]);
+// THE PAIR THAT DRIFTED FOR A WEEK. project-page.js took Movie's 1'-2" on
+// 4 Sep (e3593a0); cut-view.js sat on 1'-0" from the 30 Aug extraction until
+// 5 Sep, so the section painter and the PROJECT page drew grade 2" apart and
+// nothing said so. Same face on both -- cut-view's "foundation top" IS the top
+// of concrete, per its own note on the beam stack.
+check('grade below the concrete agrees between project-page.js and cut-view.js', P =>
+  [P.GRADE_BELOW_CONCRETE_IN, CUT_VIEW.GRADE_BELOW_FOUNDATION_TOP_FT * 12]);
+// And the relationship the 1'-2" exists to hold: an attached beam's top of
+// concrete is LEVEL with the top of the house foundation wall. That is only
+// true while the two constants match, and it silently stopped being true the
+// moment one of them moved on its own.
+check('the attached beam tops out level with the house foundation wall', P =>
+  [CUT_VIEW.GARAGE_BEAM_ABOVE_GRADE_FT, CUT_VIEW.GRADE_BELOW_FOUNDATION_TOP_FT]);
 
 // ── The garage wall carries its own opening ────────────────────────────
 // GARAGE_OVERHEAD_HEAD_FT lives in MODEL.dc.html and is repeated here as a

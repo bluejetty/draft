@@ -305,7 +305,19 @@ if (!window.DraftProjectPage) {
   // because a duplicate that drifts looks wrong and this looks right. The
   // name now matches cut-view.js's DETACHED_BEAM_ABOVE_GRADE_IN exactly,
   // so the two read as the one fact they are.
-  const DETACHED_BEAM_ABOVE_GRADE_IN = 8;
+  const DETACHED_BEAM_ABOVE_GRADE_IN = 14;
+  // THE THICKENED EDGE IS THE EXCEPTION, and it is the concrete's own depth
+  // that makes it one. Every other foundation here tops out 1'-2" above grade.
+  // A thickened edge is GARAGE_EDGE_DEPTH_IN -- 1'-0" -- of concrete total, so
+  // a top 1'-2" up would stand the entire edge above ground with 2" of air
+  // under it. At 8" the slab top clears grade and 4" of edge is in the ground.
+  //
+  // SO THE FLOOR DOES MOVE between foundations, by design and only here. A
+  // grade beam puts the slab top at grade + 1'-2" less the 4" the slab sits
+  // below the concrete = grade + 10"; this puts it at grade + 8". Two inches,
+  // and unavoidable at this depth -- the alternative is an edge bearing on
+  // almost nothing.
+  const DETACHED_SLAB_ABOVE_GRADE_IN = 8;
   // How far the garage sill sits below the house's. Movie, 4 Sep: "2 ft below
   // the house sill (house sill drops 2 ft to meet garage sill)". Measured
   // sill to sill, not floor to floor, so it holds when the floor package
@@ -1122,6 +1134,7 @@ if (!window.DraftProjectPage) {
     ROOF_HEEL_MAX_IN,
     roofHeelInBand,
     DETACHED_BEAM_ABOVE_GRADE_IN,
+    DETACHED_SLAB_ABOVE_GRADE_IN,
     // Exported so section-table-harness.js can hold this file's copies of
     // cut-view.js's numbers against the originals. The 32" is the pair that
     // already drifted once, under two different names.
