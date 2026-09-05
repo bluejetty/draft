@@ -111,6 +111,29 @@ for (const theme of P.THEMES) {
     check(`${theme}/${mode}  draw-floor-edge over its own wash`, washed >= 3.0,
       `${washed.toFixed(2)} (min 3.0)`);
 
+    // THE FIVE PAINTERS THAT HAD NO ROLE UNTIL NOW. Each against the page,
+    // at the floor its own kind answers to: draw-note is TEXT, so 4.5 like
+    // draw-dim; the other four are line and symbol work, so 3.0.
+    //
+    // These are the numbers that made the keys necessary rather than tidy.
+    // Before them, on night: notes and fixtures were #1d1f20 -- surface-page
+    // exactly, ratio 1.00 -- and stairs 2.22, cut marks 2.95, both under 3.0.
+    // Two of the five were not skinnable at all, hardcoded inside the
+    // painter. The floors below are what catches that class of thing coming
+    // back, so they are asserted per role rather than as one aggregate.
+    [['draw-note', 4.5], ['draw-fixture', 3.0], ['draw-stair', 3.0],
+      ['draw-cut', 3.0], ['draw-underlay', 3.0]].forEach(([role, min]) => {
+      const ratio = P.contrast(v[role], v['surface-page']);
+      check(`${theme}/${mode}  ${role}`, ratio >= min, `${ratio.toFixed(2)} (min ${min})`);
+    });
+
+    // NOT ASSERTED, AND THAT IS THE POINT: draw-underlay and draw-origin
+    // carry the same pair today. Pinning them EQUAL would make the divergence
+    // the separate key exists to allow into a test failure -- a check that
+    // fails when the design works. The comment in palette.js is what says
+    // do not collapse them; a test cannot say it without forbidding the
+    // thing it is protecting.
+
     // draw-dim is the one drawing role that is TEXT as well as line, so it
     // answers to 4.5 (WCAG AA body), not the 3.0 above -- and to it TWICE.
     // drawDimension2D paints the witness lines and arrows on the page, then

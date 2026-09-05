@@ -53,6 +53,28 @@ if (!window.DraftPalette) {
                         // drawDimension2D paints the label on a plate
                         // (env.colors.labelBack) and the witness lines on the
                         // page. Both values below clear 4.5 on both of theirs.
+    // The five painters that had no role of their own until now. Movie, 5 Sep,
+    // asked for whichever arrangement "will give us most options later", and
+    // that is one key each -- NOT a borrowed neighbour, even where the value
+    // is identical today. draw-note could read ink-primary and draw-underlay
+    // could read draw-origin, both exact matches; both are refused, because a
+    // shared key cannot diverge without a refactor and somebody restyling body
+    // text would move every note on every drawing without knowing it. The 32"
+    // that drifted did it by sharing one name for two facts.
+    'draw-note',        // annotation text and its leader. TEXT, so it answers
+                        // to 4.5 like draw-dim, not the 3.0 a line gets.
+    'draw-fixture',     // the 2D fixture symbols -- cabinets, plumbing. Plan
+                        // symbols today; when they gain a height nothing here
+                        // changes, because this is what they are DRAWN in.
+    'draw-stair',       // stair runs, nosings and the direction arrow
+    'draw-cut',         // the section cut marks: the line, its flags and tail
+    'draw-underlay',    // a traced PDF or image underlay, drawn under the
+                        // drafter's own work. ITS PAIR IS DELIBERATELY THE
+                        // SAME AS draw-origin's, and must not be collapsed
+                        // into it: a tracing underlay and the drawing's
+                        // registration mark are different things that happen
+                        // to be the same green, and one moving is not the
+                        // other moving.
     'draw-floor',       // floor polygons, a wash rather than a fill
     'draw-floor-edge',  // the slab outline and its corner handles, drawn ON
                         // TOP of that wash -- so the wash, not the page, is
@@ -104,6 +126,18 @@ if (!window.DraftPalette) {
       'draw-line':       '#7f8688',
       'draw-dim':        '#6b93bd',   // 5.15 on the page, 5.56 on the plate
       'draw-origin':     '#6a9a57',   // 5.02 page / 4.40 over a floor wash
+      // THE NIGHT COLUMN IS THE NEW INFORMATION HERE; day below is unchanged.
+      // Four of these five were painted in their day colour on both skins,
+      // and two of them -- notes and fixtures -- were #1d1f20, which IS
+      // surface-page on night. Ratio 1.00: not poor contrast, the same
+      // colour, so the night page lost its notes and fixtures entirely.
+      // Stairs measured 2.22 and cut marks 2.95, both under the 3.0 the
+      // drawRoof2D fix used. Measured by Gilligan, re-measured here.
+      'draw-note':       '#e7e5e2',   // 13.16 -- body ink's twin, a note is text
+      'draw-fixture':    '#e7e5e2',   // 13.16
+      'draw-stair':      '#9d8ec9',   // 5.63
+      'draw-cut':        '#d4788f',   // 5.42
+      'draw-underlay':   '#6a9a57',   // 5.02 -- draw-origin's value, its own key
       'draw-floor':      'rgba(120,140,150,0.10)',
       'draw-floor-edge': '#5980a6',
       'draw-wall':       '#2f3335',   // 1.30 on the page -- poche, deliberately quiet
@@ -133,6 +167,15 @@ if (!window.DraftPalette) {
       'draw-line':       '#6b7274',
       'draw-dim':        '#365e86',   // 6.05 on the page, 6.68 on the plate
       'draw-origin':     '#557a46',   // 4.41 page / 3.90 wash -- the old page's own green
+      // EVERY ONE OF THESE IS WHAT THE PAINTER ALREADY DREW, so the day page
+      // is pixel-identical after this lands. Three came from env keys
+      // (NOTE_COLOR, FIXTURE_COLOR, STAIR_COLOR) and two were hardcoded
+      // inside render-2d.js, which is why they could not be skinned at all.
+      'draw-note':       '#1d1f20',   // 14.79
+      'draw-fixture':    '#1d1f20',   // 14.79
+      'draw-stair':      '#5d4a8a',   // 6.68
+      'draw-cut':        '#b04060',   // 5.01
+      'draw-underlay':   '#557a46',   // 4.41 -- draw-origin's value, its own key
       'draw-floor':      'rgba(90,110,120,0.10)',
       'draw-floor-edge': '#5980a6',
       'draw-wall':       '#ffffff',   // 1.12 on the page -- the same quiet relationship
