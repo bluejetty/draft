@@ -51,7 +51,12 @@ people actually ask for:
 | 2 STOREY | flat | two | optional |
 | BILEVEL | split | one | no — yes makes it a MODIFIED BILEVEL |
 | MODIFIED BILEVEL | split | one | **yes, by definition** |
-| MODIFIED BILEVEL 2 STOREY | split | two | yes |
+
+**AND THERE IS NO FIFTH BUTTON.** Movie, 5 Sep: *"leave out the Modified 2
+storey they can ADD A LEVEL."* The house that started this board does not
+become a type. A drafter who wants a second floor over the main area of a
+modified bilevel adds the level, the same way the extra levels of a side or
+back split are added. Four buttons, unchanged.
 
 **The names stay on the buttons.** Drafters ask for a bilevel by name, not
 for a split entry with one floor over main. The grid is what the code
@@ -186,10 +191,19 @@ words mean two different buildings:
   So above the main floor there are two levels at different heights, and
   the garage again takes **its own roof**.
 
-`_garageRoofDrops()` in MODEL.dc.html is where that lands. It reads the
-stored type today: a BILEVEL always drops, everything else follows the floor
-count. Under this proposal it reads the storey-over-garage answer as well,
-and MODIFIED BILEVEL 2 STOREY drops where a plain MODIFIED BILEVEL does not.
+`_garageRoofDrops()` in MODEL.dc.html is where that lands, and with no fifth
+type it has to learn the case from somewhere else. Today it reads the stored
+type -- a BILEVEL always drops, everything else follows the floor count --
+and #291 deliberately left MODIFIED BILEVEL on the floor-count rule rather
+than sharing the roof, because a shared roof over a garage with nothing
+under it is a hollow.
+
+**That is now the open question with real work behind it.** A plain modified
+bilevel and one with a floor added differ by a level card, not by a stored
+answer, so the rule reads levels or it reads nothing. Whether "is there a
+level above the garage storey" is a question the bone can ask cleanly is not
+established, and it is the first thing to settle before any of this is
+built.
 
 ---
 
@@ -198,9 +212,8 @@ and MODIFIED BILEVEL 2 STOREY drops where a plain MODIFIED BILEVEL does not.
 - **A persisted answer**, or two — the garage question and the storey
   question — which means new keys, a line in RULES-persisted-keys.md, and
   readers that normalise rather than guess. Same shape as `buildType`.
-- **A fifth build type**, `modifiedBilevel2Storey`, if the names stay on the
-  buttons. `BUILD_TYPES` grows by one, the section table grows a row, and
-  `upperFloorForBuildType` answers true for it.
+- **No fifth build type.** Ruled out above: `BUILD_TYPES` stays at four, the
+  section table grows no row, and nothing in NEW-5's vocabulary moves.
 - **A change to the entry flow**, which is the part that wants Devin rather
   than a lane: it is the first thing a drafter meets.
 
