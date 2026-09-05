@@ -175,3 +175,43 @@ test('a wall height set on the PROJECT page lands in the saved assembly', async 
   const saved = await h.savedDrawing(page);
   expect(saved.levelAssemblies['3'].wallHeightFt).toBeCloseTo((9 * 12 + 2) / 12, 5);
 });
+
+// A ZONE HEIGHT EDIT HAS TO REDRAW, and until 5 Sep it did not. Movie's whole
+// point about the attached garage: "it's 'quasi attached' only because it will
+// move up and down as the user enters new heights for it". The garage section
+// is built from attachedOffsetFt(), which reads the zone, so the number and
+// the drawing are the same fact -- but the zone rows' commit called only
+// fillZones(), while the GRADE LEVEL row beside them called fillZones() AND
+// repaint(). So the boxes updated, the file saved, and the garage stayed where
+// it was until something else happened to repaint.
+//
+// Measured on the grey label rather than the canvas: (PILE) rides the garage
+// section, so if the section moves the label moves with it. Asserting the
+// input's value would have passed the whole time -- the value was never the
+// broken half.
+test('a zone height edit moves the garage in the drawing, not just in the box', async ({ page }) => {
+  await h.openModel(page);
+  await openProjectPage(page);
+
+  // RELATIVE TO THE CANVAS, not to the page. The first version of this check
+  // measured the label's page Y and passed on a build where nothing redrew:
+  // showStatus() adds a line of text above the drawing, and that shifts every
+  // absolute Y by more than the tolerance all by itself. A check that a save
+  // message appeared, wearing the costume of a check that the garage moved.
+  const pileY = async () => {
+    const tag = await page.locator('.detail-tag', { hasText: '(PILE)' }).first().boundingBox();
+    const box = await page.locator('canvas').first().boundingBox();
+    return tag.y - box.y;
+  };
+  const before = await pileY();
+
+  // Four feet down: far more than the couple of pixels of travel the small
+  // section gives a foot, so a redraw is unmistakable and a stale drawing
+  // cannot pass by rounding.
+  const offset = page.locator('[data-zone-offset="attachedGarage"]');
+  await offset.fill(`-4'-0"`);
+  await offset.dispatchEvent('change');
+  await expect(page.locator('#status')).toContainText('saved');
+
+  expect(Math.abs(await pileY() - before)).toBeGreaterThan(2);
+});
