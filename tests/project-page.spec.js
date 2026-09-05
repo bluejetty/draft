@@ -263,3 +263,38 @@ test('a bilevel puts the garage sill level with the house, a bungalow drops it',
   };
   expect(ft(bungalow)).toBeCloseTo(ft(bilevel) - P.GARAGE_SILL_BELOW_HOUSE_FT, 5);
 });
+
+// THE GARAGE'S TYPED NUMBER IS A SILL, AND ITS FLOOR IS A SEPARATE ROW.
+// The typed box was labelled "Garage floor off main fl" and has never held the
+// floor: the section reads it as sillOffsetFt, puts the concrete a sill plate
+// below it and the slab 4" below that. Storage did not move — Movie's whole
+// vocabulary here is sill to sill — so the box was renamed and the floor got
+// its own derived row.
+test('the garage schedule shows a sill and a floor 5 1/2" apart', async ({ page }) => {
+  await page.goto('/PROJECT.html');
+  const read = async label => {
+    const row = page.locator('#sched-garage .sched-row')
+      .filter({ has: page.locator('.sched-name', { hasText: label }) });
+    await expect(row).toHaveCount(1);
+    return (await row.locator('.sched-value').inputValue()).trim();
+  };
+  const sill = await read('Garage sill off main fl');
+  const floor = await read('Garage floor off main fl');
+
+  // NEITHER IS BLANK. The sill row was an empty box for as long as its drawing
+  // tag has been struck off: repaint returned on "no tag to place" before
+  // anything wrote the value in, so a row whose whole point is that the number
+  // is still the drafter's showed no number at all. A row with a name, an
+  // editable field and nothing in it reads as not-yet-entered.
+  expect(sill).not.toBe('');
+  expect(floor).not.toBe('');
+
+  // And the drop between them is the sill plate plus the slab's set-down: the
+  // two numbers are one relationship, so they are asserted as one.
+  const inches = t => {
+    const m = /^(-?)(\d+)'-(\d+)(?: (\d+)\/(\d+))?"$/.exec(t);
+    expect(m, `unparsed: ${t}`).toBeTruthy();
+    return (m[1] ? -1 : 1) * (+m[2] * 12 + +m[3] + (m[4] ? +m[4] / +m[5] : 0));
+  };
+  expect(inches(sill) - inches(floor)).toBeCloseTo(5.5, 5);
+});

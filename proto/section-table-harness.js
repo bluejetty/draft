@@ -416,8 +416,14 @@ const MUTATIONS = [
     s => s.replace('woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,', 'woodFillHeight: (HALF_STUD_IN + PLATE_STACK_IN) / 12,')],
   ['a types entry is misspelt (a hatched cell on the page)',
     s => s.replace("const SPLIT_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);", "const SPLIT_TYPES = Object.freeze(['bilevl', 'modifiedBilevel']);")],
+  // ANCHORED ON THE TWO FIELDS IT FLIPS, not the whole object. Matching the
+  // full literal meant that adding ANY field to that row -- `datum: null`, as
+  // it happened -- silently stopped the mutation applying, and a mutation that
+  // does not apply proves nothing while still reading as a line in the table.
+  // `label: 'BILEVEL'` cannot hit MODIFIED BILEVEL: the prefix is inside the
+  // quotes, so the two labels share no substring at that boundary.
   ['the bilevel zone row goes live before the feature does',
-    s => s.replace("{ id: 'bilevel', label: 'BILEVEL', reserved: true }", "{ id: 'bilevel', label: 'BILEVEL', reserved: false }")],
+    s => s.replace("label: 'BILEVEL', reserved: true", "label: 'BILEVEL', reserved: false")],
   ['the roof rises at pitch per foot instead of pitch per twelve',
     s => s.replace('(roof.overhangFt + x) * (roof.pitch / 12);', '(roof.overhangFt + x) * roof.pitch;')],
   ['the foundation forgets the floor it carries',

@@ -11,11 +11,22 @@ if (!window.DraftProjectPage) {
   // feed BUILD HOUSE's garage generation in a follow-up; the bilevel rows
   // are reserved until the split-level feature lands (#73) — stored and
   // editable now so the numbers are already there when it does.
+  // WHAT EACH ROW'S NUMBER MEASURES, because it is not the same thing for all
+  // of them and the panel described every one as a floor. Both garages hold a
+  // BEARING LINE: the attached one its sill top (the section reads it as
+  // sillOffsetFt), the detached one its grade beam top, 8" above grade. A
+  // garage FLOOR is 5 1/2" under the attached one -- a sill plate and the
+  // slab's drop below the concrete -- so calling the stored number a floor was
+  // wrong by more than a word.
+  //
+  // The two reserved rows get no datum rather than a guessed one. Their split
+  // feature has not landed, nothing reads them, and inventing "floor" here is
+  // how the garage rows got their label in the first place.
   const ZONE_ROWS = Object.freeze([
-    Object.freeze({ id: 'attachedGarage', label: 'ATTACHED GARAGE', reserved: false }),
-    Object.freeze({ id: 'detachedGarage', label: 'DETACHED GARAGE', reserved: false }),
-    Object.freeze({ id: 'bilevel', label: 'BILEVEL', reserved: true }),
-    Object.freeze({ id: 'modifiedBilevel', label: 'MODIFIED BILEVEL', reserved: true }),
+    Object.freeze({ id: 'attachedGarage', label: 'ATTACHED GARAGE', reserved: false, datum: 'sill' }),
+    Object.freeze({ id: 'detachedGarage', label: 'DETACHED GARAGE', reserved: false, datum: 'beam top' }),
+    Object.freeze({ id: 'bilevel', label: 'BILEVEL', reserved: true, datum: null }),
+    Object.freeze({ id: 'modifiedBilevel', label: 'MODIFIED BILEVEL', reserved: true, datum: null }),
   ]);
 
   // ── The section table ────────────────────────────────────────────────
@@ -774,6 +785,13 @@ if (!window.DraftProjectPage) {
     line(cut, slabTopCut - slabFt, 0, slabTopHouse - slabFt, 1);
     line(cut, slabTopCut - slabFt, cut, slabTopCut, 1);
     anchors.garageSlab = { x: cut * 0.55, y: slabTopCut - slabFt - 0.45 };
+    // THE FLOOR ITSELF, which had no anchor because nothing named it. The
+    // typed offset is the SILL, 5 1/2" above this line, and the schedule
+    // called that "garage floor off main fl" -- so the one number a drafter
+    // actually pictures, how far you step down into the garage, was the one
+    // the drawing could not point at. It points here, at the slab where it
+    // meets the house wall, which is the end that shares the datum.
+    anchors.garageFloor = { x: cut * 0.28, y: slabTopHouse + 0.42 };
 
     let lowest;
     if (frostWall) {
@@ -1015,6 +1033,7 @@ if (!window.DraftProjectPage) {
     roofHeelInBand,
     DETACHED_BEAM_ABOVE_GRADE_IN,
     GARAGE_SILL_BELOW_HOUSE_FT,
+    GARAGE_SLAB_BELOW_CONCRETE_IN,
     GRADE_MIN_BELOW_CONCRETE_IN,
     GRADE_BELOW_CONCRETE_IN,
     FOUNDATION_ATTACHMENTS,
