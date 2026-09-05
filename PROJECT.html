@@ -1556,6 +1556,16 @@
             save(`${zone.label} height saved.`);
           }
           fillZones();
+          // AND REDRAW. Movie on the attached garage: "it's 'quasi attached'
+          // only because it will move up and down as the user enters new
+          // heights for it" -- so this row and the drawing are the same fact,
+          // and the section is built from attachedOffsetFt() which reads it.
+          // Without this the number saved, the box refilled, and the garage
+          // stayed put until something else happened to repaint. The GRADE
+          // LEVEL row twenty lines up has always done both; these rows did
+          // half. A pair of handlers that agree on everything except the half
+          // nobody looks at.
+          repaint();
         };
         local.addEventListener('change', () => commit(local, value => value - datumFt));
         offset.addEventListener('change', () => commit(offset, value => value));
