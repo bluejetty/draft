@@ -24,8 +24,8 @@
 //   GEOMETRY    buildWallSection with one fixed assembly: the anchors the
 //               page parks its inputs on all exist, the floor bears on a sill
 //               one floor package below MAIN FL 0 with the concrete one sill
-//               below that, the heel at the wall face is the same number
-//               roofHeelIn reports.
+//               below that, the roof stands the reported heel above the plate
+//               at the wall face, and the heel web meets both chords.
 //
 // PINS THE 4 SEP RULE, NOT MAIN AS IT STOOD. WOOD FILL HT belongs to all
 // three split rows (Gilligan's fce138d). On a main that still hatches the
@@ -118,6 +118,23 @@ check('the three split rows share one default, by value', P => {
   return [same(d.split, d.bilevel) && same(d.bilevel, d.modifiedBilevel), true];
 });
 check('the split default pours a 5\'-0" wall', P => [P.SECTION_TABLE_DEFAULTS.split.fdnWallHeightFt, 5]);
+// Movie, 4 and 5 Sep: the bungalow frames 8'-1 1/8" and the split frames
+// 9'-1 1/8" -- main floor and the storey over the garage alike. Pinned as THE
+// PRECUT ONE STEP UP rather than as 9.09375, because that is the claim: a
+// stock stud, not a height that merely happens to be right today. A literal
+// would still pass with the plate stack broken underneath it.
+check('the split frames the precut one step above the bungalow', P =>
+  [near(P.SECTION_TABLE_DEFAULTS.split.mainWallHeightFt,
+    P.wallHeightFtFromStud(P.STUD_LENGTHS_IN[1])), true]);
+check('the storey over the garage frames the same wall as the floor below', P =>
+  [near(P.SECTION_TABLE_DEFAULTS.modifiedBilevel.upperWallHeightFt,
+    P.SECTION_TABLE_DEFAULTS.modifiedBilevel.mainWallHeightFt), true]);
+// The inequality beside them: the split's wall must NOT be the house's, which
+// is the failure it was written to close. Two equalities agreeing about a
+// number they both inherit would prove nothing.
+check('the split wall is a foot clear of the bungalow it fell back to', P =>
+  [near(P.SECTION_TABLE_DEFAULTS.split.mainWallHeightFt
+    - P.wallHeightFtFromStud(P.STUD_LENGTHS_IN[0]), 1), true]);
 check('the split fill wall is the half stud plus the plate stack', P =>
   [near(P.SECTION_TABLE_DEFAULTS.split.woodFillHeightFt, (P.HALF_STUD_IN + P.PLATE_STACK_IN) / 12), true]);
 
@@ -134,7 +151,25 @@ check('precuts step by a foot from 7\'-8 5/8"', P => {
 check('wall height from stud and stud from wall height are inverses on every precut', P =>
   [P.STUD_LENGTHS_IN.every(s => near(P.studInFromWallHeightFt(P.wallHeightFtFromStud(s)), s)), true]);
 check('an 8\' precut makes an 8\'-1 1/8" wall', P => [near(P.wallHeightFtFromStud(92.625), 97.125 / 12), true]);
-check('the heel is the fascia plus the rise across the overhang', P => [P.roofHeelIn(6, 2, 4), 14]);
+// Movie, 5 Sep: the fascia is a 2x6 with its BOTTOM level with the top of the
+// top plate, so the heel is 5 1/2" plus what the roof climbs across the
+// overhang -- 13 1/2" at the office default of 4:12 over 2 ft.
+// THE BAND MUST NOT ARGUE WITH THE ARITHMETIC BEHIND IT. Movie's ceiling
+// exists to catch a typo, and the heel is DERIVED, so the ceiling has to
+// clear the largest heel the drawing can compute or it would refuse a number
+// the app itself produced. The caps are drawing-format.js's (overhang <= 6',
+// pitch <= 24:12) -- named here as literals on purpose, because that is the
+// contract this file cannot see and the one that breaks silently if it moves.
+check('the ceiling clears the steepest, deepest roof the drawing allows', P =>
+  [P.ROOF_HEEL_MAX_IN > P.roofHeelIn(5.5, 6, 24), true]);
+// The floor is an office rule ABOVE the real one: 3 1/2" is buildable and the
+// office will not draw it. Pinned as an inequality so nobody "corrects" ours
+// back down to the physical minimum.
+check('the floor sits above the 3 1/2" the trusses would actually do', P =>
+  [P.ROOF_HEEL_MIN_IN > 3.5 && P.roofHeelInBand(P.ROOF_HEEL_MIN_IN), true]);
+check('the office default heel is inside its own band', P =>
+  [P.roofHeelInBand(P.roofHeelIn(5.5, 2, 4)), true]);
+check('the heel is the fascia plus the rise across the overhang', P => [P.roofHeelIn(5.5, 2, 4), 13.5]);
 
 // Which items a type has a use for. A garage has no floor joists, no
 // sheathing over them, no fill wall and no basement; only HOUSE and the MOD
@@ -160,7 +195,7 @@ check('the bilevel zone rows are reserved', P =>
 check('the garage zone rows are live', P =>
   [P.ZONE_ROWS.filter(z => !z.reserved).map(z => z.id).sort().join(','), 'attachedGarage,detachedGarage']);
 check('the section is cut 4 ft into the wall', P => [P.CUT_DEPTH_FT, 4]);
-check('the detached garage beam rides 8" above grade at the house', P => [P.GARAGE_BEAM_ABOVE_GRADE_IN, 8]);
+check('the detached garage beam rides 8" above grade at the house', P => [P.DETACHED_BEAM_ABOVE_GRADE_IN, 8]);
 
 // ── Geometry ───────────────────────────────────────────────────────────
 // One fixed two-storey assembly, in the shape the page hands the builder.
@@ -172,7 +207,7 @@ const ASSEMBLY = Object.freeze({
     { id: 'upper', name: '2ND FL', wallHeightFt: 97.125 / 12, joistDepthIn: 9.25, sheathingIn: 0.75 },
   ],
   foundation: { wallHeightFt: 8, thicknessIn: 8, slabIn: 4, footingWidthIn: 20, footingDepthIn: 8, gradeOffsetFt: -1 },
-  roof: { pitch: 4, overhangFt: 2, fasciaIn: 6 },
+  roof: { pitch: 4, overhangFt: 2, fasciaIn: 5.5 },
   wallThicknessIn: 5.5,
 });
 const section = P => P.buildWallSection(ASSEMBLY);
@@ -198,12 +233,68 @@ check('the concrete top sits one sill below the floor package', P => {
   const fdn = rects(section(P)).find(r => near(r.h, ASSEMBLY.foundation.wallHeightFt));
   return [fdn ? near(fdn.y + fdn.h, -((11.875 + 0.75 + P.SILL_PLATE_IN) / 12)) : 'no foundation rect', true];
 });
-check('the heel at the wall face is the same number roofHeelIn reports', P => {
+// THE HEEL, AND THE WEB UNDER IT -- two facts, and this was one check until
+// 5 Sep. It looked for a vertical AT the wall face whose length was the heel,
+// which is the shape the section had before Movie's correction: that line ran
+// the full height of the heel on x = 0, so it drew the outside of the
+// building rather than a member, and it went out with 6ebf942. Pinning the
+// heel to a line that no longer exists made the check a snapshot of the
+// painter, not a statement about the roof -- so the heel is now read off the
+// top chord where it crosses the wall, and the member gets a check of its own.
+// Three lines leave the eave: the soffit, which stops at the wall, and the
+// chord's two faces, which run to the cut. Of the two that reach the cut the
+// upper is the top surface. Deliberately NOT located by a height above the
+// plate -- a raised heel moves the eave, so a plate-anchored finder reports
+// "no top chord" on a drawing that is right, which is the mistake this file
+// has now made once.
+const chordLines = s => s.parts
+  .filter(p => p.kind === 'line' && near(p.x1, -ASSEMBLY.roof.overhangFt) && near(p.x2, CUT))
+  .sort((a, b) => b.y1 - a.y1);
+const topChordFace = s => chordLines(s)[0];
+const topChordUnder = s => chordLines(s)[1];
+const CUT = 4;
+const atX = (l, x) => l.y1 + (x - l.x1) * (l.y2 - l.y1) / (l.x2 - l.x1);
+
+check('the roof stands the reported heel above the plate at the wall face', P => {
+  const plateY = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
+  const chord = topChordFace(section(P));
+  const R = ASSEMBLY.roof;
+  const want = P.roofHeelIn(R.fasciaIn, R.overhangFt, R.pitch) / 12;
+  return [chord ? near(atX(chord, 0) - plateY, want) : 'no top chord', true];
+});
+// Movie, 4 Sep: "the purple line thats the 3 1/2\" from the outside to connect
+// the top and bottom chords". A 2x4 standing at the wall with its outer face
+// flush with the outside, so what shows in section is its INNER face. Pinned
+// by WHERE IT LANDS -- top of the bottom chord up to the underside of the top
+// chord -- and not by a length, because the length grows with the pitch and a
+// number here would only be true at 4:12.
+check('the heel web stands 3 1/2\" in and meets both chords', P => {
   const s = section(P);
   const plateY = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
-  const heel = s.parts.find(p => p.kind === 'line' && near(p.x1, 0) && near(p.x2, 0) && near(p.y1, plateY));
-  const want = P.roofHeelIn(6, 2, 4) / 12;
-  return [heel ? near(heel.y2 - heel.y1, want) : 'no heel line at the plate', true];
+  const chordFt = P.ROOF_CHORD_IN / 12;
+  const webs = s.parts.filter(p => p.kind === 'line' && near(p.x1, chordFt) && near(p.x2, chordFt));
+  const under = topChordUnder(s);
+  if (webs.length !== 1) return [`${webs.length} verticals 3 1/2" in from the outside`, 'exactly one'];
+  if (!under) return ['no top chord underside to meet', 'exactly one'];
+  return [near(webs[0].y1, plateY + chordFt) && near(webs[0].y2, atX(under, chordFt)), true];
+});
+// THE OVERRIDE, WITH THE CONTROL THAT MUST MOVE BESIDE IT. Movie, 5 Sep:
+// the heel is calculated, and typeable. A check that only proved the derived
+// case still draws would pass on a build that ignored the override entirely,
+// so the two are asserted together: null draws the calculation, and a number
+// lifts the eave off the plate by exactly the difference -- a raised heel,
+// not a fatter fascia.
+check('a null heel draws the calculation, and a raised heel lifts the eave', P => {
+  const R = ASSEMBLY.roof;
+  const plateY = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
+  const derived = P.roofHeelIn(R.fasciaIn, R.overhangFt, R.pitch);
+  const eaveY = a => {
+    const chord = topChordFace(P.buildWallSection({ ...ASSEMBLY, roof: { ...R, heelIn: a } }));
+    return chord ? chord.y1 - R.fasciaIn / 12 : NaN;
+  };
+  const flat = eaveY(null);
+  const raised = eaveY(derived + 6);
+  return [near(flat, plateY) && near(raised - flat, 0.5), true];
 });
 check('the plate is the two walls plus the floor between them', P => {
   const s = section(P);
@@ -275,7 +366,7 @@ const MUTATIONS = [
   ['the bilevel zone row goes live before the feature does',
     s => s.replace("{ id: 'bilevel', label: 'BILEVEL', reserved: true }", "{ id: 'bilevel', label: 'BILEVEL', reserved: false }")],
   ['the roof rises at pitch per foot instead of pitch per twelve',
-    s => s.replace('const riseAt = x => fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);', 'const riseAt = x => fasciaFt + (roof.overhangFt + x) * roof.pitch;')],
+    s => s.replace('(roof.overhangFt + x) * (roof.pitch / 12);', '(roof.overhangFt + x) * roof.pitch;')],
   ['the foundation forgets the floor it carries',
     s => s.replace('const fdnTop = -mainDepthFt;', 'const fdnTop = 0;')],
   ['the heel forgets the overhang',
@@ -287,6 +378,32 @@ const MUTATIONS = [
   // as a failure here.
   ['the mod bilevel loses its default (falls back to the house)',
     s => s.replace('    modifiedBilevel: SPLIT_BASE,\n', '')],
+  ['the heel web goes back on the wall face (the line Movie struck out)',
+    s => s.replace('line(ROOF_CHORD_IN / 12, plateY + ROOF_CHORD_IN / 12,\n      ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - chordDropFt, 1);',
+      'line(0, plateY + ROOF_CHORD_IN / 12,\n      0, plateY + riseAt(0) - chordDropFt, 1);')],
+  // The flat-drop mistake the module's own comment warns about, made on the
+  // web instead of the chord: it stops short of the top chord's underside by
+  // an amount that is zero at 0:12 and grows with the pitch.
+  ['the heel web is dropped a flat 3 1/2" and stops short of the top chord',
+    s => s.replace('ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - chordDropFt, 1);',
+      'ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - ROOF_CHORD_IN / 12, 1);')],
+  ['a raised heel is ignored and the roof stays on the plate',
+    s => s.replace('const heelLiftFt = roof.heelIn == null ? 0', 'const heelLiftFt = true ? 0')],
+  // The plausible misreading of "raise the heel": deepen the board instead of
+  // lifting the roof. It puts the top chord in the right place and leaves the
+  // soffit sitting on the plate, so only a check that watches the EAVE sees it.
+  ['a raised heel fattens the fascia instead of lifting the roof',
+    s => s.replace('const eaveY = plateY + heelLiftFt;', 'const eaveY = plateY;')],
+  ['the ceiling drops back to something a big overhang can derive past',
+    s => s.replace('const ROOF_HEEL_MAX_IN = 20 * 12;', 'const ROOF_HEEL_MAX_IN = 48;')],
+  ['the floor is "corrected" to the real-world 3 1/2" minimum',
+    s => s.replace('const ROOF_HEEL_MIN_IN = 5.5;', 'const ROOF_HEEL_MIN_IN = 3.5;')],
+  ['the band is checked exclusively, so its own endpoints fall outside it',
+    s => s.replace('inches >= ROOF_HEEL_MIN_IN && inches <= ROOF_HEEL_MAX_IN', 'inches > ROOF_HEEL_MIN_IN && inches < ROOF_HEEL_MAX_IN')],
+  ['the split falls back to the bungalow wall again',
+    s => s.replace('const SPLIT_WALL_FT = wallHeightFtFromStud(STUD_LENGTHS_IN[1]);', 'const SPLIT_WALL_FT = wallHeightFtFromStud(STUD_LENGTHS_IN[0]);')],
+  ['the storey over the garage loses its default',
+    s => s.replace('    upperWallHeightFt: SPLIT_WALL_FT,\n', '')],
   ['the footing is hung off the wall face instead of centred',
     s => s.replace('rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);', 'rect(0, fdnBot - footD, footW, footD, 1.5);')],
 ];

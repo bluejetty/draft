@@ -278,6 +278,12 @@
       const floorLevels = levels.filter(level => ![1, 7, 8].includes(level.id))
         .sort((a, b) => a.elev - b.elev);
       let roofPitch = positive(drawing?.roofPitch, 4);
+      // NULL MEANS DERIVE, A NUMBER IS AN OVERRIDE -- the same contract the
+      // garage offset and the grade line already keep. Read through
+      // roofHeelIn() below, never directly, so that a re-normalise cannot
+      // turn "derive" into a typed-in coincidence.
+      let roofHeelOverrideIn = Number.isFinite(Number(drawing?.roofHeelIn))
+        && drawing?.roofHeelIn != null ? Number(drawing.roofHeelIn) : null;
       let roofOverhang = positive(drawing?.roofOverhang, 2);
       let activeWallType = WALL_TYPE_VIEW[drawing?.activeWallType] ? drawing.activeWallType : 'stud_2x6';
       // A page-owned key of its own, not a section-table cell: the table's
@@ -322,6 +328,7 @@
         levelAssemblies,
         roofPitch,
         roofOverhang,
+        roofHeelIn: roofHeelOverrideIn,
         activeWallType,
         foundationAttachment,
       });
@@ -446,7 +453,7 @@
             attachment: attachmentChoice(),
           };
         })(),
-        roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN },
+        roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN, heelIn: roofHeelIn() },
         wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
       });
 
@@ -492,7 +499,7 @@
       // grouped them by HOW they are produced rather than by what they
       // describe. A roof is four numbers and they belong together, typed or
       // not. The drawing's labels take the same order below.
-      addChip('heel', 'HEEL', () => fmt.formatArchitecturalInches(ROOF_FASCIA_IN + roofOverhang * roofPitch));
+      addChip('heel', 'HEEL', () => fmt.formatArchitecturalInches(roofHeelIn()));
       addChip('fascia', 'FASCIA', () => inchesOnly(ROOF_FASCIA_IN));
       addInput('overhang', 'OVERHANG', {
         name: 'overhang',
@@ -542,7 +549,7 @@
       // out loud because the file's own comment promises the opposite for
       // its neighbours.
       const attachmentChoice = () => (fdnIsIcf() ? 'sill' : foundationAttachment);
-      addInput('attachment', 'ATTACHMENT', {
+      addInput('attachment', 'FND ATTACHMENT', {
         name: 'attachment',
         kind: 'choice',
         choices: () => (fdnIsIcf() ? ['sill'] : projectPage.FOUNDATION_ATTACHMENTS)
@@ -650,6 +657,37 @@
       const fullName = control => FULL_NAME[control.key]
         || control.tag.replace('FL JST', 'joist depth').replace('WALL HT', 'wall height');
 
+      // WHAT THE DRAWING CALLS A PART, which is not what the schedule calls
+      // it. Movie struck words off the section by hand: FLOOR OFF MAIN FL
+      // gone entirely, "SILL PLATE ON THE BEAM" down to SILL PLATE, "FROST
+      // WALL HEIGHT" to FROST WALL, "GRADE OFF FDN TOP" to GRADE, "FOOTING —
+      // LEVEL WITH THE HOUSE" to FOOTING, ATTACHMENT struck and replaced by
+      // the thing itself.
+      //
+      // A row name has to say what you are typing; a label on the drawing
+      // only has to name the part your eye is already on. The schedule keeps
+      // the longer wording, the drawing gets the short one, and `null` means
+      // the part needs no label at all.
+      //
+      // Two of them follow the attachment choice, so the section says SILL
+      // PLATE or PT LADDER rather than the category the control belongs to.
+      const attachmentTag = () =>
+        (attachmentChoice() === 'ladder' ? 'PT LADDER' : 'SILL PLATE');
+      const DRAW_TAG = {
+        garageOffset: null,
+        garageSill: attachmentTag,
+        garageFdnHeight: () =>
+          (garageFoundation() === 'frostwall' ? 'FROST WALL' : 'GRADE BEAM'),
+        garageFooting: 'FOOTING',
+        grade: 'GRADE',
+        attachment: attachmentTag,
+      };
+      const drawTagFor = (key, fallback) => {
+        if (!(key in DRAW_TAG)) return fallback;
+        const t = DRAW_TAG[key];
+        return typeof t === 'function' ? t() : t;
+      };
+
       const nameOf = control =>
         typeof control.name === 'function' ? control.name() : control.name;
 
@@ -745,7 +783,7 @@
       controls.forEach(control => {
         const tag = document.createElement('span');
         tag.className = 'detail-tag';
-        tag.textContent = control.tag;
+        tag.textContent = drawTagFor(control.key, control.tag) || '';
         wrap.appendChild(tag);
         if (control.kind === 'input' || control.kind === 'choice') {
           // A choice is an input whose values are a list. The garage side grew
@@ -852,14 +890,31 @@
         const value = Number(text);
         return Number.isFinite(value) && value > 0 && value <= 24 ? value : null;
       }, true);
-      // Derived like the house's: fascia plus the rise gained across the
-      // overhang, through the module's own rule rather than restated here.
+      // SAME RULE AS THE HOUSE, and same band. Movie, 5 Sep: "garage roof
+      // should act the same yes". Calculated by default from fascia + rise,
+      // typeable when somebody raises it, and cleared back to the calculation
+      // by emptying the box -- through the module's own rule and the module's
+      // own band, not a second heel that agrees with the house's until one of
+      // them is edited. It writes the ATTACHED GARAGE row, so the garage
+      // carries its own raised heel without touching the house's.
+      const derivedGarageHeelIn = () => projectPage.roofHeelIn(
+        ROOF_FASCIA_IN,
+        cellValue('attachedGarage', 'roofOverhangFt').value,
+        cellValue('attachedGarage', 'roofPitch').value);
+      const garageHeelIn = () =>
+        sectionTable.rows.attachedGarage?.roofHeelIn ?? derivedGarageHeelIn();
       addGarage('garageHeel', 'Garage roof heel',
-        () => fmt.formatArchitecturalInches(projectPage.roofHeelIn(
-          ROOF_FASCIA_IN,
-          cellValue('attachedGarage', 'roofOverhangFt').value,
-          cellValue('attachedGarage', 'roofPitch').value)),
-        () => false, undefined, true);
+        () => fmt.formatArchitecturalInches(garageHeelIn()),
+        text => {
+          const value = parseInches(text);
+          // Empty is not a rejection here: it is how the cell goes back to
+          // following the pitch, and it has to stay reachable or a typo can
+          // strand the garage on a number nobody wanted.
+          if (value == null) { writeCell('attachedGarage', 'roofHeelIn', null); return true; }
+          if (!projectPage.roofHeelInBand(value)) return false;
+          writeCell('attachedGarage', 'roofHeelIn', value);
+          return true;
+        }, undefined, true);
       // The garage had no fascia row at all. Movie asked for the four in one
       // order "on both house and garage", and a set of four with one missing
       // is not the same set -- so it gains the row the house already had.
@@ -908,7 +963,7 @@
           return true;
         });
 
-      addGarage('garageSill', 'Sill plate on the beam',
+      addGarage('garageSill', 'Sill plate',
         () => inchesOnly(projectPage.SILL_PLATE_IN), () => false);
       // NOT "FOUNDATION WALL". Movie: "call it GARAGE GRADE BEAM HEIGHT, not
       // 'foundation wall'". With the sill directly above it the two rows read
@@ -939,7 +994,8 @@
       garageControls.forEach(control => {
         const tag = document.createElement('span');
         tag.className = 'detail-tag';
-        tag.textContent = nameOf(control).replace(/^Garage /, '').toUpperCase();
+        tag.textContent =
+          drawTagFor(control.key, nameOf(control).replace(/^Garage /, '').toUpperCase()) || '';
         garageWrap.appendChild(tag);
         const input = control.kind === 'choice'
           ? document.createElement('select') : document.createElement('input');
@@ -1034,8 +1090,14 @@
             if (row) row.hidden = true;
             return;
           }
-          tag.style.display = '';
+          // A part Movie struck off the section carries no label, but its
+          // row stays: the number is still his to set, it just does not need
+          // naming twice on a drawing he can already read.
+          const drawn = drawTagFor(key, tag.textContent);
+          tag.style.display = drawn ? '' : 'none';
+          if (tag.textContent !== (drawn || '')) tag.textContent = drawn || '';
           if (row) row.hidden = false;
+          if (!drawn) return;
           // OFF THE DRAWING, out to the margins. Movie, 4 Sep: "move the
           // house text to the right and the garage text to the left off the
           // drawing". The label keeps its part's HEIGHT -- that is what makes
@@ -1094,7 +1156,7 @@
             const label = nameOf(control);
             const nameEl = row && row.querySelector('.sched-name');
             if (nameEl && nameEl.textContent !== label) nameEl.textContent = label;
-            const short = label.replace(/^Garage /, '').toUpperCase();
+            const short = drawTagFor(key, label.replace(/^Garage /, '').toUpperCase()) || '';
             if (tag && tag.textContent !== short) tag.textContent = short;
           }
           if (control.kind === 'chip') el.textContent = control.text();
@@ -1119,6 +1181,19 @@
         roofOverhangFt: {
           get: () => roofOverhang,
           set: value => { roofOverhang = value; },
+        },
+        // Clearing the box stores null, which puts the cell back on the
+        // calculation -- the only way back, so it has to stay reachable.
+        roofHeelIn: {
+          get: () => roofHeelIn(),
+          // Null is always allowed -- it is the way back to the calculation,
+          // and a band that could trap somebody on a typed number would be a
+          // worse bug than the typo it was catching. Out of band, nothing is
+          // stored and the re-render puts the old number back.
+          set: value => {
+            if (value == null) { roofHeelOverrideIn = null; return; }
+            if (projectPage.roofHeelInBand(value)) roofHeelOverrideIn = value;
+          },
         },
         mainWallHeightFt: {
           get: () => mainFloor() && assembly(mainFloor().id).wallHeightFt,
@@ -1210,12 +1285,6 @@
       // stud reads back the wall it makes, a foundation wall the height to
       // the top of its sill (plus the wood fill where the type has one).
       const derivedText = (rowId, itemId) => {
-        if (itemId === 'heel') {
-          const pitch = cellValue(rowId, 'roofPitch').value;
-          const overhang = cellValue(rowId, 'roofOverhangFt').value;
-          return fmt.formatArchitecturalInches(
-            projectPage.roofHeelIn(ROOF_FASCIA_IN, overhang, pitch));
-        }
         // What you stand under down there: the pour and everything framed on
         // it, less the slab that buries the bottom of it.
         if (itemId === 'basementClg') {
@@ -1230,6 +1299,18 @@
       };
       const cellNote = (rowId, item) => {
         if (item.unit === 'stud') return ftIn(cellValue(rowId, item.field).value);
+        // Says which of the two a heel is. Without it the calculated number
+        // and a typed one look identical in the box, and nobody can tell
+        // whether the cell is still following the pitch or has stopped.
+        if (item.field === 'roofHeelIn') {
+          // TYPICAL, not CALCULATED. Movie, 5 Sep: "there is a calculation to
+          // find the heel ... to find the TYPICAL HEEL". The calculation is
+          // not a separate mode the cell is in -- it is how the typical heel
+          // is arrived at, and TYP is the word that goes on a drawing.
+          if (rowId === 'house' && roofHeelOverrideIn == null) return 'TYPICAL';
+          return `RAISED · ${inchesOnly(projectPage.ROOF_HEEL_MIN_IN)}\u2013${
+            inchesOnly(projectPage.ROOF_HEEL_MAX_IN)}`;
+        }
         // A fill wall doesn't get to pick its height — the pour and the floor
         // above already fixed it — so it reports the stud it wants cut to.
         if (item.field === 'woodFillHeightFt') {
@@ -1371,6 +1452,17 @@
       // every drawing anyone happens to open, and is wrong on half of them.
       // When NEW-5 lands, this gains its second branch and nothing else moves.
       // (Skipper's catch.)
+      // THE HEEL IS CALCULATED AND TYPEABLE. Movie, 5 Sep: a 2x6 fascia with
+      // its bottom level with the top of the top plate, and the roof climbing
+      // at the pitch across the eave overhang -- 13 1/2" at the office
+      // default. Right nearly always, which is why it is a DEFAULT and not a
+      // rule: a raised heel is ordered from the truss plant, and a cell that
+      // could only ever show the calculation would make that drawing
+      // impossible.
+      const derivedRoofHeelIn = () =>
+        projectPage.roofHeelIn(ROOF_FASCIA_IN, roofOverhang, roofPitch);
+      const roofHeelIn = () => roofHeelOverrideIn ?? derivedRoofHeelIn();
+
       const derivedAttachedOffsetFt = () =>
         houseSillFt() - projectPage.GARAGE_SILL_BELOW_HOUSE_FT;
       const attachedOffsetFt = () =>
@@ -1391,7 +1483,7 @@
 
       const derivedDetachedOffsetFt = () =>
         fdnTopLocalFt() - datumFt + gradeOffsetFt()
-        + projectPage.GARAGE_BEAM_ABOVE_GRADE_IN / 12;
+        + projectPage.DETACHED_BEAM_ABOVE_GRADE_IN / 12;
       const zoneOffsetFt = zone => zone.id === 'attachedGarage'
         ? attachedOffsetFt()
         : zone.id === 'detachedGarage'

@@ -986,7 +986,12 @@ if (!window.DraftDrawingFormat) {
     'split', 'bilevel', 'modifiedBilevel', 'attachedGarage', 'detachedGarage',
   ]);
   const SECTION_TABLE_FIELDS = Object.freeze([
-    'roofPitch', 'roofOverhangFt',
+    // roofHeelIn is null-until-overridden like every field here, and for once
+    // that is the whole feature rather than a storage detail: null means the
+    // cell follows fascia + rise, a number means somebody ordered a raised
+    // heel. `positive()` keeps the null, so a re-normalise cannot turn a
+    // calculated heel into a typed 0.
+    'roofPitch', 'roofOverhangFt', 'roofHeelIn',
     'mainWallHeightFt', 'mainJoistDepthIn', 'mainSheathingIn',
     'upperWallHeightFt', 'upperJoistDepthIn',
     'fdnWallHeightFt', 'woodFillHeightFt',
