@@ -16,7 +16,8 @@
 //   footingWidthIn(levelId)  → footing width under that level's walls
 //   walls() / roofs() / floors() / fenestrations() → entity collections
 //   garageOutlines(levelId)  → garage outlines on a level
-//   garageFoundation(garage) → 'gradebeam' | 'thickened'
+//   garageFoundation(garage) → 'gradebeam' | 'thickened' | 'frostwall'
+//   buildType()              → the drawing's build type, or null
 //   edgeOnOutline(a, b, outline) → true when edge a→b lies on the outline
 //   masterPointById(srcId)   → BONEYARD master point or null
 //   gableCornerStyle()       → 'flat' | 'return' | 'porkchop' | 'boxed'
@@ -49,11 +50,31 @@ if (!window.DraftCutView) {
   const GRADE_BELOW_FOUNDATION_TOP_FT = 1;
   const GARAGE_BEAM_ABOVE_GRADE_FT = 1;
   const DETACHED_BEAM_ABOVE_GRADE_IN = 8;
+  // FROST WALL (Movie, 4 Sep): a garage on a concrete wall and strip footing
+  // at the house's footing depth. Its top is set SILL TO SILL against the
+  // house: level on a bilevel or modified bilevel, GARAGE_SILL_BELOW_HOUSE_FT
+  // lower on a bungalow, a 2 storey, or an untyped drawing. Sill to sill and
+  // not concrete to concrete, because the two agree only while both
+  // attachments stand the same plate proud of the concrete. A detached frost
+  // wall has no house sill to meet and tops out where its grade beam would.
+  // project-page.js carries the same 2 under the same name; PROJECT.html
+  // cannot reach STANDARDS.
+  const GARAGE_SILL_BELOW_HOUSE_FT = 2;
   // Detached-garage thickened-edge slab: a LEVEL FLAT monolithic pour on
   // gravel — 4" field, 1'-0" deep perimeter edge, 45° taper from the edge
   // back up to the field.
   const GARAGE_EDGE_DEPTH_IN = 12;
   const ROOF_FASCIA_IN = 5.5;
+
+  // Top of a frost-wall garage's concrete, on the section's foundation
+  // datum. See GARAGE_SILL_BELOW_HOUSE_FT for the rule.
+  function frostWallTop(env, fdn, garage) {
+    if (garage.open !== true && garage.detached === true) {
+      return fdn.grade + DETACHED_BEAM_ABOVE_GRADE_IN / 12;
+    }
+    const split = (env.buildType ? ['bilevel', 'modifiedBilevel'].includes(env.buildType()) : false);
+    return fdn.wallTop - (split ? 0 : GARAGE_SILL_BELOW_HOUSE_FT);
+  }
 
   function sectionLevelStack(env) {
     const floors = env.floorLevels();
@@ -347,7 +368,10 @@ if (!window.DraftCutView) {
         ctx.strokeRect(fx, Y(base), fwid, (fdn.footingIn / 12) * pxPerFt);
       }
     });
-    const bearingCrossings = fdnCrossings.filter(c => c.wall.baseHeight <= 0.01);
+    // The house slab spans the HOUSE's bearing walls. A frost-wall garage
+    // bears too, but its slab is its own, higher and sloped, so its
+    // crossings are kept out of the house span and drawn below.
+    const bearingCrossings = fdnCrossings.filter(c => c.wall.baseHeight <= 0.01 && !c.garage);
     const fdnSpan = bearingCrossings.length
       ? { min: Math.min(...bearingCrossings.map(c => c.u)), max: Math.max(...bearingCrossings.map(c => c.u)) }
       : null;
@@ -358,6 +382,22 @@ if (!window.DraftCutView) {
       ctx.fillRect(x, Y(fdn.slabTop), wid, (fdn.slabIn / 12) * pxPerFt);
       ctx.strokeRect(x, Y(fdn.slabTop), wid, (fdn.slabIn / 12) * pxPerFt);
     }
+    // A frost-wall garage's slab: 4" thick, its top 4" below the top of the
+    // wall's concrete, between the garage's own bearing walls. The 1/8"/ft
+    // fall is toward the door, across the cut, so the band reads level here.
+    const frostGarages = [...new Set(fdnCrossings
+      .filter(c => c.garage && c.wall.baseHeight <= 0.01 && env.garageFoundation(c.garage) === 'frostwall')
+      .map(c => c.garage))];
+    frostGarages.forEach(garage => {
+      const us = fdnCrossings.filter(c => c.garage === garage).map(c => c.u);
+      if (us.length < 2 || Math.max(...us) - Math.min(...us) <= 1) return;
+      const top = frostWallTop(env, fdn, garage) - GARAGE_SLAB_THICKNESS_IN / 12;
+      ctx.fillStyle = 'rgba(150,150,155,0.35)';
+      ctx.strokeStyle = INK; ctx.lineWidth = 1;
+      const x = X(Math.min(...us)), wid = (Math.max(...us) - Math.min(...us)) * pxPerFt;
+      ctx.fillRect(x, Y(top), wid, (GARAGE_SLAB_THICKNESS_IN / 12) * pxPerFt);
+      ctx.strokeRect(x, Y(top), wid, (GARAGE_SLAB_THICKNESS_IN / 12) * pxPerFt);
+    });
 
     // Hung grade beams carry a slab poured over the plate on graded fill:
     // the 4" garage slab, its under-slab line dashed, gravel dotted below —
@@ -833,11 +873,13 @@ if (!window.DraftCutView) {
     // Wall faces, far to near, each with the openings it hosts. A garage
     // face stands on its own bearing — the beam plate or the slab — so its
     // face and its doors run down to that, not to the house floor.
-    const garageBase = garage => garage.open === true
-      ? fdn.grade + GARAGE_BEAM_ABOVE_GRADE_FT + GARAGE_BEAM_PLATE_IN / 12
-      : env.garageFoundation(garage) === 'thickened'
-        ? fdn.grade + GARAGE_SLAB_THICKNESS_IN / 12
-        : fdn.grade + (DETACHED_BEAM_ABOVE_GRADE_IN + GARAGE_BEAM_PLATE_IN) / 12;
+    const garageBase = garage => env.garageFoundation(garage) === 'frostwall'
+      ? frostWallTop(env, fdn, garage) + GARAGE_BEAM_PLATE_IN / 12
+      : garage.open === true
+        ? fdn.grade + GARAGE_BEAM_ABOVE_GRADE_FT + GARAGE_BEAM_PLATE_IN / 12
+        : env.garageFoundation(garage) === 'thickened'
+          ? fdn.grade + GARAGE_SLAB_THICKNESS_IN / 12
+          : fdn.grade + (DETACHED_BEAM_ABOVE_GRADE_IN + GARAGE_BEAM_PLATE_IN) / 12;
     const HEAD_FT = 6 + 10 / 12, SILL_FT = 3;
     // A gable-end wall climbs to the roof: where a roof bearing on this
     // wall's plate runs a GABLE edge just past the face, the top of the
@@ -1435,6 +1477,7 @@ if (!window.DraftCutView) {
       GRADE_BELOW_FOUNDATION_TOP_FT,
       GARAGE_BEAM_ABOVE_GRADE_FT,
       DETACHED_BEAM_ABOVE_GRADE_IN,
+      GARAGE_SILL_BELOW_HOUSE_FT,
       GARAGE_EDGE_DEPTH_IN,
       ROOF_FASCIA_IN,
     }),

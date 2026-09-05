@@ -406,6 +406,68 @@ test('BUILD HOUSE grows the open-leg beam, flat slab, flush walls, and the dropp
   expect(Math.max(...garageRoof.points.map(point => point.x))).toBeGreaterThan(20);
 });
 
+// An attached garage has no foundation prompt of its own; the PROJECT
+// page's GARAGE FOUNDATION cell answers for it, and FROST WALL there is the
+// first section-table cell BUILD HOUSE reads. The wall's top is set sill to
+// sill against the house (Movie, 4 Sep): level on a bilevel, 2'-0" below
+// on a bungalow or an untyped drawing.
+async function plantAttachedFrostWall(page, buildType) {
+  await page.evaluate(async type => {
+    const file = await window.SharedFileStore.loadSharedFile('model-drawing');
+    const d = JSON.parse(await file.text());
+    d.sectionTable.rows.attachedGarage.garageFoundation = 'frostwall';
+    d.buildType = type;
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(d)], 'drawing.json', { type: 'application/json' }), 'model-drawing');
+  }, buildType);
+  await page.reload();
+  await h.waitForModelReady(page);
+}
+
+async function attachedFrostWallBuild(page, buildType) {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageOutline(page);
+  await plantAttachedFrostWall(page, buildType);
+  await buildHouse(page);
+  await h.waitForSaved(page);
+  const saved = await h.savedDrawing(page);
+  const fdnWalls = saved.walls.filter(wall => wall.levelId === 1);
+  const garageWalls = fdnWalls.filter(wall => h.touchesPoint(wall, 20, -4) || h.touchesPoint(wall, 20, 4));
+  const houseWall = fdnWalls.find(wall => !garageWalls.includes(wall));
+  return { saved, garageWalls, houseWall };
+}
+
+test('the PROJECT cell says FROST WALL: the attached garage stands on the footing, 2\'-0" below an untyped house', async ({ page }) => {
+  const { saved, garageWalls, houseWall } = await attachedFrostWallBuild(page, null);
+  expect(garageWalls).toHaveLength(3);
+  garageWalls.forEach(wall => {
+    expect(wall.wallType).toBe('concrete_8');
+    // Down to the house's footing depth, not hung 32" off grade.
+    expect(wall.baseHeight).toBe(0);
+    expect(wall.topHeight).toBeCloseTo(houseWall.topHeight - 2, 3);
+  });
+  // Footing lines under the three garage legs only -- the house side keeps
+  // the house's own footing. Two rings, three legs each.
+  const garageFootings = saved.lines.filter(line => line.levelId === 1
+    && line.layer === 'S-FOOTING' && Math.max(line.start.x, line.end.x) > 8.5);
+  expect(garageFootings).toHaveLength(6);
+  // Sloped to the door, where an attached grade-beam slab pours flat.
+  const slab = saved.floors.find(floor => floor.garage);
+  expect(slab.slopeInPerFt).toBeCloseTo(1 / 8, 5);
+  // No piles: the wall bears on its footing.
+  expect(saved.columns.filter(column => column.levelId === 1)).toHaveLength(0);
+});
+
+test('the same frost wall on a BILEVEL tops out level with the house', async ({ page }) => {
+  const { garageWalls, houseWall } = await attachedFrostWallBuild(page, 'bilevel');
+  expect(garageWalls).toHaveLength(3);
+  garageWalls.forEach(wall => {
+    expect(wall.baseHeight).toBe(0);
+    expect(wall.topHeight).toBeCloseTo(houseWall.topHeight, 3);
+  });
+});
+
 test('a second BUILD HOUSE click never doubles the garage', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);

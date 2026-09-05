@@ -603,10 +603,11 @@
   <div style="position:fixed; inset:0; z-index:51; display:flex; align-items:flex-start; justify-content:center; padding-top:78px; background:rgba(29,31,32,0.18);">
     <div data-detached-foundation-prompt role="dialog" aria-modal="true" aria-label="Detached garage foundation" style="width:min(420px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">DETACHED GARAGE FOUNDATION</div>
-      <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">Grade beam gets a 4&quot; slab sloping 1/8&quot;/ft to the door on graded fill; thickened edge pours one LEVEL monolithic slab — 4&quot; field, 1'-0&quot; edge, 45&deg; taper, on gravel.</div>
+      <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">Grade beam hangs off grade with a 4&quot; slab sloping 1/8&quot;/ft to the door on graded fill; thickened edge pours one LEVEL monolithic slab — 4&quot; field, 1'-0&quot; edge, 45&deg; taper, on gravel; frost wall stands 8&quot; concrete on a strip footing at the house's footing depth, with the same sloped slab.</div>
       <div style="display:flex; gap:6px; margin-top:14px;">
         <button data-detached-grade-beam onClick="{{ detachedGradeBeam }}" style="flex:1; height:28px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">GRADE BEAM</button>
         <button data-detached-thickened-edge onClick="{{ detachedThickenedEdge }}" style="flex:1; height:28px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">THICKENED-EDGE SLAB</button>
+        <button data-detached-frost-wall onClick="{{ detachedFrostWall }}" style="flex:1; height:28px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">FROST WALL</button>
       </div>
     </div>
   </div>
@@ -2006,6 +2007,7 @@ const {
   GRADE_BELOW_FOUNDATION_TOP_FT,
   GARAGE_BEAM_ABOVE_GRADE_FT,
   DETACHED_BEAM_ABOVE_GRADE_IN,
+  GARAGE_SILL_BELOW_HOUSE_FT,
   GARAGE_EDGE_DEPTH_IN,
   ROOF_FASCIA_IN,
 } = window.DraftCutView.STANDARDS;
@@ -9218,6 +9220,7 @@ class Component extends DCLogic {
       fenestrations: () => this._fenestrations,
       garageOutlines: levelId => this._garageOutlines(levelId),
       garageFoundation: garage => this._garageFoundation(garage),
+      buildType: () => this.state.buildType,
       edgeOnOutline: (a, b, outline) => this._edgeOnOutline(a, b, outline),
       masterPointById: srcId => this._masterPointById(srcId),
       gableCornerStyle: () => this._gableCornerStyle(),
@@ -11678,7 +11681,7 @@ class Component extends DCLogic {
       garage: true,
       open: false,
       detached: true,
-      foundation: foundation === 'thickened' ? 'thickened' : 'gradebeam',
+      foundation: format.GARAGE_FOUNDATIONS.includes(foundation) ? foundation : 'gradebeam',
       cornerStubs: [],
       marks: [],
       points: pending.points.map(point => {
@@ -11694,7 +11697,9 @@ class Component extends DCLogic {
       outlineGarage: null,
       drawingMessage: master.foundation === 'thickened'
         ? 'DETACHED GARAGE closed — thickened-edge slab: one LEVEL monolithic pour, 4" field, 1\'-0" edge, 45° taper, on gravel. BUILD HOUSE raises its walls, slab, doors, and roof.'
-        : 'DETACHED GARAGE closed — grade beam all around; the 4" slab slopes 1/8"/ft to the door on graded fill. BUILD HOUSE raises its walls, beam, slab, doors, and roof.',
+        : master.foundation === 'frostwall'
+          ? 'DETACHED GARAGE closed — frost wall all around: 8" concrete on a strip footing at the house\'s footing depth, top 8" above grade; the 4" slab slopes 1/8"/ft to the door. BUILD HOUSE raises its walls, frost wall, footings, slab, doors, and roof.'
+          : 'DETACHED GARAGE closed — grade beam all around; the 4" slab slopes 1/8"/ft to the door on graded fill. BUILD HOUSE raises its walls, beam, slab, doors, and roof.',
       drawingMessageError: false,
     });
     return master;
@@ -11983,11 +11988,39 @@ class Component extends DCLogic {
     return this._boneyardOutlines.find(master => master.id === garage?.masterId) || null;
   }
 
-  // A garage's foundation construction: 'thickened' (detached thickened-edge
-  // monolithic slab) or 'gradebeam' (everything else).
+  // A garage's foundation construction: 'gradebeam' (hung off grade),
+  // 'thickened' (a detached thickened-edge monolithic slab) or 'frostwall'
+  // (concrete on a strip footing at the house's footing depth). The outline
+  // answers first -- the detached prompt stores its choice on the master.
+  // An attached garage has no prompt of its own, so when the outline has
+  // no answer the PROJECT page's GARAGE FOUNDATION cell decides; that is
+  // the first cell of the section table BUILD HOUSE reads. Grade beam when
+  // nobody has said, which is what every drawing before the cell got.
   _garageFoundation(garage) {
-    const mode = garage?.foundation || this._garageMaster(garage)?.foundation;
-    return mode === 'thickened' ? 'thickened' : 'gradebeam';
+    const stored = garage?.foundation || this._garageMaster(garage)?.foundation;
+    if (stored === 'thickened' || stored === 'frostwall') return stored;
+    if (stored === 'gradebeam') return 'gradebeam';
+    const row = this._garageDetached(garage) ? 'detachedGarage' : 'attachedGarage';
+    const cell = this.state.sectionTable?.rows?.[row]?.garageFoundation;
+    if (cell === 'frostwall') return 'frostwall';
+    if (cell === 'thickened' && row === 'detachedGarage') return 'thickened';
+    return 'gradebeam';
+  }
+
+  // Top of a frost wall's concrete, on the foundation level's datum. Set
+  // SILL TO SILL against the house (Movie, 4 Sep): the garage sill level
+  // with the house sill on a bilevel or modified bilevel, GARAGE_SILL_BELOW_
+  // HOUSE_FT lower on a bungalow, a 2 storey, or an untyped drawing. Both
+  // sills stand the same plate proud of their concrete, so the concrete
+  // tops carry the same relation -- but the rule is the sills, and this
+  // stays true if the two attachments ever stop sharing a plate. A
+  // detached frost wall has no house sill to meet; it tops out where its
+  // grade beam would, DETACHED_BEAM_ABOVE_GRADE_IN above grade. The typed
+  // PROJECT offset is not read here yet -- that is a later piece.
+  _garageFrostWallTopFt(garage, houseTop, grade) {
+    if (this._garageDetached(garage)) return grade + DETACHED_BEAM_ABOVE_GRADE_IN / 12;
+    const split = format.SPLIT_BUILD_TYPES.includes(this.state.buildType);
+    return houseTop - (split ? 0 : GARAGE_SILL_BELOW_HOUSE_FT);
   }
 
   _garageDetached(garage) {
@@ -12137,12 +12170,16 @@ class Component extends DCLogic {
       const points = garage.points;
       const refLine = this._outlineInteriorRef(open ? this._garageSlabPolygon(garage) : points);
       const grade = houseTop - GRADE_BELOW_FOUNDATION_TOP_FT;
-      const topHeight = open ? grade + GARAGE_BEAM_ABOVE_GRADE_FT
+      const frostWall = this._garageFoundation(garage) === 'frostwall';
+      const topHeight = frostWall ? this._garageFrostWallTopFt(garage, houseTop, grade)
+        : open ? grade + GARAGE_BEAM_ABOVE_GRADE_FT
         : detached ? grade + DETACHED_BEAM_ABOVE_GRADE_IN / 12
         : houseTop;
       // Attached and detached grade beams alike HANG off grade — the 32"
-      // concrete band, never a basement wall down to a strip footing.
-      const baseHeight = open || detached ? topHeight - GARAGE_BEAM_CONCRETE_IN / 12 : 0;
+      // concrete band, never a basement wall down to a strip footing. A
+      // FROST WALL is the opposite: it stands on a strip footing at the
+      // house's footing depth, so its base is the house wall's base.
+      const baseHeight = frostWall ? 0 : open || detached ? topHeight - GARAGE_BEAM_CONCRETE_IN / 12 : 0;
       const existing = this._walls.filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'foundation');
       const hasWall = (a, b) => existing.some(wall =>
         (Math.hypot(wall.start.x - a.x, wall.start.z - a.z) <= eps && Math.hypot(wall.end.x - b.x, wall.end.z - b.z) <= eps)
@@ -12213,7 +12250,9 @@ class Component extends DCLogic {
     let builtAny = false;
     this._garageOutlines(levelId).forEach(garage => {
       if (garage.open !== true) return;
-      if (this._garageFoundation(garage) === 'thickened') return;
+      // Piles carry a hung beam. A thickened-edge slab and a frost wall
+      // both bear on the ground themselves.
+      if (this._garageFoundation(garage) !== 'gradebeam') return;
       const ends = [garage.points[0], garage.points[garage.points.length - 1]];
       ends.forEach(end => {
         const exists = this._columns.some(column => column.levelId === levelId
@@ -12256,6 +12295,50 @@ class Component extends DCLogic {
     return [...pts, ...between.map(i => ({ x: house.points[i].x, z: house.points[i].z, srcId: house.points[i].pointId ?? null }))];
   }
 
+  // A frost wall's strip footing: the house's footing width, centred on the
+  // wall, drawn as S-FOOTING lines on the foundation plan the way the house's
+  // are. A detached loop rings all the way round. An attached run rings the
+  // slab polygon and keeps only the edges that are garage legs -- the house
+  // side already has the house footing, and a second pair of lines there
+  // would draw a footing under a wall that is not being poured.
+  _buildGarageFootings() {
+    const levelId = 1;
+    const house = this._houseOutline(levelId);
+    const wallFt = (WALL_TYPES.find(type => type.id === 'concrete_8')?.totalIn || 8) / 12;
+    const projFt = Math.max(0, this._footingWidthIn(levelId) / 12 - wallFt) / 2;
+    const existing = this._lines.filter(line => line.levelId === levelId
+      && (line.view || 'plan') === 'foundation' && line.layer === 'S-FOOTING');
+    const eps = 0.05;
+    const hasLine = (a, b) => existing.some(line =>
+      (Math.hypot(line.start.x - a.x, line.start.z - a.z) <= eps && Math.hypot(line.end.x - b.x, line.end.z - b.z) <= eps)
+      || (Math.hypot(line.start.x - b.x, line.start.z - b.z) <= eps && Math.hypot(line.end.x - a.x, line.end.z - a.z) <= eps));
+    let builtAny = false;
+    this._garageOutlines(levelId).forEach(garage => {
+      if (this._garageFoundation(garage) !== 'frostwall') return;
+      const attached = garage.open === true && !this._garageDetached(garage);
+      const polygon = this._garageSlabPolygon(garage);
+      if (polygon.length < 3) return;
+      const rings = window.DraftBuildHouse.footingRings(polygon, wallFt, projFt);
+      rings.forEach(ring => ring.forEach((point, index) => {
+        const next = ring[(index + 1) % ring.length];
+        if (Math.hypot(next.x - point.x, next.z - point.z) < 0.01) return;
+        const a = polygon[index], b = polygon[(index + 1) % polygon.length];
+        if (attached && house && this._edgeOnOutline(a, b, house)) return;
+        if (hasLine(point, next)) return;
+        this._lines.push({
+          id: this._newDrawingItemId('line'),
+          start: this._linkVertex(this._mergeVertex({ x: point.x, z: point.z }, levelId, 'foundation', 'garage'), a.srcId),
+          end: this._linkVertex(this._mergeVertex({ x: next.x, z: next.z }, levelId, 'foundation', 'garage'), b.srcId),
+          levelId,
+          view: 'foundation',
+          layer: 'S-FOOTING',
+        });
+        builtAny = true;
+      }));
+    });
+    return builtAny;
+  }
+
   // Garage slab: always a uniform 4" pour. An open attached garage pours
   // flat, its polygon closed by the house boundary path between the
   // attachments (area closure only). A grade-beam garage slopes 1/8"/ft to
@@ -12268,7 +12351,11 @@ class Component extends DCLogic {
     let builtAny = false;
     this._garageOutlines(levelId).forEach(garage => {
       const open = garage.open === true;
-      const thickened = this._garageFoundation(garage) === 'thickened';
+      const foundation = this._garageFoundation(garage);
+      const thickened = foundation === 'thickened';
+      // Movie, 4 Sep, for the frost wall: "slab 4\" conc slope 1/8\" down
+      // from back to the garage door opening (front)" -- attached or not.
+      const sloped = foundation === 'frostwall' || (!open && !thickened);
       const polygon = this._garageSlabPolygon(garage);
       const centroid = polygon.reduce(
         (sum, point) => ({ x: sum.x + point.x, z: sum.z + point.z }),
@@ -12285,7 +12372,7 @@ class Component extends DCLogic {
         view: 'foundation',
         structure: 'slab',
         garage: true,
-        slopeInPerFt: open || thickened ? 0 : GARAGE_SLAB_SLOPE_IN_PER_FT,
+        slopeInPerFt: sloped ? GARAGE_SLAB_SLOPE_IN_PER_FT : 0,
         thickness: GARAGE_SLAB_THICKNESS_IN / 12,
         thickenedEdge: thickened,
         assembly: {
@@ -13349,16 +13436,22 @@ class Component extends DCLogic {
     const openGarage = garages.some(garage => garage.open === true);
     const thickenedGarage = garages.some(garage =>
       garage.open !== true && this._garageFoundation(garage) === 'thickened');
+    const frostGarage = garages.some(garage => this._garageFoundation(garage) === 'frostwall');
     const slopedGarage = garages.some(garage =>
-      garage.open !== true && this._garageFoundation(garage) !== 'thickened');
+      this._garageFoundation(garage) === 'frostwall'
+      || (garage.open !== true && this._garageFoundation(garage) !== 'thickened'));
     const attachedClosedGarage = garages.some(garage =>
       garage.open !== true && !this._garageDetached(garage));
     if (this._buildGarageWalls()) built.push('garage walls');
-    if (this._buildGarageGradeBeam()) built.push(openGarage ? 'garage grade beam (32" + 1.5" plate)' : 'garage grade beam');
+    if (this._buildGarageGradeBeam()) {
+      built.push(frostGarage ? 'garage frost wall (8" concrete on the footing)'
+        : openGarage ? 'garage grade beam (32" + 1.5" plate)' : 'garage grade beam');
+    }
+    if (this._buildGarageFootings()) built.push('garage footings');
     if (this._buildGaragePiles()) built.push('2 garage piles at the house — COLUMN or COPY places the rest along the beam');
     if (this._buildGarageSlab()) {
       const slabLabels = [];
-      if (openGarage) slabLabels.push('flat 4"');
+      if (openGarage && !frostGarage) slabLabels.push('flat 4"');
       if (slopedGarage) slabLabels.push('4" @ 1/8"/ft to door');
       if (thickenedGarage) slabLabels.push('level 4" + 1\'-0" thickened edge');
       built.push(`garage slab (${slabLabels.join(' / ') || '4"'})`);
@@ -22409,6 +22502,7 @@ class Component extends DCLogic {
       detachedFoundationPromptOpen: this.state.detachedFoundationPrompt === true,
       detachedGradeBeam: () => this._chooseDetachedFoundation('gradebeam'),
       detachedThickenedEdge: () => this._chooseDetachedFoundation('thickened'),
+      detachedFrostWall: () => this._chooseDetachedFoundation('frostwall'),
       fileGuardOpen: Boolean(this.state.fileGuardAction),
       fileGuardTitle: this.state.fileGuardAction === 'new' ? 'NEW DRAWING' : 'OPEN DRAWING',
       fileGuardSave: () => { this._saveDrawingFile(); this._runFileAction(); },
