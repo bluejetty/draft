@@ -106,25 +106,35 @@ check('every zone id is also a section-table row', P => {
 
 // ── Rules ──────────────────────────────────────────────────────────────
 const itemById = (P, id) => P.SECTION_TABLE_ITEMS.find(i => i.id === id);
-const SPLIT_FAMILY = ['split', 'bilevel', 'modifiedBilevel'];
+// TWO, not three. The SPLIT row went on 5 Sep (Movie's option A): the family
+// name is not a build anybody makes, so no build type could select its row and
+// anything stored under it was unread by construction. SPLIT_BASE survives as
+// what it always was -- the defaults these two start from.
+const SPLIT_FAMILY = ['bilevel', 'modifiedBilevel'];
 const GARAGES = ['attachedGarage', 'detachedGarage'];
 
 // Movie, 4 Sep: a SPLIT is the family name for BILEVEL and MODIFIED BILEVEL,
 // and all three pour the same 5'-0" wall with wood above it.
 check('WOOD FILL HT belongs to exactly the split family', P =>
   [same([...itemById(P, 'woodFill').types].sort(), [...SPLIT_FAMILY].sort()), true]);
-check('the three split rows share one default, by value', P => {
+check('the two split rows share one default, by value', P => {
   const d = P.SECTION_TABLE_DEFAULTS;
-  return [same(d.split, d.bilevel) && same(d.bilevel, d.modifiedBilevel), true];
+  return [same(d.bilevel, d.modifiedBilevel), true];
 });
-check('the split default pours a 5\'-0" wall', P => [P.SECTION_TABLE_DEFAULTS.split.fdnWallHeightFt, 5]);
+// The family name must not come back as a row. A default keyed by it would be
+// storage nothing can select, which is the state option A removed.
+check('SPLIT is a defaults holder, not a row and not a stored type', P => {
+  const rows = P.SECTION_TABLE_ROWS.map(r => r.id);
+  return [!rows.includes('split') && P.SECTION_TABLE_DEFAULTS.split === undefined, true];
+});
+check('the split default pours a 5\'-0" wall', P => [P.SECTION_TABLE_DEFAULTS.bilevel.fdnWallHeightFt, 5]);
 // Movie, 4 and 5 Sep: the bungalow frames 8'-1 1/8" and the split frames
 // 9'-1 1/8" -- main floor and the storey over the garage alike. Pinned as THE
 // PRECUT ONE STEP UP rather than as 9.09375, because that is the claim: a
 // stock stud, not a height that merely happens to be right today. A literal
 // would still pass with the plate stack broken underneath it.
 check('the split frames the precut one step above the bungalow', P =>
-  [near(P.SECTION_TABLE_DEFAULTS.split.mainWallHeightFt,
+  [near(P.SECTION_TABLE_DEFAULTS.bilevel.mainWallHeightFt,
     P.wallHeightFtFromStud(P.STUD_LENGTHS_IN[1])), true]);
 check('the storey over the garage frames the same wall as the floor below', P =>
   [near(P.SECTION_TABLE_DEFAULTS.modifiedBilevel.upperWallHeightFt,
@@ -133,10 +143,10 @@ check('the storey over the garage frames the same wall as the floor below', P =>
 // is the failure it was written to close. Two equalities agreeing about a
 // number they both inherit would prove nothing.
 check('the split wall is a foot clear of the bungalow it fell back to', P =>
-  [near(P.SECTION_TABLE_DEFAULTS.split.mainWallHeightFt
+  [near(P.SECTION_TABLE_DEFAULTS.bilevel.mainWallHeightFt
     - P.wallHeightFtFromStud(P.STUD_LENGTHS_IN[0]), 1), true]);
 check('the split fill wall is the half stud plus the plate stack', P =>
-  [near(P.SECTION_TABLE_DEFAULTS.split.woodFillHeightFt, (P.HALF_STUD_IN + P.PLATE_STACK_IN) / 12), true]);
+  [near(P.SECTION_TABLE_DEFAULTS.bilevel.woodFillHeightFt, (P.HALF_STUD_IN + P.PLATE_STACK_IN) / 12), true]);
 
 // The kerf is a contract, not a number: an 8' precut sawn in two loses one
 // 1/8" blade, so each half is 46 1/4", not 46 5/16".
@@ -350,7 +360,7 @@ console.log(`\n${CHECKS.length - baseline.length}/${CHECKS.length} checks passed
 // not there (the geometry-2d.js lesson, 4 Sep).
 const MUTATIONS = [
   ['BILEVEL loses its wood fill again',
-    s => s.replace("const SPLIT_TYPES = ['split', 'bilevel', 'modifiedBilevel'];", "const SPLIT_TYPES = ['split', 'modifiedBilevel'];")],
+    s => s.replace("const SPLIT_TYPES = ['bilevel', 'modifiedBilevel'];", "const SPLIT_TYPES = ['modifiedBilevel'];")],
   ['the split pours a 6\' wall',
     s => s.replace('fdnWallHeightFt: 5,', 'fdnWallHeightFt: 6,')],
   ['the kerf is forgotten (46 5/16")',
@@ -362,7 +372,7 @@ const MUTATIONS = [
   ['a default is keyed by a misspelt field (an empty cell on the page)',
     s => s.replace('woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,', 'woodFillHeight: (HALF_STUD_IN + PLATE_STACK_IN) / 12,')],
   ['a types entry is misspelt (a hatched cell on the page)',
-    s => s.replace("const SPLIT_TYPES = ['split', 'bilevel', 'modifiedBilevel'];", "const SPLIT_TYPES = ['split', 'bilevl', 'modifiedBilevel'];")],
+    s => s.replace("const SPLIT_TYPES = ['bilevel', 'modifiedBilevel'];", "const SPLIT_TYPES = ['bilevl', 'modifiedBilevel'];")],
   ['the bilevel zone row goes live before the feature does',
     s => s.replace("{ id: 'bilevel', label: 'BILEVEL', reserved: true }", "{ id: 'bilevel', label: 'BILEVEL', reserved: false }")],
   ['the roof rises at pitch per foot instead of pitch per twelve',
@@ -404,6 +414,15 @@ const MUTATIONS = [
     s => s.replace('const SPLIT_WALL_FT = wallHeightFtFromStud(STUD_LENGTHS_IN[1]);', 'const SPLIT_WALL_FT = wallHeightFtFromStud(STUD_LENGTHS_IN[0]);')],
   ['the storey over the garage loses its default',
     s => s.replace('    upperWallHeightFt: SPLIT_WALL_FT,\n', '')],
+  // Option A undone two ways, because the row and its default are separate
+  // lines and putting back either one alone re-creates storage nothing can
+  // select.
+  ['the SPLIT row comes back',
+    s => s.replace("    Object.freeze({ id: 'house', label: 'HOUSE', live: true }),",
+      "    Object.freeze({ id: 'house', label: 'HOUSE', live: true }),\n    Object.freeze({ id: 'split', label: 'SPLIT', live: false }),")],
+  ['a default comes back keyed by the family name',
+    s => s.replace('  const SECTION_TABLE_DEFAULTS = Object.freeze({',
+      '  const SECTION_TABLE_DEFAULTS = Object.freeze({\n    split: SPLIT_BASE,')],
   ['the footing is hung off the wall face instead of centred',
     s => s.replace('rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);', 'rect(0, fdnBot - footD, footW, footD, 1.5);')],
 ];

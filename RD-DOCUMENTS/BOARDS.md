@@ -213,6 +213,46 @@ the datum's colour on a skin nobody had checked it against.
 lossless re-encode of the entry-page PNGs (49 KB → 385 KB in PR #204, on the
 first page an iPad loads).
 
+### The SPLIT row can never be the live one
+
+Found 5 Sep while checking Skipper's NEW-5 build-type mapping. `SPLIT` is a
+complete section-table row -- visible (`project-page.js:51`), in `HOUSE_LIKE`
+and `SPLIT_TYPES` so it has a WOOD FILL cell, carrying its own `SPLIT_BASE`
+defaults, and **storable** (`drawing-format.js:986`). A drafter can type
+numbers into it and they persist.
+
+Nothing will ever read them. A drawing is ONE building, and once the build
+type picks the live row there is no build type called SPLIT -- Movie, 4 Sep:
+*"a SPLIT is either a MODIFIED BILEVEL or BILEVEL"*. Skipper's
+`sectionRowForBuildType` returns `bilevel`, `modifiedBilevel`, `house` or
+null, and correctly never returns `split`.
+
+Two ways out. **A:** SPLIT stops being a row and stays a defaults holder --
+`SPLIT_BASE` feeds BILEVEL and MOD BILEVEL exactly as now. **B:** it stays
+visible but read-only, a reference row. A is recommended: B leaves a row on
+screen whose only content is numbers already shown on the two rows below it,
+and it would be the table's only read-only row. Five references in
+`project-page.js` and `drawing-format.js`, plus the harness's `SPLIT_FAMILY`
+and two mutations. **Movie's call, not made yet.**
+
+### `roof.heel` does not know the heel can be overridden
+
+`MODEL.dc.html:_roofHeelIn` derives fascia + overhang × pitch per roof plane
+and serialises it as `heel:` on every save. Since #283 the PROJECT page can
+override the heel, and that override is building-level -- so a raised heel
+shows on the page while the saved `roof.heel` keeps the derived number.
+
+Not dead code, and this entry exists partly to correct a claim that it was:
+`tests/roof.spec.js:55` and `:81` read it, and `drawing-format.js:361` clamps
+overhang and pitch *"so the stored heel is always derivable"*. The field is
+deliberate.
+
+The open question is whether the two are allowed to differ -- per roof plane
+against the building's typical -- or whether the override should reach the
+planes. Low impact today, since the only reader is a spec. It crosses
+`MODEL.dc.html` and `PROJECT.html`, so it wants deciding before either side
+grows a second copy of the arithmetic.
+
 ---
 
 ## 6 · Parked
