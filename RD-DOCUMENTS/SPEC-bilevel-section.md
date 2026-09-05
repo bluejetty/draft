@@ -97,12 +97,48 @@ through, so the overlap is an edge condition interrupted by the stairwell --
 which means a section cut through the stairs shows no overlap and a section
 cut beside it does. Band 2 has to pick one and say which.
 
-## The front wall is a different condition
+## The front wall is a different condition, and it is a TALL WALL
 
 **The front wall, with the entry door, sits on the 2x10 entry floor** -- it
 bears on the floor, not on the foundation. So a bilevel has at least two
 typical exterior wall details, and one section cannot be captioned as
 covering both.
+
+**It is also over 12'-0", so it is engineered.** Movie, 5 Sep: *"the bilevel
+near the entry wall will probably need a TALL WALL."* Every number in it was
+already pinned, so this is arithmetic rather than a judgement:
+
+| | |
+|---|---|
+| wood fill wall | 4'-2 3/4" |
+| + MAIN FL package | 1'-0 5/8" |
+| - ENTRY package | 0'-10" |
+| **= ENTRY sits below MAIN FL** | **4'-5 3/8"** |
+| + MAIN FL wall (the 9'-1 1/8" precut) | 9'-1 1/8" |
+| **= FRONT ENTRY WALL** | **13'-6 1/2"**, stud 13'-2" |
+
+Over the threshold by 1'-6 1/2", and structural -- it carries the main floor's
+top plate and the roof over it. Both halves of the definition, so it needs an
+engineer. See DEFINITIONS.md, TALL WALL.
+
+**The assumption to check is not the heights, it is the interruption.** The
+figure above runs the wall unbroken from the entry floor to the main floor's
+top plate, which is what makes a bilevel foyer open to above and what puts the
+tall window in the front elevation. Stopping it at the main floor deck instead
+gives 4'-5 3/8" and something entirely ordinary. So nothing here is unusually
+tall; the wall is simply never cut.
+
+Two consequences worth stating plainly.
+
+**Our DEFAULTS produce an engineered wall.** Not an exotic plan, not a big
+house -- the ordinary modified bilevel on the numbers this file pins. That is
+different in kind from the garage ceiling, which can be kept under 12'-0" by
+choosing to. This one cannot be, short of interrupting the wall.
+
+**And the app draws it like any other wall today.** Nothing in the section
+knows about the threshold, so the one wall on the drawing that a drafter must
+send out is the one the drawing is quietest about. Not fixed here; named so it
+can be.
 
 ## What sits above
 
