@@ -914,7 +914,18 @@
         pitch: 'Roof pitch : 12',
         overhang: 'Roof overhang',
         fdnHeight: 'Foundation wall height',
-        grade: 'Grade below foundation top',
+        // "BELOW" AND A MINUS SIGN CANCEL. This row read "Grade below
+        // foundation top: -3'-2"", which says grade is 3'-2" ABOVE the
+        // concrete -- the opposite of both the drawing and the stored number.
+        // The value is a SIGNED OFFSET (signedFtIn / parseSignedFtIn, and the
+        // zone rows beside it work the same way), so the name has to be
+        // offset language too. The drawing's own tag has said GRADE OFF FDN
+        // TOP all along; the schedule was the one disagreeing.
+        //
+        // Renamed rather than re-signed: flipping the number to a positive
+        // "below" would have to flip the parser, the zone rows' convention and
+        // whatever is already stored in people's drawings, to fix a word.
+        grade: 'Grade off foundation top',
         slab: 'Slab thickness',
         footingWidth: 'Footing width',
         footingDepth: 'Footing depth',

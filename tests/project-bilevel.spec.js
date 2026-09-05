@@ -184,3 +184,25 @@ for (const [label, host] of [['band 1', '#detail-wrap'], ['band 2', '#bilevel-wr
     expect(collisions).toEqual([]);
   });
 }
+
+// A ROW THAT SAYS "BELOW" MUST NOT SHOW A NEGATIVE. The two cancel: "grade
+// below foundation top: -3'-2"" states that grade is 3'-2" ABOVE the concrete,
+// which is the opposite of the drawing, the stored value and the truth.
+//
+// Written as an invariant over every row rather than as a check on the one that
+// was wrong, because the trap is in the pairing and not in that row: any future
+// label with a direction in it inherits the same problem the moment its value
+// can go negative.
+test('no schedule row states a direction and then contradicts it', async ({ page }) => {
+  await page.goto('/PROJECT.html');
+  const bad = await page.evaluate(() => [...document.querySelectorAll('.sched-row')]
+    .filter(r => !r.hidden)
+    .map(r => {
+      const name = (r.children[0].textContent || '').toLowerCase();
+      const el = r.children[1];
+      return { name, value: (el.value !== undefined ? el.value : el.textContent) || '' };
+    })
+    .filter(({ name, value }) => /\b(below|above|under|over)\b/.test(name) && value.trim().startsWith('-'))
+    .map(({ name, value }) => `${name} = ${value}`));
+  expect(bad).toEqual([]);
+});
