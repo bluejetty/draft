@@ -56,19 +56,44 @@ a new one. He should not have to: the thing under the cursor already knows.
 One gesture, no modifier, no mode toggle. This is what makes the feature need
 no keyboard at all.
 
-## No new keystrokes, and the reason is measured
+## The keystroke is `I`, and it joins a system that already exists
 
-Every key comparison in `MODEL.dc.html` is `Enter`, `Escape`, `Space`,
-`Backspace`, `Shift`, `Control`, or `y`/`n` for confirms. **No tool in the bone
-has a letter shortcut.** There is no shortcut system to be consistent with, so
-adding "B for brush" means inventing one — a bigger change than it sounds, and
-a separate decision.
+**Corrected from an earlier draft of this file, which said the bone had no
+letter shortcuts and that adding one meant inventing the system.** That was
+wrong twice over. `profile-manager.js:103` holds `DEFAULT_KEYBINDINGS`, every
+binding is user-remappable, and nearly every tool already has a letter:
 
-So the brush ships click-only. Letters are a later convenience, decided once for
-every tool rather than invented for this one.
+    S select   L line    N node   W wall    F floor   E fenestration
+    A shape    U outline O roof   D dimension        Q trim
+    T tsquare  P compass C cut    Y group   X extend  K copy
+    R freezeLength       B background
 
-Getting back to empty: click the chip, which is already a chip and should be its
-own off switch, or `Escape`, which the bone uses for cancel everywhere else.
+The mistake was a bad search, not a bad memory: bindings run through
+`eventMatchesBinding(e, state.keybindings[command])`, so grepping for inline
+`e.key === 'x'` finds nothing and looks conclusive. Worth recording, because the
+wrong answer changed a design decision -- it argued for a click-only tool on
+grounds that did not exist.
+
+**B is taken** (background). Free letters are H, I, J, M, V, Z; G is in
+RESERVED_KEYS because retired bindings can still sit on it.
+
+**`I`, because Photoshop's eyedropper is `I` and this is an eyedropper.** `D`
+would suit "dusting" and belongs to the dimension tool.
+
+So the brush toggles like every other tool: `I` or the chip turns it on, `I` or
+the chip turns it off. Add `brush: 'I'` to DEFAULT_KEYBINDINGS and it inherits
+remapping, the profile round-trip, and `keyBindingLabel` in the help text for
+free.
+
+## Three states, and two levels of Escape
+
+    OFF  <->  ON, EMPTY  <->  ON, LOADED
+
+- The chip or `I` toggles OFF and ON. Pressing it while loaded turns the tool
+  off and drops what it held.
+- `Escape` steps back one level: loaded becomes empty, empty turns the tool off.
+  That is how Escape behaves everywhere else in the bone, and it gives a way to
+  drop the load WITHOUT leaving the tool -- which the chip alone cannot do.
 
 ## Refusals say why
 
@@ -77,6 +102,11 @@ arrive immediately:
 
 - **Wrong class.** A wall's properties dusted onto a door. Refuse, and say so.
 - **Won't fit.** A window BECOMING a garage door cannot land in a 3'-0" bay.
+  **It is refused; the place does not happen.** Movie, 5 Sep: *"maybe don't
+  allow to place in that case."* Skipper put the reason for it best -- growing
+  the wall to make room would be software moving geometry the drafter never
+  touched. Refusing and saying why is the same contract the zone panel keeps
+  when it turns down a grade.
 
 ## Still to settle
 
@@ -85,7 +115,6 @@ arrive immediately:
   *become*, which matches the syringe carrying an object type — and *become* is
   what needs the fit rule above, since it can ask for something the wall cannot
   hold. **Needs Movie.**
-- **What "won't fit" does.** Refuse, or grow the wall? **Needs Movie.**
 - **The name.** The chip's title says DRAFTING BRUSH; Movie says *dusting
   brush*. Write down whichever he actually says out loud, then use only that.
 
