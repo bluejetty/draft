@@ -215,3 +215,51 @@ test('a zone height edit moves the garage in the drawing, not just in the box', 
 
   expect(Math.abs(await pileY() - before)).toBeGreaterThan(2);
 });
+
+// THE GARAGE'S DROP BRANCHES ON THE BUILD TYPE, and until NEW-5 landed it
+// could not. Movie, 4 Sep: a BILEVEL puts the garage sill LEVEL with the
+// house's; a BUNGALOW or 2 STOREY drops it 2'-0". Neither is a rule -- "on
+// bilevel could change but not often, 95% inline", "on bungalow 95% not
+// inline (opposite)" -- so both are defaults and both stay typeable. What
+// this pins is which default a drawing starts from.
+//
+// Written as a DIFFERENTIAL rather than two absolute readings. Each branch on
+// its own would pass against a build that ignored buildType entirely, since
+// one of them is what the derive did before; the claim is that the two come
+// out a garage drop apart, and only a real branch does that.
+async function attachedOffsetWithType(page, type) {
+  await page.evaluate(async ([bucket, buildType]) => {
+    const file = await window.SharedFileStore.loadSharedFile(bucket);
+    const drawing = file ? JSON.parse(await file.text())
+      : { version: 1, levels: [{ id: 3, name: 'MAIN FL', elev: 0 }] };
+    drawing.buildType = buildType;
+    // The zone must be UNSET, or a stored override would answer instead of
+    // the derive and the test would pass on any build at all.
+    if (drawing.zoneHeights?.zones?.attachedGarage) {
+      drawing.zoneHeights.zones.attachedGarage.offsetFt = null;
+    }
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(drawing)], file?.name || 'model-drawing.json',
+        { type: 'application/json' }), bucket);
+  }, [h.STORAGE_BUCKET, type]);
+  await page.goto('/PROJECT.html');
+  return page.locator('[data-zone-offset="attachedGarage"]').inputValue();
+}
+
+test('a bilevel puts the garage sill level with the house, a bungalow drops it', async ({ page }) => {
+  await h.openModel(page);
+
+  const bungalow = await attachedOffsetWithType(page, 'bungalow');
+  const bilevel = await attachedOffsetWithType(page, 'bilevel');
+
+  // The two must differ, and by exactly the garage drop: the bilevel sits
+  // level with the house sill, the bungalow a GARAGE_SILL_BELOW_HOUSE_FT
+  // below it. Parsed from the feet-and-inches the box shows.
+  const ft = text => {
+    const m = /^(-?)(\d+)'-(\d+)(?:\s+(\d+)\/(\d+))?"/.exec(text.trim());
+    if (!m) throw new Error(`unparsed offset: ${text}`);
+    const inches = Number(m[3]) + (m[4] ? Number(m[4]) / Number(m[5]) : 0);
+    return (m[1] === '-' ? -1 : 1) * (Number(m[2]) + inches / 12);
+  };
+  expect(ft(bungalow)).toBeCloseTo(ft(bilevel) - P.GARAGE_SILL_BELOW_HOUSE_FT, 5);
+});

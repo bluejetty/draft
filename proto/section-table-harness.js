@@ -360,7 +360,7 @@ console.log(`\n${CHECKS.length - baseline.length}/${CHECKS.length} checks passed
 // not there (the geometry-2d.js lesson, 4 Sep).
 const MUTATIONS = [
   ['BILEVEL loses its wood fill again',
-    s => s.replace("const SPLIT_TYPES = ['bilevel', 'modifiedBilevel'];", "const SPLIT_TYPES = ['modifiedBilevel'];")],
+    s => s.replace("const SPLIT_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);", "const SPLIT_TYPES = Object.freeze(['modifiedBilevel']);")],
   ['the split pours a 6\' wall',
     s => s.replace('fdnWallHeightFt: 5,', 'fdnWallHeightFt: 6,')],
   ['the kerf is forgotten (46 5/16")',
@@ -372,7 +372,7 @@ const MUTATIONS = [
   ['a default is keyed by a misspelt field (an empty cell on the page)',
     s => s.replace('woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,', 'woodFillHeight: (HALF_STUD_IN + PLATE_STACK_IN) / 12,')],
   ['a types entry is misspelt (a hatched cell on the page)',
-    s => s.replace("const SPLIT_TYPES = ['bilevel', 'modifiedBilevel'];", "const SPLIT_TYPES = ['bilevl', 'modifiedBilevel'];")],
+    s => s.replace("const SPLIT_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);", "const SPLIT_TYPES = Object.freeze(['bilevl', 'modifiedBilevel']);")],
   ['the bilevel zone row goes live before the feature does',
     s => s.replace("{ id: 'bilevel', label: 'BILEVEL', reserved: true }", "{ id: 'bilevel', label: 'BILEVEL', reserved: false }")],
   ['the roof rises at pitch per foot instead of pitch per twelve',
