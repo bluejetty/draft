@@ -170,7 +170,61 @@ built, and the engineer edits it to his requirements and stamps it. Ours is a
 starting point for somebody else's document, which is the same relationship as
 a DEFAULT and a drafter's TYPICAL, one step further out.
 
-**Owner: Movie, later.** Not the section's problem, not blocking band 2.
+**And the tall wall gets a SECTION of its own.** Movie: *"there will need to
+be a separate section for a tall wall in the plan, in the section area... it
+will be a section they can make and add an annotation."* So it is not a
+condition band 2 has to fold into the typical wall section -- it is another
+drawing, made by the drafter in the section area, carrying the note block.
+That is consistent with the front wall being a second exterior condition
+anyway: one section cannot be captioned as covering both, and this says which
+way the split goes.
+
+**Owner: Movie, later.** Not the typical section's problem, not blocking
+band 2.
+
+## The wall between ENTRY and MAIN is derived, not chosen
+
+This was on the "still unknown" list. It should not have been: the stack
+already fixes it, because **the fill wall and the entry joists land on the same
+sill plate and both reach the main floor's bearing line.**
+
+    ENTRY -> MAIN wall  =  wood fill wall  -  ENTRY floor package
+                        =  4'-2 3/4"  -  0'-10"
+                        =  3'-4 3/4"
+
+It checks out against the drop computed the other way: 3'-4 3/4" plus the main
+floor's 1'-0 5/8" package is 4'-5 3/8", which is where the entry floor sits
+below MAIN FL.
+
+**3'-4 3/4" is not a ceiling height, and reading it as one is the trap.** It
+looked absurd at first -- no habitable storey has a 3'-4 3/4" wall -- which is
+what kept it on the unknown list. But ENTRY is a LANDING, not a storey. You
+come in the front door onto it, then go up half a flight to MAIN or down half
+a flight to the lower level, and 4'-5 3/8" is exactly that half flight. The
+number is the exterior wall segment BETWEEN two floor packages, which is the
+"two floor packages with a wall between them" this file already describes at
+the exterior wall.
+
+Above the landing there is no ceiling at all: the foyer is open to the main
+floor. That is the same fact as the front wall running unbroken to 13'-6 1/2",
+seen from the inside.
+
+**It does not agree with the PDF, and that is not waved away.** His section
+dimensions this wall 5'-1 1/8"; the derivation says 3'-4 3/4". The gap is
+1'-8 3/8", and it is NOT explained by the fill-wall error elsewhere on the
+sheet, which runs the other way and is 1'-2 3/4". Two different numbers, so
+"the drawing is off there anyway" does not cover it.
+
+Both sides are worth something. The derivation is self-consistent -- it lands
+the entry floor at the half flight and closes against the drop computed
+independently -- but it rests on the entry joists bearing on the same sill as
+the fill wall, which is Movie's sentence read literally and could mean a
+separate frost wall at another height. The PDF is a real drawing of a real
+house, next to a dimension known to be wrong.
+
+**Needs Movie.** Until then the derived number is what band 2 draws, because
+it is the one that keeps the stack closed, and this paragraph is why the
+drawing may move.
 
 ## What sits above
 
@@ -321,10 +375,14 @@ lower entry, so it takes more risers to reach the same floor.
 
 ## Still unknown
 
-- The height of the wall between the entry floor and the main floor. His PDF
-  says 5'-1 1/8" but the fill wall below it is drawn short, so the number
-  above it cannot be trusted. **Needs Movie.**
+- The height of the wall between the entry floor and the main floor. Now
+  DERIVED at 3'-4 3/4" (fill wall less the entry package) and self-consistent,
+  but his PDF says 5'-1 1/8" and the 1'-8 3/8" gap is not the fill-wall error.
+  Band 2 draws the derived number. **Still needs Movie** -- see the section
+  above.
 - Where the stringer starts and lands. Drawn on his section as two parallel
   diagonals with a small foot, no treads.
-- Which of the two exterior wall conditions band 2 should show.
+- ~~Which of the two exterior wall conditions band 2 should show.~~ ANSWERED
+  5 Sep: the typical section shows the fill-wall condition, and the front wall
+  gets a section of its own that the drafter makes and annotates.
 
