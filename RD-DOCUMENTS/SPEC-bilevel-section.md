@@ -148,8 +148,19 @@ And he confirmed it directly rather than leaving it to be inferred: *"the
 2ND FLOOR won't line up with the lower down 2nd floor in the bilevel."* The
 reason is the garage's own height -- a bilevel's garage sits at the ENTRY
 level, a half-storey down, so a storey standing on it lands below a storey
-standing on MAIN. A bungalow's garage is close enough to line up. Where they
-line up it is one level; where they cannot it is two.
+standing on MAIN.
+
+**On a bungalow they are MADE to line up, which is not the same as lining up.**
+Movie: *"a bungalow is usually deeper so the second floor higher... or the
+garage ceiling will need to get higher to fill in the extra."* The house's
+second floor sits above where a standard garage storey would reach, and the
+gap is closed by raising the GARAGE CEILING until it does. A design action,
+not a coincidence -- so the drafter has a number to set, and the app has to
+let them set it.
+
+On a bilevel the same gap is a half-storey, which is too much to absorb that
+way, so the two floors stay apart and need levels of their own. Where they
+can be made to meet it is one level; where they cannot it is two.
 
 A plain modified bilevel needs only 2ND FL, because its garage storey is its
 only upper floor -- nothing for it to fail to line up with.
