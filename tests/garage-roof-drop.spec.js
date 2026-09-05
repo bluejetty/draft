@@ -112,8 +112,10 @@ test('a bungalow (2ND FL deleted) keeps the spliced single roof over house + gar
 
 // The stored type answers before the floor count does. A BILEVEL is a
 // MODIFIED BILEVEL with the storey over the garage deleted, so its garage
-// drops whatever the stack says; a MODIFIED BILEVEL keeps the storey over
-// the garage under one roof, whatever the stack says.
+// drops whatever the stack says. A MODIFIED BILEVEL will keep the storey
+// over the garage under one roof -- once the bone builds that storey. Until
+// then it follows the floor-count rule, so its garage is never left under a
+// shared roof with nothing beneath it.
 test('a BILEVEL drops the garage roof even on a one-floor stack', async ({ page }) => {
   await h.openModel(page);
   page.on('dialog', dialog => dialog.accept(''));
@@ -137,18 +139,19 @@ test('a BILEVEL drops the garage roof even on a one-floor stack', async ({ page 
   expect(Math.max(...houseRoof.points.map(point => point.x))).toBeLessThan(11);
 });
 
-test('a MODIFIED BILEVEL keeps one roof over house + garage even on a two-floor stack', async ({ page }) => {
+test('a MODIFIED BILEVEL follows the floor-count rule until the storey over the garage builds', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutlineAs(page, 'modifiedBilevel'); // default stack: MAIN + 2ND FL
   await drawGarageOutline(page);
   await buildHouse(page);
 
+  // Two roofs, like a 2 STOREY: the garage has its own. When the storey
+  // over the garage lands this becomes ONE roof reaching past x = 20, and
+  // this test changes with it -- on purpose, not by accident.
   const saved = await h.savedDrawing(page);
   expect(saved.buildType).toBe('modifiedBilevel');
-  expect(saved.roofs).toHaveLength(1);
-  const roof = saved.roofs[0];
-  expect(roof.garage).toBeFalsy();
-  expect(Math.max(...roof.points.map(point => point.x))).toBeGreaterThan(20);
+  expect(saved.roofs).toHaveLength(2);
+  expect(saved.roofs.find(roof => roof.garage)).toBeTruthy();
 });
 
 test('the front elevation shows the garage roof band low with house ink standing above it', async ({ page }) => {
