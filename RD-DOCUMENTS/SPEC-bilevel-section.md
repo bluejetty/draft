@@ -127,6 +127,30 @@ floor-to-floor level. The garage slab sits 4" below the top of its concrete,
 which is 5 1/2" below the top of its sill, while the entry floor sits ABOVE
 the same sill. Level sills, floors about 15 1/2" apart.
 
+## Types that do not exist yet, and why id 4 is named as it is
+
+Movie, 5 Sep: *"later on we should actually make a 2 storey bilevel and also
+a 2 storey bungalow with a 2nd floor over the garage."*
+
+Neither is being built now. They are recorded because between them they
+settle what `OVER GARAGE` means:
+
+| type | levels |
+|---|---|
+| modified bilevel | FOUNDATION · ENTRY · MAIN · 2ND FL *(the storey over the garage; there is only one, so it needs no other name)* |
+| two-storey bilevel | FOUNDATION · ENTRY · MAIN · **OVER GARAGE** · 2ND FL |
+| bungalow, storey over the garage | FOUNDATION · MAIN · **OVER GARAGE** *(no 2ND FL at all)* |
+
+So OVER GARAGE is not a bilevel idea. It is **a storey standing on the
+garage**, and it behaves the same whether the house beside it is a bungalow,
+a two-storey or a bilevel -- lower than a storey over the house, because the
+garage floor is down. Naming it `2ND FL (LOWER)` would have made sense in
+exactly one of those three.
+
+Note that a plain modified bilevel does NOT need it: its storey over the
+garage is its only upper floor, so it is simply 2ND FL sitting lower than a
+house's would.
+
 ## Still unknown
 
 - The height of the wall between the entry floor and the main floor. His PDF
