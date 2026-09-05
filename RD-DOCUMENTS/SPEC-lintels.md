@@ -119,7 +119,14 @@ With the beam up in the gable rather than under the plates, the wall keeps its
 cripples.
 
 **Only on a gable end.** On an eave wall the trusses bear on that plate and
-there is nowhere for the beam to go. The bone knows which face a garage door is
+there is nowhere for the beam to go.
+
+Movie, on the mechanism: *"if it's a gable wall they could put the last truss
+behind the 2x6 gable wall and they could build the lintel into it."* The end
+truss shifts inboard, the gable wall stands proud of it, and the beam occupies
+the space that leaves. Not being built -- *"let's not worry about it now"* --
+written down because it is the difference between "the beam goes in the roof
+somehow" and a thing somebody could draw. The bone knows which face a garage door is
 on (`garageDoorPlan` takes a face list), so it could tell the difference, but
 that is real work. Default to the arrangement that always works and let the
 drafter raise the beam where the roof allows -- the same shape as ROOF HEEL.
