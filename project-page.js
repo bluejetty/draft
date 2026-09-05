@@ -647,7 +647,7 @@ if (!window.DraftProjectPage) {
   // the user enters new heights for it". So the garage is joined to the house
   // HORIZONTALLY and free VERTICALLY: x = 0 is the shared wall face for both
   // drawings, and y stays the house's datum -- MAIN FL floor surface at 0 --
-  // with the garage floor sitting at whatever ZONE HEIGHTS says its offset is.
+  // with the garage riding at whatever ZONE HEIGHTS says its offset is.
   // Type a new offset and the whole garage slides against a house that has not
   // moved, which is the relationship the zone panel's number could not show as
   // a number.
@@ -673,9 +673,28 @@ if (!window.DraftProjectPage) {
     const fdnFt = g.thicknessIn / 12;
     const slabFt = g.slabIn / 12;
 
-    // The floor surface, on the HOUSE's datum. Everything below hangs off it.
-    const floorY = g.floorOffsetFt;
-    anchors.garageOffset = { x: cut / 2, y: floorY + 0.62 };
+    // THE SILL TOP, NOT THE FLOOR, on the HOUSE's datum. Everything hangs off
+    // it. This was called floorOffsetFt and commented "the floor surface" for
+    // as long as it has existed, and it has never been the floor: three lines
+    // down, `fdnTop = sillY`, then the concrete starts a sill plate below that
+    // and the slab another 4" below the concrete. The garage floor is
+    // 5 1/2" under this number.
+    //
+    // The name mattered more than a name usually does, because the value is a
+    // BEARING LINE and the section is full of them -- houseSillFt,
+    // GARAGE_SILL_BELOW_HOUSE_FT, anchors.garageSill all mean the same kind of
+    // thing, and derivedAttachedOffsetFt computes this one FROM houseSillFt.
+    // Every neighbour said sill; only this said floor, so a reader checking
+    // whether the two buildings line up had one word telling them the wrong
+    // datum.
+    //
+    // Renaming it does not fix the control feeding it, which is still labelled
+    // "Garage floor off main fl" -- that is store-vs-display, parked. But a
+    // field named sillOffsetFt fed by a box labelled floor is visibly odd,
+    // where floorOffsetFt fed by "floor" looked settled. The lie was the
+    // agreement.
+    const sillY = g.sillOffsetFt;
+    anchors.garageOffset = { x: cut / 2, y: sillY + 0.62 };
 
 
     // TWO FOUNDATIONS, ONE TOP. Movie, 4 Sep: "that should actually be an
@@ -735,7 +754,7 @@ if (!window.DraftProjectPage) {
     // because it is cast under the beam for its whole run.
     const frostWall = g.foundation === 'frostwall';
     const sillFt = SILL_PLATE_IN / 12;
-    const fdnTop = floorY;
+    const fdnTop = sillY;
     const concTop = fdnTop - sillFt;
     const fdnBot = frostWall ? g.houseFootingTopFt : concTop - g.fdnWallHeightFt;
     rect(cut, fdnBot, GARAGE_CUT_FT, concTop - fdnBot, 2);
@@ -800,8 +819,8 @@ if (!window.DraftProjectPage) {
     // The height still matters and still gets an anchor: it is the garage's
     // clear height AT the house, slab to roof, measured against the shared
     // face rather than against a wall of its own.
-    const plateY = floorY + g.wallHeightFt;
-    anchors.garageWallHeight = { x: -0.75, y: floorY + g.wallHeightFt / 2 };
+    const plateY = sillY + g.wallHeightFt;
+    anchors.garageWallHeight = { x: -0.75, y: sillY + g.wallHeightFt / 2 };
 
     // STRAIGHT, and no grade. Movie: "no roof slop just 2ft of straight roof
     // until the cut... we want to show where the connection happens". The
