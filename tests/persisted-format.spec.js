@@ -44,7 +44,7 @@ const PERSISTED_KEYS = [
   'nextDimensionId', 'columns', 'nextColumnId', 'beams', 'nextBeamId',
   'stairs', 'nextStairId', 'notes', 'nextNoteId', 'roomTags', 'nextRoomTagId',
   'roomAreasOn', 'projectInfo', 'tour', 'roofIntent', 'zoneHeights',
-  'sectionTable', 'boneyardShelves', 'activeBoneyardShelfId',
+  'sectionTable', 'buildType', 'boneyardShelves', 'activeBoneyardShelfId',
   'nextBoneyardShelfId', 'boneyardOutlines', 'outlines', 'levels',
   'activeLevelIdx', 'levelLayerViews', 'nextLevelId', 'backgroundLevelIds',
   'backgroundLevelViews', 'contextBackgrounds', 'backgroundMode', 'units',
