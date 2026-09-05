@@ -71,7 +71,7 @@ if (!window.DraftProjectPage) {
   // and no build type is SPLIT, precisely because of the sentence above it.
   // The family name stays as SPLIT_BASE, which is what it always was: the
   // defaults the two real rows start from.
-  const SPLIT_TYPES = ['bilevel', 'modifiedBilevel'];
+  const SPLIT_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);
   const SILL_PLATE_IN = 1.5;
   const item = (id, label, unit, field, types, extra) =>
     Object.freeze({ id, label, unit, field, types: Object.freeze(types), ...extra });
@@ -944,6 +944,7 @@ if (!window.DraftProjectPage) {
     ZONE_ROWS,
     CUT_DEPTH_FT,
     ROOF_CHORD_IN,
+    SPLIT_TYPES,
     SPLIT_WALL_FT,
     ROOF_HEEL_MIN_IN,
     ROOF_HEEL_MAX_IN,

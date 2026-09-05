@@ -270,6 +270,17 @@
       let projectInfo = format.projectInfo(drawing?.projectInfo);
       let zoneHeights = format.zoneHeights(drawing?.zoneHeights);
       let sectionTable = format.sectionTable(drawing?.sectionTable);
+      // READ ONLY, DELIBERATELY, and sitting with the other drawing reads
+      // rather than up with the constants -- `drawing` is not loaded until
+      // just above, so reading it earlier is a dead-zone ReferenceError that
+      // takes the whole page down rather than failing quietly.
+      //
+      // The build type is MODEL's to set: pressing a button on the build row
+      // is what chooses it. This page only reads. It is deliberately absent
+      // from projectKeys() below, which is the ONLY set of keys this page may
+      // write -- that omission is what stops a PROJECT save from clobbering a
+      // choice made in the model space.
+      const buildType = format.buildType(drawing?.buildType);
       const levelAssemblies = drawing?.levelAssemblies && typeof drawing.levelAssemblies === 'object'
         ? drawing.levelAssemblies : {};
       const levels = format.levels(drawing.levels || DEFAULT_LEVEL_LIST);
@@ -1441,17 +1452,6 @@
         const main = floorLevels[0] && assembly(floorLevels[0].id);
         return main ? -(main.joistDepthIn + main.sheathingIn) / 12 : 0;
       };
-      // THE INTERIM, CHOSEN OUT LOUD. The real rule branches on build type:
-      // a BILEVEL drops the garage sill LEVEL with the house's, a BUNGALOW or
-      // 2 STOREY drops it 2'-0" below. There is no build type stored on a
-      // drawing yet -- that is NEW-5 -- so this derive can only be one of
-      // them, and it is the bungalow / 2 storey rule.
-      //
-      // Written down because the alternative is a hidden assumption: a derive
-      // that silently applies the bungalow rule to a bilevel looks correct on
-      // every drawing anyone happens to open, and is wrong on half of them.
-      // When NEW-5 lands, this gains its second branch and nothing else moves.
-      // (Skipper's catch.)
       // THE HEEL IS CALCULATED AND TYPEABLE. Movie, 5 Sep: a 2x6 fascia with
       // its bottom level with the top of the top plate, and the roof climbing
       // at the pitch across the eave overhang -- 13 1/2" at the office
@@ -1463,8 +1463,28 @@
         projectPage.roofHeelIn(ROOF_FASCIA_IN, roofOverhang, roofPitch);
       const roofHeelIn = () => roofHeelOverrideIn ?? derivedRoofHeelIn();
 
-      const derivedAttachedOffsetFt = () =>
-        houseSillFt() - projectPage.GARAGE_SILL_BELOW_HOUSE_FT;
+      // BOTH BRANCHES, AT LAST. This carried an interim for a day: the rule
+      // branches on build type -- a BILEVEL puts the garage sill LEVEL with
+      // the house's, a BUNGALOW or 2 STOREY drops it 2'-0" -- but nothing on
+      // a drawing said which it was, so the derive could only be the bungalow
+      // rule and said so in a comment. NEW-5's buildType is that missing
+      // input, and the note promised this would gain its second branch and
+      // nothing else would move. It has, and nothing else did.
+      //
+      // NEITHER BRANCH IS A RULE, which is the whole reason this is a DEFAULT
+      // and stays typeable. Movie, 4 Sep: "on bilevel could change but not
+      // often, 95% inline", "on bungalow 95% not inline (opposite)". Deriving
+      // either one as law would be right 95% of the time and make the other
+      // 5% impossible to draw.
+      //
+      // An untyped drawing keeps the bungalow rule. Not a guess dressed up:
+      // it is what this derive has always done, so no existing drawing moves
+      // when this lands, and a drafter who has not pressed a button has not
+      // told us anything to branch on.
+      const derivedAttachedOffsetFt = () => (
+        projectPage.SPLIT_TYPES.includes(buildType)
+          ? houseSillFt()
+          : houseSillFt() - projectPage.GARAGE_SILL_BELOW_HOUSE_FT);
       const attachedOffsetFt = () =>
         zoneHeights.zones.attachedGarage.offsetFt ?? derivedAttachedOffsetFt();
 
