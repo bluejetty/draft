@@ -175,6 +175,25 @@ if (!window.DraftProjectPage) {
   // table's own TO SILL note adds to every row, so writing 33.5 here would
   // count the sill twice and read 2'-11" to bearing instead of 2'-9 1/2".
   const GARAGE_GRADE_BEAM_IN = 32;
+  // A THICKENED EDGE IS 1'-0" DEEP, and this is a second copy of cut-view.js's
+  // GARAGE_EDGE_DEPTH_IN. Declared here rather than beside the slab slope with
+  // the other duplicate because SECTION_TABLE_DEFAULTS reads it, and a const
+  // declared after its reader is a ReferenceError at load, not a lint nit.
+  //
+  // NOT SOLVED BY LOADING cut-view.js, which the slab-slope note proposes as the
+  // tidy-up. Measured 5 Sep: cut-view reads window.DraftWallTypes,
+  // window.DraftGeometry and window.DraftFormatters at module scope, and
+  // PROJECT.html loads only the last of the three. "Load cut-view" is really
+  // three more scripts on a page that never paints a cut view, to import two
+  // numbers.
+  //
+  // SO THE COPY STAYS AND THE DRIFT IS WHAT GETS KILLED. The 32" near-collision
+  // was not caused by there being two copies of a number; it was caused by
+  // nobody noticing when they stopped agreeing. section-table-harness.js reads
+  // cut-view.js and fails if a shared number here disagrees with it, which is
+  // the property the tidy-up was wanted for. Revisit the script tags when
+  // PROJECT.html needs cut-view for something it actually paints.
+  const GARAGE_EDGE_DEPTH_IN = 12;
   // Which foundations each garage may be, in the order the drafter should see
   // them. Detached: all three. Attached: NOT thickened edge -- Movie, 4 Sep,
   // "it will move / the house foundation is solid and will cause cracking".
@@ -241,6 +260,32 @@ if (!window.DraftProjectPage) {
       slabThicknessIn: 4,
       mainWallHeightFt: GARAGE_WALL_FT,
     }),
+    // AND THE DETACHED ROW HAD THE SAME HOLE. The comment above describes the
+    // attached garage's defect and #293 fixed that row alone; its neighbour was
+    // left inheriting HOUSE, so DETACHED GARAGE has been reading a 3" slab, the
+    // house's 9'-1 1/8" precut wall and the house's basement wall ever since.
+    // Fixing the row you are looking at is not fixing the bug.
+    //
+    // THE DEFAULT IS A THICKENED EDGE, not a grade beam. Movie, 5 Sep: "the
+    // detached garage will have default thickened edge slab". GARAGE_FOUNDATIONS
+    // already said so -- 'thickened' is first in the detached list and the
+    // comment there calls it "the order the drafter should see them" -- so the
+    // fact was in the file and only the order carried it. The other two stay
+    // options: "the detached garage should also have a grade beam or frost wall
+    // foundation as options".
+    //
+    // FDN WALL HT IS THE EDGE DEPTH on this row, and that is the label doing its
+    // job rather than a label stretched over something else: ON A MONOLITHIC
+    // SLAB THE THICKENED EDGE IS THE FOUNDATION. Movie, 5 Sep. There is no
+    // separate wall to be the height of because the edge is the thing carrying
+    // the building. 1'-0" is the same 12" cut-view.js draws the taper against
+    // (GARAGE_EDGE_DEPTH_IN) -- see that constant for why this file keeps its
+    // own copy and how the two are held together.
+    detachedGarage: Object.freeze({
+      fdnWallHeightFt: GARAGE_EDGE_DEPTH_IN / 12,
+      slabThicknessIn: 4,
+      mainWallHeightFt: GARAGE_WALL_FT,
+    }),
   });
 
   // The heel is the fascia plus the rise the roof gains across the overhang
@@ -260,7 +305,27 @@ if (!window.DraftProjectPage) {
   // because a duplicate that drifts looks wrong and this looks right. The
   // name now matches cut-view.js's DETACHED_BEAM_ABOVE_GRADE_IN exactly,
   // so the two read as the one fact they are.
-  const DETACHED_BEAM_ABOVE_GRADE_IN = 8;
+  const DETACHED_BEAM_ABOVE_GRADE_IN = 14;
+  // THE THICKENED EDGE CANNOT TAKE THE 1'-2", and it is the concrete's own
+  // depth that stops it. Every other foundation here tops out 1'-2" above
+  // grade. A thickened edge is GARAGE_EDGE_DEPTH_IN -- 1'-0" -- of concrete
+  // TOTAL, so a top 1'-2" up would stand the whole edge above ground with 2"
+  // of air under it.
+  //
+  // AND YET THE FLOOR DOES NOT MOVE, which is the point of 10" rather than a
+  // smaller number. A grade beam tops out at grade + 1'-2" and its slab sits
+  // GARAGE_SLAB_BELOW_CONCRETE_IN under that, so its floor is grade + 10". A
+  // thickened edge IS its own top of concrete -- there is nothing above the
+  // slab -- so 10" here puts the two floors at the SAME height. Switching a
+  // detached garage between grade beam and thickened edge moves the
+  // foundation and leaves the door, the apron and the driveway where they
+  // were. Movie, 5 Sep: "a little higher sure better for drainage" -- and the
+  // drainage is the reason he gave, the matching floor is what it buys.
+  //
+  // The cost is 2" of edge in the ground instead of 4". Acceptable on a
+  // floating slab bearing on gravel; a garage that needs frost protection
+  // takes the frost wall option, which is what that option is for.
+  const DETACHED_SLAB_ABOVE_GRADE_IN = 10;
   // How far the garage sill sits below the house's. Movie, 4 Sep: "2 ft below
   // the house sill (house sill drops 2 ft to meet garage sill)". Measured
   // sill to sill, not floor to floor, so it holds when the floor package
@@ -398,6 +463,9 @@ if (!window.DraftProjectPage) {
   // is the deferred tidy-up. Until it does, this is a second copy of a number
   // that must agree with a first, which is exactly what happened to the 32".
   const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;
+  // The edge depth this file also carries is declared up with the grade beam,
+  // because SECTION_TABLE_DEFAULTS reads it -- see GARAGE_EDGE_DEPTH_IN there
+  // for why the copy stays and what holds it to cut-view.js.
 
   // FOR BAND 2 ONLY, not built. Movie, 4 Sep: "put the EXT WALL HEIGHT on
   // each floor under 2ND FL WALL HEIGHT, MAIN FL WALL HEIGHT, and above
@@ -1074,6 +1142,12 @@ if (!window.DraftProjectPage) {
     ROOF_HEEL_MAX_IN,
     roofHeelInBand,
     DETACHED_BEAM_ABOVE_GRADE_IN,
+    DETACHED_SLAB_ABOVE_GRADE_IN,
+    // Exported so section-table-harness.js can hold this file's copies of
+    // cut-view.js's numbers against the originals. The 32" is the pair that
+    // already drifted once, under two different names.
+    GARAGE_EDGE_DEPTH_IN,
+    GARAGE_GRADE_BEAM_IN,
     GARAGE_SILL_BELOW_HOUSE_FT,
     GARAGE_SLAB_BELOW_CONCRETE_IN,
     GARAGE_WALL_FT,

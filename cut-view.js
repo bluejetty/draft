@@ -47,9 +47,34 @@ if (!window.DraftCutView) {
   // grade usually sits 6"-8" below the foundation top). Garages hang off
   // grade, not the house: an attached beam tops out 1'-0" above it, a
   // detached grade beam 8".
-  const GRADE_BELOW_FOUNDATION_TOP_FT = 1;
-  const GARAGE_BEAM_ABOVE_GRADE_FT = 1;
-  const DETACHED_BEAM_ABOVE_GRADE_IN = 8;
+  // 1'-2", NOT 1'-0". Movie moved this on 4 Sep -- project-page.js commit
+  // e3593a0, "Grade drops to 1'-2" below the concrete, and 8" becomes only the
+  // floor" -- and this file never got the move. It sat at 1'-0" from the 30 Aug
+  // extraction until 5 Sep, so the section painter and the PROJECT page drew
+  // grade 2" apart all week. Same face on both -- see the note above: this
+  // file's "foundation top" IS the top of concrete, which is what
+  // project-page.js's GRADE_BELOW_CONCRETE_IN measures from too.
+  //
+  // The reason for 1'-2", in Movie's words on 4 Sep: "if the house is higher
+  // out of the ground it is easier to regrade afterwards... let's move it to
+  // 1'-2" grade to top of concrete so they have 6" to slope around the
+  // perimeter." The 8" legal minimum stays a separate number over there --
+  // GRADE_MIN_BELOW_CONCRETE_IN -- because one is the line a drafter cannot
+  // type past and this is where the drawing puts it.
+  const GRADE_BELOW_FOUNDATION_TOP_FT = 14 / 12;
+  // 1'-2", MOVED WITH GRADE. This number exists to put the beam's top of
+  // concrete LEVEL with the top of the house foundation wall -- the comment
+  // above says so -- and it does that only while it equals
+  // GRADE_BELOW_FOUNDATION_TOP_FT. When grade went to 1'-2" and this stayed at
+  // 1'-0", the beam sank 2" below the house it is attached to and nothing
+  // errored: the drawing just stopped matching its own stated intent.
+  const GARAGE_BEAM_ABOVE_GRADE_FT = 14 / 12;
+  // 1'-2" TOO, and no longer 8". Movie, 5 Sep: the 1'-2" is "for the grade beam
+  // or frost wall", on "all 3 detached" -- so a detached beam tops out the same
+  // height out of the ground as an attached one and as the house. The one
+  // exception is the thickened edge, which cannot: it is only 1'-0" of concrete
+  // deep, so a top 1'-2" above grade would leave the whole edge in the air.
+  const DETACHED_BEAM_ABOVE_GRADE_IN = 14;
   // FROST WALL (Movie, 4 Sep): a garage on a concrete wall and strip footing
   // at the house's footing depth. Its top is set SILL TO SILL against the
   // house: level on a bilevel or modified bilevel, GARAGE_SILL_BELOW_HOUSE_FT

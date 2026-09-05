@@ -117,12 +117,19 @@ test('BUILD HOUSE grade beam: full perimeter beam, sloped 4" slab, walls, doors,
   expect(fdnWalls).toHaveLength(4);
   fdnWalls.forEach(wall => expect(wall.wallType).toBe('concrete_8'));
 
-  // The detached beam hangs off GRADE, not the house: its top sits 8" above
-  // the drawn grade (foundation top − 1'), i.e. 4" below the foundation top,
-  // and it is the 32" concrete band — never a basement wall down to a footing.
+  // The detached beam hangs off GRADE, not the house — and since 5 Sep grade is
+  // 1'-2" below the top of concrete and the beam tops out 1'-2" above grade,
+  // the two cancel: its top lands LEVEL with the house foundation top. It used
+  // to sit 4" under it, when grade was 1'-0" and the beam 8".
+  //
+  // Written as the level relationship rather than as the arithmetic that
+  // produces it. The old form spelt out "- 1 + 8 / 12", which is two constants
+  // copied into a test, and it went red the moment either moved -- correctly,
+  // but saying "the number changed" rather than "the rule changed". It is still
+  // the 32" concrete band, never a basement wall down to a footing.
   const wallHeightFt = (8 * 12 + 1 + 1 / 8) / 12;
   fdnWalls.forEach(wall => {
-    expect(wall.topHeight).toBeCloseTo(wallHeightFt - 1 + 8 / 12, 3);
+    expect(wall.topHeight).toBeCloseTo(wallHeightFt, 3);
     expect(wall.baseHeight).toBeCloseTo(wall.topHeight - 32 / 12, 3);
   });
 
@@ -184,14 +191,16 @@ test('BUILD HOUSE frost wall: walls to the footing, footing lines, sloped slab, 
 
   // Concrete all the way round the loop, and unlike the grade beam it does
   // not hang: it stands on the footing at the house's footing depth, so its
-  // base is the house wall's base. Its top is where the grade beam's would
-  // be -- 8" above the drawn grade, which is 1'-0" below the house wall's
-  // top -- since a detached wall has no house sill to meet.
+  // base is the house wall's base. Its top is where the grade beam's would be,
+  // and since 5 Sep that is LEVEL with the house wall's top -- grade 1'-2"
+  // down and the beam 1'-2" back up cancel. It was 4" under, on the old 1'-0"
+  // and 8". A detached wall still has no house sill to meet; what changed is
+  // where the beam it copies tops out.
   expect(garageWalls).toHaveLength(4);
   garageWalls.forEach(wall => {
     expect(wall.wallType).toBe('concrete_8');
     expect(wall.baseHeight).toBe(houseWall.baseHeight);
-    expect(wall.topHeight).toBeCloseTo(houseWall.topHeight - 1 + 8 / 12, 3);
+    expect(wall.topHeight).toBeCloseTo(houseWall.topHeight, 3);
   });
 
   // A strip footing under it: two rings of S-FOOTING lines, the way the
