@@ -691,6 +691,30 @@ Every cantilever is an overhang. Not every overhang is a cantilever.
 
 Piles sit closer than columns because a pile carries the floor above as well.
 
+### TALL WALL
+
+**Movie, 5 Sep:** *"'tall wall' is an engineered wall over 12ft tall."*
+
+It is a **specific thing with a threshold**, not a description. Over 12'-0"
+the wall stops being framed off a schedule and gets engineered -- stud size,
+spacing and bracing designed for it rather than assumed.
+
+Written down because it was used here as ordinary English within the hour. A
+derived garage wall came out 10'-5 5/8" and got called "the tall wall" in a
+spec paragraph, meaning nothing more than "that wall, which is tall". At
+10'-5 5/8" it is emphatically not one -- it is under the threshold, and the
+sentence claimed engineering that no part of the app had asked for.
+
+The same trap as calling a DEFAULT a TYPICAL, and worth the same care: when a
+plain-English adjective happens to be a trade term, the plain-English use
+reads as the trade term to every drafter who sees it. **Say "a tall wall" only
+above 12'-0"; otherwise say how tall it is.**
+
+There is a live consequence. Movie on the garage ceiling: *"even more is nice
+too -- lots of bungalows have extra space there."* A drafter taking that
+invitation past 12'-0" crosses into engineered territory, and the app should
+eventually say so rather than drawing it like any other wall.
+
 ### INLINE vs HANGING
 
 How a level above responds when the wall below moves. **Inline** sits flush

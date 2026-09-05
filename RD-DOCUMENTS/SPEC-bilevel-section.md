@@ -222,7 +222,7 @@ its deck at 6'-9 1/4", well under the house's 9'-1 3/4". That gap is what
 Movie means by *"fill in the extra"*, and part of it is the deep joist paying
 for its own span.
 
-**The tall wall is the point, not a symptom.** 10'-5 5/8" was put to Movie as
+**The height is the point, not a symptom.** 10'-5 5/8" was put to Movie as
 the thing to check first, on the grounds that its 10'-1 1/8" stud is past the
 tallest precut we carry (9'-8 5/8"). He took it the other way: *"10 garage
 wall nice... even more is nice too... lots of bungalows have extra space
@@ -230,6 +230,13 @@ there."* A garage under a storey is a garage people store things in, and the
 height is wanted. So the stud being ordered rather than pulled off the pile
 is a cost of the type, not evidence the arithmetic is wrong -- and nothing
 here should clamp the ceiling to a precut.
+
+**It is not a TALL WALL, and that phrase was used loosely here before Movie
+caught it.** A tall wall is a specific thing: engineered, over 12'-0". At
+10'-5 5/8" this one is under the threshold and framed like any other. But
+*"even more is nice too"* points straight at that line, so a drafter raising
+this ceiling past 12'-0" leaves what the app knows how to draw. See
+DEFINITIONS.md, TALL WALL.
 
 **This entry was rewritten three times.** It proposed OVER GARAGE for the
 bungalow (wrong -- named for what it stands on rather than where it sits),
