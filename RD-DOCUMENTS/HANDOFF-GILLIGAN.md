@@ -42,10 +42,25 @@ onto `main` under the same name after each merge.
    the brush carries what a thing IS, never where it is; the target decides
    the verb. It lives in `MODEL.dc.html`, so it is chrome in Skipper's lane
    and it is parked until tier 2 is closed.
-3. **Awaiting a word from Movie**: the brush's name (DRAFTING BRUSH vs dusting
-   brush); whether the rough-opening plate is a 2x flat at 1 1/2"; whether any
-   zone row should inherit a wall height at all, after #293 found the garage
-   inheriting an unbuildable one.
+3. **Awaiting a word from Movie**, in the order they block work:
+
+   - **THE PALETTE PASS, and it blocks all five tier 2 painters.** See
+     SPEC-model-html-tiers.md § Tier 2j. Notes and fixtures need a colour that
+     is not the night page's own background; stairs, cut marks and underlays
+     need keys that do not exist. Candidates are measured there. Nothing about
+     tier 2 proceeds without this, and it is one decision rather than five.
+   - **Should grade keep deriving from the attached garage?**
+     `derivedGradeOffsetFt` computes a SITE fact from a BUILDING. It works, and
+     it is the only path by which the house reaches the detached garage.
+   - **Ratify the lane map**, agreed between Skipper and Gilligan and official
+     from neither. Recorded in HANDOFF-SKIPPER.md.
+   - **The brush's name**: DRAFTING BRUSH or dusting brush.
+
+   ANSWERED 5 SEP, kept here because the reasoning outlived the question: the
+   rough-opening plate is a 2x flat and 1 1/2" is a MINIMUM ("can't be less");
+   and no zone row should inherit a wall height -- every row states its own,
+   which is what #296 did for the detached garage after #293 did it for the
+   attached one.
 
 ## Traps this session actually hit
 
