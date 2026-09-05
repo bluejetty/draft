@@ -20,6 +20,20 @@ async function drawHouseOutline(page) {
   await h.climbTourToMain(page);
 }
 
+// The same house, drawn from a type button on the build row (NEW-5): the
+// press stores the type and arms the trace.
+async function drawHouseOutlineAs(page, type) {
+  await page.locator(`[data-select-build="${type}"]`).click();
+  await page.keyboard.press('Enter'); // past PROFESSOR GRUFF
+  await h.clickWorld(page, -8, -6);
+  await h.clickWorld(page, 8, -6);
+  await h.clickWorld(page, 8, 6);
+  await h.clickWorld(page, -8, 6);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
+  await h.climbTourToMain(page);
+}
+
 async function drawGarageOutline(page) {
   await h.selectTool(page, 'Outline');
   await page.getByRole('button', { name: /MARK ATTACHED GARAGE/ }).click();
@@ -94,6 +108,50 @@ test('a bungalow (2ND FL deleted) keeps the spliced single roof over house + gar
   const roof = saved.roofs[0];
   expect(roof.garage).toBeFalsy();
   expect(Math.max(...roof.points.map(point => point.x))).toBeGreaterThan(20);
+});
+
+// The stored type answers before the floor count does. A BILEVEL is a
+// MODIFIED BILEVEL with the storey over the garage deleted, so its garage
+// drops whatever the stack says. A MODIFIED BILEVEL will keep the storey
+// over the garage under one roof -- once the bone builds that storey. Until
+// then it follows the floor-count rule, so its garage is never left under a
+// shared roof with nothing beneath it.
+test('a BILEVEL drops the garage roof even on a one-floor stack', async ({ page }) => {
+  await h.openModel(page);
+  page.on('dialog', dialog => dialog.accept(''));
+  await drawHouseOutlineAs(page, 'bilevel');
+  // The bungalow-shaped stack that keeps the splice when untyped.
+  await page.locator('.level-row')
+    .filter({ has: page.locator('.level-name', { hasText: '2ND FL' }) })
+    .locator('.level-del').click();
+  await h.waitForSaved(page);
+
+  await drawGarageOutline(page);
+  await buildHouse(page);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.buildType).toBe('bilevel');
+  expect(saved.roofs).toHaveLength(2);
+  const garageRoof = saved.roofs.find(roof => roof.garage);
+  expect(garageRoof).toBeTruthy();
+  expect(Math.min(...garageRoof.points.map(point => point.x))).toBeCloseTo(8, 5);
+  const houseRoof = saved.roofs.find(roof => !roof.garage);
+  expect(Math.max(...houseRoof.points.map(point => point.x))).toBeLessThan(11);
+});
+
+test('a MODIFIED BILEVEL follows the floor-count rule until the storey over the garage builds', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutlineAs(page, 'modifiedBilevel'); // default stack: MAIN + 2ND FL
+  await drawGarageOutline(page);
+  await buildHouse(page);
+
+  // Two roofs, like a 2 STOREY: the garage has its own. When the storey
+  // over the garage lands this becomes ONE roof reaching past x = 20, and
+  // this test changes with it -- on purpose, not by accident.
+  const saved = await h.savedDrawing(page);
+  expect(saved.buildType).toBe('modifiedBilevel');
+  expect(saved.roofs).toHaveLength(2);
+  expect(saved.roofs.find(roof => roof.garage)).toBeTruthy();
 });
 
 test('the front elevation shows the garage roof band low with house ink standing above it', async ({ page }) => {
