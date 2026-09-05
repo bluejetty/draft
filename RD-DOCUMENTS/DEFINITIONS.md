@@ -481,6 +481,16 @@ and 10'-1 1/8" are both precuts -- `STUD_LENGTHS_IN[0]` and `[2]`, 92 5/8" and
 116 5/8", each plus the three plates. One room ordering a different stock stud
 is the whole of it.
 
+**But the ladder is a list of the common ones, not a constraint.** Movie:
+*"those heights are just the most common ones too, but they could have odd
+numbers used for their typical wall heights."* `STUD_LENGTHS_IN` is three
+frozen numbers, which reads like a menu; it is not one. It never gates input
+-- the `stud` cell's parse takes any inches through `wallHeightFtFromStud` and
+converts, so a 100" stud giving 8'-8 1/2" is accepted today. The array is used
+to PICK defaults (`SPLIT_WALL_FT` is `STUD_LENGTHS_IN[1]`) and nothing else.
+A building whose TYP is an odd height is an ordinary building, not an
+exception the app has to be taught.
+
 **And the odd-balls do not live on the PROJECT page.** Movie, same evening:
 *"those will be separate from the 'project' information."* So the PROJECT
 page's schedules hold the TYPICAL for the building and nothing else -- one
