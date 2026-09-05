@@ -108,8 +108,9 @@ anything else reads as "not chosen" -- every drawing older than the key has
 no build type, and the reader must not guess one from the geometry. The
 writer only ever emits a listed value or null. The type is a label, not a
 geometry: BUILD HOUSE pours the outline as drawn whichever lamp is lit, and
-the PROJECT page reads it through `sectionRowForBuildType` (the split family
-has a table row; a bungalow or two-storey is the live assembly and has none).
+the PROJECT page reads it through `sectionRowForBuildType` (a bungalow or
+two-storey is the live HOUSE row; a bilevel or modified bilevel is its own
+stored row).
 
 ### `units`, and null-means-derive
 

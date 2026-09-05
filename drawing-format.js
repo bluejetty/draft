@@ -879,11 +879,15 @@ if (!window.DraftDrawingFormat) {
   // table, through the two translations below.
   const BUILD_TYPES = Object.freeze(['bungalow', 'twoStorey', 'bilevel', 'modifiedBilevel']);
   const buildType = raw => oneOf(raw, BUILD_TYPES, null);
-  // The section table has no HOUSE row -- HOUSE is the live assembly -- so a
-  // bungalow or two-storey answers null here, and the split family answers
-  // its own row.
+  // Which section-table row the type reads on the PROJECT page. The page's
+  // row ids are HOUSE, SPLIT, BILEVEL, MOD BILEVEL and the two garages
+  // (project-page.js SECTION_TABLE_ROWS, six); SECTION_TABLE_TYPES below is
+  // the five that are STORED, because HOUSE is the live assembly and has no
+  // cells of its own. A bungalow or two-storey is that live row; the split
+  // family reads its own row, SPLIT being the family name and not a type.
   const sectionRowForBuildType = type => (
-    type === 'bilevel' || type === 'modifiedBilevel' ? type : null);
+    type === 'bungalow' || type === 'twoStorey' ? 'house'
+      : type === 'bilevel' || type === 'modifiedBilevel' ? type : null);
   // Whether the type carries a floor above MAIN: the tour's climb-or-roof
   // question. null is "the type does not say" (the split family's upper
   // half is not a second storey in the bungalow sense), and the tour asks as
