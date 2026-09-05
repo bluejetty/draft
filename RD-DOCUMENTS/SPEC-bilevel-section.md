@@ -54,9 +54,19 @@ The proof is in the level ids, which were spaced before any of this came up:
 
     8 SITE   7 ROOF   5 2ND FL   3 MAIN FL   1 FOUNDATION
 
-**The gaps at 6, 4 and 2 are deliberate**, so levels can be inserted between
-the ones that exist. ENTRY slots into **id 2**, between FOUNDATION and MAIN
-FL. The space was left for exactly this.
+The gaps at 6, 4 and 2 leave room for levels between the ones that exist,
+and ENTRY slots into **id 2**, between FOUNDATION and MAIN FL.
+
+Said carefully, because the satisfying version is not checkable: those ids
+landed on 27 Aug in PR #139, nine days before any of this came up. Whether
+they were spaced deliberately for insertions or numbered in twos out of habit
+is a claim about a decision, and the boards' own rule is that those cannot be
+verified. What IS checkable is that the gap exists and ENTRY fits it.
+
+**id 4 is OVER GARAGE** (Movie, 5 Sep), for the case he raised of a two-storey
+bilevel wanting both a storey over the garage and one over the house. Named
+for what it sits on rather than as a variant of the floor above it, because
+what it sits on is what makes it lower.
 
 Two things follow, and they agree with the rest of the app. A plain BILEVEL
 has no 2ND FLOOR, which `upperStud` and `upperJoists` already say by being

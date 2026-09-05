@@ -100,18 +100,12 @@ if (!window.DraftProjectPage) {
     item('upperStud', '2ND FL STUD', 'stud', 'upperWallHeightFt', ['house', 'modifiedBilevel']),
     item('upperJoists', '2ND FL JOISTS', 'in', 'upperJoistDepthIn', ['house', 'modifiedBilevel']),
     item('mainStud', 'MAIN FL STUD', 'stud', 'mainWallHeightFt', ALL_TYPES),
-    // THE ENTRY FLOOR, and only the split family has one. Movie, 5 Sep: "the
-    // entry floor i put 2x10 typical with 3/4" ply sheathing", and its joists
-    // "sit on the frost wall sill plate". A bungalow or 2 storey has nothing
-    // framed below MAIN FL, so these rows would be cells with no meaning
-    // rather than cells left blank.
-    //
-    // A DIFFERENT PACKAGE FROM THE MAIN FLOOR, which is the reason it needs
-    // rows of its own rather than borrowing MAIN FL JOISTS: 9 1/4" of 2x10
-    // against 11 7/8" of I-joist. Sharing the field would have drawn the
-    // entry floor 2 5/8" too deep and looked entirely plausible.
-    item('entryJoists', 'ENTRY FL JOISTS', 'in', 'entryJoistDepthIn', SPLIT_TYPES),
-    item('entrySheathing', 'ENTRY FL SHEATHING', 'in', 'entrySheathingIn', SPLIT_TYPES),
+    // NO ENTRY FLOOR ROWS HERE, deliberately. They were added to this table
+    // on 5 Sep and taken out the same evening once Movie settled that ENTRY
+    // is a LEVEL rather than an area of the main one. Every other floor's
+    // package lives in its LEVEL ASSEMBLY -- the numbers the level cards edit
+    // -- so a pair of rows here would have been a second place to set one
+    // fact, and the two would disagree the first time anybody used the card.
     item('mainJoists', 'MAIN FL JOISTS', 'in', 'mainJoistDepthIn', HOUSE_LIKE),
     item('mainSheathing', 'MAIN FL SHEATHING', 'in', 'mainSheathingIn', HOUSE_LIKE),
     item('fdnWall', 'FDN WALL HT', 'ftin', 'fdnWallHeightFt', ALL_TYPES),
@@ -147,9 +141,6 @@ if (!window.DraftProjectPage) {
     fdnWallHeightFt: 5,
     woodFillHeightFt: (HALF_STUD_IN + PLATE_STACK_IN) / 12,
     mainWallHeightFt: SPLIT_WALL_FT,
-    // 2x10 and 3/4" ply, Movie 5 Sep. Not the main floor's 11 7/8" I-joist.
-    entryJoistDepthIn: 9.25,
-    entrySheathingIn: 0.75,
     // The storey over the garage that makes a MOD BILEVEL a MOD BILEVEL. The
     // BILEVEL row has no cell for it, so this sits unused there rather than
     // wrongly -- one shared default, as the harness requires.

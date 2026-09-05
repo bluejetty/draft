@@ -242,9 +242,16 @@
       // accept this one. Anybody tempted to weld 8'-0" in as a rule is
       // choosing wrong for half of all houses.
       const FOUNDATION_POUR_FT = 8;
+      // THE ENTRY LEVEL FRAMES IN 2x10, NOT I-JOIST. Movie, 5 Sep: "the entry
+      // floor i put 2x10 typical with 3/4" ply sheathing". It is a level of
+      // its own (id 2, the gap the list left between FOUNDATION and MAIN FL),
+      // so its package belongs here with every other level's rather than in
+      // the section table -- one place to set it, edited by its own card.
+      const ENTRY_LEVEL_ID = 2;
+      const ENTRY_JOIST_IN = 9.25;
       const assemblyDefaults = levelId => ({
         wallHeightFt: levelId === 1 ? FOUNDATION_POUR_FT : (8 * 12 + 1 + 1 / 8) / 12,
-        joistDepthIn: 11 + 7 / 8,
+        joistDepthIn: levelId === ENTRY_LEVEL_ID ? ENTRY_JOIST_IN : 11 + 7 / 8,
         sheathingIn: 3 / 4,
         slabThicknessIn: 3,
         footingDepthIn: 8,

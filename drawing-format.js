@@ -1025,8 +1025,6 @@ if (!window.DraftDrawingFormat) {
     // calculated heel into a typed 0.
     'roofPitch', 'roofOverhangFt', 'roofHeelIn',
     'mainWallHeightFt', 'mainJoistDepthIn', 'mainSheathingIn',
-    // The split family's entry floor: a 2x10 package, not the main floor's.
-    'entryJoistDepthIn', 'entrySheathingIn',
     'upperWallHeightFt', 'upperJoistDepthIn',
     'fdnWallHeightFt', 'woodFillHeightFt',
     'slabThicknessIn', 'footingWidthIn', 'footingDepthIn',
