@@ -147,10 +147,23 @@ ceiling, which stays under 12'-0" by choosing to, this cannot be chosen away
 short of interrupting the wall -- and interrupting it is what you would be
 giving up the open foyer to do.
 
+**What the engineer stamps is the OPENING, not just the wall.** Movie: *"the
+engineer will stamp the construction method for the opening."* Which puts the
+interesting part exactly where this wall's whole reason for existing is -- it
+holds the entry door and the tall window above it, and a large opening in a
+13'-6 1/2" structural wall is the condition that needs designing. Header,
+jambs, how the load gets around the hole: that method comes back stamped
+rather than out of our details.
+
+So this is the one place in the section where **we draw the hole and somebody
+else specifies how it is framed.** Everywhere else on the drawing the two are
+the same job.
+
 **The app draws it like any other wall today.** Nothing in the section knows
 about the threshold. Worth naming, though not urgent now that the outcome is
-ordinary: it is the one wall on the sheet whose studs are a different product,
-and the drawing currently says nothing about that.
+ordinary: it is the one wall on the sheet whose studs are a different product
+and whose opening is somebody else's detail, and the drawing currently says
+neither.
 
 ## What sits above
 

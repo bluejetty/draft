@@ -720,6 +720,13 @@ product with it -- engineered studs rather than sawn lumber -- and at that
 height the straightness is the point, because a wall this tall is usually also
 flat, uninterrupted and side-lit, which is the condition that shows a bow.
 
+**The stamp covers the openings, not only the wall.** Movie: *"the engineer
+will stamp the construction method for the opening."* A large opening in a
+structural wall this tall is the part that actually needs designing -- header,
+jambs, and how the load travels around the hole -- so on a tall wall we draw
+where the opening is and its framing method arrives stamped. Everywhere else
+on a drawing those are the same job.
+
 There is a live consequence. Movie on the garage ceiling: *"even more is nice
 too -- lots of bungalows have extra space there."* A drafter taking that
 invitation past 12'-0" crosses into engineered territory, and the app should
