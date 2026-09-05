@@ -57,7 +57,7 @@ test('the tool rail, the level cards and the layer views all answer a tap', asyn
 
 test('a finger can run the tour: trace, climb, and stamp rooms', async ({ page }) => {
   await h.openModel(page, { tourEscort: true });
-  await page.locator('[data-select-house]').tap();
+  await page.locator('[data-select-build="bungalow"]').tap();
   await page.keyboard.press('Enter'); // past PROFESSOR GRUFF
   for (const [x, z] of [[-14, -12], [14, -12], [14, 12], [-14, 12]]) await tapWorld(page, x, z);
   await page.keyboard.press('Enter');

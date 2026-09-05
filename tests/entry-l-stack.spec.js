@@ -76,7 +76,7 @@ function expectStairsInside(saved, stairs) {
 }
 
 async function traceHouse(page, points) {
-  await page.locator('[data-select-house]').click();
+  await page.locator('[data-select-build="bungalow"]').click();
   await page.keyboard.press('Enter'); // past PROFESSOR GRUFF
   for (const [x, z] of points) await h.clickWorld(page, x, z);
   await page.keyboard.press('Enter');

@@ -32,7 +32,7 @@ test('house rectangle closes by clicking NEAR the first point (imprecise click)'
 
 test('HOUSE-button flow: rectangle closes on the first point', async ({ page }) => {
   await h.openModel(page);
-  await page.locator('[data-select-house]').click();
+  await page.locator('[data-select-build="bungalow"]').click();
   await page.keyboard.press('Enter'); // dismiss Professor Gruff
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);

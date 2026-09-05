@@ -260,7 +260,7 @@ test('PORK CHOP builds gable edges at half the eave overhang (board #252)', asyn
 
   // The tour authors the gable as roof INTENT, so the bone derives the
   // footprint with the halved gable offset.
-  await page.locator('[data-select-house]').click();
+  await page.locator('[data-select-build="bungalow"]').click();
   await page.keyboard.press('Enter');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);
