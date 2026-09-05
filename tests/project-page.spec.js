@@ -139,17 +139,22 @@ test('grade derives from the attached garage beam and drives the detached garage
   // Local reads off the datum: MAIN FL 100'-0", the foundation top one
   // main-floor assembly (11 7/8" + 3/4") below it, grade 3'-2" under that.
   await expect(page.locator('[data-grade-local]')).toHaveValue(`95'-9 3/8"`);
-  // Detached garage derives until overridden: beam top 8" above grade. It
+  // Detached garage derives until overridden: beam top 1'-2" above grade. It
   // moved with grade -- which is the point: the attached garage sets grade,
   // and the detached one is measured off grade, so a chain runs from the
   // attached garage's floor all the way to the detached garage's beam.
+  //
+  // 1'-2", NOT the 8" this asserted until 5 Sep. Movie put every garage
+  // foundation at the house's own height out of the ground, so a detached beam
+  // tops out level with the house instead of 6" under it. This assertion is
+  // what caught the change -- it failed by exactly the 6".
   const detachedLocal = page.locator('[data-zone-local="detachedGarage"]');
-  await expect(detachedLocal).toHaveValue(`96'-5 3/8"`);
+  await expect(detachedLocal).toHaveValue(`96'-11 3/8"`);
 
   // Dropping grade a foot drops the derived garage the same foot.
   await page.locator('[data-grade-offset]').fill(`-2'-0"`);
   await page.locator('[data-grade-offset]').dispatchEvent('change');
-  await expect(detachedLocal).toHaveValue(`97'-7 3/8"`);
+  await expect(detachedLocal).toHaveValue(`98'-1 3/8"`);
   await expect(page.locator('[data-grade-local]')).toHaveValue(`96'-11 3/8"`);
 
   // An explicit garage height is an override — later grade edits leave it.
