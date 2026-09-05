@@ -369,3 +369,99 @@ MODEL.dc.html and checking whether its body delegates:
 The moved half is the leaves. What remains holds `_drawCuts2D` (246 lines),
 `_drawStairSectionPane` (163), `_drawStructure2D` (135),
 `_drawStairPlanPane` (119) and `_drawTourRoof2D` (98).
+
+---
+
+## Tier 2i — what is actually left, measured (5 Sep)
+
+MODEL.html calls **8 of the 16** painters in `render-2d.js`. The other eight
+were an undifferentiated list; they are not an undifferentiated list.
+
+### The criterion
+
+**Does the painter draw saved drawing content, or something that only exists
+while a tool is mid-gesture?** Saved content is the plan, and tier 2 is the
+plan. Gesture state is interaction, and interaction is tier 3.
+
+| painter | tier | why |
+| --- | --- | --- |
+| `drawStairs2D` | **2** | `stairs` is persisted |
+| `drawCutMarks2D` | **2** | `cuts` is persisted; section marks print |
+| `drawNoteScreen2D` | **2** | `notes` is persisted |
+| `drawUnderlays2D` | **2** | `underlays` is persisted — it is what you trace |
+| `drawFixture2D` | **2** | `fixtures` is persisted |
+| `drawStairNotes2D` | 3 | serves `_drawStairWorkspace2D` only — a separate pane |
+| `drawBoneyardMark2D` | 3 | gated on `boneyardActive` — a separate workspace |
+| `drawCutPreview2D` | 3 | `cutStart` / `phase` / `hoverSide` — pure gesture state |
+
+Five to go, not eight.
+
+### Cost, from the call sites — NOT from the function bodies
+
+The first pass extracted each painter's env by taking a line range between one
+declaration and the next and grepping it for `env.`. It gave `drawUnderlays2D`
+sixteen keys including grid spacing and camera position. The range had run past
+the end of the function into the next one. **The call site is the truth**; the
+function body's line range is arithmetic, and arithmetic run past a closing
+brace is how `_wallCross` was reported impure earlier the same day.
+
+```
+drawUnderlays2D    MODEL.dc.html:3619   4 keys
+drawStairs2D       MODEL.dc.html:7663   9 keys
+drawNoteScreen2D   MODEL.dc.html:8130   2 keys   (two colours)
+drawCutMarks2D     MODEL.dc.html:8173   4 keys
+```
+
+### The six env suppliers, transitively
+
+Brace-matched whole bodies, then the closure of every `this.` reference:
+
+```
+_wallFrame            0 methods    PURE
+_wallCross            0 methods    PURE
+_stairPlanParts       2 methods    PURE
+_fixtureGeometry      3 methods    _walls
+_cutLineSpan          2 methods    _walls, state.autoDimFirstOffsetFt
+_stairCurrentLayout   6 methods    _walls, state.{levels, levelAssemblies}
+_autoElevationCuts    4 methods    _walls, _dimensions,
+                                   state.{elevationMarkOffsets, structureStandards}
+```
+
+`_walls` and `_dimensions` are not obstacles — MODEL.html holds both already
+and the shipped painters take them as env. The state keys are the question, and
+`tests/persisted-format.spec.js:41` answers it authoritatively — better than
+grepping `drawing-format.js`, which lists none of them and made them look
+transient:
+
+- `levels`, `levelAssemblies`, `elevationMarkOffsets` — **persisted per drawing**
+- `structureStandards` — a **Company Standard**, normalised in
+  `profile-manager.js:366`, edited by STANDARDS.html. Already shared.
+- `autoDimFirstOffsetFt` — **not persisted**: a UI preference, default `1.5`,
+  set from a menu at `MODEL.dc.html:21688`. MODEL.html takes the default and is
+  correct for any drawing whose author never opened that menu.
+
+**Nothing in the closure reads interaction state.** The blocker THE TEST OF A
+FINISHED EXTRACTION worried about — "its env has to be reachable too" — is
+real, and smaller than it has looked since that section was written.
+
+### A seam worth naming
+
+`levelAssemblies` and `elevationMarkOffsets` are persisted, but MODEL.dc.html
+serialises and restores them itself (`:3191`, `:5240`) rather than through
+`drawing-format.js`. A second page reading them reads raw saved JSON with no
+normaliser in front of it. That is not tier 2's job to fix, but it is the
+reason those two keys are absent from the format module and looked like session
+state on the first check.
+
+### Order, cheapest first
+
+1. `drawNoteScreen2D` — two colours. The work is the filter, which the level
+   filter already does.
+2. `drawFixture2D` — two pure methods, one `_walls` method, two literals, and a
+   `closets.js` script tag. Task #12.
+3. `drawCutMarks2D` — one `_walls` method, one preference with a default.
+4. `drawStairs2D` — `_stairPlanParts` is pure; `_stairCurrentLayout` needs
+   levels and assemblies, both of which MODEL.html reads already.
+5. `drawUnderlays2D` — four keys, but `imageFor` reads a decoded-bitmap cache
+   and MODEL.html has no loader. Four keys is not four keys of work. Measure
+   the loader before committing to it.
