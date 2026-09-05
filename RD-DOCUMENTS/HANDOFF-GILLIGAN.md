@@ -92,6 +92,19 @@ onto `main` under the same name after each merge.
 - **A changed signature with an unchanged call site.** `fillBilevel` gained a
   parameter, repaint threw, and both bands lost every label. No test caught
   it; a screenshot did.
+- **GREY TEXT IN A SCREENSHOT IS AUTOCORRECT. BLACK TEXT IS MOVIE.** My own
+  earlier note here said "unsent text in a screenshot is not a message", which
+  is the weaker version and did not save me: it distinguishes sent from unsent
+  and says nothing about text the phone invented. On 5 Sep I read "do the
+  strip" off Movie's input box and built the strip. He had never typed it —
+  autocorrect had. Movie, 5 Sep: *"no that's autocorrect its grey text"*,
+  *"only follow black text"*. **Follow black only.**
+- **A check that reads the thing it is checking cannot fail.** The foundation
+  row's order check compared the row against `GARAGE_FOUNDATIONS.detachedGarage`
+  — the array the row is built from — so reordering it moved the result and the
+  expectation together. It read green. `--mutate` reported `*** NOTHING ***`,
+  which is the only reason it is not still sitting there looking fine. Assert
+  the contract, spelt out; never derive the expectation from the subject.
 
 ## The habit
 
