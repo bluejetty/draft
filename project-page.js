@@ -783,6 +783,107 @@ if (!window.DraftProjectPage) {
   // A mirrored painter would flip the break line's jog and the footing's
   // taper the wrong way round, which looks like a drafting error rather than
   // a transform.
+  // ─── THE DETACHED GARAGE ──────────────────────────────────────────────────
+  // A BUILDING OF ITS OWN, which is why this is not a flag on
+  // buildGarageSection. That one is structurally attached: the house wall IS
+  // its wall at the cut, its x runs negative from the shared face, it draws no
+  // grade because the garage stands over that ground, and every height hangs
+  // off g.sillOffsetFt on the HOUSE's datum. A detached garage has no house to
+  // measure from and needs all four the other way -- its own wall, its own
+  // grade line, its own roof, and a datum of its own.
+  //
+  // THE DATUM IS THE TOP OF SLAB, y = 0. A standalone slab-on-grade is set out
+  // from its floor; there is no main floor to be 0.0 and no sill to hang off.
+  // Grade sits DETACHED_SLAB_ABOVE_GRADE_IN below it.
+  //
+  // X RUNS POSITIVE INWARD from the exterior face, matching the house section
+  // rather than buildGarageSection's negative run -- there is no second
+  // drawing beside this one for it to read outward from.
+  const buildDetachedGarageSection = values => {
+    const g = values.garage;
+    const roof = values.roof;
+    const parts = [];
+    const anchors = {};
+    const line = (x1, y1, x2, y2, weight = 1.5) => parts.push({ kind: 'line', x1, y1, x2, y2, weight });
+    const rect = (x, y, w, h, weight = 1.5) => parts.push({ kind: 'rect', x, y, w, h, weight });
+
+    const wallFt = values.wallThicknessIn / 12;
+    const slabFt = g.slabIn / 12;
+    const edgeFt = GARAGE_EDGE_DEPTH_IN / 12;
+    const gradeY = -DETACHED_SLAB_ABOVE_GRADE_IN / 12;
+
+    // THE THICKENED EDGE, and it is the foundation -- there is no wall under
+    // this building. One monolithic pour: a 4" field slab that deepens to
+    // 1'-0" at the perimeter, the two joined by a 45 degree taper. At 45 the
+    // taper's run equals its drop, so it is (edge - field) long in plan and
+    // needs no angle of its own.
+    const fieldBot = -slabFt;
+    const edgeBot = -edgeFt;
+    const taperRun = edgeFt - slabFt;
+    line(0, 0, CUT_DEPTH_FT, 0, 2);                       // slab top, LEVEL
+    line(0, 0, 0, edgeBot, 2);                            // outer face of the edge
+    line(0, edgeBot, edgeFt, edgeBot, 2);                 // underside of the edge
+    line(edgeFt, edgeBot, edgeFt + taperRun, fieldBot, 1.5);  // the 45 taper
+    line(edgeFt + taperRun, fieldBot, CUT_DEPTH_FT, fieldBot, 1.5); // field underside
+    anchors.edgeDepth = { x: edgeFt * 0.45, y: (edgeBot + 0) / 2 };
+    anchors.slabThickness = { x: CUT_DEPTH_FT * 0.78, y: fieldBot / 2 };
+    anchors.slabAboveGrade = { x: -0.9, y: gradeY / 2 };
+
+    // GRADE, on the outside only. It stops at the building face for the same
+    // reason buildGarageSection draws none at all: soil ticks carried under a
+    // slab would draw earth inside a building.
+    line(-1.6, gradeY, 0, gradeY, 2);
+    anchors.grade = { x: -1.15, y: gradeY - 0.3 };
+
+    // THE WALL. Its own, unlike the attached garage's.
+    const plateStackFt = PLATE_STACK_IN / 12;
+    const plateY = g.wallHeightFt;
+    rect(0, 0, wallFt, plateY, 1.5);
+    line(0, plateY - plateStackFt, wallFt, plateY - plateStackFt, 1);  // under the plates
+    anchors.wallHeight = { x: wallFt + 0.55, y: plateY / 2 };
+    anchors.plates = { x: wallFt + 0.55, y: plateY - plateStackFt / 2 };
+
+    // THE OVERHEAD DOOR HEAD, dropped OPENING_HEAD_DROP_IN off the top of the
+    // wall -- two top plates, the lintel and the rough-opening plate. Drawn as
+    // the line a drafter dimensions to, not as the lintel itself: which member
+    // sits there is SPEC-lintels.md's business and depends on the span.
+    const headY = plateY - OPENING_HEAD_DROP_IN / 12;
+    parts.push({ kind: 'dashed', x1: 0, y1: headY, x2: wallFt + 1.2, y2: headY });
+    anchors.doorHead = { x: wallFt + 1.5, y: headY };
+
+    // THE ROOF, by the same rules as the house: the heel is fascia plus the
+    // rise gained across the overhang, and a typed heel lifts the whole roof
+    // rigidly rather than fattening the fascia.
+    const fasciaFt = roof.fasciaIn / 12;
+    const heelLiftFt = roof.heelIn == null ? 0
+      : (roof.heelIn - roofHeelIn(roof.fasciaIn, roof.overhangFt, roof.pitch)) / 12;
+    const eaveY = plateY + heelLiftFt;
+    if (heelLiftFt > 0) line(0, plateY, 0, eaveY, 2);
+    const riseAt = x => heelLiftFt + fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);
+    rect(-roof.overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);
+    line(-roof.overhangFt, eaveY, 0, eaveY, 1);
+    const chordDropFt = (ROOF_CHORD_IN / 12) * Math.hypot(1, roof.pitch / 12);
+    line(-roof.overhangFt, eaveY + fasciaFt, CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT), 2);
+    line(-roof.overhangFt, eaveY + fasciaFt - chordDropFt,
+      CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT) - chordDropFt, 1);
+    anchors.overhang = { x: -roof.overhangFt / 2, y: eaveY - 0.55 };
+    anchors.fascia = { x: -roof.overhangFt - 0.55, y: eaveY + fasciaFt / 2 };
+
+    const topY = plateY + riseAt(CUT_DEPTH_FT);
+    parts.push({ kind: 'break', x: CUT_DEPTH_FT, y1: edgeBot - 0.3, y2: topY + 0.3 });
+
+    return {
+      parts,
+      anchors,
+      extents: {
+        minX: -roof.overhangFt - 1.4,
+        maxX: CUT_DEPTH_FT + 0.4,
+        minY: edgeBot - 1.0,
+        maxY: topY + 0.9,
+      },
+    };
+  };
+
   const buildGarageSection = values => {
     const g = values.garage;
     const parts = [];
@@ -1172,6 +1273,7 @@ if (!window.DraftProjectPage) {
     roofHeelIn,
     buildWallSection,
     buildGarageSection,
+    buildDetachedGarageSection,
     paintSections,
   });
 })();

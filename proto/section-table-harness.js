@@ -342,6 +342,70 @@ const GARAGE = Object.freeze({
 });
 const garage = P => P.buildGarageSection(GARAGE);
 
+// ── The detached garage section ─────────────────────────────────────────
+// A BUILDING OF ITS OWN, not a flag on the attached one. buildGarageSection
+// hangs everything off the house -- g.sillOffsetFt on the house datum,
+// g.houseFootingTopFt, no wall of its own because the house wall IS the wall
+// at the cut, and no grade because the garage stands over that ground. None
+// of those exist for a detached garage, so it gets its own builder and its own
+// datum: the TOP OF SLAB at y = 0, the way a slab-on-grade is set out.
+const DETACHED = P => ({
+  wallThicknessIn: 5.5,
+  garage: { slabIn: 4, wallHeightFt: P.GARAGE_WALL_FT },
+  roof: { pitch: 4, overhangFt: 2, fasciaIn: 5.5, heelIn: null },
+});
+const detached = P => P.buildDetachedGarageSection(DETACHED(P));
+const yLow = out => Math.min(...out.parts.flatMap(part => part.kind === 'rect'
+  ? [part.y, part.y + part.h]
+  : part.kind === 'break' ? [part.y1, part.y2] : [part.y1, part.y2]));
+
+check('the detached section puts its datum at the top of slab', P => {
+  const slabTop = detached(P).parts.find(part =>
+    part.kind === 'line' && part.y1 === 0 && part.y2 === 0 && part.x1 === 0);
+  return [slabTop != null, true];
+});
+// THE FLOOR SITS WHERE THE OTHER FOUNDATIONS PUT IT. Grade is below the datum
+// by exactly the constant, so a reader measuring off the drawing gets the same
+// number the schedule prints.
+check('grade sits DETACHED_SLAB_ABOVE_GRADE_IN below the slab top', P => {
+  const grade = detached(P).parts.find(part => part.kind === 'line' && part.x1 < 0);
+  return [grade.y1, -P.DETACHED_SLAB_ABOVE_GRADE_IN / 12];
+});
+check('the edge is GARAGE_EDGE_DEPTH_IN of concrete', P =>
+  [yLow(detached(P)) <= -P.GARAGE_EDGE_DEPTH_IN / 12, true]);
+// AND IT IS DEEPER THAN THE FIELD, which is the whole reason it is called
+// thickened. Without the inequality the check above passes on a flat slab of
+// any depth and says nothing about a taper existing.
+check('the edge is deeper than the field slab it thickens from', P =>
+  [P.GARAGE_EDGE_DEPTH_IN > DETACHED(P).garage.slabIn, true]);
+// THE TAPER IS 45 DEGREES, so its run equals its drop. Asserted as that
+// equality rather than as a number of inches: at 45 the run follows the two
+// depths, and hard-coding 8" would go stale the moment either moved.
+check('the taper runs 45 degrees -- its run equals its drop', P => {
+  const out = detached(P);
+  const taper = out.parts.find(part => part.kind === 'line'
+    && part.y1 !== part.y2 && part.x1 !== part.x2 && part.y1 < 0);
+  return [Math.abs(taper.x2 - taper.x1) - Math.abs(taper.y2 - taper.y1) < 1e-9, true];
+});
+// The door head, composed rather than pinned -- it follows the wall and the
+// head drop, so it stays right when either moves.
+check('the overhead door head hangs OPENING_HEAD_DROP_IN under the top plate', P => {
+  const out = detached(P);
+  const head = out.parts.find(part => part.kind === 'dashed');
+  return [head.y1, P.GARAGE_WALL_FT - P.OPENING_HEAD_DROP_IN / 12];
+});
+check('a 7\'-0" overhead door clears that head on the detached garage wall', P =>
+  [P.GARAGE_WALL_FT * 12 - P.OPENING_HEAD_DROP_IN >= 84, true]);
+// It is a separate builder, and this is the check that says so: the attached
+// garage draws no grade line at all, deliberately, because it stands over that
+// ground. If the two were ever fused, one of them would start lying.
+check('the attached garage still draws no grade line, the detached one does', P => {
+  const attachedHasGrade = P.buildGarageSection(GARAGE).parts
+    .some(part => part.kind === 'line' && part.x1 > 0 && part.y1 === part.y2 && part.y1 < 0);
+  const detachedHasGrade = detached(P).parts.some(part => part.kind === 'line' && part.x1 < 0);
+  return [[attachedHasGrade, detachedHasGrade].join(), 'false,true'];
+});
+
 check('every editable number has an anchor to park beside', P => {
   const want = ['pitch', 'overhang', 'fascia', 'heel', 'fdnHeight', 'fdnThickness', 'footingWidth',
     'footingDepth', 'slab', 'grade', 'wallType', 'floor-main', 'floor-upper', 'wallHeight-main', 'wallHeight-upper'];
@@ -618,6 +682,26 @@ const MUTATIONS = [
     s => s.replace('  const GARAGE_EDGE_DEPTH_IN = 12;', '  const GARAGE_EDGE_DEPTH_IN = 13;')],
   ['the grade beam drifts from cut-view.js, the way the 32" already did once',
     s => s.replace('  const GARAGE_GRADE_BEAM_IN = 32;', '  const GARAGE_GRADE_BEAM_IN = 30;')],
+  // THE DETACHED SECTION. Anchored on single lines inside the builder rather
+  // than on the block around them -- the anchor that rotted earlier today
+  // matched a whole object literal and stopped applying when one field was
+  // added beside it.
+  ['the detached slab stops being the datum',
+    s => s.replace("    line(0, 0, CUT_DEPTH_FT, 0, 2);", "    line(0, 0.25, CUT_DEPTH_FT, 0.25, 2);")],
+  ['the detached grade line drifts off the constant',
+    s => s.replace('    const gradeY = -DETACHED_SLAB_ABOVE_GRADE_IN / 12;',
+      '    const gradeY = -8 / 12;')],
+  ['the thickened edge is poured to the field depth -- no thickening at all',
+    s => s.replace('    const edgeBot = -edgeFt;', '    const edgeBot = -slabFt;')],
+  ['the taper is cut at something other than 45 degrees',
+    s => s.replace('    const taperRun = edgeFt - slabFt;', '    const taperRun = (edgeFt - slabFt) * 2;')],
+  ['the overhead door head forgets the head drop',
+    s => s.replace('    const headY = plateY - OPENING_HEAD_DROP_IN / 12;', '    const headY = plateY;')],
+  // And the one that would fuse the two garages back together: a grade line
+  // under the attached garage draws earth inside a building.
+  ['the attached garage grows a grade line it should not have',
+    s => s.replace('    const frostWall = g.foundation === \'frostwall\';',
+      '    line(0.5, -1, 2, -1, 2);\n    const frostWall = g.foundation === \'frostwall\';')],
 ];
 
 if (MUTATION_MODE) {
