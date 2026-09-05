@@ -2141,6 +2141,12 @@ const FENESTRATION_LAYERS = Object.freeze({ door: 'A-DOOR', window: 'A-GLAZ' });
 // SPAN-DEPENDENT, not a flat 3". A 3'-0" window and a 16'-0" garage door do not
 // need the same bearing, and rounding every opening up to the long-span figure
 // would refuse narrow walls that build perfectly well.
+// A 6x6 post where no wall stands at the end of a run. Movie, 5 Sep: "if
+// nothing there use a 6x6 post". He first said 5.25" and corrected it to 5.5"
+// -- a dressed 6x6 is 5 1/2", the same dressing rule as his 2x8 at 7 1/4".
+// So a free end and a 2x6 corner reserve the same 8 1/2", which is one number
+// to remember rather than two that are nearly equal.
+const OPENING_FREE_END_POST_IN = 5.5;
 const OPENING_BEARING_SHORT_IN = 1.5;
 const OPENING_BEARING_LONG_IN = 3;
 const OPENING_BEARING_SPAN_FT = 3 / 0.3048;   // the code's 3 m, 9'-10 1/8"
@@ -5369,7 +5375,11 @@ class Component extends DCLogic {
       this._fenestrations = format.fenestrations(saved.fenestrations, ownerLevelIds).map(opening => {
         const wall = wallsById.get(opening.wallId);
         if (!wall || wall.levelId !== opening.levelId) return null;
-        const clamped = this._clampOpeningToWall(wall, opening.offset, opening.width);
+        // RESTORE KEEPS THE OLD RULE. See _clampOpeningToWall: this is the
+        // load path, and a rule that widened today must not move or drop
+        // openings in a drawing that was sound yesterday.
+        const clamped = this._clampOpeningToWall(wall, opening.offset, opening.width,
+          { faceReferenced: false });
         if (!clamped) return null;
         return {
           ...opening,
@@ -13751,12 +13761,70 @@ class Component extends DCLogic {
   // when the bearing went from an eighth of an inch to this: "the saved
   // drawings don't matter" -- so an old opening within the new bearing slides
   // in on load, and one on a wall too short for it is dropped, deliberately.
-  _clampOpeningToWall(wall, offset, width) {
+  // WHAT ACTUALLY CARRIES THE END OF A LINTEL, and it is not the endpoint.
+  // #294 reserved the NBC bearing back from each end of the wall and stopped
+  // there. A wall's endpoint is a CENTRELINE intersection -- it sits INSIDE
+  // the wall it runs into -- so reserving 3" from it puts the opening 3" from
+  // a line in the middle of somebody else's studs, and counts those studs as
+  // the bearing under the lintel.
+  //
+  // Movie, 5 Sep: the bearing is "measured from inside of exterior wall (5.5"
+  // typ)". 5.5 + 3 = 8.5, which is his own older rule -- "make a wood wall max
+  // to corner allowed 8.5"" -- arriving from the other direction. Two
+  // independent statements landing on one number is the best evidence either
+  // of them is right.
+  //
+  // AND THERE IS NO FREE END. "If nothing there use a 6x6 post" -- something
+  // always carries it, so the reserve is always (what is there) + bearing and
+  // the rule has no undefined case. A rule with an "and otherwise, nothing" in
+  // it is a bug with a delay on it.
+  //
+  // The bearing stays span-dependent (1 1/2" under 3 m, 3" over) because that
+  // is the code book's number; the wall or post is what gets ADDED to it.
+  _wallThicknessFt(wall) {
+    const def = WALL_TYPES.find(type => type.id === (wall?.wallType || 'stud_2x6')) || WALL_TYPES[1];
+    return def.totalIn / 12;
+  }
+
+  // The wall meeting this one at `point`, if any. Matched on the endpoint
+  // rather than through _wallJoins() on purpose: the clamp runs once per
+  // opening per hit test, and building the join map in here would make that
+  // quadratic. _computeInsideFaceCorners is no help either -- it handles only
+  // two-wall mitre corners and says so, and an interior wall butting into an
+  // exterior one is a TEE, the case it skips.
+  _wallMeetingAt(wall, point) {
+    const near = (a, b) => Math.hypot(a.x - b.x, a.z - b.z) < 0.02;
+    return this._walls.find(other => other !== wall
+      && other.levelId === wall.levelId
+      && (other.view || 'plan') === (wall.view || 'plan')
+      && (near(other.start, point) || near(other.end, point)));
+  }
+
+  _openingEndReserveFt(wall, point, bearing) {
+    const meeting = this._wallMeetingAt(wall, point);
+    const carrier = meeting ? this._wallThicknessFt(meeting) : OPENING_FREE_END_POST_IN / 12;
+    return carrier + bearing;
+  }
+
+  // faceReferenced:false is the OLD bearing-from-the-endpoint rule, and it
+  // exists for exactly one caller: restore. Widening a rule must not reach
+  // backwards into drawings that were sound when they were saved -- an opening
+  // inside the new margin would MOVE on load, and one on a wall shorter than
+  // width + 2 x 8 1/2" would be DROPPED and counted into the load message's
+  // "skipped". A number printed for a file nobody damaged is still the wrong
+  // shape. Skipper raised this, and he is right: load repairs damaged files,
+  // it does not re-rule sound ones. Drawings converge as walls are edited.
+  _clampOpeningToWall(wall, offset, width, { faceReferenced = true } = {}) {
     const bearing = this._openingBearingFt(width);
+    // Each end is measured against whatever stands at THAT end -- a 2x6
+    // exterior and a 2x4 partition do not reserve the same, and one wall can
+    // meet a different thing at each of its ends.
+    const atStart = faceReferenced ? this._openingEndReserveFt(wall, wall.start, bearing) : bearing;
+    const atEnd = faceReferenced ? this._openingEndReserveFt(wall, wall.end, bearing) : bearing;
     const len = this._wallLength(wall);
-    if (!(width > 0) || len < width + bearing * 2) return null;
+    if (!(width > 0) || len < width + atStart + atEnd) return null;
     const half = width / 2;
-    return { offset: Math.min(Math.max(offset, half + bearing), len - half - bearing) };
+    return { offset: Math.min(Math.max(offset, half + atStart), len - half - atEnd) };
   }
 
   _fenestrationWidth(type = this.state.fenestrationType) {
