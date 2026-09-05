@@ -34,15 +34,36 @@ The pour is short and the wall makes up the difference: 5'-0" of concrete plus
 is why `buildWallSection` grew a fill wall rather than the page growing a
 second painter.
 
-## The entry floor is a ZONE, not a storey
+## ENTRY is a LEVEL, and it gets a card
 
-Movie: *"the entry floor should be on the 'main level' on the floor plan but
-will actually be dropped that amount on the elevation."*
+**A bilevel's levels are FOUNDATION, ENTRY, MAIN FLOOR. A modified bilevel
+adds 2ND FLOOR.** Movie, 5 Sep. Each gets a card in the Model Space sidebar
+the same as any storey.
 
-So it is not a floor in the storey sense -- it does not get its own plan
-sheet. It is an area of the main level whose floor sits lower, which is
-exactly what `ZONE_ROWS` means, and the BILEVEL and MODIFIED BILEVEL rows
-there have been `reserved: true` waiting for it since before this session.
+This entry is written twice because it was wrong the first time, and the
+wrong version is worth keeping. Movie also said *"the entry floor should be
+on the 'main level' on the floor plan but will actually be dropped that
+amount on the elevation"*, and that was read here as making it a ZONE -- an
+area of the main level sitting lower, like the garage. It is not. That
+sentence describes where it is DRAWN, which is a sheet convention, not what
+it is. A garage is genuinely a patch of the main level: no rooms, no stairs,
+an attached box. An entry level has rooms, people live on it, and a flight
+runs up out of it.
+
+The proof is in the level ids, which were spaced before any of this came up:
+
+    8 SITE   7 ROOF   5 2ND FL   3 MAIN FL   1 FOUNDATION
+
+**The gaps at 6, 4 and 2 are deliberate**, so levels can be inserted between
+the ones that exist. ENTRY slots into **id 2**, between FOUNDATION and MAIN
+FL. The space was left for exactly this.
+
+Two things follow, and they agree with the rest of the app. A plain BILEVEL
+has no 2ND FLOOR, which `upperStud` and `upperJoists` already say by being
+typed to `['house', 'modifiedBilevel']` only. And a MODIFIED BILEVEL's 2ND
+FLOOR is the storey over the garage, which is why it sits LOWER than a
+house's second floor: it stacks on a dropped garage rather than on the main
+floor.
 
 Its joists **bear on the frost wall's sill plate**. Its package is 2x10 plus
 3/4" ply, deliberately not the main floor's 11 7/8" I-joist -- sharing that
