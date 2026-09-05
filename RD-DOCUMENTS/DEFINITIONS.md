@@ -427,6 +427,82 @@ have zero references in MODEL.dc.html. `layersFor()` is exported by
 contents list is not a filter, and nothing is assigned to `A-FL` in the first
 place.
 
+### DEFAULT / TYPICAL (TYP)
+
+**Movie, 5 Sep**, after using TYP for both in one evening: *"DEFAULT are the
+settings and construction types our program will use initially by 'DEFAULT'.
+TYPICAL will refer to the common measurement or type of something used in a
+PLAN for a building (so it will depend what is TYPICAL for each building)."*
+And on why they blur: *"sometimes i mess up and say TYPICAL when i mean
+DEFAULT ... because it is kindof our TYPICAL."*
+
+They are not rival words for one idea. They answer **two different questions**
+-- what does our program start with, and what does this building mostly use --
+and the two answers live in two different places:
+
+| | what it answers | where it lives | whose it is |
+|---|---|---|---|
+| **DEFAULT** | what our program starts with, on a blank drawing | the code. `SECTION_TABLE_DEFAULTS`, `Object.freeze`d in `project-page.js` | ours; only we change it |
+| **TYPICAL (TYP)** | what THIS building mostly uses | the drawing. `sectionTable.rows`, `zoneHeights`, that drafter's saved file | the plan's; set by its main construction |
+
+**A drafter overriding a number does not change our default — they just do not
+use it.** Their number goes in their file; the next blank drawing gets ours
+back, untouched. That is the whole distinction, and it is structural rather
+than a matter of style: two storage locations, one frozen, one per-drawing.
+
+**The test, and it is mechanical.** `PROJECT.html` carries five
+`stored ?? derived()` sites — `roofHeelOverrideIn`, `sectionTable.rows
+.attachedGarage?.roofHeelIn`, `zoneHeights.zones.attachedGarage.offsetFt`,
+`zoneHeights.gradeOffsetFt`, `zoneHeights.zones.detachedGarage.offsetFt`. Ask
+which side of the `??` you are talking about:
+
+- still `null` → you mean our **DEFAULT**
+- a stored number → you mean that plan's **TYPICAL**
+
+**TYPICAL IS DEFINED BY WHAT PREDOMINATES, NOT BY WHERE IT CAME FROM.** Movie,
+5 Sep: *"his TYP could also be 9-1 1/8" or 10-1 1/8", depends on what the MAIN
+construction is."* So a building framed throughout at 9'-1 1/8" has that as
+its TYP from the first drawing -- it was never our 8'-1 1/8" and did not
+"become" anything. The relationship is one-way and weaker than it looks: on a
+plan nobody has touched, our DEFAULT is also the TYPICAL, because it is what
+predominates there by not being changed. That coincidence on the blank drawing
+is the whole reason the words blur, and it is the only case where they name
+the same thing.
+
+**And TYP does not mean "everywhere".** Movie, same evening: *"there may be a
+couple odd ball features which won't be typical."* That is the reason TYP is
+written on a drawing at all — it marks the repeat so the exceptions can be
+called out one at a time. A TYP with no exceptions would not need saying.
+
+Movie's example, same evening: *"maybe an area on the main floor will be
+10ft 1 1/8" ceiling rather than TYP 8'1 1/8"."* Note what the exception is
+NOT: it is not a different rule, and not a number off the ladder. 8'-1 1/8"
+and 10'-1 1/8" are both precuts -- `STUD_LENGTHS_IN[0]` and `[2]`, 92 5/8" and
+116 5/8", each plus the three plates. One room ordering a different stock stud
+is the whole of it.
+
+**And the odd-balls do not live on the PROJECT page.** Movie, same evening:
+*"those will be separate from the 'project' information."* So the PROJECT
+page's schedules hold the TYPICAL for the building and nothing else -- one
+number per item, the repeat. A feature that departs from it is called out
+where it is drawn, not entered as a second row here. That is the scoping rule
+for anything anyone wants to add to those schedules: if it is not true of the
+building generally, it does not belong on this page.
+
+**The mistakes are not symmetrical, which is the ruling.** Read one of our
+DEFAULTS as a TYPICAL and the number becomes per-plan: more freedom than
+needed, no harm. Read a TYPICAL as a DEFAULT and you weld one building's
+number into every building, and the unusual drawing becomes impossible to
+draw. That is the 95%-answer failure that produced the hatched BILEVEL wood
+fill cell, the garage inheriting the house's basement wall, and the split rows
+showing the bungalow's 8'-1 1/8".
+
+**Say instead.** When unsure which one a spec means, do not take the word —
+ask where the number comes from, and when it is still genuinely unclear, build
+it typeable. That error is recoverable; the other one is not.
+
+---
+
 ---
 
 ## The boneyard and its geometry
