@@ -232,7 +232,9 @@ is a cost of the type, not evidence the arithmetic is wrong -- and nothing
 here should clamp the ceiling to a precut.
 
 **It is not a TALL WALL, and that phrase was used loosely here before Movie
-caught it.** A tall wall is a specific thing: engineered, over 12'-0". At
+caught it.** A tall wall is a specific thing: a STRUCTURAL wall over 12'-0", which needs an
+engineer. This one qualifies on the structural half -- it carries a floor and a
+roof -- and fails on the height, which is the only reason it is ordinary. At
 10'-5 5/8" this one is under the threshold and framed like any other. But
 *"even more is nice too"* points straight at that line, so a drafter raising
 this ceiling past 12'-0" leaves what the app knows how to draw. See

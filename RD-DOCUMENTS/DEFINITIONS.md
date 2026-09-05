@@ -693,11 +693,14 @@ Piles sit closer than columns because a pile carries the floor above as well.
 
 ### TALL WALL
 
-**Movie, 5 Sep:** *"'tall wall' is an engineered wall over 12ft tall."*
+**Movie, 5 Sep:** *"'tall wall' is an engineered wall over 12ft tall"*, and
+said again with the qualifier that matters: *"any STRUCTURAL wall over 12ft
+needs [an] engineer -- it's called a 'tall wall'."*
 
-It is a **specific thing with a threshold**, not a description. Over 12'-0"
-the wall stops being framed off a schedule and gets engineered -- stud size,
-spacing and bracing designed for it rather than assumed.
+It is a **specific thing with a threshold**, not a description. Over 12'-0" a
+structural wall stops being framed off a schedule and gets engineered -- stud
+size, spacing and bracing designed for it rather than assumed. Structural is
+part of the definition, not decoration: height alone does not make one.
 
 Written down because it was used here as ordinary English within the hour. A
 derived garage wall came out 10'-5 5/8" and got called "the tall wall" in a
