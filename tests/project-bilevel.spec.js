@@ -122,3 +122,33 @@ test('band 2 draws a split: fill wall present, entry landing below main', async 
   expect(feetBelow('floor-2', 'woodFill')).toBeGreaterThan(0.5);
   expect(feetBelow('floor-2', 'woodFill')).toBeLessThan(3);
 });
+
+// THE SCHEDULE SAYS WHAT THE DRAWING DRAWS. Band 2 exists so Movie can hold it
+// against his ArchiCAD section, which means the numbers beside it have to be
+// the split's and not, say, the same field read twice.
+test('band 2 schedule reads the split stack', async ({ page }) => {
+  await page.goto('/PROJECT.html');
+  const rows = await page.evaluate(() => Object.fromEntries(
+    [...document.querySelectorAll('#sched-bilevel-left .sched-row, #sched-bilevel-right .sched-row')]
+      .filter(r => !r.hidden)
+      .map(r => [r.children[0].textContent, r.children[1].textContent])));
+
+  // Office defaults for the type, pinned: these are the numbers that make a
+  // split a split, and all three are frozen in SECTION_TABLE_DEFAULTS.
+  expect(rows['POUR']).toBe(String.raw`5'-0"`);
+  expect(rows['FILL WALL']).toBe(String.raw`4'-2 3/4"`);
+  expect(rows['MAIN FL WALL']).toBe(String.raw`9'-1 1/8"`);
+
+  // The entry package is the 2x10 and ply Movie named, deliberately NOT the
+  // main floor's I-joist — sharing that field would draw it 2 5/8" too deep and
+  // look entirely plausible.
+  expect(rows['ENTRY FL']).toBe(String.raw`0'-10"`);
+  expect(rows['MAIN FL JST']).toBe(String.raw`1'-0 5/8"`);
+
+  // THE DISPUTED ONE, pinned to the derivation rather than left loose: fill
+  // wall less the entry package. Movie's PDF says 5'-1 1/8" and is not
+  // reconciled (RD-DOCUMENTS/SPEC-bilevel-section.md). If that settles his way
+  // this test SHOULD fail — the number changing is the point of settling it,
+  // and a test that shrugged would let the schedule and the spec drift apart.
+  expect(rows['ENTRY WALL']).toBe(String.raw`3'-4 3/4"`);
+});

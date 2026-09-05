@@ -170,11 +170,11 @@
       <div class="card-title">Modified bilevel &mdash; office defaults, not this drawing</div>
       <div class="card-body">
         <div class="band">
-          <div class="sched"></div>
-          <div class="detail-wrap">
+          <div class="sched" id="sched-bilevel-left"></div>
+          <div class="detail-wrap" id="bilevel-wrap">
             <canvas id="bilevel-canvas" width="600" height="500" aria-label="Modified bilevel section — the office default split"></canvas>
           </div>
-          <div class="sched"></div>
+          <div class="sched" id="sched-bilevel-right"></div>
         </div>
         <div class="zone-note">The MOD BILEVEL row of the section table, drawn. A short pour with a wood fill wall on it reaches the same bearing line the bungalow reaches with one tall pour, and the ENTRY landing sits a half flight below MAIN FL. These are the office defaults for the type &mdash; typing here comes with the split-level feature; the numbers above still describe <em>this</em> drawing.</div>
       </div>
@@ -601,6 +601,81 @@
             fasciaIn: ROOF_FASCIA_IN, heelIn: roofHeelIn() },
           wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
         };
+      };
+
+      // BAND 2'S NUMBERS, READ-ONLY. Movie's reason for wanting the bilevel
+      // drawn was "copy the other one you made and we can adjust to match this
+      // one" — which cannot be done against an unlabelled picture. These are
+      // the dimensions that make a split a split, so the drawing can be held
+      // against his ArchiCAD section line for line.
+      //
+      // Read-only rather than typeable, and not as a shortcut: MOD BILEVEL is a
+      // live:false row. Its numbers are the office's defaults for the type, so
+      // a box here would either edit every drawing's defaults or silently edit
+      // nothing. Typing arrives with the split-level feature; a span says so by
+      // being a span.
+      const bilevelRows = [
+        { side: 'left', key: 'fdnHeight', name: 'POUR',
+          get: v => v.foundation.wallHeightFt },
+        { side: 'left', key: 'woodFill', name: 'FILL WALL',
+          get: v => v.foundation.woodFillHeightFt },
+        { side: 'left', key: 'slab', name: 'SLAB',
+          get: v => v.foundation.slabIn / 12 },
+        { side: 'right', key: 'floor-2', name: 'ENTRY FL',
+          get: v => pkgFt(v.floors[0]) },
+        // The disputed one. See RD-DOCUMENTS/SPEC-bilevel-section.md — derived
+        // at 3'-4 3/4", drawn 5'-1 1/8" on Movie's PDF, unreconciled. It is on
+        // the schedule precisely so the disagreement is visible on the page
+        // rather than only in a document nobody has open.
+        { side: 'right', key: 'wallHeight-2', name: 'ENTRY WALL',
+          get: v => v.floors[0].wallHeightFt },
+        { side: 'right', key: 'floor-3', name: 'MAIN FL JST',
+          get: v => pkgFt(v.floors[1]) },
+        { side: 'right', key: 'wallHeight-3', name: 'MAIN FL WALL',
+          get: v => v.floors[1].wallHeightFt },
+        { side: 'right', key: 'wallHeight-5', name: 'OVER GAR WALL',
+          get: v => v.floors[2] && v.floors[2].wallHeightFt },
+      ];
+      const pkgFt = level => (level.joistDepthIn + level.sheathingIn) / 12;
+      const bilevelEls = new Map();
+      const buildBilevelSched = () => {
+        const hosts = {
+          left: document.querySelector('#sched-bilevel-left'),
+          right: document.querySelector('#sched-bilevel-right'),
+        };
+        const wrap = document.querySelector('#bilevel-wrap');
+        if (!hosts.left || !hosts.right || !wrap) return;
+        bilevelRows.forEach(row => {
+          const value = document.createElement('span');
+          value.className = 'sched-value';
+          value.dataset.bilevelValue = row.key;
+          const tag = document.createElement('span');
+          tag.className = 'detail-tag';
+          wrap.appendChild(tag);
+          bilevelEls.set(row.key,
+            { row, el: value, tag, node: schedRow(hosts[row.side], row.key, row.name, value) });
+        });
+      };
+      const fillBilevel = anchors => {
+        if (!bilevelEls.size) return;
+        const values = bilevelValues();
+        bilevelEls.forEach(({ row, el, tag, node }, key) => {
+          const ft = row.get(values);
+          // A row with no number is a row this type has no use for — the plain
+          // BILEVEL has nothing over the garage — so it leaves rather than
+          // showing a blank that reads as zero.
+          const has = Number.isFinite(ft);
+          node.hidden = !has;
+          el.textContent = has ? fmt.formatArchitecturalInches(ft * 12) : '';
+          const at = has && anchors[key];
+          tag.style.display = at ? '' : 'none';
+          if (!at) return;
+          tag.textContent = row.name;
+          tag.style.left = row.side === 'left' ? `${at.x - 6}px` : `${at.x + 6}px`;
+          tag.style.top = `${at.y}px`;
+          tag.style.transform = row.side === 'left'
+            ? 'translate(-100%,-50%)' : 'translate(0,-50%)';
+        });
       };
 
       // One control per anchor. get/set/text describe the value; commit
@@ -1206,16 +1281,15 @@
         // there has to move down here too or the two bands stop being
         // comparable — which is the only reason to draw them on one page.
         if (bilevelCanvas) {
-          // The anchors are kept on the element rather than dropped. Band 2
-          // has no schedule to place them into yet, so nothing on the page
-          // reads them — but a canvas can only be checked as pixels, and
-          // pixels cannot tell a correct bilevel from a plausible one. Two
-          // ways to draw a WRONG bilevel both survived a screenshot test:
-          // losing the fill wall, and putting the entry landing at the datum
-          // instead of below it. Both are visible here in feet.
+          // The anchors are kept on the element as well as used below. A canvas
+          // can only be checked as pixels otherwise, and pixels cannot tell a
+          // correct bilevel from a plausible one: losing the fill wall and
+          // putting the entry landing at the datum both survived a screenshot
+          // test. Both are obvious in feet.
           bilevelCanvas.paintedSection = projectPage.paintSections(bilevelCanvas, [
             projectPage.buildWallSection(bilevelValues()),
           ]);
+          fillBilevel(bilevelCanvas.paintedSection.anchors);
         }
         controlEls.forEach(({ control, el, tag }, key) => {
           const at = anchors[key];
@@ -1765,6 +1839,8 @@
 
       fillZones();
       fillTable();
+      // Built before the first repaint, because repaint() is what fills it.
+      buildBilevelSched();
       repaint();
     })();
   </script>
