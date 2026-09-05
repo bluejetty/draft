@@ -459,6 +459,97 @@ test('the PROJECT cell says FROST WALL: the attached garage stands on the footin
   expect(saved.columns.filter(column => column.levelId === 1)).toHaveLength(0);
 });
 
+// THE TYPED PROJECT OFFSET BEATS THE BUILD-TYPE DEFAULT. The ATTACHED
+// GARAGE zone row stores the garage SILL off MAIN FL 0, the same line the
+// house's own sill is reported on, so the sill plates cancel and the
+// concrete tops carry the difference straight through.
+async function plantAttachedOffset(page, offsetFt, buildType) {
+  await page.evaluate(async ({ offset, type }) => {
+    const file = await window.SharedFileStore.loadSharedFile('model-drawing');
+    const d = JSON.parse(await file.text());
+    d.sectionTable.rows.attachedGarage.garageFoundation = 'frostwall';
+    d.zoneHeights.zones.attachedGarage.offsetFt = offset;
+    d.buildType = type;
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(d)], 'drawing.json', { type: 'application/json' }), 'model-drawing');
+  }, { offset: offsetFt, type: buildType });
+  await page.reload();
+  await h.waitForModelReady(page);
+}
+
+// The house's sill is one floor package below MAIN FL 0 -- the line the
+// PROJECT page measures a typed offset against. levelAssemblies is empty
+// until a drafter changes one, so the package is read off the MAIN FL floor
+// the bone just built, which carries the assembly it was built with.
+function houseSillFtOf(saved) {
+  const main = saved.floors.find(floor => floor.levelId === 3 && !floor.garage);
+  return -(main.assembly.joistDepthIn + main.assembly.sheathingIn) / 12;
+}
+
+test('a typed garage sill sets the frost wall top, sill to sill from the house', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageOutline(page);
+
+  // A garage sill 5'-0" below MAIN FL. The first draft of this used 3'-0",
+  // which lands 5/8" from the 2'-0" default -- inside what the inequality
+  // below would have swallowed if it had been written any looser. The two
+  // defaults sit near houseSill and houseSill - 2, so a number two feet
+  // clear of both is what makes agreement mean something.
+  const typed = -5;
+  await plantAttachedOffset(page, typed, null);
+  await buildHouse(page);
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  const fdnWalls = saved.walls.filter(wall => wall.levelId === 1);
+  const garageWalls = fdnWalls.filter(wall => h.touchesPoint(wall, 20, -4) || h.touchesPoint(wall, 20, 4));
+  const houseWall = fdnWalls.find(wall => !garageWalls.includes(wall));
+  const houseSillFt = houseSillFtOf(saved);
+
+  expect(garageWalls).toHaveLength(3);
+  garageWalls.forEach(wall => {
+    expect(wall.baseHeight).toBe(0);
+    expect(wall.topHeight).toBeCloseTo(houseWall.topHeight + (typed - houseSillFt), 3);
+  });
+
+  // AND NOT WHERE EITHER DEFAULT WOULD PUT IT. Untyped this drawing sits
+  // 2'-0" down; on a bilevel it sits level. The typed answer is neither, so
+  // this reads the offset rather than a branch that happens to agree.
+  garageWalls.forEach(wall => {
+    expect(Math.abs(wall.topHeight - (houseWall.topHeight - 2))).toBeGreaterThan(0.5);
+    expect(Math.abs(wall.topHeight - houseWall.topHeight)).toBeGreaterThan(0.5);
+  });
+});
+
+test('a typed offset wins over the build type, not the other way round', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  await drawGarageOutline(page);
+
+  // A BILEVEL, whose default is LEVEL with the house -- and a sill typed
+  // well below it. Movie, 4 Sep: level is "95%" on a bilevel, so the other
+  // 5% has to be drawable.
+  const typed = -4;
+  await plantAttachedOffset(page, typed, 'bilevel');
+  await buildHouse(page);
+  await h.waitForSaved(page);
+
+  const saved = await h.savedDrawing(page);
+  expect(saved.buildType).toBe('bilevel');
+  const fdnWalls = saved.walls.filter(wall => wall.levelId === 1);
+  const garageWalls = fdnWalls.filter(wall => h.touchesPoint(wall, 20, -4) || h.touchesPoint(wall, 20, 4));
+  const houseWall = fdnWalls.find(wall => !garageWalls.includes(wall));
+  const houseSillFt = houseSillFtOf(saved);
+
+  expect(garageWalls).toHaveLength(3);
+  garageWalls.forEach(wall => {
+    expect(wall.topHeight).toBeCloseTo(houseWall.topHeight + (typed - houseSillFt), 3);
+    // The bilevel default would have put it level with the house. It did not.
+    expect(wall.topHeight).toBeLessThan(houseWall.topHeight - 0.5);
+  });
+});
+
 test('the same frost wall on a BILEVEL tops out level with the house', async ({ page }) => {
   const { garageWalls, houseWall } = await attachedFrostWallBuild(page, 'bilevel');
   expect(garageWalls).toHaveLength(3);
