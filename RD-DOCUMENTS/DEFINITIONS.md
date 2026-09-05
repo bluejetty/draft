@@ -436,6 +436,16 @@ PLAN for a building (so it will depend what is TYPICAL for each building)."*
 And on why they blur: *"sometimes i mess up and say TYPICAL when i mean
 DEFAULT ... because it is kindof our TYPICAL."*
 
+**The shortest true version, Movie's own, 5 Sep:** *"basically whatever is in
+the PROJECT information is the TYPICAL stuff -- at first our defaults will be
+all their TYPICAL stuff, but then when they change it the numbers for the
+TYPICALS will change."*
+
+That doubles as the definition of the page. **PROJECT holds one building's
+typicals, and nothing else.** Our defaults are what fills that schedule in
+before anybody types; every number in it is the plan's from then on. Read the
+rest of this entry as the detail under that sentence.
+
 They are not rival words for one idea. They answer **two different questions**
 -- what does our program start with, and what does this building mostly use --
 and the two answers live in two different places:
