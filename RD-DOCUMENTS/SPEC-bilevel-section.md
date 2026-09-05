@@ -159,11 +159,18 @@ So this is the one place in the section where **we draw the hole and somebody
 else specifies how it is framed.** Everywhere else on the drawing the two are
 the same job.
 
-**The app draws it like any other wall today.** Nothing in the section knows
-about the threshold. Worth naming, though not urgent now that the outcome is
-ordinary: it is the one wall on the sheet whose studs are a different product
-and whose opening is somebody else's detail, and the drawing currently says
-neither.
+**The app draws it like any other wall today**, and that is fine, because the
+gap does not get closed by the section. Movie: *"I can make some generic tall
+wall notes later that an engineer can modify to his reqs."*
+
+That is the right shape and it settles what was left open here. The drawing
+does not have to know the threshold or derive anything -- it carries a
+boilerplate note block that says what a tall wall is and how its opening is
+built, and the engineer edits it to his requirements and stamps it. Ours is a
+starting point for somebody else's document, which is the same relationship as
+a DEFAULT and a drafter's TYPICAL, one step further out.
+
+**Owner: Movie, later.** Not the section's problem, not blocking band 2.
 
 ## What sits above
 
