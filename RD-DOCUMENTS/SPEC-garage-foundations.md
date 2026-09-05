@@ -95,9 +95,14 @@ measured to the top of concrete, remainder measured from the top of slab. Four
 of the five wrong versions came from applying the 1'-0" down to the top of
 *slab*, which lands 4" out and invites an invented filler to cover the gap.
 
-**The driveway is out of scope.** Movie, 5 Sep: *"the driveway doesn't matter
-it will just be a sloping slab we will line up."* No section draws it and no
-constant places it.
+**The driveway is out of scope HERE, not everywhere.** Movie, 5 Sep: *"the
+driveway doesn't matter it will just be a sloping slab we will line up"*, and
+*"we may add something for driveway in landscaping area / site plan area."*
+
+So no section draws it and no constant places it, and that is deliberate rather
+than an omission: a driveway is a site thing, and it belongs on the sheet that
+deals with the site. Recorded so nobody adds a driveway constant to a
+foundation file on the grounds that the section looks unfinished without one.
 
 The 1½" sill on the beam is deliberately left out of the stack above — Movie:
 *"plus 1.5" sill we won't worry about now."* `GARAGE_BEAM_PLATE_IN` carries it
