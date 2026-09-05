@@ -176,7 +176,7 @@
           </div>
           <div class="sched" id="sched-bilevel-right"></div>
         </div>
-        <div class="zone-note">The MOD BILEVEL row of the section table, drawn. A short pour with a wood fill wall on it reaches the same bearing line the bungalow reaches with one tall pour, and the ENTRY landing sits a half flight below MAIN FL. These are the office defaults for the type &mdash; typing here comes with the split-level feature; the numbers above still describe <em>this</em> drawing. <strong>ENTRY WALL is provisional:</strong> measured off Movie&#8217;s section it is 5'-1&#8539;&Prime;, because the entry floor bears on its own frost wall about 1'-8&frac38;&Prime; below the fill wall &mdash; which the section cannot draw yet, so it shows the derived 3'-4&frac34;&Prime; instead.</div>
+        <div class="zone-note">The MOD BILEVEL row of the section table, drawn. A short pour with a wood fill wall on it reaches the same bearing line the bungalow reaches with one tall pour, and the ENTRY landing sits a half flight below MAIN FL. These are the office defaults for the type &mdash; typing here comes with the split-level feature; the numbers above still describe <em>this</em> drawing. <strong>ENTRY WALL is derived</strong> at 3'-4&frac34;&Prime; &mdash; fill wall less the entry package, both landing on the 5'-0&Prime; pour&#8217;s sill. Movie&#8217;s section carries a 5'-1&#8539;&Prime; dimension near the entry that is 1'-8&#8540;&Prime; adrift and not yet accounted for.</div>
       </div>
     </section>
 
@@ -1317,7 +1317,7 @@
             houseFootingTopFt: houseFootingTopFt(),
             footingWidthIn: asm.footingWidthIn ?? (fdnIsIcf() ? 24 : 20),
             footingDepthIn: asm.footingDepthIn,
-            floorOffsetFt: attachedOffsetFt(),
+            sillOffsetFt: attachedOffsetFt(),
             wallHeightFt: cell('mainWallHeightFt'),
             fdnWallHeightFt: cell('fdnWallHeightFt'),
             slabIn: cell('slabThicknessIn'),

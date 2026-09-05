@@ -222,57 +222,50 @@ Above the landing there is no ceiling at all: the foyer is open to the main
 floor. That is the same fact as the front wall running unbroken to 13'-6 1/2",
 seen from the inside.
 
-### The PDF wins this one, measured
+### There is no entry frost wall. I measured the garage's grade beam.
 
-The derivation above is WRONG, and the drawing says so. Written out rather than
-quietly corrected, because the mistake in it is instructive and because the
-right answer arrived by measurement rather than by asking.
+This section previously said the derivation was wrong and the entry floor bore
+on its own deeper frost wall. **That was the error, not the derivation.** Kept
+in full rather than deleted, because the way it went wrong is worth more than
+the answer.
 
-His section dimensions this wall 5'-1 1/8"; the derivation says 3'-4 3/4". That
-was left open on the grounds that the sheet carries a known bad dimension
-elsewhere. It does not cover this one -- that error runs the other way and is
-1'-2 3/4", a different number -- so the PDF's vector geometry was read directly.
+**What is actually true**, Movie 5 Sep, relayed via Skipper:
 
-**Scale, from four dimensions that agree to 0.3%:**
+> *"Under the entry floor is the 5ft frost wall. To the left of the entry is
+> where the grade beam connects."*
 
-| dimension | measured | implies |
-|---|---|---|
-| 8'-1 1/8" wall | 88.4 pt | 0.9102 pt/in |
-| 1'-0 5/8" floor | 11.5 pt | 0.9109 pt/in |
-| 2'-8" | 29.2 pt | 0.9125 pt/in |
-| 2'-4" | 25.5 pt | 0.9107 pt/in |
+- Under the ENTRY floor is the bilevel's **5'-0" pour** -- the full-depth wall
+  on its footing, the one `SPLIT_BASE` already carries -- and the entry joists
+  sit on **its** sill plate.
+- The **2'-8" and 2'-4"** in the PDF are the **GARAGE GRADE BEAM**, which
+  connects into that wall to the **LEFT of the entry**. Not a second, deeper
+  wall under it.
 
-**The 5'-1 1/8" text is where it claims to be.** At 0.9109 pt/in it should span
-55.7 pt, and the gap between the two lines it sits between measures 55.7 pt. Its
-own text centres at y=314.5; that span's midpoint is y=314.15. And the span sits
-directly under the 1'-0 5/8" main floor package, which sits directly under the
-8'-1 1/8" main floor wall. It is the ENTRY -> MAIN wall, drawn to scale, and it
-means it.
+So the entry floor and the fill wall DO share a sill, which is exactly what the
+original derivation assumed, and **3'-4 3/4" goes back to being the best
+answer.** Nothing new has to be built: no entry frost wall, no new member.
 
-**Why the derivation failed, and it is one word.** Movie: *"the entry floor
-9 1/4" joists sit on the FROST WALL sill plate."* That was read as the sill the
-fill wall stands on -- the house foundation. A frost wall is a different, deeper
-wall. Take the PDF's number and the arithmetic says so outright:
+**The measurement was right and the attribution was wrong, which is the lesson.**
+The scale was solid -- four dimensions agreeing to 0.3% -- and the 5'-1 1/8"
+span really does measure 55.7 pt with its text centred on it. All of that
+survives. What did not survive is the step that felt like nothing: reading a
+vertical column of dimensions and assuming everything in it belonged to the
+member above it. **A span measured correctly tells you its length and nothing
+about what it is.** The 2'-8" and 2'-4" were sitting in that column while
+belonging to a beam several feet to the left, and once they were called a frost
+wall and a footing, an arithmetic gap of 1'-8 3/8" appeared to confirm it.
 
-    ENTRY bears at  -(12 5/8" + 5'-1 1/8" + 10")  =  -6'-11 3/4" from MAIN
-    fill wall base                                =  -5'-3 3/8" from MAIN
-    entry bearing is 1'-8 3/8" BELOW the fill wall base
+Worth noticing that the wrong version was MORE convincing than the right one.
+It had a measurement, a scale table, a coincidence that closed to the inch, and
+a tidy story about misreading one word. The correct version is just Movie
+saying where the beam goes.
 
-Which is exactly the disputed gap, arrived at from the other end. The two floors
-do not share a sill; the entry floor bears 1'-8 3/8" lower, on its own frost
-wall. The PDF agrees -- below the entry floor it dimensions 2'-8" and then
-2'-4", a frost wall and its footing.
-
-So Movie was right, his drawing was right, and the sentence was right. The
-reading of it was wrong.
-
-**Band 2 still draws 3'-4 3/4", knowingly.** `buildWallSection` stacks each floor
-on the wall below it and has no way to say "this floor bears on a different wall
-that goes deeper." Feeding it 5'-1 1/8" today would draw the entry floor
-floating 1'-8 3/8" under the fill wall's base -- a correct number in a broken
-picture, which is worse than a wrong number in a coherent one. The frost wall
-has to exist in the model first. The card on the page says so, and the test
-pinning 3'-4 3/4" is there to fail loudly on the day it changes.
+**The 1'-8 3/8" is still unexplained, and it is not a deeper wall.** The PDF
+does carry a 5'-1 1/8" dimension near the entry, its geometry is real, and it
+does not match 3'-4 3/4". Skipper's summary of where that leaves it: *"the
+answer is not a deeper wall -- it is somewhere in the fill wall or the
+package."* Band 2 draws the derived number, which is now believed correct
+rather than knowingly provisional.
 
 ## What sits above
 
@@ -423,15 +416,13 @@ lower entry, so it takes more risers to reach the same floor.
 
 ## Still unknown
 
-- ~~The height of the wall between the entry floor and the main floor.~~
-  ANSWERED by measuring the PDF: **5'-1 1/8"**, and the entry floor bears
-  1'-8 3/8" below the fill wall on its own FROST WALL. Band 2 still draws the
-  old derived 3'-4 3/4" because the section has no frost wall to bear on yet --
-  see "The PDF wins this one, measured".
-- **NEW, and it blocks the number above:** the entry floor's frost wall. The
-  PDF dimensions 2'-8" and 2'-4" below the entry floor. Whether those are the
-  wall and its footing, and how the wall relates to the house foundation beside
-  it, is not established.
+- The height of the wall between the entry floor and the main floor. DERIVED at
+  **3'-4 3/4"** (fill wall less the entry package) and believed correct: Movie
+  has confirmed the entry joists bear on the 5'-0" pour's sill, the same sill
+  the fill wall stands on, so the derivation's premise holds. What is still
+  unexplained is the PDF's 5'-1 1/8" dimension near the entry, 1'-8 3/8" adrift.
+  Not a deeper wall -- see "There is no entry frost wall" -- so it is somewhere
+  in the fill wall or the floor package.
 - Where the stringer starts and lands. Drawn on his section as two parallel
   diagonals with a small foot, no treads.
 - ~~Which of the two exterior wall conditions band 2 should show.~~ ANSWERED
