@@ -9,11 +9,32 @@ the worst-placed one to write a careful handoff.
 
 ## Lane
 
-`PROJECT.html`, `project-page.js`, `MODEL.html`, `geometry-2d.js`, and the
-specs under `tests/` for them. `MODEL.dc.html` is Skipper's; Movie opened it to
-me twice today while Skipper was out, and both times it was for a change small
-enough to name in a sentence. Branch `claude/gilligan-greeting-ls9w2n`, reset
-onto `main` under the same name after each merge.
+AGREED WITH SKIPPER 5 SEP, ratified by nobody yet — Movie or Devin still owe a
+word on it. It amends Devin's 4 Sep ruling in two places, because that ruling
+had `MODEL.dc.html` with Gilligan and `proto/` entire with Skipper, and both of
+us had been working the other way round all day without noticing:
+
+```
+Skipper   proto/ (less section-table-harness.js), test.yml, MODEL.dc.html
+Gilligan  MODEL.html, PROJECT.html, project-page.js,
+          proto/section-table-harness.js
+SHARED    cut-view.js, drawing-format.js, geometry-2d.js -- announce first
+```
+
+**Specs follow the file they exercise** (Skipper's amendment, and the better
+half of it): detached-garage, garage, garage-callout, garage-piles,
+garage-elevation-occlusion, garage-roof-drop and section-view with
+`MODEL.dc.html`; project-bilevel, project-info, project-page, project-detached
+and section-table with the PROJECT page.
+
+**A list is checkable and a feature is a judgement call every time** — that is
+why we kept the list after trying to redraw it by feature. But announce-first
+is what actually protected us all day, not the list, so the list is a
+convenience and the announcement is the mechanism.
+
+Branch `claude/gilligan-greeting-ls9w2n`, reset onto `main` under the same name
+after each merge. Prune the remote ref when Movie deletes the branch, or the
+stop hook reports the merge commit as unpushed.
 
 ## Merged today
 
@@ -26,7 +47,20 @@ onto `main` under the same name after each merge.
 #293  the garage's own wall height, and SPEC-lintels.md
 #294  an opening keeps NBC bearing back from the end of its wall --
       1 1/2" under 3 m, 3" over, ten callers share the clamp
+#295  the tier 2i measurement, and this document
+#296  the DETACHED GARAGE defaults row; every garage foundation 1'-2" above
+      grade; the thickened edge's 10" exception; SPEC-garage-foundations.md
+#297  the opening clamp measures from the ADJACENT wall's inside face, not
+      from the endpoint -- 5 1/2" + 3" = 8 1/2", and a 6x6 post where nothing
+      stands. Restore keeps the old rule: load repairs damaged files, it does
+      not re-rule sound ones (Skipper's point, and he was right)
+#298  band 3 -- the detached garage section and the three foundations at one
+      scale
+#299  GARAGE_DEPTH_FT = 24, the fall composed from it, and the strip captioned
+      with its station
 ```
+
+Skipper merged #286, #289, #291 and #300 the same day.
 
 ## Open, with the measuring already done
 
