@@ -425,6 +425,25 @@ const yLow = out => Math.min(...out.parts.flatMap(part => part.kind === 'rect'
   ? [part.y, part.y + part.h]
   : part.kind === 'break' ? [part.y1, part.y2] : [part.y1, part.y2]));
 
+// HOW FAR A SLOPED SLAB FALLS, and the reason this is here at all: the slope
+// constant existed for weeks with nothing to multiply, so no drawing could turn
+// a rate into a fall and every sloped slab was drawn at whatever station its
+// author had in mind. A rate needs a run.
+check('the garage depth is 24 ft', P => [P.GARAGE_DEPTH_FT, 24]);
+check('the fall is the depth times the slope, not a written 3"', P =>
+  [P.garageSlabFallIn(), P.GARAGE_DEPTH_FT * (1 / 8)]);
+// COMPOSED, and this is the check that proves it. A hard-coded 3" passes the
+// one above on the default depth and fails here the moment the depth changes,
+// which is exactly the drift the pair exists to catch.
+check('a deeper garage falls further -- the fall follows the depth', P =>
+  [P.garageSlabFallIn(48) > P.garageSlabFallIn(24), true]);
+// AND THE STRIP'S CLAIM IS BOUNDED BY IT. The three floors agree at the back
+// and not at the door; the fall is how far apart they finish. Asserted as a
+// non-zero difference rather than as 3", so the day the slope or the depth
+// moves this still says the right thing.
+check('the level and sloped floors do NOT agree at the door', P =>
+  [P.garageSlabFallIn() > 0, true]);
+
 check('the detached section puts its datum at the top of slab', P => {
   const slabTop = detached(P).parts.find(part =>
     part.kind === 'line' && part.y1 === 0 && part.y2 === 0 && part.x1 === 0);
@@ -752,6 +771,14 @@ const MUTATIONS = [
   // than on the block around them -- the anchor that rotted earlier today
   // matched a whole object literal and stopped applying when one field was
   // added beside it.
+  ['the garage depth drifts off Movie\'s 24 ft',
+    s => s.replace('  const GARAGE_DEPTH_FT = 24;', '  const GARAGE_DEPTH_FT = 20;')],
+  // The fall written as a number instead of composed -- passes on the default
+  // depth, fails the moment anything asks a different one. This is the shape
+  // the 32" drifted in, and the shape the whole file is now guarded against.
+  ['the fall is hard-coded instead of composed from the depth',
+    s => s.replace('  const garageSlabFallIn = (depthFt = GARAGE_DEPTH_FT) => depthFt * GARAGE_SLAB_SLOPE_IN_PER_FT;',
+      '  const garageSlabFallIn = () => 3;')],
   ['the detached slab stops being the datum',
     s => s.replace("    line(0, 0, CUT_DEPTH_FT, 0, 2);", "    line(0, 0.25, CUT_DEPTH_FT, 0.25, 2);")],
   ['the detached grade line drifts off the constant',

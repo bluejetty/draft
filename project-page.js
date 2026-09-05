@@ -463,6 +463,19 @@ if (!window.DraftProjectPage) {
   // is the deferred tidy-up. Until it does, this is a second copy of a number
   // that must agree with a first, which is exactly what happened to the 32".
   const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;
+  // HOW DEEP A GARAGE IS, and until 5 Sep nothing in the repo said. Movie:
+  // "24ft deep garage typical". GARAGE_OVERHEAD_DOOR_FT is the door's WIDTH,
+  // which is what made the absence easy to miss -- there was a garage
+  // dimension in scope and it was the wrong one.
+  //
+  // THE SLOPE HAD NOTHING TO MULTIPLY. GARAGE_SLAB_SLOPE_IN_PER_FT has been
+  // right above this line the whole time and no drawing could turn it into a
+  // fall, because a rate needs a run. So a sloped slab was drawn at whatever
+  // station its author happened to be thinking of, and nothing said which.
+  const GARAGE_DEPTH_FT = 24;
+  // 24 ft at 1/8"/ft = 3". The fall is COMPOSED, never written as 3", so it
+  // follows if either number moves.
+  const garageSlabFallIn = (depthFt = GARAGE_DEPTH_FT) => depthFt * GARAGE_SLAB_SLOPE_IN_PER_FT;
   // The edge depth this file also carries is declared up with the grade beam,
   // because SECTION_TABLE_DEFAULTS reads it -- see GARAGE_EDGE_DEPTH_IN there
   // for why the copy stays and what holds it to cut-view.js.
@@ -816,10 +829,23 @@ if (!window.DraftProjectPage) {
   // only reason to put them in a row.
   //
   // THE DATUM IS THE GARAGE FLOOR on all three, y = 0, and that is what makes
-  // the row legible: the floor does not move between foundations, so the three
-  // slabs line up across the strip and the concrete under them is the only
-  // thing that changes. Grade is DETACHED_SLAB_ABOVE_GRADE_IN below it in all
-  // three, for the same reason.
+  // the row legible: the three slabs line up across the strip and the concrete
+  // under them is the only thing that changes.
+  //
+  // AND THAT IS TRUE AT ONE STATION ONLY -- THE BACK. This comment used to say
+  // "the floor does not move between foundations" flat out, and Movie caught it
+  // by eye on the first render: "the slab looks like it should be further down,
+  // is this at the back of the garage". It is.
+  //
+  // A grade beam and a frost wall take a slab sloping to the door; a thickened
+  // edge is LEVEL. So the three share a floor height where the sloped ones meet
+  // their concrete -- the back -- and diverge from there. At the door they are
+  // garageSlabFallIn() lower, which on a 24 ft garage is 3". The strip is cut
+  // at the back and says so on the page; drawing the fall inside a detail would
+  // be dishonest precision, since over DETAIL_RUN_FT of run it comes to 0.4".
+  //
+  // Grade is DETACHED_SLAB_ABOVE_GRADE_IN below the datum in all three, and
+  // that part IS unconditional.
   // Tuned against the drawing, not guessed: at pitch 7 / wall 1.4 the row fits
   // by HEIGHT and left ~200px of the canvas unused, so every detail came out
   // small enough that the taper -- the thing the row exists to show -- was
@@ -1376,6 +1402,8 @@ if (!window.DraftProjectPage) {
     // Exported so section-table-harness.js can hold this file's copies of
     // cut-view.js's numbers against the originals. The 32" is the pair that
     // already drifted once, under two different names.
+    GARAGE_DEPTH_FT,
+    garageSlabFallIn,
     GARAGE_EDGE_DEPTH_IN,
     GARAGE_GRADE_BEAM_IN,
     GARAGE_SILL_BELOW_HOUSE_FT,

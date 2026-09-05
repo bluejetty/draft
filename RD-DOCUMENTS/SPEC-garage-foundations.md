@@ -57,6 +57,35 @@ leaves the door where it was. The cost is 2" of edge in the ground rather than
 4", which is acceptable on a floating slab bearing on gravel — a garage that
 needs frost protection takes the frost wall, which is what that option is for.
 
+## A garage is 24 ft deep, and the slope had nothing to multiply
+
+Movie, 5 Sep: *"24ft deep garage typical."* Until then **no depth existed
+anywhere in the repo** — `GARAGE_OVERHEAD_DOOR_FT = 16` is the door's WIDTH,
+which is what made the absence easy to miss: there was a garage dimension in
+scope and it was the wrong one.
+
+`GARAGE_SLAB_SLOPE_IN_PER_FT` has been right for weeks and no drawing could
+turn it into a fall, **because a rate needs a run**. So every sloped slab was
+drawn at whatever station its author had in mind, and nothing said which.
+
+24 ft at 1/8"/ft is a **3" fall**, and `garageSlabFallIn(depthFt)` composes it
+rather than storing it.
+
+### Which means the floors only agree at one station
+
+A grade beam and a frost wall slope to the door. A thickened edge is **level**.
+So the three floors are equal where the sloped ones meet the top of their
+concrete — the BACK — and diverge from there, finishing 3" apart at the door.
+
+Anything that says the floor does not move between foundations is true at the
+back and wrong at the door. `project-page.js` said exactly that flat out, and
+Movie caught it by eye on the first render of the strip: *"the slab looks like
+it should be further down, is this at the back of the garage."* It was.
+
+**A section through a sloping slab must say where it is cut.** The strip is cut
+at the back and captioned so on the page. Drawing the fall inside a detail
+would be dishonest precision — over the detail's 3'-2" of run it comes to 0.4".
+
 ## The grade beam is a perimeter member
 
 Gravel inside it under the slab, and under the driveway outside. **The slab
