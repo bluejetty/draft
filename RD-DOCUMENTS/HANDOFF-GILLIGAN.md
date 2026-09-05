@@ -155,6 +155,14 @@ Skipper merged #286, #289, #291 and #300 the same day.
   which is the only reason it is not still sitting there looking fine. Assert
   the contract, spelt out; never derive the expectation from the subject.
 
+- **A literal inside a function is not evidence of a hardcode.** I grepped
+  `drawUnderlays2D`'s line range for a hex, found `#557a46`, and published it
+  as hardcoded in a table meant to steer the next day's work. The line reads
+  `(env.colors && env.colors.origin) || '#557a46'` — env-driven, literal as a
+  fallback, with a comment explaining exactly that. Read the line, not the
+  range. Third instance of this exact shape in one day, after `_wallCross` and
+  after costing painter envs by line range.
+
 ## The habit
 
 Every one of the above was found by comparing two things, or would have been.

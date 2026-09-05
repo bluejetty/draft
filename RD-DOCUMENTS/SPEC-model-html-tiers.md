@@ -477,13 +477,38 @@ env reachable in every case. That was true and it was not the whole story.
 Measured against `palette.js`'s two skins:
 
 ```
-painter     where the colour lives     hex        night    day
-notes       NOTE_COLOR, env            #1d1f20      1.00  14.79   under 3.0
-fixtures    FIXTURE_COLOR, env         #1d1f20      1.00  14.79   under 3.0
-stairs      STAIR_COLOR, env           #5d4a8a      2.22   6.68   under 3.0
-cut marks   hardcoded IN the painter   #b04060      2.95   5.01   under 3.0
-underlays   hardcoded IN the painter   #557a46      3.36   4.41
+painter     how the colour is reached          hex        night    day
+notes       env, NOTE_COLOR                    #1d1f20      1.00  14.79   under 3.0
+fixtures    env, FIXTURE_COLOR                 #1d1f20      1.00  14.79   under 3.0
+stairs      env, STAIR_COLOR                   #5d4a8a      2.22   6.68   under 3.0
+cut marks   BARE LITERAL in the painter        #b04060      2.95   5.01   under 3.0
+underlays   env.colors.origin, literal fallback #557a46     3.36   4.41
 ```
+
+**The underlays row said "hardcoded IN the painter" until it was checked
+properly, and that was wrong.** `render-2d.js:728` reads
+`(env.colors && env.colors.origin) || '#557a46'` — env-driven already, the
+literal only a fallback, under a comment that explains the whole design:
+*"MODEL.dc.html has no skins and its ground is always light, so this value IS
+correct for that page… a caller that supplies colours gets its own; the one
+that does not keeps exactly what it painted before."* Somebody had already
+solved it.
+
+The error came from grepping the function's line range for a hex and reading
+its PRESENCE rather than its POSITION — the same shape as costing a painter's
+env by line range instead of by call site, two sections up. A literal inside a
+painter is not evidence of a hardcode; the line it sits on is.
+
+**So one painter needs changing, not two.** Only cut marks
+(`render-2d.js:1469-1470`) assigns `ctx.strokeStyle` and `ctx.fillStyle`
+without consulting env at all.
+
+Underlays has a different defect, and a more interesting one: it reads
+`env.colors.origin` — **the origin marker's key** — so a tracing underlay and
+the drawing origin are one colour by wiring, not by coincidence. Move the
+origin and every underlay moves. That is exactly the shared-key coupling the
+five separate keys exist to prevent, already live in the code, and it is why
+`draw-underlay` is a re-point rather than a rescue.
 
 `1.00` is not a rounding of "poor". The night skin's `surface-page` is
 `#1d1f20` and `NOTE_COLOR` is `#1d1f20` — **the identical hex**. A note would
@@ -498,18 +523,17 @@ the port rather than found by it — which is the same shape as `drawRoof2D`'s
 `#7a4a21`, right down to the fix: that brown moved out of the painter into
 `env.colors.roof` and got a value per skin.
 
-### Two of them cannot be fixed from the call site
+### One of them cannot be fixed from the call site
 
 `stairs` and `notes` and `fixtures` take their colour through `env`, so a
 caller can pass whatever the skin says and the painter never changes.
 
-`cut marks` and `underlays` hardcode theirs **inside `render-2d.js`**. Those
-need the painter changed to read `env`, which means a `render-2d-harness.js`
-check in the same PR or the mutation step goes red — the harness's own rule.
+`cut marks` takes no colour from env at all, so it needs the painter changed —
+and under the harness's own rule that means a `render-2d-harness.js` check in
+the same PR or the mutation step goes red.
 
-Worth noticing what `underlays` hardcodes: `#557a46`, which is `draw-origin`'s
-DAY value, sitting as a literal in a second file. A palette key copied into a
-painter is the 32" all over again.
+`underlays` needs no painter change. It needs its caller to stop passing the
+ORIGIN colour and start passing `draw-underlay`.
 
 ### So the order in Tier 2i is right and its costing was low
 
@@ -523,7 +547,8 @@ five separate problems:
 - `draw-dim` (5.15 / 6.05) if annotation should sit in a visibly different
   family from body text.
 - New keys for stairs, cut marks and underlays either way, since none of those
-  maps onto an existing role.
+  maps onto an existing role — and underlays most of all, because it is
+  currently borrowing one.
 
 **Bring measured candidates, do not guess a colour.** The `drawRoof2D` entry in
 `HANDOFF-SKIPPER.md` has said so since 4 Sep and it applies to all five.
