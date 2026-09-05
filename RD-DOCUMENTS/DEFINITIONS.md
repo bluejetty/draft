@@ -713,6 +713,13 @@ plain-English adjective happens to be a trade term, the plain-English use
 reads as the trade term to every drafter who sees it. **Say "a tall wall" only
 above 12'-0"; otherwise say how tall it is.**
 
+**It is a routine outcome, not a problem to design around.** Movie: *"they
+will just need an engineer and get engineered wood studs that are straighter,
+and the tall walls will be straight."* The engineering brings a different
+product with it -- engineered studs rather than sawn lumber -- and at that
+height the straightness is the point, because a wall this tall is usually also
+flat, uninterrupted and side-lit, which is the condition that shows a bow.
+
 There is a live consequence. Movie on the garage ceiling: *"even more is nice
 too -- lots of bungalows have extra space there."* A drafter taking that
 invitation past 12'-0" crosses into engineered territory, and the app should

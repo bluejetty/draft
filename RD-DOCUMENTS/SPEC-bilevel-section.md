@@ -128,17 +128,29 @@ tall window in the front elevation. Stopping it at the main floor deck instead
 gives 4'-5 3/8" and something entirely ordinary. So nothing here is unusually
 tall; the wall is simply never cut.
 
-Two consequences worth stating plainly.
+**This is routine, and the first draft of this entry got that wrong.** It said
+our defaults "produce an engineered wall" as though that were a problem the
+numbers had backed us into. Movie: *"they will just need an engineer and get
+engineered wood studs that are straighter, and the tall walls will be
+straight."*
 
-**Our DEFAULTS produce an engineered wall.** Not an exotic plan, not a big
-house -- the ordinary modified bilevel on the numbers this file pins. That is
-different in kind from the garage ceiling, which can be kept under 12'-0" by
-choosing to. This one cannot be, short of interrupting the wall.
+So the outcome is a better wall, not a worse one. Engineered studs come out
+straighter than sawn lumber, and that matters here more than anywhere else on
+the house: a foyer wall is long, flat, uninterrupted and lit sideways by the
+window in it, which is exactly the condition that shows a bow. The height that
+forces the engineer also gets you the stud that makes the wall worth looking
+at.
 
-**And the app draws it like any other wall today.** Nothing in the section
-knows about the threshold, so the one wall on the drawing that a drafter must
-send out is the one the drawing is quietest about. Not fixed here; named so it
-can be.
+What stays true is only the flat fact: **every modified bilevel on our
+defaults has one.** Not an exotic plan or a big house. Unlike the garage
+ceiling, which stays under 12'-0" by choosing to, this cannot be chosen away
+short of interrupting the wall -- and interrupting it is what you would be
+giving up the open foyer to do.
+
+**The app draws it like any other wall today.** Nothing in the section knows
+about the threshold. Worth naming, though not urgent now that the outcome is
+ordinary: it is the one wall on the sheet whose studs are a different product,
+and the drawing currently says nothing about that.
 
 ## What sits above
 
