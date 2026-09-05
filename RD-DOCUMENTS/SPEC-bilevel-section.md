@@ -139,16 +139,21 @@ settle what `OVER GARAGE` means:
 |---|---|
 | modified bilevel | FOUNDATION · ENTRY · MAIN · 2ND FL *(the storey over the garage; there is only one, so it needs no other name)* |
 | two-storey bilevel | FOUNDATION · ENTRY · MAIN · **OVER GARAGE** · 2ND FL |
-| bungalow, storey over the garage | FOUNDATION · MAIN · **OVER GARAGE** *(no 2ND FL at all)* |
+| bungalow, storey over the garage | FOUNDATION · MAIN · **2ND FL** |
 
-So OVER GARAGE is not a bilevel idea. It is **a storey standing on the
-garage**, and it behaves the same whether the house beside it is a bungalow,
-a two-storey or a bilevel -- lower than a storey over the house, because the
-garage floor is down. Naming it `2ND FL (LOWER)` would have made sense in
-exactly one of those three.
+**Only the two-storey bilevel needs id 4**, and this was got wrong here first.
+The bungalow case reads as OVER GARAGE if you name a level after what it
+stands on -- but Movie, 5 Sep: *"bungalow with storey over garage would be
+called 2nd floor because they would line up."* If it sits where the house's
+second floor would sit, it IS the second floor, and one level holds it.
 
-Note that a plain modified bilevel does NOT need it: its storey over the
-garage is its only upper floor, so it is simply 2ND FL sitting lower than a
+So the rule is not "a storey on the garage gets its own level". It is: **a
+level exists when two things need different heights.** The two-storey bilevel
+is the only one of the three where that is true, because it has a storey over
+the house AND a storey over the garage and they do not line up.
+
+The plain modified bilevel does not need it either: its storey over the
+garage is its only upper floor, so it is 2ND FL, sitting lower than a
 house's would.
 
 ## Still unknown
