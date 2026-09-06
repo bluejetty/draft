@@ -2140,7 +2140,7 @@ const TRACKING_GUIDE_MAX = 6;
 // defaults table, and stair-geometry.js needs a stair's rise to mean the same
 // thing on every board that draws it.
 const {
-  defaultLevelAssembly, normaliseLevelAssembly,
+  defaultLevelAssembly, normaliseLevelAssembly, levelRole,
   JOIST_TYPES, DEFAULT_WALL_TOP_FT, DEFAULT_FLOOR_ASSEMBLY, DEFAULT_JOIST_TYPE,
   DEFAULT_FOOTING_DEPTH_IN, DEFAULT_FDN_SLAB_THICKNESS_IN,
 } = window.DraftLevelAssembly;
@@ -5436,7 +5436,10 @@ class Component extends DCLogic {
         floorThickness: format.positive(saved.floorThickness, DEFAULT_FLOOR_THICKNESS_IN / 12),
         levelAssemblies: Object.fromEntries(
           Object.entries(saved.levelAssemblies && typeof saved.levelAssemblies === 'object' ? saved.levelAssemblies : {})
-            .map(([rawId, assembly]) => [migrateLevelId(rawId), normaliseLevelAssembly(assembly)])
+            .map(([rawId, assembly]) => {
+              const id = migrateLevelId(rawId);
+              return [id, normaliseLevelAssembly(assembly, levelRole(id))];
+            })
             .filter(([id]) => levelIds.has(Number(id))),
         ),
         roofOverhang: clampRoofOverhang(format.number(saved.roofOverhang, DEFAULT_ROOF_OVERHANG_FT)),
@@ -21435,8 +21438,20 @@ class Component extends DCLogic {
     return tops.length ? Math.max(...tops) : DEFAULT_WALL_TOP_FT;
   }
 
+  // THE ROLE, NOT JUST THE ID. A half-level frames differently -- ENTRY in
+  // 2x10s, OVER GARAGE clear-spanning a double bay -- and until 6 Sep this
+  // page had no way to ask for that, so it drew a half-level's floor at the
+  // house's 12 5/8" while the PROJECT page read 10". Both pages
+  // self-consistent, disagreeing with each other: the derive/store divergence
+  // class, on a level this page had just learned to create.
+  //
+  // The role is DERIVED from the id and never stored beside it. Commander
+  // Devin's ruling, 6 Sep: the half-level assembly stays a derive, and
+  // level-assembly.js becomes role-aware so there is ONE deriver rather than
+  // two vocabularies. A stored joist depth still beats the default here, the
+  // same as on every other level.
   _levelAssembly(levelId) {
-    return normaliseLevelAssembly(this.state.levelAssemblies?.[levelId]);
+    return normaliseLevelAssembly(this.state.levelAssemblies?.[levelId], levelRole(levelId));
   }
   _levelFloorFt(levelId) {
     const assembly = this._levelAssembly(levelId);
