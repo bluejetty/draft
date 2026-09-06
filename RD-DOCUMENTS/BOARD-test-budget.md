@@ -1,8 +1,10 @@
 # BOARD — the suite's heaviest specs sit on a 90-second cliff
 
 **Found 6 Sep 2026** by Gilligan and Skipper, over about six hours, while
-attributing seven failures on the stairs branch. Needs a board number and a
-decision. **The diagnosis is complete; the fix is not chosen.**
+attributing seven failures on the stairs branch. Needs a board number.
+**The diagnosis is complete, and the first fix has landed:** Movie ruled
+*"raise the timeout"* on 6 Sep and `playwright.config.js` is now `180_000`.
+What that settles and what it does not is the last section.
 
 The one-line version, and it took all night to earn:
 
@@ -136,10 +138,32 @@ Three options, and this is a judgement call rather than a measurement:
    expensive part is rebuilding the same house repeatedly, and some of that is
    reusable across the group.
 
-**Recommendation: 1 now, 3 later.** Raise the timeout today so Tier 3 does not
-push PRs through a suite that is partly luck, and put the real reduction on the
-board as its own piece of work. Option 2 is the one to avoid — it spreads the
-cost around without lowering it.
+**Recommendation was 1 now, 3 later. Movie ruled 1 on 6 Sep: "raise the
+timeout".**
+
+**WHAT IT DID.** `playwright.config.js` is `180_000` — the value that was
+measured, not a guess somewhere between it and 90. Nobody has found the real
+line, so picking 120 would have been a number standing in for a measurement.
+The config comment carries the before/after, so whoever considers lowering it
+can see what happened last time.
+
+The cost is small and one-sided: **a passing test does not consume its
+timeout**, so a larger ceiling only changes how long a genuinely broken test
+takes to report.
+
+**WHAT IT DID NOT DO.** The heavy specs are still heavy. Each rebuilds the same
+house, loads five pages and reads five sets of pixels, and the reason they sat
+on the line is that nobody had counted what they cost. **(3) is still the real
+fix** and stays on this board: the expensive part is repeated setup, and some
+of it is reusable across the group.
+
+So this is a floor raised under a known problem, not the problem solved.
+Anything that makes those specs slower will find the new line the way it found
+the old one — and the symptom will look identical: a spec failing on a PR whose
+diff cannot reach it.
+
+**Option 2 stays the one to avoid.** Splitting the heavy specs spreads the cost
+without lowering it, and pays for the same setup twice.
 
 ## Method lessons, which are the transferable part
 

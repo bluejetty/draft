@@ -72,10 +72,38 @@ module.exports = defineConfig({
   // self-hosting) — without that stall a spec that drives a whole house is
   // comfortably inside 30s, but the heaviest ones (a full BUILD HOUSE, a
   // save-and-reload, a section sweep) are not, and a slow CI box needs room
-  // besides. 90s is that room; it is not a licence for a spec to sit and
-  // wait, and a spec that needs more is a spec to look at, not to raise this
-  // for.
-  timeout: 90_000,
+  // besides.
+  //
+  // IT WAS 90s AND 90s WAS NOT ENOUGH. The old comment said "a spec that needs
+  // more is a spec to look at, not to raise this for", so it was looked at
+  // (BOARD-test-budget.md, 6 Sep) and the finding was that the heaviest
+  // MODEL.html specs pass with no margin rather than by a comfortable amount.
+  // Two independent things then push them over: added latency on a slower
+  // machine, and contention when four shards share one box. Neither is the
+  // spec's fault and neither is fixable by looking at it harder.
+  //
+  // THE MEASUREMENT, one line changed and nothing else:
+  //
+  //   base 3223d79 @  90s  ->  2 failed, 2 failed, 1 failed
+  //   base 3223d79 @ 180s  ->  0 failed, 0 failed, 0 failed
+  //
+  // Same tree, same box, same worker count, three runs each way, and every
+  // 180s run finished at CLEAN-RUN DURATION -- nothing crept in at 170, which
+  // is what a merely-slow suite would look like. A delay has a length; a wedge
+  // does not. This one had a length.
+  //
+  // 180s BECAUSE IT IS THE VALUE THAT WAS MEASURED. Somewhere between 90 and
+  // 180 is the real line and nobody has found it; picking 120 would be a guess
+  // wearing a number. The cost of the larger ceiling is small and one-sided --
+  // a PASSING test does not consume its timeout, so this only changes how long
+  // a genuinely broken one takes to report.
+  //
+  // WHAT IT IS STILL NOT. Not a licence for a spec to sit and wait. The real
+  // fix is to make the heavy specs cheaper -- they each rebuild the same house
+  // -- and that stays on the board. This stops the suite failing honest work
+  // in the meantime: CI failed a spec on #313 that that PR's diff could not
+  // reach, which cost a comment, a re-run, and twenty minutes of doubt.
+  timeout: 180_000,
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
     viewport: { width: 1280, height: 900 },
