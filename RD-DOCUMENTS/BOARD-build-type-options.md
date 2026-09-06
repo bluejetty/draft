@@ -249,3 +249,129 @@ was misplaced, and SPEC-bilevel-section.md already had the geometry: on a
 bungalow the garage ceiling is RAISED until the deck is continuous with the
 floor over the main area, so it is one level, not a tower beside a
 bungalow. One card, 2ND FL.
+
+---
+
+# REVISION — THE ROW BECOMES A MENU
+
+**Movie, 6 Sep, in conversation with Skipper.** Still proposed, still needs a
+number and Devin's word. This supersedes parts of the board above and says
+which.
+
+> *"i had a though about how the house menu operates. how about we just start
+> with BUNGALOW, BILEVEL, DETACHED GARAGE. then if they pick each will have
+> subcategories"*
+
+## The tree
+
+    BUNGALOW ------- 1 STOREY                    -> buildType 'bungalow'
+             \------ 2 STOREY                    -> buildType 'twoStorey'
+              then   ATTACHED GARAGE / NO GARAGE
+              then   OVER GARAGE
+
+    BILEVEL -------- BILEVEL          (1 STOREY) -> buildType 'bilevel'
+              then   ATTACHED GARAGE / NO GARAGE
+            \------- MODIFIED BILEVEL (1.5 STOREY) -> 'modifiedBilevel'
+              no garage question -- the name already says it has one
+
+    DETACHED GARAGE  -- children not yet named
+
+**Three buttons between the pace button and BUILD HOUSE, where there are five
+today.** The row stops implying that four houses are four equal choices.
+
+## It changes no persisted key
+
+`drawing-format.js:899` already groups the four types exactly this way:
+
+    type === 'bungalow' || type === 'twoStorey' ? 'house'
+      : SPLIT_BUILD_TYPES.includes(type) ? type : null
+
+BUNGALOW and 2 STOREY have read as one row on the PROJECT page since the key
+existed, and SPLIT is Movie's own family name for the other two (4 Sep). **The
+menu shows a grouping the format has been storing all along.** `buildType`
+keeps storing the LEAF, so the tiers are presentation.
+
+## THE GARAGE ANSWER IS NOT A TYPE
+
+A garage is geometry -- an outline carrying `garage: true`
+(`drawing-format.js:737`) -- and any house type can have one or not. So
+ATTACHED GARAGE / NO GARAGE is **an instruction to BUILD HOUSE**, not a label
+being stored. The DRAWING stays the record of whether a garage exists.
+
+That decides the disagreement case: a drafter answers NO GARAGE and then draws
+one. The garage is real. Store the answer as a type instead and the file holds
+a label contradicting its own geometry.
+
+## THE GARAGE QUESTION IS SKIPPED FOR MODIFIED BILEVEL ALONE
+
+Movie, 6 Sep: **"no garage q needed"** under BILEVEL -- then, minutes later:
+
+> *"oh ya - the BILEVEL single storey could have either attached or no garage
+> i forgot"*
+
+So the skip belongs to **MODIFIED BILEVEL only**, and the board above already
+had that right at "a button asks only what its own name leaves open":
+*"the name already says there is a garage and a storey over it, so neither is
+asked."* A plain BILEVEL asks, like the bungalows do.
+
+**Recorded because the wrong reading was acted on for a few minutes.** Skipper
+read the skip as covering the whole branch and reasoned from the building --
+a bilevel's garage sits at ENTRY, so the form implies one -- which is a good
+argument for a false premise. Bilevels are built without garages. An argument
+that explains a fact is not evidence for it.
+
+**What the correct reading costs the half-levels gate.**
+`RD-DOCUMENTS/ORDER-inbetween-levels.md` gates the two slots on build type
+alone, and that was written believing every split house had a garage. It
+splits in two:
+
+- **ENTRY gates on the type, as written.** A bilevel has a split entry whether
+  or not a garage is attached; that is the form itself.
+- **OVER GARAGE cannot.** It needs a garage to stand on, and a plain bilevel
+  may have none. Either it belongs to MODIFIED BILEVEL alone -- where the type
+  does imply one -- or it keeps the type gate AND asks the drawing.
+
+That is the open question below, and it now decides code rather than wording.
+
+**One thing the tree does dissolve.** Under the old row, answering yes to a
+storey over the garage silently changed the stored type behind the drafter
+(the board's "one catch"). Under the tree it is the name they picked:
+MODIFIED BILEVEL is the 1.5 storey, and choosing it is choosing the storey.
+
+## OVER GARAGE MEANS TWO DIFFERENT BUILDINGS
+
+> *"the OVER GARAGE for the bungalow should be worked in there too"*
+
+Agreed, and the board's own asymmetry section already says why it cannot be
+one mechanism:
+
+- **Under BUNGALOW it is NOT a half-level.** The garage ceiling is raised until
+  the deck runs continuous with the floor over the main area, so the storey
+  over the garage is the ordinary upper floor CONTINUING ACROSS -- one level,
+  one roof, one 2ND FL card.
+- **Under BILEVEL it is level id 4**, its own level with its own roof, because
+  the garage stacks on a dropped zone and the deck lands too low to join.
+
+**The sheathing is the test** (`ORDER-inbetween-levels.md`): where one deck can
+run it is one level; where it cannot it is two. Same two words on the menu,
+two mechanisms underneath, and building them as one is the trap.
+
+## Open
+
+- **Does a plain BILEVEL offer the OVER GARAGE row?** Sharper now that a plain
+  bilevel may have no garage. By these labels MODIFIED BILEVEL is DEFINED as
+  the one that has it -- that is what the 1.5 counts -- so ENTRY belongs to
+  both split types and OVER GARAGE to the modified one alone. The alternative
+  is to offer it to a plain bilevel that HAS a garage, and accept that adding
+  it makes the drawing a modified bilevel while the label still says BILEVEL.
+  Movie's call; it decides whether the gate reads the type only or the type
+  and the drawing.
+- **What sits under DETACHED GARAGE.** `GARAGE_FOUNDATIONS.detachedGarage` is
+  `['thickened', 'gradebeam', 'frostwall']`, in the order Movie said a drafter
+  should see them, which is the obvious guess and is only a guess.
+- **The parent name is narrower than its contents.** BUNGALOW containing
+  1 STOREY and 2 STOREY means a drafter wanting a two-storey presses BUNGALOW
+  to find it. The format calls that family `house`. Taste, and Movie's.
+- **Where the drive-thru fits now.** The section above put the garage question
+  in PROFESSOR GRUFF's drive-thru because a row has no room for it. A menu
+  has room. Whether the questions still want the dog is open.
