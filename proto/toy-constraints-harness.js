@@ -396,7 +396,7 @@ const wall = (id, x0, z0, x1, z1, extra = {}) => ({
     JSON.stringify(move));
 }
 
-// ── 9 · The predicate is usable on its own (RABBIT's input) ─────────────
+// ── 9 · The predicate is usable on its own, with nothing moving ────────
 {
   const legal = T.isLegal({
     walls: [wall('a', 0, 0, 0, 12)],

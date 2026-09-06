@@ -33,12 +33,23 @@ Pressing RABBIT sets a drawing message — *"RABBIT pace is coming soon"* — an
 does nothing else. So this cancels a planned feature rather than removing
 working code. No migration, no persisted key, no drawing affected.
 
-**One thing to keep straight.** The rabbit was never about making four of
-anything. Both animals are ASSISTANCE LEVELS: turtle is the guided pace that
-explains each step, rabbit was to be the opposite — staying out of the way once
-you know the moves. If "four at a time" names a behaviour that actually exists,
-it is somewhere else and removing the rabbit will not touch it. Worth
-confirming before this is called done.
+**THE PARAGRAPH THAT WAS HERE WAS WRONG, and it is kept as a correction because
+the mistake is the useful part.** It said the rabbit was never about making four
+of anything -- that both animals were only ASSISTANCE LEVELS, turtle explaining
+each step and rabbit staying out of the way -- and that if "four at a time"
+named a real behaviour, it was somewhere else.
+
+Movie was right and I was not. RABBIT *was* four at a time.
+`SPEC-toy-mode-constraints.md` specified **four plans per press**, with a market
+case for production builders, and `toy-constraints.js` was built predicate-first
+expressly so that generator could run against it. I read the build row's
+comment, which describes the assistance ladder, and stopped at the first surface
+I found.
+
+**The name meant two different things on two surfaces**, which is the whole
+lesson: a grep that finds one meaning does not tell you it is the only one.
+Movie cancelled the feature outright on 6 Sep -- *"we aren't doing the rabbit in
+any way"* -- so every trace is now gone or marked cancelled.
 
 ## The row, before and after
 

@@ -1,4 +1,4 @@
-# assets — and the five nobody references
+# assets — and the four nobody references
 
 Art the pages fetch by literal `src`. There is no bundler and no manifest, so
 a file is "in use" exactly when some page names it, and **an unreferenced file
@@ -10,21 +10,29 @@ To check the state of any of these:
 
 ## Kept deliberately, referenced by nothing
 
-Five files, from two decisions. None of them is dead weight by accident, and
-none should be deleted as a tidy-up without re-reading the reason:
+Four files, from one decision. Neither pair is dead weight by accident, and
+neither should be deleted as a tidy-up without re-reading the reason:
 
 | file | why it stopped being used |
 |---|---|
 | `btn-house.png`, `houseout.png` | **NEW-5.** The single HOUSE lamp became four text buttons — BUNGALOW / 2 STOREY / BILEVEL / MODIFIED BILEVEL. Movie: *"make it easier to understand for the user."* Text rather than lamp art, because the words are the point and a label carries no image to fetch. |
 | `btn-split.png`, `splitout.png` | **NEW-5**, same change. SPLIT became BILEVEL, one of the four. |
-| `btn-rabbit.png` | **Cancelled 6 Sep.** Movie removed the rabbit from the build row and the first-run ladder. The feature is not coming back; see `RD-DOCUMENTS/ORDER-build-row.md`. |
 
 **Why keep them at all.** Deleting artwork is a separate decision from removing
 the thing that used it, and the two want separating: a button can come back
-under a different name, and 8 KB costs nothing next to redrawing a lamp. The
-rabbit is the clearest case — the feature is cancelled outright, so its art is
-the one with the weakest claim, and it is kept only so that the removal is one
-decision rather than two taken in the same hour.
+under a different name. **The cost is 386 KB across the four**, which is not
+nothing — measured, because an unmeasured "it's only a few KB" is how this
+kind of thing accumulates. It is still small against redrawing a lamp pair from
+scratch, and the four are two matched pairs rather than four separate losses.
+
+HOUSE and SPLIT are exactly the come-back case — the houses they stood for are
+still drawn, just through four text buttons instead of two lamps.
+
+**`btn-rabbit.png` WAS here and is not.** It was kept on the same reasoning for
+about an hour, until Movie ruled the feature dead outright — *"we aren't doing
+the rabbit in any way"* — at which point the art had nothing left to come back
+for. That is the distinction this file is about: it went because someone
+decided, not because it looked abandoned.
 
 **If you are here to clean up**, that is a fine reason to delete them — but
 delete them because you decided to, not because they looked abandoned. The

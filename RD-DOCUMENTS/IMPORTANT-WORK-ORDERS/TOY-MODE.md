@@ -188,11 +188,14 @@ checks, up from 55. What is missing is the on-screen half — tap, glow, arrows,
 
 ## Not in this path, on purpose
 
-**RABBIT** — four plans per press. It reuses the same constraint set as the
-generator's input, which is the argument for having built step 1 properly, but
-it is a separate route. **The real-estate / concept-plan area** dresses a
-chosen plan; separate job. **Gruff** is a teacher, not a mode — do not couple
-them.
+**The real-estate / concept-plan area** dresses a chosen plan; separate job.
+**Gruff** is a teacher, not a mode — do not couple them.
+
+RABBIT used to head this list — four plans per press, reusing the constraint
+set as a generator's input. **Movie cancelled it on 6 Sep**, *"we aren't doing
+the rabbit in any way"*, so it is not a separate route, it is nothing. Noted
+rather than silently dropped because the constraint set was going to be shaped
+for a generator, and it no longer has to be.
 
 ---
 

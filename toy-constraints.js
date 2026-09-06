@@ -9,9 +9,12 @@
 //
 // THE PREDICATE IS THE PRIMITIVE. `isLegal` answers "is this configuration
 // legal?"; `allowedMove` proposes a configuration and asks it. That order is
-// deliberate — RABBIT's four-plans-per-press generates against the predicate,
-// and bolting a generator onto a move-validator afterwards is the expensive
-// version of this.
+// deliberate, and the ORIGINAL reason for it is gone: RABBIT was to generate
+// four plans per press against this predicate, and bolting a generator onto a
+// move-validator afterwards is the expensive version of that. Movie cancelled
+// RABBIT on 6 Sep. The order is kept anyway, on a reason that survives -- a
+// predicate that stands alone is testable alone, which is how the harness
+// exercises it without moving anything.
 // REQUIRES window.DraftGeometry2D, window.DraftWallTypes and window.DraftRoomStandards -- resolved at CALL time, not at load. A page may list this
 // script before its dependency and still work; only the room and wall rules needs the
 // dependency present by the time it is called.
