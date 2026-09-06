@@ -223,6 +223,24 @@
        be pressed -- so every OTHER thing on the row is dimmed to the tint and
        taken out of the press path, or raising the row would quietly light up
        five buttons the coach never mentioned. */
+    /* AN OPEN SUBMENU IS DENSER THAN A CLOSED ROW at every width, so its
+       sizing is not a breakpoint question. Five finished-house labels carry
+       far more words than three family names, and the cluster is centred
+       ABSOLUTELY in the top bar -- it grows both ways and wins the stacking
+       contest (z-index 6 against a bar with none), so width it does not spend
+       is width it does not take out of a button. Measured: without this the
+       BUNGALOW submenu covers NEW at 1280.
+       This does not fix the bar. The cluster can still outgrow it on a narrow
+       enough window; that wants the cluster to FLOW in the bar rather than sit
+       on top of it, which is a bigger change than this branch should make.
+
+       !important THROUGHOUT, because every one of these buttons carries the
+       property inline and an inline style beats a stylesheet rule. The media
+       block below has always done this; a first attempt here left it off and
+       the row did not move an inch.
+    [data-build-cluster].menu-open [data-select-build],
+    [data-build-cluster].menu-open [data-build-menu-back] { height:26px !important; padding:0 4px !important; font-size:9px !important; letter-spacing:0.03em !important; }
+    [data-build-cluster].menu-open img { height:30px !important; }
     [data-build-cluster].coaching > * { opacity:0.3; pointer-events:none; transition:opacity 220ms ease-out; }
     [data-build-cluster].coaching > .bone-wrap { opacity:1; pointer-events:auto; }
     @keyframes entry-coach-nudge {
@@ -1774,6 +1792,22 @@
       </div>
       <sc-for list="{{ levels }}" as="level" hint-placeholder-count="8">
         <div class="{{ level.rowClass }}">
+          <!-- A FUZZED SLOT ROW. Not a level: it holds no geometry, has no
+               layers, cannot be switched to and cannot be deleted, because
+               there is nothing there yet. ADD gives it its FIXED id. -->
+          <sc-if value="{{ level.isSlot }}" hint-placeholder-val="{{ false }}">
+            <div class="level-bar" style="background:rgba(29,31,32,0.18);"></div>
+            <div class="level-body" style="opacity:0.5;">
+              <div class="level-head">
+                <div class="level-title">
+                  <div class="level-name">{{ level.name }}</div>
+                </div>
+                <span style="flex:1;"></span>
+                <button data-add-half-level="{{ level.slotId }}" onClick="{{ level.onAddSlot }}" title="{{ level.addTitle }}" style="border:1px solid rgba(29,31,32,0.35); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:700; letter-spacing:0.06em; padding:2px 6px; cursor:pointer;">ADD</button>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ level.isLevel }}" hint-placeholder-val="{{ true }}">
           <div class="level-bar" style="background:{{ level.color }};" onClick="{{ level.onSelect }}"></div>
            <div class="level-body" onClick="{{ level.onSelect }}" title="Switch to {{ level.name }}">
             <div class="level-head">
@@ -1795,6 +1829,7 @@
                    <sc-if value="{{ layer.hasContents }}" hint-placeholder-val="{{ false }}">
                      <div class="level-layer-contents">
                        <sc-for list="{{ layer.contents }}" as="content" hint-placeholder-count="5">
+          </sc-if>
                          <div class="level-layer-content">{{ content }}</div>
                        </sc-for>
                      </div>
@@ -2569,6 +2604,32 @@ const BUILD_MENU = Object.freeze([
       Object.freeze({ id: 'detached-frostwall', label: 'FROST WALL', foundation: 'frostwall' }),
     ]),
   }),
+]);
+
+// THE HALF-LEVEL SLOTS (Movie, 6 Sep; RD-DOCUMENTS/ORDER-inbetween-levels.md).
+// A bilevel's ENTRY and a modified bilevel's OVER GARAGE are LEVELS, not cards:
+// each sits half a storey off the floors around it, too far for a ceiling to
+// absorb. The numbering left room for them on purpose -- floors are odd, these
+// are even -- and PROJECT.html:287 has hardcoded ENTRY_LEVEL_ID = 2 all along.
+//
+// THE IDS ARE CONSTANTS, NEVER ALLOCATED. _addLevel hands out nextLevelId,
+// which starts at 9, so a drafter who typed "ENTRY" into it would get id 9:
+// drawn perfectly here, invisible to PROJECT, and -- worse -- sorted AFTER
+// 2ND FL, so a stair descending by position would land on the wrong floor. A
+// lookup you can fix; an ordering you cannot. Switching a slot on rather than
+// allocating one removes the failure instead of guarding against it.
+//
+// `types` IS THE GATE, and it is finer than the split family. Movie's menu has
+// no BILEVEL + garage + room over garage entry: a drafter who wants that
+// presses MODIFIED BILEVEL, which is what the building is called. So ENTRY
+// belongs to both split types and OVER GARAGE to the modified one alone.
+//
+// A slot is NOT A RECORD until it is added: nothing here reaches the drawing,
+// so a file saved before and after this feature is byte-identical unless ADD
+// is pressed. That is what makes it safe to land beside the Write Tier.
+const HALF_LEVEL_SLOTS = Object.freeze([
+  Object.freeze({ id: 4, name: 'OVER GARAGE', types: Object.freeze(['modifiedBilevel']) }),
+  Object.freeze({ id: 2, name: 'ENTRY', types: Object.freeze(['bilevel', 'modifiedBilevel']) }),
 ]);
 
 const DEFAULT_LEVELS = [
@@ -9077,6 +9138,79 @@ class Component extends DCLogic {
       if (this._orthoCam) this._setView('top');
       this._notifySelectionChanged();
       this._markUnsaved();
+    });
+  }
+
+  // Which half-levels the build type offers and the drawing does not yet have.
+  // Offered is not the same as present: a slot the drafter has never pressed
+  // has no id, no elevation and no row in the file.
+  _halfLevelSlotsOffered() {
+    const have = new Set(this.state.levels.map(level => level.id));
+    return HALF_LEVEL_SLOTS.filter(slot => !have.has(slot.id)
+      && slot.types.includes(this.state.buildType));
+  }
+
+  // THE GATE HIDES SLOTS, NEVER LEVELS. A half-level someone has drawn walls
+  // on stays on the panel whatever type is lit -- press BUNGALOW on a drawing
+  // that has an OVER GARAGE and the row does not go anywhere. Hiding it would
+  // be the id-9 failure in reverse: geometry in the drawing that its own panel
+  // will not show. Nothing here filters `levels`; it only ADDS rows to them.
+  _levelPanelRows(levels) {
+    const offered = this._halfLevelSlotsOffered();
+    const rows = [];
+    const placed = new Set();
+    const dropSlotsAbove = id => offered.forEach(slot => {
+      if (slot.id > id && !placed.has(slot.id)) { placed.add(slot.id); rows.push({ slot }); }
+    });
+    levels.forEach((level, index) => {
+      dropSlotsAbove(level.id);
+      rows.push({ level, index });
+    });
+    dropSlotsAbove(0);
+    return rows;
+  }
+
+  // ADD on a fuzzed row: the level comes into existence AT ITS OWN ID, empty,
+  // and the drafter draws the walls. Deliberately NOT _addLevel with a
+  // different number -- that path asks for a name and an elevation and takes
+  // the next counter value, and all three are wrong here. The name is the
+  // slot's, the id is fixed, and the elevation is derived from the floors
+  // either side rather than typed.
+  //
+  // The counter is not touched. nextLevelId belongs to floors on top.
+  _addHalfLevel(slotId) {
+    const slot = HALF_LEVEL_SLOTS.find(item => item.id === slotId);
+    if (!slot) return;
+    const levels = [...this.state.levels];
+    if (levels.some(level => level.id === slot.id)) return;
+    // HALFWAY BETWEEN THE FLOORS EITHER SIDE, which is what "half-level" means
+    // and is a derive rather than a guess: a bilevel's entry sits half a storey
+    // under MAIN, and MAIN sits a storey over FOUNDATION. Both neighbours are
+    // real levels with real elevations, so the midpoint needs nothing invented.
+    // The drafter moves it after; nothing re-derives it once it exists.
+    const floors = levels.filter(level => level.id > 0 && level.id !== 7 && level.id !== 8);
+    const below = floors.filter(level => level.id < slot.id).sort((a, b) => b.id - a.id)[0];
+    const above = floors.filter(level => level.id > slot.id).sort((a, b) => a.id - b.id)[0];
+    const elev = below && above
+      ? Math.round(((Number(below.elev) || 0) + (Number(above.elev) || 0)) / 2 * 10000) / 10000
+      : Number((above || below || {}).elev) || 0;
+    const level = { id: slot.id, name: slot.name, elev, visible: true };
+    this._ensureDrawingCollections();
+    this._boneyardOutlines.forEach(master => {
+      this._outlines.push(this._outlineCopyForLevel(master, level));
+    });
+    // Straight above the floor it sits on, which is where the panel already
+    // draws the fuzzed row -- so pressing ADD does not make the row jump.
+    const insertIdx = below ? levels.findIndex(entry => entry.id === below.id) : levels.length;
+    levels.splice(insertIdx, 0, level);
+    const activeLevelIdx = this.state.activeLevelIdx
+      + (insertIdx <= this.state.activeLevelIdx ? 1 : 0);
+    this.setState({ levels, activeLevelIdx }, () => {
+      this._markUnsaved();
+      this.setState({
+        drawingMessage: `${slot.name} added — draw its walls, or press the bone once the outline is there.`,
+        drawingMessageError: false,
+      });
     });
   }
 
@@ -21906,7 +22040,8 @@ class Component extends DCLogic {
       // except the bone is dimmed to match the tint and made unpressable. The
       // result is the one described: the bone is the only thing still lit.
       buildClusterZ: this.state.entryCoach === true ? 61 : 6,
-      buildClusterClass: this.state.entryCoach === true ? 'coaching' : '',
+      buildClusterClass: (this.state.entryCoach === true ? 'coaching' : '')
+        + (openFamily ? ' menu-open' : ''),
       hasHouseMaster: houseExists,
       // THE TURTLE AND THE GARAGE MARKS STAY PUT while a submenu is open.
       // Standing them down was tried first, to buy 92px against the bar, and
@@ -22243,7 +22378,23 @@ class Component extends DCLogic {
         e.stopPropagation();
       },
 
-      levels: levels.map((l, i) => {
+      // THE PANEL LIST, WITH THE HALF-LEVEL SLOTS DROPPED IN. Slots are rows,
+      // not levels: they never reach `levels` itself, so nothing downstream --
+      // _floorLevels, the section tables, the serializer -- can see one. A
+      // drawing saved with a slot on screen is byte-identical to one saved
+      // without it.
+      levels: this._levelPanelRows(levels).map(row => {
+        if (row.slot) return {
+          isSlot: true, isLevel: false,
+          name: row.slot.name,
+          slotId: row.slot.id,
+          addTitle: `ADD ${row.slot.name} — a level of its own, half a storey off the floors either side`,
+          onAddSlot: event => { event.stopPropagation(); this._addHalfLevel(row.slot.id); },
+          rowClass: 'level-row level-slot',
+          layers: [], hasLayers: false,
+        };
+        const l = row.level;
+        const i = row.index;
         const slot = l.id === activeLevel?.id ? -1 : backgroundLevelIds.indexOf(l.id);
         const scopedView = backgroundLevelViews[l.id] ?? null;
         const bgSlotStyle = s => ({
@@ -22278,6 +22429,7 @@ class Component extends DCLogic {
           };
         });
     return {
+          isSlot: false, isLevel: true,
           name: l.name,
           layers,
           hasLayers: layers.length > 0,
