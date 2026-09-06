@@ -8,12 +8,20 @@
 //   cuts                  the drawing        persisted, read like walls
 //   elevationMarkOffsets  the drawing        persisted
 //   structureStandards    the PROFILE        localStorage, not the drawing
-//   autoDimFirstOffsetFt  nowhere            session state; this page defaults
+//   autoDimFirstOffsetFt  the drawing        persisted since PR #319
 //
 // The third is the reason profile-manager.js is in the head, and `the profile
 // is actually read` below is the check that earns that dependency. Without it
 // the page could ignore the profile entirely and every other test here would
 // still pass.
+//
+// THE FOURTH WAS THIS PAGE'S ONE ADMITTED INFIDELITY until PR #319 gave the
+// offset a home. It was session state on the old page, so this page painted
+// 1.5' whatever the drawing said. The three checks at the bottom are what
+// close that, and they are written so each can fail on its own: one proves the
+// stored number reaches the ink, one proves null still derives, and one proves
+// the value goes through the format's normaliser rather than straight off the
+// parsed JSON.
 //
 // TWO COLOURS, as with fixtures. drawCutMarks2D strokes in the cut ink and
 // fills the bubble interior, and both were literals baked into the painter:
@@ -221,3 +229,102 @@ test('the day page paints them in the day ink and the day ground', async ({ page
   expect(fills).not.toContain(OLD_WHITE);
   expect(strokes).not.toContain(NIGHT_INK);
 });
+
+// ── THE FIRST-OFFSET, READ OFF THE DRAWING (PR #319, WO-W-1 deliverable 6) ──
+//
+// A hand-placed cut is clipped to the plan box grown by the cut mark gap on
+// each side (cut-marks.js cutLineSpan), and the gap is HALF the first offset.
+// So the drawn line's length is the one thing on screen that moves with this
+// value, and it moves by twice the change in the gap.
+//
+// MEASURED AS A RATIO, NOT IN PIXELS. Two loads of the same drawing at the
+// same viewport share a scale, so comparing lengths needs no px-per-foot --
+// and inventing one would be a second thing to get wrong.
+const longestFlatRun = ops => {
+  const pts = [];
+  for (const op of ops) {
+    const m = /^(moveTo|lineTo)\((-?[\d.]+),(-?[\d.]+)\)$/.exec(op);
+    if (m) pts.push({ op: m[1], x: +m[2], y: +m[3] });
+  }
+  let best = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    if (b.op !== 'lineTo') continue;
+    if (Math.abs(a.y - b.y) > 0.5) continue;      // horizontal in screen space
+    best = Math.max(best, Math.abs(b.x - a.x));
+  }
+  return best;
+};
+const cutRun = async page => longestFlatRun(await page.evaluate(() => window.__ops.slice()));
+
+test('the first offset comes off the drawing, not this page\'s own default', async ({ page }) => {
+  await recordPaint(page);
+  await houseOnOldPage(page);
+  await setStandards(page, { autoElevations: false });
+
+  await loadWith(page, `d.cuts = [${CUT}]; delete d.autoDimFirstOffsetFt;`);
+  const derived = await cutRun(page);
+
+  await loadWith(page, `d.cuts = [${CUT}]; d.autoDimFirstOffsetFt = 6;`);
+  const stored = await cutRun(page);
+
+  // Both drew something, so a longer line is a longer line rather than one
+  // painter running and the other not.
+  expect(derived).toBeGreaterThan(0);
+  expect(stored).toBeGreaterThan(0);
+  // 6' of offset is a 3' gap against the default's 0.75', and the line grows
+  // by twice the difference -- 4.5' wider on a house whose box is nowhere near
+  // that small, so the change is far outside any rounding.
+  expect(stored).toBeGreaterThan(derived);
+});
+
+test('and a drawing that never chose one derives the format\'s 1.5, not just something',
+  async ({ page }) => {
+    await recordPaint(page);
+    await houseOnOldPage(page);
+    await setStandards(page, { autoElevations: false });
+
+    await loadWith(page, `d.cuts = [${CUT}]; delete d.autoDimFirstOffsetFt;`);
+    const absent = await cutRun(page);
+
+    // null is the stored way of saying "never chose", and it must draw what an
+    // absent key draws.
+    await loadWith(page, `d.cuts = [${CUT}]; d.autoDimFirstOffsetFt = null;`);
+    const explicitNull = await cutRun(page);
+
+    // AND IT MUST DERIVE THE RIGHT NUMBER, which the two comparisons above
+    // cannot see between them. Written after mutating `?? DEFAULT` to `|| 0`
+    // and watching this test stay green: absent and null both resolved to 0,
+    // so they still agreed with each other, and a page drawing every cut at a
+    // zero gap passed a check called "still derives it". A stored 1.5 is the
+    // same number by a different route, so it pins the value rather than the
+    // agreement.
+    await loadWith(page, `d.cuts = [${CUT}]; d.autoDimFirstOffsetFt = 1.5;`);
+    const storedDefault = await cutRun(page);
+
+    expect(absent).toBeGreaterThan(0);
+    expect(explicitNull).toBeCloseTo(absent, 1);
+    expect(storedDefault).toBeCloseTo(absent, 1);
+  });
+
+test('and a quoted number is not a number -- the format normalises before the paint does',
+  async ({ page }) => {
+    await recordPaint(page);
+    await houseOnOldPage(page);
+    await setStandards(page, { autoElevations: false });
+
+    await loadWith(page, `d.cuts = [${CUT}]; delete d.autoDimFirstOffsetFt;`);
+    const derived = await cutRun(page);
+
+    // THIS IS THE CHECK THAT EARNS THE NORMALISE CALL. `drawing` is built by
+    // spreading `parsed`, so the raw key is already on it -- if the paint site
+    // read that instead of the normalised value, every other check here would
+    // still pass, because a valid number survives both routes. A string does
+    // not: drawing-format.js does not coerce, so "6" is NOT CHOSEN and must
+    // derive. If this draws the wide line, the page is reading raw JSON.
+    await loadWith(page, `d.cuts = [${CUT}]; d.autoDimFirstOffsetFt = '6';`);
+    const quoted = await cutRun(page);
+
+    expect(derived).toBeGreaterThan(0);
+    expect(quoted).toBeCloseTo(derived, 1);
+  });
