@@ -186,6 +186,36 @@ the row does not go anywhere. See THE GATE HIDES SLOTS, NEVER LEVELS below.
 | `_addLevel()` | unchanged. A floor on top is still a floor on top |
 | a spec | a fuzzed row is not a level: it must not reach `_floorLevels()`, must not appear in a section table, and must not change a saved file |
 
+## BOTH HALF-LEVELS HAVE A FLOOR PACKAGE, AND THE ROUND NUMBER IS NEVER THE JOIST
+
+**Movie, 6 Sep:** *"the entry joists are 9.25" with 3/4" ply sheathing"*, and
+for the storey over the garage *"make the joists 19.25" with 3/4" sheathing"*.
+
+    ENTRY         9 1/4" joist  +  3/4" ply  =  10"
+    OVER GARAGE  19 1/4" joist  +  3/4" ply  =  20"
+
+**THE ROUND NUMBER IS THE PACKAGE.** Both rulings arrived first as a depth --
+"min 20 inches deep", "10 inches" -- and both were then corrected to a joist
+plus a course of sheathing. The correction matters because the two readings
+differ by 3/4" at every deck in the building.
+
+**And one of them was read the wrong way in live code.**
+`PROJECT.html:304` has carried `OVER_GARAGE_JOIST_IN = 20` since 5 Sep -- the
+package as the joist, which puts the deck at 10'-9 7/8" instead of 10'-9 1/8".
+Written the day BEFORE the correction, so it never contradicted anything at
+the time; the correction reached this order and never reached the constant.
+
+**It was visible and got explained away.** Gilligan saw 10'-9 7/8" against
+this order's 10'-9 1/8", assumed a misread of 7/8 for 1/8 in a screenshot, and
+moved on. Two sources disagreeing IS the finding; picking the one that is
+easier to doubt is how it stops being one.
+
+**ENTRY was already right** -- `PROJECT.html:288` is 9.25 with `sheathingIn:
+3/4` beside it -- so Movie's ruling confirms that constant rather than
+changing it. Recorded because the pair only reads as a rule when both halves
+are written down: a half-level's floor is a joist and a course, and the
+figure a drafter says out loud is their sum.
+
 ## The floor package over the garage
 
 **Movie, 6 Sep**, over five exchanges. Joists **19 1/4"**, sheathing **3/4"** --
