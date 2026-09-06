@@ -1,8 +1,10 @@
 # BOARD — the suite's heaviest specs sit on a 90-second cliff
 
 **Found 6 Sep 2026** by Gilligan and Skipper, over about six hours, while
-attributing seven failures on the stairs branch. Needs a board number and a
-decision. **The diagnosis is complete; the fix is not chosen.**
+attributing seven failures on the stairs branch. Needs a board number.
+**The diagnosis is complete, and the first fix has landed:** Movie ruled
+*"raise the timeout"* on 6 Sep and `playwright.config.js` is now `180_000`.
+What that settles and what it does not is the last section.
 
 The one-line version, and it took all night to earn:
 
@@ -90,12 +92,33 @@ one of them looked like evidence at some point.
 | Skipper's box, idle | yes | slow enough that latency crosses it |
 | Skipper's box, +180s | control | proves the mechanism |
 
-**One more accidental control, worth recording.** PR #310 changed nothing but
-markdown and still ran the full sharded suite — **clean, four for four**. So
-CI's machine is not near the line at all, consistent with base run 802. That
-does not weaken anything here: the budget bites on slower hardware and under
-contention, and CI is neither. Recorded because "CI is always green" is exactly
-the argument someone will later use to say this board was overstated.
+### CI IS NOT SAFELY ON THE FAR SIDE, AND THIS PARAGRAPH SAID IT WAS
+
+**Written wrong first, corrected within the hour, and kept as both.** The
+original text read:
+
+> *PR #310 changed nothing but markdown and still ran the full sharded suite —
+> clean, four for four. So CI's machine is **not near the line at all**,
+> consistent with base run 802.*
+
+Two clean CI runs — base run 802 and a markdown-only PR — and I called it a
+position. **Then CI crossed the line.** PR #313, a change confined to
+`LAYOUT.dc.html`, failed `model-html-origin.spec.js:135` on shard 2: a
+90-second timeout, 232 passed, and a spec whose diff cannot reach it —
+MODEL.html never loads LAYOUT.dc.html and the spec names LAYOUT zero times.
+
+So CI is **near enough to cross on a bad draw**, on its own hardware, with no
+slow container and no second tree involved.
+
+**Which is the third time in one day that two data points were read as a
+trend** — the same error this board already records twice, committed by the
+person writing it down. That is worth more than the correction: the pattern is
+not carelessness, it is what two matching results *feel* like.
+
+**And it raises the stakes rather than lowering them.** A green check on this
+repo is partly luck on CI's own machine, not merely on an unlucky one. Anyone
+using "CI is always green" to dismiss a red shard as "must be my change" is
+using a claim that has now been falsified.
 
 **A green run only means something from a box that has been shown to go red.**
 That sentence would have saved hours. We wrote off three instruments for the
@@ -115,10 +138,32 @@ Three options, and this is a judgement call rather than a measurement:
    expensive part is rebuilding the same house repeatedly, and some of that is
    reusable across the group.
 
-**Recommendation: 1 now, 3 later.** Raise the timeout today so Tier 3 does not
-push PRs through a suite that is partly luck, and put the real reduction on the
-board as its own piece of work. Option 2 is the one to avoid — it spreads the
-cost around without lowering it.
+**Recommendation was 1 now, 3 later. Movie ruled 1 on 6 Sep: "raise the
+timeout".**
+
+**WHAT IT DID.** `playwright.config.js` is `180_000` — the value that was
+measured, not a guess somewhere between it and 90. Nobody has found the real
+line, so picking 120 would have been a number standing in for a measurement.
+The config comment carries the before/after, so whoever considers lowering it
+can see what happened last time.
+
+The cost is small and one-sided: **a passing test does not consume its
+timeout**, so a larger ceiling only changes how long a genuinely broken test
+takes to report.
+
+**WHAT IT DID NOT DO.** The heavy specs are still heavy. Each rebuilds the same
+house, loads five pages and reads five sets of pixels, and the reason they sat
+on the line is that nobody had counted what they cost. **(3) is still the real
+fix** and stays on this board: the expensive part is repeated setup, and some
+of it is reusable across the group.
+
+So this is a floor raised under a known problem, not the problem solved.
+Anything that makes those specs slower will find the new line the way it found
+the old one — and the symptom will look identical: a spec failing on a PR whose
+diff cannot reach it.
+
+**Option 2 stays the one to avoid.** Splitting the heavy specs spreads the cost
+without lowering it, and pays for the same setup twice.
 
 ## Method lessons, which are the transferable part
 
