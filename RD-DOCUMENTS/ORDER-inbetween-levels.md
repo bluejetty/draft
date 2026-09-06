@@ -1,7 +1,15 @@
-# WORK ORDER — the half-levels are always on the panel, fuzzed until you add one
+# WORK ORDER — the half-levels come with the build type
 
 **Movie, 6 Sep**, over four exchanges, with Gilligan settling where the slots
 live. **PRE-TIER 3.** Nothing here is built.
+
+**READ THE LAST SECTION FIRST.** This order was written as *"the half-levels
+are always on the panel, fuzzed until you add one"* and Movie narrowed it the
+same day: they belong to BILEVEL and MODIFIED BILEVEL, and a bungalow does not
+show them at all. The reasoning below is unchanged and still load-bearing --
+the fixed ids, the panel-not-the-drawing decision, the stair ordering -- only
+WHO SEES THE ROWS moved. The old title is kept in this paragraph rather than
+quietly rewritten out.
 
 This is the piece the build-type board called *"the one with real work in it"*
 and it has been waiting on Movie's sketch since 5 Sep. The sketch arrived as
@@ -144,18 +152,28 @@ gives the bone something to CALL rather than something to duplicate, and lets
 the bilevel autohouse be tested against a level that already works instead of
 debugging both halves at once.
 
-## The panel, before and after
+## The panel, by build type
 
-    LEVELS                          [DATUM] [+ ADD]
-      | 2ND FL
-      | OVER GARAGE       fuzzed             [ADD]
-      | MAIN FL
-      | ENTRY             fuzzed             [ADD]
-      | FOUNDATION
+    BUNGALOW / 2 STOREY             BILEVEL / MODIFIED BILEVEL
 
-The header's `+ ADD` is unchanged -- it still adds an ordinary floor on top,
-through `_addLevel()` and the counter. The two new ADDs are per-slot and use
-the slot's own id.
+    LEVELS       [DATUM] [+ ADD]    LEVELS         [DATUM] [+ ADD]
+      | 2ND FL                        | 2ND FL
+      | MAIN FL                       | OVER GARAGE
+      | FOUNDATION                    | MAIN FL
+                                      | ENTRY
+                                      | FOUNDATION
+
+No fuzzed rows on the left, and no way to add one: the two ids are simply not
+offered. On the right they are ordinary rows, because the build type put them
+there.
+
+The header's `+ ADD` is unchanged in both -- it still adds an ordinary floor
+on top, through `_addLevel()` and the counter, and it can never produce a 2
+or a 4.
+
+**A level that was BUILT stays on the panel whatever lamp is lit.** Press
+BUNGALOW on a drawing that already has an OVER GARAGE with walls on it and
+the row does not go anywhere. See THE GATE HIDES SLOTS, NEVER LEVELS below.
 
 ## What it touches
 
@@ -271,11 +289,91 @@ the door end, not the footprint.
 already carries `{ id: 'owj', label: 'OWJ', depthIn: null }` -- the open-web
 joist whose depth is entered by hand, which is exactly the engineer's case.
 
-## Open, and both are Movie's
+## THE BUILD TYPE GATES THEM — later the same day
 
-- **What "fuzzed" looks like.** Opacity, or the lamp treatment the build row
-  uses for a thing that can exist but does not yet. A taste question.
-- **Whether a half-level can be added where its type does not apply** -- an
-  ENTRY on a bungalow, say. The panel-only design permits it; nothing says
-  whether it should. Not blocking: the answer can be a guard added later
-  without moving anything.
+**Movie, 6 Sep, after the above was written.** This supersedes the title.
+
+> *"if they choose BUNGALOW, lets not have them even fuzzy. if they choose
+> BILEVEL they get them"* ... *"if they want those extras i'm thinking they
+> should choose them when they start"* ... *"so if they pick BUNGALOW those
+> levels don't exist or aren't shown and not available -- if BILEVEL they
+> exist and are available"*
+
+**BUNGALOW and 2 STOREY: the rows are not there and there is no way to add
+one. BILEVEL and MODIFIED BILEVEL: they are there and available.**
+
+### "Don't exist" and "aren't shown" are the same fact here
+
+Movie's sentence offers both and the panel-only decision above already
+collapsed them. A slot that has not been added **is not a record** -- no id
+allocated, nothing in the drawing, nothing a serializer can emit. So there is
+no hidden thing to go looking for later. That is what makes this gate free
+rather than a new piece of state.
+
+### The predicate already exists
+
+    drawing-format.js:891
+    const SPLIT_BUILD_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);
+
+Exported since 4 Sep, read by MODEL and PROJECT both, and already what
+`_garageFrostWallTopFt` branches on. The gate is a call to a list that is
+already the family name -- not new logic.
+
+It is also a BETTER test than the one this order was going to use for OVER
+GARAGE. "Does the drawing have a garage" is a query over outlines that can
+change with any edit; the build type is one stored value with a normaliser.
+
+### THE GATE HIDES SLOTS, NEVER LEVELS
+
+The one rule that has to hold, and the safety of the whole thing.
+
+A drafter draws an OVER GARAGE on a bilevel, then presses BUNGALOW. The walls
+are in the file. **The row stays.** Hiding a built level would be the id-9
+failure of the section above, in reverse and worse -- there the level was in
+the drawing and PROJECT could not find it; here it would be in the drawing
+and its own panel would not show it, on geometry someone drew by hand.
+
+So: the gate governs what can be ADDED, never what can be SEEN. A level that
+exists is on the panel whatever lamp is lit.
+
+### What it costs, named on purpose
+
+**The manual path from 5 Sep narrows.** *"the drafter will need to draw it in
+at that point if they didn't autohouse it from the start"* still holds for the
+WALLS, but the LEVEL now comes from the build row rather than a per-slot ADD.
+A drafter who drew a bilevel by hand without ever pressing BILEVEL has no
+OVER GARAGE row -- and neither does any drawing older than the build-type key,
+where `buildType` is `null` by design (`drawing-format.js:881`: *"Absent or
+unknown is 'not chosen'"*).
+
+**The out is that the build row stays live.** "Choose them when they start"
+means the BUILD ROW is where you choose, not that the choice expires. Press
+BILEVEL at any point and the rows appear. Nothing else changes.
+
+### What this removes from the work
+
+The per-slot ADD button, the fuzzed row treatment, and the dim vocabulary the
+panel does not have today all stop being needed for the SPLIT case, because
+on a bilevel the levels are simply there. What remains is the gate, the
+create-at-a-given-id handler the bone calls, and the specs.
+
+## Open
+
+Both of the questions this order closed with have been ruled on since.
+
+- ~~What "fuzzed" looks like.~~ **Moot.** There are no fuzzed rows: a slot is
+  either offered by the build type or absent.
+- ~~Whether a half-level can be added where its type does not apply -- an
+  ENTRY on a bungalow, say.~~ **No**, and the gate is the answer rather than
+  a guard bolted on afterwards.
+
+What is still open is narrower:
+
+- **A drawing whose `buildType` is `null`** -- every one older than the key,
+  and any drafter who skipped the build row. It gets no half-levels until
+  the row is pressed. Correct by the rule as stated; worth knowing it is the
+  common case for existing files rather than an edge.
+- **Whether pressing BUNGALOW on a drawing that has a BUILT half-level should
+  say anything.** The row stays, so nothing is lost and nothing is silent in
+  the geometry sense. But the drafter has just told the page one thing while
+  the drawing says another, and the page currently would not mention it.
