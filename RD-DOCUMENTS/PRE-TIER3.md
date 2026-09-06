@@ -11,11 +11,12 @@ is on the table and why each one is cheaper now than later.
 | 1 | Underlays in MODEL.html | **DONE** (`8b1a991`) — tier 2 is complete |
 | 2 | Capture the race reproduction | **DONE** — `BOARD-test-budget.md`, and #314 raised the budget to the measured value |
 | 3 | The build row loses the rabbit | **DONE** (#312) |
-| 4 | The storey over the garage | **DESIGNED, NOT BUILT** — see below |
+| 4 | The storey over the garage | **DONE** (`5f6afba`) — designed and built the same day |
 | 5 | Two rulings with Devin | **OPEN**, both |
 
-So what stands between here and the Write Tier is **item 4's code and two
-rulings**, and one of those two is not blocking.
+**So what stands between here and the Write Tier is ONE RULING** --
+`autoDimFirstOffsetFt`, a persisted key on shared ground. The other, a board
+number for the build-type board, is not blocking.
 
 **The principle underneath all five.** Devin's Write Tier acceptance is a
 DEEP-COMPARE — the old page saves a drawing, the new page saves the same
@@ -83,7 +84,14 @@ ENTRY, a half storey down, so a storey standing on it lands below one standing
 on MAIN — too far for a ceiling to absorb, so they stay two levels. An ordinary
 level card is one elevation across the whole building and cannot say that.
 
-**DESIGNED IN FULL, 6 Sep, AND NOT BUILT.** This is the whole of what is left.
+**DESIGNED AND BUILT, 6 Sep — `5f6afba`, five specs green.** The LEVELS panel
+offers ENTRY on any BILEVEL and OVER GARAGE on a MODIFIED BILEVEL; ADD creates
+the level at its own constant id, and the counter is never touched. A slot is a
+ROW, never an entry in `levels`, so a drawing saved with one on screen is
+byte-identical to one saved without it -- which is what let this land before a
+Write Tier whose acceptance is a deep-compare.
+
+Every ruling made the work smaller than the day before.
 `RD-DOCUMENTS/ORDER-inbetween-levels.md` now carries every ruling, and each one
 made the work SMALLER than the day before:
 
