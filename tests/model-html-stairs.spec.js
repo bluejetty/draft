@@ -24,16 +24,36 @@ const BUCKET = 'model-drawing';
 const MAIN_FL = 3;
 const FOUNDATION = 1;
 
-// The painter's legend, recorded from the first frame. drawStairs2D writes
+// The painter's legend, recorded from THE LAST FRAME ONLY. drawStairs2D writes
 // `DN — {risers}R @ {riser}` under every stair it draws, so the legend is both
 // the proof it ran and the layout it used, in one string.
+//
+// THE FRAME RESET IS NOT TIDINESS. Recording every fillText since page load
+// counts each stair once PER PAINT, and paint() runs again on any resize, font
+// load or pan -- so `toHaveLength(1)` silently became "exactly one repaint
+// happened", which is not a claim about stairs at all. It passed alone and
+// failed in a group run, which is the tell. paint() clears the canvas at the
+// top of every frame, so hooking clearRect gives the frame boundary for free.
+//
+// AND BOTH HOOKS ARE SCOPED TO #plan, which is the half that is easy to miss:
+// these patch CanvasRenderingContext2D.prototype, so they fire for EVERY canvas
+// on the page. Unscoped, any other canvas clearing after the plan painted wiped
+// the array and the legend count came back zero -- a reset that made the check
+// read empty rather than wrong, which is the failure mode that looks like a
+// real result.
 async function recordText(page) {
   await page.addInitScript(() => {
     window.__painted = [];
+    const onPlan = ctx => ctx.canvas && ctx.canvas.id === 'plan';
     const proto = CanvasRenderingContext2D.prototype;
+    const clearRect = proto.clearRect;
+    proto.clearRect = function (...args) {
+      if (onPlan(this)) window.__painted = [];
+      return clearRect.apply(this, args);
+    };
     const fillText = proto.fillText;
     proto.fillText = function (text, ...rest) {
-      window.__painted.push(String(text));
+      if (onPlan(this)) window.__painted.push(String(text));
       return fillText.call(this, text, ...rest);
     };
   });
