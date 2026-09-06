@@ -184,6 +184,14 @@ there is not wrong about why the garage wall went up a precut rung -- a 7'-0"
 overhead door needs `OPENING_HEAD_DROP_IN` above its head either way -- only
 about where the deck lands.
 
+**AND THE 20" WAS NOT NEW TODAY.** Four lines further down, that same comment
+lists *"the 11 7/8" joists that should be 20""* as one of four garage rows
+that silently inherited a house number, beside the 3" slab and the basement
+wall under a garage. The file had already written down that the number was
+wrong and then left the wrong number in place. Movie's ruling closes a gap
+the code was carrying its own note about -- which is the fallback the comment
+names: *"no default means HOUSE, and HOUSE is always plausible."*
+
 ### Which end is anchored
 
 > *"the bottom will need to go deeper it if goes from 19.25" to 23.25""* ...
