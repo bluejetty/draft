@@ -8841,6 +8841,21 @@ class Component extends DCLogic {
   // stored ?? derived(), in one place. Every reader goes through here so the
   // number a drawing draws at is the same one the picker lights, whether it
   // was chosen or defaulted.
+  //
+  // ONLY THIS PAGE, SO FAR. MODEL.html has its own `cutMarkGapFt()` -- one
+  // underscore apart from this file's `_cutMarkGapFt()`, same concept, same
+  // half-of-the-offset arithmetic -- and it still hardcodes 1.5 because until
+  // today the value had no home to read from. Its comment says so out loud.
+  // That page reading the persisted key is Gilligan's deliverable, not this
+  // commit's, and it is what actually closes tier 2's last infidelity: the new
+  // page painting its own default instead of what the drawing says.
+  //
+  // WRITTEN DOWN BECAUSE A NEAR-COLLISION READS AS SETTLED. Two functions with
+  // nearly the same name on two boards, one fixed and one not, is exactly the
+  // shape DETACHED_BEAM_ABOVE_GRADE_IN had -- a plausible name over a value
+  // that had stopped matching its neighbour, where nothing looks wrong. A
+  // reader of "the gap now derives through the format" would reasonably
+  // conclude both were done.
   _autoDimFirstOffsetFt() {
     return this.state.autoDimFirstOffsetFt ?? format.AUTO_DIM_FIRST_OFFSET_FT;
   }
