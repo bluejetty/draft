@@ -212,6 +212,22 @@ test.describe('MODEL.html tier 1', () => {
     // page and find four elevation marks round the house. A viewer that
     // disagrees with the drafter's own settings is worse than one dependency.
     //
+    // level-assembly.js and stair-geometry.js joined for tier 2m, and the
+    // PAIR is the argument, not either half. stair-geometry.js is the obvious
+    // one: drawStairs2D asks its caller for layoutFor and partsFor and both
+    // were component methods, so this page drew no stairs.
+    //
+    // level-assembly.js is here because the cheap alternative was WRONG rather
+    // than merely worse. A stair's rise is the wall height below plus this
+    // level's floor, and the table saying what a level is made of lived in
+    // three copies (MODEL.dc.html, LAYOUT.dc.html, proto/elevation-harness.js).
+    // Without it this page would have fallen back on each stair's STORED rise
+    // -- which the bone treats as a fallback and re-derives on every paint
+    // without ever writing back. Edit a wall height, save, and the two boards
+    // would draw the same drawing with different riser counts. A dependency
+    // that stops the viewer disagreeing with the drafter is the same trade
+    // profile-manager.js won above.
+    //
     // Keep it exact rather than loosening it to a `toContain`. It caught the
     // palette being added the same hour it was added, and it caught these two
     // the same hour as well, which is what an exact list is for: the
@@ -223,6 +239,7 @@ test.describe('MODEL.html tier 1', () => {
       './cut-view.js', './drawing-format.js', './render-2d.js',
       './fixture-geometry.js', './closets.js',
       './cut-marks.js', './profile-manager.js',
+      './level-assembly.js', './stair-geometry.js',
     ]);
   });
 

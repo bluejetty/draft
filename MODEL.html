@@ -143,6 +143,17 @@
      marks to a drafter who had switched them off. -->
 <script src="./cut-marks.js"></script>
 <script src="./profile-manager.js"></script>
+<!-- Stairs. stair-geometry.js is the riser math and the plan parts; it is not
+     a painter either, it is the two ANSWERS drawStairs2D asks its caller for
+     (layoutFor, partsFor), which lived on the MODEL.dc.html component.
+     level-assembly.js loads FIRST because the stair's rise is the level below's
+     wall height plus this level's floor, and until now the table saying what a
+     level is made of existed in three separate copies. Without it this page
+     would have had to fall back on each stair's STORED rise -- which the bone
+     treats as a fallback, not the truth, so the two boards would have drawn
+     different riser counts for the same drawing after any wall-height edit. -->
+<script src="./level-assembly.js"></script>
+<script src="./stair-geometry.js"></script>
 
 <script>
 (() => {
@@ -372,6 +383,19 @@
   // the drafter wants to see whichever floor is on screen. The four auto marks
   // carry levelId: null, which says the same thing in the data.
   const cuts = () => drawing?.cuts || [];
+  // STAIRS FILTER STRICTLY ON view, and that is copied deliberately rather
+  // than routed through onPlan(). _activeStairs (MODEL.dc.html) reads
+  // `stair.view === view` with NO `|| 'plan'` fallback, unlike every wall,
+  // line and fixture beside it. So a stair saved without a view is hidden on
+  // a level that has layer views, and shown on one that has none. Reusing
+  // onPlan() here would have quietly REVEALED those stairs on this page only.
+  const stairs = () => {
+    const { levelId, viewId } = onActiveLevel();
+    const views = window.DraftLayerViews.layerViewsForLevelId(levelId);
+    return (drawing?.stairs || [])
+      .filter(stair => Number(stair.levelId) === levelId
+        && (!views.length || stair.view === viewId));
+  };
   const shapes = () => (drawing?.shapes || [])
     .filter(sh => onActiveLevel().byLevel(sh));
   // Outlines take the same LEVEL-ONLY rule as roofs -- rule four above. They
@@ -962,6 +986,72 @@
     });
   };
 
+  // The level readings a stair's rise is built from. Faithful to the four
+  // component methods it replaces, INCLUDING their inconsistencies: _floorLevels
+  // does not coerce level ids and _levelWallTopFt compares them strictly, so
+  // neither does this. A stair descends to the subfloor below, and on the
+  // lowest floor past the foundation wall onto the slab -- stair-geometry.js
+  // owns that rule; this only answers the four questions it asks.
+  const stairLevels = () => {
+    const LA = window.DraftLevelAssembly;
+    const LV = window.DraftLayerViews;
+    const all = drawing?.walls || [];
+    const assemblies = drawing?.levelAssemblies || {};
+    const assemblyFor = id => LA.normaliseLevelAssembly(assemblies[id]);
+    return {
+      floors: (drawing?.levels || [])
+        .filter(level => LV.layerViewsForLevelId(level.id).some(view => view.id === 'floor'))
+        .slice()
+        .reverse(),
+      assemblyFor,
+      floorFtFor: id => LA.levelFloorFt(assemblyFor(id)),
+      wallTopFtFor: (id, view = 'plan') => {
+        const tops = all
+          .filter(wall => wall.levelId === id && (wall.view || 'plan') === view)
+          .map(wall => wall.topHeight);
+        return tops.length ? Math.max(...tops) : LA.DEFAULT_WALL_TOP_FT;
+      },
+    };
+  };
+
+  // A-STR IS UNCONFIGURED HERE, and that is the bone's own default rather than
+  // a stub. _layerStandard(STAIR_LAYER) reads this.state.layerStandards and
+  // falls back to `{ name, printable: true, visible: true }` for any layer the
+  // drafter has not touched. Layer standards are page state, not drawing data,
+  // so this page has none to read and every stair layer is untouched by
+  // definition -- the fallback is the whole answer, not a placeholder for one.
+  const STAIR_LAYER_STANDARD = Object.freeze({ name: 'A-STR', printable: true, visible: true });
+
+  const paintStairs = () => {
+    const R = window.DraftRender2D;
+    const SG = window.DraftStairGeometry;
+    const LA = window.DraftLevelAssembly;
+    const F = window.DraftFormatters;
+    const missing = [!R && 'render-2d.js', !SG && 'stair-geometry.js',
+      !LA && 'level-assembly.js', !F && 'formatters.js'].filter(Boolean);
+    if (missing.length) {
+      throw new Error(`MODEL.html: cannot paint stairs, ${missing.join(' and ')} `
+        + 'did not load. Check the script order in the page head.');
+    }
+    // Built ONCE per paint, not per stair: every stair on the level asks the
+    // same four questions and wallTopFtFor scans the whole wall array.
+    const levels = stairLevels();
+    R.drawStairs2D(ctx, toS, {
+      layer: STAIR_LAYER_STANDARD,
+      isPrinting: false,
+      stairs: stairs(),
+      // Inert here for the same reason as the origin marker: toS is a plan
+      // projection reading x and z only. Supplied because the painter reads
+      // `env.elev || 0` and a caller answers the whole interface.
+      elev: 0,
+      stairColor: skin['draw-stair'],
+      treadRunIn: SG.STAIR_TREAD_RUN_IN,
+      layoutFor: stair => SG.stairCurrentLayout(stair, levels),
+      partsFor: (stair, layout) => SG.stairPlanParts(stair, layout),
+      formatInchesOnly: F.formatInchesOnly,
+    });
+  };
+
   // THE DATUM MADE VISIBLE. Tier 2d anchored the grid to the datum but never
   // showed the point itself, so the drafter saw a grid whose origin was
   // inferable only by counting squares. Same three states as the grid, from
@@ -1003,6 +1093,11 @@
         // straight after the wall and opening passes and well before the
         // dimensions at 6960's tail).
         paintFixtures();
+        // Stairs sit with the geometry, not the annotation, and after the
+        // fixtures for the slot the bone puts them in (MODEL.dc.html:7018 --
+        // straight past the fixture and beam passes, and well before the
+        // selection highlight and the dimension strings).
+        paintStairs();
         // LAST, because dimensions are annotation: MODEL.dc.html paints them
         // after the walls and lines (6960) so a string is never buried under
         // the geometry it measures.
