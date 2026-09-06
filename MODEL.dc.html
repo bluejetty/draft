@@ -246,12 +246,21 @@
        1024 with a submenu open the bar's content is simply wider than the
        window, and the overflow pushed NEW off the right edge -- unreachable
        rather than covered, which is no better.
-       So the entry labels truncate. A drafter on a narrow window reads
+       So the labels truncate. A drafter on a narrow window reads
        "2 STOREY + GAR..." and hovers for the rest; every button stays on
        screen and pressable, which is the property worth keeping. The bone,
        the turtle and the garage marks never shrink -- they are art, they
-       carry no text to trim, and they are the ones you press blind. */
-    [data-build-cluster].menu-open [data-select-build] { min-width:0 !important; overflow:hidden !important; text-overflow:ellipsis !important; }
+       carry no text to trim, and they are the ones you press blind.
+
+       BOTH RUNGS, AND NOT ONLY WHILE THE MENU IS OPEN. This was scoped to
+       .menu-open [data-select-build], which is the entries alone -- so the
+       CLOSED row, which is what is on screen almost all the time, could still
+       overflow the cluster and spill over the bar. Caught by sampling THREE
+       points across the NEW button instead of its centre: the centre came
+       back clear while its left quarter was under the bone. A probe that
+       samples one point measures one point. */
+    [data-build-cluster] [data-select-build],
+    [data-build-cluster] [data-build-menu] { min-width:0 !important; overflow:hidden !important; text-overflow:ellipsis !important; }
     [data-build-cluster].coaching > * { opacity:0.3; pointer-events:none; transition:opacity 220ms ease-out; }
     [data-build-cluster].coaching > .bone-wrap { opacity:1; pointer-events:auto; }
     @keyframes entry-coach-nudge {
