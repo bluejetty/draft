@@ -37,7 +37,7 @@ const PH = 11;
 const FIT_MARGIN = 60;
 
 async function traceHouse(page, w, d) {
-  await page.locator('[data-select-build="bungalow"]').click();
+  await h.pickBuild(page, 'bungalow');
   await page.keyboard.press('Enter'); // past PROFESSOR GRUFF
   await h.clickWorld(page, -w / 2, -d / 2);
   await h.clickWorld(page, w / 2, -d / 2);

@@ -388,13 +388,40 @@
     <button data-select-turtle onClick="{{ onSelectTurtle }}" aria-label="TURTLE PACE" title="TURTLE — guided pace, explains each step (coming soon)" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0;">
       <img src="./assets/btn-turtle.png" alt="" style="height:38px; display:block;" />
     </button>
-    <!-- THE HOUSE TYPES (NEW-5): four text buttons, one per build type, all
-         present from the start. The lit one is the type stored on the
-         drawing, read on every render and never a second flag; the halo is
-         the outline trace armed under it. Text rather than lamp art because
-         the words are the point -- Movie: "make it easier to understand for
-         the user" -- and a label carries no image to fetch. -->
-    <sc-for list="{{ buildTypeBtns }}" as="bt" hint-placeholder-count="4">
+    <!-- THE HOUSE MENU (Movie, 6 Sep): THREE families here, and pressing one
+         swaps this stretch of the row for its submenu of finished houses.
+         Text rather than lamp art because the words are the point -- Movie:
+         "make it easier to understand for the user" -- and a label carries no
+         image to fetch.
+
+         THE SUBMENU REPLACES RATHER THAN FLOATS, and the reason is the
+         STACKING, not the widget. This file has plenty of overlays to copy --
+         six scrim modals, the tour popup, the project callout -- but every
+         one of them sits at z-index 50-53, and the entry coach's scrim is 60
+         with its dialog at 61. A menu that had to open while the coach is up
+         would be the first thing in the file needing to live above 60, and
+         none of those six show how. (An earlier version of this comment said
+         there was no popup here at all, which was simply false -- Gilligan
+         checked it. The conclusion survives on the narrower ground.)
+
+         Swapping in place needs no z-index and no click-outside to dismiss,
+         and the row stays one row.
+
+         The lit entry is the type stored on the drawing, read on every render
+         and never a second flag; the halo is the outline trace armed under
+         it. -->
+    <sc-if value="{{ buildMenuBackOpen }}" hint-placeholder-val="{{ false }}">
+      <button data-build-menu-back onClick="{{ onBuildMenuBack }}" aria-label="BACK" title="{{ buildMenuBackTitle }}" style="height:30px; border:1px solid rgba(29,31,32,0.35); background:#fff; color:#1d1f20; padding:0 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:700; cursor:pointer; line-height:1;">&#8249;</button>
+    </sc-if>
+    <!-- TWO LISTS, NOT ONE WITH A SWITCH: a family and an entry can share a
+         name (BUNGALOW is both), so one <button> carrying both attributes
+         would make [data-select-build="bungalow"] match the family too, and a
+         spec asking for the type would sometimes get the menu. Exactly one of
+         these lists is ever non-empty. -->
+    <sc-for list="{{ buildFamilyBtns }}" as="bt" hint-placeholder-count="3">
+      <button data-build-menu="{{ bt.id }}" onClick="{{ bt.onSelect }}" aria-label="{{ bt.label }}" title="{{ bt.title }}" style="height:30px; border:1px solid {{ bt.border }}; background:{{ bt.bg }}; color:{{ bt.color }}; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; cursor:pointer; white-space:nowrap; filter:{{ bt.glow }};">{{ bt.label }}</button>
+    </sc-for>
+    <sc-for list="{{ buildEntryBtns }}" as="bt" hint-placeholder-count="0">
       <button data-select-build="{{ bt.id }}" onClick="{{ bt.onSelect }}" aria-label="{{ bt.label }}" title="{{ bt.title }}" style="height:30px; border:1px solid {{ bt.border }}; background:{{ bt.bg }}; color:{{ bt.color }}; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; cursor:pointer; white-space:nowrap; filter:{{ bt.glow }};">{{ bt.label }}</button>
     </sc-for>
     <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
@@ -2449,6 +2476,72 @@ const BUILD_TYPE_BUTTONS = Object.freeze([
   Object.freeze({ id: 'modifiedBilevel', label: 'MODIFIED BILEVEL' }),
 ]);
 
+// THE ROW IS A MENU (Movie, 6 Sep). Three families between the turtle and the
+// bone, each opening ONE submenu -- "only 1 submenu each" -- and every entry
+// is a WHOLE HOUSE rather than a question. Movie wrote the list out:
+//
+//     BUNGALOW  1 STOREY / +GARAGE / 2 STOREY / +GARAGE / +ROOM OVER
+//     BILEVEL   BILEVEL / +GARAGE / MODIFIED BILEVEL (1.5 STOREY)
+//     DETACHED GARAGE   THICKENED EDGE / GRADE BEAM / FROST WALL
+//
+// WHY A LIST OF HOUSES BEATS A CHAIN OF QUESTIONS. An earlier draft asked the
+// type, then the garage, then the storey over it. The drafter recognises the
+// building they are drawing; they should not have to answer three questions
+// about it. And the garage ends up in the NAME of the thing pressed rather
+// than a separate stored answer that can later disagree with the drawing.
+//
+// `type` is the persisted vocabulary (drawing-format.js BUILD_TYPES) and is
+// the only thing here that reaches the file. `garage` and `overGarage` are
+// NOT stored: a garage is an outline carrying garage:true, so an entry naming
+// one is saying what to draw next, not writing a label. Store it and the file
+// would hold a claim its own geometry could contradict.
+//
+// `foundation` belongs to the DETACHED entries alone and pre-answers the
+// prompt that _commitDetachedGarageOutline raises after the loop closes.
+const BUILD_MENU = Object.freeze([
+  Object.freeze({
+    id: 'bungalow',
+    label: 'BUNGALOW',
+    title: 'BUNGALOW — 1 or 2 storey, with or without an attached garage',
+    entries: Object.freeze([
+      Object.freeze({ id: 'bungalow', label: '1 STOREY', type: 'bungalow' }),
+      Object.freeze({ id: 'bungalow-garage', label: '1 STOREY + GARAGE', type: 'bungalow', garage: 'attached' }),
+      Object.freeze({ id: 'twoStorey', label: '2 STOREY', type: 'twoStorey' }),
+      Object.freeze({ id: 'twoStorey-garage', label: '2 STOREY + GARAGE', type: 'twoStorey', garage: 'attached' }),
+      // The room over the garage on a 2 STOREY is the UPPER FLOOR REACHING
+      // ACROSS -- one deck, one roof -- not a level of its own. That is the
+      // asymmetry with MODIFIED BILEVEL below, where the garage sits half a
+      // storey down and its floor cannot join the house's.
+      Object.freeze({ id: 'twoStorey-over', label: '2 STOREY + GARAGE + ROOM OVER', type: 'twoStorey', garage: 'attached', overGarage: true }),
+    ]),
+  }),
+  Object.freeze({
+    id: 'bilevel',
+    label: 'BILEVEL',
+    title: 'BILEVEL — split entry, with or without a garage; MODIFIED adds the storey over it',
+    entries: Object.freeze([
+      Object.freeze({ id: 'bilevel', label: 'BILEVEL', type: 'bilevel' }),
+      Object.freeze({ id: 'bilevel-garage', label: 'BILEVEL + GARAGE', type: 'bilevel', garage: 'attached' }),
+      // MODIFIED BILEVEL asks nothing: the name already says there is a garage
+      // and a storey over it, and the .5 IS that storey. It is the only entry
+      // in the whole menu that makes a HALF-LEVEL.
+      Object.freeze({ id: 'modifiedBilevel', label: 'MODIFIED BILEVEL', type: 'modifiedBilevel', garage: 'attached', overGarage: true }),
+    ]),
+  }),
+  Object.freeze({
+    id: 'detachedGarage',
+    label: 'DETACHED GARAGE',
+    title: 'DETACHED GARAGE — pick its foundation, then draw its own loop',
+    // No `type`: a detached garage says nothing about what house it stands
+    // beside, and may stand beside none.
+    entries: Object.freeze([
+      Object.freeze({ id: 'detached-thickened', label: 'THICKENED EDGE', foundation: 'thickened' }),
+      Object.freeze({ id: 'detached-gradebeam', label: 'GRADE BEAM', foundation: 'gradebeam' }),
+      Object.freeze({ id: 'detached-frostwall', label: 'FROST WALL', foundation: 'frostwall' }),
+    ]),
+  }),
+]);
+
 const DEFAULT_LEVELS = [
   { id:8, name:'SITE',         elev:  0, visible:true },
   { id:7, name:'ROOF',         elev: 18, visible:true },
@@ -2680,6 +2773,7 @@ class Component extends DCLogic {
     nextBoneyardShelfId: 2,
     boneyardActive: false,   // BONEYARD card selected instead of a level
     outlineGarage: null,      // 'attached' | 'detached' — the next outline drawn is a garage
+    buildMenuOpen: null,      // which build family's submenu is showing in the row, if any
     garageCornerPrompt: false, // CONNECT AT CORNER stub choice pending
     detachedFoundationPrompt: false, // detached-garage foundation choice pending
     autoDimFirstOffsetFt: 1.5, // gap between the plan and the closest auto string
@@ -10942,6 +11036,9 @@ class Component extends DCLogic {
     // The user drew those legs, so say they are gone rather than let them
     // notice. Converting the trace instead is a bigger job than the bug is
     // worth, and tapping a different button means drawing a different thing.
+    // Turning DETACHED off drops any foundation the menu pre-answered with it:
+    // the trace it belonged to is being abandoned.
+    if (this.state.outlineGarage === mode) this._detachedFoundationChoice = null;
     const hadTrace = this._outlinePoints.length > 0;
     const said = text => (hadTrace
       ? `Part-drawn outline dropped — a trace belongs to the builder that started it. ${text}`
@@ -11591,6 +11688,13 @@ class Component extends DCLogic {
       shelfId: shelf.id,
       sourceLevelId: level ? level.id : null,
     };
+    // ALREADY ANSWERED. The DETACHED GARAGE menu entries name the foundation
+    // before the trace starts, so the prompt would be asking a question the
+    // drafter has just answered. The choice is consumed here, once, and
+    // cleared -- a garage drawn any other way still gets the prompt.
+    const chosen = this._detachedFoundationChoice;
+    this._detachedFoundationChoice = null;
+    if (format.GARAGE_FOUNDATIONS.includes(chosen)) return this._chooseDetachedFoundation(chosen);
     this.setState({ detachedFoundationPrompt: true });
     return null;
   }
@@ -13120,7 +13224,8 @@ class Component extends DCLogic {
   // is armed stands the trace down; pressing another type mid-trace keeps
   // the legs, because a house outline is the same outline under every type
   // (a garage run is not, which is why _toggleGarageMode drops its trace).
-  _pressBuildType(type) {
+  _pressBuildType(type, nextUp = '') {
+    this._detachedFoundationChoice = null;
     const label = BUILD_TYPE_BUTTONS.find(button => button.id === type)?.label || 'HOUSE';
     const armed = this.state.activeTool === 'outline' && !this.state.outlineGarage;
     if (armed && this.state.buildType === type) {
@@ -13144,10 +13249,85 @@ class Component extends DCLogic {
       // after.
       if (changed) this._markUnsaved();
       this.setState({
-        drawingMessage: `${label} — trace the outline corner to corner and close it on the first point (or press Enter), then press the bone to grow the shell.`,
+        drawingMessage: `${label} — trace the outline corner to corner and close it on the first point (or press Enter), then press the bone to grow the shell.${nextUp ? ` ${nextUp}` : ''}`,
         drawingMessageError: false,
       });
     });
+  }
+
+  // A MENU ENTRY IS A WHOLE HOUSE, so pressing one does what the four-button
+  // row did and then says what is still to draw. Movie's list, 6 Sep.
+  //
+  // WHAT IT DOES NOT DO IS STORE THE GARAGE. "2 STOREY + GARAGE" and
+  // "2 STOREY" put the SAME thing in the file -- buildType 'twoStorey' -- and
+  // differ only in what the page tells the drafter to draw next. A garage is
+  // an outline carrying garage:true; writing "wants a garage" beside it would
+  // be a second source for a fact the geometry already answers, free to
+  // disagree with it the moment someone draws or deletes one. The same goes
+  // for the room over the garage.
+  //
+  // So the entries are a better way to ASK, not a new thing to KEEP. That is
+  // why this needs no drawing-format change at all.
+  // One button's look, whether it is a family on the closed row or an entry
+  // inside a family. A FAMILY lights when the drawing's stored type is any of
+  // its entries'; an ENTRY lights only on its own. DETACHED GARAGE stores no
+  // type, so neither it nor its three foundations ever light -- which is
+  // right: a detached garage says nothing about the house beside it.
+  //
+  // Both lamps derive from state.buildType on every render, never a second
+  // flag, so F5 keeps them and NEW clears them for free -- the property the
+  // four-button row had and the reason it never needed a reset.
+  _buildMenuBtn(item, family, houseArmed) {
+    const lit = family
+      ? (item.type != null && this.state.buildType === item.type)
+      : (item.entries || []).some(entry => entry.type != null && entry.type === this.state.buildType);
+    const armed = lit && houseArmed;
+    return {
+      id: item.id,
+      label: item.label,
+      title: armed
+        ? `${item.label} — tracing; click to cancel`
+        : family
+          ? (item.foundation
+            ? `${item.label} — press, then draw the detached garage's own loop`
+            : `${item.label} — press, then trace the outline; the bone builds it`)
+          : item.title,
+      border: lit ? '#1d1f20' : 'rgba(29,31,32,0.35)',
+      bg: lit ? '#1d1f20' : '#fff',
+      color: lit ? '#fff' : '#1d1f20',
+      glow: armed ? 'drop-shadow(0 0 5px rgba(192,57,43,0.9))' : 'none',
+      onSelect: () => (family
+        ? this._pressBuildEntry(family.id, item.id)
+        : this.setState({ buildMenuOpen: item.id })),
+    };
+  }
+
+  _pressBuildEntry(familyId, entryId) {
+    const family = BUILD_MENU.find(item => item.id === familyId);
+    const entry = family?.entries.find(item => item.id === entryId);
+    if (!entry) return;
+    this.setState({ buildMenuOpen: null });
+    // ANY OTHER PRESS DROPS A PENDING FOUNDATION. Pick FROST WALL, change
+    // your mind, press 2 STOREY -- and without this the frost wall would be
+    // waiting to answer a prompt for whatever detached garage got drawn next,
+    // however much later. A pre-answer is only good for the trace it was
+    // given for.
+    this._detachedFoundationChoice = null;
+    // The detached entries pre-answer the foundation prompt that
+    // _commitDetachedGarageOutline raises when the loop closes: the drafter
+    // has already said which one, and asking twice is asking a question that
+    // was answered.
+    if (entry.foundation) {
+      this._detachedFoundationChoice = entry.foundation;
+      this._toggleGarageMode('detached');
+      return;
+    }
+    const next = entry.overGarage
+      ? 'Then MARK ATTACHED GARAGE for the garage, and the room over it comes with the floor above.'
+      : entry.garage
+        ? 'Then MARK ATTACHED GARAGE and trace the garage against the house.'
+        : '';
+    this._pressBuildType(entry.type, next);
   }
 
   // TURTLE is an assistance level -- how much the app does for you. It works
@@ -21217,6 +21397,7 @@ class Component extends DCLogic {
     // and their lit state is a fill rather than art.
     const houseArmed = this.state.activeTool === 'outline' && !this.state.outlineGarage;
     const houseExists = this._shelfHasHouseMaster();
+    const openFamily = BUILD_MENU.find(family => family.id === this.state.buildMenuOpen) || null;
     const attachedExists = this._shelfHasGarageMaster(false);
     const detachedExists = this._shelfHasGarageMaster(true);
 
@@ -21704,22 +21885,22 @@ class Component extends DCLogic {
       // type, and wears the halo HOUSE wore. Armed beats lit: while you trace,
       // the tool state is the one worth showing, and it is the louder of the
       // two so a press never reads as switching something off.
-      buildTypeBtns: BUILD_TYPE_BUTTONS.map(button => {
-        const lit = this.state.buildType === button.id;
-        const armed = lit && houseArmed;
-        return {
-          id: button.id,
-          label: button.label,
-          title: armed
-            ? `${button.label} — tracing; click to cancel`
-            : `${button.label} — press, then trace the outline; the bone builds it`,
-          border: lit ? '#1d1f20' : 'rgba(29,31,32,0.35)',
-          bg: lit ? '#1d1f20' : '#fff',
-          color: lit ? '#fff' : '#1d1f20',
-          glow: armed ? 'drop-shadow(0 0 5px rgba(192,57,43,0.9))' : 'none',
-          onSelect: () => this._pressBuildType(button.id),
-        };
-      }),
+      // THE MENU'S CURRENT RUNG. Closed, the row carries the three families,
+      // and a family lights when the drawing's stored type is one of its
+      // entries -- so a bungalow drawing shows BUNGALOW lit without anyone
+      // opening anything. Open, it carries that family's entries and the lit
+      // one is the exact house.
+      //
+      // NEITHER LAMP IS A FLAG. Both derive from state.buildType on every
+      // render, exactly as the four-button row did, so F5 keeps them and NEW
+      // clears them for free. Only WHICH RUNG IS SHOWING is state, and it is
+      // deliberately not persisted: it is where the drafter is standing in a
+      // menu, not a fact about the building.
+      buildMenuBackOpen: openFamily != null,
+      buildMenuBackTitle: 'BACK — BUNGALOW / BILEVEL / DETACHED GARAGE',
+      onBuildMenuBack: () => this.setState({ buildMenuOpen: null }),
+      buildFamilyBtns: (openFamily ? [] : BUILD_MENU).map(item => this._buildMenuBtn(item, null, houseArmed)),
+      buildEntryBtns: (openFamily ? openFamily.entries : []).map(item => this._buildMenuBtn(item, openFamily, houseArmed)),
       // The garage lamps: lit art means "this exists", and is routinely on
       // both at once; the halo means "this is happening now" and is only
       // ever on one button.

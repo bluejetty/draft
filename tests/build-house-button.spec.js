@@ -20,9 +20,12 @@ test('strip starts as the four house types · BONE · DETACHED; ATTACHED waits f
   await h.openModel(page);
 
   const cluster = page.locator('[data-build-cluster]');
-  // Movie's words, in his order: "BUNGALOW / 2 STOREY / BILEVEL / MODIFIED
-  // BILEVEL / DETACHED GARAGE (first) then after the house add in ATTACHED".
-  await expect(cluster.locator('[data-select-build]')).toHaveText(['BUNGALOW', '2 STOREY', 'BILEVEL', 'MODIFIED BILEVEL']);
+  // THREE FAMILIES, since 6 Sep -- Movie: "how about we just start with
+  // BUNGALOW, BILEVEL, DETACHED GARAGE. then if they pick each will have
+  // subcategories". The four types are one press inside; DETACHED GARAGE is
+  // now a family of its own rather than the lamp beside them.
+  await expect(cluster.locator('[data-build-menu]')).toHaveText(['BUNGALOW', 'BILEVEL', 'DETACHED GARAGE']);
+  await expect(cluster.locator('[data-select-build]')).toHaveCount(0);
   await expect(cluster.locator('[data-build-house]')).toBeVisible();
   await expect(cluster.locator('[data-mark-detached-garage]')).toBeVisible();
   await expect(cluster.locator('[data-mark-attached-garage]')).toHaveCount(0);
@@ -37,7 +40,7 @@ test('strip starts as the four house types · BONE · DETACHED; ATTACHED waits f
 test('a house outline unlocks ATTACHED, and it survives a reload', async ({ page }) => {
   await h.openModel(page);
 
-  await page.locator('[data-select-build="bungalow"]').click();
+  await h.pickBuild(page, 'bungalow');
   await page.keyboard.press('Enter'); // past PROFESSOR GRUFF
   await traceRect(page);
 
@@ -55,7 +58,7 @@ test('a type press stores its type; it survives a reload and a NEW clears it', a
   // Each button stores its own id — the persisted vocabulary, not the label.
   for (const [id, label] of [['bungalow', 'BUNGALOW'], ['twoStorey', '2 STOREY'],
     ['bilevel', 'BILEVEL'], ['modifiedBilevel', 'MODIFIED BILEVEL']]) {
-    await page.locator(`[data-select-build="${id}"]`).click();
+    await h.pickBuild(page, id);
     if (id === 'bungalow') await page.keyboard.press('Enter'); // past PROFESSOR GRUFF, once
     await expect(page.locator('[data-model-drawing-message]')).toContainText(`${label} — trace the outline`);
     await h.waitForSaved(page);
@@ -76,7 +79,7 @@ test('a type press stores its type; it survives a reload and a NEW clears it', a
 test('a type may change after the house is built, and the build does not move', async ({ page }) => {
   await h.openModel(page);
 
-  await page.locator('[data-select-build="bungalow"]').click();
+  await h.pickBuild(page, 'bungalow');
   await page.keyboard.press('Enter');
   await traceRect(page);
   await page.locator('[data-build-house]').click();
@@ -88,7 +91,7 @@ test('a type may change after the house is built, and the build does not move', 
   // The type is a label the bone does not read yet: BUILD HOUSE pours the
   // outline as drawn under every lamp, so changing it afterwards changes
   // the file's answer and nothing in the geometry.
-  await page.locator('[data-select-build="twoStorey"]').click();
+  await h.pickBuild(page, 'twoStorey');
   await h.waitForSaved(page);
   const after = await h.savedDrawing(page);
   expect(after.buildType).toBe('twoStorey');
@@ -109,7 +112,7 @@ test('bone with nothing drawn coaches instead of building', async ({ page }) => 
 
 test('a type press arms the trace and PROFESSOR GRUFF points at PROJECT; Escape opens it', async ({ page }) => {
   await h.openModel(page);
-  await page.locator('[data-select-build="bungalow"]').click();
+  await h.pickBuild(page, 'bungalow');
 
   await expect(page.locator('[data-project-callout]')).toBeVisible();
   await expect(page.getByText('Professor Gruff')).toBeVisible();
@@ -124,7 +127,7 @@ test('a type press arms the trace and PROFESSOR GRUFF points at PROJECT; Escape 
 test('select BUNGALOW, trace, bone builds the house', async ({ page }) => {
   await h.openModel(page);
 
-  await page.locator('[data-select-build="bungalow"]').click();
+  await h.pickBuild(page, 'bungalow');
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-project-callout]')).toBeHidden();
 
@@ -139,7 +142,7 @@ test('select BUNGALOW, trace, bone builds the house', async ({ page }) => {
 
 test("don't show this again survives a reload", async ({ page }) => {
   await h.openModel(page);
-  await page.locator('[data-select-build="bungalow"]').click();
+  await h.pickBuild(page, 'bungalow');
   await expect(page.locator('[data-project-callout]')).toBeVisible();
 
   await page.locator('[data-callout-off]').check();
@@ -148,7 +151,7 @@ test("don't show this again survives a reload", async ({ page }) => {
 
   await page.reload();
   await h.waitForModelReady(page);
-  await page.locator('[data-select-build="bungalow"]').click();
+  await h.pickBuild(page, 'bungalow');
   await expect(page.getByText(/BUNGALOW — trace the outline/)).toBeVisible();
   await expect(page.locator('[data-project-callout]')).toBeHidden();
 });
@@ -171,7 +174,7 @@ test('DETACHED arms its trace from the default tool; live trace wears the purple
 test('a house trace draws in the type red', async ({ page }) => {
   await h.openModel(page);
 
-  await page.locator('[data-select-build="bungalow"]').click();
+  await h.pickBuild(page, 'bungalow');
   await page.keyboard.press('Enter');
 
   await h.clickWorld(page, -6, -4);

@@ -21,7 +21,7 @@ const h = require('./helpers');
 // ROOMS DONE, and since NEW-5 the stored type answers that climb (a
 // BUNGALOW goes to the ROOF instead).
 async function traceHouse(page, w, d) {
-  await page.locator('[data-select-build="twoStorey"]').click();
+  await h.pickBuild(page, 'twoStorey');
   await page.keyboard.press('Enter');
   await h.clickWorld(page, -w / 2, -d / 2);
   await h.clickWorld(page, w / 2, -d / 2);
@@ -231,7 +231,7 @@ function insidePolygon(poly, pt) {
 }
 
 async function traceLHouse(page) {
-  await page.locator('[data-select-build="bungalow"]').click();
+  await h.pickBuild(page, 'bungalow');
   await page.keyboard.press('Enter');
   for (const pt of L_OUTLINE) await h.clickWorld(page, pt.x, pt.z);
   await page.keyboard.press('Enter');

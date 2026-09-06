@@ -37,11 +37,25 @@ const armedRe = {
   detached: /rgba?\(125, ?91, ?166/,
 };
 const TYPES = ['bungalow', 'twoStorey', 'bilevel', 'modifiedBilevel'];
+// The row is a MENU since 6 Sep: these three sit on it, and the types live one
+// press inside. So a type lamp can only be read with its family OPEN, which is
+// what the second argument to lamps() is for.
+const FAMILIES = ['bungalow', 'bilevel', 'detachedGarage'];
+const FAMILY_OF = { bungalow: 'bungalow', twoStorey: 'bungalow', bilevel: 'bilevel', modifiedBilevel: 'bilevel' };
 
 // Each lamp read as the pair that describes it: which art it wears (or, for
 // a house type, whether it carries the lit fill), and whether it carries the
 // armed halo.
-const lamps = page => page.evaluate(() => {
+const lamps = async (page, family = null) => {
+  // Opening a family is a press on the row and nothing else -- it does not
+  // touch the drawing, cancel a trace, or move the stored type -- so a probe
+  // may do it. Without it there are no type buttons in the DOM to read.
+  if (family) {
+    const back = page.locator('[data-build-menu-back]');
+    if (await back.count()) await back.click();
+    await page.locator(`[data-build-menu="${family}"]`).click();
+  }
+  return page.evaluate(() => {
   const read = sel => {
     const el = document.querySelector(sel);
     if (!el) return null;
@@ -51,13 +65,19 @@ const lamps = page => page.evaluate(() => {
     el.dataset.selectBuild,
     { lit: el.style.background === 'rgb(29, 31, 32)', glow: el.style.filter, label: el.textContent.trim() },
   ]));
+  const families = Object.fromEntries([...document.querySelectorAll('[data-build-menu]')].map(el => [
+    el.dataset.buildMenu,
+    { lit: el.style.background === 'rgb(29, 31, 32)', glow: el.style.filter, label: el.textContent.trim() },
+  ]));
   return {
     turtle: read('[data-select-turtle]'),
     attached: read('[data-mark-attached-garage]'),
     detached: read('[data-mark-detached-garage]'),
     types,
+    families,
   };
-});
+  });
+};
 const litTypes = state => TYPES.filter(id => state.types[id]?.lit);
 const haloTypes = state => TYPES.filter(id => state.types[id] && state.types[id].glow !== NO_GLOW);
 
@@ -71,7 +91,7 @@ async function traceRect(page, points) {
 // A house the way a drafter draws one: press its type, past PROFESSOR GRUFF,
 // trace, close.
 async function traceHouseAs(page, type, points) {
-  await page.locator(`[data-select-build="${type}"]`).click();
+  await h.pickBuild(page, type);
   await page.keyboard.press('Enter');
   for (const [x, z] of points) await h.clickWorld(page, x, z);
   await page.keyboard.press('Enter');
@@ -101,17 +121,26 @@ test.describe('The build row lamps', () => {
   test('an empty drawing rests dark, and arming lights only its own lamp', async ({ page }) => {
     await h.openModel(page, { webgl: false });
 
+    // Closed, the row carries the three families and no type at all.
     let state = await lamps(page);
-    expect(Object.keys(state.types)).toEqual(TYPES);
+    expect(Object.keys(state.families)).toEqual(FAMILIES);
+    expect(Object.keys(state.types)).toEqual([]);
+    expect(FAMILIES.filter(id => state.families[id].lit)).toEqual([]);
+
+    // Open, it carries that family's finished houses -- Movie's list, 6 Sep.
+    state = await lamps(page, 'bungalow');
+    expect(Object.keys(state.types)).toEqual([
+      'bungalow', 'bungalow-garage', 'twoStorey', 'twoStorey-garage', 'twoStorey-over',
+    ]);
     expect(litTypes(state)).toEqual([]);
     expect(haloTypes(state)).toEqual([]);
     expect(state.detached.src).toMatch(off('detached'));
     // ATTACHED is not in the DOM until a house master exists.
     expect(state.attached).toBeNull();
 
-    await page.locator('[data-select-build="bungalow"]').click();
+    await h.pickBuild(page, 'bungalow');
     await page.waitForTimeout(200);
-    state = await lamps(page);
+    state = await lamps(page, 'bungalow');
     // Arming lights the type and adds the halo, though nothing exists yet.
     expect(litTypes(state)).toEqual(['bungalow']);
     expect(haloTypes(state)).toEqual(['bungalow']);
@@ -129,7 +158,7 @@ test.describe('The build row lamps', () => {
     // up here by construction rather than by contrivance: the house exists
     // AND is armed, and the row shows armed on the stored type.
     await h.climbTourToMain(page);
-    let state = await lamps(page);
+    let state = await lamps(page, 'bungalow');
     expect(litTypes(state)).toEqual(['bungalow']);
     expect(state.types.bungalow.glow).toMatch(armedRe.house);
     expect(state.attached.src).toMatch(on('attached'));
@@ -140,7 +169,7 @@ test.describe('The build row lamps', () => {
     // armed and falls back to lit, because it is still the stored type.
     await page.locator('[data-mark-attached-garage]').click();
     await page.waitForTimeout(200);
-    state = await lamps(page);
+    state = await lamps(page, 'bungalow');
     expect(state.attached.glow).toMatch(armedRe.attached);
     expect(litTypes(state)).toEqual(['bungalow']);
     expect(haloTypes(state)).toEqual([]);
@@ -156,7 +185,7 @@ test.describe('The build row lamps', () => {
     // is in the file.
     await page.reload();
     await h.waitForModelReady(page);
-    let state = await lamps(page);
+    let state = await lamps(page, 'bungalow');
     for (const name of ['attached', 'detached']) {
       expect(state[name].src).toMatch(on(name));
       expect(state[name].glow).toBe(NO_GLOW);
@@ -169,7 +198,7 @@ test.describe('The build row lamps', () => {
     if (await dontSave.count()) await dontSave.click();
     await h.waitForSaved(page);
 
-    state = await lamps(page);
+    state = await lamps(page, 'bungalow');
     expect(litTypes(state)).toEqual([]);
     expect(state.detached.src).toMatch(off('detached'));
     expect(state.attached).toBeNull();
@@ -178,10 +207,10 @@ test.describe('The build row lamps', () => {
   test('the lit type is the stored type: it moves with the press and a press on it stands the trace down', async ({ page }) => {
     await h.openModel(page, { webgl: false });
 
-    await page.locator('[data-select-build="twoStorey"]').click();
+    await h.pickBuild(page, 'twoStorey');
     await page.keyboard.press('Enter');
     await page.waitForTimeout(200);
-    let state = await lamps(page);
+    let state = await lamps(page, 'bungalow');
     expect(litTypes(state)).toEqual(['twoStorey']);
     expect(haloTypes(state)).toEqual(['twoStorey']);
     await expect(page.locator('[data-model-drawing-message]')).toContainText('2 STOREY — trace the outline');
@@ -190,18 +219,18 @@ test.describe('The build row lamps', () => {
     // it, because a house outline is the same outline under every type.
     await h.clickWorld(page, -8, -6);
     await h.clickWorld(page, 8, -6);
-    await page.locator('[data-select-build="modifiedBilevel"]').click();
+    await h.pickBuild(page, 'modifiedBilevel');
     await page.waitForTimeout(200);
-    state = await lamps(page);
+    state = await lamps(page, 'bilevel');
     expect(litTypes(state)).toEqual(['modifiedBilevel']);
     expect(haloTypes(state)).toEqual(['modifiedBilevel']);
     await expect(page.locator('[data-model-drawing-message]')).toContainText('MODIFIED BILEVEL — trace the outline');
 
     // The lit type pressed while armed stands the trace down and stays lit:
     // the drawing still has a type, there is just nothing being traced.
-    await page.locator('[data-select-build="modifiedBilevel"]').click();
+    await h.pickBuild(page, 'modifiedBilevel');
     await page.waitForTimeout(200);
-    state = await lamps(page);
+    state = await lamps(page, 'bilevel');
     expect(litTypes(state)).toEqual(['modifiedBilevel']);
     expect(haloTypes(state)).toEqual([]);
     await expect(page.locator('[data-model-drawing-message]')).toContainText('MODIFIED BILEVEL trace off.');
@@ -212,7 +241,7 @@ test.describe('The build row lamps', () => {
     await h.openModel(page, { webgl: false });
     await traceRect(page, HOUSE);
     await h.climbTourToMain(page);
-    const state = await lamps(page);
+    const state = await lamps(page, 'bungalow');
     expect(litTypes(state)).toEqual([]);
     expect((await h.savedDrawing(page)).buildType).toBeNull();
   });
@@ -253,7 +282,7 @@ test.describe('The build row lamps', () => {
     // Still bare after a house exists and the lamps have come on.
     await traceHouseAs(page, 'bungalow', HOUSE);
     await h.climbTourToMain(page);
-    state = await lamps(page);
+    state = await lamps(page, 'bungalow');
     expect(litTypes(state)).toEqual(['bungalow']);
     expect(state.turtle.glow).toBe('');
   });

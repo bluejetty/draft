@@ -215,8 +215,13 @@ test.describe('the saved format', () => {
     });
     await page.reload();
     await h.waitForModelReady(page);
-    expect(await page.evaluate(() => [...document.querySelectorAll('[data-select-build]')]
+    // THE FAMILY BUTTONS, not the type buttons. Since the row became a menu
+    // (6 Sep) the types are one press in, so [data-select-build] matches
+    // nothing on a closed row -- and a filter over nothing is zero whatever
+    // the drawing says. Reading the families keeps this able to fail.
+    expect(await page.evaluate(() => [...document.querySelectorAll('[data-build-menu]')]
       .filter(el => el.style.background === 'rgb(29, 31, 32)').length)).toBe(0);
+    expect(await page.locator('[data-build-menu]').count()).toBe(3);
     // A units toggle is the cheapest edit that goes through the writer.
     await page.locator('[data-unit-toggle] button').first().click();
     await h.waitForSaved(page);

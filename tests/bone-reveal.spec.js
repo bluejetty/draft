@@ -6,7 +6,7 @@ const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
 async function traceHouse(page) {
-  await page.locator('[data-select-build="bungalow"]').click();
+  await h.pickBuild(page, 'bungalow');
   await page.keyboard.press('Enter');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);

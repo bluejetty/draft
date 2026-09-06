@@ -18,7 +18,7 @@ const h = require('./helpers');
 // ROOMS DONE, and since NEW-5 the stored type answers that climb (a
 // BUNGALOW goes to the ROOF instead).
 async function traceHouse(page, w, d) {
-  await page.locator('[data-select-build="twoStorey"]').click();
+  await h.pickBuild(page, 'twoStorey');
   await page.keyboard.press('Enter');
   await h.clickWorld(page, -w / 2, -d / 2);
   await h.clickWorld(page, w / 2, -d / 2);
