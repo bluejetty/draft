@@ -468,21 +468,37 @@ PURE placement derivation -- plain geometry in, one suggested stair out, plus
 a per-shape report of WHY when a shape found no home -- and MODEL commits the
 winner and owns everything stateful. This is that shape one level up.
 
-**It places ONE thing, not four.** The entry's position is the anchor: both
-runs go off it in opposite directions, and the garage sits beside it. So the
-derivation is `stored ?? derived()` again -- the entry stored, the stairs
-derived from it -- the same contract as ROOF HEEL rather than a new idea.
+**IT PLACES FOUR THINGS, AND THE ENTRY DECIDES WHERE.** Movie, 6 Sep, amending
+this paragraph: the core is *"garage, front door, entry AND STAIRS"*.
+
+An earlier version of this said it placed ONE thing and derived the stairs off
+the entry forever. That was wrong, and the difference matters. `auto-stair.js`
+hands back *"one suggested stair out (same shape as a hand placement)"* -- so a
+placed stair IS an ordinary stair from the moment it exists. The entry's
+position decides where the two runs GO; it does not own them afterwards.
+
+**Which means moving the entry does not move the stairs.** They are the
+drafter's geometry, and board #313 says software does not move that. What
+still recomputes is the RISE, off the level heights on every paint, exactly as
+it does for every other stair in the drawing.
+
+That is a cleaner story than a standing derivation: after the press, nothing
+in the core carries a hidden dependency on anything else in it.
 
 **It stays inside board #313.** Software never moves geometry; this is
 geometry CREATED on a drafter's press, which is what the bone does for every
 wall it pours. Nothing moves behind anyone.
 
-**AND IT MAKES THE RE-DERIVE GAP COMMON.** *"they can move it around"* is the
-whole point of placing it, and moving the entry re-derives both stairs. The
-riser maths recomputes fine; nothing re-checks that the stair still FITS the
-opening cut. Today that path needs a drafter who edits a wall height. Once the
-bone places the core it becomes every bilevel, the first time anyone nudges
-the entry. The gap does not get worse -- it gets REACHED.
+**AND IT STILL WALKS INTO THE RE-DERIVE GAP, by a different door than first
+written.** The stairs do not follow the entry. But a bilevel's two runs sit on
+HALF a storey each, and a stair's rise recomputes from the level heights on
+every paint -- so moving the ENTRY LEVEL'S ELEVATION, which is a thing a
+drafter will do, changes both rises at once while nothing re-checks that
+either stair still FITS the opening cut made for it.
+
+Today that path needs a drafter who edits a wall height. Once the bone places
+the core it is every bilevel, the first time anyone adjusts the entry height.
+The gap does not get worse -- it gets REACHED.
 
 ### One question that is Movie's
 

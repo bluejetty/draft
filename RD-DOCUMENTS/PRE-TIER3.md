@@ -4,6 +4,19 @@
 item has or needs its own board or order. Devin rules the order; this says what
 is on the table and why each one is cheaper now than later.
 
+**STATE AT END OF 6 SEP — three of five are done.**
+
+| | | |
+|---|---|---|
+| 1 | Underlays in MODEL.html | **DONE** (`8b1a991`) — tier 2 is complete |
+| 2 | Capture the race reproduction | **DONE** — `BOARD-test-budget.md`, and #314 raised the budget to the measured value |
+| 3 | The build row loses the rabbit | **DONE** (#312) |
+| 4 | The storey over the garage | **DESIGNED, NOT BUILT** — see below |
+| 5 | Two rulings with Devin | **OPEN**, both |
+
+So what stands between here and the Write Tier is **item 4's code and two
+rulings**, and one of those two is not blocking.
+
 **The principle underneath all five.** Devin's Write Tier acceptance is a
 DEEP-COMPARE — the old page saves a drawing, the new page saves the same
 drawing, and every key must match. From the moment that work starts, every
@@ -14,6 +27,10 @@ like a bug. Things that are free today are not free then.
 ---
 
 ## 1. Underlays in MODEL.html — the last tier 2 item
+
+**DONE, 6 Sep — `8b1a991`, "Tier 2n: MODEL.html paints underlays, and says
+what it cannot draw".** All three parts landed, the notice included. **Tier 2
+is complete**, which is the gate Devin's review opens from.
 
 The only painter left. Tier 2 is not finished without it, and Devin's tier-2
 review is the gate the Write Tier opens from.
@@ -33,6 +50,12 @@ and nothing on screen says why.
 
 ## 2. Capture the race reproduction — BEFORE underlays, not after
 
+**DONE, and it turned out not to be a race.** `BOARD-test-budget.md` records
+the measurement: the heavy specs passed with no margin against a 90-second
+timeout, and #314 raised it to the 180 that was measured rather than guessed.
+Written down before underlays touched the store, which is what this item asked
+for.
+
 See `RD-DOCUMENTS/BOARD-test-budget.md`. It reproduces today with one command on one machine.
 
 **Underlays is the change most likely to take that away.** Its loader is
@@ -46,6 +69,8 @@ stops reproducing is a bug that stops getting fixed.
 
 ## 3. The build row loses the rabbit
 
+**DONE, #312**, both surfaces — the build row and `first-run.js`.
+
 Its own work order (`RD-DOCUMENTS/ORDER-build-row.md`). Movie's ruling, 6 Sep. Cancels a
 planned feature rather than removing working code — RABBIT was never built.
 Moves no geometry, stores no key, so it is free today and pure noise inside a
@@ -58,11 +83,24 @@ ENTRY, a half storey down, so a storey standing on it lands below one standing
 on MAIN — too far for a ceiling to absorb, so they stay two levels. An ordinary
 level card is one elevation across the whole building and cannot say that.
 
-**UNBLOCKED, 6 Sep.** Movie's sketch arrived and dissolved the problem rather
-than solving it: the half-levels are always on the panel, fuzzed, with a small
-ADD in the corner. So nothing ever allocates an id and the collision that made
-this hard stops existing. Written up as `RD-DOCUMENTS/ORDER-inbetween-levels.md`;
-still not built.
+**DESIGNED IN FULL, 6 Sep, AND NOT BUILT.** This is the whole of what is left.
+`RD-DOCUMENTS/ORDER-inbetween-levels.md` now carries every ruling, and each one
+made the work SMALLER than the day before:
+
+- **The id collision is gone.** Slots are switched on, not allocated, so 2 and
+  4 stay constants.
+- **The build type decides who gets them**, and the menu narrows it further:
+  ENTRY comes with all three BILEVEL entries, OVER GARAGE with MODIFIED
+  BILEVEL alone. One entry, not a family test.
+- **The floor package is ruled** — 19 1/4" joists + 3/4", deck anchored, the
+  garage wall derived, and the door head the drafter designs around.
+- **The stairs are nothing.** Movie corrected U to *"2 short runs"*: the entry
+  landing is a floor you walk off, so neither run needs a shape or a landing.
+- **The bone places the core** — garage, front door, entry **and the stairs**
+  — and the drafter moves it. Four things placed, the entry deciding where;
+  nothing keeps a standing dependency after the press.
+
+What remains is the gate, a create-at-a-given-id handler, and the specs.
 
 It is listed here because it changes the DRAWING FORMAT, and a persisted-key
 change during the Write Tier is the most expensive kind of change there is —
