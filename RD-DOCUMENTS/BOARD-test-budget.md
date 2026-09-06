@@ -185,3 +185,21 @@ Every one of these cost real time tonight.
   belonged to a different painter than the one being audited.
 - **`retain-on-failure` keeps traces, but the artifacts directory is reused.**
   A trace from two runs ago is already gone.
+- **AN EMPTINESS ASSERTION NEEDS A COMPANION THAT THE POPULATION IS NOT
+  EMPTY.** 6 Sep. `persisted-format.spec.js` checked that no build-type button
+  was lit by filtering `[data-select-build]` and expecting zero. When the build
+  row became a menu, that selector stopped matching anything on a closed row --
+  and a filter over an empty list is zero whatever the page does. The check
+  went on passing while testing nothing.
+
+  It is the same shape as the `grep -c '✘'` above, and the general rule is
+  Gilligan's: an assertion of ABSENCE proves nothing without proof of
+  PRESENCE. Mechanical enough to grep for, which "a check whose broken state
+  looks like its passing state is not a check" never was. He searched the
+  suite: **one instance in 127 emptiness assertions**, and the two near-hits
+  in `rail-order.spec.js` (`:57`, `:79`) use the count as a SELECTOR and then
+  assert something positive, which is fine.
+
+  The fix is one line beside it -- `expect(locator.count()).toBe(3)` -- and it
+  is what makes the zero mean something.
+
