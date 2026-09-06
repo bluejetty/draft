@@ -850,3 +850,125 @@ colours in either. Stairs is the larger extraction of the two (13 methods, 167
 lines, all level data, all persisted); underlays is a caller re-point plus an
 image loader MODEL.html does not have yet.
 
+
+## Tier 2m — stairs, and the module that had to come first (6 Sep)
+
+The fourth of five, and the first where the painter was never the problem.
+`drawStairs2D` has no hardcoded colour and needed no edit — Tier 2l's
+brace-match was right about that. What it cost instead was a **second module
+nobody had costed**, and the reason is worth reading before Tier 3 is planned.
+
+### The closure was 13 methods and only 6 of them were stairs
+
+Measured by brace-matching, not by reading a line range:
+
+```
+_stairPlanParts     92 lines    _floorLevels        6    reads this.state
+_stairShapeSplit    17          _levelWallTopFt     6
+_stairDescent       15          _activeLevelId      4    reads this.state
+_stairLayout         7          _levelFloorFt       4
+_stairLandFt         5          _levelAssembly      3    reads this.state
+_stairCurrentLayout  4          _activeLevel        2    reads this.state
+                                _boneyardLevelId    2    reads this.state
+```
+
+The right-hand column is the app's **level spine**, not stair geometry, and the
+call counts settle it: `_activeLevelId` has **66 callers** on the component,
+`_floorLevels` 21, `_levelAssembly` 17. Moving those into a stair module would
+make the stair module the owner of the level model. So six functions moved and
+the seventh question — *what is this level made of* — is passed in through a
+`levels` accessor that can be handed an object literal in a test.
+
+### The constants could not move, and that is not a weaker extraction
+
+`cut-marks.js` and `fixture-geometry.js` took their constants outright;
+`CUT_BUBBLE_PUSH_FT` appears **zero** times in `MODEL.dc.html` today. Stairs
+cannot do that. `STAIR_TREAD_RUN_IN` is named **17 times** and only 6 are in the
+closure — the STAIR SECTION drawing measures its own treads with it, and so do
+the auto-placer and the stair schedule.
+
+So the module owns the value and the page **binds** to it:
+
+```js
+const STAIR_TREAD_RUN_IN = window.DraftStairGeometry.STAIR_TREAD_RUN_IN;
+```
+
+One source of truth either way; the seventeen uses do not change. Four
+constants that turned out to be closure-only (`STAIR_MAX_RISER_IN`,
+`STAIR_LANDING_MIN_FT`, `STAIR_LANDING_DRYWALL_IN`, `STAIR_RAIL_INSET_FT`) left
+outright and are now at zero references.
+
+### THE FINDING: the stored rise is a fallback, and trusting it is a real defect
+
+This is the part that cost the extra module, and the part Tier 3 should learn
+from.
+
+A stair stores `riseFt`. It is tempting — and it was the cheap path — to have
+`MODEL.html` read it and skip the level model entirely. It is **wrong**, and
+not marginally:
+
+- `_stairCurrentLayout` re-derives the rise from the level heights on **every
+  paint**, and uses the stored value only *"if its level goes away"*.
+- Nothing ever writes the derived rise back. All four writes to `riseFt` are at
+  stair **creation**.
+- So edit a wall height or a joist depth, save, and the stored rise is stale
+  while the bone keeps drawing the derived one.
+
+Two boards would then have drawn **the same drawing with different riser
+counts**, and no test on `MODEL.dc.html` could ever have caught it — that page
+never reads the stored value while a level exists. Same family as the note
+painted in the night page's own colour: *the second page creates the defect, so
+the second page is where the test lives.*
+
+That forced `level-assembly.js`, which was overdue on its own: the defaults
+table saying what a level is made of existed in **three copies** —
+`MODEL.dc.html`, `LAYOUT.dc.html`, and `proto/elevation-harness.js`, whose
+comment already admitted it *"mirrors LAYOUT.dc.html's normaliseLevelAssembly
+exactly"*. This change adopts it in `MODEL.dc.html` only; **LAYOUT.dc.html still
+holds its own copy** and adopting it there is a separate change with its own
+test surface.
+
+### How the extraction was proved
+
+The differential ran while both copies existed, and it does not survive into
+the repo — `MODEL.dc.html` delegates now, so the same comparison would be the
+module against itself. It sliced the **live method text straight out of
+`MODEL.dc.html`** (constants included) and raced it against the module over
+random stairs:
+
+| | comparisons | mutations caught |
+|---|---|---|
+| `stair-geometry.js` | 24000 / 24000 identical | 12 of 12 |
+| `level-assembly.js` | 6007 / 6007 identical | 10 of 10 |
+
+Before that, a **textual** diff of every extracted body against its original:
+`_stairPlanParts` came out at 76 code lines each with the single difference
+being `}` versus `};`. That check exists because a function read through two
+windows that do not touch is a function with a missing line, and one of those
+shipped a tub with no body earlier in this tier.
+
+### What the sweep caught that the tests did not
+
+The page tests were mutated too, and one mutation went **green**: routing
+`stairs()` through the page's ordinary `onPlan()` helper. Stairs filter
+strictly on `view` — `stair.view === view`, no `|| 'plan'` fallback, unlike
+every wall and fixture beside them — and the three stairs in the test all
+carried an explicit view, so nothing could tell the two rules apart. A stair
+with **no view field** is the only input they disagree about. It is in the test
+now. The comment claiming the strictness mattered had been there the whole
+time; the assertion had not.
+
+### The bill
+
+| | |
+|---|---|
+| new modules | `stair-geometry.js` (6 functions), `level-assembly.js` (3 + the defaults table) |
+| `MODEL.dc.html` | **-166 lines**, 6 stair delegations + `_stairLevels`, 2 functions and 11 constants bound |
+| painter | **untouched** — no hardcoded colour, `env.stairColor` already reads through |
+| script tags | `level-assembly.js`, `stair-geometry.js` — the exact list goes 13 to 15 |
+| checks | 30007 differential comparisons, 22 module mutations, 3 page tests, 4 page mutations |
+
+**Four of five painters done. Underlays is the last one, and it is the one that
+could still stop short of the definition** — `imageFor` reads a decoded-bitmap
+cache and `MODEL.html` has no loader. That is a loader to measure before
+committing to it, not a re-point.
