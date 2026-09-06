@@ -538,6 +538,45 @@ above (`stair-geometry.js:57`). That is a STAIR rule. An entry landing is a
 foyer: people stand on it, and a front door swings into it. Nothing in the
 repo says what it should be, and the stair rule will not object.
 
+## THE SHARED MODULE DOES NOT KNOW A HALF-LEVEL HAS A DIFFERENT FLOOR
+
+**Found 6 Sep, after item 4 shipped, and it is a gap in what shipped.**
+
+`level-assembly.js` takes no level id. `defaultLevelAssembly()` hands every
+level the same floor:
+
+    level-assembly.js  (any level)   11 7/8 + 3/4  =  12 5/8"
+    PROJECT.html:288   ENTRY          9 1/4 + 3/4  =  10"
+    PROJECT.html:304   OVER GARAGE   19 1/4 + 3/4  =  20"
+
+So **a half-level added by the ADD button draws its floor at 12 5/8" on the
+Model Space and reads 10" on the PROJECT page** -- 2 5/8" apart on ENTRY,
+7 3/8" on OVER GARAGE. Both pages are self-consistent and neither is wrong on
+its own terms, which is the derive/store divergence class exactly: a value one
+page derives and another stores, passing every test either page runs alone.
+
+**IT IS NOT A DUPLICATE TO DELETE.** `PROJECT.html:310` is a fourth copy of the
+defaults table -- the three that `level-assembly.js` was extracted to end were
+MODEL's, LAYOUT's and the elevation harness's, and #316 called the harness's
+"the last copy" without counting this one. But this copy carries **per-level**
+defaults the shared module has no vocabulary for: a foundation wall at 8'-0"
+against the house's 8'-1 1/8", ENTRY's 9 1/4" joists, OVER GARAGE's 19 1/4".
+Those are not drift. They are the design.
+
+**So it wants a ruling, not a cleanup**, and on the same ground as
+`autoDimFirstOffsetFt`: what shape should the shared assembly take so it can
+say "this level's floor is different"? Neither agent should decide that alone.
+
+**AND IT IS CHEAPER BEFORE THE WRITE TIER**, for the reason that list gives:
+the deep-compare is old-page-saves against new-page-saves, and a floor
+thickness the two pages disagree about is a mismatch that will look like a
+serializer bug.
+
+Until then, a drafter who adds a half-level and types its joist depth on the
+level card gets the right drawing -- `positive(raw.joistDepthIn, ...)` lets a
+stored number beat the default on both pages. The gap is only in what the
+Model Space assumes when nobody has typed.
+
 ## Open
 
 Both of the questions this order closed with have been ruled on since.
