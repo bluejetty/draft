@@ -979,16 +979,34 @@
   //   elevationMarkOffsets  the drawing        persisted (PERSISTED_KEYS)
   //   structureStandards    the PROFILE        the drafter's office standard,
   //                                            localStorage, not the drawing
-  //   autoDimFirstOffsetFt  nowhere            session state on the old page;
-  //                                            this page uses its default
+  //   autoDimFirstOffsetFt  the drawing        persisted since PR #319;
+  //                                            null means derive
   //
-  // The third is why profile-manager.js is in the head. The fourth has no home
-  // to read from -- it is a menu setting the bone keeps for the session and
-  // never saves -- so this page uses 1.5', which is the value MODEL.dc.html
-  // starts every session with. A drafter who changed it mid-session sees a
-  // slightly wider or narrower gap here than there. Stated rather than hidden,
-  // because it is the one place this page cannot be faithful.
-  const cutMarkGapFt = () => 1.5 / 2;
+  // The third is why profile-manager.js is in the head.
+  //
+  // THE FOURTH USED TO HAVE NO HOME, AND THIS PAGE PAINTED ITS OWN DEFAULT.
+  // Until PR #319 the offset was session state on the old page, written
+  // nowhere, so this page hardcoded 1.5' and the comment here said out loud
+  // that a drafter who changed it mid-session saw a different gap on the two
+  // boards. That was the one input this page could not be faithful about, and
+  // it is now one it reads -- which is why this is a completion of tier 2
+  // rather than a tidy: tier 2's whole claim is that this page paints what the
+  // drawing says.
+  //
+  // NULL MEANS DERIVE, and reading it any other way reintroduces the bug the
+  // key was added to close. `format.autoDimFirstOffsetFt` keeps null for a
+  // drawing that never chose (drawing-format.js: "readers normalise, writers
+  // never invent"), so `?? AUTO_DIM_FIRST_OFFSET_FT` is where the 1.5 comes
+  // from -- and moving that default later then reaches every such drawing.
+  //
+  // HALF, because the bubbles sit in the middle of the gap between the walls
+  // and the first string. MODEL.dc.html's `_cutMarkGapFt()` takes the same
+  // half of the same number -- one underscore apart from this name, on the
+  // board this one has to agree with, which is why that file carries a comment
+  // pointing here and this one points back.
+  const autoDimFirstOffsetFt = () =>
+    drawing?.autoDimFirstOffsetFt ?? window.DraftDrawingFormat.AUTO_DIM_FIRST_OFFSET_FT;
+  const cutMarkGapFt = () => autoDimFirstOffsetFt() / 2;
 
   // TWO GLOBALS, not one, and profile-manager.js publishes seven. The reader
   // is on DraftProfileManager; the normaliser is on DraftStructureStandards
@@ -1381,6 +1399,12 @@
       // it is what lets the view filter above trust that every dimension in
       // the array carries a real view.
       dimensions: F.dimensions(parsed.dimensions, levelIds),
+      // Normalised here rather than at the paint site so the null survives to
+      // exactly one place that resolves it. `drawing` is built by spreading
+      // `parsed`, so without this line the raw key would still be present and
+      // the paint site would read it -- indistinguishable for a valid number,
+      // wrong for a quoted one, since the format does not coerce.
+      autoDimFirstOffsetFt: F.autoDimFirstOffsetFt(parsed.autoDimFirstOffsetFt),
     };
     dropped = ['walls', 'lines', 'floors', 'dimensions']
       .map(k => (Array.isArray(raw[k]) ? raw[k].length : 0) - drawing[k].length)
