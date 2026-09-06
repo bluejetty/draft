@@ -58,8 +58,11 @@ ENTRY, a half storey down, so a storey standing on it lands below one standing
 on MAIN — too far for a ceiling to absorb, so they stay two levels. An ordinary
 level card is one elevation across the whole building and cannot say that.
 
-**Blocked on Movie's sketch**, deliberately: where the OVER GARAGE level comes
-from and what the drafter presses. Neither agent should invent that answer.
+**UNBLOCKED, 6 Sep.** Movie's sketch arrived and dissolved the problem rather
+than solving it: the half-levels are always on the panel, fuzzed, with a small
+ADD in the corner. So nothing ever allocates an id and the collision that made
+this hard stops existing. Written up as `RD-DOCUMENTS/ORDER-inbetween-levels.md`;
+still not built.
 
 It is listed here because it changes the DRAWING FORMAT, and a persisted-key
 change during the Write Tier is the most expensive kind of change there is —
