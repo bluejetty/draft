@@ -167,6 +167,102 @@ the slot's own id.
 | `_addLevel()` | unchanged. A floor on top is still a floor on top |
 | a spec | a fuzzed row is not a level: it must not reach `_floorLevels()`, must not appear in a section table, and must not change a saved file |
 
+## The floor package over the garage
+
+**Movie, 6 Sep**, over five exchanges. Joists **19 1/4"**, sheathing **3/4"** --
+**20" total**, and that is a DEFAULT: *"they can change after"*, and *"those
+joists will likey change depth se we need to make them adjustable because
+those will be sized by the engineer"*.
+
+    garage wall   9'-1 1/8"    109.125"   <- DERIVED, not typed
+    package                   + 20"
+    deck                        129.125"  = 10'-9 1/8"
+
+This SUPERSEDES the `10'-5 5/8"` in `project-page.js:240`, which named this
+same deck off a **16 1/2"** floor before the package was ruled. The comment
+there is not wrong about why the garage wall went up a precut rung -- a 7'-0"
+overhead door needs `OPENING_HEAD_DROP_IN` above its head either way -- only
+about where the deck lands.
+
+### Which end is anchored
+
+> *"the bottom will need to go deeper it if goes from 19.25" to 23.25""* ...
+> *"and the garage ceiling gets less height"*
+
+**The deck is the stored fact and the garage wall is derived from it.** The
+floor above stays put, the joists grow downward, the garage ceiling loses
+the height.
+
+Which puts a value on the wrong side of the line today. `GARAGE_WALL_FT`
+(`project-page.js:249`) is a 9' precut measured UP FROM THE SLAB, and
+`PROJECT.html:1355` gives the drafter a cell to type it into. Under this rule
+a garage carrying an OVER GARAGE level must not read that cell: it is
+`deck - package`, recomputed, every time. Keep it stored and an engineer's
+depth change leaves a number on the page that contradicts the drawing --
+the same shape as the stair's stale `riseFt` and the detached offset that is
+stored and never read.
+
+The door head needs no wiring at all. `PROJECT.html:747` already derives it:
+
+    get: v => v.garage.wallHeightFt - projectPage.OPENING_HEAD_DROP_IN / 12
+
+so it follows the wall down on its own.
+
+### The limit is the door, and the drafter designs around it
+
+> *"the user will need to take the door limitation height into consideration
+> for thier design"*
+
+An engineer's 23 1/4":
+
+    deck             129.125"
+    23 1/4" + 3/4"  -  24"
+    garage wall      105.125"  = 8'-9 1/8"   (no longer a precut)
+    door head        - 16 1/2"
+                      88.625"  = 7'-4 5/8"   clears 7'-0" by 4 5/8"
+
+At a **27 7/8"** joist the head lands exactly on 7'-0" and a 7'-0" overhead
+door stops fitting. That is a LIMIT THE PAGE SHOWS, not a clamp it applies:
+house rule #313 -- software never moves geometry, only a drafter's press may.
+`proto/section-table-harness.js:306` already makes this check against the
+DEFAULT wall; the sibling that does not exist yet is the same check against a
+wall derived from a deck.
+
+### The two levers, when they cross it
+
+> *"they will need to move the grade beam or frost wall top down (and grade)
+> move the house up"*
+
+**Drop the garage foundation.** `zoneHeights.zones.attachedGarage.offsetFt` is
+the typed cell and `MODEL.dc.html:11971` reads it, so one number moves the
+concrete top; grade follows without a second entry, since every garage
+foundation tops out 14" above grade (`cut-view.js:64`, `:71`, `:77` -- three
+constants, one fact). Recovering the 4" lost at 23 1/4" puts the wall back at
+9'-1 1/8" and the head at 7'-8 5/8", and takes the garage floor AND the grade
+at the garage down 4" with it -- an apron and a driveway, which is site work
+rather than a drawing change.
+
+The two options named are the only two that exist:
+`GARAGE_FOUNDATIONS.attachedGarage` is `['gradebeam', 'frostwall']`. A
+thickened edge is detached-only.
+
+**Or move the house up**, spending the same 4" on the house's own grade
+instead. Which is cheaper is a question about the LOT, so the drafter picks.
+
+`GARAGE_SILL_BELOW_HOUSE_FT = 2` is what that cell derives from, and its
+comment is what makes this land without new plumbing: measured *"sill to
+sill, not floor to floor, so it holds when the floor package changes"*.
+
+### The rest of the storey
+
+**The front 4 ft of the garage stays out of it**, with a lower roof over the
+strip -- so the level's outline is the garage footprint less a 4 ft band at
+the door end, not the footprint.
+
+**The adjustable depth needs no new joist type.** `level-assembly.js:41`
+already carries `{ id: 'owj', label: 'OWJ', depthIn: null }` -- the open-web
+joist whose depth is entered by hand, which is exactly the engineer's case.
+
 ## Open, and both are Movie's
 
 - **What "fuzzed" looks like.** Opacity, or the lamp treatment the build row
