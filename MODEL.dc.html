@@ -373,12 +373,18 @@
   </div>
 
   <div data-build-cluster class="{{ buildClusterClass }}" style="position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; align-items:center; gap:8px; z-index:{{ buildClusterZ }};">
-    <!-- TURTLE and RABBIT bookend the row permanently while its middle grows,
-         so unlike SPLIT and ATTACHED they are NOT wrapped in hasHouseMaster —
-         which means the turtle is not always next to HOUSE, and that is
-         intended. They wear no filter binding: they are assistance levels,
-         not things that can exist in the drawing, so the lamps' dim/armed/lit
-         treatment would say something untrue about them. -->
+    <!-- THE TURTLE HOLDS THE LEFT END ON ITS OWN. It used to be one of a pair
+         bookending the row, with RABBIT on the right; that pairing went with
+         the rabbit (Movie, 6 Sep). What survives is the reason it is NOT
+         wrapped in hasHouseMaster the way SPLIT and ATTACHED are: the turtle
+         is an assistance level, not a thing that can exist in the drawing, so
+         it stays put while the row's middle grows past it. Same reason it
+         wears no filter binding -- the lamps' dim/armed/lit treatment would
+         say something untrue about it.
+
+         AND THE ORDER IS A SENTENCE: turtle, then which house, then whether
+         there is a garage, then press. The bone ends the row because pressing
+         it is the last thing you do. -->
     <button data-select-turtle onClick="{{ onSelectTurtle }}" aria-label="TURTLE PACE" title="TURTLE — guided pace, explains each step (coming soon)" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0;">
       <img src="./assets/btn-turtle.png" alt="" style="height:38px; display:block;" />
     </button>
@@ -391,6 +397,20 @@
     <sc-for list="{{ buildTypeBtns }}" as="bt" hint-placeholder-count="4">
       <button data-select-build="{{ bt.id }}" onClick="{{ bt.onSelect }}" aria-label="{{ bt.label }}" title="{{ bt.title }}" style="height:30px; border:1px solid {{ bt.border }}; background:{{ bt.bg }}; color:{{ bt.color }}; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; cursor:pointer; white-space:nowrap; filter:{{ bt.glow }};">{{ bt.label }}</button>
     </sc-for>
+    <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
+      <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" aria-label="{{ attachedGarageLabel }}" title="{{ attachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ attachedButtonGlow }};">
+        <!-- Lit and dark are two pieces of art. A bound src would be fetched
+             literally by the parser once per load ({{ ... }} as a URL, a 404)
+             before the binding resolved; two literal sources under a switch
+             fetch only what they show. -->
+        <sc-if value="{{ attachedLit }}" hint-placeholder-val="{{ false }}"><img src="./assets/btn-attached.png" alt="" style="height:38px; display:block;" /></sc-if>
+        <sc-if value="{{ attachedDark }}" hint-placeholder-val="{{ true }}"><img src="./assets/attachedout.png" alt="" style="height:38px; display:block;" /></sc-if>
+      </button>
+    </sc-if>
+    <button data-mark-detached-garage onClick="{{ onMarkDetachedGarage }}" aria-label="{{ detachedGarageLabel }}" title="{{ detachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ detachedButtonGlow }};">
+      <sc-if value="{{ detachedLit }}" hint-placeholder-val="{{ false }}"><img src="./assets/btn-detached.png" alt="" style="height:38px; display:block;" /></sc-if>
+      <sc-if value="{{ detachedDark }}" hint-placeholder-val="{{ true }}"><img src="./assets/detachedout.png" alt="" style="height:38px; display:block;" /></sc-if>
+    </button>
     <!-- THE BONE ALONE RISES. While the entry coach is up the cluster stops
          making a stacking context of its own, so this wrapper -- and nothing
          else on the row -- comes through the scrim. The one thing you already
@@ -411,23 +431,6 @@
         </button>
       </sc-if>
     </div>
-    <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
-      <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" aria-label="{{ attachedGarageLabel }}" title="{{ attachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ attachedButtonGlow }};">
-        <!-- Lit and dark are two pieces of art. A bound src would be fetched
-             literally by the parser once per load ({{ ... }} as a URL, a 404)
-             before the binding resolved; two literal sources under a switch
-             fetch only what they show. -->
-        <sc-if value="{{ attachedLit }}" hint-placeholder-val="{{ false }}"><img src="./assets/btn-attached.png" alt="" style="height:38px; display:block;" /></sc-if>
-        <sc-if value="{{ attachedDark }}" hint-placeholder-val="{{ true }}"><img src="./assets/attachedout.png" alt="" style="height:38px; display:block;" /></sc-if>
-      </button>
-    </sc-if>
-    <button data-mark-detached-garage onClick="{{ onMarkDetachedGarage }}" aria-label="{{ detachedGarageLabel }}" title="{{ detachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ detachedButtonGlow }};">
-      <sc-if value="{{ detachedLit }}" hint-placeholder-val="{{ false }}"><img src="./assets/btn-detached.png" alt="" style="height:38px; display:block;" /></sc-if>
-      <sc-if value="{{ detachedDark }}" hint-placeholder-val="{{ true }}"><img src="./assets/detachedout.png" alt="" style="height:38px; display:block;" /></sc-if>
-    </button>
-    <button data-select-rabbit onClick="{{ onSelectRabbit }}" aria-label="RABBIT PACE" title="RABBIT — quick pace, stays out of the way (coming soon)" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0;">
-      <img src="./assets/btn-rabbit.png" alt="" style="height:38px; display:block;" />
-    </button>
   </div>
 
   <div style="flex:1;"></div>
@@ -13147,16 +13150,18 @@ class Component extends DCLogic {
     });
   }
 
-  // TURTLE and RABBIT are assistance levels — how much the app does for you.
-  // RABBIT is not built. TURTLE is, and only inside TOY MODE: it is the
-  // beginner's drawing surface, and handing it to a drafter who pressed a
-  // build-row button would be answering a press with a different app.
-  _pressAssistLevel(pace) {
-    if (pace === 'turtle' && this._toyModeOn()) { this._startTurtle(); return; }
+  // TURTLE is an assistance level -- how much the app does for you. It works
+  // only inside TOY MODE: it is the beginner's drawing surface, and handing it
+  // to a drafter who pressed a build-row button would be answering a press
+  // with a different app.
+  //
+  // It used to take a `pace` and answer for RABBIT as well. Movie cancelled
+  // the rabbit on 6 Sep, so the branch went with it rather than being left to
+  // answer for a button nobody can press.
+  _pressTurtle() {
+    if (this._toyModeOn()) { this._startTurtle(); return; }
     this.setState({
-      drawingMessage: pace === 'turtle'
-        ? 'TURTLE pace is coming soon — it will walk you through each step as you draw.'
-        : 'RABBIT pace is coming soon — it will stay out of the way once you know the moves.',
+      drawingMessage: 'TURTLE pace is coming soon — it will walk you through each step as you draw.',
       drawingMessageError: true,
     });
   }
@@ -21661,7 +21666,7 @@ class Component extends DCLogic {
       onGarageIntroOffToggle: e => this._onGarageIntroOffToggle(e.target.checked),
       onMarkAttachedGarage: () => this._toggleGarageMode('attached'),
       onMarkDetachedGarage: () => this._toggleGarageMode('detached'),
-      onSelectTurtle: () => this._pressAssistLevel('turtle'),
+      onSelectTurtle: () => this._pressTurtle(),
       turtleWalking: !!this.state.turtleWalk,
       turtleFacing: this.state.turtleWalk
         ? `FACING ${window.DraftTurtle.HEADINGS[this._turtleFacing(this.state.turtleWalk,
@@ -21692,7 +21697,6 @@ class Component extends DCLogic {
       // result is the one described: the bone is the only thing still lit.
       buildClusterZ: this.state.entryCoach === true ? 61 : 6,
       buildClusterClass: this.state.entryCoach === true ? 'coaching' : '',
-      onSelectRabbit: () => this._pressAssistLevel('rabbit'),
       hasHouseMaster: houseExists,
       // The house types: LIT is the type stored on the drawing, derived from
       // state on every render and never a second flag, so F5 keeps it and NEW

@@ -40,20 +40,21 @@ if (!window.DraftFirstRun) {
     DONE: 'done',        // what was made, and the next stage up
   });
 
-  // ── The three ways in ─────────────────────────────────────────────────
+  // ── The two ways in ───────────────────────────────────────────────────
   // A ladder of how much the machine does for you, over one house model --
   // the same ladder the build row shows, said in words a beginner can pick
   // between without knowing what any of them mean yet.
+  //
+  // IT WAS THREE. The middle rung was RABBIT -- GIVE ME A FEW, four houses to
+  // choose from -- offered though unbuilt, because a rung missing from a
+  // ladder teaches the wrong shape. Movie cancelled the rabbit on 6 Sep, and
+  // an offer for a feature that is not coming teaches a worse shape than a
+  // gap does: the first thing it says to a beginner would be a promise the
+  // app has already broken. So the ladder is the two ends, and the middle of
+  // the range is genuinely not on offer rather than merely late.
   const WAYS = Object.freeze([
     Object.freeze({ id: 'bone', label: 'BUILD IT FOR ME',
       blurb: 'Gruff draws the whole house. Change anything after.', ready: true }),
-    Object.freeze({ id: 'rabbit', label: 'GIVE ME A FEW',
-      blurb: 'Four houses to choose from.', ready: false,
-      // RABBIT is not built. It is still OFFERED, because the ladder is the
-      // thing being explained and a rung missing from it teaches the wrong
-      // shape -- but a press says so plainly rather than answering with
-      // nothing, the same way SPLIT does on the build row.
-      soon: 'A FEW TO CHOOSE FROM is coming — it draws four houses and you pick one.' }),
     Object.freeze({ id: 'turtle', label: 'I WILL DRAW IT',
       blurb: 'Walk the walls yourself, one at a time.', ready: true }),
   ]);
