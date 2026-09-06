@@ -63,11 +63,41 @@ check('the box is the house',
   G => [JSON.stringify(G.planWallExtents(HOUSE)),
         JSON.stringify({ minX: 0, maxX: 30, minZ: 0, maxZ: 24 })]);
 
-// The boneyard sits far off to one side. If its walls counted, the box would
-// stretch across the sheet and every elevation mark would be off in the void.
-check('the boneyard is not part of the house',
+// WHAT IT IS GIVEN IS WHAT IT MEASURES. This used to assert the opposite --
+// that the module filtered the boneyard out itself -- and that second,
+// blinder filter is what Movie's porch case killed on 6 Sep. The caller
+// (_activeWalls on the bone, walls() on MODEL.html) decides visibility in one
+// place; the module must not second-guess it, or the two rules drift and the
+// call site cannot see which one won.
+check('a wall it is handed is measured, whatever level it claims',
   G => [JSON.stringify(G.planWallExtents([...HOUSE, W('shelf', -500, -500, -480, -480, 0)])),
+        JSON.stringify({ minX: -500, maxX: 30, minZ: -500, maxZ: 24 })]);
+
+check('and a wall it is not handed cannot move anything',
+  G => [JSON.stringify(G.planWallExtents(HOUSE)),
         JSON.stringify({ minX: 0, maxX: 30, minZ: 0, maxZ: 24 })]);
+
+// THE PORCH, which is the drawing the rule came from. A frost wall 8 ft in
+// front of the house, drawn on FOUNDATION to carry the porch posts. On the
+// MAIN FL plan the caller does not hand it over, so E1 stays against the
+// house instead of standing in the front yard.
+const PORCH_FROST = W('porch', 0, -8, 30, -8);
+check('the porch frost wall moves E1 when the view shows it',
+  G => [G.autoElevationCuts({ walls: [...HOUSE, PORCH_FROST], dimensions: [],
+          elevationMarkOffsets: {}, autoElevations: true })
+        .find(c => c.id === 'E3').startPt.z < -8, true]);
+
+check('and leaves it alone when the view does not',
+  G => [G.autoElevationCuts({ walls: HOUSE, dimensions: [],
+          elevationMarkOffsets: {}, autoElevations: true })
+        .find(c => c.id === 'E3').startPt.z > -8, true]);
+
+// The same box feeds the hand-placed cut lines, so the porch stretched those
+// too. One filter, two symptoms -- and this is the half nobody would have
+// looked for.
+check('the porch stretched hand-placed cut lines as well, and no longer can',
+  G => [G.cutLineSpan(HOUSE, P(15, 5), P(16, 5), 0.75).start.x
+        === G.cutLineSpan([...HOUSE, PORCH_FROST], P(15, 5), P(16, 5), 0.75).start.x, true]);
 
 check('no walls is no box',
   G => [G.planWallExtents([]), null]);
@@ -112,9 +142,15 @@ check('a string in neither corridor pushes no edge at all',
   G => [JSON.stringify(G.eMarkDimEdges(HOUSE, [D(200, -40, 210, -40)])),
         JSON.stringify({ N: 0, S: 24, W: 0, E: 30 })]);
 
-check('a boneyard dimension does not push anything',
-  G => [JSON.stringify(G.eMarkDimEdges(HOUSE, [D(0, 40, 30, 40, 0)])),
-        JSON.stringify({ N: 0, S: 24, W: 0, E: 30 })]);
+// SAME CONTRACT ON THE DIMENSIONS, and this is the half that would have been
+// missed. Fixing only the walls leaves a string on a hidden layer view still
+// pushing the marks out -- on a drawing where nothing visible is out there --
+// and the porch case would have looked fixed while staying broken.
+check('a dimension it is handed pushes the edge, whatever level it claims',
+  G => [G.eMarkDimEdges(HOUSE, [D(0, 40, 30, 40, 0)]).S, 40]);
+
+check('and one it is not handed cannot',
+  G => [G.eMarkDimEdges(HOUSE, []).S, 24]);
 
 check('no house is no edges',
   G => [G.eMarkDimEdges([], [D(0, 28, 30, 28)]), null]);
@@ -294,13 +330,62 @@ check('the cut keeps the elevation it was drawn at',
 check('MODEL.dc.html delegates all five rather than carrying a second copy',
   () => {
     const src = fs.readFileSync(MODEL_DC, 'utf8');
+    // BRACE-MATCHED, not a character budget. The first version allowed 400
+    // characters of body and went red the moment a delegation grew a comment
+    // -- reporting "does not delegate" about a method that plainly did. A
+    // check that fails for a reason unrelated to its claim is worse than no
+    // check: it trains you to edit the check.
+    const bodyOf = name => {
+      const at = src.indexOf(`\n  ${name}(`);
+      if (at < 0) return null;
+      let i = src.indexOf('{', at), depth = 0;
+      for (let j = i; j < src.length; j += 1) {
+        if (src[j] === '{') depth += 1;
+        else if (src[j] === '}') { depth -= 1; if (!depth) return src.slice(i, j); }
+      }
+      return null;
+    };
     const missing = ['_planWallExtents', '_eMarkClearFt', '_cutLineSpan',
                      '_eMarkDimEdges', '_autoElevationCuts']
-      .filter(name => {
-        const m = src.match(new RegExp(`\\n  ${name}\\(([^)]*)\\) \\{\\n([\\s\\S]{0,400}?)\\n  \\}`));
-        return !m || !m[2].includes('window.DraftCutMarks.');
-      });
+      .filter(name => !(bodyOf(name) || '').includes('window.DraftCutMarks.'));
     return [missing.join(',') || 'all five delegate', 'all five delegate'];
+  });
+
+// AND BOTH CALLERS ACTUALLY PASS THEIR VISIBLE SETS. The contract above is
+// only worth anything if somebody honours it, and the module cannot tell.
+// Cheap to read, and it is the half that would rot silently: someone
+// "simplifying" _activeWalls() back to _walls restores the porch bug with
+// every check in this file still green.
+check('MODEL.dc.html hands over the walls and dimensions it is showing',
+  () => {
+    const src = fs.readFileSync(MODEL_DC, 'utf8');
+    // SCOPED TO THIS PAINTER'S ENV, not grepped over the file. The first
+    // version looked for `walls: this._walls,` anywhere and found it -- in
+    // drawFixture2D's env, where it is CORRECT: tubGeometry scans for the wall
+    // that closes the alcove and does its own level and view filtering while
+    // it scans, so it wants the whole list. A check that cannot tell one
+    // painter's env from another's reports a bug in working code, which is how
+    // a correct line gets "fixed".
+    const at = src.indexOf('_autoElevationCuts() {');
+    const env = at < 0 ? '' : src.slice(at, src.indexOf('\n  }', at));
+    const bad = [
+      ['planWallExtents(this._walls)', 'planWallExtents'],
+      ['eMarkDimEdges(this._walls', 'eMarkDimEdges'],
+      ['cutLineSpan(this._walls', 'cutLineSpan'],
+    ].filter(([needle]) => src.includes(needle)).map(([, label]) => label)
+      .concat(env.includes('walls: this._walls,') ? ['autoElevationCuts walls'] : [])
+      .concat(env.includes('dimensions: this._dimensions,') ? ['autoElevationCuts dimensions'] : []);
+    return [bad.join(',') || 'all five pass the active sets', 'all five pass the active sets'];
+  });
+
+// The control, so the check above is not passing because it looks at nothing:
+// the env it reads must actually mention the active sets.
+check('and that env is really the one being read',
+  () => {
+    const src = fs.readFileSync(MODEL_DC, 'utf8');
+    const at = src.indexOf('_autoElevationCuts() {');
+    const env = at < 0 ? '' : src.slice(at, src.indexOf('\n  }', at));
+    return [env.includes('this._activeWalls()') && env.includes('this._activeDimensions()'), true];
   });
 
 // ── Run ──
@@ -319,17 +404,21 @@ for (const m of baseline) console.log(`  FAIL ${m.label}\n       got ${m.got}, w
 console.log(`\n${CHECKS.length - baseline.length}/${CHECKS.length} checks passed`);
 
 const MUTATIONS = [
-  ['the boneyard is counted as part of the house',
-    s => s.replace('.filter(wall => wall.levelId > 0)', '')],
+  // THE CONTRACT MUTATION, replacing one that anchored on the filter this
+  // module used to keep. A second filter here is the porch bug: the caller
+  // hands over what the drafter can see, and anything the module strips after
+  // that is a rule invisible from the call site.
+  ['the module re-filters the walls it was handed',
+    s => s.replace('const kept = walls || [];', 'const kept = (walls || []).filter(w => w.levelId > 0);')],
   ['a degenerate box is accepted',
     s => s.replace('if (maxX - minX < 1 || maxZ - minZ < 1) return null;', '')],
   ['the box collapses to its x extent',
     s => s.replace('minZ = Math.min(minZ, pt.z); maxZ = Math.max(maxZ, pt.z);', '')],
   ['dimension strings never push the edges out',
-    s => s.replace('(dimensions || []).filter(dimension => dimension.levelId > 0)',
-      '[].filter(dimension => dimension.levelId > 0)')],
-  ['boneyard dimensions push the edges too',
-    s => s.replace('.filter(dimension => dimension.levelId > 0)', '')],
+    s => s.replace('(dimensions || []).forEach(dimension => {', '[].forEach(dimension => {')],
+  ['the module re-filters the dimensions it was handed',
+    s => s.replace('(dimensions || []).forEach(dimension => {',
+      '(dimensions || []).filter(d => d.levelId > 0).forEach(dimension => {')],
   ['the corridor pad is dropped, so any string pushes any edge',
     s => s.replace('if (pt.x >= minX - pad && pt.x <= maxX + pad) {', 'if (true) {')],
   ['north and south are swapped',

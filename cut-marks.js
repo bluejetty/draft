@@ -35,10 +35,30 @@ if (!window.DraftCutMarks) {
   });
 
   // The house's bounding box in plan, or null when there is not enough of a
-  // house to ring. levelId > 0 excludes the boneyard, whose walls are off to
-  // one side and would stretch the box across the whole sheet.
+  // house to ring.
+  //
+  // WHAT IT IS GIVEN IS WHAT IT MEASURES, and that is the contract rather than
+  // an omission. This filtered `walls.filter(w => w.levelId > 0)` -- every wall
+  // on every level and every layer view, boneyard excluded -- and Movie ruled
+  // that out on 6 Sep with a drawing:
+  //
+  //   A 30 x 40 bungalow with a covered front porch. On FOUNDATION you draw a
+  //   frost wall 8 ft out in front of the house to carry the porch posts. That
+  //   is correct drawing; it is where the concrete goes. Switch back to MAIN FL
+  //   and the porch foundation is not shown -- but E1 has moved 8 ft into the
+  //   front yard, positioned by a wall the drafter cannot see.
+  //
+  // "Should a mark you can see be positioned by a wall you can't?" No. So the
+  // CALLER passes the walls it is showing -- _activeWalls() on the bone,
+  // walls() on MODEL.html -- and both of those already exclude the boneyard,
+  // the other levels and the other layer views in one place. Two filters, one
+  // of them invisible from the call site, is how the porch bug survived.
+  //
+  // It does not re-filter what it is handed. A `levelId > 0` kept here would be
+  // dead against both callers while reading as though it were guarding
+  // something.
   const planWallExtents = walls => {
-    const kept = (walls || []).filter(wall => wall.levelId > 0);
+    const kept = walls || [];
     if (!kept.length) return null;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     kept.forEach(wall => [wall.start, wall.end].forEach(pt => {
@@ -53,13 +73,18 @@ if (!window.DraftCutMarks) {
   // sits outside the numbers rather than through them. A dimension only counts
   // against an edge it actually runs along -- the pad keeps a string that
   // brushes the corner from pushing both edges at once.
+  //
+  // SAME CONTRACT AS ABOVE, and fixing only the walls would have half-worked:
+  // a dimension string on a hidden layer view would still have pushed the marks
+  // out, on a drawing where nothing visible is out there. Half a fix here is
+  // worse than none, because the porch case would look fixed.
   const eMarkDimEdges = (walls, dimensions) => {
     const box = planWallExtents(walls);
     if (!box) return null;
     const { minX, maxX, minZ, maxZ } = box;
     const pad = 2;
     const edge = { N: minZ, S: maxZ, W: minX, E: maxX };
-    (dimensions || []).filter(dimension => dimension.levelId > 0).forEach(dimension => {
+    (dimensions || []).forEach(dimension => {
       [dimension.start, dimension.end].forEach(pt => {
         if (pt.x >= minX - pad && pt.x <= maxX + pad) {
           if (pt.z > edge.S) edge.S = pt.z;
