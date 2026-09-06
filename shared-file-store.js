@@ -20,6 +20,26 @@ function openDb() {
       db.onclose = () => forget(pending);
       resolve(db);
     };
+    // BLOCKED IS NEITHER SUCCESS NOR ERROR, which is why it needs its own line
+    // and why its absence was invisible. While an open is blocked -- a
+    // deleteDatabase still pending, or another connection holding the old
+    // version -- the request just sits there: onsuccess does not fire and
+    // neither does onerror.
+    //
+    // THE HANG IS PERMANENT, NOT A STALL. `pending` is cached in dbPromise
+    // above, and forget() is only reachable from onsuccess, onerror,
+    // onversionchange and onclose. A promise that never settles reaches none
+    // of them, so dbPromise is never cleared and EVERY later loadSharedFile on
+    // that page awaits the same dead promise. The page does not recover; it is
+    // finished.
+    //
+    // Rejecting hands it to withDb, which forgets this promise and opens a
+    // fresh one -- one automatic retry, by the path that was already there.
+    req.onblocked = () => {
+      forget(pending);
+      reject(new Error(`draft: indexedDB open blocked — another connection or a `
+        + `pending deleteDatabase still holds ${DB_NAME}`));
+    };
     req.onerror = () => { forget(pending); reject(req.error); };
   });
   dbPromise = pending;
