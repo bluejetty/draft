@@ -28,7 +28,9 @@ button. Movie's was better:
 > BILEVEL and 2 STOREY"*
 
 An option, not a type. The reason it matters is combinatorial rather than
-stylistic — see the grid below: as buttons, the five become eight.
+stylistic — see the grid below: as buttons, the five become eight. And the
+grid below narrows it once more: the storey over the GARAGE is the option;
+the second floor over the MAIN AREA is a level the drafter adds.
 
 ---
 
@@ -142,11 +144,15 @@ actually reads.
 ## The rule: a button asks only what its own name leaves open
 
 - **MODIFIED BILEVEL** — the name already says there is a garage and a
-  storey over it, so neither is asked. The one free answer is the second
-  floor over the main area. Off is a modified bilevel; on is a
-  MODIFIED BILEVEL 2 STOREY. Movie: *"won't have the attached garage option
-  because it needs a garage… but the 2nd floor over main area would be
-  optional."*
+  storey over it, so neither is asked. **Neither is the second floor over
+  the main area**, and this is the one place the board changed its mind.
+  Movie's first words were *"won't have the attached garage option because
+  it needs a garage… but the 2nd floor over main area would be optional"* —
+  an option on the button. His later ruling replaced it: *"leave out the
+  Modified 2 storey they can ADD A LEVEL."* Optional is still true; what is
+  optional is the LEVEL CARD, not a toggle on the row. So this button asks
+  nothing, and MODIFIED BILEVEL 2 STOREY is a modified bilevel with a level
+  added — no stored answer distinguishes them.
 - **BUNGALOW** and **2 STOREY** — the floors are fixed by the name, so the
   free answers are the garage and what is above it. Movie: *"the 2 STOREY
   can have options: ATTACHED GARAGE ? and 2nd FLOOR OVER GARAGE."* The
@@ -216,9 +222,12 @@ built.
 
 ## What it costs
 
-- **A persisted answer**, or two — the garage question and the storey
-  question — which means new keys, a line in RULES-persisted-keys.md, and
-  readers that normalise rather than guess. Same shape as `buildType`.
+- **A persisted answer**, or two — is there an attached garage, and is
+  there a storey OVER THE GARAGE — which means new keys, a line in
+  RULES-persisted-keys.md, and readers that normalise rather than guess.
+  Same shape as `buildType`. **Not** the second floor over the main area of
+  a modified bilevel: that is a level card, and level cards are already
+  stored, so it costs no key.
 - **No fifth build type.** Ruled out above: `BUILD_TYPES` stays at four, the
   section table grows no row, and nothing in NEW-5's vocabulary moves.
 - **A change to the entry flow**, which is the part that wants Devin rather
@@ -226,9 +235,9 @@ built.
 
 ## Open
 
-- **The button name.** MODIFIED BILEVEL 2 STOREY is long beside BUNGALOW.
-  Movie has said the words; whether they fit the row is a layout question
-  nobody has measured.
+~~The button name: MODIFIED BILEVEL 2 STOREY is long beside BUNGALOW.~~
+**MOOT.** It is not a button, so it needs no room on the row. The name
+survives as something drafters say, not as a control.
 - **Whether the storey-over-garage answer is stored on its own key or
   derived from the type.** Derived is fewer keys and cannot disagree with
   itself; stored is what makes it an option on a 2 STOREY at all. Probably
