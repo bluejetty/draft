@@ -312,6 +312,22 @@ allocated, nothing in the drawing, nothing a serializer can emit. So there is
 no hidden thing to go looking for later. That is what makes this gate free
 rather than a new piece of state.
 
+**AND THE REPO ALREADY SHOWS THE COST OF GETTING IT BACKWARDS.**
+`MODEL.dc.html:8604` hands every wall on the level to the plan's footprint:
+
+    _planWallExtents() {
+      return window.DraftCutMarks.planWallExtents(this._walls);
+    }
+
+and `cut-marks.js:41` filters on `wall.levelId > 0` and nothing else. Layer
+visibility never enters it, so **a wall a drafter has hidden still votes on
+where the plan box sits.** Not-drawn and not-there are the same record there,
+and any view filter built on top of that inherits the confusion.
+
+That is the failure this gate avoids by construction: an unadded slot is not
+a hidden record, it is no record. (Gilligan, 6 Sep, after two earlier
+citations for the same point did not check out -- this one does.)
+
 ### The predicate already exists
 
     drawing-format.js:891
