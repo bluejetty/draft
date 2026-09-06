@@ -245,39 +245,39 @@ test.describe('the saved format', () => {
     expect((await h.savedDrawing(page)).autoDimFirstOffsetFt).toBeNull();
 
     // The normaliser keeps null and refuses everything that is not a positive
-    // number -- including 0, which is a typed answer meaning "no gap" and must
-    // not be storable as one.
-    //
-    // AND IT DOES NOT COERCE, which is the half worth pinning on purpose:
-    // num() is `typeof value === 'number'`, so a hand-edited "2.5" reads as
-    // NOT CHOSEN rather than as two and a half feet. A format that quietly
-    // parsed strings would let a file's text decide a measurement, and the
-    // difference between "the drafter picked 2.5" and "something in the file
-    // looked like 2.5" is exactly what null-means-derive exists to keep apart.
-    // (Written the other way first, asserting 2.5, on an assumption about
-    // positive() rather than a reading of it. The spec was wrong, not the
-    // format.)
+    // number -- including 0, which is a typed answer that means "no gap" and
+    // must not be storable as one.
     expect(await page.evaluate(() => {
       const f = window.DraftDrawingFormat;
       return {
         derived: f.AUTO_DIM_FIRST_OFFSET_FT,
         keeps: f.autoDimFirstOffsetFt(2.5),
-        rejects: [null, undefined, 0, -1, '2.5', 'wide', {}, NaN, Infinity]
-          .map(v => f.autoDimFirstOffsetFt(v)),
+        // A QUOTED NUMBER IS NOT A NUMBER, and that is the contract rather
+        // than a gap. `num()` requires typeof 'number' throughout this
+        // format, so a hand-edited file carrying "2.5" reads as NOT CHOSEN
+        // and the page derives -- it does not silently adopt a string as a
+        // measurement. Written down because the expectation here originally
+        // said 2.5 and the run said null: the code was right and the spec was
+        // wrong, and the tempting fix was to delete the line rather than
+        // learn what it had found.
+        quoted: f.autoDimFirstOffsetFt('2.5'),
+        rejects: [null, undefined, 0, -1, 'wide', {}, NaN].map(v => f.autoDimFirstOffsetFt(v)),
       };
     })).toEqual({
       derived: 1.5,
       keeps: 2.5,
-      rejects: [null, null, null, null, null, null, null, null, null],
+      quoted: null,
+      rejects: [null, null, null, null, null, null, null],
     });
 
     // A PICK IS STORED AND SURVIVES A RELOAD, which is the defect this key
     // exists to close.
-    // The picker lives in the DIMENSION tool's panel, so the tool has to be
-    // active for the buttons to exist at all. Selecting it here is what makes
-    // the assertion below reachable -- the first version of this test guarded
-    // on the buttons existing and would have skipped forever without ever
-    // saying so.
+    // THE PICKER LIVES UNDER THE DIMENSION TOOL (MODEL.dc.html:1246,
+    // `dimensionToolActive`), so it has to be selected before the buttons
+    // exist. The first version of this assertion was written as "if these
+    // buttons exist" and would have skipped here forever, reporting a pass
+    // for a round trip it never made -- the same shape as the emptiness
+    // assertion found elsewhere in this file today.
     await h.selectTool(page, 'Dimension');
     const offsets = page.locator('[data-auto-dim-offset]');
     await expect(offsets).not.toHaveCount(0);

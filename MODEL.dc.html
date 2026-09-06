@@ -8845,19 +8845,39 @@ class Component extends DCLogic {
   // ONLY THIS PAGE, SO FAR. MODEL.html has its own `cutMarkGapFt()` -- one
   // underscore apart from this file's `_cutMarkGapFt()`, same concept, same
   // half-of-the-offset arithmetic -- and it still hardcodes 1.5 because until
-  // today the value had no home to read from. Its comment says so out loud.
-  // That page reading the persisted key is Gilligan's deliverable, not this
-  // commit's, and it is what actually closes tier 2's last infidelity: the new
-  // page painting its own default instead of what the drawing says.
+  // this key existed the value had no home to read from. Its comment says so
+  // out loud. That page reading the persisted key is a separate deliverable,
+  // and it is the one that closes tier 2's last acknowledged infidelity: the
+  // new page painting its own default instead of what the drawing says.
   //
   // WRITTEN DOWN BECAUSE A NEAR-COLLISION READS AS SETTLED. Two functions with
-  // nearly the same name on two boards, one fixed and one not, is exactly the
-  // shape DETACHED_BEAM_ABOVE_GRADE_IN had -- a plausible name over a value
-  // that had stopped matching its neighbour, where nothing looks wrong. A
-  // reader of "the gap now derives through the format" would reasonably
-  // conclude both were done.
+  // nearly the same name on two boards, one fixed and one not, is the shape
+  // DETACHED_BEAM_ABOVE_GRADE_IN had -- a plausible name over a value that had
+  // stopped matching its neighbour, where nothing looks wrong. A reader of
+  // "the gap now derives through the format" would reasonably conclude both
+  // were done.
   _autoDimFirstOffsetFt() {
     return this.state.autoDimFirstOffsetFt ?? format.AUTO_DIM_FIRST_OFFSET_FT;
+  }
+
+  // PICKING AN OFFSET IS AN EDIT, now that the offset is in the file.
+  //
+  // It was not before, and that is the whole point: while the value went
+  // nowhere, a pick that left the drawing "saved" lost nothing, because there
+  // was nothing to lose. The moment the key persists, a pick that does not
+  // mark the drawing unsaved is a drafter's change that can go with the window
+  // -- the strings and the cut marks move on screen, and the file never hears.
+  // Making a value durable converts its unmarked edit from harmless to real.
+  //
+  // The callback is not decoration either: _markUnsaved's save reads state, so
+  // the value has to land first. `_toggleRoomAreas` says the same in the same
+  // words, and every other persisted setting on this page is shaped this way.
+  //
+  // Found by Gilligan reading the PR rather than by a spec -- the round-trip
+  // passes either way, because it presses SAVE itself.
+  _pickAutoDimOffset(value) {
+    if (this.state.autoDimFirstOffsetFt === value) return;
+    this.setState({ autoDimFirstOffsetFt: value }, () => this._markUnsaved());
   }
 
   _cutMarkGapFt() {
@@ -21905,16 +21925,7 @@ class Component extends DCLogic {
           border: isActive ? '#5980a6' : 'rgba(29,31,32,0.2)',
           bg: isActive ? 'rgba(89,128,166,0.14)' : '#fff',
           color: isActive ? '#3e6285' : '#1d1f20',
-          // THE PRESS IS AN EDIT NOW. This set state and stopped, which was
-          // harmless while the offset went nowhere -- and became a silent
-          // loss the moment it became a persisted key (6 Sep, board #313's
-          // ruling): the drafter picked, the page drew the new gap, nothing
-          // marked the drawing dirty, and the pick was gone on reload. Every
-          // other stored choice on this page goes through _markUnsaved; this
-          // one had no reason to until today.
-          onSelect: () => this.setState(
-            { autoDimFirstOffsetFt: offset.value },
-            () => this._markUnsaved()),
+          onSelect: () => this._pickAutoDimOffset(offset.value),
         };
       }),
       autoDimHint: this._activeLevelId() === 7
