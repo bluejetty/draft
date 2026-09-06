@@ -890,6 +890,26 @@ if (!window.DraftDrawingFormat) {
   // two, not a third type. Exported so MODEL and PROJECT read one list.
   const SPLIT_BUILD_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);
   const buildType = raw => oneOf(raw, BUILD_TYPES, null);
+
+  // THE FIRST AUTO-DIMENSION OFFSET — the gap between the plan and the closest
+  // auto string. Ruled by Commander Devin, 6 Sep, on Skipper's proposal.
+  //
+  // IT LIVED NOWHERE. MODEL.dc.html kept it in session state and never wrote
+  // it, so a drafter moved the first string, saved, and the viewer drew a
+  // different gap than the page they saved from. That is the derive/store
+  // divergence class: a value one page holds and another derives, which
+  // passes every test either page runs alone.
+  //
+  // NULL MEANS DERIVE, and `positive()` is what keeps the null -- the same
+  // `stored ?? derived()` contract as ROOF HEEL. A drawing that never chose an
+  // offset must not gain a typed 1.5 on its next normalise, because then
+  // moving the default later would silently not reach it. Readers normalise,
+  // writers never invent, null means derive.
+  //
+  // THE DERIVED VALUE LIVES HERE rather than in either page, because the whole
+  // defect was two pages disagreeing about it. One number, one home.
+  const AUTO_DIM_FIRST_OFFSET_FT = 1.5;
+  const autoDimFirstOffsetFt = raw => positive(raw, null);
   // Which section-table row the type reads on the PROJECT page. The page's
   // rows (project-page.js SECTION_TABLE_ROWS) are HOUSE plus the stored
   // types below; HOUSE is not in SECTION_TABLE_TYPES because it is the live
@@ -1259,6 +1279,8 @@ if (!window.DraftDrawingFormat) {
     roofIntent,
     buildType,
     BUILD_TYPES,
+    autoDimFirstOffsetFt,
+    AUTO_DIM_FIRST_OFFSET_FT,
     SPLIT_BUILD_TYPES,
     GARAGE_FOUNDATIONS,
     sectionRowForBuildType,
