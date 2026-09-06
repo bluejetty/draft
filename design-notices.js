@@ -15,6 +15,11 @@
 // the drafter built it -- while the press said otherwise. In each the
 // geometry is right and the page is mute.
 //
+// THE THIRD IS BOARD #333 and is NOT in this file, deliberately. Its build
+// row is not on main, and a function returning null until it lands would pass
+// every check in the harness for the wrong reason. Named here, where it
+// cannot look tested, rather than stubbed there, where it would.
+//
 // SO THESE RETURN FACTS, NOT ACTIONS. Every function here answers "is there
 // something to say", never "what should move". A caller that renders the
 // notice has changed nothing in the drawing, which is the point: the rule

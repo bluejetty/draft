@@ -156,10 +156,15 @@ lost, silently, at the next load -- the same invariant failing in the other
 direction. Both reduce to: the file decides where things sit, so anything that
 moves them belongs in the file.
 
-WHAT MUST HAPPEN BEFORE IT IS ADDED. It is a top-level key on shared ground,
-so adding it is a format change under standing rules 1 and 2: the name is
-permanent once written, and the old page must open a new page's drawing
-without loss, by spec. Cheaper before Tier 3 than during it -- a page that
-already writes has to be migrated, a page that does not yet write only has to
-be told. Awaiting Movie's ruling (Skipper raised the key, Gilligan the second
-consumer, 6 Sep); NEITHER AGENT ADDS IT ALONE.
+RULED YES, 6 Sep, Commander Devin, as proposed: the key is added, Skipper
+implements, BEFORE Tier 3's first slice. The timing is the ruling's teeth --
+it is a top-level key on shared ground, so it is a format change under
+standing rules 1 and 2 (the name is permanent once written; the old page must
+open a new page's drawing without loss, by spec). Added before the new page
+writes, that costs one name. Added during Tier 3, the deep-compare in slice 1
+is chasing a target that moves under it.
+
+WHEN IT LANDS, THIS SECTION MOVES UP into the ruled names above and loses the
+"not a persisted key" framing -- and its second consumer travels with it. A
+future reader auditing "what does the dimension offset affect" must still
+reach `_cutMarkGapFt`, which the name will never tell them.
