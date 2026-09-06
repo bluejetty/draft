@@ -1,5 +1,43 @@
 const { test, expect } = require('@playwright/test');
 
+// WAIT FOR THE PAINT, NOT FOR THE LOAD.
+//
+// `page.goto` resolves on the document's load event. The bands are painted
+// after that, and `paintedSection` is attached to the canvas by the repaint
+// (PROJECT.html:1521) -- so a test that goes straight from goto to reading it
+// is racing the page, and the tests below read three things the paint
+// produces: the anchors on the canvas, the schedule rows (their containers are
+// EMPTY divs in the HTML, filled by fillBilevel), and the label positions.
+//
+// It is a coin flip weighted by the machine. Every one of these passed here
+// for weeks and shard 3 lost the toss on a loaded CI runner:
+//
+//   TypeError: Cannot read properties of undefined (reading 'anchors')
+//
+// THE GAP IS I/O, NOT COMPUTE, which is worth writing down because the first
+// attempt to reproduce it reached for the wrong lever. Throttling the CPU 20x
+// did not reproduce it at all: the first repaint (PROJECT.html:2114) sits at
+// the end of an async block gated on `await SharedFileStore.loadSharedFile`
+// (:348), an IndexedDB read. Delay THAT and the failure is exact --
+// paintedSection undefined, same error, first try. A runner under load is
+// slow at I/O whatever its clock, which is why this surfaces there and never
+// here.
+//
+// Fixed at the root rather than on the test that happened to lose. Only one of
+// them was failing, but "add a wait to that one" leaves the same race in the
+// two beside it, and the next report would look like a new defect.
+//
+// paintedSection is the right thing to wait on rather than a timeout or a
+// visibility check: it is set by the same statement that draws, so it cannot
+// be true before the drawing exists. A visible canvas proves nothing -- it is
+// visible while blank.
+async function openProject(page) {
+  await page.goto('/PROJECT.html');
+  await page.waitForFunction(
+    () => document.querySelector('#bilevel-canvas')?.paintedSection != null,
+    null, { timeout: 10000 });
+}
+
 // BAND 2 IS WIRED, AND IT IS NOT BAND 1 REPAINTED.
 // The cheap version of this test asserts the canvas is non-blank, which a
 // second copy of the bungalow would also pass — and a second copy is exactly
@@ -8,7 +46,7 @@ const { test, expect } = require('@playwright/test');
 test('band 2 is wired and draws without error', async ({ page }) => {
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  await page.goto('/PROJECT.html');
+  await openProject(page);
   await expect(page.locator('#bilevel-canvas')).toBeVisible();
   const split = (await page.locator('#bilevel-canvas').screenshot()).toString('base64');
   expect(errors).toEqual([]);
@@ -27,7 +65,7 @@ test('band 2 is wired and draws without error', async ({ page }) => {
 // exact second bungalow, the single most likely mistake in this wiring --
 // still leaves two unequal images. It passed the mutation and proved nothing.
 test('band 2 ignores a foundation edit in band 1', async ({ page }) => {
-  await page.goto('/PROJECT.html');
+  await openProject(page);
   const shoot = async () =>
     (await page.locator('#bilevel-canvas').screenshot()).toString('base64');
   const before = await shoot();
@@ -55,7 +93,7 @@ test('band 2 ignores a foundation edit in band 1', async ({ page }) => {
 // band 2 looking perfectly correct while showing the previous roof. A test that
 // only checked band 2 was non-blank would pass on that forever.
 test('a pitch change in band 1 moves band 2 too', async ({ page }) => {
-  await page.goto('/PROJECT.html');
+  await openProject(page);
   const shoot = async () =>
     (await page.locator('#bilevel-canvas').screenshot()).toString('base64');
 
@@ -85,7 +123,7 @@ test('a pitch change in band 1 moves band 2 too', async ({ page }) => {
 // Differences rather than absolute positions: paintSections auto-fits, so the
 // origin is wherever the content put it.
 test('band 2 draws a split: fill wall present, entry landing below main', async ({ page }) => {
-  await page.goto('/PROJECT.html');
+  await openProject(page);
   const paint = await page.evaluate(() =>
     document.querySelector('#bilevel-canvas').paintedSection);
   const at = paint.anchors;
@@ -127,7 +165,7 @@ test('band 2 draws a split: fill wall present, entry landing below main', async 
 // against his ArchiCAD section, which means the numbers beside it have to be
 // the split's and not, say, the same field read twice.
 test('band 2 schedule reads the split stack', async ({ page }) => {
-  await page.goto('/PROJECT.html');
+  await openProject(page);
   const rows = await page.evaluate(() => Object.fromEntries(
     [...document.querySelectorAll('#sched-bilevel-left .sched-row, #sched-bilevel-right .sched-row')]
       .filter(r => !r.hidden)
@@ -163,7 +201,7 @@ test('band 2 schedule reads the split stack', async ({ page }) => {
 // tighter stack: POUR and FILL WALL are 6 3/4" apart in the drawing.
 for (const [label, host] of [['band 1', '#detail-wrap'], ['band 2', '#bilevel-wrap']]) {
   test(`${label} labels do not overlap each other`, async ({ page }) => {
-    await page.goto('/PROJECT.html');
+    await openProject(page);
     await expect(page.locator(`${host} .detail-tag`).first()).toBeAttached();
     const boxes = await page.evaluate(sel => [...document.querySelectorAll(`${sel} .detail-tag`)]
       .filter(t => t.style.display !== 'none' && t.textContent.trim())
@@ -194,7 +232,7 @@ for (const [label, host] of [['band 1', '#detail-wrap'], ['band 2', '#bilevel-wr
 // label with a direction in it inherits the same problem the moment its value
 // can go negative.
 test('no schedule row states a direction and then contradicts it', async ({ page }) => {
-  await page.goto('/PROJECT.html');
+  await openProject(page);
   const bad = await page.evaluate(() => [...document.querySelectorAll('.sched-row')]
     .filter(r => !r.hidden)
     .map(r => {
