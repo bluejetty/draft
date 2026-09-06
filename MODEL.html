@@ -942,19 +942,14 @@
       throw new Error(`MODEL.html: cannot paint cut marks, ${missing.join(' and ')} `
         + 'did not load. Check the script order in the page head.');
     }
-    // THE VISIBLE SETS, not the whole drawing. Same ruling as the bone's
-    // _activeWalls (Movie, 6 Sep, the porch frost wall): a wall this view
-    // hides must not move a mark this view shows. walls() and dimensions()
-    // already carry the level and view rules for this page, so they answer
-    // here and cut-marks.js keeps no filter of its own.
-    const shown = walls();
-    const dims = dimensions();
+    const all = drawing?.walls || [];
+    const dims = drawing?.dimensions || [];
     const standards = structureStandards();
     R.drawCutMarks2D(ctx, toS, {
       bubbleStyle: standards.cutBubbleStyle,
-      lineSpan: (start, end) => CM.cutLineSpan(shown, start, end, cutMarkGapFt()),
+      lineSpan: (start, end) => CM.cutLineSpan(all, start, end, cutMarkGapFt()),
       autoCuts: CM.autoElevationCuts({
-        walls: shown,
+        walls: all,
         dimensions: dims,
         elevationMarkOffsets: drawing?.elevationMarkOffsets || {},
         autoElevations: standards.autoElevations,

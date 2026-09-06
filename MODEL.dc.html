@@ -8638,14 +8638,8 @@ class Component extends DCLogic {
 
   // The plan's own footprint, from level walls only — BONEYARD shelf geometry
   // (negative pseudo levels) never pulls the marks around.
-  // THE WALLS THIS VIEW IS SHOWING, not every wall in the drawing. Movie's
-  // ruling of 6 Sep (the porch frost wall pushing E1 into the front yard): a
-  // mark the drafter can see must not be positioned by a wall they cannot.
-  // _activeWalls() is the one place that already knows -- level, layer view,
-  // and the courtesy escape across a layer switch -- so it answers here too
-  // rather than cut-marks.js keeping a second, blinder filter of its own.
   _planWallExtents() {
-    return window.DraftCutMarks.planWallExtents(this._activeWalls());
+    return window.DraftCutMarks.planWallExtents(this._walls);
   }
 
   // Half the first dimension offset: the middle of the gap between the
@@ -8658,16 +8652,11 @@ class Component extends DCLogic {
   // plan whatever the drafter drew, ending in the wall-to-dimension gap on
   // both sides so the bubbles land there instead of out past the strings.
   // Without walls to measure against it just extends past the drawn ends.
-  // The same box, so a hidden wall no longer stretches a hand-placed cut line
-  // either -- it was never only the elevation ring that read these extents.
   _cutLineSpan(start, end) {
-    return window.DraftCutMarks.cutLineSpan(this._activeWalls(), start, end, this._cutMarkGapFt());
+    return window.DraftCutMarks.cutLineSpan(this._walls, start, end, this._cutMarkGapFt());
   }
-  // Both halves, for the reason in cut-marks.js: filtering the walls and not
-  // the dimensions would leave a string on a hidden layer view still pushing
-  // the marks out, which looks fixed and is not.
   _eMarkDimEdges() {
-    return window.DraftCutMarks.eMarkDimEdges(this._activeWalls(), this._activeDimensions());
+    return window.DraftCutMarks.eMarkDimEdges(this._walls, this._dimensions);
   }
 
   // Kept as a delegation though autoElevationCuts no longer routes through it:
@@ -8686,15 +8675,8 @@ class Component extends DCLogic {
   // in its corridor (any level), or wherever its grab handle was dragged.
   _autoElevationCuts() {
     return window.DraftCutMarks.autoElevationCuts({
-      walls: this._activeWalls(),
-      dimensions: this._activeDimensions(),
-      // Keyed by mark id and NOT by view, deliberately: what is stored is a
-      // CLEARANCE from the outermost ink, not a position (the drag writes
-      // `sign * (raw[axis] - base)`, and the state comment says so). So a drag
-      // made on one layer view keeps the mark the same distance clear on
-      // every other one, which is what a clearance means. The mark does land
-      // at different coordinates per view now that the base varies -- that is
-      // the stored meaning being honoured, not a side effect.
+      walls: this._walls,
+      dimensions: this._dimensions,
       elevationMarkOffsets: this.state.elevationMarkOffsets,
       autoElevations: this._autoElevationsOn(),
     });
