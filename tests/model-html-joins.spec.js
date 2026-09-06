@@ -35,11 +35,44 @@ const canvasHash = page => page.evaluate(() => {
   return `${n.toString(16)}:${c.width}x${c.height}`;
 });
 
+// THE ELEVATION RING IS SWITCHED OFF FOR THIS WHOLE FILE, and it is the
+// file's premise rather than a convenience.
+//
+// Every test here compares whole-canvas hashes, resting on the observation in
+// the header: with joins supplied, the ONLY thing that can differ between two
+// renders is the walls and how their corners meet. Tier 2l put cut marks on
+// this page, and the four standard elevation marks ring the plan extents --
+// which `planWallExtents` takes over every wall on the level REGARDLESS OF
+// VIEW (cut-marks.js; MODEL.dc.html did the same before the extraction, so
+// this is the bone's behaviour faithfully carried, not a new bug).
+//
+// So a wall that the view filter hides still widens the box and moves the
+// ring. Measured on the fixture below -- two walls plus a hidden third:
+//
+//   ring ON    two=c607eaec  three=2041035d   DIFFER
+//   ring OFF   two=ab8b476   three=ab8b476    IDENTICAL
+//
+// That broke `a wall hidden by the view filter does not vote on a visible
+// corner`, which is the equality test and the one that went red. THE WORSE
+// HALF IS THE OTHER TWO: they assert INEQUALITY, so a ring that moves whenever
+// the wall set changes would have made them pass without the joins differing
+// at all. One red test and two quietly weakened ones.
+//
+// Switched off through the profile, which is where the drafter's own switch
+// lives, so this is the supported way to ask for a plan with no ring rather
+// than a test-only hook.
+const PROFILE_KEY = 'draft-active-package:standards';   // profile-manager.js:7
+
 async function houseOnOldPage(page) {
   await h.openModel(page, { webgl: false, rails: false, entryCoach: true });
   await expect(page.locator('[data-entry-coach]')).toBeVisible({ timeout: 4000 });
   await page.locator('[data-first-bone-press]').click();
   await h.waitForSaved(page);
+  await page.evaluate(key => localStorage.setItem(key, JSON.stringify({
+    format: 'draft-profile-package',
+    kind: 'standards',
+    content: { model: { structureStandards: { autoElevations: false } } },
+  })), PROFILE_KEY);
 }
 
 // TWO WALLS AND NOTHING ELSE. The generated house is replaced rather than
