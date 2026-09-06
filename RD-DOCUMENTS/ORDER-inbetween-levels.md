@@ -396,6 +396,66 @@ survives every run, reads as authority, and gets repeated. Four stale comments
 and two bad references turned up on 6 Sep alone, and both classes have the same
 shape -- prose that no longer matches, in a place nothing checks.
 
+## WHAT THE BONE STILL CANNOT DO, AND WHY IT IS THIS ORDER'S PROBLEM
+
+**Movie, 6 Sep:** *"the bone might not know how to make a bilevel because it
+needs more floors and the stairs will need to be U shape with the entry
+landing in the middle"*, and *"we will need to build that stuff for bilevels
+still"*.
+
+**Both halves are downstream of this order.**
+
+### More floors is exactly this
+
+BUILD HOUSE pours each level's shell from THAT LEVEL'S OUTLINE. A bilevel
+needs ENTRY to exist as a level before the bone has anywhere to pour it. So
+the bone is not missing a bilevel routine; it is missing a level. Build the
+slot and the bone's existing per-level work reaches it.
+
+### IT IS NOT A U. IT IS TWO SHORT RUNS
+
+Movie said U first and corrected it the same minute: *"your right its not like
+a U"*, *"its more like 2 short runs"*. The correction is the whole design, so
+it is worth being exact about what it rules out.
+
+`stair-geometry.js:43` does offer a U -- *"Switchback: two runs 4.5" apart
+(rail or wall between) over one landing"* -- and it is the wrong tool.
+It is built as a TURN: `stair-geometry.js:100` puts the landing "near the
+middle of the descent", and the whole model is ONE stair between TWO floors,
+with a landing you walk THROUGH.
+
+**A bilevel's landing is a place you walk OFF.** It is the front door, and it
+is a FLOOR rather than part of a stair. So neither run is a U, neither carries
+a landing, and neither needs `shape` to be anything but `straight`:
+
+       MAIN FL  --+
+                  |  half flight up
+       ENTRY  ====+====   <- the landing IS a level; the front door is here
+                  |  half flight down
+       FOUNDATION-+
+
+Two ORDINARY STRAIGHT stairs, each to the next floor down BY POSITION -- the
+`floors[idx - 1]` rule this order already leans on for the id-4 ordering. What
+LOOKS like a switchback is just two short runs either side of a floor. The
+riser maths is the ordinary maths against half a storey, which is the same
+recompute the re-derive section above describes.
+
+**So the stair work here is nothing.** No new shape, no landing geometry, no
+switchback rule. The half-storey rise makes each run short by itself, because
+the rise is the thing that sets the tread count.
+
+So the sequence is: **ENTRY exists -> the two stairs are ordinary -> the bone
+can pour a bilevel.** Teaching the bone a bilevel before the level exists
+would mean teaching it a shape it would then have to unlearn.
+
+### One question that is Movie's
+
+**Does the entry landing want to be bigger than a stair landing?** The code's
+minimum is `STAIR_LANDING_MIN_FT = 3` -- 36" CLEAR, measured to the nosing
+above (`stair-geometry.js:57`). That is a STAIR rule. An entry landing is a
+foyer: people stand on it, and a front door swings into it. Nothing in the
+repo says what it should be, and the stair rule will not object.
+
 ## Open
 
 Both of the questions this order closed with have been ruled on since.

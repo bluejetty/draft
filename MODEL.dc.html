@@ -331,9 +331,32 @@
       [data-save-controls] { margin-left:0 !important; }
       [data-save-controls] > span { display:none; }
       [data-save-controls] select { max-width:58px; }
+    }
+    /* THE BUILD CLUSTER SHRINKS AT 1100, NOT 760, and that is a bug fix rather
+       than a preference. The cluster is centred ABSOLUTELY in the top bar, so
+       it grows both ways and nothing stops it growing onto the bar's own
+       buttons -- and it wins the stacking contest (z-index 6 against a bar
+       with none), so an overlap does not look wrong, it EATS THE CLICK.
+       Measured on the four-button row before any of this: at 1024 the BONE
+       sat over NEW and NEW could not be pressed. These rules were the answer
+       all along and were simply scoped 264px too low, so between 760 and 1100
+       the cluster rendered full size in a window that had stopped growing to
+       match.
+       NOT SOLVED BY POINTER-EVENTS. The idiom at the top of this sheet makes a
+       container's empty space click-through, and what sits on NEW at 1024 is
+       the bone's own <img> -- a real button, not a gap. Narrower is the fix;
+       transparent is not. */
+    @media (max-width: 1100px) {
       [data-build-cluster] img { height:30px !important; }
       [data-build-cluster] [data-build-house] img { height:36px !important; }
-      [data-build-cluster] [data-select-build] { height:26px !important; padding:0 5px !important; font-size:9px !important; }
+      /* BOTH RUNGS OF THE MENU. This read [data-select-build] alone, which was
+         every house button until 6 Sep and is now only the ENTRIES -- so the
+         three FAMILY buttons, the ones on screen almost all the time, quietly
+         stopped shrinking. A selector that moved out from under a rule nobody
+         re-read. */
+      [data-build-cluster] [data-select-build],
+      [data-build-cluster] [data-build-menu],
+      [data-build-cluster] [data-build-menu-back] { height:26px !important; padding:0 5px !important; font-size:9px !important; }
     }
   </style>
 </helmet>
@@ -385,11 +408,9 @@
          AND THE ORDER IS A SENTENCE: turtle, then which house, then whether
          there is a garage, then press. The bone ends the row because pressing
          it is the last thing you do. -->
-    <sc-if value="{{ buildMenuClosed }}" hint-placeholder-val="{{ true }}">
     <button data-select-turtle onClick="{{ onSelectTurtle }}" aria-label="TURTLE PACE" title="TURTLE — guided pace, explains each step (coming soon)" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0;">
       <img src="./assets/btn-turtle.png" alt="" style="height:38px; display:block;" />
     </button>
-    </sc-if>
     <!-- THE HOUSE MENU (Movie, 6 Sep): THREE families here, and pressing one
          swaps this stretch of the row for its submenu of finished houses.
          Text rather than lamp art because the words are the point -- Movie:
@@ -432,7 +453,7 @@
     <sc-for list="{{ buildEntryBtns }}" as="bt" hint-placeholder-count="0">
       <button data-select-build="{{ bt.id }}" onClick="{{ bt.onSelect }}" aria-label="{{ bt.label }}" title="{{ bt.title }}" style="height:30px; border:1px solid {{ bt.border }}; background:{{ bt.bg }}; color:{{ bt.color }}; padding:0 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.04em; cursor:pointer; white-space:nowrap; filter:{{ bt.glow }};">{{ bt.label }}</button>
     </sc-for>
-    <sc-if value="{{ attachedButtonOpen }}" hint-placeholder-val="{{ false }}">
+    <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
       <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" aria-label="{{ attachedGarageLabel }}" title="{{ attachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ attachedButtonGlow }};">
         <!-- Lit and dark are two pieces of art. A bound src would be fetched
              literally by the parser once per load ({{ ... }} as a URL, a 404)
@@ -442,12 +463,10 @@
         <sc-if value="{{ attachedDark }}" hint-placeholder-val="{{ true }}"><img src="./assets/attachedout.png" alt="" style="height:38px; display:block;" /></sc-if>
       </button>
     </sc-if>
-    <sc-if value="{{ buildMenuClosed }}" hint-placeholder-val="{{ true }}">
     <button data-mark-detached-garage onClick="{{ onMarkDetachedGarage }}" aria-label="{{ detachedGarageLabel }}" title="{{ detachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ detachedButtonGlow }};">
       <sc-if value="{{ detachedLit }}" hint-placeholder-val="{{ false }}"><img src="./assets/btn-detached.png" alt="" style="height:38px; display:block;" /></sc-if>
       <sc-if value="{{ detachedDark }}" hint-placeholder-val="{{ true }}"><img src="./assets/detachedout.png" alt="" style="height:38px; display:block;" /></sc-if>
     </button>
-    </sc-if>
     <!-- THE BONE ALONE RISES. While the entry coach is up the cluster stops
          making a stacking context of its own, so this wrapper -- and nothing
          else on the row -- comes through the scrim. The one thing you already
@@ -21889,23 +21908,13 @@ class Component extends DCLogic {
       buildClusterZ: this.state.entryCoach === true ? 61 : 6,
       buildClusterClass: this.state.entryCoach === true ? 'coaching' : '',
       hasHouseMaster: houseExists,
-      // WHILE A SUBMENU IS OPEN THE ROW CARRIES ONLY THE CHOICE. The turtle
-      // and the two garage marks step out, and come back when it closes.
-      //
-      // MEASURED, NOT PREFERRED. The cluster is centred absolutely in the top
-      // bar, so it grows both ways: the five-entry BUNGALOW submenu ran
-      // 288-992 at 1280 wide and sat on top of the NEW button at 938, which
-      // stops NEW being pressable. A spec caught it (build-row-lights, "lit
-      // survives a reload") because its probe now opens the menu to read a
-      // type lamp, and NEW was the next thing it pressed.
-      //
-      // Truncating the labels was the other way out and is worse: they are
-      // Movie's words for the houses, and shortening them to fit a layout is
-      // the drawing bending to the paper. Standing the unrelated buttons down
-      // buys 92px and reads better -- while you are choosing a house, the
-      // pace and the garages are not the question.
-      buildMenuClosed: openFamily == null,
-      attachedButtonOpen: houseExists && openFamily == null,
+      // THE TURTLE AND THE GARAGE MARKS STAY PUT while a submenu is open.
+      // Standing them down was tried first, to buy 92px against the bar, and
+      // it was the wrong trade twice over: it hid the garage lamps at the
+      // moment a drafter is choosing whether their house has one, and four
+      // lamp specs went red because reading a lamp now means opening a menu.
+      // The width belongs to the stylesheet, not to hiding buttons -- see the
+      // 1100px block.
       // The house types: LIT is the type stored on the drawing, derived from
       // state on every render and never a second flag, so F5 keeps it and NEW
       // clears it for free. ARMED is the outline trace live under the lit
