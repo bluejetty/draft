@@ -1053,3 +1053,109 @@ been run on a second tree AND a second machine. One clean run on the box you
 happen to have proves that box, not the code. Every conclusion in the table
 above changed at least once before the sixth run.
 
+
+## Tier 2n — underlays, and the honest half of a cheap decision (6 Sep)
+
+The last of the five. The painter needed nothing — twenty lines, no hardcoded
+colour, four env keys. What it needed was a **loader**, and the loader forced a
+decision that is only defensible if it is said out loud.
+
+### The painter refuses four ways and every refusal draws nothing
+
+```
+env.isPrinting                     -> return
+no underlays, or no activeLevel    -> return
+underlay.levelId !== activeLevel.id-> skip
+imageFor(id) falsy                 -> skip          <- the one that matters
+width or height under 1px          -> skip
+```
+
+That silence is deliberate and correct: an underlay is a photograph or a PDF
+page and it arrives with its own colours, so the painter puts no ink of its own
+on the page (palette.js says the same about `draw-underlay`). No placeholder,
+no outline, not even for image-not-loaded.
+
+**Correct in the bone, dangerous here.** MODEL.dc.html always has the image,
+because it decoded it. This page might not — and a viewer that silently omits
+the thing the drafter was tracing is indistinguishable from a broken viewer.
+
+### RASTER ONLY, and the cost of the alternative
+
+MODEL.dc.html's loader decodes two kinds: images straight from the blob, PDF
+pages re-rendered through pdf.js. Carrying pdf.js here costs **1.37 MB**
+(`vendor/pdf-3.11.174.min.js` 312 KB plus its 1061 KB worker) on a page whose
+entire claim is a short, exact dependency list that a test pins.
+
+So this page decodes rasters — seven lines, `loadNamedFile` +
+`createImageBitmap`, **no new dependency, the script list stays at 15** — and
+says so about the rest.
+
+The bone's loader already contains the identical refusal
+(`if (!window.pdfjsLib) continue;`). The difference is not the behaviour, it is
+that this page admits it on screen.
+
+### Where the admission goes, and why not a dialog
+
+`#notice` is a full-screen overlay for fatal states — wrong for "one image of
+four is missing while the drawing is fine". The readout already speaks in
+shown-of-total AND already carries this exact rule for dropped geometry:
+*"Malformed geometry is dropped on load. Say how much, so a thinner drawing is
+a fact rather than a mystery."*
+
+So the counter joins it, on the same rule:
+
+```
+underlays 1/2   ...   1 PDF underlay not drawn (needs pdf.js)
+```
+
+### THE TEST FOUND A BUG IN THE COUNTER
+
+The loader decodes every underlay in the drawing, not just the active level's,
+so switching level is instant — the bone does the same. The counter's numerator
+was `underlayImages.size`, which counts images the drafter cannot currently
+see. Against a level-scoped denominator it printed **`underlays 1/0`**.
+
+A ratio above one is not a fact, it is a bug, and it would have shipped: it
+only appears when an underlay on ANOTHER level has decoded. Both sides are
+level-scoped now.
+
+### And a mutation survived the first sweep, for the second time this tier
+
+Deleting the `|| underlay.kind === 'pdf'` guard from the loader left all three
+page tests green. The PDF fixture had no stored file, so the loader bailed one
+line earlier at `loadNamedFile` and the guard was never reached — the test
+could not tell the guard from its absence.
+
+The fixture now stores a **decodable PNG under a `kind: 'pdf'` record**, so the
+guard is the only thing stopping it, and `underlays 0/1` becomes a statement
+about the guard rather than about a missing file. Same shape as tier 2m's
+`onPlan` gap: *a test that cannot reach the branch is not testing the branch.*
+
+### The bill
+
+| | |
+|---|---|
+| new modules | **none** |
+| `MODEL.html` | +1 painter, +1 loader, +1 selector, readout counter and PDF notice |
+| painter | **untouched** |
+| script tags | **unchanged — still 15** |
+| checks | 3 page tests, 5 / 5 page mutations |
+
+**TIER 2 IS COMPLETE — all five remaining painters land.**
+
+Counted rather than claimed: render-2d has **17 exports and MODEL.html calls
+13**. The four it does not call are not gaps in this tier:
+
+| not called | why |
+|---|---|
+| `drawCutPreview2D` | the cut TOOL's rubber band; this page has no tools (and it holds the one hardcode left, measured at 2.66 against night in tier 2l) |
+| `drawStairNotes2D` | the STAIR workspace, a drafting surface rather than a plan |
+| `drawBoneyardMark2D` | the boneyard shelf, likewise |
+| `strokeSegPath2D` | a helper the other painters call, not a painter |
+
+So every painter that draws the DRAWING is now shared. The three unreached
+painters are bound to editing surfaces this page deliberately does not have,
+which is a statement about the viewer's scope rather than about the extraction.
+
+The one thing this page still cannot do that the bone can is decode a PDF
+underlay, and it says so on screen.
