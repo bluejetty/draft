@@ -652,8 +652,9 @@ wall.
 
 ### ASSIST LEVEL / PACE
 
-DOG, TURTLE, RABBIT — how much the program does for you.
-`_pressAssistLevel(pace)`. Not a skill level, not a mode.
+DOG, TURTLE — how much the program does for you. `_pressTurtle()`. Not a skill
+level, not a mode. RABBIT was a third, cancelled 6 Sep, which is why the
+handler no longer takes a pace.
 
 ---
 

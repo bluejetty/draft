@@ -20,7 +20,7 @@ teacher who explains things; he is not a mode. Do not couple them.
 
 ---
 
-## The three buttons — TURTLE / DOG / RABBIT
+## The buttons — TURTLE / DOG
 
 Not three characters. **A ladder of how much the machine does for you**, over
 one house model:
@@ -29,10 +29,12 @@ one house model:
 | --- | --- |
 | **TURTLE** | You draw it, one wall at a time. |
 | **DOG** | It draws one house — the existing auto-house. |
-| **RABBIT** | It draws four (or more) plans and you pick one. |
 
-Two of the three are not built yet. TURTLE is specified below; RABBIT and the
-real-estate area follow it.
+**IT WAS THREE.** RABBIT drew four plans per press and you picked one. Movie
+cancelled it outright on 6 Sep -- *"we aren't doing the rabbit in any way"* --
+so the ladder is two rungs and the top of the range is one house, drawn well.
+Neither of the remaining two is built yet; TURTLE is specified below, and the
+real-estate area follows it.
 
 **TURTLE** is a Logo turtle. A turtle appears on screen and draws walls by
 walking. Selecting it also switches a PC into the iPad interaction set — big
@@ -181,32 +183,10 @@ provenance problem already flagged against `room-standards.js`.
 
 ---
 
-## RABBIT — four plans per press
-
-The market for this is production home builders: they want **one plan they have
-costed, offered in several versions** so a street does not look like a
-barracks.
-
-**Variation is whatever the restrictions do not pin down.** There is no
-"how random" slider. Press it with nothing set and you get four different
-houses; set the footprint, the garage side and the budget and you get four
-versions of your house. The user controls diversity by controlling constraints,
-which is how a real client brief works.
-
-This gives the constraint set a second job. It is not only validation for
-grip-tab moves — it is the generator's input. Build it that way from the start
-rather than bolting the generator on afterwards.
-
-Choosing one of four means discarding three, and discarding must be
-recoverable: a beginner will bin the good one. That is the BONEYARD, which the
-saved format already carries.
-
-Open: does a rabbit press cost one bone or four?
-
 ## The real-estate / concept-plan area
 
-A separate left-hand area, and a separate job from rabbit. Rabbit varies the
-**plan**; this area **dresses the plan the user picked**.
+A separate left-hand area. It **dresses the plan the user drew** -- it does not
+generate or vary plans.
 
 - Document type is the 8.5×11 real-estate/concept sheet already settled in the
   paper rules. Not a new sheet type.
@@ -296,4 +276,4 @@ text at someone who never noticed.
 - Does BONE LOCK default on?
 - Is detachment per storey or per wall?
 - Do interior walls have bones, or does the user move *rooms* instead?
-- What are DOG and RABBIT?
+- What is DOG?

@@ -1,5 +1,6 @@
-// THE BUILD ROW — turtle, rabbit, and lamps that mean something (board NEW-4,
-// the house types NEW-5).
+// THE BUILD ROW — turtle, the house types, the garages, the bone, and lamps
+// that mean something (board NEW-4, the house types NEW-5; the rabbit removed
+// and the row re-sorted 6 Sep).
 //
 // Three states per lamp: OFF when the thing does not exist and its tool is
 // not armed, LIT once the thing is in the drawing, ARMED while you trace.
@@ -54,7 +55,6 @@ const lamps = page => page.evaluate(() => {
     turtle: read('[data-select-turtle]'),
     attached: read('[data-mark-attached-garage]'),
     detached: read('[data-mark-detached-garage]'),
-    rabbit: read('[data-select-rabbit]'),
     types,
   };
 });
@@ -217,31 +217,38 @@ test.describe('The build row lamps', () => {
     expect((await h.savedDrawing(page)).buildType).toBeNull();
   });
 
-  test('turtle and rabbit bookend the row, always present and never lamps', async ({ page }) => {
+  test('the turtle holds the left end, the bone the right, and no rabbit', async ({ page }) => {
     await h.openModel(page, { webgl: false });
 
     const cluster = page.locator('[data-build-cluster]');
     await expect(cluster.locator('[data-select-turtle]')).toBeVisible();
-    await expect(cluster.locator('[data-select-rabbit]')).toBeVisible();
 
-    // They wear no filter in any drawing state — an assistance level is not
-    // a thing that can exist, so dim/armed/lit would say something untrue.
+    // CANCELLED, 6 Sep. Pinned as an absence rather than deleted quietly, so
+    // the button cannot drift back in: it is gone from the row here and from
+    // the first-run ladder in proto/first-run-harness.js.
+    await expect(cluster.locator('[data-select-rabbit]')).toHaveCount(0);
+
+    // The turtle wears no filter in any drawing state -- an assistance level
+    // is not a thing that can exist, so dim/armed/lit would say something
+    // untrue about it.
     let state = await lamps(page);
     expect(state.turtle.glow).toBe('');
-    expect(state.rabbit.glow).toBe('');
 
-    // First and last in the cluster, with the lamps between them.
+    // THE ORDER IS THE SENTENCE: turtle, which house, whether there is a
+    // garage, then press. The bone ends the row because pressing it is the
+    // last thing you do.
     const order = await page.evaluate(() => [...document.querySelector('[data-build-cluster]').children]
       .filter(el => el.tagName === 'BUTTON' || el.querySelector('button'))
       .map(el => (el.tagName === 'BUTTON' ? el : el.querySelector('button')).dataset));
     expect(Object.keys(order[0])).toContain('selectTurtle');
-    expect(Object.keys(order[order.length - 1])).toContain('selectRabbit');
+    expect(Object.keys(order[order.length - 1])).toContain('buildHouse');
+    const detachedAt = order.findIndex(d => 'markDetachedGarage' in d);
+    expect(detachedAt).toBeGreaterThan(0);
+    expect(detachedAt).toBeLessThan(order.length - 1);
 
-    // They say what is coming rather than answering a press with nothing.
+    // It says what is coming rather than answering a press with nothing.
     await page.locator('[data-select-turtle]').click();
     await expect(page.locator('[data-model-drawing-message]')).toContainText('TURTLE');
-    await page.locator('[data-select-rabbit]').click();
-    await expect(page.locator('[data-model-drawing-message]')).toContainText('RABBIT');
 
     // Still bare after a house exists and the lamps have come on.
     await traceHouseAs(page, 'bungalow', HOUSE);
@@ -249,6 +256,5 @@ test.describe('The build row lamps', () => {
     state = await lamps(page);
     expect(litTypes(state)).toEqual(['bungalow']);
     expect(state.turtle.glow).toBe('');
-    expect(state.rabbit.glow).toBe('');
   });
 });

@@ -20,10 +20,10 @@ built, and change a rule in here without rewriting the interview.
 
 - **the drafting dogs**, arranging rooms from the order
 - **TOY MODE**, to keep a beginner inside buildable geometry
-- **RABBIT**, later, generating several plans that all have to be valid
 - **the drafter**, when they want to know why the machine did that
 
-Four readers, one book. That's the reason it's written as tables the code
+Three readers, one book. (RABBIT was a fourth, generating several plans that
+all had to be valid; cancelled 6 Sep.) That's the reason it's written as tables the code
 loads rather than prose someone implements — a rule in a document gets built
 once and then drifts; a rule in a table is the thing actually running.
 

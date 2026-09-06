@@ -118,9 +118,9 @@ behind one hour of your rulings.
 
 ## What is deliberately not in this path
 
-- **RABBIT.** Four plans per press. It reuses the same constraint set as the
-  generator's input, which is the argument for building step 1 properly, but
-  it's a separate route.
-- **The real-estate / concept-plan area.** Dresses a chosen plan; separate job
-  again.
+- **The real-estate / concept-plan area.** Dresses a chosen plan; separate job.
+
+RABBIT was the first entry here — four plans per press, reusing the constraint
+set as a generator's input. **Cancelled 6 Sep.** It was also the reason given
+for building step 1 a particular way, so that argument goes with it.
 - **Gruff.** He's a teacher, not a mode. Don't couple them.

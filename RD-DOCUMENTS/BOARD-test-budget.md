@@ -90,6 +90,13 @@ one of them looked like evidence at some point.
 | Skipper's box, idle | yes | slow enough that latency crosses it |
 | Skipper's box, +180s | control | proves the mechanism |
 
+**One more accidental control, worth recording.** PR #310 changed nothing but
+markdown and still ran the full sharded suite — **clean, four for four**. So
+CI's machine is not near the line at all, consistent with base run 802. That
+does not weaken anything here: the budget bites on slower hardware and under
+contention, and CI is neither. Recorded because "CI is always green" is exactly
+the argument someone will later use to say this board was overstated.
+
 **A green run only means something from a box that has been shown to go red.**
 That sentence would have saved hours. We wrote off three instruments for the
 same reason, twice each, before it stuck.

@@ -84,19 +84,21 @@ const run = (...steps) => steps.reduce((state, action) => F.advance(state, actio
     /tools are on the left/i.test(F.line(noWay)), F.line(noWay));
 }
 
-// ── 3 · THE THREE WAYS IN, INCLUDING THE ONE THAT IS NOT BUILT ──────────
+// ── 3 · THE TWO WAYS IN, AND THE RUNG THAT WAS CANCELLED ────────────────
 {
-  check('three ways in, and they are the ladder', F.WAYS.length === 3
-    && F.WAYS.map(way => way.id).join(',') === 'bone,rabbit,turtle');
+  check('two ways in, and they are the ladder', F.WAYS.length === 2
+    && F.WAYS.map(way => way.id).join(',') === 'bone,turtle');
 
-  // RABBIT IS OFFERED THOUGH IT IS NOT BUILT. The ladder is the thing being
-  // explained, and a rung missing from it teaches the wrong shape -- but a
-  // press says so plainly rather than answering with nothing.
-  check('the unbuilt rung is still shown', F.wayFor('rabbit') !== null);
-  check('and is marked unbuilt rather than quietly working',
-    F.wayFor('rabbit').ready === false && typeof F.wayFor('rabbit').soon === 'string');
+  // IT WAS THREE, AND THE MIDDLE RUNG IS GONE ON PURPOSE. RABBIT -- GIVE ME A
+  // FEW -- was offered though unbuilt, on the reasoning that a ladder with a
+  // gap teaches the wrong shape. Movie cancelled the rabbit on 6 Sep, which
+  // turns that reasoning around: offering a rung for something that is not
+  // coming is a promise broken on the first screen a beginner sees. These
+  // checks pin the ABSENCE so the rung cannot drift back in unnoticed.
+  check('the cancelled rung is gone', F.wayFor('rabbit') === null);
+  check('and no way is offered unbuilt', F.WAYS.every(way => way.ready === true));
   const pressed = F.advance(run({}, { bedrooms: 3 }), { way: 'rabbit' });
-  check('pressing it does not move the ceremony on',
+  check('pressing the name it used to have does nothing',
     pressed.stage === F.STAGE.CHOOSE && pressed.way == null, JSON.stringify(pressed));
   check('while the two that are built do',
     F.advance(run({}, { bedrooms: 3 }), { way: 'bone' }).stage === F.STAGE.DONE

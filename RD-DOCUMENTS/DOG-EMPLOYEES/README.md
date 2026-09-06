@@ -35,7 +35,8 @@ dog is held to them.
 
 The building guidebook is filed here because the drafting dogs work from it,
 but they are not its only readers — TOY MODE reads it to keep a beginner inside
-buildable geometry, and RABBIT will read it to generate plans. Neither is a dog.
+buildable geometry. TOY MODE is not a dog. (RABBIT was to be a third reader,
+generating plans; cancelled 6 Sep.)
 
 Professor Gruff, who writes notes inside the model, is a different character
 doing a different job and is not an employee of either shift. Name to be sorted
