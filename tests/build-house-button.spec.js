@@ -37,6 +37,24 @@ test('strip starts as the four house types · BONE · DETACHED; ATTACHED waits f
   await expect(page.locator('[data-build-garage]')).toHaveCount(0);
 });
 
+test('an open submenu does not cover the bar it sits in', async ({ page }) => {
+  await h.openModel(page);
+
+  // THE ROW IS CENTRED ABSOLUTELY IN THE TOP BAR, so it grows both ways and
+  // can end up over the bar's own buttons. The five-entry BUNGALOW submenu did
+  // exactly that -- 288 to 992 at 1280 wide, with NEW starting at 938 -- and
+  // NEW stopped being pressable.
+  //
+  // NOTHING FAILED ON PURPOSE. build-row-lights' probe happened to press NEW
+  // straight after opening the menu, and the click was swallowed by the
+  // detached garage lamp. A layout that eats a button is not the sort of thing
+  // that should need luck, so this presses NEW with the WIDEST submenu open:
+  // a click that lands proves no part of the cluster is on top of it.
+  await page.locator('[data-build-menu="bungalow"]').click();
+  await expect(page.locator('[data-select-build]')).toHaveCount(5);
+  await page.getByRole('button', { name: 'NEW', exact: true }).click({ timeout: 5000 });
+});
+
 test('a house outline unlocks ATTACHED, and it survives a reload', async ({ page }) => {
   await h.openModel(page);
 

@@ -385,9 +385,11 @@
          AND THE ORDER IS A SENTENCE: turtle, then which house, then whether
          there is a garage, then press. The bone ends the row because pressing
          it is the last thing you do. -->
+    <sc-if value="{{ buildMenuClosed }}" hint-placeholder-val="{{ true }}">
     <button data-select-turtle onClick="{{ onSelectTurtle }}" aria-label="TURTLE PACE" title="TURTLE — guided pace, explains each step (coming soon)" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0;">
       <img src="./assets/btn-turtle.png" alt="" style="height:38px; display:block;" />
     </button>
+    </sc-if>
     <!-- THE HOUSE MENU (Movie, 6 Sep): THREE families here, and pressing one
          swaps this stretch of the row for its submenu of finished houses.
          Text rather than lamp art because the words are the point -- Movie:
@@ -421,10 +423,16 @@
     <sc-for list="{{ buildFamilyBtns }}" as="bt" hint-placeholder-count="3">
       <button data-build-menu="{{ bt.id }}" onClick="{{ bt.onSelect }}" aria-label="{{ bt.label }}" title="{{ bt.title }}" style="height:30px; border:1px solid {{ bt.border }}; background:{{ bt.bg }}; color:{{ bt.color }}; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; cursor:pointer; white-space:nowrap; filter:{{ bt.glow }};">{{ bt.label }}</button>
     </sc-for>
+    <!-- TIGHTER THAN A FAMILY BUTTON: 5px of padding and 0.04em of tracking
+         rather than 8 and 0.06. Five entries carry more words than three
+         families do, and the row is centred absolutely in the bar, so the
+         width it does not spend is width it does not push over the bar's own
+         buttons. Measured: this is what puts the BUNGALOW submenu's right
+         edge back inside NEW's left edge at 1280. -->
     <sc-for list="{{ buildEntryBtns }}" as="bt" hint-placeholder-count="0">
-      <button data-select-build="{{ bt.id }}" onClick="{{ bt.onSelect }}" aria-label="{{ bt.label }}" title="{{ bt.title }}" style="height:30px; border:1px solid {{ bt.border }}; background:{{ bt.bg }}; color:{{ bt.color }}; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.06em; cursor:pointer; white-space:nowrap; filter:{{ bt.glow }};">{{ bt.label }}</button>
+      <button data-select-build="{{ bt.id }}" onClick="{{ bt.onSelect }}" aria-label="{{ bt.label }}" title="{{ bt.title }}" style="height:30px; border:1px solid {{ bt.border }}; background:{{ bt.bg }}; color:{{ bt.color }}; padding:0 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:700; letter-spacing:0.04em; cursor:pointer; white-space:nowrap; filter:{{ bt.glow }};">{{ bt.label }}</button>
     </sc-for>
-    <sc-if value="{{ hasHouseMaster }}" hint-placeholder-val="{{ false }}">
+    <sc-if value="{{ attachedButtonOpen }}" hint-placeholder-val="{{ false }}">
       <button data-mark-attached-garage onClick="{{ onMarkAttachedGarage }}" aria-label="{{ attachedGarageLabel }}" title="{{ attachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ attachedButtonGlow }};">
         <!-- Lit and dark are two pieces of art. A bound src would be fetched
              literally by the parser once per load ({{ ... }} as a URL, a 404)
@@ -434,10 +442,12 @@
         <sc-if value="{{ attachedDark }}" hint-placeholder-val="{{ true }}"><img src="./assets/attachedout.png" alt="" style="height:38px; display:block;" /></sc-if>
       </button>
     </sc-if>
+    <sc-if value="{{ buildMenuClosed }}" hint-placeholder-val="{{ true }}">
     <button data-mark-detached-garage onClick="{{ onMarkDetachedGarage }}" aria-label="{{ detachedGarageLabel }}" title="{{ detachedGarageLabel }}" style="border:none; background:transparent; padding:0; cursor:pointer; line-height:0; filter:{{ detachedButtonGlow }};">
       <sc-if value="{{ detachedLit }}" hint-placeholder-val="{{ false }}"><img src="./assets/btn-detached.png" alt="" style="height:38px; display:block;" /></sc-if>
       <sc-if value="{{ detachedDark }}" hint-placeholder-val="{{ true }}"><img src="./assets/detachedout.png" alt="" style="height:38px; display:block;" /></sc-if>
     </button>
+    </sc-if>
     <!-- THE BONE ALONE RISES. While the entry coach is up the cluster stops
          making a stacking context of its own, so this wrapper -- and nothing
          else on the row -- comes through the scrim. The one thing you already
@@ -21879,6 +21889,23 @@ class Component extends DCLogic {
       buildClusterZ: this.state.entryCoach === true ? 61 : 6,
       buildClusterClass: this.state.entryCoach === true ? 'coaching' : '',
       hasHouseMaster: houseExists,
+      // WHILE A SUBMENU IS OPEN THE ROW CARRIES ONLY THE CHOICE. The turtle
+      // and the two garage marks step out, and come back when it closes.
+      //
+      // MEASURED, NOT PREFERRED. The cluster is centred absolutely in the top
+      // bar, so it grows both ways: the five-entry BUNGALOW submenu ran
+      // 288-992 at 1280 wide and sat on top of the NEW button at 938, which
+      // stops NEW being pressable. A spec caught it (build-row-lights, "lit
+      // survives a reload") because its probe now opens the menu to read a
+      // type lamp, and NEW was the next thing it pressed.
+      //
+      // Truncating the labels was the other way out and is worse: they are
+      // Movie's words for the houses, and shortening them to fit a layout is
+      // the drawing bending to the paper. Standing the unrelated buttons down
+      // buys 92px and reads better -- while you are choosing a house, the
+      // pace and the garages are not the question.
+      buildMenuClosed: openFamily == null,
+      attachedButtonOpen: houseExists && openFamily == null,
       // The house types: LIT is the type stored on the drawing, derived from
       // state on every render and never a second flag, so F5 keeps it and NEW
       // clears it for free. ARMED is the outline trace live under the lit
