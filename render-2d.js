@@ -446,7 +446,19 @@ if (!window.DraftRender2D) {
     ctx.save();
     ctx.globalAlpha = options.preview ? 0.55 : 1;
     ctx.strokeStyle = env.FIXTURE_COLOR;
-    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    // THE BODY FILL, AND WHY IT IS NOT A LITERAL ANY MORE. It was
+    // 'rgba(255,255,255,0.65)' -- a translucent white, so the wall hatch shows
+    // faintly through a sink. Correct on a light page and only on a light
+    // page: MODEL.html's night skin paints its ground #1d1f20 and its fixture
+    // linework #e7e5e2, so a white blob under near-white lines is the fixture
+    // erased. Same defect as the leader note painted in the colour of the page
+    // (#302), one layer further in, and it is invisible from MODEL.dc.html
+    // because that page has one ground and no second one to be wrong against.
+    //
+    // NO FALLBACK, deliberately. A `|| 'rgba(255,255,255,0.65)'` here would
+    // let a caller keep the literal by saying nothing, which is the drift this
+    // change exists to remove -- both boards now name the fill they want.
+    ctx.fillStyle = env.fixtureFill;
     ctx.lineWidth = 1.2;
     rect(a0, a1, cBack, cFront); ctx.fill(); ctx.stroke();
     const kind = fixture.kind;
