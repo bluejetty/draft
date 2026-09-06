@@ -90,12 +90,33 @@ one of them looked like evidence at some point.
 | Skipper's box, idle | yes | slow enough that latency crosses it |
 | Skipper's box, +180s | control | proves the mechanism |
 
-**One more accidental control, worth recording.** PR #310 changed nothing but
-markdown and still ran the full sharded suite — **clean, four for four**. So
-CI's machine is not near the line at all, consistent with base run 802. That
-does not weaken anything here: the budget bites on slower hardware and under
-contention, and CI is neither. Recorded because "CI is always green" is exactly
-the argument someone will later use to say this board was overstated.
+### CI IS NOT SAFELY ON THE FAR SIDE, AND THIS PARAGRAPH SAID IT WAS
+
+**Written wrong first, corrected within the hour, and kept as both.** The
+original text read:
+
+> *PR #310 changed nothing but markdown and still ran the full sharded suite —
+> clean, four for four. So CI's machine is **not near the line at all**,
+> consistent with base run 802.*
+
+Two clean CI runs — base run 802 and a markdown-only PR — and I called it a
+position. **Then CI crossed the line.** PR #313, a change confined to
+`LAYOUT.dc.html`, failed `model-html-origin.spec.js:135` on shard 2: a
+90-second timeout, 232 passed, and a spec whose diff cannot reach it —
+MODEL.html never loads LAYOUT.dc.html and the spec names LAYOUT zero times.
+
+So CI is **near enough to cross on a bad draw**, on its own hardware, with no
+slow container and no second tree involved.
+
+**Which is the third time in one day that two data points were read as a
+trend** — the same error this board already records twice, committed by the
+person writing it down. That is worth more than the correction: the pattern is
+not carelessness, it is what two matching results *feel* like.
+
+**And it raises the stakes rather than lowering them.** A green check on this
+repo is partly luck on CI's own machine, not merely on an unlucky one. Anyone
+using "CI is always green" to dismiss a red shard as "must be my change" is
+using a claim that has now been falsified.
 
 **A green run only means something from a box that has been shown to go red.**
 That sentence would have saved hours. We wrote off three instruments for the
