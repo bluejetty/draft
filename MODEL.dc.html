@@ -1253,7 +1253,7 @@
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:3px;">First string offset</div>
         <div style="display:flex; gap:3px;">
           <sc-for list="{{ autoDimOffsetBtns }}" as="od" hint-placeholder-count="2">
-            <button onClick="{{ od.onSelect }}" title="{{ od.title }}" style="flex:1; border:1px solid {{ od.border }}; background:{{ od.bg }}; color:{{ od.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ od.label }}</button>
+            <button data-auto-dim-offset="{{ od.value }}" onClick="{{ od.onSelect }}" title="{{ od.title }}" style="flex:1; border:1px solid {{ od.border }}; background:{{ od.bg }}; color:{{ od.color }}; padding:6px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.04em; cursor:pointer;">{{ od.label }}</button>
           </sc-for>
         </div>
       </div>
@@ -2682,7 +2682,11 @@ class Component extends DCLogic {
     outlineGarage: null,      // 'attached' | 'detached' — the next outline drawn is a garage
     garageCornerPrompt: false, // CONNECT AT CORNER stub choice pending
     detachedFoundationPrompt: false, // detached-garage foundation choice pending
-    autoDimFirstOffsetFt: 1.5, // gap between the plan and the closest auto string
+    // The gap between the plan and the closest auto string. NULL until a
+    // drafter picks one, which is the persisted contract: null means derive
+    // format.AUTO_DIM_FIRST_OFFSET_FT, so moving that default later reaches
+    // every drawing that never chose. Every reader below derives.
+    autoDimFirstOffsetFt: format.autoDimFirstOffsetFt(null),
     levelLayerViews: { 5:'plan', 3:'plan', 1:'foundation' },
     levelAssemblies: {},        // levelId -> wall height + floor joist/sheathing assembly
     leftRailOpen: false,        // pull-out tabs: both side rails start hidden
@@ -3108,6 +3112,7 @@ class Component extends DCLogic {
         .map(([id, zone]) => [id, { ...zone }])) },
       sectionTable: format.sectionTable(this.state.sectionTable),
       buildType: format.buildType(this.state.buildType),
+      autoDimFirstOffsetFt: format.autoDimFirstOffsetFt(this.state.autoDimFirstOffsetFt),
       boneyardShelves: this.state.boneyardShelves.map(shelf => ({ ...shelf })),
       activeBoneyardShelfId: this.state.activeBoneyardShelfId,
       nextBoneyardShelfId: this.state.nextBoneyardShelfId,
@@ -5229,6 +5234,7 @@ class Component extends DCLogic {
         zoneHeights: format.zoneHeights(saved.zoneHeights),
         sectionTable: format.sectionTable(saved.sectionTable),
         buildType: format.buildType(saved.buildType),
+        autoDimFirstOffsetFt: format.autoDimFirstOffsetFt(saved.autoDimFirstOffsetFt),
         tour: format.tour(saved.tour),
         roofIntent: format.roofIntent(saved.roofIntent),
         tourPopup: format.tour(saved.tour).step === 'foundation' ? 'foundation' : false,
@@ -8607,8 +8613,30 @@ class Component extends DCLogic {
 
   // Half the first dimension offset: the middle of the gap between the
   // exterior walls and the first string, where cut marks sit cozy.
+  // stored ?? derived(), in one place. Every reader goes through here so the
+  // number a drawing draws at is the same one the picker lights, whether it
+  // was chosen or defaulted.
+  //
+  // ONLY THIS PAGE, SO FAR. MODEL.html has its own `cutMarkGapFt()` -- one
+  // underscore apart from this file's `_cutMarkGapFt()`, same concept, same
+  // half-of-the-offset arithmetic -- and it still hardcodes 1.5 because until
+  // this key existed the value had no home to read from. Its comment says so
+  // out loud. That page reading the persisted key is a separate deliverable,
+  // and it is the one that closes tier 2's last acknowledged infidelity: the
+  // new page painting its own default instead of what the drawing says.
+  //
+  // WRITTEN DOWN BECAUSE A NEAR-COLLISION READS AS SETTLED. Two functions with
+  // nearly the same name on two boards, one fixed and one not, is the shape
+  // DETACHED_BEAM_ABOVE_GRADE_IN had -- a plausible name over a value that had
+  // stopped matching its neighbour, where nothing looks wrong. A reader of
+  // "the gap now derives through the format" would reasonably conclude both
+  // were done.
+  _autoDimFirstOffsetFt() {
+    return this.state.autoDimFirstOffsetFt ?? format.AUTO_DIM_FIRST_OFFSET_FT;
+  }
+
   _cutMarkGapFt() {
-    return (this.state.autoDimFirstOffsetFt || 1.5) / 2;
+    return this._autoDimFirstOffsetFt() / 2;
   }
 
   // A hand-placed cut reads as an infinite line: it runs clear through the
@@ -17702,7 +17730,7 @@ class Component extends DCLogic {
     const segments = window.DraftAutoDims.computeAutoDimStrings({
       walls, outlines, roofs, openings,
       offsetOutline: (pts, dist) => this._offsetOutline(pts, dist),
-      firstOffset: this.state.autoDimFirstOffsetFt,
+      firstOffset: this._autoDimFirstOffsetFt(),
       jogMergeFt: AUTO_DIM_JOG_MERGE_FT,
       stringSpacingFt: AUTO_DIM_STRING_SPACING_FT,
     });
@@ -21480,9 +21508,14 @@ class Component extends DCLogic {
       dimensionToolActive: dimensioning,
       onAutoDims: () => this._generateAutoDims(),
       autoDimOffsetBtns: AUTO_DIM_FIRST_OFFSETS_FT.map(offset => {
-        const isActive = this.state.autoDimFirstOffsetFt === offset.value;
+        const isActive = this._autoDimFirstOffsetFt() === offset.value;
         return {
           label: offset.label,
+          // The value on the button, so a spec can press a KNOWN offset and
+          // check that exact number came back off the file. Without it the
+          // round-trip assertion could only be written behind an "if these
+          // buttons exist", which is the shape that passes by not running.
+          value: String(offset.value),
           title: `First auto string sits ${offset.label} off the plan; further strings step out 1'-6" each`,
           border: isActive ? '#5980a6' : 'rgba(29,31,32,0.2)',
           bg: isActive ? 'rgba(89,128,166,0.14)' : '#fff',
