@@ -396,6 +396,53 @@
       .filter(stair => Number(stair.levelId) === levelId
         && (!views.length || stair.view === viewId));
   };
+  // UNDERLAYS TAKE THE LEVEL FILTER ONLY -- no view filter, because an
+  // underlay is a tracing image for the whole level, not for one layer set.
+  // That is the painter's own rule (drawUnderlays2D skips on
+  // `underlay.levelId !== env.activeLevel.id` and tests nothing else), copied
+  // rather than invented.
+  const underlays = () => (drawing?.underlays || [])
+    .filter(underlay => Number(underlay.levelId) === activeLevelId());
+
+  // Decoded tracing images, by underlay id. Empty until the async loader
+  // fills it, which is why paint() must tolerate a missing image -- and the
+  // painter already does: `if (!image) continue`.
+  const underlayImages = new Map();
+
+  // RASTER ONLY, AND THE PDF CASE IS NAMED RATHER THAN SKIPPED.
+  //
+  // MODEL.dc.html decodes both kinds: images straight from the blob, PDF pages
+  // re-rendered through pdf.js. Carrying pdf.js here costs 1.37 MB
+  // (vendor/pdf-3.11.174.min.js + its worker) against a page whose whole claim
+  // is an exact, short dependency list -- so this page decodes rasters and
+  // says so about the rest. The bone's loader already contains the same
+  // refusal (`if (!window.pdfjsLib) continue;`); the difference is that this
+  // page admits it on screen instead of drawing nothing and looking broken.
+  const loadUnderlayImages = async () => {
+    for (const underlay of (drawing?.underlays || [])) {
+      if (underlayImages.has(underlay.id) || underlay.kind === 'pdf') continue;
+      try {
+        const file = await window.SharedFileStore.loadNamedFile(underlay.id, 'underlays');
+        if (!file) continue;
+        const bitmap = await createImageBitmap(file).catch(() => null);
+        if (!bitmap) continue;
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0);
+        bitmap.close();
+        underlayImages.set(underlay.id, canvas);
+        // Each image repaints as it lands, rather than one repaint at the end:
+        // a large tracing image can take a moment and the drawing above it is
+        // already correct without it.
+        paint();
+        updateReadout();
+      } catch (error) {
+        console.warn(`MODEL: underlay ${underlay.id} failed to load:`, error);
+      }
+    }
+  };
+
   const shapes = () => (drawing?.shapes || [])
     .filter(sh => onActiveLevel().byLevel(sh));
   // Outlines take the same LEVEL-ONLY rule as roofs -- rule four above. They
@@ -1060,6 +1107,28 @@
   // MODEL.dc.html guards this with `!this._isPrinting`. This page never
   // prints, so the guard is the constant `false` and the marker always shows
   // when a datum exists -- which is the whole point of drawing it.
+  // Reference images the drafter traces over. The painter refuses four ways
+  // and every refusal draws NOTHING -- no placeholder, no outline -- which is
+  // deliberate (see palette.js on draw-underlay: an underlay arrives with its
+  // own colours and the painter puts no ink of its own on the page).
+  const paintUnderlays = () => {
+    const R = window.DraftRender2D;
+    if (!R) {
+      throw new Error('MODEL.html: cannot paint underlays, render-2d.js did '
+        + 'not load. Check the script order in the page head.');
+    }
+    R.drawUnderlays2D(ctx, toS, {
+      isPrinting: false,
+      underlays: underlays(),
+      // The painter reads `.id` and nothing else. MODEL.dc.html hands it
+      // `state.levels[state.activeLevelIdx]` -- an INDEX into the level list --
+      // and this page has an ID, so it builds the one field the painter asks
+      // for rather than pretending to supply a level object.
+      activeLevel: { id: activeLevelId() },
+      imageFor: id => underlayImages.get(id),
+    });
+  };
+
   const paintOrigin = () => {
     const R = window.DraftRender2D;
     if (!R) {
@@ -1085,7 +1154,12 @@
     ctx.fillRect(0, 0, cssW, cssH);
     try {
       if (drawing) {
-        paintGrid(); paintFloors(); paintRoofs(); paintShapes();
+        paintGrid();
+        // "Underlays sit beneath everything drawn: over the grid, under
+        // geometry" -- MODEL.dc.html's own words at the same seam. A tracing
+        // image that painted over the walls would be worse than none.
+        paintUnderlays();
+        paintFloors(); paintRoofs(); paintShapes();
         paintOutlines();
         paintLines(); paintWalls();
         // Fixtures ride ON the walls, so they go after them and before the
@@ -1151,6 +1225,9 @@
     return (drawing && !('drawingOrigin' in drawing)) ? `${at} (world, back-filled)` : at;
   };
 
+  // PDF underlays on THIS level: the ones the drafter would expect to see.
+  const pdfUnderlays = () => underlays().filter(u => u.kind === 'pdf').length;
+
   const updateReadout = () => {
     if (!drawing) return;
     readout.innerHTML =
@@ -1160,7 +1237,14 @@
       + `roofs <b>${shownOfTotal(roofs().length, drawing.roofs)}</b>   `
       + `shapes <b>${shownOfTotal(shapes().length, drawing.shapes)}</b>   `
       + `outlines <b>${shownOfTotal(outlines().length, drawing.outlines)}</b>   `
-      + `dims <b>${shownOfTotal(dimensions().length, drawing.dimensions)}</b>\n`
+      + `dims <b>${shownOfTotal(dimensions().length, drawing.dimensions)}</b>   `
+      // BOTH SIDES LEVEL-SCOPED. The loader decodes every underlay in the
+      // drawing, not just this level's, so that switching level is instant --
+      // which means underlayImages.size counts images the drafter cannot
+      // currently see. Counting it against this level's total printed
+      // `underlays 1/0`, and a ratio above one is not a fact, it is a bug.
+      + `underlays <b>${underlays().filter(u => underlayImages.has(u.id)).length}</b>`
+      + `/${underlays().length}\n`
       + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
       + `view <b>${onActiveLevel().viewId || 'all'}</b>   `
       + `${theme}/${mode}   `
@@ -1170,7 +1254,14 @@
       + `datum <b>${datumLabel()}</b>`
       // Malformed geometry is dropped on load, as the old page drops it. Say
       // how much, so a thinner drawing is a fact rather than a mystery.
-      + (dropped ? `   <b>${dropped} dropped</b>` : '');
+      + (dropped ? `   <b>${dropped} dropped</b>` : '')
+      // THE SAME RULE AS `dropped` ABOVE, for the same reason. A PDF underlay
+      // is stored, is on this level, and will never draw here -- so without
+      // this line the drafter sees the thing they were tracing simply gone and
+      // has no way to tell a missing feature from a broken page. Naming it
+      // costs one clause and turns an absence into a fact.
+      + (pdfUnderlays() ? `   <b>${pdfUnderlays()} PDF underlay`
+          + `${pdfUnderlays() === 1 ? '' : 's'} not drawn</b> (needs pdf.js)` : '');
   };
 
   // ── pan and zoom ──────────────────────────────────────────────────────────
@@ -1324,6 +1415,10 @@
 
     fit();
     paint();
+    // Deliberately NOT awaited: the drawing is correct without its tracing
+    // images and should be on screen before they arrive. Each one repaints
+    // itself as it lands.
+    loadUnderlayImages();
   };
 
   boot();
