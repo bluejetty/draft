@@ -247,18 +247,33 @@ test.describe('the saved format', () => {
       return {
         derived: f.AUTO_DIM_FIRST_OFFSET_FT,
         keeps: f.autoDimFirstOffsetFt(2.5),
-        strings: f.autoDimFirstOffsetFt('2.5'),
+        // A QUOTED NUMBER IS NOT A NUMBER, and that is the contract rather
+        // than a gap. `num()` requires typeof 'number' throughout this
+        // format, so a hand-edited file carrying "2.5" reads as NOT CHOSEN
+        // and the page derives -- it does not silently adopt a string as a
+        // measurement. Written down because the expectation here originally
+        // said 2.5 and the run said null: the code was right and the spec was
+        // wrong, and the tempting fix was to delete the line rather than
+        // learn what it had found.
+        quoted: f.autoDimFirstOffsetFt('2.5'),
         rejects: [null, undefined, 0, -1, 'wide', {}, NaN].map(v => f.autoDimFirstOffsetFt(v)),
       };
     })).toEqual({
       derived: 1.5,
       keeps: 2.5,
-      strings: 2.5,
+      quoted: null,
       rejects: [null, null, null, null, null, null, null],
     });
 
     // A PICK IS STORED AND SURVIVES A RELOAD, which is the defect this key
     // exists to close.
+    // THE PICKER LIVES UNDER THE DIMENSION TOOL (MODEL.dc.html:1246,
+    // `dimensionToolActive`), so it has to be selected before the buttons
+    // exist. The first version of this assertion was written as "if these
+    // buttons exist" and would have skipped here forever, reporting a pass
+    // for a round trip it never made -- the same shape as the emptiness
+    // assertion found elsewhere in this file today.
+    await h.selectTool(page, 'Dimension');
     const offsets = page.locator('[data-auto-dim-offset]');
     await expect(offsets).not.toHaveCount(0);
     const wanted = Number(await offsets.last().getAttribute('data-auto-dim-offset'));

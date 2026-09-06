@@ -8635,6 +8635,26 @@ class Component extends DCLogic {
     return this.state.autoDimFirstOffsetFt ?? format.AUTO_DIM_FIRST_OFFSET_FT;
   }
 
+  // PICKING AN OFFSET IS AN EDIT, now that the offset is in the file.
+  //
+  // It was not before, and that is the whole point: while the value went
+  // nowhere, a pick that left the drawing "saved" lost nothing, because there
+  // was nothing to lose. The moment the key persists, a pick that does not
+  // mark the drawing unsaved is a drafter's change that can go with the window
+  // -- the strings and the cut marks move on screen, and the file never hears.
+  // Making a value durable converts its unmarked edit from harmless to real.
+  //
+  // The callback is not decoration either: _markUnsaved's save reads state, so
+  // the value has to land first. `_toggleRoomAreas` says the same in the same
+  // words, and every other persisted setting on this page is shaped this way.
+  //
+  // Found by Gilligan reading the PR rather than by a spec -- the round-trip
+  // passes either way, because it presses SAVE itself.
+  _pickAutoDimOffset(value) {
+    if (this.state.autoDimFirstOffsetFt === value) return;
+    this.setState({ autoDimFirstOffsetFt: value }, () => this._markUnsaved());
+  }
+
   _cutMarkGapFt() {
     return this._autoDimFirstOffsetFt() / 2;
   }
@@ -21520,7 +21540,7 @@ class Component extends DCLogic {
           border: isActive ? '#5980a6' : 'rgba(29,31,32,0.2)',
           bg: isActive ? 'rgba(89,128,166,0.14)' : '#fff',
           color: isActive ? '#3e6285' : '#1d1f20',
-          onSelect: () => this.setState({ autoDimFirstOffsetFt: offset.value }),
+          onSelect: () => this._pickAutoDimOffset(offset.value),
         };
       }),
       autoDimHint: this._activeLevelId() === 7
