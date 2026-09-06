@@ -10,6 +10,7 @@
 <script src="./shared-file-store.js"></script>
 <script src="./drawing-format.js"></script>
 <script src="./wall-types.js"></script>
+<script src="./level-assembly.js"></script>
 <script src="./render-2d.js"></script>
 <script src="./geometry-2d.js"></script>
 <script src="./layer-views.js"></script>
@@ -278,33 +279,27 @@ const E_MARK_SIDES = {
 };
 const E_MARK_CLEAR_FT = 2;
 
-// The Model Space's level-assembly defaults, mirrored so the sheet reads a
-// saved drawing the way the drawing's own screens do.
-const DEFAULT_WALL_TOP_FT = (8 * 12 + 1 + 1 / 8) / 12;
+// The level assembly comes from level-assembly.js, which MODEL.dc.html binds
+// the same way. This file used to keep its own copy, described in its own
+// comment as "mirrored so the sheet reads a saved drawing the way the
+// drawing's own screens do" -- an intent a copy can only approximate.
+//
+// IT HAD ALREADY DRIFTED, and quietly: the copy here answered SIX fields where
+// MODEL's answers eight, missing joistType and joistSpacingIn. Both boards
+// hand this object to cut-view.js, so that shared painter was being given two
+// different shapes depending on which page called it. It worked only because
+// cut-view reads three fields and all three happened to be in both. That is
+// luck holding, not a design.
+//
+// The six shared fields were value-identical -- proved by a differential over
+// 8002 comparisons against this file's own text before it was deleted, with
+// seven mutations to show the check could fail. So this adopts a superset: the
+// two added fields are ones nothing on this page's path reads.
+const {
+  defaultLevelAssembly, normaliseLevelAssembly, DEFAULT_WALL_TOP_FT,
+} = window.DraftLevelAssembly;
 const DEFAULT_FOOTING_WIDTH_IN = 20;
 const ICF_FOOTING_WIDTH_IN = 24;
-const defaultLevelAssembly = () => ({
-  wallHeightFt: DEFAULT_WALL_TOP_FT,
-  joistDepthIn: 11 + 7 / 8,
-  sheathingIn: 3 / 4,
-  slabThicknessIn: 3,
-  footingDepthIn: 8,
-  footingWidthIn: null,
-});
-const normaliseLevelAssembly = raw => {
-  const base = defaultLevelAssembly();
-  if (!raw || typeof raw !== 'object') return base;
-  const positive = (value, fallback) =>
-    (Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback);
-  return {
-    wallHeightFt: positive(raw.wallHeightFt, base.wallHeightFt),
-    joistDepthIn: positive(raw.joistDepthIn, base.joistDepthIn),
-    sheathingIn: positive(raw.sheathingIn, base.sheathingIn),
-    slabThicknessIn: positive(raw.slabThicknessIn, base.slabThicknessIn),
-    footingDepthIn: positive(raw.footingDepthIn, base.footingDepthIn),
-    footingWidthIn: positive(raw.footingWidthIn, null),
-  };
-};
 
 const MODEL_STORAGE_BUCKET = 'model-drawing';
 
