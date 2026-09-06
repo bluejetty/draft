@@ -1,9 +1,13 @@
-# BOARD — the build row asks what its buttons leave open
+# BOARD #333 — the build row asks what its buttons leave open
 
-**Movie, 5 Sep, in conversation with Skipper.** Proposed, not ruled. Needs a
-board number and Devin's word: it adds a persisted answer and changes the
-entry flow, so it is not a change to a type, it is a change to how a type is
-chosen.
+**Movie, 5 Sep, in conversation with Skipper. NUMBERED AND RULED by Commander
+Devin, 6 Sep: board #333, with the menu revision approved** -- the storey over
+the garage derived rather than stored, and no new key.
+
+The original framing said this "adds a persisted answer". It does not, and that
+is what the 6 Sep revision changed: the garage and the room over it are
+instructions to BUILD HOUSE, not labels in the file. `buildType` still stores
+one of the same four values.
 
 Status: **NOT STARTED.** Nothing in this file is built. NEW-5 built the
 vocabulary it stands on (`buildType`, the four-button row, the type driving

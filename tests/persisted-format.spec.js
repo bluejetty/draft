@@ -44,7 +44,8 @@ const PERSISTED_KEYS = [
   'nextDimensionId', 'columns', 'nextColumnId', 'beams', 'nextBeamId',
   'stairs', 'nextStairId', 'notes', 'nextNoteId', 'roomTags', 'nextRoomTagId',
   'roomAreasOn', 'projectInfo', 'tour', 'roofIntent', 'zoneHeights',
-  'sectionTable', 'buildType', 'boneyardShelves', 'activeBoneyardShelfId',
+  'sectionTable', 'buildType', 'autoDimFirstOffsetFt',
+  'boneyardShelves', 'activeBoneyardShelfId',
   'nextBoneyardShelfId', 'boneyardOutlines', 'outlines', 'levels',
   'activeLevelIdx', 'levelLayerViews', 'nextLevelId', 'backgroundLevelIds',
   'backgroundLevelViews', 'contextBackgrounds', 'backgroundMode', 'units',
@@ -226,5 +227,68 @@ test.describe('the saved format', () => {
     await page.locator('[data-unit-toggle] button').first().click();
     await h.waitForSaved(page);
     expect((await h.savedDrawing(page)).buildType).toBeNull();
+  });
+
+  // autoDimFirstOffsetFt LIVED NOWHERE until 6 Sep: the page kept it for the
+  // session and never wrote it, so a drafter moved the first auto string,
+  // saved, and the viewer drew a different gap than the page they saved from.
+  // Commander Devin ruled the shape -- positive(), null means derive -- and
+  // this is the spec that makes the ruling true rather than intended.
+  test('autoDimFirstOffsetFt: null means derive, a pick round-trips, and a re-normalise never invents', async ({ page }) => {
+    await h.openModel(page);
+
+    // A drawing nobody has chosen an offset on stores NULL, not 1.5. This is
+    // the half that matters: store the derived value and moving the default
+    // later would silently miss every drawing that never chose.
+    await page.locator('[data-unit-toggle] button').first().click();
+    await h.waitForSaved(page);
+    expect((await h.savedDrawing(page)).autoDimFirstOffsetFt).toBeNull();
+
+    // The normaliser keeps null and refuses everything that is not a positive
+    // number -- including 0, which is a typed answer that means "no gap" and
+    // must not be storable as one.
+    expect(await page.evaluate(() => {
+      const f = window.DraftDrawingFormat;
+      return {
+        derived: f.AUTO_DIM_FIRST_OFFSET_FT,
+        keeps: f.autoDimFirstOffsetFt(2.5),
+        strings: f.autoDimFirstOffsetFt('2.5'),
+        rejects: [null, undefined, 0, -1, 'wide', {}, NaN].map(v => f.autoDimFirstOffsetFt(v)),
+      };
+    })).toEqual({
+      derived: 1.5,
+      keeps: 2.5,
+      strings: 2.5,
+      rejects: [null, null, null, null, null, null, null],
+    });
+
+    // A PICK IS STORED AND SURVIVES A RELOAD, which is the defect this key
+    // exists to close.
+    const offsets = page.locator('[data-auto-dim-offset]');
+    await expect(offsets).not.toHaveCount(0);
+    const wanted = Number(await offsets.last().getAttribute('data-auto-dim-offset'));
+    expect(wanted).toBeGreaterThan(0);
+    await offsets.last().click();
+    await h.waitForSaved(page);
+    expect((await h.savedDrawing(page)).autoDimFirstOffsetFt).toBe(wanted);
+    await page.reload();
+    await h.waitForModelReady(page);
+    expect((await h.savedDrawing(page)).autoDimFirstOffsetFt).toBe(wanted);
+
+    // A hand-edited file with an impossible offset loads as "not chosen" and
+    // the next save writes that, rather than echoing the number back.
+    await page.evaluate(async () => {
+      const file = await window.SharedFileStore.loadSharedFile('model-drawing');
+      const d = JSON.parse(await file.text());
+      d.autoDimFirstOffsetFt = -4;
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(d)], 'drawing.json', { type: 'application/json' }),
+        'model-drawing');
+    });
+    await page.reload();
+    await h.waitForModelReady(page);
+    await page.locator('[data-unit-toggle] button').first().click();
+    await h.waitForSaved(page);
+    expect((await h.savedDrawing(page)).autoDimFirstOffsetFt).toBeNull();
   });
 });

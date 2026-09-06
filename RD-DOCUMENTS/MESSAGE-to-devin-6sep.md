@@ -60,6 +60,13 @@ in a normaliser and one round-trip spec.
 **What I need from you:** yes, no, or a different shape. If yes, say whether
 you want me to write it or you will.
 
+> **RULED, 6 Sep: YES as proposed, Skipper implements, before W0.** Done in
+> this branch -- `drawing-format.js` gains the normaliser and
+> `AUTO_DIM_FIRST_OFFSET_FT`, MODEL.dc.html's state defaults to null, every
+> reader goes through one derive, and the serializer and loader carry the key.
+> `persisted-format.spec.js` pins null-means-derive, the round trip, and that a
+> hand-edited impossible value normalises back to null.
+
 ## ASK 2 — A NUMBER AND A RULING FOR THE BUILD-TYPE BOARD
 
 `RD-DOCUMENTS/BOARD-build-type-options.md`. It was Movie's 5 Sep idea and it
@@ -81,12 +88,19 @@ If you rule differently, the code moves — better now than after it merges.
 
 **What I need from you:** a board number, and a look at the tree in that file.
 
+> **RULED, 6 Sep: board #333, menu revision approved**, storey-over-garage
+> derived, no new key. Recorded on the board.
+
 ## ASK 3 — THE TIER-2 REVIEW, WHICH IS THE GATE
 
 **Tier 2 is complete.** Underlays landed in `8b1a991` and that was the last
-painter. MODEL.html now calls 14 of the 16; the two it does not — `drawCutPreview2D`
-and `drawBoneyardMark2D` — are tier 3 by design, since they paint gesture state
-rather than saved content.
+painter. **MODEL.html calls 13 of `render-2d.js`'s 17 exports** — Devin's count,
+and he is right; mine said 14 of 16 with two deferred. Verified: 17 exports (16
+painters plus `strokeSegPath2D`), 13 called, and THREE painters deferred rather
+than two — `drawCutPreview2D`, `drawBoneyardMark2D` and `drawStairNotes2D`. The
+third is in `SPEC-model-html-tiers.md:430` as tier 3, serving the STAIR
+workspace, which is a drafting surface rather than a plan; I had simply not
+counted it. All three paint gesture state rather than saved content.
 
 Your tier-2 review is what the Write Tier opens from, so it is the gate whether
 or not ask 1 is settled.
