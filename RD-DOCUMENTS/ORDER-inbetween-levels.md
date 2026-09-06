@@ -448,6 +448,42 @@ So the sequence is: **ENTRY exists -> the two stairs are ordinary -> the bone
 can pour a bilevel.** Teaching the bone a bilevel before the level exists
 would mean teaching it a shape it would then have to unlearn.
 
+### THE BONE PLACES THE BILEVEL CORE, AND THE DRAFTER MOVES IT
+
+**Movie, 6 Sep:**
+
+> *"we could just locate the garage, front door and entry area for them with
+> the garage on one side and the front door and entry near the middle to cover
+> both"* ... *"ya its hard to draw so if we give them the basics they can move
+> it around if they need too, and will make it easier for us"*
+
+**The argument is about drawing, not about code.** Deciding where a bilevel's
+garage and entry go is not the hard part -- drawing them is. A bilevel's plan
+is stereotyped in a way a bungalow's is not: garage at one end, entry between
+garage and house, stairs off the entry. A default is right most of the time
+there, which is exactly when placing beats asking.
+
+**The machinery pattern already exists.** `auto-stair.js` (board #260) is a
+PURE placement derivation -- plain geometry in, one suggested stair out, plus
+a per-shape report of WHY when a shape found no home -- and MODEL commits the
+winner and owns everything stateful. This is that shape one level up.
+
+**It places ONE thing, not four.** The entry's position is the anchor: both
+runs go off it in opposite directions, and the garage sits beside it. So the
+derivation is `stored ?? derived()` again -- the entry stored, the stairs
+derived from it -- the same contract as ROOF HEEL rather than a new idea.
+
+**It stays inside board #313.** Software never moves geometry; this is
+geometry CREATED on a drafter's press, which is what the bone does for every
+wall it pours. Nothing moves behind anyone.
+
+**AND IT MAKES THE RE-DERIVE GAP COMMON.** *"they can move it around"* is the
+whole point of placing it, and moving the entry re-derives both stairs. The
+riser maths recomputes fine; nothing re-checks that the stair still FITS the
+opening cut. Today that path needs a drafter who edits a wall height. Once the
+bone places the core it becomes every bilevel, the first time anyone nudges
+the entry. The gap does not get worse -- it gets REACHED.
+
 ### One question that is Movie's
 
 **Does the entry landing want to be bigger than a stair landing?** The code's
