@@ -68,13 +68,29 @@ if (!window.DraftPalette) {
                         // changes, because this is what they are DRAWN in.
     'draw-stair',       // stair runs, nosings and the direction arrow
     'draw-cut',         // the section cut marks: the line, its flags and tail
-    'draw-underlay',    // a traced PDF or image underlay, drawn under the
-                        // drafter's own work. ITS PAIR IS DELIBERATELY THE
-                        // SAME AS draw-origin's, and must not be collapsed
-                        // into it: a tracing underlay and the drawing's
-                        // registration mark are different things that happen
-                        // to be the same green, and one moving is not the
-                        // other moving.
+    'draw-underlay',    // RESERVED, NOT WIRED. Nothing reads this key today,
+                        // and saying so is the point: an underlay is a jpg or
+                        // a PDF page you trace over, so drawUnderlays2D
+                        // (render-2d.js:651) sets an opacity and calls
+                        // drawImage and paints no ink at all. The photograph
+                        // arrives with its own colours.
+                        //
+                        // It is reserved rather than dead. The painter has
+                        // four refusals -- printing, wrong level, image not
+                        // loaded, sub-pixel -- and every one draws nothing,
+                        // including the not-loaded case where a grey
+                        // placeholder is the obvious thing. So the absence of
+                        // ink was chosen, and the two things that would end
+                        // it are chrome nobody has built: a border showing
+                        // where the page edge is, or an outline while one is
+                        // dragged into position. Whoever builds either has
+                        // the value and its contrast already measured.
+                        //
+                        // ITS PAIR IS DELIBERATELY THE SAME AS draw-origin's,
+                        // and must not be collapsed into it: a tracing
+                        // underlay and the drawing's registration mark are
+                        // different things that happen to be the same green,
+                        // and one moving is not the other moving.
     'draw-floor',       // floor polygons, a wash rather than a fill
     'draw-floor-edge',  // the slab outline and its corner handles, drawn ON
                         // TOP of that wash -- so the wash, not the page, is
