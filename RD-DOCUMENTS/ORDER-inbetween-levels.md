@@ -121,7 +121,8 @@ stair follow a wall-height change, and what a drafter would want. But it is
 VISIBLE: press ADD on one row and a stair somewhere else in the drawing changes
 shape, with no other press.
 
-**And it is board #31 again.** The riser maths re-derives fine. What does not
+**And it is the re-derive gap again** -- the one where a number recomputes and
+the check on it does not. The riser maths re-derives fine. What does not
 re-run is the check that the stair still FITS. A stair that gets *shorter* is
 safe on its own terms, but the one now landing on OVER GARAGE may not line up
 with the floor opening that was cut for a full-storey run -- and nothing asks.
@@ -249,7 +250,8 @@ An engineer's 23 1/4":
 
 At a **27 7/8"** joist the head lands exactly on 7'-0" and a 7'-0" overhead
 door stops fitting. That is a LIMIT THE PAGE SHOWS, not a clamp it applies:
-house rule #313 -- software never moves geometry, only a drafter's press may.
+board #313 as amended -- software never moves geometry, only a drafter's
+press may (`RULES-persisted-keys.md:121`).
 `proto/section-table-harness.js:306` already makes this check against the
 DEFAULT wall; the sibling that does not exist yet is the same check against a
 wall derived from a deck.
@@ -356,6 +358,27 @@ The per-slot ADD button, the fuzzed row treatment, and the dim vocabulary the
 panel does not have today all stop being needed for the SPLIT case, because
 on a bilevel the levels are simply there. What remains is the gate, the
 create-at-a-given-id handler the bone calls, and the specs.
+
+## A CITATION IN THIS ORDER WAS INVENTED
+
+**6 Sep, found by checking it.** The paragraph above said *"And it is board #31
+again"*, and there is no board #31. The string appeared **exactly once in the
+whole repository -- in this file** -- and `BOARDS.md`, which is the record, has
+never carried it. It was written here, merged, and then read back and built on
+by a second agent as though it were a fact of the project.
+
+`BOARDS.md:8` warns about this exact thing: *"Board numbers and PR numbers are
+different sequences that overlap -- always write 'board #168' or 'PR #168',
+never a bare number... that collision has already caused one error."*
+
+**The observation was sound and is kept, without the number.** A stair's rise
+re-derives and nothing re-checks that the stair still fits. That is worth a
+board; it does not have one yet, and Devin assigns them.
+
+**Nothing tests a citation.** A wrong number is quieter than a wrong value: it
+survives every run, reads as authority, and gets repeated. Four stale comments
+and two bad references turned up on 6 Sep alone, and both classes have the same
+shape -- prose that no longer matches, in a place nothing checks.
 
 ## Open
 
