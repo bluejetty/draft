@@ -24,7 +24,7 @@ function loadDraftModules() {
   const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, Map, Set, isFinite, parseFloat, parseInt };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  for (const file of ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-format.js', 'room-standards.js', 'cut-view.js']) {
+  for (const file of ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-format.js', 'room-standards.js', 'level-assembly.js', 'cut-view.js']) {
     const full = path.join(ROOT, file);
     if (!fs.existsSync(full)) continue;
     try { vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: file }); }
@@ -100,19 +100,19 @@ function buildEnv(win, saved) {
   const shelves = format.boneyardShelves(saved.boneyardShelves);
   const masters = format.boneyardOutlines(saved.boneyardOutlines, new Set(shelves.map(s => s.id)));
   const assemblies = (saved.levelAssemblies && typeof saved.levelAssemblies === 'object') ? saved.levelAssemblies : {};
-  // Mirrors LAYOUT.dc.html's normaliseLevelAssembly exactly — the foundation
-  // stack reads slabThicknessIn / footingDepthIn off it.
-  const positive = (v, fb) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : fb);
-  const normalise = a => ({
-    wallHeightFt: positive(a?.wallHeightFt, DEFAULT_WALL_TOP_FT),
-    joistDepthIn: positive(a?.joistDepthIn, 11 + 7 / 8),
-    joistSpacingIn: positive(a?.joistSpacingIn, 16),
-    sheathingIn: positive(a?.sheathingIn, 3 / 4),
-    slabThicknessIn: positive(a?.slabThicknessIn, 3),
-    footingDepthIn: positive(a?.footingDepthIn, 8),
-    footingWidthIn: positive(a?.footingWidthIn, null),
-  });
-  const levelAssembly = id => normalise(assemblies[id]);
+  // THE THIRD COPY IS GONE, and the comment it replaces was already untrue.
+  // This said it "mirrors LAYOUT.dc.html's normaliseLevelAssembly exactly".
+  // It did not: LAYOUT's answered SIX fields, this one SEVEN (it carried
+  // joistSpacingIn, LAYOUT did not), and MODEL.dc.html's answered EIGHT. Three
+  // copies of one table that had each drifted a different way, with a comment
+  // asserting an equality that had stopped holding.
+  //
+  // level-assembly.js is the one copy now. Proved before deleting this one: a
+  // differential sliced the text below out of this file and raced it against
+  // the module over 8002 comparisons -- the contract being that the module
+  // RESTRICTED TO THIS HARNESS'S KEYS equals its answer, since the module is a
+  // superset. The single field it adds is joistType, which nothing here reads.
+  const levelAssembly = id => win.DraftLevelAssembly.normaliseLevelAssembly(assemblies[id]);
   const floorLevels = levels
     .filter(l => l.id > 0 && l.id !== 1 && l.id !== 7 && l.id !== 8)
     .slice().reverse();
