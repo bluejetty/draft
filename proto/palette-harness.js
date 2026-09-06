@@ -127,6 +127,14 @@ for (const theme of P.THEMES) {
       check(`${theme}/${mode}  ${role}`, ratio >= min, `${ratio.toFixed(2)} (min ${min})`);
     });
 
+    // draw-underlay is asserted with the rest and is NOT WIRED to anything.
+    // That is deliberate on both counts. drawUnderlays2D paints a jpg or a
+    // PDF page and no ink of its own, so no painter reads the key today; it
+    // is reserved for the chrome an underlay has not grown yet -- a border
+    // showing the page edge, or an outline while one is dragged. Measuring it
+    // now is what makes that cheap later, and a green line here means the
+    // value is sound, NOT that anything consumes it. See palette.js.
+
     // NOT ASSERTED, AND THAT IS THE POINT: draw-underlay and draw-origin
     // carry the same pair today. Pinning them EQUAL would make the divergence
     // the separate key exists to allow into a test failure -- a check that
