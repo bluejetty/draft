@@ -241,6 +241,17 @@
     [data-build-cluster].menu-open [data-select-build],
     [data-build-cluster].menu-open [data-build-menu-back] { height:26px !important; padding:0 4px !important; font-size:9px !important; letter-spacing:0.03em !important; }
     [data-build-cluster].menu-open img { height:30px !important; }
+    /* AND WHEN THERE IS STILL NOT ROOM, THE WORDS GIVE, NOT THE BAR. Flowing
+       stops the row covering a button, but it cannot conjure width: below
+       1024 with a submenu open the bar's content is simply wider than the
+       window, and the overflow pushed NEW off the right edge -- unreachable
+       rather than covered, which is no better.
+       So the entry labels truncate. A drafter on a narrow window reads
+       "2 STOREY + GAR..." and hovers for the rest; every button stays on
+       screen and pressable, which is the property worth keeping. The bone,
+       the turtle and the garage marks never shrink -- they are art, they
+       carry no text to trim, and they are the ones you press blind. */
+    [data-build-cluster].menu-open [data-select-build] { min-width:0 !important; overflow:hidden !important; text-overflow:ellipsis !important; }
     [data-build-cluster].coaching > * { opacity:0.3; pointer-events:none; transition:opacity 220ms ease-out; }
     [data-build-cluster].coaching > .bone-wrap { opacity:1; pointer-events:auto; }
     @keyframes entry-coach-nudge {
@@ -413,7 +424,28 @@
     <button data-gruff-open onClick="{{ onGruffOpen }}" title="{{ gruffOpenTitle }}" style="min-width:64px; border:1px solid #8f2a1d; background:{{ gruffOpenBg }}; color:{{ gruffOpenColor }}; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">ASK GRUFF</button>
   </div>
 
-  <div data-build-cluster class="{{ buildClusterClass }}" style="position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; align-items:center; gap:8px; z-index:{{ buildClusterZ }};">
+  <!-- A SPACER EITHER SIDE, so the row FLOWS in the bar instead of floating
+       over it. It used to be position:absolute at left:50% with a -50%
+       translate: always exactly centred, and taken out of the bar's layout
+       entirely, so when it grew it grew ON TOP OF whatever was underneath.
+       That is measurable rather than theoretical -- at 1024 the bone sat over
+       NEW and NEW could not be pressed, on the four-button row, before any
+       menu existed; the five-entry BUNGALOW submenu did the same at 1280.
+       Between them, this cluster could eat a button at any width.
+
+       Movie, 6 Sep, on the trade: "probably flowing better hey". Centred
+       exactly and sometimes covering a button, against never covering one and
+       drifting off exact centre when the groups either side differ in width.
+       A row is looked at; NEW is pressed.
+
+       POSITION:RELATIVE, NOT STATIC. z-index needs a positioned element, and
+       buildClusterZ is what lifts the whole row through the entry coach's
+       scrim. The transform used to be what made the stacking context; relative
+       plus a z-index makes the same one, so the coaching behaviour below is
+       unchanged. Dropping position entirely would have silently stopped the
+       row rising at all. -->
+  <div style="flex:1;"></div>
+  <div data-build-cluster class="{{ buildClusterClass }}" style="position:relative; display:flex; align-items:center; gap:8px; min-width:0; z-index:{{ buildClusterZ }};">
     <!-- THE TURTLE HOLDS THE LEFT END ON ITS OWN. It used to be one of a pair
          bookending the row, with RABBIT on the right; that pairing went with
          the rabbit (Movie, 6 Sep). What survives is the reason it is NOT
