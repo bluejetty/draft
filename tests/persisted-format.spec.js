@@ -245,25 +245,40 @@ test.describe('the saved format', () => {
     expect((await h.savedDrawing(page)).autoDimFirstOffsetFt).toBeNull();
 
     // The normaliser keeps null and refuses everything that is not a positive
-    // number -- including 0, which is a typed answer that means "no gap" and
-    // must not be storable as one.
+    // number -- including 0, which is a typed answer meaning "no gap" and must
+    // not be storable as one.
+    //
+    // AND IT DOES NOT COERCE, which is the half worth pinning on purpose:
+    // num() is `typeof value === 'number'`, so a hand-edited "2.5" reads as
+    // NOT CHOSEN rather than as two and a half feet. A format that quietly
+    // parsed strings would let a file's text decide a measurement, and the
+    // difference between "the drafter picked 2.5" and "something in the file
+    // looked like 2.5" is exactly what null-means-derive exists to keep apart.
+    // (Written the other way first, asserting 2.5, on an assumption about
+    // positive() rather than a reading of it. The spec was wrong, not the
+    // format.)
     expect(await page.evaluate(() => {
       const f = window.DraftDrawingFormat;
       return {
         derived: f.AUTO_DIM_FIRST_OFFSET_FT,
         keeps: f.autoDimFirstOffsetFt(2.5),
-        strings: f.autoDimFirstOffsetFt('2.5'),
-        rejects: [null, undefined, 0, -1, 'wide', {}, NaN].map(v => f.autoDimFirstOffsetFt(v)),
+        rejects: [null, undefined, 0, -1, '2.5', 'wide', {}, NaN, Infinity]
+          .map(v => f.autoDimFirstOffsetFt(v)),
       };
     })).toEqual({
       derived: 1.5,
       keeps: 2.5,
-      strings: 2.5,
-      rejects: [null, null, null, null, null, null, null],
+      rejects: [null, null, null, null, null, null, null, null, null],
     });
 
     // A PICK IS STORED AND SURVIVES A RELOAD, which is the defect this key
     // exists to close.
+    // The picker lives in the DIMENSION tool's panel, so the tool has to be
+    // active for the buttons to exist at all. Selecting it here is what makes
+    // the assertion below reachable -- the first version of this test guarded
+    // on the buttons existing and would have skipped forever without ever
+    // saying so.
+    await h.selectTool(page, 'Dimension');
     const offsets = page.locator('[data-auto-dim-offset]');
     await expect(offsets).not.toHaveCount(0);
     const wanted = Number(await offsets.last().getAttribute('data-auto-dim-offset'));

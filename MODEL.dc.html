@@ -21890,7 +21890,16 @@ class Component extends DCLogic {
           border: isActive ? '#5980a6' : 'rgba(29,31,32,0.2)',
           bg: isActive ? 'rgba(89,128,166,0.14)' : '#fff',
           color: isActive ? '#3e6285' : '#1d1f20',
-          onSelect: () => this.setState({ autoDimFirstOffsetFt: offset.value }),
+          // THE PRESS IS AN EDIT NOW. This set state and stopped, which was
+          // harmless while the offset went nowhere -- and became a silent
+          // loss the moment it became a persisted key (6 Sep, board #313's
+          // ruling): the drafter picked, the page drew the new gap, nothing
+          // marked the drawing dirty, and the pick was gone on reload. Every
+          // other stored choice on this page goes through _markUnsaved; this
+          // one had no reason to until today.
+          onSelect: () => this.setState(
+            { autoDimFirstOffsetFt: offset.value },
+            () => this._markUnsaved()),
         };
       }),
       autoDimHint: this._activeLevelId() === 7
