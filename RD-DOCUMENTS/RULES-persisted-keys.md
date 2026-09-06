@@ -126,3 +126,40 @@ Elsewhere, null is a meaning, not a missing number: `plateHeightFt` null is
 `offX`/`offZ` null is "not stored" while `0` is "explicitly on the master".
 `format.number(...)`-style readers preserve these; a normaliser that turns
 null into 0 has changed the drawing.
+
+### `autoDimFirstOffsetFt` — a drafter's press that no drawing records
+
+**NOT a persisted key today, and that is the entry.** The drafter sets it,
+two things on the drawing move, the file is saved, and both move back. It is
+listed here rather than among the ruled names because a key that SHOULD exist
+is invisible to a spec pinning the keys that do: `persisted-format.spec.js`
+enumerates what is written, and a value written nowhere cannot fail it.
+
+Where it lives now, measured 6 Sep:
+
+    MODEL.dc.html:2685    autoDimFirstOffsetFt: 1.5    component state, not the file
+    MODEL.dc.html:21490   onSelect -> setState(...)     the drafter's press
+    MODEL.dc.html:17705   firstOffset: <it>             the auto dimension strings
+    MODEL.dc.html:8611    _cutMarkGapFt()               HALF of it -- the E1-E4 cut marks
+    MODEL.html:982        "autoDimFirstOffsetFt  nowhere"
+
+TWO CONSUMERS, NOT ONE. The name says dimensions and the second reader is the
+cut marks, at half the value: the bubbles sit in the middle of the gap between
+the walls and the first string. So a drafter who moves the strings also moves
+every cut mark, and neither survives the save. The name is why this went
+unnoticed -- someone auditing "what does the dimension offset affect" reads the
+name, greps `firstOffset`, and never reaches `_cutMarkGapFt`.
+
+THIS IS BOARD #313 FROM THE OTHER SIDE. That rule forbids software moving
+geometry without a press. Here a press moves geometry and the move is then
+lost, silently, at the next load -- the same invariant failing in the other
+direction. Both reduce to: the file decides where things sit, so anything that
+moves them belongs in the file.
+
+WHAT MUST HAPPEN BEFORE IT IS ADDED. It is a top-level key on shared ground,
+so adding it is a format change under standing rules 1 and 2: the name is
+permanent once written, and the old page must open a new page's drawing
+without loss, by spec. Cheaper before Tier 3 than during it -- a page that
+already writes has to be migrated, a page that does not yet write only has to
+be told. Awaiting Movie's ruling (Skipper raised the key, Gilligan the second
+consumer, 6 Sep); NEITHER AGENT ADDS IT ALONE.
