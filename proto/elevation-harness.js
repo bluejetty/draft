@@ -374,6 +374,129 @@ for (const [id, { span, ridge, empty, lit }] of Object.entries(BEHIND)) {
     Math.abs(skylineAt(v, -10.65) - WING_A_RIDGE) < 0.1, `${skylineAt(v, -10.65)}`);
 }
 
+// ── THE LEVEL ASSEMBLY, READ OFF THE INK ──────────────────────────────
+// Added because PR #316 deleted the last duplicate of the defaults table and
+// left nothing watching the survivor. Measured first rather than assumed: of
+// level-assembly.js's eight fields, FIVE reach elevation ink at all --
+// wallHeightFt, joistDepthIn, sheathingIn, footingDepthIn, footingWidthIn --
+// and the checks above caught only the first two (mutating wallHeightFt fails
+// 16 of them, joistDepthIn 6). The other three moved the drawing and every
+// check stayed green. These are for those three.
+//
+// joistType, joistSpacingIn and slabThicknessIn put NO ink in an elevation:
+// mutating each leaves the four views byte-identical at 400 px/ft. They are
+// section and schedule facts. No check for them is written here, because a
+// check that cannot reach what it checks passes for the wrong reason.
+//
+// PAINTED AT 400 px/ft, NOT THE 40 THE VIEWS ABOVE USE. The painter rounds to
+// the pixel grid, so at 40 a pixel is 0.3" -- coarser than the 1/4" sheathing
+// this measures, and the 8" footing reads as 7.8". At 400 a pixel is 0.03"
+// and the same footing reads 7.98".
+const FINE_PX = 400;
+const fine = paintElevation(win, env, standardElevationCuts(env).find(c => c.id === 'E2'),
+  { pxPerFt: FINE_PX });
+// The drawn elevation nearest a target, or null if no ink lies within reach.
+// Null fails its check: a line that moved further than the window is exactly
+// the failure being looked for, not a reason to look elsewhere.
+const drawnE = (target, reach) => {
+  let best = null;
+  fine.strokes.forEach(s => s.pts.forEach(p => {
+    if (Math.abs(p.e - target) > reach) return;
+    if (best === null || Math.abs(p.e - target) < Math.abs(best - target)) best = p.e;
+  }));
+  return best;
+};
+// How far ink at one elevation reaches past ink at another, on the left --
+// the footing's step out from the foundation wall face.
+const leftEdgeAt = (target, reach) => {
+  let u = null;
+  fine.strokes.forEach(s => s.pts.forEach(p => {
+    if (Math.abs(p.e - target) > reach) return;
+    if (u === null || p.u < u) u = p.u;
+  }));
+  return u;
+};
+
+{
+  const fdnAsm = env.levelAssembly(1);
+  const mainAsm = env.levelAssembly(3);
+  const stack = win.DraftCutView.sectionLevelStack(env);
+  const TOL_IN = 0.05;           // the measured pixel error at FINE_PX is 0.02"
+  const inches = ft => ft * 12;
+  // Half of these pin level-assembly.js's DEFAULT numbers as drawn inches, so
+  // editing a default moves the ink away from a literal that did not move with
+  // it. That question only exists while the defaults are what is in play: a
+  // drawing passed on argv may store its own assembly, and 12 5/8" would then
+  // be a false failure rather than a caught one. So they are registered only
+  // when the drawing stores nothing for the level, and the skip is announced
+  // -- a check that quietly vanishes is worse than one that never existed.
+  const stored = (saved.levelAssemblies && typeof saved.levelAssemblies === 'object')
+    ? saved.levelAssemblies : {};
+  const onDefaults = id => !stored[id] || typeof stored[id] !== 'object';
+  const checkDefault = (id, name, condition, detail) => {
+    if (onDefaults(id)) return check(name, condition, detail);
+    console.log(`  - skipped (level ${id} stores its own assembly): ${name}`);
+  };
+
+  // ── The floor package: joistDepthIn + sheathingIn, drawn ────────────
+  // MAIN FL's floor is the band between the foundation wall's top and the
+  // floor level itself. 11 7/8" of joist and 3/4" of sheathing is 12 5/8",
+  // and it is written here as that literal so a change to either default
+  // moves the ink away from a number that did not move with it.
+  const floorTopE = drawnE(stack.floors[0].floorTop, 0.4);
+  const floorBotE = drawnE(stack.floors[0].floorBottom, 0.4);
+  const packageIn = floorTopE === null || floorBotE === null ? null
+    : inches(floorTopE - floorBotE);
+  checkDefault(3, 'assembly: the drawn floor package is 12 5/8" (11 7/8" joist + 3/4" sheathing)',
+    packageIn !== null && Math.abs(packageIn - 12.625) < TOL_IN,
+    `drawn ${packageIn === null ? 'no ink' : packageIn.toFixed(3) + '"'}`);
+  // And the same measurement against what the module actually answers, which
+  // is a different question: the literal above catches the defaults changing,
+  // this catches the painter ceasing to ask.
+  check('assembly: the drawn floor package equals levelFloorFt for MAIN FL',
+    packageIn !== null && Math.abs(packageIn - inches(env.levelFloorFt(3))) < TOL_IN,
+    `drawn ${packageIn === null ? 'no ink' : packageIn.toFixed(3) + '"'}, `
+    + `module ${inches(env.levelFloorFt(3)).toFixed(3)}" `
+    + `(joist ${mainAsm.joistDepthIn}" + sheathing ${mainAsm.sheathingIn}")`);
+
+  // ── The footing: its depth below the foundation wall ────────────────
+  // Buried concrete is drawn dashed below grade, so the footing bottom is
+  // real ink and its depth is measurable.
+  const wallBotE = drawnE(stack.foundation.wallBottom, 0.3);
+  const footBotE = drawnE(stack.foundation.footingBottom, 0.5);
+  const footIn = wallBotE === null || footBotE === null ? null
+    : inches(wallBotE - footBotE);
+  checkDefault(1, 'assembly: the drawn footing is 8" deep under the foundation wall',
+    footIn !== null && Math.abs(footIn - 8) < TOL_IN,
+    `drawn ${footIn === null ? 'no ink' : footIn.toFixed(3) + '"'}`);
+  check('assembly: the drawn footing depth equals footingDepthIn',
+    footIn !== null && Math.abs(footIn - fdnAsm.footingDepthIn) < TOL_IN,
+    `drawn ${footIn === null ? 'no ink' : footIn.toFixed(3) + '"'}, `
+    + `module ${fdnAsm.footingDepthIn}"`);
+
+  // ── The footing: how far it steps out ───────────────────────────────
+  // footingWidthIn is null on this drawing, so the value under test is the
+  // DERIVED one -- 20" for a non-ICF foundation -- and the step out each side
+  // is half of what the 8" concrete wall does not cover.
+  // Measured at the elevations the ink is actually AT, not the ones it was
+  // expected at. Anchoring this on stack.foundation.footingBottom read as a
+  // step-out failure whenever the footing simply sat somewhere else -- one
+  // fault reported as a different one, at a place with no ink to measure.
+  const wallFaceU = floorBotE === null ? null : leftEdgeAt(floorBotE, 0.02);
+  const footFaceU = footBotE === null ? null : leftEdgeAt(footBotE, 0.02);
+  const projIn = wallFaceU === null || footFaceU === null ? null
+    : inches(wallFaceU - footFaceU);
+  checkDefault(1, 'assembly: the footing steps out 6" past the foundation wall face',
+    projIn !== null && Math.abs(projIn - 6) < TOL_IN,
+    `drawn ${projIn === null ? 'no ink' : projIn.toFixed(3) + '"'}`);
+  const fdnWallType = (env.walls().find(w => w.levelId === 1 && w.view === 'foundation') || {}).wallType;
+  const wallIn = (win.DraftWallTypes.WALL_TYPES.find(t => t.id === fdnWallType) || {}).totalIn;
+  check('assembly: that step out is half of footingWidthIn less the wall',
+    projIn !== null && Number.isFinite(wallIn) && Math.abs(projIn - (env.footingWidthIn(1) - wallIn) / 2) < TOL_IN,
+    `drawn ${projIn === null ? 'no ink' : projIn.toFixed(3) + '"'}, `
+    + `module (${env.footingWidthIn(1)}" - ${wallIn}" ${fdnWallType}) / 2`);
+}
+
 // ── The envelope is correct and must not move ─────────────────────────
 // Stated for every view: the fix hides, so nothing may appear over the top.
 for (const id of ['E1', 'E2', 'E3', 'E4']) {
