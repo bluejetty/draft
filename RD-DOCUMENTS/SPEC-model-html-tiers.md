@@ -972,3 +972,47 @@ time; the assertion had not.
 could still stop short of the definition** — `imageFor` reads a decoded-bitmap
 cache and `MODEL.html` has no loader. That is a loader to measure before
 committing to it, not a re-point.
+
+### Why a store fix rides in the stairs change (6 Sep)
+
+`shared-file-store.js` is in this diff and it has nothing to do with stairs.
+It is here because verifying the stairs work found it, and the finding is
+worth more than the tidiness of a narrow PR.
+
+Verifying tier 2m meant running the full suite, which surfaced seven failures.
+Attributing them took a second checkout at `3223d79` and a second machine, and
+produced a table nobody expected:
+
+| | base `3223d79` | stairs |
+|---|---|---|
+| one container, idle ×3 | **2, 2, 1 rotating** | 0, 0, 0 |
+| another container, idle ×3 | 0, 0, 0 | 0, 0, 0 |
+
+Six of the seven were **already failing on main**. The suite was not green
+before this change and is not made worse by it. But two facts refused to sit
+together: one machine lost the race every run and another never did, and on
+the machine that lost it, adding two `<script>` tags to MODEL.html — nothing
+else — made it stop. A change that alters nothing but page weight should not
+fix a bug.
+
+It doesn't. `openDb` wired `onupgradeneeded`, `onsuccess` and `onerror`, and
+`indexedDB.open` has a fourth outcome: **blocked**, which fires when a
+`deleteDatabase` is still pending. While blocked, neither success nor error
+fires — and because the promise is cached in `dbPromise`, and `forget()` is
+reachable only from the handlers that never ran, one blocked open wedges every
+later read for the life of the page.
+
+Eleven spec files call `deleteDatabase('pdf-img-mgr-shared')` in their init
+scripts. That string is `DB_NAME`.
+
+So both observations were one defect seen from opposite ends: **anything that
+delays the open past the delete hides it.** Two script tags did. So did a
+faster machine. That is why the stairs branch appeared to "fix" the race, and
+why banking that would have been the worst outcome available — a bug that
+stops reproducing is a bug that stops getting fixed.
+
+**The rule this leaves.** A pre-existing failure is not attributed until it has
+been run on a second tree AND a second machine. One clean run on the box you
+happen to have proves that box, not the code. Every conclusion in the table
+above changed at least once before the sixth run.
+
