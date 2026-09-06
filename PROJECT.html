@@ -297,11 +297,30 @@
       // a garage were the first two -- and this one is the worst of the three,
       // because 11 7/8" over a garage draws perfectly and does not stand up.
       //
-      // 20" is a DEFAULT, not a rule: it is right for the ordinary two-car
+      // 19 1/4" JOIST, NOT 20" -- THE 20 IS THE PACKAGE (Movie, 6 Sep: "should
+      // be 19.25\" with 3/4\" ply sheathing"). This held 20 as the JOIST, which
+      // is the same mistake as reading a wall height off a stud length: the
+      // number quoted on 5 Sep was the depth of the finished floor, and the
+      // joist is that less its sheathing.
+      //
+      // IT MOVED THE DECK, WHICH IS THE PART THAT MATTERED. The deck sits on
+      // the 9'-1 1/8" garage wall plus the package, so
+      //
+      //     20" joist + 3/4" ply = 20 3/4"  ->  deck 10'-9 7/8"   what this drew
+      //     19 1/4"   + 3/4" ply = 20"      ->  deck 10'-9 1/8"   the ruling
+      //
+      // and 3/4" is exactly the amount by which the top of this floor failed
+      // to line up with the 3/4" over the house's 11 7/8" joists -- which was
+      // the whole point of choosing the number (Movie, 6 Sep: "the top of the
+      // floor 3/4\" sheathing should line up with the 3/4\" on the 11 7/8\"").
+      //
+      // 19 1/4" is a DEFAULT, not a rule: it is right for the ordinary two-car
       // bay, and `positive(raw.joistDepthIn, ...)` below already lets a
-      // stored number beat it, the same contract as every other cell.
+      // stored number beat it, the same contract as every other cell. The
+      // engineer sizes the real one, and a deeper joist eats garage headroom
+      // rather than raising the deck.
       const OVER_GARAGE_LEVEL_ID = 4;
-      const OVER_GARAGE_JOIST_IN = 20;
+      const OVER_GARAGE_JOIST_IN = 19.25;
       const defaultJoistDepthIn = levelId => {
         if (levelId === ENTRY_LEVEL_ID) return ENTRY_JOIST_IN;
         if (levelId === OVER_GARAGE_LEVEL_ID) return OVER_GARAGE_JOIST_IN;
