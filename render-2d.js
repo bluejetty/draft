@@ -1449,7 +1449,13 @@ if (!window.DraftRender2D) {
           ctx.fillStyle = ink; ctx.fill();
         }
         ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
-        ctx.fillStyle = '#fff'; ctx.fill();
+        // The bubble's interior, and it was a literal white. Correct on a light
+        // page and only there: MODEL.html's night ground is #1d1f20, so a white
+        // disc under #d4788f lettering is a hole punched in the drawing. Same
+        // defect as the fixture body fill, and found the same way -- by
+        // brace-matching this function rather than trusting a one-colour audit,
+        // which had cleared cut marks as "one hardcode" twice.
+        ctx.fillStyle = env.bubbleFill; ctx.fill();
         ctx.stroke();
         if (env.bubbleStyle === 'proud') {
           const tx = cx + vx * R, ty = cy + vy * R;
@@ -1478,8 +1484,17 @@ if (!window.DraftRender2D) {
     };
     ctx.save();
     ctx.lineWidth = 1;
-    ctx.strokeStyle = '#b04060';
-    ctx.fillStyle = '#b04060';
+    // THE CUT INK, now the page's rather than the painter's. #b04060 IS the day
+    // value of palette.js's draw-cut, so the light page does not move; night
+    // gets #d4788f, which is the whole point.
+    //
+    // NO FALLBACK on either colour, deliberately. A `|| '#b04060'` would let a
+    // caller keep the literal by saying nothing, which is the drift this
+    // removes. Note `const ink = ctx.strokeStyle` above reads back whatever is
+    // set here, so this one assignment carries the triangles and the lettering
+    // too -- do not add a third env key for them.
+    ctx.strokeStyle = env.cutColor;
+    ctx.fillStyle = env.cutColor;
     [...env.autoCuts, ...env.cuts].forEach(bubbleMark);
     ctx.restore();
   }

@@ -16,6 +16,7 @@
 <script src="./auto-dims.js"></script>
 <script src="./render-2d.js"></script>
 <script src="./cut-view.js"></script>
+<script src="./cut-marks.js"></script>
 <script src="./areas.js"></script>
 <script src="./room-standards.js"></script>
 <script src="./turtle.js"></script>
@@ -2195,22 +2196,17 @@ const ROOF_LAYER = 'A-ROOF';
 // the gap between the exterior walls and the first dimension string, the same
 // cozy spot the standard elevations use. This is the least the line extends
 // past the drawn ends when there are no walls to measure against.
-const CUT_BUBBLE_PUSH_FT = 6;
+// The cut-mark geometry lives in cut-marks.js; only the elevation sides are
+// still read on this page, by the grab-handle drag below.
+const { E_MARK_SIDES } = window.DraftCutMarks;
 // The standard elevation marks stand this far outside the outermost dimension
 // string on their side (board #263). Each mark's grab handle can slide it
 // along its own axis, and the chosen clearance saves with the drawing.
-const E_MARK_CLEAR_FT = 2;
 const E_MARK_CLEAR_MIN_FT = 0.5;
 const E_MARK_CLEAR_MAX_FT = 60;
 const clampEMarkClear = value => Math.min(E_MARK_CLEAR_MAX_FT, Math.max(E_MARK_CLEAR_MIN_FT, value));
 // Which way each mark's axis runs: E1 south of the plan, E2 west, E3 north,
 // E4 east — `sign * (coordinate - dim edge)` reads the mark's clearance.
-const E_MARK_SIDES = {
-  E1: { side: 'S', axis: 'z', sign: 1 },
-  E2: { side: 'W', axis: 'x', sign: -1 },
-  E3: { side: 'N', axis: 'z', sign: -1 },
-  E4: { side: 'E', axis: 'x', sign: 1 },
-};
 // Structural point supports and spans, placed manually in either order —
 // columns centre onto a beam line and beam ends snap to columns, so they line
 // up whichever is placed first. A beam is one span between two supports:
@@ -8187,6 +8183,11 @@ class Component extends DCLogic {
       lineSpan: (start, end) => this._cutLineSpan(start, end),
       autoCuts: this._autoElevationCuts(),
       cuts: this.state.cuts,
+      // The two literals this page has always drawn, said out loud rather than
+      // baked into the painter. Unchanged on purpose: one light ground, and
+      // both are right against it.
+      cutColor: '#b04060',
+      bubbleFill: '#fff',
     });
 
     ctx.save();
@@ -8638,15 +8639,7 @@ class Component extends DCLogic {
   // The plan's own footprint, from level walls only — BONEYARD shelf geometry
   // (negative pseudo levels) never pulls the marks around.
   _planWallExtents() {
-    const walls = this._walls.filter(wall => wall.levelId > 0);
-    if (!walls.length) return null;
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    walls.forEach(wall => [wall.start, wall.end].forEach(pt => {
-      minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
-      minZ = Math.min(minZ, pt.z); maxZ = Math.max(maxZ, pt.z);
-    }));
-    if (maxX - minX < 1 || maxZ - minZ < 1) return null;
-    return { minX, maxX, minZ, maxZ };
+    return window.DraftCutMarks.planWallExtents(this._walls);
   }
 
   // Half the first dimension offset: the middle of the gap between the
@@ -8660,66 +8653,20 @@ class Component extends DCLogic {
   // both sides so the bubbles land there instead of out past the strings.
   // Without walls to measure against it just extends past the drawn ends.
   _cutLineSpan(start, end) {
-    const dx = end.x - start.x, dz = end.z - start.z;
-    const len = Math.hypot(dx, dz);
-    if (len < 0.001) return { start, end };
-    const ux = dx / len, uz = dz / len;
-    const along = t => ({ x: start.x + ux * t, y: start.y, z: start.z + uz * t });
-    const box = this._planWallExtents();
-    if (!box) {
-      return { start: along(-CUT_BUBBLE_PUSH_FT), end: along(len + CUT_BUBBLE_PUSH_FT) };
-    }
-    const gap = this._cutMarkGapFt();
-    const slab = (origin, dir, lo, hi) => {
-      if (Math.abs(dir) < 1e-9) {
-        return (origin >= lo && origin <= hi) ? [-Infinity, Infinity] : null;
-      }
-      const t0 = (lo - origin) / dir, t1 = (hi - origin) / dir;
-      return [Math.min(t0, t1), Math.max(t0, t1)];
-    };
-    const sx = slab(start.x, ux, box.minX - gap, box.maxX + gap);
-    const sz = slab(start.z, uz, box.minZ - gap, box.maxZ + gap);
-    if (!sx || !sz) {
-      return { start: along(-CUT_BUBBLE_PUSH_FT), end: along(len + CUT_BUBBLE_PUSH_FT) };
-    }
-    const tMin = Math.max(sx[0], sz[0]), tMax = Math.min(sx[1], sz[1]);
-    if (!(tMax - tMin > 0.5) || !Number.isFinite(tMin) || !Number.isFinite(tMax)) {
-      return { start: along(-CUT_BUBBLE_PUSH_FT), end: along(len + CUT_BUBBLE_PUSH_FT) };
-    }
-    return { start: along(tMin), end: along(tMax) };
+    return window.DraftCutMarks.cutLineSpan(this._walls, start, end, this._cutMarkGapFt());
   }
-
-  // The outermost dimension string in each side's corridor (any level) — the
-  // reference line the standard elevation marks measure their clearance from.
-  // With no dimensions on a side, the plan's own wall extents stand in.
   _eMarkDimEdges() {
-    const box = this._planWallExtents();
-    if (!box) return null;
-    const { minX, maxX, minZ, maxZ } = box;
-    const pad = 2;
-    const edge = { N: minZ, S: maxZ, W: minX, E: maxX };
-    this._dimensions.filter(dimension => dimension.levelId > 0).forEach(dimension => {
-      [dimension.start, dimension.end].forEach(pt => {
-        if (pt.x >= minX - pad && pt.x <= maxX + pad) {
-          if (pt.z > edge.S) edge.S = pt.z;
-          if (pt.z < edge.N) edge.N = pt.z;
-        }
-        if (pt.z >= minZ - pad && pt.z <= maxZ + pad) {
-          if (pt.x > edge.E) edge.E = pt.x;
-          if (pt.x < edge.W) edge.W = pt.x;
-        }
-      });
-    });
-    return edge;
+    return window.DraftCutMarks.eMarkDimEdges(this._walls, this._dimensions);
   }
 
-  // How far outside the outermost dimension string a standard elevation mark
-  // stands: the drafter's dragged clearance if its handle has moved, else 2'.
+  // Kept as a delegation though autoElevationCuts no longer routes through it:
+  // it is the component's accessor for "what clearance does this mark have",
+  // which is the space the grab-handle drag works in. Removing a method from
+  // this page is a different change from moving its body, and only the second
+  // one was agreed.
   _eMarkClearFt(id) {
-    const stored = this.state.elevationMarkOffsets[id];
-    return Number.isFinite(stored) ? stored : E_MARK_CLEAR_FT;
+    return window.DraftCutMarks.eMarkClearFt(this.state.elevationMarkOffsets, id);
   }
-
   // The four standard elevations place themselves just outside the plan
   // extents: E1 along the bottom looking up into the model, E2 left looking
   // right, E3 top looking down, E4 right looking left. Like hand-placed
@@ -8727,23 +8674,12 @@ class Component extends DCLogic {
   // stands clear of the drawing ink: 2' past the outermost dimension string
   // in its corridor (any level), or wherever its grab handle was dragged.
   _autoElevationCuts() {
-    if (!this._autoElevationsOn()) return [];
-    const box = this._planWallExtents();
-    if (!box) return [];
-    const edge = this._eMarkDimEdges();
-    const { minX, maxX, minZ, maxZ } = box;
-    const pad = 2;
-    const at = id => edge[E_MARK_SIDES[id].side] + E_MARK_SIDES[id].sign * this._eMarkClearFt(id);
-    return [
-      { id: 'E1', name: 'E1', auto: true, elev: 0, levelId: null,
-        startPt: { x: minX - pad, z: at('E1') }, endPt: { x: maxX + pad, z: at('E1') }, dirVec: { x: 0, z: 1 } },
-      { id: 'E2', name: 'E2', auto: true, elev: 0, levelId: null,
-        startPt: { x: at('E2'), z: minZ - pad }, endPt: { x: at('E2'), z: maxZ + pad }, dirVec: { x: -1, z: 0 } },
-      { id: 'E3', name: 'E3', auto: true, elev: 0, levelId: null,
-        startPt: { x: minX - pad, z: at('E3') }, endPt: { x: maxX + pad, z: at('E3') }, dirVec: { x: 0, z: -1 } },
-      { id: 'E4', name: 'E4', auto: true, elev: 0, levelId: null,
-        startPt: { x: at('E4'), z: minZ - pad }, endPt: { x: at('E4'), z: maxZ + pad }, dirVec: { x: 1, z: 0 } },
-    ];
+    return window.DraftCutMarks.autoElevationCuts({
+      walls: this._walls,
+      dimensions: this._dimensions,
+      elevationMarkOffsets: this.state.elevationMarkOffsets,
+      autoElevations: this._autoElevationsOn(),
+    });
   }
 
   _cutById(id) {

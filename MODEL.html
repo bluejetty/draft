@@ -133,6 +133,16 @@
      reason this page drew no fixtures. -->
 <script src="./fixture-geometry.js"></script>
 <script src="./closets.js"></script>
+<!-- Cut marks. cut-marks.js is the geometry; profile-manager.js is here for
+     ONE reason and it is worth naming, because it is the first non-drawing
+     dependency this page has taken: two of the four inputs a cut needs are not
+     in the saved drawing. `structureStandards` -- is the auto-elevation ring
+     on, and which bubble style -- is the drafter's OFFICE STANDARD, held in
+     localStorage by profile-manager and read with getActive('standards'). The
+     alternative was office defaults, which would have shown four elevation
+     marks to a drafter who had switched them off. -->
+<script src="./cut-marks.js"></script>
+<script src="./profile-manager.js"></script>
 
 <script>
 (() => {
@@ -355,6 +365,13 @@
     return (drawing?.fixtures || [])
       .filter(fx => onActiveLevel().byLevel(fx) && shown.has(fx.wallId));
   };
+  // CUTS TAKE NO LEVEL FILTER, and that is the bone's rule rather than an
+  // omission here. _drawCuts2D (MODEL.dc.html:7432) is called ungated -- no
+  // activeVisible, no view test -- because a section cut is a fact about the
+  // BUILDING, not about one storey: the same line through the house is what
+  // the drafter wants to see whichever floor is on screen. The four auto marks
+  // carry levelId: null, which says the same thing in the data.
+  const cuts = () => drawing?.cuts || [];
   const shapes = () => (drawing?.shapes || [])
     .filter(sh => onActiveLevel().byLevel(sh));
   // Outlines take the same LEVEL-ONLY rule as roofs -- rule four above. They
@@ -881,6 +898,70 @@
       all.find(w => w.id === fixture.wallId), env));
   };
 
+  // CUT MARKS -- the section lines and their bubbles.
+  //
+  // FOUR INPUTS, AND THEY COME FROM THREE DIFFERENT PLACES. That is the whole
+  // story of this painter, and it is why it went last of the ones that only
+  // needed wiring:
+  //
+  //   cuts                  the drawing        persisted, read like walls
+  //   elevationMarkOffsets  the drawing        persisted (PERSISTED_KEYS)
+  //   structureStandards    the PROFILE        the drafter's office standard,
+  //                                            localStorage, not the drawing
+  //   autoDimFirstOffsetFt  nowhere            session state on the old page;
+  //                                            this page uses its default
+  //
+  // The third is why profile-manager.js is in the head. The fourth has no home
+  // to read from -- it is a menu setting the bone keeps for the session and
+  // never saves -- so this page uses 1.5', which is the value MODEL.dc.html
+  // starts every session with. A drafter who changed it mid-session sees a
+  // slightly wider or narrower gap here than there. Stated rather than hidden,
+  // because it is the one place this page cannot be faithful.
+  const cutMarkGapFt = () => 1.5 / 2;
+
+  // TWO GLOBALS, not one, and profile-manager.js publishes seven. The reader
+  // is on DraftProfileManager; the normaliser is on DraftStructureStandards
+  // (profile-manager.js:479). Written out rather than assumed: the first
+  // version of this reached for PM.normaliseStructureStandards, which is
+  // undefined, and the page caught the throw and said "painter failed".
+  const structureStandards = () => window.DraftStructureStandards
+    .normaliseStructureStandards(
+      window.DraftProfileManager.getActive('standards')?.content?.model?.structureStandards);
+
+  const paintCuts = () => {
+    const R = window.DraftRender2D;
+    const CM = window.DraftCutMarks;
+    const PM = window.DraftProfileManager;
+    const SS = window.DraftStructureStandards;
+    // Both profile-manager globals are named, so a load-order slip says which
+    // half is missing rather than blaming the file twice.
+    const missing = [!R && 'render-2d.js', !CM && 'cut-marks.js',
+      !PM && 'profile-manager.js (DraftProfileManager)',
+      !SS && 'profile-manager.js (DraftStructureStandards)'].filter(Boolean);
+    if (missing.length) {
+      throw new Error(`MODEL.html: cannot paint cut marks, ${missing.join(' and ')} `
+        + 'did not load. Check the script order in the page head.');
+    }
+    const all = drawing?.walls || [];
+    const dims = drawing?.dimensions || [];
+    const standards = structureStandards();
+    R.drawCutMarks2D(ctx, toS, {
+      bubbleStyle: standards.cutBubbleStyle,
+      lineSpan: (start, end) => CM.cutLineSpan(all, start, end, cutMarkGapFt()),
+      autoCuts: CM.autoElevationCuts({
+        walls: all,
+        dimensions: dims,
+        elevationMarkOffsets: drawing?.elevationMarkOffsets || {},
+        autoElevations: standards.autoElevations,
+      }),
+      cuts: cuts(),
+      cutColor: skin['draw-cut'],
+      // The bubble interior is the page's own ground, so the lettering inside
+      // it reads at the same contrast the palette measured draw-cut against.
+      bubbleFill: skin['surface-page'],
+    });
+  };
+
   // THE DATUM MADE VISIBLE. Tier 2d anchored the grid to the datum but never
   // showed the point itself, so the drafter saw a grid whose origin was
   // inferable only by counting squares. Same three states as the grid, from
@@ -926,6 +1007,11 @@
         // after the walls and lines (6960) so a string is never buried under
         // the geometry it measures.
         paintDimensions();
+        // Cut marks go with the annotation rather than the geometry: they are
+        // a fact ABOUT the drawing, and the bone paints them late for the same
+        // reason (MODEL.dc.html:7432, after every piece of linework and just
+        // before the outline guide).
+        paintCuts();
         // Notes ride with the dimensions, for the same reason and in the same
         // place the bone puts them (MODEL.dc.html:7025, immediately after the
         // dimension pass): annotation goes over the geometry it annotates.

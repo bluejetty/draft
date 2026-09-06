@@ -169,7 +169,7 @@ test.describe('MODEL.html tier 1', () => {
     expect(frameworks.dc).toBe(0);
     expect(frameworks.scripts).not.toContain('./support.js');
 
-    // ELEVEN dependencies, and the list is the finding rather than a formality:
+    // THIRTEEN dependencies, and the list is the finding rather than a formality:
     // render-2d.js reaches for no globals, so the wall painter still costs one
     // module. palette.js joined on 3 Sep and is the only one that is not a
     // painter -- it is loaded FIRST because the skin is applied at module
@@ -200,6 +200,18 @@ test.describe('MODEL.html tier 1', () => {
     // Neither is a painter and neither is new code: this pair is the price of
     // NOT duplicating geometry, which is the cheaper bill.
     //
+    // cut-marks.js and profile-manager.js joined for tier 2l, and the SECOND
+    // one is the entry on this list worth arguing about: it is the first
+    // dependency here that is not about drawing the drawing. Two of the four
+    // inputs a cut mark needs are not in the saved file. `structureStandards`
+    // -- whether the auto-elevation ring is on, and which bubble style -- is
+    // the drafter's office standard, kept in localStorage by profile-manager.
+    //
+    // The cheaper option was office defaults, and it was rejected on what it
+    // would look like: a drafter who had switched the ring off would open this
+    // page and find four elevation marks round the house. A viewer that
+    // disagrees with the drafter's own settings is worse than one dependency.
+    //
     // Keep it exact rather than loosening it to a `toContain`. It caught the
     // palette being added the same hour it was added, and it caught these two
     // the same hour as well, which is what an exact list is for: the
@@ -210,6 +222,7 @@ test.describe('MODEL.html tier 1', () => {
       './shared-file-store.js', './wall-types.js', './formatters.js',
       './cut-view.js', './drawing-format.js', './render-2d.js',
       './fixture-geometry.js', './closets.js',
+      './cut-marks.js', './profile-manager.js',
     ]);
   });
 
