@@ -96,6 +96,43 @@ read that rather than assuming `DEFAULT_LEVELS`.
 
 ---
 
+## THE SECOND TEST: WHO DERIVES IT, AND WHO STORES IT
+
+Added 6 Sep, from tier 2m, and aimed at the Write Tier rather than at this
+page — it is the hazard that the reachability test above cannot see.
+
+**For every field two boards both touch, ask which one DERIVES it and which
+one STORES it.** A field can be present, correct, shared, and reachable, and
+still make the two pages disagree.
+
+Stairs is the worked example. A stair record carries `riseFt`. It looks like
+the truth and it is not: `_stairCurrentLayout` re-derives the rise from the
+level heights on every paint, and falls back to the stored number only *"if
+its level goes away"*. Nothing ever writes the derived value back — all four
+writes to `riseFt` happen at stair creation. So the stored number is correct
+exactly until someone edits a wall height, and then it is silently stale
+forever.
+
+The old page never notices, because it never reads the stored value while a
+level exists. A second page that trusted it would have drawn a different
+riser count for the same drawing, and **no test on either page alone could
+catch that** — the divergence does not exist inside one page. It exists in
+the file they exchange.
+
+That is why `level-assembly.js` came out with the stairs rather than after
+them: reading `stair.riseFt` was the cheap path and it was WRONG, not merely
+worse.
+
+**The write side is the same hazard mirrored** — a value the old page derives
+and the new page stores, or a value the new page writes that the old page
+expects to re-derive. Both directions pass every single-page test. This is
+the reader-side twin of the round-trip rule.
+
+**The standing check:** name the deriver, name the storer, and make the two
+boards exchange a file in a test. If a field has two derivers, that is a
+merge conflict waiting in the data. If it has two storers, one of them is
+stale and nobody will find out until a drafter does.
+
 ## THE TEST OF A FINISHED EXTRACTION
 
 Steps 3-5 are blocked, and measuring *why* produced the most useful thing
