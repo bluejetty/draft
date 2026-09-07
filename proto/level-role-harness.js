@@ -319,6 +319,25 @@ check('the height FOLLOWS the pour -- it is a sum, not a number that matches one
 // change them". So the held decision depends on the override working.
 check('and a drafter\'s own height still beats it', ({ LA }) =>
   [LA.normaliseLevelAssembly({ wallHeightFt: 9 }, 'foundation').wallHeightFt, 9]);
+// THE SHARED LOOKUP, which W1 step 3 gave a home. Every board used to ask
+// "what is this level made of" in its own words -- the TABLE had one home and
+// the LOOKUP had four, which is the drift #325 found one layer up. These three
+// are what let the mutation on levelAssemblyFor bite: retargeting a mutation
+// at a function nothing calls just moves the hole, and the first attempt at
+// this did exactly that -- applied, caught NOTHING, and the harness said so.
+// The two package numbers are written out rather than read from the module's
+// own constants on purpose: comparing the export to itself passes however far
+// either drifts. These are Movie's ruled depths and they are pinned as digits.
+check('the shared lookup reads the role, so OVER GARAGE gets its 19 1/4"', ({ LA }) =>
+  [LA.levelAssemblyFor({}, 4).joistDepthIn, 19.25]);
+check('and ENTRY gets its 2x10s from the same call', ({ LA }) =>
+  [LA.levelAssemblyFor({}, 2).joistDepthIn, 9.25]);
+check('while a plain floor is left alone', ({ LA }) =>
+  [LA.levelAssemblyFor({}, 3).joistDepthIn,
+    LA.normaliseLevelAssembly(undefined, 'floor').joistDepthIn]);
+check('and a stored value still beats the role default', ({ LA }) =>
+  [LA.levelAssemblyFor({ 4: { joistDepthIn: 16 } }, 4).joistDepthIn, 16]);
+
 check('an unmapped level is a plain floor', ({ LA }) =>
   [LA.levelRole(3), 'floor']);
 check('and so is a level id nobody has invented yet', ({ LA }) =>
@@ -445,9 +464,19 @@ const MUTATIONS = [
     s => s.replace('normaliseLevelAssembly(assemblies[levelId], levelRole(levelId))', 'normaliseLevelAssembly(assemblies[levelId])')],
   ['the elevation harness goes back to measuring a plain-floor building', 'elevation',
     s => s.replace('normaliseLevelAssembly(\n    assemblies[id], win.DraftLevelAssembly.levelRole(id))', 'normaliseLevelAssembly(assemblies[id])')],
-  ['MODEL.dc.html drops the role on the level it reads most', 'modelDc',
-    s => s.replace('normaliseLevelAssembly(this.state.levelAssemblies?.[levelId], levelRole(levelId))',
-      'normaliseLevelAssembly(this.state.levelAssemblies?.[levelId])')],
+  // W1 step 3 moved MODEL.dc.html's inline lookup into level-assembly.js as
+  // levelAssemblyFor, and this mutation stayed pointed at the old text -- so it
+  // matched nothing and the harness refused it rather than counting a mutation
+  // that proves nothing. That refusal is the guard working: a mutation aimed at
+  // deleted text is indistinguishable from a mutation the code survives.
+  //
+  // Retargeted to follow the code, and it is STRONGER at the new address. It
+  // used to break one page's lookup; it now breaks the lookup every board
+  // shares, so MODEL.dc.html is covered along with everyone else who stopped
+  // asking the question in their own words.
+  ['the shared lookup drops the role, so every caller frames a plain floor', 'module',
+    s => s.replace('normaliseLevelAssembly(levelAssemblies?.[levelId], levelRole(levelId))',
+      'normaliseLevelAssembly(levelAssemblies?.[levelId])')],
   ['PROJECT.html normalises without one', 'project',
     s => s.replace('normaliseLevelAssembly(raw, levelRole(levelId))', 'normaliseLevelAssembly(raw)')],
   ['PROJECT.html asks for a default with no role', 'project',
