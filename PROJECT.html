@@ -373,7 +373,32 @@
 
       const assembly = levelId => normaliseAssembly(levelAssemblies[levelId], levelId);
       const setAssembly = (levelId, field, value) => {
-        levelAssemblies[levelId] = { ...assembly(levelId), [field]: value };
+        // THE STORED OBJECT LEADS, so this line does not discard keys it does
+        // not own. `assembly()` answers the shared module, which returns an
+        // explicit eight-field object; the copy it replaced spread `...raw`
+        // and carried unknown keys through, so swapping it in bare would have
+        // made an edit to one field rewrite the whole stored assembly.
+        //
+        // NOT BECAUSE ANYTHING DURABLE WAS AT RISK -- that alarm was raised
+        // and withdrawn. MODEL.dc.html:5441 loads every stored assembly
+        // through the same normaliser and writes `{ ...assembly }` back from
+        // that normalised state, so a ninth key dies at the next Model Space
+        // open regardless of what this page does. This page's old spread
+        // preserved it only until then.
+        //
+        // The line stands on its own terms instead: "readers normalise,
+        // writers never invent" has an unstated converse, which is that a
+        // writer must not silently DROP. setAssembly is a writer. That MODEL
+        // will strip the key later makes MODEL'S LOADER the next question,
+        // not this line's restraint wrong.
+        //
+        // AND IT BELONGS HERE RATHER THAN IN THE NORMALISER. A spread there
+        // would make every READ carry unknown keys, which is the wrong shape
+        // for a normaliser; here it is just "do not throw away what is not
+        // yours". Gilligan's, both the catch and the placement.
+        levelAssemblies[levelId] = {
+          ...levelAssemblies[levelId], ...assembly(levelId), [field]: value,
+        };
       };
       // The foundation wall's thickness reads from the drawn foundation
       // walls when there are any — the same derivation the Model uses.
