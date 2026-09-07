@@ -2155,7 +2155,7 @@ const TRACKING_GUIDE_MAX = 6;
 // defaults table, and stair-geometry.js needs a stair's rise to mean the same
 // thing on every board that draws it.
 const {
-  defaultLevelAssembly, normaliseLevelAssembly, levelRole,
+  defaultLevelAssembly, normaliseLevelAssembly, levelRole, levelFloorFt,
   JOIST_TYPES, DEFAULT_WALL_TOP_FT, DEFAULT_FLOOR_ASSEMBLY, DEFAULT_JOIST_TYPE,
   DEFAULT_FOOTING_DEPTH_IN, DEFAULT_FDN_SLAB_THICKNESS_IN,
 } = window.DraftLevelAssembly;
@@ -21535,9 +21535,23 @@ class Component extends DCLogic {
   _levelAssembly(levelId) {
     return normaliseLevelAssembly(this.state.levelAssemblies?.[levelId], levelRole(levelId));
   }
+  // W1 STEP 3. This wrote out `(joistDepthIn + sheathingIn) / 12` itself, and
+  // level-assembly.js has exported `levelFloorFt` -- the identical expression --
+  // since the tables were collapsed. MODEL.html calls the export; this page did
+  // not, and neither does LAYOUT.dc.html or proto/elevation-harness.js. Four
+  // homes for one derivation.
+  //
+  // WHY THAT WAS WORSE THAN IT LOOKS. proto/level-role-harness.js mutation-tests
+  // this expression by rewriting the MODULE's copy to `joistDepthIn / 12`. That
+  // goes red only where the module is actually called -- so the mutation passed
+  // over this page entirely, and a green harness read as if the derivation here
+  // were covered. Collapsing the copy is what makes the existing mutation reach
+  // it; every collapsed caller inherits the coverage.
+  //
+  // The other two copies are boarded, not swept in here: they are outside the
+  // serializer closure and outside this step's remit.
   _levelFloorFt(levelId) {
-    const assembly = this._levelAssembly(levelId);
-    return (assembly.joistDepthIn + assembly.sheathingIn) / 12;
+    return levelFloorFt(this._levelAssembly(levelId));
   }
 
   // Footing width never prints on plan — the contractor centers the footing
