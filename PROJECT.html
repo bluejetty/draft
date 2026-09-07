@@ -9,6 +9,7 @@
   <script src="./drawing-format.js"></script>
   <script src="./level-assembly.js"></script>
   <script src="./project-page.js"></script>
+  <script src="./design-notices.js"></script>
   <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
        critical path of the page. -->
   <link rel="stylesheet" href="vendor/fonts.css" />
@@ -169,6 +170,15 @@
           </div>
           <div class="sched" id="sched-house"></div>
         </div>
+        <!-- Board #313 says software never moves geometry without a press. It
+             does not say what happens when a press arrives and the geometry
+             correctly stays put. This is that: the garage door head follows the
+             wall down without anyone wiring it, and at some depth a standard
+             overhead door stops fitting. The wall is not adjusted -- Movie,
+             6 Sep: "the user will need to take the door limitation height into
+             consideration for their design" -- so the page says how short it is
+             and leaves the drawing alone. -->
+        <div class="notice" id="garage-door-head-notice"></div>
       </div>
     </section>
 
@@ -1519,7 +1529,43 @@
         };
       };
 
+      // THE ONE CALLER design-notices.js HAD NONE OF. The module shipped in
+      // #318 with 27 checks and 18 mutations and nothing on any page loaded
+      // it -- a guard that cannot reach a drafter is not a guard.
+      //
+      // Every number is passed in, none derived here: the wall the drafter
+      // edits, the drop and the door from project-page.js. The module owns no
+      // constants it does not define, and a fourth copy of 16.5 or 84 at this
+      // call site is exactly the drift this repo spent two days removing.
+      const doorHeadNoticeEl = document.querySelector('#garage-door-head-notice');
+      const fillDoorHeadNotice = () => {
+        if (!doorHeadNoticeEl || !window.DraftDesignNotices) return;
+        const notice = window.DraftDesignNotices.garageDoorHeadNotice({
+          wallHeightFt: garageValues().garage.wallHeightFt,
+          headDropIn: projectPage.OPENING_HEAD_DROP_IN,
+          doorHeightIn: projectPage.GARAGE_DOOR_HEIGHT_IN,
+        });
+        // null is the common case and it MUST clear the element, not skip it:
+        // a notice that appears once and never leaves says the wall is still
+        // short after the drafter has fixed it.
+        // AND THE QUESTION A DRAFTER ASKS NEXT. The module answers it -- whole
+        // inches down, because a door is ordered from a catalogue and 83.6"
+        // is not one of them -- and leaving that export uncalled would be the
+        // same dead claim one function along.
+        const limitIn = notice && window.DraftDesignNotices.garageDoorHeadLimitIn({
+          wallHeightFt: garageValues().garage.wallHeightFt,
+          headDropIn: projectPage.OPENING_HEAD_DROP_IN,
+        });
+        doorHeadNoticeEl.textContent = notice
+          ? `${notice.text} The tallest door this wall clears is ${limitIn}".`
+          : '';
+        doorHeadNoticeEl.classList.toggle('visible', Boolean(notice));
+        if (notice) doorHeadNoticeEl.dataset.noticeKind = notice.kind;
+        else delete doorHeadNoticeEl.dataset.noticeKind;
+      };
+
       const repaint = () => {
+        fillDoorHeadNotice();
         // Built first, painted second: the two sections have to agree on a
         // scale and a y origin BEFORE either is drawn, or the garage's offset
         // reads as a drawing error rather than a height.

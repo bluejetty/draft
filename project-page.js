@@ -246,6 +246,13 @@ if (!window.DraftProjectPage) {
   // Anyone who reuses one for the other gets the right answer today and a wrong
   // one the moment either changes. See RD-DOCUMENTS/SPEC-lintels.md.
   const OPENING_HEAD_DROP_IN = 16.5;
+  // THE DOOR THE DROP IS SIZED FOR, named at last. The comment below already
+  // reasons from "a 7'-0" overhead door needs OPENING_HEAD_DROP_IN above its
+  // head, so the wall has to reach 8'-4 1/2"" -- the number was doing work in
+  // the prose and nowhere in the code. design-notices.js owns no constants it
+  // does not define and takes this as an input, so it has to come from the
+  // file that owns the drop derived from it.
+  const GARAGE_DOOR_HEIGHT_IN = 7 * 12;
 
   // A GARAGE WALL IS TALLER THAN THE HOUSE'S, and until now it WAS the house's.
   // Nothing set mainWallHeightFt for the attached garage, so it fell through to
@@ -1441,6 +1448,7 @@ if (!window.DraftProjectPage) {
     GARAGE_SLAB_BELOW_CONCRETE_IN,
     GARAGE_WALL_FT,
     OPENING_HEAD_DROP_IN,
+    GARAGE_DOOR_HEIGHT_IN,
     GRADE_MIN_BELOW_CONCRETE_IN,
     GRADE_BELOW_CONCRETE_IN,
     FOUNDATION_ATTACHMENTS,

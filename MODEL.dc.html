@@ -18,6 +18,7 @@
 <script src="./cut-view.js"></script>
 <script src="./cut-marks.js"></script>
 <script src="./level-assembly.js"></script>
+<script src="./design-notices.js"></script>
 <script src="./stair-geometry.js"></script>
 <script src="./areas.js"></script>
 <script src="./room-standards.js"></script>
@@ -1498,6 +1499,15 @@
   <!-- STAIR PROPERTIES -->
   <sc-if value="{{ stairToolActive }}" hint-placeholder-val="{{ false }}">
     <div style="display:flex; flex-direction:column; align-items:stretch;">
+      <!-- A STAIR RE-DERIVES ITS RISE ON EVERY PAINT AND NEVER WRITES IT BACK,
+           so `stair.riseFt` is the rise at PLACEMENT. When the two disagree by
+           a whole riser the run has changed length and the space left for it
+           has not. Board #313 forbids moving the stair; this says so instead.
+           Amber, not the red of stairOpeningReq at :1437 -- nothing is wrong,
+           something moved. -->
+      <sc-if value="{{ hasStairRefitNotice }}" hint-placeholder-val="{{ false }}">
+        <div data-stair-refit-notice style="border:1px solid rgba(160,96,53,0.45); background:rgba(160,96,53,0.08); color:#8a5228; padding:5px 8px; margin:8px 12px 0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; line-height:1.35; letter-spacing:0.03em;">{{ stairRefitNotice }}</div>
+      </sc-if>
       <div style="display:flex; flex-direction:column; padding:8px 12px; border-bottom:1px solid rgba(29,31,32,0.12); flex-shrink:0;">
         <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:5px; white-space:nowrap;">Stair · Shape</div>
         <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:3px;">
@@ -21822,6 +21832,27 @@ class Component extends DCLogic {
         : 'FLUSH — beam top flush with the joists; bears on the sill plate at foundation walls.',
       hasActiveBeams: this._activeBeams().length > 0,
       onBeamDelete: () => this._deleteLastBeam(),
+      // THE OTHER CALLER design-notices.js NEVER HAD. Every input is passed
+      // in: the module depends on no stair internals, and this page hands it
+      // the two functions it asks for rather than the module importing them.
+      // `levels` is unused by stairRefitNotice's descentFor here because this
+      // page's _stairDescent already closes over its own level list.
+      ...(() => {
+        const N = window.DraftDesignNotices;
+        if (activeTool !== 'stair' || !N) return { hasStairRefitNotice: false, stairRefitNotice: '' };
+        // Every stair on the level being edited, first one that has drifted.
+        // One line of panel, so the first is the one shown -- and a stair that
+        // has NOT drifted returns null, which is the common case and must
+        // leave the banner absent rather than blank.
+        const drifted = this._stairs
+          .filter(stair => stair.levelId === this._activeLevelId())
+          .map(stair => N.stairRefitNotice(stair, null, {
+            layoutFor: riseFt => this._stairLayout(riseFt),
+            descentFor: levelId => this._stairDescent(levelId),
+          }))
+          .find(notice => notice && notice.kind === 'stair-refit');
+        return { hasStairRefitNotice: Boolean(drifted), stairRefitNotice: drifted ? drifted.text : '' };
+      })(),
       stairToolActive: activeTool === 'stair',
       stairShapeBtns: STAIR_SHAPE_OPTIONS.map(option => ({
         label: option.label,
