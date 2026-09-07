@@ -98,7 +98,14 @@ test.describe('the saved format', () => {
 
     // Added is not a failure -- the format grows -- but it must be deliberate,
     // so a new key fails here once and gets added to the list with a reason.
-    const added = Object.keys(saved).filter(k => !PERSISTED_KEYS.includes(k) && k !== 'layout');
+    // `layout` and `specs` are the two conditional passthroughs -- MODEL
+    // re-emits them but does not author them, so neither belongs in
+    // PERSISTED_KEYS and both have to be excused here. Only `layout` was, and
+    // `specs` stayed green solely because this flow never loads SPECS data:
+    // populate it and this line would have failed for the wrong reason.
+    const PASSTHROUGH = ['layout', 'specs'];
+    const added = Object.keys(saved)
+      .filter(k => !PERSISTED_KEYS.includes(k) && !PASSTHROUGH.includes(k));
     expect(added, 'new persisted keys: add to PERSISTED_KEYS with a note').toEqual([]);
   });
 
@@ -172,6 +179,92 @@ test.describe('the saved format', () => {
     // clears; it has to survive the round trip or the composer re-deals a
     // hand-arranged sheet.
     expect(after.layout.auto).toBe(true);
+  });
+
+  // W0 FINDING C. `specs` is `layout`'s twin and had no test of any kind.
+  //
+  // Same three-site passthrough shape -- read at load (MODEL.dc.html:5402),
+  // restored from history (:6135), re-emitted at save (:3436) -- and the same
+  // consequence if the re-emit line goes: the drafter's saved work disappears
+  // the next time they touch a wall, with nothing red.
+  //
+  // What is in there matters for how bad that is. drawing-format.js only
+  // persists a project's DIFFERENCES from the office master: a section this
+  // job switched off, a section it reworded, a section it added that the
+  // master has no idea about. A project that agrees with the master stores
+  // nothing at all. So the specs key holds exactly the part of the
+  // specification that is this job's and exists nowhere else -- there is no
+  // master to fall back on for it, which is the whole point of the shape.
+  //
+  // Mirrors the layout round trip above, including its control. The control is
+  // the load-bearing half: asserting `after.specs` proves nothing unless MODEL
+  // actually rewrote the bucket, or the test reads back its own injection and
+  // passes with the re-emit deleted.
+  test("MODEL saving does not delete SPECS' project sections", async ({ page }) => {
+    const saved = await houseAndSave(page);
+    const linesBefore = (saved.lines || []).length;
+
+    // Stand in for SPECS: one section switched off, one reworded, one added.
+    // All three survive drawing-format's normaliser -- an added section needs
+    // a division or it loads and never prints, so 6 is real, not filler.
+    await page.evaluate(async ({ bucket }) => {
+      const store = window.SharedFileStore;
+      const at = await store.loadSharedFileAt(bucket);
+      const drawing = JSON.parse(await at.file.text());
+      drawing.specs = {
+        sections: [
+          { id: '06-10-00', off: true },
+          { id: '07-21-00', body: 'Batt insulation to R-24 in all exterior walls.' },
+          { id: '99-01-00', added: true, div: 6, kind: 'notes',
+            title: 'SITE-SPECIFIC CARPENTRY', body: 'Stair stringers cut on site.' },
+        ],
+      };
+      const file = new File([JSON.stringify(drawing)], 'model-drawing.json',
+        { type: 'application/json' });
+      await store.saveSharedFile(file, bucket, { ifRev: at.rev });
+    }, { bucket: h.STORAGE_BUCKET });
+
+    // Come back to MODEL as a drafter would, and draw one line. Enter COMMITS.
+    await page.reload();
+    await h.waitForModelReady(page);
+    await h.selectTool(page, 'Line');
+    await h.clickWorld(page, -20, -20);
+    await h.clickWorld(page, -10, -20);
+    await page.keyboard.press('Enter');
+    await h.waitForSaved(page);
+
+    const after = await h.savedDrawing(page);
+
+    // THE CONTROL. Without it this test passes on a MODEL that never saved.
+    expect((after.lines || []).length,
+      'MODEL never saved, so this test is not measuring a round trip')
+      .toBeGreaterThan(linesBefore);
+
+    expect(after.specs, "SPECS' project sections were dropped by a MODEL save")
+      .toBeTruthy();
+    const sections = after.specs.sections || [];
+    expect(sections.length, 'a project section went missing').toBe(3);
+
+    const byId = Object.fromEntries(sections.map(section => [section.id, section]));
+
+    // Each of the three shapes checked on its own terms -- they are stored
+    // differently and a normaliser can lose one while keeping the others.
+    expect(byId['06-10-00'], 'the section this job switched off').toBeTruthy();
+    expect(byId['06-10-00'].off).toBe(true);
+
+    expect(byId['07-21-00'], 'the section this job reworded').toBeTruthy();
+    expect(byId['07-21-00'].body, "the drafter's wording, not the master's")
+      .toContain('R-24');
+
+    const addedSection = byId['99-01-00'];
+    expect(addedSection, 'the section this job added -- it exists nowhere else')
+      .toBeTruthy();
+    expect(addedSection.added).toBe(true);
+    // Division and title are what decide where an added section prints. A
+    // survivor that lost either one loads into the file and never appears.
+    expect(addedSection.div, 'an added section with no division cannot print').toBe(6);
+    expect(addedSection.title).toBe('SITE-SPECIFIC CARPENTRY');
+    expect(addedSection.body).toContain('Stair stringers');
   });
 
   // NEW-5: `buildType` is exactly bungalow / twoStorey / bilevel /
