@@ -62,6 +62,41 @@ if (!window.DraftLevelAssembly) {
   // PROJECT page read 10" for the same level: two pages self-consistent and
   // disagreeing, which is the derive/store divergence class exactly.
   const FOUNDATION_POUR_FT = 8;
+  // THE SILL PLATE ON TOP OF THE POUR, and the reason the foundation's wall
+  // height is not the pour. Movie, 7 Sep: "default is 8\" conc wall with 1.5\"
+  // pt sill plate 8'1.5\" total (default)" and "8'1.5\" foundation it needs a
+  // sill plate". The floor bears on the SILL, not on the concrete, so the
+  // height a level asks for is pour + sill.
+  //
+  // IT LIVES HERE NOW, AND IT USED TO LIVE IN project-page.js. That page still
+  // exports it and nine call sites still read it from there -- unchanged, and
+  // now re-exported from this module rather than declared a second time. A
+  // sill thickness typed in two files is the fourth-copy problem, and this
+  // repo spent 6 Sep removing one of those.
+  //
+  // THE PATTERN WAS ALREADY IN THE FILE, FOR THE SPLIT AND NOT FOR THE HOUSE.
+  // project-page.js: "The SPLIT's 5'-0\" concrete wall with the 1 1/2\" sill on
+  // top is the office default -- 5'-1 1/2\" to the bearing surface, and the
+  // entry floor sits on that sill". Same composition, already correct there.
+  // The house foundation is the one that never got it.
+  const SILL_PLATE_IN = 1.5;
+  // 8'-1 1/2" to the bearing line. Composed, not typed: quoting 97.5 here
+  // would survive the pour changing, and the pour is the number a drafter
+  // actually edits.
+  const FOUNDATION_WALL_TOP_FT = (FOUNDATION_POUR_FT * 12 + SILL_PLATE_IN) / 12;
+  // ONE HEIGHT FOR EVERY FOUNDATION WALL TYPE, ON PURPOSE. An ICF wall and a
+  // PT SPF wood foundation do not stack to the same number as an 8" pour with
+  // a sill, and Movie holds those: 7 Sep, "PT SPF wall and ICF wall heights
+  // will be different but don't worry about it until you figure out the 8\"
+  // conc wall", then "leave them 8'1.5\" for now i will change them in the
+  // futre" and "user can change them".
+  //
+  // SO THIS IS A HELD DECISION, NOT A GAP. All three types default to the
+  // concrete answer, and a drafter who needs another types it -- a stored
+  // wallHeightFt already beats this default through normaliseLevelAssembly's
+  // `positive(raw.wallHeightFt, base.wallHeightFt)`, the same stored-beats-
+  // derived contract every other field here has. Written down so the next
+  // reader does not invent the other two numbers to "finish" the table.
   // THE ENTRY LEVEL FRAMES IN 2x10, NOT I-JOIST. Movie, 5 Sep: "the entry
   // floor i put 2x10 typical with 3/4" ply sheathing", and 6 Sep: "the entry
   // joists are 9.25" with 3/4" ply sheathing". 9 1/4 + 3/4 = a 10" package.
@@ -103,6 +138,12 @@ if (!window.DraftLevelAssembly) {
   // consolidation that quietly resolves an unruled disagreement is not a
   // consolidation, it is a decision nobody made.
   const ROLE_DEFAULTS = Object.freeze({
+    // A FOUNDATION IS NOT A FRAMED WALL, and until 7 Sep this table said it
+    // was. With no entry here the foundation fell through to
+    // DEFAULT_WALL_TOP_FT -- eight-foot STUDS plus a DOUBLE TOP PLATE, a
+    // stick-framing formula applied to concrete, landing on 8'-1 1/8" and
+    // looking close enough to the right answer to survive.
+    foundation: Object.freeze({ wallHeightFt: FOUNDATION_WALL_TOP_FT }),
     entry: Object.freeze({ joistDepthIn: ENTRY_JOIST_IN }),
     overGarage: Object.freeze({ joistDepthIn: OVER_GARAGE_JOIST_IN }),
   });
@@ -156,6 +197,8 @@ if (!window.DraftLevelAssembly) {
     LEVEL_ROLES,
     ROLE_BY_LEVEL_ID,
     FOUNDATION_POUR_FT,
+    SILL_PLATE_IN,
+    FOUNDATION_WALL_TOP_FT,
     ENTRY_JOIST_IN,
     OVER_GARAGE_JOIST_IN,
     levelFloorFt,

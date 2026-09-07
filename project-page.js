@@ -90,7 +90,27 @@ if (!window.DraftProjectPage) {
   // The family name stays as SPLIT_BASE, which is what it always was: the
   // defaults the two real rows start from.
   const SPLIT_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);
-  const SILL_PLATE_IN = 1.5;
+  // THE SILL MOVED TO level-assembly.js AND IS RE-EXPORTED, not re-declared.
+  // Nine call sites on PROJECT.html read `projectPage.SILL_PLATE_IN` and none
+  // of them change: what changes is that there is now one place the 1 1/2" is
+  // written. The foundation's wall height is pour + sill, so the module needs
+  // the number to answer at all, and a second copy here would be free to
+  // drift from the height derived out of it.
+  //
+  // READ AT CALL TIME, NOT AT LOAD -- AND THE FIRST ATTEMPT GOT THIS WRONG.
+  // `const SILL_PLATE_IN = window.DraftLevelAssembly.SILL_PLATE_IN;` at module
+  // scope made this the NINTH file in the repo to capture a global at load
+  // (load-order-harness.js counts 8 files, 13 captures) and, being a property
+  // read rather than a plain alias, it THREW at load in any window where the
+  // module had not arrived. Three harnesses build exactly such a window and
+  // all three died on it -- which is the harnesses doing their job, not a
+  // reason to hand them a bigger window.
+  //
+  // A function has no such problem: all three internal uses are inside
+  // function bodies that run long after both files have loaded, and the export
+  // is a getter, so nothing here reaches for the module until someone asks.
+  // This file goes back to depending on load ORDER not at all.
+  const sillPlateIn = () => window.DraftLevelAssembly.SILL_PLATE_IN;
   const item = (id, label, unit, field, types, extra) =>
     Object.freeze({ id, label, unit, field, types: Object.freeze(types), ...extra });
 
@@ -563,7 +583,7 @@ if (!window.DraftProjectPage) {
   // concrete. Shared by the house and the garage so the two can never drift
   // into drawing the same detail differently.
   const attachment = (rect, line, kind, x, concTop, wallFt) => {
-    const proudFt = SILL_PLATE_IN / 12;
+    const proudFt = sillPlateIn() / 12;
     if (kind !== 'ladder') { rect(x, concTop, wallFt, proudFt, 1.5); return; }
     // Two members on edge at the wall faces, most of them below the pour.
     const memberFt = LADDER_MEMBER_IN / 12, deepFt = LADDER_DEPTH_IN / 12;
@@ -724,7 +744,7 @@ if (!window.DraftProjectPage) {
     // draw a zero-height rect and a plate on top of nothing.
     const fillFt = fdn.woodFillHeightFt ?? null;
     const fdnTop = -mainDepthFt;
-    const attachFt = SILL_PLATE_IN / 12;
+    const attachFt = sillPlateIn() / 12;
     // The bearing line does not move: the floor still lands one attachment
     // below MAIN FL. What changes is how far down the CONCRETE starts, since
     // the fill wall now occupies the top of that distance.
@@ -1141,7 +1161,7 @@ if (!window.DraftProjectPage) {
     // of the drawing, ending at the break. The void form does the same,
     // because it is cast under the beam for its whole run.
     const frostWall = g.foundation === 'frostwall';
-    const sillFt = SILL_PLATE_IN / 12;
+    const sillFt = sillPlateIn() / 12;
     const fdnTop = sillY;
     const concTop = fdnTop - sillFt;
     const fdnBot = frostWall ? g.houseFootingTopFt : concTop - g.fdnWallHeightFt;
@@ -1435,7 +1455,7 @@ if (!window.DraftProjectPage) {
     STUD_LENGTHS_IN,
     HALF_STUD_IN,
     PLATE_STACK_IN,
-    SILL_PLATE_IN,
+    get SILL_PLATE_IN() { return sillPlateIn(); },
     wallHeightFtFromStud,
     studInFromWallHeightFt,
     roofHeelIn,
