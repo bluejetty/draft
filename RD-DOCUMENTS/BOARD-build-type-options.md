@@ -9,9 +9,22 @@ is what the 6 Sep revision changed: the garage and the room over it are
 instructions to BUILD HOUSE, not labels in the file. `buildType` still stores
 one of the same four values.
 
-Status: **NOT STARTED.** Nothing in this file is built. NEW-5 built the
-vocabulary it stands on (`buildType`, the four-button row, the type driving
-the garage roof) and that is all that exists today.
+Status: **BUILT, 6 Sep, in #323.** MODEL.dc.html's `BUILD_MENU` carries the
+three families and their submenus, and the storey over the garage is an OPTION
+on an existing button rather than a fifth type -- Movie's ruling, honoured:
+
+    MODEL.dc.html:2636   '2 STOREY + GARAGE + ROOM OVER'   overGarage: true
+    MODEL.dc.html:2649   'MODIFIED BILEVEL'                overGarage: true
+
+`overGarage` is derived, not stored, and no new key was added -- the 6 Sep
+revision below, as ruled.
+
+THIS LINE SAID "NOT STARTED" UNTIL 7 SEP, a day after the work landed, and it
+was read as fact and nearly acted on: a crew asked what to start next, this
+board was offered as unstarted work, and rebuilding a menu that already existed
+was one step away. A status line is the one sentence in a board that gets
+believed without being checked. It is corrected here rather than left to be
+discovered a second time.
 
 ---
 

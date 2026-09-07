@@ -15597,8 +15597,23 @@ class Component extends DCLogic {
     //
     // Run on a COPY: refusing must not move the drafter's stair, and accepting
     // must leave the real nudge to BUILD HOUSE exactly as before.
+    //
+    // WALLS ONLY, and the beam is deliberately not consulted (7 Sep). This
+    // called _stairAutoFit, which slides off beams as well -- harmless while
+    // the beam nudge was inert, but once it started seeing the auto beams it
+    // pushed the copy out past the ring and REFUSED stairs that were fine. The
+    // ordering is the reason: at placement the beam is not fixed. Placing a
+    // MAIN stair re-derives the beam AROUND it (_rederiveTourBeam), so a beam
+    // sitting where the stair wants to go is about to move. Refusing the stair
+    // for standing on a beam that is on its way out is backwards -- and it
+    // stopped the re-derive ever running, because the stair never got placed.
+    //
+    // The walls do not move, so they still decide. The verdict below was always
+    // the wall ring alone; only the slide is narrowed to match it.
     stair = { ...stair, start: { ...stair.start }, end: { ...stair.end } };
-    this._stairAutoFit(stair);
+    for (let pass = 0; pass < 4; pass++) {
+      if (!this._stairNudgeInsideWalls(stair)) break;
+    }
     const outline = this._houseOutline(stair.levelId);
     if (!outline || outline.points.length < 3) return true;   // nothing to fit inside
     const ring = window.DraftGeometry2D.offsetOutline(
@@ -15647,8 +15662,35 @@ class Component extends DCLogic {
 
   // The beams carrying the floor a stair cuts through — structure lives with
   // the framing, so they sit on the level's own FLOOR view.
+  // The beams CARRYING this level's floor -- the ones a stair well must keep
+  // clear of, because a beam crossing an open well is a beam over the drafter's
+  // head on the way down.
+  //
+  // THIS ASKED THE WRONG QUESTION UNTIL 7 SEP. It looked only for beams on the
+  // stair's OWN level in the FLOOR view, which is where a drafter's hand-placed
+  // beam lands. Every beam BUILD HOUSE generates is written at
+  // `levelId: BASEMENT_LEVEL_ID, view: 'foundation'` (:4298 and :4680) -- so
+  // against the app's own beams this returned [], `_stairNudgeOffBeams` took its
+  // `if (!beams.length) return false` exit, and `_stairPlacementLegal` reported
+  // the beam half clear unconditionally. Both the nudge and its verifier were
+  // inert on every automatically built house.
+  //
+  // MEASURED, not inferred: a 22x28 house puts three foundation beams along
+  // x=0. A stair placed at (-1,2) takes a well spanning x -1.04..9.38 -- the
+  // middle beam crosses in one edge and out the other, gap 0.00" against the
+  // 2" rule, and BUILD HOUSE cut the opening with the stair unmoved.
+  //
+  // The foundation beams stand on the foundation and carry the floor above
+  // them, which is the LOWEST floor level -- so they are that level's carrying
+  // beams and nobody else's. A higher floor's beams are hand-placed in its own
+  // FLOOR view, which the first clause already found.
   _stairFloorBeams(levelId) {
-    return this._beams.filter(beam => beam.levelId === levelId && beam.view === 'floor');
+    const floors = this._floorLevels();
+    const lowestFloorId = floors.length ? floors[0].id : null;
+    return this._beams.filter(beam =>
+      (beam.levelId === levelId && beam.view === 'floor')
+      || (levelId === lowestFloorId
+        && beam.levelId === BASEMENT_LEVEL_ID && beam.view === 'foundation'));
   }
 
   // Closest approach between a beam's centreline and the opening boundary —
@@ -19013,9 +19055,26 @@ class Component extends DCLogic {
       drawingMessage: `Stair added \u2014 ${layout.risers} risers @ ${formatInchesOnly(layout.riserIn)}, ${layout.treads} treads @ ${formatInchesOnly(STAIR_TREAD_RUN_IN)}, down ${this._ftIn(layout.riseFt)} to ${descent.landing}.${shapeMsg} ${rail.note}`,
       drawingMessageError: false,
     });
-    // Q3, confirmed: a MAIN FLOOR stair placed during the tour re-derives
-    // the auto beam with the stair opening as a boundary.
-    if (this.state.tour.step === 'main' && this._activeLevelId() === 3) this._rederiveTourBeam();
+    // Q3, confirmed: a MAIN FLOOR stair re-derives the auto beam with the stair
+    // opening as a boundary. midSpanBeams cuts the stair out of the strips it
+    // may sit in, takes the largest strip left and centres in THAT -- Movie's
+    // rule, 7 Sep: "it doesn't have to be central, any position up to 19';
+    // centre is good if no other factors influence position like corners and
+    // stairs."
+    //
+    // THE TOUR GATE CAME OFF ON 7 SEP. This read
+    // `this.state.tour.step === 'main' && ...`, so the beam moved out of a
+    // stair's way ONLY while the guided tour was open. A drafter who had
+    // climbed the tour -- which is most of the time a stair gets placed --
+    // placed a stair and the beam stayed exactly where it was, straight
+    // through the well. The re-derive was written correctly and simply never
+    // ran for them.
+    //
+    // MEASURED before the gate came off, 22x28 house, three beams along x=0:
+    // every stair placed after the tour ended with gap 0.00" to a beam, and
+    // the WALL nudge slid two of them 19" and 31" INTO the beam because
+    // nothing objected. The stair is not what should move here; the beam is.
+    if (this._activeLevelId() === 3) this._rederiveTourBeam();
   }
 
   _cancelStair() {
