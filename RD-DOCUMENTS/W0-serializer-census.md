@@ -18,9 +18,11 @@ suffix is the membership test and this file sits outside the loop by
 construction. The harness count is unchanged. It asserts nothing and exits 0
 whatever it finds — a census reports, a harness judges.
 
-Measured against `main` at `c341798`. Two PRs were in flight at the time
-(#326 foundation, #327 the PRE-TIER3 gate line); neither touches
-`_serializeDrawing`, but a re-run after they land is cheap.
+First measured against `main` at `c341798`, with #326 (the foundation ruling)
+and #327 (the PRE-TIER3 gate note) still in flight. Both have since landed, and
+the census was re-run at `3a7be51`: **every count above is unchanged**. That is
+the tool paying for itself on its first day — the claim that neither PR touched
+the serializer is now a measurement rather than an expectation.
 
 ---
 
