@@ -7,6 +7,7 @@
   <script src="./shared-file-store.js"></script>
   <script src="./formatters.js"></script>
   <script src="./drawing-format.js"></script>
+  <script src="./level-assembly.js"></script>
   <script src="./project-page.js"></script>
   <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
        critical path of the page. -->
@@ -278,77 +279,47 @@
       // flip, and the drafter types the other one about as often as they
       // accept this one. Anybody tempted to weld 8'-0" in as a rule is
       // choosing wrong for half of all houses.
-      const FOUNDATION_POUR_FT = 8;
-      // THE ENTRY LEVEL FRAMES IN 2x10, NOT I-JOIST. Movie, 5 Sep: "the entry
-      // floor i put 2x10 typical with 3/4" ply sheathing". It is a level of
-      // its own (id 2, the gap the list left between FOUNDATION and MAIN FL),
-      // so its package belongs here with every other level's rather than in
-      // the section table -- one place to set it, edited by its own card.
+      // ── THE LEVEL ASSEMBLY COMES FROM level-assembly.js ──────────────
+      // This page used to keep its own copy of the defaults table, because it
+      // had per-level facts and the shared module had no way to say them: an
+      // 8'-0" foundation pour against the house's 8'-1 1/8", ENTRY's 2x10s,
+      // OVER GARAGE's clear span.
+      //
+      // IT WAS A FOURTH COPY. The three that module was extracted to end were
+      // MODEL's, LAYOUT's and the elevation harness's; #316 called the
+      // harness's "the last copy" without counting this one, because this one
+      // did not look like drift. It was not drift -- it was the design, kept
+      // in the only place that could hold it. A temporary shape that stopped
+      // looking temporary.
+      //
+      // Commander Devin's ruling, 6 Sep: the half-level assembly stays a
+      // DERIVE and level-assembly.js becomes role-aware, so there is ONE
+      // deriver instead of two vocabularies. The numbers now live there; this
+      // page reads them.
+      //
+      // AND THE HARNESS ENFORCES IT. proto/over-garage-floor-harness.js fails
+      // if OVER_GARAGE_JOIST_IN is defined in more than one file -- "two homes
+      // for one number is the divergence this repo spent 6 Sep removing" --
+      // so this block cannot come back without something going red.
+      // The ids stay here: which row is ENTRY is this page's business, and it
+      // has read them since the numbering was chosen (floors odd, half-levels
+      // even). What moved is what those levels are MADE of.
       const ENTRY_LEVEL_ID = 2;
-      const ENTRY_JOIST_IN = 9.25;
-      // OVER GARAGE SPANS CLEAR, so it does not get the house's joist.
-      // Movie, 5 Sep: "the joist depth over the garage we should make 20"
-      // deep... default... and allow them to adjust." A house floor lands on
-      // interior walls every dozen feet; a garage has none to land on, so the
-      // same 11 7/8" that works over a bedroom will not cross a double bay.
-      //
-      // It is the third time a garage row would have quietly taken a house
-      // number if nobody named one -- the 3" slab and the basement wall under
-      // a garage were the first two -- and this one is the worst of the three,
-      // because 11 7/8" over a garage draws perfectly and does not stand up.
-      //
-      // 19 1/4" JOIST, NOT 20" -- THE 20 IS THE PACKAGE (Movie, 6 Sep: "should
-      // be 19.25\" with 3/4\" ply sheathing"). This held 20 as the JOIST, which
-      // is the same mistake as reading a wall height off a stud length: the
-      // number quoted on 5 Sep was the depth of the finished floor, and the
-      // joist is that less its sheathing.
-      //
-      // IT MOVED THE DECK, WHICH IS THE PART THAT MATTERED. The deck sits on
-      // the 9'-1 1/8" garage wall plus the package, so
-      //
-      //     20" joist + 3/4" ply = 20 3/4"  ->  deck 10'-9 7/8"   what this drew
-      //     19 1/4"   + 3/4" ply = 20"      ->  deck 10'-9 1/8"   the ruling
-      //
-      // and 3/4" is exactly the amount by which the top of this floor failed
-      // to line up with the 3/4" over the house's 11 7/8" joists -- which was
-      // the whole point of choosing the number (Movie, 6 Sep: "the top of the
-      // floor 3/4\" sheathing should line up with the 3/4\" on the 11 7/8\"").
-      //
-      // 19 1/4" is a DEFAULT, not a rule: it is right for the ordinary two-car
-      // bay, and `positive(raw.joistDepthIn, ...)` below already lets a
-      // stored number beat it, the same contract as every other cell. The
-      // engineer sizes the real one, and a deeper joist eats garage headroom
-      // rather than raising the deck.
       const OVER_GARAGE_LEVEL_ID = 4;
-      const OVER_GARAGE_JOIST_IN = 19.25;
-      const defaultJoistDepthIn = levelId => {
-        if (levelId === ENTRY_LEVEL_ID) return ENTRY_JOIST_IN;
-        if (levelId === OVER_GARAGE_LEVEL_ID) return OVER_GARAGE_JOIST_IN;
-        return 11 + 7 / 8;
-      };
-      const assemblyDefaults = levelId => ({
-        wallHeightFt: levelId === 1 ? FOUNDATION_POUR_FT : (8 * 12 + 1 + 1 / 8) / 12,
-        joistDepthIn: defaultJoistDepthIn(levelId),
-        sheathingIn: 3 / 4,
-        slabThicknessIn: 3,
-        footingDepthIn: 8,
-        footingWidthIn: null,
-      });
+      const {
+        normaliseLevelAssembly, defaultLevelAssembly, levelRole, FOUNDATION_POUR_FT,
+      } = window.DraftLevelAssembly;
+      // THE FOUNDATION POUR STAYS THIS PAGE'S OWN, and the module says why:
+      // MODEL.dc.html has always drawn a foundation wall at the house's
+      // 8'-1 1/8" while this page pours 8'-0". Moving that into the shared
+      // table would have changed an existing drawing's foundation height with
+      // no press behind it. Everything else comes from the one deriver.
+      const assemblyDefaults = levelId => (levelId === 1
+        ? { ...defaultLevelAssembly(levelRole(levelId)), wallHeightFt: FOUNDATION_POUR_FT }
+        : defaultLevelAssembly(levelRole(levelId)));
       const positive = (value, fallback) =>
         Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
-      const normaliseAssembly = (raw, levelId) => {
-        const base = assemblyDefaults(levelId);
-        if (!raw || typeof raw !== 'object') return base;
-        return {
-          ...raw,
-          wallHeightFt: positive(raw.wallHeightFt, base.wallHeightFt),
-          joistDepthIn: positive(raw.joistDepthIn, base.joistDepthIn),
-          sheathingIn: positive(raw.sheathingIn, base.sheathingIn),
-          slabThicknessIn: positive(raw.slabThicknessIn, base.slabThicknessIn),
-          footingDepthIn: positive(raw.footingDepthIn, base.footingDepthIn),
-          footingWidthIn: positive(raw.footingWidthIn, null),
-        };
-      };
+      const normaliseAssembly = (raw, levelId) => normaliseLevelAssembly(raw, levelRole(levelId));
 
       // ── Load the drawing ────────────────────────────────────────────────
       // A fresh browser has no stored drawing yet — the Model only writes
@@ -409,7 +380,32 @@
 
       const assembly = levelId => normaliseAssembly(levelAssemblies[levelId], levelId);
       const setAssembly = (levelId, field, value) => {
-        levelAssemblies[levelId] = { ...assembly(levelId), [field]: value };
+        // THE STORED OBJECT LEADS, so this line does not discard keys it does
+        // not own. `assembly()` answers the shared module, which returns an
+        // explicit eight-field object; the copy it replaced spread `...raw`
+        // and carried unknown keys through, so swapping it in bare would have
+        // made an edit to one field rewrite the whole stored assembly.
+        //
+        // NOT BECAUSE ANYTHING DURABLE WAS AT RISK -- that alarm was raised
+        // and withdrawn. MODEL.dc.html:5441 loads every stored assembly
+        // through the same normaliser and writes `{ ...assembly }` back from
+        // that normalised state, so a ninth key dies at the next Model Space
+        // open regardless of what this page does. This page's old spread
+        // preserved it only until then.
+        //
+        // The line stands on its own terms instead: "readers normalise,
+        // writers never invent" has an unstated converse, which is that a
+        // writer must not silently DROP. setAssembly is a writer. That MODEL
+        // will strip the key later makes MODEL'S LOADER the next question,
+        // not this line's restraint wrong.
+        //
+        // AND IT BELONGS HERE RATHER THAN IN THE NORMALISER. A spread there
+        // would make every READ carry unknown keys, which is the wrong shape
+        // for a normaliser; here it is just "do not throw away what is not
+        // yours". Gilligan's, both the catch and the placement.
+        levelAssemblies[levelId] = {
+          ...levelAssemblies[levelId], ...assembly(levelId), [field]: value,
+        };
       };
       // The foundation wall's thickness reads from the drawn foundation
       // walls when there are any — the same derivation the Model uses.

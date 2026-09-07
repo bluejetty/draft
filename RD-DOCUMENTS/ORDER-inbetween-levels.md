@@ -1,7 +1,15 @@
-# WORK ORDER — the half-levels are always on the panel, fuzzed until you add one
+# WORK ORDER — the half-levels come with the build type
 
 **Movie, 6 Sep**, over four exchanges, with Gilligan settling where the slots
 live. **PRE-TIER 3.** Nothing here is built.
+
+**READ THE LAST SECTION FIRST.** This order was written as *"the half-levels
+are always on the panel, fuzzed until you add one"* and Movie narrowed it the
+same day: they belong to BILEVEL and MODIFIED BILEVEL, and a bungalow does not
+show them at all. The reasoning below is unchanged and still load-bearing --
+the fixed ids, the panel-not-the-drawing decision, the stair ordering -- only
+WHO SEES THE ROWS moved. The old title is kept in this paragraph rather than
+quietly rewritten out.
 
 This is the piece the build-type board called *"the one with real work in it"*
 and it has been waiting on Movie's sketch since 5 Sep. The sketch arrived as
@@ -113,7 +121,8 @@ stair follow a wall-height change, and what a drafter would want. But it is
 VISIBLE: press ADD on one row and a stair somewhere else in the drawing changes
 shape, with no other press.
 
-**And it is board #31 again.** The riser maths re-derives fine. What does not
+**And it is the re-derive gap again** -- the one where a number recomputes and
+the check on it does not. The riser maths re-derives fine. What does not
 re-run is the check that the stair still FITS. A stair that gets *shorter* is
 safe on its own terms, but the one now landing on OVER GARAGE may not line up
 with the floor opening that was cut for a full-storey run -- and nothing asks.
@@ -144,18 +153,28 @@ gives the bone something to CALL rather than something to duplicate, and lets
 the bilevel autohouse be tested against a level that already works instead of
 debugging both halves at once.
 
-## The panel, before and after
+## The panel, by build type
 
-    LEVELS                          [DATUM] [+ ADD]
-      | 2ND FL
-      | OVER GARAGE       fuzzed             [ADD]
-      | MAIN FL
-      | ENTRY             fuzzed             [ADD]
-      | FOUNDATION
+    BUNGALOW / 2 STOREY             BILEVEL / MODIFIED BILEVEL
 
-The header's `+ ADD` is unchanged -- it still adds an ordinary floor on top,
-through `_addLevel()` and the counter. The two new ADDs are per-slot and use
-the slot's own id.
+    LEVELS       [DATUM] [+ ADD]    LEVELS         [DATUM] [+ ADD]
+      | 2ND FL                        | 2ND FL
+      | MAIN FL                       | OVER GARAGE
+      | FOUNDATION                    | MAIN FL
+                                      | ENTRY
+                                      | FOUNDATION
+
+No fuzzed rows on the left, and no way to add one: the two ids are simply not
+offered. On the right they are ordinary rows, because the build type put them
+there.
+
+The header's `+ ADD` is unchanged in both -- it still adds an ordinary floor
+on top, through `_addLevel()` and the counter, and it can never produce a 2
+or a 4.
+
+**A level that was BUILT stays on the panel whatever lamp is lit.** Press
+BUNGALOW on a drawing that already has an OVER GARAGE with walls on it and
+the row does not go anywhere. See THE GATE HIDES SLOTS, NEVER LEVELS below.
 
 ## What it touches
 
@@ -167,11 +186,414 @@ the slot's own id.
 | `_addLevel()` | unchanged. A floor on top is still a floor on top |
 | a spec | a fuzzed row is not a level: it must not reach `_floorLevels()`, must not appear in a section table, and must not change a saved file |
 
-## Open, and both are Movie's
+## BOTH HALF-LEVELS HAVE A FLOOR PACKAGE, AND THE ROUND NUMBER IS NEVER THE JOIST
 
-- **What "fuzzed" looks like.** Opacity, or the lamp treatment the build row
-  uses for a thing that can exist but does not yet. A taste question.
-- **Whether a half-level can be added where its type does not apply** -- an
-  ENTRY on a bungalow, say. The panel-only design permits it; nothing says
-  whether it should. Not blocking: the answer can be a guard added later
-  without moving anything.
+**Movie, 6 Sep:** *"the entry joists are 9.25" with 3/4" ply sheathing"*, and
+for the storey over the garage *"make the joists 19.25" with 3/4" sheathing"*.
+
+    ENTRY         9 1/4" joist  +  3/4" ply  =  10"
+    OVER GARAGE  19 1/4" joist  +  3/4" ply  =  20"
+
+**THE ROUND NUMBER IS THE PACKAGE.** Both rulings arrived first as a depth --
+"min 20 inches deep", "10 inches" -- and both were then corrected to a joist
+plus a course of sheathing. The correction matters because the two readings
+differ by 3/4" at every deck in the building.
+
+**And one of them was read the wrong way in live code.**
+`PROJECT.html:304` has carried `OVER_GARAGE_JOIST_IN = 20` since 5 Sep -- the
+package as the joist, which puts the deck at 10'-9 7/8" instead of 10'-9 1/8".
+Written the day BEFORE the correction, so it never contradicted anything at
+the time; the correction reached this order and never reached the constant.
+
+**It was visible and got explained away.** Gilligan saw 10'-9 7/8" against
+this order's 10'-9 1/8", assumed a misread of 7/8 for 1/8 in a screenshot, and
+moved on. Two sources disagreeing IS the finding; picking the one that is
+easier to doubt is how it stops being one.
+
+**ENTRY was already right** -- `PROJECT.html:288` is 9.25 with `sheathingIn:
+3/4` beside it -- so Movie's ruling confirms that constant rather than
+changing it. Recorded because the pair only reads as a rule when both halves
+are written down: a half-level's floor is a joist and a course, and the
+figure a drafter says out loud is their sum.
+
+## The floor package over the garage
+
+**Movie, 6 Sep**, over five exchanges. Joists **19 1/4"**, sheathing **3/4"** --
+**20" total**, and that is a DEFAULT: *"they can change after"*, and *"those
+joists will likey change depth se we need to make them adjustable because
+those will be sized by the engineer"*.
+
+    garage wall   9'-1 1/8"    109.125"   <- DERIVED, not typed
+    package                   + 20"
+    deck                        129.125"  = 10'-9 1/8"
+
+This SUPERSEDES the `10'-5 5/8"` in `project-page.js:240`, which named this
+same deck off a **16 1/2"** floor before the package was ruled. The comment
+there is not wrong about why the garage wall went up a precut rung -- a 7'-0"
+overhead door needs `OPENING_HEAD_DROP_IN` above its head either way -- only
+about where the deck lands.
+
+**AND THE 20" WAS NOT NEW TODAY.** Four lines further down, that same comment
+lists *"the 11 7/8" joists that should be 20""* as one of four garage rows
+that silently inherited a house number, beside the 3" slab and the basement
+wall under a garage. The file had already written down that the number was
+wrong and then left the wrong number in place. Movie's ruling closes a gap
+the code was carrying its own note about -- which is the fallback the comment
+names: *"no default means HOUSE, and HOUSE is always plausible."*
+
+### Which end is anchored
+
+> *"the bottom will need to go deeper it if goes from 19.25" to 23.25""* ...
+> *"and the garage ceiling gets less height"*
+
+**The deck is the stored fact and the garage wall is derived from it.** The
+floor above stays put, the joists grow downward, the garage ceiling loses
+the height.
+
+Which puts a value on the wrong side of the line today. `GARAGE_WALL_FT`
+(`project-page.js:249`) is a 9' precut measured UP FROM THE SLAB, and
+`PROJECT.html:1355` gives the drafter a cell to type it into. Under this rule
+a garage carrying an OVER GARAGE level must not read that cell: it is
+`deck - package`, recomputed, every time. Keep it stored and an engineer's
+depth change leaves a number on the page that contradicts the drawing --
+the same shape as the stair's stale `riseFt` and the detached offset that is
+stored and never read.
+
+The door head needs no wiring at all. `PROJECT.html:747` already derives it:
+
+    get: v => v.garage.wallHeightFt - projectPage.OPENING_HEAD_DROP_IN / 12
+
+so it follows the wall down on its own.
+
+### The limit is the door, and the drafter designs around it
+
+> *"the user will need to take the door limitation height into consideration
+> for thier design"*
+
+An engineer's 23 1/4":
+
+    deck             129.125"
+    23 1/4" + 3/4"  -  24"
+    garage wall      105.125"  = 8'-9 1/8"   (no longer a precut)
+    door head        - 16 1/2"
+                      88.625"  = 7'-4 5/8"   clears 7'-0" by 4 5/8"
+
+At a **27 7/8"** joist the head lands exactly on 7'-0" and a 7'-0" overhead
+door stops fitting. That is a LIMIT THE PAGE SHOWS, not a clamp it applies:
+board #313 as amended -- software never moves geometry, only a drafter's
+press may (`RULES-persisted-keys.md:121`).
+`proto/section-table-harness.js:306` already makes this check against the
+DEFAULT wall; the sibling that does not exist yet is the same check against a
+wall derived from a deck.
+
+### The two levers, when they cross it
+
+> *"they will need to move the grade beam or frost wall top down (and grade)
+> move the house up"*
+
+**Drop the garage foundation.** `zoneHeights.zones.attachedGarage.offsetFt` is
+the typed cell and `MODEL.dc.html:11971` reads it, so one number moves the
+concrete top; grade follows without a second entry, since every garage
+foundation tops out 14" above grade (`cut-view.js:64`, `:71`, `:77` -- three
+constants, one fact). Recovering the 4" lost at 23 1/4" puts the wall back at
+9'-1 1/8" and the head at 7'-8 5/8", and takes the garage floor AND the grade
+at the garage down 4" with it -- an apron and a driveway, which is site work
+rather than a drawing change.
+
+The two options named are the only two that exist:
+`GARAGE_FOUNDATIONS.attachedGarage` is `['gradebeam', 'frostwall']`. A
+thickened edge is detached-only.
+
+**Or move the house up**, spending the same 4" on the house's own grade
+instead. Which is cheaper is a question about the LOT, so the drafter picks.
+
+`GARAGE_SILL_BELOW_HOUSE_FT = 2` is what that cell derives from, and its
+comment is what makes this land without new plumbing: measured *"sill to
+sill, not floor to floor, so it holds when the floor package changes"*.
+
+### The rest of the storey
+
+**The front 4 ft of the garage stays out of it**, with a lower roof over the
+strip -- so the level's outline is the garage footprint less a 4 ft band at
+the door end, not the footprint.
+
+**The adjustable depth needs no new joist type.** `level-assembly.js:41`
+already carries `{ id: 'owj', label: 'OWJ', depthIn: null }` -- the open-web
+joist whose depth is entered by hand, which is exactly the engineer's case.
+
+## THE BUILD TYPE GATES THEM — later the same day
+
+**Movie, 6 Sep, after the above was written.** This supersedes the title.
+
+> *"if they choose BUNGALOW, lets not have them even fuzzy. if they choose
+> BILEVEL they get them"* ... *"if they want those extras i'm thinking they
+> should choose them when they start"* ... *"so if they pick BUNGALOW those
+> levels don't exist or aren't shown and not available -- if BILEVEL they
+> exist and are available"*
+
+**BUNGALOW and 2 STOREY: the rows are not there and there is no way to add
+one. BILEVEL and MODIFIED BILEVEL: they are there and available.**
+
+### "Don't exist" and "aren't shown" are the same fact here
+
+Movie's sentence offers both and the panel-only decision above already
+collapsed them. A slot that has not been added **is not a record** -- no id
+allocated, nothing in the drawing, nothing a serializer can emit. So there is
+no hidden thing to go looking for later. That is what makes this gate free
+rather than a new piece of state.
+
+**AND THE REPO ALREADY SHOWS THE COST OF GETTING IT BACKWARDS.**
+`MODEL.dc.html:8604` hands every wall on the level to the plan's footprint:
+
+    _planWallExtents() {
+      return window.DraftCutMarks.planWallExtents(this._walls);
+    }
+
+and `cut-marks.js:41` filters on `wall.levelId > 0` and nothing else. Layer
+visibility never enters it, so **a wall a drafter has hidden still votes on
+where the plan box sits.** Not-drawn and not-there are the same record there,
+and any view filter built on top of that inherits the confusion.
+
+That is the failure this gate avoids by construction: an unadded slot is not
+a hidden record, it is no record. (Gilligan, 6 Sep, after two earlier
+citations for the same point did not check out -- this one does.)
+
+### The predicate already exists
+
+    drawing-format.js:891
+    const SPLIT_BUILD_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);
+
+Exported since 4 Sep, read by MODEL and PROJECT both, and already what
+`_garageFrostWallTopFt` branches on. The gate is a call to a list that is
+already the family name -- not new logic.
+
+It is also a BETTER test than the one this order was going to use for OVER
+GARAGE. "Does the drawing have a garage" is a query over outlines that can
+change with any edit; the build type is one stored value with a normaliser.
+
+### THE GATE HIDES SLOTS, NEVER LEVELS
+
+The one rule that has to hold, and the safety of the whole thing.
+
+A drafter draws an OVER GARAGE on a bilevel, then presses BUNGALOW. The walls
+are in the file. **The row stays.** Hiding a built level would be the id-9
+failure of the section above, in reverse and worse -- there the level was in
+the drawing and PROJECT could not find it; here it would be in the drawing
+and its own panel would not show it, on geometry someone drew by hand.
+
+So: the gate governs what can be ADDED, never what can be SEEN. A level that
+exists is on the panel whatever lamp is lit.
+
+### What it costs, named on purpose
+
+**The manual path from 5 Sep narrows.** *"the drafter will need to draw it in
+at that point if they didn't autohouse it from the start"* still holds for the
+WALLS, but the LEVEL now comes from the build row rather than a per-slot ADD.
+A drafter who drew a bilevel by hand without ever pressing BILEVEL has no
+OVER GARAGE row -- and neither does any drawing older than the build-type key,
+where `buildType` is `null` by design (`drawing-format.js:881`: *"Absent or
+unknown is 'not chosen'"*).
+
+**The out is that the build row stays live.** "Choose them when they start"
+means the BUILD ROW is where you choose, not that the choice expires. Press
+BILEVEL at any point and the rows appear. Nothing else changes.
+
+### What this removes from the work
+
+The per-slot ADD button, the fuzzed row treatment, and the dim vocabulary the
+panel does not have today all stop being needed for the SPLIT case, because
+on a bilevel the levels are simply there. What remains is the gate, the
+create-at-a-given-id handler the bone calls, and the specs.
+
+## A CITATION IN THIS ORDER WAS INVENTED
+
+**6 Sep, found by checking it.** The paragraph above said *"And it is board #31
+again"*, and there is no board #31. The string appeared **exactly once in the
+whole repository -- in this file** -- and `BOARDS.md`, which is the record, has
+never carried it. It was written here, merged, and then read back and built on
+by a second agent as though it were a fact of the project.
+
+`BOARDS.md:8` warns about this exact thing: *"Board numbers and PR numbers are
+different sequences that overlap -- always write 'board #168' or 'PR #168',
+never a bare number... that collision has already caused one error."*
+
+**The observation was sound and is kept, without the number.** A stair's rise
+re-derives and nothing re-checks that the stair still fits. That is worth a
+board; it does not have one yet, and Devin assigns them.
+
+**Nothing tests a citation.** A wrong number is quieter than a wrong value: it
+survives every run, reads as authority, and gets repeated. Four stale comments
+and two bad references turned up on 6 Sep alone, and both classes have the same
+shape -- prose that no longer matches, in a place nothing checks.
+
+## WHAT THE BONE STILL CANNOT DO, AND WHY IT IS THIS ORDER'S PROBLEM
+
+**Movie, 6 Sep:** *"the bone might not know how to make a bilevel because it
+needs more floors and the stairs will need to be U shape with the entry
+landing in the middle"*, and *"we will need to build that stuff for bilevels
+still"*.
+
+**Both halves are downstream of this order.**
+
+### More floors is exactly this
+
+BUILD HOUSE pours each level's shell from THAT LEVEL'S OUTLINE. A bilevel
+needs ENTRY to exist as a level before the bone has anywhere to pour it. So
+the bone is not missing a bilevel routine; it is missing a level. Build the
+slot and the bone's existing per-level work reaches it.
+
+### IT IS NOT A U. IT IS TWO SHORT RUNS
+
+Movie said U first and corrected it the same minute: *"your right its not like
+a U"*, *"its more like 2 short runs"*. The correction is the whole design, so
+it is worth being exact about what it rules out.
+
+`stair-geometry.js:43` does offer a U -- *"Switchback: two runs 4.5" apart
+(rail or wall between) over one landing"* -- and it is the wrong tool.
+It is built as a TURN: `stair-geometry.js:100` puts the landing "near the
+middle of the descent", and the whole model is ONE stair between TWO floors,
+with a landing you walk THROUGH.
+
+**A bilevel's landing is a place you walk OFF.** It is the front door, and it
+is a FLOOR rather than part of a stair. So neither run is a U, neither carries
+a landing, and neither needs `shape` to be anything but `straight`:
+
+       MAIN FL  --+
+                  |  half flight up
+       ENTRY  ====+====   <- the landing IS a level; the front door is here
+                  |  half flight down
+       FOUNDATION-+
+
+Two ORDINARY STRAIGHT stairs, each to the next floor down BY POSITION -- the
+`floors[idx - 1]` rule this order already leans on for the id-4 ordering. What
+LOOKS like a switchback is just two short runs either side of a floor. The
+riser maths is the ordinary maths against half a storey, which is the same
+recompute the re-derive section above describes.
+
+**So the stair work here is nothing.** No new shape, no landing geometry, no
+switchback rule. The half-storey rise makes each run short by itself, because
+the rise is the thing that sets the tread count.
+
+So the sequence is: **ENTRY exists -> the two stairs are ordinary -> the bone
+can pour a bilevel.** Teaching the bone a bilevel before the level exists
+would mean teaching it a shape it would then have to unlearn.
+
+### THE BONE PLACES THE BILEVEL CORE, AND THE DRAFTER MOVES IT
+
+**Movie, 6 Sep:**
+
+> *"we could just locate the garage, front door and entry area for them with
+> the garage on one side and the front door and entry near the middle to cover
+> both"* ... *"ya its hard to draw so if we give them the basics they can move
+> it around if they need too, and will make it easier for us"*
+
+**The argument is about drawing, not about code.** Deciding where a bilevel's
+garage and entry go is not the hard part -- drawing them is. A bilevel's plan
+is stereotyped in a way a bungalow's is not: garage at one end, entry between
+garage and house, stairs off the entry. A default is right most of the time
+there, which is exactly when placing beats asking.
+
+**The machinery pattern already exists.** `auto-stair.js` (board #260) is a
+PURE placement derivation -- plain geometry in, one suggested stair out, plus
+a per-shape report of WHY when a shape found no home -- and MODEL commits the
+winner and owns everything stateful. This is that shape one level up.
+
+**IT PLACES FOUR THINGS, AND THE ENTRY DECIDES WHERE.** Movie, 6 Sep, amending
+this paragraph: the core is *"garage, front door, entry AND STAIRS"*.
+
+An earlier version of this said it placed ONE thing and derived the stairs off
+the entry forever. That was wrong, and the difference matters. `auto-stair.js`
+hands back *"one suggested stair out (same shape as a hand placement)"* -- so a
+placed stair IS an ordinary stair from the moment it exists. The entry's
+position decides where the two runs GO; it does not own them afterwards.
+
+**Which means moving the entry does not move the stairs.** They are the
+drafter's geometry, and board #313 says software does not move that. What
+still recomputes is the RISE, off the level heights on every paint, exactly as
+it does for every other stair in the drawing.
+
+That is a cleaner story than a standing derivation: after the press, nothing
+in the core carries a hidden dependency on anything else in it.
+
+**It stays inside board #313.** Software never moves geometry; this is
+geometry CREATED on a drafter's press, which is what the bone does for every
+wall it pours. Nothing moves behind anyone.
+
+**AND IT STILL WALKS INTO THE RE-DERIVE GAP, by a different door than first
+written.** The stairs do not follow the entry. But a bilevel's two runs sit on
+HALF a storey each, and a stair's rise recomputes from the level heights on
+every paint -- so moving the ENTRY LEVEL'S ELEVATION, which is a thing a
+drafter will do, changes both rises at once while nothing re-checks that
+either stair still FITS the opening cut made for it.
+
+Today that path needs a drafter who edits a wall height. Once the bone places
+the core it is every bilevel, the first time anyone adjusts the entry height.
+The gap does not get worse -- it gets REACHED.
+
+### One question that is Movie's
+
+**Does the entry landing want to be bigger than a stair landing?** The code's
+minimum is `STAIR_LANDING_MIN_FT = 3` -- 36" CLEAR, measured to the nosing
+above (`stair-geometry.js:57`). That is a STAIR rule. An entry landing is a
+foyer: people stand on it, and a front door swings into it. Nothing in the
+repo says what it should be, and the stair rule will not object.
+
+## THE SHARED MODULE DOES NOT KNOW A HALF-LEVEL HAS A DIFFERENT FLOOR
+
+**Found 6 Sep, after item 4 shipped, and it is a gap in what shipped.**
+
+`level-assembly.js` takes no level id. `defaultLevelAssembly()` hands every
+level the same floor:
+
+    level-assembly.js  (any level)   11 7/8 + 3/4  =  12 5/8"
+    PROJECT.html:288   ENTRY          9 1/4 + 3/4  =  10"
+    PROJECT.html:304   OVER GARAGE   19 1/4 + 3/4  =  20"
+
+So **a half-level added by the ADD button draws its floor at 12 5/8" on the
+Model Space and reads 10" on the PROJECT page** -- 2 5/8" apart on ENTRY,
+7 3/8" on OVER GARAGE. Both pages are self-consistent and neither is wrong on
+its own terms, which is the derive/store divergence class exactly: a value one
+page derives and another stores, passing every test either page runs alone.
+
+**IT IS NOT A DUPLICATE TO DELETE.** `PROJECT.html:310` is a fourth copy of the
+defaults table -- the three that `level-assembly.js` was extracted to end were
+MODEL's, LAYOUT's and the elevation harness's, and #316 called the harness's
+"the last copy" without counting this one. But this copy carries **per-level**
+defaults the shared module has no vocabulary for: a foundation wall at 8'-0"
+against the house's 8'-1 1/8", ENTRY's 9 1/4" joists, OVER GARAGE's 19 1/4".
+Those are not drift. They are the design.
+
+**So it wants a ruling, not a cleanup**, and on the same ground as
+`autoDimFirstOffsetFt`: what shape should the shared assembly take so it can
+say "this level's floor is different"? Neither agent should decide that alone.
+
+**AND IT IS CHEAPER BEFORE THE WRITE TIER**, for the reason that list gives:
+the deep-compare is old-page-saves against new-page-saves, and a floor
+thickness the two pages disagree about is a mismatch that will look like a
+serializer bug.
+
+Until then, a drafter who adds a half-level and types its joist depth on the
+level card gets the right drawing -- `positive(raw.joistDepthIn, ...)` lets a
+stored number beat the default on both pages. The gap is only in what the
+Model Space assumes when nobody has typed.
+
+## Open
+
+Both of the questions this order closed with have been ruled on since.
+
+- ~~What "fuzzed" looks like.~~ **Moot.** There are no fuzzed rows: a slot is
+  either offered by the build type or absent.
+- ~~Whether a half-level can be added where its type does not apply -- an
+  ENTRY on a bungalow, say.~~ **No**, and the gate is the answer rather than
+  a guard bolted on afterwards.
+
+What is still open is narrower:
+
+- **A drawing whose `buildType` is `null`** -- every one older than the key,
+  and any drafter who skipped the build row. It gets no half-levels until
+  the row is pressed. Correct by the rule as stated; worth knowing it is the
+  common case for existing files rather than an edge.
+- **Whether pressing BUNGALOW on a drawing that has a BUILT half-level should
+  say anything.** The row stays, so nothing is lost and nothing is silent in
+  the geometry sense. But the drafter has just told the page one thing while
+  the drawing says another, and the page currently would not mention it.

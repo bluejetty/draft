@@ -8,7 +8,7 @@ const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
 async function traceHouse(page, w, d, type = 'bungalow') {
-  await page.locator(`[data-select-build="${type}"]`).click();
+  await h.pickBuild(page, type);
   await page.keyboard.press('Enter'); // past PROFESSOR GRUFF
   await h.clickWorld(page, -w / 2, -d / 2);
   await h.clickWorld(page, w / 2, -d / 2);

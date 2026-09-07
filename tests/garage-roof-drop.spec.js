@@ -23,7 +23,7 @@ async function drawHouseOutline(page) {
 // The same house, drawn from a type button on the build row (NEW-5): the
 // press stores the type and arms the trace.
 async function drawHouseOutlineAs(page, type) {
-  await page.locator(`[data-select-build="${type}"]`).click();
+  await h.pickBuild(page, type);
   await page.keyboard.press('Enter'); // past PROFESSOR GRUFF
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);

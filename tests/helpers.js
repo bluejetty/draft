@@ -303,6 +303,35 @@ async function climbTourToMain(page) {
   await waitForSaved(page);
 }
 
+// THE BUILD ROW IS A MENU (Movie, 6 Sep). Three families sit between the
+// turtle and the bone -- BUNGALOW, BILEVEL, DETACHED GARAGE -- and the type
+// buttons live one press inside their family, so a spec cannot click a type
+// straight off the row any more.
+//
+// EVERY SPEC GOES THROUGH HERE for the same reason the page derives its lamps
+// instead of flagging them: when the menu changes shape again, one function
+// moves rather than thirty-five call sites. It also closes an open submenu
+// first, so a spec that picks two types in a row does not have to know where
+// the menu was left standing.
+const BUILD_FAMILY = Object.freeze({
+  bungalow: 'bungalow',
+  twoStorey: 'bungalow',
+  bilevel: 'bilevel',
+  modifiedBilevel: 'bilevel',
+});
+
+async function pickBuild(page, type, { tap = false } = {}) {
+  const family = BUILD_FAMILY[type];
+  if (!family) throw new Error(`pickBuild: no build family for "${type}"`);
+  const back = page.locator('[data-build-menu-back]');
+  if (await back.count()) await back.click();
+  await page.locator(`[data-build-menu="${family}"]`).click();
+  const entry = page.locator(`[data-select-build="${type}"]`);
+  if (tap) await entry.tap();
+  else await entry.click();
+}
+
+
 module.exports = {
   HALF_HEIGHT_FT,
   STORAGE_BUCKET,
@@ -314,6 +343,8 @@ module.exports = {
   moveTo,
   clickWorld,
   selectTool,
+  pickBuild,
+  BUILD_FAMILY,
   activeToolLabels,
   waitForSaved,
   climbTourToMain,

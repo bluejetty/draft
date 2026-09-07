@@ -104,7 +104,7 @@ test('the finale reveal stands the drawing tool down before parking in E1', asyn
 
   // The guided tour up to the roof pause, drawing the outline WITH the wall
   // tool armed later: trace, stairs, straight to roof, ROOF DONE, bone.
-  await page.locator('[data-select-build="bungalow"]').click();
+  await h.pickBuild(page, 'bungalow');
   await page.keyboard.press('Enter');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);

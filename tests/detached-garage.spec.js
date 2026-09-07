@@ -24,7 +24,7 @@ async function drawHouseOutline(page) {
 // the 9' narrow overhead door; a 10' side takes the man door.
 async function drawDetachedGarage(page, foundation) {
   await h.selectTool(page, 'Outline');
-  await page.getByRole('button', { name: /DETACHED GARAGE/ }).click();
+  await page.locator('[data-mark-detached-garage]').click();
   await h.clickWorld(page, 14, -5);
   await h.clickWorld(page, 26, -5);
   await h.clickWorld(page, 26, 5);
@@ -74,7 +74,7 @@ test('a detached loop touching the house stays detached — no welding, no guess
   // Corners land right on the house's x=8 edge; DETACHED mode still keeps
   // the loop independent instead of treating it as an attached run.
   await h.selectTool(page, 'Outline');
-  await page.getByRole('button', { name: /DETACHED GARAGE/ }).click();
+  await page.locator('[data-mark-detached-garage]').click();
   await h.clickWorld(page, 8, -4);
   await h.clickWorld(page, 20, -4);
   await h.clickWorld(page, 20, 4);

@@ -43,9 +43,77 @@ if (!window.DraftLevelAssembly) {
   // Basement slabs pour 3" (typ house; a garage runs 4").
   const DEFAULT_FDN_SLAB_THICKNESS_IN = 3;
 
+  // NOT EVERY LEVEL FRAMES THE SAME, and until 6 Sep this module could not say
+  // so. Commander Devin's ruling that day: the half-level assembly stays a
+  // DERIVE, and this file becomes ROLE-AWARE, so there is ONE deriver instead
+  // of two vocabularies. No new persisted key -- a role is read off the level,
+  // never stored beside it.
+  //
+  // WHAT THE MISSING VOCABULARY COST. PROJECT.html grew its own copy of this
+  // table because it had per-level facts to express and no way to express them
+  // here: an 8'-0" foundation pour against the house's 8'-1 1/8", ENTRY's
+  // 2x10s, OVER GARAGE's clear span. That copy was a FOURTH -- the three this
+  // module was extracted to end were MODEL's, LAYOUT's and the elevation
+  // harness's -- and it was never counted, because it did not look like drift.
+  // It was not drift. It was the design, kept in the only place that could
+  // hold it.
+  //
+  // So a half-level added on the Model Space drew a 12 5/8" floor while the
+  // PROJECT page read 10" for the same level: two pages self-consistent and
+  // disagreeing, which is the derive/store divergence class exactly.
+  const FOUNDATION_POUR_FT = 8;
+  // THE ENTRY LEVEL FRAMES IN 2x10, NOT I-JOIST. Movie, 5 Sep: "the entry
+  // floor i put 2x10 typical with 3/4" ply sheathing", and 6 Sep: "the entry
+  // joists are 9.25" with 3/4" ply sheathing". 9 1/4 + 3/4 = a 10" package.
+  const ENTRY_JOIST_IN = 9 + 1 / 4;
+  // OVER GARAGE SPANS CLEAR, so it does not get the house's joist. A house
+  // floor lands on interior walls every dozen feet; a garage has none, so the
+  // 11 7/8" that works over a bedroom will not cross a double bay.
+  //
+  // 19 1/4" JOIST, AND THE 20 IS THE PACKAGE. Movie, 6 Sep: "make the joists
+  // 19.25" with 3/4" sheathing". PROJECT.html carried 20 as the JOIST for a
+  // day -- written before the correction, so it contradicted nothing when
+  // written -- and drew every over-garage deck 3/4" high.
+  const OVER_GARAGE_JOIST_IN = 19 + 1 / 4;
+
+  // A level's ROLE is what it does in the building, not where it sits in a
+  // list. Ids are the pages' vocabulary; this is the module's.
+  const LEVEL_ROLES = Object.freeze(['floor', 'foundation', 'entry', 'overGarage']);
+  // The ids are fixed by the numbering both pages already share -- floors odd,
+  // half-levels even, 1 FOUNDATION / 2 ENTRY / 4 OVER GARAGE -- and mapping
+  // them HERE is the point of the ruling: one place says which level frames
+  // differently, instead of each page keeping its own answer.
+  const ROLE_BY_LEVEL_ID = Object.freeze({ 1: 'foundation', 2: 'entry', 4: 'overGarage' });
+  const levelRole = levelId => ROLE_BY_LEVEL_ID[levelId] || 'floor';
+
+  // Only what the role CHANGES. Everything unlisted stays the house default,
+  // so a role can never quietly re-answer a field it has no opinion about.
+  // ONLY WHAT COMMANDER DEVIN RULED, which is the half-levels and nothing
+  // else. FOUNDATION IS DELIBERATELY ABSENT.
+  //
+  // PROJECT.html pours its foundation wall at 8'-0" and MODEL.dc.html has
+  // always drawn it at the house's 8'-1 1/8". That is a THIRD divergence, it
+  // predates this work, and consolidating it here would have changed the
+  // height of an existing drawing's foundation wall with no press behind it --
+  // which board #313 forbids and which CI caught: section-view.spec.js:160
+  // went red on a garage section whose concrete band moved.
+  //
+  // So the foundation pour stays PROJECT's own answer until somebody rules
+  // it, and this table carries only the two joists that were ruled. A
+  // consolidation that quietly resolves an unruled disagreement is not a
+  // consolidation, it is a decision nobody made.
+  const ROLE_DEFAULTS = Object.freeze({
+    entry: Object.freeze({ joistDepthIn: ENTRY_JOIST_IN }),
+    overGarage: Object.freeze({ joistDepthIn: OVER_GARAGE_JOIST_IN }),
+  });
+
   // Per-level wall + floor assembly: the WALL HEIGHT and FLOOR JOISTS boxes
   // edit these, and the sidebar's border heights derive from them.
-  const defaultLevelAssembly = () => ({
+  //
+  // THE ROLE IS OPTIONAL AND DEFAULTS TO 'floor', so every existing caller
+  // keeps the answer it had. A caller that knows the level passes its role and
+  // gets the right one.
+  const defaultLevelAssembly = (role = 'floor') => ({
     wallHeightFt: DEFAULT_WALL_TOP_FT,
     joistType: DEFAULT_JOIST_TYPE,
     joistDepthIn: DEFAULT_FLOOR_ASSEMBLY.joistDepthIn,
@@ -54,10 +122,11 @@ if (!window.DraftLevelAssembly) {
     slabThicknessIn: DEFAULT_FDN_SLAB_THICKNESS_IN,
     footingDepthIn: DEFAULT_FOOTING_DEPTH_IN,
     footingWidthIn: null, // null → derived from the foundation wall type
+    ...(ROLE_DEFAULTS[role] || {}),
   });
 
-  const normaliseLevelAssembly = raw => {
-    const base = defaultLevelAssembly();
+  const normaliseLevelAssembly = (raw, role = 'floor') => {
+    const base = defaultLevelAssembly(role);
     if (!raw || typeof raw !== 'object') return base;
     const positive = (value, fallback) =>
       Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
@@ -83,6 +152,12 @@ if (!window.DraftLevelAssembly) {
   window.DraftLevelAssembly = Object.freeze({
     defaultLevelAssembly,
     normaliseLevelAssembly,
+    levelRole,
+    LEVEL_ROLES,
+    ROLE_BY_LEVEL_ID,
+    FOUNDATION_POUR_FT,
+    ENTRY_JOIST_IN,
+    OVER_GARAGE_JOIST_IN,
     levelFloorFt,
     DEFAULT_WALL_TOP_FT,
     DEFAULT_FLOOR_ASSEMBLY,

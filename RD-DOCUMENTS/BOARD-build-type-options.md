@@ -1,9 +1,13 @@
-# BOARD — the build row asks what its buttons leave open
+# BOARD #333 — the build row asks what its buttons leave open
 
-**Movie, 5 Sep, in conversation with Skipper.** Proposed, not ruled. Needs a
-board number and Devin's word: it adds a persisted answer and changes the
-entry flow, so it is not a change to a type, it is a change to how a type is
-chosen.
+**Movie, 5 Sep, in conversation with Skipper. NUMBERED AND RULED by Commander
+Devin, 6 Sep: board #333, with the menu revision approved** -- the storey over
+the garage derived rather than stored, and no new key.
+
+The original framing said this "adds a persisted answer". It does not, and that
+is what the 6 Sep revision changed: the garage and the room over it are
+instructions to BUILD HOUSE, not labels in the file. `buildType` still stores
+one of the same four values.
 
 Status: **NOT STARTED.** Nothing in this file is built. NEW-5 built the
 vocabulary it stands on (`buildType`, the four-button row, the type driving
@@ -249,3 +253,153 @@ was misplaced, and SPEC-bilevel-section.md already had the geometry: on a
 bungalow the garage ceiling is RAISED until the deck is continuous with the
 floor over the main area, so it is one level, not a tower beside a
 bungalow. One card, 2ND FL.
+
+---
+
+# REVISION — THE ROW BECOMES A MENU
+
+**Movie, 6 Sep, in conversation with Skipper.** Still proposed, still needs a
+number and Devin's word. This supersedes parts of the board above and says
+which.
+
+> *"i had a though about how the house menu operates. how about we just start
+> with BUNGALOW, BILEVEL, DETACHED GARAGE. then if they pick each will have
+> subcategories"*
+
+## The menu, as Movie wrote it
+
+**ONE SUBMENU EACH, and each entry is a whole house rather than a question.**
+Movie, 6 Sep: *"only 1 submenu each"*.
+
+    BUNGALOW
+      1)  1 STOREY
+      2)  1 STOREY  + ATTACHED GARAGE
+      3)  2 STOREY
+      4)  2 STOREY  + ATTACHED GARAGE
+      5)  2 STOREY  + ATTACHED GARAGE + room OVER GARAGE
+
+    BILEVEL
+      1)  BILEVEL
+      2)  BILEVEL   + ATTACHED GARAGE
+      3)  MODIFIED BILEVEL  (1.5 STOREY)
+
+    DETACHED GARAGE
+          THICKENED EDGE / GRADE BEAM / FROST WALL
+
+Three buttons between the pace button and BUILD HOUSE, where five sit today.
+
+**IT IS A LIST OF FINISHED HOUSES, NOT A DECISION TREE.** This replaces the
+earlier draft in this section, which chained a type question to a garage
+question to an over-garage question. The drafter recognises the house they are
+building and presses it once. Nothing is asked twice and nothing can be
+answered inconsistently, because the garage is in the NAME of the thing
+pressed rather than a separate answer that could later disagree with the
+drawing.
+
+It also ends the board's *"where do the questions get asked"* problem by
+having no questions to place.
+
+**What each entry stores:**
+
+| entry | `buildType` | what else it tells BUILD HOUSE |
+|---|---|---|
+| BUNGALOW 1, 2 | `bungalow` | 2: pour an attached garage |
+| BUNGALOW 3, 4, 5 | `twoStorey` | 4: garage. 5: garage + upper floor reaching across it |
+| BILEVEL 1, 2 | `bilevel` | 2: pour an attached garage |
+| BILEVEL 3 | `modifiedBilevel` | garage, and the storey over it |
+
+Four stored values, unchanged. Everything else is an instruction.
+
+## WHAT THIS SETTLES FOR THE HALF-LEVELS
+
+`RD-DOCUMENTS/ORDER-inbetween-levels.md` asked whether a plain BILEVEL should
+offer the OVER GARAGE row. **The menu answers it by leaving it out.** There is
+no BILEVEL + garage + room over garage entry: a drafter who wants that presses
+MODIFIED BILEVEL, which is what the building is called.
+
+- **ENTRY** comes with all three BILEVEL entries.
+- **OVER GARAGE (level id 4)** comes with **MODIFIED BILEVEL alone.**
+
+Tighter than the family gate that order was written against, and it removes
+the case where adding a level would leave the stored label describing a
+different house than the drawing.
+
+**MODIFIED BILEVEL is the only entry in the whole menu that creates a
+half-level.** BUNGALOW 5 does not: on a 2 STOREY the room over the garage is
+the upper floor's footprint reaching across, one deck and one roof, per the
+asymmetry below.
+
+**Left out on purpose, for now:** a 1 STOREY with a bonus room over the
+garage. A real house; Movie's list is *"those ones"*. Cheap to add later --
+on a 1 STOREY it is BUNGALOW 5's mechanism, not a new one.
+
+## It changes no persisted key
+
+`drawing-format.js:899` already groups the four types exactly this way:
+
+    type === 'bungalow' || type === 'twoStorey' ? 'house'
+      : SPLIT_BUILD_TYPES.includes(type) ? type : null
+
+BUNGALOW and 2 STOREY have read as one row on the PROJECT page since the key
+existed, and SPLIT is Movie's own family name for the other two (4 Sep). **The
+menu shows a grouping the format has been storing all along.** `buildType`
+keeps storing the LEAF, so the tiers are presentation.
+
+## THE GARAGE IS STILL NOT A TYPE
+
+A garage is geometry -- an outline carrying `garage: true`
+(`drawing-format.js:737`) -- and any house can have one, so no menu entry
+stores "has a garage". The entries that name one tell BUILD HOUSE to pour one.
+**The drawing stays the record.**
+
+With the flat list this stops being a live risk rather than a rule to
+remember: there is no separate garage answer left lying around to contradict
+the drawing later.
+
+## A WRONG READING, RECORDED
+
+Movie said **"no garage q needed"** under BILEVEL and then, minutes later:
+
+> *"oh ya - the BILEVEL single storey could have either attached or no garage
+> i forgot"*
+
+Skipper had already taken the first as covering the whole branch and reasoned
+from the building -- a bilevel's garage sits at ENTRY, so the form implies one
+-- and told Movie the half-levels gate was now exact. Bilevels are built
+without garages. **An argument that explains a fact is not evidence for it**,
+and this one was good enough to survive a reading of the board that already
+said otherwise (*"the name already says there is a garage"* is written of
+MODIFIED BILEVEL alone).
+
+The menu above settles it a different way and the wrong claim never reached
+code, but the shape is the day's shape: prose that reads as current, in a
+place nothing checks.
+
+## OVER GARAGE MEANS TWO DIFFERENT BUILDINGS
+
+> *"the OVER GARAGE for the bungalow should be worked in there too"*
+
+Agreed, and the board's own asymmetry section already says why it cannot be
+one mechanism:
+
+- **Under BUNGALOW it is NOT a half-level.** The garage ceiling is raised until
+  the deck runs continuous with the floor over the main area, so the storey
+  over the garage is the ordinary upper floor CONTINUING ACROSS -- one level,
+  one roof, one 2ND FL card.
+- **Under BILEVEL it is level id 4**, its own level with its own roof, because
+  the garage stacks on a dropped zone and the deck lands too low to join.
+
+**The sheathing is the test** (`ORDER-inbetween-levels.md`): where one deck can
+run it is one level; where it cannot it is two. Same two words on the menu,
+two mechanisms underneath, and building them as one is the trap.
+
+## Open
+
+- **DETACHED GARAGE's submenu is Movie's own list** -- THICKENED EDGE / GRADE
+  BEAM / FROST WALL -- which is `GARAGE_FOUNDATIONS.detachedGarage` in the
+  order the code already calls *"the order the drafter should see them"*. No
+  longer open; recorded here because it was a guess before he said it.
+- **The parent name is narrower than its contents.** BUNGALOW holds 1 STOREY
+  and 2 STOREY, so a drafter wanting a two-storey presses BUNGALOW to find it.
+  The format calls that family `house`. Taste, and Movie's.
+- **A number, and Devin's word.** Unchanged from the board above.

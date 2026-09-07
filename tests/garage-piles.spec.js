@@ -132,7 +132,7 @@ test('a detached garage gets no automatic piles', async ({ page }) => {
   // A DETACHED garage (grade beam) stands on its own — its supports are the
   // drafter's call, so BUILD HOUSE places none.
   await h.selectTool(page, 'Outline');
-  await page.getByRole('button', { name: /DETACHED GARAGE/ }).click();
+  await page.locator('[data-mark-detached-garage]').click();
   for (const [x, z] of [[-6, -5], [6, -5], [6, 5], [-6, 5]]) await h.clickWorld(page, x, z);
   await page.keyboard.press('Enter');
   await page.locator('[data-detached-grade-beam]').click();
