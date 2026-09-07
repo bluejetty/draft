@@ -5,7 +5,7 @@ sequencing list, not a plan: each item has or needs its own board or order.
 Devin rules the order; this says what is on the table and why each one is
 cheaper now than later.
 
-## FOUR OF FIVE ARE DONE
+## FIVE OF FIVE ARE DONE — THE GATE IS CLEAR
 
 | | | |
 |---|---|---|
@@ -13,10 +13,10 @@ cheaper now than later.
 | 2 | Capture the race reproduction | **DONE** — and it was a budget, not a race |
 | 3 | The build row loses the rabbit | **DONE** #312 |
 | 4 | The storey over the garage | **DONE** `5f6afba` — designed and built the same day |
-| 5 | Two rulings with Devin | **ONE BLOCKS** |
+| 5 | Two rulings with Devin | **DONE** — ruled 6 Sep, landed in #319/#320 and board #333 |
 
-**What stands between here and the Write Tier is a single ruling:**
-`autoDimFirstOffsetFt`, a persisted key on shared ground.
+**Nothing stands between here and the Write Tier.** The census (W0) is the
+next authorized work, per the standing work orders.
 
 **The principle underneath all five.** Devin's Write Tier acceptance is a
 DEEP-COMPARE — the old page saves a drawing, the new page saves the same
@@ -102,20 +102,17 @@ Full design: `RD-DOCUMENTS/ORDER-inbetween-levels.md`. **Still to build, and
 not on this list:** the bone actually pouring a bilevel, which needs the level
 that now exists.
 
-## 5. Two rulings still with Devin — ONE BLOCKS
+## 5. Two rulings with Devin — BOTH RULED, 6 Sep
 
-- **`autoDimFirstOffsetFt` lives nowhere.** The bone keeps it for the session
-  and never saves it, so the viewer draws a slightly different gap after a
-  mid-session change. The house pattern already fits: a persisted key,
-  `positive`, null means derive 1.5 — the same `stored ?? derived()` contract
-  as ROOF HEEL. It is a `drawing-format.js` change on shared ground, which is
-  exactly why neither agent should just add it. **A persisted key is far
-  cheaper before the Write Tier than during it**, so this is the one that
-  blocks.
-- **The build-type options board.** `RD-DOCUMENTS/BOARD-build-type-options.md`,
-  now carrying Movie's three-item menu in full. Needs a number and a ruling.
-  Not blocking, but it is the entry flow, and the entry flow is what a drafter
-  meets first.
+- **`autoDimFirstOffsetFt` is a persisted key now.** Ruled as proposed:
+  `positive`, null means derive 1.5, the `stored ?? derived()` contract.
+  Landed in #319 (`drawing-format.js` + the old page's setter and dirty
+  flag) and #320 (MODEL.html reads the offset off the drawing, closing
+  tier 2's last acknowledged infidelity). This no longer blocks anything.
+- **The build-type options board is board #333.** Movie's three-item menu
+  (BUNGALOW / BILEVEL / DETACHED GARAGE) approved as revised; existing
+  stored leaves keep their names, storey-over-garage derives from geometry
+  — no new persisted key.
 
 ---
 
