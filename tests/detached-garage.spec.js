@@ -127,7 +127,16 @@ test('BUILD HOUSE grade beam: full perimeter beam, sloped 4" slab, walls, doors,
   // copied into a test, and it went red the moment either moved -- correctly,
   // but saying "the number changed" rather than "the rule changed". It is still
   // the 32" concrete band, never a basement wall down to a footing.
-  const wallHeightFt = (8 * 12 + 1 + 1 / 8) / 12;
+  //
+  // AND THE LINE BELOW USED TO MAKE THAT EXACT MISTAKE. It restated the house
+  // foundation's height as `(8 * 12 + 1 + 1/8) / 12` -- a third copy of a
+  // constant, written out by hand -- and went red on 7 Sep when Movie ruled the
+  // foundation is an 8'-0" pour plus a 1 1/2" PT sill, 8'-1 1/2" to the bearing
+  // line, not a framed wall's studs-plus-double-top-plate. The rule did not
+  // change; the number did. So it is asked of the module now, and "level with
+  // the house foundation top" stays true whatever that top becomes.
+  const wallHeightFt = await page.evaluate(() =>
+    window.DraftLevelAssembly.defaultLevelAssembly('foundation').wallHeightFt);
   fdnWalls.forEach(wall => {
     expect(wall.topHeight).toBeCloseTo(wallHeightFt, 3);
     expect(wall.baseHeight).toBeCloseTo(wall.topHeight - 32 / 12, 3);
