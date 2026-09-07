@@ -82,6 +82,6 @@ test('DETACHED GARAGE never opens the attached lesson', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
   await h.selectTool(page, 'Outline');
-  await page.getByRole('button', { name: /DETACHED GARAGE/ }).click();
+  await page.locator('[data-mark-detached-garage]').click();
   await expect(page.locator('[data-garage-callout]')).toBeHidden();
 });

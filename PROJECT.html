@@ -307,9 +307,16 @@
       const ENTRY_LEVEL_ID = 2;
       const OVER_GARAGE_LEVEL_ID = 4;
       const {
-        normaliseLevelAssembly, defaultLevelAssembly, levelRole,
+        normaliseLevelAssembly, defaultLevelAssembly, levelRole, FOUNDATION_POUR_FT,
       } = window.DraftLevelAssembly;
-      const assemblyDefaults = levelId => defaultLevelAssembly(levelRole(levelId));
+      // THE FOUNDATION POUR STAYS THIS PAGE'S OWN, and the module says why:
+      // MODEL.dc.html has always drawn a foundation wall at the house's
+      // 8'-1 1/8" while this page pours 8'-0". Moving that into the shared
+      // table would have changed an existing drawing's foundation height with
+      // no press behind it. Everything else comes from the one deriver.
+      const assemblyDefaults = levelId => (levelId === 1
+        ? { ...defaultLevelAssembly(levelRole(levelId)), wallHeightFt: FOUNDATION_POUR_FT }
+        : defaultLevelAssembly(levelRole(levelId)));
       const positive = (value, fallback) =>
         Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
       const normaliseAssembly = (raw, levelId) => normaliseLevelAssembly(raw, levelRole(levelId));

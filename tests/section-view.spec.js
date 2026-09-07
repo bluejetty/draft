@@ -427,7 +427,7 @@ test.describe('Generated section view', () => {
     await h.openModel(page, { webgl: false });
     await drawOutlineRect(page);
     await h.selectTool(page, 'Outline');
-    await page.getByRole('button', { name: /DETACHED GARAGE/ }).click();
+    await page.locator('[data-mark-detached-garage]').click();
     await h.clickWorld(page, 14, -5);
     await h.clickWorld(page, 26, -5);
     await h.clickWorld(page, 26, 5);

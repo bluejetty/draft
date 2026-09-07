@@ -88,8 +88,21 @@ if (!window.DraftLevelAssembly) {
 
   // Only what the role CHANGES. Everything unlisted stays the house default,
   // so a role can never quietly re-answer a field it has no opinion about.
+  // ONLY WHAT COMMANDER DEVIN RULED, which is the half-levels and nothing
+  // else. FOUNDATION IS DELIBERATELY ABSENT.
+  //
+  // PROJECT.html pours its foundation wall at 8'-0" and MODEL.dc.html has
+  // always drawn it at the house's 8'-1 1/8". That is a THIRD divergence, it
+  // predates this work, and consolidating it here would have changed the
+  // height of an existing drawing's foundation wall with no press behind it --
+  // which board #313 forbids and which CI caught: section-view.spec.js:160
+  // went red on a garage section whose concrete band moved.
+  //
+  // So the foundation pour stays PROJECT's own answer until somebody rules
+  // it, and this table carries only the two joists that were ruled. A
+  // consolidation that quietly resolves an unruled disagreement is not a
+  // consolidation, it is a decision nobody made.
   const ROLE_DEFAULTS = Object.freeze({
-    foundation: Object.freeze({ wallHeightFt: FOUNDATION_POUR_FT }),
     entry: Object.freeze({ joistDepthIn: ENTRY_JOIST_IN }),
     overGarage: Object.freeze({ joistDepthIn: OVER_GARAGE_JOIST_IN }),
   });
