@@ -8,7 +8,7 @@ The one-line version:
 > **A check that cannot fail is not a check. Prove each check can fail
 > before you believe anything it passes.**
 
-Eleven same-shape instances were caught on 7 Sep alone, across three of us,
+Twelve same-shape instances were caught on 7 Sep alone, across three of us,
 in product code, in probes, in test tooling, and in a planning board. Not one
 was caught by reading harder. Every one was caught by measuring — or by the
 check finally failing for real.
@@ -17,7 +17,7 @@ check finally failing for real.
 
 ## The shape
 
-All eleven are one defect wearing four coats:
+All twelve are one defect wearing four coats:
 
 | coat | what it looks like | why it survives |
 | --- | --- | --- |
@@ -71,7 +71,7 @@ The timing lane (Gilligan, landed as #336):
    `model-html-origin` — never on the board — was the second worst. The
    list was written from memory and quoted as fact. *(uncounted claim)*
 
-And two more from the same afternoon, after the rule was already named:
+And three more from the same afternoon, after the rule was already named:
 
 10. Beam re-derivation existed, was correct, and ran only during the guided
     tour — right machinery, unreachable from the path every post-tour
@@ -82,6 +82,14 @@ And two more from the same afternoon, after the rule was already named:
     written to **scan**, not to carry a list — and was proven by breaking
     it three ways and watching it name each break. That is this rule,
     practiced. *(the fix, done right)*
+12. Found live while writing that guard, verified against the tree:
+    `tests/no-third-party.spec.js` carries a hand-kept `PAGES` list of
+    seven while ten pages sit on disk — `MODEL.html`, `Notepad.dc.html`
+    and `SaveBox.dc.html` were never enrolled. "No page requests a
+    third-party host" has been asserting about seven of ten and reading
+    identically to asserting about all of them, green all along. Same
+    fix shape as the favicon guard: **scan, don't carry a list.**
+    *(uncounted claim, in a green spec)*
 
 ## The rule, as practice
 
