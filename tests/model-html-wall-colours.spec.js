@@ -122,15 +122,40 @@ async function inkOnBothSkins(page) {
   };
 }
 
+// MEASURED FIRST, THEN HOISTED. Both tests below called inkOnBothSkins
+// independently, and it is the most expensive thing in the model-html group:
+// one house build, four page loads and four full canvas reads. Timed with the
+// JSON reporter on 7 Sep, this file cost 145.4s over three tests -- 72.9s and
+// 72.5s for these two -- against a 180s per-test budget. The next slowest test
+// in the whole group is 3.8s, a 19x cliff.
+//
+// The setup is DETERMINISTIC: same drawing, same two skins, same pixels. Two
+// tests asking the identical question got two identical answers at twice the
+// price. So it runs once for the file and both tests read the result.
+//
+// SERIAL, AND THAT IS NOT A PREFERENCE. beforeAll shares one page across the
+// tests in the file, so they must not run in parallel against it. The suite is
+// workers:1 and fullyParallel:false already, but stating it here means the
+// file stays correct if that ever changes.
+test.describe.configure({ mode: 'serial' });
+
 test.describe('MODEL.html wall colours', () => {
+  // One page for the file, built once in beforeAll. The tests assert on the
+  // captured numbers and touch neither the page nor the store.
+  let ink;
+  test.beforeAll(async ({ browser }) => {
+    const page = await browser.newPage();
+    try { ink = await inkOnBothSkins(page); } finally { await page.close(); }
+  });
+
   // NO THRESHOLD, by design: one statistic, two skins, and only the direction
   // is asserted. draw-wall-edge is #a7aeb1 on night and the wall body is
   // #ffffff on day, so a page that supplies the colours paints DARKER ink at
   // night than by day. A page that stops supplying them falls back to the
   // literals -- which are the day values -- and the two peaks become equal.
   test('the walls are painted in the SKIN\'s colours, not the hardcoded pair',
-    async ({ page }) => {
-      const { night, day } = await inkOnBothSkins(page);
+    async () => {
+      const { night, day } = ink;
 
       expect(night.peak, 'the walls must put ink on the night canvas').toBeGreaterThan(0);
       expect(day.peak, 'and on the day canvas').toBeGreaterThan(0);
@@ -146,8 +171,8 @@ test.describe('MODEL.html wall colours', () => {
   // in the night palette, so one white pixel on that canvas is a painter
   // ignoring the skin -- no baseline, no differencing, nothing to get subtly
   // wrong. Day is the control: it proves the counter can see a white wall.
-  test('night paints no white at all; day still does', async ({ page }) => {
-    const { night, day } = await inkOnBothSkins(page);
+  test('night paints no white at all; day still does', async () => {
+    const { night, day } = ink;
     expect(day.white, 'day fills walls #ffffff, so the counter must find them')
       .toBeGreaterThan(0);
     expect(night.white,
