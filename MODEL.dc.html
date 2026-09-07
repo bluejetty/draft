@@ -3158,7 +3158,17 @@ class Component extends DCLogic {
     return stored;
   }
 
-  _serializeDrawing() {
+  // The two page-state values the saved format depends on but does not carry.
+  // Named in one place so step 3's extraction has an env to hand over, and so a
+  // deep compare can pin both sides on the same two values.
+  _serializerEnv() {
+    return {
+      boneyardActive: this.state.boneyardActive,
+      layerStandards: this.state.layerStandards,
+    };
+  }
+
+  _serializeDrawing(env = this._serializerEnv()) {
     this._ensureSerializerCollections();
     const point = p => this._pointForStorage(p);
     return {
@@ -3421,7 +3431,7 @@ class Component extends DCLogic {
       drawingOrigin: this.state.drawingOrigin,
       siteRegistration: this.state.siteRegistration,
       lineLayers: normaliseLineLayers(this.state.lineLayers),
-      activeLineLayer: this._activeLineLayer(),
+      activeLineLayer: this._activeLineLayer(env),
       activeWallType: this.state.activeWallType,
       wallRefLine: this.state.wallRefLine,
       wallBaseHeight: this.state.wallBaseHeight,
@@ -8588,13 +8598,39 @@ class Component extends DCLogic {
   // a level can never share an item and level ids stay strictly positive.
   _boneyardLevelId(shelfId = this.state.activeBoneyardShelfId) { return -shelfId; }
 
-  _activeLevelId() {
-    if (this.state.boneyardActive) return this._boneyardLevelId();
+  // W1 STEP 2 (W0 Finding B). `activeLineLayer` is a PERSISTED key that this
+  // page COMPUTES, and the computation reaches two values that never travel in
+  // the file -- boneyardActive and layerStandards. The same drawing saved twice
+  // can therefore write a different layer with neither save wrong, and a shared
+  // serializer handed only the drawing could not produce the key at all.
+  //
+  // The fix is to make that dependency an ARGUMENT instead of a reach. Each
+  // method on the chain takes a trailing `env`; omit it and the method reads
+  // this.state exactly as before, so all ~150 existing callers are untouched.
+  // Only the save path passes one, and _serializerEnv is the single place that
+  // names what the save path needs from the page.
+  //
+  // THE FALLBACK IS SPELT OUT PER KEY, not `env = this.state`. That default
+  // reads better and was written first, but it hands the whole state object to
+  // methods that need two values from it, and it turns a dotted `this.state.x`
+  // into a bare `this.state` -- which is precisely the property W0 measured as
+  // zero and said to keep, because a serializer that takes state wholesale is
+  // one nobody can enumerate again. The census caught it going 0 to 7.
+  //
+  // Devin's ruling, and the constraint that matters: env carries the two RAW
+  // values, not an already-resolved layer, so the resolution logic stays in ONE
+  // place. And W1 does NOT change what the key computes -- the
+  // rewrite-to-E-POWER and the visible-under-standard fallback ship exactly as
+  // they are. A migration that silently changed a persisted value is the bug
+  // the deep compare exists to catch.
+  _activeLevelId(env) {
+    const boneyardActive = env === undefined ? this.state.boneyardActive : env.boneyardActive;
+    if (boneyardActive) return this._boneyardLevelId();
     return this._activeLevel()?.id;
   }
 
-  _layerViewsForLevel(levelId = this._activeLevelId()) {
-    return layerViewsForLevelId(levelId);
+  _layerViewsForLevel(levelId, env) {
+    return layerViewsForLevelId(levelId === undefined ? this._activeLevelId(env) : levelId);
   }
 
   // Floor levels carry the stacked construction profile — returned bottom-up
@@ -8606,13 +8642,14 @@ class Component extends DCLogic {
       .reverse();
   }
 
-  _activeLayerViewId(levelId = this._activeLevelId()) {
-    const views = this._layerViewsForLevel(levelId);
+  _activeLayerViewId(levelId, env) {
+    const id = levelId === undefined ? this._activeLevelId(env) : levelId;
+    const views = this._layerViewsForLevel(id, env);
     if (!views.length) return null;
-    const selected = this.state.levelLayerViews?.[levelId];
+    const selected = this.state.levelLayerViews?.[id];
     return views.some(view => view.id === selected)
       ? selected
-      : (defaultLayerViewId(levelId) || views[0].id);
+      : (defaultLayerViewId(id) || views[0].id);
   }
 
   _draftingContextLabel(viewId = this._activeLayerViewId()) {
@@ -8828,19 +8865,21 @@ class Component extends DCLogic {
   // The second half of the same bug: even a layer that survived the loader
   // was looked up as 'draft' here, so its own visible/printable settings
   // never applied. Known names pass through; only unknown ones fall back.
-  _lineLayerConfig(layerId) {
-    return this._layerStandard(KNOWN_LAYER_IDS.has(layerId) ? layerId : 'draft');
+  _lineLayerConfig(layerId, env) {
+    return this._layerStandard(KNOWN_LAYER_IDS.has(layerId) ? layerId : 'draft', env);
   }
 
   // Command-driven layers: generic lines drawn in the ELECTRIC layer set are
   // electric linework and save on E-POWER; NO-DRAFT stays construction-only.
-  _contextLineLayer(layerId, viewId = this._activeLayerViewId()) {
+  _contextLineLayer(layerId, viewId, env) {
+    const view = viewId === undefined ? this._activeLayerViewId(undefined, env) : viewId;
     const id = normaliseActiveLineLayer(layerId);
-    return id === 'draft' && viewId === 'e-power' ? 'E-POWER' : id;
+    return id === 'draft' && view === 'e-power' ? 'E-POWER' : id;
   }
 
-  _layerStandard(layerId) {
-    const standards = normaliseLayerStandards(this.state.layerStandards);
+  _layerStandard(layerId, env) {
+    const raw = env === undefined ? this.state.layerStandards : env.layerStandards;
+    const standards = normaliseLayerStandards(raw);
     return standards[layerId] || { name: layerId, printable: true, visible: true };
   }
 
@@ -8984,11 +9023,12 @@ class Component extends DCLogic {
     }, () => this._markUnsaved());
   }
 
-  _activeLineLayer() {
-    const requested = this._contextLineLayer(this.state.activeLineLayer);
-    if (this._lineLayerConfig(requested).visible) return requested;
-    const alternate = requested === 'no-draft' ? this._contextLineLayer('draft') : 'no-draft';
-    return this._lineLayerConfig(alternate).visible ? alternate : requested;
+  _activeLineLayer(env) {
+    const requested = this._contextLineLayer(this.state.activeLineLayer, undefined, env);
+    if (this._lineLayerConfig(requested, env).visible) return requested;
+    const alternate = requested === 'no-draft'
+      ? this._contextLineLayer('draft', undefined, env) : 'no-draft';
+    return this._lineLayerConfig(alternate, env).visible ? alternate : requested;
   }
 
   _activeLineLayerLabel() {
