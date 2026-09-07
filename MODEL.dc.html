@@ -2155,7 +2155,8 @@ const TRACKING_GUIDE_MAX = 6;
 // defaults table, and stair-geometry.js needs a stair's rise to mean the same
 // thing on every board that draws it.
 const {
-  defaultLevelAssembly, normaliseLevelAssembly, levelRole,
+  defaultLevelAssembly, normaliseLevelAssembly, levelRole, levelFloorFt,
+  levelAssemblyFor, levelWallTopFt,
   JOIST_TYPES, DEFAULT_WALL_TOP_FT, DEFAULT_FLOOR_ASSEMBLY, DEFAULT_JOIST_TYPE,
   DEFAULT_FOOTING_DEPTH_IN, DEFAULT_FDN_SLAB_THICKNESS_IN,
 } = window.DraftLevelAssembly;
@@ -2555,7 +2556,7 @@ const LEVEL_BUTTON_NAMES = Object.freeze({
 // one definition instead of two that could drift.
 const {
   FLOOR_LEVEL_VIEWS, LEVEL_LAYER_VIEWS, WHOLE_LEVEL_IDS,
-  layerViewsForLevelId, defaultLayerViewId,
+  layerViewsForLevelId, defaultLayerViewId, floorLevels,
 } = window.DraftLayerViews;
 // Layer standards revealed by a layer-set button collapse again after a minute.
 const LAYER_REVEAL_MS = 60000;
@@ -3148,14 +3149,11 @@ class Component extends DCLogic {
     return id;
   }
 
+  // W1 STEP 3. Moved to drawing-format.js. How a point is written to the file
+  // is a FORMAT question and belongs beside the readers, not on the page that
+  // happens to serialize.
   _pointForStorage(point) {
-    const stored = { x: point.x, y: point.y || 0, z: point.z };
-    if (point.srcId) {
-      stored.srcId = point.srcId;
-      stored.offX = Number.isFinite(point.offX) ? point.offX : 0;
-      stored.offZ = Number.isFinite(point.offZ) ? point.offZ : 0;
-    }
-    return stored;
+    return format.pointForStorage(point);
   }
 
   // The two page-state values the saved format depends on but does not carry.
@@ -8635,11 +8633,12 @@ class Component extends DCLogic {
 
   // Floor levels carry the stacked construction profile — returned bottom-up
   // (the levels rail lists top-down).
+  // W1 STEP 3. Moved to layer-views.js: "does this level carry a floor" is a
+  // question about that file's own table, and the bottom-up reversal is the
+  // part that needed one home -- a stair climbs from the level BELOW, so
+  // reading the list the wrong way up lands the flight on the wrong storey.
   _floorLevels() {
-    return this.state.levels
-      .filter(level => layerViewsForLevelId(level.id).some(view => view.id === 'floor'))
-      .slice()
-      .reverse();
+    return floorLevels(this.state.levels);
   }
 
   _activeLayerViewId(levelId, env) {
@@ -15792,8 +15791,10 @@ class Component extends DCLogic {
   // The heel is measured at the exterior wall face: the 5½" fascia bottom sits
   // level with the top of the wall plate, so the heel is the fascia depth plus
   // the rise the pitch gains back across the overhang.
+  // W1 STEP 3. Moved to cut-view.js, which owns the ROOF_FASCIA_IN it adds --
+  // the constant and the only formula using it sat in different files.
   _roofHeelIn(pitch = this.state.roofPitch, overhangFt = this.state.roofOverhang) {
-    return ROOF_FASCIA_IN + overhangFt * pitch;
+    return window.DraftCutView.roofHeelIn(pitch, overhangFt);
   }
 
   _handleRoofClick(e) {
@@ -18842,16 +18843,13 @@ class Component extends DCLogic {
   // Bottom nosing of the FIRST run: the stored end only fixes the downhill
   // direction — the distance always comes from the current layout (the whole
   // run for a straight stair, the first run for an L or U).
+  // W1 STEP 3. Moved to stair-geometry.js beside the layout it measures. It
+  // returns a plain {x, y, z} there rather than a THREE.Vector3: the only
+  // caller is the serializer, which reads the three components and nothing
+  // else, so the vector was built and immediately taken apart. Keeping THREE
+  // out of that file is what keeps it dependency-free.
   _stairEndFor(stair, layout = this._stairCurrentLayout(stair)) {
-    const split = this._stairShapeSplit(stair, layout);
-    const lenFt = split ? split.t1 * STAIR_TREAD_RUN_IN / 12 : layout.runFt;
-    const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
-    const len = Math.hypot(dx, dz) || 1;
-    return new THREE.Vector3(
-      stair.start.x + (dx / len) * lenFt,
-      stair.start.y || 0,
-      stair.start.z + (dz / len) * lenFt,
-    );
+    return window.DraftStairGeometry.stairEndFor(stair, layout);
   }
 
   _stairLayoutNote() {
@@ -21513,11 +21511,11 @@ class Component extends DCLogic {
     return sign + (this.state.units !== 'metric' ? this._ftIn(elev) : this._metric(elev));
   }
 
+  // W1 STEP 3. Moved to level-assembly.js, which already owns the
+  // DEFAULT_WALL_TOP_FT this falls back to -- the fallback and the default it
+  // reads were in different files.
   _levelWallTopFt(levelId, view = 'plan') {
-    const tops = this._walls
-      .filter(wall => wall.levelId === levelId && (wall.view || 'plan') === view)
-      .map(wall => wall.topHeight);
-    return tops.length ? Math.max(...tops) : DEFAULT_WALL_TOP_FT;
+    return levelWallTopFt(this._walls, levelId, view);
   }
 
   // THE ROLE, NOT JUST THE ID. A half-level frames differently -- ENTRY in
@@ -21532,12 +21530,30 @@ class Component extends DCLogic {
   // level-assembly.js becomes role-aware so there is ONE deriver rather than
   // two vocabularies. A stored joist depth still beats the default here, the
   // same as on every other level.
+  // W1 STEP 3. The lookup moved to level-assembly.js beside the normaliser it
+  // wraps. The TABLE has had one home since 6 Sep; the LOOKUP had four, which is
+  // the shape #325 found one layer up -- every board asking the same question in
+  // its own words.
   _levelAssembly(levelId) {
-    return normaliseLevelAssembly(this.state.levelAssemblies?.[levelId], levelRole(levelId));
+    return levelAssemblyFor(this.state.levelAssemblies, levelId);
   }
+  // W1 STEP 3. This wrote out `(joistDepthIn + sheathingIn) / 12` itself, and
+  // level-assembly.js has exported `levelFloorFt` -- the identical expression --
+  // since the tables were collapsed. MODEL.html calls the export; this page did
+  // not, and neither does LAYOUT.dc.html or proto/elevation-harness.js. Four
+  // homes for one derivation.
+  //
+  // WHY THAT WAS WORSE THAN IT LOOKS. proto/level-role-harness.js mutation-tests
+  // this expression by rewriting the MODULE's copy to `joistDepthIn / 12`. That
+  // goes red only where the module is actually called -- so the mutation passed
+  // over this page entirely, and a green harness read as if the derivation here
+  // were covered. Collapsing the copy is what makes the existing mutation reach
+  // it; every collapsed caller inherits the coverage.
+  //
+  // The other two copies are boarded, not swept in here: they are outside the
+  // serializer closure and outside this step's remit.
   _levelFloorFt(levelId) {
-    const assembly = this._levelAssembly(levelId);
-    return (assembly.joistDepthIn + assembly.sheathingIn) / 12;
+    return levelFloorFt(this._levelAssembly(levelId));
   }
 
   // Footing width never prints on plan — the contractor centers the footing

@@ -1239,6 +1239,20 @@ if (!window.DraftDrawingFormat) {
       .filter((id, index, ids) => levelIds.has(id) && id !== activeLevelId && ids.indexOf(id) === index)
       .slice(0, 2);
 
+  // How a point is written to the file. A point pulled from another point
+  // carries its source and offsets so the link survives a reload; a free point
+  // writes three numbers. This is a FORMAT question and it belongs beside the
+  // readers, not on the page that happens to serialize.
+  const pointForStorage = point => {
+    const stored = { x: point.x, y: point.y || 0, z: point.z };
+    if (point.srcId) {
+      stored.srcId = point.srcId;
+      stored.offX = Number.isFinite(point.offX) ? point.offX : 0;
+      stored.offZ = Number.isFinite(point.offZ) ? point.offZ : 0;
+    }
+    return stored;
+  };
+
   window.DraftDrawingFormat = {
     VERSION,
     checkEnvelope,
@@ -1286,6 +1300,7 @@ if (!window.DraftDrawingFormat) {
     sectionRowForBuildType,
     upperFloorForBuildType,
     backgroundLevelIds,
+    pointForStorage,
     oneOf,
     number,
     positive,
