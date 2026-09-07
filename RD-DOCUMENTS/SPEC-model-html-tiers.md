@@ -133,6 +133,53 @@ boards exchange a file in a test. If a field has two derivers, that is a
 merge conflict waiting in the data. If it has two storers, one of them is
 stale and nobody will find out until a drafter does.
 
+### THE COROLLARY: ONE DERIVER IS NOT ENOUGH IF THE CALLERS ASK IT DIFFERENT QUESTIONS
+
+Added 7 Sep, from the thing that actually went wrong.
+
+Pulling three copies of the level assembly table into `level-assembly.js`
+removed the drift **between the tables**. It left the drift **between the
+callers**, and that turned out to be the same defect one level up.
+
+On 6 Sep the module became role-aware (PR #323): OVER GARAGE spans a double
+bay on a 19¼" joist, ENTRY frames on 2x10s, and the level's role is derived
+from its id inside the module. Two callers were updated to pass the role.
+Three were not — `MODEL.html`, `LAYOUT.dc.html` and the elevation harness kept
+calling `normaliseLevelAssembly(assemblies[id])` with no second argument, so on
+those three every level framed like a plain floor. Measured through the real
+stair geometry:
+
+```
+stair up to OVER GARAGE   role-aware   117 1/8" rise, 15 risers, 11'-8" run
+                          role-less    109 3/4" rise, 14 risers, 10'-10" run
+```
+
+One riser and a whole tread, same drawing, between the page that serves users
+and the page written to replace it. ENTRY diverges too (104⅛" against 106¾")
+and lands on the same riser count, so it draws the same run at slightly wrong
+riser heights — real, and invisible.
+
+**One deriver with an optional argument is two derivers.** `defaultLevelAssembly
+(role = 'floor')` was written with a default so every existing caller kept the
+answer it had, which is exactly what made the omission silent: a role-less call
+is not an error, it is a different building. The kindness in the signature is
+where the divergence lives.
+
+**Why nothing caught it for a day.** Three of the module's eight fields —
+`joistType`, `joistSpacingIn`, `slabThicknessIn` — had no check anywhere in the
+repo. Measured: each set to a different value and every harness in `proto/`
+re-run — 27 of them at the time — all
+green on all three. The vocabulary could move underneath them because nothing
+was holding them still.
+
+**The standing check, extended:** a shared deriver needs a check that every
+caller asks it the same question. `proto/level-role-harness.js` does it by
+scanning rather than by anchoring — it walks each caller file and requires
+every call to pass a role, so a fourth caller added tomorrow fails without
+anyone remembering to add it. An anchored check per known call site would have
+passed, because the sites that were wrong were the ones nobody thought to
+anchor.
+
 ## THE TEST OF A FINISHED EXTRACTION
 
 Steps 3-5 are blocked, and measuring *why* produced the most useful thing

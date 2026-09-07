@@ -1062,7 +1062,11 @@
     const LV = window.DraftLayerViews;
     const all = drawing?.walls || [];
     const assemblies = drawing?.levelAssemblies || {};
-    const assemblyFor = id => LA.normaliseLevelAssembly(assemblies[id]);
+    // THE ROLE, NOT JUST THE ID. Passing no role means every level frames
+    // like a plain floor, and MODEL.dc.html stopped believing that on 6 Sep
+    // (PR #323, Devin's ruling). This page's whole job is to paint what that
+    // page saved, so the two must ask the module the same question.
+    const assemblyFor = id => LA.normaliseLevelAssembly(assemblies[id], LA.levelRole(id));
     return {
       floors: (drawing?.levels || [])
         .filter(level => LV.layerViewsForLevelId(level.id).some(view => view.id === 'floor'))

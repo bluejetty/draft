@@ -112,7 +112,16 @@ function buildEnv(win, saved) {
   // the module over 8002 comparisons -- the contract being that the module
   // RESTRICTED TO THIS HARNESS'S KEYS equals its answer, since the module is a
   // superset. The single field it adds is joistType, which nothing here reads.
-  const levelAssembly = id => win.DraftLevelAssembly.normaliseLevelAssembly(assemblies[id]);
+  //
+  // THE ROLE ARRIVED LATER AND THIS LINE DID NOT FOLLOW IT. PR #323 made the
+  // module role-aware and updated MODEL.dc.html's caller; this one, LAYOUT's
+  // and MODEL.html's kept asking role-less, so ENTRY read 11 7/8" here where
+  // MODEL.dc.html read 9 1/4" and OVER GARAGE read 11 7/8" against 19 1/4".
+  // A harness measuring a building the live board does not draw is worse than
+  // no harness: it is green about the wrong world. proto/level-role-harness.js
+  // now holds every caller to the role vocabulary so this cannot drift again.
+  const levelAssembly = id => win.DraftLevelAssembly.normaliseLevelAssembly(
+    assemblies[id], win.DraftLevelAssembly.levelRole(id));
   const floorLevels = levels
     .filter(l => l.id > 0 && l.id !== 1 && l.id !== 7 && l.id !== 8)
     .slice().reverse();
@@ -386,7 +395,8 @@ for (const [id, { span, ridge, empty, lit }] of Object.entries(BEHIND)) {
 // joistType, joistSpacingIn and slabThicknessIn put NO ink in an elevation:
 // mutating each leaves the four views byte-identical at 400 px/ft. They are
 // section and schedule facts. No check for them is written here, because a
-// check that cannot reach what it checks passes for the wrong reason.
+// check that cannot reach what it checks passes for the wrong reason. Where
+// they DO reach, and what watches them now: proto/level-role-harness.js.
 //
 // PAINTED AT 400 px/ft, NOT THE 40 THE VIEWS ABOVE USE. The painter rounds to
 // the pixel grid, so at 40 a pixel is 0.3" -- coarser than the 1/4" sheathing
