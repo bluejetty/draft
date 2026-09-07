@@ -68,6 +68,14 @@ function load(mutate) {
     src = next;
   }
   const window = {};
+  // level-assembly.js FIRST, and for real rather than stubbed. project-page.js
+  // reads SILL_PLATE_IN off it -- the sill got one home on 7 Sep, because the
+  // foundation's wall height is pour + sill and a second copy of the 1 1/2"
+  // here would be free to drift from the height derived out of it. The section
+  // builder asks for it at CALL time, so a window without the module loads
+  // fine and then throws inside buildWallSection; this window is the page's,
+  // and on the page the module is always there.
+  new Function('window', fs.readFileSync(path.join(__dirname, '..', 'level-assembly.js'), 'utf8'))(window);
   new Function('window', src)(window);
   return window.DraftProjectPage;
 }

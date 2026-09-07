@@ -307,16 +307,20 @@
       const ENTRY_LEVEL_ID = 2;
       const OVER_GARAGE_LEVEL_ID = 4;
       const {
-        normaliseLevelAssembly, defaultLevelAssembly, levelRole, FOUNDATION_POUR_FT,
+        normaliseLevelAssembly, defaultLevelAssembly, levelRole,
       } = window.DraftLevelAssembly;
       // THE FOUNDATION POUR STAYS THIS PAGE'S OWN, and the module says why:
       // MODEL.dc.html has always drawn a foundation wall at the house's
-      // 8'-1 1/8" while this page pours 8'-0". Moving that into the shared
-      // table would have changed an existing drawing's foundation height with
-      // no press behind it. Everything else comes from the one deriver.
-      const assemblyDefaults = levelId => (levelId === 1
-        ? { ...defaultLevelAssembly(levelRole(levelId)), wallHeightFt: FOUNDATION_POUR_FT }
-        : defaultLevelAssembly(levelRole(levelId)));
+      // 8'-1 1/8" while this page poured 8'-0", and BOTH WERE WRONG. Movie
+      // ruled it 7 Sep: an 8" concrete wall is 8'-0" of pour with a 1 1/2" PT
+      // sill on top, 8'-1 1/2" to the bearing line. MODEL had a framed wall's
+      // studs-plus-double-top-plate; this page had the pour and no sill.
+      //
+      // SO THE SPECIAL CASE IS GONE. It existed to keep this page off MODEL's
+      // wrong number without moving anyone's drawing, and the module now
+      // answers the right one for the foundation role. Everything comes from
+      // the one deriver.
+      const assemblyDefaults = levelId => defaultLevelAssembly(levelRole(levelId));
       const positive = (value, fallback) =>
         Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : fallback;
       const normaliseAssembly = (raw, levelId) => normaliseLevelAssembly(raw, levelRole(levelId));
