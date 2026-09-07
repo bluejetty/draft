@@ -296,7 +296,7 @@ const E_MARK_CLEAR_FT = 2;
 // seven mutations to show the check could fail. So this adopts a superset: the
 // two added fields are ones nothing on this page's path reads.
 const {
-  defaultLevelAssembly, normaliseLevelAssembly, DEFAULT_WALL_TOP_FT,
+  defaultLevelAssembly, normaliseLevelAssembly, levelRole, DEFAULT_WALL_TOP_FT,
 } = window.DraftLevelAssembly;
 const DEFAULT_FOOTING_WIDTH_IN = 20;
 const ICF_FOOTING_WIDTH_IN = 24;
@@ -517,7 +517,10 @@ class Component extends DCLogic {
     const masters = format.boneyardOutlines(saved.boneyardOutlines, new Set(shelves.map(shelf => shelf.id)));
     const assemblies = saved.levelAssemblies && typeof saved.levelAssemblies === 'object'
       ? saved.levelAssemblies : {};
-    const levelAssembly = levelId => normaliseLevelAssembly(assemblies[levelId]);
+    // Role-aware since PR #323: OVER GARAGE spans clear on a 19 1/4" joist
+    // and ENTRY frames on 2x10s. Reading these levels as plain floors drew
+    // this board's sections and elevations off MODEL.dc.html's.
+    const levelAssembly = levelId => normaliseLevelAssembly(assemblies[levelId], levelRole(levelId));
     // SITE and ROOF are whole-level contexts and the FOUNDATION bears no floor
     // of its own — the floor-bearing stack is every other level, lowest first.
     const floorLevels = this._levels

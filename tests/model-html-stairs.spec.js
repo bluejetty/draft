@@ -23,6 +23,15 @@ const h = require('./helpers');
 const BUCKET = 'model-drawing';
 const MAIN_FL = 3;
 const FOUNDATION = 1;
+const OVER_GARAGE = 4;
+// The role table's number for level 4, quoted here ONLY as the thing the page
+// must be shown to derive on its own. The third load below stores it
+// explicitly, so the test compares a DERIVED answer against a STORED one
+// rather than against a constant this file typed -- if the number moves in
+// level-assembly.js, load one moves with it and load three does not, and the
+// test fails as it should.
+const OVER_GARAGE_JOIST_IN = 19.25;
+const HOUSE_JOIST_IN = 11.875;
 
 // The painter's legend, recorded from THE LAST FRAME ONLY. drawStairs2D writes
 // `DN — {risers}R @ {riser}` under every stair it draws, so the legend is both
@@ -66,7 +75,11 @@ async function houseOnOldPage(page) {
   await h.waitForSaved(page);
 }
 
-async function loadWith(page, src) {
+// `level` picks which level the page paints -- MODEL.html reads ?level= and
+// falls back to MAIN FL, so a stair on any other level is simply not on the
+// drawing being looked at. Omitting it does not fail; it paints the wrong
+// level and reports zero stairs, which reads exactly like a broken painter.
+async function loadWith(page, src, { level = null } = {}) {
   await page.evaluate(async ({ bucket, src: s }) => {
     const file = await window.SharedFileStore.loadSharedFile(bucket);
     const drawing = JSON.parse(await file.text());
@@ -75,7 +88,7 @@ async function loadWith(page, src) {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(out)], 'drawing.json', { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, src });
-  await page.goto('/MODEL.html');
+  await page.goto(level === null ? '/MODEL.html' : `/MODEL.html?level=${level}`);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 6000 });
 }
 
@@ -199,5 +212,100 @@ test.describe('MODEL.html stairs', () => {
         + 'electrical one are somewhere else, and the view-less one is '
         + 'nowhere at all -- which is the bone\'s rule, not a rounding of it')
         .toHaveLength(1);
+    });
+
+  // THE LEVEL'S ROLE, WHICH THIS PAGE READ FOR A DAY AND DID NOT.
+  //
+  // level-assembly.js became role-aware on 6 Sep (PR #323): OVER GARAGE spans
+  // a double bay on a 19 1/4" joist rather than the house's 11 7/8". MODEL.dc
+  // .html's caller was updated and this page's was not, so it asked
+  // `normaliseLevelAssembly(assemblies[id])` with no role and framed every
+  // level like a plain floor. The stair up to OVER GARAGE came out 14 risers
+  // and a 10'-10" run here against 15 risers and 11'-8" there -- one riser and
+  // a whole tread, same drawing, on the page written to replace that one.
+  //
+  // It is the same defect the test above this one exists for, one turn along:
+  // that one caught a page trusting a STORED rise instead of deriving it, this
+  // one catches a page deriving it from the WRONG VOCABULARY. Both read as a
+  // plausible stair. Neither is visible without a second page to disagree with.
+  //
+  // NO ASSEMBLY IS STORED ON LEVEL 4 IN THE FIRST LOAD, deliberately: the whole
+  // question is what the page falls back to when the drawing says nothing.
+  test('the joist depth comes from the LEVEL ROLE, not from every level being a plain floor',
+    async ({ page }) => {
+      await recordText(page);
+      await houseOnOldPage(page);
+
+      // Level 4 sits between 2ND FL and MAIN FL. The list is stored top-down
+      // and MODEL.html reverses it, so the insert has to keep that order or
+      // the stair descends to the wrong storey and the numbers below stop
+      // meaning what they say.
+      const overGarage = stored => `
+        d.levels = (d.levels || []).slice();
+        if (!d.levels.some(l => Number(l.id) === ${OVER_GARAGE})) {
+          const at = d.levels.findIndex(l => Number(l.id) === ${MAIN_FL});
+          d.levels.splice(at < 0 ? d.levels.length : at, 0,
+            { id: ${OVER_GARAGE}, name: 'OVER GARAGE', elev: 9, visible: true });
+        }
+        d.levelAssemblies = ${stored};
+        d.stairs = [{
+          id: 7405, levelId: ${OVER_GARAGE}, view: 'plan', layer: 'A-STR',
+          start: { x: -2, z: 0 }, end: { x: 8, z: 0 },
+          widthFt: 3, riseFt: ${STORED_RISE_FT}, rail: 'both',
+          shape: 'straight', turn: 'right', winders: 0,
+        }];`;
+      // THE WHOLE LEGEND, NOT THE RISER COUNT. `DN — 15R @ 7 13/16"` carries
+      // the riser HEIGHT as well, and the count alone is far too coarse to
+      // hold this: measured, a joist depth of 16" instead of 19 1/4" lands on
+      // the same 15 risers and the count-only version of this test passed on
+      // it. The height moves 7 13/16" -> 7 9/16" and the legend catches it.
+      // It is a sixteenth-inch readout rather than an exact one, so it is
+      // sharp, not infinitely sharp -- but three and a quarter inches of joist
+      // is nowhere near the rounding.
+      const legend = async () => {
+        const dn = await legends(page);
+        expect(dn, 'the OVER GARAGE stair has to paint before it can be measured')
+          .toHaveLength(1);
+        // PARSED, NOT SUBSTRING-MATCHED. `expect(dn[0]).not.toContain('5R')`
+        // is the obvious way to write this and it is wrong: the real answer
+        // is 15R, which contains '5R', so the guard fired on a correct run.
+        expect(Number(dn[0].match(/(\d+)R/)[1]),
+          'the stored-rise riser count means the page read the stair instead '
+          + 'of the house').not.toBe(Number(STORED_RISERS.replace('R', '')));
+        return dn[0];
+      };
+
+      await loadWith(page, overGarage('{}'), { level: OVER_GARAGE });
+      const derived = await legend();
+
+      await page.evaluate(() => { window.__painted = []; });
+      await loadWith(page, overGarage(
+        `{ ${OVER_GARAGE}: { joistDepthIn: ${HOUSE_JOIST_IN}, sheathingIn: 0.75 } }`),
+        { level: OVER_GARAGE });
+      const asPlainFloor = await legend();
+
+      await page.evaluate(() => { window.__painted = []; });
+      await loadWith(page, overGarage(
+        `{ ${OVER_GARAGE}: { joistDepthIn: ${OVER_GARAGE_JOIST_IN}, sheathingIn: 0.75 } }`),
+        { level: OVER_GARAGE });
+      const asOverGarage = await legend();
+
+      // ONE: the fallback is not the house floor. 7 3/8" of extra joist at a
+      // 7 7/8" maximum riser cannot be absorbed by the risers already there,
+      // so this one would hold even on the riser count alone.
+      expect(derived,
+        'a level with no stored assembly must not frame like a plain floor -- '
+        + 'that is the vocabulary MODEL.dc.html stopped using')
+        .not.toBe(asPlainFloor);
+
+      // TWO, AND THIS IS THE HALF THAT MAKES IT A CHECK: it derived the RIGHT
+      // number, not merely a different one. Pinned against a STORED 19 1/4"
+      // rather than against a literal, so the two answers are held together
+      // by the module and neither can drift alone. Without this the test goes
+      // green on any wrong-but-not-house depth.
+      expect(derived,
+        'the derived depth must be the role table\'s 19 1/4", which is what '
+        + 'storing 19 1/4" explicitly produces')
+        .toBe(asOverGarage);
     });
 });
