@@ -48,11 +48,19 @@ function bbox(points) {
   };
 }
 
-// MAIN FL descent: 11 7/8" joists + 3/4" sheathing over 8'-1 1/8" foundation
-// walls minus the 3" slab = 14 risers at 7.625". The opening runs until
-// 6'-10" headroom + the floor assembly clears: 94.625" / 7.625" = 12.41
-// tread slots x 10" = 124.1" -> next inch is 125".
-const OPEN_LEN_FT = 125 / 12;
+// MAIN FL descent: 11 7/8" joists + 3/4" sheathing over 8'-1 1/2" foundation
+// walls minus the 3" slab = 14 risers at 7.6518". The opening runs until
+// 6'-10" headroom + the floor assembly clears: 94.625" / 7.6518" = 12.366
+// tread slots x 10" = 123.66" -> next inch is 124".
+//
+// 125" UNTIL 7 SEP, on an 8'-1 1/8" foundation. Movie ruled the wall that day:
+// an 8" pour with a 1 1/2" PT sill is 8'-1 1/2", not the framed wall's
+// studs-plus-double-top-plate. 3/8" more rise over 14 risers is 0.027" more
+// per riser, which costs a third of a tread slot and rounds the run down an
+// inch. The opening follows the walking line continuously, not in whole
+// treads -- reasoning it in tread steps is what made this look unrelated to
+// the foundation once already.
+const OPEN_LEN_FT = 124 / 12;
 const FINISH_FT = 1 / 24; // half the 1" finish allowance per side
 const HALF_W = 1.5 + FINISH_FT;
 
@@ -129,7 +137,7 @@ test('the opening pulls one real wall assembly inside the exterior', async ({ pa
 
 // A run that cannot fit ANYWHERE is refused rather than left overhanging.
 //
-// The house is 10' across and the run is 10'-5" (OPEN_LEN_FT), so even after
+// The house is 10' across and the run is 10'-4" (OPEN_LEN_FT), so even after
 // _stairAutoFit slides the stair as far back as it goes, the opening still
 // crosses the exterior wall. Before this refusal the stair was stored anyway,
 // its opening hung over the floor edge, and the overhang was then DEDUCTED
@@ -226,7 +234,11 @@ test('the opening keeps 2" clear of the beams carrying the floor', async ({ page
   const limit = 5.5 - 2 / 12;
   expect(box.maxX).toBeLessThanOrEqual(limit + 0.005);
   expect(box.maxX).toBeGreaterThan(limit - 0.05);
-  expect(saved.stairs[0].start.x).toBeLessThan(-5.05);
+  // It moved LEFT of where it was placed, by at least the finish allowance.
+  // Written as the allowance rather than as -5.05: the raw threshold was 1/100
+  // clear of the old answer and the 7 Sep foundation ruling shortened the run
+  // an inch, which walked the stair start right past it.
+  expect(saved.stairs[0].start.x).toBeLessThan(-5 - FINISH_FT);
   // The beam itself never moved.
   expect(Math.abs(saved.beams[0].start.x - 5.5)).toBeLessThan(0.001);
 });
@@ -247,10 +259,11 @@ test('an L stair cuts an L-shaped well over its landing and second run', async (
   expect(saved.surfaceOpenings).toHaveLength(1);
   const opening = saved.surfaceOpenings[0];
   // First run (6 treads) + 3'-1 1/2" landing + the used stretch of run 2:
-  // 12.41 slots - 6 treads - 1 landing = 5.41 -> 54.1" -> 55" down run 2.
+  // 12.366 slots - 6 treads - 1 landing = 5.366 -> 53.66" -> 54" down run 2.
+  // 55" until the 7 Sep foundation ruling; see OPEN_LEN_FT for the arithmetic.
   expect(opening.points).toHaveLength(10);
   const box = bbox(opening.points);
-  const run1 = 5, land = 3.125, run2Cut = 55 / 12;
+  const run1 = 5, land = 3.125, run2Cut = 54 / 12;
   expect(Math.abs(box.minX - (-4 - FINISH_FT))).toBeLessThan(0.02);
   expect(Math.abs(box.maxX - (-4 + run1 + land + FINISH_FT))).toBeLessThan(0.02);
   expect(Math.abs(box.minZ - (-4 - HALF_W))).toBeLessThan(0.02);
