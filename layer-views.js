@@ -58,9 +58,22 @@ if (!window.DraftLayerViews) {
     return view ? view.contents : [];
   };
 
+  // The levels that carry a floor, bottom-up. The levels rail lists top-down,
+  // so this reverses -- and the reversal is the part worth having one home for:
+  // a stair climbs from the level BELOW, and reading this list the wrong way up
+  // lands the flight on the wrong storey.
+  //
+  // It lives here because "does this level have a floor" is a layer-views
+  // question -- the filter asks this file's own table -- and the pages that
+  // needed the answer were each re-asking it in their own words.
+  const floorLevels = levels => (levels || [])
+    .filter(level => layerViewsForLevelId(level.id).some(view => view.id === 'floor'))
+    .slice()
+    .reverse();
+
   window.DraftLayerViews = Object.freeze({
     FLOOR_LEVEL_VIEWS, LEVEL_LAYER_VIEWS, WHOLE_LEVEL_IDS,
-    layerViewsForLevelId, defaultLayerViewId, layersFor,
+    layerViewsForLevelId, defaultLayerViewId, layersFor, floorLevels,
   });
 })();
 }

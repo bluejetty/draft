@@ -190,6 +190,23 @@ if (!window.DraftLevelAssembly) {
   // someone to forget the sheathing.
   const levelFloorFt = assembly => (assembly.joistDepthIn + assembly.sheathingIn) / 12;
 
+  // Bind the normaliser to a drawing's stored table. Every board that draws a
+  // level asks this question -- MODEL.dc.html, LAYOUT.dc.html and the harnesses
+  // each held their own one-liner for it, which is how the role-less callers in
+  // #325 happened: the TABLE had one home, the LOOKUP had four.
+  const levelAssemblyFor = (levelAssemblies, levelId) =>
+    normaliseLevelAssembly(levelAssemblies?.[levelId], levelRole(levelId));
+
+  // The top of the tallest wall on a level, per view. Falls back to the office
+  // default when a level has no walls yet -- a level being empty is not the
+  // same as its walls being at height zero, and returning 0 would sink a stair.
+  const levelWallTopFt = (walls, levelId, view = 'plan') => {
+    const tops = (walls || [])
+      .filter(wall => wall.levelId === levelId && (wall.view || 'plan') === view)
+      .map(wall => wall.topHeight);
+    return tops.length ? Math.max(...tops) : DEFAULT_WALL_TOP_FT;
+  };
+
   window.DraftLevelAssembly = Object.freeze({
     defaultLevelAssembly,
     normaliseLevelAssembly,
@@ -202,6 +219,8 @@ if (!window.DraftLevelAssembly) {
     ENTRY_JOIST_IN,
     OVER_GARAGE_JOIST_IN,
     levelFloorFt,
+    levelAssemblyFor,
+    levelWallTopFt,
     DEFAULT_WALL_TOP_FT,
     DEFAULT_FLOOR_ASSEMBLY,
     JOIST_TYPES,

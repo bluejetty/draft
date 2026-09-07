@@ -218,12 +218,34 @@ if (!window.DraftStairGeometry) {
       walk: [S, at(run1Len + L / 2, 0), at(run1Len + L / 2, off), run2End] };
   };
 
+  // Where a flight ends in world space: along the drawn direction, for the run
+  // the layout works out -- the first leg's length on a shaped stair, the whole
+  // run on a straight one.
+  //
+  // Returns a plain {x, y, z}. MODEL.dc.html built a THREE.Vector3 here, but its
+  // one caller is the serializer, which reads x/y/z and nothing else -- the
+  // vector was constructed and immediately taken apart. Keeping THREE out is
+  // what lets this file stay dependency-free, which is the property that makes
+  // it answerable from any board.
+  const stairEndFor = (stair, layout) => {
+    const split = stairShapeSplit(stair, layout);
+    const lenFt = split ? split.t1 * STAIR_TREAD_RUN_IN / 12 : layout.runFt;
+    const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return {
+      x: stair.start.x + (dx / len) * lenFt,
+      y: stair.start.y || 0,
+      z: stair.start.z + (dz / len) * lenFt,
+    };
+  };
+
   window.DraftStairGeometry = Object.freeze({
     stairLayout,
     stairLandFt,
     stairDescent,
     stairCurrentLayout,
     stairShapeSplit,
+    stairEndFor,
     stairPlanParts,
     STAIR_MAX_RISER_IN,
     STAIR_TREAD_RUN_IN,

@@ -1494,6 +1494,12 @@ if (!window.DraftCutView) {
     return true;
   }
 
+  // Heel height: the fascia board plus whatever the pitch gains over the
+  // overhang. MODEL.dc.html computed this from its own arguments while the
+  // fascia constant it needs lived here -- the number and the formula using it
+  // in different files.
+  const roofHeelIn = (pitch, overhangFt) => ROOF_FASCIA_IN + overhangFt * pitch;
+
   window.DraftCutView = Object.freeze({
     STANDARDS: Object.freeze({
       GARAGE_SLAB_THICKNESS_IN,
@@ -1506,6 +1512,7 @@ if (!window.DraftCutView) {
       GARAGE_EDGE_DEPTH_IN,
       ROOF_FASCIA_IN,
     }),
+    roofHeelIn,
     sectionLevelStack,
     sectionWallCrossings,
     cutViewExtents,
