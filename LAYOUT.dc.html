@@ -296,7 +296,8 @@ const E_MARK_CLEAR_FT = 2;
 // seven mutations to show the check could fail. So this adopts a superset: the
 // two added fields are ones nothing on this page's path reads.
 const {
-  defaultLevelAssembly, normaliseLevelAssembly, levelRole, DEFAULT_WALL_TOP_FT,
+  defaultLevelAssembly, normaliseLevelAssembly, levelRole, levelFloorFt,
+  DEFAULT_WALL_TOP_FT,
 } = window.DraftLevelAssembly;
 const DEFAULT_FOOTING_WIDTH_IN = 20;
 const ICF_FOOTING_WIDTH_IN = 24;
@@ -547,10 +548,12 @@ class Component extends DCLogic {
     this._cutEnv = {
       floorLevels: () => floorLevels,
       levelAssembly,
-      levelFloorFt: levelId => {
-        const assembly = levelAssembly(levelId);
-        return (assembly.joistDepthIn + assembly.sheathingIn) / 12;
-      },
+      // ASKS THE MODULE. This spelt the arithmetic out until 7 Sep -- one of
+      // four hand copies of `(joistDepthIn + sheathingIn) / 12`, which is
+      // exactly what level-assembly.js's own comment warned the inlined form
+      // would invite: "reading it at the call site invites someone to forget
+      // the sheathing". Three call sites inlined it anyway.
+      levelFloorFt: levelId => levelFloorFt(levelAssembly(levelId)),
       levelWallTopFt,
       footingWidthIn: levelId => {
         const assembly = levelAssembly(levelId);
