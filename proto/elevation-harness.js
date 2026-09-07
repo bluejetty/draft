@@ -139,7 +139,12 @@ function buildEnv(win, saved) {
   return {
     floorLevels: () => floorLevels,
     levelAssembly,
-    levelFloorFt: id => { const a = levelAssembly(id); return (a.joistDepthIn + a.sheathingIn) / 12; },
+    // ASKS THE MODULE, and this file had the most to lose by not. Its own
+    // header says a check that cannot reach what it checks passes for the
+    // wrong reason -- and this line meant the elevation harness would have
+    // stayed green while the module's levelFloorFt broke, because it never
+    // called it. Skipper found it while moving MODEL's copy (W1 step 3).
+    levelFloorFt: id => win.DraftLevelAssembly.levelFloorFt(levelAssembly(id)),
     levelWallTopFt,
     footingWidthIn: id => {
       const a = levelAssembly(id);
