@@ -60,6 +60,7 @@ const FILES = Object.freeze({
   project:   'PROJECT.html',
   elevation: 'proto/elevation-harness.js',
   cutView:   'cut-view.js',
+  projectPage: 'project-page.js',
 });
 // Files scanned for role-less calls: everyone except the module that DEFINES
 // the functions (its own internal calls are the definition, not a caller) and
@@ -245,12 +246,79 @@ check('every role in the id map is a declared role', ({ LA }) => {
   const known = new Set(LA.LEVEL_ROLES);
   return [Object.values(LA.ROLE_BY_LEVEL_ID).filter(role => !known.has(role)).join(','), ''];
 });
+// UNTIL 7 SEP 'foundation' WAS THE EXPECTED ANSWER HERE. It mapped to a role
+// that changed nothing, so the level fell through to DEFAULT_WALL_TOP_FT --
+// eight-foot studs plus a double top plate, a framed wall's formula on
+// concrete. Now every mapped role earns its entry and the expected set is
+// empty, which is what makes this check worth having rather than a list of
+// exceptions that grows.
 check('every mapped role actually changes the assembly', ({ LA }) => {
   const plain = JSON.stringify(LA.defaultLevelAssembly('floor'));
   const inert = [...new Set(Object.values(LA.ROLE_BY_LEVEL_ID))]
     .filter(role => JSON.stringify(LA.defaultLevelAssembly(role)) === plain);
-  return [inert.join(','), 'foundation'];
+  return [inert.join(','), ''];
 });
+
+// ── THE FOUNDATION WALL: POUR PLUS SILL ───────────────────────────────────
+// Movie, 7 Sep: "default is 8\" conc wall with 1.5\" pt sill plate 8'1.5\"
+// total (default)". Two boards had two answers and NEITHER was this one:
+// MODEL derived 8'-1 1/8" from the stud formula, PROJECT poured 8'-0" and
+// forgot the sill. Both looked plausible; they were 1 1/8" apart.
+//
+// THE COMPOSITION FIRST, THE NUMBER SECOND -- the same order as the
+// over-garage joist. A lone 97.5 survives the pour changing underneath it,
+// and the pour is the number a drafter actually edits.
+check('the foundation wall is the pour plus its sill', ({ LA }) =>
+  [LA.defaultLevelAssembly('foundation').wallHeightFt * 12,
+   LA.FOUNDATION_POUR_FT * 12 + LA.SILL_PLATE_IN]);
+check('which is 8\'-1 1/2\" to the bearing line', ({ LA }) =>
+  [LA.defaultLevelAssembly('foundation').wallHeightFt * 12, 97.5]);
+// The mistake in one line: a foundation is not a stick-framed wall.
+check('and it is NOT the framed wall\'s studs-plus-double-top-plate', ({ LA }) =>
+  [LA.defaultLevelAssembly('foundation').wallHeightFt !== LA.DEFAULT_WALL_TOP_FT, true]);
+// Nor the bare pour, which is what PROJECT.html answered until 7 Sep. Written
+// as "taller than the pour by exactly a sill" rather than "not 8'-0"", so it
+// fails if the sill is dropped AND if it is doubled.
+check('nor the bare pour -- it clears it by exactly one sill', ({ LA }) =>
+  [(LA.defaultLevelAssembly('foundation').wallHeightFt - LA.FOUNDATION_POUR_FT) * 12,
+   LA.SILL_PLATE_IN]);
+// ONE SILL, ONE HOME. project-page.js declared its own 1.5 until 7 Sep and now
+// re-exports the module's. Nine call sites on PROJECT.html read it from there,
+// so the two must be the same object's value or the height derived here drifts
+// from the sill drawn in the section.
+check('project-page.js re-exports the module\'s sill rather than typing its own',
+  ({ LA, src }) => {
+    const declared = /const SILL_PLATE_IN = ([^;]+);/.exec(src.projectPage);
+    return [declared && declared[1].trim(), 'window.DraftLevelAssembly.SILL_PLATE_IN'];
+  });
+// AND THE COMPOSITION CHECK ABOVE CANNOT SEE A HARDCODE, which is why this
+// one exists. `wallHeightFt * 12 === POUR * 12 + SILL` is satisfied just as
+// well by a typed 97.5 as by the sum -- both sides read 97.5 and the check is
+// green. Measured, not reasoned: the mutation that replaced the expression
+// with `97.5 / 12` survived every other check in this file.
+//
+// The only thing that can tell them apart is whether the height MOVES when
+// the pour does, so this loads a second copy of the module with a 9'-0" pour
+// and requires the height to follow by exactly a foot. A typed number does
+// not move; the sum does. This is the shape section-table-harness pins its
+// kerf in -- "a check against the literal passes with the value hardcoded".
+check('the height FOLLOWS the pour -- it is a sum, not a number that matches one',
+  ({ LA, src }) => {
+    const taller = src.module.replace('const FOUNDATION_POUR_FT = 8;', 'const FOUNDATION_POUR_FT = 9;');
+    if (taller === src.module) return ['the pour anchor did not match', ''];
+    const w = {};
+    // eslint-disable-next-line no-new-func
+    new Function('window', taller)(w);
+    const moved = (w.DraftLevelAssembly.defaultLevelAssembly('foundation').wallHeightFt
+      - LA.defaultLevelAssembly('foundation').wallHeightFt) * 12;
+    return [Math.round(moved * 1000) / 1000, 12];
+  });
+
+// A drafter's typed height still wins. Movie, 7 Sep, on ICF and PT SPF walls:
+// "leave them 8'1.5\" for now i will change them in the futre", "user can
+// change them". So the held decision depends on the override working.
+check('and a drafter\'s own height still beats it', ({ LA }) =>
+  [LA.normaliseLevelAssembly({ wallHeightFt: 9 }, 'foundation').wallHeightFt, 9]);
 check('an unmapped level is a plain floor', ({ LA }) =>
   [LA.levelRole(3), 'floor']);
 check('and so is a level id nobody has invented yet', ({ LA }) =>
@@ -383,7 +451,8 @@ const MUTATIONS = [
   ['PROJECT.html normalises without one', 'project',
     s => s.replace('normaliseLevelAssembly(raw, levelRole(levelId))', 'normaliseLevelAssembly(raw)')],
   ['PROJECT.html asks for a default with no role', 'project',
-    s => s.replace(': defaultLevelAssembly(levelRole(levelId)));', ': defaultLevelAssembly());')],
+    s => s.replace('const assemblyDefaults = levelId => defaultLevelAssembly(levelRole(levelId));',
+      'const assemblyDefaults = () => defaultLevelAssembly();')],
   // The map, which is where a role goes quiet rather than wrong.
   ['OVER GARAGE loses its entry in the id map', 'module',
     s => s.replace("4: 'overGarage'", "40: 'overGarage'")],
@@ -391,6 +460,26 @@ const MUTATIONS = [
     s => s.replace("2: 'entry'", "2: 'Entry'")],
   ['ENTRY loses its 2x10s', 'module',
     s => s.replace('entry: Object.freeze({ joistDepthIn: ENTRY_JOIST_IN }),', '')],
+  // The foundation, back to each of the two wrong answers it had on 6 Sep.
+  ['the foundation falls back to the framed wall again', 'module',
+    s => s.replace('foundation: Object.freeze({ wallHeightFt: FOUNDATION_WALL_TOP_FT }),', '')],
+  ['the foundation is the bare pour, sill forgotten', 'module',
+    s => s.replace('const FOUNDATION_WALL_TOP_FT = (FOUNDATION_POUR_FT * 12 + SILL_PLATE_IN) / 12;',
+      'const FOUNDATION_WALL_TOP_FT = FOUNDATION_POUR_FT;')],
+  ['the height is typed rather than composed, so the pour drifts off it', 'module',
+    s => s.replace('const FOUNDATION_WALL_TOP_FT = (FOUNDATION_POUR_FT * 12 + SILL_PLATE_IN) / 12;',
+      'const FOUNDATION_WALL_TOP_FT = 97.5 / 12;\n  const FOUNDATION_POUR_UNUSED = 0;')],
+  ['the sill is doubled -- a plate under and over', 'module',
+    s => s.replace('(FOUNDATION_POUR_FT * 12 + SILL_PLATE_IN) / 12',
+      '(FOUNDATION_POUR_FT * 12 + SILL_PLATE_IN * 2) / 12')],
+  ['the sill thickness drifts', 'module',
+    s => s.replace('const SILL_PLATE_IN = 1.5;', 'const SILL_PLATE_IN = 1.25;')],
+  ['project-page.js goes back to typing its own sill', 'projectPage',
+    s => s.replace('const SILL_PLATE_IN = window.DraftLevelAssembly.SILL_PLATE_IN;',
+      'const SILL_PLATE_IN = 1.5;')],
+  ['a drafter\'s typed foundation height stops beating the default', 'module',
+    s => s.replace('wallHeightFt: positive(raw.wallHeightFt, base.wallHeightFt),',
+      'wallHeightFt: base.wallHeightFt,')],
   // TWO MUTATIONS THAT BELONG IN THIS FILE'S TABLE AND ARE NOT IN IT:
   //
   //   OVER_GARAGE_JOIST_IN 19 1/4" -> 20" survives every check here, and
