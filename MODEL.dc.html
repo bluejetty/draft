@@ -3081,11 +3081,24 @@ class Component extends DCLogic {
   }
 
   // ─── Local drawing persistence ───────────────────────────────────────────────
-  _ensureDrawingCollections() {
-    // Items drawn from a neighbouring layer set (a wall drawn in FLOOR, a floor
-    // drawn in PLAN) stay visible in that context until the layer set changes.
-    if (!(this._courtesyWallIds instanceof Set)) this._courtesyWallIds = new Set();
-    if (!(this._courtesyFloorIds instanceof Set)) this._courtesyFloorIds = new Set();
+  // W1 STEP 1 (W0 Finding A). These were one method, and _serializeDrawing
+  // opened by calling it -- which meant the serializer's closure reached ten
+  // fields it never reads: selection sets, courtesy ids, decoded underlay
+  // images, the vertex cache. A shared serializer that inherited that whole
+  // method would take a dependency on the host page's selection state and
+  // image blobs, which is how a format module ends up unable to run outside
+  // the page it came from.
+  //
+  // So they are split by WHO NEEDS THEM, not by what they are made of. The
+  // nineteen below are the collections the saved format is built from; the
+  // ten in _ensurePageCollections belong to whoever owns the canvas.
+  //
+  // NOTHING CHANGES ORDER OR TIMING. _ensureDrawingCollections still runs
+  // both, so all nineteen of its callers behave exactly as before, and
+  // componentDidMount still calls it before _init -- so the page-only fields
+  // are initialised long before any serialize call, which is what makes it
+  // safe for _serializeDrawing to ask for its half alone.
+  _ensureSerializerCollections() {
     if (!Array.isArray(this._lines)) this._lines = [];
     if (!Array.isArray(this._walls)) this._walls = [];
     if (!Array.isArray(this._floors)) this._floors = [];
@@ -3097,22 +3110,36 @@ class Component extends DCLogic {
     if (!Array.isArray(this._roofs)) this._roofs = [];
     if (!Array.isArray(this._outlines)) this._outlines = [];
     if (!Array.isArray(this._boneyardOutlines)) this._boneyardOutlines = [];
-    if (!(this._selectedOutlines instanceof Set)) this._selectedOutlines = new Set();
-    if (!(this._selectedFenestrations instanceof Set)) this._selectedFenestrations = new Set();
-    if (!(this._selectedFixtures instanceof Set)) this._selectedFixtures = new Set();
-    if (!(this._selectedRoofs instanceof Set)) this._selectedRoofs = new Set();
-    if (!(this._selectedSurfaceOpenings instanceof Set)) this._selectedSurfaceOpenings = new Set();
-    if (!(this._selectedDimensions instanceof Set)) this._selectedDimensions = new Set();
     if (!Array.isArray(this._dimensions)) this._dimensions = [];
     if (!Array.isArray(this._columns)) this._columns = [];
     if (!Array.isArray(this._beams)) this._beams = [];
     if (!Array.isArray(this._stairs)) this._stairs = [];
     if (!Array.isArray(this._notes)) this._notes = [];
     if (!Array.isArray(this._roomTags)) this._roomTags = [];
-    if (!Array.isArray(this._vertices)) this._vertices = [];
     if (!Array.isArray(this._groups)) this._groups = [];
     if (!Array.isArray(this._underlays)) this._underlays = [];
+  }
+
+  // The page's own working state. None of it is persisted, and the serializer
+  // never reads any of it.
+  _ensurePageCollections() {
+    // Items drawn from a neighbouring layer set (a wall drawn in FLOOR, a floor
+    // drawn in PLAN) stay visible in that context until the layer set changes.
+    if (!(this._courtesyWallIds instanceof Set)) this._courtesyWallIds = new Set();
+    if (!(this._courtesyFloorIds instanceof Set)) this._courtesyFloorIds = new Set();
+    if (!(this._selectedOutlines instanceof Set)) this._selectedOutlines = new Set();
+    if (!(this._selectedFenestrations instanceof Set)) this._selectedFenestrations = new Set();
+    if (!(this._selectedFixtures instanceof Set)) this._selectedFixtures = new Set();
+    if (!(this._selectedRoofs instanceof Set)) this._selectedRoofs = new Set();
+    if (!(this._selectedSurfaceOpenings instanceof Set)) this._selectedSurfaceOpenings = new Set();
+    if (!(this._selectedDimensions instanceof Set)) this._selectedDimensions = new Set();
+    if (!Array.isArray(this._vertices)) this._vertices = [];
     if (!(this._underlayImages instanceof Map)) this._underlayImages = new Map();
+  }
+
+  _ensureDrawingCollections() {
+    this._ensureSerializerCollections();
+    this._ensurePageCollections();
   }
 
   _newDrawingItemId(type) {
@@ -3132,7 +3159,7 @@ class Component extends DCLogic {
   }
 
   _serializeDrawing() {
-    this._ensureDrawingCollections();
+    this._ensureSerializerCollections();
     const point = p => this._pointForStorage(p);
     return {
       version: DRAWING_FORMAT_VERSION,
