@@ -125,7 +125,36 @@ async function markerOn(page, mode) {
   return { peak: peakGreen(before, after), before, after };
 }
 
+// MEASURED FIRST, THEN HOISTED -- the same finding as
+// model-html-wall-colours.spec.js, and this file is the second worst in the
+// group. Timed with the JSON reporter on 7 Sep: 111.2s over two tests, 72.7s
+// and 38.6s, against a 180s per-test budget. The next slowest test outside
+// these two files is 3.8s.
+//
+// Both tests build the house and run markerOn('night'); one of them also runs
+// markerOn('day'). Every one of those is a page load plus a full canvas read,
+// and the answers are deterministic -- the same drawing, the same skins, the
+// same pixels. So the work happens once for the file.
+//
+// THIS IS THE SPEC THAT FAILED ON PR #313 with a diff that could not reach it
+// (BOARD-test-budget.md: "a change confined to LAYOUT.dc.html ... a spec whose
+// diff cannot reach it"). It was never on that board's list of heavy specs; it
+// turned up only when the group was actually timed.
+test.describe.configure({ mode: 'serial' });
+
 test.describe('MODEL.html datum marker', () => {
+  // One page for the file. The tests assert on captured numbers and pixels and
+  // touch neither the page nor the store.
+  let night, day;
+  test.beforeAll(async ({ browser }) => {
+    const page = await browser.newPage();
+    try {
+      await houseOnOldPage(page);
+      night = await markerOn(page, 'night');
+      day = await markerOn(page, 'day');
+    } finally { await page.close(); }
+  });
+
   // NO THRESHOLD, and none is needed: this is the same statistic measured on
   // two skins. draw-origin is #6a9a57 on night and #557a46 on day, so a page
   // that supplies the colour paints a LIGHTER green on night than on day. A
@@ -133,10 +162,7 @@ test.describe('MODEL.html datum marker', () => {
   // value -- so both skins paint #557a46 and the two peaks become equal.
   // Nothing here has to know what the numbers are, only which is bigger.
   test('the marker is painted in the SKIN\'s green, not the hardcoded one',
-    async ({ page }) => {
-      await houseOnOldPage(page);
-      const night = await markerOn(page, 'night');
-      const day = await markerOn(page, 'day');
+    async () => {
 
       expect(night.peak, 'the datum must add green ink to the night canvas')
         .toBeGreaterThan(0);
@@ -149,9 +175,8 @@ test.describe('MODEL.html datum marker', () => {
     });
 
   test('no datum, no marker -- the same three states as the grid',
-    async ({ page }) => {
-      await houseOnOldPage(page);
-      const { before, after } = await markerOn(page, 'night');
+    async () => {
+      const { before, after } = night;
       const green = pixels => {
         let n = 0;
         for (let i = 0; i < pixels.length; i += 4) {
