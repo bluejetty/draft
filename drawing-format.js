@@ -703,6 +703,12 @@ if (!window.DraftDrawingFormat) {
       // #276: claimedNo pins an edited BEDROOM/WC number — the ladder
       // renumbers around it. Additive; absent = auto-numbered as always.
       const claimedNo = Number(tag?.claimedNo);
+      const minDimensionFt = number(tag?.minDimensionFt, 0);
+      // Lowercased to match the minimums table's keys (bedroom, kitchen,
+      // living, wc, laundry, dz). A category with no row always passes --
+      // evaluateRoom refuses to flag a guess -- so an unknown string here
+      // is inert rather than dangerous.
+      const roomCategory = String(tag?.roomCategory ?? '').trim().toLowerCase().slice(0, 32);
       return {
         id,
         at,
@@ -711,6 +717,32 @@ if (!window.DraftDrawingFormat) {
         name,
         areaSqFt: area > 0 ? area : 0,
         underMin: tag?.underMin === true,
+        // ── THE TWO FACTS BEHIND THE UNDER MIN VERDICT ──────────────────
+        // underMin is a FINDING, and a finding in a file goes stale the
+        // moment the standard behind it moves. Its inputs are three: the
+        // area, the room's short side, and the minimums table. Only the
+        // area was ever stored, so the office could tighten its minimums,
+        // every drawing reopen, and every flag -- shown AND hidden -- stay
+        // whatever it was at the last grow. Nothing re-evaluates on load.
+        //
+        // These two are the missing FACTS. With them the verdict is
+        // recomputed against the CURRENT table on every load and underMin
+        // stops being authoritative.
+        //
+        // ABSENT IS NOT ZERO. Absence means "this verdict was valid as of
+        // the last grow", and an old drawing keeps its stored underMin
+        // untouched. Recomputing with minDimensionFt=0 would flag every
+        // room in every legacy drawing under the dimension rule -- a false
+        // accusation on a file the drafter never changed.
+        ...(minDimensionFt > 0 ? { minDimensionFt } : {}),
+        // The category is the second missing fact, and it cannot be
+        // recovered from the name. A stamp drops its `base` the moment the
+        // drafter touches or renames it (MODEL.dc.html:20420, :20521), and
+        // from then on the tag-time code falls back to the DETECTOR's live
+        // category -- which no file has ever stored. So a renamed BEDROOM
+        // reads only as its new name, and grading it off that name would
+        // grade it wrong on exactly the tags a drafter has handled most.
+        ...(roomCategory ? { roomCategory } : {}),
         stamped,
         ...(stamped && base ? { base } : {}),
         ...(stamped && Number.isInteger(claimedNo) && claimedNo > 0 ? { claimedNo } : {}),
