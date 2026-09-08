@@ -209,9 +209,13 @@ test.describe('MODEL.html unsaved edits', () => {
     await page.waitForTimeout(60);
     expect(await beacon(page), 'a tap that moved nothing is not an edit').toBe('0');
 
-    // A PAN THAT STARTS AWAY FROM THE HANDLE. The sheet slides; the drawing
-    // does not change.
-    await dragFrom(page, -120, 0, 140, 60);
+    // A PAN THAT STARTS OFF THE SELECTED WALL ENTIRELY. This used to start at
+    // (-120, 0) — along the west wall, well clear of its corners — because a
+    // wall's body was not grabbable and a press there could only pan. It is
+    // grabbable now, and that press moves the wall. So the pan starts in empty
+    // space above the drawing: press the selected wall and it travels, press
+    // anywhere else and the sheet slides, which is the whole rule.
+    await dragFrom(page, 0, -300, 140, 60);
     expect(await beacon(page), 'panning the sheet is not an edit').toBe('0');
     await expect(page.locator('#save')).toHaveText('SAVE');
   });
