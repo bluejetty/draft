@@ -69,9 +69,17 @@ function buildEnv(win, saved) {
   const levels = (saved.levels || []).map(l => ({ id: Number(l.id), name: l.name, elev: Number(l.elev) || 0 }));
   const levelIds = new Set(levels.map(l => l.id));
   const num = v => (Number.isFinite(Number(v)) ? Number(v) : null);
+  // srcId TRAVELS. This mapper used to return { x, z } and nothing else, so
+  // no point reaching the module through this env carried its BONEYARD
+  // source link -- and cut-view's body membership derives from exactly that.
+  // The effect was not a wrong answer but a silent "undecidable": every
+  // provenance check answered from the stored flag instead of the geometry
+  // it was written to test, and passed. A mirror that quietly drops a field
+  // the module reads is the audit rule wearing the harness's own hat.
   const point = raw => {
     const x = num(raw?.x), z = num(raw?.z);
-    return x === null || z === null ? null : { x, z };
+    if (x === null || z === null) return null;
+    return raw?.srcId ? { x, z, srcId: raw.srcId } : { x, z };
   };
   const walls = (saved.walls || []).map(wall => {
     const start = point(wall?.start), end = point(wall?.end);
@@ -90,6 +98,7 @@ function buildEnv(win, saved) {
     const points = (floor?.points || []).map(point).filter(Boolean);
     if (points.length < 3 || !levelIds.has(Number(floor?.levelId))) return null;
     return {
+      id: String(floor?.id || ''),
       points, levelId: Number(floor.levelId), view: floor?.view || 'floor',
       garage: floor?.garage === true, thickenedEdge: floor?.thickenedEdge === true,
     };
@@ -517,6 +526,199 @@ const leftEdgeAt = (target, reach) => {
 for (const id of ['E1', 'E2', 'E3', 'E4']) {
   check(`${id}: no ink above the tallest ridge`,
     inkIn(views[id], { uLo: -99, uHi: 99, eLo: WING_A_RIDGE + 0.2, eHi: 99 }) === 0);
+}
+
+
+// ── SECOND FIXTURE: AN ATTACHED GARAGE (board #334, item 1) ───────────
+//
+// WHY A SECOND FIXTURE AT ALL. Every check above is written for the L-house
+// -- "the far wing's ridge", "the nearer wing's eave" -- so they cannot be
+// re-pointed at another building; they would fail on its geometry rather
+// than on a defect. But repro-L-house.draft HAS NO GARAGE, and that is not
+// a small gap: this harness wires up garageOutlines and garageFoundation
+// faithfully and then never exercises either.
+//
+// MEASURED, 8 Sep 2026: disabling the garage arm of roofBaseElev entirely --
+// so every garage roof drops onto the full wall stack, the exact defect
+// boards #153 and #245 fixed -- left ALL 29 harnesses green. Only
+// tests/garage-roof-drop.spec.js noticed, at 1.2 minutes a run.
+//
+// So the garage gets its own fixture and its own checks, built through the
+// real bone path (house outline, MARK ATTACHED GARAGE, BUILD HOUSE) rather
+// than hand-assembled, because a synthetic drawing forgets exactly the
+// fields a body question is decided on.
+{
+  const gFile = path.join(ROOT, 'proto', 'repro-garage-house.draft');
+  const gSaved = JSON.parse(fs.readFileSync(gFile, 'utf8'));
+  const gEnv = buildEnv(win, gSaved);
+  const CV = win.DraftCutView;
+  const roofs = gEnv.roofs();
+  const garageRoofs = roofs.filter(r => r.garage === true);
+  const houseRoofs = roofs.filter(r => r.garage !== true);
+
+  // THE FIXTURE'S REACH, ASSERTED BEFORE IT IS TRUSTED. Every check below
+  // is a filter over a list, and a filter over an empty list passes whatever
+  // the code does -- which is the shape this repo has now catalogued a dozen
+  // times. If the fixture ever loses its garage, these say so instead of
+  // going quietly green.
+  check('garage fixture: it has a garage roof', garageRoofs.length > 0,
+    `${garageRoofs.length} garage roofs`);
+  check('garage fixture: and a house roof to tell it apart from', houseRoofs.length > 0,
+    `${houseRoofs.length} house roofs`);
+
+  // THE DERIVATION AGREES WITH THE FLAG. Stated before anything indexes the
+  // lists above, because it is the one check that still means something when
+  // the fixture has drifted -- which is exactly when it must be heard.
+  // ROOFS AND FLOORS BOTH. The sweep found floor.garage is the same stored
+  // flag in a second place, and derivable the same way.
+  const drift = CV.bodyDrift(gEnv);
+  check('body membership: stored flag and geometry agree on every roof and floor',
+    drift.length === 0,
+    drift.map(d => `${d.kind} ${d.id} stored=${d.stored} geometry=${d.geometry}`).join(', ') || 'none');
+  const garageFloors = gEnv.floors().filter(f => f.garage === true);
+  check('garage fixture: it has a garage FLOOR too, so that half is not vacuous',
+    garageFloors.length > 0, `${garageFloors.length} garage floors`);
+  check('body membership: the garage slab resolves to its outline by geometry',
+    garageFloors.length > 0 && CV.garageOfFloor(garageFloors[0], gEnv) !== null,
+    garageFloors.length ? `resolved to ${(CV.garageOfFloor(garageFloors[0], gEnv) || {}).id || 'null'}` : 'no garage floor');
+  const houseFloors = gEnv.floors().filter(f => f.garage !== true);
+  check('body membership: and a house floor does NOT, despite shared weld points',
+    houseFloors.every(f => CV.garageOfFloor(f, gEnv) === null),
+    houseFloors.map(f => `${f.id}->${(CV.garageOfFloor(f, gEnv) || {}).id || 'null'}`).join(' '));
+
+  // GUARDED, and the guard is not politeness. Mutating the fixture's stored
+  // flag to prove the drift check fires used to CRASH here instead: the
+  // reach checks above had already recorded the problem, and then the first
+  // garageRoofs[0] threw before anything printed. A harness that dies on the
+  // condition it exists to report is the audit rule wearing a different hat.
+  if (garageRoofs.length && houseRoofs.length) {
+  check('garage fixture: and garage outlines for geometry to match',
+    gEnv.garageOutlines(garageRoofs[0].sourceLevelId).length > 0,
+    `${gEnv.garageOutlines(garageRoofs[0].sourceLevelId).length} on level ${garageRoofs[0].sourceLevelId}`);
+  check('garage fixture: the garage roof carries source links',
+    (garageRoofs[0].points || []).filter(pt => pt.srcId).length > 0,
+    `${(garageRoofs[0].points || []).filter(pt => pt.srcId).length} linked points`);
+
+  // SET EQUALITY, NOT OVERLAP, and this is the check that defends it. An
+  // attached garage WELDS onto the house at shared master points, so the
+  // house roof's srcIds genuinely contain two of the garage outline's. A
+  // membership test written as "shares any srcId" passes everything above
+  // and still calls the house roof a garage -- dropping the main roof a
+  // storey. Only this one goes red for it.
+  check('body membership: the house roof is NOT the garage, despite shared weld points',
+    CV.garageOfRoof(houseRoofs[0], gEnv) === null,
+    `resolved to ${(CV.garageOfRoof(houseRoofs[0], gEnv) || {}).id || 'null'}`);
+  check('body membership: and the garage roof IS, by exact match',
+    CV.garageOfRoof(garageRoofs[0], gEnv) !== null,
+    `resolved to ${(CV.garageOfRoof(garageRoofs[0], gEnv) || {}).id || 'null'}`);
+  const houseIds = new Set((houseRoofs[0].points || []).map(pt => pt.srcId).filter(Boolean));
+  const garageOutline = CV.garageOfRoof(garageRoofs[0], gEnv);
+  const shared = (garageOutline.points || [])
+    .filter(pt => pt.srcId && houseIds.has(pt.srcId)).length;
+  check('body membership: the weld really is shared, so that check is not vacuous',
+    shared > 0, `${shared} srcIds in common`);
+
+  // THE BRANCH NO HARNESS COULD SEE. A garage roof bears on its own plate
+  // over the main floor; the house roof bears on the full wall stack. Kill
+  // the garage arm of roofBaseElev and these two collapse onto each other.
+  const gStack = CV.sectionLevelStack(gEnv);
+  const garageBase = CV.roofBaseElev(garageRoofs[0], gStack, gEnv);
+  const houseBase = CV.roofBaseElev(houseRoofs[0], gStack, gEnv);
+  check('roof base: the garage roof bears BELOW the house roof',
+    garageBase < houseBase - 0.5,
+    `garage ${garageBase.toFixed(3)}ft vs house ${houseBase.toFixed(3)}ft`);
+  check('roof base: and it bears on its own plate over the main floor',
+    Math.abs(garageBase
+      - (gStack.floors[0].floorTop + Number(garageRoofs[0].plateHeightFt))) < 1e-6,
+    `${garageBase.toFixed(3)}ft vs floorTop ${gStack.floors[0].floorTop.toFixed(3)}`
+      + ` + plate ${Number(garageRoofs[0].plateHeightFt).toFixed(3)}`);
+  }
+}
+
+
+// ── THIRD FIXTURE: A COURTYARD (board #292, item 2) ───────────────────
+//
+// levelSpan took min..max of the crossing positions within one body. For a
+// U footprint the cut crosses the same body's walls with a REAL GAP between
+// the wings, and one band bridged the open courtyard -- a framed floor
+// drawn over open air, the same lie audit C5 fixed for garages, now inside
+// a single body.
+//
+// The fix bands where the FLOOR POLYGON is, not between the outermost
+// walls. Two checks below and they answer different questions: floorRuns is
+// the rule itself, and the painted fills are the proof the painter actually
+// uses it -- a correct rule wired to nothing would pass the first alone.
+{
+  const cFile = path.join(ROOT, 'proto', 'repro-courtyard-house.draft');
+  const cSaved = JSON.parse(fs.readFileSync(cFile, 'utf8'));
+  const cEnv = buildEnv(win, cSaved);
+  const CV = win.DraftCutView;
+
+  // Straight across the open end of the U, at z = +4: through the left leg,
+  // the courtyard, and the right leg.
+  const cut = {
+    id: 'S1', name: 'S1', elev: 0, levelId: null,
+    startPt: { x: -40, z: 4 }, endPt: { x: 40, z: 4 }, dirVec: { x: 0, z: 1 },
+  };
+  const axis = { x: cut.dirVec.z, z: -cut.dirVec.x };
+  const framed = cEnv.floors().filter(f => (f.view || 'plan') !== 'foundation'
+    && !f.garage && (f.points || []).length >= 3);
+
+  // THE FIXTURE'S REACH. A U that is not a U proves nothing about gaps.
+  check('courtyard fixture: it has framed floors', framed.length > 0,
+    `${framed.length} framed floors`);
+  check('courtyard fixture: and they are U-shaped, not rectangles',
+    framed.every(f => f.points.length > 4),
+    `corners ${framed.map(f => f.points.length).join('/')}`);
+
+  if (framed.length) {
+    const runs = CV.floorRuns(cut, axis, [framed[0]]);
+    check('courtyard: the cut yields TWO floor runs, not one',
+      runs.length === 2,
+      `${runs.length} runs: ${runs.map(r => `${r.min.toFixed(1)}..${r.max.toFixed(1)}`).join(' | ')}`);
+    if (runs.length === 2) {
+      const gap = runs[1].min - runs[0].max;
+      check('courtyard: with real open air between them', gap > 1,
+        `gap ${gap.toFixed(2)}ft`);
+      // NOT VACUOUS: the two runs must also be real floor, or "two runs"
+      // could be satisfied by two slivers either side of nothing.
+      check('courtyard: and both runs are real floor, not slivers',
+        runs.every(r => r.max - r.min > 1),
+        runs.map(r => (r.max - r.min).toFixed(2) + 'ft').join(', '));
+    }
+    // THE CONTROL. The same rule over a solid rectangle must give ONE run,
+    // or the fix has simply learned to split everything.
+    const rect = [{ x: -10, z: -10 }, { x: 10, z: -10 }, { x: 10, z: 10 }, { x: -10, z: 10 }];
+    check('courtyard: a solid floor still gives ONE run',
+      CV.floorRuns(cut, axis, [{ points: rect }]).length === 1,
+      `${CV.floorRuns(cut, axis, [{ points: rect }]).length} runs over a plain rectangle`);
+  }
+
+  // AND THE PAINTER USES IT. Band fills carry their own ink, so they can be
+  // counted without inverting the transform; widths are compared as a ratio,
+  // which is scale-free.
+  const BAND_INK = 'rgba(89,128,166,0.15)';
+  const rec = recordingCtx();
+  CV.drawCutView(cEnv, rec.ctx, 900, 600, cut);
+  const bands = rec.fills.filter(f => f.ink === BAND_INK && f.rect);
+  check('courtyard: the section paints floor bands at all', bands.length > 0,
+    `${bands.length} band fills`);
+  if (bands.length) {
+    const byRow = {};
+    bands.forEach(b => { const k = Math.round(b.rect.y); (byRow[k] = byRow[k] || []).push(b.rect); });
+    const rows = Object.values(byRow);
+    check('courtyard: every storey wears TWO bands, not one across the gap',
+      rows.every(r => r.length === 2),
+      rows.map(r => `${r.length}`).join('/') + ' bands per storey');
+    const bridged = rows.filter(r => {
+      const left = Math.min(...r.map(x => x.x));
+      const right = Math.max(...r.map(x => x.x + x.w));
+      const painted = r.reduce((sum, x) => sum + x.w, 0);
+      return painted > (right - left) * 0.9;
+    });
+    check('courtyard: and the courtyard is left unpainted', bridged.length === 0,
+      `${bridged.length} storeys painted across the gap`);
+  }
 }
 
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
