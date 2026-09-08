@@ -165,9 +165,79 @@ if (!window.DraftWashroom) {
     };
   };
 
+  // ── STAIR LANDING ZONES — a general rule, not a washroom one ───────────
+  // Every stair run gets a keep-out at its top AND its bottom: minimum
+  // 3'-0", preferred 3'-6", the full width of the run. Nothing AUTO-PLACED
+  // may occupy it.
+  //
+  // IT BINDS THE MACHINE, NOT THE HUMAN. A drafter may put whatever they
+  // like on a landing -- they can see the stair. This exists because the
+  // machine cannot, and a closet dealt onto the bottom step is the kind of
+  // thing that gets drawn, printed and built before anyone looks.
+  //
+  // Stated here because the washroom is the first caller, not because it
+  // belongs to washrooms: closets, kitchens and built-ins all want it, and
+  // the second caller should find it already written.
+  const LANDING_MIN_FT = 3;
+  const LANDING_PREFERRED_FT = 3.5;
+
+  const landingZones = (stairs, { depthFt = LANDING_PREFERRED_FT } = {}) =>
+    (stairs || []).flatMap(stair => {
+      const a = stair.start, b = stair.end;
+      if (!a || !b) return [];
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len = Math.hypot(dx, dz);
+      if (len < 1e-6) return [];
+      const ux = dx / len, uz = dz / len;          // along the run
+      const px = -uz, pz = ux;                     // across it
+      const half = (Number(stair.widthFt) || 3) / 2;
+      // BOTH ENDS. A run has a landing at the top and one at the bottom, and
+      // which end is which does not matter to a keep-out.
+      return [
+        { at: a, sign: -1 },
+        { at: b, sign: +1 },
+      ].map(({ at, sign }) => ({
+        // The zone as its four corners, so a caller can test any shape
+        // against it rather than only an axis-aligned box.
+        corners: [
+          { x: at.x + px * half, z: at.z + pz * half },
+          { x: at.x - px * half, z: at.z - pz * half },
+          { x: at.x - px * half + ux * sign * depthFt, z: at.z - pz * half + uz * sign * depthFt },
+          { x: at.x + px * half + ux * sign * depthFt, z: at.z + pz * half + uz * sign * depthFt },
+        ],
+        depthFt,
+        stairId: stair.id ?? null,
+      }));
+    });
+
+  // ── WHICH SIDE THE WASHROOM TAKES ─────────────────────────────────────
+  // Second rule: the WC goes to the GARAGE SIDE, so living and dining own
+  // the open non-garage side.
+  //
+  // WITH NO GARAGE THE DOOR PREDICTS IT. A garage most likely lands on the
+  // side away from the front door, so the WC takes that side now and a house
+  // that grows a garage later already has the stack sitting behind it.
+  //
+  //   door centred -> left     door left -> right     door right -> left
+  //
+  // Returns 'left' or 'right' in the plan's own terms; the caller owns what
+  // those mean on its axes. `null` only when there is nothing to go on at
+  // all, which is a caller's decision to make, not a coin this should flip.
+  const garageSide = ({ garageOutlineSide = null, doorSide = null } = {}) => {
+    if (garageOutlineSide === 'left' || garageOutlineSide === 'right') return garageOutlineSide;
+    if (doorSide === 'left') return 'right';
+    if (doorSide === 'right') return 'left';
+    if (doorSide === 'centre' || doorSide === 'center') return 'left';
+    return null;
+  };
+
   window.DraftWashroom = Object.freeze({
     layout,
     closes,
+    landingZones,
+    garageSide,
+    LANDING_MIN_FT,
+    LANDING_PREFERRED_FT,
     runsForLength,
     MIN_LENGTH_IN,
     STANDARD_LENGTH_IN,

@@ -150,6 +150,69 @@ check('the two finishes are the 1" that makes 102 into 103',
 check('the floor tile grid is 12"x12"',
   Math.abs(std.tileGridFt * 12 - 12) < 1e-9, `${(std.tileGridFt * 12).toFixed(3)}"`);
 
+// ── STAIR LANDING ZONES ──────────────────────────────────────────────────
+// A general rule the washroom is only the first caller of: every run gets a
+// keep-out at top AND bottom, full width, that nothing auto-placed may
+// occupy. It binds the machine, not the human.
+const run = { id: 's1', start: { x: 0, z: 0 }, end: { x: 0, z: 10 }, widthFt: 3.5 };
+const zones = W.landingZones([run]);
+check('a stair run gets TWO landing zones, top and bottom',
+  zones.length === 2, `${zones.length} zones`);
+check('the preferred depth is 3\'-6", the minimum 3\'-0"',
+  W.LANDING_PREFERRED_FT === 3.5 && W.LANDING_MIN_FT === 3,
+  `${W.LANDING_PREFERRED_FT} / ${W.LANDING_MIN_FT}`);
+check('each zone is the full width of the run',
+  zones.every(z => {
+    const xs = z.corners.map(c => c.x);
+    return Math.abs((Math.max(...xs) - Math.min(...xs)) - run.widthFt) < 1e-9;
+  }),
+  zones.map(z => (Math.max(...z.corners.map(c => c.x)) - Math.min(...z.corners.map(c => c.x))).toFixed(2)).join(', '));
+check('and it reaches its depth away from the step',
+  zones.every(z => {
+    const zs = z.corners.map(c => c.z);
+    return Math.abs((Math.max(...zs) - Math.min(...zs)) - W.LANDING_PREFERRED_FT) < 1e-9;
+  }),
+  zones.map(z => (Math.max(...z.corners.map(c => c.z)) - Math.min(...z.corners.map(c => c.z))).toFixed(2)).join(', '));
+
+// THE TWO ZONES ARE ON OPPOSITE SIDES, and this is the check that catches a
+// sign error. Both sitting at the same end would leave one landing bare
+// while the room looked guarded -- a keep-out that keeps nothing out.
+const zMids = zones.map(z => z.corners.reduce((sum, c) => sum + c.z, 0) / z.corners.length);
+check('one zone falls below the run and one above it',
+  Math.min(...zMids) < 0 && Math.max(...zMids) > run.end.z,
+  zMids.map(v => v.toFixed(2)).join(' and '));
+
+check('a zero-length run gets no zones rather than a divide-by-zero',
+  W.landingZones([{ start: { x: 1, z: 1 }, end: { x: 1, z: 1 } }]).length === 0,
+  JSON.stringify(W.landingZones([{ start: { x: 1, z: 1 }, end: { x: 1, z: 1 } }])));
+check('no stairs means no zones, not a throw', W.landingZones([]).length === 0, 'empty');
+// AND THE COMPANION: the fixture must have a run to zone at all, or every
+// count above is a count of nothing.
+check('the fixture really has a stair to zone',
+  Math.hypot(run.end.x - run.start.x, run.end.z - run.start.z) > 1,
+  'zero-length fixture would make the checks above vacuous');
+
+// ── WHICH SIDE ──────────────────────────────────────────────────────────
+// The WC takes the garage side so living and dining own the open one. With
+// no garage the front door predicts where the garage will land.
+check('a known garage side is taken as given',
+  W.garageSide({ garageOutlineSide: 'left' }) === 'left'
+  && W.garageSide({ garageOutlineSide: 'right' }) === 'right',
+  'garage outline');
+check('a door on the LEFT sends the WC right',
+  W.garageSide({ doorSide: 'left' }) === 'right', W.garageSide({ doorSide: 'left' }));
+check('a door on the RIGHT sends the WC left',
+  W.garageSide({ doorSide: 'right' }) === 'left', W.garageSide({ doorSide: 'right' }));
+check('a CENTRED door sends the WC left',
+  W.garageSide({ doorSide: 'centre' }) === 'left', W.garageSide({ doorSide: 'centre' }));
+check('a real garage outranks the door prediction',
+  W.garageSide({ garageOutlineSide: 'right', doorSide: 'right' }) === 'right',
+  'the prediction exists only for houses with no garage');
+// NOTHING TO GO ON IS NOT A COIN FLIP. Returning null hands the decision
+// back to the caller instead of guessing a side and looking certain.
+check('with nothing to go on it returns null rather than guessing',
+  W.garageSide({}) === null, String(W.garageSide({})));
+
 console.log(`washroom harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach(line => console.log(`  ✘ ${line}`));
