@@ -211,3 +211,51 @@ BONE placed rather than the drafter — the same meaning `auto` carries on a
 room tag, and deliberately NOT the `auto` flag on walls, which means "the
 build owns this and sweeps it before regenerating" and would delete the
 washroom on the next press.
+
+## `roomTags[].minDimensionFt` / `roomTags[].roomCategory` — the facts behind UNDER MIN
+
+A room tag carries a verdict, `underMin`. A verdict is a FINDING, and a finding
+in a file goes stale the moment the standard behind it moves. Its inputs are
+three: the room's area, its short side, and the office minimums table. Only the
+area was ever stored.
+
+So: tighten the minimums in STANDARDS, reopen any drawing, and every UNDER MIN
+flag — the ones showing AND the ones hidden — is whatever it was at the last
+grow. `evaluateRoom` had exactly one caller on the page and it was the ROOM
+TAGS button; nothing re-evaluated on load.
+
+These two keys are the missing facts.
+
+- **`minDimensionFt`** — the room's short side in feet, as measured at the last
+  grow. `room-grow.js` has always computed it (`:422`) and emitted it (`:432`);
+  the BUILD HOUSE copy-back used to drop it on the floor.
+- **`roomCategory`** — the category the room was graded under, lowercased to
+  match the table's own ids (`bedroom`, `kitchen`, `living`, `wc`, `laundry`,
+  `dz`).
+
+### Why the category has to be stored and cannot be read off the name
+
+A stamp loses its `base` the moment the drafter touches or renames it
+(`MODEL.dc.html:20420`, `:20521` — *"renamed — it left the numbering pool,
+custom forever"*). From then on the tag-time code falls back to the DETECTOR's
+live category, which no file has ever stored. A renamed BEDROOM reads only as
+its new name, so grading off the name would grade it wrong on exactly the tags
+a drafter has handled most.
+
+### ABSENT IS NOT ZERO
+
+Absence means *"this verdict was valid as of the last grow"*, and such a tag is
+left exactly as stored — no re-grade, no touch-on-load write, no migration.
+Re-grading a legacy tag with `minDimensionFt` reading 0 would flag every room
+in every drawing saved before these keys existed: a false accusation on a file
+nobody changed. Old drawings keep their stored answer until the next grow
+writes the facts down.
+
+### Where the re-grade runs
+
+Not only on load. STANDARDS is a separate page, so the minimums can change
+while a drawing sits open — the drafter edits them in another tab and tabs
+back. `_regradeRoomTags()` therefore runs at every point the minimums arrive:
+the drawing load, the `visibilitychange` re-read, and both profile-package
+apply sites. It returns how many verdicts actually changed, so a re-grade that
+did something can be told from one that did not.

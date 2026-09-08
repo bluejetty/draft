@@ -121,12 +121,28 @@ if (!window.DraftDrawingFormat) {
   // is nothing to persist for a broken one -- the same principle as storey
   // detachment in the BONE model. A drag never breaks it and neither does
   // distance; if the drafter has not said so, the lock holds.
-  const levelLocks = (rawLocks, groupIds) => {
+  // WHY A DROP REASON, AND NOT JUST A SHORTER LIST. A lock can leave this
+  // function for two completely different reasons, and the loader used to
+  // count both as file damage:
+  //
+  //   unreadable  — no id, or an id already used. The FILE is wrong, and the
+  //                 drafter should hear about it.
+  //   superseded  — the lock is fine; the drawing moved on. Its members were
+  //                 deleted, or enough of them were that fewer than two are
+  //                 left. That is a DELETION doing exactly what a deletion
+  //                 does, and reporting it as "incomplete and could not be
+  //                 loaded" accuses the drafter of a broken file over
+  //                 geometry they removed on purpose.
+  //
+  // `drops` is a caller-supplied sink, so the rules stay in one place instead
+  // of being re-derived at the call site where they would drift.
+  const levelLocks = (rawLocks, groupIds, drops = null) => {
     const known = groupIds instanceof Set ? groupIds : new Set(groupIds || []);
     const seen = new Set();
+    const note = (id, reason) => { if (drops) drops.push({ id, reason }); };
     return (Array.isArray(rawLocks) ? rawLocks : []).map(lock => {
       const id = String(lock?.id || '').trim();
-      if (!id || seen.has(id)) return null;
+      if (!id || seen.has(id)) { note(id || null, 'unreadable'); return null; }
       // Members must be groups that actually survived the load. A group the
       // loader dropped as damaged would otherwise leave a lock pointing at
       // nothing, and a lock with one live member silently stops locking.
@@ -137,7 +153,7 @@ if (!window.DraftDrawingFormat) {
       // disagree, so a shorter one is dropped rather than kept as a lock
       // that can never do anything -- which would read, in the file and on
       // screen, exactly like a lock that works.
-      if (members.length < 2) return null;
+      if (members.length < 2) { note(id, 'superseded'); return null; }
       seen.add(id);
       return {
         id,
@@ -703,6 +719,12 @@ if (!window.DraftDrawingFormat) {
       // #276: claimedNo pins an edited BEDROOM/WC number — the ladder
       // renumbers around it. Additive; absent = auto-numbered as always.
       const claimedNo = Number(tag?.claimedNo);
+      const minDimensionFt = number(tag?.minDimensionFt, 0);
+      // Lowercased to match the minimums table's keys (bedroom, kitchen,
+      // living, wc, laundry, dz). A category with no row always passes --
+      // evaluateRoom refuses to flag a guess -- so an unknown string here
+      // is inert rather than dangerous.
+      const roomCategory = String(tag?.roomCategory ?? '').trim().toLowerCase().slice(0, 32);
       return {
         id,
         at,
@@ -711,6 +733,32 @@ if (!window.DraftDrawingFormat) {
         name,
         areaSqFt: area > 0 ? area : 0,
         underMin: tag?.underMin === true,
+        // ── THE TWO FACTS BEHIND THE UNDER MIN VERDICT ──────────────────
+        // underMin is a FINDING, and a finding in a file goes stale the
+        // moment the standard behind it moves. Its inputs are three: the
+        // area, the room's short side, and the minimums table. Only the
+        // area was ever stored, so the office could tighten its minimums,
+        // every drawing reopen, and every flag -- shown AND hidden -- stay
+        // whatever it was at the last grow. Nothing re-evaluates on load.
+        //
+        // These two are the missing FACTS. With them the verdict is
+        // recomputed against the CURRENT table on every load and underMin
+        // stops being authoritative.
+        //
+        // ABSENT IS NOT ZERO. Absence means "this verdict was valid as of
+        // the last grow", and an old drawing keeps its stored underMin
+        // untouched. Recomputing with minDimensionFt=0 would flag every
+        // room in every legacy drawing under the dimension rule -- a false
+        // accusation on a file the drafter never changed.
+        ...(minDimensionFt > 0 ? { minDimensionFt } : {}),
+        // The category is the second missing fact, and it cannot be
+        // recovered from the name. A stamp drops its `base` the moment the
+        // drafter touches or renames it (MODEL.dc.html:20420, :20521), and
+        // from then on the tag-time code falls back to the DETECTOR's live
+        // category -- which no file has ever stored. So a renamed BEDROOM
+        // reads only as its new name, and grading it off that name would
+        // grade it wrong on exactly the tags a drafter has handled most.
+        ...(roomCategory ? { roomCategory } : {}),
         stamped,
         ...(stamped && base ? { base } : {}),
         ...(stamped && Number.isInteger(claimedNo) && claimedNo > 0 ? { claimedNo } : {}),

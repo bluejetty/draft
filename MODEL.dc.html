@@ -3055,7 +3055,9 @@ class Component extends DCLogic {
           this.setState({ structureStandards: normaliseStructureStandards(standards.content.model.structureStandards) });
         }
         if (standards?.content?.model?.roomMinimums) {
-          this.setState({ roomMinimums: window.DraftRoomStandards.normaliseRoomMinimums(standards.content.model.roomMinimums) });
+          this.setState(
+            { roomMinimums: window.DraftRoomStandards.normaliseRoomMinimums(standards.content.model.roomMinimums) },
+            () => { if (this._regradeRoomTags()) this._redrawOverlay(); });
         }
         if (standards?.content?.model?.roomTray) {
           this.setState({ roomTray: window.DraftRoomStandards.normaliseRoomTray(standards.content.model.roomTray) });
@@ -3388,6 +3390,11 @@ class Component extends DCLogic {
         ...(tag.stamped === true && tag.auto === true ? { auto: true } : {}),
         ...(tag.stamped === true && tag.closetDeclined === true ? { closetDeclined: true } : {}),
         underMin: tag.underMin === true,
+        // The two facts the verdict is made of. Written only when known, so
+        // a tag that has never been graded stays absent rather than storing
+        // a zero that would read as "0 feet wide" on the next load.
+        ...(tag.minDimensionFt > 0 ? { minDimensionFt: tag.minDimensionFt } : {}),
+        ...(tag.roomCategory ? { roomCategory: tag.roomCategory } : {}),
         layer: ROOM_TAG_LAYER,
       })),
       nextRoomTagId: this._nextRoomTagId || 1,
@@ -4212,6 +4219,10 @@ class Component extends DCLogic {
     const patch = this._profileStatePatch(pkg);
     if (!Object.keys(patch).length) return;
     this.setState(patch, () => {
+      // A package that carries new minimums re-grades the tags that can be
+      // re-graded. Guarded, so applying a settings package with no minimums
+      // in it does nothing here.
+      if ('roomMinimums' in patch && this._regradeRoomTags()) this._redrawOverlay();
       if (saveDrawing) this._markUnsaved();
     });
   }
@@ -4238,7 +4249,9 @@ class Component extends DCLogic {
       const perfOn = typeof patch.perfNoticeOn === 'boolean' ? patch.perfNoticeOn : this.state.perfNoticeOn;
       patch.perfNotice = perfOn === true && !perfOff;
     }
-    this.setState(patch);
+    this.setState(patch, () => {
+      if ('roomMinimums' in patch && this._regradeRoomTags()) this._redrawOverlay();
+    });
   }
 
   // PROJECT lives on its own page now (boards #158/#187) — the top-bar
@@ -5814,6 +5827,9 @@ class Component extends DCLogic {
         ...roomTags.map(tag => tag.id + 1),
         Number.isInteger(saved.nextRoomTagId) ? saved.nextRoomTagId : 1,
       );
+      // The stored underMin is only the answer to the LAST grow's question.
+      // Tags carrying their own facts get asked again, against today's table.
+      this._regradeRoomTags();
       const storedUnderlays = Array.isArray(saved.underlays)
         ? saved.underlays.map(underlay => ({ ...underlay, levelId: migrateLevelId(underlay?.levelId) }))
         : saved.underlays;
@@ -5930,9 +5946,21 @@ class Component extends DCLogic {
        // are group ids, and the validator drops a member naming a group the
        // loader threw away. Read first, it would keep locks pointing at
        // nothing -- which looks exactly like a lock that works.
+       // A lock the drawing outgrew is NOT a damaged file. Deleting a level
+       // takes its assemblies, which can leave a lock with fewer than two
+       // members -- a deletion doing what a deletion does. Only a lock we
+       // genuinely could not READ counts toward the damage tally; the rest
+       // is stated plainly to the console as what IS, and accuses nobody.
+       const lockDrops = [];
        this._levelLocks = format.levelLocks(saved.levelLocks,
-         new Set(this._groups.map(group => group.id)));
-       skipped += damaged(saved.levelLocks, this._levelLocks.length);
+         new Set(this._groups.map(group => group.id)), lockDrops);
+       skipped += lockDrops.filter(drop => drop.reason === 'unreadable').length;
+       const superseded = lockDrops.filter(drop => drop.reason === 'superseded');
+       if (superseded.length) {
+         console.info(`${superseded.length} LEVEL LOCK${superseded.length === 1 ? '' : 'S'} `
+           + `no longer ${superseded.length === 1 ? 'joins' : 'join'} two levels `
+           + `and did not load: ${superseded.map(drop => drop.id).join(', ')}`);
+       }
        const lockNums = this._levelLocks
          .map(lock => Number(String(lock.id).replace(/^lock-/, '')))
          .filter(Number.isInteger);
@@ -20258,16 +20286,23 @@ class Component extends DCLogic {
       // BEDRM/BEDROOM naming already reads. Nothing blocks or auto-fixes.
       // A stamped room grades under the STAMP's category where it has one
       // (a custom-named stamp falls back to the fixtures' vote).
+      // The category is settled HERE and stored with the verdict. A stamp
+      // that has been touched or renamed has no `base` left, so this falls
+      // back to the detector's live category -- which is exactly why it has
+      // to be written down: on the next load there is no detector running.
+      const category = room.stampOwner
+        ? (window.DraftRoomStandards.stampCategory(room.stampOwner.base) || room.category)
+        : room.category;
       const verdict = window.DraftRoomStandards.evaluateRoom({
-        category: room.stampOwner
-          ? (window.DraftRoomStandards.stampCategory(room.stampOwner.base) || room.category)
-          : room.category,
+        category,
         insideSqFt: room.insideSqFt,
         minDimensionFt: room.minSide,
       }, this.state.roomMinimums);
       if (room.stampOwner) {
         room.stampOwner.areaSqFt = Math.round(room.insideSqFt * 10) / 10;
         room.stampOwner.underMin = !verdict.ok;
+        room.stampOwner.minDimensionFt = room.minSide;
+        room.stampOwner.roomCategory = category;
         // #276: the room's loop rides the tag (transient) so the WC
         // fixture suffix can read live at paint time.
         room.stampOwner._roomPts = room.loop.points;
@@ -20288,11 +20323,48 @@ class Component extends DCLogic {
         name,
         areaSqFt: Math.round(room.insideSqFt * 10) / 10,
         underMin: !verdict.ok,
+        minDimensionFt: room.minSide,
+        roomCategory: category,
         _roomPts: room.loop.points, // transient — the WC suffix reads it live
         layer: ROOM_TAG_LAYER,
       });
     });
     return rooms.length;
+  }
+
+  // RE-GRADE EVERY TAG THAT CARRIES ITS OWN FACTS.
+  //
+  // underMin in a file is a finding, and a finding goes stale when the
+  // standard behind it moves. This runs wherever the minimums land -- on
+  // load, and on the visibilitychange re-read, because STANDARDS is a
+  // separate page and the drafter can tighten a minimum and tab straight
+  // back without reloading anything.
+  //
+  // A TAG WITHOUT THE FACTS IS LEFT ALONE. Absence is not zero: it means
+  // the verdict was valid as of the last grow, and there is nothing here
+  // to improve on. Grading it anyway -- with minDimensionFt reading 0 and
+  // no category -- would flag every room in every drawing saved before
+  // this field existed, which is a false accusation on a file nobody
+  // touched. Old drawings keep their stored answer until the next grow
+  // writes the facts down.
+  //
+  // Returns how many verdicts actually CHANGED, so a caller can tell a
+  // re-grade that did something from one that did not.
+  _regradeRoomTags() {
+    const minimums = this.state.roomMinimums;
+    if (!minimums || !window.DraftRoomStandards) return 0;
+    let changed = 0;
+    this._roomTags.forEach(tag => {
+      if (!(tag.minDimensionFt > 0) || !(tag.areaSqFt > 0) || !tag.roomCategory) return;
+      const verdict = window.DraftRoomStandards.evaluateRoom({
+        category: tag.roomCategory,
+        insideSqFt: tag.areaSqFt,
+        minDimensionFt: tag.minDimensionFt,
+      }, minimums);
+      if (tag.underMin !== !verdict.ok) changed += 1;
+      tag.underMin = !verdict.ok;
+    });
+    return changed;
   }
 
   _clearRoomTags() {
@@ -20858,6 +20930,11 @@ class Component extends DCLogic {
         if (!tag) return;
         tag.areaSqFt = Math.round(room.insideSqFt * 10) / 10;
         tag.underMin = room.underMin === true;
+        // room-grow already computes and sends both facts (room-grow.js:422,
+        // :432); this used to drop them and keep only the verdict.
+        if (room.minDimensionFt > 0) tag.minDimensionFt = room.minDimensionFt;
+        const grownCategory = window.DraftRoomStandards.stampCategory(room.base);
+        if (grownCategory) tag.roomCategory = grownCategory;
         if (room.underMin) result.flagged += 1;
         if (!room.companion) result.rooms += 1;
       });
