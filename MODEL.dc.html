@@ -13573,37 +13573,20 @@ class Component extends DCLogic {
           this.setState({ drawingMessage: notes.join(' '), drawingMessageError: false });
         }
       }
-      // THE WASHROOM, on every silent floor. Not mid-tour, by the same Q10
-      // hold the stairs half proved: the tour walks the drafter through each
-      // floor in turn, and dealing the ones it has not reached is changing
-      // what the tour does.
+      // THE WASHROOM IS DEALT INSIDE _buildHouse, NOT HERE, and the suite is
+      // what settled that. Dealt from this point it landed BEFORE the shell,
+      // and _buildHouse then saw walls already on the level and skipped
+      // building it: four washroom walls on the main floor, no exterior
+      // walls at all, and a door that had nothing to attach to. It surfaced
+      // three specs away, in auto-dims, as a rectangle with no openings
+      // string -- nothing about the washroom looked wrong.
       //
-      // NO FREEZE HERE, AND THAT IS DELIBERATE. The first version wrapped
-      // this in _historyFrozen like the stair fill, and the mutation that
-      // should have proved it necessary passed with the freeze removed --
-      // because _dealWashrooms marks nothing unsaved, so freezing and not
-      // freezing are indistinguishable. A guard whose presence and absence
-      // look identical is not a guard, and this repo has now catalogued that
-      // shape more times than any other.
+      // It also needs the shell for its own sake: the interior region is the
+      // outline inset by the THICKEST EXTERIOR WALL, and before the build
+      // there are no exterior walls to measure.
       //
-      // The property still holds and is still pinned: the deal mutates
-      // without marking, so the build's own _markUnsaved -- still ahead of
-      // us -- records the press whole. ONE PRESS IS ONE UNDO, and the spec
-      // that proves it is tests/washroom-deal.spec.js, which goes red the
-      // moment anything in here starts marking.
-      if (!step) {
-        const dealt = this._dealWashrooms();
-        if (dealt) {
-          filled.push(`${dealt} washroom${dealt === 1 ? '' : 's'} dealt`
-            + (dealt > 1 ? ', stacked and locked' : ''));
-        }
-        if (this._washroomNotes?.length) {
-          // Said, not swallowed: a floor that could not take one is worth
-          // knowing about, and it is information rather than a warning.
-          filled.push(...this._washroomNotes.map(note => `no washroom on ${note}`));
-          this._washroomNotes = null;
-        }
-      }
+      // The Q10 hold still applies and is applied there: not mid-tour.
+      this._washroomStep = step;
       // Handed to _buildHouse for its summary: what the bone FILLED is part
       // of what the press did, and the drafter should read it in the same
       // line as the walls and the roof. Informative, never a warning.
@@ -14093,6 +14076,24 @@ class Component extends DCLogic {
     if (stairCut.cut) {
       built.push(`${stairCut.cut} stair opening${stairCut.cut === 1 ? '' : 's'}`);
       if (stairCut.nudges.length) built.push(`stair nudged ${stairCut.nudges.join(', ')} clear of beams / walls`);
+    }
+    // BOARD #315: the dealt washroom, after the shell and the stair openings
+    // and before the room growing -- the same seam the grown partitions use,
+    // and for the same reasons. The shell has to exist first (the interior
+    // region is measured off the exterior walls) and the stair openings have
+    // to be cut first (the landing zones are keep-outs the seat respects).
+    if (!this._washroomStep) {
+      const dealtWc = this._dealWashrooms();
+      if (dealtWc) {
+        built.push(`${dealtWc} washroom${dealtWc === 1 ? '' : 's'} dealt`
+          + (dealtWc > 1 ? ', stacked and locked' : ''));
+      }
+      if (this._washroomNotes?.length) {
+        // Said, not swallowed: a floor that could not take one is worth
+        // knowing, and it is information rather than a warning.
+        this._washroomNotes.forEach(note => built.push(`no washroom on ${note}`));
+        this._washroomNotes = null;
+      }
     }
     // Room growing (boards #275/#276): the stamp program becomes real 2x4
     // interior walls, routed around the stair openings just cut.
