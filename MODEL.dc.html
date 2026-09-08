@@ -3475,6 +3475,9 @@ class Component extends DCLogic {
         stretchBehavior: group.stretchBehavior || (group.fixed ? 'rigid' : 'item-geometry'),
         members: group.members.map(member => ({ type: member.type, id: member.id })),
         wallSettings: group.wallSettings ? { ...group.wallSettings } : null,
+        // Board #315: which floor a dealt washroom belongs to, so a re-press
+        // can tell a floor that HAS one from a floor that is merely silent.
+        ...(group.washroomLevelId != null ? { washroomLevelId: group.washroomLevelId } : {}),
       })),
       // Board #315: the second tier of grouping rides beside the first.
       levelLocks: (this._levelLocks || []).map(lock => ({
@@ -5910,6 +5913,8 @@ class Component extends DCLogic {
            fixed: rawGroup?.fixed === true,
            stretchBehavior: rawGroup?.fixed === true ? 'rigid' : 'item-geometry',
            members,
+           ...(Number.isFinite(Number(rawGroup?.washroomLevelId))
+             ? { washroomLevelId: Number(rawGroup.washroomLevelId) } : {}),
            wallSettings: walls.length ? {
              wallType: WALL_TYPES.some(type => type.id === settings.wallType) ? settings.wallType : firstWall.wallType,
              baseHeight: Number.isFinite(Number(settings.baseHeight)) ? Number(settings.baseHeight) : firstWall.baseHeight,
@@ -6411,6 +6416,11 @@ class Component extends DCLogic {
      // the groups they join, for the same reason.
      this._levelLocks = [];
      this._nextLevelLockId = 1;
+     // Board #315: a floor whose dealt washroom the drafter deleted has
+     // spoken — the bone deals it none for the rest of the session. Same
+     // shape as _declinedGrowEdges, and the same reason: silence is what
+     // Q17 fills, and a deletion is not silence.
+     this._washroomDeclined = new Set();
      this._nextGroupId = 1;
      this._nextDrawingItemId = 1;
     this._nextDimensionId = 1;
@@ -13563,6 +13573,37 @@ class Component extends DCLogic {
           this.setState({ drawingMessage: notes.join(' '), drawingMessageError: false });
         }
       }
+      // THE WASHROOM, on every silent floor. Not mid-tour, by the same Q10
+      // hold the stairs half proved: the tour walks the drafter through each
+      // floor in turn, and dealing the ones it has not reached is changing
+      // what the tour does.
+      //
+      // NO FREEZE HERE, AND THAT IS DELIBERATE. The first version wrapped
+      // this in _historyFrozen like the stair fill, and the mutation that
+      // should have proved it necessary passed with the freeze removed --
+      // because _dealWashrooms marks nothing unsaved, so freezing and not
+      // freezing are indistinguishable. A guard whose presence and absence
+      // look identical is not a guard, and this repo has now catalogued that
+      // shape more times than any other.
+      //
+      // The property still holds and is still pinned: the deal mutates
+      // without marking, so the build's own _markUnsaved -- still ahead of
+      // us -- records the press whole. ONE PRESS IS ONE UNDO, and the spec
+      // that proves it is tests/washroom-deal.spec.js, which goes red the
+      // moment anything in here starts marking.
+      if (!step) {
+        const dealt = this._dealWashrooms();
+        if (dealt) {
+          filled.push(`${dealt} washroom${dealt === 1 ? '' : 's'} dealt`
+            + (dealt > 1 ? ', stacked and locked' : ''));
+        }
+        if (this._washroomNotes?.length) {
+          // Said, not swallowed: a floor that could not take one is worth
+          // knowing about, and it is information rather than a warning.
+          filled.push(...this._washroomNotes.map(note => `no washroom on ${note}`));
+          this._washroomNotes = null;
+        }
+      }
       // Handed to _buildHouse for its summary: what the bone FILLED is part
       // of what the press did, and the drafter should read it in the same
       // line as the walls and the roof. Informative, never a warning.
@@ -16908,6 +16949,202 @@ class Component extends DCLogic {
     else target.delete(item);
   }
 
+  // ─── THE DEALT WASHROOM (board #315) ────────────────────────────────────
+  // One three-piece WC per silent floor, built from washroom.js, grouped
+  // rigid, seated by the placement rules, then stacked and locked.
+
+  // The interior region: the outline inset by the thickest exterior plan
+  // wall. Same derivation _roomGrowInputs uses -- and taken from there
+  // rather than written again, because two insets that disagree put the
+  // washroom and the grown walls in different rooms.
+  _washroomInterior(levelId) {
+    const outline = this._houseOutline(levelId);
+    if (!outline || outline.points.length < 3) return null;
+    const thickest = this._walls
+      .filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan'
+        && this._edgeOnOutline(wall.start, wall.end, outline))
+      .reduce((most, wall) => {
+        const def = WALL_TYPES.find(type => type.id === (wall.wallType || 'stud_2x6'));
+        return Math.max(most, def ? def.totalIn : 0);
+      }, WALL_TYPES.find(type => type.id === 'stud_2x6').totalIn);
+    const points = window.DraftGeometry2D.offsetOutline(
+      outline.points.map(pt => ({ x: pt.x, z: pt.z })), -(thickest / 12));
+    if (!points || points.length < 3) return null;
+    const xs = points.map(pt => pt.x), zs = points.map(pt => pt.z);
+    return {
+      points,
+      minX: Math.min(...xs), maxX: Math.max(...xs),
+      minZ: Math.min(...zs), maxZ: Math.max(...zs),
+    };
+  }
+
+  // WHICH SIDE. The garage outline answers when there is one.
+  //
+  // THE DOOR PREDICTION CANNOT RUN HERE, and that is worth stating rather
+  // than leaving as a silent gap: washroom.js can predict the garage side
+  // from the front door, but the deal happens BEFORE _buildHouse places any
+  // opening, so on a bare outline there is no door to read. When no garage
+  // exists the deal takes washroom.js's centred-door answer. Wiring the
+  // prediction properly means dealing after the openings, which reorders the
+  // build -- a bigger change than this board, and not one to make quietly.
+  _washroomSide(levelId) {
+    const garages = this._garageOutlines(levelId) || [];
+    if (!garages.length) return window.DraftWashroom.garageSide({ doorSide: 'centre' });
+    const interior = this._washroomInterior(levelId);
+    if (!interior) return null;
+    const mid = (interior.minX + interior.maxX) / 2;
+    const garageMid = garages[0].points.reduce((sum, pt) => sum + pt.x, 0) / garages[0].points.length;
+    return garageMid < mid ? 'left' : 'right';
+  }
+
+  // Does a rectangle overlap any stair landing zone? Corner-in-box both
+  // ways, which catches the case a one-way test misses: a small zone
+  // entirely inside the washroom has no corner inside the washroom's own
+  // corners... and would read as clear.
+  _hitsLandingZone(rect, zones) {
+    const inRect = (pt, r) => pt.x >= r.minX - 1e-9 && pt.x <= r.maxX + 1e-9
+      && pt.z >= r.minZ - 1e-9 && pt.z <= r.maxZ + 1e-9;
+    const boxOf = corners => ({
+      minX: Math.min(...corners.map(c => c.x)), maxX: Math.max(...corners.map(c => c.x)),
+      minZ: Math.min(...corners.map(c => c.z)), maxZ: Math.max(...corners.map(c => c.z)),
+    });
+    return (zones || []).some(zone => {
+      const zb = boxOf(zone.corners);
+      const overlaps = rect.minX < zb.maxX && rect.maxX > zb.minX
+        && rect.minZ < zb.maxZ && rect.maxZ > zb.minZ;
+      return overlaps || zone.corners.some(c => inRect(c, rect));
+    });
+  }
+
+  // THE SEAT. The washroom lives WITH THE STAIRS -- beside the run, or with
+  // a hallway between -- on the garage side, mid-depth so bedrooms fit
+  // around it front and back. Returns the unit's stud rectangle, or null
+  // with a reason.
+  //
+  // A STARTING SEAT, NOT A CAGE. The whole point of the assembly and the
+  // lock is that the drafter grabs the stack and slides it where they want
+  // it; this only has to be somewhere sensible and never somewhere wrong.
+  _washroomSeat(levelId) {
+    const WR = window.DraftWashroom;
+    const interior = this._washroomInterior(levelId);
+    if (!interior) return { seat: null, why: 'no interior region on this level' };
+    // Stud footprint: the finished faces plus the walls the unit brings.
+    const wFt = (WR.STANDARD_LENGTH_IN + WR.WET_WALL_IN + WR.WALL_IN) / 12;
+    const dFt = (WR.STANDARD_WIDTH_IN + WR.WALL_IN + WR.WALL_IN) / 12;
+    const roomW = interior.maxX - interior.minX;
+    const roomD = interior.maxZ - interior.minZ;
+    if (roomW < wFt || roomD < dFt) {
+      return { seat: null, why: `the floor is ${roomW.toFixed(1)}x${roomD.toFixed(1)}ft and the unit needs ${wFt.toFixed(1)}x${dFt.toFixed(1)}ft` };
+    }
+    const side = this._washroomSide(levelId);
+    const zones = WR.landingZones(this._stairs
+      .filter(stair => stair.levelId === levelId && (stair.view || 'plan') === 'plan'));
+
+    // Against the chosen side wall, mid-depth, then slid along that wall
+    // until it is clear of every landing zone. Sliding rather than giving up
+    // because a stair near the middle of a wall leaves room either side of
+    // it, and the room is what the drafter wants -- not a refusal.
+    const x0 = side === 'right' ? interior.maxX - wFt : interior.minX;
+    const midZ = (interior.minZ + interior.maxZ) / 2 - dFt / 2;
+    const steps = [0];
+    for (let step = 0.5; step <= roomD; step += 0.5) { steps.push(step, -step); }
+    for (const step of steps) {
+      const z0 = Math.min(Math.max(midZ + step, interior.minZ), interior.maxZ - dFt);
+      const rect = { minX: x0, maxX: x0 + wFt, minZ: z0, maxZ: z0 + dFt };
+      if (!this._hitsLandingZone(rect, zones)) return { seat: rect, why: '', side };
+    }
+    // EVERY SEAT ON THAT WALL IS ON A LANDING. Reported, not forced: a
+    // washroom squatting on the bottom step is worse than none, and the
+    // drafter can place one anywhere they like.
+    return { seat: null, why: 'every seat on that wall falls in a stair landing zone' };
+  }
+
+  // Build the unit's four walls as an ordinary rigid assembly. The wet wall
+  // is 2x6 and runs the LENGTH; the other three are 2x4. Nothing here is a
+  // special kind of wall -- a drafter can retype or delete any of them.
+  _buildWashroomAt(levelId, seat) {
+    const WR = window.DraftWashroom;
+    const wet = WR.WET_WALL_IN / 12;
+    const a = { x: seat.minX, z: seat.minZ };
+    const b = { x: seat.maxX, z: seat.minZ };
+    const c = { x: seat.maxX, z: seat.maxZ };
+    const d = { x: seat.minX, z: seat.maxZ };
+    const assembly = this._levelAssembly(levelId);
+    const made = [[a, b, 'stud_2x6'], [b, c, 'stud_2x4'], [c, d, 'stud_2x4'], [d, a, 'stud_2x4']]
+      .map(([from, to, wallType]) => {
+        const wall = {
+          id: this._newDrawingItemId('wall'),
+          start: this._mergeVertex({ x: from.x, z: from.z }, levelId, 'plan'),
+          end: this._mergeVertex({ x: to.x, z: to.z }, levelId, 'plan'),
+          levelId,
+          view: 'plan',
+          wallType,
+          baseHeight: 0,
+          topHeight: assembly.wallHeightFt,
+          refLine: 'center',
+          // NOT auto, and this cost a debugging round worth recording.
+          // `auto` on a wall means "the build owns this and sweeps it before
+          // regenerating" -- it is the grown-partition flag. Marked auto, the
+          // washroom was dealt and then deleted by _buildHouse moments later
+          // IN THE SAME PRESS: four walls made, four walls swept, a group
+          // left pointing at nothing, and no error anywhere.
+          //
+          // A dealt washroom is the drafter's from the moment it lands. The
+          // bone never regenerates it; deleting it is speech and the floor
+          // stays spoken for.
+        };
+        this._walls.push(wall);
+        return wall;
+      });
+    void wet;
+    return made;
+  }
+
+  // ── THE DEAL ────────────────────────────────────────────────────────────
+  // One WC per silent floor, then one lock over all of them.
+  //
+  // SILENCE MEANS SILENCE, the same reading the stairs half settled: a floor
+  // the drafter stamped, or whose dealt WC they deleted, has spoken and gets
+  // nothing. Q17 is a ruling about silence, and deleting is speech.
+  _dealWashrooms() {
+    if (!window.DraftWashroom || !window.DraftLevelLock) return 0;
+    this._ensureDrawingCollections();
+    const declined = this._washroomDeclined || new Set();
+    const stamped = new Set(this._roomStamps().filter(tag => tag.base).map(tag => tag.levelId));
+    const floors = this._floorLevels().filter(level =>
+      !stamped.has(level.id) && !declined.has(level.id) && this._houseOutline(level.id)
+      && !(this._levelLocks || []).some(lock => lock.members.some(id =>
+        (this._groups || []).find(g => g.id === id && g.washroomLevelId === level.id))));
+    if (!floors.length) return 0;
+
+    const groups = [];
+    const notes = [];
+    floors.forEach(level => {
+      const { seat, why } = this._washroomSeat(level.id);
+      if (!seat) { notes.push(`${level.name}: ${why}`); return; }
+      const walls = this._buildWashroomAt(level.id, seat);
+      const group = {
+        id: `group-${this._nextGroupId++}`,
+        name: 'WASHROOM',
+        fixed: true,
+        stretchBehavior: 'rigid',
+        members: walls.map(wall => ({ type: 'wall', id: wall.id })),
+        wallSettings: null,
+        // Which floor this unit belongs to, so a re-press can tell a floor
+        // that already has one from a floor that is merely silent.
+        washroomLevelId: level.id,
+      };
+      this._groups.push(group);
+      groups.push(group);
+    });
+    // STACKED AND LOCKED. Every unit is seated by the same rule on the same
+    // plan, so they land in the same place by construction -- the lock is
+    // what KEEPS them there when one of them moves.
+    if (groups.length > 1) this._lockGroupsAcrossLevels(groups, 'WC STACK');
+    if (notes.length) this._washroomNotes = notes;
+    return groups.length;
+  }
+
   // ─── LEVEL LOCKS (board #315) ────────────────────────────────────────────
   // The second tier: assemblies on different floors that must hold the same
   // plan position. Its first customer is the dealt washroom, whose 2x6 wet
@@ -17142,6 +17379,10 @@ class Component extends DCLogic {
     const groups = this._selectedGroups();
     if (!groups.length) return;
     const ids = new Set(groups.map(group => group.id));
+    // Board #315: deleting a dealt washroom is SPEECH. Recorded before the
+    // groups go, because afterwards there is nothing left to read it from.
+    this._groups.filter(group => ids.has(group.id) && group.washroomLevelId != null)
+      .forEach(group => (this._washroomDeclined ||= new Set()).add(group.washroomLevelId));
     this._groups = this._groups.filter(group => !ids.has(group.id));
     this._notifySelectionChanged();
     this._markUnsaved();
