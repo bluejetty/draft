@@ -253,7 +253,7 @@ planes. Low impact today, since the only reader is a spec. It crosses
 `MODEL.dc.html` and `PROJECT.html`, so it wants deciding before either side
 grows a second copy of the arithmetic.
 
-### NEW-6 · Four distance functions, and they disagree where nothing looks
+### #351 · Four distance functions, and they disagree where nothing looks
 
 Found by Skipper 8 Sep, reading ahead of Gilligan's `_distToLineSeg` collapse
 rather than after it. Verified against all four sources before being written
@@ -281,7 +281,7 @@ So a degenerate segment reads as **"right here"** to three of them and
 **"infinitely far"** to the one PR #349 collapsed onto.
 
 **Why this is a trap and not a tidy-up.** `distToSegment`'s two callers are
-proximity tests at `<= 0.6` (`:4918`) and `<= 0.8` (`:4965`), and the
+proximity tests at `<= 0.6` (`:4918`, the roof E/G tag reach) and `<= 0.8` (`:4965`), and the
 elevation harness uses its variant as an on-boundary `<= eps` (`:180`). A
 degenerate edge currently lands **inside** those thresholds; under the shared
 export it lands outside. The tag simply stops being assigned and on-boundary
