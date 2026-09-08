@@ -69,9 +69,17 @@ function buildEnv(win, saved) {
   const levels = (saved.levels || []).map(l => ({ id: Number(l.id), name: l.name, elev: Number(l.elev) || 0 }));
   const levelIds = new Set(levels.map(l => l.id));
   const num = v => (Number.isFinite(Number(v)) ? Number(v) : null);
+  // srcId TRAVELS. This mapper used to return { x, z } and nothing else, so
+  // no point reaching the module through this env carried its BONEYARD
+  // source link -- and cut-view's body membership derives from exactly that.
+  // The effect was not a wrong answer but a silent "undecidable": every
+  // provenance check answered from the stored flag instead of the geometry
+  // it was written to test, and passed. A mirror that quietly drops a field
+  // the module reads is the audit rule wearing the harness's own hat.
   const point = raw => {
     const x = num(raw?.x), z = num(raw?.z);
-    return x === null || z === null ? null : { x, z };
+    if (x === null || z === null) return null;
+    return raw?.srcId ? { x, z, srcId: raw.srcId } : { x, z };
   };
   const walls = (saved.walls || []).map(wall => {
     const start = point(wall?.start), end = point(wall?.end);
@@ -90,6 +98,7 @@ function buildEnv(win, saved) {
     const points = (floor?.points || []).map(point).filter(Boolean);
     if (points.length < 3 || !levelIds.has(Number(floor?.levelId))) return null;
     return {
+      id: String(floor?.id || ''),
       points, levelId: Number(floor.levelId), view: floor?.view || 'floor',
       garage: floor?.garage === true, thickenedEdge: floor?.thickenedEdge === true,
     };
@@ -560,10 +569,22 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   // THE DERIVATION AGREES WITH THE FLAG. Stated before anything indexes the
   // lists above, because it is the one check that still means something when
   // the fixture has drifted -- which is exactly when it must be heard.
-  const drift = CV.roofBodyDrift(gEnv);
-  check('body membership: stored flag and geometry agree on every roof',
+  // ROOFS AND FLOORS BOTH. The sweep found floor.garage is the same stored
+  // flag in a second place, and derivable the same way.
+  const drift = CV.bodyDrift(gEnv);
+  check('body membership: stored flag and geometry agree on every roof and floor',
     drift.length === 0,
-    drift.map(d => `${d.id} stored=${d.stored} geometry=${d.geometry}`).join(', ') || 'none');
+    drift.map(d => `${d.kind} ${d.id} stored=${d.stored} geometry=${d.geometry}`).join(', ') || 'none');
+  const garageFloors = gEnv.floors().filter(f => f.garage === true);
+  check('garage fixture: it has a garage FLOOR too, so that half is not vacuous',
+    garageFloors.length > 0, `${garageFloors.length} garage floors`);
+  check('body membership: the garage slab resolves to its outline by geometry',
+    garageFloors.length > 0 && CV.garageOfFloor(garageFloors[0], gEnv) !== null,
+    garageFloors.length ? `resolved to ${(CV.garageOfFloor(garageFloors[0], gEnv) || {}).id || 'null'}` : 'no garage floor');
+  const houseFloors = gEnv.floors().filter(f => f.garage !== true);
+  check('body membership: and a house floor does NOT, despite shared weld points',
+    houseFloors.every(f => CV.garageOfFloor(f, gEnv) === null),
+    houseFloors.map(f => `${f.id}->${(CV.garageOfFloor(f, gEnv) || {}).id || 'null'}`).join(' '));
 
   // GUARDED, and the guard is not politeness. Mutating the fixture's stored
   // flag to prove the drift check fires used to CRASH here instead: the

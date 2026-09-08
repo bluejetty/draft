@@ -196,13 +196,38 @@ if (!window.DraftCutView) {
   //                  (hand-built geometry, or a drawing older than linking),
   //                  so geometry has no opinion and the stored flag is all
   //                  there is.
-  function garageOfRoof(roof, env) {
-    const ids = srcIdsOf(roof.points);
+  function garageOfShape(shape, env, levelId) {
+    const ids = srcIdsOf(shape.points);
     if (!ids.size) return undefined;
-    const level = roof.sourceLevelId != null ? roof.sourceLevelId : roof.levelId;
-    const found = env.garageOutlines(level)
+    const found = env.garageOutlines(levelId)
       .find(garage => sameIds(srcIdsOf(garage.points), ids));
     return found || null;
+  }
+
+  function garageOfRoof(roof, env) {
+    return garageOfShape(roof, env,
+      roof.sourceLevelId != null ? roof.sourceLevelId : roof.levelId);
+  }
+
+  // FLOORS HAVE THE SAME SHAPE, and the sweep found it where the work order
+  // had not looked. A garage slab is generated from the garage outline and
+  // carries its srcIds exactly -- measured on the garage fixture:
+  //
+  //   outline-22 (garage, level 1)  op-11 op-15 op-16 op-12
+  //   floor-62   (slab,   level 1)  op-11 op-15 op-16 op-12
+  //
+  // so `floor.garage` is a second stored flag of exactly the class board
+  // #293 was about.
+  //
+  // THE PAINTERS STILL READ THE FLAG, deliberately. Switching roofBaseElev
+  // to geometry was one call site and paid for itself; floor.garage is read
+  // across the slab, grade-beam, frost-wall and thickened-edge paths, and
+  // moving all of them buys no behaviour -- the drift check below already
+  // makes flag and geometry provably identical wherever geometry can
+  // decide. Written down rather than done, so the next person chooses with
+  // the measurement in hand instead of rediscovering it.
+  function garageOfFloor(floor, env) {
+    return garageOfShape(floor, env, floor.levelId);
   }
 
   // IS this a garage roof. Geometry decides whenever it can; the stored flag
@@ -221,16 +246,17 @@ if (!window.DraftCutView) {
   // regenerated against a stale flag. Returns the roofs that disagree, so a
   // spec can assert the list is empty and SAY which roof drifted when it is
   // not. Silence on drift is what board #293 was.
-  function roofBodyDrift(env) {
-    return env.roofs().filter(roof => {
-      const derived = garageOfRoof(roof, env);
-      if (derived === undefined) return false;
-      return (derived !== null) !== (roof.garage === true);
-    }).map(roof => ({
-      id: roof.id,
-      stored: roof.garage === true,
-      geometry: garageOfRoof(roof, env) !== null,
-    }));
+  function bodyDrift(env) {
+    const rows = [];
+    const scan = (items, resolve, kind) => items.forEach(item => {
+      const derived = resolve(item, env);
+      if (derived === undefined) return;          // geometry has no opinion
+      if ((derived !== null) === (item.garage === true)) return;
+      rows.push({ id: item.id, kind, stored: item.garage === true, geometry: derived !== null });
+    });
+    scan(env.roofs(), garageOfRoof, 'roof');
+    scan(env.floors(), garageOfFloor, 'floor');
+    return rows;
   }
 
   // ── WHERE A FLOOR ACTUALLY IS (board #292) ─────────────────────────────
@@ -1716,8 +1742,9 @@ if (!window.DraftCutView) {
     floorRuns,
     garageOfWall,
     garageOfRoof,
+    garageOfFloor,
     isGarageRoof,
-    roofBodyDrift,
+    bodyDrift,
     sectionRoofHeightAt,
     drawCutView,
     drawSectionWall,
