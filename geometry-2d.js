@@ -1015,6 +1015,67 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     };
   }
 
+  // A point on a segment at parameter t, straight or arced. The arc is the
+  // quadratic through start and end with lineControlPoint as its control.
+  function pointOnLineSeg(seg, t) {
+    const it = 1 - t;
+    if (!seg.bulge) {
+      return {
+        x: seg.start.x + (seg.end.x - seg.start.x) * t,
+        y: ((seg.start.y || 0) + (seg.end.y || 0)) / 2,
+        z: seg.start.z + (seg.end.z - seg.start.z) * t,
+      };
+    }
+    const c = lineControlPoint(seg);
+    return {
+      x: it * it * seg.start.x + 2 * it * t * c.x + t * t * seg.end.x,
+      y: c.y,
+      z: it * it * seg.start.z + 2 * it * t * c.z + t * t * seg.end.z,
+    };
+  }
+
+  // How far worldPt lies from a segment, straight or arced, and where along it
+  // -> { d, t }. This is what answers "did the drafter click that wall": the
+  // caller compares d against its own pixel threshold, converted to world
+  // units at the current zoom. THE THRESHOLD IS DELIBERATELY NOT HERE -- the
+  // old page uses eight different ones (30px down to 4px) for different
+  // targets, so a number baked in here would be a ninth, wrong for seven
+  // callers and invisible to all of them.
+  //
+  // EXTRACTED FROM MODEL.dc.html's _distToLineSeg, which is the spec: same
+  // degenerate rule (a segment shorter than 0.01ft is Infinity away, not zero
+  // -- a zero would make every click "hit" a collapsed wall), same 24-step
+  // sampling on the arc branch, same {d, t} shape.
+  //
+  // WHY IT IS HERE AND NOT COMPOSED FROM paramAlongSegment: that function
+  // already exports the clamped projection -- the whole t half of this sum --
+  // and eleven places in this repo wrote the same arithmetic anyway, six of
+  // them as named functions under six different names (distPtSeg, distToSeg,
+  // distToSegment, pointToSegment, _distToLineSeg). It was not composed
+  // because the halves were never named as halves. It cannot simply call
+  // paramAlongSegment either: that returns 0 for a degenerate segment where
+  // this must report Infinity, and quietly swapping one for the other would
+  // change what a click on a zero-length wall does.
+  function pointToSegment(worldPt, seg) {
+    if (!seg.bulge) {
+      const ax = seg.start.x, az = seg.start.z;
+      const dx = seg.end.x - ax, dz = seg.end.z - az;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < 0.0001) return { d: Infinity, t: 0 };
+      const t = Math.max(0, Math.min(1, ((worldPt.x - ax) * dx + (worldPt.z - az) * dz) / len2));
+      return { d: Math.hypot(worldPt.x - ax - t * dx, worldPt.z - az - t * dz), t };
+    }
+    let bestD = Infinity, bestT = 0;
+    const STEPS = 24;
+    for (let i = 0; i <= STEPS; i++) {
+      const t = i / STEPS;
+      const p = pointOnLineSeg(seg, t);
+      const d = Math.hypot(worldPt.x - p.x, worldPt.z - p.z);
+      if (d < bestD) { bestD = d; bestT = t; }
+    }
+    return { d: bestD, t: bestT };
+  }
+
   window.DraftGeometry2D = {
     distance,
     worldPerPixel,
@@ -1043,6 +1104,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     outlineSegment,
     outlineSegmentCount,
     lineControlPoint,
+    pointOnLineSeg,
+    pointToSegment,
   };
 })();
 }
