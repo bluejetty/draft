@@ -97,7 +97,14 @@ test('the 2ND floor stair stacks over the suggestion below, 6" wider beside the 
   expect(stairs[0].widthFt).toBeCloseTo(3, 5); // the basement flight keeps 3'-0"
 });
 
-test('outside the tour the bone parks on the suggestion first, then builds where it stands (Q2b)', async ({ page }) => {
+// BOARD #315 / audit Q17 SUPERSEDED Q2(b), and this test was rewritten
+// rather than adjusted. It used to pin the park: press once for a
+// suggestion, press again to build. Q17 says a bone press never stalls, so
+// the behaviour it pinned is gone and the test now pins what replaced it.
+// Rewriting a test because the RULING changed is not editing to pass; the
+// difference is that the old assertions were deleted outright instead of
+// loosened until they went green.
+test('outside the tour ONE press places the stairs and builds (Q17)', async ({ page }) => {
   await h.openModel(page, { autoStairs: true, tourEscort: true });
   await traceHouse(page, RECT);
   await expect(page.locator('[data-tour-popup]')).toBeVisible();
@@ -105,41 +112,43 @@ test('outside the tour the bone parks on the suggestion first, then builds where
   await h.waitForSaved(page);
 
   await page.locator('[data-build-house]').click();
-  await expect(page.locator('[data-model-drawing-message]')).toContainText('Stairs suggested');
   await h.waitForSaved(page);
-  let saved = await h.savedDrawing(page);
-  expect(autoStairs(saved).length).toBeGreaterThan(0);
-  expect(saved.walls).toHaveLength(0);       // parked — nothing built
-  expect(stairOpenings(saved)).toHaveLength(0);
-  const before = autoStairs(saved).map(stair => ({ x: stair.start.x, z: stair.start.z }));
+  const saved = await h.savedDrawing(page);
 
-  await page.locator('[data-build-house]').click(); // the confirming press
-  await h.waitForSaved(page);
-  saved = await h.savedDrawing(page);
-  expect(saved.walls.length).toBeGreaterThan(0);
+  // ONE press: the stairs are there AND the house is up AND the openings
+  // are cut where those stairs stand. Any one of these missing is the
+  // stall Q17 forbids.
+  expect(autoStairs(saved).length, 'the bone must place the stairs it found missing').toBeGreaterThan(0);
+  expect(saved.walls.length, 'and build in the SAME press — no park').toBeGreaterThan(0);
   expect(stairOpenings(saved).length).toBe(autoStairs(saved).length);
-  autoStairs(saved).forEach((stair, index) => {
-    expect(stair.start.x).toBeCloseTo(before[index].x, 3); // zero nudge
-    expect(stair.start.z).toBeCloseTo(before[index].z, 3);
-  });
+
+  // And it says what it filled, in the build summary rather than as a
+  // warning: informative, never a stall.
+  await expect(page.locator('[data-model-drawing-message]')).toContainText('stairs placed');
 });
 
-test('deleting the suggestion is "no thanks" — the next press builds stairless (Q6)', async ({ page }) => {
+// THE OTHER HALF OF Q17, and the reason the declined-suggestion memory
+// could not simply be deleted. "Every house always gets 1 interior stair
+// set floor-to-floor — the rule, not an option" means deleting the stairs
+// and pressing again PLACES THEM AGAIN. The old Q6 reading — deleting is
+// "no thanks", the next press builds stairless — survives only inside the
+// tour, where it is pinned separately below.
+test('deleting the stairs and pressing again places them again (Q17)', async ({ page }) => {
   await h.openModel(page, { autoStairs: true, tourEscort: true });
   await traceHouse(page, RECT);
   await expect(page.locator('[data-tour-popup]')).toBeVisible();
   await page.keyboard.press('Escape');
   await h.waitForSaved(page);
 
-  await page.locator('[data-build-house]').click(); // park + suggest
-  await expect(page.locator('[data-model-drawing-message]')).toContainText('Stairs suggested');
+  await page.locator('[data-build-house]').click();
   await h.waitForSaved(page);
-  const suggested = autoStairs(await h.savedDrawing(page)).length;
-  expect(suggested).toBeGreaterThan(0);
+  const placed = autoStairs(await h.savedDrawing(page)).length;
+  expect(placed, 'the first press must place stairs, or the delete below proves nothing')
+    .toBeGreaterThan(0);
 
-  // REMOVE LAST STAIR works on the ACTIVE level; the park suggested one
-  // per floor, so clear them floor by floor (deleting the first auto
-  // stair already declines re-suggestion).
+  // REMOVE LAST STAIR works on the ACTIVE level, so clear them floor by
+  // floor. Deleting an auto stair used to set the decline memory; outside
+  // the tour that memory no longer speaks.
   for (const level of ['2ND FL', 'MAIN FL']) {
     await page.locator('.level-name', { hasText: level }).click();
     await page.waitForTimeout(300);
@@ -147,12 +156,41 @@ test('deleting the suggestion is "no thanks" — the next press builds stairless
     await page.getByRole('button', { name: 'REMOVE LAST STAIR' }).click();
     await h.waitForSaved(page);
   }
+  expect(autoStairs(await h.savedDrawing(page))).toHaveLength(0);
 
   await page.locator('[data-build-house]').click();
   await h.waitForSaved(page);
   const saved = await h.savedDrawing(page);
-  expect(saved.stairs).toHaveLength(0);      // no re-suggest
-  expect(saved.walls.length).toBeGreaterThan(0); // built stairless
+  expect(autoStairs(saved).length, 'the set is the rule, not an option — it comes back')
+    .toBeGreaterThan(0);
+  expect(saved.walls.length).toBeGreaterThan(0);
+});
+
+// suggestStairs === false IS THE DOOR OUT, and it is the only one. Q17 is a
+// ruling about SILENCE — "drafter silence means you pick" — so a drafter who
+// turned suggestions off in Settings has spoken, and the bone builds the
+// house they asked for: no stairs, no argument, no stall.
+test('suggestStairs off still builds stairless in one press (Q17 is about silence)', async ({ page }) => {
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
+  await page.evaluate(() => {
+    const manager = window.DraftProfileManager;
+    manager.saveActive(manager.createPackage('settings', 'test-settings', {
+      model: { suggestStairs: false },
+    }));
+  });
+  await page.reload();
+  await h.waitForModelReady(page);
+
+  await traceHouse(page, RECT);
+  await expect(page.locator('[data-tour-popup]')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await h.waitForSaved(page);
+
+  await page.locator('[data-build-house]').click();
+  await h.waitForSaved(page);
+  const saved = await h.savedDrawing(page);
+  expect(autoStairs(saved), 'the setting is speech, and the bone listens').toHaveLength(0);
+  expect(saved.walls.length, 'and it still builds in one press').toBeGreaterThan(0);
 });
 
 test('an ENTRY stamp near the front wall wins the entry L, and the stacked stair mirrors it (rule A)', async ({ page }) => {
@@ -203,8 +241,8 @@ test('an ENTRY stamp near the front wall wins the entry L, and the stacked stair
   await page.reload();
   await h.waitForModelReady(page);
 
-  await page.locator('[data-build-house]').click(); // park + suggest
-  await expect(page.locator('[data-model-drawing-message]')).toContainText('Stairs suggested');
+  await page.locator('[data-build-house]').click(); // Q17: places AND builds
+  await expect(page.locator('[data-model-drawing-message]')).toContainText('stairs placed');
   await h.waitForSaved(page);
 
   const saved = await h.savedDrawing(page);

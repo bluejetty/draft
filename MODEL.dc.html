@@ -6066,6 +6066,17 @@ class Component extends DCLogic {
   // there: _historySnapshot always holds the drawing as it was before the change
   // that is being saved right now.
   _recordHistory() {
+    // FROZEN while one user action is still assembling itself. Board #315:
+    // a bone press PLACES the stairs and then builds, and the placement
+    // marks unsaved per stair — so without this the press landed its own
+    // history entries and ONE PRESS TOOK TWO UNDOS: ctrl-Z peeled the house
+    // off and left the stairs standing in an empty outline. Freezing leaves
+    // _historySnapshot at the pre-press state, so the build's own record
+    // pushes that and a single undo returns the whole press.
+    //
+    // Deliberately not a general "batch" API: one caller, named, released
+    // in a finally. The save itself is untouched — only the undo grain.
+    if (this._historyFrozen) return;
     const snapshot = JSON.stringify(this._serializeDrawing());
     if (snapshot === this._historySnapshot) return;
     if (this._historySnapshot !== null && !this._restoringHistory) {
@@ -13473,30 +13484,61 @@ class Component extends DCLogic {
         return;
       }
       const step = this.state.tour.step;
-      // Board #260, Q2(b) park-and-confirm: OUTSIDE the tour, a press with
-      // no stairs anywhere first SUGGESTS them and stops — free, and the
-      // opening never cuts at a spot nobody approved. The next press
-      // builds with the openings where the (possibly re-placed) stairs
-      // stand. Mid-tour presses never park (the tour has its own stair
-      // step), and a declined suggestion (deleted) does not come back —
-      // that press builds stairless.
-      if (!step && this.state.suggestStairs !== false && !this._stairSuggestionDeclined
+      // BOARD #315 / audit Q17: A BONE PRESS NEVER STALLS. Outside the tour
+      // a press with no stairs PLACES them and continues into the build in
+      // the same press. This supersedes board #260's Q2(b) park-and-confirm
+      // HERE and only here — two presses for one house is exactly the stall
+      // Q17 forbids. The placed stairs are ordinary editable stairs: move
+      // them, delete them, press again like any rebuild.
+      //
+      // TWO THINGS DELIBERATELY DID NOT CHANGE.
+      //
+      // THE TOUR keeps its own stair step, its offer, and its "deleting it
+      // is no thanks" memory (Q6, and the Q10 hold on tour behaviour).
+      // _stairSuggestionDeclined still governs there and is simply no
+      // longer read here — so deleting the stairs and pressing the bone
+      // places them again, because every house gets its set. Half-alive in
+      // two places was the thing to avoid; it now has exactly one meaning.
+      //
+      // suggestStairs === false STILL BUILDS STAIRLESS, and that is the
+      // reconciliation the order asked for rather than a loophole left
+      // open. Q17 is a ruling about SILENCE — "drafter silence means you
+      // pick" — and a drafter who turned suggestions off in Settings did
+      // not stay silent. That setting is the door out, and it is the only
+      // one.
+      //
+      // THE ROOM HALF OF Q17 IS NOT HERE. It was built, and it collided
+      // with board #275: deleting every stamp and pressing the bone must
+      // SWEEP the partitions away, while an empty floor must be DEALT a
+      // program — together they regrow the walls the drafter just removed.
+      // Solvable, and solved twice; but Movie's call was that the rooms can
+      // wait, and this half is the actual stall and stands on its own. The
+      // interview engine already owns the defaults, so nothing is lost by
+      // taking it separately.
+      const filled = [];
+      if (!step && this.state.suggestStairs !== false
         && !this._stairs.some(stair => (stair.view || 'plan') === 'plan')) {
-        const { placed, notes } = this._autoPlaceStairs();
+        // ONE PRESS IS ONE UNDO. The placement below marks unsaved per
+        // stair, which is right when a drafter asked for a suggestion on
+        // its own and wrong inside a press that is about to build.
+        this._historyFrozen = true;
+        let placed = [];
+        let notes = [];
+        try { ({ placed, notes } = this._autoPlaceStairs()); }
+        finally { this._historyFrozen = false; }
         if (placed.length) {
-          this.setState({
-            drawingMessage: `Stairs suggested — ${notes.join(' ')} Adjust or replace them, then press the bone to build.`,
-            drawingMessageError: false,
-          });
-          return;
-        }
-        if (notes.length) {
+          filled.push('stairs placed (no set on the plan)');
+        } else if (notes.length) {
           // Nothing fit: say why and carry on with the build — a house
           // can stand without stairs, and parking forever would trap the
-          // bone.
+          // bone. Already Q17-correct; kept exactly.
           this.setState({ drawingMessage: notes.join(' '), drawingMessageError: false });
         }
       }
+      // Handed to _buildHouse for its summary: what the bone FILLED is part
+      // of what the press did, and the drafter should read it in the same
+      // line as the walls and the roof. Informative, never a warning.
+      this._boneFilled = filled;
       if (step && step !== 'finale') {
         // A mid-tour bone press: the drafter overrode the escort. The
         // build and the tour's end are ONE action — clear the tour first
@@ -13925,7 +13967,13 @@ class Component extends DCLogic {
       });
       return false;
     }
-    const built = [];
+    // BOARD #315: what the bone FILLED leads the summary. _pressBuildHouse
+    // places the stairs before calling here, so that is part of what this
+    // press did and belongs in the same line as the walls and the roof.
+    // CONSUMED, not read: a later _buildHouse from another path must not
+    // repeat a stale note.
+    const built = this._boneFilled || [];
+    this._boneFilled = null;
     floors.forEach(level => {
       if (this._buildHouseWalls(level.id, 'plan', 'stud_2x6')) built.push(`${level.name} walls`);
       if (this._buildHouseFloor(level.id, 'floor')) built.push(`${level.name} floor`);
