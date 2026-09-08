@@ -519,6 +519,101 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
     inkIn(views[id], { uLo: -99, uHi: 99, eLo: WING_A_RIDGE + 0.2, eHi: 99 }) === 0);
 }
 
+
+// ── SECOND FIXTURE: AN ATTACHED GARAGE (board #334, item 1) ───────────
+//
+// WHY A SECOND FIXTURE AT ALL. Every check above is written for the L-house
+// -- "the far wing's ridge", "the nearer wing's eave" -- so they cannot be
+// re-pointed at another building; they would fail on its geometry rather
+// than on a defect. But repro-L-house.draft HAS NO GARAGE, and that is not
+// a small gap: this harness wires up garageOutlines and garageFoundation
+// faithfully and then never exercises either.
+//
+// MEASURED, 8 Sep 2026: disabling the garage arm of roofBaseElev entirely --
+// so every garage roof drops onto the full wall stack, the exact defect
+// boards #153 and #245 fixed -- left ALL 29 harnesses green. Only
+// tests/garage-roof-drop.spec.js noticed, at 1.2 minutes a run.
+//
+// So the garage gets its own fixture and its own checks, built through the
+// real bone path (house outline, MARK ATTACHED GARAGE, BUILD HOUSE) rather
+// than hand-assembled, because a synthetic drawing forgets exactly the
+// fields a body question is decided on.
+{
+  const gFile = path.join(ROOT, 'proto', 'repro-garage-house.draft');
+  const gSaved = JSON.parse(fs.readFileSync(gFile, 'utf8'));
+  const gEnv = buildEnv(win, gSaved);
+  const CV = win.DraftCutView;
+  const roofs = gEnv.roofs();
+  const garageRoofs = roofs.filter(r => r.garage === true);
+  const houseRoofs = roofs.filter(r => r.garage !== true);
+
+  // THE FIXTURE'S REACH, ASSERTED BEFORE IT IS TRUSTED. Every check below
+  // is a filter over a list, and a filter over an empty list passes whatever
+  // the code does -- which is the shape this repo has now catalogued a dozen
+  // times. If the fixture ever loses its garage, these say so instead of
+  // going quietly green.
+  check('garage fixture: it has a garage roof', garageRoofs.length > 0,
+    `${garageRoofs.length} garage roofs`);
+  check('garage fixture: and a house roof to tell it apart from', houseRoofs.length > 0,
+    `${houseRoofs.length} house roofs`);
+
+  // THE DERIVATION AGREES WITH THE FLAG. Stated before anything indexes the
+  // lists above, because it is the one check that still means something when
+  // the fixture has drifted -- which is exactly when it must be heard.
+  const drift = CV.roofBodyDrift(gEnv);
+  check('body membership: stored flag and geometry agree on every roof',
+    drift.length === 0,
+    drift.map(d => `${d.id} stored=${d.stored} geometry=${d.geometry}`).join(', ') || 'none');
+
+  // GUARDED, and the guard is not politeness. Mutating the fixture's stored
+  // flag to prove the drift check fires used to CRASH here instead: the
+  // reach checks above had already recorded the problem, and then the first
+  // garageRoofs[0] threw before anything printed. A harness that dies on the
+  // condition it exists to report is the audit rule wearing a different hat.
+  if (garageRoofs.length && houseRoofs.length) {
+  check('garage fixture: and garage outlines for geometry to match',
+    gEnv.garageOutlines(garageRoofs[0].sourceLevelId).length > 0,
+    `${gEnv.garageOutlines(garageRoofs[0].sourceLevelId).length} on level ${garageRoofs[0].sourceLevelId}`);
+  check('garage fixture: the garage roof carries source links',
+    (garageRoofs[0].points || []).filter(pt => pt.srcId).length > 0,
+    `${(garageRoofs[0].points || []).filter(pt => pt.srcId).length} linked points`);
+
+  // SET EQUALITY, NOT OVERLAP, and this is the check that defends it. An
+  // attached garage WELDS onto the house at shared master points, so the
+  // house roof's srcIds genuinely contain two of the garage outline's. A
+  // membership test written as "shares any srcId" passes everything above
+  // and still calls the house roof a garage -- dropping the main roof a
+  // storey. Only this one goes red for it.
+  check('body membership: the house roof is NOT the garage, despite shared weld points',
+    CV.garageOfRoof(houseRoofs[0], gEnv) === null,
+    `resolved to ${(CV.garageOfRoof(houseRoofs[0], gEnv) || {}).id || 'null'}`);
+  check('body membership: and the garage roof IS, by exact match',
+    CV.garageOfRoof(garageRoofs[0], gEnv) !== null,
+    `resolved to ${(CV.garageOfRoof(garageRoofs[0], gEnv) || {}).id || 'null'}`);
+  const houseIds = new Set((houseRoofs[0].points || []).map(pt => pt.srcId).filter(Boolean));
+  const garageOutline = CV.garageOfRoof(garageRoofs[0], gEnv);
+  const shared = (garageOutline.points || [])
+    .filter(pt => pt.srcId && houseIds.has(pt.srcId)).length;
+  check('body membership: the weld really is shared, so that check is not vacuous',
+    shared > 0, `${shared} srcIds in common`);
+
+  // THE BRANCH NO HARNESS COULD SEE. A garage roof bears on its own plate
+  // over the main floor; the house roof bears on the full wall stack. Kill
+  // the garage arm of roofBaseElev and these two collapse onto each other.
+  const gStack = CV.sectionLevelStack(gEnv);
+  const garageBase = CV.roofBaseElev(garageRoofs[0], gStack, gEnv);
+  const houseBase = CV.roofBaseElev(houseRoofs[0], gStack, gEnv);
+  check('roof base: the garage roof bears BELOW the house roof',
+    garageBase < houseBase - 0.5,
+    `garage ${garageBase.toFixed(3)}ft vs house ${houseBase.toFixed(3)}ft`);
+  check('roof base: and it bears on its own plate over the main floor',
+    Math.abs(garageBase
+      - (gStack.floors[0].floorTop + Number(garageRoofs[0].plateHeightFt))) < 1e-6,
+    `${garageBase.toFixed(3)}ft vs floorTop ${gStack.floors[0].floorTop.toFixed(3)}`
+      + ` + plate ${Number(garageRoofs[0].plateHeightFt).toFixed(3)}`);
+  }
+}
+
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach(line => console.log(`  \u2718 ${line}`));
