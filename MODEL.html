@@ -9,7 +9,12 @@
 
   Tier 1 asks one question and answers only that: can a page with no framework
   read the drawing MODEL.dc.html saved, and paint it with the same painters?
-  It reads. It does not write. Nothing here can damage a drawing.
+
+  The Write Tier begins here: SAVE writes the drawing back to the shared
+  store, revision-guarded, through the same drawing-format rules the old page
+  saves through. This page still edits nothing — a save re-emits what it
+  loaded — so the deep-compare proof (tests/write-tier.spec.js) is what says a
+  save through this page equals a save through the old one.
 
   What it carries, and why the list is this short: render-2d.js reaches for
   zero globals — every outside thing it needs arrives in an `env` object — so
@@ -90,6 +95,15 @@
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; pointer-events:none; }
 
+  #save { position:fixed; right:12px; top:12px; z-index:5; display:none;
+    font-family: var(--font-ui); font-size:13px; font-weight:600;
+    letter-spacing:0.06em; text-transform:uppercase;
+    color: var(--ink-primary); cursor:pointer;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:6px; padding:7px 16px; }
+  #save.show { display:block; }
+  #save:disabled { color: var(--ink-quiet); cursor:default; }
+
   /* The empty and error states say what to do, because a black screen with
      nothing on it is indistinguishable from a page that failed to boot. */
   #notice { position:fixed; inset:0; z-index:6; display:none;
@@ -108,6 +122,7 @@
 
 <canvas id="plan"></canvas>
 <div id="readout">loading…</div>
+<button id="save" type="button" data-model-save>SAVE</button>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 <div id="notice"><div id="notice-body"></div></div>
 
@@ -195,6 +210,7 @@
   const readout = document.getElementById('readout');
   const notice = document.getElementById('notice');
   const noticeBody = document.getElementById('notice-body');
+  const saveButton = document.getElementById('save');
 
   // View state in world units (feet). scale is screen pixels per foot.
   // Deliberately plain arithmetic: MODEL.dc.html projects through a three.js
@@ -202,6 +218,10 @@
   // came from, so tier 1 owes three.js nothing.
   const view = { cx: 0, cz: 0, scale: 6 };
   let drawing = null;
+  // The bucket revision the drawing was read at, handed back as `ifRev` on
+  // save so a write that would land on top of someone else's is REFUSED
+  // rather than silent — the same guard MODEL.dc.html saves under.
+  let storeRev = null;
   // One shared object per corner, rebuilt on every load. Only wall endpoints
   // go in it today, because mitring is the only thing that needs identity;
   // MODEL.dc.html pools lines, floors and roofs too, and this grows to match
@@ -1333,7 +1353,12 @@
     resize();
     let file = null;
     try {
-      file = await window.SharedFileStore.loadSharedFile(BUCKET);
+      // loadSharedFileAt, not loadSharedFile: the file AND the revision it was
+      // read at, in one transaction, so the rev handed to a later save really
+      // describes the drawing on screen and not some neighbouring moment.
+      const at = await window.SharedFileStore.loadSharedFileAt(BUCKET);
+      file = at.file;
+      storeRev = at.rev;
     } catch (err) {
       readout.textContent = 'store unavailable';
       say('The drawing store could not be opened',
@@ -1398,7 +1423,16 @@
         legacyWallTypes: WT.LEGACY_WALL_TYPES,
         defaultWallTopFt: 8,
       }),
-      lines: F.lines(parsed.lines, levelIds, {}),
+      // THE KNOWN LAYERS, or the normaliser flattens them. format.lines folds
+      // any layer outside this set to 'draft' (or E-POWER); passing {} here
+      // read fine — a flattened layer still paints — but the Write Tier
+      // re-emits what it loaded, so a save through this page would have
+      // quietly moved every A-DOOR and A-GLAZ line to draft. The set is
+      // derived from the same table MODEL.dc.html derives its own from.
+      lines: F.lines(parsed.lines, levelIds, {
+        knownLayerIds: new Set(window.DraftLayerStandards.DEFAULT_LAYER_STANDARDS
+          .flatMap(group => group.layers).map(layer => layer.id)),
+      }),
       floors: F.floors(parsed.floors, levelIds, { defaultFloorThickness: 0.75 }),
       // Dimensions already had a rule; this page just never called it. Running
       // it is what lets the view filter above trust that every dimension in
@@ -1435,20 +1469,91 @@
     // already the place that decides what a body may be.
     const G = window.DraftGeometry2D;
     vertexPool = [];
+    // mergeVertex copies coordinates and pool identity, NOTHING ELSE — and a
+    // stored point may carry more: srcId/offX/offZ, the link that lets a wall
+    // corner ride its BONEYARD master point (drawing-format.js stores them on
+    // purpose). A viewer could shrug that off; a page that SAVES cannot,
+    // because the pooled object is what gets re-emitted, and a save that
+    // drops srcId silently unhooks every BUILD HOUSE wall from its bone.
+    // First point into a pooled corner wins, matching the identity the old
+    // page saved: one shared object per corner has one link.
+    const pooled = (pt, wall, view, body) => {
+      const v = G.mergeVertex(vertexPool, pt, wall.levelId, view, body);
+      if (pt.srcId && !v.srcId) {
+        v.srcId = pt.srcId;
+        v.offX = pt.offX;
+        v.offZ = pt.offZ;
+      }
+      return v;
+    };
     drawing.walls.forEach(wall => {
       const view = wall.view === 'foundation' ? 'foundation' : 'plan';
       const body = wall.body || 'house';
-      wall.start = G.mergeVertex(vertexPool, wall.start, wall.levelId, view, body);
-      wall.end = G.mergeVertex(vertexPool, wall.end, wall.levelId, view, body);
+      wall.start = pooled(wall.start, wall, view, body);
+      wall.end = pooled(wall.end, wall, view, body);
     });
 
     fit();
     paint();
+    saveButton.classList.add('show');
     // Deliberately NOT awaited: the drawing is correct without its tracing
     // images and should be on screen before they arrive. Each one repaints
     // itself as it lands.
     loadUnderlayImages();
   };
+
+  // ── the Write Tier ──────────────────────────────────────────────────────────────────
+  // This page has no serializer of its own, ON PURPOSE. `drawing` was built by
+  // spreading the parsed save, so every persisted key — all 65 literal ones
+  // plus conditional layout/specs passthrough — is still sitting on it,
+  // untouched, in the shape MODEL.dc.html wrote. The four collections this
+  // page normalises on load are re-emitted through the SAME shared rules the
+  // old page saves through, and pooled wall corners go back to stored points
+  // through the same pointForStorage that wrote them. Nothing here decides
+  // what a drawing looks like; drawing-format.js already did.
+  //
+  // What a save through this page is, precisely: load → normalise → store.
+  // The deep-compare proof in tests/write-tier.spec.js holds the result
+  // against a straight legacy save of the same drawing, key for key.
+  const serializeDrawing = () => {
+    const point = p => window.DraftDrawingFormat.pointForStorage(p);
+    return {
+      ...drawing,
+      walls: drawing.walls.map(wall => ({
+        ...wall, start: point(wall.start), end: point(wall.end),
+      })),
+    };
+  };
+
+  const save = async () => {
+    if (!drawing) return;
+    saveButton.disabled = true;
+    saveButton.textContent = 'SAVING…';
+    const contents = JSON.stringify(serializeDrawing());
+    const file = new File([contents], 'model-drawing.json', { type: 'application/json' });
+    try {
+      storeRev = await window.SharedFileStore.saveSharedFile(file, BUCKET, {
+        ifRev: Number.isInteger(storeRev) ? storeRev : null,
+      });
+      saveButton.textContent = 'SAVED';
+      saveButton.disabled = false;
+    } catch (error) {
+      saveButton.textContent = 'SAVE';
+      saveButton.disabled = false;
+      // A STALE WRITE IS REFUSED, NOT MERGED. MODEL.dc.html re-reads and
+      // retries because it holds live edits worth fighting for; this page
+      // holds only what it loaded, so the honest resolution is to reload and
+      // read what is really there now.
+      if (error?.stale) {
+        say('The drawing changed underneath this page',
+          `<p>Another page saved since this one loaded. Nothing was written.
+              Reload to pick up the current drawing, then save again.</p>`);
+        return;
+      }
+      say('The save failed', `<p><code>${String(error && error.message || error)}</code></p>`);
+    }
+  };
+  saveButton.addEventListener('click', save);
 
   boot();
 })();

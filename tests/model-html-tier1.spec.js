@@ -9,8 +9,9 @@
 // walls on screen, from a drawing the OLD page saved, through the SAME
 // painters, with React and the DC runtime absent.
 //
-// It reads and never writes. MODEL.html has no save path at all, so a tier-1
-// bug cannot cost anyone a drawing.
+// These tests read and never write. MODEL.html grew a save path in the Write
+// Tier (tests/write-tier.spec.js owns that proof); nothing in THIS file
+// presses it, so a tier-1 failure still cannot cost anyone a drawing.
 //
 // The old page stays authoritative throughout: index.html still points at
 // MODEL.dc.html and nothing here changes that. When these tests grow to cover
