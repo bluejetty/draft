@@ -109,13 +109,21 @@ async function open(page) {
 // the button's own SAVED text rather than a timeout: the write is async and a
 // read that raced it would return the previous revision, which looks exactly
 // like a drag that did nothing.
+const readStore = page => page.evaluate(async bucket => {
+  const file = await window.SharedFileStore.loadSharedFile(bucket);
+  return JSON.parse(await file.text());
+}, BUCKET);
+
 async function saveAndRead(page) {
+  // The button must be OFFERING a save. Clicking a button that already reads
+  // SAVED and then asserting it reads SAVED is the shape of a check that
+  // cannot fail — and it would hand back the previous revision as if it were
+  // the edit's.
+  await expect(page.locator('#save'), 'there must be an unsaved edit to save')
+    .toHaveText('UNSAVED');
   await page.locator('#save').click();
   await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
-  return page.evaluate(async bucket => {
-    const file = await window.SharedFileStore.loadSharedFile(bucket);
-    return JSON.parse(await file.text());
-  }, BUCKET);
+  return readStore(page);
 }
 
 // The four wall ends that meet at the shared corner, by wall id.
@@ -167,7 +175,7 @@ test.describe('MODEL.html corner drag', () => {
       // CONTROL FIRST. Every assertion after the drag is a comparison against
       // this, so if the four ends did not start together — or the save did not
       // report them — the rest of the test proves nothing.
-      const before = await saveAndRead(page);
+      const before = await readStore(page);
       const b = cornerEnds(before);
       Object.entries(b).forEach(([id, v]) => {
         expect(v, `wall ${id} must start at the shared corner`)
@@ -204,7 +212,7 @@ test.describe('MODEL.html corner drag', () => {
       await houseOnOldPage(page);
       await open(page);
 
-      const before = await saveAndRead(page);
+      const before = await readStore(page);
       const b = cornerEnds(before);
       // CONTROL. The link is here before the drag, and the offsets hold — so a
       // failure after the drag is the drag's doing and not a fixture that
@@ -251,7 +259,7 @@ test.describe('MODEL.html corner drag', () => {
   test('Ctrl+Z puts the corner and its offsets back', async ({ page }) => {
     await houseOnOldPage(page);
     await open(page);
-    const before = await saveAndRead(page);
+    const before = await readStore(page);
 
     await selectWest(page);
     await dragCorner(page, 90, 50);
@@ -318,14 +326,19 @@ test.describe('MODEL.html corner drag', () => {
     async ({ page }) => {
       await houseOnOldPage(page);
       await open(page);
-      const before = cornerEnds(await saveAndRead(page));
+      const before = cornerEnds(await readStore(page));
 
       // NO SELECTION. The same press-and-drag on the same pixel must slide the
       // sheet instead of moving the corner underneath it — otherwise every pan
       // begun near a corner would drag geometry.
       await dragCorner(page, 90, 50);
 
-      const after = cornerEnds(await saveAndRead(page));
+      // Nothing was edited, so the button must not be offering to save one.
+      await expect(page.locator('#save'),
+        'a pan is not an edit and must not mark the drawing unsaved')
+        .toHaveText('SAVE');
+
+      const after = cornerEnds(await readStore(page));
       Object.keys(before).forEach(id => {
         expect(after[id], `wall ${id} must not have moved without a selection`)
           .toMatchObject({ x: before[id].x, z: before[id].z });

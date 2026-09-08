@@ -106,6 +106,9 @@
     border:1px solid var(--edge-panel); border-radius:6px; padding:7px 16px; }
   #save.show { display:block; }
   #save:disabled { color: var(--ink-quiet); cursor:default; }
+  /* Unsaved edits. The accent is the page's one attention colour, so the
+     button stops being furniture the moment there is something to lose. */
+  #save.dirty { color: var(--accent); border-color: var(--accent); }
 
   /* The empty and error states say what to do, because a black screen with
      nothing on it is indistinguishable from a page that failed to boot. */
@@ -1515,7 +1518,10 @@
       const cd = cornerDrag;
       // A grab that never armed moved nothing, so there is nothing to undo —
       // and a snapshot pushed for it would make one Ctrl+Z do nothing visible.
-      if (cd.active) undoStack.push({ vtx: cd.vtx, ...cd.before });
+      if (cd.active) {
+        undoStack.push({ vtx: cd.vtx, ...cd.before });
+        markDirty();
+      }
       cornerDrag = null;
       if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
       return;
@@ -1570,6 +1576,10 @@
       // new offset — a different drawing from the one before the drag, and one
       // whose difference nothing on screen would show.
       if (step.offX !== undefined) { step.vtx.offX = step.offX; step.vtx.offZ = step.offZ; }
+      // AN UNDO IS AN EDIT TOO. The drawing on screen no longer matches the
+      // file — going back to where you started is only free if you never
+      // saved the trip out.
+      markDirty();
       paint();
     }
   });
@@ -1723,6 +1733,9 @@
     fit();
     paint();
     saveButton.classList.add('show');
+    // CLEAN ON ARRIVAL, and stamped rather than assumed: without this the
+    // attribute is absent, and absent is not '0' to anything reading it.
+    document.body.dataset.saveDirty = '0';
     // Deliberately NOT awaited: the drawing is correct without its tracing
     // images and should be on screen before they arrive. Each one repaints
     // itself as it lands.
@@ -1742,6 +1755,35 @@
   // What a save through this page is, precisely: load → normalise → store.
   // The deep-compare proof in tests/write-tier.spec.js holds the result
   // against a straight legacy save of the same drawing, key for key.
+  // ── unsaved edits ─────────────────────────────────────────────────────────
+  // MODEL.dc.html AUTOSAVES: _markUnsaved (MODEL.dc.html:6199) writes on every
+  // edit, so its UNSAVED is only ever briefly true. THIS PAGE SAVES ON A
+  // PRESS, deliberately — the Write Tier note below says why, and the stale
+  // check in save() is the other half of it: two pages writing the same file
+  // on every drag would spend the day refusing each other. A manual save is
+  // only honest if the drafter can see there is something unsaved, so the
+  // button carries three true words: SAVE before anything is touched, UNSAVED
+  // the instant a corner moves, SAVED once it is written.
+  //
+  // THE BODY ATTRIBUTE IS LIFTED FROM MODEL.dc.html:6206 and is there for the
+  // same stated reason: it flips SYNCHRONOUSLY with the edit, where the
+  // button's text lands a frame later. A test that watched the text would be
+  // racing the edit it is checking.
+  let dirty = false;
+  const markDirty = () => {
+    if (!drawing || dirty) return;
+    dirty = true;
+    document.body.dataset.saveDirty = '1';
+    saveButton.textContent = 'UNSAVED';
+    saveButton.classList.add('dirty');
+  };
+  const markSaved = () => {
+    dirty = false;
+    document.body.dataset.saveDirty = '0';
+    saveButton.textContent = 'SAVED';
+    saveButton.classList.remove('dirty');
+  };
+
   const serializeDrawing = () => {
     const point = p => window.DraftDrawingFormat.pointForStorage(p);
     return {
@@ -1762,10 +1804,13 @@
       storeRev = await window.SharedFileStore.saveSharedFile(file, BUCKET, {
         ifRev: Number.isInteger(storeRev) ? storeRev : null,
       });
-      saveButton.textContent = 'SAVED';
+      markSaved();
       saveButton.disabled = false;
     } catch (error) {
-      saveButton.textContent = 'SAVE';
+      // The edit is still unsaved, so the button must still say so. Dropping
+      // back to a neutral SAVE here would tell a drafter whose write just
+      // failed that there is nothing to lose.
+      saveButton.textContent = dirty ? 'UNSAVED' : 'SAVE';
       saveButton.disabled = false;
       // A STALE WRITE IS REFUSED, NOT MERGED. MODEL.dc.html re-reads and
       // retries because it holds live edits worth fighting for; this page
