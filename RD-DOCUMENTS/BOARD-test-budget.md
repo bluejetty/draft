@@ -157,6 +157,63 @@ on the line is that nobody had counted what they cost. **(3) is still the real
 fix** and stays on this board: the expensive part is repeated setup, and some
 of it is reusable across the group.
 
+## (3) IS DONE, AND THE COST WAS NOT WHERE THIS BOARD SAID IT WAS
+
+**Measured 7 Sep by Gilligan**, phase by phase, before proposing anything.
+The board above guessed twice and was wrong both times:
+
+> *the expensive part is rebuilding the same house repeatedly* ... *five page
+> loads and five canvas pixel reads*
+
+| phase | share of 76s |
+|---|---|
+| build the house (openModel, coach, BUILD HOUSE, save) | **3.5%** — 2.7s total |
+| all four page loads and readout waits | **0.6%** — under 120ms each |
+| **four full-canvas pixel reads** | **96.0%** — 16.3s to 20.5s each |
+
+The house build is nearly free. The page loads are noise. **The entire cost is
+the pixel reads**, and not because reading pixels is slow — reducing the same
+canvas inside the page takes **12ms**. It is the TRANSPORT:
+
+```
+Array.from(imageData.data)  ->  3,686,400 JSON numbers over CDP   19,355 ms
+btoa of the identical bytes ->  one 4.9MB string                     526 ms
+count the whites in-page    ->  one number                            12 ms
+```
+
+So the fix was six lines, not a restructuring: both specs return base64 and
+node decodes it to a Buffer, which indexes and lengths exactly like the array
+did. Every statistic is untouched -- verified by reading one canvas both ways
+and comparing all 3,686,400 bytes: **no byte differs**.
+
+```
+wall-colours  75.3s -> 5.1s
+origin        69.6s -> 5.0s
+                       14.4x, both green
+```
+
+Only these two specs ever shipped a whole canvas to node. The other 23 that
+touch `getImageData` already reduce in the page, which is why they were never
+near the line.
+
+**Why the guess was wrong is the transferable part.** "Five page loads and five
+pixel reads" counts OPERATIONS, and operations of the same name cost wildly
+different amounts. Nothing in the description distinguishes a 12ms read from a
+19s one; the difference is invisible in the source and shows up only on a
+clock.
+
+### AND THE OLD INSTRUMENT NOW READS ZERO
+
+After #336 hoisted the setup into `beforeAll`, the JSON reporter's per-test
+`duration` -- the instrument this board used to find the 72.9s in the first
+place -- reports **1ms to 15ms** for these four tests. The work is real and
+still runs; hook time is simply not charged to a test.
+
+Anyone re-measuring these specs the way this board originally did would
+conclude they are the fastest in the suite. Use `stats.duration` or the wall
+clock. It is the same disease as the rest of this board: **a measurement that
+cannot see the thing looks exactly like the thing being absent.**
+
 So this is a floor raised under a known problem, not the problem solved.
 Anything that makes those specs slower will find the new line the way it found
 the old one — and the symptom will look identical: a spec failing on a PR whose
