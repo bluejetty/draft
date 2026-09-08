@@ -306,6 +306,77 @@ test.describe('MODEL.html unsaved edits', () => {
         .toMatchObject({ x: 0, z: 0, offX: 0 - MASTER.x + STALE, offZ: 0 - MASTER.z + STALE });
     });
 
+  // Close a page with its unload handlers running, and report whether the
+  // browser asked. Playwright only surfaces a beforeunload dialog on this
+  // path, and only as a dialog event — the wording is the browser's and is
+  // not ours to assert.
+  async function closingAsks(target) {
+    const asked = target.waitForEvent('dialog', { timeout: 3000 })
+      .then(dialog => { dialog.dismiss(); return true; })
+      .catch(() => false);
+    await target.close({ runBeforeUnload: true });
+    return asked;
+  }
+
+  test('a tab with an unsaved corner asks before it closes',
+    async ({ page, context }) => {
+      await houseOnOldPage(page);
+      await writeFixture(page);
+      // OFF THE OLD PAGE FIRST. MODEL.dc.html autosaves, and it is still live
+      // in this tab — leave it open and it writes its own drawing back over
+      // the fixture while these pages are being driven. That is exactly what
+      // happened here: the first page loaded 4 walls and the second loaded 18.
+      // Every other test in this file navigates away as its next line and
+      // never notices; these two open extra pages instead, so it has to be
+      // said out loud.
+      await openModelPage(page);
+
+      // CONTROL, and it carries the trap. Chrome will not show a beforeunload
+      // dialog on a page the user never interacted with — so a control that
+      // merely loaded and closed would come back silent no matter what the
+      // handler does, and prove nothing about it. This one CLICKS first, on
+      // empty space where nothing is selected and nothing moves. Same gesture
+      // budget as the dirty page below; the only difference between them is
+      // whether an edit happened.
+      const clean = await context.newPage();
+      await clean.goto('/MODEL.html?mode=night');
+      await expect(clean.locator('#readout')).toContainText('walls 4/4', { timeout: 6000 });
+      await clickAt(clean, 0, -300);
+      expect(await beacon(clean), 'the control page must really be clean').toBe('0');
+      expect(await closingAsks(clean),
+        'a page with nothing unsaved must close without a word').toBe(false);
+
+      // AND NOW WITH AN EDIT IN IT.
+      const edited = await context.newPage();
+      await edited.goto('/MODEL.html?mode=night');
+      await expect(edited.locator('#readout')).toContainText('walls 4/4', { timeout: 6000 });
+      await clickAt(edited, -120, 0);
+      await dragCorner(edited, 90, 50);
+      expect(await beacon(edited), 'the edited page must really be dirty').toBe('1');
+      expect(await closingAsks(edited),
+        'a moved corner that was never saved is worth a question').toBe(true);
+    });
+
+  test('saving takes the question away again', async ({ page, context }) => {
+    await houseOnOldPage(page);
+    await writeFixture(page);
+    await openModelPage(page);   // close the autosaving old page — see above
+
+    const edited = await context.newPage();
+    await edited.goto('/MODEL.html?mode=night');
+    await expect(edited.locator('#readout')).toContainText('walls 4/4', { timeout: 6000 });
+    await clickAt(edited, -120, 0);
+    await dragCorner(edited, 90, 50);
+    await pressSave(edited);
+
+    // The edit is in the file, so there is nothing left to lose and nothing to
+    // ask about. Without this a handler armed once and never disarmed would
+    // pass the test above and nag forever after.
+    expect(await beacon(edited), 'the save must have cleared the flag').toBe('0');
+    expect(await closingAsks(edited),
+      'once the edit is saved the tab must close without a word').toBe(false);
+  });
+
   test('a failed save keeps saying UNSAVED', async ({ page }) => {
     await houseOnOldPage(page);
     await writeFixture(page);

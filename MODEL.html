@@ -1827,6 +1827,33 @@
   };
   saveButton.addEventListener('click', save);
 
+  // THE LAST THING BETWEEN AN EDIT AND LOSING IT. MODEL.dc.html never needed
+  // this: _markUnsaved (MODEL.dc.html:6199) writes on every edit, so there is
+  // never a closed tab with work in it. This page saves on a press, which is
+  // the right call for a second writer on one file — and it is what puts a
+  // drafter one stray Ctrl+W away from a moved corner that never landed.
+  //
+  // The browser owns the dialog and its wording; a page can only say whether
+  // there is something to lose.
+  //
+  // TWO SPELLINGS, AND ONLY ONE OF THEM IS TESTED HERE. Mutating preventDefault
+  // away makes the spec below fail; mutating returnValue away does not — this
+  // Chromium reads preventDefault and nothing else. returnValue is the older
+  // spelling, kept for the engines that still read only it, and THE SUITE
+  // CANNOT PROVE IT DOES ANYTHING, because it runs one engine. Said out loud
+  // rather than left as a line that reads as verified: a reader who deletes it
+  // will see every test pass.
+  //
+  // This is the honest minimum, not the answer. The answer is autosave, and
+  // autosave here means deciding what happens when this page and MODEL.dc.html
+  // both hold the same file — the ifRev refusal in save() above is one half of
+  // a story that has not been written yet. Not a rung to take on the way past.
+  window.addEventListener('beforeunload', event => {
+    if (!dirty) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+
   boot();
 })();
 </script>
