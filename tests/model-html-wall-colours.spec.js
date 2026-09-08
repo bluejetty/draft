@@ -16,10 +16,31 @@ const h = require('./helpers');
 
 const BUCKET = 'model-drawing';
 
-const canvasPixels = page => page.evaluate(() => {
-  const c = document.getElementById('plan');
-  return Array.from(c.getContext('2d').getImageData(0, 0, c.width, c.height).data);
-});
+// THE WHOLE CANVAS, BUT NOT AS 3.7 MILLION JSON NUMBERS.
+//
+// `Array.from(...data)` builds a 3,686,400-element JS array and Playwright
+// serialises every element over CDP. Measured on 7 Sep: 19.4s per read, and
+// four reads are the entire cost of this file. Base64 of the identical bytes
+// is 526ms -- 37x -- because it crosses the wire as one string.
+//
+// The bytes are the same bytes. Buffer indexes and lengths exactly like the
+// array did, so the statistics below are untouched; this changes the TRUCK,
+// not the cargo.
+const canvasPixels = async (page) => {
+  const b64 = await page.evaluate(() => {
+    const c = document.getElementById('plan');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    // Chunked: String.fromCharCode.apply blows the argument limit on a
+    // 3.7MB array in one call.
+    let s = '';
+    const CHUNK = 0x8000;
+    for (let i = 0; i < d.length; i += CHUNK) {
+      s += String.fromCharCode.apply(null, d.subarray(i, i + CHUNK));
+    }
+    return btoa(s);
+  });
+  return Buffer.from(b64, 'base64');
+};
 
 // EXACT white, not near-white. The first version of this file counted pixels
 // at or above 240 on every channel and called that "the wall body, and nothing
