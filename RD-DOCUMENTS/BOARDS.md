@@ -260,6 +260,12 @@ rather than after it. Verified against all four sources before being written
 down, and recorded in `proto/outline-accessors-harness.js` beside the
 asymmetry note.
 
+**Line references measured against merged main at `8804ca5`, not against a
+working tree.** The first draft of this entry cited `:4872`/`:4905`/`:4952`,
+read correctly before the fold-in PR added ~90 lines to `MODEL.dc.html` above
+them — true when taken, stale by thirteen lines when quoted. The other three
+files were untouched and their numbers held.
+
 The repo measures point-to-segment distance in four places. They agree on
 every segment a drafter draws and disagree on the one nobody does — a
 **zero-length** segment:
@@ -267,7 +273,7 @@ every segment a drafter draws and disagree on the one nobody does — a
 | function | where | degenerate answer |
 | --- | --- | --- |
 | `pointToSegment` / `_distToLineSeg` | `geometry-2d.js` (the shared export) | `Infinity` |
-| `distToSegment` | `MODEL.dc.html:4872` (`len2 = … \|\| 1`) | distance to point `a` |
+| `distToSegment` | `MODEL.dc.html:4885` (`len2 = … \|\| 1`) | distance to point `a` |
 | `distPtSeg` | `auto-stair.js:101` (`len2 > 0 ? … : 0`) | distance to point `a` |
 | `distToSeg` | `proto/elevation-harness.js:141` | distance to point `a` |
 
@@ -275,7 +281,7 @@ So a degenerate segment reads as **"right here"** to three of them and
 **"infinitely far"** to the one PR #349 collapsed onto.
 
 **Why this is a trap and not a tidy-up.** `distToSegment`'s two callers are
-proximity tests at `<= 0.6` (`:4905`) and `<= 0.8` (`:4952`), and the
+proximity tests at `<= 0.6` (`:4918`) and `<= 0.8` (`:4965`), and the
 elevation harness uses its variant as an on-boundary `<= eps` (`:180`). A
 degenerate edge currently lands **inside** those thresholds; under the shared
 export it lands outside. The tag simply stops being assigned and on-boundary
