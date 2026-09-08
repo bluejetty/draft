@@ -139,6 +139,100 @@ if (!window.DraftCutView) {
     };
   }
 
+  // ── BODY MEMBERSHIP: ONE SOURCE OF TRUTH (board #293) ──────────────────
+  //
+  // A drawing is bodies, not one building, and every painter below has to ask
+  // "which body?" before "which level?". Until now this file answered that
+  // question three different ways:
+  //
+  //   * two VERBATIM copies of the wall rule -- one closure inside
+  //     sectionWallCrossings, an identical one inside drawElevationView.
+  //   * roofBaseElev read the STORED flag `roof.garage === true`.
+  //
+  // Two definitions disagree the first time they drift, and a duplicated one
+  // drifts by being edited in one place. Both are fixed here: geometry is the
+  // single definition, and it lives once.
+  //
+  // ROOFS ARE DERIVABLE, and that was worth measuring rather than assuming.
+  // A roof's points are the source outline OFFSET by the overhang, so
+  // edgeOnOutline can never match them -- but each roof point carries the
+  // srcId of the outline point it was offset from (`_linkVertex` at the
+  // generator). Measured on a real bone build with an attached garage,
+  // 8 Sep 2026:
+  //
+  //   house outline   op-2 op-3 op-11 op-12 op-4 op-5
+  //   garage outline  op-11 op-15 op-16 op-12
+  //   house roof      op-2 op-3 op-11 op-12 op-4 op-5   <- the house exactly
+  //   garage roof     op-11 op-15 op-16 op-12           <- the garage exactly
+  //
+  // SET EQUALITY, NOT OVERLAP, and the measurement is what proves it: an
+  // attached garage WELDS onto the house at shared master points, so the
+  // house roof and the garage outline genuinely share op-11 and op-12. An
+  // overlap test calls the house roof a garage roof and drops the main roof
+  // a storey. Equality does not.
+  const srcIdsOf = points => {
+    const ids = new Set();
+    (points || []).forEach(pt => { if (pt && pt.srcId) ids.add(pt.srcId); });
+    return ids;
+  };
+  const sameIds = (a, b) => a.size === b.size && a.size > 0
+    && [...a].every(id => b.has(id));
+
+  // The garage outline a WALL lies on, or null. One home for the rule that
+  // used to be copied twice. `cache` is a per-call object so the outline
+  // lookup still happens once per level, exactly as the closures did.
+  function garageOfWall(wall, env, cache) {
+    const list = cache[wall.levelId]
+      || (cache[wall.levelId] = env.garageOutlines(wall.levelId));
+    return list.find(garage => env.edgeOnOutline(wall.start, wall.end, garage)) || null;
+  }
+
+  // The garage outline a ROOF was generated from.
+  //
+  // Three answers, and the third is the honest one rather than a hedge:
+  //   an outline  -- this roof is that garage's
+  //   null        -- decidable, and it is not a garage roof
+  //   undefined   -- UNDECIDABLE: the roof carries no source links at all
+  //                  (hand-built geometry, or a drawing older than linking),
+  //                  so geometry has no opinion and the stored flag is all
+  //                  there is.
+  function garageOfRoof(roof, env) {
+    const ids = srcIdsOf(roof.points);
+    if (!ids.size) return undefined;
+    const level = roof.sourceLevelId != null ? roof.sourceLevelId : roof.levelId;
+    const found = env.garageOutlines(level)
+      .find(garage => sameIds(srcIdsOf(garage.points), ids));
+    return found || null;
+  }
+
+  // IS this a garage roof. Geometry decides whenever it can; the stored flag
+  // answers only where geometry cannot see. That is the "one definition"
+  // this board asked for, with the fallback named instead of hidden.
+  function isGarageRoof(roof, env) {
+    const derived = env && typeof env.garageOutlines === 'function'
+      ? garageOfRoof(roof, env) : undefined;
+    if (derived === undefined) return roof.garage === true;
+    return derived !== null;
+  }
+
+  // THE DRIFT DETECTOR, and the reason this board did not simply delete the
+  // flag. Where geometry CAN decide, the stored flag must agree with it; a
+  // disagreement means an outline was edited after generation, or a roof was
+  // regenerated against a stale flag. Returns the roofs that disagree, so a
+  // spec can assert the list is empty and SAY which roof drifted when it is
+  // not. Silence on drift is what board #293 was.
+  function roofBodyDrift(env) {
+    return env.roofs().filter(roof => {
+      const derived = garageOfRoof(roof, env);
+      if (derived === undefined) return false;
+      return (derived !== null) !== (roof.garage === true);
+    }).map(roof => ({
+      id: roof.id,
+      stored: roof.garage === true,
+      geometry: garageOfRoof(roof, env) !== null,
+    }));
+  }
+
   // Where the cut segment crosses a wall centreline: the position along the
   // viewer's horizontal axis, the wall, and how far along the wall it lands
   // (for reading fenestrations at the crossing).
@@ -150,11 +244,7 @@ if (!window.DraftCutView) {
     // marker, so anything spanning "the level" has to ask which building
     // (audit C5). The elevation path already groups this way.
     const garagesByLevel = {};
-    const garageFor = wall => {
-      const list = garagesByLevel[wall.levelId]
-        || (garagesByLevel[wall.levelId] = env.garageOutlines(wall.levelId));
-      return list.find(garage => env.edgeOnOutline(wall.start, wall.end, garage)) || null;
-    };
+    const garageFor = wall => garageOfWall(wall, env, garagesByLevel);
     env.walls().forEach(wall => {
       // BONEYARD shelf walls live on negative pseudo levels and are not in
       // the building at all.
@@ -187,9 +277,9 @@ if (!window.DraftCutView) {
   // height over the main-floor line, so a garage beside a two-storey house
   // keeps a one-storey roof; every other roof sits on top of the full wall
   // stack.
-  function roofBaseElev(roof, stack) {
+  function roofBaseElev(roof, stack, env) {
     const plate = Number(roof.plateHeightFt);
-    if (roof.garage === true && Number.isFinite(plate) && stack.floors.length) {
+    if (isGarageRoof(roof, env) && Number.isFinite(plate) && stack.floors.length) {
       return stack.floors[0].floorTop + plate;
     }
     return stack.bearing;
@@ -238,7 +328,7 @@ if (!window.DraftCutView) {
     let roofTop = null;
     env.roofs().forEach(roof => {
       if (!roof.points || roof.points.length < 3) return;
-      const base = roofBaseElev(roof, stack) + ROOF_FASCIA_IN / 12;
+      const base = roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
       geo().roofFaces(roof, geo().roofSkeleton(roof)).forEach(face => {
         face.points.forEach(pt => {
           const elev = base + geo().roofFaceRise(face, pt, roof.pitch || 4);
@@ -314,7 +404,7 @@ if (!window.DraftCutView) {
       roofs
         .filter(roof => roof.points && roof.points.length >= 3)
         .forEach(roof => {
-          const base = roofBaseElev(roof, stack);
+          const base = roofBaseElev(roof, stack, env);
           const profile = geo().roofProfile(
             roof, geo().roofFaces(roof, geo().roofSkeleton(roof)),
             cut.startPt, cut.endPt, axis)
@@ -612,11 +702,7 @@ if (!window.DraftCutView) {
     // A plan wall lying on a garage outline belongs to that garage: it
     // stands on the garage's beam plate or slab, off the house floor stack.
     const garagesByLevel = {};
-    const garageFor = wall => {
-      const list = garagesByLevel[wall.levelId]
-        || (garagesByLevel[wall.levelId] = env.garageOutlines(wall.levelId));
-      return list.find(g => env.edgeOnOutline(wall.start, wall.end, g)) || null;
-    };
+    const garageFor = wall => garageOfWall(wall, env, garagesByLevel);
     const faces = [];
     const fdnFaces = [];
     env.walls().forEach(wall => {
@@ -672,7 +758,7 @@ if (!window.DraftCutView) {
           facesByRoof.forEach((faces, roof) => {
             const rise = sectionRoofHeightAt({ x: px, z: pz }, roof, faces);
             if (rise == null) return;
-            const base = roofBaseElev(roof, stack);
+            const base = roofBaseElev(roof, stack, env);
             const elev = base + ROOF_FASCIA_IN / 12 + rise;
             if (tallest === null || elev > tallest.elev) tallest = { elev, base };
           });
@@ -922,7 +1008,7 @@ if (!window.DraftCutView) {
       let top = plateTop;
       if (!facesByRoof) return top;
       facesByRoof.forEach((roofFaces, roof) => {
-        const base = roofBaseElev(roof, stack);
+        const base = roofBaseElev(roof, stack, env);
         if (Math.abs(base - plateTop) > 0.6) return;   // bears on another storey
         const reach = (Number(roof.overhang) || 0) + 1;
         const pts = roof.points || [];
@@ -993,7 +1079,7 @@ if (!window.DraftCutView) {
       const far = { x: pt.x + dir.x * span, z: pt.z + dir.z * span };
       let clipped = top;
       facesByRoof.forEach((roofFaces, roof) => {
-        const base = roofBaseElev(roof, stack) + fasciaFt;
+        const base = roofBaseElev(roof, stack, env) + fasciaFt;
         let lo = Infinity, hi = -Infinity;
         geo().roofProfile(roof, roofFaces, pt, far, dir).forEach(p => {
           const elev = base + p.rise;
@@ -1264,7 +1350,7 @@ if (!window.DraftCutView) {
         let covered = false;
         facesByRoof.forEach((roofFaces, roof) => {
           if (covered) return;
-          const base = roofBaseElev(roof, stack) + fasciaFt;
+          const base = roofBaseElev(roof, stack, env) + fasciaFt;
           let lo = Infinity, hi = -Infinity;
           geo().roofProfile(roof, roofFaces, near, far, dir).forEach(p => {
             const e = base + p.rise;
@@ -1279,7 +1365,7 @@ if (!window.DraftCutView) {
       };
       const seen = new Set();
       facesByRoof.forEach((roofFaces, roof) => {
-        const eaveTop = roofBaseElev(roof, stack) + ROOF_FASCIA_IN / 12;
+        const eaveTop = roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
         const pitch = roof.pitch || 4;
         const rpts = roof.points || [];
         const gableSegs = rpts.flatMap((a, i) => (roof.edges?.[i] === 'gable'
@@ -1517,6 +1603,10 @@ if (!window.DraftCutView) {
     sectionWallCrossings,
     cutViewExtents,
     roofBaseElev,
+    garageOfWall,
+    garageOfRoof,
+    isGarageRoof,
+    roofBodyDrift,
     sectionRoofHeightAt,
     drawCutView,
     drawSectionWall,
