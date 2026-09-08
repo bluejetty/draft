@@ -3478,6 +3478,7 @@ class Component extends DCLogic {
         // Board #315: which floor a dealt washroom belongs to, so a re-press
         // can tell a floor that HAS one from a floor that is merely silent.
         ...(group.washroomLevelId != null ? { washroomLevelId: group.washroomLevelId } : {}),
+        ...(group.dealt === true ? { dealt: true } : {}),
       })),
       // Board #315: the second tier of grouping rides beside the first.
       levelLocks: (this._levelLocks || []).map(lock => ({
@@ -5915,6 +5916,7 @@ class Component extends DCLogic {
            members,
            ...(Number.isFinite(Number(rawGroup?.washroomLevelId))
              ? { washroomLevelId: Number(rawGroup.washroomLevelId) } : {}),
+           ...(rawGroup?.dealt === true ? { dealt: true } : {}),
            wallSettings: walls.length ? {
              wallType: WALL_TYPES.some(type => type.id === settings.wallType) ? settings.wallType : firstWall.wallType,
              baseHeight: Number.isFinite(Number(settings.baseHeight)) ? Number(settings.baseHeight) : firstWall.baseHeight,
@@ -17151,6 +17153,12 @@ class Component extends DCLogic {
         // Which floor this unit belongs to, so a re-press can tell a floor
         // that already has one from a floor that is merely silent.
         washroomLevelId: level.id,
+        // THE BONE PLACED THIS, NOT THE DRAFTER -- the same meaning `auto`
+        // carries on a room tag. Deliberately NOT the `auto` flag on walls:
+        // that one means "the build owns this and sweeps it before
+        // regenerating", and marking the unit with it made _buildHouse
+        // delete the washroom it had just dealt.
+        dealt: true,
       };
       this._groups.push(group);
       groups.push(group);
@@ -17316,6 +17324,19 @@ class Component extends DCLogic {
       ...group,
       members: group.members.filter(member => this._itemForMember(member)),
     })).filter(group => group.members.length > 0);
+    // BOARD #315: AND THE LOCKS THAT NAMED THEM. Deleting a level takes its
+    // walls, which empties that floor's washroom assembly, which leaves a
+    // lock pointing at a group that no longer exists -- the loader then
+    // drops it as damaged and the drafter is told an item "was incomplete
+    // and could not be loaded" about geometry they deliberately deleted.
+    // store-integrity.spec.js found it exactly that way.
+    //
+    // A lock is only a lock with two live members, so one that falls below
+    // that goes with them rather than lingering as a lock that cannot lock.
+    const live = new Set(this._groups.map(group => group.id));
+    this._levelLocks = (this._levelLocks || [])
+      .map(lock => ({ ...lock, members: lock.members.filter(id => live.has(id)) }))
+      .filter(lock => lock.members.length > 1);
   }
 
   _selectedGroupForWallEditing() {
@@ -20705,6 +20726,26 @@ class Component extends DCLogic {
   _unautoTouchedWalls(moved) {
     this._walls.forEach(wall => {
       if (wall.auto === true && (moved.has(wall.start) || moved.has(wall.end))) delete wall.auto;
+    });
+    this._undealTouchedAssemblies(moved);
+  }
+
+  // BOARD #315/#349: `dealt` CLEARS FOREVER ON FIRST TOUCH, and that half is
+  // the load-bearing one. Setting it is easy; clearing it is the fact that
+  // cannot be reconstructed later. Once files exist in which a machine-dealt
+  // unit and a drafter-moved one both say `dealt: true`, no migration can
+  // tell them apart -- the information was never written down.
+  //
+  // Mirrors `auto` on a wall exactly: machine-placed until touched, cleared
+  // on first touch, NEVER set again by the machine. A unit the drafter slid,
+  // reshaped or regrouped is theirs from that moment.
+  _undealTouchedAssemblies(moved) {
+    (this._groups || []).forEach(group => {
+      if (group.dealt !== true) return;
+      const touched = this._groupItems(group).some(item =>
+        (item.points || [item.start, item.end]).filter(Boolean).some(pt => moved.has(pt))
+        || (item.point && moved.has(item.point)));
+      if (touched) delete group.dealt;
     });
   }
 

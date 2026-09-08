@@ -25,11 +25,19 @@
 // drain runs straight down. It is measured across the WIDTH, which is why it
 // never appears in the 102" length run.
 //
-// ── WHAT THIS FILE DOES NOT DO ───────────────────────────────────────────
-// No placement heuristic, no stair landing zones, no group or lock
-// machinery. This answers one question -- what is a washroom, at a given
-// size -- and hands back plain geometry in feet. Where it goes is the
-// caller's problem, exactly as closets.js splits it.
+// ── WHAT THIS FILE DOES AND DOES NOT DO ──────────────────────────────────
+// It answers what a washroom IS at a given size, and it carries the two
+// placement RULES that are about geometry rather than about this page:
+// stair landing zones (a general keep-out every auto-placer wants) and
+// which side the unit takes. All of it returns plain geometry in feet.
+//
+// It owns no group or lock machinery, does no hit-testing, and never
+// touches the drawing. WHERE a unit actually lands, and what it becomes
+// once it does, is the caller's problem -- exactly as closets.js splits it.
+//
+// (This header said "no placement heuristic, no stair landing zones" until
+// 8 Sep, when both had been added below it. A stale header is worse than no
+// header: it is a claim a reader has no reason to doubt.)
 if (!window.DraftWashroom) {
 (() => {
   const IN = 1 / 12;

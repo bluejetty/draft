@@ -142,3 +142,37 @@ test('a floor the drafter stamped gets no washroom dealt', async ({ page }) => {
     'the silent floor must still be dealt, or the check above proves nothing')
     .toBeGreaterThan(0);
 });
+
+// BOARD #349 — UNIT OWNERSHIP. Two facts that cost nothing today and cannot
+// be recovered later, so they are written from day one.
+test('a dealt unit says so, carries no master links, and stops saying so once touched', async ({ page }) => {
+  await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
+  await bareOutline(page);
+  await page.locator('[data-build-house]').click();
+  await h.waitForSaved(page);
+  const saved = await h.savedDrawing(page);
+
+  const units = washrooms(saved);
+  expect(units.length, 'a unit to be about').toBeGreaterThan(0);
+
+  // MACHINE-PLACED UNTIL TOUCHED. Once files exist where a dealt unit and a
+  // drafter-moved one both say dealt:true, no migration can separate them --
+  // the information was never written down.
+  units.forEach(unit => expect(unit.dealt, 'the bone placed this').toBe(true));
+
+  // NO MASTER LINKS ON A SEATED UNIT. The schema would accept srcId/offX/offZ,
+  // and accepting them is a shear defect: four corners riding four different
+  // master points deform the unit independently, the 103"/67" runs stop
+  // holding, and two locked floors can shear apart -- breaking the wet-wall
+  // stack the LEVEL LOCK exists for.
+  const wallById = new Map((saved.walls || []).map(w => [w.id, w]));
+  units.forEach(unit => unit.members.forEach(member => {
+    const wall = wallById.get(member.id);
+    expect(wall, 'every member resolves to a wall').toBeTruthy();
+    [wall.start, wall.end].forEach(pt => {
+      expect(pt.srcId, 'a seated unit rides no master point').toBeUndefined();
+      expect(pt.offX, 'and carries no master offset').toBeUndefined();
+      expect(pt.offZ).toBeUndefined();
+    });
+  }));
+});

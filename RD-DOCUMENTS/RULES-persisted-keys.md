@@ -168,3 +168,46 @@ WHEN IT LANDS, THIS SECTION MOVES UP into the ruled names above and loses the
 "not a persisted key" framing -- and its second consumer travels with it. A
 future reader auditing "what does the dimension offset affect" must still
 reach `_cutMarkGapFt`, which the name will never tell them.
+
+---
+
+## `levelLocks` / `nextLevelLockId` — the second tier of grouping (board #315)
+
+Added 8 Sep. A LEVEL LOCK joins ASSEMBLIES on different floors that must
+hold the same PLAN position. The three tiers:
+
+    items      -> an ASSEMBLY  (one floor, rigid: `groups`)
+    assemblies -> a LEVEL LOCK (across floors: `levelLocks`)
+
+`levelLocks` is a list of `{ id, name, members }`, where members are GROUP
+ids — never item ids. A lock never reaches past the assembly to the walls
+inside it; moving a member is the assembly's own rigid move, applied to each
+sibling. One tier per question.
+
+**A LOCK OF ONE IS NOT A LOCK.** Two members are the fewest that can
+disagree, so `drawing-format.js`'s validator drops a shorter one on load and
+`level-lock.js` refuses to create one. A lock that can never do anything
+reads — in the file and on screen — exactly like a lock that works.
+
+**MEMBERS ARE VALIDATED AGAINST THE GROUPS THAT SURVIVED THE LOAD**, which
+is why the locks are read AFTER the groups. A lock naming a group the loader
+threw away would otherwise point at nothing and stop locking silently.
+
+**BREAKING A LOCK REMOVES IT.** There is no persisted "broken" state: a
+broken lock and no lock behave identically, and one of them is a state to
+carry, migrate and get wrong later. Breaking is an explicit act — a drag
+never breaks a lock and neither does distance.
+
+Its first customer is the dealt washroom, whose 2x6 wet wall carries every
+supply in the room: stack that wall floor to floor and the drain runs
+straight down. Nothing in the schema knows what a washroom is.
+
+### `groups[].washroomLevelId` and `groups[].dealt`
+
+Also board #315, on the existing `groups` entries. `washroomLevelId` names
+the floor a dealt washroom belongs to, so a re-press can tell a floor that
+HAS one from a floor that is merely silent. `dealt: true` marks a unit the
+BONE placed rather than the drafter — the same meaning `auto` carries on a
+room tag, and deliberately NOT the `auto` flag on walls, which means "the
+build owns this and sweeps it before regenerating" and would delete the
+washroom on the next press.
