@@ -326,7 +326,21 @@ if (!window.DraftDrawingFormat) {
   const walls = (rawWalls, levelIds, env = {}) => {
     const types = env.wallTypes || [];
     const legacy = env.legacyWallTypes || {};
-    const refLines = env.refLines || ['left', 'centre', 'right'];
+    // BOTH SPELLINGS, AND THE PAGES' ONE WINS. This list read
+    // ['left', 'centre', 'right'] -- British -- while every page writes and
+    // validates 'center' (MODEL.dc.html:2555, and seven `refLine: 'center'`
+    // sites). oneOf('center', [...'centre'...], 'left') falls through to the
+    // FALLBACK, so the shared normaliser silently moved every centre-
+    // referenced wall to its LEFT FACE: half a wall thickness, no error, and
+    // MODEL.html reads through here.
+    //
+    // Latent because nothing generated a centre-referenced wall until board
+    // #315's washroom did, and found by the spec that compares this module
+    // against the old page field for field.
+    //
+    // 'centre' stays accepted so an older file still loads, and both answer
+    // as 'center' so the two spellings can never mean two places again.
+    const refLines = env.refLines || ['left', 'center', 'centre', 'right'];
     const defaultType = env.defaultWallType || 'stud_2x6';
     const defaultTop = env.defaultWallTopFt;
     return (Array.isArray(rawWalls) ? rawWalls : []).map(wall => {
@@ -367,7 +381,7 @@ if (!window.DraftDrawingFormat) {
           : (legacy[wall?.wallType] || defaultType),
         baseHeight: number(wall?.baseHeight, 0),
         topHeight: number(wall?.topHeight, defaultTop),
-        refLine: oneOf(wall?.refLine, refLines, 'left'),
+        refLine: (raw => (raw === 'centre' ? 'center' : raw))(oneOf(wall?.refLine, refLines, 'left')),
         // #275: grown interior walls stay auto until the drafter touches them
         // -- regeneration replaces only still-tagged walls.
         ...(wall?.auto === true ? { auto: true } : {}),

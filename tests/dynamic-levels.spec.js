@@ -2,6 +2,14 @@
 // (and beyond) for taller buildings. Added floors get the standard ELECTRIC /
 // PLAN / FLOOR layer sets, join BUILD HOUSE, and persist in the drawing.
 const { test, expect } = require('@playwright/test');
+
+// THE SHELL, NOT EVERY WALL ON THE LEVEL. Board #315 deals a washroom on
+// each silent floor, so a floor carries its exterior run plus four interior
+// walls. These tests are about which LEVELS get a shell, so they count the
+// shell. Re-pinned to the ruling, still exact.
+const shellWalls = (saved, levelId) => saved.walls.filter(wall =>
+  wall.levelId === levelId && (wall.view || 'plan') === 'plan'
+  && wall.wallType === 'stud_2x6' && wall.refLine === 'left');
 const h = require('./helpers');
 
 async function drawOutlineRect(page) {
@@ -41,8 +49,10 @@ test('deleting 2ND FL makes a bungalow: BUILD HOUSE skips it', async ({ page }) 
   const saved = await h.savedDrawing(page);
   expect(saved.levels.map(level => level.name)).toEqual(['SITE', 'ROOF', 'MAIN FL', 'FOUNDATION']);
   // MAIN FL + FOUNDATION shells only — nothing on the deleted level.
-  expect(saved.walls.filter(wall => wall.levelId === 3)).toHaveLength(4);
+  expect(shellWalls(saved, 3)).toHaveLength(4);
   expect(saved.walls.filter(wall => wall.levelId === 1)).toHaveLength(4);
+  // NOTHING AT ALL on the deleted level — not a shell, and not a washroom
+  // either. The bone only fills a floor whose shell it just built.
   expect(saved.walls.filter(wall => wall.levelId === 5)).toHaveLength(0);
   expect(saved.floors).toHaveLength(2);
   expect(saved.roofs).toHaveLength(1);
@@ -80,7 +90,7 @@ test('an added 3RD FL gets the floor layer sets and joins BUILD HOUSE', async ({
   expect(thirdLevel).toBeTruthy();
   expect(thirdLevel.elev).toBe(18);
   // The new floor built its shell like any other floor level.
-  const thirdWalls = saved.walls.filter(wall => wall.levelId === thirdLevel.id);
+  const thirdWalls = shellWalls(saved, thirdLevel.id);
   expect(thirdWalls).toHaveLength(4);
   thirdWalls.forEach(wall => {
     expect(wall.wallType).toBe('stud_2x6');
