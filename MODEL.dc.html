@@ -6425,6 +6425,10 @@ class Component extends DCLogic {
     // Boards #275: partition edges the drafter deleted stay ungrown for
     // the session; the preview plan memo lives beside it.
     this._declinedGrowEdges = new Set();
+
+    // Board #315: a floor whose stamps the drafter deleted is spoken for —
+    // the bone deals it no default program for the rest of the session.
+    this._roomProgramDeclined = new Set();
     this._roomGrowCache = null;
 
     // Surface-opening drawing state — a free-form hole in a floor or roof.
@@ -20059,6 +20063,23 @@ class Component extends DCLogic {
     this._roomTags.forEach(other => { if (other.companionOf === tag.id) doomed.add(other.id); });
     const took = doomed.size;
     this._roomTags = this._roomTags.filter(other => !doomed.has(other.id));
+    // BOARD #315: DELETING A STAMP IS SPEECH, so this floor stops being
+    // silent and the bone deals it nothing.
+    //
+    // Without this the two rulings collide head-on. Board #275 says
+    // deleting every stamp and pressing the bone SWEEPS the grown
+    // partitions away; Q17 says a floor with no stamps gets a program
+    // dealt. Together they would deal the rooms straight back and regrow
+    // the walls the drafter just removed -- a floor you can never empty.
+    // room-grow-review.spec.js's sweep test is what surfaced it.
+    //
+    // Q17's own words settle which yields: "drafter SILENCE means you
+    // pick." A drafter who deleted the stamps did not stay silent. Same
+    // distinction as suggestStairs, and modelled on the sibling that was
+    // already here -- _declinedGrowEdges, partition edges the drafter
+    // deleted staying ungrown for the session. Session-scoped for the same
+    // reason: a fresh document is a fresh offer.
+    if (tag.levelId != null) (this._roomProgramDeclined ||= new Set()).add(tag.levelId);
     this._refreshStampNames();
     this._markUnsaved();
     this.setState({
@@ -20258,7 +20279,9 @@ class Component extends DCLogic {
     const floors = this._floorLevels();
     if (!floors.length) return 0;
     const stamped = new Set(this._roomStamps().filter(tag => tag.base).map(tag => tag.levelId));
-    const empty = floors.filter(level => !stamped.has(level.id) && this._houseOutline(level.id));
+    const declined = this._roomProgramDeclined || new Set();
+    const empty = floors.filter(level => !stamped.has(level.id)
+      && !declined.has(level.id) && this._houseOutline(level.id));
     if (!empty.length) return 0;
     const facts = window.DraftGruffDrivethru.factsFrom(this._gruffSnapshot());
     const seed = ((this._roomTags.length * 7) + (this._walls.length * 3) + 1) % 997;
