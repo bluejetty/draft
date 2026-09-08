@@ -48,8 +48,22 @@ test('BUILD HOUSE stamps generated points with their master link', async ({ page
   const saved = await h.savedDrawing(page);
   const masterIds = new Set(saved.boneyardOutlines[0].points.map(p => p.id));
 
-  // Walls trace the outline exactly: linked with a zero offset.
-  saved.walls.forEach(wall => {
+  // THE GENERATED WALLS, which is what this test is about. Board #315 also
+  // deals a washroom on each silent floor, and its walls are NOT generated
+  // from the outline -- the unit is placed inside the house, seated relative
+  // to the interior, so there is no master point for its corners to link to.
+  //
+  // A KNOWN LIMIT, WRITTEN DOWN RATHER THAN HIDDEN BY THIS FILTER: because
+  // its corners carry no master link, a dealt washroom does NOT follow the
+  // outline when a house corner is dragged. Today it stays where it was put
+  // and the drafter slides it, which is what the assembly and the level lock
+  // are for. Whether it should ride the outline instead is a real question
+  // and a bigger one than this board -- it needs a defensible rule for WHICH
+  // master a unit seated off the interior belongs to.
+  const generated = saved.walls.filter(wall => wall.start.srcId || wall.end.srcId);
+  expect(generated.length, 'the outline must generate walls, or this proves nothing')
+    .toBeGreaterThan(0);
+  generated.forEach(wall => {
     for (const end of [wall.start, wall.end]) {
       expect(masterIds.has(end.srcId)).toBe(true);
       expect(Math.abs(end.offX)).toBeLessThan(0.001);

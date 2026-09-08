@@ -9,6 +9,20 @@
 // the main-floor ceiling. The roof depends on the stack (board #245): a
 // single-storey house splices ONE roof over the combined loop; a taller
 // house drops the garage to its own roof, flush at the upper wall face.
+
+// THE SHELL AND THE GARAGE, NOT THE DEALT WASHROOM. Board #315 puts one
+// three-piece WC on each silent floor, so a floor carries the house run, the
+// garage run, and four walls that are neither. These tests are about the
+// first two, so they exclude the third by ASKING WHAT A WALL IS -- its
+// membership of a dealt assembly -- rather than by guessing from its type.
+// Re-pinned to the ruling; the counts are still exact.
+const shellAndGarage = (saved, levelId) => {
+  const dealtWalls = new Set((saved.groups || [])
+    .filter(group => group.washroomLevelId != null)
+    .flatMap(group => group.members.map(member => member.id)));
+  return saved.walls.filter(wall => wall.levelId === levelId && !dealtWalls.has(wall.id));
+};
+
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -373,7 +387,7 @@ test('BUILD HOUSE grows the open-leg beam, flat slab, flush walls, and the dropp
 
   // Garage stud walls on MAIN FL along the open legs, dropped to the beam
   // plate so their ceiling lands flush with the main-floor ceiling.
-  const mainWalls = saved.walls.filter(wall => wall.levelId === 3);
+  const mainWalls = shellAndGarage(saved, 3);
   expect(mainWalls).toHaveLength(9); // 6 house + 3 garage
   const garageStud = mainWalls.filter(wall => h.touchesPoint(wall, 20, -4) || h.touchesPoint(wall, 20, 4));
   expect(garageStud).toHaveLength(3);
@@ -568,8 +582,8 @@ test('a second BUILD HOUSE click never doubles the garage', async ({ page }) => 
   await buildHouse(page);
 
   const saved = await h.savedDrawing(page);
-  expect(saved.walls.filter(wall => wall.levelId === 1)).toHaveLength(9);
-  expect(saved.walls.filter(wall => wall.levelId === 3)).toHaveLength(9);
+  expect(shellAndGarage(saved, 1)).toHaveLength(9);
+  expect(shellAndGarage(saved, 3)).toHaveLength(9);
   expect(saved.floors.filter(floor => floor.levelId === 1)).toHaveLength(2);
   expect(saved.notes.filter(note => note.body === 'REBAR TIE')).toHaveLength(2);
   expect(saved.roofs).toHaveLength(2); // house + dropped garage roof, neither doubled
@@ -615,7 +629,7 @@ test('the garage is its own body: coincident ends, no splice, master edits carry
   await buildHouse(page);
   await h.waitForSaved(page);
   saved = await h.savedDrawing(page);
-  expect(saved.walls.filter(wall => wall.levelId === 3)).toHaveLength(9);
+  expect(shellAndGarage(saved, 3)).toHaveLength(9);
   expect(saved.walls.filter(wall => wall.levelId === 3 && wall.body === 'garage')).toHaveLength(3);
 
   // A BONEYARD master edit still carries BOTH bodies: the coincident house

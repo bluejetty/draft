@@ -99,6 +99,54 @@ if (!window.DraftDrawingFormat) {
     }).filter(Boolean);
   };
 
+  // ── LEVEL LOCKS — the second tier of grouping (board #315) ─────────────
+  //
+  // The three tiers, and the reason there are three:
+  //
+  //   items          -> an ASSEMBLY  (one floor, rigid: `groups`)
+  //   assemblies     -> a LEVEL LOCK (across floors: here)
+  //
+  // A lock joins assemblies that must hold the same plan position on
+  // different storeys. Its first customer is the dealt washroom, whose 2x6
+  // wet wall carries every supply in the room: stack that wall floor to
+  // floor and the drain runs straight down. But nothing here knows what a
+  // washroom is -- a lock is any set of groups on different levels, which
+  // is what the order asked for.
+  //
+  // MEMBERS ARE GROUP IDS, NOT ITEM IDS. A lock never reaches past the
+  // assembly to the walls inside it; moving a member is the assembly's own
+  // rigid move, applied to each sibling. One tier per question.
+  //
+  // BREAKING A LOCK IS AN EXPLICIT ACT and leaves no lock behind, so there
+  // is nothing to persist for a broken one -- the same principle as storey
+  // detachment in the BONE model. A drag never breaks it and neither does
+  // distance; if the drafter has not said so, the lock holds.
+  const levelLocks = (rawLocks, groupIds) => {
+    const known = groupIds instanceof Set ? groupIds : new Set(groupIds || []);
+    const seen = new Set();
+    return (Array.isArray(rawLocks) ? rawLocks : []).map(lock => {
+      const id = String(lock?.id || '').trim();
+      if (!id || seen.has(id)) return null;
+      // Members must be groups that actually survived the load. A group the
+      // loader dropped as damaged would otherwise leave a lock pointing at
+      // nothing, and a lock with one live member silently stops locking.
+      const members = Array.isArray(lock?.members)
+        ? [...new Set(lock.members.map(m => String(m || '').trim()).filter(m => known.has(m)))]
+        : [];
+      // A LOCK OF ONE IS NOT A LOCK. Two members are the minimum that can
+      // disagree, so a shorter one is dropped rather than kept as a lock
+      // that can never do anything -- which would read, in the file and on
+      // screen, exactly like a lock that works.
+      if (members.length < 2) return null;
+      seen.add(id);
+      return {
+        id,
+        name: String(lock?.name || 'LEVEL LOCK').trim().toUpperCase() || 'LEVEL LOCK',
+        members,
+      };
+    }).filter(Boolean);
+  };
+
   const dimensions = (rawDimensions, levelIds) => {
     const seen = new Set();
     return (Array.isArray(rawDimensions) ? rawDimensions : []).map(dimension => {
@@ -278,7 +326,21 @@ if (!window.DraftDrawingFormat) {
   const walls = (rawWalls, levelIds, env = {}) => {
     const types = env.wallTypes || [];
     const legacy = env.legacyWallTypes || {};
-    const refLines = env.refLines || ['left', 'centre', 'right'];
+    // BOTH SPELLINGS, AND THE PAGES' ONE WINS. This list read
+    // ['left', 'centre', 'right'] -- British -- while every page writes and
+    // validates 'center' (MODEL.dc.html:2555, and seven `refLine: 'center'`
+    // sites). oneOf('center', [...'centre'...], 'left') falls through to the
+    // FALLBACK, so the shared normaliser silently moved every centre-
+    // referenced wall to its LEFT FACE: half a wall thickness, no error, and
+    // MODEL.html reads through here.
+    //
+    // Latent because nothing generated a centre-referenced wall until board
+    // #315's washroom did, and found by the spec that compares this module
+    // against the old page field for field.
+    //
+    // 'centre' stays accepted so an older file still loads, and both answer
+    // as 'center' so the two spellings can never mean two places again.
+    const refLines = env.refLines || ['left', 'center', 'centre', 'right'];
     const defaultType = env.defaultWallType || 'stud_2x6';
     const defaultTop = env.defaultWallTopFt;
     return (Array.isArray(rawWalls) ? rawWalls : []).map(wall => {
@@ -319,7 +381,7 @@ if (!window.DraftDrawingFormat) {
           : (legacy[wall?.wallType] || defaultType),
         baseHeight: number(wall?.baseHeight, 0),
         topHeight: number(wall?.topHeight, defaultTop),
-        refLine: oneOf(wall?.refLine, refLines, 'left'),
+        refLine: (raw => (raw === 'centre' ? 'center' : raw))(oneOf(wall?.refLine, refLines, 'left')),
         // #275: grown interior walls stay auto until the drafter touches them
         // -- regeneration replaces only still-tagged walls.
         ...(wall?.auto === true ? { auto: true } : {}),
@@ -1260,6 +1322,7 @@ if (!window.DraftDrawingFormat) {
     levelId,
     levels,
     cuts,
+    levelLocks,
     dimensions,
     columns,
     beams,

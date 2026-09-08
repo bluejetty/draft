@@ -54,6 +54,10 @@ const PERSISTED_KEYS = [
   'floorThickness', 'levelAssemblies', 'roofOverhang', 'roofPitch',
   'elevationDatum', 'elevationNames', 'elevationMarkOffsets', 'cuts',
   'nextCutId', 'groups', 'nextGroupId', 'nextDrawingItemId', 'underlays',
+  // Board #315, the second tier of grouping: assemblies on different
+  // floors that hold the same plan position. See
+  // RD-DOCUMENTS/RULES-persisted-keys.md.
+  'levelLocks', 'nextLevelLockId',
 ];
 
 // The subset another page reads. Renaming one of these leaves MODEL working
