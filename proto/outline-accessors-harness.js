@@ -145,6 +145,99 @@ check('y is averaged across the segment',
 check('a point with no y contributes 0 rather than NaN',
   G => [sig(G.lineControlPoint({ start: { x: 0, z: 0 }, end: { x: 10, y: 6, z: 0 }, bulge: 0 })), '5,3,0']);
 
+// ── pointOnLineSeg AND pointToSegment ────────────────────────────────────
+//
+// Added when MODEL.dc.html's _pointOnLineSeg and _distToLineSeg were collapsed
+// onto these. They arrive with checks for the same reason the three above did:
+// they had none. pointToSegment is reached by TWENTY call sites on the old page
+// -- every click-to-select, every snap, every beam-to-edge distance -- and the
+// only thing standing behind it was that the drawing looked right.
+//
+// THE DEGENERATE RULE IS THE LOAD-BEARING ONE. A segment shorter than 0.01ft
+// answers Infinity, NOT zero. Its own comment says why: a zero would make
+// every click "hit" a collapsed wall, so a stray zero-length segment would
+// silently swallow every selection on the drawing. Nothing pinned that until
+// now, which means the comment was the only thing holding it.
+//
+// NOTE THE DELIBERATE ASYMMETRY WITH lineControlPoint, which is the one input
+// where these two genuinely disagree: on a zero-length segment lineControlPoint
+// answers the midpoint (via `|| 1`) and pointToSegment answers Infinity. Both
+// are right, because they are answering different questions -- "where is this
+// arc's control point" always has an answer, "how close did the drafter click"
+// does not. Anyone collapsing these further needs to keep that difference.
+check('the perpendicular foot inside the segment gives distance and t',
+  G => [JSON.stringify(G.pointToSegment(pt(5, 3), { start: pt(0, 0), end: pt(10, 0) })), '{"d":3,"t":0.5}']);
+
+check('a point past the end clamps to t=1 and measures from the endpoint',
+  G => [JSON.stringify(G.pointToSegment(pt(20, 0), { start: pt(0, 0), end: pt(10, 0) })), '{"d":10,"t":1}']);
+
+check('a point before the start clamps to t=0',
+  G => [JSON.stringify(G.pointToSegment(pt(-5, 0), { start: pt(0, 0), end: pt(10, 0) })), '{"d":5,"t":0}']);
+
+// THE ONE THAT MATTERS. Not "does not throw" -- the specific answer Infinity,
+// because 0 is what a naive projection returns and 0 is what breaks clicking.
+check('a zero-length segment is INFINITELY far, not zero away',
+  G => [G.pointToSegment(pt(4, 4), { start: pt(4, 4), end: pt(4, 4) }).d, Infinity]);
+
+check('and a segment under the 0.01ft floor is too',
+  G => [G.pointToSegment(pt(0, 1), { start: pt(0, 0), end: pt(0.005, 0) }).d, Infinity]);
+
+// The companion. Without it the two checks above pass on a pointToSegment that
+// answers Infinity for EVERY segment, which is the emptiness trap: a rule that
+// rejects everything looks exactly like a rule that rejects the right things.
+check('a segment just over the floor is measured normally',
+  G => [JSON.stringify(G.pointToSegment(pt(0, 1), { start: pt(0, 0), end: pt(0.02, 0) })), '{"d":1,"t":0}']);
+
+// The arc branch, paired against the same segment without bulge. Unpaired, a
+// distance of 9 proves nothing -- it is only evidence that the bulge branch ran
+// because the straight answer to the identical question is 10.
+check('a bulged segment is measured to the ARC, not the chord',
+  G => [G.pointToSegment(pt(5, 10), { start: pt(0, 0), end: pt(10, 0), bulge: 2 }).d, 9]);
+check('and the same segment without bulge answers the chord distance',
+  G => [G.pointToSegment(pt(5, 10), { start: pt(0, 0), end: pt(10, 0) }).d, 10]);
+
+// The arc branch samples rather than solving, so its t is always on the 24-step
+// grid. Pinned because "it got close enough" would survive the sampling being
+// replaced by something with different endpoints or a different step count.
+check('the arc branch returns a t on the 24-step sampling grid',
+  G => [Number.isInteger(G.pointToSegment(pt(1, 5), { start: pt(0, 0), end: pt(10, 0), bulge: 2 }).t * 24), true]);
+
+// THE SAMPLER MUST INCLUDE BOTH ENDS. A loop starting at i=1 still answers
+// sensibly everywhere except right at the segment's start, where it snaps 1/24
+// along instead of to the point itself -- which is a click landing on the wrong
+// end of an arc and nothing else in this file could see it.
+check('a point exactly on the arc start is zero away at t=0',
+  G => [JSON.stringify(G.pointToSegment(pt(0, 0), { start: pt(0, 0), end: pt(10, 0), bulge: 2 })), '{"d":0,"t":0}']);
+check('and a point exactly on the arc end is zero away at t=1',
+  G => [JSON.stringify(G.pointToSegment(pt(10, 0), { start: pt(0, 0), end: pt(10, 0), bulge: 2 })), '{"d":0,"t":1}']);
+
+check('a straight segment interpolates x and z at t',
+  G => [sig(G.pointOnLineSeg({ start: pt(0, 0), end: pt(10, 4) }, 0.25)), '2.5,0,1']);
+check('t=0 is the start and t=1 is the end',
+  G => [`${sig(G.pointOnLineSeg({ start: pt(0, 0), end: pt(10, 4) }, 0))}|${sig(G.pointOnLineSeg({ start: pt(0, 0), end: pt(10, 4) }, 1))}`,
+    '0,0,0|10,0,4']);
+
+// The arc apex, computed from the quadratic rather than read off the function:
+// at t=0.5 a quadratic Bezier sits at (start + 2c + end)/4, and c is 2ft off the
+// chord midpoint, so the apex is 1ft off it -- half the bulge, not the bulge.
+check('the arc at t=0.5 sits at half the bulge, not the whole of it',
+  G => [sig(G.pointOnLineSeg({ start: pt(0, 0), end: pt(10, 0), bulge: 2 }, 0.5)), '5,0,1']);
+
+// AND ONE OFF-CENTRE, which the t=0.5 check above cannot replace. At the
+// midpoint of a symmetric segment the curve's x is EQUAL to the control point's
+// x, so an implementation that just returned the control point passes that
+// check on x. At t=0.25 they differ (2.5 against 5) and the difference is
+// visible. Found by a mutation surviving, not by reading.
+check('an off-centre sample is on the quadratic, not at the control point',
+  G => [sig(G.pointOnLineSeg({ start: pt(0, 0), end: pt(10, 0), bulge: 2 }, 0.25)), '2.5,0,0.75']);
+
+// SURPRISING BUT REAL, and pinned as-is rather than fixed: y does NOT
+// interpolate. Both branches average the two endpoint ys and hand back the same
+// y at every t. Harmless in plan, where y is dropped -- but anyone reaching for
+// this in a section will get a flat answer, and should find out here.
+check('y is averaged at every t rather than interpolated',
+  G => [`${sig(G.pointOnLineSeg({ start: { x: 0, y: 0, z: 0 }, end: { x: 10, y: 10, z: 0 } }, 0)).split(',')[1]}`, '5']);
+
 // ── THE TWO COPIES MUST NOT DRIFT ──
 //
 // The originals are still on MODEL.dc.html and the old page still calls its
@@ -175,11 +268,28 @@ const bodyIn = (src, name) => {
 const dcSrc = fs.readFileSync(DC, 'utf8');
 const g2Src = fs.readFileSync(SRC, 'utf8');
 [['_outlineSegment', 'outlineSegment'],
-  ['_outlineSegmentCount', 'outlineSegmentCount'],
-  ['_lineControlPoint', 'lineControlPoint']].forEach(([dcName, gName]) => {
+  ['_outlineSegmentCount', 'outlineSegmentCount']].forEach(([dcName, gName]) => {
   const a = bodyIn(dcSrc, dcName), b = bodyIn(g2Src, gName);
   check(`${gName} is still byte-identical to MODEL.dc.html's ${dcName}`,
     () => [a !== null && a === b, true]);
+});
+
+// _lineControlPoint IS NO LONGER ON THAT LIST, and its check was deleted rather
+// than relaxed. This file used to say the right response to a byte-identity
+// failure is "port the change and delete one copy, not update this string" --
+// so when the copy went, the string went with it. Relaxing it to a subset
+// comparison, or leaving it asserting over a one-line forwarder, would have
+// left a check whose passing state and broken state look the same.
+//
+// What replaces it guards the opposite direction: that nobody re-inlines the
+// arithmetic. A forwarder is a few characters; the moment one of these grows a
+// Math.hypot again there are two copies and the drift is back.
+[['_lineControlPoint', 'lineControlPoint'],
+  ['_pointOnLineSeg', 'pointOnLineSeg'],
+  ['_distToLineSeg', 'pointToSegment']].forEach(([dcName, gName]) => {
+  const body = bodyIn(dcSrc, dcName);
+  check(`MODEL.dc.html's ${dcName} forwards to ${gName} instead of duplicating it`,
+    () => [body !== null && body.includes(`window.DraftGeometry2D.${gName}(`) && !/Math\.hypot|bestD/.test(body), true]);
 });
 
 // ── Run ──
@@ -202,6 +312,30 @@ console.log(`\n${CHECKS.length - baseline.length}/${CHECKS.length} checks passed
 // they are worth listing: none of these produces an exception or a blank page,
 // only a drawing that is quietly wrong.
 const MUTATIONS = [
+  // ── pointToSegment / pointOnLineSeg ──
+  // The degenerate rule first, because it is the one with a comment claiming it
+  // matters and no check behind it until now.
+  ['a zero-length segment answers 0 away instead of Infinity',
+    s => s.replace('return { d: Infinity, t: 0 };', 'return { d: 0, t: 0 };')],
+  ['the 0.01ft floor is removed entirely',
+    s => s.replace('if (len2 < 0.0001) return { d: Infinity, t: 0 };', '')],
+  ['the floor is applied to real segments too',
+    s => s.replace('if (len2 < 0.0001)', 'if (len2 < 10000)')],
+  ['t is no longer clamped to the segment',
+    s => s.replace('const t = Math.max(0, Math.min(1, ((worldPt.x - ax) * dx + (worldPt.z - az) * dz) / len2));',
+      'const t = ((worldPt.x - ax) * dx + (worldPt.z - az) * dz) / len2;')],
+  ['the arc branch is never taken, so arcs measure as chords',
+    s => s.replace('  function pointToSegment(worldPt, seg) {\n    if (!seg.bulge) {',
+      '  function pointToSegment(worldPt, seg) {\n    if (true) {')],
+  ['the arc is sampled at a different resolution',
+    s => s.replace('const STEPS = 24;', 'const STEPS = 25;')],
+  ['the arc sampler starts past the beginning of the segment',
+    s => s.replace('for (let i = 0; i <= STEPS; i++) {', 'for (let i = 1; i <= STEPS; i++) {')],
+  ['pointOnLineSeg interpolates y instead of averaging it',
+    s => s.replace('        y: ((seg.start.y || 0) + (seg.end.y || 0)) / 2,\n        z: seg.start.z + (seg.end.z - seg.start.z) * t,',
+      '        y: (seg.start.y || 0) + ((seg.end.y || 0) - (seg.start.y || 0)) * t,\n        z: seg.start.z + (seg.end.z - seg.start.z) * t,')],
+  ['the quadratic uses the control point as the apex rather than a control',
+    s => s.replace('x: it * it * seg.start.x + 2 * it * t * c.x + t * t * seg.end.x,', 'x: c.x,')],
   ['open outlines are counted as closed',
     s => s.replace('return outline.open === true ? outline.points.length - 1 : outline.points.length;',
       'return outline.points.length;')],

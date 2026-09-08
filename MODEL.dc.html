@@ -16875,53 +16875,27 @@ class Component extends DCLogic {
 
   // Arc segments are quadratic curves: the control point sits at the segment
   // midpoint, offset along the left normal by the line's bulge (in feet).
+  // ── THESE THREE NOW LIVE IN geometry-2d.js ───────────────────────────────
+  // They were duplicated here character for character, and the copies were held
+  // together only by a byte-identity check in proto/outline-accessors-harness.js
+  // -- which is a tripwire, not a fix. The bodies are gone; these three forward.
+  //
+  // They are kept as methods rather than replaced at the ~25 call sites because
+  // the call sites are the risk and the duplication was the defect. `this._x()`
+  // still resolves; only the arithmetic moved.
   _lineControlPoint(seg) {
-    const bulge = seg.bulge || 0;
-    const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;
-    const len = Math.hypot(dx, dz) || 1;
-    return {
-      x: (seg.start.x + seg.end.x) / 2 + (-dz / len) * bulge,
-      y: ((seg.start.y || 0) + (seg.end.y || 0)) / 2,
-      z: (seg.start.z + seg.end.z) / 2 + (dx / len) * bulge,
-    };
+    return window.DraftGeometry2D.lineControlPoint(seg);
   }
 
   _pointOnLineSeg(seg, t) {
-    const it = 1 - t;
-    if (!seg.bulge) {
-      return {
-        x: seg.start.x + (seg.end.x - seg.start.x) * t,
-        y: ((seg.start.y || 0) + (seg.end.y || 0)) / 2,
-        z: seg.start.z + (seg.end.z - seg.start.z) * t,
-      };
-    }
-    const c = this._lineControlPoint(seg);
-    return {
-      x: it * it * seg.start.x + 2 * it * t * c.x + t * t * seg.end.x,
-      y: c.y,
-      z: it * it * seg.start.z + 2 * it * t * c.z + t * t * seg.end.z,
-    };
+    return window.DraftGeometry2D.pointOnLineSeg(seg, t);
   }
 
   // Distance from worldPt to a line segment (straight or arced) → { d, t }.
+  // A segment shorter than 0.01ft answers Infinity, not zero -- see
+  // pointToSegment in geometry-2d.js, where the rule and its reason now live.
   _distToLineSeg(worldPt, seg) {
-    if (!seg.bulge) {
-      const ax = seg.start.x, az = seg.start.z;
-      const dx = seg.end.x - ax, dz = seg.end.z - az;
-      const len2 = dx * dx + dz * dz;
-      if (len2 < 0.0001) return { d: Infinity, t: 0 };
-      const t = Math.max(0, Math.min(1, ((worldPt.x - ax) * dx + (worldPt.z - az) * dz) / len2));
-      return { d: Math.hypot(worldPt.x - ax - t * dx, worldPt.z - az - t * dz), t };
-    }
-    let bestD = Infinity, bestT = 0;
-    const STEPS = 24;
-    for (let i = 0; i <= STEPS; i++) {
-      const t = i / STEPS;
-      const p = this._pointOnLineSeg(seg, t);
-      const d = Math.hypot(worldPt.x - p.x, worldPt.z - p.z);
-      if (d < bestD) { bestD = d; bestT = t; }
-    }
-    return { d: bestD, t: bestT };
+    return window.DraftGeometry2D.pointToSegment(worldPt, seg);
   }
 
   // Return { idx, t, d } of the _lines segment closest to worldPt (within 12px), or null.
