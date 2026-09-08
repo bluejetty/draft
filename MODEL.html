@@ -1219,6 +1219,11 @@
         // after the walls and lines (6960) so a string is never buried under
         // the geometry it measures.
         paintDimensions();
+        // The selection highlight sits where MODEL.dc.html puts it: after the
+        // dimension strings (:6960) and immediately before the cut marks
+        // (:7380 against :7432), so the highlight is never buried under the
+        // geometry it marks but never covers the annotation either.
+        paintSelection();
         // Cut marks go with the annotation rather than the geometry: they are
         // a fact ABOUT the drawing, and the bone paints them late for the same
         // reason (MODEL.dc.html:7432, after every piece of linework and just
@@ -1307,21 +1312,98 @@
           + `${pdfUnderlays() === 1 ? '' : 's'} not drawn</b> (needs pdf.js)` : '');
   };
 
+  // ── selection ─────────────────────────────────────────────────────────────
+  // TIER 3a. The first editing tool: click a wall, it lights up.
+  //
+  // THE OLD PAGE IS THE SPEC, and it does NOT paint this through the painter.
+  // drawWallSeg2D has no `selected` key -- drawRoof2D, drawFixture2D and
+  // drawFloor2D do, and MODEL.dc.html uses both mechanisms deliberately, split
+  // by what is being selected: AREAS go through their painter with
+  // { selected: true } (:7393), SEGMENTS get a separate overlay pass (:7380).
+  // A wall is a segment, so it gets the overlay, and render-2d.js needs no
+  // change at all.
+  //
+  // The colours are MODEL.dc.html's literals. #5980a6 is the drafting blue --
+  // 81 uses across the repo -- and the palette has no `selected` role to ask
+  // for, only 'draw-floor-edge' which happens to hold the same hex under a
+  // name that means something else. Naming a role is tier 2j's boarded colour
+  // problem; borrowing the wrong name here would be worse than a literal that
+  // says where it came from.
+  const SELECT_INK = 'rgba(89,128,166,0.55)';   // MODEL.dc.html:7385
+  const SELECT_HANDLE = '#5980a6';              // MODEL.dc.html:7388
+  const SELECT_GRAB_PX = 12;                    // MODEL.dc.html:16707, _findLineHit
+  let selectedSeg = null;
+
+  // Nearest wall to a world point, or null. The threshold is converted from
+  // pixels at the CURRENT zoom, so the grab zone stays the same size on screen
+  // however far in the drafter is -- and it is passed in rather than baked
+  // into geometry-2d.js, because the old page uses eight different distances
+  // (30, 24, 18, 14, 12, 4 px) for different targets and a number frozen in
+  // the shared function would be wrong for seven of them.
+  const wallAt = worldPt => {
+    const G = window.DraftGeometry2D;
+    const thresh = SELECT_GRAB_PX / view.scale;
+    let best = null, bestD = thresh;
+    walls().forEach(wall => {
+      if (!wall.start || !wall.end) return;
+      const { d } = G.pointToSegment(worldPt, wall);
+      if (d < bestD) { bestD = d; best = wall; }
+    });
+    return best;
+  };
+
+  const paintSelection = () => {
+    if (!selectedSeg) return;
+    // Only if it is still on screen's level: a selection kept across a level
+    // change would paint a highlight over nothing.
+    if (!walls().includes(selectedSeg)) return;
+    const a = toS(selectedSeg.start), b = toS(selectedSeg.end);
+    ctx.save();
+    ctx.strokeStyle = SELECT_INK;
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    // Square handles at each end -- the same 8px squares the old page draws,
+    // and the grab targets the corner drag will use next.
+    ctx.fillStyle = SELECT_HANDLE;
+    [a, b].forEach(pt => ctx.fillRect(pt.x - 4, pt.y - 4, 8, 8));
+    ctx.restore();
+  };
+
   // ── pan and zoom ──────────────────────────────────────────────────────────
   let dragging = null;
   canvas.addEventListener('pointerdown', e => {
-    dragging = { sx: e.clientX, sy: e.clientY, cx: view.cx, cz: view.cz };
+    dragging = { sx: e.clientX, sy: e.clientY, cx: view.cx, cz: view.cz, moved: 0 };
     canvas.classList.add('dragging');
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', e => {
     if (!dragging) return;
+    dragging.moved = Math.max(dragging.moved,
+      Math.hypot(e.clientX - dragging.sx, e.clientY - dragging.sy));
     view.cx = dragging.cx - (e.clientX - dragging.sx) / view.scale;
     view.cz = dragging.cz - (e.clientY - dragging.sy) / view.scale;
     paint();
   });
   const endDrag = e => {
     if (!dragging) return;
+    // A CLICK SELECTS, A DRAG PANS, and the difference is 4px of travel. Every
+    // pointerdown starts a pan here -- it has since tier 1 -- so selection
+    // cannot take pointerdown without taking panning with it. Deciding on
+    // RELEASE, by how far the pointer actually went, leaves the pan untouched:
+    // a drafter who moved the sheet gets no selection, and one who tapped a
+    // wall gets no pan they can see.
+    if (dragging.moved <= 4 && e) {
+      const rect = canvas.getBoundingClientRect();
+      const hit = wallAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+      // An empty click clears, which is the other half of select: without it
+      // the drafter has no way to put a selection down.
+      selectedSeg = hit || null;
+      paint();
+    }
     dragging = null;
     canvas.classList.remove('dragging');
     if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
@@ -1345,6 +1427,7 @@
 
   window.addEventListener('keydown', e => {
     if (e.key === '0') { fit(); paint(); }
+    if (e.key === 'Escape' && selectedSeg) { selectedSeg = null; paint(); }
   });
   window.addEventListener('resize', resize);
 
