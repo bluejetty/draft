@@ -5988,6 +5988,10 @@ class Component extends DCLogic {
         const at = await window.SharedFileStore.loadSharedFileAt(MODEL_STORAGE_BUCKET);
         file = at.file;
         this._storeRev = at.rev;
+        // The copy this page starts from. _writeDrawingToStore compares
+        // against it to tell "someone else changed the model" from "LAYOUT
+        // saved a sheet"; until this page writes, what it loaded IS its copy.
+        this._storeBaseline = at.file ? await at.file.text() : null;
       }
       if (!file) return outcome;
       const raw = await file.text();
@@ -6173,12 +6177,71 @@ class Component extends DCLogic {
   // (`_saveGeneration` is a per-tab ordering guard — it decides which of THIS
   // tab's in-flight writes gets to clear the dirty flag. It never knew about
   // anyone else's writes; this is what does.)
+  // KEY ORDER MUST NOT DECIDE ANYTHING HERE. Two pages serialise this file and
+  // the format guarantees no order, so a plain string compare would call an
+  // identical drawing a conflict — and the cost of a false conflict is that
+  // the drafter cannot save at all, which is worse than the bug being fixed.
+  // Sorting keys on the way out makes the compare order-insensitive while
+  // staying a compare of the PERSISTED forms, which is what matters: in-memory
+  // identity is meaningless across copies once the vertex pool has rebuilt.
+  //
+  // ARRAYS KEEP THEIR ORDER, and no test can currently show that mattering:
+  // both writers emit arrays in the order they read them, so nothing produces
+  // a reordered-but-identical walls list. Sorting them would pass every spec
+  // here too. Left ordered because that is the plain reading of "is this the
+  // same document", and said out loud because a reader who sorts them will see
+  // the suite stay green.
+  _stableJSON(value) {
+    if (Array.isArray(value)) return `[${value.map(v => this._stableJSON(v)).join(',')}]`;
+    if (value && typeof value === 'object') {
+      return `{${Object.keys(value).sort()
+        .map(k => `${JSON.stringify(k)}:${this._stableJSON(value[k])}`).join(',')}}`;
+    }
+    return JSON.stringify(value === undefined ? null : value);
+  }
+
+  // Does the store hold a change to a key this page owns? `layout` is LAYOUT's
+  // and `specs` is SPECS'; everything else is the model's, and since TIER 3a
+  // MODEL.html writes walls among it.
+  _modelKeysDiffer(baseline, stored) {
+    const strip = obj => {
+      const { layout, specs, ...rest } = obj || {};
+      void layout; void specs;
+      return rest;
+    };
+    return this._stableJSON(strip(baseline)) !== this._stableJSON(strip(stored));
+  }
+
+  // Write the drawing to the shared bucket, guarded by the revision we last
+  // saw there. If someone else wrote in between the write is REFUSED, and what
+  // happens next depends ENTIRELY on what they changed.
+  //
+  // This used to merge unconditionally, on a stated assumption: "every key in
+  // this file is the Model Space's own and our copy is the current one, except
+  // `layout`, which is LAYOUT's." That was true while LAYOUT was the only
+  // other writer. TIER 3a made it false — MODEL.html writes walls — and the
+  // consequence was a live bug with no race in it: the revision check caught
+  // the collision and the merge threw the catch away, so a corner moved and
+  // saved on the new page was silently overwritten by this page's stale copy
+  // on its very next edit, reported as SAVED. Stale writer wins, on the path
+  // built to honour PR #178's rule that the store must not eat work.
+  //
+  // So the merge is narrowed to the case it was written for. If the only
+  // difference is `layout`/`specs`, take theirs and write again exactly as
+  // before. If any model key differs, STOP: write nothing, stay dirty, and put
+  // it in front of the drafter. A refusal the drafter can see beats a merge
+  // that quietly picks a winner.
   async _writeDrawingToStore(file, triesLeft = 3) {
     const store = window.SharedFileStore;
     try {
       this._storeRev = await store.saveSharedFile(file, MODEL_STORAGE_BUCKET, {
         ifRev: Number.isInteger(this._storeRev) ? this._storeRev : null,
       });
+      // What we just put there is now the copy we are current with. Read from
+      // the FILE, not re-serialised from state: by the time this resolves the
+      // drafter may have edited again, and a baseline built from that would
+      // record a drawing the store never held.
+      this._storeBaseline = await file.text();
       return;
     } catch (error) {
       if (!error?.stale || triesLeft <= 0) throw error;
@@ -6186,11 +6249,24 @@ class Component extends DCLogic {
     const at = await store.loadSharedFileAt(MODEL_STORAGE_BUCKET);
     this._storeRev = at.rev;
     if (at.file) {
+      let stored = null;
       try {
-        const stored = JSON.parse(await at.file.text());
-        if (stored && typeof stored.layout === 'object') this._layoutData = stored.layout;
-        if (stored && typeof stored.specs === 'object') this._specsData = stored.specs;
+        stored = JSON.parse(await at.file.text());
       } catch { /* unreadable — our own copy is the better one to keep */ }
+      if (stored) {
+        // No baseline means this page has never loaded or written a readable
+        // copy, so there is nothing to compare and nothing to claim: behave as
+        // before rather than refuse a save on a suspicion.
+        let baseline = null;
+        try { baseline = this._storeBaseline ? JSON.parse(this._storeBaseline) : null; } catch { /* ditto */ }
+        if (baseline && this._modelKeysDiffer(baseline, stored)) {
+          const conflict = new Error('The drawing was changed by another page.');
+          conflict.conflict = true;
+          throw conflict;
+        }
+        if (typeof stored.layout === 'object') this._layoutData = stored.layout;
+        if (typeof stored.specs === 'object') this._specsData = stored.specs;
+      }
     }
     // Rebuilt so the sheet we just took rides out with it.
     return this._writeDrawingToStore(this._drawingFile(), triesLeft - 1);
@@ -6222,7 +6298,22 @@ class Component extends DCLogic {
       })
       .catch(error => {
         console.warn('Unable to save model drawing:', error);
-        if (generation === this._saveGeneration) this.setState({
+        if (generation !== this._saveGeneration) return;
+        // A CONFLICT IS NOT A FAILURE, and telling a drafter "Save failed"
+        // when another page holds newer work sends them to the wrong problem.
+        // Nothing was written and this page's edit is still here; the choice —
+        // keep editing, or reload and lose it — is theirs.
+        if (error?.conflict) {
+          this.setState({
+            persistenceStatus: 'UNSAVED',
+            persistenceError: 'Changed elsewhere',
+            drawingMessage: 'Another page saved this drawing. Nothing was written — '
+              + 'your edits are still here. Reload to take their version, at the cost of yours.',
+            drawingMessageError: true,
+          });
+          return;
+        }
+        this.setState({
           persistenceStatus: 'UNSAVED',
           persistenceError: 'Save failed',
         });
