@@ -233,6 +233,92 @@ if (!window.DraftCutView) {
     }));
   }
 
+  // ── WHERE A FLOOR ACTUALLY IS (board #292) ─────────────────────────────
+  //
+  // A floor-assembly band claims "there is a framed floor here". The old
+  // rule took min..max of the crossing positions within one body, which is
+  // only the same claim when the body is solid all the way across. For a U
+  // or courtyard footprint the cut crosses the same body's walls with a real
+  // GAP between the wings, and one band bridged the open courtyard -- a
+  // framed floor drawn over open air, the same lie audit C5 fixed for
+  // garages, now inside a single body.
+  //
+  // THE FLOOR POLYGON IS THE ANSWER, not a pairing of wall crossings. The
+  // work order proposed pairing consecutive crossings enter/exit along u,
+  // and on today's fixtures that works -- every wall in both is exterior.
+  // It stops working the moment an interior wall exists: a cut through a
+  // partitioned house yields three crossings, the pairing opens a gap under
+  // the partition, and the band stops in the middle of a floor that is
+  // really there. room-grow.js and closets.js already build interior walls.
+  //
+  // A floor polygon has no such problem in either direction: a courtyard has
+  // no floor over it, and a partition does not touch the polygon at all. It
+  // is also the semantic truth rather than a proxy for it -- the question
+  // was always "is there a floor here", and floors() answers it.
+  //
+  // Even-odd along the cut, which is why a U yields two runs and a
+  // rectangle one.
+
+  const pointInPolygon = (pt, pts) => {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i, i += 1) {
+      const a = pts[i], b = pts[j];
+      if ((a.z > pt.z) !== (b.z > pt.z)
+        && pt.x < (b.x - a.x) * (pt.z - a.z) / (b.z - a.z) + a.x) inside = !inside;
+    }
+    return inside;
+  };
+
+  // The [s0,s1] parameter ranges along a->b that lie inside one polygon.
+  const insideRanges = (a, b, pts) => {
+    const hits = [];
+    for (let i = 0; i < pts.length; i += 1) {
+      const c = pts[i], d = pts[(i + 1) % pts.length];
+      const denom = (b.x - a.x) * (d.z - c.z) - (b.z - a.z) * (d.x - c.x);
+      if (Math.abs(denom) < 1e-9) continue;
+      const s = ((c.x - a.x) * (d.z - c.z) - (c.z - a.z) * (d.x - c.x)) / denom;
+      const t = ((c.x - a.x) * (b.z - a.z) - (c.z - a.z) * (b.x - a.x)) / denom;
+      if (s < 0 || s > 1 || t < 0 || t > 1) continue;
+      hits.push(s);
+    }
+    hits.sort((x, y) => x - y);
+    // A cut through a VERTEX crosses two edges at the same parameter and
+    // would toggle twice, turning a solid floor into two runs meeting at a
+    // point. Collapse those before walking.
+    const uniq = hits.filter((s, i) => i === 0 || s - hits[i - 1] > 1e-7);
+    const ranges = [];
+    let inside = pointInPolygon(a, pts);
+    let start = inside ? 0 : null;
+    uniq.forEach(s => {
+      if (inside) { ranges.push([start, s]); inside = false; } else { start = s; inside = true; }
+    });
+    if (inside) ranges.push([start, 1]);
+    return ranges;
+  };
+
+  // Merged u-runs where the cut lies over any of the given floor polygons.
+  function floorRuns(cut, axis, floors) {
+    const a = cut.startPt, b = cut.endPt;
+    const uAt = s => (a.x + (b.x - a.x) * s) * axis.x + (a.z + (b.z - a.z) * s) * axis.z;
+    const spans = [];
+    floors.forEach(floor => {
+      insideRanges(a, b, floor.points).forEach(([s0, s1]) => {
+        const u0 = uAt(s0), u1 = uAt(s1);
+        spans.push({ min: Math.min(u0, u1), max: Math.max(u0, u1) });
+      });
+    });
+    spans.sort((x, y) => x.min - y.min);
+    const merged = [];
+    spans.forEach(span => {
+      const last = merged[merged.length - 1];
+      // Touching runs are one floor: two polygons meeting on a shared edge
+      // are not a courtyard. Only a real opening survives this.
+      if (last && span.min <= last.max + 0.01) last.max = Math.max(last.max, span.max);
+      else merged.push({ ...span });
+    });
+    return merged;
+  }
+
   // Where the cut segment crosses a wall centreline: the position along the
   // viewer's horizontal axis, the wall, and how far along the wall it lands
   // (for reading fenestrations at the crossing).
@@ -456,11 +542,23 @@ if (!window.DraftCutView) {
     // slab on grade, so a band drawn across it claimed a framed floor and an
     // open storey underneath; with a detached garage the same band ran
     // across the open ground between the two buildings.
-    const levelSpan = levelId => {
+    // RUNS, not one span. floorRuns answers from the level's own floor
+    // polygon; the crossings answer only when the level has no floor to ask
+    // -- an older or hand-built drawing -- and that fallback is the OLD
+    // min..max, named here rather than left as a silent default so a
+    // courtyard drawn without floors is a known limit and not a surprise.
+    const levelRuns = levelId => {
+      const polys = env.floors().filter(floor => floor.levelId === levelId
+        && !floor.garage && (floor.view || 'plan') !== 'foundation'
+        && (floor.points || []).length >= 3);
+      if (polys.length) {
+        const runs = floorRuns(cut, axis, polys);
+        if (runs.length) return runs;
+      }
       const us = crossings
         .filter(c => c.wall.levelId === levelId && !c.garage)
         .map(c => c.u);
-      return us.length ? { min: Math.min(...us), max: Math.max(...us) } : null;
+      return us.length ? [{ min: Math.min(...us), max: Math.max(...us) }] : [];
     };
 
     // Foundation first: each crossed wall at its own heights — a basement
@@ -487,16 +585,25 @@ if (!window.DraftCutView) {
     // bears too, but its slab is its own, higher and sloped, so its
     // crossings are kept out of the house span and drawn below.
     const bearingCrossings = fdnCrossings.filter(c => c.wall.baseHeight <= 0.01 && !c.garage);
-    const fdnSpan = bearingCrossings.length
-      ? { min: Math.min(...bearingCrossings.map(c => c.u)), max: Math.max(...bearingCrossings.map(c => c.u)) }
-      : null;
-    if (fdnSpan && fdnSpan.max - fdnSpan.min > 1) {
+    // The house slab, by the same rule as the floors above: its own polygon
+    // where there is one, the bearing crossings where there is not. The
+    // garage slab is a separate polygon, already flagged, and stays out.
+    const slabPolys = env.floors().filter(floor => floor.levelId === 1
+      && !floor.garage && (floor.view || 'plan') === 'foundation'
+      && (floor.points || []).length >= 3);
+    const fdnRuns = slabPolys.length ? floorRuns(cut, axis, slabPolys) : [];
+    const fdnSpans = fdnRuns.length ? fdnRuns
+      : (bearingCrossings.length
+        ? [{ min: Math.min(...bearingCrossings.map(c => c.u)), max: Math.max(...bearingCrossings.map(c => c.u)) }]
+        : []);
+    fdnSpans.forEach(fdnSpan => {
+      if (fdnSpan.max - fdnSpan.min <= 1) return;
       ctx.fillStyle = 'rgba(150,150,155,0.35)';
       ctx.strokeStyle = INK; ctx.lineWidth = 1;
       const x = X(fdnSpan.min), wid = (fdnSpan.max - fdnSpan.min) * pxPerFt;
       ctx.fillRect(x, Y(fdn.slabTop), wid, (fdn.slabIn / 12) * pxPerFt);
       ctx.strokeRect(x, Y(fdn.slabTop), wid, (fdn.slabIn / 12) * pxPerFt);
-    }
+    });
     // A frost-wall garage's slab: 4" thick, its top 4" below the top of the
     // wall's concrete, between the garage's own bearing walls. The 1/8"/ft
     // fall is toward the door, across the cut, so the band reads level here.
@@ -572,8 +679,11 @@ if (!window.DraftCutView) {
 
     // Floor levels: assembly band, then the crossed walls standing on it.
     stack.floors.forEach(level => {
-      const span = levelSpan(level.id) || fdnSpan;
-      if (span && span.max - span.min > 0.5) {
+      // ONE BAND PER RUN. A U-shaped storey wears two, with the courtyard
+      // between them left as the open air it is.
+      const runs = levelRuns(level.id);
+      (runs.length ? runs : fdnSpans).forEach(span => {
+        if (span.max - span.min <= 0.5) return;
         ctx.fillStyle = 'rgba(89,128,166,0.15)';
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         const x = X(span.min), wid = (span.max - span.min) * pxPerFt;
@@ -586,7 +696,7 @@ if (!window.DraftCutView) {
         ctx.fillText(
           `${formatInchesOnly(level.joistDepthIn)} TJI + ${formatInchesOnly(level.sheathingIn)} SHTG`,
           x + 4, Y((level.floorTop + level.floorBottom) / 2));
-      }
+      });
       crossings.filter(c => c.wall.levelId === level.id && (c.wall.view || 'plan') === 'plan')
         .forEach(c => drawSectionWall(env, ctx, X, Y, pxPerFt, c, level));
     });
@@ -1603,6 +1713,7 @@ if (!window.DraftCutView) {
     sectionWallCrossings,
     cutViewExtents,
     roofBaseElev,
+    floorRuns,
     garageOfWall,
     garageOfRoof,
     isGarageRoof,

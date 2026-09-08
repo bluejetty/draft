@@ -614,6 +614,92 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   }
 }
 
+
+// ── THIRD FIXTURE: A COURTYARD (board #292, item 2) ───────────────────
+//
+// levelSpan took min..max of the crossing positions within one body. For a
+// U footprint the cut crosses the same body's walls with a REAL GAP between
+// the wings, and one band bridged the open courtyard -- a framed floor
+// drawn over open air, the same lie audit C5 fixed for garages, now inside
+// a single body.
+//
+// The fix bands where the FLOOR POLYGON is, not between the outermost
+// walls. Two checks below and they answer different questions: floorRuns is
+// the rule itself, and the painted fills are the proof the painter actually
+// uses it -- a correct rule wired to nothing would pass the first alone.
+{
+  const cFile = path.join(ROOT, 'proto', 'repro-courtyard-house.draft');
+  const cSaved = JSON.parse(fs.readFileSync(cFile, 'utf8'));
+  const cEnv = buildEnv(win, cSaved);
+  const CV = win.DraftCutView;
+
+  // Straight across the open end of the U, at z = +4: through the left leg,
+  // the courtyard, and the right leg.
+  const cut = {
+    id: 'S1', name: 'S1', elev: 0, levelId: null,
+    startPt: { x: -40, z: 4 }, endPt: { x: 40, z: 4 }, dirVec: { x: 0, z: 1 },
+  };
+  const axis = { x: cut.dirVec.z, z: -cut.dirVec.x };
+  const framed = cEnv.floors().filter(f => (f.view || 'plan') !== 'foundation'
+    && !f.garage && (f.points || []).length >= 3);
+
+  // THE FIXTURE'S REACH. A U that is not a U proves nothing about gaps.
+  check('courtyard fixture: it has framed floors', framed.length > 0,
+    `${framed.length} framed floors`);
+  check('courtyard fixture: and they are U-shaped, not rectangles',
+    framed.every(f => f.points.length > 4),
+    `corners ${framed.map(f => f.points.length).join('/')}`);
+
+  if (framed.length) {
+    const runs = CV.floorRuns(cut, axis, [framed[0]]);
+    check('courtyard: the cut yields TWO floor runs, not one',
+      runs.length === 2,
+      `${runs.length} runs: ${runs.map(r => `${r.min.toFixed(1)}..${r.max.toFixed(1)}`).join(' | ')}`);
+    if (runs.length === 2) {
+      const gap = runs[1].min - runs[0].max;
+      check('courtyard: with real open air between them', gap > 1,
+        `gap ${gap.toFixed(2)}ft`);
+      // NOT VACUOUS: the two runs must also be real floor, or "two runs"
+      // could be satisfied by two slivers either side of nothing.
+      check('courtyard: and both runs are real floor, not slivers',
+        runs.every(r => r.max - r.min > 1),
+        runs.map(r => (r.max - r.min).toFixed(2) + 'ft').join(', '));
+    }
+    // THE CONTROL. The same rule over a solid rectangle must give ONE run,
+    // or the fix has simply learned to split everything.
+    const rect = [{ x: -10, z: -10 }, { x: 10, z: -10 }, { x: 10, z: 10 }, { x: -10, z: 10 }];
+    check('courtyard: a solid floor still gives ONE run',
+      CV.floorRuns(cut, axis, [{ points: rect }]).length === 1,
+      `${CV.floorRuns(cut, axis, [{ points: rect }]).length} runs over a plain rectangle`);
+  }
+
+  // AND THE PAINTER USES IT. Band fills carry their own ink, so they can be
+  // counted without inverting the transform; widths are compared as a ratio,
+  // which is scale-free.
+  const BAND_INK = 'rgba(89,128,166,0.15)';
+  const rec = recordingCtx();
+  CV.drawCutView(cEnv, rec.ctx, 900, 600, cut);
+  const bands = rec.fills.filter(f => f.ink === BAND_INK && f.rect);
+  check('courtyard: the section paints floor bands at all', bands.length > 0,
+    `${bands.length} band fills`);
+  if (bands.length) {
+    const byRow = {};
+    bands.forEach(b => { const k = Math.round(b.rect.y); (byRow[k] = byRow[k] || []).push(b.rect); });
+    const rows = Object.values(byRow);
+    check('courtyard: every storey wears TWO bands, not one across the gap',
+      rows.every(r => r.length === 2),
+      rows.map(r => `${r.length}`).join('/') + ' bands per storey');
+    const bridged = rows.filter(r => {
+      const left = Math.min(...r.map(x => x.x));
+      const right = Math.max(...r.map(x => x.x + x.w));
+      const painted = r.reduce((sum, x) => sum + x.w, 0);
+      return painted > (right - left) * 0.9;
+    });
+    check('courtyard: and the courtyard is left unpainted', bridged.length === 0,
+      `${bridged.length} storeys painted across the gap`);
+  }
+}
+
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach(line => console.log(`  \u2718 ${line}`));
