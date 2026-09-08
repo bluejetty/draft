@@ -99,6 +99,54 @@ if (!window.DraftDrawingFormat) {
     }).filter(Boolean);
   };
 
+  // ── LEVEL LOCKS — the second tier of grouping (board #315) ─────────────
+  //
+  // The three tiers, and the reason there are three:
+  //
+  //   items          -> an ASSEMBLY  (one floor, rigid: `groups`)
+  //   assemblies     -> a LEVEL LOCK (across floors: here)
+  //
+  // A lock joins assemblies that must hold the same plan position on
+  // different storeys. Its first customer is the dealt washroom, whose 2x6
+  // wet wall carries every supply in the room: stack that wall floor to
+  // floor and the drain runs straight down. But nothing here knows what a
+  // washroom is -- a lock is any set of groups on different levels, which
+  // is what the order asked for.
+  //
+  // MEMBERS ARE GROUP IDS, NOT ITEM IDS. A lock never reaches past the
+  // assembly to the walls inside it; moving a member is the assembly's own
+  // rigid move, applied to each sibling. One tier per question.
+  //
+  // BREAKING A LOCK IS AN EXPLICIT ACT and leaves no lock behind, so there
+  // is nothing to persist for a broken one -- the same principle as storey
+  // detachment in the BONE model. A drag never breaks it and neither does
+  // distance; if the drafter has not said so, the lock holds.
+  const levelLocks = (rawLocks, groupIds) => {
+    const known = groupIds instanceof Set ? groupIds : new Set(groupIds || []);
+    const seen = new Set();
+    return (Array.isArray(rawLocks) ? rawLocks : []).map(lock => {
+      const id = String(lock?.id || '').trim();
+      if (!id || seen.has(id)) return null;
+      // Members must be groups that actually survived the load. A group the
+      // loader dropped as damaged would otherwise leave a lock pointing at
+      // nothing, and a lock with one live member silently stops locking.
+      const members = Array.isArray(lock?.members)
+        ? [...new Set(lock.members.map(m => String(m || '').trim()).filter(m => known.has(m)))]
+        : [];
+      // A LOCK OF ONE IS NOT A LOCK. Two members are the minimum that can
+      // disagree, so a shorter one is dropped rather than kept as a lock
+      // that can never do anything -- which would read, in the file and on
+      // screen, exactly like a lock that works.
+      if (members.length < 2) return null;
+      seen.add(id);
+      return {
+        id,
+        name: String(lock?.name || 'LEVEL LOCK').trim().toUpperCase() || 'LEVEL LOCK',
+        members,
+      };
+    }).filter(Boolean);
+  };
+
   const dimensions = (rawDimensions, levelIds) => {
     const seen = new Set();
     return (Array.isArray(rawDimensions) ? rawDimensions : []).map(dimension => {
@@ -1260,6 +1308,7 @@ if (!window.DraftDrawingFormat) {
     levelId,
     levels,
     cuts,
+    levelLocks,
     dimensions,
     columns,
     beams,
