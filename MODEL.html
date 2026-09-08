@@ -82,7 +82,7 @@
   #plan.dragging { cursor:grabbing; }
   /* Over a grabbable corner. Declared AFTER .dragging so it wins while a
      corner is actually being dragged -- equal specificity, later rule. */
-  #plan.over-corner { cursor:move; }
+  #plan.over-corner, #plan.over-wall { cursor:move; }
 
   #readout { position:fixed; left:12px; bottom:12px; z-index:5;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
@@ -1435,65 +1435,154 @@
     return G.nearestVertex(ends, worldPt, CORNER_GRAB_PX / view.scale);
   };
 
-  // Snap to another corner on screen. Candidates are excluded by reference AND
-  // by coincident position, matching _withoutVertices (MODEL.dc.html:16543):
+  // Corners on screen that a moving vertex may snap to. Excluded by reference
+  // AND by coincident position, matching _withoutVertices (MODEL.dc.html:16543):
   // the pool keys corners by (level, view, body), so a garage corner and a
   // house corner can share a spot as two separate objects, and offering one as
   // a snap target for the other would be a snap that moved nothing.
-  const cornerSnap = (worldPt, moving) => {
-    const G = window.DraftGeometry2D;
-    const candidates = [];
+  const snapCandidates = moving => {
+    const out = [];
     walls().forEach(wall => {
       [wall.start, wall.end].forEach(v => {
-        if (!v || v === moving) return;
-        if (Math.abs(v.x - moving.x) < 0.001 && Math.abs(v.z - moving.z) < 0.001) return;
-        candidates.push(v);
+        if (!v || moving.includes(v)) return;
+        if (moving.some(m => Math.abs(v.x - m.x) < 0.001 && Math.abs(v.z - m.z) < 0.001)) return;
+        out.push(v);
       });
     });
-    return G.nearestVertex(candidates, worldPt, CORNER_SNAP_PX / view.scale);
+    return out;
   };
 
-  // ONE ENTRY PER COMPLETED DRAG. The pool is what keeps this small: a drag
-  // touched exactly one object, so restoring that object's four numbers puts
-  // back every wall that moved with it.
+  const cornerSnap = (worldPt, moving) =>
+    window.DraftGeometry2D.nearestVertex(
+      snapCandidates([moving]), worldPt, CORNER_SNAP_PX / view.scale);
+
+  // ── move a whole wall ─────────────────────────────────────────────────────
+  // BOTH ENDS BY THE SAME DELTA. Their corners are pooled, so the neighbouring
+  // walls that meet them travel too and the outline deforms around the moved
+  // wall — the ruling, and the conservative one: a wall that detached from its
+  // corners instead would be silently unhooked from the pool, the same failure
+  // shape as a dropped srcId and just as invisible until much later. A true
+  // detach, if it is ever wanted, is a deliberate gesture with its own name.
+  //
+  // THE OLD PAGE HAS NO SUCH GESTURE — its SELECT drag grabs a vertex
+  // (_findVertexHit, MODEL.dc.html:10512) and a press on a wall body away from
+  // a corner moves nothing. So this is the first behaviour on this page with
+  // nothing to copy, and the one thing that IS copied is the precedence: the
+  // old page tests for a vertex before it tests for a line
+  // (MODEL.dc.html:16791 then :16799), and so does pointerdown below.
+  //
+  // A CONSEQUENCE OF THAT ORDER, stated rather than discovered later: the
+  // corner zone is 30px and the body zone is 12, so on a wall shorter than
+  // about 60px on screen the two corner zones meet and there is no body left
+  // to grab. Zoom in and it appears. That is the old page's own precedence
+  // producing it, not a rule added here.
+  const wallBodyAt = worldPt => {
+    if (!selectedSeg || !walls().includes(selectedSeg)) return null;
+    if (!selectedSeg.start || !selectedSeg.end) return null;
+    const { d } = window.DraftGeometry2D.pointToSegment(worldPt, selectedSeg);
+    return d < SELECT_GRAB_PX / view.scale ? selectedSeg : null;
+  };
+
+  // The two vertex objects a wall drag moves. NOT deduped, and it took a
+  // mutation to settle that. A wall whose ends were one pooled corner would
+  // travel twice the cursor's distance, so a dedupe looks obviously necessary
+  // — but nothing can reach it: segmentCore drops any wall shorter than 1e-6
+  // before it arrives (drawing-format.js), the pool merges corners closer than
+  // 0.001, and everything in between is sub-pixel, with its two corners on top
+  // of each other. Every press on such a wall is inside the 30px corner zone,
+  // so the body grab below never runs on one. The dedupe that was here could
+  // not be made to fail, which is the same thing as not being a guard.
+  const movingEnds = wall => [wall.start, wall.end];
+
+  // A wall drag snaps by its ENDS, not its body: offer each moving end the
+  // corner nearest to where the raw delta would put it, take the closer of the
+  // two, and shift the whole delta so that end lands exactly. The wall still
+  // moves rigidly — the correction applies to both ends — which is the corner
+  // drag's snap generalised rather than a second rule.
+  const wallSnapDelta = (before, dx, dz) => {
+    const G = window.DraftGeometry2D;
+    const moving = before.map(b => b.vtx);
+    const candidates = snapCandidates(moving);
+    const r = CORNER_SNAP_PX / view.scale;
+    let best = null, bestD = Infinity;
+    before.forEach(b => {
+      const at = { x: b.x + dx, z: b.z + dz };
+      const hit = G.nearestVertex(candidates, at, r);
+      if (!hit) return;
+      const d = Math.hypot(hit.x - at.x, hit.z - at.z);
+      if (d < bestD) { bestD = d; best = { dx: hit.x - b.x, dz: hit.z - b.z }; }
+    });
+    return best;
+  };
+
+  // ONE ENTRY PER COMPLETED DRAG, and an entry is a LIST of vertices: a corner
+  // drag moves one object, a wall drag moves two. The pool is what keeps even
+  // the two small — restoring those objects' numbers puts back every wall that
+  // travelled with them.
   const undoStack = [];
 
   // ── pan and zoom ──────────────────────────────────────────────────────────
   let dragging = null;
-  let cornerDrag = null;
+  // One drag for both gestures: `kind` says whether the press took a corner or
+  // the wall's body, and `before` is the list of pooled vertices it will move
+  // with the numbers they started with.
+  let moveDrag = null;
   canvas.addEventListener('pointerdown', e => {
     const rect = canvas.getBoundingClientRect();
-    // A grabbed corner takes the gesture whole: no pan starts, so the sheet
-    // cannot slide out from under a corner being placed.
-    const grab = cornerAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
-    if (grab) {
-      cornerDrag = {
-        vtx: grab, sx: e.clientX, sy: e.clientY, active: false,
-        before: { x: grab.x, z: grab.z, offX: grab.offX, offZ: grab.offZ },
+    const at = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+    // VERTEX BEFORE BODY — the old page's own precedence (_findVertexHit at
+    // MODEL.dc.html:16791, then _findLineHit at :16799). A press near a corner
+    // is a corner press even though it is also on the wall.
+    const corner = cornerAt(at);
+    const body = corner ? null : wallBodyAt(at);
+    if (corner || body) {
+      // A grabbed corner or wall takes the gesture whole: no pan starts, so
+      // the sheet cannot slide out from under geometry being placed.
+      const ends = corner ? [corner] : movingEnds(body);
+      moveDrag = {
+        kind: corner ? 'corner' : 'wall',
+        grab: at,
+        before: ends.map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ })),
+        sx: e.clientX, sy: e.clientY, active: false,
       };
       canvas.setPointerCapture(e.pointerId);
       return;
     }
-    canvas.classList.remove('over-corner');
+    canvas.classList.remove('over-corner', 'over-wall');
     dragging = { sx: e.clientX, sy: e.clientY, cx: view.cx, cz: view.cz, moved: 0 };
     canvas.classList.add('dragging');
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', e => {
-    if (cornerDrag) {
-      const cd = cornerDrag;
-      if (!cd.active && Math.hypot(e.clientX - cd.sx, e.clientY - cd.sy) > DRAG_ARM_PX) cd.active = true;
-      if (cd.active) {
+    if (moveDrag) {
+      const md = moveDrag;
+      if (!md.active && Math.hypot(e.clientX - md.sx, e.clientY - md.sy) > DRAG_ARM_PX) md.active = true;
+      if (md.active) {
         const rect = canvas.getBoundingClientRect();
         const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
-        const pt = cornerSnap(raw, cd.vtx) || raw;
-        cd.vtx.x = pt.x;
-        cd.vtx.z = pt.z;
+        if (md.kind === 'corner') {
+          // The corner goes TO the cursor, not by the cursor's delta — the old
+          // page's node drag writes the point through (MODEL.dc.html:10848),
+          // so a corner grabbed off-centre still lands under the pointer.
+          const pt = cornerSnap(raw, md.before[0].vtx) || raw;
+          md.before[0].vtx.x = pt.x;
+          md.before[0].vtx.z = pt.z;
+        } else {
+          // A WALL MOVES BY THE DELTA, and the delta is measured from where
+          // the press landed to where the cursor is now — never accumulated
+          // move to move. Absolute is what makes "both ends travelled the same
+          // distance" exactly true, rather than true to within the float drift
+          // of a hundred pointermove events.
+          let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          const snapped = wallSnapDelta(md.before, dx, dz);
+          if (snapped) { dx = snapped.dx; dz = snapped.dz; }
+          md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+        }
         // Live, on every move, exactly where the old page relinks — not once
         // on release. The two agree at the end of a completed drag; they part
         // company on a drag the browser cancels mid-gesture, and matching the
         // old page is the point.
-        relinkVertex(cd.vtx);
+        md.before.forEach(b => relinkVertex(b.vtx));
         paint();
       }
       return;
@@ -1501,10 +1590,13 @@
     if (!dragging) {
       // HOVER HINT. The handles are 8px squares and the grab zone is 30, so
       // without this there is nothing on screen telling a drafter where the
-      // corner tool starts and the pan ends.
+      // corner tool starts and the pan ends — and now the same for the body of
+      // a selected wall, whose grab zone has no marks on it at all.
       const rect = canvas.getBoundingClientRect();
-      canvas.classList.toggle('over-corner',
-        !!cornerAt(toWorld(e.clientX - rect.left, e.clientY - rect.top)));
+      const at = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+      const corner = cornerAt(at);
+      canvas.classList.toggle('over-corner', !!corner);
+      canvas.classList.toggle('over-wall', !corner && !!wallBodyAt(at));
       return;
     }
     dragging.moved = Math.max(dragging.moved,
@@ -1514,15 +1606,15 @@
     paint();
   });
   const endDrag = e => {
-    if (cornerDrag) {
-      const cd = cornerDrag;
+    if (moveDrag) {
+      const md = moveDrag;
       // A grab that never armed moved nothing, so there is nothing to undo —
       // and a snapshot pushed for it would make one Ctrl+Z do nothing visible.
-      if (cd.active) {
-        undoStack.push({ vtx: cd.vtx, ...cd.before });
+      if (md.active) {
+        undoStack.push(md.before);
         markDirty();
       }
-      cornerDrag = null;
+      moveDrag = null;
       if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
       return;
     }
@@ -1569,13 +1661,18 @@
       const step = undoStack.pop();
       if (!step) return;
       e.preventDefault();
-      step.vtx.x = step.x;
-      step.vtx.z = step.z;
-      // The offsets go BACK to what they were, not to a re-measure. Undo that
-      // recomputed them would leave the corner at its old position carrying a
-      // new offset — a different drawing from the one before the drag, and one
-      // whose difference nothing on screen would show.
-      if (step.offX !== undefined) { step.vtx.offX = step.offX; step.vtx.offZ = step.offZ; }
+      // ONE PRESS IS ONE UNDO whether the press moved one corner or a wall's
+      // two: the entry is the list the drag captured, so a wall goes back in
+      // one keystroke rather than two.
+      step.forEach(b => {
+        b.vtx.x = b.x;
+        b.vtx.z = b.z;
+        // The offsets go BACK to what they were, not to a re-measure. Undo that
+        // recomputed them would leave the corner at its old position carrying a
+        // new offset — a different drawing from the one before the drag, and one
+        // whose difference nothing on screen would show.
+        if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
+      });
       // AN UNDO IS AN EDIT TOO. The drawing on screen no longer matches the
       // file — going back to where you started is only free if you never
       // saved the trip out.
