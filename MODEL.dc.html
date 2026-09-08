@@ -14026,8 +14026,20 @@ class Component extends DCLogic {
     // repeat a stale note.
     const built = this._boneFilled || [];
     this._boneFilled = null;
+    // Per-press, so a floor built two presses ago does not get a washroom
+    // dealt onto it now.
+    this._shellBuiltLevels = new Set();
     floors.forEach(level => {
-      if (this._buildHouseWalls(level.id, 'plan', 'stud_2x6')) built.push(`${level.name} walls`);
+      // BOARD #315: remember the floors whose shell this press actually
+      // built. A floor the drafter had already put walls on is skipped here,
+      // and the washroom must be skipped there too -- a hand-drawn wall is
+      // speech exactly as a room stamp is. auto-house.spec.js caught this:
+      // it hand-draws one wall on the main floor, expects BUILD HOUSE to
+      // leave that floor alone, and found a washroom dealt onto it.
+      if (this._buildHouseWalls(level.id, 'plan', 'stud_2x6')) {
+        built.push(`${level.name} walls`);
+        (this._shellBuiltLevels ||= new Set()).add(level.id);
+      }
       if (this._buildHouseFloor(level.id, 'floor')) built.push(`${level.name} floor`);
     });
     if (this._buildHouseWalls(1, 'foundation', 'concrete_8')) built.push('FOUNDATION walls');
@@ -17112,8 +17124,13 @@ class Component extends DCLogic {
     this._ensureDrawingCollections();
     const declined = this._washroomDeclined || new Set();
     const stamped = new Set(this._roomStamps().filter(tag => tag.base).map(tag => tag.levelId));
+    // ONLY WHERE THE BONE JUST BUILT THE SHELL. A floor the drafter had
+    // already walled is one BUILD HOUSE leaves alone, and the washroom
+    // leaves it alone for the same reason: they spoke for that floor.
+    const shellBuilt = this._shellBuiltLevels || new Set();
     const floors = this._floorLevels().filter(level =>
-      !stamped.has(level.id) && !declined.has(level.id) && this._houseOutline(level.id)
+      shellBuilt.has(level.id)
+      && !stamped.has(level.id) && !declined.has(level.id) && this._houseOutline(level.id)
       && !(this._levelLocks || []).some(lock => lock.members.some(id =>
         (this._groups || []).find(g => g.id === id && g.washroomLevelId === level.id))));
     if (!floors.length) return 0;

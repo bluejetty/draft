@@ -163,7 +163,13 @@ test('re-running BUILD HOUSE never doubles the marked openings or the dims', asy
 
   const saved = await h.savedDrawing(page);
   expect(saved.fenestrations).toHaveLength(3);
-  expect(saved.walls).toHaveLength(12);
+  // The SHELL must not double. Board #315 also deals a washroom on each
+  // silent floor, so counting every wall on the level would be counting
+  // two different things at once.
+  expect(saved.walls.filter(wall => wall.wallType === 'stud_2x6'
+    && (wall.view || 'plan') === 'plan' && wall.refLine === 'left')
+    .concat(saved.walls.filter(wall => wall.view === 'foundation')))
+    .toHaveLength(12);
   expect(saved.dimensions).toHaveLength(first.dimensions.length);
 });
 

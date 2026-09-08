@@ -23,6 +23,16 @@ async function buildHouse(page) {
   await page.waitForTimeout(300);
 }
 
+// THE SHELL, NOT EVERY WALL ON THE LEVEL. Board #315 made the bone deal a
+// washroom on each silent floor, so a floor now carries its exterior run AND
+// four interior walls that are nothing to do with the shell. These tests are
+// about the shell, so they count the shell: the walls that trace the outline.
+// Re-pinned to the ruling rather than loosened -- the counts below are still
+// exact, they are just exact about the right thing.
+const shellWalls = (saved, levelId) => saved.walls.filter(wall =>
+  wall.levelId === levelId && (wall.view || 'plan') === 'plan'
+  && wall.wallType === 'stud_2x6' && wall.refLine === 'left');
+
 test('BUILD HOUSE generates walls, floors, slab, and roof from the outline', async ({ page }) => {
   await h.openModel(page);
   await drawOutlineRect(page);
@@ -33,7 +43,7 @@ test('BUILD HOUSE generates walls, floors, slab, and roof from the outline', asy
 
   // MAIN FL + 2ND FL: four 2×6 stud walls each, on PLAN.
   for (const levelId of [3, 5]) {
-    const walls = saved.walls.filter(wall => wall.levelId === levelId);
+    const walls = shellWalls(saved, levelId);
     expect(walls).toHaveLength(4);
     walls.forEach(wall => {
       expect(wall.wallType).toBe('stud_2x6');
@@ -97,7 +107,11 @@ test('a second BUILD HOUSE click never doubles the shell', async ({ page }) => {
   await buildHouse(page);
 
   const saved = await h.savedDrawing(page);
-  expect(saved.walls).toHaveLength(12);
+  // Three levels of shell: the second press must add none of them again.
+  // (The dealt washrooms are counted by tests/washroom-deal.spec.js; this
+  // test is about the shell not doubling.)
+  expect([...shellWalls(saved, 3), ...shellWalls(saved, 5),
+    ...saved.walls.filter(w => w.view === 'foundation')]).toHaveLength(12);
   expect(saved.floors).toHaveLength(3);
   expect(saved.lines).toHaveLength(8);
   expect(saved.roofs).toHaveLength(1);
@@ -149,8 +163,13 @@ test('BUILD HOUSE only fills levels that are still empty', async ({ page }) => {
 
   const saved = await h.savedDrawing(page);
   // MAIN FL keeps only the hand-drawn wall; the other levels got theirs.
+  //
+  // AND NO WASHROOM ON MAIN EITHER, which is the point of this test after
+  // board #315: a hand-drawn wall is the drafter speaking for that floor,
+  // so the bone leaves the whole floor alone -- shell and washroom both.
+  // The first version of the deal missed that and dealt one here.
   expect(saved.walls.filter(wall => wall.levelId === 3)).toHaveLength(1);
-  expect(saved.walls.filter(wall => wall.levelId === 5)).toHaveLength(4);
+  expect(shellWalls(saved, 5)).toHaveLength(4);
   expect(saved.walls.filter(wall => wall.levelId === 1)).toHaveLength(4);
   // Floors, footings, and roof still build everywhere.
   expect(saved.floors).toHaveLength(3);
