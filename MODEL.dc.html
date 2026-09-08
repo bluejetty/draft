@@ -28,6 +28,9 @@
 <script src="./toy-constraints.js"></script>
 <script src="./toy-context.js"></script>
 <script src="./closets.js"></script>
+<!-- Board #315: the predesigned washroom and the second tier of grouping. -->
+<script src="./washroom.js"></script>
+<script src="./level-lock.js"></script>
 <script src="./bone-sound.js"></script>
 <script src="./fen-labels.js"></script>
 <script src="./build-house.js"></script>
@@ -3129,6 +3132,7 @@ class Component extends DCLogic {
     if (!Array.isArray(this._notes)) this._notes = [];
     if (!Array.isArray(this._roomTags)) this._roomTags = [];
     if (!Array.isArray(this._groups)) this._groups = [];
+    if (!Array.isArray(this._levelLocks)) this._levelLocks = [];
     if (!Array.isArray(this._underlays)) this._underlays = [];
   }
 
@@ -3472,6 +3476,13 @@ class Component extends DCLogic {
         members: group.members.map(member => ({ type: member.type, id: member.id })),
         wallSettings: group.wallSettings ? { ...group.wallSettings } : null,
       })),
+      // Board #315: the second tier of grouping rides beside the first.
+      levelLocks: (this._levelLocks || []).map(lock => ({
+        id: lock.id,
+        name: lock.name,
+        members: [...lock.members],
+      })),
+      nextLevelLockId: this._nextLevelLockId || 1,
       nextGroupId: this._nextGroupId || 1,
       nextDrawingItemId: this._nextDrawingItemId || 1,
       // LAYOUT sheets ride the drawing untouched: the LAYOUT page owns them,
@@ -5908,6 +5919,19 @@ class Component extends DCLogic {
          };
        }).filter(Boolean) : [];
        skipped += damaged(saved.groups, this._groups.length);
+       // AFTER the groups, and that order is load-bearing: a lock's members
+       // are group ids, and the validator drops a member naming a group the
+       // loader threw away. Read first, it would keep locks pointing at
+       // nothing -- which looks exactly like a lock that works.
+       this._levelLocks = format.levelLocks(saved.levelLocks,
+         new Set(this._groups.map(group => group.id)));
+       skipped += damaged(saved.levelLocks, this._levelLocks.length);
+       const lockNums = this._levelLocks
+         .map(lock => Number(String(lock.id).replace(/^lock-/, '')))
+         .filter(Number.isInteger);
+       this._nextLevelLockId = Math.max(
+         Number(saved.nextLevelLockId) || 1,
+         lockNums.length ? Math.max(...lockNums) + 1 : 1);
        const numericGroupIds = this._groups
          .map(group => Number(String(group.id).replace(/^group-/, '')))
          .filter(Number.isInteger);
@@ -6383,6 +6407,10 @@ class Component extends DCLogic {
     this._notes      = []; // leader annotations — anchor, text point, style
     this._roomTags   = []; // auto room names (WC 1 / KITCHEN / BEDROOM B2) on ROOM-IDS-AREA
      this._groups     = [];
+     // Board #315: level locks join assemblies across floors. Cleared with
+     // the groups they join, for the same reason.
+     this._levelLocks = [];
+     this._nextLevelLockId = 1;
      this._nextGroupId = 1;
      this._nextDrawingItemId = 1;
     this._nextDimensionId = 1;
@@ -16878,6 +16906,95 @@ class Component extends DCLogic {
       : type === 'dimension' ? this._selectedDimensions : this._selectedSegs;
     if (selected) target.add(item);
     else target.delete(item);
+  }
+
+  // ─── LEVEL LOCKS (board #315) ────────────────────────────────────────────
+  // The second tier: assemblies on different floors that must hold the same
+  // plan position. Its first customer is the dealt washroom, whose 2x6 wet
+  // wall carries every supply in the room -- stack that wall and the drain
+  // runs straight down -- but nothing here knows what a washroom is.
+
+  // THE RULES LIVE IN level-lock.js AND ARE READ HERE, the same split as
+  // closets.js: which lock holds a group, who its siblings are, what a lock
+  // of one is worth, and that a shared corner is moved once -- all pinned by
+  // proto/level-lock-harness.js, which this page cannot be. What stays here
+  // is the half that owns the real point objects.
+  _levelLockFor(group) {
+    if (!group) return null;
+    return window.DraftLevelLock.lockFor(this._levelLocks, group.id);
+  }
+
+  _levelLockSiblings(group) {
+    if (!group) return [];
+    return window.DraftLevelLock.siblingIds(this._levelLocks, group.id)
+      .map(id => (this._groups || []).find(other => other.id === id))
+      .filter(Boolean);
+  }
+
+  // EVERY POINT ONCE. Walls carry start/end, floors carry a points array, and
+  // a corner shared between two walls of the same assembly is ONE object in
+  // the vertex pool -- so a naive walk would move it twice and the assembly
+  // would tear itself apart at its own corners. Collected into a Set first,
+  // which is identity-based and exactly the right instrument.
+  _translateItemsBy(items, dx, dz) {
+    const points = window.DraftLevelLock.uniquePoints(items);
+    window.DraftLevelLock.translate(points, dx, dz);
+    // Same as every other move in the page: a dragged linked vertex
+    // re-measures its master offset rather than dropping the link. That part
+    // stays here -- the module owns geometry, not the boneyard.
+    points.forEach(point => this._relinkVertex(point));
+    return points.length;
+  }
+
+  // MOVE THE SIBLINGS. Called with the delta a member group has ALREADY
+  // moved by, so the mover is never moved twice -- the caller owns its own
+  // move and this owns the others.
+  //
+  // Plan only. Per-floor properties (heights, the level a wall sits on) stay
+  // per-floor: a lock says "the same place on the plan", not "the same
+  // storey", which is the whole point of it spanning storeys.
+  _applyLevelLockDelta(group, dx, dz) {
+    if (!group || (Math.abs(dx) < 1e-9 && Math.abs(dz) < 1e-9)) return 0;
+    const siblings = this._levelLockSiblings(group);
+    if (!siblings.length) return 0;
+    let moved = 0;
+    siblings.forEach(sibling => {
+      moved += this._translateItemsBy(this._groupItems(sibling), dx, dz);
+    });
+    return moved;
+  }
+
+  // BREAKING IS AN EXPLICIT ACT, and that is the rule rather than a default.
+  // A drag never breaks a lock and neither does distance -- the same
+  // principle as storey detachment in the BONE model. If the drafter has not
+  // said so, the lock holds, however far apart the assemblies end up.
+  //
+  // Breaking removes the lock outright rather than marking it broken: a
+  // broken lock and no lock behave identically, and one of them is a state
+  // to carry, migrate and get wrong later.
+  _breakLevelLock(lock) {
+    if (!lock) return false;
+    const before = (this._levelLocks || []).length;
+    this._levelLocks = window.DraftLevelLock.breakLock(this._levelLocks, lock.id);
+    if (this._levelLocks.length === before) return false;
+    this._markUnsaved();
+    this.setState({
+      drawingMessage: `${lock.name} broken — each floor's assembly moves alone now.`,
+      drawingMessageError: false,
+    });
+    return true;
+  }
+
+  _lockGroupsAcrossLevels(groups, name = 'LEVEL LOCK') {
+    // A LOCK OF ONE IS NOT A LOCK, and the module refuses it -- the same rule
+    // the format validator enforces on load, so a caller cannot create what a
+    // reload would drop.
+    const lock = window.DraftLevelLock.makeLock(
+      `lock-${this._nextLevelLockId}`, name, (groups || []).map(group => group?.id));
+    if (!lock) return null;
+    this._nextLevelLockId += 1;
+    (this._levelLocks || (this._levelLocks = [])).push(lock);
+    return lock;
   }
 
   _isGroupSelected(group) {
