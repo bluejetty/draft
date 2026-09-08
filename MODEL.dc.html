@@ -6066,6 +6066,17 @@ class Component extends DCLogic {
   // there: _historySnapshot always holds the drawing as it was before the change
   // that is being saved right now.
   _recordHistory() {
+    // FROZEN while one user action is still assembling itself. Board #315:
+    // a bone press PLACES the stairs and then builds, and the placement
+    // marks unsaved per stair — so without this the press landed its own
+    // history entries and ONE PRESS TOOK TWO UNDOS: ctrl-Z peeled the house
+    // off and left the stairs standing in an empty outline. Freezing leaves
+    // _historySnapshot at the pre-press state, so the build's own record
+    // pushes that and a single undo returns the whole press.
+    //
+    // Deliberately not a general "batch" API: one caller, named, released
+    // in a finally. The save itself is untouched — only the undo grain.
+    if (this._historyFrozen) return;
     const snapshot = JSON.stringify(this._serializeDrawing());
     if (snapshot === this._historySnapshot) return;
     if (this._historySnapshot !== null && !this._restoringHistory) {
@@ -6425,10 +6436,6 @@ class Component extends DCLogic {
     // Boards #275: partition edges the drafter deleted stay ungrown for
     // the session; the preview plan memo lives beside it.
     this._declinedGrowEdges = new Set();
-
-    // Board #315: a floor whose stamps the drafter deleted is spoken for —
-    // the bone deals it no default program for the rest of the session.
-    this._roomProgramDeclined = new Set();
     this._roomGrowCache = null;
 
     // Surface-opening drawing state — a free-form hole in a floor or roof.
@@ -13499,10 +13506,26 @@ class Component extends DCLogic {
       // pick" — and a drafter who turned suggestions off in Settings did
       // not stay silent. That setting is the door out, and it is the only
       // one.
+      //
+      // THE ROOM HALF OF Q17 IS NOT HERE. It was built, and it collided
+      // with board #275: deleting every stamp and pressing the bone must
+      // SWEEP the partitions away, while an empty floor must be DEALT a
+      // program — together they regrow the walls the drafter just removed.
+      // Solvable, and solved twice; but Movie's call was that the rooms can
+      // wait, and this half is the actual stall and stands on its own. The
+      // interview engine already owns the defaults, so nothing is lost by
+      // taking it separately.
       const filled = [];
       if (!step && this.state.suggestStairs !== false
         && !this._stairs.some(stair => (stair.view || 'plan') === 'plan')) {
-        const { placed, notes } = this._autoPlaceStairs();
+        // ONE PRESS IS ONE UNDO. The placement below marks unsaved per
+        // stair, which is right when a drafter asked for a suggestion on
+        // its own and wrong inside a press that is about to build.
+        this._historyFrozen = true;
+        let placed = [];
+        let notes = [];
+        try { ({ placed, notes } = this._autoPlaceStairs()); }
+        finally { this._historyFrozen = false; }
         if (placed.length) {
           filled.push('stairs placed (no set on the plan)');
         } else if (notes.length) {
@@ -13511,11 +13534,6 @@ class Component extends DCLogic {
           // bone. Already Q17-correct; kept exactly.
           this.setState({ drawingMessage: notes.join(' '), drawingMessageError: false });
         }
-      }
-      // And the rooms, before the build so the grower sees the stamps.
-      const roomsDealt = this._dealDefaultProgram();
-      if (roomsDealt) {
-        filled.push(`${roomsDealt} room${roomsDealt === 1 ? '' : 's'} dealt (house default)`);
       }
       // Handed to _buildHouse for its summary: what the bone FILLED is part
       // of what the press did, and the drafter should read it in the same
@@ -13950,10 +13968,10 @@ class Component extends DCLogic {
       return false;
     }
     // BOARD #315: what the bone FILLED leads the summary. _pressBuildHouse
-    // places the stairs and deals the rooms before calling here, so those
-    // are part of what this press did and belong in the same line as the
-    // walls and the roof. CONSUMED, not read: a later _buildHouse from
-    // another path must not repeat a stale note.
+    // places the stairs before calling here, so that is part of what this
+    // press did and belongs in the same line as the walls and the roof.
+    // CONSUMED, not read: a later _buildHouse from another path must not
+    // repeat a stale note.
     const built = this._boneFilled || [];
     this._boneFilled = null;
     floors.forEach(level => {
@@ -20063,23 +20081,6 @@ class Component extends DCLogic {
     this._roomTags.forEach(other => { if (other.companionOf === tag.id) doomed.add(other.id); });
     const took = doomed.size;
     this._roomTags = this._roomTags.filter(other => !doomed.has(other.id));
-    // BOARD #315: DELETING A STAMP IS SPEECH, so this floor stops being
-    // silent and the bone deals it nothing.
-    //
-    // Without this the two rulings collide head-on. Board #275 says
-    // deleting every stamp and pressing the bone SWEEPS the grown
-    // partitions away; Q17 says a floor with no stamps gets a program
-    // dealt. Together they would deal the rooms straight back and regrow
-    // the walls the drafter just removed -- a floor you can never empty.
-    // room-grow-review.spec.js's sweep test is what surfaced it.
-    //
-    // Q17's own words settle which yields: "drafter SILENCE means you
-    // pick." A drafter who deleted the stamps did not stay silent. Same
-    // distinction as suggestStairs, and modelled on the sibling that was
-    // already here -- _declinedGrowEdges, partition edges the drafter
-    // deleted staying ungrown for the session. Session-scoped for the same
-    // reason: a fresh document is a fresh offer.
-    if (tag.levelId != null) (this._roomProgramDeclined ||= new Set()).add(tag.levelId);
     this._refreshStampNames();
     this._markUnsaved();
     this.setState({
@@ -20198,32 +20199,12 @@ class Component extends DCLogic {
     if (!interview) return null;
     const program = window.DraftGruffInterview.program(interview);
     this._ensureDrawingCollections();
-    const dealtCount = this._applyProgramStamps(program);
-    this._refreshStampNames();
-    this._markUnsaved();
-    this.setState({
-      gruffState: interview,
-      gruffProgram: program,
-      gruffDraft: '',
-      drawingMessage: `Gruff has your order: ${dealtCount} room stamp${dealtCount === 1 ? '' : 's'} on the plan. Press the bone to build it.`,
-      drawingMessageError: false,
-    });
-    return program;
-  }
-
-  // THE ONE STAMP APPLIER, extracted so board #315's bone deal reuses it
-  // rather than growing a second one that drifts. `levelIds`, when given,
-  // limits the deal to those levels and leaves every other level's stamps
-  // -- including its own earlier auto ones -- exactly where they are.
-  // Gruff passes nothing and deals the whole house, as he always did.
-  _applyProgramStamps(program, levelIds = null) {
-    const wanted = levelId => !levelIds || levelIds.has(levelId);
-    // Replaces its own previous deal and never the drafter's stamps. That
-    // is what the persisted `auto` flag is for.
-    this._roomTags = this._roomTags.filter(tag => tag.auto !== true || !wanted(tag.levelId));
+    // Gruff replaces his own previous deal and never the drafter's stamps.
+    // That is what the persisted `auto` flag is for.
+    this._roomTags = this._roomTags.filter(tag => tag.auto !== true);
     const idMap = new Map();
     program.stamps.forEach(stamp => {
-      if (stamp.levelId == null || !wanted(stamp.levelId)) return;
+      if (stamp.levelId == null) return;
       const elevation = this.state.levels.find(level => level.id === stamp.levelId)?.elev ?? 0;
       const tag = {
         id: this._nextRoomTagId++,
@@ -20249,57 +20230,17 @@ class Component extends DCLogic {
       const hostId = idMap.get(stamp.companionOf);
       if (tag && hostId != null) tag.companionOf = hostId;
     });
-    return idMap.size;
-  }
-
-  // ─── BOARD #315: THE BONE FILLS THE GAPS ─────────────────────────────────
-  // Audit Q17: "no room stamps -> deal a random valid room program by the
-  // rules. Drafter silence means you pick."
-  //
-  // PER FLOOR, because that is what silence means. A floor with a single
-  // drafter stamp has been spoken for and is left completely alone; a floor
-  // with none gets the default program. The two cases live side by side in
-  // one drawing, which is why the applier above takes a level filter
-  // instead of this path growing its own.
-  //
-  // DETERMINISTIC, and that is not decoration: "random valid" must never
-  // mean unreproducible. The seed rides the drawing exactly as _openGruff
-  // seeds it, so the same drawing deals the same program twice running --
-  // and after an undo, when the counts return to what they were.
-  //
-  // roomGrow === false STILL DEALS. The setting governs interior WALLS --
-  // it is the switch on growing, and #276's numbering rules already run
-  // regardless. A drafter who turned wall-growing off still wants the room
-  // program on the plan; the deal lands as labels and nothing grows from
-  // them. Written here because the order asked for the decision, not a
-  // guess at it.
-  _dealDefaultProgram() {
-    if (!window.DraftGruffInterview || !window.DraftGruffDrivethru) return 0;
-    this._ensureDrawingCollections();
-    const floors = this._floorLevels();
-    if (!floors.length) return 0;
-    const stamped = new Set(this._roomStamps().filter(tag => tag.base).map(tag => tag.levelId));
-    const declined = this._roomProgramDeclined || new Set();
-    const empty = floors.filter(level => !stamped.has(level.id)
-      && !declined.has(level.id) && this._houseOutline(level.id));
-    if (!empty.length) return 0;
-    const facts = window.DraftGruffDrivethru.factsFrom(this._gruffSnapshot());
-    const seed = ((this._roomTags.length * 7) + (this._walls.length * 3) + 1) % 997;
-    const interview = window.DraftGruffInterview.startState(facts, seed);
-    const program = window.DraftGruffInterview.program(interview);
-    const dealt = this._applyProgramStamps(program, new Set(empty.map(level => level.id)));
-    // NO _markUnsaved HERE, and that is the whole point. _markUnsaved calls
-    // _recordHistory, so a deal that marked itself would land its own undo
-    // step and ONE PRESS WOULD TAKE TWO UNDOS to reverse -- the stamps
-    // surviving a single ctrl-Z that removed the house they belong to. The
-    // build's own _markUnsaved is still ahead of us and the pre-press
-    // snapshot is still the one on file, so it records the press whole:
-    // stairs, stamps, walls, roof, one entry, one undo.
-    //
-    // Found by the determinism spec, which undid a build and found twelve
-    // dealt stamps still standing.
-    if (dealt) this._refreshStampNames();
-    return dealt;
+    this._refreshStampNames();
+    this._markUnsaved();
+    const dealt = idMap.size;
+    this.setState({
+      gruffState: interview,
+      gruffProgram: program,
+      gruffDraft: '',
+      drawingMessage: `Gruff has your order: ${dealt} room stamp${dealt === 1 ? '' : 's'} on the plan. Press the bone to build it.`,
+      drawingMessageError: false,
+    });
+    return program;
   }
 
   // ─── ROOM GROWING (boards #275/#276) ─────────────────────────────────────
