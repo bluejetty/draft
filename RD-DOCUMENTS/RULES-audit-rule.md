@@ -117,6 +117,41 @@ Before trusting any check, probe, or measurement — new or existing:
    most durable form of wrong, because nothing ever contradicts it.
    (Instances 2 and 10.)
 
+## The substring day — 8 September
+
+Sixteen instrument failures in one day between two crews. **Zero code
+failures among them.** Every real defect that day was found by a check
+someone had first proven could fail; every wrong answer came from a tool.
+
+The centrepiece is a matched pair — the same bug, opposite polarity, and the
+identical fix:
+
+- **False pass (the expensive direction) — Skipper.**
+  `stale-merge-refusal.spec.js` asserted the output did not contain
+  `"SAVED"`. But `"UNSAVED"` contains `"SAVED"`. The assertion could never
+  fail, and passed vacuously until a real edit plus a store-revision proof
+  replaced it.
+- **False alarm — Gilligan.** A failure detector grepped for `"failed"` and
+  matched `"0 failed"` — and test names besides — reporting six failures
+  from a clean run.
+
+One direction hides a break, the other invents one. Both are the same
+mistake: **a substring match answers a question you did not ask.** Match the
+whole word.
+
+The day's other instruments failed the same way in different clothes: a red
+test that could never go green (its room's category had no row in the table,
+and a category without a row always passes, so nothing about it could ever
+be flagged); a `pkill -f` pattern that matched its own command line and
+killed the shell running it; an exit code of 1 that came from `grep -c`
+finding zero failures rather than from the suite; and a companion assertion
+that read a file on disk when the thing it meant to measure had only
+happened in memory.
+
+The lesson is not "be careful with strings". It is that **an instrument is
+code, and untested code is untested code** — including the code that decides
+whether your other code is broken.
+
 ## Where this sits
 
 `MODULE-REVIEW-GATE.md` already carries the sibling rule for module

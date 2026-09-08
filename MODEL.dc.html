@@ -5946,9 +5946,21 @@ class Component extends DCLogic {
        // are group ids, and the validator drops a member naming a group the
        // loader threw away. Read first, it would keep locks pointing at
        // nothing -- which looks exactly like a lock that works.
+       // A lock the drawing outgrew is NOT a damaged file. Deleting a level
+       // takes its assemblies, which can leave a lock with fewer than two
+       // members -- a deletion doing what a deletion does. Only a lock we
+       // genuinely could not READ counts toward the damage tally; the rest
+       // is stated plainly to the console as what IS, and accuses nobody.
+       const lockDrops = [];
        this._levelLocks = format.levelLocks(saved.levelLocks,
-         new Set(this._groups.map(group => group.id)));
-       skipped += damaged(saved.levelLocks, this._levelLocks.length);
+         new Set(this._groups.map(group => group.id)), lockDrops);
+       skipped += lockDrops.filter(drop => drop.reason === 'unreadable').length;
+       const superseded = lockDrops.filter(drop => drop.reason === 'superseded');
+       if (superseded.length) {
+         console.info(`${superseded.length} LEVEL LOCK${superseded.length === 1 ? '' : 'S'} `
+           + `no longer ${superseded.length === 1 ? 'joins' : 'join'} two levels `
+           + `and did not load: ${superseded.map(drop => drop.id).join(', ')}`);
+       }
        const lockNums = this._levelLocks
          .map(lock => Number(String(lock.id).replace(/^lock-/, '')))
          .filter(Number.isInteger);

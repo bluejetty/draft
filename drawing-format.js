@@ -121,12 +121,28 @@ if (!window.DraftDrawingFormat) {
   // is nothing to persist for a broken one -- the same principle as storey
   // detachment in the BONE model. A drag never breaks it and neither does
   // distance; if the drafter has not said so, the lock holds.
-  const levelLocks = (rawLocks, groupIds) => {
+  // WHY A DROP REASON, AND NOT JUST A SHORTER LIST. A lock can leave this
+  // function for two completely different reasons, and the loader used to
+  // count both as file damage:
+  //
+  //   unreadable  — no id, or an id already used. The FILE is wrong, and the
+  //                 drafter should hear about it.
+  //   superseded  — the lock is fine; the drawing moved on. Its members were
+  //                 deleted, or enough of them were that fewer than two are
+  //                 left. That is a DELETION doing exactly what a deletion
+  //                 does, and reporting it as "incomplete and could not be
+  //                 loaded" accuses the drafter of a broken file over
+  //                 geometry they removed on purpose.
+  //
+  // `drops` is a caller-supplied sink, so the rules stay in one place instead
+  // of being re-derived at the call site where they would drift.
+  const levelLocks = (rawLocks, groupIds, drops = null) => {
     const known = groupIds instanceof Set ? groupIds : new Set(groupIds || []);
     const seen = new Set();
+    const note = (id, reason) => { if (drops) drops.push({ id, reason }); };
     return (Array.isArray(rawLocks) ? rawLocks : []).map(lock => {
       const id = String(lock?.id || '').trim();
-      if (!id || seen.has(id)) return null;
+      if (!id || seen.has(id)) { note(id || null, 'unreadable'); return null; }
       // Members must be groups that actually survived the load. A group the
       // loader dropped as damaged would otherwise leave a lock pointing at
       // nothing, and a lock with one live member silently stops locking.
@@ -137,7 +153,7 @@ if (!window.DraftDrawingFormat) {
       // disagree, so a shorter one is dropped rather than kept as a lock
       // that can never do anything -- which would read, in the file and on
       // screen, exactly like a lock that works.
-      if (members.length < 2) return null;
+      if (members.length < 2) { note(id, 'superseded'); return null; }
       seen.add(id);
       return {
         id,

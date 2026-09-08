@@ -159,6 +159,28 @@ check('a point with no y contributes 0 rather than NaN',
 // silently swallow every selection on the drawing. Nothing pinned that until
 // now, which means the comment was the only thing holding it.
 //
+// THREE OTHER DISTANCE FUNCTIONS IN THIS REPO DISAGREE WITH THIS ONE, and
+// they disagree exactly where nothing looks. On a zero-length segment:
+//
+//   pointToSegment / _distToLineSeg    Infinity      (len2 < 0.0001 guard)
+//   distToSegment   MODEL.dc.html      distance to a (len2 = ... || 1)
+//   distPtSeg       auto-stair.js      distance to a (len2 > 0 ? ... : 0)
+//   distToSeg       proto/elevation-harness.js  same shape
+//
+// So a degenerate segment reads as "right here" to three of them and
+// "infinitely far" to this one. Anyone collapsing the other three onto this
+// export must write the failing test FIRST, because the flip is silent:
+// distToSegment's callers are proximity tests at <= 0.6 and <= 0.8, and
+// elevation-harness uses its variant as an on-boundary <= eps. A degenerate
+// edge currently lands INSIDE those thresholds and would land outside, so
+// the tag simply stops being assigned and on-boundary becomes permanently
+// false. No error is raised, and no existing fixture would catch it, because
+// a zero-length edge is not something anyone draws on purpose -- it arrives
+// from an import or a collapsed corner.
+//
+// (Found by Skipper, 8 Sep, while reading ahead of the collapse rather than
+// after it. Verified against all four sources before being written down.)
+//
 // NOTE THE DELIBERATE ASYMMETRY WITH lineControlPoint, which is the one input
 // where these two genuinely disagree: on a zero-length segment lineControlPoint
 // answers the midpoint (via `|| 1`) and pointToSegment answers Infinity. Both
