@@ -148,6 +148,41 @@
         /* --logo-w needs no override: min(460px, 88vw) already shrinks to
            fit a phone. */
       }
+
+      /* THE PREVIEW DOOR. MODEL.html is the framework-free rebuild and until
+         7 Sep nothing in the repo linked to it -- index.html:157 was the only
+         entry point in the tree and it points at MODEL.dc.html, so the new page
+         could only be reached by typing its name. A page nobody can open is a
+         page nobody reviews, and it was being designed blind.
+         The bone door above is untouched: it is what every drafter uses and it
+         still goes straight to the live model space. This is a second, quieter
+         way in, and it says what it is so nobody mistakes it for the product. */
+      .preview {
+        margin: 2.25rem 0 0;
+        text-align: center;
+        font-size: 0.8125rem;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+      .preview-link {
+        color: var(--blue-dark);
+        text-decoration: none;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 1px;
+      }
+      .preview-link:hover,
+      .preview-link:focus-visible {
+        border-bottom-color: var(--blue-dark);
+      }
+      .preview-link:focus-visible {
+        outline: 2px solid var(--blue-dark);
+        outline-offset: 3px;
+      }
+      .preview-what {
+        display: block;
+        margin-top: 0.35rem;
+        font-size: 0.75rem;
+      }
     </style>
   </head>
   <body>
@@ -160,6 +195,13 @@
                  alt="Rough Drafter: a rolled blueprint lettered ROUGH DRAFTER" />
           </a>
         </div>
+        <!-- Reachable, and honest about what it is. It reads the drawing the
+             bone saved and paints it with the same painters; it cannot save,
+             so opening it can do no harm to a drawing. -->
+        <p class="preview">
+          <a class="preview-link" href="MODEL.html">Open the new model space (preview)</a>
+          <span class="preview-what">Reads and draws. Cannot save yet.</span>
+        </p>
       </main>
     </div>
 
