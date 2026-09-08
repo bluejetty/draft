@@ -253,6 +253,58 @@ planes. Low impact today, since the only reader is a spec. It crosses
 `MODEL.dc.html` and `PROJECT.html`, so it wants deciding before either side
 grows a second copy of the arithmetic.
 
+### #351 · Four distance functions, and they disagree where nothing looks
+
+Found by Skipper 8 Sep, reading ahead of Gilligan's `_distToLineSeg` collapse
+rather than after it. Verified against all four sources before being written
+down, and recorded in `proto/outline-accessors-harness.js` beside the
+asymmetry note.
+
+**Line references measured against merged main at `8804ca5`, not against a
+working tree.** The first draft of this entry cited `:4872`/`:4905`/`:4952`,
+read correctly before the fold-in PR added ~90 lines to `MODEL.dc.html` above
+them — true when taken, stale by thirteen lines when quoted. The other three
+files were untouched and their numbers held.
+
+The repo measures point-to-segment distance in four places. They agree on
+every segment a drafter draws and disagree on the one nobody does — a
+**zero-length** segment:
+
+| function | where | degenerate answer |
+| --- | --- | --- |
+| `pointToSegment` / `_distToLineSeg` | `geometry-2d.js` (the shared export) | `Infinity` |
+| `distToSegment` | `MODEL.dc.html:4885` (`len2 = … \|\| 1`) | distance to point `a` |
+| `distPtSeg` | `auto-stair.js:101` (`len2 > 0 ? … : 0`) | distance to point `a` |
+| `distToSeg` | `proto/elevation-harness.js:141` | distance to point `a` |
+
+So a degenerate segment reads as **"right here"** to three of them and
+**"infinitely far"** to the one PR #349 collapsed onto.
+
+**Why this is a trap and not a tidy-up.** `distToSegment`'s two callers are
+proximity tests at `<= 0.6` (`:4918`, the roof E/G tag reach) and `<= 0.8` (`:4965`), and the
+elevation harness uses its variant as an on-boundary `<= eps` (`:180`). A
+degenerate edge currently lands **inside** those thresholds; under the shared
+export it lands outside. The tag simply stops being assigned and on-boundary
+becomes permanently false. **No error is raised**, and no existing fixture
+would catch it — a zero-length edge is not something anyone draws on purpose,
+so it is absent from every test drawing. It arrives from an import or a
+collapsed corner, which is to say: on a real job, not on ours.
+
+**The order of work is the whole point.** Write the failing test first — a
+zero-length edge inside a 0.6 threshold, proven to flip — then collapse. A
+collapse done the other way round is green on the way in and wrong on a
+drawing nobody has yet opened.
+
+Nothing is broken today; all four are correct where they sit. This is a
+standing note against a future tidy-up, not a defect. Whether the three
+should adopt the `Infinity` rule or the shared export should grow a caller-
+chosen degenerate answer is the open question, and it wants deciding before
+somebody collapses them on instinct.
+
+**Size:** 2–3 h including the tests. **Blocks nothing.** PR #349 already
+carries the pinned degenerate rule and the mutation coverage the collapse
+would lean on.
+
 ---
 
 ## 6 · Parked
