@@ -351,8 +351,34 @@ and 0.8 ft.
 Both call sites had **no behavioural coverage at all** before this; the
 sound-edge regression guard was written first.
 
-**Remaining — SKIPPER'S LANE, held:** `auto-stair.js`, `cut-view.js`,
-`closets.js`, `proto/elevation-harness.js`.
+**Remaining — SKIPPER'S LANE:** `auto-stair.js`, `cut-view.js`, `closets.js`,
+`proto/elevation-harness.js`. (In flight as board #346's outboard half.)
+
+### Board #346, the MODEL half: closed as ALREADY DONE, and made permanent
+
+Censused twice independently, by Gilligan and by Devin with different probes,
+against merged main `0eb2178`. **Zero private point-to-segment copies remain in
+`MODEL.dc.html`:** PR #349 turned `_distToLineSeg` into a forwarder and PR #352
+collapsed the last one, the tour roof's `distToSegment`, leaving a documented
+adapter that calls the shared export on the next line. `_edgeOnOutline` holds no
+copy either — it goes through the forwarder. The board entry was simply dated.
+
+A negative claim wants better evidence than one search, which is why it was run
+twice by two people looking for different things.
+
+So the MODEL half produced a **standing guard** rather than a rewrite —
+`proto/no-inline-distance-harness.js`. The one-time cleanup is now a property:
+the next inlined copy is caught the day it lands, not in a survey six weeks
+later, which is how ~10 copies accumulated to begin with.
+
+**The obvious guard would have been wrong, and measurably so.** Squared length
+(`X * X + Y * Y`) appears **14 times** in live code here — screen distances,
+drag thresholds, honest arithmetic with nothing to do with segments — so
+guarding on it would cry wolf until someone deleted the guard. The real
+discriminator is the **clamp**, `Math.max(0, Math.min(1, …))`: the step that
+turns a distance-to-a-point into a distance-to-a-segment. Zero occurrences
+today. Measuring the candidate patterns before writing the guard is what bought
+that.
 
 **Size:** the remaining outboard sweep, 2–3 h including its tests. **Blocks
 nothing.** The degenerate rule, its mutation coverage and the full chain are
