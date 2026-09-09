@@ -97,3 +97,47 @@ test.describe('board #346 — closets.js', () => {
         .toBeCloseTo(6, 9);
     });
 });
+
+// ── auto-stair.js ──────────────────────────────────────────────────────────
+// Its distPtSeg has two callers and NEITHER was covered. Breaking the helper
+// completely — always Infinity, always 0, distance-to-the-start-point — left
+// all eleven auto-stair and stair-rules specs green. That was found by
+// mutating before trusting, after this file's author had already written down
+// "the existing specs are the regression net". They were not.
+//
+// This is the net. `wallAdjacent` on the returned stair is computed straight
+// from distToRing (auto-stair.js:518, surfaced at :575), so it moves when the
+// helper moves, and it separates cleanly: a stair pulled into a corner is
+// beside the ring, one left to find the centroid of a 40ft room is not.
+const AUTO_STAIR = { points: [{ x: 0, z: 0 }, { x: 40, z: 0 }, { x: 40, z: 40 }, { x: 0, z: 40 }],
+  insetFt: 0.5, runFt: 11, treads: 13 };
+
+test.describe('board #346 — auto-stair.js', () => {
+  test('wall adjacency tracks the ring, and says both yes and no',
+    async ({ page }) => {
+      await page.goto('/MODEL.dc.html');
+      await page.waitForFunction(() => !!window.DraftAutoStair && !!window.DraftGeometry2D,
+        undefined, { timeout: 10000 });
+
+      const out = await page.evaluate(base => {
+        const run = stamps => window.DraftAutoStair
+          .suggestStair(Object.assign({}, base, { stamps })).stair;
+        const pull = window.DraftAutoStair.PULL_STAMPS[0];
+        return {
+          middle: run([])?.wallAdjacent,
+          corner: run([{ name: pull, x: 1, z: 1 }])?.wallAdjacent,
+          edge: run([{ name: pull, x: 20, z: 0.5 }])?.wallAdjacent,
+          placed: !!run([]),
+        };
+      }, AUTO_STAIR);
+
+      expect(out.placed, 'the fixture must actually place a stair').toBe(true);
+      // BOTH ANSWERS, from the same room. Either one alone passes for a helper
+      // that always returns the same number, which is exactly how three broken
+      // versions of it slipped through the existing specs.
+      expect(out.middle, 'a stair left to find the centre of a 40ft room is not '
+        + 'beside the ring').toBe(false);
+      expect(out.corner, 'a stair pulled into a corner is').toBe(true);
+      expect(out.edge, 'and so is one pulled against an edge').toBe(true);
+    });
+});
