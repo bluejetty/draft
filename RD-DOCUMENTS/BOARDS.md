@@ -544,6 +544,31 @@ opposite end. When the guard lands, those three specs move their anchor click to
 where the opening fits and go green on their own terms. Moving the clicks
 *before* the fix would be editing tests to pass.
 
+**A comment at the second site cites an authority that refutes it.**
+`_buildStairOpenings` explains itself with:
+
+> *"NOT GUARDED HERE, and deliberately so. The manual path checks the whole
+> opening against its host (see `_commitSurfaceOpening`)"*
+
+`_commitSurfaceOpening`'s own comment, ~270 lines away, opens *"NOT GUARDED
+YET"*. Neither half of the claim is true — the manual path checks the centre,
+and the function it points at checks nothing — and the false half is
+load-bearing, since it is the stated reason the automatic path goes unguarded.
+Sweep that sentence with the fix.
+
+**But the same comment raises a real question the fix must answer first**, and
+it is not stale:
+
+> *"the opening is keyed to the wall FACE; the floor may be drawn to the
+> centreline. That relation is unmeasured, so no guard goes here until it is."*
+
+A generated footprint may sit against the floor polygon differently from a drawn
+one, by half a wall thickness. So this is not "swap the centre test for
+`ringInsideRing` in two places" — the automatic path needs that relation
+measured first, or the guard will refuse openings that are correctly placed.
+That measurement is the actual first task, and it is why the two sites are not
+one change repeated twice.
+
 **Until it lands, the AREAS dialog line is what the drafter sees**, and on those
 drawings it is telling the truth about a real overhang.
 
