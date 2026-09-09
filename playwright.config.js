@@ -62,6 +62,76 @@ if (!globalThis[ANNOUNCED]) {
       : ' (own server)'));
 }
 
+// AND THE SAME CLASS OF FAILURE, FROM THE OTHER DIRECTION: A RED THAT ISN'T
+// REAL. `workers: 1` below is not timidity, and the reasons are already
+// written down twice — test.yml:224 and README.md:48. Every spec shares one
+// origin, so every spec shares one localStorage and one IndexedDB, and
+// helpers.openModel clears BOTH on the way into every test. Two workers on
+// one machine therefore delete each other's storage mid-test.
+//
+// MEASURED, on 9 Sep 2026, because a whole day went into it. A suite run at
+// --workers=4 produced seven distinct red names across two machines. Every
+// one of them was the clobber, in one of two shapes:
+//
+//   indexedDB.deleteDatabase  -> savedDrawing() reads null, or the pre-edit
+//                                value from a store recreated behind it
+//   localStorage.clear()      -> `draft-entry-coach-seen` is wiped mid-test,
+//                                the dismissed coach returns, and it eats
+//                                every click until the 180s budget is gone
+//
+// The same suite, same tree, at the configured default: 979 tests, ZERO
+// failures. Not one of the seven was a defect. Three boards were opened on
+// that evidence and all three closed void, and a product change to four
+// pages was one step from being written to fix a race that did not exist.
+//
+// A THROW, NOT A WARNING. The whole cost of that day was that the failures
+// looked exactly like real ones and nothing said otherwise. A warning scrolls
+// past in a log nobody reads until something is already wrong; this has to
+// stop the run in the first second, before anyone has a red suite to explain.
+//
+// SHARDING IS THE SUPPORTED WAY TO GO PARALLEL, and it is untouched: a shard
+// gets its own runner and therefore its own origin, which is the only way to
+// have both. CI's `--shard=N/4` inherits workers: 1 and never reaches this.
+const workerOverride = (() => {
+  const argv = process.argv;
+  for (let i = 2; i < argv.length; i += 1) {
+    const arg = argv[i];
+    const value = arg === '--workers' || arg === '-j' ? argv[i + 1]
+      : arg.startsWith('--workers=') ? arg.slice('--workers='.length)
+      : arg.startsWith('-j=') ? arg.slice('-j='.length)
+      : null;
+    if (value == null) continue;
+    // Playwright takes a count or a percentage of the machine's cores. Resolve
+    // both to the number of workers that would actually run, because "50%" on
+    // a four-core box is the same mistake spelt differently.
+    const percent = /^(\d+(?:\.\d+)?)%$/.exec(String(value).trim());
+    const resolved = percent
+      ? Math.max(1, Math.floor(require('os').cpus().length * Number(percent[1]) / 100))
+      : Math.floor(Number(value));
+    if (Number.isFinite(resolved) && resolved > 1) return { asked: String(value), resolved };
+  }
+  return null;
+})();
+if (workerOverride) {
+  throw new Error(
+    `[draft] REFUSING --workers=${workerOverride.asked} (${workerOverride.resolved} workers).\n`
+    + '\n'
+    + 'This suite is serial on purpose. Every spec shares one origin, and\n'
+    + "helpers.openModel clears localStorage and deletes the shared IndexedDB on\n"
+    + 'the way into each test — so parallel workers on one machine wipe each\n'
+    + "other's storage mid-test. The failures that produces look like real bugs:\n"
+    + 'null or stale reads from savedDrawing(), and a dismissed entry coach that\n'
+    + 'comes back and swallows every click. On 9 Sep 2026 that cost a day and\n'
+    + 'three boards, and the same suite passed 979/979 serially.\n'
+    + '\n'
+    + 'See test.yml:224 and README.md:48.\n'
+    + '\n'
+    + 'To go parallel, shard instead — a shard gets its own runner and its own\n'
+    + 'origin, which is the only way to have both:\n'
+    + '\n'
+    + '    npx playwright test --shard=1/4\n');
+}
+
 module.exports = defineConfig({
   testDir: './tests',
   fullyParallel: false,
