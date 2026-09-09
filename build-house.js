@@ -256,6 +256,21 @@ if (!window.DraftBuildHouse) {
     // clipped to the outline, so no end extends past a wall and the outward
     // allowance never decides a case; if that ever changes, it belongs here
     // as a tolerance on this test rather than anywhere else.
+    // BOARD #346 LOOKED AT THIS COPY AND LEFT IT, which is the finding rather
+    // than an omission. The shared export (geometry-2d.js pointToSegment)
+    // floors at len2 < 0.0001 — a segment under 0.01ft is unreachable,
+    // Infinity — and this guard floors at true zero, 1e-12.
+    //
+    // At EXACTLY zero the two agree: `return false` here, and Infinity there,
+    // which the `< 1e-6` below rejects just the same. They part company in the
+    // band between: an outline edge from ~1e-6 up to 0.01ft is measured
+    // normally here and refused outright by the export.
+    //
+    // That band is reachable from ordinary geometry, not from a corrupt file.
+    // offsetOutline emits edges inside it — a 20 x 2.001ft room inset 1ft comes
+    // back with two edges of exactly 0.001ft — so collapsing this would change
+    // which runs are found to bear, on plans a drafter can draw. Value-
+    // preserving means this copy stays private.
     const onOutline = p => points.some((a, i) => {
       const b = points[(i + 1) % points.length];
       const dx = b.x - a.x, dz = b.z - a.z;
