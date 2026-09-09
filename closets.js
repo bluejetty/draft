@@ -115,6 +115,33 @@ if (!window.DraftClosets) {
 
   // Distance from a point to a segment — the primitive every clearance test
   // below is built from.
+  //
+  // NOT COLLAPSED ONTO THE SHARED EXPORT, and board #346 asked for the reason
+  // in writing rather than a silent copy. window.DraftGeometry2D.pointToSegment
+  // (geometry-2d.js) is canonical for this shape and three of the four outboard
+  // copies board #351 records do collapse onto it. This one does not, because
+  // the two guards below and there are not the same rule wearing different
+  // numbers:
+  //
+  //   the export  `len2 < 0.0001`  — anything under 0.01ft answers Infinity,
+  //               a CLICK-TARGET POLICY: a zero-length wall must be
+  //               un-hittable rather than infinitely attractive to a cursor.
+  //   here        `len2 < 1e-12`   — true zero only. A 0.005ft segment is
+  //               ordinary geometry to a closet and gets the perpendicular
+  //               answer.
+  //
+  // Everything between those two floors is a segment closets measures and the
+  // export refuses. Collapsing with the caller-local fallback the order
+  // prescribes would answer distance-to-`a` there instead — off by at most the
+  // segment's own length, under 0.01ft, against a smallest threshold of
+  // WALL_FT (0.29ft). Harmless by that measure, and tests/degenerate-distance
+  // .spec.js pins the number.
+  //
+  // The cost that decided it is not the arithmetic: it is that closets does no
+  // hit-testing, so collapsing would tie closet clearance to a rule that exists
+  // for selection and may change for selection's reasons — and would put the
+  // first geometry-module dependency into a file that has none. If that trade
+  // ever looks worth making, the spec above goes red first and says so.
   const pointToSegment = (p, a, b) => {
     const ab = sub(b, a);
     const len2 = dot(ab, ab);
