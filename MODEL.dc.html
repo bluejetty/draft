@@ -2155,6 +2155,45 @@ const FIT_MARGIN = 1.12;
 // The smallest comfortable finger target. Apple and Google both land near
 // this; the chrome below grows its HIT AREA to it without changing the look.
 const TOUCH_TARGET_PX = 44;
+
+// ── HIT THRESHOLDS (board #347) ───────────────────────────────────────────
+// How close the pointer must come to grab a thing, in screen pixels, applied
+// as `worldPerPixel * CONST` so the zone stays the same size on screen at any
+// zoom. Named per MEANING, not per number: two sites sharing a value because
+// they are the same gesture share a constant, and two that merely coincide do
+// not. Every value here is exactly what the literal it replaced was.
+//
+// ONE SELECT CLICK, ONE RADIUS. _selectAt tests a click against the nearest
+// segment, then a dimension string, then -- when nothing picked -- a locked
+// S-FOOTING, purely so it can explain why the footing did not take. Those
+// three are one gesture, so a retune has to move all three together or the
+// explanation starts lying about the threshold it is explaining.
+const SELECT_CLICK_PX = 14;
+// A roof edge is grabbed by the roof editor, not by Select (_findRoofEdgeAt is
+// called from one place). It happens to equal SELECT_CLICK_PX today; that is a
+// coincidence of value, not of meaning, so it keeps its own name.
+const ROOF_EDGE_HIT_PX = 14;
+// An outline edge is dashed and thin, and it is picked INSIDE the same
+// _selectAt click as the three above -- at a tighter radius than they use.
+// Named separately so that difference is visible on the page rather than
+// buried in a literal. Whether 12 is deliberate or drift is board #347's
+// follow-up, not its business: this sweep changes no value.
+const OUTLINE_EDGE_HIT_PX = 12;
+// The NODE tool's own pick: a click within this of a line splits or bends it.
+const LINE_HIT_PX = 12;
+// A boneyard mark is a small glyph on a master outline, not a linear element
+// -- a different target that lands on the same number.
+const BONEYARD_MARK_HIT_PX = 12;
+// THE HOST-WALL LADDER. Three tools ask the same question -- which wall does
+// this thing go on -- and answer it with three deliberately different reaches.
+// The ladder tracks how much the drafter is committing: a fixture is dropped
+// roughly into a room and snaps to the nearest wall, so it reaches furthest; a
+// stair opening keys to one wall of a shaft and needs less; a door or window
+// is placed AT a spot on a specific wall, so it reaches least and a miss is
+// better than the wrong wall. Same gesture, three sizes, three constants.
+const FIXTURE_WALL_PICK_PX = 30;
+const STAIR_OPENING_WALL_PICK_PX = 24;
+const FENESTRATION_WALL_PICK_PX = 18;
 // Polar-origin activation effect: the node pulses orange and shoots hairline
 // direction rays that hold for a second, then fade out over another.
 const POLAR_FX_HOLD_MS = 1000;
@@ -12412,7 +12451,7 @@ class Component extends DCLogic {
   // worldPt (within 12px), or null.
   _findOutlineEdgeHit(worldPt) {
     const h = this._canvas ? this._canvas.clientHeight : 600;
-    let bestD = (this._orthoHalfH * 2) / h * 12;
+    let bestD = (this._orthoHalfH * 2) / h * OUTLINE_EDGE_HIT_PX;
     let best = null;
     const outlines = this.state.boneyardActive ? this._activeBoneyardOutlines() : this._activeOutlines();
     outlines.forEach(outline => {
@@ -14702,7 +14741,7 @@ class Component extends DCLogic {
   // (ELECTRIC shares, cross-context overlays) are deliberately excluded.
   _fenestrationPlacement(worldPt) {
     const h = this._canvas ? this._canvas.clientHeight : 600;
-    const thresh = (this._orthoHalfH * 2) / h * 18;
+    const thresh = (this._orthoHalfH * 2) / h * FENESTRATION_WALL_PICK_PX;
     let best = null, bestD = thresh;
     this._activeWalls().forEach(wall => {
       const { d, t } = this._distToLineSeg(worldPt, wall);
@@ -14738,7 +14777,7 @@ class Component extends DCLogic {
 
   _findBoneyardMarkAt(worldPt) {
     const h = this._canvas ? this._canvas.clientHeight : 600;
-    const thresh = (this._orthoHalfH * 2) / h * 12;
+    const thresh = (this._orthoHalfH * 2) / h * BONEYARD_MARK_HIT_PX;
     for (const outline of this._activeBoneyardOutlines()) {
       for (const mark of outline.marks || []) {
         const at = this._boneyardMarkGeometry(outline, mark);
@@ -14943,7 +14982,7 @@ class Component extends DCLogic {
   // with side read from which face of the wall the cursor sits on.
   _fixturePlacement(worldPt) {
     const h = this._canvas ? this._canvas.clientHeight : 600;
-    const thresh = (this._orthoHalfH * 2) / h * 30;
+    const thresh = (this._orthoHalfH * 2) / h * FIXTURE_WALL_PICK_PX;
     let best = null, bestD = thresh;
     this._activeWalls().forEach(wall => {
       const { d, t } = this._distToLineSeg(worldPt, wall);
@@ -15637,7 +15676,7 @@ class Component extends DCLogic {
   _stairOpeningWallPick(worldPt) {
     const levelId = this._activeLevelId();
     const h = this._canvas ? this._canvas.clientHeight : 600;
-    const thresh = (this._orthoHalfH * 2) / h * 24;
+    const thresh = (this._orthoHalfH * 2) / h * STAIR_OPENING_WALL_PICK_PX;
     let best = null, bestD = thresh;
     this._walls
       .filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan')
@@ -16444,7 +16483,7 @@ class Component extends DCLogic {
 
   _findRoofEdgeAt(worldPt) {
     const h = this._canvas ? this._canvas.clientHeight : 600;
-    const thresh = (this._orthoHalfH * 2) / h * 14;
+    const thresh = (this._orthoHalfH * 2) / h * ROOF_EDGE_HIT_PX;
     let best = null, bestD = thresh;
     this._activeRoofs().forEach(roof => {
       roof.points.forEach((point, index) => {
@@ -17028,7 +17067,7 @@ class Component extends DCLogic {
   // Return { idx, t, d } of the _lines segment closest to worldPt (within 12px), or null.
   _findLineHit(worldPt) {
     const h = this._canvas ? this._canvas.clientHeight : 600;
-    const thresh = (this._orthoHalfH * 2) / h * 12;
+    const thresh = (this._orthoHalfH * 2) / h * LINE_HIT_PX;
     let bestD = thresh, bestIdx = -1, bestT = 0;
     this._activeLines().forEach(l => {
       const { d, t } = this._distToLineSeg(worldPt, l);
@@ -17705,11 +17744,13 @@ class Component extends DCLogic {
     return true;
   }
 
-  // Return the nearest line or wall segment within a ~12px screen threshold, or null.
+  // Return the nearest line or wall segment within the Select click threshold,
+  // or null. The comment here read "~12px" until board #347 and the code read
+  // 14 -- naming the value is what stopped it being able to drift again.
   _findNearestSeg(worldPt, filter = null) {
     const allows = type => !filter || filter === 'all' || filter === type;
     const h = this._canvas ? this._canvas.clientHeight : 600;
-    const thresh = (this._orthoHalfH * 2) / h * 14;
+    const thresh = (this._orthoHalfH * 2) / h * SELECT_CLICK_PX;
     let bestD = thresh, bestSeg = null;
     const check = segs => {
       segs.forEach(seg => {
@@ -17780,7 +17821,7 @@ class Component extends DCLogic {
   _lockedFootingAt(worldPt) {
     if (this._freeformFootings()) return null;
     const h = this._canvas ? this._canvas.clientHeight : 600;
-    const thresh = (this._orthoHalfH * 2) / h * 14;
+    const thresh = (this._orthoHalfH * 2) / h * SELECT_CLICK_PX;
     return this._activeLines().find(line => line.layer === 'S-FOOTING'
       && this._distToLineSeg(worldPt, line).d < thresh) || null;
   }
@@ -17791,7 +17832,7 @@ class Component extends DCLogic {
   _findNearestDimension(worldPt) {
     const h = this._canvas ? this._canvas.clientHeight : 600;
     const fpx = (this._orthoHalfH * 2) / h;
-    const thresh = fpx * 14;
+    const thresh = fpx * SELECT_CLICK_PX;
     const offset = fpx * 19;
     let bestD = thresh, best = null;
     this._activeDimensions().forEach(dimension => {
