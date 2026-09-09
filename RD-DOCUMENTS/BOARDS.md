@@ -385,6 +385,78 @@ nothing.** The degenerate rule, its mutation coverage and the full chain are
 pinned in `proto/outline-accessors-harness.js` and
 `proto/degenerate-chain-harness.js`.
 
+### Board #346: CLOSED WHOLE — and the three boards its verification opened, closed void
+
+The outboard half landed in PR #359: `LAYOUT.dc.html`'s `edgeOnOutline`
+collapsed onto the shared export, `build-house.js` kept its own copy with the
+reason written down (its divergence is the 1e-6-to-0.01 ft floor gap, reachable
+because `offsetOutline` emits 0.001 ft edges from ordinary geometry), and
+`tests/section-garage-slab.spec.js` added as the observable the collapse had
+been missing — breaking `pointToSegment` outright had left all sixteen layout
+specs green.
+
+**Three boards, #360 / #361 / #362, were opened out of that PR's suite run.
+All three are void.** Their evidence was manufactured by the run that found it.
+
+**What happened.** The 9 Sep suite runs were invoked with `--workers=4`. The
+config sets `workers: 1`, `README.md:48` warns against overriding it, and
+`test.yml:224` explains why: every spec shares one origin, so every spec shares
+one `localStorage` and one IndexedDB, and `helpers.openModel` clears both on the
+way into every test. Two workers on one machine therefore delete each other's
+storage mid-test. Seven distinct red names came out of that across two machines,
+in two shapes, both of which read exactly like product defects:
+
+| wiped by | what the test sees | names |
+|---|---|---|
+| `indexedDB.deleteDatabase` | `savedDrawing()` returns `null`, or the pre-edit value from a store recreated behind it | `project-page:64`, `project-page:100`, `defaults:50` |
+| `localStorage.clear()` | `draft-entry-coach-seen` wiped mid-test; the dismissed coach returns and eats every click until the 180 s budget is gone | `design-notices-wired:65`, `perf-notice:35`, `perf-notice:62` |
+
+`perf-notice` holds no storage key of its own — measured, not assumed — so both
+its failures route through the coach flag like the rest.
+
+**The control settles it.** The same suite, same tree, at the configured
+default: **zero failures**, with the seven dormant `room-grow` specs skipping by
+design. Every one of the seven suspects ran and passed, including
+`perf-notice:35`, which had been the single strongest case — the only failure
+ever seen on two different machines.
+
+So: **#360** (a `savedDrawing` wait) is void — there is no race, and the 662
+call sites need nothing. **#361** (the entry-coach overlay) is void — the coach
+is not a defect, a neighbouring worker was wiping its dismissal flag. **#362**
+(worker right-sizing) was aimed the wrong way: the default is already correct
+and what was missing was a guard against overriding it.
+
+**What this cost, recorded because the shape is the lesson.** A day of two
+crews' time; three boards written on false evidence; and a product change — save
+beacons added to `PROJECT.html`, `STANDARDS.html`, `SETTINGS.html` and
+`SPECS.html` — ruled and about to be written to fix a race that does not exist.
+That change would have "worked", because removing the flag removes the clobber
+whether or not a beacon is there. It would have gone green and been believed.
+
+The error was caught by reading `playwright.config.js` and `test.yml` — the
+sources that had said so in writing the whole time — rather than by any further
+measurement of the failures themselves. Nine measuring mistakes were made that
+day against zero code defects; the last was the expensive one.
+
+**The one honest outcome is the guard**, in `playwright.config.js`: a worker
+override resolving above 1 throws at config load, naming the reason. A throw and
+not a warning, deliberately — the entire cost of that day was that the failures
+looked real and nothing said otherwise, and a warning scrolls past. Percentages
+resolve before the check (`--workers=50%` on a four-core box is the same mistake
+spelt differently). Sharding is untouched and remains the supported way to go
+parallel: a shard gets its own runner and therefore its own origin, and CI's
+`--shard=N/4` inherits `workers: 1` and never reaches the guard.
+
+**PR #359's body is wrong about this and has been corrected in a comment on the
+merged PR.** It describes its three suite failures as characterised repo flakes
+caused by `--workers=4` oversubscribing a four-core box, and recommends a board
+line to that effect. The conclusion — that the diff did not cause them — holds,
+and holds better than when it was written; the mechanism given is wrong, and the
+recommendation is close to the opposite of the real lesson. Left in place with
+the correction attached rather than quietly superseded.
+
+---
+
 ---
 
 ## 6 · Parked
