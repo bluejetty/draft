@@ -18,6 +18,16 @@ cheaper now than later.
 **Nothing stands between here and the Write Tier.** The census (W0) is the
 next authorized work, per the standing work orders.
 
+**Swept 9 Sep, and one of the two flagged lines was already right.**
+`HANDOFF-to-devin-7sep.md:127` says this file *"still says one ruling blocks
+it, `autoDimFirstOffsetFt`"* — it does not, and has not since `6c7d2d2` the
+same day; item 5 below reads *"this no longer blocks anything"*. The handoff
+was written before that commit and describes the file it was handing over,
+not the file on main. The other flagged line was genuinely stale and is
+corrected at the bottom of this page. **The Write Tier is not waiting on
+anything, and tier 3 has since started and put four rungs down** — see the
+ladder in `SPEC-model-html-tiers.md`.
+
 **The principle underneath all five.** Devin's Write Tier acceptance is a
 DEEP-COMPARE — the old page saves a drawing, the new page saves the same
 drawing, and every key must match. From the moment that work starts, every
@@ -127,8 +137,22 @@ that now exists.
   6 Sep: the row now flows in the bar instead of floating over it, and every
   width from 1024 up is clear. Below 900 the bar genuinely runs out of room.
   Real, measured, and not a Write Tier gate.
-- **A press-and-flag mechanism.** Three things now want the same one — a
-  stair whose rise re-derives while nothing re-checks it still fits, the
-  27 7/8" door head, and pressing BUNGALOW on a drawing that has a built OVER
-  GARAGE. Each is a case where the geometry correctly does not move and the
-  page says nothing. Wants an owner; does not gate the Write Tier.
+- **A press-and-flag mechanism.** ~~Wants an owner.~~ **BUILT AND WIRED —
+  corrected 9 Sep.** Three things wanted the same mechanism: a stair whose
+  rise re-derives while nothing re-checks it still fits, the 27 7/8" door
+  head, and pressing BUNGALOW on a drawing that has a built OVER GARAGE. Each
+  is a case where the geometry correctly does not move and the page says
+  nothing. `design-notices.js` owns it — built in #318 with 27 checks and 18
+  mutations — and **it has callers**: `a824547` (PR #334) wired
+  `garageDoorHeadNotice` into `PROJECT.html` and `stairRefitNotice` into
+  `MODEL.dc.html`, with `tests/design-notices-wired.spec.js` asserting
+  absence as well as presence, because a banner that appears once and never
+  leaves is the bug a presence-only test passes on. **The third case is not
+  in the module and that is deliberate**: it is board #333, its build row is
+  not on main, and a function returning null until it lands would pass the
+  harness for the wrong reason. It never gated the Write Tier, and now it
+  gates nothing at all.
+
+  *Kept as a corrected line rather than deleted: `HANDOFF-to-devin-7sep.md`
+  hands this on as unwired open work, and a reader who finds only silence
+  here would take the handoff's word for it.*

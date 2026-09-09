@@ -271,10 +271,251 @@ paints it correctly; it does not grow a UI to change it.
 
 ---
 
-## Tier 3 — the dashboard
+## Tier 3 — the ladder *(written down 9 Sep, after four rungs had already landed)*
 
-Chrome, interaction, and the skins from `SPEC-skins.md`. Not specced here
-beyond that, because tier 2 will change what it should say.
+Chrome, interaction, and the skins from `SPEC-skins.md`. The sentence above
+this one used to be the whole section — *"not specced here beyond that,
+because tier 2 will change what it should say"* — and it stayed that way for
+five days after tier 3 started. **That is the same doc failure tier 2 had
+before 3 Sep**: the plan existed, it existed in one agent's head, and nobody
+else could see the order of the work or tell a finished rung from an
+unstarted one. Written down here for the same reason, and kept the same way.
+
+**The standing rule for this section: one entry per rung, as it lands, with
+the commit.** A rung with no commit beside it has not landed, whatever the
+prose says.
+
+| rung | what it is | who | state |
+|---|---|---|---|
+| **3a** | **MODEL.html becomes a writer** — select, move a corner, save, guard the close, move a whole wall | Devin's crew | **four of four DONE**, PRs #346 / #347 |
+| **3b** | **The level switcher** — chrome on the page for the level tier 2a already filters by | Gilligan | ordered, not started |
+| **3c** | **Draw and delete a wall** — the two verbs that make the page a drafting surface rather than an editor of walls that already exist | Gilligan | queued behind 3b |
+| **3d** | **The rest of the autosave ruling** — rungs 2–5: the change broadcast, then the named edit lease. Its first job is done: the ruling is written down, `RULING-autosave-two-writers.md` | unassigned | **PLANNED**, spec in hand |
+| **3e…** | **One old-page verb per rung**, never a batch, in whatever order a real drafter reaches for them | unassigned | **PLANNED**, 19 tool states to go |
+| **gate** | **The swap** — two `href`s in `index.html`, its own PR, nothing sooner | Movie rules | **PLANNED** |
+
+Skins are not a rung on this ladder. `palette.js` calls its own night values
+provisional and `PRE-TIER3.md` ruled them *"a taste decision, not a gate"*;
+they land when Movie rules on them, in any order relative to the rungs.
+
+**3b carries a hazard that is already written down twice in this file and is
+worth a third mention here, because a switcher is exactly where it bites.**
+`MAIN_FLOOR_LEVEL_ID = 3` is an **id**; `state.activeLevelIdx: 3` is an
+**index**. They coincide on a default drawing and stop coinciding the moment a
+level is inserted — and the half-storey work means insertion is now a thing
+the product does. A switcher built on the index passes every test that uses a
+default drawing and paints the wrong level on a real one. The spec for 3b
+should name a drawing with an inserted level, not a default one.
+
+### Tier 3a — the four rungs, and the store rung it forced
+
+**Rung one — selection.** `ec993b3`, *"MODEL.html's first editing tool — click
+a wall, it lights up"*. 85 lines on the page and a 185-line spec. Nothing is
+written to the drawing: selection is the rung that proves the page can hear a
+press at all, and it was cheap because `95e7a0b` had already given
+`geometry-2d.js` the point-to-segment distance the hit test needed.
+
+**Rung two — the corner drag.** `4e2be48`. The mechanism is the corner pool,
+not a search: load rebuilds reference equality at shared corners, so writing
+`x`/`z` on one endpoint moves every wall that meets there without anything
+iterating the neighbours. **The numbers are the old page's, read rather than
+chosen** — 30px to grab a corner, 4px to snap to another, 4px of travel to arm
+the drag, all off `MODEL.dc.html`'s shipped defaults; they have names now
+rather than being literals (board #347, `d96cda6` / `39b8d40`). **And the
+master link survives**: a BUILD HOUSE corner rides a BONEYARD master point
+through `srcId`/`offX`/`offZ`, and the drag keeps the `srcId` and re-measures
+the offset, which is what `_relinkVertex` does on the old page. The trap
+recorded with it is the one that would have been silent: a master point's id
+is `id` in the file and only the old page's loader renames it `pointId` in
+memory, so reading `pointId` here resolves nothing, on every corner, quietly.
+
+**Rung three — the edit survives the page.** `75cc4ac`, plus `be01325` for the
+close guard. SAVE is a press, not an autosave, and the button carries three
+true words — SAVE, UNSAVED, SAVED — where **a refused write stays UNSAVED,
+because it is**. An undo is an edit. Selecting, panning, and a tap on a handle
+that never moved are not. The close guard is *the honest minimum, not the
+answer*: saving on a press is right for a second writer on one file, and it is
+also what puts a drafter one stray Ctrl+W away from a corner that never
+landed.
+
+**Rung four — the whole wall.** `a0c3841`. **The first gesture on this page
+with nothing to copy** — the old page's SELECT drag grabs a vertex, and a
+press on a wall body away from a corner moves nothing at all there. So it is a
+ruling rather than a measurement, and the conservative one: both endpoints are
+pooled corners shared with the neighbours, the drag moves both, and the
+outline deforms around the wall. A wall that detached from its corners instead
+would be unhooked from the pool — the same failure shape as a dropped `srcId`,
+and just as invisible until much later. A true detach, if it is ever wanted,
+gets its own name. Consequence stated rather than discovered later: the corner
+zone is 30px and the body zone 12, so a wall shorter than about 60px on screen
+has no body to grab until you zoom in.
+
+**The store rung 3a forced.** `8992ad9`, on `MODEL.dc.html` rather than on this
+page. `MODEL.dc.html`'s stale-write path merged unconditionally on a stated
+assumption — *every key in this file is the Model Space's own except
+`layout`* — which was true while LAYOUT was the only other writer and **rung
+three made it false**. The consequence was live and had no race in it: move a
+corner here and save, then edit in a still-open old tab, and the old tab is
+correctly refused, re-reads, keeps its own stale walls, writes again, and
+reports SAVED over your corner. The merge is now narrowed to the case it was
+written for; anything else is a refusal the drafter can see. This is rung 1 of
+the five-rung autosave ruling (Kevin, 8 Sep), now written down at
+`RULING-autosave-two-writers.md`. *(Corrected 9 Sep: this paragraph used to
+say the ruling's terms were "quoted in `8992ad9`'s message, the only copy on
+main". Measured — they are not. That message argues rung 1 and mentions the
+others only to say it took "nothing from rungs 2-5", and for a day the repo
+held the fix with none of its reasoning. The ruling landed here later the same
+day, carrying the two implementation choices rung 1 made that the ruling had
+not — the sorted-key compare of persisted forms, and the baseline read from
+the written file.)*
+
+**What 3a deliberately did not do:** autosave. The `ifRev` refusal in `save()`
+is one half of a story whose other half is a named edit lease and a change
+broadcast, and that is rungs 2–5 of the autosave ruling, not something to take
+on the way past a corner drag.
+
+### The ladder ahead — PLANNED *(drafted by Devin 9 Sep, checked against the repo the same day)*
+
+**Nothing below has landed. No commits, by the rule at the top of this
+section.** Written down anyway, because the cost of tier 3's first five days
+was a plan that existed only in one agent's head. Three of the plan's factual
+premises were checked against the repo before it went in here; **two were
+wrong, and both are corrected below rather than repeated.**
+
+**3b — the level switcher.** Gilligan, in flight. Ids never indexes, and the
+spec names a drawing with an inserted level. The hazard is stated above.
+
+**3c — draw and delete a wall.** Gilligan, queued. New endpoints join the
+corner pool or the page loses the property rung two is built on; the default
+wall type comes from `_contextWallType()` on the old page rather than a
+constant chosen here (`MODEL.dc.html:9016` — the FOUNDATION set and the
+stud/insul set are different lists, and picking wrong is silent); saves go
+through `ifRev`; the deliverable is an old-page round-trip spec, and every
+field written names its deriver and its storer. **A note on the delete half:
+the old page has no DELETE BUTTON for a wall.** Delete is the `delete`
+keybinding (`profile-manager.js:128`, default `Delete`) over a SELECT-tool
+selection (`MODEL.dc.html:22209`, refusal at `:22196`), and it is a multi-kind
+operation there — walls, floors, roofs, fenestrations, dimensions, fixtures
+and outline nodes all answer the same key, with a *"this corner carries built
+geometry"* refusal in front of it. 3c takes the wall case only, and should
+say so out loud, since the drafter presses the same key for all of them.
+
+**3d — the rest of the autosave ruling.** Its first job was writing the ruling
+down, because rungs 2–5 existed nowhere in this repository — measured, not
+assumed: `git log --all -i --grep=lease` found no commit carrying them, and
+`edit lease` appeared in no file on main but this one. **Done on 9 Sep:
+`RULING-autosave-two-writers.md`.** The rungs now have a spec to be tested
+against, and it is the spec — not this table — that the work is measured by:
+
+- **Rung 2, the broadcast.** `onBucketChanged`, post-commit, both pages. A
+  clean page re-reads; a dirty page never does. Cheapest rung in the design,
+  and it also retires the bug where one LAYOUT sheet edit refuses every save
+  from `MODEL.html` until reload.
+- **Rung 3, the lease.** Own-keyed so heartbeats never bump the revision,
+  with a TTL, a takeover generation, and a **silent resume** for a holder that
+  was frozen rather than replaced. **Both model pages convert in the same
+  slice** — a lease the old page does not respect is theatre, and a slice
+  converting only `MODEL.html` should not be merged.
+- **Rung 4, hide-save**, best-effort: a `pagehide` write was measured *not*
+  landing on a tab reload in desktop Chrome, so nothing may depend on it.
+- **Rung 5, autosave**, only once `MODEL.html` is the sole model writer.
+
+Rung 3 does not wait on the iPad TTL measurement: the resume path is correct
+under every outcome, and the constant is tuned afterwards.
+
+**3e onward — one verb per rung, and the inventory is bigger than the plan
+said.** The plan sketched *"fenestration, stairs, fixtures, outline/BONEYARD,
+the bone"* — five. **Measured from the old page's own dispatch, the gap is 19
+tool states**, and a count of toolbar buttons would have found neither the
+right number nor the right names, so each is cited. Two crews measured this
+independently and converged on the same 19 — across `activeTool === 'x'`,
+`[...].includes(activeTool)` and `setActiveTool('x')`, cross-checked against
+`POLAR_RULER_TOOLS` / `POLAR_TRACKING_TOOLS` / `ORTHO_LOCK_TOOLS`, which add
+nothing new:
+
+| verb | dispatch | verb | dispatch |
+|---|---|---|---|
+| `annotation` | `MODEL.dc.html:10219` | `line` | `:22720` |
+| `beam` | `:22723` | `node` | `:22572` |
+| `column` | `:22722` | `outline` | `:11744` |
+| `copy` | `:7778` | `roof` | `:7314` |
+| `cut` | `:22566` | `select` | `:6869` |
+| `dimension` | `:22569` | `shape` | `:21390` |
+| `extend` | `:7712` | `stair` | `:22759` |
+| `fenestration` | `:7507` | `trim` | `:7622` |
+| `fixture` | `:15366` | `wall` | `:22567` |
+| `floor` | `:21386` | | |
+
+**`select` counts as a nineteenth, and the number is misleading in the other
+direction too: `MODEL.html` implements *none* of the 19 as tools.**
+`MODEL.html:764` is `activeTool: null` and stays null; its selection is a hit
+test, not a tool, and its whole write surface is two paths — a move-drag
+commit and an undo, both ending at `markDirty()` (`MODEL.html:1615`, `:1679`).
+No create, no delete. That is the real baseline 3c builds on.
+
+**"The bone itself" is not a verb**, so the plan's five-item sketch had a
+category error in it as well as a shortfall. `boneyardActive` is an orthogonal
+mode flag (38 references in the old page, plus 11 for `activeBoneyardShelfId`)
+that *composes* with the tools — fenestration's ghost is
+`boneyardActive && activeTool === 'fenestration'`. A bone rung multiplies the
+other rungs rather than sitting beside them; counting it as one of them is
+3e's ladder wrong before it starts.
+
+**Neither of the old page's own lists of itself is complete**, which is why
+the count had to come from dispatch. `_contextToolLabel`'s `names` map
+(`MODEL.dc.html:8997`) knows 14 of the 19 and has no entry for `trim`, `cut`,
+`extend`, `copy` or `select`; `profile-manager.js`'s `DEFAULT_KEYBINDINGS`
+binds those four and also `group`, `ungroup`, `delete`, `background`,
+`tsquare`, `compass` and `freezeLength` — commands the label map never heard
+of — while COLUMN, BEAM, STAIR, FIXTURE and ANNOTATION have no shortcut at
+all. **Whoever orders 3e should take the union of the two, not either one**,
+and the count in this table is of tool states, not of everything a drafter
+can do: BUILD HOUSE, ROOM TAGS, AUTO DIMS, SHAPE CAPTURE, TURTLE, GRUFF and
+the per-object deletes are buttons (`onBuildHouse`, `onRoomTags`,
+`onAutoDims`, `onShapeCapture`, `onTurtleGo`, `onGruffOpen`, `onRoofDelete`
+and its siblings), and they are a second inventory nobody has taken yet.
+
+**One gap inside a rung already called done.** `MODEL.html` has undo — one
+press, one undo, over the drag's own capture — and **it has no redo**: `redo`
+appears nowhere in the file, while the old page binds `Ctrl+Shift+Z` and puts
+a button on the strip for it (`MODEL.dc.html:2096`, `_redo()` at `:6296`) —
+and the iPad drafter has no keyboard at all. An undo that cannot be taken
+back is the more dangerous half to ship alone. Small, and it belongs to
+whoever opens 3b, not to a board.
+
+**The exit gate — when tier 3 is done.** `MODEL.html` does everything
+`MODEL.dc.html` does *for the tasks it claims*; Movie draws a real house with
+it and prefers it; and the old page still opens what the new one saved, with
+no loss. Then the swap is two `href`s in `index.html` — a deliberate act, its
+own PR, nothing sooner. **The round-trip half of that gate is the one with
+teeth**, and it is testable today rather than at the end: every rung from 3c
+on owes an old-page round-trip spec, and the gate is just the last one of
+them.
+
+### After MODEL — and one premise of that plan was already false
+
+**`LAYOUT.dc.html` has already adopted `level-assembly.js`.** The plan
+proposed that adoption as LAYOUT's natural tier 1; it landed on 6 Sep in
+`c420e80` (PR #313), *"LAYOUT adopts level-assembly.js, and it had already
+drifted"* — and the copy was not merely duplicated but **wrong**, answering
+six fields where the module answers eight, with both pages handing the result
+to `cut-view.js`. The adoption was proved by a differential over 8002
+comparisons with seven mutations. `LAYOUT.dc.html:296-302` destructures the
+module today and holds no table of its own.
+
+**The stale sentence is `level-assembly.js:21`** — *"LAYOUT.dc.html still
+holds its own copy; adopting this there is a separate change with its own test
+surface"* — left standing in the module's header three days after the
+adoption, and it is what the plan was read off. **Flagged, not fixed: it is
+product code and this pass is docs.** It is one comment line and it belongs in
+the next PR that touches that file.
+
+So LAYOUT's ladder starts where MODEL's did — read the real drawing, paint it
+with the real painters — with `layout-plan.js`, `wall-types.js` and
+`level-assembly.js` already banked, and its own tier 1 still to be specced.
+The rest of the order after that is unchanged and is not this file's to hold:
+module review closes out through `MODULE-REVIEW-GATE.md`, the rename pass is
+board #317, and the swap is the gate above. **There is no tier 4.**
 
 ## Tier 2c — floors through the real painter (3 Sep)
 

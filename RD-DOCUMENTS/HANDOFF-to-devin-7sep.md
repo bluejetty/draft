@@ -106,6 +106,11 @@ if not, the failure is this change's and belongs to whoever holds it.
   `PRE-TIER3.md` still lists press-and-flag as *"wants an owner"*; it has one,
   the module just is not wired in. Adoption is a change into `MODEL.dc.html`
   and `PROJECT.html`.
+  > **CLOSED the same day this was written — noted 9 Sep.** `a824547` (PR
+  > #334) wired both exports into exactly those two pages, added
+  > `garageDoorHeadLimitIn`, and proved the specs can fail by pulling the
+  > script tag. `PRE-TIER3.md`'s line is corrected. Left in place because the
+  > handoff is a record of the 7 Sep state, not a to-do list to be edited.
 - **Three floor-item writers drop `joistType`.** `MODEL.dc.html:12433` and
   `:12714` spread `DEFAULT_FLOOR_ASSEMBLY` (three keys) then override all three
   from the level's assembly — so the spread contributes nothing and the level's
@@ -128,6 +133,14 @@ if not, the failure is this change's and belongs to whoever holds it.
 was ruled 6 Sep, landed in #319, and MODEL.html was wired to read it in #320.
 **The gate is clear; the document is stale.** Worth correcting so nobody plans
 around a blocker that is gone.
+
+> **The document was corrected before this was read — noted 9 Sep.**
+> `6c7d2d2`, *"PRE-TIER3: the gate is clear, both rulings landed 6 Sep"*, is
+> dated 7 Sep and says exactly that. This paragraph describes the file as it
+> stood when the handoff was drafted, and a later reader chasing it finds
+> nothing to fix — which costs a lookup and, worse, makes the rest of the
+> handoff look stale by association. **A doc that flags another doc should
+> name the commit it was read at.**
 
 ## HOW I WAS GETTING IT WRONG
 
