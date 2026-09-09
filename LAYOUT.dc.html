@@ -535,12 +535,25 @@ class Component extends DCLogic {
         .map(wall => wall.topHeight);
       return tops.length ? Math.max(...tops) : DEFAULT_WALL_TOP_FT;
     };
-    const distToSeg = (pt, a, b) => {
-      const dx = b.x - a.x, dz = b.z - a.z;
-      const len2 = dx * dx + dz * dz;
-      const t = len2 ? Math.max(0, Math.min(1, ((pt.x - a.x) * dx + (pt.z - a.z) * dz) / len2)) : 0;
-      return Math.hypot(pt.x - (a.x + t * dx), pt.z - (a.z + t * dz));
-    };
+    // Board #346: the last outboard copy of point-to-segment, collapsed onto the
+    // shared export. geometry-2d.js is already loaded here (line 16), and this
+    // page's env feeds cut-view.js's garageOfWall through edgeOnOutline below —
+    // the same contract proto/elevation-harness.js serves, whose identical copy
+    // collapsed in PR #353.
+    //
+    // NO CALLER-LOCAL FALLBACK. The export refuses a segment under 0.01ft
+    // (Infinity) where this copy answered distance-to-`a`, and the one caller
+    // was measured rather than assumed: edgeOnOutline's onBoundary is a
+    // `.some()` across every edge, and a zero-length edge sits exactly on a
+    // point its two neighbours already reach, so the Infinity is skipped and a
+    // neighbour answers the same number. Checked against a clean square, a
+    // duplicated corner, an edge ending on the duplicate, three identical
+    // points, and a point only the zero-length edge could match: no flip in any
+    // of them. It differs in one shape only — an outline whose edges are ALL
+    // degenerate — and there `false` is the better answer, because something
+    // that is one point has no boundary for an edge to lie along.
+    const distToSeg = (pt, a, b) =>
+      window.DraftGeometry2D.pointToSegment(pt, { start: a, end: b }).d;
     const standards = window.DraftStructureStandards.normaliseStructureStandards(
       window.DraftProfileManager?.getActive('standards')?.content?.model?.structureStandards);
     const datum = format.number(saved.elevationDatum, 0) === 100 ? 100 : 0;
