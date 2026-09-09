@@ -569,6 +569,29 @@ measured first, or the guard will refuse openings that are correctly placed.
 That measurement is the actual first task, and it is why the two sites are not
 one change repeated twice.
 
+**Ruled (Devin, 9 Sep): it does not block the `areas.js` repair, and the
+direction is worth stating because it is the reassuring one.** Work the two
+cases through:
+
+| how the floor is drawn | where a face-keyed opening sits |
+|---|---|
+| to the wall **centreline** | **strictly inside** the floor ring, by half a wall thickness — the centreline polygon is the larger one |
+| to the **interior face** | exactly **on** the ring, and boundary counts as inside |
+
+So neither case puts a correctly-placed opening outside, and no tolerance is
+needed for the arithmetic. (The ruling as first written said such an opening
+"lands on the ring"; that describes the second row only. The first row is
+strictly inside, which is a stronger result, not a weaker one.)
+
+What it *does* block is a tolerance-free pass/fail in the **stair tool's**
+future guard: an opening over by an inch and one over by four feet must not
+report the same, so that guard should carry the measured overhang rather than a
+bare boolean, and the half-a-wall-thickness case wants naming in its harness
+with the measurement attached. If floors turn out to be drawn to centreline
+systematically, that is a wall-thickness offset applied once at the comparison —
+never a change to `ringInsideRing`, which is the shared containment primitive
+and has its own harness.
+
 **Until it lands, the AREAS dialog line is what the drafter sees**, and on those
 drawings it is telling the truth about a real overhang.
 
