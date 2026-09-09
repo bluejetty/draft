@@ -97,6 +97,15 @@ async function growFourRooms(page) {
 }
 
 test('deleting the stamps sweeps their grown walls on the next bone — no stale partitions', async ({ page }) => {
+  // DORMANT — BOARD #331. The bone no longer grows interior partitions from
+  // the stamp program (BONE_GROWS_ROOMS in MODEL.dc.html), so there is
+  // nothing here to observe. NOT deleted: this is the page-wiring proof that
+  // must come back WITH the dealer rework, and rebuilding it from the boards
+  // later is exactly the waste the "bypass, not delete" rule exists to avoid.
+  // The grower's own logic stays covered offline — proto/room-grow-harness.js,
+  // 69 checks. Flip the constant and these wake up with it.
+  test.skip(true, 'board #331: the bone grows no rooms — wake with BONE_GROWS_ROOMS');
+
   await h.openModel(page, { tourEscort: true, roomGrow: true });
   await growFourRooms(page);
   let saved = await h.savedDrawing(page);
@@ -116,6 +125,15 @@ test('deleting the stamps sweeps their grown walls on the next bone — no stale
 });
 
 test('an ordinary drag promotes the grown wall, and the promoted wall survives the sweep', async ({ page }) => {
+  // DORMANT — BOARD #331. The bone no longer grows interior partitions from
+  // the stamp program (BONE_GROWS_ROOMS in MODEL.dc.html), so there is
+  // nothing here to observe. NOT deleted: this is the page-wiring proof that
+  // must come back WITH the dealer rework, and rebuilding it from the boards
+  // later is exactly the waste the "bypass, not delete" rule exists to avoid.
+  // The grower's own logic stays covered offline — proto/room-grow-harness.js,
+  // 69 checks. Flip the constant and these wake up with it.
+  test.skip(true, 'board #331: the bone grows no rooms — wake with BONE_GROWS_ROOMS');
+
   await h.openModel(page, { tourEscort: true, roomGrow: true });
   await growFourRooms(page);
   let saved = await h.savedDrawing(page);
@@ -147,6 +165,15 @@ test('an ordinary drag promotes the grown wall, and the promoted wall survives t
 });
 
 test('a frozen drag keeps ownership through the preview; Escape restores wall and ownership', async ({ page }) => {
+  // DORMANT — BOARD #331. The bone no longer grows interior partitions from
+  // the stamp program (BONE_GROWS_ROOMS in MODEL.dc.html), so there is
+  // nothing here to observe. NOT deleted: this is the page-wiring proof that
+  // must come back WITH the dealer rework, and rebuilding it from the boards
+  // later is exactly the waste the "bypass, not delete" rule exists to avoid.
+  // The grower's own logic stays covered offline — proto/room-grow-harness.js,
+  // 69 checks. Flip the constant and these wake up with it.
+  test.skip(true, 'board #331: the bone grows no rooms — wake with BONE_GROWS_ROOMS');
+
   await h.openModel(page, { tourEscort: true, roomGrow: true });
   await growFourRooms(page);
   let saved = await h.savedDrawing(page);
@@ -175,6 +202,15 @@ test('a frozen drag keeps ownership through the preview; Escape restores wall an
 });
 
 test('a frozen drag committed with Enter moves the endpoint and promotes the wall', async ({ page }) => {
+  // DORMANT — BOARD #331. The bone no longer grows interior partitions from
+  // the stamp program (BONE_GROWS_ROOMS in MODEL.dc.html), so there is
+  // nothing here to observe. NOT deleted: this is the page-wiring proof that
+  // must come back WITH the dealer rework, and rebuilding it from the boards
+  // later is exactly the waste the "bypass, not delete" rule exists to avoid.
+  // The grower's own logic stays covered offline — proto/room-grow-harness.js,
+  // 69 checks. Flip the constant and these wake up with it.
+  test.skip(true, 'board #331: the bone grows no rooms — wake with BONE_GROWS_ROOMS');
+
   await h.openModel(page, { tourEscort: true, roomGrow: true });
   await growFourRooms(page);
   let saved = await h.savedDrawing(page);
@@ -202,6 +238,15 @@ test('a frozen drag committed with Enter moves the endpoint and promotes the wal
 });
 
 test('a deleted partition edge stays declined on its floor, and the same edge grows upstairs', async ({ page }) => {
+  // DORMANT — BOARD #331. The bone no longer grows interior partitions from
+  // the stamp program (BONE_GROWS_ROOMS in MODEL.dc.html), so there is
+  // nothing here to observe. NOT deleted: this is the page-wiring proof that
+  // must come back WITH the dealer rework, and rebuilding it from the boards
+  // later is exactly the waste the "bypass, not delete" rule exists to avoid.
+  // The grower's own logic stays covered offline — proto/room-grow-harness.js,
+  // 69 checks. Flip the constant and these wake up with it.
+  test.skip(true, 'board #331: the bone grows no rooms — wake with BONE_GROWS_ROOMS');
+
   await h.openModel(page, { tourEscort: true, roomGrow: true });
   await reachRoomsMain(page, 28, 22);
   await stamp(page, 'KITCHEN', -9, -7);

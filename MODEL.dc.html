@@ -2194,6 +2194,28 @@ const BONEYARD_MARK_HIT_PX = 12;
 const FIXTURE_WALL_PICK_PX = 30;
 const STAIR_OPENING_WALL_PICK_PX = 24;
 const FENESTRATION_WALL_PICK_PX = 18;
+// ── BOARD #331: THE BONE DOES NOT GROW INTERIOR ROOMS ────────────────────
+//
+// The drafter's ruling, 9 Sep 2026: "lets use 331 to reprogram the autohouse
+// to SKIP the room part" -- the room dealer "didn't work good, i need to fix
+// it later". A bone press still builds shell, stairs, openings, garage, roof,
+// marks, windows and dims, and still deals the washroom. It just stops
+// turning the stamp program into 2x4 partitions.
+//
+// A BYPASS, NOT A DELETE. room-grow.js, the stamp tray, Gruff's drive-thru
+// and _growStampedRooms all stay exactly where they are, dormant. The later
+// dealer fix flips THIS ONE CONSTANT back and the machinery wakes up; it does
+// not have to be rebuilt from the boards.
+//
+// WHY A CONSTANT AND NOT state.roomGrow. That flag is the DRAFTER'S -- a
+// checkbox in SETTINGS ("Room growing"). Forcing it false to get this skip
+// would be the app quietly overruling a choice the drafter made in their own
+// settings, and then lying about it the next time they opened the page. The
+// two are separate questions: this constant says what the BONE does, that
+// checkbox says what the DRAFTER wants, and the machinery runs only when both
+// agree.
+const BONE_GROWS_ROOMS = false;
+
 // Polar-origin activation effect: the node pulses orange and shoots hairline
 // direction rays that hold for a second, then fade out over another.
 const POLAR_FX_HOLD_MS = 1000;
@@ -13445,6 +13467,12 @@ class Component extends DCLogic {
   // from the room-grow plan, so this is the same geometry the dashed
   // preview draws — with room growing off there are no claims and the
   // dealer falls back to spreading windows on the face itself (open plan).
+  // DORMANT SINCE BOARD #331, and kept deliberately. Nothing calls this: the
+  // drafter cut the tie between windows and bedrooms, so _dealAutoWindows
+  // passes an empty rooms list. It is the other half of the trapped-bedroom
+  // rescue -- the page side that turns grown rooms into the frontage the
+  // module reads -- and the dealer rework needs it back as it stands. Deleting
+  // it would mean rebuilding it from the boards to restore one argument.
   _autoWindowRooms(levelId, faces) {
     const plan = this._roomGrowPlan(levelId);
     if (!plan || !plan.rooms.length) return [];
@@ -13492,10 +13520,22 @@ class Component extends DCLogic {
         && (opening.view || 'plan') === 'plan'));
       const faces = this._autoWindowFaces(level.id);
       if (!faces.length) return;
-      const rooms = this._autoWindowRooms(level.id, faces);
+      // BOARD #331, the drafter's call: "make the windows unrelated to the
+      // bedrooms if you can". Severed HERE, at the page, rather than in the
+      // module: dealWindows keeps its trapped-bedroom rescue intact and still
+      // harnessed (proto/auto-windows-harness.js calls it directly with its
+      // own rooms), so the later dealer rework reconnects it by passing rooms
+      // again -- one argument, not a rebuild.
+      //
+      // WHAT IS LOST, SAID PLAINLY: a bedroom touching only a side wall used
+      // to force that side to carry windows, so it could not end up blind.
+      // Without rooms there is nothing to rescue, and such a bedroom can now
+      // get no window. That is moot while board #331 grows no rooms at all --
+      // there are none to trap -- but whoever wakes the dealer decides
+      // whether the rescue comes back with it.
       const deal = window.DraftAutoWindows.dealWindows({
         faces: faces.map(({ wall, forward, start, u, inward, ...rest }) => rest),
-        rooms,
+        rooms: [],
       });
       const byId = new Map(faces.map(face => [face.id, face]));
       deal.windows.forEach(win => {
@@ -14375,10 +14415,10 @@ class Component extends DCLogic {
     } else if (grown.swept) {
       built.push(`${grown.swept} stale grown wall${grown.swept === 1 ? '' : 's'} swept`);
     }
-    // Auto windows (board #169) last of the fenestration work: the grown
-    // rooms above are the bedroom-access oracle the siting rules read, and
-    // dealing after the marks and garage doors means their faces are
-    // already spoken for.
+    // Auto windows (board #169) last of the fenestration work: dealing after
+    // the marks and garage doors means their faces are already spoken for.
+    // The grown rooms above WERE the bedroom-access oracle; board #331 cut
+    // that tie, so the siting rules now read faces alone.
     const dealt = this._dealAutoWindows();
     if (dealt.placed) built.push(`${dealt.placed} window${dealt.placed === 1 ? '' : 's'} dealt onto the exterior walls`);
     // The dimension stack refreshes on every build that changed something, so
@@ -21022,7 +21062,10 @@ class Component extends DCLogic {
 
   // The dashed boundary preview — live, screen-only, never printing.
   _drawRoomGrow2D(ctx, toS) {
-    if (this._isPrinting || this.state.roomGrow === false) return;
+    // BOARD #331: a dashed preview of partitions the bone will not build is
+    // the screen making a promise the button does not keep. It goes quiet
+    // with the grower and comes back with it.
+    if (this._isPrinting || this.state.roomGrow === false || !BONE_GROWS_ROOMS) return;
     const plan = this._roomGrowPlan(this._activeLevelId());
     if (!plan || !plan.rooms.length) return;
     ctx.save();
@@ -21082,7 +21125,20 @@ class Component extends DCLogic {
   // its claim's area and minimums verdict on the spot — detection refines
   // them later, and never silently: an under-min bedroom/WC flags loud.
   _growStampedRooms() {
-    if (this.state.roomGrow === false || !window.DraftRoomGrow) return { walls: 0, rooms: 0, flagged: 0, swept: 0 };
+    // THE DRAFTER'S SWITCH IS UNCHANGED. Off means this does nothing at all,
+    // exactly as before -- including no sweep. Their existing grown walls are
+    // left alone, because "stop growing rooms" is not "delete the rooms I
+    // already have", and #331 is not licence to reinterpret their setting.
+    if (this.state.roomGrow === false || !window.DraftRoomGrow) {
+      return { walls: 0, rooms: 0, flagged: 0, swept: 0 };
+    }
+    // BOARD #331: THE BONE STOPS GROWING BUT KEEPS SWEEPING, and that half is
+    // the trap in this change. An `auto` wall means THE BUILD OWNS THIS AND
+    // SWEEPS IT BEFORE REGENERATING. Skipping the whole function would strand
+    // every partition an older press grew: the bone would never make them
+    // again and never clean them either, so they would sit in the drawing
+    // forever with nothing able to remove them. The sweep below already runs
+    // BEFORE the grow, per level, so all this needs is to withhold the plan.
     const result = { walls: 0, rooms: 0, flagged: 0, swept: 0 };
     // Every level with a stamp program AND every level still holding grown
     // walls: a floor whose stamps are gone gets its stale partitions swept.
@@ -21092,7 +21148,7 @@ class Component extends DCLogic {
         .map(wall => wall.levelId),
     ])];
     levelIds.forEach(levelId => {
-      const plan = this._roomGrowPlan(levelId);
+      const plan = BONE_GROWS_ROOMS ? this._roomGrowPlan(levelId) : null;
       const kept = this._walls.filter(wall => !(wall.auto === true
         && wall.levelId === levelId && (wall.view || 'plan') === 'plan'));
       result.swept += this._walls.length - kept.length;

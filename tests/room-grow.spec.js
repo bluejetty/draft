@@ -84,6 +84,15 @@ test('stamps project dashed boundary claims — preview only, nothing saved unti
 });
 
 test('the bone grows 2x4 interior walls from the stamp program and the rooms clear their minimums', async ({ page }) => {
+  // DORMANT — BOARD #331. The bone no longer grows interior partitions from
+  // the stamp program (BONE_GROWS_ROOMS in MODEL.dc.html), so there is
+  // nothing here to observe. NOT deleted: this is the page-wiring proof that
+  // must come back WITH the dealer rework, and rebuilding it from the boards
+  // later is exactly the waste the "bypass, not delete" rule exists to avoid.
+  // The grower's own logic stays covered offline — proto/room-grow-harness.js,
+  // 69 checks. Flip the constant and these wake up with it.
+  test.skip(true, 'board #331: the bone grows no rooms — wake with BONE_GROWS_ROOMS');
+
   await h.openModel(page, { tourEscort: true, roomGrow: true });
   // 28x22: room for the four-stamp program at minimums beside the stair
   // well — a 26x20 genuinely cannot hold it, and the shrink-then-flag
@@ -239,6 +248,15 @@ async function traceLHouse(page) {
 }
 
 test('an L-shaped house grows nothing into the notch (board #290)', async ({ page }) => {
+  // DORMANT — BOARD #331. The bone no longer grows interior partitions from
+  // the stamp program (BONE_GROWS_ROOMS in MODEL.dc.html), so there is
+  // nothing here to observe. NOT deleted: this is the page-wiring proof that
+  // must come back WITH the dealer rework, and rebuilding it from the boards
+  // later is exactly the waste the "bypass, not delete" rule exists to avoid.
+  // The grower's own logic stays covered offline — proto/room-grow-harness.js,
+  // 69 checks. Flip the constant and these wake up with it.
+  test.skip(true, 'board #331: the bone grows no rooms — wake with BONE_GROWS_ROOMS');
+
   await h.openModel(page, { tourEscort: true, roomGrow: true });
   await traceLHouse(page);
   await page.locator('[data-tour-popup]').click();       // FOUNDATION DONE → MAIN
