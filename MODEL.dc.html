@@ -4882,11 +4882,33 @@ class Component extends DCLogic {
     const model = this._tourRoofModel();
     if (!model) return false;
     const pt = { x: raw.x, z: raw.z };
+    // BOARD #351. This was a private copy of the shared export's arithmetic,
+    // differing from it on exactly one input: a segment of length zero.
+    //
+    // The export answers Infinity there, and that rule is load-bearing for
+    // the twenty click-to-select sites that read it -- a zero would make
+    // every click "hit" a collapsed wall. THIS caller wants the opposite. A
+    // collapsed gable or eave edge is still a clickable place: roof intent
+    // can produce coincident points mid-drag, and the tag must not silently
+    // die under the drafter's cursor. So the exception lives here, with the
+    // caller that wants it, and never as a flag on the export.
+    //
+    // A collapsed edge really does reach here -- the route is the NORMAL,
+    // not the overhang. offsetOutlineVariable leaves a coincident point
+    // where it is, so `nlen = hypot(nx, nz) || 1` hands the edge a normal of
+    // length zero and the gable stub below collapses to a point despite
+    // being built as n * (overhang + 1). Pinned in
+    // proto/degenerate-chain-harness.js, which fails if any link changes.
+    //
+    // EXACT on a zero-length segment: the old `|| 1` substitution drove t to
+    // 0 and returned the distance to `a`, which is what the fallback returns.
+    // The two differ only for a segment SHORTER than the export's 0.01ft
+    // floor but not zero, and there by at most the segment's own length --
+    // measured worst case 0.0099ft, about 1/8 inch, against thresholds of
+    // 0.6 and 0.8 feet.
     const distToSegment = (p, a, b) => {
-      const dx = b.x - a.x, dz = b.z - a.z;
-      const len2 = dx * dx + dz * dz || 1;
-      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2));
-      return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t));
+      const { d } = window.DraftGeometry2D.pointToSegment({ x: p.x, z: p.z }, { start: a, end: b });
+      return Number.isFinite(d) ? d : Math.hypot(p.x - a.x, p.z - a.z);
     };
     // E/G tag: the whole-edge eave-vs-gable choice.
     for (const edge of model.edges) {
