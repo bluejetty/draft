@@ -438,11 +438,16 @@ distinct 180s click-retry timeouts on clean main, **all with the same
 blocker**: `perf-notice:35` reproduced across both machines (same mode, same
 budget, same blocker — corrected by Gilligan, 9 Sep: it is the ONLY one that
 did; his clean main passed the other two), while `design-notices-wired:65` and
-`perf-notice:62` are single-machine sightings, consistent with it. One
-cross-machine reproduction plus two consistent sightings is still not a random
-draw — the coach overlay stays up (or comes back) over the rail long enough
-for Playwright to burn its full budget clicking through it — but it is one
-reproduction, not three. And keep Skipper's distinction rather than flattening
+`perf-notice:62` each failed **twice on Skipper's machine** (branch run and
+baseline run) and **zero times on Gilligan's** — settled from Skipper's
+primary logs, 9 Sep. Two sightings each on one box, zero on the other, is a
+different animal from a single sighting: a failure that fires twice on one
+machine and never on another points at a machine-specific factor, not noise.
+One cross-machine reproduction plus two twice-seen single-machine patterns is
+still not a random draw — the coach overlay stays up (or comes back) over the
+rail long enough for Playwright to burn its full budget clicking through it —
+but it is one cross-machine reproduction, not three. And keep Skipper's
+distinction rather than flattening
 it: on `design-notices-wired:65` the blocked target was a **different rail
 selector** on each box (`left-rail-tab` vs `right-rail-tab`) — "same cause"
 satisfied, "strict selector identity" not.
@@ -462,10 +467,16 @@ intended dismissal path under load.
 Measured, not inferred: 4 Playwright workers each driving Chromium (multiple
 processes per worker) held load at 18–22 on 4 cores through two full 41-minute
 baselines — roughly 5× oversubscribed. Under that starvation the suite's
-failure set is drawn nearly at random from the known-fragile specs: six
-distinct failure names by Skipper's count — seven by Gilligan's, the two
-tallies differing on what counts as a run, and the disagreement recorded here
-rather than averaged — across four runs of unchanged code, with boards #360
+failure set is drawn nearly at random from the known-fragile specs. The count,
+settled from Skipper's primary logs (the six-vs-seven dispute was
+definitional, not factual): **7 distinct failure names across the full-suite
+runs on both machines** (`defaults:50`, `design-notices-wired:65`,
+`perf-notice:35`, `perf-notice:62`, `project-page:64`, `touch-affordances:78`,
+plus Gilligan's `project-info:30`) — with `project-page:100` recorded
+separately as **probe-only**: it appeared only in the artificial 12-worker
+`--repeat-each` probe that demonstrated the `savedDrawing` mechanism, never in
+a normal suite run, so it stays visible but out of the tally — across four
+full runs of unchanged code, with boards #360
 and #361 supplying the mechanisms. A green CI run (GitHub shards 4 ways across
 4 machines, each carrying a quarter of the load) and a red local run of the
 same tree are both telling the truth about different environments.
