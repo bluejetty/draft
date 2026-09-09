@@ -434,12 +434,18 @@ it is the current largest manufacturer of false suite failures after board
 ### Board #361 · The entry-coach overlay eats clicks under load
 
 `[data-entry-coach]` intercepting pointer events is now implicated in three
-distinct 180s click-retry timeouts (`design-notices-wired:65`,
-`perf-notice:62`, `perf-notice:35`), reproduced **identically on two
-independent machines** on clean main — same mode, same budget, same blocker
-element. That is not a random draw; it is a real defect that fires when the
-box is slow: the coach overlay stays up (or comes back) over `[data-felt-rail]`
-long enough for Playwright to burn its full budget clicking through it.
+distinct 180s click-retry timeouts on clean main, **all with the same
+blocker**: `perf-notice:35` reproduced across both machines (same mode, same
+budget, same blocker — corrected by Gilligan, 9 Sep: it is the ONLY one that
+did; his clean main passed the other two), while `design-notices-wired:65` and
+`perf-notice:62` are single-machine sightings, consistent with it. One
+cross-machine reproduction plus two consistent sightings is still not a random
+draw — the coach overlay stays up (or comes back) over the rail long enough
+for Playwright to burn its full budget clicking through it — but it is one
+reproduction, not three. And keep Skipper's distinction rather than flattening
+it: on `design-notices-wired:65` the blocked target was a **different rail
+selector** on each box (`left-rail-tab` vs `right-rail-tab`) — "same cause"
+satisfied, "strict selector identity" not.
 
 **Open question the board must answer first:** is this a product defect (the
 coach should be dismissed/`pointer-events: none` by then and is not, which a
@@ -457,7 +463,9 @@ Measured, not inferred: 4 Playwright workers each driving Chromium (multiple
 processes per worker) held load at 18–22 on 4 cores through two full 41-minute
 baselines — roughly 5× oversubscribed. Under that starvation the suite's
 failure set is drawn nearly at random from the known-fragile specs: six
-distinct failure names across four runs of unchanged code, with boards #360
+distinct failure names by Skipper's count — seven by Gilligan's, the two
+tallies differing on what counts as a run, and the disagreement recorded here
+rather than averaged — across four runs of unchanged code, with boards #360
 and #361 supplying the mechanisms. A green CI run (GitHub shards 4 ways across
 4 machines, each carrying a quarter of the load) and a red local run of the
 same tree are both telling the truth about different environments.
