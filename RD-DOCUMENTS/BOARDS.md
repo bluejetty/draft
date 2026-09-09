@@ -461,7 +461,9 @@ the correction attached rather than quietly superseded.
 
 Tier 3 gate duty asked me to confirm that `design-notices.js` (built in #318)
 still has no callers. **It does not — it was adopted, and the check is what
-found it.** Measured on main `3ed8f1e`:
+found it.** It got them in `a824547`, "design-notices.js gets its callers"
+(PR #334), whose spec asserts absence as well as presence. Measured on main
+`3ed8f1e`:
 
 | export | caller |
 |---|---|
