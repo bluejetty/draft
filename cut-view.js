@@ -1132,12 +1132,23 @@ if (!window.DraftCutView) {
     // wall's plate runs a GABLE edge just past the face, the top of the
     // wall follows the underside of the rakes — the triangle between the
     // plate and the ridge is wall, not sky.
-    const distToSegment = (p, a, b) => {
-      const dx = b.x - a.x, dz = b.z - a.z;
-      const len2 = dx * dx + dz * dz || 1;
-      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2));
-      return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t));
-    };
+    // Board #346: the last of four outboard copies of point-to-segment,
+    // collapsed onto the shared export. No caller-local fallback — both callers
+    // are asking "is this wall along that gable edge", and the export's refusal
+    // of a sub-0.01ft segment is the right answer to that question.
+    //
+    // The `|| 1` this replaces made a zero-length gable edge behave as a POINT:
+    // a wall within `reach` of it would climb, and two rake ends within 0.1ft
+    // of it would read as lying along it. An edge under an eighth of an inch is
+    // not a gable, and the export declines to measure one.
+    //
+    // This helper had no coverage of any kind when the sweep reached it —
+    // always-Infinity and always-zero both left twenty specs and both harnesses
+    // green, and the one check that named the behaviour, "E4: the near
+    // gable-end wall still climbs its gable", passed whether the wall climbed
+    // or not. That check now counts wall ink alone and fails for the right
+    // reason; the collapse rides on it rather than on nothing.
+    const distToSegment = (p, a, b) => geo().pointToSegment(p, { start: a, end: b }).d;
     // Only a wall running ALONG the gable climbs; a perpendicular wall
     // passing the gable's corner keeps its plate.
     const gableTopAt = (pt, plateTop, wallDir) => {

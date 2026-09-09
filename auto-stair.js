@@ -98,12 +98,35 @@ if (!window.DraftAutoStair) {
     return intervals || [];
   };
 
-  const distPtSeg = (pt, a, b) => {
-    const dx = b.x - a.x, dz = b.z - a.z;
-    const len2 = dx * dx + dz * dz;
-    const t = len2 > 0 ? Math.max(0, Math.min(1, ((pt.x - a.x) * dx + (pt.z - a.z) * dz) / len2)) : 0;
-    return Math.hypot(pt.x - (a.x + dx * t), pt.z - (a.z + dz * t));
-  };
+  // Board #346: one of four outboard copies of point-to-segment, collapsed onto
+  // the shared export. No caller-local fallback — the two callers were measured
+  // rather than assumed, and neither wants the old degenerate answer.
+  //
+  // The export refuses a segment under 0.01ft (Infinity) where this copy
+  // answered distance-to-`a`. Rings here come from offsetOutline, which DOES
+  // produce zero-length edges: a 20x2 room inset 1ft comes back with two of
+  // them, and that is a corridor, not a corrupt file.
+  //
+  //   distToRing (:111) takes a min across every edge. A zero-length edge sits
+  //   exactly on a point its two neighbours already reach, so the Infinity is
+  //   skipped and a neighbour answers the same number. No change — swept over
+  //   a grid of points against real inset rings, zero disagreements.
+  //
+  //   The front-wall scan (:369) picks the ring edge NEAREST the entry stamp,
+  //   and ties go to whichever came first. On a ring whose FIRST edge is the
+  //   degenerate one — which offsetOutline produces when the outline starts on
+  //   the eaten side — the old helper handed back a zero-length "front wall",
+  //   and `Math.hypot(ex, ez) || 1` turned that into a direction of (0, 0)
+  //   rather than a NaN: every downstream length multiplied by a null vector.
+  //   119 of 1400 sampled entry positions picked it. The export refuses that
+  //   edge and a real 18ft wall wins instead.
+  //
+  // That second one is a LATENT fix, stated as latent: no shape was found that
+  // produces a degenerate first edge AND still fits a stair, so nothing
+  // reachable through suggestStair changes today. No new spec was written for
+  // it, because a check that cannot fail is not a check — the existing
+  // auto-stair specs are the regression net, and this comment is the record.
+  const distPtSeg = (pt, a, b) => geo().pointToSegment(pt, { start: a, end: b }).d;
 
   const distToRing = (pt, ring) => {
     let best = Infinity;
