@@ -271,10 +271,99 @@ paints it correctly; it does not grow a UI to change it.
 
 ---
 
-## Tier 3 — the dashboard
+## Tier 3 — the ladder *(written down 9 Sep, after four rungs had already landed)*
 
-Chrome, interaction, and the skins from `SPEC-skins.md`. Not specced here
-beyond that, because tier 2 will change what it should say.
+Chrome, interaction, and the skins from `SPEC-skins.md`. The sentence above
+this one used to be the whole section — *"not specced here beyond that,
+because tier 2 will change what it should say"* — and it stayed that way for
+five days after tier 3 started. **That is the same doc failure tier 2 had
+before 3 Sep**: the plan existed, it existed in one agent's head, and nobody
+else could see the order of the work or tell a finished rung from an
+unstarted one. Written down here for the same reason, and kept the same way.
+
+**The standing rule for this section: one entry per rung, as it lands, with
+the commit.** A rung with no commit beside it has not landed, whatever the
+prose says.
+
+| rung | what it is | who | state |
+|---|---|---|---|
+| **3a** | **MODEL.html becomes a writer** — select, move a corner, save, guard the close, move a whole wall | Devin's crew | **four of four DONE**, PRs #346 / #347 |
+| **3b** | **The level switcher** — chrome on the page for the level tier 2a already filters by | Gilligan | ordered, not started |
+| **3c** | **Draw and delete a wall** — the two verbs that make the page a drafting surface rather than an editor of walls that already exist | Gilligan | queued behind 3b |
+
+Skins are not a rung on this ladder. `palette.js` calls its own night values
+provisional and `PRE-TIER3.md` ruled them *"a taste decision, not a gate"*;
+they land when Movie rules on them, in any order relative to the rungs.
+
+**3b carries a hazard that is already written down twice in this file and is
+worth a third mention here, because a switcher is exactly where it bites.**
+`MAIN_FLOOR_LEVEL_ID = 3` is an **id**; `state.activeLevelIdx: 3` is an
+**index**. They coincide on a default drawing and stop coinciding the moment a
+level is inserted — and the half-storey work means insertion is now a thing
+the product does. A switcher built on the index passes every test that uses a
+default drawing and paints the wrong level on a real one. The spec for 3b
+should name a drawing with an inserted level, not a default one.
+
+### Tier 3a — the four rungs, and the store rung it forced
+
+**Rung one — selection.** `ec993b3`, *"MODEL.html's first editing tool — click
+a wall, it lights up"*. 85 lines on the page and a 185-line spec. Nothing is
+written to the drawing: selection is the rung that proves the page can hear a
+press at all, and it was cheap because `95e7a0b` had already given
+`geometry-2d.js` the point-to-segment distance the hit test needed.
+
+**Rung two — the corner drag.** `4e2be48`. The mechanism is the corner pool,
+not a search: load rebuilds reference equality at shared corners, so writing
+`x`/`z` on one endpoint moves every wall that meets there without anything
+iterating the neighbours. **The numbers are the old page's, read rather than
+chosen** — 30px to grab a corner, 4px to snap to another, 4px of travel to arm
+the drag, all off `MODEL.dc.html`'s shipped defaults; they have names now
+rather than being literals (board #347, `d96cda6` / `39b8d40`). **And the
+master link survives**: a BUILD HOUSE corner rides a BONEYARD master point
+through `srcId`/`offX`/`offZ`, and the drag keeps the `srcId` and re-measures
+the offset, which is what `_relinkVertex` does on the old page. The trap
+recorded with it is the one that would have been silent: a master point's id
+is `id` in the file and only the old page's loader renames it `pointId` in
+memory, so reading `pointId` here resolves nothing, on every corner, quietly.
+
+**Rung three — the edit survives the page.** `75cc4ac`, plus `be01325` for the
+close guard. SAVE is a press, not an autosave, and the button carries three
+true words — SAVE, UNSAVED, SAVED — where **a refused write stays UNSAVED,
+because it is**. An undo is an edit. Selecting, panning, and a tap on a handle
+that never moved are not. The close guard is *the honest minimum, not the
+answer*: saving on a press is right for a second writer on one file, and it is
+also what puts a drafter one stray Ctrl+W away from a corner that never
+landed.
+
+**Rung four — the whole wall.** `a0c3841`. **The first gesture on this page
+with nothing to copy** — the old page's SELECT drag grabs a vertex, and a
+press on a wall body away from a corner moves nothing at all there. So it is a
+ruling rather than a measurement, and the conservative one: both endpoints are
+pooled corners shared with the neighbours, the drag moves both, and the
+outline deforms around the wall. A wall that detached from its corners instead
+would be unhooked from the pool — the same failure shape as a dropped `srcId`,
+and just as invisible until much later. A true detach, if it is ever wanted,
+gets its own name. Consequence stated rather than discovered later: the corner
+zone is 30px and the body zone 12, so a wall shorter than about 60px on screen
+has no body to grab until you zoom in.
+
+**The store rung 3a forced.** `8992ad9`, on `MODEL.dc.html` rather than on this
+page. `MODEL.dc.html`'s stale-write path merged unconditionally on a stated
+assumption — *every key in this file is the Model Space's own except
+`layout`* — which was true while LAYOUT was the only other writer and **rung
+three made it false**. The consequence was live and had no race in it: move a
+corner here and save, then edit in a still-open old tab, and the old tab is
+correctly refused, re-reads, keeps its own stale walls, writes again, and
+reports SAVED over your corner. The merge is now narrowed to the case it was
+written for; anything else is a refusal the drafter can see. This is rung 1 of
+the five-rung autosave ruling (Kevin, 8 Sep); the ruling itself is not in the
+repo — its terms are quoted in `8992ad9`'s message, which is the only copy on
+main.
+
+**What 3a deliberately did not do:** autosave. The `ifRev` refusal in `save()`
+is one half of a story whose other half is a named edit lease and a change
+broadcast, and that is rungs 2–5 of the autosave ruling, not something to take
+on the way past a corner drag.
 
 ## Tier 2c — floors through the real painter (3 Sep)
 
