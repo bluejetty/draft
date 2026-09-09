@@ -138,12 +138,20 @@ function buildEnv(win, saved) {
     const tops = walls.filter(w => w.levelId === levelId && w.view === view).map(w => w.topHeight);
     return tops.length ? Math.max(...tops) : DEFAULT_WALL_TOP_FT;
   };
-  const distToSeg = (pt, a, b) => {
-    const dx = b.x - a.x, dz = b.z - a.z;
-    const len2 = dx * dx + dz * dz;
-    const t = len2 ? Math.max(0, Math.min(1, ((pt.x - a.x) * dx + (pt.z - a.z) * dz) / len2)) : 0;
-    return Math.hypot(pt.x - (a.x + t * dx), pt.z - (a.z + t * dz));
-  };
+  // Board #346: one of four outboard copies of point-to-segment, collapsed onto
+  // the shared export. loadDraftModules already runs geometry-2d.js in this
+  // harness's sandbox, alongside the four other Draft modules `win` serves, so
+  // there was nothing to build — the work order's "if the harness can't load
+  // the export without scaffolding" did not apply.
+  //
+  // NO CALLER-LOCAL FALLBACK, deliberately. The export answers Infinity for a
+  // segment under 0.01ft where this copy answered distance-to-`a`, and the one
+  // caller (edgeOnOutline, below) was expected to need protecting. Measured, it
+  // does not: its `.some()` skips a zero-length edge and a neighbour sharing
+  // that point answers instead. The checks at the foot of this file hold both
+  // halves of that.
+  const distToSeg = (pt, a, b) =>
+    win.DraftGeometry2D.pointToSegment(pt, { start: a, end: b }).d;
   const ftIn = feet => `${feet.toFixed(2)}'`;
   return {
     floorLevels: () => floorLevels,
@@ -719,6 +727,37 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
     check('courtyard: and the courtyard is left unpainted', bridged.length === 0,
       `${bridged.length} storeys painted across the gap`);
   }
+}
+
+// ── board #346: the degenerate segment, and what edgeOnOutline does with it ──
+// distToSeg answers distance-to-`a` for a zero-length edge; the shared export
+// answers Infinity. The work order expected the `<= eps` test above to go
+// permanently false under the export. IT DOES NOT, and the reason is
+// structural rather than lucky: onBoundary is a `.some()` over every edge, and
+// a zero-length edge sits exactly on a point its two neighbours already reach,
+// so the one Infinity is skipped and a neighbour answers.
+//
+// It flips in exactly one shape — an outline whose edges are ALL degenerate,
+// every point in the same place. There the export answers false where
+// distToSeg answered true, and false is the better answer: a "outline" that is
+// one point has no boundary for an edge to lie along.
+//
+// These four checks are why no caller-local fallback was added here. A guard
+// for a case that cannot arise is not a guard.
+{
+  const P = (x, z) => ({ x, z });
+  const square = { points: [P(0, 0), P(10, 0), P(10, 10), P(0, 10)] };
+  const dupCorner = { points: [P(0, 0), P(10, 0), P(10, 0), P(10, 10), P(0, 10)] };
+  check('board #346: an edge along a clean outline is on the boundary',
+    env.edgeOnOutline(P(2, 0), P(8, 0), square) === true);
+  check('board #346: and an edge well off it is not — the test can say no',
+    env.edgeOnOutline(P(2, 5), P(8, 5), square) === false);
+  check('board #346: a duplicated corner does not hide the edge beside it',
+    env.edgeOnOutline(P(2, 0), P(10, 0), dupCorner) === true,
+    'a zero-length edge must be skipped by .some(), not fatal to it');
+  check('board #346: an outline collapsed to one point carries no boundary',
+    env.edgeOnOutline(P(5, 5), P(5, 5), { points: [P(5, 5), P(5, 5), P(5, 5)] }) === false,
+    'the shared export refuses a zero-length edge, and refusing is correct here');
 }
 
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
