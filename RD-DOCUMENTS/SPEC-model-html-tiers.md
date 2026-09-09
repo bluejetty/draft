@@ -290,7 +290,7 @@ prose says.
 | **3a** | **MODEL.html becomes a writer** — select, move a corner, save, guard the close, move a whole wall | Devin's crew | **four of four DONE**, PRs #346 / #347 |
 | **3b** | **The level switcher** — chrome on the page for the level tier 2a already filters by | Gilligan | ordered, not started |
 | **3c** | **Draw and delete a wall** — the two verbs that make the page a drafting surface rather than an editor of walls that already exist | Gilligan | queued behind 3b |
-| **3d** | **The rest of the autosave ruling** — rungs 2–5: the named edit lease and the change broadcast. **Its first job is writing the ruling down**, because it is not in this repo at all | unassigned | **PLANNED** |
+| **3d** | **The rest of the autosave ruling** — rungs 2–5: the change broadcast, then the named edit lease. Its first job is done: the ruling is written down, `RULING-autosave-two-writers.md` | unassigned | **PLANNED**, spec in hand |
 | **3e…** | **One old-page verb per rung**, never a batch, in whatever order a real drafter reaches for them | unassigned | **PLANNED**, 19 tool states to go |
 | **gate** | **The swap** — two `href`s in `index.html`, its own PR, nothing sooner | Movie rules | **PLANNED** |
 
@@ -359,13 +359,15 @@ corner here and save, then edit in a still-open old tab, and the old tab is
 correctly refused, re-reads, keeps its own stale walls, writes again, and
 reports SAVED over your corner. The merge is now narrowed to the case it was
 written for; anything else is a refusal the drafter can see. This is rung 1 of
-the five-rung autosave ruling (Kevin, 8 Sep); **the ruling itself is nowhere in
-this repository.** *(Corrected 9 Sep: this paragraph used to say its terms were
-"quoted in `8992ad9`'s message, the only copy on main". Measured — they are
-not. That message argues rung 1 and mentions the others only to say it took
-"nothing from rungs 2-5". `git log --all -i --grep=lease` returns it and four
-unrelated commits; `edit lease` appears in no file on main except this one.
-The ruling exists as a courier document and in a chat window.)*
+the five-rung autosave ruling (Kevin, 8 Sep), now written down at
+`RULING-autosave-two-writers.md`. *(Corrected 9 Sep: this paragraph used to
+say the ruling's terms were "quoted in `8992ad9`'s message, the only copy on
+main". Measured — they are not. That message argues rung 1 and mentions the
+others only to say it took "nothing from rungs 2-5", and for a day the repo
+held the fix with none of its reasoning. The ruling landed here later the same
+day, carrying the two implementation choices rung 1 made that the ruling had
+not — the sorted-key compare of persisted forms, and the baseline read from
+the written file.)*
 
 **What 3a deliberately did not do:** autosave. The `ifRev` refusal in `save()`
 is one half of a story whose other half is a named edit lease and a change
@@ -398,14 +400,28 @@ and outline nodes all answer the same key, with a *"this corner carries built
 geometry"* refusal in front of it. 3c takes the wall case only, and should
 say so out loud, since the drafter presses the same key for all of them.
 
-**3d — the rest of the autosave ruling.** **Its first job is writing the
-ruling into `RD-DOCUMENTS/`, and that is not optional housekeeping: rungs 2–5
-do not exist in this repository in any form.** Measured, not assumed —
-`git log --all -i --grep=lease` finds no commit carrying them, and the string
-`edit lease` appears in no file on main but this one. Rung 1 landed from a
-ruling nobody in the repo can read, which is why its own paragraph above had
-to reconstruct the terms from a commit message. A rung with no spec cannot be
-tested against anything; write the ruling first, then build to it.
+**3d — the rest of the autosave ruling.** Its first job was writing the ruling
+down, because rungs 2–5 existed nowhere in this repository — measured, not
+assumed: `git log --all -i --grep=lease` found no commit carrying them, and
+`edit lease` appeared in no file on main but this one. **Done on 9 Sep:
+`RULING-autosave-two-writers.md`.** The rungs now have a spec to be tested
+against, and it is the spec — not this table — that the work is measured by:
+
+- **Rung 2, the broadcast.** `onBucketChanged`, post-commit, both pages. A
+  clean page re-reads; a dirty page never does. Cheapest rung in the design,
+  and it also retires the bug where one LAYOUT sheet edit refuses every save
+  from `MODEL.html` until reload.
+- **Rung 3, the lease.** Own-keyed so heartbeats never bump the revision,
+  with a TTL, a takeover generation, and a **silent resume** for a holder that
+  was frozen rather than replaced. **Both model pages convert in the same
+  slice** — a lease the old page does not respect is theatre, and a slice
+  converting only `MODEL.html` should not be merged.
+- **Rung 4, hide-save**, best-effort: a `pagehide` write was measured *not*
+  landing on a tab reload in desktop Chrome, so nothing may depend on it.
+- **Rung 5, autosave**, only once `MODEL.html` is the sole model writer.
+
+Rung 3 does not wait on the iPad TTL measurement: the resume path is correct
+under every outcome, and the constant is tuned afterwards.
 
 **3e onward — one verb per rung, and the inventory is bigger than the plan
 said.** The plan sketched *"fenestration, stairs, fixtures, outline/BONEYARD,
