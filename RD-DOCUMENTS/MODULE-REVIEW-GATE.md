@@ -151,6 +151,10 @@ to the exterior wall — the move the sliver exists to avoid — and overshootin
 a few inches deducts the overshoot as though it were floor. Silent, and smaller
 than the truth, on a number that goes on a permit application.
 
+**FIXED, 9 Sep, in `308941d`** — see "How it was fixed" below. The paragraph
+that follows was true when written and is now out of date in one respect,
+corrected there rather than rewritten here, so the reasoning stays readable.
+
 **Not fixed here — the fix needs a ruling.** Clipping the opening to its host is
 geometrically correct but wants a polygon-intersection routine the repo does not
 have. Refusing an opening not fully inside its host is far cheaper —
@@ -159,6 +163,37 @@ the habit the repo already follows in `closets.placeIn()` and `parseScaleEntry`,
 which refuse rather than answer wrongly. Which of those, and whether the refusal
 lands at draw time or as a flag on the level's figure, is a decision, not a
 measurement.
+
+### How it was fixed — `308941d`, 9 Sep
+
+**The sentence above is out of date and was already out of date when written.**
+`geometry-2d.js:163` exports `ringInsideRing(inner, outer)` — every corner
+inside AND no edge properly crossing a host edge, boundary counting as inside,
+harnessed at `proto/ring-inside-harness.js`. Its header names *this* defect as
+the reason it exists. **The routine was written for this and never wired to
+it**, so the fix was one call, not the polygon-intersection routine the verdict
+went looking for. `electric-rules`' point-in-polygon was deliberately not used:
+a second containment rule beside a harnessed one is the level-assembly
+duplication over again.
+
+**The ruling: not deducted, not clipped.** Clipping answers with a third number
+for a shape the drafter believes is one hole — a plausible figure hiding a wrong
+drawing. So the table above needs reading with care: its `net 260` for the
+half-off row is the CLIPPING answer, one of the two options this verdict offered
+while declining to choose. Under the ruling that row is **net 280**, and the
+level's line says an opening was dropped. `proto/areas-harness.js` ports these
+scenarios verbatim with the ruling's expectations and states the divergence in
+its header.
+
+**What the mutation testing changed.** Three mutants: containment inverted
+(caught, 14 of 18), corners only (caught, 2 of 18 — the L-notch pair exactly),
+and boundary exclusive — which **survived**. The flush cases sat on the WEST
+edge, where the ray cast in `within` answers "inside" even with the boundary
+rule disabled; they passed for the wrong reason. A flush opening on the EAST
+edge crosses nothing, so only the boundary test can answer it. That case was
+added and the mutant is now caught. Without it, a fix making the boundary
+exclusive would have shipped green and silently stopped deducting every
+stairwell run out to that wall — the workflow the whole design exists to allow.
 
 ## The original verdict 2 finding — `polygonArea`'s contract
 

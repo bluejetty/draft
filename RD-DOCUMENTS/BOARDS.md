@@ -491,6 +491,64 @@ export statement, not a shape that resembles one.
 
 ---
 
+### FINDING — the stair tool tests the CENTRE of an opening, in two places
+
+Found while fixing `areas.js` (verdict 2, `308941d`). **Written up, not patched:
+it is old-page interaction and a different lane.**
+
+`_commitSurfaceOpening` carries a written refusal to wire `ringInsideRing`,
+because doing so *"turns three stair-opening specs red"*, with the captured
+geometry:
+
+```
+opening  [[2, 0.4583], [12.4167, 0.4583], [12.4167, 3.5417], [2, 3.5417]]
+host     [[-10, 0],    [10, 0],           [10, 12],          [-10, 12]]
+```
+
+and closes: *"Either that footprint is wrong and the specs pin a defect, or the
+scenario is artificial. That is a ruling."* **It is a defect, and it sits in the
+stair tool rather than in the arithmetic.**
+
+`_handleStairOpeningClick` does check containment before committing — and checks
+**the centre of the rectangle and nothing else**:
+
+```js
+const centre = { x: (points[0].x + points[2].x) / 2, z: (points[0].z + points[2].z) / 2 };
+const floor = this._floors.find(f => ... && this._pointInOutline(f.points, centre));
+```
+
+The opening is 10'-5" long, anchored at `x=2` on a floor ending at `x=10`, so
+the centre sits at ~7.2 — comfortably inside — while the far end is 2'-5" past
+the slab. The tool's own refusal says *"The opening must land inside this
+level's floor"* and means it; the test it uses cannot deliver it. All three red
+specs are the same click pair copy-pasted.
+
+**It is in TWO places, not one.** The order that surfaced this named
+`_handleStairOpeningClick`; `_buildStairOpenings` — BUILD HOUSE's automatic
+openings — repeats the same centroid-only test:
+
+| site | method |
+|---|---|
+| `MODEL.dc.html:15861` | `_handleStairOpeningClick()` — the drafter's click |
+| `MODEL.dc.html:15900` | `_buildStairOpenings()` — BUILD HOUSE, automatic |
+
+So it is not a one-line fix. Both want the same `ringInsideRing(points,
+f.points)` in place of the centre test, and a fix landing on only the first
+leaves every automatically-cut opening unguarded. (`:13133` also tests a centre
+but is the garage-slab coverage check, a different question — left alone.)
+
+**Not artificial, and not legitimate either.** It is a placement a drafter
+reaches honestly — the stair does not fit between the click and the far wall —
+which the tool accepts and the arithmetic then charged for, silently, from the
+opposite end. When the guard lands, those three specs move their anchor click to
+where the opening fits and go green on their own terms. Moving the clicks
+*before* the fix would be editing tests to pass.
+
+**Until it lands, the AREAS dialog line is what the drafter sees**, and on those
+drawings it is telling the truth about a real overhang.
+
+---
+
 ---
 
 ## 6 · Parked
