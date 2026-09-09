@@ -110,6 +110,26 @@
      button stops being furniture the moment there is something to lose. */
   #save.dirty { color: var(--accent); border-color: var(--accent); }
 
+  /* TIER 3b chrome: the level and view switchers. Same panel idiom as the
+     readout, top-left so it clears #save (top-right) and #hint (bottom-right)
+     at a narrow width.
+
+     THE [hidden] RULE IS LOAD-BEARING, not tidiness. `display:flex` on the bar
+     beats the browser's own `[hidden] { display:none }`, so without this line
+     `viewWrap.hidden = true` would set the attribute, change nothing on
+     screen, and leave a picker offering a choice that does nothing on ROOF
+     and SITE -- hidden in the DOM and visible to the drafter. */
+  #chrome { position:fixed; left:12px; top:12px; z-index:5;
+    display:flex; gap:10px; align-items:center; }
+  #chrome[hidden], #chrome label[hidden] { display:none; }
+  #chrome label { display:flex; align-items:center; gap:6px;
+    font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
+    text-transform:uppercase; color: var(--ink-quiet); }
+  #chrome select { font-family: var(--font-ui); font-size:12px;
+    color: var(--ink-primary); cursor:pointer;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:6px; padding:5px 8px; }
+
   /* The empty and error states say what to do, because a black screen with
      nothing on it is indistinguishable from a page that failed to boot. */
   #notice { position:fixed; inset:0; z-index:6; display:none;
@@ -128,6 +148,10 @@
 
 <canvas id="plan"></canvas>
 <div id="readout">loading…</div>
+<div id="chrome" hidden>
+  <label>Level <select id="level-pick" data-level-pick></select></label>
+  <label id="view-wrap">View <select id="view-pick" data-view-pick></select></label>
+</div>
 <button id="save" type="button" data-model-save>SAVE</button>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 <div id="notice"><div id="notice-body"></div></div>
@@ -1318,6 +1342,101 @@
           + `${pdfUnderlays() === 1 ? '' : 's'} not drawn</b> (needs pdf.js)` : '');
   };
 
+  // ── the level switcher, and the view switcher ─────────────────────────────
+  // TIER 3b, and the spec's own words: "a level switcher is chrome, and chrome
+  // is tier 3." The page has painted any level correctly since tier 2a, but
+  // only `?level=` could change which one -- and a URL is not a drafter.
+  //
+  // NO WRITES IN THIS RUNG. Both switchers change what is LOOKED AT and
+  // nothing that is saved: they set a query parameter and repaint. `drawing`
+  // is not touched, markDirty is not called, and the save button does not
+  // move off SAVE.
+  //
+  // THE URL STAYS THE ONE SOURCE OF TRUTH. `params` is already what
+  // activeLevelId() and activeViewId() read, so the switcher writes THERE and
+  // repaints, rather than keeping a second copy of "which level" beside it.
+  // Two copies is how a picker comes to disagree with the address bar; with
+  // one, `?level=` keeps working untouched, every switch is shareable and
+  // reloadable, and there is nothing to get out of step.
+  //
+  // IDS, NEVER INDEXES. Every option's value is the level's own `id`.
+  // MAIN_FLOOR_LEVEL_ID is 3 and `state.activeLevelIdx` is an index; on the
+  // default list they happen to agree, and they stop agreeing the moment a
+  // level is inserted. A switcher carrying the index would pass every test on
+  // a default drawing and paint the wrong level on a real one -- broken and
+  // passing looking identical, which is the failure this whole rung is about.
+  const chromeBar = document.getElementById('chrome');
+  const levelPick = document.getElementById('level-pick');
+  const viewPick = document.getElementById('view-pick');
+  const viewWrap = document.getElementById('view-wrap');
+
+  // replaceState, not pushState: a switch is a change of viewpoint, not a
+  // navigation, and forty pushes would bury whatever page the drafter came
+  // from under forty presses of Back.
+  const syncUrl = () => {
+    const query = params.toString();
+    history.replaceState(null, '',
+      query ? `${location.pathname}?${query}` : location.pathname);
+  };
+
+  const fillViewPick = () => {
+    const views = window.DraftLayerViews.layerViewsForLevelId(activeLevelId());
+    // ROOF and SITE have no layer views -- the view filter switches itself
+    // off there and they show everything they hold. A picker on those levels
+    // would be offering a choice that changes nothing, so there isn't one.
+    viewWrap.hidden = !views.length;
+    if (!views.length) return;
+    const current = onActiveLevel().viewId;
+    viewPick.innerHTML = '';
+    views.forEach(view => {
+      const option = document.createElement('option');
+      option.value = view.id;
+      option.textContent = view.label;
+      option.selected = view.id === current;
+      viewPick.append(option);
+    });
+  };
+
+  const buildChrome = () => {
+    const levels = drawing?.levels || [];
+    levelPick.innerHTML = '';
+    levels.forEach(level => {
+      const option = document.createElement('option');
+      option.value = String(level.id);
+      option.textContent = level.name || `level ${level.id}`;
+      option.selected = Number(level.id) === activeLevelId();
+      levelPick.append(option);
+    });
+    fillViewPick();
+    chromeBar.hidden = false;
+  };
+
+  const goToLevel = id => {
+    params.set('level', String(id));
+    // THE VIEW IS KEPT WHERE THE NEW LEVEL HAS IT, dropped where it does not.
+    // MAIN FL and 2ND FL share the same four views, so a drafter comparing
+    // one floor's electrical plan with the next stays on ELECTRIC rather than
+    // being thrown back to walls at every switch. FOUNDATION has no 'stair',
+    // so arriving there falls to that level's own default -- and dropping the
+    // parameter is how it falls, since leaving a stale `?view=stair` in the
+    // URL would make activeViewId() warn about a view the level never had.
+    const views = window.DraftLayerViews.layerViewsForLevelId(Number(id));
+    const asked = params.get('view');
+    if (!asked || !views.some(view => view.id === asked)) params.delete('view');
+    syncUrl();
+    buildChrome();
+    paint();
+  };
+
+  levelPick.addEventListener('change', () => goToLevel(levelPick.value));
+  viewPick.addEventListener('change', () => {
+    params.set('view', viewPick.value);
+    syncUrl();
+    // No buildChrome(): the level did not change, so the option lists are
+    // still right and the browser has already moved the selection.
+    paint();
+  });
+
   // ── selection ─────────────────────────────────────────────────────────────
   // TIER 3a. The first editing tool: click a wall, it lights up.
   //
@@ -1829,6 +1948,9 @@
 
     fit();
     paint();
+    // The switchers can only be built once the drawing is on the page: their
+    // options ARE its levels. Before this the bar stays hidden, like #save.
+    buildChrome();
     saveButton.classList.add('show');
     // CLEAN ON ARRIVAL, and stamped rather than assumed: without this the
     // attribute is absent, and absent is not '0' to anything reading it.
