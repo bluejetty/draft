@@ -17170,23 +17170,73 @@ class Component extends DCLogic {
     const zones = WR.landingZones(this._stairs
       .filter(stair => stair.levelId === levelId && (stair.view || 'plan') === 'plan'));
 
-    // Against the chosen side wall, mid-depth, then slid along that wall
-    // until it is clear of every landing zone. Sliding rather than giving up
-    // because a stair near the middle of a wall leaves room either side of
-    // it, and the room is what the drafter wants -- not a refusal.
-    const x0 = side === 'right' ? interior.maxX - wFt : interior.minX;
-    const midZ = (interior.minZ + interior.maxZ) / 2 - dFt / 2;
-    const steps = [0];
-    for (let step = 0.5; step <= roomD; step += 0.5) { steps.push(step, -step); }
-    for (const step of steps) {
-      const z0 = Math.min(Math.max(midZ + step, interior.minZ), interior.maxZ - dFt);
-      const rect = { minX: x0, maxX: x0 + wFt, minZ: z0, maxZ: z0 + dFt };
-      if (!this._hitsLandingZone(rect, zones)) return { seat: rect, why: '', side };
+    // ── BOARD #352: INSIDE IS THE ONLY HARD RULE ──────────────────────────
+    //
+    // This used to seat against the bounding box and nothing else, which is
+    // correct on a rectangle -- where the box IS the interior -- and wrong on
+    // every concave plan. On an L the box covers the notch, so mid-depth is
+    // the middle of a region whose centre is outdoors, and the unit landed
+    // 3ft through the exterior wall. The polygon that answers this was
+    // already in `interior.points`; it simply was not asked.
+    //
+    // Movie's ruling, 8 Sep: "not as critical about location, just place it
+    // and allow user to move it (but make sure its inside)". So containment
+    // is the one thing that must hold and everything else is a PREFERENCE --
+    // tried in order, abandoned rather than refused.
+    //
+    // ringInsideRing does the real work and is harnessed. Corners alone would
+    // not be enough here: its own comment names this exact shape -- a ring
+    // with every corner on an L-shaped floor can still run an edge through
+    // the notch -- so it checks proper edge crossings too.
+    const contained = rect => window.DraftGeometry2D.ringInsideRing([
+      { x: rect.minX, z: rect.minZ }, { x: rect.maxX, z: rect.minZ },
+      { x: rect.maxX, z: rect.maxZ }, { x: rect.minX, z: rect.maxZ },
+    ], interior.points);
+
+    // The seat this used to take, kept as the FIRST preference rather than
+    // the only option: hard against the garage-side wall, mid-depth.
+    const wantX = side === 'right' ? interior.maxX - wFt : interior.minX;
+    const wantZ = (interior.minZ + interior.maxZ) / 2 - dFt / 2;
+
+    const STEP = 0.5;
+    const axis = (lo, hi) => {
+      const out = [];
+      for (let v = lo; v <= hi + 1e-9; v += STEP) out.push(v);
+      if (!out.length || Math.abs(out[out.length - 1] - hi) > 1e-9) out.push(hi);
+      return out;
+    };
+    const flush = (v, lo, hi) => Math.abs(v - lo) < 1e-9 || Math.abs(v - hi) < 1e-9;
+
+    let best = null;
+    for (const x0 of axis(interior.minX, interior.maxX - wFt)) {
+      for (const z0 of axis(interior.minZ, interior.maxZ - dFt)) {
+        const rect = { minX: x0, maxX: x0 + wFt, minZ: z0, maxZ: z0 + dFt };
+        if (!contained(rect)) continue;
+        // Preference, worst-first in the sort: a landing overlap is worse
+        // than any amount of being in an odd spot, because the drafter can
+        // slide an oddly-placed unit and cannot use one on the bottom step.
+        // But it still beats no washroom at all, which is why it scores
+        // rather than rejects.
+        const onLanding = this._hitsLandingZone(rect, zones) ? 1 : 0;
+        // Against a wall reads as architecture; floating mid-floor does not.
+        const against = (flush(x0, interior.minX, interior.maxX - wFt)
+          || flush(z0, interior.minZ, interior.maxZ - dFt)) ? 0 : 1;
+        const drift = Math.hypot(x0 - wantX, z0 - wantZ);
+        // Lexicographic, cheapest wins: clear of landings first, then against
+        // a wall, then nearest the seat this used to take.
+        const score = [onLanding, against, drift];
+        if (!best || score.some((v, i) => v !== best.score[i] && v < best.score[i]
+          && score.slice(0, i).every((u, k) => u === best.score[k]))) {
+          best = { rect, score };
+        }
+      }
     }
-    // EVERY SEAT ON THAT WALL IS ON A LANDING. Reported, not forced: a
-    // washroom squatting on the bottom step is worse than none, and the
-    // drafter can place one anywhere they like.
-    return { seat: null, why: 'every seat on that wall falls in a stair landing zone' };
+
+    if (best) return { seat: best.rect, why: '', side };
+    // NOTHING FITS INSIDE. Reported, never forced: a washroom hanging out
+    // through an exterior wall is worse than none, and the drafter can place
+    // one anywhere they like.
+    return { seat: null, why: `no ${wFt.toFixed(1)}x${dFt.toFixed(1)}ft seat fits inside this floor's outline` };
   }
 
   // Build the unit's four walls as an ordinary rigid assembly. The wet wall
