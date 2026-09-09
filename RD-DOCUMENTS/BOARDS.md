@@ -270,12 +270,24 @@ The repo measures point-to-segment distance in four places. They agree on
 every segment a drafter draws and disagree on the one nobody does — a
 **zero-length** segment:
 
-| function | where | degenerate answer |
-| --- | --- | --- |
-| `pointToSegment` / `_distToLineSeg` | `geometry-2d.js` (the shared export) | `Infinity` |
-| `distToSegment` | `MODEL.dc.html:4885` (`len2 = … \|\| 1`) | distance to point `a` |
-| `distPtSeg` | `auto-stair.js:101` (`len2 > 0 ? … : 0`) | distance to point `a` |
-| `distToSeg` | `proto/elevation-harness.js:141` | distance to point `a` |
+**SIX copies, not four, and three distinct mechanisms.** The first version of
+this entry listed four; `cut-view.js` and `closets.js` were missed.
+
+| function | where | degenerate mechanism | answer |
+| --- | --- | --- | --- |
+| `pointToSegment` / `_distToLineSeg` | `geometry-2d.js` (shared export) | `len2 < 0.0001` | `Infinity` |
+| ~~`distToSegment`~~ | ~~`MODEL.dc.html:4885`~~ | ~~`\|\| 1`~~ | **collapsed — see progress** |
+| `distToSegment` | `cut-view.js:1135` | `\|\| 1` | distance to `a` |
+| `distPtSeg` | `auto-stair.js:101` | `len2 > 0 ? … : 0` | distance to `a` |
+| `distToSeg` | `proto/elevation-harness.js:141` | `len2 ? … : 0` | distance to `a` |
+| `pointToSegment` | `closets.js:118` | **explicit `len2 < 1e-12`** | distance to `a` |
+
+`closets.js` is not a sixth copy of the same accident: its guard is deliberate
+and commented. And the thresholds differ by ten orders of magnitude — the
+shared export's floor is `0.01 ft`, a real length of about ⅛", while closets'
+`1e-12` is a true numerical-zero guard. **A 0.005 ft segment is degenerate to
+the shared export and perfectly ordinary to closets.** They disagree about
+*when* the rule applies, not only what it answers.
 
 So a degenerate segment reads as **"right here"** to three of them and
 **"infinitely far"** to the one PR #349 collapsed onto.
@@ -301,9 +313,51 @@ should adopt the `Infinity` rule or the shared export should grow a caller-
 chosen degenerate answer is the open question, and it wants deciding before
 somebody collapses them on instinct.
 
-**Size:** 2–3 h including the tests. **Blocks nothing.** PR #349 already
-carries the pinned degenerate rule and the mutation coverage the collapse
-would lean on.
+### It is a CHAIN, not a function — and the 0.6 site's reprieve was imaginary
+
+Measured while doing the MODEL.dc.html half. Three `|| 1` guards compose, each
+prudent-looking on its own line:
+
+| # | site | effect on a collapsed edge |
+| --- | --- | --- |
+| 1 | `len = Math.hypot(dx, dz) \|\| 1` (`MODEL.dc.html:4750`) | `ux, uz = 0` — and `edge.len` reports **1 ft for a 0 ft edge** |
+| 2 | `nlen = Math.hypot(nx, nz) \|\| 1` (`:4768`) | the normal becomes the **zero vector** |
+| 3 | `len2 = dx*dx + dz*dz \|\| 1` (`:4887`) | masks the zero-length segment |
+
+The 0.6 call site builds its segment as `cWall + n·(overhang + 1)`, so the
+obvious reading is that the `+1` floor keeps it at least a foot long and it can
+never see a degenerate segment. **It can.** `offsetOutlineVariable` leaves a
+coincident point exactly where it was, so guard 2 hands the edge a zero-length
+normal and the stub collapses to a point for any overhang. The route is the
+normal, not the overhang.
+
+Guard 1's lie — a zero-length edge reporting `len` as 1 ft — feeds the gable
+splitter. Recorded as fact; nobody's order yet.
+
+**Nobody can draw this input.** The tracer refuses a repeat click within
+0.01 ft (`MODEL.dc.html:12706`, `:12906`), which is why no test drawing in the
+repo contains a collapsed corner and why the behaviour is only reachable from
+an import.
+
+### Progress (this is also the board #346 note — #346 has no entry in this file)
+
+**Done:** the `MODEL.dc.html` copy is collapsed onto the shared export with an
+explicit distance-to-`a` fallback local to `_handleTourRoofPress`. Exact on a
+truly zero-length segment; differs from the old formula only for segments
+shorter than the 0.01 ft floor but not zero, and there by at most the segment's
+own length — measured worst case 0.0099 ft, about ⅛", against thresholds of 0.6
+and 0.8 ft.
+
+Both call sites had **no behavioural coverage at all** before this; the
+sound-edge regression guard was written first.
+
+**Remaining — SKIPPER'S LANE, held:** `auto-stair.js`, `cut-view.js`,
+`closets.js`, `proto/elevation-harness.js`.
+
+**Size:** the remaining outboard sweep, 2–3 h including its tests. **Blocks
+nothing.** The degenerate rule, its mutation coverage and the full chain are
+pinned in `proto/outline-accessors-harness.js` and
+`proto/degenerate-chain-harness.js`.
 
 ---
 

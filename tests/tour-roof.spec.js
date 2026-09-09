@@ -171,3 +171,43 @@ test('PRESS ▲ BONE hints, the bone glows, and the press grows the house in the
   expect(saved.walls.length).toBeGreaterThan(0);
   expect(saved.roofs.length).toBeGreaterThan(0);
 });
+
+// ── THE TWO distToSegment CALL SITES (board #351) ────────────────────────
+//
+// Added before collapsing MODEL.dc.html's private `distToSegment` onto the
+// shared geometry-2d.js export. Both of its call sites had NO behavioural
+// coverage at all -- nothing in the suite asserted the node-edit refusal or
+// drove the gable centerline break -- so the collapse would have been a
+// change to code that nothing watched.
+//
+// These pin the SOUND-edge behaviour, which is what the collapse must not
+// disturb. The degenerate case cannot be reached from here: the tracer
+// refuses a repeat click within 0.01ft (MODEL.dc.html:12706, :12906), so a
+// drafter cannot draw a collapsed corner at all -- it arrives from an import.
+// That half is pinned arithmetically in proto/degenerate-chain-harness.js.
+
+test('a click on the roof wall line refuses node editing and says why', async ({ page }) => {
+  await h.openModel(page, { tourEscort: true });
+  await reachRoof(page, 16, 12);
+
+  // The house wall runs at z = -6. The eave sits an overhang further out, so
+  // a press ON the wall line is past the 1.0 eave-handle reach and falls
+  // through to the node-edit refusal -- the 0.8 distToSegment test.
+  await h.clickWorld(page, 0, -6);
+
+  await expect(page.locator('[data-model-drawing-message]'))
+    .toContainText('the roof only pulls OUT');
+});
+
+test('a click far inside the house is not a roof edge and draws no refusal', async ({ page }) => {
+  await h.openModel(page, { tourEscort: true });
+  await reachRoof(page, 16, 12);
+
+  // THE COMPANION. Without it the test above passes on a page that shows the
+  // refusal for every press anywhere -- "the message appeared" and "the
+  // message always appears" look identical from one click.
+  await h.clickWorld(page, 0, 0);
+
+  await expect(page.locator('[data-model-drawing-message]'))
+    .not.toContainText('the roof only pulls OUT');
+});
