@@ -6815,7 +6815,27 @@ class Component extends DCLogic {
         // A landed drag is a touch: the grown walls under its vertices are
         // the drafter's now (#275). A drag the ruler consumed settled its
         // own ownership — Enter promoted on commit, Escape declined.
-        if (!sd.froze) this._unautoTouchedWalls(new Set(sd.refs.map(r => (r.target || r.seg)[r.prop])));
+        if (!sd.froze) {
+          const moved = new Set(sd.refs.map(r => (r.target || r.seg)[r.prop]).filter(Boolean));
+          // BOARD #348: THE LOCKED SIBLING RIDES. _applyLevelLockDelta has
+          // existed since #315 with exactly one thing missing -- a delta from
+          // a drafter. This is that delta. Applied before ownership is
+          // settled so the sibling's points are in `moved` too: a unit the
+          // lock carried was still moved BY the drafter, and `dealt` clears
+          // on both floors rather than leaving the far one looking
+          // machine-placed after the drafter plainly moved it.
+          if (sd.rigid && sd.group) {
+            const from = sd.starts.get(sd.anchor);
+            const ddx = sd.anchor.x - from.x, ddz = sd.anchor.z - from.z;
+            if (this._applyLevelLockDelta(sd.group, ddx, ddz)) {
+              this._levelLockSiblings(sd.group).forEach(sibling =>
+                this._groupItems(sibling).forEach(item =>
+                  (item.points || [item.start, item.end, item.point]).filter(Boolean)
+                    .forEach(pt => moved.add(pt))));
+            }
+          }
+          this._unautoTouchedWalls(moved);
+        }
         // MOVE FLOOR commits its consequences with the drag's own history
         // entry: pile stubs and the engineer notice land before the mark,
         // and the summary message after it (the mark clears messages).
@@ -10692,13 +10712,15 @@ class Component extends DCLogic {
           }
           const refs = this._findVertexHit(raw, this.state.selectFilter);
           if (refs) {
-            const fixedAssembly = this._itemsFromVertexRefs(refs)
-              .some(item => this._groupForItem(item)?.fixed === true);
-            // Fixed assemblies are rigid: they can be selected, but their
-            // individual nodes cannot be reshaped by the existing node drag.
-            if (!fixedAssembly) {
-              this._selectDrag = this._makeNodeDrag(refs, e);
-            }
+            // Fixed assemblies are rigid: a node of one cannot be RESHAPED,
+            // but board #348 gives it a translate, so the grab arms a whole-
+            // assembly slide instead of doing nothing.
+            const fixedGroup = this._itemsFromVertexRefs(refs)
+              .map(item => this._groupForItem(item))
+              .find(group => group?.fixed === true) || null;
+            this._selectDrag = fixedGroup
+              ? this._makeAssemblyDrag(refs, e, fixedGroup)
+              : this._makeNodeDrag(refs, e);
             e.preventDefault();
           } else {
             const fixture = this._findFixtureAt(raw);
@@ -10834,6 +10856,50 @@ class Component extends DCLogic {
     const [first] = vertices;
     const origin = new THREE.Vector3(first.x, first.y || 0, first.z);
     return { refs, vertices, origin, startX: e.clientX, startY: e.clientY, active: false, clickTool, downAt: performance.now() };
+  }
+
+  // BOARD #348 / #352: A FIXED ASSEMBLY SLIDES AS ONE.
+  //
+  // Grabbing a node of a rigid assembly used to arm nothing at all -- the
+  // node drag was refused because it would deform the unit, and no gesture
+  // replaced it. So a dealt washroom was doubly immovable: `fixed` refused
+  // every reshape and nothing originated a translate. Its only escape was
+  // deletion, which made "just place it and let the drafter move it" a
+  // promise the page could not keep.
+  //
+  // This arms a TRANSLATE instead of a refusal. Every vertex of every member
+  // travels by the delta the grabbed one travels, so the unit keeps its
+  // shape exactly -- the 103"/67" runs cannot drift, which is the whole
+  // reason the group is rigid in the first place.
+  //
+  // Start positions are recorded per POINT OBJECT, not per ref, because two
+  // walls meeting at a corner share one object. Applying `start + delta` is
+  // then idempotent: reaching the same point twice writes the same answer,
+  // where `+= delta` would move that corner twice and shear the unit.
+  _makeAssemblyDrag(refs, e, group) {
+    const items = this._groupItems(group);
+    const all = [];
+    items.forEach(item => {
+      if (item.point) { all.push({ target: item, prop: 'point' }); return; }
+      if (Array.isArray(item.points)) {
+        item.points.forEach((_, i) => all.push({ target: item.points, prop: i }));
+        return;
+      }
+      if (item.start) all.push({ seg: item, prop: 'start' });
+      if (item.end) all.push({ seg: item, prop: 'end' });
+    });
+    const starts = new Map();
+    all.forEach(ref => {
+      const pt = (ref.target || ref.seg)[ref.prop];
+      if (pt && !starts.has(pt)) starts.set(pt, { x: pt.x, z: pt.z });
+    });
+    const anchor = (refs[0].target || refs[0].seg)[refs[0].prop];
+    const origin = new THREE.Vector3(anchor.x, anchor.y || 0, anchor.z);
+    return {
+      refs: all, vertices: new Set(starts.keys()), origin,
+      startX: e.clientX, startY: e.clientY, active: false, clickTool: null,
+      downAt: performance.now(), rigid: true, group, anchor, starts,
+    };
   }
 
   // Plan-space tools refuse clicks outside TOP / PLAN the way STAIR does:
@@ -11036,11 +11102,22 @@ class Component extends DCLogic {
           // MOVE FLOOR: a tour floor's outline corner rides the pull ladder —
           // the point is adjusted in place before any ref sees it.
           this._tourFloorPullConstrain(sd, pt);
-          sd.refs.forEach(r => {
-            const target = r.target || r.seg;
-            target[r.prop].x = pt.x;
-            target[r.prop].z = pt.z;
-          });
+          if (sd.rigid) {
+            // The grabbed node lands on the snapped point; everything else
+            // keeps its offset from it. Written from the recorded starts, so
+            // a shared corner reached twice still moves exactly once.
+            const ddx = pt.x - sd.origin.x, ddz = pt.z - sd.origin.z;
+            sd.starts.forEach((from, point) => {
+              point.x = from.x + ddx;
+              point.z = from.z + ddz;
+            });
+          } else {
+            sd.refs.forEach(r => {
+              const target = r.target || r.seg;
+              target[r.prop].x = pt.x;
+              target[r.prop].z = pt.z;
+            });
+          }
           // A dragged linked vertex re-measures its master offset (after every
           // ref has landed) so later master edits carry the adjustment along
           // in its new position.
@@ -17170,23 +17247,73 @@ class Component extends DCLogic {
     const zones = WR.landingZones(this._stairs
       .filter(stair => stair.levelId === levelId && (stair.view || 'plan') === 'plan'));
 
-    // Against the chosen side wall, mid-depth, then slid along that wall
-    // until it is clear of every landing zone. Sliding rather than giving up
-    // because a stair near the middle of a wall leaves room either side of
-    // it, and the room is what the drafter wants -- not a refusal.
-    const x0 = side === 'right' ? interior.maxX - wFt : interior.minX;
-    const midZ = (interior.minZ + interior.maxZ) / 2 - dFt / 2;
-    const steps = [0];
-    for (let step = 0.5; step <= roomD; step += 0.5) { steps.push(step, -step); }
-    for (const step of steps) {
-      const z0 = Math.min(Math.max(midZ + step, interior.minZ), interior.maxZ - dFt);
-      const rect = { minX: x0, maxX: x0 + wFt, minZ: z0, maxZ: z0 + dFt };
-      if (!this._hitsLandingZone(rect, zones)) return { seat: rect, why: '', side };
+    // ── BOARD #352: INSIDE IS THE ONLY HARD RULE ──────────────────────────
+    //
+    // This used to seat against the bounding box and nothing else, which is
+    // correct on a rectangle -- where the box IS the interior -- and wrong on
+    // every concave plan. On an L the box covers the notch, so mid-depth is
+    // the middle of a region whose centre is outdoors, and the unit landed
+    // 3ft through the exterior wall. The polygon that answers this was
+    // already in `interior.points`; it simply was not asked.
+    //
+    // Movie's ruling, 8 Sep: "not as critical about location, just place it
+    // and allow user to move it (but make sure its inside)". So containment
+    // is the one thing that must hold and everything else is a PREFERENCE --
+    // tried in order, abandoned rather than refused.
+    //
+    // ringInsideRing does the real work and is harnessed. Corners alone would
+    // not be enough here: its own comment names this exact shape -- a ring
+    // with every corner on an L-shaped floor can still run an edge through
+    // the notch -- so it checks proper edge crossings too.
+    const contained = rect => window.DraftGeometry2D.ringInsideRing([
+      { x: rect.minX, z: rect.minZ }, { x: rect.maxX, z: rect.minZ },
+      { x: rect.maxX, z: rect.maxZ }, { x: rect.minX, z: rect.maxZ },
+    ], interior.points);
+
+    // The seat this used to take, kept as the FIRST preference rather than
+    // the only option: hard against the garage-side wall, mid-depth.
+    const wantX = side === 'right' ? interior.maxX - wFt : interior.minX;
+    const wantZ = (interior.minZ + interior.maxZ) / 2 - dFt / 2;
+
+    const STEP = 0.5;
+    const axis = (lo, hi) => {
+      const out = [];
+      for (let v = lo; v <= hi + 1e-9; v += STEP) out.push(v);
+      if (!out.length || Math.abs(out[out.length - 1] - hi) > 1e-9) out.push(hi);
+      return out;
+    };
+    const flush = (v, lo, hi) => Math.abs(v - lo) < 1e-9 || Math.abs(v - hi) < 1e-9;
+
+    let best = null;
+    for (const x0 of axis(interior.minX, interior.maxX - wFt)) {
+      for (const z0 of axis(interior.minZ, interior.maxZ - dFt)) {
+        const rect = { minX: x0, maxX: x0 + wFt, minZ: z0, maxZ: z0 + dFt };
+        if (!contained(rect)) continue;
+        // Preference, worst-first in the sort: a landing overlap is worse
+        // than any amount of being in an odd spot, because the drafter can
+        // slide an oddly-placed unit and cannot use one on the bottom step.
+        // But it still beats no washroom at all, which is why it scores
+        // rather than rejects.
+        const onLanding = this._hitsLandingZone(rect, zones) ? 1 : 0;
+        // Against a wall reads as architecture; floating mid-floor does not.
+        const against = (flush(x0, interior.minX, interior.maxX - wFt)
+          || flush(z0, interior.minZ, interior.maxZ - dFt)) ? 0 : 1;
+        const drift = Math.hypot(x0 - wantX, z0 - wantZ);
+        // Lexicographic, cheapest wins: clear of landings first, then against
+        // a wall, then nearest the seat this used to take.
+        const score = [onLanding, against, drift];
+        if (!best || score.some((v, i) => v !== best.score[i] && v < best.score[i]
+          && score.slice(0, i).every((u, k) => u === best.score[k]))) {
+          best = { rect, score };
+        }
+      }
     }
-    // EVERY SEAT ON THAT WALL IS ON A LANDING. Reported, not forced: a
-    // washroom squatting on the bottom step is worse than none, and the
-    // drafter can place one anywhere they like.
-    return { seat: null, why: 'every seat on that wall falls in a stair landing zone' };
+
+    if (best) return { seat: best.rect, why: '', side };
+    // NOTHING FITS INSIDE. Reported, never forced: a washroom hanging out
+    // through an exterior wall is worse than none, and the drafter can place
+    // one anywhere they like.
+    return { seat: null, why: `no ${wFt.toFixed(1)}x${dFt.toFixed(1)}ft seat fits inside this floor's outline` };
   }
 
   // Build the unit's four walls as an ordinary rigid assembly. The wet wall
@@ -21220,7 +21347,11 @@ class Component extends DCLogic {
   // ruler) instead of the pre-filled cursor length.
   _freezeLength(seed) {
     const sd = this._selectDrag;
-    if (sd?.active) { this._freezeNodeDrag(sd, seed); return; }
+    // A RIGID DRAG DOES NOT FREEZE. _placeFrozenDrag writes the same point
+    // into every ref, which is right for a node and would collapse an
+    // assembly into a dot. Typed-length for a whole unit is its own feature.
+    if (sd?.active && !sd.rigid) { this._freezeNodeDrag(sd, seed); return; }
+    if (sd?.active && sd.rigid) return;
     const tool = this.state.activeTool;
     const extendReady = tool === 'extend' && this.state.extendPhase === 'destination'
       && this._extendSession && this.state.extendBase;
