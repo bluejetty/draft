@@ -90,7 +90,11 @@ untested outside. These are the ones the review gate is really for.
 
 ## Review status
 
-**Ten of seventeen reviewed.** Under the moving-house rule in
+**Seventeen of seventeen reviewed** *(corrected 9 Sep — this section said
+"ten of seventeen" with seven modules marked `not read`, and all seven had
+verdicts in the gate: 11–15 and 16–17. The file that says "a status here that
+is a week stale is worse than no file" was a week stale about itself.)*
+Under the moving-house rule in
 `PLAN-new-app.md`, a module is read before a new page references it, and gets
 one of three verdicts: *right as it is*, *right but unclear*, or *wrong* — and
 a wrong one is fixed in the **old** app first, because that is where it runs.
@@ -104,25 +108,27 @@ two levels, not two homes.
 | `auto-dims.js` | right as it is | names its caller's duty in its own header |
 | `stair-rules.js` | right as it is | labels every number's provenance; §9 checklist still unworked |
 | `pdf-scan.js` | right but unclear | negative-scale guard lives in `MODEL.dc.html:3335`; harness added |
-| `areas.js` | right but unclear | returns 0 for a crossing outline; audit M6, now CONFIRMED reachable |
+| `areas.js` | **WRONG** *(revised 2 Sep; this row said "right but unclear", the gate's verdict 2 does not)* | `computeAreas` deducts an opening whether or not it lies on the floor; the `polygonArea` unclarity stands too |
 | `build-house.js` | right but unclear | load-order capture — **fixed**, resolves at call time |
 | `auto-stair.js` | right but unclear | load-order capture — **fixed** |
 | `room-grow.js` | right but unclear | capture was dead — **removed** |
 | `toy-constraints.js` | right but unclear | three load-order captures — **fixed** |
 | `toy-context.js` | right but unclear | two captures — **fixed**; was one line from breaking |
 | `first-run.js` | right but unclear | capture — **fixed**; script-tagged nowhere, so it armed on first use |
-| `auto-windows.js` | not read | |
-| `bone-wallet.js` | not read | no harness yet |
-| `closets.js` | not read | |
-| `electric-rules.js` | not read | |
-| `gruff-drivethru.js` | not read | no harness yet |
-| `gruff-interview.js` | not read | |
-| `turtle.js` | not read | |
+| `auto-windows.js` | right as it is | verdicts 11–15: harness passes, zero captures, empty-in/empty-out |
+| `closets.js` | right as it is | verdicts 11–15 |
+| `electric-rules.js` | right as it is | verdicts 11–15 |
+| `gruff-interview.js` | right as it is | verdicts 11–15 |
+| `turtle.js` | right as it is | verdicts 11–15 |
+| `bone-wallet.js` | right as it is | verdict 16, on a 12-check harness written for it |
+| `gruff-drivethru.js` | right as it is | verdict 17, harness written for it |
 
-**The gate's finding so far:** eight of ten are *unclear* for one reason —
-correct in the app, and held up by something outside the module that the module
-does not mention. That is the answer to "can this cross over as-is": mostly
-yes, but not on its own.
+**The gate's finding, over all seventeen:** nine *right as it is*, seven
+*right but unclear*, one *wrong* — and the unclear seven are unclear for a
+single reason: correct in the app, and held up by something outside the module
+that the module does not mention. That is the answer to "can this cross over
+as-is": mostly yes, but not on its own. *(This paragraph read "eight of ten"
+while the table was seven modules short of the gate.)*
 
 ---
 
@@ -134,6 +140,30 @@ yes, but not on its own.
 | **new MODEL page** | nothing — `render-2d.js` and `drawing-format.js` are both `PORTABLE` and ready |
 | **BONEYARD** | MODEL space existing first; page-or-mode is undecided and does not block the three pure modules |
 | **`dc-runtime/` source** | the Replit project. Not urgent — `support.js` is readable and has never needed a change in 782 commits. |
+
+---
+
+## What comes after MODEL — PLANNED, and nothing here has landed
+
+The ladder for `MODEL.html` itself is in `SPEC-model-html-tiers.md`, which is
+where the rungs and the exit gate live — **one record, and this is the index,
+not a second copy of it.** What this file owes the reader is the order of the
+work *after* that gate:
+
+1. **`LAYOUT.dc.html` gets the same ladder** — read the real drawing, paint it
+   with the real painters, then chrome and write. `layout-plan.js`,
+   `wall-types.js` and `level-assembly.js` are already banked. **Its tier 1 is
+   not the level-assembly adoption**, which a draft plan proposed on 9 Sep:
+   that landed on 6 Sep in `c420e80` (PR #313), and the sentence it was read
+   off — *"LAYOUT.dc.html still holds its own copy"* — is a stale comment at
+   `level-assembly.js:21`, flagged for the next PR that touches that file.
+2. **The module review closes out** — all seventeen now have verdicts; what is
+   open is the *work* the verdicts named, `areas.js`'s defect first.
+3. **The rename pass, board #317** — `.dc` filenames, the
+   `pdf-img-mgr-shared` database, every old-era name. One pass, before real
+   users have work saved under those names. Features first.
+4. **The swap** — `index.html` points at the new pages and the `.dc` pages
+   retire; `support.js` goes with the last of them. **There is no tier 4.**
 
 ---
 

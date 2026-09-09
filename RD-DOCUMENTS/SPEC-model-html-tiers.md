@@ -290,6 +290,9 @@ prose says.
 | **3a** | **MODEL.html becomes a writer** — select, move a corner, save, guard the close, move a whole wall | Devin's crew | **four of four DONE**, PRs #346 / #347 |
 | **3b** | **The level switcher** — chrome on the page for the level tier 2a already filters by | Gilligan | ordered, not started |
 | **3c** | **Draw and delete a wall** — the two verbs that make the page a drafting surface rather than an editor of walls that already exist | Gilligan | queued behind 3b |
+| **3d** | **The rest of the autosave ruling** — rungs 2–5: the named edit lease and the change broadcast. **Its first job is writing the ruling down**, because it is not in this repo at all | unassigned | **PLANNED** |
+| **3e…** | **One old-page verb per rung**, never a batch, in whatever order a real drafter reaches for them | unassigned | **PLANNED**, 19 tool states to go |
+| **gate** | **The swap** — two `href`s in `index.html`, its own PR, nothing sooner | Movie rules | **PLANNED** |
 
 Skins are not a rung on this ladder. `palette.js` calls its own night values
 provisional and `PRE-TIER3.md` ruled them *"a taste decision, not a gate"*;
@@ -356,14 +359,147 @@ corner here and save, then edit in a still-open old tab, and the old tab is
 correctly refused, re-reads, keeps its own stale walls, writes again, and
 reports SAVED over your corner. The merge is now narrowed to the case it was
 written for; anything else is a refusal the drafter can see. This is rung 1 of
-the five-rung autosave ruling (Kevin, 8 Sep); the ruling itself is not in the
-repo — its terms are quoted in `8992ad9`'s message, which is the only copy on
-main.
+the five-rung autosave ruling (Kevin, 8 Sep); **the ruling itself is nowhere in
+this repository.** *(Corrected 9 Sep: this paragraph used to say its terms were
+"quoted in `8992ad9`'s message, the only copy on main". Measured — they are
+not. That message argues rung 1 and mentions the others only to say it took
+"nothing from rungs 2-5". `git log --all -i --grep=lease` returns it and four
+unrelated commits; `edit lease` appears in no file on main except this one.
+The ruling exists as a courier document and in a chat window.)*
 
 **What 3a deliberately did not do:** autosave. The `ifRev` refusal in `save()`
 is one half of a story whose other half is a named edit lease and a change
 broadcast, and that is rungs 2–5 of the autosave ruling, not something to take
 on the way past a corner drag.
+
+### The ladder ahead — PLANNED *(drafted by Devin 9 Sep, checked against the repo the same day)*
+
+**Nothing below has landed. No commits, by the rule at the top of this
+section.** Written down anyway, because the cost of tier 3's first five days
+was a plan that existed only in one agent's head. Three of the plan's factual
+premises were checked against the repo before it went in here; **two were
+wrong, and both are corrected below rather than repeated.**
+
+**3b — the level switcher.** Gilligan, in flight. Ids never indexes, and the
+spec names a drawing with an inserted level. The hazard is stated above.
+
+**3c — draw and delete a wall.** Gilligan, queued. New endpoints join the
+corner pool or the page loses the property rung two is built on; the default
+wall type comes from `_contextWallType()` on the old page rather than a
+constant chosen here (`MODEL.dc.html:9016` — the FOUNDATION set and the
+stud/insul set are different lists, and picking wrong is silent); saves go
+through `ifRev`; the deliverable is an old-page round-trip spec, and every
+field written names its deriver and its storer. **A note on the delete half:
+the old page has no DELETE BUTTON for a wall.** Delete is the `delete`
+keybinding (`profile-manager.js:128`, default `Delete`) over a SELECT-tool
+selection (`MODEL.dc.html:22209`, refusal at `:22196`), and it is a multi-kind
+operation there — walls, floors, roofs, fenestrations, dimensions, fixtures
+and outline nodes all answer the same key, with a *"this corner carries built
+geometry"* refusal in front of it. 3c takes the wall case only, and should
+say so out loud, since the drafter presses the same key for all of them.
+
+**3d — the rest of the autosave ruling.** **Its first job is writing the
+ruling into `RD-DOCUMENTS/`, and that is not optional housekeeping: rungs 2–5
+do not exist in this repository in any form.** Measured, not assumed —
+`git log --all -i --grep=lease` finds no commit carrying them, and the string
+`edit lease` appears in no file on main but this one. Rung 1 landed from a
+ruling nobody in the repo can read, which is why its own paragraph above had
+to reconstruct the terms from a commit message. A rung with no spec cannot be
+tested against anything; write the ruling first, then build to it.
+
+**3e onward — one verb per rung, and the inventory is bigger than the plan
+said.** The plan sketched *"fenestration, stairs, fixtures, outline/BONEYARD,
+the bone"* — five. **Measured from the old page's own dispatch, the gap is 19
+tool states**, and a count of toolbar buttons would have found neither the
+right number nor the right names, so each is cited. Two crews measured this
+independently and converged on the same 19 — across `activeTool === 'x'`,
+`[...].includes(activeTool)` and `setActiveTool('x')`, cross-checked against
+`POLAR_RULER_TOOLS` / `POLAR_TRACKING_TOOLS` / `ORTHO_LOCK_TOOLS`, which add
+nothing new:
+
+| verb | dispatch | verb | dispatch |
+|---|---|---|---|
+| `annotation` | `MODEL.dc.html:10219` | `line` | `:22720` |
+| `beam` | `:22723` | `node` | `:22572` |
+| `column` | `:22722` | `outline` | `:11744` |
+| `copy` | `:7778` | `roof` | `:7314` |
+| `cut` | `:22566` | `select` | `:6869` |
+| `dimension` | `:22569` | `shape` | `:21390` |
+| `extend` | `:7712` | `stair` | `:22759` |
+| `fenestration` | `:7507` | `trim` | `:7622` |
+| `fixture` | `:15366` | `wall` | `:22567` |
+| `floor` | `:21386` | | |
+
+**`select` counts as a nineteenth, and the number is misleading in the other
+direction too: `MODEL.html` implements *none* of the 19 as tools.**
+`MODEL.html:764` is `activeTool: null` and stays null; its selection is a hit
+test, not a tool, and its whole write surface is two paths — a move-drag
+commit and an undo, both ending at `markDirty()` (`MODEL.html:1615`, `:1679`).
+No create, no delete. That is the real baseline 3c builds on.
+
+**"The bone itself" is not a verb**, so the plan's five-item sketch had a
+category error in it as well as a shortfall. `boneyardActive` is an orthogonal
+mode flag (38 references in the old page, plus 11 for `activeBoneyardShelfId`)
+that *composes* with the tools — fenestration's ghost is
+`boneyardActive && activeTool === 'fenestration'`. A bone rung multiplies the
+other rungs rather than sitting beside them; counting it as one of them is
+3e's ladder wrong before it starts.
+
+**Neither of the old page's own lists of itself is complete**, which is why
+the count had to come from dispatch. `_contextToolLabel`'s `names` map
+(`MODEL.dc.html:8997`) knows 14 of the 19 and has no entry for `trim`, `cut`,
+`extend`, `copy` or `select`; `profile-manager.js`'s `DEFAULT_KEYBINDINGS`
+binds those four and also `group`, `ungroup`, `delete`, `background`,
+`tsquare`, `compass` and `freezeLength` — commands the label map never heard
+of — while COLUMN, BEAM, STAIR, FIXTURE and ANNOTATION have no shortcut at
+all. **Whoever orders 3e should take the union of the two, not either one**,
+and the count in this table is of tool states, not of everything a drafter
+can do: BUILD HOUSE, ROOM TAGS, AUTO DIMS, SHAPE CAPTURE, TURTLE, GRUFF and
+the per-object deletes are buttons (`onBuildHouse`, `onRoomTags`,
+`onAutoDims`, `onShapeCapture`, `onTurtleGo`, `onGruffOpen`, `onRoofDelete`
+and its siblings), and they are a second inventory nobody has taken yet.
+
+**One gap inside a rung already called done.** `MODEL.html` has undo — one
+press, one undo, over the drag's own capture — and **it has no redo**: `redo`
+appears nowhere in the file, while the old page binds `Ctrl+Shift+Z` and puts
+a button on the strip for it (`MODEL.dc.html:2096`, `_redo()` at `:6296`) —
+and the iPad drafter has no keyboard at all. An undo that cannot be taken
+back is the more dangerous half to ship alone. Small, and it belongs to
+whoever opens 3b, not to a board.
+
+**The exit gate — when tier 3 is done.** `MODEL.html` does everything
+`MODEL.dc.html` does *for the tasks it claims*; Movie draws a real house with
+it and prefers it; and the old page still opens what the new one saved, with
+no loss. Then the swap is two `href`s in `index.html` — a deliberate act, its
+own PR, nothing sooner. **The round-trip half of that gate is the one with
+teeth**, and it is testable today rather than at the end: every rung from 3c
+on owes an old-page round-trip spec, and the gate is just the last one of
+them.
+
+### After MODEL — and one premise of that plan was already false
+
+**`LAYOUT.dc.html` has already adopted `level-assembly.js`.** The plan
+proposed that adoption as LAYOUT's natural tier 1; it landed on 6 Sep in
+`c420e80` (PR #313), *"LAYOUT adopts level-assembly.js, and it had already
+drifted"* — and the copy was not merely duplicated but **wrong**, answering
+six fields where the module answers eight, with both pages handing the result
+to `cut-view.js`. The adoption was proved by a differential over 8002
+comparisons with seven mutations. `LAYOUT.dc.html:296-302` destructures the
+module today and holds no table of its own.
+
+**The stale sentence is `level-assembly.js:21`** — *"LAYOUT.dc.html still
+holds its own copy; adopting this there is a separate change with its own test
+surface"* — left standing in the module's header three days after the
+adoption, and it is what the plan was read off. **Flagged, not fixed: it is
+product code and this pass is docs.** It is one comment line and it belongs in
+the next PR that touches that file.
+
+So LAYOUT's ladder starts where MODEL's did — read the real drawing, paint it
+with the real painters — with `layout-plan.js`, `wall-types.js` and
+`level-assembly.js` already banked, and its own tier 1 still to be specced.
+The rest of the order after that is unchanged and is not this file's to hold:
+module review closes out through `MODULE-REVIEW-GATE.md`, the rename pass is
+board #317, and the swap is the gate above. **There is no tier 4.**
 
 ## Tier 2c — floors through the real painter (3 Sep)
 
