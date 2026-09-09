@@ -457,6 +457,38 @@ the correction attached rather than quietly superseded.
 
 ---
 
+### design-notices.js is NOT zero-callers any more — no adoption board needed
+
+Tier 3 gate duty asked me to confirm that `design-notices.js` (built in #318)
+still has no callers. **It does not — it was adopted, and the check is what
+found it.** Measured on main `3ed8f1e`:
+
+| export | caller |
+|---|---|
+| `stairRefitNotice` | `MODEL.dc.html:22758`, through a `const N = window.DraftDesignNotices` alias |
+| `garageDoorHeadNotice` | `PROJECT.html:1544` |
+| `garageDoorHeadLimitIn` | `PROJECT.html:1556` |
+| `formatFtIn`, `formatIn` | the harness only — and the module's own comment says so |
+
+Every behavioural export has a caller, and `tests/design-notices-wired.spec.js`
+covers both live sites: the garage-door notice on PROJECT.html, the stair-refit
+notice on MODEL.dc.html. **No adoption board is needed.**
+
+**MODEL.html — the new page — references it zero times**, which is the number
+that matters for Tier 3: whenever a rung makes the new page reach for this
+module the first time, that is a module-review-gate event, not an adoption one.
+
+**Two counting traps on the way to that table, both worth the warning.** A
+direct grep for `DraftDesignNotices.<fn>(` reports **0** for `MODEL.dc.html`,
+because the call goes through the `N` alias — the module looks unused there and
+is not. And an export list built with `grep -E '^\s+[a-zA-Z]+,'` picks up
+object-literal keys and local consts: it reported `placedRiseFt` as an export
+when it is a local inside `stairRefitNotice` and a field of its return value.
+The real surface is the frozen object at `design-notices.js:167`. Read the
+export statement, not a shape that resembles one.
+
+---
+
 ---
 
 ## 6 · Parked
