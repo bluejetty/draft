@@ -78,6 +78,46 @@ if (!window.DraftToyConstraints) {
 
   const MODE = Object.freeze({ TOY: 'TOY', DRAFTING: 'DRAFTING' });
 
+  // WHAT KIND OF MOVE THAT WAS, which is a different question from how far.
+  // A foot of exterior wall and six feet of it are not the same operation:
+  // under 2' the joists overhang and nothing below or above is touched, past
+  // 4'-6" the foundation itself moves and everything standing on it follows.
+  // A caller handed only a distance has to re-derive that from the bands to
+  // know whether it just cantilevered a floor or moved a house, and a second
+  // derivation is a second opinion. So the verdict says which.
+  const KIND = Object.freeze({
+    INELIGIBLE: 'ineligible',            // inert geometry; nothing moved
+    NO_MOVE: 'no-move',                  // nothing was asked, or nothing permitted
+    INTERIOR: 'interior',                // a partition; no foundation under it
+    CANTILEVER: 'cantilever',            // LOCAL: joists overhang, ≤ 2'-0"
+    BLOCKED_BAND: 'blocked-band',        // stopped at the edge of the middle band
+    FOUNDATION_MOVE: 'foundation-move',  // GLOBAL: the foundation moves, and piles
+  });
+
+  // THE OFFICE'S WORDS, IN ONE PLACE. The module has otherwise refused to
+  // write English -- a reason code, and the presentation says it in the room's
+  // own words -- and that rule is right for a refusal, which has to name a
+  // room the module has never seen. Advice is the case it does not fit: the
+  // sentence is about the STRUCTURE, identical on every drawing, and the
+  // signpost names a fix in another part of the app. Assembled at the call
+  // site it would be assembled twice, and the two screens would eventually
+  // give different structural advice for the same band.
+  //
+  // Keyed by band, carrying the code as well as the text, so a caller that
+  // wants to write its own sentence still has the fact to write it from.
+  const ADVICE = Object.freeze({
+    [BAND.BUMP_FOUNDATION]: Object.freeze({
+      band: BAND.BUMP_FOUNDATION,
+      text: 'a 3\' cantilever needs a beam and extra structure; 2\' or 4\'-6" is the economical detail',
+      signpost: 'want more than 2\'? go downstairs and bump the foundation bone out',
+    }),
+    [BAND.BUMP_AND_PILES]: Object.freeze({
+      band: BAND.BUMP_AND_PILES,
+      text: 'past 4\'-6" the foundation moves with the wall, which means piles under it',
+      signpost: 'bump the foundation bone out downstairs, and everything above follows',
+    }),
+  });
+
   // ── Small helpers ─────────────────────────────────────────────────────
 
   const num = value => (typeof value === 'number' && Number.isFinite(value) ? value : null);
@@ -139,6 +179,22 @@ if (!window.DraftToyConstraints) {
       return REASON.TOUCHES_NON_ORTHOGONAL;
     }
     return null;
+  };
+
+  // ELIGIBILITY, ASKED AHEAD OF THE DRAG. TOY draws a grip tab on the walls it
+  // may drag, so it needs the answer BEFORE anything is proposed -- and a tab
+  // that appears and then refuses every move is worse than no tab. Discovering
+  // it by proposing a move and reading the refusal works, but only a caller
+  // that already knows the answer can decide what to paint.
+  //
+  // The same predicate `allowedMove` consults, so a wall can never be eligible
+  // to one and inert to the other.
+  const eligibility = (wall, walls) => {
+    if (!wall) return { eligible: false, reason: REASON.NO_MOVE };
+    const inert = inertReason(wall, walls || [wall]);
+    return inert
+      ? { eligible: false, reason: inert, wallId: wall.id }
+      : { eligible: true, wallId: wall.id };
   };
 
   // ── The inside face, not the centreline ───────────────────────────────
@@ -250,6 +306,7 @@ if (!window.DraftToyConstraints) {
     const openings = (config && config.openings) || [];
     const minimums = (config && config.minimums) || null;
     const mode = (config && config.mode) || MODE.TOY;
+    const foundationFollows = !!(config && config.foundationFollows);
     const violations = [];
 
     // Interior minimums are the office's numbers, read and never restated.
@@ -289,6 +346,20 @@ if (!window.DraftToyConstraints) {
       const band = cantileverBand(ft);
       if (band === BAND.FREE) return;
       if (mode === MODE.DRAFTING && band === BAND.BUMP_FOUNDATION) return;  // advised, not blocked
+      // PAST 4'-6" IT IS FREE AGAIN -- but only as a different operation. The
+      // rule reads "free to 2', nothing between 2' and 4'-6", free again
+      // beyond", and the reason it is free beyond is that the foundation has
+      // moved out under it and a pile at that distance is sound. So the
+      // permission is not the distance, it is the foundation: a caller that
+      // says the foundation follows gets the move, and one that says nothing
+      // is still asking for a 6' overhang on a foundation standing where it
+      // was, which is the thing no band ever permitted.
+      //
+      // NARROWEST READING, DELIBERATELY. Whether the bone moves by default,
+      // and what a per-storey detach means, are both undecided (31 Aug), and
+      // both are the question this flag is standing in for. Reading silence as
+      // "the foundation follows" would answer them here by accident.
+      if (band === BAND.BUMP_AND_PILES && foundationFollows) return;
       violations.push({ reason: REASON.CANTILEVER, wallId: wall.id, band, cantileverFt: ft });
     });
 
@@ -432,6 +503,87 @@ if (!window.DraftToyConstraints) {
     return said;
   };
 
+  // ── BODILY DRAG: WHAT HAPPENS AT THE TWO ENDS ─────────────────────────
+  // The dragged wall keeps its own length and travels sideways as one body;
+  // it is the walls meeting it at each end that stretch or shrink, and that is
+  // what keeps the corners at 90°. Stretch the dragged wall instead and the
+  // house racks into a parallelogram one drag at a time.
+  //
+  // The move is `delta` along the wall's own LEFT normal (start→end, +90°),
+  // the same convention `insideFaceOffsetFt` reads. A wall welded to a moving
+  // end has its far end pinned, so its new length is the distance from that
+  // pinned end to the corner's new position — which shrinks as readily as it
+  // grows, and says so with a negative `stretchFt`.
+  //
+  // A wall inside the moving group is not stretched by any of this: it is
+  // carried. So the honest answer for a shell whose corners are all welded is
+  // an EMPTY LIST — every wall that touches the drag is travelling with it,
+  // and nothing is left standing still to stretch. See the note on `weldsWith`
+  // in the harness: with no `bearing` flags in play today's gatherer welds
+  // every end-to-end pair, so that empty list is what the current context
+  // produces. That is a fact about the gatherer, not a hole in this function.
+  const endStretches = (wall, groupIds, walls, delta) => {
+    if (!wall || !wall.start || !wall.end || !delta) return [];
+    const runX = wall.end.x - wall.start.x;
+    const runZ = wall.end.z - wall.start.z;
+    const run = Math.hypot(runX, runZ);
+    if (run < 1e-9) return [];
+    const offX = (-runZ / run) * delta;
+    const offZ = (runX / run) * delta;
+
+    const moving = (walls || []).filter(w => groupIds.includes(w.id));
+    const stretches = [];
+    (walls || []).forEach(other => {
+      if (groupIds.includes(other.id) || !other.start || !other.end) return;
+      ['start', 'end'].forEach(endName => {
+        const corner = other[endName];
+        const welded = moving.some(m => [m.start, m.end]
+          .some(q => geo().distance(corner, q) <= WELD_TOL_FT));
+        if (!welded) return;
+        const pinned = other[endName === 'start' ? 'end' : 'start'];
+        const fromFt = geo().distance(other.start, other.end);
+        const toFt = Math.hypot(corner.x + offX - pinned.x, corner.z + offZ - pinned.z);
+        stretches.push({ wallId: other.id, end: endName, fromFt, toFt, stretchFt: toFt - fromFt });
+      });
+    });
+    return stretches;
+  };
+
+  // ── WHICH KIND OF MOVE THAT WAS ───────────────────────────────────────
+  // The overhang a move produces, in the terms the bands are written in. A
+  // wall that declares `cantileverFt` answers with the figure after the move.
+  // A wall MODEL has marked `exterior` and left undeclared answers with the
+  // move itself, because pushing an exterior wall out IS the overhang until
+  // something moves underneath it. Anything else is a partition, and there is
+  // no foundation under a partition to leave behind.
+  const moveOverhangFt = (wall, delta) => {
+    const declared = num(wall && wall.cantileverFt);
+    if (declared !== null) {
+      return declared + (wall.cantileverGrowsWithMove ? delta : 0);
+    }
+    return wall && wall.exterior ? delta : null;
+  };
+
+  const kindOf = (wall, delta, blockedReason) => {
+    if (blockedReason === REASON.CANTILEVER) return KIND.BLOCKED_BAND;
+    if (!delta) return KIND.NO_MOVE;
+    const overhang = moveOverhangFt(wall, delta);
+    if (overhang === null) return KIND.INTERIOR;
+    // Past 4'-6" this is not a bigger cantilever, it is a different
+    // operation: the foundation moves and everything standing on it follows.
+    return cantileverBand(overhang) === BAND.BUMP_AND_PILES
+      ? KIND.FOUNDATION_MOVE
+      : KIND.CANTILEVER;
+  };
+
+  // PROVISIONAL, AND ONE LINE TO CHANGE. Whether a TOY drag into the middle
+  // band stops at 2' or refuses outright is still undecided ("whether a
+  // blocked TOY drag stops, explains, or suggests"). Stopping is implemented
+  // because a wall that moves as far as it may and then names the rule teaches
+  // where the edge IS, while a drag that returns zero teaches only that
+  // something is wrong. Flip this to false for the refusing behaviour.
+  const TOY_BAND_CLAMPS_AT_EDGE = true;
+
   // ── ALLOWED MOVE ──────────────────────────────────────────────────────
   // Given where this wall is and what else is in the house, how far may it
   // actually move? Returns the permitted movement — possibly zero — plus a
@@ -441,7 +593,7 @@ if (!window.DraftToyConstraints) {
     const walls = ctx.walls || (wall ? [wall] : []);
     const mode = ctx.mode || MODE.TOY;
 
-    if (!wall) return { delta: 0, reason: REASON.NO_MOVE, group: [] };
+    if (!wall) return { delta: 0, kind: KIND.NO_MOVE, reason: REASON.NO_MOVE, group: [] };
 
     // Inert geometry first: cheapest to answer, and it is the answer that
     // keeps old drawings open.
@@ -449,12 +601,14 @@ if (!window.DraftToyConstraints) {
     const groupIds = group.map(member => member.id);
     for (const member of group) {
       const inert = inertReason(member, walls);
-      if (inert) return { delta: 0, reason: inert, wallId: member.id, group: groupIds };
+      if (inert) {
+        return { delta: 0, kind: KIND.INELIGIBLE, reason: inert, wallId: member.id, group: groupIds };
+      }
     }
 
     const stepFt = stepFor(wall);
     const wanted = quantiseFeet(proposedDelta, stepFt);
-    if (wanted === 0) return { delta: 0, reason: REASON.NO_MOVE, group: groupIds };
+    if (wanted === 0) return { delta: 0, kind: KIND.NO_MOVE, reason: REASON.NO_MOVE, group: groupIds };
 
     // A GROUP'S PERMITTED DELTA IS THE SMALLEST PERMITTED DELTA OF ANY MEMBER:
     // one blocked member blocks the set. Walk from the wanted distance back
@@ -463,7 +617,7 @@ if (!window.DraftToyConstraints) {
     // legally can instead of refusing outright.
     const base = { walls, rooms: ctx.rooms, openings: ctx.openings, minimums: ctx.minimums, mode,
       objects: ctx.objects, clearanceFor: ctx.clearanceFor, shortSpanFt: ctx.shortSpanFt,
-      spanGrowsWith: ctx.spanGrowsWith };
+      spanGrowsWith: ctx.spanGrowsWith, foundationFollows: ctx.foundationFollows };
     const step = wanted > 0 ? stepFt : -stepFt;
     let blocked = null;
     for (let d = wanted; Math.abs(d) >= stepFt - 1e-9; d -= step) {
@@ -481,12 +635,22 @@ if (!window.DraftToyConstraints) {
         // touch. `blocked` is the first refusal walking back from what was
         // asked, so it is the rule the user actually leaned on.
         if (blocked) Object.assign(result, describeBlocker(blocked, ctx, groupIds, wall.id));
+        if (!TOY_BAND_CLAMPS_AT_EDGE && mode === MODE.TOY
+          && blocked && blocked.reason === REASON.CANTILEVER) {
+          return { delta: 0, kind: KIND.BLOCKED_BAND, group: groupIds, stretches: [],
+            ...describeBlocker(blocked, ctx, groupIds, wall.id),
+            advice: ADVICE[blocked.band] };
+        }
+        result.kind = kindOf(wall, d, blocked && blocked.reason);
+        result.lengthFt = geo().distance(wall.start, wall.end);
+        result.stretches = endStretches(wall, groupIds, walls, d);
         // The advisory band describes where the wall LANDED, so it is the
         // later word on `band`. The two can only both exist in DRAFTING, where
         // BUMP_FOUNDATION is permitted and only BUMP_AND_PILES blocks; in TOY
         // no permitted position is ever in a band, so `band` there is the one
         // that stopped you, which is what the BUMP_FOUNDATION steer reads.
         if (advisory) result.band = advisory;
+        if (result.band && ADVICE[result.band]) result.advice = ADVICE[result.band];
         return result;
       }
       // THE BINDING CONSTRAINT IS THE CLOSEST ONE, not the furthest. Walking
@@ -500,8 +664,10 @@ if (!window.DraftToyConstraints) {
       blocked = verdict.violations[0];
     }
 
-    const refusal = { delta: 0, reason: REASON.NO_MOVE, group: groupIds };
+    const refusal = { delta: 0, reason: REASON.NO_MOVE, group: groupIds, stretches: [] };
     if (blocked) Object.assign(refusal, describeBlocker(blocked, ctx, groupIds, wall.id));
+    refusal.kind = kindOf(wall, 0, blocked && blocked.reason);
+    if (refusal.band && ADVICE[refusal.band]) refusal.advice = ADVICE[refusal.band];
     return refusal;
   };
 
@@ -509,6 +675,10 @@ if (!window.DraftToyConstraints) {
     REASON,
     BAND,
     MODE,
+    KIND,
+    ADVICE,
+    eligibility,
+    endStretches,
     FOOT_FT,
     HALF_FOOT_FT,
     BEAM_AT_FT,
