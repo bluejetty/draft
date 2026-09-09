@@ -385,6 +385,91 @@ nothing.** The degenerate rule, its mutation coverage and the full chain are
 pinned in `proto/outline-accessors-harness.js` and
 `proto/degenerate-chain-harness.js`.
 
+### Board #346: CLOSED WHOLE, 9 Sep — and the three boards its verification found
+
+The outboard half landed as PR #359 (merged `6be1562`): `LAYOUT.dc.html`'s
+`edgeOnOutline` collapsed onto the shared export, `build-house.js` kept its
+copy with the reason written down (the 1e-6-to-0.01 ft floor gap is reachable —
+`offsetOutline` emits 0.001 ft edges from ordinary rooms — so collapsing would
+change which runs are found to bear), and the five witnesses stayed
+independent. Two-sided mutation evidence in `tests/section-garage-slab.spec.js`
+with the one uncovered branch (the degenerate floor) stated by construction.
+The MODEL half was already closed above, with the standing guard — which
+passed on PR #359's own tree, machine-verifying the lane rule on the first PR
+to touch this code since it landed.
+
+Proving PR #359's three suite failures were main's and not its own took two
+clean-main baselines on two machines, and THAT work — not the geometry —
+produced three real findings. They are the follow-up boards below. None of
+them was folded into PR #359, which landed on its own evidence.
+
+### Board #360 · `savedDrawing()` reads the store without waiting for the save
+
+**The mechanism, seen directly:** the test helper is a bare
+`sharedFileStore.loadSharedFile` read with no wait for the app's async save to
+land, so under load a caller sees the store mid-flight — absent (`null`), or
+holding the pre-edit value. Observed as `project-page:64`'s `-2.5` arriving as
+`-2` on a starved box, `project-page.spec.js:169`'s `gradeOffsetFt` arriving as
+`null` on clean main, and `project-info.spec.js:30` failing the same way on a
+second machine — one mechanism, three sightings, two boxes, no product diff
+present in any of them.
+
+**The exposure, Gilligan's measured table (counts are call sites, not files):**
+736 `savedDrawing(` call sites across 132 spec files; 122 of those files have
+no wait mechanism anywhere, holding **662 call sites**; the other 74 sites live
+in 10 files that wait *somewhere*, which does not prove any given read is
+guarded. Both numbers are upper bounds on defects — a read that doesn't follow
+a write can't lose a race.
+
+**The fix is one place, not 662:** put the wait inside `savedDrawing()` itself,
+reusing the save-completion signal the layout-* specs already wait on
+(`waitForFunction` on the save beacon — same family as PR #55's
+`waitForSaved`). Verify against the two named assertions above under
+`--repeat-each` load, where the race reproduces 2-in-10 today.
+
+**Size:** 2–3 h with verification. **Blocks nothing, but taxes everything:**
+it is the current largest manufacturer of false suite failures after board
+#362's oversubscription.
+
+### Board #361 · The entry-coach overlay eats clicks under load
+
+`[data-entry-coach]` intercepting pointer events is now implicated in three
+distinct 180s click-retry timeouts (`design-notices-wired:65`,
+`perf-notice:62`, `perf-notice:35`), reproduced **identically on two
+independent machines** on clean main — same mode, same budget, same blocker
+element. That is not a random draw; it is a real defect that fires when the
+box is slow: the coach overlay stays up (or comes back) over `[data-felt-rail]`
+long enough for Playwright to burn its full budget clicking through it.
+
+**Open question the board must answer first:** is this a product defect (the
+coach should be dismissed/`pointer-events: none` by then and is not, which a
+slow real machine — an old iPad — would also hit) or purely a test-sequencing
+gap (the specs never dismiss the coach and usually win the race)? The answer
+decides whether the fix lands in product code or in the specs' setup. Evidence
+so far cannot tell these apart; deciding it needs one trace of the overlay's
+intended dismissal path under load.
+
+**Size:** half a session to diagnose, small fix either way.
+
+### Board #362 · `--workers=4` on a 4-core box manufactures failures
+
+Measured, not inferred: 4 Playwright workers each driving Chromium (multiple
+processes per worker) held load at 18–22 on 4 cores through two full 41-minute
+baselines — roughly 5× oversubscribed. Under that starvation the suite's
+failure set is drawn nearly at random from the known-fragile specs: six
+distinct failure names across four runs of unchanged code, with boards #360
+and #361 supplying the mechanisms. A green CI run (GitHub shards 4 ways across
+4 machines, each carrying a quarter of the load) and a red local run of the
+same tree are both telling the truth about different environments.
+
+**The job:** right-size the local default — `workers: 2` on a 4-core box, or
+derive it from `os.cpus()` in `playwright.config.js` — and record the expected
+wall-clock cost (the 41-minute baseline becomes longer, but its failures mean
+something). CI's sharded settings stay as they are; they are not oversubscribed.
+
+**Size:** an hour, plus one timed comparison run to put honest numbers on the
+trade.
+
 ---
 
 ## 6 · Parked
