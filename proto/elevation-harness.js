@@ -290,9 +290,13 @@ const segmentsOf = view => view.strokes.flatMap(s => {
 // Ink census over a model-space box: the length of stroke lying inside it,
 // in feet. Segments are walked rather than clipped — the question is only
 // ever "is there ink here", and half a foot of it is already too much.
-const inkIn = (view, { uLo, uHi, eLo, eHi }) => {
+// `keep` narrows the count to one class of stroke. Without it this sums EVERY
+// stroke crossing the box, which is how the gable-climb check below came to
+// pass whether the wall climbed or not: the roof's own rakes cross the same
+// box and carry it over the threshold on their own. Board #346.
+const inkIn = (view, { uLo, uHi, eLo, eHi, keep = null }) => {
   let feet = 0;
-  segmentsOf(view).forEach(({ a, b }) => {
+  (keep ? segmentsOf(view).filter(keep) : segmentsOf(view)).forEach(({ a, b }) => {
     const steps = Math.max(2, Math.ceil(Math.hypot(b.u - a.u, b.e - a.e) / 0.05));
     let run = 0;
     for (let i = 0; i <= steps; i++) {
@@ -304,6 +308,11 @@ const inkIn = (view, { uLo, uHi, eLo, eHi }) => {
   });
   return feet;
 };
+// The line weight drawElevationView strokes a WALL FACE with (cut-view.js:1277)
+// — the path that walks the per-sample tops. Roof rakes and eaves carry other
+// weights, which is what lets a check ask about the wall alone.
+const WALL_FACE_W = 1.25;
+
 // The highest ink at a spot along the view axis — the drawn skyline.
 const skylineAt = (view, u) => {
   let top = null;
@@ -347,9 +356,19 @@ const WING_A_RIDGE = 22.63, WING_B_RIDGE = 22.01, EAVE = 17.70, PLATE = 17.24;
   // the underside of its own rakes, and the same stretch that must be EMPTY
   // in E2 and E3 must be LIT here. Its own roof stands nearer than it and
   // higher than its plate, and must not be read as standing in front of it.
+  //
+  // WALL INK ONLY. This check counted every stroke in the box until board
+  // #346, and the box holds three roof strokes of 13-16ft each — so it read
+  // "climbed" at 50ft whether the wall climbed (5.72ft of its own ink) or
+  // stayed flat on its plate (0.00). Mutating gableTopAt to never climb, and
+  // to always climb, both left it green. WALL_FACE is the weight
+  // drawElevationView strokes a wall face with (cut-view.js:1277), which is
+  // the path that walks the sampled tops gableTopAt fills.
+  const wallFace = s => s.w === WALL_FACE_W;
   check('E4: the near gable-end wall still climbs its gable',
-    inkIn(v, { uLo: 2, uHi: 9, eLo: 18, eHi: 21 }) > 5,
-    `${inkIn(v, { uLo: 2, uHi: 9, eLo: 18, eHi: 21 }).toFixed(2)} ft`);
+    inkIn(v, { uLo: 2, uHi: 9, eLo: 18, eHi: 21, keep: wallFace }) > 3,
+    `${inkIn(v, { uLo: 2, uHi: 9, eLo: 18, eHi: 21, keep: wallFace }).toFixed(2)} ft of wall ink`
+      + ` (all strokes: ${inkIn(v, { uLo: 2, uHi: 9, eLo: 18, eHi: 21 }).toFixed(2)} ft)`);
   check('E4: its skyline peaks on the ridge',
     Math.abs(skylineAt(v, 10.65) - WING_A_RIDGE) < 0.1,
     `skyline at the ridge: ${skylineAt(v, 10.65)}`);
