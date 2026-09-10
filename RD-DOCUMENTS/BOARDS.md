@@ -582,18 +582,26 @@ and the function it points at checks nothing — and the false half is
 load-bearing, since it is the stated reason the automatic path goes unguarded.
 Sweep that sentence with the fix.
 
-**But the same comment raises a real question the fix must answer first**, and
-it is not stale:
+**The same comment raised a second question, and I got that one wrong too.** It
+said:
 
 > *"the opening is keyed to the wall FACE; the floor may be drawn to the
 > centreline. That relation is unmeasured, so no guard goes here until it is."*
 
-A generated footprint may sit against the floor polygon differently from a drawn
-one, by half a wall thickness. So this is not "swap the centre test for
-`ringInsideRing` in two places" — the automatic path needs that relation
-measured first, or the guard will refuse openings that are correctly placed.
-That measurement is the actual first task, and it is why the two sites are not
-one change repeated twice.
+I read that as a real precondition and wrote here that measuring it was the
+fix's first task. **It was already measured, in the repository, by an assertion.**
+`tests/stair-opening.spec.js:69` states the offset as a constant —
+`WALL_IN_FACE_Z = 5.5 / 12` — and line 126 asserts the opening's near edge lands
+on it. The interior face is 5½" INSIDE the wall's drawn line, so keying to the
+face pushes the opening further into the floor, never out of it; `_stairAutoFit`
+nudges the generated footprint inward as well. The relation resolves in the safe
+direction on both paths and gates nothing.
+
+So my line here was the same failure as the comment it was describing: it sent
+the next reader off to derive something the specs already assert, which is worse
+than silence. The three specs were red for **arithmetic** — a 10'-5" opening
+anchored at x=2 on a floor whose right edge is x=10 overhangs by 2'-5". The
+fixture was artificial in placement, not in dimension.
 
 **Ruled (Devin, 9 Sep): it does not block the `areas.js` repair, and the
 direction is worth stating because it is the reassuring one.** Work the two
