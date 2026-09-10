@@ -15899,15 +15899,32 @@ class Component extends DCLogic {
       const floor = this._floors.find(f => f.levelId === stair.levelId && f.structure !== 'slab'
         && f.points.length >= 3 && this._pointInOutline(f.points, centre));
       if (!floor) return;
-      // NOT GUARDED HERE, and deliberately so. The manual path checks the whole
-      // opening against its host (see _commitSurfaceOpening); this one is not
-      // drafter-drawn -- the footprint is generated from the stair and nudged
-      // in by _stairAutoFit -- and adding the same check refused every opening
-      // stair-opening.spec.js expects. Three specs went red, which says the
-      // generated footprint stands in a different relation to the floor
-      // polygon than a drawn one does (the opening is keyed to the wall FACE;
-      // the floor may be drawn to the centreline). That relation is unmeasured,
-      // so no guard goes here until it is.
+      // NOT GUARDED HERE -- and the note that used to sit here was wrong twice.
+      //
+      // It said "the manual path checks the whole opening against its host (see
+      // _commitSurfaceOpening)". It does not, and neither does the function it
+      // cited: _commitSurfaceOpening's own comment opens "NOT GUARDED YET", and
+      // the manual path tests ONE POINT, the opening's centre. So both paths
+      // are centre-only, and this comment named a sibling as doing a check that
+      // sibling explicitly denies doing. That was never true at any commit, so
+      // no staleness sweep could have found it: a comment goes wrong the moment
+      // it describes a NEIGHBOUR rather than itself, because a reader cannot
+      // catch it without opening the other function.
+      //
+      // It then blamed the three red specs on the generated footprint standing
+      // "in a different relation to the floor polygon than a drawn one does
+      // (the opening is keyed to the wall FACE; the floor may be drawn to the
+      // centreline)", and called that relation unmeasured. The repository had
+      // already measured it: stair-opening.spec.js:69 states the offset as a
+      // constant and line 126 asserts it, and it resolves in the SAFE
+      // direction -- the interior face is 5 1/2" INSIDE the wall's drawn line,
+      // so keying to the face pushes the opening further into the floor, never
+      // out of it. _stairAutoFit nudges the generated footprint inward too.
+      //
+      // The three specs are red for arithmetic. The measured opening is 10'-5"
+      // long, the spec anchors it at x=2, and the floor's right edge is x=10:
+      // far edge 12.4167, overhang 2'-5". The fixture is artificial in
+      // PLACEMENT, not in dimension, and the specs pin a real defect.
       this._surfaceOpenings.push({
         id: this._newDrawingItemId('opening'),
         hostType: 'floor',
