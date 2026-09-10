@@ -110,6 +110,19 @@
      button stops being furniture the moment there is something to lose. */
   #save.dirty { color: var(--accent); border-color: var(--accent); }
 
+  /* RUNG 2's QUIET NOTE. A page holding an unsaved edit re-reads nothing when
+     another page writes — throwing away this drafter's work to avoid throwing
+     away someone else's is the defect the ruling exists to remove — so the
+     only thing left to do is say so. Quiet on purpose: it reports a fact about
+     the file, it does not ask for a decision, and it sits under SAVE rather
+     than over the drawing. */
+  #elsewhere { position:fixed; right:12px; top:46px; z-index:5;
+    font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
+    text-transform:uppercase; color: var(--ink-quiet);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:6px; padding:5px 10px; }
+  #elsewhere[hidden] { display:none; }
+
   /* TIER 3b chrome: the level and view switchers. Same panel idiom as the
      readout, top-left so it clears #save (top-right) and #hint (bottom-right)
      at a narrow width.
@@ -169,6 +182,7 @@
   <button id="delete-wall" type="button" data-delete-wall hidden>Delete wall</button>
 </div>
 <button id="save" type="button" data-model-save>SAVE</button>
+<div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 <div id="notice"><div id="notice-body"></div></div>
 
@@ -257,6 +271,7 @@
   const notice = document.getElementById('notice');
   const noticeBody = document.getElementById('notice-body');
   const saveButton = document.getElementById('save');
+  const elsewhereNote = document.getElementById('elsewhere');
 
   // View state in world units (feet). scale is screen pixels per foot.
   // Deliberately plain arithmetic: MODEL.dc.html projects through a three.js
@@ -2136,33 +2151,18 @@
   window.addEventListener('resize', resize);
 
   // ── boot ──────────────────────────────────────────────────────────────────
-  const boot = async () => {
-    resize();
-    let file = null;
-    try {
-      // loadSharedFileAt, not loadSharedFile: the file AND the revision it was
-      // read at, in one transaction, so the rev handed to a later save really
-      // describes the drawing on screen and not some neighbouring moment.
-      const at = await window.SharedFileStore.loadSharedFileAt(BUCKET);
-      file = at.file;
-      storeRev = at.rev;
-    } catch (err) {
-      readout.textContent = 'store unavailable';
-      say('The drawing store could not be opened',
-        `<p>IndexedDB refused to open: <code>${String(err && err.message || err)}</code></p>
-         <p>Private-browsing windows and blocked site data both do this.</p>`);
-      return;
-    }
-    if (!file) {
-      readout.textContent = 'no drawing saved';
-      say('No saved drawing on this origin',
-        `<p>Nothing is stored under <code>${BUCKET}</code> yet.</p>
-         <p>Draw something in <code>MODEL.dc.html</code> on this same origin and save it,
-            then reload this page. Storage is per-origin, so a drawing made on a
-            different host or port will not appear here.</p>`);
-      return;
-    }
-
+  // ── from a saved file to the drawing on this page ─────────────────────────
+  // Parse, check the envelope, normalise the four collections this page owns
+  // rules for, and rebuild reference equality at the shared corners. BOOT AND
+  // THE CHANGE BROADCAST BOTH COME THROUGH HERE, so a page that adopts another
+  // page's write builds exactly the drawing a reload would have built — one
+  // definition of what reading a file means, not two that drift.
+  //
+  // Returns false when the file could not be adopted, having already told the
+  // drafter why. The drawing on screen is left alone in that case: a page that
+  // blanked itself because somebody else wrote something unreadable would turn
+  // one damaged file into two lost drawings.
+  const adoptFile = async file => {
     let parsed;
     try {
       parsed = JSON.parse(await file.text());
@@ -2170,7 +2170,7 @@
       readout.textContent = 'unreadable';
       say('The saved drawing could not be parsed',
         `<p><code>${String(err && err.message || err)}</code></p>`);
-      return;
+      return false;
     }
 
     // The same envelope check MODEL.dc.html runs, from the same module, so this
@@ -2183,7 +2183,7 @@
       say('That drawing is not one this page can read',
         `<p>checkEnvelope said <code>${check.reason}</code>.
             <code>version</code> means it was written by a newer MODEL than this page knows.</p>`);
-      return;
+      return false;
     }
 
     // VALIDATE THE THREE TYPES NOTHING VALIDATED. Every other item type on a
@@ -2280,6 +2280,45 @@
       wall.end = pooled(wall.end, wall, view, body);
     });
 
+    // THE HISTORY GOES WITH THE DRAWING IT POINTS INTO. Undo entries hold
+    // references to wall and corner OBJECTS, and every one of them has just
+    // been replaced. Kept, an undo would splice a wall from the previous
+    // drawing back into this one, or move a corner nothing is joined to.
+    undoStack.length = 0;
+    selectedSeg = null;
+    drawStart = null;
+    return true;
+  };
+
+
+  const boot = async () => {
+    resize();
+    let file = null;
+    try {
+      // loadSharedFileAt, not loadSharedFile: the file AND the revision it was
+      // read at, in one transaction, so the rev handed to a later save really
+      // describes the drawing on screen and not some neighbouring moment.
+      const at = await window.SharedFileStore.loadSharedFileAt(BUCKET);
+      file = at.file;
+      storeRev = at.rev;
+    } catch (err) {
+      readout.textContent = 'store unavailable';
+      say('The drawing store could not be opened',
+        `<p>IndexedDB refused to open: <code>${String(err && err.message || err)}</code></p>
+         <p>Private-browsing windows and blocked site data both do this.</p>`);
+      return;
+    }
+    if (!file) {
+      readout.textContent = 'no drawing saved';
+      say('No saved drawing on this origin',
+        `<p>Nothing is stored under <code>${BUCKET}</code> yet.</p>
+         <p>Draw something in <code>MODEL.dc.html</code> on this same origin and save it,
+            then reload this page. Storage is per-origin, so a drawing made on a
+            different host or port will not appear here.</p>`);
+      return;
+    }
+
+    if (!(await adoptFile(file))) return;
     fit();
     paint();
     // The switchers can only be built once the drawing is on the page: their
@@ -2358,6 +2397,8 @@
         ifRev: Number.isInteger(storeRev) ? storeRev : null,
       });
       markSaved();
+      // The note described a difference this save has just resolved.
+      if (elsewhereNote) elsewhereNote.hidden = true;
       saveButton.disabled = false;
     } catch (error) {
       // The edit is still unsaved, so the button must still say so. Dropping
@@ -2406,6 +2447,71 @@
     event.preventDefault();
     event.returnValue = '';
   });
+
+  // ── the change broadcast ────────────────────────────────────────────────────
+  // RULING-autosave-two-writers.md §4, rung 2. This page reads its revision
+  // once at load and advances it only by its own save, so before this listener
+  // existed a single sheet edit in LAYOUT — a write to a key this page does not
+  // touch — refused every save from here until the drafter reloaded, and
+  // reloading is what costs them the corner they had not saved.
+  //
+  // A page that hears the write and re-reads is never stale, so it never has
+  // anything to overwrite.
+  //
+  // Reads overlap: two writes land in quick succession and the second read can
+  // resolve first, leaving the older file on screen with the newer revision
+  // beside it. A sequence number is the cheapest thing that makes the last
+  // change asked for the one that wins.
+  let adoptSeq = 0;
+  const adoptStore = async () => {
+    const mine = ++adoptSeq;
+    const at = await window.SharedFileStore.loadSharedFileAt(BUCKET);
+    if (mine !== adoptSeq) return;
+    // A cleared bucket is not a drawing to adopt. Keeping what is on screen is
+    // the safe direction: nothing here can put it back.
+    if (!at.file) return;
+    if (!(await adoptFile(at.file))) return;
+    if (mine !== adoptSeq) return;
+    // THE REVISION COMES FROM THE READ, NOT FROM THE MESSAGE. loadSharedFileAt
+    // takes the file and the revision in ONE transaction, so they describe one
+    // state of the bucket. The message's rev describes the write that woke us,
+    // and by the time this read ran a third page may have written again —
+    // adopting that number would hand the next save an `ifRev` that does not
+    // match the drawing it is about to write.
+    storeRev = at.rev;
+    // NOT fit(). A reload would re-frame the view; a live adopt must not move
+    // the drafter's camera out from under them for someone else's edit.
+    paint();
+    buildChrome();
+    loadUnderlayImages();
+  };
+
+  if (window.SharedFileStore?.onBucketChanged) {
+    window.SharedFileStore.onBucketChanged(BUCKET, change => {
+      // OUR OWN SAVE. The store tells every listener, this page's included, so
+      // that "the bucket changed" means one thing regardless of who wrote it.
+      // Ignoring our own is this page's decision and this is where it is made:
+      // without it, every SAVE would be followed by a re-read that replaces the
+      // drawing the undo stack points into, and the drafter's history would go
+      // with it.
+      if (change.writerId === window.SharedFileStore.writerId) return;
+      // Nothing on screen yet — boot failed or the store was empty. There is no
+      // drawing to keep current and no camera to preserve; a reload is the
+      // honest way back and the notice already says so.
+      if (!drawing) return;
+      // A DIRTY PAGE RE-READS NOTHING. Not the drawing, not the revision: the
+      // next save must still be refused, because this page's copy really is
+      // built on an older one and rung 1's refusal is what stands between the
+      // drafter and somebody else's work being eaten.
+      if (dirty) {
+        if (elsewhereNote) elsewhereNote.hidden = false;
+        return;
+      }
+      adoptStore().catch(error => {
+        console.warn('draft: could not adopt a change from another page', error);
+      });
+    });
+  }
 
   boot();
 })();

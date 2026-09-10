@@ -6138,6 +6138,46 @@ class Component extends DCLogic {
       }
     }
     this._loadDrawing();
+    this._watchStoreChanges();
+  }
+
+  // RULING-autosave-two-writers.md §4, RUNG 2 — the change broadcast.
+  //
+  // This page keeps the revision it loaded for the whole session and only its
+  // own writes advance it. Rung 1 stopped the consequence being silent: a write
+  // that would land on top of another page's model keys is refused rather than
+  // merged over. But the refusal still arrives, and most of the time it did not
+  // need to — the other page's write was already there for the taking.
+  //
+  // So: when someone else commits, and this page has nothing of its own
+  // outstanding, re-read. That is a reload's worth of work through the SAME
+  // path a reload uses (`_loadDrawing`), which is what refreshes `_storeRev`
+  // and `_storeBaseline` (:6155-6161) and is why the next edit saves cleanly
+  // instead of conflicting with a change this page had no reason to fight.
+  _watchStoreChanges() {
+    const store = window.SharedFileStore;
+    // Additive: a store without the broadcast, or a browser without
+    // BroadcastChannel, simply does not live-reload. That is today's behaviour,
+    // which is a working page.
+    if (!store || typeof store.onBucketChanged !== 'function') return;
+    store.onBucketChanged(MODEL_STORAGE_BUCKET, change => {
+      // OUR OWN AUTOSAVE. This page writes on EVERY edit (`_markUnsaved`), so
+      // without this line it would re-read and rebuild the whole drawing after
+      // every keystroke — and take the undo history with it each time.
+      if (change.writerId === store.writerId) return;
+      if (this._loadingDrawing || !this._drawingReady) return;
+      // A DIRTY PAGE RE-READS NOTHING. `persistenceStatus` is this page's
+      // "there is an edit the store has not got": it goes UNSAVED with the edit
+      // and back to SAVED only when the write lands, so it is also UNSAVED
+      // while rung 1 is holding a refused write in front of the drafter — the
+      // one moment when re-reading would eat exactly the work rung 1 saved.
+      //
+      // AND IT SAYS NOTHING. The status already reads UNSAVED, and a refusal
+      // already puts the real conflict in front of them; a second message here
+      // would overwrite that one with a vaguer version of itself.
+      if (this.state.persistenceStatus !== 'SAVED') return;
+      this._loadDrawing();
+    });
   }
 
   async _loadDrawing(importedFile = null) {

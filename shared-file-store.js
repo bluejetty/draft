@@ -84,6 +84,84 @@ class StaleWriteError extends Error {
   }
 }
 
+// ── the change broadcast ─────────────────────────────────────────────────────
+// A page that hears "this bucket is now rev 9" and re-reads is never stale, so
+// it never has anything to overwrite. That is what this is for: it is a
+// PREVENTER of the refusals in RULING-autosave-two-writers.md §0, not a
+// resolver of concurrent edits, and it must not be described as one.
+//
+// ONE ID PER PAGE INSTANCE, and that is the whole of "who wrote last". A
+// listener compares it against `writerId` below to ignore the writes its own
+// page made. There is no per-key author map: the ruling rejects one by name
+// (§3.3), because a per-key author map is object-level merge wearing a hat.
+const writerId = `w-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+const bucketListeners = new Map();
+let channel;
+
+// KEYED ON THE DATABASE NAME, WITH NO FALLBACK. A browser without
+// BroadcastChannel does not live-reload and degrades to exactly today's
+// behaviour, which is a working page. A localStorage-event shim would be a
+// second delivery path with second-class ordering, and §3.3 rules it out.
+function bucketChannel() {
+  if (channel !== undefined) return channel;
+  channel = (typeof BroadcastChannel === 'function') ? new BroadcastChannel(DB_NAME) : null;
+  if (channel) channel.onmessage = event => deliver(event.data);
+  return channel;
+}
+
+function deliver(change) {
+  if (!change || typeof change.bucket !== 'string') return;
+  const listeners = bucketListeners.get(change.bucket);
+  if (!listeners) return;
+  // A COPY, because a listener is allowed to unsubscribe itself: mutating the
+  // set being walked would silently skip the listener after it.
+  [...listeners].forEach(listener => {
+    // One listener that throws must not stop the next one hearing about a
+    // change it may be holding stale data against.
+    try { listener(change); } catch (error) {
+      console.error('draft: an onBucketChanged listener failed', error);
+    }
+  });
+}
+
+// Announce a change that has COMMITTED. Called from tx.oncomplete and nowhere
+// else — see the note at the call site, which is the one thing in this module
+// most likely to be got wrong silently.
+function announce(bucket, rev) {
+  const change = { bucket, rev, writerId };
+  const live = bucketChannel();
+  if (live) {
+    try { live.postMessage(change); } catch (error) {
+      console.warn('draft: could not broadcast a bucket change', error);
+    }
+  }
+  // THE WRITER'S OWN PAGE HEARS IT TOO. BroadcastChannel deliberately does not
+  // echo to the object that posted, so without this line "this bucket changed"
+  // would mean something different to a subscriber depending on which page did
+  // the writing — and a page with two subscribers would have one of them miss
+  // its own page's writes. Own writes are ignored by COMPARING writerId, which
+  // is a decision the subscriber makes and can be seen making, rather than by
+  // never being told.
+  //
+  // Queued, not called inline, so every listener runs after this write has
+  // resolved for its caller whichever page it came from.
+  setTimeout(() => deliver(change), 0);
+}
+
+// Hear about committed changes to one bucket. Returns the unsubscribe.
+function onBucketChanged(bucket, listener) {
+  const key = bucket || DEFAULT_BUCKET;
+  bucketChannel();
+  if (!bucketListeners.has(key)) bucketListeners.set(key, new Set());
+  const listeners = bucketListeners.get(key);
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+    if (!listeners.size) bucketListeners.delete(key);
+  };
+}
+
 // One readwrite transaction: read the bucket, hand it to `mutate`, store what
 // comes back, bump the revision. `mutate` must be SYNCHRONOUS — an IndexedDB
 // transaction commits as soon as the microtask queue drains with no request
@@ -98,7 +176,22 @@ function updateRecords(bucket, mutate, { ifRev = null } = {}) {
     const recordsReq = store.get(bucket);
     let nextRev = null;
     let failure = null;
-    tx.oncomplete = () => (failure ? reject(failure) : resolve(nextRev));
+    // ANNOUNCED FROM oncomplete, NEVER FROM THE onsuccess BELOW. That handler
+    // QUEUES the puts; it does not commit them. A listener woken by a message
+    // posted from there is entitled to read the bucket and find the state that
+    // was there BEFORE the write — and the failure mode is a clean page
+    // re-reading the old drawing and calling itself current. `oncomplete` is
+    // the only point at which the records and the revision are both real, and
+    // it already has `nextRev` in hand.
+    //
+    // It is also the only point that has ruled out an abort: a refused write
+    // (ifRev) and a throwing `mutate` both land on onabort, so neither
+    // announces a revision that does not exist.
+    tx.oncomplete = () => {
+      if (failure) { reject(failure); return; }
+      announce(bucket, nextRev);
+      resolve(nextRev);
+    };
     tx.onerror = () => reject(failure || tx.error);
     tx.onabort = () => reject(failure || tx.error || new Error('write aborted'));
     recordsReq.onsuccess = () => {
@@ -206,5 +299,6 @@ window.SharedFileStore = {
   saveSharedFile, loadSharedFile, loadSharedFileAt, clearSharedFile,
   saveNamedFile, loadNamedFile, removeNamedFile,
   readBucket, StaleWriteError,
+  onBucketChanged, writerId,
 };
 }
