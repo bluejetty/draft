@@ -51,6 +51,17 @@ The suite is configured **serial on one worker** (`fullyParallel: false, workers
 
 Pushing is not merging. The PR still waits on a green run.
 
+**A mutation run measures the tree you handed it, not the tree you meant.** Breaking a line on purpose to watch a test go red is the only way to know a check *can* fail, and it is the standing evidence for any claim that a test pins something. But every harness fault found here so far has been the same fault wearing a different face — not a wrong mutation, but the tree under test not being the tree you think — and each one ends the same way: the run completes, prints a plausible number, and the number is about a tree nobody intended. Four ends to hold shut:
+
+- **Commit before each run.** `git checkout -- FILE` restores HEAD, not your working state, so it silently drops the very fix the mutants were meant to be probing. A hand-rolled backup fails from the other side: on 10 Sep 2026 a `cp /tmp/geo.bak geo` wrote to a new file literally named `geo`, the mutation never reverted, and the next mutant stacked on the last — the tell was failure counts that climbed instead of repeating.
+- **Assert the anchor matches exactly one site, and fail loudly when it doesn't.** A four-space anchor also matches a six-space line that contains it as a substring. On 10 Sep 2026 that made a stair mutant report SURVIVED when the substitution had in fact raised and never applied; the suite had run on clean code.
+- **Verify the mutation is present in the file before running the tests.** This is the cheap check that catches both faults above and any future member of the family — read the line back and confirm it changed. A survivor you cannot prove was ever applied is not a survivor.
+- **A mutation that deletes rather than moves is somebody else's mutant.** Deleting a call when you meant to relocate it usually reproduces an earlier mutation exactly, so two rows of the table describe one experiment run twice, and the behaviour you thought you covered was never touched.
+
+Both crews on this repo hit the first two of these independently on 10 Sep 2026 — different harnesses, different files, the same two faults within an afternoon of each other. That is the argument for the note living here rather than in either harness.
+
+A surviving mutant is a finding only once these four hold. Until then it is a report about the harness.
+
 `tests/helpers.js` is the suite's vocabulary: `openModel` (boot + storage reset, optional `{ webgl: false }` for the 2D fallback), `worldToClient`/`clickWorld`/`moveTo` (world-feet in, real mouse events out), `selectTool`, `waitForSaved` (autosave settle), `savedDrawing` (reads the drawing JSON back out of IndexedDB — assert against this, not the DOM), and `overlayPixels`/`countColor` (pixel assertions on the overlay canvas).
 
 To poke at the app by hand, serve the repo root with any static server — `python3 -m http.server 8000` — and open `/MODEL.dc.html`. (The suite runs its own server on port 4173; the two don't conflict.)
