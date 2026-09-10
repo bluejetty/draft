@@ -9,8 +9,12 @@ numbers and PR numbers are different sequences that overlap — always write
 #203 (the composer) are different things, and that collision has already caused
 one error.
 
-Three items still have no number and are marked **NEW**. Devin numbers them
-next time he is awake.
+Items with no number are marked **NEW**, and Devin numbers them next time he
+is awake. **There are five of them now — NEW-2 through NEW-6** (NEW-1 is
+closed); the line here used to say "three", which was true when it was
+written and had stopped being true without anyone editing it. A count in
+prose has no test, so nothing fails when it goes wrong — the same failure
+`SPEC-model-html-tiers.md` records against its own fixture-env paragraph.
 
 ---
 
@@ -59,6 +63,7 @@ Ordered longest first.
 | #14 | **Specifications composer** — 8.5×11 flowing text, appended after the drawings. | 1–2 days | Needs the four document-processor answers first: pagination, keep-with-next, numbering that survives an insert, measured text matching painted text. |
 | #1 | **Extract the plan painter out of MODEL.** | 1 day | Mechanical, with a worked example to copy (`cut-view.js`). LAYOUT cannot draw floor plans on sheets without it. Good overnight job — but one agent only, it is the big file. |
 | #6 | **Persistence extraction.** `buildSaveData` / `applySavedData` / auto-resume are three lists that must agree. | 1 day | Worth doing because it is dangerous, not because it is big: a field missed in one list silently fails to survive a reload. |
+| **NEW-6** | **MODEL.html tier 3 — the page becomes a drafting surface.** The ladder, and it is the live one: **3a is DONE, four rungs of four** (select `ec993b3`, corner `4e2be48`, save `75cc4ac` + close guard `be01325`, whole wall `a0c3841`, PRs #346 / #347), plus the store rung it forced on the old page (`8992ad9`, the stale write becomes a refusal instead of an eat). **3b** — the level switcher chrome — is Gilligan's and ordered. **3c** — draw and delete a wall — is Gilligan's and queued behind it. **The ladder lives in `SPEC-model-html-tiers.md`, not here, and the rule there is one entry per rung as it lands, with the commit.** This row exists so the board says tier 3 is running at all: it ran for five days while the spec's entire tier-3 section read *"not specced here"* and this file said nothing. **Do not plan a switcher off `activeLevelIdx`** — it is an index, `MAIN_FLOOR_LEVEL_ID` is an id, and they agree on every default drawing and disagree the moment a level is inserted. | 3b + 3c: a session each | Nothing waits on it. It is the tier that decides whether the new page replaces the old one or stays a viewer. |
 
 ---
 
@@ -396,7 +401,21 @@ been missing — breaking `pointToSegment` outright had left all sixteen layout
 specs green.
 
 **Three boards, #360 / #361 / #362, were opened out of that PR's suite run.
-All three are void.** Their evidence was manufactured by the run that found it.
+All three are void, and all three are now CLOSED** — reconciled 9 Sep against
+the merge rather than against the intention:
+
+| board | state | evidence on main |
+|---|---|---|
+| **#360** `savedDrawing` wait | **closed void** | no race; the 662 call sites need nothing |
+| **#361** entry-coach overlay | **closed void** | the coach is not a defect; a neighbouring worker was wiping `draft-entry-coach-seen` |
+| **#362** worker right-sizing | **closed, aimed the wrong way** | the default was already correct; the guard is the outcome |
+| — the guard | **MERGED**, PR #361 (`53c03e2`, merge `3ed8f1e`) | `playwright.config.js` throws at config load on a resolved override above 1 |
+
+**PR #361 and board #361 are different things and both appear above** — the
+collision this file's own header warns about, landing for the second time.
+The merged PR is the guard; the void board is the coach.
+
+Their evidence was manufactured by the run that found it.
 
 **What happened.** The 9 Sep suite runs were invoked with `--workers=4`. The
 config sets `workers: 1`, `README.md:48` warns against overriding it, and
@@ -438,7 +457,8 @@ sources that had said so in writing the whole time — rather than by any furthe
 measurement of the failures themselves. Nine measuring mistakes were made that
 day against zero code defects; the last was the expensive one.
 
-**The one honest outcome is the guard**, in `playwright.config.js`: a worker
+**The one honest outcome is the guard**, in `playwright.config.js`, and it is
+on main: `53c03e2`, merged as PR #361 in `3ed8f1e`. A worker
 override resolving above 1 throws at config load, naming the reason. A throw and
 not a warning, deliberately — the entire cost of that day was that the failures
 looked real and nothing said otherwise, and a warning scrolls past. Percentages
@@ -454,6 +474,31 @@ line to that effect. The conclusion — that the diff did not cause them — hol
 and holds better than when it was written; the mechanism given is wrong, and the
 recommendation is close to the opposite of the real lesson. Left in place with
 the correction attached rather than quietly superseded.
+
+### Adoption check, 9 Sep: `design-notices.js` HAS callers, and no board is needed
+
+Checked because two documents still say otherwise —
+`HANDOFF-to-devin-7sep.md:104` (*"has no callers… nothing renders it"*) and
+`PRE-TIER3.md`'s press-and-flag line (*"wants an owner"*). **Both are stale,
+and the wiring landed the same day the handoff was written**: `a824547`, PR
+#334, *"design-notices.js gets its callers"*.
+
+| export | caller on main |
+|---|---|
+| `garageDoorHeadNotice` | `PROJECT.html:1544` — the garage door head against the wall height |
+| `garageDoorHeadLimitIn` | `PROJECT.html:1556` — the tallest door that clears |
+| `stairRefitNotice` | `MODEL.dc.html:22766` — a stair drawn at a rise the level no longer has |
+
+`tests/design-notices-wired.spec.js` covers the half the module's own harness
+could not: that a drafter sees it. **It asserts absence as well as presence**,
+which is the half that matters — a banner that appears once and never leaves
+is a bug a presence-only test passes on.
+
+**So there is no adoption board to open.** The one case still unwired is
+deliberate, not forgotten: pressing BUNGALOW on a drawing with a built OVER
+GARAGE belongs to board #333, whose build row is not on main, and the module
+says in its own header why a function returning null until then would pass its
+harness for the wrong reason. Both stale sentences are corrected in place.
 
 ---
 
