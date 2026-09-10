@@ -254,6 +254,55 @@ test.describe('rung 2 — a committed change is broadcast, and a clean page adop
       .toHaveLength(0);
   });
 
+  // M5's PREMISE, MEASURED — and only the premise.
+  //
+  // adoptStore takes the revision from the READ, not from the message, and the
+  // comment there says why: by the time that read runs another page may have
+  // written again, so the message's number would hand the next save an `ifRev`
+  // that does not describe the drawing it is about to write. That claim is a
+  // fact about the store, and it can be checked head-on: a listener that waits
+  // before it reads finds a bucket that has already moved past the revision it
+  // was told about.
+  //
+  // THIS DOES NOT COVER THE GUARD, and is not counted as covering it. MODEL.html
+  // cancels an adopt the moment a newer message arrives (`adoptSeq`), so the
+  // only ordering that reaches the mutation needs a SILENT write — a page with
+  // no BroadcastChannel — committing inside the page's read window, a few
+  // milliseconds between one page's postMessage and another page's listener
+  // task. Nothing on this surface can pin that. The mutation stays a survivor
+  // and is reported as unexercised; what is measured here is that the
+  // divergence it is written against is real rather than theoretical.
+  test('the revision a message carries can already be behind the store',
+    async ({ page, context }) => {
+      await openNew(page, { seed: true });
+      const reader = await context.newPage();
+      await reader.goto('/MODEL.html?mode=night');
+      await reader.waitForFunction(() => !!window.SharedFileStore, null, { timeout: 10000 });
+      await reader.evaluate(bucket => {
+        window.__heard = [];
+        window.SharedFileStore.onBucketChanged(bucket, async change => {
+          const slot = window.__heard.push({ messageRev: change.rev, revAtRead: null }) - 1;
+          // The wait is what makes the window big enough to place a write in on
+          // purpose. A real page's window is the length of an IndexedDB read.
+          await new Promise(done => setTimeout(done, 400));
+          window.__heard[slot].revAtRead = (await window.SharedFileStore.readBucket(bucket)).rev;
+        });
+      }, BUCKET);
+
+      await foreignWrite(page, 'd.walls = d.walls.slice(0, 3); return d;');
+      await reader.waitForFunction(() => (window.__heard || []).length >= 1, null, { timeout: 6000 });
+      // Inside the first listener's wait.
+      await foreignWrite(page, 'd.walls = d.walls.slice(0, 2); return d;');
+
+      await reader.waitForFunction(() => (window.__heard || [])[0]?.revAtRead !== null,
+        null, { timeout: 6000 });
+      const first = (await reader.evaluate(() => window.__heard))[0];
+      expect(first.revAtRead,
+        'the store moved on while the listener was between the message and its '
+        + 'read — which is why the revision a page adopts must come from the read')
+        .toBeGreaterThan(first.messageRev);
+    });
+
   // ── 4 ──────────────────────────────────────────────────────────────────────
   // MUTATION: drop the writerId comparison. This fails — the page hears its own
   // save, is clean at that moment, re-reads, and the re-read replaces the
