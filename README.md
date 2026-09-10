@@ -45,7 +45,11 @@ Requirements:
 
 Run one file with `npx playwright test tests/underlays.spec.js`; add `--headed` to watch it. Traces are kept on failure (`trace: 'retain-on-failure'`) — open with `npx playwright show-trace`.
 
-The suite is configured **serial on one worker** (`fullyParallel: false, workers: 1`). Each test clears its own storage on the way in (`helpers.openModel`), but the config is deliberate — don't add `--workers` parallelism without verifying the whole suite still passes repeatedly.
+The suite is configured **serial on one worker** (`fullyParallel: false, workers: 1`), and the config **refuses** a `--workers` override outright — a throw, not a warning. Every spec shares one origin, and `helpers.openModel` clears `localStorage` and deletes the shared IndexedDB on the way into each test, so parallel workers on one machine wipe each other's storage mid-test. The failures that produces look like real bugs — null or stale reads from `savedDrawing()`, a dismissed entry coach that comes back and swallows every click — and on 9 Sep 2026 they cost a day and three boards. To go parallel, **shard** instead (`npx playwright test --shard=1/4`): a shard gets its own runner and therefore its own origin, which is the only way to have both.
+
+**Resolve, push, then run.** The suite is serial and takes about an hour. A branch that exists only in a session container for that hour is one restart from gone — a worktree was already lost to a box restart. Pushing first costs seconds, turns a restart into a re-run rather than a loss, and lets the diff be reviewed while the suite is still running instead of after it.
+
+Pushing is not merging. The PR still waits on a green run.
 
 `tests/helpers.js` is the suite's vocabulary: `openModel` (boot + storage reset, optional `{ webgl: false }` for the 2D fallback), `worldToClient`/`clickWorld`/`moveTo` (world-feet in, real mouse events out), `selectTool`, `waitForSaved` (autosave settle), `savedDrawing` (reads the drawing JSON back out of IndexedDB — assert against this, not the DOM), and `overlayPixels`/`countColor` (pixel assertions on the overlay canvas).
 
