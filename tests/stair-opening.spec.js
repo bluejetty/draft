@@ -107,7 +107,7 @@ test('a stair opening cuts the measured rectangle keyed to the wall face', async
   await expect(page.getByText(/Rough opening 3'-1"/)).toBeVisible();
 
   // First click keys the interior face, second picks the run direction.
-  await h.clickWorld(page, 2, 0.3);
+  await h.clickWorld(page, -8, 0.3);
   await page.waitForTimeout(300);
   await h.clickWorld(page, 8, 2);
   await h.waitForSaved(page);
@@ -127,8 +127,103 @@ test('a stair opening cuts the measured rectangle keyed to the wall face', async
   // Width: 3' stair + 1" finish. Length: headroom-clearing run, to the inch.
   expect(Math.max(...zs) - Math.min(...zs)).toBeCloseTo(WIDTH_IN / 12, 3);
   expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(LENGTH_IN / 12, 3);
-  // Runs from the anchor click toward the second click's direction.
-  expect(Math.min(...xs)).toBeCloseTo(2, 3);
+  // Runs from the anchor click toward the second click's direction. The anchor
+  // is x=-8 because the measured opening is 10'-5" and the floor ends at x=10:
+  // from x=2 it would hang 2'-5" over open air, which the tool now refuses and
+  // which "an opening that runs past the floor is refused" keeps pinned.
+  expect(Math.min(...xs)).toBeCloseTo(-8, 3);
+});
+
+test('an opening that runs past the floor is refused, with the length named', async ({ page }) => {
+  await h.openModel(page);
+  await drawWall(page);
+  await drawFloor(page);
+  await drawFoundationSlab(page);
+  await switchLayerView(page, 'FLOOR LAYOUT (FLOOR)');
+
+  await h.selectTool(page, 'Fenestration');
+  await page.getByRole('button', { name: 'STAIRS', exact: true }).click();
+  await expect(page.getByText(/Rough opening 3'-1"/)).toBeVisible();
+
+  // THE OLD PLACEMENT, kept on purpose. The measured opening is 10'-5" and the
+  // floor's right edge is x=10, so anchoring at x=2 and running right puts the
+  // far end at x=12.4167 -- 2'-5" of hole over open air. Three specs used to
+  // pin this arrangement and pass, because the tool only ever asked whether the
+  // opening's CENTRE was on the floor, and at x=7.2 the centre comfortably is.
+  await h.clickWorld(page, 2, 0.3);
+  await page.waitForTimeout(300);
+  await h.clickWorld(page, 8, 2);
+  await page.waitForTimeout(300);
+
+  // Refused, and the message names the measured length so the drafter knows how
+  // much room to find rather than guessing at what "does not fit" means.
+  //
+  // THE ASSERTION IS PHRASED TO EXCLUDE SUCCESS, and it had to be rewritten to
+  // manage it. The first version asked for "10'-5"" and /past|room|fit/i, and
+  // BOTH passed against the unguarded page: the success line is
+  //   Stair opening cut on A-FL-OPNG - 3'-1" x 10'-5" (... clears 6'-10" headroom ...)
+  // so "10'-5"" matched its length and /room/ matched "headROOM". Two refusal
+  // assertions satisfied by a successful cut -- only the opening count below
+  // was doing any work. So: a phrase success cannot contain, AND an explicit
+  // absence of the phrase success always contains.
+  await expect(page.locator('[data-model-drawing-message]')).toContainText('runs off the floor');
+  await expect(page.locator('[data-model-drawing-message]')).toContainText("10'-5\"");
+  await expect(page.locator('[data-model-drawing-message]')).not.toContainText('Stair opening cut');
+
+  // Nothing cut. The refusal is the whole point: an opening deducted from a
+  // floor it hangs off is silent and always in the applicant's favour.
+  const drawing = await h.savedDrawing(page);
+  expect(drawing.surfaceOpenings || []).toHaveLength(0);
+});
+
+test('an opening flush with the floor edge is still cut', async ({ page }) => {
+  await h.openModel(page);
+  await drawWall(page);
+  await drawFloor(page);
+  await drawFoundationSlab(page);
+  await switchLayerView(page, 'FLOOR LAYOUT (FLOOR)');
+
+  await h.selectTool(page, 'Fenestration');
+  await page.getByRole('button', { name: 'STAIRS', exact: true }).click();
+  await expect(page.getByText(/Rough opening 3'-1"/)).toBeVisible();
+
+  // ON THE BOUNDARY COUNTS AS INSIDE, and it has to be the EAST edge to prove
+  // it. A stairwell run flush to an exterior wall is on the slab; refusing it
+  // would force back the sliver of floor this design exists to make
+  // unnecessary. Nothing else in this file touches an edge at all.
+  //
+  // WHAT THIS CASE DOES AND DOES NOT PROVE, measured rather than assumed.
+  //
+  // It proves a flush opening survives the REAL CLICK PATH -- tool, wall pick,
+  // rectangle, guard, commit, save. It does NOT pin the boundary rule itself,
+  // and two attempts to make it do so both failed for instructive reasons.
+  // Anchored at the WEST edge, the boundary-exclusive mutant survived:
+  // ringInsideRing casts its ray rightward, so a point on the west edge still
+  // crosses the east wall and reads inside with the boundary rule switched
+  // off. Moved to the EAST edge it survived too, because a click cannot land
+  // exactly on a boundary -- pixel-to-world conversion puts the corner a
+  // fraction inside, where the ray-cast answers and the boundary rule is never
+  // consulted.
+  //
+  // So the primitive is pinned where it CAN be pinned exactly, by harnesses
+  // that construct polygons directly: proto/ring-inside-harness.js and
+  // proto/areas-harness.js both go red under that mutant. This spec proves the
+  // wiring; those prove the rule. Do not "fix" this by loosening the assertion
+  // until the mutant dies here -- that would only hide which half is covering
+  // what.
+  //
+  // The opening is 10'-5" and runs right from the anchor, so anchoring at
+  // 10 - LENGTH puts its far edge exactly on the floor's east edge, x=10.
+  const flushAnchor = 10 - LENGTH_IN / 12;
+  await h.clickWorld(page, flushAnchor, 0.3);
+  await page.waitForTimeout(300);
+  await h.clickWorld(page, flushAnchor + 4, 2);
+  await h.waitForSaved(page);
+
+  const drawing = await h.savedDrawing(page);
+  expect(drawing.surfaceOpenings).toHaveLength(1);
+  const xs = drawing.surfaceOpenings[0].points.map(p => p.x);
+  expect(Math.max(...xs)).toBeCloseTo(10, 3);
 });
 
 test('typed stair width and headroom resize the opening', async ({ page }) => {
@@ -148,7 +243,7 @@ test('typed stair width and headroom resize the opening', async ({ page }) => {
   // 42" + 1" finish = 3'-7" opening width.
   await expect(page.getByText(/Rough opening 3'-7"/)).toBeVisible();
 
-  await h.clickWorld(page, 2, 0.3);
+  await h.clickWorld(page, -8, 0.3);
   await page.waitForTimeout(300);
   await h.clickWorld(page, 8, 2);
   await h.waitForSaved(page);
@@ -170,7 +265,7 @@ test('the stair opening survives a reload on its floor', async ({ page }) => {
 
   await h.selectTool(page, 'Fenestration');
   await page.getByRole('button', { name: 'STAIRS', exact: true }).click();
-  await h.clickWorld(page, 2, 0.3);
+  await h.clickWorld(page, -8, 0.3);
   await page.waitForTimeout(300);
   await h.clickWorld(page, 8, 2);
   await h.waitForSaved(page);

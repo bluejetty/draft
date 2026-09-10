@@ -14409,6 +14409,13 @@ class Component extends DCLogic {
     if (garageDoors) built.push('garage doors (overhead + man door)');
     // Stairs cut their own rough openings, nudged clear of beams and walls.
     const stairCut = this._buildStairOpenings();
+    // A stair whose opening was refused is reported, not dropped: BUILD HOUSE
+    // is unattended, so an unexplained missing hole is exactly the silence that
+    // makes a Boneyard run impossible to argue with.
+    if (stairCut.refused.length) {
+      built.push(`${stairCut.refused.length} stair opening${stairCut.refused.length === 1 ? '' : 's'} NOT cut`
+        + ` — ${stairCut.refused.join('; ')}`);
+    }
     if (stairCut.cut) {
       built.push(`${stairCut.cut} stair opening${stairCut.cut === 1 ? '' : 's'}`);
       if (stairCut.nudges.length) built.push(`stair nudged ${stairCut.nudges.join(', ')} clear of beams / walls`);
@@ -15852,16 +15859,38 @@ class Component extends DCLogic {
     const anchor = this._stairOpeningAnchorPt();
     const dir = ((pt.x - anchor.x) * pick.ux + (pt.z - anchor.z) * pick.uz) >= 0 ? 1 : -1;
     const points = this._stairOpeningRect(dir, size);
-    const centre = {
-      x: (points[0].x + points[2].x) / 2,
-      z: (points[0].z + points[2].z) / 2,
-    };
     const levelId = this._activeLevelId();
-    const floor = this._floors.find(f => f.levelId === levelId && f.structure !== 'slab'
-      && f.points.length >= 3 && this._pointInOutline(f.points, centre));
+    const candidates = this._floors.filter(f => f.levelId === levelId
+      && f.structure !== 'slab' && f.points.length >= 3);
+    // THE WHOLE OPENING, not its centre. This used to test one point -- the
+    // midpoint of the rectangle -- against the floor outline, which accepts any
+    // opening whose middle is over floor no matter how far the ends run past
+    // it. The area is then deducted from the level ARITHMETICALLY, because the
+    // slab polygon is never cut, so the overhang comes off a permit figure that
+    // never had it. Silent, and always in the applicant's favour.
+    //
+    // ringInsideRing is the exported, harnessed predicate for exactly this, and
+    // areas.js asks it the same question about the same shapes. Boundary
+    // contact counts as inside there and here: a stair run flush to an exterior
+    // wall is on the slab, and refusing it would force back the sliver of floor
+    // this design exists to make unnecessary.
+    const floor = candidates.find(f => window.DraftGeometry2D.ringInsideRing(points, f.points));
     if (!floor) {
+      // Two refusals, because they are two different mistakes. An opening whose
+      // centre IS over a floor is the right idea in the wrong direction -- the
+      // drafter has room, just not this way -- so name the measured length and
+      // leave the anchor armed for a second click the other way. Anything else
+      // is a click the floor does not reach at all.
+      const centre = {
+        x: (points[0].x + points[2].x) / 2,
+        z: (points[0].z + points[2].z) / 2,
+      };
+      const overhangs = candidates.some(f => this._pointInOutline(f.points, centre));
       this.setState({
-        drawingMessage: 'The opening must land inside this level\'s floor — click along a wall the floor reaches.',
+        drawingMessage: overhangs
+          ? `This opening is ${formatArchitecturalInches(size.lengthIn)} long and runs off the floor`
+            + ' from here — click the other way, or start where the floor has that much length.'
+          : 'The opening must land inside this level\'s floor — click along a wall the floor reaches.',
         drawingMessageError: true,
       });
       return;
@@ -15884,7 +15913,7 @@ class Component extends DCLogic {
   // A stair that already has its opening keeps it untouched — delete the
   // opening and BUILD HOUSE again to re-derive it at the stair's spot.
   _buildStairOpenings() {
-    const result = { cut: 0, nudges: [] };
+    const result = { cut: 0, nudges: [], refused: [] };
     this._stairs.filter(stair => (stair.view || 'plan') === 'plan').forEach(stair => {
       if (this._surfaceOpenings.some(opening => opening.stairId === stair.id)) return;
       const descent = this._stairDescent(stair.levelId);
@@ -15892,22 +15921,57 @@ class Component extends DCLogic {
       const nudgedIn = this._stairAutoFit(stair);
       const points = this._stairOpeningFootprint(stair);
       if (!points || points.length < 3) return;
-      const centre = points.reduce((sum, pt) => ({
-        x: sum.x + pt.x / points.length,
-        z: sum.z + pt.z / points.length,
-      }), { x: 0, z: 0 });
-      const floor = this._floors.find(f => f.levelId === stair.levelId && f.structure !== 'slab'
-        && f.points.length >= 3 && this._pointInOutline(f.points, centre));
-      if (!floor) return;
-      // NOT GUARDED HERE, and deliberately so. The manual path checks the whole
-      // opening against its host (see _commitSurfaceOpening); this one is not
-      // drafter-drawn -- the footprint is generated from the stair and nudged
-      // in by _stairAutoFit -- and adding the same check refused every opening
-      // stair-opening.spec.js expects. Three specs went red, which says the
-      // generated footprint stands in a different relation to the floor
-      // polygon than a drawn one does (the opening is keyed to the wall FACE;
-      // the floor may be drawn to the centreline). That relation is unmeasured,
-      // so no guard goes here until it is.
+      // THE WHOLE FOOTPRINT, for the same reason the manual path asks it: the
+      // deduction is arithmetic, so an opening hanging off its slab is charged
+      // to a level that never had it and nothing downstream disagrees. The
+      // stair itself is already refused if its RUN will not fit inside the
+      // walls, but this opening's length comes from the headroom under the
+      // floor rather than from the stair's footprint, so a stair that fits can
+      // still generate a hole that does not.
+      const candidates = this._floors.filter(f => f.levelId === stair.levelId
+        && f.structure !== 'slab' && f.points.length >= 3);
+      const floor = candidates.find(f => window.DraftGeometry2D.ringInsideRing(points, f.points));
+      if (!floor) {
+        // REPORTED, not thrown and not silently skipped. Nobody is watching a
+        // single stair during BUILD HOUSE, so a skip with no trace is what
+        // makes a Boneyard run unexplainable -- the drafter gets a house with
+        // a stair and no hole and nothing said why. It rides back as data on
+        // the result the caller already reads.
+        const centre = points.reduce((sum, pt) => ({
+          x: sum.x + pt.x / points.length,
+          z: sum.z + pt.z / points.length,
+        }), { x: 0, z: 0 });
+        if (candidates.some(f => this._pointInOutline(f.points, centre))) {
+          result.refused.push(`${LEVEL_BUTTON_NAMES[stair.levelId] || `level ${stair.levelId}`}: the opening runs off the floor`);
+        }
+        return;
+      }
+      // NOT GUARDED HERE -- and the note that used to sit here was wrong twice.
+      //
+      // It said "the manual path checks the whole opening against its host (see
+      // _commitSurfaceOpening)". It does not, and neither does the function it
+      // cited: _commitSurfaceOpening's own comment opens "NOT GUARDED YET", and
+      // the manual path tests ONE POINT, the opening's centre. So both paths
+      // are centre-only, and this comment named a sibling as doing a check that
+      // sibling explicitly denies doing. That was never true at any commit, so
+      // no staleness sweep could have found it: a comment goes wrong the moment
+      // it describes a NEIGHBOUR rather than itself, because a reader cannot
+      // catch it without opening the other function.
+      //
+      // It then blamed the three red specs on the generated footprint standing
+      // "in a different relation to the floor polygon than a drawn one does
+      // (the opening is keyed to the wall FACE; the floor may be drawn to the
+      // centreline)", and called that relation unmeasured. The repository had
+      // already measured it: stair-opening.spec.js:69 states the offset as a
+      // constant and line 126 asserts it, and it resolves in the SAFE
+      // direction -- the interior face is 5 1/2" INSIDE the wall's drawn line,
+      // so keying to the face pushes the opening further into the floor, never
+      // out of it. _stairAutoFit nudges the generated footprint inward too.
+      //
+      // The three specs are red for arithmetic. The measured opening is 10'-5"
+      // long, the spec anchors it at x=2, and the floor's right edge is x=10:
+      // far edge 12.4167, overhang 2'-5". The fixture is artificial in
+      // PLACEMENT, not in dimension, and the specs pin a real defect.
       this._surfaceOpenings.push({
         id: this._newDrawingItemId('opening'),
         hostType: 'floor',
