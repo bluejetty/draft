@@ -130,6 +130,14 @@ const LEASE_HEARTBEAT_MS = LEASE_TTL_MS / 4;
 // never shared with a second tab, and a closed tab's lease still expires on the
 // TTL exactly as designed.
 //
+// KNOWN HOLE, STATED RATHER THAN LEFT TO BE FOUND: Chrome COPIES sessionStorage
+// into a duplicated tab. Duplicate a drafting tab and both copies present the
+// same holder id, so each is granted the lease as "already this holder" and both
+// believe they hold it — the one case where this mechanism is silently off. It
+// is not closable from here without a liveness ping between pages, which is a
+// new message shape and belongs to whoever argues for it. Reload is constant and
+// duplicating a drafting tab is rare, so the trade is taken deliberately.
+//
 // The ruling left this open (§6, "whether a lease survives its holder's reload")
 // and warned that a restored id could claim a lease the drafter meant to give
 // up. It cannot: `claimLease` still refuses a LIVE foreign holder, so a restored
