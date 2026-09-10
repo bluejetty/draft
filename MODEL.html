@@ -125,6 +125,20 @@
   #chrome label { display:flex; align-items:center; gap:6px;
     font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
     text-transform:uppercase; color: var(--ink-quiet); }
+  /* TIER 3c, and §3.4 of its order is the reason these are BUTTONS. The old
+     page deletes with a keybinding over a SELECT selection; this page's stated
+     drafter is on an iPad and has no keyboard, so a verb reachable only by
+     Ctrl/Delete is a verb half its audience cannot use. The key works too. */
+  #chrome button { font-family: var(--font-ui); font-size:12px; font-weight:600;
+    letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;
+    color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:6px; padding:6px 12px; }
+  #chrome button[hidden] { display:none; }
+  /* Armed. The accent is the page's one attention colour, and a drafter
+     mid-gesture must be able to see that the next tap draws. */
+  #chrome button.armed { color: var(--accent); border-color: var(--accent); }
+
   #chrome select { font-family: var(--font-ui); font-size:12px;
     color: var(--ink-primary); cursor:pointer;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
@@ -151,6 +165,8 @@
 <div id="chrome" hidden>
   <label>Level <select id="level-pick" data-level-pick></select></label>
   <label id="view-wrap">View <select id="view-pick" data-view-pick></select></label>
+  <button id="draw-wall" type="button" data-draw-wall>Draw wall</button>
+  <button id="delete-wall" type="button" data-delete-wall hidden>Delete wall</button>
 </div>
 <button id="save" type="button" data-model-save>SAVE</button>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
@@ -1267,6 +1283,19 @@
         // page (MODEL.dc.html:6956, immediately before the committed lines):
         // it is the one point the drafter must always be able to find.
         paintOrigin();
+        // THE HALF-DRAWN WALL'S ANCHOR. Without it the first tap of a
+        // two-tap gesture has no visible effect at all, which is
+        // indistinguishable from the tap not registering.
+        if (drawStart) {
+          const p = toS(drawStart);
+          ctx.save();
+          ctx.strokeStyle = skin['accent'];
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
     } catch (err) {
       // The throw above is only useful if someone SEES it. paint() runs on
@@ -1280,6 +1309,10 @@
       throw err;
     }
     ctx.restore();
+    // The delete affordance exists exactly while there is something to delete.
+    // A button that is always there and usually does nothing teaches a drafter
+    // to distrust it.
+    if (deleteButton) deleteButton.hidden = !selectedSeg;
     updateReadout();
   };
 
@@ -1634,11 +1667,249 @@
     return best;
   };
 
-  // ONE ENTRY PER COMPLETED DRAG, and an entry is a LIST of vertices: a corner
-  // drag moves one object, a wall drag moves two. The pool is what keeps even
-  // the two small — restoring those objects' numbers puts back every wall that
-  // travelled with them.
+  // ONE ENTRY PER GESTURE, and an entry KNOWS WHAT IT UNDOES.
+  //
+  // TIER 3c GENERALISED THIS, and it had to. Until 3c an entry was a bare list
+  // of vertices with the numbers they started with, and undo wrote those
+  // numbers back — which can only restore the POSITION of an object that still
+  // exists. A created wall has no position to go back to and a deleted one has
+  // no vertex left to write on, so create and delete were unrepresentable, not
+  // merely unimplemented.
+  //
+  // Three kinds now, and the old one is unchanged in behaviour:
+  //   { kind: 'move',   before }              the corner / wall drag, as before
+  //   { kind: 'add',    wall }                undo removes it again
+  //   { kind: 'remove', wall, index, deps }   undo puts it and its dependents back
+  //
+  // The pool is still what keeps 'move' small — restoring those objects'
+  // numbers puts back every wall that travelled with them. 'add' and 'remove'
+  // carry the wall RECORD, whose endpoints are the pooled objects themselves,
+  // so a re-added wall rejoins its corners by identity rather than by
+  // coordinate — which is the same reason the loader pools at all.
   const undoStack = [];
+
+  // ── TIER 3c: drawing a wall, and deleting one ─────────────────────────────
+  // THE FIRST RUNG THAT CREATES AND DESTROYS. Everything before it moved
+  // geometry that already existed; the whole write surface was a move-drag
+  // commit and an undo. So the rule here is not "make it work" but "make it
+  // indistinguishable from the old page's own writer", because the file has to
+  // keep opening there.
+  //
+  // MODEL.dc.html:14609 `_commitWall` is the single authority — the two chain
+  // committers (:11297, :21833) both funnel through it — and every field below
+  // is derived the way that function derives it. DERIVER on the left of the
+  // arrow, STORER on the right:
+  //
+  //   id          _newDrawingItemId('wall')  ->  `wall-${n}`, counter persisted
+  //                                              as nextDrawingItemId (:3559)
+  //   start/end   _mergeVertex(pt, levelId, homeView)  ->  the POOLED object
+  //   levelId     the active level's ID, never its index
+  //   view        _wallHomeView  ->  'foundation' on that set, else 'plan'
+  //   wallType    _contextWallType()  ->  validated against WALL_TYPES
+  //   baseHeight  state.wallBaseHeight  ->  number, 0
+  //   topHeight   state.wallTopHeight   ->  number, 8
+  //   refLine     state.wallRefLine     ->  'centre' folds to 'center'; 'left'
+  //   body/auto   NOT SET by _commitWall — conditional keys, never invented
+  //
+  // `auto: true` in particular would tell the old page's delete path this is
+  // generated geometry (:22218). A hand-drawn wall must not carry it.
+
+  // THE THREE WALL SETTINGS ARE PERSISTED, so they are read off the drawing
+  // rather than hardcoded here: MODEL.dc.html:3517-3519 writes wallRefLine,
+  // wallBaseHeight and wallTopHeight into every save. Reading them back is how
+  // a wall drawn on this page inherits the same settings the drafter last used
+  // on the old one, instead of this page having a private opinion. The
+  // fallbacks are the old page's own initial values (:2911-2913).
+  const wallSetting = (key, fallback) =>
+    (drawing && drawing[key] !== undefined && drawing[key] !== null) ? drawing[key] : fallback;
+
+  // MODEL.dc.html:9010 `_contextWallTypes` and :9016 `_contextWallType`,
+  // ported rather than re-decided. THE TWO LISTS ARE DISJOINT — foundation
+  // assemblies on one side, stud/insul on the other — so picking the wrong
+  // default is not a near miss, it is a wall of the wrong kind, silently.
+  // (No BONEYARD on this page, so that arm of the original is not ported; a
+  // level with no layer views returns every type, as viewId == null does there.)
+  const contextWallTypes = viewId => {
+    const WT = window.DraftWallTypes;
+    if (viewId == null) return WT.WALL_TYPES;
+    const isFdn = id => WT.FOUNDATION_WALL_TYPE_IDS.includes(id);
+    return viewId === 'foundation'
+      ? WT.WALL_TYPES.filter(t => isFdn(t.id))
+      : WT.WALL_TYPES.filter(t => !isFdn(t.id));
+  };
+  const contextWallType = viewId => {
+    const choices = contextWallTypes(viewId);
+    const active = wallSetting('activeWallType', null);
+    if (choices.some(t => t.id === active)) return active;
+    const want = viewId === 'foundation' ? 'concrete_8' : 'stud_2x6';
+    return (choices.find(t => t.id === want) || choices[0]).id;
+  };
+
+  // MODEL.dc.html:14614 `_wallHomeView`. A wall drawn on any set other than
+  // FOUNDATION lives in PLAN — pooling it under the ACTIVE view instead would
+  // let a foundation wall and a plan wall at the same coordinates share a
+  // corner they do not share on the old page.
+  const wallHomeView = viewId => (viewId === 'foundation' ? 'foundation' : 'plan');
+
+  // MODEL.dc.html:3224 `_newDrawingItemId`, and :5982 is why the counter must
+  // be BUMPED rather than left to heal itself. The old page's load takes
+  // Math.max(saved, highestSuffix + 1, 1) — a maximum, never a lowering. Draw
+  // wall-7, delete it, save without bumping: nothing survives carrying 7, the
+  // max does not rise, and the NEXT wall drawn anywhere is wall-7 again. The
+  // cascade below stops a door reattaching that way, but groups and level
+  // locks reference members by id too and this page passes both through
+  // untouched — so a stale group would adopt a brand-new wall nobody put in it.
+  const newDrawingItemId = kind => {
+    const next = Number.isInteger(drawing.nextDrawingItemId) ? drawing.nextDrawingItemId : 1;
+    drawing.nextDrawingItemId = next + 1;
+    return `${kind}-${next}`;
+  };
+
+  // The pool key is THREE VALUES plus coordinates — (levelId, viewId, body) —
+  // and mergeVertex is the same shared function the loader pools with, so a
+  // new endpoint landing on an existing corner returns THAT OBJECT. Anything
+  // else and mitring silently reverts to butt joints: no error, capped ends.
+  const poolVertex = (pt, levelId, viewId) =>
+    window.DraftGeometry2D.mergeVertex(vertexPool, pt, levelId, viewId, 'house');
+
+  // A corner is retired only when NOTHING still holds it. Identity, not
+  // coordinates: two corners at the same place are still two corners if the
+  // pool never merged them.
+  // Returns WHAT IT RETIRED, because undo has to put exactly those back — see
+  // the 'remove' branch. A retire that reports nothing forces undo to guess.
+  const retirePoolCorners = corners => {
+    const retired = [];
+    corners.forEach(corner => {
+      const held = drawing.walls.some(w => w.start === corner || w.end === corner);
+      if (held) return;
+      const at = vertexPool.indexOf(corner);
+      if (at >= 0) { vertexPool.splice(at, 1); retired.push(corner); }
+    });
+    return retired;
+  };
+
+  const commitWall = (startPt, endPt) => {
+    const { levelId, viewId } = onActiveLevel();
+    const homeView = wallHomeView(viewId);
+    const wall = {
+      id: newDrawingItemId('wall'),
+      start: poolVertex(startPt, levelId, homeView),
+      end: poolVertex(endPt, levelId, homeView),
+      levelId,
+      view: homeView,
+      wallType: contextWallType(viewId),
+      baseHeight: wallSetting('wallBaseHeight', 0),
+      topHeight: wallSetting('wallTopHeight', 8),
+      // 'center', not 'centre'. drawing-format.js:400 folds the British
+      // spelling on LOAD, but this page has no serializer — a record written
+      // with 'centre' reaches the file unvalidated and only the next load
+      // repairs it, moving the wall half an assembly thickness in between.
+      refLine: (raw => (raw === 'centre' ? 'center' : raw))(wallSetting('wallRefLine', 'left')),
+    };
+    drawing.walls.push(wall);
+    undoStack.push({ kind: 'add', wall });
+    markDirty();
+    return wall;
+  };
+
+  // DELETE CASCADES, IT DOES NOT REFUSE — MODEL.dc.html:22225-22251 does, and
+  // the round-trip proof is about the two pages agreeing on what delete MEANS.
+  // A refusal here would also need a message surface this page does not have
+  // for a drafter with no keyboard.
+  //
+  // Three referent classes, all riding through on the ...parsed spread and
+  // none of them validated on load — format.fenestrations and format.fixtures
+  // check levelId, type, width and offset and NEVER that the host wall exists
+  // (drawing-format.js:184-200, :229-245). So an orphan is invisible and
+  // persistent: it survives every save, paints nowhere, and returns the moment
+  // something is given its host's id.
+  const deleteWall = wall => {
+    const index = drawing.walls.indexOf(wall);
+    if (index < 0) return null;
+    drawing.walls.splice(index, 1);
+    const gone = wall.id;
+    const deps = [];
+    const cut = (list, doomed) => {
+      if (!Array.isArray(list)) return;
+      for (let i = list.length - 1; i >= 0; i--) {
+        if (!doomed(list[i])) continue;
+        deps.push({ list, index: i, item: list[i] });
+        list.splice(i, 1);
+      }
+    };
+    // A door or window whose host is gone.
+    cut(drawing.fenestrations, f => f && f.wallId === gone);
+    // A fixture by either anchor: the tub needs its faucet-END wall too.
+    cut(drawing.fixtures, f => f && (f.wallId === gone || f.endWallId === gone));
+    // AND GROUPS, which neither the order nor the review named. The old page
+    // runs _cleanupGroups() beside the cascade; groups reference members by
+    // {type, id}, so a group left holding a dead wall id adopts the next wall
+    // to be given it. Members go; a group emptied to fewer than two members
+    // is not a group, so it goes too.
+    if (Array.isArray(drawing.groups)) {
+      drawing.groups.forEach(group => {
+        cut(group && group.members, m => m && m.type === 'wall' && String(m.id) === gone);
+      });
+      cut(drawing.groups, g => g && Array.isArray(g.members) && g.members.length < 2);
+    }
+    // deps were collected newest-first per list; undo re-inserts in reverse so
+    // each splice lands at the index it was taken from.
+    deps.reverse();
+    const retired = retirePoolCorners([wall.start, wall.end]);
+    if (selectedSeg === wall) selectedSeg = null;
+    undoStack.push({ kind: 'remove', wall, index, deps, retired });
+    markDirty();
+    return wall;
+  };
+
+  // ── the draw gesture ──────────────────────────────────────────────────────
+  // TWO PRESSES, one wall. The first sets a start and the second commits, so
+  // the gesture works with a finger, a pen or a mouse without a drag — the old
+  // page's wall tool is press-press too (its chain committer is the same shape
+  // repeated).
+  //
+  // ARMED IS A MODE, and it is visible: the button carries the accent while
+  // the next tap will draw. A mode nobody can see is how a drafter loses a
+  // pan and gets a wall.
+  const drawButton = document.getElementById('draw-wall');
+  const deleteButton = document.getElementById('delete-wall');
+  let drawArmed = false;
+  let drawStart = null;
+
+  const setArmed = on => {
+    drawArmed = on;
+    drawStart = null;
+    drawButton.classList.toggle('armed', on);
+    canvas.style.cursor = on ? 'crosshair' : '';
+  };
+
+  // A drawn endpoint snaps to an existing corner exactly as a dragged one
+  // does, and for the same reason: landing ON a corner is what makes the join
+  // mitre. Nothing is moving during a draw, so nothing is excluded.
+  const drawPoint = at => cornerSnap(at, []) || { x: at.x, y: 0, z: at.z };
+
+  const drawPress = at => {
+    if (!drawStart) { drawStart = drawPoint(at); paint(); return; }
+    const end = drawPoint(at);
+    // A wall of no length is not a wall — the format drops anything under
+    // 1e-6 on load, so committing one would write a record that vanishes on
+    // the next open. Treat the second tap as a correction, not a commit.
+    if (Math.hypot(end.x - drawStart.x, end.z - drawStart.z) < 0.001) { drawStart = end; paint(); return; }
+    const wall = commitWall(drawStart, end);
+    // CHAINING, the old page's habit: the next wall starts where this one
+    // ended, so a room is four taps and not eight. The pooled END object is
+    // the start, so the corner is shared by identity.
+    drawStart = wall.end;
+    selectedSeg = wall;
+    paint();
+  };
+
+  drawButton.addEventListener('click', () => setArmed(!drawArmed));
+  deleteButton.addEventListener('click', () => {
+    if (!selectedSeg) return;
+    deleteWall(selectedSeg);
+    paint();
+  });
 
   // ── pan and zoom ──────────────────────────────────────────────────────────
   let dragging = null;
@@ -1649,6 +1920,11 @@
   canvas.addEventListener('pointerdown', e => {
     const rect = canvas.getBoundingClientRect();
     const at = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+    // ARMED TAKES THE PRESS WHOLE, before the corner/body hit test and before
+    // panning. Otherwise the first tap of a wall that starts on an existing
+    // corner would be read as grabbing that corner, and the drafter would drag
+    // the building instead of drawing against it.
+    if (drawArmed) { drawPress(at); return; }
     // VERTEX BEFORE BODY — the old page's own precedence (_findVertexHit at
     // MODEL.dc.html:16791, then _findLineHit at :16799). A press near a corner
     // is a corner press even though it is also on the wall.
@@ -1730,7 +2006,7 @@
       // A grab that never armed moved nothing, so there is nothing to undo —
       // and a snapshot pushed for it would make one Ctrl+Z do nothing visible.
       if (md.active) {
-        undoStack.push(md.before);
+        undoStack.push({ kind: 'move', before: md.before });
         markDirty();
       }
       moveDrag = null;
@@ -1775,23 +2051,81 @@
 
   window.addEventListener('keydown', e => {
     if (e.key === '0') { fit(); paint(); }
-    if (e.key === 'Escape' && selectedSeg) { selectedSeg = null; paint(); }
+    // ESCAPE IS THE OLD PAGE'S ESCAPE, measured rather than invented.
+    // MODEL.dc.html:22165-22172 does two things in ONE press: it cancels every
+    // in-progress gesture (_cancelWall among a dozen siblings) AND clears the
+    // selection. It does NOT put the tool down — activeTool survives, so the
+    // drafter who was drawing walls is still drawing walls.
+    //
+    // A ladder was tried here first — pending start, then the mode, then the
+    // selection, one press each — and it is wrong twice over: it takes two
+    // presses to reach the selection, and it disarms a tool the old page
+    // keeps. A drafter who learns Escape on one page would lose their tool on
+    // the other. The DRAW button is how this page puts the tool down, because
+    // it is the affordance a drafter with no keyboard can reach.
+    if (e.key === 'Escape') {
+      drawStart = null;
+      selectedSeg = null;
+      paint();
+      return;
+    }
+    // 3c TAKES THE WALL CASE ONLY. The old page's `delete` answers for walls,
+    // floors, roofs, fenestrations, surface openings, dimensions, fixtures and
+    // outline nodes at once (MODEL.dc.html:22209), behind a "this corner
+    // carries built geometry" refusal (:22196). This page can select a wall
+    // and nothing else, so the key does the one thing it can do and is silent
+    // on the rest — said out loud here because the drafter presses the same
+    // key for all of them and a silent no-op reads as a broken page.
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedSeg) {
+      e.preventDefault();
+      deleteWall(selectedSeg);
+      paint();
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
       const step = undoStack.pop();
       if (!step) return;
       e.preventDefault();
       // ONE PRESS IS ONE UNDO whether the press moved one corner or a wall's
-      // two: the entry is the list the drag captured, so a wall goes back in
-      // one keystroke rather than two.
-      step.forEach(b => {
-        b.vtx.x = b.x;
-        b.vtx.z = b.z;
-        // The offsets go BACK to what they were, not to a re-measure. Undo that
-        // recomputed them would leave the corner at its old position carrying a
-        // new offset — a different drawing from the one before the drag, and one
-        // whose difference nothing on screen would show.
-        if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
-      });
+      // two, drew a wall, or deleted one: the entry is whatever that gesture
+      // captured, so a wall goes back in one keystroke rather than two.
+      if (step.kind === 'move') {
+        step.before.forEach(b => {
+          b.vtx.x = b.x;
+          b.vtx.z = b.z;
+          // The offsets go BACK to what they were, not to a re-measure. Undo that
+          // recomputed them would leave the corner at its old position carrying a
+          // new offset — a different drawing from the one before the drag, and one
+          // whose difference nothing on screen would show.
+          if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
+        });
+      } else if (step.kind === 'add') {
+        const at = drawing.walls.indexOf(step.wall);
+        if (at >= 0) drawing.walls.splice(at, 1);
+        if (selectedSeg === step.wall) selectedSeg = null;
+        // AND RETIRE THE CORNERS IT INTRODUCED, or the pool keeps a phantom
+        // the next drawn wall snaps to — a corner belonging to a wall that no
+        // longer exists, invisible and magnetic.
+        retirePoolCorners([step.wall.start, step.wall.end]);
+      } else if (step.kind === 'remove') {
+        drawing.walls.splice(Math.min(step.index, drawing.walls.length), 0, step.wall);
+        // The dependents come back BY VALUE into the same raw arrays the
+        // cascade took them out of. They were never normalised on the way in
+        // (this page rides them through on the ...parsed spread), so putting
+        // the same objects back is the only restoration that is exact.
+        step.deps.forEach(d => { if (Array.isArray(d.list)) d.list.splice(Math.min(d.index, d.list.length), 0, d.item); });
+        // AND THE CORNERS GO BACK IN THE POOL. The restored wall already holds
+        // these objects — identity on the wall survives the round trip — but
+        // the pool is what the NEXT drawn endpoint searches. Leave them out
+        // and a wall drawn onto the restored free end mints a fresh object at
+        // the same coordinates instead of joining: every number right, the
+        // drawing right, and the mitre silently gone. That is the same class
+        // as the pooling mutation this rung's specs already caught, arriving
+        // through undo instead of through create.
+        (step.retired || []).forEach(corner => {
+          if (!vertexPool.includes(corner)) vertexPool.push(corner);
+        });
+      }
       // AN UNDO IS AN EDIT TOO. The drawing on screen no longer matches the
       // file — going back to where you started is only free if you never
       // saved the trip out.
