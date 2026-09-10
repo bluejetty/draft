@@ -330,3 +330,272 @@ test.describe('rung 3 — expiry and generation', () => {
         .toBe(seen.firstGen);
     });
 });
+
+// ── the pages ────────────────────────────────────────────────────────────────
+// The store gate above is the authority; these are about what the two model
+// pages do in front of it. A lease MODEL.html held and MODEL.dc.html ignored
+// would be a banner over a page still autosaving on every keystroke, so both
+// conversions are here.
+const h = require('./helpers');
+
+const BUCKET = 'model-drawing';
+const MAIN_FL = 3;
+
+const FIXTURE = {
+  format: 'draft-drawing', version: 1,
+  levels: [
+    { id: 8, name: 'SITE', elev: 0, visible: true },
+    { id: 7, name: 'ROOF', elev: 18, visible: true },
+    { id: 5, name: '2ND FL', elev: 9, visible: true },
+    { id: 3, name: 'MAIN FL', elev: 0, visible: true },
+    { id: 1, name: 'FOUNDATION', elev: -10, visible: true },
+  ],
+  walls: [
+    ['n', -10, -5, 10, -5], ['e', 10, -5, 10, 5],
+    ['s', 10, 5, -10, 5], ['w', -10, 5, -10, -5],
+  ].map(([id, sx, sz, ex, ez]) => ({
+    id, start: { x: sx, y: 0, z: sz }, end: { x: ex, y: 0, z: ez },
+    levelId: MAIN_FL, view: 'plan', wallType: 'stud_2x6',
+    baseHeight: 0, topHeight: 8, refLine: 'left',
+  })),
+  lines: [], floors: [], roofs: [], shapes: [], outlines: [], dimensions: [],
+  notes: [], underlays: [], fixtures: [], fenestrations: [], stairs: [],
+  nextDrawingItemId: 9,
+};
+
+const readStore = page => page.evaluate(async bucket => {
+  const file = await window.SharedFileStore.loadSharedFile(bucket);
+  return JSON.parse(await file.text());
+}, BUCKET);
+
+async function openNew(page, { seed = false } = {}) {
+  await page.goto('/MODEL.html?mode=night');
+  if (seed) {
+    await page.waitForFunction(() => !!window.SharedFileStore, null, { timeout: 10000 });
+    await page.evaluate(async ({ bucket, data }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(data)], 'drawing.json', { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, data: FIXTURE });
+    await page.goto('/MODEL.html?mode=night');
+  }
+  await expect(page.locator('#readout')).toContainText('walls 4/4', { timeout: 8000 });
+  return page;
+}
+
+const scaleOf = async page => {
+  const hit = (await page.locator('#readout').textContent()).match(/scale ([\d.]+) px\/ft/);
+  expect(hit, 'the readout publishes the scale').toBeTruthy();
+  return Number(hit[1]);
+};
+
+async function drawWallOn(page, points) {
+  const box = await page.locator('#plan').boundingBox();
+  const scale = await scaleOf(page);
+  await page.locator('[data-draw-wall]').click();
+  for (const [x, z] of points) {
+    const cx = box.width / 2 + x * scale;
+    const cy = box.height / 2 + z * scale;
+    expect(cx >= 0 && cx <= box.width && cy >= 0 && cy <= box.height,
+      `world (${x}, ${z}) is off-canvas — the tap would land nowhere`).toBe(true);
+    await page.mouse.click(box.x + cx, box.y + cy);
+    await page.waitForTimeout(60);
+  }
+  await page.keyboard.press('Escape');
+}
+
+const holdsLease = page => page.evaluate(() => document.body.dataset.leaseHeld);
+
+async function takeOverOn(page) {
+  await page.locator('[data-take-over]').click();
+  await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1', { timeout: 8000 });
+}
+
+test.describe('rung 3 — the pages in front of the gate', () => {
+
+  // ── 5 ──────────────────────────────────────────────────────────────────────
+  // ASSERTED AS DISABLED, NEVER CLICKED. A click on a disabled button is not a
+  // failing click — Playwright waits for it to become enabled and burns the
+  // whole test timeout, which is three minutes to say what one attribute says
+  // now. That is how the first repair pass arrived: hangs, not refusals.
+  test('a second page opens read-only, naming the holder', async ({ page, context }) => {
+    await openNew(page, { seed: true });
+    await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1', { timeout: 8000 });
+    const holder = await page.evaluate(() => window.SharedFileStore.leaseHolderId());
+
+    const second = await openNew(await context.newPage());
+    await expect(second.locator('body'),
+      'the second page must not hold the lease').toHaveAttribute('data-lease-held', '0', { timeout: 8000 });
+    await expect(second.locator('#save'),
+      'and SAVE is disabled rather than hidden — a missing button reads as a broken page')
+      .toBeDisabled();
+    await expect(second.locator('[data-lease-banner]')).toBeVisible();
+    await expect(second.locator('[data-lease-banner]'),
+      'and the banner names WHICH page has it, not merely that one does')
+      .toHaveAttribute('data-lease-holder', holder);
+  });
+
+  // ── 4 ──────────────────────────────────────────────────────────────────────
+  // THE TEST THAT WOULD HAVE CAUGHT §0. The old page writes on every edit; if it
+  // does that while MODEL.html holds the lease, the lease is decoration.
+  //
+  // MUTATION: drop the gate in `_markUnsaved`. Fails.
+  test('the old page\'s autosave cannot land while MODEL.html holds the lease',
+    async ({ page, context }) => {
+      await h.openModel(page, { rails: false, entryCoach: true });
+      await expect(page.locator('[data-entry-coach]')).toBeVisible({ timeout: 4000 });
+      await page.locator('[data-first-bone-press]').click();
+      await h.waitForSaved(page);
+      await h.openModel(page, { rails: true });
+      await h.openRails(page);
+      await h.waitForSaved(page);
+      const before = h.allLines(await h.savedDrawing(page)).length;
+
+      // MODEL.html takes the file.
+      const modern = await context.newPage();
+      await modern.goto('/MODEL.html?mode=night');
+      await expect(modern.locator('#readout')).toContainText('walls', { timeout: 8000 });
+      await takeOverOn(modern);
+      await expect(page.locator('body'),
+        'the old page must notice it lost the lease on its own heartbeat')
+        .toHaveAttribute('data-lease-held', '0', { timeout: 10000 });
+
+      // AND NOW IT EDITS ANYWAY.
+      await h.selectTool(page, 'Line');
+      await h.clickWorld(page, -4, 0);
+      await h.clickWorld(page, 4, 0);
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(1200);
+
+      // THE EFFECT BEFORE THE WORDING.
+      expect(h.allLines(await h.savedDrawing(page)),
+        'the old page must not have written — that is the whole of the lease')
+        .toHaveLength(before);
+      await expect(page.locator('[data-model-status]'),
+        'and the edit is kept, unsaved, not discarded').toHaveText('UNSAVED');
+      await expect(page.locator('[data-lease-banner]')).toBeVisible();
+
+      // AND THE DRAFTER STILL HAS IT. A gate that dropped the edit would be the
+      // eat wearing a lease.
+      await page.keyboard.press('Control+z');
+      await expect(page.locator('[data-model-drawing-message]'))
+        .toContainText('Undone', { timeout: 4000 });
+    });
+
+  // ── 6 ──────────────────────────────────────────────────────────────────────
+  // Someone loses work here; the ruling is only that they must CHOOSE to.
+  test('a taken-over dirty page is refused, not eaten', async ({ page, context }) => {
+    await openNew(page, { seed: true });
+    await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1', { timeout: 8000 });
+    await drawWallOn(page, [[-6, -2], [0, -2]]);
+    await expect(page.locator('#save')).toHaveText('UNSAVED');
+
+    const other = await openNew(await context.newPage());
+    await takeOverOn(other);
+
+    await expect(page.locator('body'),
+      'the first page loses it on its next heartbeat')
+      .toHaveAttribute('data-lease-held', '0', { timeout: 10000 });
+
+    // ITS COPY STAYS IN MEMORY, DIRTY. The wall it drew is still on screen and
+    // still absent from the store.
+    expect((await page.locator('#readout').textContent()).match(/walls (\d+)/)[1],
+      'the drafter\'s unsaved wall is still there').toBe('5');
+    expect((await readStore(page)).walls,
+      'and it never reached the store').toHaveLength(4);
+    await expect(page.locator('#save'), 'and it cannot write it').toBeDisabled();
+    await expect(page.locator('[data-lease-banner]')).toBeVisible();
+  });
+
+  // ── 7 ──────────────────────────────────────────────────────────────────────
+  // §3.4, THE RESUME PATH, at the page. The probe produced a 22.6-second freeze
+  // with the lease dead for 7.6s of it and the generation unchanged; without
+  // this the drafter comes back to a read-only page holding their dirty edits,
+  // which the ruling calls the sharpest edge in the design.
+  //
+  // The lease is aged rather than the page frozen: the test re-claims the page's
+  // OWN holder id with a 1ms ttl, which expires it without changing hands. What
+  // the page does next is the page's own heartbeat, unmodified.
+  //
+  // MUTATION: bump the generation on any re-claim. Fails.
+  test('a holder whose lease expired with nobody taking it resumes in silence',
+    async ({ page }) => {
+      await openNew(page, { seed: true });
+      await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1', { timeout: 8000 });
+      await drawWallOn(page, [[-6, -2], [0, -2]]);
+
+      const aged = await page.evaluate(async bucket => {
+        const S = window.SharedFileStore;
+        const mine = S.leaseHolderId();
+        const before = await S.readLease(bucket, 'model');
+        await S.claimLease(bucket, 'model', mine, { ttlMs: 1 });
+        return { gen: before.generation, dead: await S.readLease(bucket, 'model') };
+      }, BUCKET);
+      expect(aged.dead, 'the lease must really be expired before the wake-up').toBeNull();
+
+      // One heartbeat later, with nothing else touching it.
+      await page.waitForTimeout(6000);
+
+      expect(await holdsLease(page),
+        'the page resumed its own lease').toBe('1');
+      const now = await page.evaluate(bucket =>
+        window.SharedFileStore.readLease(bucket, 'model'), BUCKET);
+      expect(now.generation,
+        'and at the SAME generation — nobody took it, so nothing happened')
+        .toBe(aged.gen);
+      await expect(page.locator('[data-changed-elsewhere]'),
+        'so the drafter is told nothing at all: a banner here is a lie they act on')
+        .toBeHidden();
+      await expect(page.locator('#save'), 'and they can still save').toBeEnabled();
+    });
+
+  // THE FLUSH IS SAFE BECAUSE `ifRev` STILL APPLIES, and that was inherited
+  // rather than asserted until this test. An edit made while the page was
+  // read-only is written when the lease arrives — so if the bucket MOVED while
+  // it was read-only, that write must be refused, not land on top.
+  test('an edit held back by the gate is refused, not applied over a bucket that '
+    + 'moved underneath', async ({ page, context }) => {
+      await h.openModel(page, { rails: false, entryCoach: true });
+      await expect(page.locator('[data-entry-coach]')).toBeVisible({ timeout: 4000 });
+      await page.locator('[data-first-bone-press]').click();
+      await h.waitForSaved(page);
+      await h.openModel(page, { rails: true });
+      await h.openRails(page);
+      await h.waitForSaved(page);
+
+      const modern = await context.newPage();
+      await modern.goto('/MODEL.html?mode=night');
+      await expect(modern.locator('#readout')).toContainText('walls', { timeout: 8000 });
+      await takeOverOn(modern);
+      await expect(page.locator('body')).toHaveAttribute('data-lease-held', '0', { timeout: 10000 });
+
+      // The old page edits while it cannot write. The edit is held back.
+      await h.selectTool(page, 'Line');
+      await h.clickWorld(page, -4, 0);
+      await h.clickWorld(page, 4, 0);
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(400);
+
+      // AND THE BUCKET MOVES UNDERNEATH IT — an ungated writer, the one kind the
+      // lease does not cover.
+      await modern.evaluate(async bucket => {
+        const file = await window.SharedFileStore.loadSharedFile(bucket);
+        const drawing = JSON.parse(await file.text());
+        drawing.walls[0].start.z -= 3;
+        await window.SharedFileStore.saveSharedFile(
+          new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), bucket);
+      }, BUCKET);
+      const theirs = (await readStore(page)).walls[0].start.z;
+
+      // The old page gets the lease back and flushes what it held.
+      await page.locator('[data-take-over]').click();
+      await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1', { timeout: 8000 });
+      await page.waitForTimeout(1500);
+
+      expect((await readStore(page)).walls[0].start.z,
+        'the flushed write must have been refused on `ifRev`, not applied over '
+        + 'the corner that moved while this page was read-only')
+        .toBeCloseTo(theirs, 6);
+      await expect(page.locator('[data-model-status]'),
+        'and the drafter still has their line, unsaved').toHaveText('UNSAVED');
+    });
+});
