@@ -506,6 +506,54 @@ test.describe('rung 3 — the pages in front of the gate', () => {
     await expect(page.locator('[data-lease-banner]')).toBeVisible();
   });
 
+  // THE PRESS-THEN-LOSE RACE, and the only thing that exercises MODEL.html's
+  // half of the STORE gate.
+  //
+  // The page refuses its own write when it knows it is read-only, and that guard
+  // is what tests 5 and 6 above measure. But it means the `lease` argument the
+  // page hands the store is never actually tested by them: drop it and every one
+  // of those still passes, because the page never gets far enough to need it.
+  // That mutation (L8) survived the first table, which is what this test is for.
+  //
+  // The window is real, not contrived. A page learns it lost the lease on its
+  // next heartbeat, TTL/4 away, and a drafter can press SAVE inside that window —
+  // believing, correctly as far as it knows, that it still holds the file. The
+  // store is the only thing standing there.
+  //
+  // MUTATION: drop the `lease` argument from MODEL.html's save. Fails — the write
+  // lands.
+  test('a save pressed in the window before the page learns it lost the lease is '
+    + 'refused by the store', async ({ page, context }) => {
+      await openNew(page, { seed: true });
+      await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1', { timeout: 8000 });
+      await drawWallOn(page, [[-6, -2], [0, -2]]);
+      await expect(page.locator('#save')).toHaveText('UNSAVED');
+
+      const other = await openNew(await context.newPage());
+      await takeOverOn(other);
+
+      // INSIDE THE HEARTBEAT WINDOW, and checked rather than hoped: if this page
+      // has already noticed, SAVE is disabled and the press below would wait for
+      // an enabled button until the test times out. Better to say so here.
+      expect(await holdsLease(page),
+        'this page must still BELIEVE it holds the lease — the heartbeat beat the '
+        + 'test to it, so the race this stands in front of was not staged')
+        .toBe('1');
+
+      await page.locator('#save').click();
+      await page.waitForTimeout(1200);
+
+      // THE EFFECT BEFORE THE WORDING.
+      expect((await readStore(page)).walls,
+        'the store must have refused it: this page presented a generation that is '
+        + 'no longer current, and nothing but the store was left to notice')
+        .toHaveLength(4);
+      await expect(page.locator('#save'),
+        'and the drafter still has the edit, unsaved').toHaveText('UNSAVED');
+      await expect(page.locator('[data-lease-banner]'),
+        'and now the page knows too').toBeVisible();
+    });
+
   // ── 7 ──────────────────────────────────────────────────────────────────────
   // §3.4, THE RESUME PATH, at the page. The probe produced a 22.6-second freeze
   // with the lease dead for 7.6s of it and the generation unchanged; without
