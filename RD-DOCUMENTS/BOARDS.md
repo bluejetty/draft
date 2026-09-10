@@ -494,6 +494,21 @@ could not: that a drafter sees it. **It asserts absence as well as presence**,
 which is the half that matters — a banner that appears once and never leaves
 is a bug a presence-only test passes on.
 
+**Two counting traps on the way to that table, either of which gives the
+opposite answer.** A direct grep for `DraftDesignNotices.<fn>(` reports **zero**
+for `MODEL.dc.html`: the call goes through a `const N = window.DraftDesignNotices`
+alias, so the module reads as unused exactly where it is used. And an export list
+built by *shape* (`grep -E '^\s+[a-zA-Z]+,'`) picks up object-literal keys and
+local consts — it reported `placedRiseFt` as an export when it is a local inside
+`stairRefitNotice` and a field of its return value. The real surface is the frozen
+object at `design-notices.js:167`, and two of its five entries (`formatFtIn`,
+`formatIn`) are harness-only, which the module says in its own comment. Read the
+export statement, not something that resembles one.
+
+**`MODEL.html` references it zero times**, which is the number Tier 3 watches:
+when a rung makes the new page reach for this module, that is a
+module-review-gate event, not an adoption one.
+
 **So there is no adoption board to open.** The one case still unwired is
 deliberate, not forgotten: pressing BUNGALOW on a drawing with a built OVER
 GARAGE belongs to board #333, whose build row is not on main, and the module
@@ -502,37 +517,109 @@ harness for the wrong reason. Both stale sentences are corrected in place.
 
 ---
 
-### design-notices.js is NOT zero-callers any more — no adoption board needed
+### FINDING — the stair tool tests the CENTRE of an opening, in two places
 
-Tier 3 gate duty asked me to confirm that `design-notices.js` (built in #318)
-still has no callers. **It does not — it was adopted, and the check is what
-found it.** It got them in `a824547`, "design-notices.js gets its callers"
-(PR #334), whose spec asserts absence as well as presence. Measured on main
-`3ed8f1e`:
+Found while fixing `areas.js` (verdict 2, `308941d`). **Written up, not patched:
+it is old-page interaction and a different lane.**
 
-| export | caller |
+`_commitSurfaceOpening` carries a written refusal to wire `ringInsideRing`,
+because doing so *"turns three stair-opening specs red"*, with the captured
+geometry:
+
+```
+opening  [[2, 0.4583], [12.4167, 0.4583], [12.4167, 3.5417], [2, 3.5417]]
+host     [[-10, 0],    [10, 0],           [10, 12],          [-10, 12]]
+```
+
+and closes: *"Either that footprint is wrong and the specs pin a defect, or the
+scenario is artificial. That is a ruling."* **It is a defect, and it sits in the
+stair tool rather than in the arithmetic.**
+
+`_handleStairOpeningClick` does check containment before committing — and checks
+**the centre of the rectangle and nothing else**:
+
+```js
+const centre = { x: (points[0].x + points[2].x) / 2, z: (points[0].z + points[2].z) / 2 };
+const floor = this._floors.find(f => ... && this._pointInOutline(f.points, centre));
+```
+
+The opening is 10'-5" long, anchored at `x=2` on a floor ending at `x=10`, so
+the centre sits at ~7.2 — comfortably inside — while the far end is 2'-5" past
+the slab. The tool's own refusal says *"The opening must land inside this
+level's floor"* and means it; the test it uses cannot deliver it. All three red
+specs are the same click pair copy-pasted.
+
+**It is in TWO places, not one.** The order that surfaced this named
+`_handleStairOpeningClick`; `_buildStairOpenings` — BUILD HOUSE's automatic
+openings — repeats the same centroid-only test:
+
+| site | method |
 |---|---|
-| `stairRefitNotice` | `MODEL.dc.html:22758`, through a `const N = window.DraftDesignNotices` alias |
-| `garageDoorHeadNotice` | `PROJECT.html:1544` |
-| `garageDoorHeadLimitIn` | `PROJECT.html:1556` |
-| `formatFtIn`, `formatIn` | the harness only — and the module's own comment says so |
+| `MODEL.dc.html:15861` | `_handleStairOpeningClick()` — the drafter's click |
+| `MODEL.dc.html:15900` | `_buildStairOpenings()` — BUILD HOUSE, automatic |
 
-Every behavioural export has a caller, and `tests/design-notices-wired.spec.js`
-covers both live sites: the garage-door notice on PROJECT.html, the stair-refit
-notice on MODEL.dc.html. **No adoption board is needed.**
+So it is not a one-line fix. Both want the same `ringInsideRing(points,
+f.points)` in place of the centre test, and a fix landing on only the first
+leaves every automatically-cut opening unguarded. (`:13133` also tests a centre
+but is the garage-slab coverage check, a different question — left alone.)
 
-**MODEL.html — the new page — references it zero times**, which is the number
-that matters for Tier 3: whenever a rung makes the new page reach for this
-module the first time, that is a module-review-gate event, not an adoption one.
+**Not artificial, and not legitimate either.** It is a placement a drafter
+reaches honestly — the stair does not fit between the click and the far wall —
+which the tool accepts and the arithmetic then charged for, silently, from the
+opposite end. When the guard lands, those three specs move their anchor click to
+where the opening fits and go green on their own terms. Moving the clicks
+*before* the fix would be editing tests to pass.
 
-**Two counting traps on the way to that table, both worth the warning.** A
-direct grep for `DraftDesignNotices.<fn>(` reports **0** for `MODEL.dc.html`,
-because the call goes through the `N` alias — the module looks unused there and
-is not. And an export list built with `grep -E '^\s+[a-zA-Z]+,'` picks up
-object-literal keys and local consts: it reported `placedRiseFt` as an export
-when it is a local inside `stairRefitNotice` and a field of its return value.
-The real surface is the frozen object at `design-notices.js:167`. Read the
-export statement, not a shape that resembles one.
+**A comment at the second site cites an authority that refutes it.**
+`_buildStairOpenings` explains itself with:
+
+> *"NOT GUARDED HERE, and deliberately so. The manual path checks the whole
+> opening against its host (see `_commitSurfaceOpening`)"*
+
+`_commitSurfaceOpening`'s own comment, ~270 lines away, opens *"NOT GUARDED
+YET"*. Neither half of the claim is true — the manual path checks the centre,
+and the function it points at checks nothing — and the false half is
+load-bearing, since it is the stated reason the automatic path goes unguarded.
+Sweep that sentence with the fix.
+
+**But the same comment raises a real question the fix must answer first**, and
+it is not stale:
+
+> *"the opening is keyed to the wall FACE; the floor may be drawn to the
+> centreline. That relation is unmeasured, so no guard goes here until it is."*
+
+A generated footprint may sit against the floor polygon differently from a drawn
+one, by half a wall thickness. So this is not "swap the centre test for
+`ringInsideRing` in two places" — the automatic path needs that relation
+measured first, or the guard will refuse openings that are correctly placed.
+That measurement is the actual first task, and it is why the two sites are not
+one change repeated twice.
+
+**Ruled (Devin, 9 Sep): it does not block the `areas.js` repair, and the
+direction is worth stating because it is the reassuring one.** Work the two
+cases through:
+
+| how the floor is drawn | where a face-keyed opening sits |
+|---|---|
+| to the wall **centreline** | **strictly inside** the floor ring, by half a wall thickness — the centreline polygon is the larger one |
+| to the **interior face** | exactly **on** the ring, and boundary counts as inside |
+
+So neither case puts a correctly-placed opening outside, and no tolerance is
+needed for the arithmetic. (The ruling as first written said such an opening
+"lands on the ring"; that describes the second row only. The first row is
+strictly inside, which is a stronger result, not a weaker one.)
+
+What it *does* block is a tolerance-free pass/fail in the **stair tool's**
+future guard: an opening over by an inch and one over by four feet must not
+report the same, so that guard should carry the measured overhang rather than a
+bare boolean, and the half-a-wall-thickness case wants naming in its harness
+with the measurement attached. If floors turn out to be drawn to centreline
+systematically, that is a wall-thickness offset applied once at the comparison —
+never a change to `ringInsideRing`, which is the shared containment primitive
+and has its own harness.
+
+**Until it lands, the AREAS dialog line is what the drafter sees**, and on those
+drawings it is telling the truth about a real overhang.
 
 ---
 

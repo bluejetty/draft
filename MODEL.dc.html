@@ -1088,7 +1088,7 @@
             <div style="font-size:10px; color:rgba(29,31,32,0.45);">{{ row.sourceNote }}</div>
             <div data-areas-net style="margin-left:auto; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600;">{{ row.netLabel }}</div>
           </div>
-          <div style="margin-top:3px; font-size:11px; color:rgba(29,31,32,0.62);">gross {{ row.grossLabel }} <span data-areas-less style="color:#b04050;">{{ row.lessLabel }}</span> <span style="color:rgba(29,31,32,0.45);">{{ row.garageLabel }}</span></div>
+          <div style="margin-top:3px; font-size:11px; color:rgba(29,31,32,0.62);">gross {{ row.grossLabel }} <span data-areas-less style="color:#b04050;">{{ row.lessLabel }}</span> <span style="color:rgba(29,31,32,0.45);">{{ row.garageLabel }}</span> <span data-areas-excluded style="color:#b04050;">{{ row.excludedLabel }}</span></div>
           <div data-areas-rooms style="margin-top:4px; font-size:11px; line-height:1.5; color:rgba(29,31,32,0.72);">{{ row.roomsLine }}</div>
         </div>
       </sc-for>
@@ -5345,6 +5345,31 @@ class Component extends DCLogic {
         // that level's net or in the building total (audit Q16) — the wording
         // has to say so, or the numbers look like they don't add up.
         garageLabel: row.garageSqFt > 0 ? `garage ${sq(row.garageSqFt)}, excluded` : '',
+        // AN OPENING THAT IS NOT ON THIS FLOOR was not deducted, and the row
+        // says so rather than just printing a bigger number. Silence is the
+        // failure mode this fix exists to end: the old arithmetic deducted the
+        // hole wherever it sat, so a stair opening drifted off the slab came
+        // off the permit figure and nothing on screen disagreed.
+        //
+        // ONE WORDING FOR BOTH SHAPES, against the order's preference and by
+        // its own invitation to overrule with a measurement. Kevin thought a
+        // half-off opening more alarming than one floating loose and wanted
+        // them read differently. Telling them apart means asking whether the
+        // opening PARTLY overlaps the floor -- which is polygon intersection,
+        // the routine that ruled out clipping in the first place and that the
+        // repo still does not have. The cheap substitute, testing whether any
+        // corner is inside, would be a second containment rule beside
+        // ringInsideRing: the level-assembly duplication over again, and wrong
+        // besides, since a bar can cross a floor with no corner on it.
+        //
+        // The wording carries the count instead, which is honest about what is
+        // known. Both shapes mean the same thing to the drafter -- the drawing
+        // is wrong and this figure is not what they think -- and the plan is
+        // where the difference is visible.
+        excludedLabel: row.excludedOpenings > 0
+          ? `${row.excludedOpenings} floor opening${row.excludedOpenings === 1 ? ' is' : 's are'} `
+            + 'not on this floor \u2014 not deducted'
+          : '',
         netLabel: row.netSqFt === null ? '\u2014' : sq(row.netSqFt),
         roomsLine: row.rooms.map(room => `${room.name} ${room.areaSqFt}`).join(' \u00b7 '),
       })),
