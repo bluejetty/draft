@@ -6222,8 +6222,18 @@ class Component extends DCLogic {
     } else {
       // The generation moves only on a change of holder, so a page whose lease
       // merely expired while nobody wanted it resumes here in silence (§3.4).
+      const gained = this._leaseGeneration === null;
       this._leaseGeneration = got.generation;
       this._leaseHolder = null;
+      // AND WHATEVER THE GATE HELD BACK NOW GOES OUT. A claim is asynchronous,
+      // so the first edits of a session can land before it resolves, and a page
+      // that took the lease back after a takeover is holding work nothing else
+      // will ever write. Both are the same case: we may write, and there is
+      // something to write.
+      if (gained && this._drawingReady && !this._loadingDrawing
+          && this.state.persistenceStatus === 'UNSAVED') {
+        this._queueDrawingWrite();
+      }
     }
     this._paintLease();
     return got.ok;
@@ -6599,7 +6609,17 @@ class Component extends DCLogic {
     // while dirty never discards the drafter's work, it only stops writing it.
     // Gating earlier would drop the edit; gating later would queue the write.
     if (!this._holdsLease()) return;
+    this._queueDrawingWrite();
+  }
 
+  // The write itself, split out from `_markUnsaved` because there are now TWO
+  // ways to arrive at it. The second is the important one: an edit made while
+  // this page did not hold the lease was recorded and shown UNSAVED but never
+  // written, and without this it would stay that way forever — the gate would
+  // have turned "not yet" into "never", which is a quieter version of the eat
+  // this whole ruling exists to remove. When the lease arrives, whatever is
+  // outstanding goes out.
+  _queueDrawingWrite() {
     const generation = (this._saveGeneration || 0) + 1;
     this._saveGeneration = generation;
     const file = this._drawingFile();
