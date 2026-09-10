@@ -124,10 +124,11 @@ test.describe('rung 3 — the lease lives in its own key', () => {
         await S.claimLease(bucket, scope, 'holder-a', { ttlMs: 15000 });
         await S.releaseLease(bucket, scope, 'holder-b');       // not the holder
         const afterStranger = await S.readLease(bucket, scope);
+        const held = await S.claimLease(bucket, scope, 'holder-a', { ttlMs: 15000 });
         await S.releaseLease(bucket, scope, 'holder-a');       // the holder
         const afterHolder = await S.readLease(bucket, scope);
         const reclaim = await S.claimLease(bucket, scope, 'holder-b', { ttlMs: 15000 });
-        return { afterStranger, afterHolder, reclaim };
+        return { afterStranger, afterHolder, reclaim, firstGen: held.generation };
       }, { bucket: PROBE, scope: SCOPE });
 
       expect(seen.afterStranger?.holderId,
@@ -135,6 +136,16 @@ test.describe('rung 3 — the lease lives in its own key', () => {
         + 'the page that does').toBe('holder-a');
       expect(seen.afterHolder, 'the holder released it').toBeNull();
       expect(seen.reclaim.ok, 'so the next page gets it').toBe(true);
+      // THE GENERATION NEVER GOES BACKWARDS, which is why a released lease is
+      // expired rather than deleted. Delete the record and the next holder
+      // starts at 1 again — and a generation that can repeat is one a stale
+      // page's saved generation can match, which is the resume path's guard
+      // silently inverted.
+      //
+      // MUTATION: delete the key on release instead of expiring it. Fails here.
+      expect(seen.reclaim.generation,
+        'a new holder after a release is a new generation, not a reused one')
+        .toBeGreaterThan(seen.firstGen);
     });
 });
 

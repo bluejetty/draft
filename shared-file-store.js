@@ -143,7 +143,7 @@ const liveLease = (record, now) =>
 // NOT ANNOUNCED on the rung-2 broadcast. `announce()` carries a DATA revision
 // and a lease operation has none; if pages ever need to hear about lease
 // changes that is a different message shape and it needs its own argument.
-function claimLease(bucket, scope, holderId, { ttlMs = LEASE_TTL_MS } = {}) {
+function claimLease(bucket, scope, holderId, { ttlMs = LEASE_TTL_MS, takeover = false } = {}) {
   return withDb(db => new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     const key = leaseKey(bucket, scope);
@@ -156,7 +156,13 @@ function claimLease(bucket, scope, holderId, { ttlMs = LEASE_TTL_MS } = {}) {
       const now = Date.now();
       const current = (req.result && typeof req.result === 'object') ? req.result : null;
       const held = liveLease(current, now);
-      if (held && held.holderId !== holderId) {
+      // TAKE OVER SEIZES A LIVE LEASE, and it is the only thing that may. The
+      // ruling requires the press (§2) and gives claimLease no way to force one,
+      // so it is a NAMED ARGUMENT rather than a second function: a takeover is a
+      // deliberate act by a person who has read a banner, and it must never be
+      // something a heartbeat can do by accident. The generation bumps as for any
+      // change of holder, which is exactly how the loser finds out.
+      if (held && held.holderId !== holderId && !takeover) {
         // A REFUSAL WRITES NOTHING. Not the lease, and certainly not the
         // records: a page that asked and was told no has changed nothing.
         outcome = {
