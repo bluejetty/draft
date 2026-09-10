@@ -115,6 +115,41 @@ const leaseKey = (bucket, scope) => `${bucket}::lease:${scope}`;
 const LEASE_TTL_MS = 15000;
 const LEASE_HEARTBEAT_MS = LEASE_TTL_MS / 4;
 
+// THE HOLDER ID SURVIVES THIS TAB'S OWN RELOAD, and it has to.
+//
+// MEASURED, not assumed: claim the lease, reload the tab, read the lease back.
+// The record comes back byte-identical — same holder, same `until`, same
+// generation — because the `pagehide` release does not land on a reload, which
+// is what the ruling's own probe found and why §3.4 forbids depending on it. The
+// reloaded page then arrives with a fresh `writerId`, fails to match the holder,
+// and sits READ-ONLY IN ITS OWN DRAWING for the rest of the TTL. On the old page
+// that gates autosave off for the same window. A drafter pressing F5 is not an
+// edge case.
+//
+// `sessionStorage` is per-tab and dies with the tab, so: it survives F5, it is
+// never shared with a second tab, and a closed tab's lease still expires on the
+// TTL exactly as designed.
+//
+// The ruling left this open (§6, "whether a lease survives its holder's reload")
+// and warned that a restored id could claim a lease the drafter meant to give
+// up. It cannot: `claimLease` still refuses a LIVE foreign holder, so a restored
+// id can only ever reclaim something nobody else is holding. It removes the
+// self-lockout without buying any power to steal.
+const LEASE_HOLDER_KEY = 'draft-lease-holder';
+let leaseHolder = null;
+function leaseHolderId() {
+  if (leaseHolder) return leaseHolder;
+  try {
+    const kept = sessionStorage.getItem(LEASE_HOLDER_KEY);
+    if (kept) { leaseHolder = kept; return leaseHolder; }
+  } catch (error) { /* private windows and blocked site data both throw */ }
+  // Falls back to the per-page-instance id, which is the pre-reload behaviour:
+  // no worse than not having it.
+  leaseHolder = writerId;
+  try { sessionStorage.setItem(LEASE_HOLDER_KEY, leaseHolder); } catch (error) { /* as above */ }
+  return leaseHolder;
+}
+
 class LeaseError extends Error {
   constructor(bucket, scope, held) {
     super(held
@@ -479,7 +514,7 @@ window.SharedFileStore = {
   saveNamedFile, loadNamedFile, removeNamedFile,
   readBucket, StaleWriteError,
   onBucketChanged, writerId,
-  claimLease, renewLease, releaseLease, readLease, LeaseError,
+  claimLease, renewLease, releaseLease, readLease, LeaseError, leaseHolderId,
   LEASE_TTL_MS, LEASE_HEARTBEAT_MS,
 };
 }

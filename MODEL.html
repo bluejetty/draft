@@ -2504,7 +2504,7 @@
   // ONE ID PER PAGE INSTANCE, and it is rung 2's `writerId` rather than a second
   // one. A page that ignored its own broadcast under one identity and held the
   // lease under another would have two answers to "is this me".
-  const holderId = () => window.SharedFileStore.writerId;
+  const holderId = () => window.SharedFileStore.leaseHolderId();
   let leaseGeneration = null;   // the generation we hold, or null when we do not
   let leaseHolder = null;       // whoever holds it instead, so the banner can say
   let leaseTimer = null;

@@ -6140,7 +6140,6 @@ class Component extends DCLogic {
     }
     this._loadDrawing();
     this._watchStoreChanges();
-    this._startEditLease();
   }
 
   // RULING-autosave-two-writers.md §2, §3.1-3.2, RUNG 3 — the named edit lease.
@@ -6196,7 +6195,7 @@ class Component extends DCLogic {
     // Best effort, and nothing depends on it (§3.4). The TTL is the backstop.
     window.addEventListener('pagehide', () => {
       if (!this._holdsLease()) return;
-      store.releaseLease(MODEL_STORAGE_BUCKET, MODEL_LEASE_SCOPE, store.writerId).catch(() => {});
+      store.releaseLease(MODEL_STORAGE_BUCKET, MODEL_LEASE_SCOPE, store.leaseHolderId()).catch(() => {});
     });
   }
 
@@ -6211,7 +6210,7 @@ class Component extends DCLogic {
   async _askForLease({ takeover = false } = {}) {
     const store = window.SharedFileStore;
     const got = await store.claimLease(
-      MODEL_STORAGE_BUCKET, MODEL_LEASE_SCOPE, store.writerId,
+      MODEL_STORAGE_BUCKET, MODEL_LEASE_SCOPE, store.leaseHolderId(),
       { ttlMs: store.LEASE_TTL_MS, takeover });
     if (!got.ok) {
       // READ-ONLY, AND NOTHING OF THE DRAFTER'S IS DISCARDED. Whatever is
@@ -7118,6 +7117,15 @@ class Component extends DCLogic {
     this._boneTick = setInterval(() => this._refreshBoneWallet(true), 60000);
     this._invalidate();
     this._animate();
+
+    // THE LEASE STARTS HERE, NOT IN _openDrawing. componentDidMount calls
+    // _openDrawing straight away but defers _init behind two animation frames
+    // (:3084, and the note at :3177 names the same hazard), so anything started
+    // from the load path runs before this page's own fields exist —
+    // `this._history` among them. Rung 2's watcher survives out there because it
+    // only subscribes; the lease renders, writes and reads page state, so it
+    // belongs where the page is actually built.
+    this._startEditLease();
   }
 
   // Nothing in a drafting view moves on its own, so frames are drawn on demand:
