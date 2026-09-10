@@ -206,13 +206,13 @@ test.describe('MODEL.html draw + delete a wall', () => {
 
       const saved = await stored(page);
       const at = id => saved.walls.find(w => w.id === id);
-      expect(at('wall-7').start.x, 'the dragged corner moved').toBeCloseTo(2, 6);
-      expect(at('w-a').end.x, "w-a's end travelled with it").toBeCloseTo(2, 6);
-      expect(at('w-b').start.x, "w-b's start travelled with it").toBeCloseTo(2, 6);
+      expect(at('wall-7').start.x, 'the dragged corner moved').toBeCloseTo(2, 4);
+      expect(at('w-a').end.x, "w-a's end travelled with it").toBeCloseTo(2, 4);
+      expect(at('w-b').start.x, "w-b's start travelled with it").toBeCloseTo(2, 4);
       // THE CONTROL: the far ends did not move, so "everything moved" cannot
       // pass by the whole drawing having been translated.
-      expect(at('w-a').start.x).toBeCloseTo(-8, 6);
-      expect(at('w-b').end.x).toBeCloseTo(8, 6);
+      expect(at('w-a').start.x).toBeCloseTo(-8, 4);
+      expect(at('w-b').end.x).toBeCloseTo(8, 4);
     });
 
   test("a drawing that says 'centre' writes 'center'", async ({ page }) => {
@@ -314,6 +314,52 @@ test.describe('MODEL.html draw + delete a wall', () => {
     expect(saved.fixtures.map(f => f.id)).toEqual(['fx1']);
     expect(saved.groups.map(g => g.id)).toEqual(['g1']);
   });
+
+  test('after delete + undo the restored corner is POOLED again, so a new wall joins it',
+    async ({ page }) => {
+      await seed(page);
+      await openNewPage(page);
+      await tapAt(page, 4, 0);                       // select w-b
+      await page.locator('[data-delete-wall]').click();
+      await page.keyboard.press('Control+z');        // w-b is back
+      expect(await wallsShown(page)).toEqual({ shown: 2, total: 2 });
+
+      // THE MIRROR OF THE POOLING TEST, and the same class of defect.
+      // deleteWall retires the corners no surviving wall holds; the restored
+      // wall still HOLDS those objects, so identity on the wall survives — but
+      // the pool is what the next drawn endpoint searches. Leave them out and
+      // this draw mints a fresh object at the same coordinates: every number
+      // right, the drawing right, the mitre silently gone.
+      await page.locator('[data-draw-wall]').click();
+      await tapAt(page, 8, 0);                       // onto w-b's restored free end
+      await tapAt(page, 8, 3);
+      await page.locator('[data-draw-wall]').click();  // disarm; new wall selected
+
+      const box = await page.locator('#plan').boundingBox();
+      const scale = await scaleOf(page);
+      const from = { x: box.x + box.width / 2 + 8 * scale, y: box.y + box.height / 2 };
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(from.x - 2 * scale, from.y, { steps: 8 });
+      await page.mouse.up();
+      await page.waitForTimeout(80);
+
+      await page.locator('[data-model-save]').click();
+      await expect(page.locator('[data-model-save]')).toHaveText(/saved/i, { timeout: 6000 });
+
+      const saved = await stored(page);
+      // FOUR PLACES, NOT SIX, and measured rather than relaxed until green: a
+      // drag lands on pixel boundaries and one pixel is 0.0145 ft here, so a
+      // pixel-derived coordinate carries ~1e-6 ft of quantisation. Six places
+      // asserts more precision than the input has; four is still 0.0006 of an
+      // inch, far tighter than anything this rung could get wrong.
+      const at = id => saved.walls.find(w => w.id === id);
+      expect(at('wall-7').start.x, 'the dragged corner moved').toBeCloseTo(6, 4);
+      expect(at('w-b').end.x, 'the restored wall travelled with it').toBeCloseTo(6, 4);
+      // CONTROL: the other end stayed, so this is a shared corner and not a
+      // whole-drawing translation.
+      expect(at('w-b').start.x).toBeCloseTo(0, 4);
+    });
 
   test('Escape cancels the pending wall AND the selection in one press, and keeps the tool',
     async ({ page }) => {

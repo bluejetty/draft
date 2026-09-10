@@ -1775,13 +1775,17 @@
   // A corner is retired only when NOTHING still holds it. Identity, not
   // coordinates: two corners at the same place are still two corners if the
   // pool never merged them.
+  // Returns WHAT IT RETIRED, because undo has to put exactly those back — see
+  // the 'remove' branch. A retire that reports nothing forces undo to guess.
   const retirePoolCorners = corners => {
+    const retired = [];
     corners.forEach(corner => {
       const held = drawing.walls.some(w => w.start === corner || w.end === corner);
       if (held) return;
       const at = vertexPool.indexOf(corner);
-      if (at >= 0) vertexPool.splice(at, 1);
+      if (at >= 0) { vertexPool.splice(at, 1); retired.push(corner); }
     });
+    return retired;
   };
 
   const commitWall = (startPt, endPt) => {
@@ -1851,9 +1855,9 @@
     // deps were collected newest-first per list; undo re-inserts in reverse so
     // each splice lands at the index it was taken from.
     deps.reverse();
-    retirePoolCorners([wall.start, wall.end]);
+    const retired = retirePoolCorners([wall.start, wall.end]);
     if (selectedSeg === wall) selectedSeg = null;
-    undoStack.push({ kind: 'remove', wall, index, deps });
+    undoStack.push({ kind: 'remove', wall, index, deps, retired });
     markDirty();
     return wall;
   };
@@ -2110,6 +2114,17 @@
         // (this page rides them through on the ...parsed spread), so putting
         // the same objects back is the only restoration that is exact.
         step.deps.forEach(d => { if (Array.isArray(d.list)) d.list.splice(Math.min(d.index, d.list.length), 0, d.item); });
+        // AND THE CORNERS GO BACK IN THE POOL. The restored wall already holds
+        // these objects — identity on the wall survives the round trip — but
+        // the pool is what the NEXT drawn endpoint searches. Leave them out
+        // and a wall drawn onto the restored free end mints a fresh object at
+        // the same coordinates instead of joining: every number right, the
+        // drawing right, and the mitre silently gone. That is the same class
+        // as the pooling mutation this rung's specs already caught, arriving
+        // through undo instead of through create.
+        (step.retired || []).forEach(corner => {
+          if (!vertexPool.includes(corner)) vertexPool.push(corner);
+        });
       }
       // AN UNDO IS AN EDIT TOO. The drawing on screen no longer matches the
       // file — going back to where you started is only free if you never
