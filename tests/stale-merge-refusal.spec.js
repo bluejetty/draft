@@ -74,7 +74,22 @@ async function drawALine(page, x1, z1, x2, z2) {
 }
 
 // The old page, holding the rectangle and a current store revision.
+//
+// WITH NO LIVE BROADCAST, WHICH IS WHAT KEEPS THIS FILE ABOUT RUNG 1. Rung 2
+// gives a CLEAN page the other page's write before it can go stale, so on a
+// browser that has BroadcastChannel these tests would stop reaching the merge
+// path at all — every assertion below would hold for the wrong reason, or fail
+// describing a conflict that no longer happens.
+//
+// Deleting BroadcastChannel is not a test-only mode: it is the degrade the
+// ruling names (§3.3, "a browser without it does not live-reload"), and it is
+// also every page that IS dirty when the write lands. The rule this file
+// exists for — a stale write with model-key differences is refused, never
+// merged over — has to hold in both, and rung 2's own spec
+// (tests/model-change-broadcast.spec.js) covers the clean page picking the
+// write up instead.
 async function oldPageOnFixture(page) {
+  await page.addInitScript(() => { delete window.BroadcastChannel; });
   await h.openModel(page, { rails: false, entryCoach: true });
   await expect(page.locator('[data-entry-coach]')).toBeVisible({ timeout: 4000 });
   await page.locator('[data-first-bone-press]').click();
