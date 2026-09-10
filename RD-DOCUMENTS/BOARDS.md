@@ -494,45 +494,26 @@ could not: that a drafter sees it. **It asserts absence as well as presence**,
 which is the half that matters — a banner that appears once and never leaves
 is a bug a presence-only test passes on.
 
+**Two counting traps on the way to that table, either of which gives the
+opposite answer.** A direct grep for `DraftDesignNotices.<fn>(` reports **zero**
+for `MODEL.dc.html`: the call goes through a `const N = window.DraftDesignNotices`
+alias, so the module reads as unused exactly where it is used. And an export list
+built by *shape* (`grep -E '^\s+[a-zA-Z]+,'`) picks up object-literal keys and
+local consts — it reported `placedRiseFt` as an export when it is a local inside
+`stairRefitNotice` and a field of its return value. The real surface is the frozen
+object at `design-notices.js:167`, and two of its five entries (`formatFtIn`,
+`formatIn`) are harness-only, which the module says in its own comment. Read the
+export statement, not something that resembles one.
+
+**`MODEL.html` references it zero times**, which is the number Tier 3 watches:
+when a rung makes the new page reach for this module, that is a
+module-review-gate event, not an adoption one.
+
 **So there is no adoption board to open.** The one case still unwired is
 deliberate, not forgotten: pressing BUNGALOW on a drawing with a built OVER
 GARAGE belongs to board #333, whose build row is not on main, and the module
 says in its own header why a function returning null until then would pass its
 harness for the wrong reason. Both stale sentences are corrected in place.
-
----
-
-### design-notices.js is NOT zero-callers any more — no adoption board needed
-
-Tier 3 gate duty asked me to confirm that `design-notices.js` (built in #318)
-still has no callers. **It does not — it was adopted, and the check is what
-found it.** It got them in `a824547`, "design-notices.js gets its callers"
-(PR #334), whose spec asserts absence as well as presence. Measured on main
-`3ed8f1e`:
-
-| export | caller |
-|---|---|
-| `stairRefitNotice` | `MODEL.dc.html:22758`, through a `const N = window.DraftDesignNotices` alias |
-| `garageDoorHeadNotice` | `PROJECT.html:1544` |
-| `garageDoorHeadLimitIn` | `PROJECT.html:1556` |
-| `formatFtIn`, `formatIn` | the harness only — and the module's own comment says so |
-
-Every behavioural export has a caller, and `tests/design-notices-wired.spec.js`
-covers both live sites: the garage-door notice on PROJECT.html, the stair-refit
-notice on MODEL.dc.html. **No adoption board is needed.**
-
-**MODEL.html — the new page — references it zero times**, which is the number
-that matters for Tier 3: whenever a rung makes the new page reach for this
-module the first time, that is a module-review-gate event, not an adoption one.
-
-**Two counting traps on the way to that table, both worth the warning.** A
-direct grep for `DraftDesignNotices.<fn>(` reports **0** for `MODEL.dc.html`,
-because the call goes through the `N` alias — the module looks unused there and
-is not. And an export list built with `grep -E '^\s+[a-zA-Z]+,'` picks up
-object-literal keys and local consts: it reported `placedRiseFt` as an export
-when it is a local inside `stairRefitNotice` and a field of its return value.
-The real surface is the frozen object at `design-notices.js:167`. Read the
-export statement, not a shape that resembles one.
 
 ---
 
