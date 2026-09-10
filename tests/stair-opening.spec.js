@@ -187,25 +187,43 @@ test('an opening flush with the floor edge is still cut', async ({ page }) => {
   await page.getByRole('button', { name: 'STAIRS', exact: true }).click();
   await expect(page.getByText(/Rough opening 3'-1"/)).toBeVisible();
 
-  // ON THE BOUNDARY COUNTS AS INSIDE, and this is the case that proves it.
-  // The floor's left edge is x=-10; anchoring there puts the opening's near
-  // edge exactly on it. A containment test that treats boundary contact as
-  // OUTSIDE refuses this, which would force the drafter to leave a sliver of
-  // floor between the stairwell and the wall -- the very thing the arithmetic
-  // design exists to make unnecessary.
+  // ON THE BOUNDARY COUNTS AS INSIDE, and it has to be the EAST edge to prove
+  // it. A stairwell run flush to an exterior wall is on the slab; refusing it
+  // would force back the sliver of floor this design exists to make
+  // unnecessary. Nothing else in this file touches an edge at all.
   //
-  // Nothing else in this file exercises it: every other case sits clear of the
-  // edge, so a boundary-exclusive guard would pass them all. That gap is what
-  // let the same mutant survive the first areas.js harness.
-  await h.clickWorld(page, -10, 0.3);
+  // WHAT THIS CASE DOES AND DOES NOT PROVE, measured rather than assumed.
+  //
+  // It proves a flush opening survives the REAL CLICK PATH -- tool, wall pick,
+  // rectangle, guard, commit, save. It does NOT pin the boundary rule itself,
+  // and two attempts to make it do so both failed for instructive reasons.
+  // Anchored at the WEST edge, the boundary-exclusive mutant survived:
+  // ringInsideRing casts its ray rightward, so a point on the west edge still
+  // crosses the east wall and reads inside with the boundary rule switched
+  // off. Moved to the EAST edge it survived too, because a click cannot land
+  // exactly on a boundary -- pixel-to-world conversion puts the corner a
+  // fraction inside, where the ray-cast answers and the boundary rule is never
+  // consulted.
+  //
+  // So the primitive is pinned where it CAN be pinned exactly, by harnesses
+  // that construct polygons directly: proto/ring-inside-harness.js and
+  // proto/areas-harness.js both go red under that mutant. This spec proves the
+  // wiring; those prove the rule. Do not "fix" this by loosening the assertion
+  // until the mutant dies here -- that would only hide which half is covering
+  // what.
+  //
+  // The opening is 10'-5" and runs right from the anchor, so anchoring at
+  // 10 - LENGTH puts its far edge exactly on the floor's east edge, x=10.
+  const flushAnchor = 10 - LENGTH_IN / 12;
+  await h.clickWorld(page, flushAnchor, 0.3);
   await page.waitForTimeout(300);
-  await h.clickWorld(page, 0, 2);
+  await h.clickWorld(page, flushAnchor + 4, 2);
   await h.waitForSaved(page);
 
   const drawing = await h.savedDrawing(page);
   expect(drawing.surfaceOpenings).toHaveLength(1);
   const xs = drawing.surfaceOpenings[0].points.map(p => p.x);
-  expect(Math.min(...xs)).toBeCloseTo(-10, 3);
+  expect(Math.max(...xs)).toBeCloseTo(10, 3);
 });
 
 test('typed stair width and headroom resize the opening', async ({ page }) => {
