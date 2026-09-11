@@ -313,6 +313,23 @@
   // when something on this page needs them to share a corner.
   let vertexPool = [];
   let dropped = 0;   // items the format module rejected on load
+  // PAINT THE SUBSTITUTE, NEVER PERSIST IT (RULING-substitution-is-not-a-save,
+  // Movie, 11 Sep). `LEGACY_WALL_TYPES` rewrites a retired wall type to the
+  // nearest surviving assembly so the wall can be DRAWN — a reader's
+  // accommodation, and the right one. This page also WRITES, and re-emitting the
+  // substitute makes the accommodation permanent: open an old house with 12"
+  // foundation walls, change nothing, press SAVE, and four inches of concrete
+  // are gone from the record with no message.
+  //
+  // The mapping is lossy and ONE-WAY. Nothing in the saved file records that a
+  // wall was ever 12", so when the thicker types come back — one row each in
+  // WALL_TYPES — the app recovers and already-round-tripped drawings do not.
+  //
+  // The rule this belongs to: a page may SHOW less than the file contains; it
+  // may not SAVE less than the file contains. Keyed by wall id and holding both
+  // halves, so a type the drafter later changes on purpose is not quietly
+  // reverted to the legacy one.
+  let substitutedWallTypes = new Map();
 
   const say = (title, body) => {
     noticeBody.innerHTML = `<h1>${title}</h1>${body}`;
@@ -2256,6 +2273,18 @@
       // wrong for a quoted one, since the format does not coerce.
       autoDimFirstOffsetFt: F.autoDimFirstOffsetFt(parsed.autoDimFirstOffsetFt),
     };
+    // Recorded against the RAW file: the normaliser is the only thing that knows
+    // a substitution happened, and it does not say so — the two types differ and
+    // nothing else marks it.
+    substitutedWallTypes = new Map();
+    (Array.isArray(parsed.walls) ? parsed.walls : []).forEach(raw => {
+      if (!raw || typeof raw.wallType !== 'string') return;
+      const kept = drawing.walls.find(wall => wall.id === raw.id);
+      if (kept && kept.wallType !== raw.wallType) {
+        substitutedWallTypes.set(kept.id, { original: raw.wallType, painted: kept.wallType });
+      }
+    });
+
     dropped = ['walls', 'lines', 'floors', 'dimensions']
       .map(k => (Array.isArray(raw[k]) ? raw[k].length : 0) - drawing[k].length)
       .reduce((a, b) => a + b, 0);
@@ -2409,9 +2438,14 @@
     const point = p => window.DraftDrawingFormat.pointForStorage(p);
     return {
       ...drawing,
-      walls: drawing.walls.map(wall => ({
-        ...wall, start: point(wall.start), end: point(wall.end),
-      })),
+      walls: drawing.walls.map(wall => {
+        // Restored ONLY while the wall still carries the type this page
+        // substituted; a deliberate later change is the drafter's edit and is
+        // what gets written.
+        const swap = substitutedWallTypes.get(wall.id);
+        const wallType = (swap && wall.wallType === swap.painted) ? swap.original : wall.wallType;
+        return { ...wall, wallType, start: point(wall.start), end: point(wall.end) };
+      }),
     };
   };
 
