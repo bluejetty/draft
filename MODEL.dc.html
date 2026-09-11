@@ -6243,7 +6243,14 @@ class Component extends DCLogic {
     // A synchronous beacon, the same discipline as data-save-dirty.
     document.body.dataset.leaseHeld = held ? '1' : '0';
     if (!this._leaseBanner) return;
+    // DISPLAY, NOT JUST THE ATTRIBUTE. An inline `display` BEATS the browser's
+    // own `[hidden]` rule, so this banner sat visible across the top of the page
+    // — over the toolbar — the whole time it was supposed to be hidden. That is
+    // the same defect tier 3b hit on MODEL.html, where the fix was the CSS rule
+    // `#chrome[hidden] { display:none }`; this element carries its style inline
+    // and so has to say it here.
     this._leaseBanner.hidden = held;
+    this._leaseBanner.style.display = held ? 'none' : 'flex';
     if (this._leaseHolder) this._leaseBanner.dataset.leaseHolder = this._leaseHolder;
     else delete this._leaseBanner.dataset.leaseHolder;
   }
