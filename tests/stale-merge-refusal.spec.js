@@ -73,6 +73,22 @@ async function drawALine(page, x1, z1, x2, z2) {
   await page.keyboard.press('Enter');
 }
 
+// RUNG 3 PUT A LEASE IN FRONT OF BOTH PAGES, and the old page claims it on load.
+// A second page therefore opens READ-ONLY with SAVE disabled — and a disabled
+// button is not a failing click, it is a click that waits for the button to
+// become enabled until the test times out, which is how this arrived: three
+// minutes of nothing rather than an assertion.
+//
+// The fixture is repaired the way a drafter repairs it: press TAKE OVER. Not by
+// deleting the second write, which would leave these tests passing with nothing
+// in them.
+async function takeOverOn(page) {
+  await page.locator('[data-take-over]').click();
+  await expect(page.locator('body'), 'the second page must really hold the lease '
+    + 'before it edits, or what follows proves nothing')
+    .toHaveAttribute('data-lease-held', '1', { timeout: 6000 });
+}
+
 // The old page, holding the rectangle and a current store revision.
 //
 // WITH NO LIVE BROADCAST, WHICH IS WHAT KEEPS THIS FILE ABOUT RUNG 1. Rung 2
@@ -148,6 +164,12 @@ test.describe('a stale write is refused, not merged over', () => {
       expect(before, 'both pages must start on the rectangle')
         .toMatchObject({ x: -10, z: -5 });
 
+      // THE NEGATIVE HALF of the banner assertion further down: this page holds
+      // the lease right now, so the banner must be GONE. Without it that
+      // assertion is satisfied by a banner that was never hidden, which is the
+      // bug that actually shipped.
+      await expect(page.locator('[data-lease-banner]')).toBeHidden();
+
       // ── the new page saves a moved corner ─────────────────────────────────
       const modern = await context.newPage();
       await modern.goto('/MODEL.html?mode=night');
@@ -163,6 +185,7 @@ test.describe('a stale write is refused, not merged over', () => {
       await dragOn(modern, -10 * ppf, -5 * ppf, 0, -3 * ppf);   // pull the NW corner north
 
       await expect(modern.locator('#save')).toHaveText('UNSAVED');
+      await takeOverOn(modern);
       await modern.locator('#save').click();
       await expect(modern.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
 
@@ -196,9 +219,19 @@ test.describe('a stale write is refused, not merged over', () => {
       // UNSAVED contains the word SAVED.
       await expect(page.locator('[data-model-status]'),
         'and it must say so').toHaveText('UNSAVED');
-      await expect(page.locator('[data-model-drawing-message]'),
-        'and it must tell the drafter what happened, not "Save failed"')
-        .toContainText('Another page saved this drawing');
+      // WHAT IT SAYS HAS CHANGED, AND SO HAS WHY. Before rung 3 this page wrote,
+      // was refused on `ifRev`, and rung 1's narrowed merge told the drafter
+      // another page had saved. Now it never writes at all: the takeover above
+      // left it read-only, so the banner names the tab that holds the file. The
+      // rule this test is named for is unchanged and is asserted above — the
+      // corner survived and nothing of this page's went in — but the mechanism
+      // that saves it is now the lease rather than the refusal, and asserting the
+      // old wording would be asserting a path rung 3 removed.
+      //
+      // Rung 1's refusal is still reachable by any writer that carries no lease,
+      // and the test below this one holds it there.
+      await expect(page.locator('[data-lease-banner]'),
+        'and it must tell the drafter who has the file').toBeVisible();
 
       // 3. AND NOTHING OF THE OLD PAGE'S OWN WENT IN EITHER. A refusal writes
       //    nothing at all; a merge would have carried this line in alongside
@@ -260,6 +293,53 @@ test.describe('a stale write is refused, not merged over', () => {
         .toBe('SITE PLAN');
     });
 
+  // RUNG 1'S REFUSAL, HELD WHERE RUNG 3 CANNOT REACH IT.
+  //
+  // The test above used to arrive here: a second MODEL.html saved, this page went
+  // stale, and the narrowed merge refused rather than writing its own walls over
+  // the top. Rung 3 removed that route — a second model page is read-only until
+  // it takes the lease, and once it has, this page cannot write at all.
+  //
+  // The rule is not gone, it just needs the writer the lease does not cover.
+  // `saveSharedFile` without a `lease` argument is ungated by design (§3.2, so
+  // LAYOUT and every unconverted caller keep working), and that is exactly what
+  // reaches `_writeDrawingToStore`'s stale path while this page still holds the
+  // lease. If rung 1's narrowing is ever undone, this is what goes red.
+  test('a model-key write from an ungated writer is still refused, not merged over',
+    async ({ page, context }) => {
+      await oldPageOnFixture(page);
+      await drawALine(page, -8, -2, -6, -2);
+      await h.waitForSaved(page);
+      const before = movedCorner(await readStore(page));
+
+      // No lease, no page: the write a legacy caller makes.
+      const other = await context.newPage();
+      await other.goto('/MODEL.html?mode=night');
+      await other.waitForFunction(() => !!window.SharedFileStore, null, { timeout: 10000 });
+      await other.evaluate(async bucket => {
+        const file = await window.SharedFileStore.loadSharedFile(bucket);
+        const drawing = JSON.parse(await file.text());
+        drawing.walls.find(w => w.id === 'n').start.z -= 3;
+        await window.SharedFileStore.saveSharedFile(
+          new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), bucket);
+      }, BUCKET);
+
+      const theirs = movedCorner(await readStore(page));
+      expect(theirs.z, 'the ungated writer must really have moved the corner')
+        .toBeLessThan(before.z - 0.5);
+
+      await drawALine(page, -4, 0, 4, 0);
+      await page.waitForTimeout(900);
+
+      expect(movedCorner(await readStore(page)).z,
+        'this page holds the lease, so it wrote — and it must have been refused '
+        + 'on `ifRev` and NOT re-applied its stale walls over their corner')
+        .toBeCloseTo(theirs.z, 6);
+      await expect(page.locator('[data-model-status]')).toHaveText('UNSAVED');
+      await expect(page.locator('[data-model-drawing-message]'),
+        'and rung 1 must still say what happened').toContainText('Another page saved this drawing');
+    });
+
   test('a refused write does not eat the local edit either', async ({ page, context }) => {
     await oldPageOnFixture(page);
 
@@ -271,6 +351,7 @@ test.describe('a stale write is refused, not merged over', () => {
     await modern.mouse.click(box.x + box.width / 2, box.y + box.height / 2 - 5 * ppf);
     await modern.waitForTimeout(60);
     await dragOn(modern, -10 * ppf, -5 * ppf, 0, -3 * ppf);
+    await takeOverOn(modern);
     await modern.locator('#save').click();
     await expect(modern.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
 

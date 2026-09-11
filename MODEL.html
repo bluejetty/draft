@@ -123,6 +123,23 @@
     border:1px solid var(--edge-panel); border-radius:6px; padding:5px 10px; }
   #elsewhere[hidden] { display:none; }
 
+  /* RUNG 3's READ-ONLY BANNER. It names the holder because "somebody is
+     editing this" is not something a drafter can act on, and it carries the one
+     press that resolves it. Sat under SAVE with the change note, so the page has
+     one place where it says things about the file rather than three. */
+  #lease { position:fixed; right:12px; top:46px; z-index:6;
+    display:flex; gap:10px; align-items:center;
+    font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
+    text-transform:uppercase; color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--accent); border-radius:6px; padding:5px 10px; }
+  #lease[hidden] { display:none; }
+  #take-over { font:inherit; letter-spacing:inherit; text-transform:inherit;
+    color: var(--accent); background:none; border:1px solid var(--accent);
+    border-radius:4px; padding:3px 8px; cursor:pointer; }
+  /* The change note steps down when the banner is up, so they never overlap. */
+  body[data-lease-held="0"] #elsewhere { top:78px; }
+
   /* TIER 3b chrome: the level and view switchers. Same panel idiom as the
      readout, top-left so it clears #save (top-right) and #hint (bottom-right)
      at a narrow width.
@@ -183,6 +200,10 @@
 </div>
 <button id="save" type="button" data-model-save>SAVE</button>
 <div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
+<div id="lease" data-lease-banner hidden>
+  <span data-lease-message></span>
+  <button id="take-over" type="button" data-take-over>TAKE OVER</button>
+</div>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 <div id="notice"><div id="notice-body"></div></div>
 
@@ -272,6 +293,9 @@
   const noticeBody = document.getElementById('notice-body');
   const saveButton = document.getElementById('save');
   const elsewhereNote = document.getElementById('elsewhere');
+  const leaseBanner = document.getElementById('lease');
+  const leaseMessage = leaseBanner && leaseBanner.querySelector('[data-lease-message]');
+  const takeOverButton = document.getElementById('take-over');
 
   // View state in world units (feet). scale is screen pixels per foot.
   // Deliberately plain arithmetic: MODEL.dc.html projects through a three.js
@@ -2332,6 +2356,11 @@
     // images and should be on screen before they arrive. Each one repaints
     // itself as it lands.
     loadUnderlayImages();
+    // CLAIMED ONCE THERE IS SOMETHING TO EDIT. A page that failed to load a
+    // drawing has nothing to protect and should not hold the lease shut against
+    // a page that does.
+    await askForLease();
+    startLeaseHeartbeat();
   };
 
   // ── the Write Tier ──────────────────────────────────────────────────────────────────
@@ -2388,13 +2417,22 @@
 
   const save = async () => {
     if (!drawing) return;
+    // A READ-ONLY PAGE DOES NOT ASK. The store would refuse it anyway — that gate
+    // is the authority and is tested on its own — but a page that fires a write
+    // it knows will be refused spends the drafter's attention to learn something
+    // it already knew.
+    if (!holdsLease()) { paintLease(); return; }
     saveButton.disabled = true;
     saveButton.textContent = 'SAVING…';
     const contents = JSON.stringify(serializeDrawing());
     const file = new File([contents], 'model-drawing.json', { type: 'application/json' });
     try {
       storeRev = await window.SharedFileStore.saveSharedFile(file, BUCKET, {
+        // BOTH GUARDS, NOT ONE. The lease prevents the collision; `ifRev`
+        // catches the case where prevention failed. Dropping `ifRev` because
+        // this page holds a lease would reintroduce audit C3.
         ifRev: Number.isInteger(storeRev) ? storeRev : null,
+        lease: { scope: LEASE_SCOPE, holderId: holderId(), generation: leaseGeneration },
       });
       markSaved();
       // The note described a difference this save has just resolved.
@@ -2410,6 +2448,14 @@
       // retries because it holds live edits worth fighting for; this page
       // holds only what it loaded, so the honest resolution is to reload and
       // read what is really there now.
+      // TAKEN OVER BETWEEN THE PRESS AND THE WRITE. The edit is untouched and
+      // still on screen; the banner names who holds it and offers it back.
+      if (error?.lease) {
+        leaseGeneration = null;
+        leaseHolder = error.holderId;
+        paintLease();
+        return;
+      }
       if (error?.stale) {
         say('The drawing changed underneath this page',
           `<p>Another page saved since this one loaded. Nothing was written.
@@ -2446,6 +2492,116 @@
     if (!dirty) return;
     event.preventDefault();
     event.returnValue = '';
+  });
+
+  // ── the edit lease ──────────────────────────────────────────────────────────
+  // RULING-autosave-two-writers.md §2 and §3.1-3.2, rung 3. The broadcast below
+  // stops a CLEAN page going stale; this is what happens when two pages are both
+  // being edited. It is the only thing in the design that protects work before
+  // it is written, and it does not make concurrent editing safe — it makes it
+  // refused, visibly, with the loser's work intact.
+  const LEASE_SCOPE = 'model';
+  // ONE ID PER PAGE INSTANCE, and it is rung 2's `writerId` rather than a second
+  // one. A page that ignored its own broadcast under one identity and held the
+  // lease under another would have two answers to "is this me".
+  const holderId = () => window.SharedFileStore.leaseHolderId();
+  let leaseGeneration = null;   // the generation we hold, or null when we do not
+  let leaseHolder = null;       // whoever holds it instead, so the banner can say
+  let leaseTimer = null;
+  const holdsLease = () => leaseGeneration !== null;
+
+  const paintLease = () => {
+    const held = holdsLease();
+    // A SYNCHRONOUS BEACON, like data-save-dirty: it flips with the state, where
+    // the banner's text lands a frame later.
+    document.body.dataset.leaseHeld = held ? '1' : '0';
+    if (leaseBanner) {
+      leaseBanner.hidden = held;
+      // NAMED, as §2 asks — and the holder id is the only name there is. It is
+      // not shown, because "w-mf2k3-8ad19c" tells a drafter nothing; it is
+      // carried where a second page, and a test, can read WHICH page has it
+      // rather than merely that one does.
+      if (leaseHolder) leaseBanner.dataset.leaseHolder = leaseHolder;
+      else delete leaseBanner.dataset.leaseHolder;
+    }
+    if (leaseMessage && !held) {
+      // WORDED AS BEING EDITED ELSEWHERE, NOT AS EXPIRED (§3.4). An
+      // expired-but-unclaimed lease is an absent drafter, not a free lease, and a
+      // drafter told "expired" will reasonably assume they may simply carry on.
+      leaseMessage.textContent = 'Being edited in another tab';
+    }
+    // DISABLED, NOT HIDDEN. The ruling leaves this unruled and asks that someone
+    // who watches drafters pick it; THIS IS A PICK, NOT A SPECIFICATION. A
+    // missing button reads as a broken page, where a dead one says the drafter
+    // is looking at the right place and cannot use it yet.
+    if (saveButton) saveButton.disabled = !held;
+  };
+
+  const askForLease = async ({ takeover = false } = {}) => {
+    const S = window.SharedFileStore;
+    if (!S || !S.claimLease) return false;
+    let got;
+    try {
+      got = await S.claimLease(BUCKET, LEASE_SCOPE, holderId(),
+        { ttlMs: S.LEASE_TTL_MS, takeover });
+    } catch (error) {
+      console.warn('draft: could not reach the edit lease', error);
+      return holdsLease();
+    }
+    if (!got.ok) {
+      // WE DO NOT HOLD IT, AND NOTHING OF OURS IS DISCARDED. A dirty page keeps
+      // every edit it has; it is simply refused at the store if it tries to
+      // write, and the banner tells the drafter why and offers the way out.
+      leaseGeneration = null;
+      leaseHolder = got.holderId;
+      paintLease();
+      return false;
+    }
+    // A GENERATION THAT MOVED WHILE WE WERE AWAY MEANS SOMEBODY HELD THIS IN
+    // BETWEEN — we froze, they took it, it came back to us. They may have
+    // written, so this page says the same thing rung 2 says when another page
+    // writes rather than inventing a fourth kind of notice.
+    //
+    // A generation that did NOT move is the resume path (§3.4): our own lease
+    // expired, nobody took it, nothing happened, and the drafter is told nothing
+    // at all. Bump the generation on every re-claim and every woken tab
+    // announces a takeover that never occurred.
+    const wasTakenOver = leaseGeneration !== null && got.generation !== leaseGeneration;
+    leaseGeneration = got.generation;
+    leaseHolder = null;
+    paintLease();
+    if (wasTakenOver && !takeover && elsewhereNote) elsewhereNote.hidden = false;
+    return true;
+  };
+
+  const startLeaseHeartbeat = () => {
+    if (leaseTimer) return;
+    const S = window.SharedFileStore;
+    // It renews while we hold it and acquires when whoever does goes away —
+    // expiry with a heartbeat is what stops a closed tab bricking the drawing,
+    // and the ruling calls that non-negotiable.
+    leaseTimer = setInterval(() => {
+      askForLease().catch(error => console.warn('draft: lease heartbeat failed', error));
+    }, (S && S.LEASE_HEARTBEAT_MS) || 4000);
+  };
+
+  if (takeOverButton) {
+    takeOverButton.addEventListener('click', () => {
+      // The only thing that may seize a live lease, and only because a person
+      // read a banner and pressed it.
+      askForLease({ takeover: true })
+        .catch(error => console.warn('draft: takeover failed', error));
+    });
+  }
+
+  // BEST EFFORT, AND NOTHING DEPENDS ON IT (§3.4). The probe found a pagehide
+  // IndexedDB write fail to land on a tab reload with no memory pressure at all;
+  // the TTL is the real backstop and this only shortens the wait for whoever is
+  // next.
+  window.addEventListener('pagehide', () => {
+    const S = window.SharedFileStore;
+    if (!holdsLease() || !S || !S.releaseLease) return;
+    S.releaseLease(BUCKET, LEASE_SCOPE, holderId()).catch(() => {});
   });
 
   // ── the change broadcast ────────────────────────────────────────────────────

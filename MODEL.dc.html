@@ -2282,6 +2282,7 @@ const DEFAULT_FLOORING_THICKNESS_IN = 3 / 8;
 const DEFAULT_FOOTING_WIDTH_IN = 20;
 const ICF_FOOTING_WIDTH_IN = 24;
 const MODEL_STORAGE_BUCKET = 'model-drawing';
+const MODEL_LEASE_SCOPE = 'model';
 
 // Every drawing collection whose items belong to a LEVEL, in one place: what
 // `_deleteLevel` takes with the level, and the list a new level-owned
@@ -6141,6 +6142,119 @@ class Component extends DCLogic {
     this._watchStoreChanges();
   }
 
+  // RULING-autosave-two-writers.md §2, §3.1-3.2, RUNG 3 — the named edit lease.
+  //
+  // THE LEASE IS THEATRE UNLESS THIS PAGE RESPECTS IT (§4 rung 3), which is why
+  // both conversions land in one slice. This page autosaves on every edit, so a
+  // lease MODEL.html held and this page ignored would be a banner over a page
+  // still writing on every keystroke.
+  //
+  // The banner is built here rather than in the template because it is not a
+  // property of the drawing and has no business in renderVals; it is a fact
+  // about who is holding the file.
+  _startEditLease() {
+    const store = window.SharedFileStore;
+    // Additive, as rung 2 was: a store without the lease simply is not gated,
+    // which is exactly today's behaviour.
+    if (!store || typeof store.claimLease !== 'function') return;
+    this._leaseGeneration = null;
+    this._leaseHolder = null;
+
+    const banner = document.createElement('div');
+    banner.setAttribute('data-lease-banner', '');
+    banner.hidden = true;
+    banner.style.cssText = 'position:fixed;left:50%;top:10px;transform:translateX(-50%);'
+      + 'z-index:9999;display:flex;gap:10px;align-items:center;'
+      + 'font:600 11px/1.4 system-ui,sans-serif;letter-spacing:0.06em;'
+      + 'text-transform:uppercase;color:#111;background:#ffd9a8;'
+      + 'border:1px solid #b26a00;border-radius:6px;padding:6px 12px;';
+    const label = document.createElement('span');
+    // WORDED AS BEING EDITED ELSEWHERE, NOT AS EXPIRED (§3.4): an
+    // expired-but-unclaimed lease is an absent drafter, not a free lease.
+    label.textContent = 'Being edited in another tab';
+    const press = document.createElement('button');
+    press.setAttribute('data-take-over', '');
+    press.type = 'button';
+    press.textContent = 'TAKE OVER';
+    press.style.cssText = 'font:inherit;letter-spacing:inherit;text-transform:inherit;'
+      + 'cursor:pointer;border:1px solid #b26a00;border-radius:4px;'
+      + 'background:transparent;color:#111;padding:3px 8px;';
+    press.addEventListener('click', () => {
+      this._askForLease({ takeover: true })
+        .catch(error => console.warn('Unable to take over the edit lease:', error));
+    });
+    banner.append(label, press);
+    document.body.appendChild(banner);
+    this._leaseBanner = banner;
+
+    this._askForLease().catch(error => console.warn('Unable to claim the edit lease:', error));
+    this._leaseTimer = setInterval(() => {
+      this._askForLease().catch(error => console.warn('Edit lease heartbeat failed:', error));
+    }, store.LEASE_HEARTBEAT_MS || 4000);
+
+    // Best effort, and nothing depends on it (§3.4). The TTL is the backstop.
+    window.addEventListener('pagehide', () => {
+      if (!this._holdsLease()) return;
+      store.releaseLease(MODEL_STORAGE_BUCKET, MODEL_LEASE_SCOPE, store.leaseHolderId()).catch(() => {});
+    });
+  }
+
+  _holdsLease() {
+    // A store with no lease in it gates nothing, so this page writes as it
+    // always has.
+    const store = window.SharedFileStore;
+    if (!store || typeof store.claimLease !== 'function') return true;
+    return this._leaseGeneration !== null;
+  }
+
+  async _askForLease({ takeover = false } = {}) {
+    const store = window.SharedFileStore;
+    const got = await store.claimLease(
+      MODEL_STORAGE_BUCKET, MODEL_LEASE_SCOPE, store.leaseHolderId(),
+      { ttlMs: store.LEASE_TTL_MS, takeover });
+    if (!got.ok) {
+      // READ-ONLY, AND NOTHING OF THE DRAFTER'S IS DISCARDED. Whatever is
+      // unsaved stays unsaved and stays on screen; `_markUnsaved` simply stops
+      // queueing writes that would be refused.
+      this._leaseGeneration = null;
+      this._leaseHolder = got.holderId;
+    } else {
+      // The generation moves only on a change of holder, so a page whose lease
+      // merely expired while nobody wanted it resumes here in silence (§3.4).
+      const gained = this._leaseGeneration === null;
+      this._leaseGeneration = got.generation;
+      this._leaseHolder = null;
+      // AND WHATEVER THE GATE HELD BACK NOW GOES OUT. A claim is asynchronous,
+      // so the first edits of a session can land before it resolves, and a page
+      // that took the lease back after a takeover is holding work nothing else
+      // will ever write. Both are the same case: we may write, and there is
+      // something to write.
+      if (gained && this._drawingReady && !this._loadingDrawing
+          && this.state.persistenceStatus === 'UNSAVED') {
+        this._queueDrawingWrite();
+      }
+    }
+    this._paintLease();
+    return got.ok;
+  }
+
+  _paintLease() {
+    const held = this._holdsLease();
+    // A synchronous beacon, the same discipline as data-save-dirty.
+    document.body.dataset.leaseHeld = held ? '1' : '0';
+    if (!this._leaseBanner) return;
+    // DISPLAY, NOT JUST THE ATTRIBUTE. An inline `display` BEATS the browser's
+    // own `[hidden]` rule, so this banner sat visible across the top of the page
+    // — over the toolbar — the whole time it was supposed to be hidden. That is
+    // the same defect tier 3b hit on MODEL.html, where the fix was the CSS rule
+    // `#chrome[hidden] { display:none }`; this element carries its style inline
+    // and so has to say it here.
+    this._leaseBanner.hidden = held;
+    this._leaseBanner.style.display = held ? 'none' : 'flex';
+    if (this._leaseHolder) this._leaseBanner.dataset.leaseHolder = this._leaseHolder;
+    else delete this._leaseBanner.dataset.leaseHolder;
+  }
+
   // RULING-autosave-two-writers.md §4, RUNG 2 — the change broadcast.
   //
   // This page keeps the revision it loaded for the whole session and only its
@@ -6489,7 +6603,29 @@ class Component extends DCLogic {
     document.body.dataset.saveDirty = '1';
     this.setState({ persistenceStatus: 'UNSAVED', persistenceError: '', drawingMessage: '', drawingMessageError: false });
     if (!window.SharedFileStore) return;
+    // ── THE EDIT LEASE GATE, BEFORE ANYTHING IS QUEUED ──────────────────────
+    // RULING §4 rung 3: "the old page's autosave cannot land while the modern
+    // page holds the lease", and the ruling names it the test that would have
+    // caught §0 in the first place. This page writes on EVERY edit, so without
+    // the gate here a read-only page spends the whole session queueing writes
+    // that the store will refuse one at a time.
+    //
+    // PLACED AFTER THE STATE ABOVE, DELIBERATELY. The edit is recorded, the
+    // history keeps it, and the page says UNSAVED — a page that loses the lease
+    // while dirty never discards the drafter's work, it only stops writing it.
+    // Gating earlier would drop the edit; gating later would queue the write.
+    if (!this._holdsLease()) return;
+    this._queueDrawingWrite();
+  }
 
+  // The write itself, split out from `_markUnsaved` because there are now TWO
+  // ways to arrive at it. The second is the important one: an edit made while
+  // this page did not hold the lease was recorded and shown UNSAVED but never
+  // written, and without this it would stay that way forever — the gate would
+  // have turned "not yet" into "never", which is a quieter version of the eat
+  // this whole ruling exists to remove. When the lease arrives, whatever is
+  // outstanding goes out.
+  _queueDrawingWrite() {
     const generation = (this._saveGeneration || 0) + 1;
     this._saveGeneration = generation;
     const file = this._drawingFile();
@@ -6988,6 +7124,15 @@ class Component extends DCLogic {
     this._boneTick = setInterval(() => this._refreshBoneWallet(true), 60000);
     this._invalidate();
     this._animate();
+
+    // THE LEASE STARTS HERE, NOT IN _openDrawing. componentDidMount calls
+    // _openDrawing straight away but defers _init behind two animation frames
+    // (:3084, and the note at :3177 names the same hazard), so anything started
+    // from the load path runs before this page's own fields exist —
+    // `this._history` among them. Rung 2's watcher survives out there because it
+    // only subscribes; the lease renders, writes and reads page state, so it
+    // belongs where the page is actually built.
+    this._startEditLease();
   }
 
   // Nothing in a drafting view moves on its own, so frames are drawn on demand:

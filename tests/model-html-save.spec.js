@@ -371,6 +371,13 @@ test.describe('MODEL.html unsaved edits', () => {
     await expect(edited.locator('#readout')).toContainText('walls 4/4', { timeout: 6000 });
     await clickAt(edited, -120, 0);
     await dragCorner(edited, 90, 50);
+    // RUNG 3: the page opened above already holds the edit lease, so this second
+    // one opens read-only with SAVE disabled. Taking the lease is the drafter's
+    // route and it keeps this test about the beforeunload handler, which is what
+    // its name says. Without it `pressSave` does not fail — it waits for a
+    // disabled button to become enabled until the test times out.
+    await edited.locator('[data-take-over]').click();
+    await expect(edited.locator('body')).toHaveAttribute('data-lease-held', '1', { timeout: 6000 });
     await pressSave(edited);
 
     // The edit is in the file, so there is nothing left to lose and nothing to
