@@ -110,3 +110,43 @@ test('the page says a retired assembly was substituted, and not as an error', as
   // are perfectly good.
   await expect(message).not.toContainText('could not be loaded');
 });
+
+// ── the drafter's own change ends the substitution ───────────────────────────
+//
+// THE FAILURE THE FIX ITSELF CREATES. Keeping the original past a deliberate
+// retype would re-emit `concrete_12` for a wall somebody had just set to
+// something else — "never persist the substitute" turned into "never persist
+// the drafter's change", which is worse than the defect being fixed because it
+// overrides an intention rather than a gap.
+//
+// AND THE CASE THAT DISCRIMINATES BETWEEN TWO DESIGNS. A guard that re-emitted
+// the original "while the wall still carries the substituted type" passes a
+// retype to ICF and FAILS this one: `concrete_8` IS the substituted type, so a
+// drafter choosing it deliberately looks identical to a drafter who chose
+// nothing. Clearing the kept original at the point of the change is what tells
+// those two apart, and this is the only case that can see the difference.
+//
+// The wall-type control is group-scoped, so this is also the repo's first spec
+// to drive ASSEMBLY.
+test('a wall retyped to the substitute\'s own type keeps the drafter\'s choice',
+  async ({ page }) => {
+    const id = await retiredWallInStore(page);
+
+    await h.selectTool(page, 'Select');
+    await h.clickWorld(page, 0, 0);
+    await page.waitForTimeout(150);
+
+    await page.getByRole('button', { name: /ASSEMBLY/ }).first().click();
+    await expect(page.locator('[data-group-dialog]')).toBeVisible({ timeout: 4000 });
+    await page.getByRole('button', { name: 'NOT FIXED' }).click();
+    await page.waitForTimeout(200);
+
+    // The drafter picks the 8" assembly ON PURPOSE — the same id the page had
+    // been substituting silently.
+    await page.getByRole('button', { name: '8" Concrete', exact: true }).first().click();
+    await h.waitForSaved(page);
+
+    const saved = await h.savedDrawing(page);
+    const wall = saved.walls.find(item => item.id === id);
+    expect(wall.wallType, 'the drafter chose 8" — the file must say 8"').toBe(SUBSTITUTE);
+  });
