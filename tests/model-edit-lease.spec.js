@@ -588,14 +588,42 @@ test.describe('rung 3 — the pages in front of the gate', () => {
       await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1', { timeout: 8000 });
       await drawWallOn(page, [[-6, -2], [0, -2]]);
 
+      // THE SETUP IS THE PART THAT FAILED ON CI, and it failed silently in a way
+      // this code could not report. It aged the lease by re-claiming with a 1ms
+      // ttl and never looked at whether the claim was GRANTED. Two different
+      // causes produce the identical observation — the page's own heartbeat
+      // landing between the claim and the read back, or a live lease under
+      // another holder correctly REFUSING the claim so the ageing never happened
+      // at all — and both hand back a live record with the generation unchanged.
+      // Sub-millisecond on an unshared box; 582ms to fail on a shared runner.
+      //
+      // A setup step that can silently not happen is the same defect as a
+      // mutation that never applied. So this one reports: it asserts the claim
+      // was granted, and it retries until it has OBSERVED the lease dead rather
+      // than assuming one attempt did it.
       const aged = await page.evaluate(async bucket => {
         const S = window.SharedFileStore;
         const mine = S.leaseHolderId();
         const before = await S.readLease(bucket, 'model');
-        await S.claimLease(bucket, 'model', mine, { ttlMs: 1 });
-        return { gen: before.generation, dead: await S.readLease(bucket, 'model') };
+        let granted = null;
+        let observedDead = false;
+        for (let i = 0; i < 60 && !observedDead; i += 1) {
+          granted = await S.claimLease(bucket, 'model', mine, { ttlMs: 1 });
+          if (!granted.ok) break;
+          observedDead = (await S.readLease(bucket, 'model')) === null;
+        }
+        return { gen: before.generation, observedDead, granted, mine };
       }, BUCKET);
-      expect(aged.dead, 'the lease must really be expired before the wake-up').toBeNull();
+      expect(aged.granted && aged.granted.ok,
+        `the ageing claim must be granted — this page holds the lease, so a refusal `
+        + `means something else does (${JSON.stringify(aged.granted)}) and the `
+        + `expiry this test rests on never happened`)
+        .toBe(true);
+      expect(aged.observedDead,
+        "the lease must really have been seen expired before the wake-up — if the "
+        + "page's heartbeat won all sixty attempts, this test never staged the "
+        + 'thing it is about')
+        .toBe(true);
 
       // One heartbeat later, with nothing else touching it.
       await page.waitForTimeout(6000);
