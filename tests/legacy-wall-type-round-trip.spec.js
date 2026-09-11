@@ -28,6 +28,10 @@ const SUBSTITUTE = 'concrete_8';   // wall-types.js:19
 // which is the whole reason it needs a substitute to paint at all.
 async function retiredWallInStore(page) {
   await h.openModel(page, { webgl: false });
+  // THE SAME URL, not a bare path. openModel boots the page with the flags the
+  // suite runs under; re-opening at '/MODEL.dc.html' drops them and the reload
+  // comes back a different page than the fixture built on.
+  const booted = page.url();
   await h.selectTool(page, 'Wall');
   await h.clickWorld(page, -6, 0);
   await h.clickWorld(page, 6, 0);
@@ -44,7 +48,7 @@ async function retiredWallInStore(page) {
     return drawing.walls[0].id;
   }, { bucket: 'model-drawing', retired: RETIRED });
 
-  await page.goto('/MODEL.dc.html');
+  await page.goto(booted);
   await expect(page.locator('body')).toHaveAttribute('data-model-ready', '1', { timeout: 10000 });
   return id;
 }
