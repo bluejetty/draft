@@ -50,6 +50,10 @@ async function retiredWallInStore(page) {
 
   await page.goto(booted);
   await expect(page.locator('body')).toHaveAttribute('data-model-ready', '1', { timeout: 10000 });
+  // THE RAIL CLOSES ON A RELOAD. openModel opens it on the way in; a second
+  // navigation comes back with the tools folded into their tab, and the first
+  // case spent two full timeouts reaching for a Line button that was behind it.
+  await h.openRails(page);
   return id;
 }
 
