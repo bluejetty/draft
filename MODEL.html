@@ -329,6 +329,28 @@
   // may not SAVE less than the file contains. Keyed by wall id and holding both
   // halves, so a type the drafter later changes on purpose is not quietly
   // reverted to the legacy one.
+  //
+  // THE CONTRACT, AND IT IS NOT ENFORCED BY ANYTHING. The serializer decides
+  // whether to restore by asking whether the wall still carries the type this
+  // page substituted — it INFERS the drafter's intent, and there is one case it
+  // infers wrongly: a drafter who deliberately picks the very type the
+  // substitution chose is indistinguishable from the substitution, so the save
+  // would put the retired type back over their choice. Skipper measured that on
+  // MODEL.dc.html by modelling this guard as a mutant, and it fails there.
+  //
+  // It cannot happen HERE, today: every write of `wallType` in this file is the
+  // creation site, the load-path normaliser, or the serializer. There is no
+  // picker and no change-type verb, so an existing wall's type cannot be
+  // reassigned at all. That makes this a LATENT defect, not a live one — and it
+  // is why there is no clear-on-assignment call in this file. A call at the
+  // creation site would be a no-op by construction: a freshly drawn wall has
+  // never been loaded and has no kept original to forget, so the line could
+  // never fail and would read to the next person as a guard that is working.
+  //
+  // So the rule is written and not pretended: ANY site that assigns a type to an
+  // existing wall must delete that wall's entry here. The day the picker is
+  // added, this comment is the thing that has to be obeyed, because nothing in
+  // the code will complain.
   let substitutedWallTypes = new Map();
 
   const say = (title, body) => {
