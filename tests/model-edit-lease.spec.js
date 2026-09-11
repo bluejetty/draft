@@ -420,6 +420,14 @@ test.describe('rung 3 — the pages in front of the gate', () => {
   test('a second page opens read-only, naming the holder', async ({ page, context }) => {
     await openNew(page, { seed: true });
     await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1', { timeout: 8000 });
+    // THE NEGATIVE HALF. Every "the banner is visible" assertion in this file was
+    // satisfied by two worlds until now: the banner really appearing, and the
+    // banner never having been hidden at all — which is exactly the bug that
+    // shipped, an inline `display` beating the browser's `[hidden]`. Asserting
+    // it is GONE while this page holds the lease is what makes the visible
+    // assertions mean something.
+    await expect(page.locator('[data-lease-banner]'),
+      'the page holding the lease shows no banner').toBeHidden();
     const holder = await page.evaluate(() => window.SharedFileStore.leaseHolderId());
 
     const second = await openNew(await context.newPage());
@@ -449,6 +457,11 @@ test.describe('rung 3 — the pages in front of the gate', () => {
       await h.openRails(page);
       await h.waitForSaved(page);
       const before = h.allLines(await h.savedDrawing(page)).length;
+      await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1', { timeout: 8000 });
+      await expect(page.locator('[data-lease-banner]'),
+        'the old page holds the lease and shows no banner — without this the '
+        + 'assertion further down passes on a banner that was never hidden')
+        .toBeHidden();
 
       // MODEL.html takes the file.
       const modern = await context.newPage();
@@ -488,6 +501,8 @@ test.describe('rung 3 — the pages in front of the gate', () => {
     await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1', { timeout: 8000 });
     await drawWallOn(page, [[-6, -2], [0, -2]]);
     await expect(page.locator('#save')).toHaveText('UNSAVED');
+    await expect(page.locator('[data-lease-banner]'),
+      'no banner while it still holds the lease').toBeHidden();
 
     const other = await openNew(await context.newPage());
     await takeOverOn(other);
@@ -528,6 +543,8 @@ test.describe('rung 3 — the pages in front of the gate', () => {
       await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1', { timeout: 8000 });
       await drawWallOn(page, [[-6, -2], [0, -2]]);
       await expect(page.locator('#save')).toHaveText('UNSAVED');
+      await expect(page.locator('[data-lease-banner]'),
+        'no banner while it still holds the lease').toBeHidden();
 
       const other = await openNew(await context.newPage());
       await takeOverOn(other);
@@ -593,6 +610,8 @@ test.describe('rung 3 — the pages in front of the gate', () => {
       await expect(page.locator('[data-changed-elsewhere]'),
         'so the drafter is told nothing at all: a banner here is a lie they act on')
         .toBeHidden();
+      await expect(page.locator('[data-lease-banner]'),
+        'and no read-only banner ever appeared').toBeHidden();
       await expect(page.locator('#save'), 'and they can still save').toBeEnabled();
     });
 

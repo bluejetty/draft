@@ -164,6 +164,12 @@ test.describe('a stale write is refused, not merged over', () => {
       expect(before, 'both pages must start on the rectangle')
         .toMatchObject({ x: -10, z: -5 });
 
+      // THE NEGATIVE HALF of the banner assertion further down: this page holds
+      // the lease right now, so the banner must be GONE. Without it that
+      // assertion is satisfied by a banner that was never hidden, which is the
+      // bug that actually shipped.
+      await expect(page.locator('[data-lease-banner]')).toBeHidden();
+
       // ── the new page saves a moved corner ─────────────────────────────────
       const modern = await context.newPage();
       await modern.goto('/MODEL.html?mode=night');
