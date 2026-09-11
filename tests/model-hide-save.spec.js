@@ -291,3 +291,126 @@ test.describe('rung 4 — the hide-save', () => {
       .toBe(before.rev);
   });
 });
+
+// ── rung 4a — the hide-save / lease-release ordering ─────────────────────────
+//
+// Spec of record: RULING-autosave-two-writers.md §3.4, and the rung-4 code this
+// extends.
+//
+// Rung 4 was correct and its COMMENT was not. It said listener registration
+// order put the write out "while the page still holds the lease", but
+// registration order settles the CALL order; the write is asynchronous and the
+// release listener ran while it was still in flight. It happened to work — both
+// paths reach IndexedDB through one cached connection, so the write's
+// transaction was created first and IndexedDB serialises overlapping
+// transactions in creation order — which is a guarantee two levels below the
+// one the comment named, and one added `await` from inverting silently.
+//
+// The release now waits on the write. These cases are about COMPLETION order,
+// which is what the rung-4 cases could not see: swapping the two listeners is
+// already caught by 'pagehide saves on its own' above, and an assertion on call
+// order would only re-test that.
+//
+// The note about dispatched events applies here too: this proves what the
+// handlers do when they run, not that a browser fires them.
+test.describe('rung 4a — the release waits for the write', () => {
+
+  // Both store entry points, logged on the way in and on the way out. The page
+  // looks `saveSharedFile` and `releaseLease` up on the store object at call
+  // time, so patching the object is enough.
+  const instrument = page => page.evaluate(() => {
+    const S = window.SharedFileStore;
+    window.__order = [];
+    const write = S.saveSharedFile, release = S.releaseLease;
+    S.saveSharedFile = (...args) => {
+      window.__order.push('write:call');
+      return write.apply(S, args).then(
+        value => { window.__order.push('write:done'); return value; },
+        error => { window.__order.push('write:failed'); throw error; });
+    };
+    S.releaseLease = (...args) => {
+      window.__order.push('release:call');
+      return release.apply(S, args).then(
+        value => { window.__order.push('release:done'); return value; },
+        error => { window.__order.push('release:failed'); throw error; });
+    };
+  });
+  const order = page => page.evaluate(() => window.__order);
+
+  const leaseNow = page => page.evaluate(async bucket =>
+    window.SharedFileStore.readLease(bucket, 'model'), BUCKET);
+  const myHolderId = page => page.evaluate(() => window.SharedFileStore.leaseHolderId());
+
+  // ── 1 ────────────────────────────────────────────────────────────────────
+  // THE COMPLETION ORDER, WHICH IS THE WHOLE RUNG. Not "the release was called
+  // second" — rung 4 had that — but "the release had not even been asked for
+  // until the write had finished".
+  test('the release does not land before the hide-save\'s write', async ({ page }) => {
+    await editedPage(page);
+    await instrument(page);
+
+    await hideByPagehide(page);
+    await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
+    await page.waitForTimeout(SETTLE);
+
+    const log = await order(page);
+    expect(log, 'the write must have run and finished').toContain('write:done');
+    expect(log, 'and the release must have run').toContain('release:call');
+    expect(log.indexOf('write:done'),
+      'the release must not be asked for until the write has settled')
+      .toBeLessThan(log.indexOf('release:call'));
+  });
+
+  // ── 2 ────────────────────────────────────────────────────────────────────
+  // THE REGRESSION THE CHAINING COULD INTRODUCE, and the one a first draft gets
+  // wrong by chaining on resolve. A refused write must still give the lease up:
+  // holding it because our own save failed costs the next drafter the full TTL
+  // for nothing.
+  test('a hide-save whose write fails still releases the lease', async ({ page, context }) => {
+    await editedPage(page);
+    const mine = await myHolderId(page);
+    expect((await leaseNow(page))?.holderId, 'this page must hold the lease first').toBe(mine);
+
+    // An unleased write from elsewhere moves the revision; this page is dirty,
+    // so it deliberately does not adopt it, and its own write is refused stale.
+    const other = await context.newPage();
+    await other.goto('/MODEL.html?mode=night');
+    await other.waitForFunction(() => !!window.SharedFileStore, null, { timeout: 10000 });
+    await other.evaluate(async bucket => {
+      const S = window.SharedFileStore;
+      const file = await S.loadSharedFile(bucket);
+      const drawing = JSON.parse(await file.text());
+      drawing.notes = [{ id: 'from-elsewhere', text: 'x' }];
+      await S.saveSharedFile(
+        new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), bucket);
+    }, BUCKET);
+    await page.waitForTimeout(400);
+    await instrument(page);
+
+    await hideByPagehide(page);
+    await page.waitForTimeout(SETTLE);
+
+    const log = await order(page);
+    expect(log, 'the write must really have been refused').toContain('write:failed');
+    expect(await leaseNow(page), 'and the lease must be gone all the same').toBeNull();
+    await other.close();
+  });
+
+  // ── 3 ────────────────────────────────────────────────────────────────────
+  // A BACKGROUNDED TAB IS COMING BACK. Only pagehide gives the lease up; a
+  // drafter who switched apps to read their mail must not return to a page that
+  // handed its lease away. This is the case that notices if the two handlers
+  // are ever merged into one.
+  test('a hidden-but-not-unloading tab keeps its lease', async ({ page }) => {
+    await editedPage(page);
+    const mine = await myHolderId(page);
+
+    await hideByVisibility(page);
+    await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
+    await page.waitForTimeout(SETTLE);
+
+    expect((await leaseNow(page))?.holderId,
+      'visibilitychange must not release the lease').toBe(mine);
+    await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1');
+  });
+});

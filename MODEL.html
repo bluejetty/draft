@@ -2629,21 +2629,44 @@
   // is rung 5, and rung 5 is illegal until this page is the sole model writer.
   // A mutation in the rung-4 PR fires this on a timer specifically so the suite
   // can tell the two rungs apart.
+  // THE WRITE THE RELEASE WAITS ON. Rung 4 dropped this promise on the floor,
+  // which is what left the write and the lease release racing; the release
+  // below chains off it.
+  let inFlightWrite = null;
   const saveOnHide = () => {
     if (!dirty || !drawing || !holdsLease()) return;
+    const write = writeDrawing();
+    inFlightWrite = write;
     // NOTHING ON FAILURE, ON PURPOSE. Stale, refused, store unreachable — the
     // page keeps the edit and keeps saying UNSAVED, because markSaved() runs
     // only inside a resolved write. The failure mode of a best-effort save is
     // "the drafter still has their work and can still see it is unsaved", never
     // "the drafter was told it was fine" on the way out the door.
-    writeDrawing().catch(() => {});
+    //
+    // SWALLOWED HERE RATHER THAN IN THE STORED PROMISE. `inFlightWrite` keeps
+    // the raw write, so the release can tell a failure from a success and
+    // still run either way; a pre-caught promise would hide the difference and
+    // make a release chained on success alone look correct.
+    write.catch(() => {});
   };
-  // REGISTERED BEFORE THE LEASE RELEASE BELOW, AND THE ORDER IS LOAD-BEARING.
-  // Listeners run in registration order, so this write goes out while the page
-  // still holds the lease it writes under. Release first and the save that
-  // follows is refused by a lease this page gave up one line earlier — a
-  // refusal built by hand. The pagehide case of the rung-4 spec is what keeps
-  // the order honest.
+  // REGISTERED BEFORE THE LEASE RELEASE BELOW, WHICH BUYS THE CALL ORDER AND
+  // NOTHING MORE. Listeners run in registration order, so this handler is
+  // CALLED first — but it starts an asynchronous write and returns, so the
+  // release listener runs while that write is still in flight. What guarantees
+  // the lease is still live when the write reads it is the release awaiting
+  // `inFlightWrite`, below; registration order alone never settled a race
+  // between two async operations.
+  //
+  // WHY THIS WAS NOT A BUG BEFORE THE CHAINING, for the record and not as the
+  // guarantee: both paths reach IndexedDB through the store's `withDb`, which
+  // awaits one cached connection promise, so the write's continuation is queued
+  // as a microtask ahead of the release's and its `readwrite` transaction is
+  // created first — and IndexedDB serialises overlapping transactions on a
+  // store in creation order. True, load-bearing, and two levels below anything
+  // this file says. One added `await` before the write's transaction opens, or
+  // the re-open branch inside `withDb`, inverts it silently and nothing
+  // reports. That is the sentence this comment used to make, and the reason it
+  // was replaced rather than softened.
   window.addEventListener('pagehide', saveOnHide);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'hidden') return;
@@ -2654,10 +2677,22 @@
   // IndexedDB write fail to land on a tab reload with no memory pressure at all;
   // the TTL is the real backstop and this only shortens the wait for whoever is
   // next.
+  //
+  // AFTER THE HIDE-SAVE, AND AFTER IT EITHER WAY. The release is chained on the
+  // write's promise SETTLING, not resolving: a write that was refused as stale
+  // must still give the lease up, or a failed best-effort save would cost the
+  // next drafter the full TTL — a regression traded for nothing. With no write
+  // in flight this is exactly what it was.
+  //
+  // ONLY pagehide RELEASES. visibilitychange deliberately does not: a
+  // backgrounded iPad tab is coming back, and handing its lease away while the
+  // drafter is reading their mail is how they return to a read-only page.
   window.addEventListener('pagehide', () => {
     const S = window.SharedFileStore;
     if (!holdsLease() || !S || !S.releaseLease) return;
-    S.releaseLease(BUCKET, LEASE_SCOPE, holderId()).catch(() => {});
+    const release = () => S.releaseLease(BUCKET, LEASE_SCOPE, holderId()).catch(() => {});
+    if (inFlightWrite) inFlightWrite.then(release, release);
+    else release();
   });
 
   // ── the change broadcast ────────────────────────────────────────────────────
