@@ -118,6 +118,18 @@ test.describe('MODEL.html write tier', () => {
         'the drafter changed nothing, so the file must still say what it said — '
         + 'a page that draws a substitute may not write one')
         .toBe(legacyName);
+
+      // AND THE DRAFTER CAN FIND OUT. The ruling asks for this in the same voice
+      // the dropped-item count already uses: the page says what it could not do
+      // rather than looking like it did it. Without it the accommodation is
+      // invisible — the wall simply looks thinner and nothing on screen says the
+      // page could not draw what the file holds.
+      //
+      // MUTATION: drop the readout clause. Fails.
+      await expect(readout(page),
+        'the page must say a substitution happened, or the drafter has no way to '
+        + 'tell a thinner wall from a page that cannot draw the real one')
+        .toContainText('1 wall type substituted');
     });
 
   test('a save through the new page equals the save the old page wrote, key for key', async ({ page }) => {

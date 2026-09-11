@@ -1422,6 +1422,18 @@
       // Malformed geometry is dropped on load, as the old page drops it. Say
       // how much, so a thinner drawing is a fact rather than a mystery.
       + (dropped ? `   <b>${dropped} dropped</b>` : '')
+      // A SUBSTITUTION IS NOT A FACT ABOUT THE DRAWING, and the drafter should
+      // be able to find out one happened. This page has no 12" assembly, so it
+      // paints those walls as 8" — drawing nothing would be worse — and the file
+      // keeps `concrete_12` either way (RULING-substitution-is-not-a-save).
+      // Without this clause the accommodation is invisible: the wall looks
+      // thinner and there is nothing on screen to say the page could not draw
+      // what the file says. The same voice as `dropped` above, for the same
+      // reason — this page says what it could not do rather than looking like
+      // it did it.
+      + (substitutedWallTypes.size
+        ? `   <b>${substitutedWallTypes.size} wall type${substitutedWallTypes.size === 1 ? '' : 's'} substituted</b>`
+        : '')
       // THE SAME RULE AS `dropped` ABOVE, for the same reason. A PDF underlay
       // is stored, is on this level, and will never draw here -- so without
       // this line the drafter sees the thing they were tracing simply gone and
