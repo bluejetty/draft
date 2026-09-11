@@ -96,7 +96,7 @@ The last two are Finding B.
 
 ### Output surface
 
-**65 literal top-level keys, plus 2 conditional** — `layout` and `specs`, both
+**67 literal top-level keys, plus 2 conditional** — `layout` and `specs`, both
 emitted by spread and both absent when the page holds no such payload:
 
     ...(this._layoutData ? { layout: this._layoutData } : {}),   MODEL.dc.html:3433
@@ -132,13 +132,20 @@ that does not depend on how the source happens to be wrapped. The three wrong
 counts are recorded here because a number that changes when you look again is
 the one thing a census must not quietly settle.)
 
-The 65 literal keys were diffed against `PERSISTED_KEYS` in
+The 67 literal keys were diffed against `PERSISTED_KEYS` in
 `tests/persisted-format.spec.js`:
 
-    spec PERSISTED_KEYS: 65   dupes: 0
-    serializer literal keys: 65
+    spec PERSISTED_KEYS: 67   dupes: 0
+    serializer literal keys: 67
     in serializer, NOT in spec: (none)
     in spec, NOT in serializer literal: (none)
+
+**65 UNTIL 11 SEP, and the two additions are `levelLocks` and `nextLevelLockId`
+— level locks.** Serializer and spec still agree exactly: nothing
+written-but-undeclared, nothing declared-but-unwritten. This was documentation
+drift, not a persistence hole, and it is corrected here from a re-run of
+`node proto/w0-census.js` on the merged tree rather than by editing the prose to
+taste. A census nobody re-ran is the failure this document exists to remove.
 
 **Exact match, no drift.** That list is currently honest.
 
@@ -279,7 +286,7 @@ the spec file was written to name, applied to the key it did not cover.
   unchanged**.
 - A format whose keys are all named explicitly — **no `this.state` spread** —
   so the census can be re-run rather than re-derived.
-- **65 fixed keys plus 2 conditional ones**, and **15 per-entity conditional
+- **67 fixed keys plus 2 conditional ones**, and **15 per-entity conditional
   spreads** below them, one of which branches on shape rather than presence;
   the output shape is not constant at either level.
 - **One initialiser to split**, not port (Finding A).
