@@ -3266,7 +3266,9 @@ class Component extends DCLogic {
         levelId: wall.levelId,
         view: wall.view || 'plan',
         body: wall.body === 'garage' ? 'garage' : undefined,
-        wallType: wall.wallType,
+        // THE ORIGINAL WINS. A page may show less than the file contains; it may
+        // not save less than the file contains.
+        wallType: wall.legacyWallType || wall.wallType,
         baseHeight: wall.baseHeight,
         topHeight: wall.topHeight,
         refLine: wall.refLine,
@@ -4153,6 +4155,16 @@ class Component extends DCLogic {
     const clauses = [];
     if (skipped) {
       clauses.push(`${skipped} ${skipped === 1 ? 'item was' : 'items were'} incomplete and could not be loaded`);
+    }
+    // NOT AN ERROR, AND DELIBERATELY NOT COUNTED AS ONE. `skipped` flips
+    // drawingMessageError because something is wrong with the FILE; a
+    // substitution means something is missing from THIS APP. The file is
+    // intact and stays intact — the ruling asks only that the drafter be able
+    // to find out, in the voice this report already speaks.
+    const substituted = outcome.ok ? (outcome.substituted || 0) : 0;
+    if (substituted) {
+      clauses.push(`${substituted} ${substituted === 1 ? 'wall uses' : 'walls use'} a retired assembly this app no longer draws`
+        + ` and ${substituted === 1 ? 'is' : 'are'} shown as the closest current one — the file keeps the original`);
     }
     if (orphaned) {
       clauses.push(`${orphaned} ${orphaned === 1 ? 'item' : 'items'} belonged to a level that is no longer in the drawing and ${orphaned === 1 ? 'was' : 'were'} dropped`);
@@ -5723,6 +5735,22 @@ class Component extends DCLogic {
           body: wall?.body === 'garage' ? 'garage' : undefined,
           wallType: WALL_TYPES.some(type => type.id === wall.wallType) ? wall.wallType
             : (LEGACY_WALL_TYPES[wall.wallType] || 'stud_2x6'),
+          // THE ORIGINAL, KEPT IN MEMORY AND NEVER IN THE FILE (RULING-substitution-is-not-a-save,
+          // 11 Sep). The substitution above exists so the wall can be PAINTED —
+          // this app has no 12" concrete assembly and drawing nothing is worse
+          // than drawing 8" — and a substitution made to paint is not a fact
+          // about the drawing. The serializer re-emits this id into the same
+          // `wallType` key, so the file keeps `concrete_12` and the format does
+          // not gain a field.
+          //
+          // The mapping is lossy AND ONE-WAY: nothing in a saved file records
+          // that a wall was ever 12". Thicker types are one table row away from
+          // coming back, but a drawing already round-tripped does not come back
+          // with them, so every save that persisted the substitute was four
+          // inches of foundation no later feature could restore.
+          ...(!WALL_TYPES.some(type => type.id === wall.wallType)
+            && LEGACY_WALL_TYPES[wall.wallType]
+            ? { legacyWallType: wall.wallType } : {}),
           baseHeight: format.number(wall.baseHeight, 0),
           topHeight: format.number(wall.topHeight, DEFAULT_WALL_TOP_FT),
           refLine: format.oneOf(wall.refLine, REF_LINES, 'left'),
@@ -5732,6 +5760,11 @@ class Component extends DCLogic {
         })).filter(Boolean)
         : [];
       skipped += damaged(saved.walls, this._walls.length);
+      // COUNTED OFF THE WALLS THAT LANDED, not off the file: a retired wall
+      // that failed to restore for some other reason is not a substitution the
+      // drafter needs told about, and this counts the same field the serializer
+      // re-emits rather than re-deriving the condition a second time.
+      const substituted = this._walls.filter(wall => wall.legacyWallType).length;
       this._floors = Array.isArray(saved.floors)
         ? saved.floors.map(floor => {
           const levelId = format.levelId(migrateLevelId(floor?.levelId), ownerLevelIds);
@@ -6094,7 +6127,7 @@ class Component extends DCLogic {
       // invisible/stale sections behind in 3D or accumulate duplicates.
       this._clearCutObjects();
       cuts.forEach(cut => this._restoreCutObjects(cut));
-      return { ok: true, reason: 'loaded', orphaned, skipped: Math.max(0, skipped) };
+      return { ok: true, reason: 'loaded', orphaned, skipped: Math.max(0, skipped), substituted };
   }
 
   // Returns { ok, reason }. A load that cannot be understood leaves the current
@@ -18030,7 +18063,12 @@ class Component extends DCLogic {
     this._groupItems(group)
       .filter(item => this._itemType(item) === 'wall' && !this._isCurrentContextReferenceItem(item))
       .forEach(wall => {
-        if (settings.wallType) wall.wallType = settings.wallType;
+        // A DRAFTER'S CHANGE ENDS THE SUBSTITUTION. Keeping the original past
+        // this point would re-emit `concrete_12` for a wall somebody just set
+        // to ICF — "never persist the substitute" turned into "never persist
+        // the drafter's change", which is the failure mode the fix itself
+        // creates if this line is missed.
+        if (settings.wallType) { wall.wallType = settings.wallType; delete wall.legacyWallType; }
         if (Number.isFinite(settings.baseHeight)) wall.baseHeight = settings.baseHeight;
         if (Number.isFinite(settings.topHeight)) wall.topHeight = settings.topHeight;
         if (settings.refLine) wall.refLine = settings.refLine;
