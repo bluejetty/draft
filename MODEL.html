@@ -2415,6 +2415,27 @@
     };
   };
 
+  // ONE WRITE, TWO CALLERS. The press and the hide-save below both come through
+  // here, and that is the point: two write paths to one file is how the two
+  // halves drift apart, and the half that drifts is always the one nobody
+  // watches. Everything that decides WHETHER to write stays with the caller;
+  // everything that decides HOW lives here.
+  //
+  // markSaved() is inside the await rather than after it at the call site, so a
+  // page cannot say SAVED before the store has taken the bytes.
+  const writeDrawing = async () => {
+    const contents = JSON.stringify(serializeDrawing());
+    const file = new File([contents], 'model-drawing.json', { type: 'application/json' });
+    storeRev = await window.SharedFileStore.saveSharedFile(file, BUCKET, {
+      // BOTH GUARDS, NOT ONE. The lease prevents the collision; `ifRev`
+      // catches the case where prevention failed. Dropping `ifRev` because
+      // this page holds a lease would reintroduce audit C3.
+      ifRev: Number.isInteger(storeRev) ? storeRev : null,
+      lease: { scope: LEASE_SCOPE, holderId: holderId(), generation: leaseGeneration },
+    });
+    markSaved();
+  };
+
   const save = async () => {
     if (!drawing) return;
     // A READ-ONLY PAGE DOES NOT ASK. The store would refuse it anyway — that gate
@@ -2424,17 +2445,8 @@
     if (!holdsLease()) { paintLease(); return; }
     saveButton.disabled = true;
     saveButton.textContent = 'SAVING…';
-    const contents = JSON.stringify(serializeDrawing());
-    const file = new File([contents], 'model-drawing.json', { type: 'application/json' });
     try {
-      storeRev = await window.SharedFileStore.saveSharedFile(file, BUCKET, {
-        // BOTH GUARDS, NOT ONE. The lease prevents the collision; `ifRev`
-        // catches the case where prevention failed. Dropping `ifRev` because
-        // this page holds a lease would reintroduce audit C3.
-        ifRev: Number.isInteger(storeRev) ? storeRev : null,
-        lease: { scope: LEASE_SCOPE, holderId: holderId(), generation: leaseGeneration },
-      });
-      markSaved();
+      await writeDrawing();
       // The note described a difference this save has just resolved.
       if (elsewhereNote) elsewhereNote.hidden = true;
       saveButton.disabled = false;
@@ -2593,6 +2605,50 @@
         .catch(error => console.warn('draft: takeover failed', error));
     });
   }
+
+  // ── the hide-save ───────────────────────────────────────────────────────────
+  // RULING-autosave-two-writers.md §3.4, rung 4. AN EXTRA, NOT A MECHANISM.
+  // The press is still the only commit point and stays the only commit point.
+  // This closes the tab-closed hole MOST OF THE TIME, which is the whole claim
+  // and the most that can honestly be claimed: the probe (TTL-MEASUREMENT-MEMO)
+  // measured a pagehide IndexedDB write failing to land on a tab reload with no
+  // memory pressure at all. It landed on close. So nothing here — no rung, no
+  // test, no comment — may assume this ran.
+  //
+  // TWO LISTENERS, AND NEITHER IS A SUPERSET OF THE OTHER. visibilitychange is
+  // what fires when an iPad drafter switches apps or backgrounds the tab;
+  // pagehide is what fires on close and on navigation. A page that listened to
+  // one of them would miss whichever half of the drafter's day it did not pick.
+  //
+  // It writes only when it can write CLEANLY, and the three conditions are the
+  // press's own: something to save, a lease to save under, a drawing to
+  // serialise. A hide-save that fired without the lease would spend a refusal
+  // to learn what holdsLease() already knew, exactly as save() says.
+  //
+  // NO TIMER, AND THAT IS NOT AN OVERSIGHT. Saving on an interval or a debounce
+  // is rung 5, and rung 5 is illegal until this page is the sole model writer.
+  // A mutation in the rung-4 PR fires this on a timer specifically so the suite
+  // can tell the two rungs apart.
+  const saveOnHide = () => {
+    if (!dirty || !drawing || !holdsLease()) return;
+    // NOTHING ON FAILURE, ON PURPOSE. Stale, refused, store unreachable — the
+    // page keeps the edit and keeps saying UNSAVED, because markSaved() runs
+    // only inside a resolved write. The failure mode of a best-effort save is
+    // "the drafter still has their work and can still see it is unsaved", never
+    // "the drafter was told it was fine" on the way out the door.
+    writeDrawing().catch(() => {});
+  };
+  // REGISTERED BEFORE THE LEASE RELEASE BELOW, AND THE ORDER IS LOAD-BEARING.
+  // Listeners run in registration order, so this write goes out while the page
+  // still holds the lease it writes under. Release first and the save that
+  // follows is refused by a lease this page gave up one line earlier — a
+  // refusal built by hand. The pagehide case of the rung-4 spec is what keeps
+  // the order honest.
+  window.addEventListener('pagehide', saveOnHide);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') return;
+    saveOnHide();
+  });
 
   // BEST EFFORT, AND NOTHING DEPENDS ON IT (§3.4). The probe found a pagehide
   // IndexedDB write fail to land on a tab reload with no memory pressure at all;
