@@ -37,6 +37,16 @@ async function retiredWallInStore(page) {
   await h.clickWorld(page, 6, 0);
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
+  // A SECOND WALL THAT IS NOT RETIRED, and it is not scenery. With one wall in
+  // the drawing, "1 wall uses a retired assembly" is true whether the page
+  // substituted for that one wall or for every wall it loaded — measured, not
+  // supposed: a mutant that marked EVERY wall substituted passed the whole file
+  // until this wall existed.
+  await h.selectTool(page, 'Wall');
+  await h.clickWorld(page, -6, 4);
+  await h.clickWorld(page, 6, 4);
+  await page.keyboard.press('Enter');
+  await h.waitForSaved(page);
 
   const id = await page.evaluate(async ({ bucket, retired }) => {
     const S = window.SharedFileStore;
@@ -90,7 +100,9 @@ test('the page says a retired assembly was substituted, and not as an error', as
   // told what this app could not do rather than being left to assume it drew
   // what the file says.
   const message = page.locator('[data-model-drawing-message]');
-  await expect(message).toContainText('retired assembly this app no longer draws');
+  await expect(message).toContainText('1 wall uses a retired assembly this app no longer draws');
+  // ONE, not both. The drawing holds two walls and only one of them is retired.
+  await expect(message).not.toContainText('2 walls use');
   await expect(message).toContainText('the file keeps the original');
   // NOT AN ERROR. `skipped` means something is wrong with the FILE; this means
   // something is missing from THIS APP, and the file is intact. A substitution
