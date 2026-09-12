@@ -95,6 +95,26 @@ const tapAt = async (page, x, z) => {
   expect(cx >= 0 && cx <= box.width && cy >= 0 && cy <= box.height,
     `world (${x}, ${z}) is off-canvas at ${scale} px/ft — the tap would land nowhere`)
     .toBe(true);
+  // AND NOT UNDER THE CHROME, which is a second way for a tap to land nowhere
+  // and used to be invisible. The view rail is fixed over the top-right of the
+  // sheet, and a tap that hit a seat instead of #plan drew no wall — surfacing
+  // three tests later as `Cannot read properties of undefined (reading
+  // 'start')` on a wall that was never created. The point is on the canvas and
+  // still does not reach it, so the on-canvas check above passes and says
+  // nothing. This names the element that took the tap.
+  const hit = await page.evaluate(({ px, py }) => {
+    const el = document.elementFromPoint(px, py);
+    if (!el) return 'nothing';
+    if (el.id) return `${el.tagName.toLowerCase()}#${el.id}`;
+    // A seat's screen is a bare <canvas> with no id of its own, which reads as
+    // "the tap reached canvas, not the canvas". Name the seat instead.
+    const seat = el.closest('[data-seat]');
+    if (seat) return `the ${seat.dataset.seat} seat on the view rail`;
+    return el.tagName.toLowerCase();
+  }, { px: box.x + cx, py: box.y + cy });
+  expect(hit,
+    `world (${x}, ${z}) is covered by page chrome — the tap reached ${hit}, not the canvas`)
+    .toBe('canvas#plan');
   await page.mouse.click(box.x + cx, box.y + cy);
   await page.waitForTimeout(60);
 };
@@ -318,6 +338,19 @@ test.describe('MODEL.html draw + delete a wall', () => {
   test('after delete + undo the restored corner is POOLED again, so a new wall joins it',
     async ({ page }) => {
       await seed(page);
+      // A TALLER WINDOW, AND ONLY HERE. The view rail is chrome fixed over the
+      // top-right of the sheet, and this test has to tap w-b's restored free
+      // end at world (8, 0) -- the fixture puts it there, so the coordinate is
+      // not free to move. fit() zooms this small fixture to 68.8 px/ft, which
+      // lands that point at (1190, 360) on a 1280x720 window: inside the
+      // rail, on the S2 seat. The tap drew no wall and surfaced forty lines
+      // later as a TypeError on a wall that was never created.
+      //
+      // Not a weakened assertion -- the geometry under test is identical, the
+      // window is just tall enough that the corner is below the rail rather
+      // than behind it. Movie is placing the rail by eye once he can see it;
+      // when it moves, this override should go with it.
+      await page.setViewportSize({ width: 1280, height: 900 });
       await openNewPage(page);
       await tapAt(page, 4, 0);                       // select w-b
       await page.locator('[data-delete-wall]').click();
