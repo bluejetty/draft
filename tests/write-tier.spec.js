@@ -13,9 +13,18 @@
 // THE FIXTURE IS A REAL HOUSE, NOT A HANDMADE OBJECT. The bone builds it on
 // the old page exactly as a first-time user does, which is what makes the
 // comparison honest: bone-built walls carry srcId/offX/offZ source links,
-// the drawing carries floors, roofs, stairs, dims, fenestrations — the
+// the drawing carries floors, roofs, dims, beams, columns, groups, outlines
+// and levelLocks — the
 // fields a synthetic fixture forgets are exactly the ones a save silently
 // drops. The spec asserts the fixture's reach before trusting it.
+//
+// THIS COMMENT USED TO CLAIM STAIRS AND FENESTRATIONS. Measured 11 Sep while
+// widening for the round-trip gate: both arrays are EMPTY in the bone house. A
+// sentence above a green test describing coverage that does not exist is the
+// same defect as an assertion that cannot fail — anyone reading it concluded
+// riseFt and openings were round-tripped, and nothing could contradict it
+// because no assertion stood behind it. Corrected rather than deleted, so the
+// next reader knows the claim was checked rather than quietly dropped.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -57,6 +66,72 @@ async function houseWithPassthroughs(page) {
 }
 
 test.describe('MODEL.html write tier', () => {
+
+  // MOVIE'S RULING, 11 Sep: PAINT THE SUBSTITUTE, NEVER PERSIST IT.
+  //
+  // Found by the round-trip gate's first widening. `legacyWallTypes` rewrites a
+  // retired wall type to the nearest surviving one so the wall can be drawn —
+  // correct for a reader, and this page is also a writer. Before the fix, a
+  // no-op round trip turned `concrete_12` into `concrete_8` IN THE FILE: open an
+  // old house, change nothing, press SAVE, and four inches of concrete are gone
+  // from the record with no message.
+  //
+  // The damage is one-way and time-limited in the worst way: every old drawing
+  // opened and saved between now and the day the thicker type returns loses it,
+  // and when it returns those walls do not, because nothing in the file
+  // remembers what they were.
+  //
+  // MUTATION: drop the restore in serializeDrawing. Fails — the file comes back
+  // migrated.
+  test('a retired wall type is drawn as its substitute and SAVED as itself',
+    async ({ page }) => {
+      await houseWithPassthroughs(page);
+
+      const legacyName = await page.evaluate(async bucket => {
+        const store = window.SharedFileStore;
+        const at = await store.loadSharedFileAt(bucket);
+        const drawing = JSON.parse(await at.file.text());
+        const legacy = Object.keys(window.DraftWallTypes.LEGACY_WALL_TYPES || {});
+        if (!legacy.length) return null;
+        drawing.walls[0].wallType = legacy[0];
+        await store.saveSharedFile(
+          new File([JSON.stringify(drawing)], 'd.json', { type: 'application/json' }),
+          bucket, { ifRev: at.rev });
+        return legacy[0];
+      }, h.STORAGE_BUCKET);
+
+      expect(legacyName,
+        'there is no retired wall type to test with, so this spec asserts '
+        + 'nothing — that is a finding, not a pass').toBeTruthy();
+      const seeded = await h.savedDrawing(page);
+      expect(seeded.walls[0].wallType,
+        'the legacy type must really be in the file before the round trip')
+        .toBe(legacyName);
+
+      await page.goto('/MODEL.html');
+      await expect(readout(page)).toContainText('walls', { timeout: 6000 });
+      await saveButton(page).click();
+      await expect(saveButton(page)).toHaveText('SAVED', { timeout: 6000 });
+
+      const after = await h.savedDrawing(page);
+      expect(after.walls[0].wallType,
+        'the drafter changed nothing, so the file must still say what it said — '
+        + 'a page that draws a substitute may not write one')
+        .toBe(legacyName);
+
+      // AND THE DRAFTER CAN FIND OUT. The ruling asks for this in the same voice
+      // the dropped-item count already uses: the page says what it could not do
+      // rather than looking like it did it. Without it the accommodation is
+      // invisible — the wall simply looks thinner and nothing on screen says the
+      // page could not draw what the file holds.
+      //
+      // MUTATION: drop the readout clause. Fails.
+      await expect(readout(page),
+        'the page must say a substitution happened, or the drafter has no way to '
+        + 'tell a thinner wall from a page that cannot draw the real one')
+        .toContainText('1 wall type substituted');
+    });
+
   test('a save through the new page equals the save the old page wrote, key for key', async ({ page }) => {
     const before = await houseWithPassthroughs(page);
     const legacy = before.drawing;
