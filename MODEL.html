@@ -1310,11 +1310,27 @@
           && String(wall.wallType || '').startsWith('icf'));
         return icf ? 24 : 20;
       },
-      walls: () => walls(),
-      roofs: () => roofs(),
-      floors: () => floors(),
+      // THE WHOLE DRAWING, NOT THE PAGE'S VIEW OF IT. walls(), roofs(),
+      // floors() and outlines() are this page's ON-SCREEN accessors: each one
+      // filters to the active level and the active layer view. A section cuts
+      // through EVERY level at once — that is what a section is — so handing
+      // the painter those filtered lists is a category error, and under a cut
+      // view they filter to nothing at all, because no item's `view` is ever
+      // "cut:S1".
+      //
+      // It did not fail loudly. drawCutView falls back to an ELEVATION when
+      // the cut crosses no walls, so the page painted a plausible picture from
+      // an empty world and every test passed: `ink > 0` is true of an
+      // elevation, and nothing asserted a section. Found by running the same
+      // cut through proto/elevation-harness.js's env, which reported 8
+      // crossings where this one reported none — the third env existing is
+      // what made the disagreement visible, and the spec now asserts the
+      // crossing count rather than that something was drawn.
+      walls: () => drawing?.walls || [],
+      roofs: () => drawing?.roofs || [],
+      floors: () => drawing?.floors || [],
       fenestrations: () => drawing?.fenestrations || [],
-      garageOutlines: levelId => outlines()
+      garageOutlines: levelId => (drawing?.outlines || [])
         .filter(outline => outline.levelId === levelId && outline.garage),
       // Ported from _garageFoundation: the outline answers first, then the
       // master, then the section table's row for this garage's kind.
@@ -1462,7 +1478,19 @@
     });
   };
 
+  // THE FRAME TIME IS AN INSTRUMENT, not a test hook. Measured here rather
+  // than in the spec because the page offers nothing to time from outside:
+  // dispatching a resize and timing it measures canvas REALLOCATION, which on
+  // this fixture swamped the paint so completely that fifty section paints per
+  // frame moved the median from 0.20ms to 0.90ms and the budget check still
+  // passed. A check that survives fifty times the work is not a check, and the
+  // number it produced was not the section's cost. This times the paint body
+  // and nothing else, and the readout carries it, so what the spec asserts is
+  // the same number a drafter can see on a slow drawing.
+  let lastPaintMs = 0;
+
   const paint = () => {
+    const t0 = performance.now();
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
@@ -1550,6 +1578,9 @@
     // on screen to point at. The comment above is the reason: an affordance
     // that acts on something invisible is the same distrust, one step worse.
     if (deleteButton) deleteButton.hidden = !selectedSeg || !!activeCut();
+    // Before updateReadout, so the readout reports the frame it describes and
+    // not the cost of writing itself.
+    lastPaintMs = performance.now() - t0;
     updateReadout();
   };
 
@@ -1608,7 +1639,8 @@
       + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
       + `view <b>${CUT_VIEW}${cut.id}</b>   `
       + `${theme}/${mode}   `
-      + `scale <b>fit to the cut</b>`;
+      + `scale <b>fit to the cut</b>   `
+      + `paint <b>${lastPaintMs.toFixed(2)}</b> ms`;
   };
 
   const updateReadout = () => {
@@ -1664,7 +1696,10 @@
       // has no way to tell a missing feature from a broken page. Naming it
       // costs one clause and turns an absence into a fact.
       + (pdfUnderlays() ? `   <b>${pdfUnderlays()} PDF underlay`
-          + `${pdfUnderlays() === 1 ? '' : 's'} not drawn</b> (needs pdf.js)` : '');
+          + `${pdfUnderlays() === 1 ? '' : 's'} not drawn</b> (needs pdf.js)` : '')
+      // The frame this readout describes, on both views, so a plan and a
+      // section on the same drawing can be compared by looking at them.
+      + `   paint <b>${lastPaintMs.toFixed(2)}</b> ms`;
   };
 
   // ── the level switcher, and the view switcher ─────────────────────────────
