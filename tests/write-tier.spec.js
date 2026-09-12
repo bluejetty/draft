@@ -417,6 +417,8 @@ test.describe('MODEL.html write tier', () => {
   // that owns the format.
   test('gate widening: the two-hop — old writes, new saves, old saves again',
     async ({ browser }) => {
+      // Two full bone builds plus a detour. The 180 s default is for one.
+      test.setTimeout(300_000);
       const LINE = [-6, 2, 6, 2];
 
       const arm = async detour => {
@@ -424,6 +426,10 @@ test.describe('MODEL.html write tier', () => {
         const page = await context.newPage();
         try {
           await houseWithPassthroughs(page);
+          // Counted inside the arm rather than by building a third bone. Same
+          // assertion, one fewer context: the first version of this test opened
+          // three and died in teardown.
+          const linesBefore = (await h.savedDrawing(page)).lines.length;
 
           if (detour) {
             await page.goto('/MODEL.html');
@@ -441,7 +447,7 @@ test.describe('MODEL.html write tier', () => {
           await page.keyboard.press('Enter');
           await h.waitForSaved(page);
 
-          return await h.savedDrawing(page);
+          return { drawing: await h.savedDrawing(page), linesBefore };
         } finally {
           await context.close();
         }
@@ -450,28 +456,18 @@ test.describe('MODEL.html write tier', () => {
       const control = await arm(false);
       const twoHop = await arm(true);
 
-      // THE CONTROL MUST REALLY CARRY THE VEHICLE, or both arms are comparing
-      // two bones and the line never happened — a green that proves nothing,
-      // which is exactly the shape this gate keeps producing.
-      const bone = await (async () => {
-        const context = await browser.newContext();
-        const page = await context.newPage();
-        try {
-          await houseWithPassthroughs(page);
-          return await h.savedDrawing(page);
-        } finally {
-          await context.close();
-        }
-      })();
-      expect(control.lines.length,
-        'the drawn line must really be in the control arm, or the comparison '
-        + 'below is between two untouched bones')
-        .toBe(bone.lines.length + 1);
+      // THE VEHICLE MUST REALLY HAVE HAPPENED, in both arms. Without this the
+      // comparison below is between two untouched bones and passes for the one
+      // reason it must never pass — which is the shape this gate keeps
+      // producing.
+      expect([control.drawing.lines.length - control.linesBefore,
+        twoHop.drawing.lines.length - twoHop.linesBefore],
+      'each arm must really have drawn its line').toEqual([1, 1]);
 
-      expect(twoHop,
+      expect(twoHop.drawing,
         'a detour through MODEL.html must be invisible to the page that owns '
         + 'the format — same bone, same edit, same file')
-        .toEqual(control);
+        .toEqual(control.drawing);
     });
 
   test('a save through the new page equals the save the old page wrote, key for key', async ({ page }) => {
