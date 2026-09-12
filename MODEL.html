@@ -2079,23 +2079,27 @@
         // thumbnail painter is a one-line wrapper over drawCutView (:10117),
         // so this is not a second, smaller renderer that could drift.
         //
-        // ELEVATIONS DO NOT GET ONE, and that is a measurement rather than a
-        // preference. proto/cut-view-timing.js, per seat on the 24-wall house:
+        // ELEVATIONS DO NOT GET ONE, and the reason is what the seat is FOR,
+        // not what it costs. A thumbnail earns its keep where the name does
+        // not identify the view: S1 and S2 tell a drafter nothing about which
+        // section is which, so a picture is the only way to tell them apart.
+        // E1 FRONT and E3 BACK already do the job a picture would.
+        //
+        // The cost only makes the correct answer also the cheap one, and it
+        // is worth recording because it was measured the wrong way first.
+        // Per seat, 232x152, repro-garage-house:
         //
         //     E1 46.8 ms   E2 43.2 ms   E3 47.6 ms   E4 43.7 ms   S1 0.32 ms
         //
-        // About 100x, and identical at 232x152 and 900x600 -- so it is the
-        // painter's hidden-line geometry, not fill. Four live elevations is
-        // ~180 ms of blocking JS on EVERY edit: a freeze the drafter feels on
-        // every wall they draw. A section costs a third of a millisecond and
-        // is the seat where a preview earns its keep anyway, since two
-        // sections of one house look alike by name where E1 FRONT and E3 BACK
-        // do not.
+        // About 100x, holding across three houses and IDENTICAL at 232x152
+        // and 900x600 -- so it is the painter's hidden-line geometry, not
+        // fill. Four live elevations is ~180 ms of blocking JS on every edit;
+        // in the browser, before this, the rail cost 148 ms per wall drawn.
         //
-        // This is Devin's own pre-authorised fallback -- "labels behind the
-        // same seat, which costs nothing to keep possible" -- and it is
-        // literal: the seat, the canvas and the epoch are unchanged, so a
-        // cheaper elevation painter turns four lines back into a thumbnail.
+        // THE SHAPE IS KEPT ON PURPOSE. Seat, canvas and epoch are unchanged
+        // and an elevation draws its name where its picture would go, so a
+        // faster elevation painter becomes a thumbnail here without moving a
+        // seat -- Devin's "labels behind the same seat", taken literally.
         if (spec.cut.auto) { labelScreen(c, screen.width, screen.height, spec); return; }
         window.DraftCutView.drawCutView(env, c, screen.width, screen.height, spec.cut);
       });
