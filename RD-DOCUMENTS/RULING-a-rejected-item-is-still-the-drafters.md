@@ -140,12 +140,19 @@ Recorded rather than tidied away, for the same reason as everything else in this
 file: the wrong version existed for twenty minutes and a ruling that shows only
 its final state cannot be checked by the next person who reads it.
 
-**One dangling citation, noted while writing this.** `MODEL.html`,
-`MODEL.dc.html` and `tests/legacy-wall-type-round-trip.spec.js` all cite
-`RULING-substitution-is-not-a-save`, and **there is no such file in
-`RD-DOCUMENTS/`.** The ruling is real and both halves of it shipped; the
-document never landed in the repo. Three code comments now point at nothing,
-which is the stale-reference failure this crew has hit repeatedly. Not fixed
-here — writing someone else's ruling from memory is how a document ends up
-saying what the reader expected instead of what was decided — but named, so the
-next reader stops looking for a file that is not there.
+**The dangling citation, found while writing this — and now fixed.**
+`RULING-substitution-is-not-a-save` was cited by **five files on main** and
+existed in none of them: `MODEL.html`, `MODEL.dc.html`, `BOARDS.md`,
+`W0-serializer-census.md`, `tests/legacy-wall-type-round-trip.spec.js`. The
+ruling is real and both halves shipped; the document never landed, so the repo
+spent a day enforcing a file it did not contain.
+
+I first counted **three**, because I grepped my own branch instead of main. The
+two I missed are the two I wrote myself — `cfd644c` and `5a1cee7` on the census
+branch. **I cited a document I had never opened, and then reported it missing.**
+
+Movie's original is now committed verbatim rather than reconstructed. Rebuilding
+it from the code comments and PR bodies it produced would have given a document
+that agrees with everything already written and could not contradict any of it —
+which is the whole reason a citation to a missing file is dangerous rather than
+merely untidy.
