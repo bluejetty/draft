@@ -66,9 +66,10 @@ from a spec that did measure. Rows marked `?` say what would settle them.
 | Change a wall's type | wall-type picker on a group | **absent** | must-have | #377 established there is no change-type verb at all |
 | Undo | undo stack | **present** — `Ctrl/Cmd+Z`, one press per gesture | must-have | covers add, remove, move |
 | **Redo** | redo | **absent** | must-have | the handler excludes `shiftKey`; there is no `redo` in the file |
-| **Switch level** | level rail | **absent** | **must-have** | `activeLevelIdx` is read in three places and set in none |
-| Add / delete / insert a level | level rail | absent | must-have | |
-| Level locks | lock toggles | absent | ? | persisted (`levelLocks`) but no gesture here |
+| **Switch level** | level rail | **present** — `level-pick` in the chrome bar, its `change` handler, `goToLevel` | must-have | keyed by `?level=` in the URL, not by an index |
+| Switch layer view within a level | layer view rail | **present** — `view-pick`, filled from `DraftLayerViews.layerViewsForLevelId` | must-have | hides itself on ROOF and SITE, which hold no layer views |
+| Add / delete / insert a level | level rail | **absent** | must-have | re-derived in this page's own vocabulary: no add/insert/remove verb, and no `levels` mutation. It re-emits the levels it loaded |
+| Level locks | lock toggles | **absent** | ? | re-derived the same way: no lock verb in the chrome bar, no URL parameter, no mutation. The persisted key is re-emitted, not honoured |
 | ASSEMBLY / group / ungroup | assembly rail | absent | ? | my #375 spec drives it on the old page; nothing here |
 | Stacked washrooms, source links | boneyard/assembly work | absent | ? | |
 | Elevation / section previews | right-hand cards | absent | must-have | `SPEC-model-html-cut-views.md` — 18 accessors, 6 absent |
@@ -83,22 +84,61 @@ from a spec that did measure. Rows marked `?` say what would settle them.
 
 ## The three that are real work
 
-1. **Switching level.** A drafter works on more than one floor. The page reads
-   `activeLevelIdx` and offers no way to change it, so everything above the main
-   floor is unreachable — and this is not on anyone's list that I have seen.
-2. **The cut views**, already specified and costed as far as honesty allows.
-3. **The tool palette itself.** Eighteen of the nineteen tools are absent, and
+1. **The cut views**, already specified and costed as far as honesty allows.
+2. **The tool palette itself.** Eighteen of the nineteen tools are absent, and
    the one that exists arrives by a different gesture. Whatever is built next,
    the question "button or palette?" is answered once and then eighteen times.
+3. **Adding and deleting levels.** A drafter can move between the levels a
+   drawing has; they cannot make one. Re-derived in this page's vocabulary
+   rather than by searching for the old page's.
 
 ## The row nobody has mentioned
 
-**Level switching.** The order asked for whichever row the conversation had
-missed, and that is it. The cut views were the missed row an hour ago; this one
-is smaller to state and larger in consequence, because a drafter who cannot
-reach the second floor cannot check that any of the rest of it worked.
+**I offered one and it was wrong** — see the correction below. The honest
+position is that this pass did not find a new must-have the conversation had
+missed. It found that one of the ones we thought was missing is already built.
+
+The nearest thing to a new row is a small one: **the page can switch layer views
+within a level** (`view-pick`), which nobody had mentioned either, and which
+matters mainly because the cut-view host should reuse that mechanism rather than
+invent its own.
 
 ---
+
+## Correction — the level-switching row was wrong in the merged version
+
+The version of this document merged as #381 said level switching was **absent**,
+ranked it the top piece of real work, and offered it as the row nobody had
+mentioned. **All three were wrong.** `MODEL.html` has had a level picker the
+whole time: `level-pick` in the chrome bar, a `change` handler, and `goToLevel`,
+which sets `?level=`, drops a `?view=` the new level does not have, re-syncs the
+URL, rebuilds the chrome and repaints.
+
+**The search error, which is the reusable part: I grepped this page for
+`activeLevelIdx` — the OTHER page's name.** It is `MODEL.dc.html`'s state, an
+*index* into the level list. The new page keys levels by **id** through the URL
+deliberately, and the comment above its switcher explains why: an index agrees
+with the id on a default drawing and disagrees the moment a level is inserted,
+so a switcher carrying an index would pass every test and paint the wrong floor
+on a real house. All three of my hits were comments *about the old page*, in a
+file that deliberately has no such variable.
+
+**When a grep for a name comes back empty, the next question is whether the name
+belongs to this page.** Twice this week it did not.
+
+The two neighbouring rows were re-derived from this page's own vocabulary rather
+than left standing on the same evidence, and both survive as absent — but now
+for reasons read off the chrome bar, the URL parameters and the serializer,
+instead of off a missing identifier.
+
+**The same faulty justification appears in `SPEC-model-html-cut-views.md`**,
+which says of the viewing side "grep those names in `MODEL.html` and you get
+nothing" — `activeView` and `activeCutId` being, again, the old page's names.
+**That spec's conclusion survives**: `?view=` selects *layer* views from
+`DraftLayerViews.layerViewsForLevelId`, and cut views are not among them. But
+the reasoning was the same kind, and the spec deserves a one-line fix in a later
+pass — noted here rather than edited, because this pass's writes are scoped to
+this file.
 
 ## Defects found, not fixed
 

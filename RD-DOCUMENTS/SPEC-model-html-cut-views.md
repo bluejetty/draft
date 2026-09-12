@@ -189,8 +189,23 @@ Named items, in the order I would build them:
    `edgeOnOutline`, `gableCornerStyle`, `elevLabel`, `ftIn`. **The six are the
    real work in this item**, and each needs its old-page implementation read
    before it is costed — I have not done that reading, so I am not costing it.
-2. **View state** — `activeView` / `activeCutId`, and the plan/cut branch in the
-   main canvas (`MODEL.dc.html:7402-7408` is the old page's).
+2. **View state** — and **this page already has some**, which the first version
+   of this spec missed by describing the gap in the old page's vocabulary
+   (`activeView` / `activeCutId`) rather than looking for this page's own.
+   `MODEL.html` keys a view through `?view=` in the URL, with `view-pick` in the
+   chrome bar filled from `DraftLayerViews.layerViewsForLevelId`, and
+   `goToLevel` already drops a `?view=` the new level does not have.
+
+   Those are **layer** views — plan, floor layout — and cut views are not among
+   them, so the conclusion above stands. But the host should **extend that
+   mechanism rather than invent a second one**: a cut view reached by `?view=`
+   is shareable, survives a reload, and inherits the level-change handling that
+   already exists. A parallel `activeCutId` in page state would be a second
+   source of truth for "what am I looking at", which is the shape of defect this
+   project has spent the week removing.
+
+   The plan/cut branch in the main canvas is still needed
+   (`MODEL.dc.html:7402-7408` is the old page's).
 3. **The rail** — seats for E1-E4 and S1-S2, labels only per §2, non-pressable
    when empty per §3.
 4. **The three leave paths** per §4, with tests first.
