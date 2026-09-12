@@ -292,99 +292,136 @@ test.describe('MODEL.html write tier', () => {
   //
   // srcId lives on the POINT, not the wall (drawing-format.js:51): it links a
   // corner to the boneyard master it was generated from, with offX/offZ holding
-  // the offset. MODEL.html rebuilds reference equality at shared corners on
-  // load, so two walls that meet end up holding ONE point object — and one
-  // object can carry one link.
+  // the offset. Both pages rebuild reference equality at shared corners on load,
+  // so two walls that meet end up holding ONE point object — and one object can
+  // carry one link.
   //
-  // The load path already anticipates this and says so: "First point into a
-  // pooled corner wins, matching the identity the old page saved." This test
-  // asks whether that is true of the FILE, which is a different question from
-  // whether it is true of the page.
+  // THIS WAS FILED AS A FINDING AGAINST MODEL.html AND IT IS NOT ONE.
   //
-  // MEASURED, NOT FIXED — AND IT FOUND SOMETHING. The round trip collapses the
-  // two links into one:
+  // The first version of this test asserted that each wall keeps its own link,
+  // saw MODEL.html collapse them, and recorded a defect. Then the same fixture
+  // was run through MODEL.dc.html, and the old page does exactly the same
+  // thing:
   //
-  //     coincident-b.start   srcId  bone-master-B -> bone-master-A
-  //                          offX   -1.5          -> 0.25
-  //                          offZ    2            -> -0.5
+  //     both pages:  coincident-b.start  srcId  bone-master-B -> bone-master-A
+  //                                      offX   -1.5          -> 0.25
+  //                                      offZ    2            -> -0.5
   //
-  // Wall B's corner is silently re-parented to wall A's master, at A's offset.
-  // Nothing on screen changes today, and nothing in the file records that it
-  // happened — but the next time master A moves it drags B's corner with it, to
-  // a position derived from the wrong offset. That is the boneyard link doing
-  // the opposite of its job.
+  // So this is the FORMAT'S IDENTITY MODEL — one shared corner is one point and
+  // one point carries one link — and not a new-page regression. The defect was
+  // in the expectation. It was caught by measuring the other page instead of
+  // ruling on the first result, which is the only reason a correct behaviour
+  // was not "fixed" into a divergence.
   //
-  // test.fail() rather than a fixed expectation, deliberately. Asserting the
-  // current behaviour would write the defect into the suite as the contract,
-  // which is the failure this spec file spent the week removing. As a marked
-  // failure it does two things a passing test cannot: it stays visible as an
-  // open finding, and it goes RED THE DAY SOMEBODY FIXES IT, so the fix cannot
-  // land silently and the ruling gets written down.
+  // WHAT THIS TEST ASSERTS NOW is the Write Tier's actual contract: the two
+  // pages resolve the corner IDENTICALLY. It is written as a comparison between
+  // them rather than against a hardcoded expectation, so it cannot bless one
+  // page's answer — if either page changes how it pools, this goes red and says
+  // which.
   //
-  // ONE THING THIS IS NOT: the handmade points below omit `y`, and the round
-  // trip returns them carrying `y: 0`. That is the fixture, not the page — the
-  // old page writes `y` on every point and the bone round-trips it exactly, as
-  // the whole-file test below proves. Recorded so the next reader does not
-  // re-derive it as a second finding.
-  //
-  // WHAT IS STILL UNMEASURED: whether a real gesture can produce two coincident
-  // corners with different masters. This shows the format can express it and
-  // the round trip does not survive it; it does not show a drafter can reach
-  // it. And the same question of MODEL.dc.html is unasked — if the old page
-  // collapses them too, this is the format's identity model rather than the
-  // new page's bug.
-  test.fail('gate widening: two walls meet at one point carrying different srcIds',
-    async ({ page }) => {
-      await houseWithPassthroughs(page);
+  // STILL OPEN, AND NOT THIS TEST'S TO SETTLE: whether collapsing is the right
+  // model at all. A drafter's second boneyard link is silently discarded on both
+  // pages, and the next time master A moves it drags B's corner to a position
+  // derived from the wrong offset. That is a question about the format, older
+  // than this page, and it wants a board rather than a patch. Also unmeasured:
+  // whether a real gesture can produce two coincident corners with different
+  // masters at all.
+  test('gate widening: both pages resolve a shared corner the same way',
+    async ({ browser }) => {
+      test.setTimeout(300_000);
 
-      await page.evaluate(async bucket => {
-        const store = window.SharedFileStore;
-        const at = await store.loadSharedFileAt(bucket);
-        const drawing = JSON.parse(await at.file.text());
-        const levelId = drawing.levels[0].id;
-        const corner = { x: 40, z: 40 };
-        // Same level, same view, same body, coincident to the last decimal —
-        // everything the pool keys on. The two links differ, which is the only
-        // thing being asked about.
-        drawing.walls.push({
-          id: 'coincident-a', levelId, view: 'plan', wallType: 'stud_2x6',
-          start: { x: 30, z: 40 },
-          end: { ...corner, srcId: 'bone-master-A', offX: 0.25, offZ: -0.5 },
-          baseHeight: 0, topHeight: 8, refLine: 'left',
-        });
-        drawing.walls.push({
-          id: 'coincident-b', levelId, view: 'plan', wallType: 'stud_2x6',
-          start: { ...corner, srcId: 'bone-master-B', offX: -1.5, offZ: 2 },
-          end: { x: 40, z: 50 },
-          baseHeight: 0, topHeight: 8, refLine: 'left',
-        });
-        await store.saveSharedFile(
-          new File([JSON.stringify(drawing)], 'd.json', { type: 'application/json' }),
-          bucket, { ifRev: at.rev });
-      }, h.STORAGE_BUCKET);
+      const seeded = async () => {
+        const context = await browser.newContext();
+        const page = await context.newPage();
+        await houseWithPassthroughs(page);
+        await page.evaluate(async bucket => {
+          const store = window.SharedFileStore;
+          const at = await store.loadSharedFileAt(bucket);
+          const drawing = JSON.parse(await at.file.text());
+          const levelId = drawing.levels[0].id;
+          const corner = { x: 40, z: 40, y: 0 };
+          // Same level, same view, same body, coincident to the last decimal —
+          // everything the pool keys on. The two links differ, which is the only
+          // thing being asked about.
+          drawing.walls.push({
+            id: 'coincident-a', levelId, view: 'plan', wallType: 'stud_2x6',
+            start: { x: 30, z: 40, y: 0 },
+            end: { ...corner, srcId: 'bone-master-A', offX: 0.25, offZ: -0.5 },
+            baseHeight: 0, topHeight: 8, refLine: 'left',
+          });
+          drawing.walls.push({
+            id: 'coincident-b', levelId, view: 'plan', wallType: 'stud_2x6',
+            start: { ...corner, srcId: 'bone-master-B', offX: -1.5, offZ: 2 },
+            end: { x: 40, z: 50, y: 0 },
+            baseHeight: 0, topHeight: 8, refLine: 'left',
+          });
+          await store.saveSharedFile(
+            new File([JSON.stringify(drawing)], 'd.json', { type: 'application/json' }),
+            bucket, { ifRev: at.rev });
+        }, h.STORAGE_BUCKET);
+        return { context, page };
+      };
 
-      const before = await h.savedDrawing(page);
-      const linkOf = (drawing, id, endKey) =>
-        drawing.walls.find(wall => wall.id === id)?.[endKey];
-      expect(linkOf(before, 'coincident-a', 'end').srcId,
-        'the two links must really differ in the file before the round trip')
-        .toBe('bone-master-A');
-      expect(linkOf(before, 'coincident-b', 'start').srcId).toBe('bone-master-B');
-
-      await page.goto('/MODEL.html');
-      await expect(readout(page)).toContainText('walls', { timeout: 6000 });
-      await saveButton(page).click();
-      await expect(saveButton(page)).toHaveText('SAVED', { timeout: 6000 });
-
-      const after = await h.savedDrawing(page);
-      expect({
-        a: linkOf(after, 'coincident-a', 'end'),
-        b: linkOf(after, 'coincident-b', 'start'),
-      }, 'each wall must keep its own link to its own master — a corner two '
-        + 'walls share is still two walls').toEqual({
-        a: linkOf(before, 'coincident-a', 'end'),
-        b: linkOf(before, 'coincident-b', 'start'),
+      const links = drawing => ({
+        a: drawing.walls.find(w => w.id === 'coincident-a')?.end,
+        b: drawing.walls.find(w => w.id === 'coincident-b')?.start,
       });
+
+      // ── the new page: load, press SAVE ──────────────────────────────────
+      const modern = await seeded();
+      let planted;
+      let viaNewPage;
+      try {
+        planted = links(await h.savedDrawing(modern.page));
+        await modern.page.goto('/MODEL.html');
+        await expect(readout(modern.page)).toContainText('walls', { timeout: 6000 });
+        await saveButton(modern.page).click();
+        await expect(saveButton(modern.page)).toHaveText('SAVED', { timeout: 6000 });
+        viaNewPage = links(await h.savedDrawing(modern.page));
+      } finally {
+        await modern.context.close();
+      }
+
+      // ── the old page: load, and make the cheapest edit that forces its
+      //    serializer to run, because it saves on edit and on nothing else ──
+      const legacy = await seeded();
+      let viaOldPage;
+      try {
+        await h.openModel(legacy.page, { webgl: false, rails: false });
+        await h.openRails(legacy.page);
+        await h.selectTool(legacy.page, 'Line');
+        await h.clickWorld(legacy.page, -6, 2);
+        await h.clickWorld(legacy.page, 6, 2);
+        await legacy.page.keyboard.press('Enter');
+        await h.waitForSaved(legacy.page);
+        viaOldPage = links(await h.savedDrawing(legacy.page));
+      } finally {
+        await legacy.context.close();
+      }
+
+      // THE FIXTURE MUST REALLY HAVE HELD TWO DIFFERENT LINKS, or every
+      // assertion below is satisfied by a file that never posed the question.
+      expect([planted.a.srcId, planted.b.srcId],
+        'the two links must really differ before either page reads the file')
+        .toEqual(['bone-master-A', 'bone-master-B']);
+
+      // THE CONTRACT: whatever the format's identity model is, both pages
+      // implement the same one. Compared against each other, never against a
+      // hardcoded answer — a fixed expectation here would bless one page's
+      // behaviour as correct, and which one is correct is exactly what this
+      // test is not entitled to decide.
+      expect(viaNewPage,
+        'the new page must resolve a shared corner exactly as the page that '
+        + 'owns the format does — whatever that resolution is')
+        .toEqual(viaOldPage);
+
+      // AND THE MEASURED FACT, recorded so a future reader does not have to
+      // re-run this to learn what the model IS: both pages keep the first link
+      // into the corner and discard the second.
+      expect([viaNewPage.b.srcId, viaNewPage.b.offX, viaNewPage.b.offZ],
+        'both pages collapse to the first link — recorded as the measurement '
+        + 'it is, not endorsed as the behaviour it should be')
+        .toEqual([planted.a.srcId, planted.a.offX, planted.a.offZ]);
     });
 
   // GATE WIDENING 3 of 3: THE TWO-HOP. old writes -> new saves -> old reopens
