@@ -42,20 +42,58 @@ if (a.error || b.error) {
   process.exit(2);
 }
 
-// IDENTITY, NOT REFERENCE. Not every dimension is a list of strings —
-// `spreads` holds objects, and two separate JSON.parse calls give those
-// distinct identities, so a naive Set comparison reported all 21 as both
-// added and removed when a file was diffed against ITSELF. Caught by testing
-// the tool on an identical pair; it would otherwise have cried "serializer
-// touched" on every rung until someone stopped believing it.
+// IDENTITY BY KEY-SET, NOT BY LINE. Two defects, one after the other, both
+// found by running the tool rather than reading it.
+//
+// The first: `spreads` holds objects, and two separate JSON.parse calls give
+// those distinct identities, so a naive Set comparison reported all 21 as both
+// added and removed when a file was diffed against ITSELF. Fixed by comparing
+// a printed label instead of the object.
+//
+// The second is that the label was `line 26 keys=auto`. A LINE NUMBER IS NOT AN
+// IDENTITY. Insert two lines anywhere above the serializer's spreads and every
+// one of them re-labels, so all 21 read as added and removed again -- which is
+// exactly what happened across #375, where the serializer gained two comment
+// lines and the format did not move at all. The verdict was still "touched",
+// truthfully but for the wrong reason, and the 21-row churn is the noise that
+// teaches a reader to skip the row. An entry is now identified by WHAT IT
+// WRITES: its key-set, its tier, and whether it branches. Where it sits in the
+// file is not part of the format.
+//
+// MULTIPLICITY IS PART OF THE COUNT. Three separate spreads write `auto`. A Set
+// of labels collapses them to one, so deleting two of the three would report no
+// change AND a before/after size of 19 for a 21-entry list. Labels are counted,
+// not deduped, and a repeated label is suffixed `#2`, `#3` so the diff names
+// which occurrence went.
 const label = x => {
   if (x == null) return String(x);
   if (typeof x === 'string') return x;
   if (x.name) return String(x.name);
-  if (x.line != null) return `line ${x.line}${x.keys ? ` keys=${[].concat(x.keys).join('+')}` : ''}`;
+  if (x.keys) {
+    const keys = [].concat(x.keys);
+    // Source order is kept rather than sorted: reordering a spread's keys is an
+    // edit to the serializer, and the gate's question is whether the rung
+    // touched it.
+    return `${x.indent > 6 ? 'per-entity' : 'top-level'}`
+      + ` ${x.branching ? 'branching' : 'optional'}`
+      + ` keys=${keys.join('+') || '(none)'}`;
+  }
+  if (x.line != null) return `line ${x.line}`;
   return JSON.stringify(x);
 };
-const names = list => new Set((list || []).map(label));
+// A counted multiset: label -> occurrences, flattened back to `label`,
+// `label #2`, `label #3` so set arithmetic keeps the population.
+const names = list => {
+  const seen = new Map();
+  const out = new Set();
+  for (const item of (list || [])) {
+    const base = label(item);
+    const n = (seen.get(base) || 0) + 1;
+    seen.set(base, n);
+    out.add(n === 1 ? base : `${base} #${n}`);
+  }
+  return out;
+};
 const rows = [];
 let moved = 0;
 for (const key of COUNTED) {
