@@ -57,3 +57,27 @@ original — but that is a design question with its own test surface, and it is
 one of the two rulings the gate has produced rather than part of the gate.
 
 Widening continues; this comes out as its own lane.
+
+---
+
+## ADDED 12 SEP, NOT PART OF THE RULING AS WRITTEN
+
+Everything above is Movie's text of 11 Sep, committed byte-for-byte a day late.
+Two facts have moved since and are appended rather than edited in, so the
+document still reads as what was decided at the time.
+
+**§3.1 has been ruled, the same way.** Where the text above says it *"is still
+awaiting its own ruling"*, it no longer is:
+`RULING-a-rejected-item-is-still-the-drafters.md`. Rejected items are kept raw
+and re-emitted unchanged; only accepted items paint. The general rule this
+document establishes — *a page may show less than the file contains; it may not
+save less than the file contains* — is what settled it, which is the second
+ruling that sentence has decided and the reason it was written down as a rule
+rather than as a fix.
+
+**Scope, as it turned out.** The note declines to specify implementation and
+guesses at *"the load path keeps the original id beside the substituted one and
+the serializer re-emits the original"*. That is what shipped, on both pages:
+`legacyWallType` in `MODEL.dc.html`, a `substitutedWallTypes` map in
+`MODEL.html`. Recorded because a prediction a document makes about its own
+implementation is worth checking afterwards, and this one was right.
