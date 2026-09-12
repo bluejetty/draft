@@ -430,11 +430,22 @@ if (!window.DraftCutView) {
   // the viewing axis, and the vertical band from below the footings to above
   // the tallest roof. LAYOUT sizes a sheet viewport from these and hands them
   // back through fit.extents so the rectangle and the drawing agree exactly.
+  // Screen-x in world terms: the viewer looks along -dir with +Y up, so right
+  // on the paper is (dir.z, -dir.x) -- the cut line's own direction.
+  //
+  // ONE HOME, because this had four: twice here and twice in the elevation
+  // harness. A host that wants to report what the section contains has to ask
+  // the painter's own passes with the painter's own axis, or it reports the
+  // other direction's answer and disagrees with the picture it sits under.
+  function cutAxis(cut) {
+    const dir = cut.dirVec;
+    return { x: dir.z, z: -dir.x };
+  }
+
   function cutViewExtents(env, cut) {
     const stack = sectionLevelStack(env);
     if (!stack) return null;
-    const dir = cut.dirVec;
-    const axis = { x: dir.z, z: -dir.x };
+    const axis = cutAxis(cut);
     const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
     const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
     let roofTop = null;
@@ -475,10 +486,7 @@ if (!window.DraftCutView) {
     ctx.fillStyle = (opts && opts.paperColor) || '#fafafa';
     ctx.fillRect(0, 0, w, h);
     const stack = sectionLevelStack(env);
-    const dir = cut.dirVec;
-    // Screen-x in world terms: the viewer looks along -dir with +Y up, so
-    // right on the paper is (dir.z, -dir.x) — the cut line's own direction.
-    const axis = { x: dir.z, z: -dir.x };
+    const axis = cutAxis(cut);
     const header = (label) => {
       if (fit) return;   // the sheet captions its viewports itself
       ctx.fillStyle = 'rgba(29,31,32,0.55)';
@@ -1746,6 +1754,7 @@ if (!window.DraftCutView) {
       ROOF_FASCIA_IN,
     }),
     roofHeelIn,
+    cutAxis,
     sectionLevelStack,
     sectionWallCrossings,
     cutViewExtents,

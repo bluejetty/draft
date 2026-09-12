@@ -445,12 +445,29 @@
   //
   // A level is not one drawing. Choosing the level and not the drawing is
   // choosing half.
+  // A CUT IS A VIEW, and it is named in the URL like every other one.
+  // SPEC-model-html-cut-views.md called for "a state saying which one you are
+  // looking at" and the first draft of that spec proposed building one. The
+  // page already had it: `?view=` keyed through the URL. A second source of
+  // truth for what is on screen is the defect shape this project spent the
+  // week removing, so the section reuses the mechanism instead — which also
+  // means it is shareable, survives a reload, and inherits the level-change
+  // handling below for free.
+  const CUT_VIEW = 'cut:';
+  const cutForViewId = id => (typeof id === 'string' && id.startsWith(CUT_VIEW)
+    ? cuts().find(cut => String(cut.id) === id.slice(CUT_VIEW.length)) || null
+    : null);
+  const activeCut = () => cutForViewId(params.get('view'));
+
   const activeViewId = () => {
     const LV = window.DraftLayerViews;
     const levelId = activeLevelId();
     const views = LV.layerViewsForLevelId(levelId);
-    if (!views.length) return null;               // ROOF / SITE hold everything
     const asked = params.get('view');
+    // Before the layer-view lookup, or a cut would be reported as a view the
+    // level does not have and warn on every paint.
+    if (cutForViewId(asked)) return asked;
+    if (!views.length) return null;               // ROOF / SITE hold everything
     if (asked && views.some(v => v.id === asked)) return asked;
     if (asked) {
       console.warn(`MODEL: level ${levelId} has no view "${asked}"; using its `
@@ -1227,9 +1244,12 @@
   // scoped inside stairLevels until the cut-view host needed the same answer,
   // and two level-assembly lookups that could drift apart is how the derive/
   // store divergence got in last time.
+  // levelAssemblyFor IS this lookup, exported for exactly this reason: the
+  // module's own comment says the TABLE had one home while the LOOKUP had
+  // four, and that is how #325's role-less callers happened. Rolling a fifth
+  // copy here would have re-made that bug in the file that warns about it.
   const assemblyFor = id => window.DraftLevelAssembly
-    .normaliseLevelAssembly((drawing?.levelAssemblies || {})[id],
-      window.DraftLevelAssembly.levelRole(id));
+    .levelAssemblyFor(drawing?.levelAssemblies, id);
 
   // ── the cut-view env ────────────────────────────────────────────────────────
   // SPEC-model-html-cut-views.md. cut-view.js's drawCutView reads its world
@@ -1273,7 +1293,23 @@
       levelFloorFt: levelId => LA.levelFloorFt(assemblyFor(levelId)),
       levelWallTopFt: (levelId, view = 'plan') =>
         LA.levelWallTopFt(drawing?.walls || [], levelId, view),
-      footingWidthIn: levelId => LA.footingWidthIn(assemblyFor(levelId)),
+      // NOT a module function — footingWidthIn is a FIELD on the normalised
+      // assembly, and a nullable one: null means "derive from the foundation
+      // wall type", ICF on 24" and everything else on 20". I called
+      // LA.footingWidthIn() here because I had counted occurrences of the name
+      // instead of reading level-assembly.js's export block, and the page
+      // swallowed the TypeError into "painter failed". Counting a name is not
+      // confirming an export. The two constants are inlined because they are
+      // not exported either — MODEL.dc.html, LAYOUT.dc.html and the elevation
+      // harness each hold their own pair, and this is the fourth.
+      footingWidthIn: levelId => {
+        const stored = assemblyFor(levelId).footingWidthIn;
+        if (stored) return stored;
+        const icf = (drawing?.walls || []).some(wall => wall.levelId === levelId
+          && (wall.view || 'plan') === 'foundation'
+          && String(wall.wallType || '').startsWith('icf'));
+        return icf ? 24 : 20;
+      },
       walls: () => walls(),
       roofs: () => roofs(),
       floors: () => floors(),
@@ -1433,7 +1469,14 @@
     ctx.fillStyle = skin['surface-page'];
     ctx.fillRect(0, 0, cssW, cssH);
     try {
-      if (drawing) {
+      // THE SECTION INSTEAD OF THE PLAN, when a cut is the active view. The
+      // painter is the shared one (cut-view.js), reading through cutEnv()'s
+      // eighteen accessors — the same contract MODEL.dc.html supplies and the
+      // same one proto/elevation-harness.js mirrors offline.
+      const cut = drawing ? activeCut() : null;
+      if (cut) {
+        window.DraftCutView.drawCutView(cutEnv(), ctx, cssW, cssH, cut);
+      } else if (drawing) {
         paintGrid();
         // "Underlays sit beneath everything drawn: over the grid, under
         // geometry" -- MODEL.dc.html's own words at the same seam. A tracing
@@ -1503,7 +1546,10 @@
     // The delete affordance exists exactly while there is something to delete.
     // A button that is always there and usually does nothing teaches a drafter
     // to distrust it.
-    if (deleteButton) deleteButton.hidden = !selectedSeg;
+    // ...and not under a section, where the selection it would delete is not
+    // on screen to point at. The comment above is the reason: an affordance
+    // that acts on something invisible is the same distrust, one step worse.
+    if (deleteButton) deleteButton.hidden = !selectedSeg || !!activeCut();
     updateReadout();
   };
 
@@ -1530,8 +1576,48 @@
   // PDF underlays on THIS level: the ones the drafter would expect to see.
   const pdfUnderlays = () => underlays().filter(u => u.kind === 'pdf').length;
 
+  // THE READOUT FOLLOWS THE SECTION, or it stops being an instrument the
+  // moment the page is most novel. The first cut branch in paint() returned
+  // early, straight past updateReadout, so a page opened cold on ?view=cut:
+  // painted a correct section and sat at "loading..." underneath it for ever.
+  //
+  // The spec did not catch it, and the reason is worth keeping: the test
+  // asserted the readout contains "walls" AFTER switching view, when the plan
+  // paint's readout was still on screen. True whether the section updated the
+  // readout or never touched it -- an assertion two world states satisfy,
+  // which is the defect shape this session has met at every rung. It is now
+  // asserted on a COLD load, where only one state can produce it.
+  //
+  // The counts come from the painter's OWN exported passes with the painter's
+  // own axis, not a second derivation: sectionLevelStack and
+  // sectionWallCrossings are what drawCutView itself calls, so the instrument
+  // cannot drift from the picture it describes. The three states it reports
+  // are the painter's three: no level stack, no crossings (an elevation, not
+  // a section), and a section with walls in it.
+  const sectionReadout = cut => {
+    const CV = window.DraftCutView;
+    const env = cutEnv();
+    const stack = CV.sectionLevelStack(env);
+    const crossings = stack ? CV.sectionWallCrossings(env, cut, CV.cutAxis(cut)) : [];
+    const what = !stack ? 'no level stack'
+      : (crossings.length ? `walls cut <b>${crossings.length}</b>`
+        : 'crosses no walls — an elevation');
+    return `section <b>${cut.name || cut.id}</b>   ${what}   `
+      + `of <b>${(drawing.walls || []).length}</b> in the drawing
+`
+      + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
+      + `view <b>${CUT_VIEW}${cut.id}</b>   `
+      + `${theme}/${mode}   `
+      + `scale <b>fit to the cut</b>`;
+  };
+
   const updateReadout = () => {
     if (!drawing) return;
+    // Before the plan counts, which describe a picture that is not on screen:
+    // walls() and the rest filter by layer view, and under a section every one
+    // of them reads 0 while the section shows the whole house.
+    const cut = activeCut();
+    if (cut) { readout.innerHTML = sectionReadout(cut); return; }
     readout.innerHTML =
       `walls <b>${shownOfTotal(walls().length, drawing.walls)}</b>   `
       + `lines <b>${shownOfTotal(lines().length, drawing.lines)}</b>   `
@@ -1623,8 +1709,12 @@
     // ROOF and SITE have no layer views -- the view filter switches itself
     // off there and they show everything they hold. A picker on those levels
     // would be offering a choice that changes nothing, so there isn't one.
-    viewWrap.hidden = !views.length;
-    if (!views.length) return;
+    // THE CUTS COUNT TOWARDS HAVING A PICKER AT ALL. ROOF and SITE hold no
+    // layer views, and hiding the picker there used to be right because a
+    // choice that changes nothing is not a choice. Sections are offered on
+    // every level, so on those two the picker now holds exactly the cuts.
+    viewWrap.hidden = !views.length && !cuts().length;
+    if (viewWrap.hidden) return;
     const current = onActiveLevel().viewId;
     viewPick.innerHTML = '';
     views.forEach(view => {
@@ -1632,6 +1722,19 @@
       option.value = view.id;
       option.textContent = view.label;
       option.selected = view.id === current;
+      viewPick.append(option);
+    });
+    // THE CUTS, AFTER THE LAYER VIEWS. A section is a fact about the house
+    // rather than about one level, so every level offers the same ones; the
+    // old page's rail does the same. Switching level still leaves a section —
+    // goToLevel drops a `?view=` the new level's layer views do not carry, and
+    // a cut id never does, which is the old page's behaviour arrived at for
+    // free rather than re-implemented.
+    cuts().forEach(cut => {
+      const option = document.createElement('option');
+      option.value = CUT_VIEW + cut.id;
+      option.textContent = cut.name || String(cut.id);
+      option.selected = option.value === current;
       viewPick.append(option);
     });
   };
