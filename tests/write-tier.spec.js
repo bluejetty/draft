@@ -417,19 +417,64 @@ test.describe('MODEL.html write tier', () => {
   // that owns the format.
   test('gate widening: the two-hop — old writes, new saves, old saves again',
     async ({ browser }) => {
-      // Two full bone builds plus a detour. The 180 s default is for one.
       test.setTimeout(300_000);
       const LINE = [-6, 2, 6, 2];
 
-      const arm = async detour => {
+      const freshPage = async () => {
         const context = await browser.newContext();
-        const page = await context.newPage();
+        return { context, page: await context.newPage() };
+      };
+
+      // ONE BONE, SHARED BY BOTH ARMS — and this is the part that was wrong
+      // first time.
+      //
+      // The control arm's job is to cancel the vehicle edit. That only works if
+      // the two arms start from the same house, and TWO INDEPENDENT BONE BUILDS
+      // DO NOT AGREE. Measured, not assumed: a null-hypothesis run with the
+      // detour removed from BOTH arms still failed, the house landing at a
+      // different origin each time —
+      //
+      //     control  x -15    two-hop  x -10.5
+      //     control  x -25    two-hop  x -21
+      //
+      // A differential built on two separate builds compares fixture noise and
+      // reports it as a round-trip finding. The first version of this test did
+      // exactly that, and the only reason it is not in the PR is that the
+      // control was checked against itself before the result was believed.
+      //
+      // So the bone is built once and both arms are SEEDED from the same bytes.
+      // Identical by construction rather than by hope.
+      const seed = await (async () => {
+        const { context, page } = await freshPage();
         try {
           await houseWithPassthroughs(page);
-          // Counted inside the arm rather than by building a third bone. Same
-          // assertion, one fewer context: the first version of this test opened
-          // three and died in teardown.
-          const linesBefore = (await h.savedDrawing(page)).lines.length;
+          return JSON.stringify(await h.savedDrawing(page));
+        } finally {
+          await context.close();
+        }
+      })();
+
+      const arm = async detour => {
+        const { context, page } = await freshPage();
+        try {
+          await h.openModel(page, { webgl: false, rails: false });
+          await page.evaluate(async ({ bucket, text }) => {
+            const store = window.SharedFileStore;
+            const at = await store.loadSharedFileAt(bucket);
+            await store.saveSharedFile(
+              new File([text], 'd.json', { type: 'application/json' }),
+              bucket, at ? { ifRev: at.rev } : {});
+          }, { bucket: h.STORAGE_BUCKET, text: seed });
+          await page.reload();
+          await h.waitForModelReady(page, { rails: false });
+
+          // THE SEED MUST HAVE TAKEN. A store write that silently did not land
+          // leaves the arm on its own freshly-built house, which is the exact
+          // failure this seeding exists to remove — and it would look like a
+          // round-trip difference.
+          expect(await h.savedDrawing(page),
+            'the arm must be standing on the shared bone, not one of its own')
+            .toEqual(JSON.parse(seed));
 
           if (detour) {
             await page.goto('/MODEL.html');
@@ -441,6 +486,15 @@ test.describe('MODEL.html write tier', () => {
             await h.openModel(page, { webgl: false, rails: false });
           }
 
+          const linesBefore = (await h.savedDrawing(page)).lines.length;
+
+          // THE RAILS MUST BE OUT BEFORE A TOOL CAN BE PICKED. selectTool clicks
+          // by role, so with the rail closed Playwright waits for a button that
+          // never becomes actionable and the test dies on its own timeout — in
+          // the arm that has nothing to do with the detour. Same shape as the
+          // disabled-button trap: an invisible control is not a failing click,
+          // it is a hang.
+          await h.openRails(page);
           await h.selectTool(page, 'Line');
           await h.clickWorld(page, LINE[0], LINE[1]);
           await h.clickWorld(page, LINE[2], LINE[3]);
@@ -458,8 +512,7 @@ test.describe('MODEL.html write tier', () => {
 
       // THE VEHICLE MUST REALLY HAVE HAPPENED, in both arms. Without this the
       // comparison below is between two untouched bones and passes for the one
-      // reason it must never pass — which is the shape this gate keeps
-      // producing.
+      // reason it must never pass.
       expect([control.drawing.lines.length - control.linesBefore,
         twoHop.drawing.lines.length - twoHop.linesBefore],
       'each arm must really have drawn its line').toEqual([1, 1]);
@@ -468,6 +521,23 @@ test.describe('MODEL.html write tier', () => {
         'a detour through MODEL.html must be invisible to the page that owns '
         + 'the format — same bone, same edit, same file')
         .toEqual(control.drawing);
+
+      // WHAT THIS INSTRUMENT CANNOT SEE, measured rather than reasoned.
+      //
+      // Two mutants were run against this test. Dropping the last line from
+      // MODEL.html's save KILLS it. Rewriting every roof's `slopeInPerFt` on
+      // save does NOT — the old page drops the key on the way back in, so the
+      // corruption is healed before the second save and the two-hop is blind
+      // to it by construction.
+      //
+      // That is the two-hop being what it is rather than a hole in it: it
+      // measures what SURVIVES a return to the page that owns the format, and
+      // a field that page re-derives was never really persisted. The one-hop
+      // test below is the one that sees those, which is why both exist.
+      //
+      // Say it out loud so nobody reads a green here as "the round trip is
+      // exact". It means: the detour left nothing behind that the old page
+      // would not have written itself.
     });
 
   test('a save through the new page equals the save the old page wrote, key for key', async ({ page }) => {
