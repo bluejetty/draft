@@ -273,56 +273,64 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         .toContainText('walls');
     });
 
-  test('LAYER VIEW ON A LEVEL THAT HAS NONE — it hides, rather than offering an empty picker',
+  test('LAYER VIEW — the picker matches the level, and a visible one is never empty',
     async ({ page }) => {
       await seeded(page);
-      // THE LEVEL IT STARTED ON, captured before anything moves — and proved to
-      // have a picker. Coming "back" to an arbitrary other level would answer a
-      // different question: a second level with no layer views looks exactly
-      // like a picker that never returns.
-      const home = await page.locator('#level-pick').inputValue();
-      await expect(page.locator('#view-pick'),
-        'the starting level must have a layer-view picker, or the return leg '
-        + 'below proves nothing').toBeVisible();
 
-      const options = await page.locator('#level-pick option')
+      // THIS TEST USED TO ASSERT THE PICKER HIDES ON ROOF AND SITE, and it
+      // passed, and then #386 landed and it stopped being true — not because
+      // the picker changed, but because those levels stopped being empty. The
+      // cut-view seats put the four elevations (E1–E4) on EVERY level, so
+      // ROOF and SITE now hold four views each and the picker legitimately
+      // shows. Measured 12 Sep, after the rail:
+      //
+      //     SITE / ROOF        E1 · FRONT  E2 · LEFT  E3 · BACK  E4 · RIGHT
+      //     MAIN FL / 2ND FL   + ELECTRIC, FLOOR PLAN (WALLS),
+      //                          FLOOR LAYOUT (FLOOR), STAIR
+      //     FOUNDATION         + ELECTRIC, BASEMENT (WALLS), FOUNDATION
+      //
+      // So the parity row's "hides itself on ROOF and SITE" is now a statement
+      // about a page that no longer exists. Rather than delete the check or
+      // freeze the old answer, it is rewritten to guard the two properties that
+      // are still worth guarding and that no longer depend on which levels
+      // happen to be bare:
+      //
+      //   1. A VISIBLE PICKER IS NEVER EMPTY. An empty visible picker and a
+      //      hidden one read identically in prose and completely differently to
+      //      a drafter.
+      //   2. THE PICKER BELONGS TO THE LEVEL. A picker still holding the
+      //      previous level's views would offer a layer set that does not
+      //      exist on the level the drafter is on.
+      const levels = await page.locator('#level-pick option')
         .evaluateAll(nodes => nodes.map(n => ({ value: n.value, label: n.textContent.trim() })));
-      const bare = options.find(o => /ROOF|SITE/i.test(o.label));
-      expect(bare,
-        'this measurement needs a level that holds no layer views — the row '
-        + 'names ROOF and SITE').toBeTruthy();
+      expect(levels.length, 'the level picker must offer levels to walk')
+        .toBeGreaterThan(1);
 
-      await page.locator('#level-pick').selectOption(bare.value);
-      await expect(readout(page)).toContainText(bare.label, { timeout: 6000 });
+      const seen = {};
+      for (const level of levels) {
+        await page.locator('#level-pick').selectOption(level.value);
+        await expect(readout(page)).toContainText(level.label, { timeout: 6000 });
+        const visible = await page.locator('#view-pick').isVisible();
+        const options = await page.locator('#view-pick option')
+          .evaluateAll(nodes => nodes.map(n => n.value));
+        if (visible) {
+          expect(options.length,
+            `${level.label}: a visible layer-view picker must have something in `
+            + 'it — an empty picker is worse than a hidden one').toBeGreaterThan(0);
+          const shown = await page.locator('#view-pick').inputValue();
+          expect(options.includes(shown),
+            `${level.label}: the picker must be showing one of its own options, `
+            + 'not a view carried over from the level before it').toBe(true);
+        }
+        seen[level.label] = options.length;
+      }
 
-      // THE TWO WORLDS A READER CANNOT TELL APART: a hidden picker and a
-      // visible one with nothing in it. Both satisfy "hides itself on ROOF and
-      // SITE" as prose; only one of them is a page a drafter can use.
-      await expect(page.locator('#view-pick'),
-        'on a level with no layer views the picker must be gone, not empty')
-        .toBeHidden();
-
-      // AND IT KEEPS ITS OLD OPTIONS WHILE HIDDEN — measured, and NOT reported
-      // as a defect. A hidden select's contents are invisible; the only way
-      // stale options could reach a drafter is if the picker were shown again
-      // before being refilled. So that is the thing worth asserting, and it is
-      // asserted on the way back rather than assumed either way.
-      const staleWhileHidden = await page.locator('#view-pick option').count();
-      expect(staleWhileHidden,
-        'recorded: the hidden picker still holds the previous level\'s options')
-        .toBeGreaterThan(0);
-
-      await page.locator('#level-pick').selectOption(home);
-      await expect(page.locator('#view-pick'),
-        'the picker must come back on a level that has layer views').toBeVisible();
-      const back = await page.locator('#view-pick option')
-        .evaluateAll(nodes => nodes.map(n => n.value));
-      const shown = await page.locator('#view-pick').inputValue();
-      expect(back.includes(shown),
-        'the picker that comes back must be showing one of its own options — a '
-        + 're-shown picker still holding another level\'s views would offer the '
-        + 'drafter a layer set that does not belong to the level they are on')
-        .toBe(true);
+      // AND THE LEVELS ARE NOT ALL THE SAME. If every level answered with an
+      // identical list, both assertions above would pass on a picker that never
+      // reads the level at all.
+      expect(new Set(Object.values(seen)).size,
+        'the levels must not all offer the same number of views, or this test '
+        + 'cannot tell a level-aware picker from a fixed one').toBeGreaterThan(1);
     });
 
   // ── GROUP 1: the seven `?` rows ──────────────────────────────────────────
@@ -339,16 +347,29 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // THE WHOLE INTERACTIVE SURFACE, enumerated from the live DOM rather than
       // grepped. Every `absent` row below rests on this: there is no hidden
       // palette, no context menu host, no file input.
+      // SORTED, because this asks WHICH controls exist, not what order the DOM
+      // happens to put them in. Order is a layout fact and would make the check
+      // go red for a rearrangement that changes nothing a drafter can do.
       const controls = await page.evaluate(() => ({
-        buttons: [...document.querySelectorAll('button')].map(b => b.id || b.textContent.trim()),
-        selects: [...document.querySelectorAll('select')].map(s => s.id),
-        inputs: [...document.querySelectorAll('input')].map(i => i.type),
+        buttons: [...document.querySelectorAll('button')].map(b => b.id || b.textContent.trim()).sort(),
+        selects: [...document.querySelectorAll('select')].map(s => s.id).sort(),
+        inputs: [...document.querySelectorAll('input')].map(i => i.type).sort(),
       }));
+      // THE SIX SEATS ARRIVED WHILE THIS PR WAS OPEN, and this assertion is how
+      // that was noticed rather than merged past: it went red on the merge with
+      // #386, naming the six buttons it had never seen. That is the check doing
+      // exactly the job it was written for — a control that no parity row
+      // mentions means a row is wrong.
+      //
+      // They are cut-view SEATS, not drawing verbs: each shows a section or an
+      // elevation. No absence row below is affected, and the parity table now
+      // carries a row for them.
       expect(controls,
         'the parity table\'s absences are only as good as this list — if a '
         + 'control appears here that no row mentions, a row is wrong')
         .toEqual({
-          buttons: ['draw-wall', 'delete-wall', 'save', 'take-over'],
+          buttons: ['E1 · FRONT', 'E2 · LEFT', 'E3 · BACK', 'E4 · RIGHT', 'S1', 'S2',
+            'delete-wall', 'draw-wall', 'save', 'take-over'].sort(),
           selects: ['level-pick', 'view-pick'],
           inputs: [],
         });

@@ -91,6 +91,27 @@ control rather than by review:
 for stacked washrooms / source links. The keys are shown to round-trip untouched
 through `MODEL.html`; the old page was not run on the same fixture.
 
+### Re-run against `30de120`, after the cut-view rail landed
+
+This pass was written against `71f031c`. **#386 landed under it while it was
+open, and two of its eleven checks went red on the merge — both correctly.**
+
+- **The control enumeration named six buttons it had never seen** — `E1 · FRONT`,
+  `E2 · LEFT`, `E3 · BACK`, `E4 · RIGHT`, `S1`, `S2`. That is the check doing
+  precisely the job it was written for: a control that no parity row mentions
+  means a row is wrong. Two rows added above.
+- **The layer-view picker stopped hiding on ROOF and SITE** — not because the
+  hiding broke, but because those levels stopped being empty. The seats put the
+  four elevations on every level. The check now guards the two properties that
+  do not depend on which levels happen to be bare: a visible picker is never
+  empty, and it never shows a view belonging to the level before it.
+
+**Nothing was found wrong with the clicks**, which is what everyone including me
+expected to break: the rail sits top-right and this spec's gestures land within
+80 px of the canvas centre. That is luck of geometry rather than design, and it
+is worth knowing that a click landing on chrome fails in exactly the voice of a
+gesture that does not work.
+
 ---
 
 ## The table
@@ -114,7 +135,7 @@ through `MODEL.html`; the old page was not run on the same fixture.
 | Undo | undo stack | **present** — one press per gesture, **counted** | must-have | **driven**: three walls drawn, one press takes back one, three take back all three |
 | **Redo** | redo | **absent** | must-have | the handler excludes `shiftKey`; there is no `redo` in the file |
 | **Switch level** | level rail | **present** — and the choice survives a reload | must-have | **driven** through `level-pick`; keyed by `?level=`, not by an index |
-| Switch layer view within a level | layer view rail | **present** — and it really hides on a level with none | must-have | **driven**: hidden on ROOF/SITE, refilled correctly on the way back. It keeps the old options while hidden — invisible to a drafter, recorded not filed |
+| Switch layer view within a level | layer view rail | **present**, and the picker belongs to the level it is on | must-have | **driven** on every level. The old note said it hides on ROOF and SITE; **#386 ended that** — the four elevations are on every level now, so no level is empty and the picker always shows. Guarded instead: a visible picker is never empty, and never shows a view carried over from the level before |
 | Add / delete / insert a level | level rail | **absent** | must-have | re-derived in this page's own vocabulary: no add/insert/remove verb, and no `levels` mutation. It re-emits the levels it loaded |
 | Level locks | lock toggles | **absent — no verb; the key is carried untouched** | **settled** | **driven**: the page's whole control surface is four buttons and two selects, none of them a lock; a seeded lock and its `nextLevelLockId` come back byte-identical after a save |
 | ASSEMBLY / group / ungroup | assembly rail | **absent — no verb; groups carried untouched** | **settled** | **driven**: no control exists, and a seeded group survives a save unchanged |
@@ -126,6 +147,8 @@ through `MODEL.html`; the old page was not run on the same fixture.
 | Pan / zoom / fit | mouse, `0` | **present** | must-have | |
 | Escape cancels and clears selection | one press, tool survives | **present** | must-have | measured from the old page and documented in the new one |
 | Save | press | **present** — press, plus the rung-4 hide-save | must-have | |
+| Cut-view seats (E1–E4, S1–S2) | right-hand cards | **present** — six buttons, added by #386 | must-have | **driven** only as far as their existence: the control enumeration names them. Whether each seat paints what it claims is `model-html-seats.spec.js`, not this file |
+| Chrome over the drawing area | `#save` / `#chrome` / `#readout` overlay as **strips** | the cut-view rail is a **block**, top-right, and swallows taps there | ? **Movie's call** | the difference the row exists to record: strips leave the sheet reachable, a block takes a corner of it away. Placement is a look-at-it decision, not a measurement |
 
 ---
 
