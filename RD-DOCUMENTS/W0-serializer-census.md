@@ -24,46 +24,104 @@ the census was re-run at `3a7be51`: **every count above is unchanged**. That is
 the tool paying for itself on its first day — the claim that neither PR touched
 the serializer is now a measurement rather than an expectation.
 
+**RE-RUN AT `2da04b5`, 11 SEP: SEVEN OF THE TEN DIMENSIONS HAD MOVED.** The
+document was two days stale and looked exactly as trustworthy as it had on the
+day it was written — which is the failure it opens by naming, arriving to the
+person who named it. Nobody was wrong; nobody re-ran it. Measured, not recalled
+— `node proto/w0-census-diff.js` between `3a7be51` and `2da04b5`, the current
+tool reading both trees:
+
+    root serializer chars: 13601 -> 14722  CHANGED by 1121
+
+| dimension | before | after | delta |
+|---|---|---|---|
+| `persistedFields` | 29 | 31 | +`_levelLocks` +`_nextLevelLockId` |
+| `literalKeys` | 65 | 67 | +`levelLocks` +`nextLevelLockId` |
+| `spreads` | 17 | 21 | +4 per-entity optional |
+| `nestedConditionalKeys` | 14 | 18 | +`dealt` +`minDimensionFt` +`roomCategory` +`washroomLevelId` |
+| `componentFields` | **10** | **0** | all ten of Finding A's |
+| `methods` | 21 | 21 | +`_ensureSerializerCollections` +`_serializerEnv` −`_ensureDrawingCollections` −`_stairShapeSplit` |
+| `stateKeys` · `conditionalKeys` · `transitiveOnly` · `unresolved` | | | unchanged |
+
+The `methods` row is the one to look at twice: **21 before and 21 after, with
+four changes inside it.** A reader checking the total sees a dimension that
+never moved. That is this document's own defect class — a count whose broken
+state looks identical to its passing state — and the only reason it is visible
+here is that the diff names members rather than counting them.
+
+Everything below is re-derived from that run. Two findings were closed by other
+hands, and neither closure was written down here:
+`83dba6f` *(W1 step 1)* split the initialiser Finding A named, `01226e3`
+*(W1 step 2)* gave the save path an explicit environment, and `16a9b60` guarded
+the `specs` passthrough Finding C named. **Finding B is still open**, which is
+the one W1 has to decide rather than repair.
+
+**THE EXCEPTION: rung #375 touched `_serializeDrawing`, deliberately.** The gate
+duty phrases its answer as *"this rung never touched the old serializer"*, and
+for #375 that answer is **no** — correctly. It changed one line,
+`wallType: wall.legacyWallType || wall.wallType`, under
+`RULING-substitution-is-not-a-save`: a wall whose retired assembly this app
+cannot draw is painted as the nearest surviving one and **saved as itself**.
+The whole change is +154 chars of serializer text and it moves nothing else —
+literal keys, spreads, state keys and persisted fields are all identical across
+the merge. So the honest reading is not "the serializer is frozen" but
+**"the serializer is touched only with a ruling behind it, and the format did
+not move"**, and that distinction is why the diff reports `chars` separately
+from every key dimension.
+
 ---
 
 ## THE SHAPE
 
-    _serializeDrawing  MODEL.dc.html:3134-3456  13601 chars
+    _serializeDrawing  MODEL.dc.html:3248-3588  14722 chars
 
-**323 lines**, brace-matched by a scanner that skips strings, template
+**341 lines**, brace-matched by a scanner that skips strings, template
 literals, comments and regex literals. The care is not decorative: this
 serializer builds objects inside template strings, and a naive depth count
 would let a `}` in one of them close the function early — silently shortening
 every count below and leaving a census that looks complete.
 
 Following every `this.<name>(` call transitively gives a closure of
-**21 methods**. Twenty of them are between 1 and 11 lines:
+**21 methods**. Twenty of them are between 1 and 22 lines.
 
-| method | lines | length |
+**No line-number column, on purpose.** The first version of this table carried
+one, and so did the diff tool's spread labels — where it was a live defect:
+identified by line, all 21 conditional spreads read as added and removed across
+#375 because two comment lines were inserted above them. A method's identity is
+its name; where it sits is a fact about today's file. Names and lengths below,
+re-derived by `node proto/w0-census.js`:
+
+| method | length | bucket |
 |---|---|---|
-| `_serializeDrawing` | 3134 | 323L |
-| `_ensureDrawingCollections` | 3084 | 33L |
-| `_stairEndFor` | 18778 | 11L |
-| `_stairLevels` | 18461 | 8L |
-| `_activeLayerViewId` | 8582 | 8L |
-| `_pointForStorage` | 3124 | 9L |
-| `_activeLineLayer` | 8960 | 6L |
-| `_floorLevels` | 8575 | 6L |
-| `_levelWallTopFt` | 21449 | 6L |
-| `_contextLineLayer` | 8810 | 4L |
-| `_layerStandard` | 8815 | 4L |
-| `_levelFloorFt` | 21471 | 4L |
-| `_activeLevelId` | 8564 | 4L |
-| `_roofHeelIn` | 15728 | 3L |
-| `_stairCurrentLayout` | 18481 | 3L |
-| `_stairShapeSplit` | 18486 | 3L |
-| `_lineLayerConfig` | 8804 | 3L |
-| `_levelAssembly` | 21468 | 3L |
-| `_layerViewsForLevel` | 8569 | 3L |
-| `_activeLevel` | 8558 | 1L |
-| `_boneyardLevelId` | 8562 | 1L |
+| `_serializeDrawing` | 341L | root |
+| `_ensureSerializerCollections` | 22L | pure |
+| `_activeLayerViewId` | 9L | impure-input |
+| `_stairLevels` | 8L | pure |
+| `_activeLineLayer` | 7L | impure-input |
+| `_serializerEnv` | 6L | impure-input |
+| `_contextLineLayer` | 5L | impure-input |
+| `_layerStandard` | 5L | impure-input |
+| `_activeLevelId` | 5L | impure-input |
+| `_pointForStorage` | 3L | pure |
+| `_roofHeelIn` | 3L | pure |
+| `_stairCurrentLayout` | 3L | pure |
+| `_stairEndFor` | 3L | pure |
+| `_lineLayerConfig` | 3L | impure-input |
+| `_floorLevels` | 3L | pure |
+| `_levelAssembly` | 3L | pure |
+| `_levelFloorFt` | 3L | pure |
+| `_levelWallTopFt` | 3L | pure |
+| `_layerViewsForLevel` | 3L | impure-input |
+| `_boneyardLevelId` | 1L | pure |
+| `_activeLevel` | 1L | pure |
 
-So the extractable surface is one large function plus **123 lines** of small
+Two membership changes since 6 Sep, and the count of 21 hides both:
+`_stairShapeSplit` left the closure and `_serializerEnv` joined it, so a reader
+checking only the total sees a table that never moved.
+`_ensureDrawingCollections` is here as `_ensureSerializerCollections` — the
+rename is Finding A being fixed, below.
+
+So the extractable surface is one large function plus **99 lines** of small
 accessors across twenty methods. That is better news than it looks: the accessors are where the
 component coupling hides, and they are small enough to read in full.
 
@@ -78,8 +136,12 @@ expressions, outside the body — counting braces alone would have missed them.
 
 ## THE REFERENCES
 
-**60 distinct `this.<ident>`** across the closure — 39 fields, 20 methods
-(the root is never referenced by name), plus `state`. Every call resolved to a
+**52 distinct `this.<ident>`** across the closure — 31 fields, 20 methods
+(the root is never referenced by name), plus `state`. It was 60 on 6 Sep, and
+the net −8 is two movements, not one: **Finding A's ten component fields left**
+and level locks brought two persisted ones in (`_levelLocks`,
+`_nextLevelLockId`). **Every field the closure still reaches is persisted** —
+`componentFields` is now empty. Every call resolved to a
 class method; nothing in the closure calls through a field.
 
 **Zero bare `this.state`** — no spread, no destructure, no dynamic index. Every persisted key is named
@@ -99,26 +161,32 @@ The last two are Finding B.
 **67 literal top-level keys, plus 2 conditional** — `layout` and `specs`, both
 emitted by spread and both absent when the page holds no such payload:
 
-    ...(this._layoutData ? { layout: this._layoutData } : {}),   MODEL.dc.html:3433
-    ...(this._specsData  ? { specs:  this._specsData  } : {}),   MODEL.dc.html:3436
+    ...(this._layoutData ? { layout: this._layoutData } : {}),   MODEL.dc.html:3565
+    ...(this._specsData ? { specs: this._specsData } : {}),      MODEL.dc.html:3568
 
 The output shape is therefore **not fixed**. A deep-compare acceptance for the
 Write Tier has to expect two keys that legitimately appear and vanish.
 
 And the same hazard exists one level down, which the first pass of this census
-missed. **Fifteen per-entity conditional spreads** write optional keys inside
-the mapped objects — 14 distinct names:
+missed. **Nineteen per-entity conditional spreads** write optional keys inside
+the mapped objects — 18 distinct names:
 
-    auto  base  claimedNo  closetDeclined  companionOf  dir  endWallId
-    padIn  pullLevelId  pullSrcId  splitTreads  stairId  standoff  switchId
+    auto  base  claimedNo  closetDeclined  companionOf  dealt  dir  endWallId
+    minDimensionFt  padIn  pullLevelId  pullSrcId  roomCategory  splitTreads
+    stairId  standoff  switchId  washroomLevelId
+
+(15 sites and 14 names on 6 Sep. The four added since — `dealt`,
+`minDimensionFt`, `roomCategory`, `washroomLevelId` — arrived without anyone
+re-running the census, which is how a number in prose goes wrong while every
+test stays green.)
 
 A wall with `auto` unset and a wall with `auto: false` are different objects in
 the file. Any comparison that walks entities key-by-key has to treat an absent
 optional and a falsy one as the same thing, or it will report differences that
 are not there.
 
-One of the fifteen is not optional at all and is worth separating.
-`MODEL.dc.html:3221` **branches on shape**: a wall-hosted electric device
+One of the nineteen is not optional at all and is worth separating.
+One site **branches on shape**: a wall-hosted electric device
 writes `wallId`/`offset`/`side`, a point-hosted one writes `at: {x,y,z}`. Both
 alternates are non-empty, so nothing is ever absent — what changes is which
 shape arrived. Presence is the wrong question to ask of that key, and a
@@ -159,34 +227,52 @@ the drawing.
 
 ### pure — 12
 
-`_pointForStorage`, `_roofHeelIn`, `_stairCurrentLayout`, `_stairEndFor`,
-`_stairLevels`, `_stairShapeSplit`, `_floorLevels`, `_levelAssembly`,
-`_levelFloorFt`, `_levelWallTopFt`, `_activeLevel`, `_boneyardLevelId`
+`_ensureSerializerCollections`, `_pointForStorage`, `_roofHeelIn`,
+`_stairCurrentLayout`, `_stairEndFor`, `_stairLevels`, `_floorLevels`,
+`_levelAssembly`, `_levelFloorFt`, `_levelWallTopFt`, `_activeLevel`,
+`_boneyardLevelId`
 
 Everything they reach is persisted state or their own arguments. These move to
 a shared module unchanged. `_levelAssembly` is here on purpose — the role-aware
 reader added on 6 Sep asks `level-assembly.js` and holds nothing itself.
 
-### reachable persisted state — 19 collections + 8 counters + 2 passthroughs
+**Still 12, and two of the names changed.** `_stairShapeSplit` left the closure;
+`_ensureSerializerCollections` is the split half of the initialiser Finding A
+named, and it is *pure* now — which is the finding being closed rather than the
+bucket coincidentally holding.
 
-Nineteen collections the serializer reads and `_ensureDrawingCollections`
+### reachable persisted state — 20 collections + 9 counters + 2 passthroughs
+
+Twenty collections the serializer reads and `_ensureSerializerCollections`
 initialises (`_lines`, `_walls`, `_floors`, `_shapes`, `_roofs`,
 `_fenestrations`, `_electricDevices`, `_fixtures`, `_surfaceOpenings`,
 `_dimensions`, `_columns`, `_beams`, `_stairs`, `_notes`, `_roomTags`,
-`_outlines`, `_boneyardOutlines`, `_groups`, `_underlays`), eight
+`_outlines`, `_boneyardOutlines`, `_groups`, `_underlays`, `_levelLocks`), nine
 `_next*Id` counters the serializer reads and ensure does not touch, and the two
-passthrough holders `_layoutData` and `_specsData`.
+passthrough holders `_layoutData` and `_specsData`. **31 fields, all persisted.**
 
-### component-only — 1 method, 10 fields
+(19 + 8 on 6 Sep; level locks added one of each.)
 
-`_ensureDrawingCollections` is the only member of this bucket, and it is the
-census's first real finding.
+### component-only — **0 methods, 0 fields**
+
+Empty. It held one method and ten fields when this census was written, and that
+was Finding A.
 
 ---
 
-## FINDING A — the ensure call is the widener
+## FINDING A — the ensure call is the widener — **CLOSED, `83dba6f`**
 
-`_serializeDrawing`'s first statement is `this._ensureDrawingCollections()`.
+**Fixed by W1 step 1, *"split the initialiser by who needs it"*, and confirmed
+by re-run: `componentFields` is 0 and the serializer's closure now reaches
+nothing but persisted state.** The finding is left standing below rather than
+deleted — it is the reason the split happened, and a closed finding with its
+evidence intact is worth more than a gap. `01226e3` (W1 step 2) followed it by
+handing the save path an explicit environment, which is where `_serializerEnv`
+in the method table came from.
+
+The state it described, as measured on 6 Sep:
+
+`_serializeDrawing`'s first statement was `this._ensureDrawingCollections()`.
 That method touches **ten fields the serializer never reads**:
 
     _courtesyFloorIds        _selectedFenestrations   _underlayImages
@@ -204,6 +290,8 @@ For W1 this is the thing to split, not port. A shared serializer that inherits
 to know only about the saved format ends up unable to run outside the page it
 came from. The initialisation the serializer actually needs is the nineteen
 collections; the other ten belong to whoever owns the canvas.
+
+That is exactly what `83dba6f` did.
 
 ---
 
@@ -249,15 +337,24 @@ down so it is settled deliberately rather than discovered.
 
 ---
 
-## FINDING C — `specs` is `layout`'s unguarded twin
+## FINDING C — `specs` is `layout`'s unguarded twin — **CLOSED, `16a9b60`**
 
-`tests/persisted-format.spec.js` opens by naming the layout passthrough as
+**Guarded, at `tests/persisted-format.spec.js:188`, and the guard asserts the
+load-bearing half** — that MODEL *carries* the sections through, not merely that
+the key survives. `PASSTHROUGH = ['layout', 'specs']` also replaced the
+`k !== 'layout'` exclusion the finding named. Left standing below for the same
+reason as Finding A.
+
+The state it described, as measured on 6 Sep:
+
+`tests/persisted-format.spec.js` opened by naming the layout passthrough as
 the failure that "can cost a drafter real work": delete it and MODEL still
 passes every test it has, while silently deleting the drafter's entire sheet
 set on the next save. It then guards it properly, with a dedicated round-trip
 test that injects a `layout` key and asserts it survives a MODEL save.
 
-`specs` has the identical three-site shape:
+`specs` had the identical three-site shape (line numbers as of 6 Sep — they have
+all moved, which is the point the method table above makes):
 
     MODEL.dc.html:5402   this._specsData = saved.specs ? format.specs(saved.specs) : null;
     MODEL.dc.html:6135   if (stored && typeof stored.specs === 'object') this._specsData = stored.specs;
@@ -282,18 +379,42 @@ the spec file was written to name, applied to the key it did not cover.
 
 ## WHAT W1 INHERITS
 
-- One 323-line function and ~115 lines of accessors, of which **12 methods move
-  unchanged**.
+- One **341-line** function and **99 lines** of accessors, of which **12 methods
+  move unchanged**.
 - A format whose keys are all named explicitly — **no `this.state` spread** —
   so the census can be re-run rather than re-derived.
-- **67 fixed keys plus 2 conditional ones**, and **15 per-entity conditional
+- **67 fixed keys plus 2 conditional ones**, and **19 per-entity conditional
   spreads** below them, one of which branches on shape rather than presence;
   the output shape is not constant at either level.
-- **One initialiser to split**, not port (Finding A).
-- **One key that cannot be computed from the drawing alone** (Finding B).
-- **One passthrough to guard before anything is moved** (Finding C) — moving
-  code past an unguarded passthrough is how it gets dropped.
+- ~~**One initialiser to split**, not port (Finding A).~~ **Done, `83dba6f`.**
+- **One key that cannot be computed from the drawing alone** (Finding B). **The
+  only one still open**, and it is a decision rather than a repair: a shared
+  serializer handed the drawing alone cannot produce `activeLineLayer` at all.
+- ~~**One passthrough to guard before anything is moved** (Finding C)~~ **Done,
+  `16a9b60`.**
 
-Order of operations that follows from the above: guard `specs`, then split
+Order of operations that followed from the above: guard `specs`, then split
 `_ensureDrawingCollections`, then decide how `activeLineLayer` is supplied,
-then move the twelve pure methods. Nothing before the guard.
+then move the twelve pure methods. **The first two are done and in that order.**
+What is left is the `activeLineLayer` decision, then the move.
+
+---
+
+## RE-RUNNING THIS DOCUMENT
+
+    node proto/w0-census.js                          the counts quoted above
+    node proto/w0-census.js --json > after.json      the full index
+    node proto/w0-census-diff.js before.json after.json
+
+The diff is the gate's tool, and it answers *"did this rung touch the old
+serializer"* by naming what moved rather than counting it. **It identifies an
+entry by what it writes — key-set, tier, branching — never by line number.** It
+used to label by line, and across #375 that printed all 21 spreads as added and
+removed for two inserted comment lines. Twenty-one false rows standing next to
+one true one is worse than silence: it is the row that teaches a reader to skip
+the row.
+
+An unreadable or unrecognised input exits 2 and says `UNREADABLE`. It never
+reports "no change", because **"nothing moved" is the answer a broken tool gives
+too** — which is the same sentence this document opens with, and the reason
+both the census and its diff exist as tools rather than as prose.
