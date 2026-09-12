@@ -313,6 +313,45 @@
   // when something on this page needs them to share a corner.
   let vertexPool = [];
   let dropped = 0;   // items the format module rejected on load
+  // PAINT THE SUBSTITUTE, NEVER PERSIST IT (RULING-substitution-is-not-a-save,
+  // Movie, 11 Sep). `LEGACY_WALL_TYPES` rewrites a retired wall type to the
+  // nearest surviving assembly so the wall can be DRAWN — a reader's
+  // accommodation, and the right one. This page also WRITES, and re-emitting the
+  // substitute makes the accommodation permanent: open an old house with 12"
+  // foundation walls, change nothing, press SAVE, and four inches of concrete
+  // are gone from the record with no message.
+  //
+  // The mapping is lossy and ONE-WAY. Nothing in the saved file records that a
+  // wall was ever 12", so when the thicker types come back — one row each in
+  // WALL_TYPES — the app recovers and already-round-tripped drawings do not.
+  //
+  // The rule this belongs to: a page may SHOW less than the file contains; it
+  // may not SAVE less than the file contains. Keyed by wall id and holding both
+  // halves, so a type the drafter later changes on purpose is not quietly
+  // reverted to the legacy one.
+  //
+  // THE CONTRACT, AND IT IS NOT ENFORCED BY ANYTHING. The serializer decides
+  // whether to restore by asking whether the wall still carries the type this
+  // page substituted — it INFERS the drafter's intent, and there is one case it
+  // infers wrongly: a drafter who deliberately picks the very type the
+  // substitution chose is indistinguishable from the substitution, so the save
+  // would put the retired type back over their choice. Skipper measured that on
+  // MODEL.dc.html by modelling this guard as a mutant, and it fails there.
+  //
+  // It cannot happen HERE, today: every write of `wallType` in this file is the
+  // creation site, the load-path normaliser, or the serializer. There is no
+  // picker and no change-type verb, so an existing wall's type cannot be
+  // reassigned at all. That makes this a LATENT defect, not a live one — and it
+  // is why there is no clear-on-assignment call in this file. A call at the
+  // creation site would be a no-op by construction: a freshly drawn wall has
+  // never been loaded and has no kept original to forget, so the line could
+  // never fail and would read to the next person as a guard that is working.
+  //
+  // So the rule is written and not pretended: ANY site that assigns a type to an
+  // existing wall must delete that wall's entry here. The day the picker is
+  // added, this comment is the thing that has to be obeyed, because nothing in
+  // the code will complain.
+  let substitutedWallTypes = new Map();
 
   const say = (title, body) => {
     noticeBody.innerHTML = `<h1>${title}</h1>${body}`;
@@ -1405,6 +1444,18 @@
       // Malformed geometry is dropped on load, as the old page drops it. Say
       // how much, so a thinner drawing is a fact rather than a mystery.
       + (dropped ? `   <b>${dropped} dropped</b>` : '')
+      // A SUBSTITUTION IS NOT A FACT ABOUT THE DRAWING, and the drafter should
+      // be able to find out one happened. This page has no 12" assembly, so it
+      // paints those walls as 8" — drawing nothing would be worse — and the file
+      // keeps `concrete_12` either way (RULING-substitution-is-not-a-save).
+      // Without this clause the accommodation is invisible: the wall looks
+      // thinner and there is nothing on screen to say the page could not draw
+      // what the file says. The same voice as `dropped` above, for the same
+      // reason — this page says what it could not do rather than looking like
+      // it did it.
+      + (substitutedWallTypes.size
+        ? `   <b>${substitutedWallTypes.size} wall type${substitutedWallTypes.size === 1 ? '' : 's'} substituted</b>`
+        : '')
       // THE SAME RULE AS `dropped` ABOVE, for the same reason. A PDF underlay
       // is stored, is on this level, and will never draw here -- so without
       // this line the drafter sees the thing they were tracing simply gone and
@@ -2256,6 +2307,18 @@
       // wrong for a quoted one, since the format does not coerce.
       autoDimFirstOffsetFt: F.autoDimFirstOffsetFt(parsed.autoDimFirstOffsetFt),
     };
+    // Recorded against the RAW file: the normaliser is the only thing that knows
+    // a substitution happened, and it does not say so — the two types differ and
+    // nothing else marks it.
+    substitutedWallTypes = new Map();
+    (Array.isArray(parsed.walls) ? parsed.walls : []).forEach(raw => {
+      if (!raw || typeof raw.wallType !== 'string') return;
+      const kept = drawing.walls.find(wall => wall.id === raw.id);
+      if (kept && kept.wallType !== raw.wallType) {
+        substitutedWallTypes.set(kept.id, { original: raw.wallType, painted: kept.wallType });
+      }
+    });
+
     dropped = ['walls', 'lines', 'floors', 'dimensions']
       .map(k => (Array.isArray(raw[k]) ? raw[k].length : 0) - drawing[k].length)
       .reduce((a, b) => a + b, 0);
@@ -2409,9 +2472,14 @@
     const point = p => window.DraftDrawingFormat.pointForStorage(p);
     return {
       ...drawing,
-      walls: drawing.walls.map(wall => ({
-        ...wall, start: point(wall.start), end: point(wall.end),
-      })),
+      walls: drawing.walls.map(wall => {
+        // Restored ONLY while the wall still carries the type this page
+        // substituted; a deliberate later change is the drafter's edit and is
+        // what gets written.
+        const swap = substitutedWallTypes.get(wall.id);
+        const wallType = (swap && wall.wallType === swap.painted) ? swap.original : wall.wallType;
+        return { ...wall, wallType, start: point(wall.start), end: point(wall.end) };
+      }),
     };
   };
 
