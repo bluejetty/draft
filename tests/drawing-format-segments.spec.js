@@ -112,9 +112,15 @@ test.describe('drawing-format walls/lines/floors', () => {
 
   // AND THE WIRING IS LIVE. The rules above are worth nothing to MODEL.html if
   // it still reads the raw arrays, so this asserts through the page: plant
-  // malformed geometry in the stored drawing and check the page drops it and
-  // says so.
-  test('MODEL.html drops malformed geometry and reports how much', async ({ page }) => {
+  // malformed geometry in the stored drawing and check the page refuses to draw
+  // it and says so.
+  //
+  // REFUSED IS NO LONGER DROPPED (RULING-a-rejected-item-is-still-the-drafters,
+  // 11 Sep). The count is the same count; the items now survive a SAVE instead
+  // of being deleted by one, so the readout no longer calls them dropped. That
+  // half — that the file keeps them — is asserted in write-tier.spec.js, where
+  // the round trip lives; this spec still owns the wiring.
+  test('MODEL.html refuses to draw malformed geometry and reports how much', async ({ page }) => {
     await h.openModel(page, { webgl: false, rails: false, entryCoach: true });
     await expect(page.locator('[data-entry-coach]')).toBeVisible({ timeout: 4000 });
     await page.locator('[data-first-bone-press]').click();
@@ -123,7 +129,7 @@ test.describe('drawing-format walls/lines/floors', () => {
     await page.goto('/MODEL.html?mode=night');
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 6000 });
     const before = await page.locator('#readout').textContent();
-    expect(before, 'a clean drawing reports nothing dropped').not.toContain('dropped');
+    expect(before, 'a clean drawing reports nothing undrawn').not.toContain('not drawn');
 
     // Three bad segments: no length, no level, and a floor with two points.
     await page.evaluate(async () => {
@@ -139,7 +145,7 @@ test.describe('drawing-format walls/lines/floors', () => {
     });
     await page.reload();
     await expect(page.locator('#readout'),
-      'three malformed items planted, three reported dropped')
-      .toContainText('3 dropped', { timeout: 6000 });
+      'three malformed items planted, three reported as carried but not drawn')
+      .toContainText('3 not drawn, kept in file', { timeout: 6000 });
   });
 });
