@@ -163,9 +163,38 @@ if (!window.DraftDrawingFormat) {
     }).filter(Boolean);
   };
 
-  const dimensions = (rawDimensions, levelIds) => {
+  // WHAT A NORMALISER REFUSED, HANDED BACK RAW. Same shape as levelLocks'
+  // `drops` above and for the same stated reason: the rule stays in one place
+  // instead of being re-derived at the call site, where it would drift.
+  //
+  // Two things make the sink the only honest way to ask this question, and a
+  // call-site reconstruction wrong in both:
+  //
+  //   POSITION. The map is 1:1 with the input and the filter happens after, so
+  //   a refusal's INDEX is known here and unrecoverable from the filtered
+  //   array alone.
+  //   CROSS-ITEM STATE. `dimensions` refuses a duplicate id via `seen`. Re-run
+  //   on a single item that duplicate PASSES, so a caller re-deriving the
+  //   refusals one at a time would classify it as accepted, fail to record it,
+  //   and lose it on the next save -- while looking exactly like a caller that
+  //   works.
+  //
+  // Entries are `{ index, item }` with `item` the RAW entry exactly as it
+  // arrived. MODEL.html re-emits it unchanged (RULING-a-rejected-item-is-still-
+  // the-drafters), so anything normalised or re-keyed here would defeat the
+  // point of keeping it.
+  const collectRefusals = (raw, mapped, drops) => {
+    if (!Array.isArray(drops)) return mapped;
+    raw.forEach((item, index) => {
+      if (mapped[index] === null) drops.push({ index, item });
+    });
+    return mapped;
+  };
+
+  const dimensions = (rawDimensions, levelIds, env = {}) => {
     const seen = new Set();
-    return (Array.isArray(rawDimensions) ? rawDimensions : []).map(dimension => {
+    const raw = Array.isArray(rawDimensions) ? rawDimensions : [];
+    return collectRefusals(raw, raw.map(dimension => {
       const id = Number(dimension?.id);
       const start = point(dimension?.start);
       const end = point(dimension?.end);
@@ -175,7 +204,7 @@ if (!window.DraftDrawingFormat) {
       if (Math.hypot(end.x - start.x, end.z - start.z) < 0.001) return null;
       seen.add(id);
       return { id, start, end, levelId: dimensionLevelId, view, auto: dimension?.auto === true };
-    }).filter(Boolean);
+    }), env.drops).filter(Boolean);
   };
 
   // Openings anchor to a host wall by id: type decides the CAD layer, offset
@@ -322,7 +351,8 @@ if (!window.DraftDrawingFormat) {
 
   const lines = (rawLines, levelIds, env = {}) => {
     const knownLayers = env.knownLayerIds || new Set();
-    return (Array.isArray(rawLines) ? rawLines : []).map(line => {
+    const raw = Array.isArray(rawLines) ? rawLines : [];
+    return collectRefusals(raw, raw.map(line => {
       const core = segmentCore(line, levelIds);
       if (!core) return null;
       const view = LINE_VIEWS.includes(line?.view) ? line.view : 'plan';
@@ -336,7 +366,7 @@ if (!window.DraftDrawingFormat) {
           : (view === 'e-power' ? 'E-POWER' : 'draft'),
         bulge: Number.isFinite(Number(line?.bulge)) ? Number(line.bulge) : 0,
       };
-    }).filter(Boolean);
+    }), env.drops).filter(Boolean);
   };
 
   const walls = (rawWalls, levelIds, env = {}) => {
@@ -359,7 +389,8 @@ if (!window.DraftDrawingFormat) {
     const refLines = env.refLines || ['left', 'center', 'centre', 'right'];
     const defaultType = env.defaultWallType || 'stud_2x6';
     const defaultTop = env.defaultWallTopFt;
-    return (Array.isArray(rawWalls) ? rawWalls : []).map(wall => {
+    const raw = Array.isArray(rawWalls) ? rawWalls : [];
+    return collectRefusals(raw, raw.map(wall => {
       const core = segmentCore(wall, levelIds);
       if (!core) return null;
       return {
@@ -402,11 +433,11 @@ if (!window.DraftDrawingFormat) {
         // -- regeneration replaces only still-tagged walls.
         ...(wall?.auto === true ? { auto: true } : {}),
       };
-    }).filter(Boolean);
+    }), env.drops).filter(Boolean);
   };
 
-  const floors = (rawFloors, levelIds, env = {}) => (Array.isArray(rawFloors) ? rawFloors : [])
-    .map(floor => {
+  const floors = (rawFloors, levelIds, env = {}) => ((raw =>
+    collectRefusals(raw, raw.map(floor => {
       const floorLevelId = levelId(floor?.levelId, levelIds);
       const points = (Array.isArray(floor?.points) ? floor.points : []).map(point).filter(Boolean);
       if (floorLevelId == null || points.length < 3) return null;
@@ -426,7 +457,7 @@ if (!window.DraftDrawingFormat) {
         thickenedEdge: floor?.thickenedEdge === true,
         assembly: { ...(env.defaultFloorAssembly || {}), ...(floor?.assembly || {}) },
       };
-    }).filter(Boolean);
+    }), env.drops).filter(Boolean))(Array.isArray(rawFloors) ? rawFloors : []));
 
   const shapes = (rawShapes, levelIds) => (Array.isArray(rawShapes) ? rawShapes : [])
     .map(shape => {
