@@ -55,17 +55,32 @@ redefinition of the old one.
 
 `tests/write-tier.spec.js` was failing about one run in five. Measured:
 
-| tree | result |
-| --- | --- |
-| `d81e988` (pre-rung-3) | 4 failed / 20 |
-| `bb8872e` (rung 3) | 4 failed / 20 |
-| `4923e1e` (rung 4a) | **0 failed / 120** |
+| tree | shape of run | result |
+| --- | --- | --- |
+| `d81e988` (pre-rung-3) | 10 repeats | 4 failed / 20 |
+| `bb8872e` (rung 3) | 10 repeats | 4 failed / 20 |
+| `4923e1e` (rung 4a) | 10-40 repeats | 0 failed / 120 |
+| **`4923e1e` (rung 4a)** | **80 repeats, one process** | **29 failed / 160 (18.1%)** |
 
-The identical rate on both sides of rung 3 ruled rung 3 out. Then it stopped
-reproducing entirely: 120 consecutive passes of the unmodified test. At a 20%
-rate that is not luck, so something between `bb8872e` and `4923e1e` changed it —
-rung 4a touches the save path on both pages and is the obvious candidate, though
-that was not chased down.
+**CORRECTED 11 Sep, AND THE FIRST VERSION OF THIS TABLE WAS WRONG.** It ended at
+the third row and concluded the flake had stopped reproducing — that something
+between `bb8872e` and `4923e1e` had fixed it. It had not. Re-measured at 80
+repeats in a single process, current main fails **29 times in 160**.
+
+The rate depends on the SHAPE of the run, not only on the tree. Short runs hide
+it: at 18%, twenty cases come back clean about one time in fifty, and two such
+runs in a row read as a fix. That is what the 0-in-120 was — three short runs, not
+one long one.
+
+**So the flake is not fixed, it is the base's, and it is large.** For comparison,
+a branch carrying unrelated changes measured 31 failed / 240 (12.9%) over the
+same 80-repeat shape, all of them in the two pre-existing tests. CI does not see
+this because it shards four ways, which is exactly the short-run regime where it
+hides.
+
+The original error is left visible rather than edited away: a measurement whose
+blind spot looks identical to a clean result is the same defect this board is
+about, and it caught the person writing the board.
 
 A call-site fix was written (wait for the beams to be present, then for the file
 to be unchanged across two reads) and **reverted unpushed**. The gate for the
