@@ -178,10 +178,16 @@
      one, and the same literals inside drawCutMarks2D punched a white disc
      into the night drawing -- tests/model-html-cuts.spec.js's header records
      it. Every colour here is a palette token, so the rail follows the skin. */
+  /* The CONTAINER takes no clicks, the seats do -- MODEL.dc.html's own split
+     (.view-thumb carries `pointer-events:auto`, so its wrapper does not).
+     Without it the 6px gutters between seats swallow taps meant for the
+     drawing underneath. */
   #view-rail { position:fixed; right:12px; top:80px; z-index:5;
+    pointer-events:none;
     display:grid; grid-template-columns:repeat(2, 118px); gap:6px; }
   #view-rail[hidden] { display:none; }
-  .seat { width:118px; padding:0; text-align:left; cursor:pointer; overflow:hidden;
+  .seat { pointer-events:auto;
+    width:118px; padding:0; text-align:left; cursor:pointer; overflow:hidden;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:4px; }
   .seat:hover { border-color: var(--accent); }

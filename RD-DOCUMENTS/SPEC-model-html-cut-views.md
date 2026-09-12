@@ -172,6 +172,42 @@ having no preview at all. Ship the seat, measure the painter with a real hook,
 then decide. Reversing that order means paying an unmeasured per-frame cost to
 answer a question we could have asked first.
 
+### SETTLED, 12 Sep — and the first measurement was wrong
+
+**The ruling (Devin): sections live, elevations labelled.** The decider is the
+argument above rather than the cost: *a thumbnail earns its keep where the name
+does not identify the view.* `S1` and `S2` tell a drafter nothing about which
+section is which, so only a picture separates them. `E1 FRONT` and `E3 BACK`
+already do the job a picture would.
+
+**The measurement nearly settled it the other way, because it measured one
+thing and reported another.** `proto/cut-view-timing.js` printed 0.14–0.30 ms a
+card, and I quoted that here and in two pull requests as grounds to reverse the
+recommendation above. Its own header read *"HOW LONG ONE SECTION TAKES TO
+PAINT"* and its last line printed *"six cards at the median"* — one sample
+multiplied by six, reported as a population it had never sampled. **Four of the
+six seats are elevations.** Per seat, 232×152, `repro-garage-house`:
+
+| E1 | E2 | E3 | E4 | S1 |
+|---|---|---|---|---|
+| 46.8 ms | 43.2 ms | 47.6 ms | 43.7 ms | **0.32 ms** |
+
+About 100×, holding across all three repro houses, and identical at 232×152 and
+900×600 — so it is the painter's hidden-line geometry, not rasterisation.
+Measured in the browser before the fix, four live elevations cost **148 ms per
+wall drawn**. The rail as built costs **1.0 ms**.
+
+So §2's original recommendation was closer to right than the number that
+overturned it, and the paragraph above stands rather than being edited to look
+prescient. The tool is rewritten to time every seat separately, with the error
+recorded in its header; a tool that averages a cheap case with an expensive one
+hides the thing the question turns on.
+
+**The deferral in §3 is unchanged, and the seat shape is kept deliberately.**
+Seat, canvas and epoch are identical for both kinds — an elevation simply draws
+its name where its picture would go — so a faster elevation painter becomes a
+thumbnail without moving a seat.
+
 ---
 
 ## 3. The empty seats

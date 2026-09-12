@@ -40,21 +40,36 @@ const DAY_INK = '#b04060';      // palette.js day draw-cut -- the painter's old 
 const DAY_FILL = '#f2f2f3';     // palette.js day surface-page
 const OLD_WHITE = '#fff';
 
+// THE PLAN CANVAS ONLY, and the scoping is not belt-and-braces. This patches
+// CanvasRenderingContext2D.PROTOTYPE, which is every canvas on the page. That
+// was the same thing as "the plan" while the page had one canvas, and stopped
+// being so the day the view rail arrived with six thumbnail canvases of its
+// own: a section thumbnail paints paper-coloured, exactly as the full-size cut
+// view does, so `#fafafa` started appearing in __fills and the night check --
+// "in neither the night page's old ink nor its old white" -- failed on ink the
+// plan had never used. The rail's labels landed in __text the same way.
+//
+// An instrument that records more than it names is this suite's recurring
+// defect, so it names what it records: `this.canvas.id === 'plan'`.
 async function recordPaint(page) {
   await page.addInitScript(() => {
     window.__strokes = [];
     window.__fills = [];
     window.__text = [];
     const proto = CanvasRenderingContext2D.prototype;
+    const onPlan = ctx => ctx && ctx.canvas && ctx.canvas.id === 'plan';
     for (const [prop, sink] of [['strokeStyle', '__strokes'], ['fillStyle', '__fills']]) {
       const desc = Object.getOwnPropertyDescriptor(proto, prop);
       Object.defineProperty(proto, prop, {
-        set(v) { window[sink].push(String(v)); return desc.set.call(this, v); },
+        set(v) { if (onPlan(this)) window[sink].push(String(v)); return desc.set.call(this, v); },
         get() { return desc.get.call(this); },
       });
     }
     const fillText = proto.fillText;
-    proto.fillText = function (t, ...rest) { window.__text.push(String(t)); return fillText.call(this, t, ...rest); };
+    proto.fillText = function (t, ...rest) {
+      if (onPlan(this)) window.__text.push(String(t));
+      return fillText.call(this, t, ...rest);
+    };
     // The drawing operations, not just the styles. Needed twice below: a style
     // set proves the painter RAN, and the two checks that matter are about
     // whether it DREW -- see each for why the difference bites.
@@ -62,7 +77,9 @@ async function recordPaint(page) {
     for (const op of ['moveTo', 'lineTo', 'arc', 'fill', 'stroke', 'closePath']) {
       const real = proto[op];
       proto[op] = function (...a) {
-        window.__ops.push(op + '(' + a.map(v => (typeof v === 'number' ? Math.round(v * 10) / 10 : v)).join(',') + ')');
+        if (onPlan(this)) {
+          window.__ops.push(op + '(' + a.map(v => (typeof v === 'number' ? Math.round(v * 10) / 10 : v)).join(',') + ')');
+        }
         return real.apply(this, a);
       };
     }
