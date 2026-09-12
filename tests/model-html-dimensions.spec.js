@@ -165,9 +165,14 @@ test.describe('MODEL.html dimensions', () => {
         return d;`);
       await expect(page.locator('#readout'),
         'a dimension with no view and one with an unknown view are both '
-        + 'dropped on load, and the readout says so')
+        + 'refused on load, and the readout says so')
         .toContainText('dims 1/1');
-      await expect(page.locator('#readout')).toContainText('2 dropped');
+      // REFUSED, NOT DELETED (RULING-a-rejected-item-is-still-the-drafters).
+      // `dims 1/1` above is the half that did not change: neither dimension
+      // reaches the drawing, so the filter this test guards still never needs
+      // a fallback. What changed is what happens to them afterwards — the file
+      // keeps both, so the readout no longer calls them dropped.
+      await expect(page.locator('#readout')).toContainText('2 not drawn, kept in file');
       expect(await painted(page)).toContain(TWELVE_FT_IMPERIAL);
     });
 });

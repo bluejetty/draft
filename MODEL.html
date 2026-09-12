@@ -312,7 +312,23 @@
   // MODEL.dc.html pools lines, floors and roofs too, and this grows to match
   // when something on this page needs them to share a corner.
   let vertexPool = [];
-  let dropped = 0;   // items the format module rejected on load
+  let dropped = 0;   // items the format module refused on load — kept, not drawn
+  // WHAT THE FORMAT MODULE REFUSED, HELD RAW SO THE SAVE CAN PUT IT BACK
+  // (RULING-a-rejected-item-is-still-the-drafters, Movie, 11 Sep). Keyed by
+  // collection; each entry is `{ index, item }` with `item` byte-for-byte as it
+  // came out of the file. The page will not draw these — they failed the
+  // format's own rules and drawing them is exactly what those rules prevent —
+  // but a page may show less than the file contains; it may not SAVE less than
+  // the file contains.
+  //
+  // The list comes from the normaliser's own sink rather than from a comparison
+  // made here, because a reconstruction at this call site gets the duplicate-id
+  // case backwards: a dimension refused for a duplicate id PASSES when re-run
+  // on its own, so a caller re-deriving the refusals one at a time would call
+  // it accepted, never record it, and lose it on the next save — while looking
+  // exactly like a caller that works.
+  const REFUSED_KEYS = ['walls', 'lines', 'floors', 'dimensions'];
+  let refusedItems = { walls: [], lines: [], floors: [], dimensions: [] };
   // PAINT THE SUBSTITUTE, NEVER PERSIST IT (RULING-substitution-is-not-a-save,
   // Movie, 11 Sep). `LEGACY_WALL_TYPES` rewrites a retired wall type to the
   // nearest surviving assembly so the wall can be DRAWN — a reader's
@@ -1441,9 +1457,12 @@
       // Why the grid is or is not there, so its absence reads as a fact about
       // the drawing rather than a broken page.
       + `datum <b>${datumLabel()}</b>`
-      // Malformed geometry is dropped on load, as the old page drops it. Say
-      // how much, so a thinner drawing is a fact rather than a mystery.
-      + (dropped ? `   <b>${dropped} dropped</b>` : '')
+      // Malformed geometry is NOT DRAWN and NOT DELETED. Say how much, so a
+      // thinner drawing is a fact rather than a mystery — and say which of the
+      // two happened, because "dropped" is now a lie in the direction that
+      // matters. The count is the same count it always was; the word changed
+      // when the behaviour did.
+      + (dropped ? `   <b>${dropped} not drawn, kept in file</b>` : '')
       // A SUBSTITUTION IS NOT A FACT ABOUT THE DRAWING, and the drafter should
       // be able to find out one happened. This page has no 12" assembly, so it
       // paints those walls as 8" — drawing nothing would be worse — and the file
@@ -2268,22 +2287,28 @@
     // rules now live in the shared module (drawing-format.js) and this is the
     // first caller of them.
     //
-    // Rejected items are DROPPED, exactly as the old page drops them, and the
-    // readout says how many so a malformed drawing reads as a fact rather than
-    // as a page that quietly lost geometry.
+    // REJECTED ITEMS ARE NOT DRAWN AND NOT DELETED (RULING-a-rejected-item-is-
+    // still-the-drafters, 11 Sep). They used to be dropped, exactly as the old
+    // page drops them, and a SAVE then wrote the file back without them: a
+    // drafter who opened a drawing and pressed SAVE had asked to draw nothing
+    // and lost geometry anyway. Same failure as the 12" foundation, a different
+    // field.
+    //
+    // So each normaliser is handed a `drops` sink and what it refuses is kept
+    // RAW, by index, for the serializer to put back untouched. The readout says
+    // how many are being carried, so a malformed drawing reads as a fact rather
+    // than as a page that quietly lost -- or quietly kept -- geometry.
     const F = window.DraftDrawingFormat;
     const levelIds = new Set((parsed.levels || []).map(level => Number(level.id)));
     const WT = window.DraftWallTypes;
-    const raw = {
-      walls: parsed.walls, lines: parsed.lines,
-      floors: parsed.floors, dimensions: parsed.dimensions,
-    };
+    refusedItems = { walls: [], lines: [], floors: [], dimensions: [] };
     drawing = {
       ...parsed,
       walls: F.walls(parsed.walls, levelIds, {
         wallTypes: WT.WALL_TYPES,
         legacyWallTypes: WT.LEGACY_WALL_TYPES,
         defaultWallTopFt: 8,
+        drops: refusedItems.walls,
       }),
       // THE KNOWN LAYERS, or the normaliser flattens them. format.lines folds
       // any layer outside this set to 'draft' (or E-POWER); passing {} here
@@ -2294,12 +2319,16 @@
       lines: F.lines(parsed.lines, levelIds, {
         knownLayerIds: new Set(window.DraftLayerStandards.DEFAULT_LAYER_STANDARDS
           .flatMap(group => group.layers).map(layer => layer.id)),
+        drops: refusedItems.lines,
       }),
-      floors: F.floors(parsed.floors, levelIds, { defaultFloorThickness: 0.75 }),
+      floors: F.floors(parsed.floors, levelIds, {
+        defaultFloorThickness: 0.75,
+        drops: refusedItems.floors,
+      }),
       // Dimensions already had a rule; this page just never called it. Running
       // it is what lets the view filter above trust that every dimension in
       // the array carries a real view.
-      dimensions: F.dimensions(parsed.dimensions, levelIds),
+      dimensions: F.dimensions(parsed.dimensions, levelIds, { drops: refusedItems.dimensions }),
       // Normalised here rather than at the paint site so the null survives to
       // exactly one place that resolves it. `drawing` is built by spreading
       // `parsed`, so without this line the raw key would still be present and
@@ -2319,9 +2348,11 @@
       }
     });
 
-    dropped = ['walls', 'lines', 'floors', 'dimensions']
-      .map(k => (Array.isArray(raw[k]) ? raw[k].length : 0) - drawing[k].length)
-      .reduce((a, b) => a + b, 0);
+    // ONE SOURCE, NOT TWO. This used to be a length difference between the raw
+    // arrays and the normalised ones. It agreed with the sink by construction,
+    // which is the problem: two ways to count the same thing drift, and the one
+    // that drifts is the one nothing reads back.
+    dropped = REFUSED_KEYS.reduce((total, key) => total + refusedItems[key].length, 0);
 
     // REBUILD REFERENCE EQUALITY AT SHARED CORNERS. Everything above restores
     // VALUES: JSON has no way to say "these two walls end at the same point",
@@ -2468,18 +2499,46 @@
     saveButton.classList.remove('dirty');
   };
 
+  // PUT THE REFUSED ITEMS BACK WHERE THEY CAME FROM. Original index, so a load
+  // followed by an untouched SAVE reproduces the file's own order rather than a
+  // resemblance of it — the round trip is asserted deep-equal, and an item that
+  // comes back in a different slot fails that as surely as one that vanishes.
+  //
+  // The index clamps. After the drafter adds or deletes, the recorded slot can
+  // be past the end of a shorter array, and there is no honest answer to
+  // "where does it go now" — it lands as near its old position as the array
+  // allows. Stated because it is a choice, not an invariant.
+  //
+  // Applied to all four collections unconditionally, empty list or not. A
+  // `if (refused.length)` around the call site would be dead code on every
+  // clean drawing, which is to say untested on every clean drawing.
+  const withRefused = (key, items) => {
+    const refused = refusedItems[key] || [];
+    if (!refused.length) return items;
+    const out = items.slice();
+    [...refused].sort((a, b) => a.index - b.index)
+      .forEach(({ index, item }) => out.splice(Math.min(index, out.length), 0, item));
+    return out;
+  };
+
   const serializeDrawing = () => {
     const point = p => window.DraftDrawingFormat.pointForStorage(p);
     return {
       ...drawing,
-      walls: drawing.walls.map(wall => {
+      walls: withRefused('walls', drawing.walls.map(wall => {
         // Restored ONLY while the wall still carries the type this page
         // substituted; a deliberate later change is the drafter's edit and is
         // what gets written.
         const swap = substitutedWallTypes.get(wall.id);
         const wallType = (swap && wall.wallType === swap.painted) ? swap.original : wall.wallType;
         return { ...wall, wallType, start: point(wall.start), end: point(wall.end) };
-      }),
+      })),
+      // Spread from `drawing` these three would already be here; they are named
+      // so the refused items go back into them. A refused LINE is as much the
+      // drafter's as a refused wall.
+      lines: withRefused('lines', drawing.lines),
+      floors: withRefused('floors', drawing.floors),
+      dimensions: withRefused('dimensions', drawing.dimensions),
     };
   };
 
