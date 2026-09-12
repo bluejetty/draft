@@ -1218,16 +1218,113 @@
   // neither does this. A stair descends to the subfloor below, and on the
   // lowest floor past the foundation wall onto the slab -- stair-geometry.js
   // owns that rule; this only answers the four questions it asks.
+  // THE ROLE, NOT JUST THE ID. Passing no role means every level frames like a
+  // plain floor, and MODEL.dc.html stopped believing that on 6 Sep (PR #323,
+  // Devin's ruling). This page's whole job is to paint what that page saved, so
+  // the two must ask the module the same question.
+  //
+  // ONE DEFINITION, TWO CALLERS — stairLevels below and cutEnv after it. It was
+  // scoped inside stairLevels until the cut-view host needed the same answer,
+  // and two level-assembly lookups that could drift apart is how the derive/
+  // store divergence got in last time.
+  const assemblyFor = id => window.DraftLevelAssembly
+    .normaliseLevelAssembly((drawing?.levelAssemblies || {})[id],
+      window.DraftLevelAssembly.levelRole(id));
+
+  // ── the cut-view env ────────────────────────────────────────────────────────
+  // SPEC-model-html-cut-views.md. cut-view.js's drawCutView reads its world
+  // through EIGHTEEN accessors and nothing else — there is no destructuring of
+  // `env` anywhere in that file, so this object is the whole contract rather
+  // than a sample, and MODEL.dc.html's _cutViewEnv supplies exactly the same
+  // eighteen. Neither end carries a spare.
+  //
+  // NOT ONE OF THEM NEEDS PAGE STATE. Measured rather than assumed: the two
+  // that look like state on the old page (`buildType`, `elevationDatum`) are
+  // PERSISTED_KEYS entries, and even `garageFoundation` bottoms out in
+  // persisted keys — `boneyardOutlines`, which this page reads though it offers
+  // no boneyard gestures, and `sectionTable`. So the env is a function of the
+  // drawing plus the shared modules, and the host inherits none of the old
+  // page's state machine.
+  //
+  // proto/elevation-harness.js:buildEnv is the third implementation of this
+  // contract and the one the offline timing runs against; where the two could
+  // drift, that harness is the reference.
+  const cutEnv = () => {
+    const LA = window.DraftLevelAssembly;
+    const LV = window.DraftLayerViews;
+    const G = window.DraftGeometry2D;
+    const F = window.DraftFormatters;
+    const ftIn = feet => F.formatArchitecturalInches(feet * 12);
+
+    // A garage outline's master lives on the boneyard shelf; an outline that
+    // IS a master carries its own shelfId. The old page reads the same two
+    // ways round (_garageMaster).
+    const garageMaster = garage => {
+      if (garage?.shelfId != null) return garage;
+      return (drawing?.boneyardOutlines || [])
+        .find(master => master.id === garage?.masterId) || null;
+    };
+    const garageDetached = garage =>
+      garage?.detached === true || garageMaster(garage)?.detached === true;
+
+    return {
+      floorLevels: () => LV.floorLevels(drawing?.levels),
+      levelAssembly: levelId => assemblyFor(levelId),
+      levelFloorFt: levelId => LA.levelFloorFt(assemblyFor(levelId)),
+      levelWallTopFt: (levelId, view = 'plan') =>
+        LA.levelWallTopFt(drawing?.walls || [], levelId, view),
+      footingWidthIn: levelId => LA.footingWidthIn(assemblyFor(levelId)),
+      walls: () => walls(),
+      roofs: () => roofs(),
+      floors: () => floors(),
+      fenestrations: () => drawing?.fenestrations || [],
+      garageOutlines: levelId => outlines()
+        .filter(outline => outline.levelId === levelId && outline.garage),
+      // Ported from _garageFoundation: the outline answers first, then the
+      // master, then the section table's row for this garage's kind.
+      garageFoundation: garage => {
+        const stored = garage?.foundation || garageMaster(garage)?.foundation;
+        if (stored === 'thickened' || stored === 'frostwall') return stored;
+        if (stored === 'gradebeam') return 'gradebeam';
+        const row = garageDetached(garage) ? 'detachedGarage' : 'attachedGarage';
+        const cell = drawing?.sectionTable?.rows?.[row]?.garageFoundation;
+        if (cell === 'frostwall') return 'frostwall';
+        if (cell === 'thickened' && row === 'detachedGarage') return 'thickened';
+        return 'gradebeam';
+      },
+      buildType: () => drawing?.buildType ?? null,
+      // BOTH ENDS AND THE MIDDLE, as the old page asks it: an edge lying along
+      // an outline needs all three on the boundary, or a chord across a
+      // concave outline would read as an edge of it. The segment walk comes
+      // from geometry-2d.js rather than a private copy.
+      edgeOnOutline: (a, b, outline, eps = 0.1) => {
+        if (!outline) return false;
+        const count = G.outlineSegmentCount(outline);
+        const onBoundary = pt => (outline.points || []).some((point, index) => {
+          if (index >= count) return false;
+          return G.pointToSegment(pt, G.outlineSegment(outline, index)).d <= eps;
+        });
+        return onBoundary(a) && onBoundary(b)
+          && onBoundary({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+      },
+      masterPointById: srcId => masterPointById(srcId),
+      gableCornerStyle: () => structureStandards().gableCorner,
+      // The sign is suppressed when the drawing carries a datum, because the
+      // datum already says what the number is measured from.
+      elevLabel: elev => {
+        const sign = elev > 0 && !drawing?.elevationDatum ? '+' : '';
+        return sign + (drawing?.units !== 'metric'
+          ? ftIn(elev) : F.formatMetres(elev));
+      },
+      ftIn,
+      elevationDatum: () => drawing?.elevationDatum ?? null,
+    };
+  };
+
   const stairLevels = () => {
     const LA = window.DraftLevelAssembly;
     const LV = window.DraftLayerViews;
     const all = drawing?.walls || [];
-    const assemblies = drawing?.levelAssemblies || {};
-    // THE ROLE, NOT JUST THE ID. Passing no role means every level frames
-    // like a plain floor, and MODEL.dc.html stopped believing that on 6 Sep
-    // (PR #323, Devin's ruling). This page's whole job is to paint what that
-    // page saved, so the two must ask the module the same question.
-    const assemblyFor = id => LA.normaliseLevelAssembly(assemblies[id], LA.levelRole(id));
     return {
       floors: (drawing?.levels || [])
         .filter(level => LV.layerViewsForLevelId(level.id).some(view => view.id === 'floor'))
