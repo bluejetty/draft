@@ -454,9 +454,21 @@
   // means it is shareable, survives a reload, and inherits the level-change
   // handling below for free.
   const CUT_VIEW = 'cut:';
-  const cutForViewId = id => (typeof id === 'string' && id.startsWith(CUT_VIEW)
-    ? cuts().find(cut => String(cut.id) === id.slice(CUT_VIEW.length)) || null
-    : null);
+  // BOTH LISTS, as the old page's _cutById reads them (MODEL.dc.html:9531):
+  // the four DERIVED elevations first, then the drafter's stored sections.
+  //
+  // This searched `cuts()` alone when the host shipped, which was wrong and
+  // quiet about it: E1-E4 are not in `cuts` -- they are computed from the
+  // plan's extents -- so every `?view=cut:E1` resolved to null, fell through
+  // to the layer-view branch, and warned about a view the level does not
+  // have. Nothing caught it because nothing had asked for an elevation yet;
+  // the rail is what asks, and it would have seated four dead cards.
+  const cutForViewId = id => {
+    if (typeof id !== 'string' || !id.startsWith(CUT_VIEW)) return null;
+    const wanted = id.slice(CUT_VIEW.length);
+    return [...autoElevationCuts(), ...cuts()]
+      .find(cut => String(cut.id) === wanted) || null;
+  };
   const activeCut = () => cutForViewId(params.get('view'));
 
   const activeViewId = () => {
@@ -1195,6 +1207,63 @@
     .normaliseStructureStandards(
       window.DraftProfileManager.getActive('standards')?.content?.model?.structureStandards);
 
+  // THE MODEL EPOCH: bumped when the DRAWING changes and at nothing else --
+  // not on pan, zoom, a level switch or a view switch. MODEL.dc.html bumps
+  // its rail epoch at exactly two places, the load and _markUnsaved
+  // (:6366, :6632); this matches them.
+  //
+  // It does two jobs, and both ask the same question -- has the drawing
+  // changed since I last looked:
+  //   - the rail's six thumbnails repaint on it, never on mouse traffic;
+  //   - autoElevationCuts caches on it.
+  //
+  // The PROFILE is deliberately not part of it, and that is parity rather
+  // than an oversight: standards live in localStorage and take effect on the
+  // next load on both pages. tests/model-html-cuts.spec.js changes them and
+  // reloads, which starts a fresh epoch anyway.
+  let modelEpoch = 0;
+  const bumpModelEpoch = () => { modelEpoch += 1; };
+
+  // THE FOUR STANDARD ELEVATIONS ARE DERIVED, NOT STORED. `cuts` holds the
+  // drafter's SECTIONS; E1-E4 are computed from the plan's own extents every
+  // time, which is why a house that grows moves its elevation lines without
+  // anyone editing them.
+  //
+  // ONE HOME, because there are now two readers: paintCuts draws their marks
+  // on the plan, and the rail seats them. Two derivations of the same four
+  // cuts could disagree about where the house is -- a seat showing one
+  // elevation while the mark on the plan points somewhere else. This is the
+  // third time in this branch that a second copy was the thing to avoid
+  // (levelAssemblyFor, cutAxis), so it is not written twice even once.
+  // CACHED ON THE EPOCH, and the numbers below are the measurement, not the
+  // guess it replaced. autoElevationCuts walks every wall to find the plan's
+  // extents, and cutForViewId is called several times a paint.
+  //
+  // I expected the damage to be in the PLAN paint, where walls(), lines(),
+  // floors() and outlines() each call onActiveLevel() once per item. It is
+  // not: under a plan view cutForViewId exits on the `cut:` prefix test
+  // before it derives anything, and the plan paint measured 0.70 ms on the
+  // 24-wall house with the cache and without it. The per-item path never pays.
+  //
+  // The cost is real on the SECTION paint, where every call does derive:
+  // 0.60 ms uncached against 0.40 ms cached, same house. So the cache earns
+  // its place, just not for the reason it was written for.
+  let autoElevCache = { epoch: -1, cuts: [] };
+  const autoElevationCuts = () => {
+    if (autoElevCache.epoch !== modelEpoch) {
+      autoElevCache = {
+        epoch: modelEpoch,
+        cuts: window.DraftCutMarks.autoElevationCuts({
+          walls: drawing?.walls || [],
+          dimensions: drawing?.dimensions || [],
+          elevationMarkOffsets: drawing?.elevationMarkOffsets || {},
+          autoElevations: structureStandards().autoElevations,
+        }),
+      };
+    }
+    return autoElevCache.cuts;
+  };
+
   const paintCuts = () => {
     const R = window.DraftRender2D;
     const CM = window.DraftCutMarks;
@@ -1210,17 +1279,11 @@
         + 'did not load. Check the script order in the page head.');
     }
     const all = drawing?.walls || [];
-    const dims = drawing?.dimensions || [];
     const standards = structureStandards();
     R.drawCutMarks2D(ctx, toS, {
       bubbleStyle: standards.cutBubbleStyle,
       lineSpan: (start, end) => CM.cutLineSpan(all, start, end, cutMarkGapFt()),
-      autoCuts: CM.autoElevationCuts({
-        walls: all,
-        dimensions: dims,
-        elevationMarkOffsets: drawing?.elevationMarkOffsets || {},
-        autoElevations: standards.autoElevations,
-      }),
+      autoCuts: autoElevationCuts(),
       cuts: cuts(),
       cutColor: skin['draw-cut'],
       // The bubble interior is the page's own ground, so the lettering inside
@@ -1625,6 +1688,13 @@
   // cannot drift from the picture it describes. The three states it reports
   // are the painter's three: no level stack, no crossings (an elevation, not
   // a section), and a section with walls in it.
+  // The office's side name for a standard elevation -- E1 FRONT, E2 LEFT and
+  // so on -- read the way MODEL.dc.html's _elevationName reads it (:9437):
+  // the drawing's own names first (they are persisted, so a drawing saved
+  // with its own names keeps them), then the profile's, then a plain word.
+  const elevationName = id => drawing?.elevationNames?.[id]
+    || structureStandards().elevationNames?.[id] || 'ELEVATION';
+
   const sectionReadout = cut => {
     const CV = window.DraftCutView;
     const env = cutEnv();
@@ -1633,7 +1703,14 @@
     const what = !stack ? 'no level stack'
       : (crossings.length ? `walls cut <b>${crossings.length}</b>`
         : 'crosses no walls — an elevation');
-    return `section <b>${cut.name || cut.id}</b>   ${what}   `
+    // THE RIGHT NOUN. An auto cut stands OUTSIDE the house looking at it, so
+    // it crosses no walls BY DESIGN -- "section E1 crosses no walls" reads as
+    // a fault rather than the normal case. The drafter's two kinds of cut are
+    // named as two kinds.
+    const title = cut.auto
+      ? `elevation <b>${cut.name || cut.id} · ${elevationName(cut.id)}</b>`
+      : `section <b>${cut.name || cut.id}</b>`;
+    return `${title}   ${what}   `
       + `of <b>${(drawing.walls || []).length}</b> in the drawing
 `
       + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
@@ -2672,6 +2749,9 @@
     }
 
     if (!(await adoptFile(file))) return;
+    // The drawing is on the page: first epoch, as MODEL.dc.html bumps at the
+    // end of its load (:6366).
+    bumpModelEpoch();
     fit();
     paint();
     // The switchers can only be built once the drawing is on the page: their
@@ -2721,7 +2801,15 @@
   // racing the edit it is checking.
   let dirty = false;
   const markDirty = () => {
-    if (!drawing || dirty) return;
+    if (!drawing) return;
+    // EVERY EDIT, ahead of the dirty guard. That guard returns early once the
+    // page is already unsaved, which is right for the button and wrong for
+    // the epoch: MODEL.dc.html's _markUnsaved has no such short-circuit, so
+    // its rail epoch moves on every edit. Bumping below the guard would
+    // freeze the six thumbnails on the FIRST change after a save and leave
+    // them stale for every change after it -- a wall drawn, no seat updated.
+    bumpModelEpoch();
+    if (dirty) return;
     dirty = true;
     document.body.dataset.saveDirty = '1';
     saveButton.textContent = 'UNSAVED';
