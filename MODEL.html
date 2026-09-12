@@ -169,6 +169,45 @@
      mid-gesture must be able to see that the next tap draws. */
   #chrome button.armed { color: var(--accent); border-color: var(--accent); }
 
+  /* THE SEATING CHART: six cut views, all six always shown. The shape is
+     MODEL.dc.html's rail (:188-200) and the PAIRING is its own -- E1|E3 over
+     E2|E4, then the two section seats side by side (:7266, :7281).
+
+     NOT its colours, though. That rail is #fff cards with #b04060 accents
+     baked in, because that page has one light skin. This page has a night
+     one, and the same literals inside drawCutMarks2D punched a white disc
+     into the night drawing -- tests/model-html-cuts.spec.js's header records
+     it. Every colour here is a palette token, so the rail follows the skin. */
+  /* The CONTAINER takes no clicks, the seats do -- MODEL.dc.html's own split
+     (.view-thumb carries `pointer-events:auto`, so its wrapper does not).
+     Without it the 6px gutters between seats swallow taps meant for the
+     drawing underneath. */
+  #view-rail { position:fixed; right:12px; top:80px; z-index:5;
+    pointer-events:none;
+    display:grid; grid-template-columns:repeat(2, 118px); gap:6px; }
+  #view-rail[hidden] { display:none; }
+  .seat { pointer-events:auto;
+    width:118px; padding:0; text-align:left; cursor:pointer; overflow:hidden;
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    border:1px solid var(--edge-panel); border-radius:4px; }
+  .seat:hover { border-color: var(--accent); }
+  .seat.active { border-color: var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  /* AN EMPTY SEAT IS A CHAIR, NOT A BUTTON. The creation gesture that fills a
+     section seat on the old page is deferred (SPEC §3), so an empty seat must
+     not invite a press that does nothing. It is disabled rather than merely
+     unstyled: `cursor:default` tells a mouse and nothing else, while disabled
+     also takes it out of the tab order and off a screen reader's list of
+     things to press. */
+  .seat[disabled] { cursor:default; }
+  .seat[disabled]:hover { border-color: var(--edge-panel); }
+  .seat canvas { display:block; width:116px; height:76px; }
+  .seat[disabled] canvas { opacity:0.25; }
+  .seat-label { padding:3px 5px 4px; border-top:1px solid var(--edge-panel);
+    font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.06em; text-transform:uppercase; color: var(--ink-quiet);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .seat.active .seat-label { color: var(--accent); }
+
   #chrome select { font-family: var(--font-ui); font-size:12px;
     color: var(--ink-primary); cursor:pointer;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
@@ -204,6 +243,7 @@
   <span data-lease-message></span>
   <button id="take-over" type="button" data-take-over>TAKE OVER</button>
 </div>
+<div id="view-rail" hidden></div>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 <div id="notice"><div id="notice-body"></div></div>
 
@@ -454,9 +494,20 @@
   // means it is shareable, survives a reload, and inherits the level-change
   // handling below for free.
   const CUT_VIEW = 'cut:';
-  const cutForViewId = id => (typeof id === 'string' && id.startsWith(CUT_VIEW)
-    ? cuts().find(cut => String(cut.id) === id.slice(CUT_VIEW.length)) || null
-    : null);
+  // BOTH LISTS, as the old page's _cutById reads them (MODEL.dc.html:9531):
+  // the four DERIVED elevations first, then the drafter's stored sections.
+  //
+  // This searched `cuts()` alone when the host shipped, which was wrong and
+  // quiet about it: E1-E4 are not in `cuts` -- they are computed from the
+  // plan's extents -- so every `?view=cut:E1` resolved to null, fell through
+  // to the layer-view branch, and warned about a view the level does not
+  // have. Nothing caught it because nothing had asked for an elevation yet;
+  // the rail is what asks, and it would have seated four dead cards.
+  const cutForViewId = id => {
+    if (typeof id !== 'string' || !id.startsWith(CUT_VIEW)) return null;
+    const wanted = id.slice(CUT_VIEW.length);
+    return allCuts().find(cut => String(cut.id) === wanted) || null;
+  };
   const activeCut = () => cutForViewId(params.get('view'));
 
   const activeViewId = () => {
@@ -1195,6 +1246,72 @@
     .normaliseStructureStandards(
       window.DraftProfileManager.getActive('standards')?.content?.model?.structureStandards);
 
+  // THE MODEL EPOCH: bumped when the DRAWING changes and at nothing else --
+  // not on pan, zoom, a level switch or a view switch. MODEL.dc.html bumps
+  // its rail epoch at exactly two places, the load and _markUnsaved
+  // (:6366, :6632); this matches them.
+  //
+  // It does two jobs, and both ask the same question -- has the drawing
+  // changed since I last looked:
+  //   - the rail's six thumbnails repaint on it, never on mouse traffic;
+  //   - autoElevationCuts caches on it.
+  //
+  // The PROFILE is deliberately not part of it, and that is parity rather
+  // than an oversight: standards live in localStorage and take effect on the
+  // next load on both pages. tests/model-html-cuts.spec.js changes them and
+  // reloads, which starts a fresh epoch anyway.
+  let modelEpoch = 0;
+  const bumpModelEpoch = () => { modelEpoch += 1; };
+
+  // THE FOUR STANDARD ELEVATIONS ARE DERIVED, NOT STORED. `cuts` holds the
+  // drafter's SECTIONS; E1-E4 are computed from the plan's own extents every
+  // time, which is why a house that grows moves its elevation lines without
+  // anyone editing them.
+  //
+  // ONE HOME, because there are now two readers: paintCuts draws their marks
+  // on the plan, and the rail seats them. Two derivations of the same four
+  // cuts could disagree about where the house is -- a seat showing one
+  // elevation while the mark on the plan points somewhere else. This is the
+  // third time in this branch that a second copy was the thing to avoid
+  // (levelAssemblyFor, cutAxis), so it is not written twice even once.
+  // CACHED ON THE EPOCH, and the numbers below are the measurement, not the
+  // guess it replaced. autoElevationCuts walks every wall to find the plan's
+  // extents, and cutForViewId is called several times a paint.
+  //
+  // I expected the damage to be in the PLAN paint, where walls(), lines(),
+  // floors() and outlines() each call onActiveLevel() once per item. It is
+  // not: under a plan view cutForViewId exits on the `cut:` prefix test
+  // before it derives anything, and the plan paint measured 0.70 ms on the
+  // 24-wall house with the cache and without it. The per-item path never pays.
+  //
+  // The cost is real on the SECTION paint, where every call does derive:
+  // 0.60 ms uncached against 0.40 ms cached, same house. So the cache earns
+  // its place, just not for the reason it was written for.
+  let autoElevCache = { epoch: -1, cuts: [] };
+  const autoElevationCuts = () => {
+    if (autoElevCache.epoch !== modelEpoch) {
+      autoElevCache = {
+        epoch: modelEpoch,
+        cuts: window.DraftCutMarks.autoElevationCuts({
+          walls: drawing?.walls || [],
+          dimensions: drawing?.dimensions || [],
+          elevationMarkOffsets: drawing?.elevationMarkOffsets || {},
+          autoElevations: structureStandards().autoElevations,
+        }),
+      };
+    }
+    return autoElevCache.cuts;
+  };
+
+  // EVERY CUT VIEW THIS DRAWING OFFERS, in MODEL.dc.html's _cutById order
+  // (:9531): the four derived elevations, then the drafter's stored sections.
+  //
+  // Three callers ask this one question -- the view lookup, the view picker
+  // and the rail -- and they must not be able to disagree about it. A picker
+  // offering a view the lookup cannot resolve is a dead option; a rail seating
+  // one is a dead card.
+  const allCuts = () => [...autoElevationCuts(), ...cuts()];
+
   const paintCuts = () => {
     const R = window.DraftRender2D;
     const CM = window.DraftCutMarks;
@@ -1210,17 +1327,11 @@
         + 'did not load. Check the script order in the page head.');
     }
     const all = drawing?.walls || [];
-    const dims = drawing?.dimensions || [];
     const standards = structureStandards();
     R.drawCutMarks2D(ctx, toS, {
       bubbleStyle: standards.cutBubbleStyle,
       lineSpan: (start, end) => CM.cutLineSpan(all, start, end, cutMarkGapFt()),
-      autoCuts: CM.autoElevationCuts({
-        walls: all,
-        dimensions: dims,
-        elevationMarkOffsets: drawing?.elevationMarkOffsets || {},
-        autoElevations: standards.autoElevations,
-      }),
+      autoCuts: autoElevationCuts(),
       cuts: cuts(),
       cutColor: skin['draw-cut'],
       // The bubble interior is the page's own ground, so the lettering inside
@@ -1488,6 +1599,7 @@
   // and nothing else, and the readout carries it, so what the spec asserts is
   // the same number a drafter can see on a slow drawing.
   let lastPaintMs = 0;
+  let lastRailMs = 0;
 
   const paint = () => {
     const t0 = performance.now();
@@ -1581,6 +1693,12 @@
     // Before updateReadout, so the readout reports the frame it describes and
     // not the cost of writing itself.
     lastPaintMs = performance.now() - t0;
+    // AFTER the canvas timing and BEFORE the readout. After, because `paint`
+    // in the readout means the main canvas and folding six thumbnails into it
+    // would make one frame an edit read like a slow one. Before, because the
+    // readout carries the rail's own number and reporting last frame's would
+    // be the same staleness this page has already been bitten by once.
+    syncRail();
     updateReadout();
   };
 
@@ -1625,6 +1743,19 @@
   // cannot drift from the picture it describes. The three states it reports
   // are the painter's three: no level stack, no crossings (an elevation, not
   // a section), and a section with walls in it.
+  // The office's side name for a standard elevation -- E1 FRONT, E2 LEFT and
+  // so on -- read the way MODEL.dc.html's _elevationName reads it (:9437):
+  // the drawing's own names first (they are persisted, so a drawing saved
+  // with its own names keeps them), then the profile's, then a plain word.
+  const elevationName = id => drawing?.elevationNames?.[id]
+    || structureStandards().elevationNames?.[id] || 'ELEVATION';
+
+  // What a cut is called on screen, in the picker and on its seat. An auto
+  // elevation carries its office side name; a section is just its name.
+  const cutLabel = cut => (cut.auto
+    ? `${cut.name || cut.id} · ${elevationName(cut.id)}`
+    : (cut.name || String(cut.id)));
+
   const sectionReadout = cut => {
     const CV = window.DraftCutView;
     const env = cutEnv();
@@ -1633,14 +1764,22 @@
     const what = !stack ? 'no level stack'
       : (crossings.length ? `walls cut <b>${crossings.length}</b>`
         : 'crosses no walls — an elevation');
-    return `section <b>${cut.name || cut.id}</b>   ${what}   `
+    // THE RIGHT NOUN. An auto cut stands OUTSIDE the house looking at it, so
+    // it crosses no walls BY DESIGN -- "section E1 crosses no walls" reads as
+    // a fault rather than the normal case. The drafter's two kinds of cut are
+    // named as two kinds.
+    const title = cut.auto
+      ? `elevation <b>${cut.name || cut.id} · ${elevationName(cut.id)}</b>`
+      : `section <b>${cut.name || cut.id}</b>`;
+    return `${title}   ${what}   `
       + `of <b>${(drawing.walls || []).length}</b> in the drawing
 `
       + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
       + `view <b>${CUT_VIEW}${cut.id}</b>   `
       + `${theme}/${mode}   `
       + `scale <b>fit to the cut</b>   `
-      + `paint <b>${lastPaintMs.toFixed(2)}</b> ms`;
+      + `paint <b>${lastPaintMs.toFixed(2)}</b> ms   `
+      + `rail <b>${lastRailMs.toFixed(2)}</b> ms`;
   };
 
   const updateReadout = () => {
@@ -1699,7 +1838,10 @@
           + `${pdfUnderlays() === 1 ? '' : 's'} not drawn</b> (needs pdf.js)` : '')
       // The frame this readout describes, on both views, so a plan and a
       // section on the same drawing can be compared by looking at them.
-      + `   paint <b>${lastPaintMs.toFixed(2)}</b> ms`;
+      // The rail's six thumbnails, and this is the cost of an EDIT, not of a
+      // frame: it only moves when the epoch does.
+      + `   paint <b>${lastPaintMs.toFixed(2)}</b> ms`
+      + `   rail <b>${lastRailMs.toFixed(2)}</b> ms`;
   };
 
   // ── the level switcher, and the view switcher ─────────────────────────────
@@ -1748,7 +1890,7 @@
     // layer views, and hiding the picker there used to be right because a
     // choice that changes nothing is not a choice. Sections are offered on
     // every level, so on those two the picker now holds exactly the cuts.
-    viewWrap.hidden = !views.length && !cuts().length;
+    viewWrap.hidden = !views.length && !allCuts().length;
     if (viewWrap.hidden) return;
     const current = onActiveLevel().viewId;
     viewPick.innerHTML = '';
@@ -1765,10 +1907,15 @@
     // goToLevel drops a `?view=` the new level's layer views do not carry, and
     // a cut id never does, which is the old page's behaviour arrived at for
     // free rather than re-implemented.
-    cuts().forEach(cut => {
+    // EVERY CUT VIEW, not only the stored sections. This listed cuts() alone,
+    // which was consistent while elevations were unreachable and became a lie
+    // the moment they were not: a drafter arriving on ?view=cut:E1 would see a
+    // picker whose value matched no option and read as showing something else.
+    // The picker and the lookup ask allCuts() so they cannot disagree.
+    allCuts().forEach(cut => {
       const option = document.createElement('option');
       option.value = CUT_VIEW + cut.id;
-      option.textContent = cut.name || String(cut.id);
+      option.textContent = cutLabel(cut);
       option.selected = option.value === current;
       viewPick.append(option);
     });
@@ -1806,13 +1953,171 @@
   };
 
   levelPick.addEventListener('change', () => goToLevel(levelPick.value));
-  viewPick.addEventListener('change', () => {
-    params.set('view', viewPick.value);
+  // ONE WAY INTO A VIEW, for the picker and for a seat press. Both change
+  // what is looked at and nothing that is saved: a query parameter and a
+  // repaint, with `drawing` untouched and markDirty uncalled.
+  const goToView = viewId => {
+    params.set('view', viewId);
     syncUrl();
     // No buildChrome(): the level did not change, so the option lists are
-    // still right and the browser has already moved the selection.
+    // still right. The picker's own selection is moved here rather than by
+    // the browser, because a seat press has to move it too -- the rail and
+    // the picker are two controls on ONE piece of state, and a seat that left
+    // the picker behind would put two answers on screen at once.
+    if (!viewWrap.hidden) viewPick.value = viewId;
     paint();
-  });
+  };
+
+  viewPick.addEventListener('change', () => goToView(viewPick.value));
+
+  // ── the view rail ─────────────────────────────────────────────────────────
+  // SIX SEATS, ALWAYS SIX. The rail shows E1-E4 and S1-S2 whether or not those
+  // views exist, because a seating chart with gaps in it is a worse answer to
+  // "what can I look at" than one with empty chairs.
+  //
+  // THE PAIRING IS THE OLD PAGE'S. MODEL.dc.html fills two columns across:
+  // E1|E3, then E2|E4 (:7266-7267), and the section seats side by side at the
+  // bottom (:7281-7290). Reading down a column would put E1 above E2, which is
+  // not where a drafter who knows that rail expects to find them.
+  const SEAT_ORDER = ['E1', 'E3', 'E2', 'E4', 'S1', 'S2'];
+  const rail = document.getElementById('view-rail');
+  let railEpoch = -1;
+
+  // WHICH CUT SITS IN A SEAT. Elevations are looked up BY ID -- E3 is the back
+  // of the house wherever it falls in the array. Sections are seated BY
+  // POSITION, which is the old page's rule and not an oversight of mine: it
+  // maps `cuts` across the seats in order (:7281), so the first stored cut
+  // takes the first seat whatever the drafter named it.
+  const seatFor = name => {
+    if (name[0] === 'E') {
+      const cut = autoElevationCuts().find(c => String(c.id) === name) || null;
+      return {
+        cut,
+        label: cut ? cutLabel(cut) : `${name} · ${elevationName(name)}`,
+        title: cut
+          ? `${cut.name || name} — the ${elevationName(name)} elevation; tap to bring it center`
+          // The old page's words for an empty elevation seat, and still true
+          // here: nobody cuts these by hand, the house cuts them for you.
+          : `${name} — this elevation cuts itself when the house builds`,
+      };
+    }
+    const cut = cuts()[Number(name.slice(1)) - 1] || null;
+    return {
+      cut,
+      label: cut ? cutLabel(cut) : name,
+      // NOT the old page's "tap to cut a section into this screen". That seat
+      // offers a creation gesture this page has not got yet (SPEC §3), and a
+      // title promising a tap that does nothing is worse than a plain one.
+      title: cut
+        ? `${cut.name || name} — tap to bring this section center`
+        : `${name} — cut a section on the plan and it takes this seat`,
+    };
+  };
+
+  // A SEAT WITH NO PREVIEW STILL HAS A SCREEN. Drawing the name where the
+  // picture would go keeps all six seats one shape, so the rail does not go
+  // ragged and the thumbnail can come back without moving anything.
+  const labelScreen = (c, w, h, spec) => {
+    c.fillStyle = skin['surface-page'];
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = skin['ink-quiet'];
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = `600 ${Math.round(h * 0.22)}px 'Barlow Condensed', system-ui, sans-serif`;
+    c.fillText(spec.cut.name || spec.cut.id, w / 2, h * 0.42);
+    c.font = `600 ${Math.round(h * 0.12)}px 'Barlow Condensed', system-ui, sans-serif`;
+    c.fillText(elevationName(spec.cut.id), w / 2, h * 0.66);
+  };
+
+  const syncRail = () => {
+    if (!drawing) return;
+    if (!rail.children.length) {
+      SEAT_ORDER.forEach(name => {
+        const seat = document.createElement('button');
+        seat.type = 'button';
+        seat.className = 'seat';
+        seat.dataset.seat = name;
+        const screen = document.createElement('canvas');
+        // 2x the CSS size, so the lines are crisp on a retina panel -- the
+        // old page's own numbers (:7306).
+        screen.width = 232; screen.height = 152;
+        seat.append(screen);
+        const label = document.createElement('div');
+        label.className = 'seat-label';
+        seat.append(label);
+        rail.append(seat);
+      });
+    }
+    const active = params.get('view');
+    const specs = SEAT_ORDER.map(seatFor);
+    specs.forEach((spec, i) => {
+      const seat = rail.children[i];
+      seat.title = spec.title;
+      seat.lastChild.textContent = spec.label;
+      seat.disabled = !spec.cut;
+      seat.classList.toggle('active',
+        Boolean(spec.cut) && active === CUT_VIEW + spec.cut.id);
+      seat.onclick = spec.cut ? () => goToView(CUT_VIEW + spec.cut.id) : null;
+    });
+
+    // THE THUMBNAILS, AND ONLY WHEN THE DRAWING MOVED. This is the whole
+    // reason the epoch exists. syncRail runs on every paint -- it has to, or a
+    // seat's active ring lags the view it points at -- but six section paints
+    // on every pan and zoom would cost about 2.4 ms of a 16 ms frame to redraw
+    // six pictures that did not change. MODEL.dc.html says the same thing in
+    // one line at :7203: "Repaints only when the model changes (the epoch),
+    // never on mouse traffic."
+    //
+    // The four markDirty sites are all COMMITTED edits -- a wall added, one
+    // removed, a move finished at mouseup, an undo -- so this fires once per
+    // edit and never mid-drag.
+    if (railEpoch !== modelEpoch) {
+      railEpoch = modelEpoch;
+      const t0 = performance.now();
+      const env = cutEnv();
+      specs.forEach((spec, i) => {
+        const screen = rail.children[i].firstChild;
+        const c = screen.getContext('2d');
+        c.clearRect(0, 0, screen.width, screen.height);
+        if (!spec.cut) return;
+        // A TRUE MINIATURE where one is affordable: the same painter that
+        // draws the full-size view, through the same env. MODEL.dc.html's
+        // thumbnail painter is a one-line wrapper over drawCutView (:10117),
+        // so this is not a second, smaller renderer that could drift.
+        //
+        // ELEVATIONS DO NOT GET ONE, and the reason is what the seat is FOR,
+        // not what it costs. A thumbnail earns its keep where the name does
+        // not identify the view: S1 and S2 tell a drafter nothing about which
+        // section is which, so a picture is the only way to tell them apart.
+        // E1 FRONT and E3 BACK already do the job a picture would.
+        //
+        // The cost only makes the correct answer also the cheap one, and it
+        // is worth recording because it was measured the wrong way first.
+        // Per seat, 232x152, repro-garage-house:
+        //
+        //     E1 46.8 ms   E2 43.2 ms   E3 47.6 ms   E4 43.7 ms   S1 0.32 ms
+        //
+        // About 100x, holding across three houses and IDENTICAL at 232x152
+        // and 900x600 -- so it is the painter's hidden-line geometry, not
+        // fill. Four live elevations is ~180 ms of blocking JS on every edit;
+        // in the browser, before this, the rail cost 148 ms per wall drawn.
+        //
+        // THE SHAPE IS KEPT ON PURPOSE. Seat, canvas and epoch are unchanged
+        // and an elevation draws its name where its picture would go, so a
+        // faster elevation painter becomes a thumbnail here without moving a
+        // seat -- Devin's "labels behind the same seat", taken literally.
+        if (spec.cut.auto) { labelScreen(c, screen.width, screen.height, spec); return; }
+        window.DraftCutView.drawCutView(env, c, screen.width, screen.height, spec.cut);
+      });
+      // THE NUMBER THE WHOLE LIVE-THUMBNAIL DECISION RESTS ON, on screen
+      // rather than in a commit message. The spec recommended label-only seats
+      // precisely because nobody had measured this; it is measured here, on
+      // whatever house the drafter actually has open, and it is the cost of an
+      // EDIT rather than of a frame.
+      lastRailMs = performance.now() - t0;
+    }
+    rail.hidden = false;
+  };
 
   // ── selection ─────────────────────────────────────────────────────────────
   // TIER 3a. The first editing tool: click a wall, it lights up.
@@ -2672,6 +2977,9 @@
     }
 
     if (!(await adoptFile(file))) return;
+    // The drawing is on the page: first epoch, as MODEL.dc.html bumps at the
+    // end of its load (:6366).
+    bumpModelEpoch();
     fit();
     paint();
     // The switchers can only be built once the drawing is on the page: their
@@ -2721,7 +3029,15 @@
   // racing the edit it is checking.
   let dirty = false;
   const markDirty = () => {
-    if (!drawing || dirty) return;
+    if (!drawing) return;
+    // EVERY EDIT, ahead of the dirty guard. That guard returns early once the
+    // page is already unsaved, which is right for the button and wrong for
+    // the epoch: MODEL.dc.html's _markUnsaved has no such short-circuit, so
+    // its rail epoch moves on every edit. Bumping below the guard would
+    // freeze the six thumbnails on the FIRST change after a save and leave
+    // them stale for every change after it -- a wall drawn, no seat updated.
+    bumpModelEpoch();
+    if (dirty) return;
     dirty = true;
     document.body.dataset.saveDirty = '1';
     saveButton.textContent = 'UNSAVED';
