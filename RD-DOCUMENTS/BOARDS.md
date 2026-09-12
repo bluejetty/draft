@@ -517,6 +517,62 @@ harness for the wrong reason. Both stale sentences are corrected in place.
 
 ---
 
+### The serializer gate: #375 is the first legitimate exception, and the diff tool was labelling by line
+
+**Gate duty for a Tier 3 rung is `node proto/w0-census.js --json` at main before
+and after, diffed by `proto/w0-census-diff.js`**, so *"this rung never touched
+the old serializer"* is a measurement rather than a claim. That duty had no
+entry in this file: the paragraph that carried it was folded away on 9 Sep when
+two design-notices entries were collapsed into one, and since then the
+assumption has lived only in a tool header. Written down here so the next hand
+finds it where they look.
+
+**THE EXCEPTION. #375 touched `_serializeDrawing`, deliberately, with a ruling
+behind it.** One line —
+
+    wallType: wall.legacyWallType || wall.wallType
+
+— under `RULING-substitution-is-not-a-save`: a wall whose retired assembly this
+app cannot draw is **painted** as the nearest surviving one and **saved as
+itself**. +154 chars of serializer text, and **no key dimension moves** —
+literal keys, spreads, state keys and persisted fields are byte-identical across
+the merge.
+
+So the standing sentence is not *"nothing touches the old serializer"*. It is:
+
+> **The old serializer is touched only with a ruling behind it, and a touch that
+> moves the format is a different event from one that does not.**
+
+That is why the diff prints `chars` on its own line, above every key dimension.
+Anyone re-deriving the frozen-serializer assumption from a green gate run will
+get it wrong in the direction that matters — silently permitting a format change
+because the last exception was benign.
+
+**AND THE TOOL WAS CRYING WOLF.** Across #375 the diff reported all 21
+conditional spreads as simultaneously added and removed. Nothing about them
+changed; the rung inserted two comment lines above them and the label was
+`line 26 keys=auto`. **A line number is not an identity** — any insertion
+anywhere above re-labels every entry, so the dimension that exists to answer
+*"did the format move"* answers yes to edits that cannot move it. The verdict
+that day was still correct, which is the worst way for the noise to arrive: the
+row that cried wolf was standing next to the row that was right.
+
+Fixed in `6a1730b`. An entry is identified by **what it writes** — key-set, tier,
+branching — and labels are **counted, not deduped**: three separate spreads write
+`auto`, so a Set of key-sets reports a 21-entry list as 19 and calls a deleted
+spread untouched. That is measured, not assumed — the naive variant scores *no
+change* on the mutant that removes one of the three. Five mutants run, five
+killed; the identical pair still reports untouched; unreadable input still exits
+2 rather than saying "no change".
+
+**The re-run this prompted found the census document seven dimensions stale**
+(`5a1cee7`) — including a `methods` row that reads 21 before and 21 after with
+four members changed. It also found **W0's Findings A and C already closed** by
+`83dba6f` and `16a9b60`, with neither closure written down. **Finding B is the
+only one still open**, and it is a decision for W1 rather than a repair.
+
+---
+
 ### FINDING — the stair tool tests the CENTRE of an opening, in two places
 
 Found while fixing `areas.js` (verdict 2, `308941d`). **Written up, not patched:
