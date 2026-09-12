@@ -15,6 +15,54 @@ loads and already wires, and two that look like page state are persisted
 drawing data.** What is genuinely absent is a *host*: a place to put a
 generated drawing and a state saying which one you are looking at.
 
+> **CORRECTED BY THE BUILD — the sentence above is wrong twice, and the table
+> below is corrected in place. Both errors have the same cause: I established
+> that a NAME existed and recorded that as the answer to a question about
+> BEHAVIOUR.** Read §0.1 before costing anything from this document. The
+> "host" conclusion itself survived the build unchanged.
+
+---
+
+## 0.1 Correction: two rows of the table below were wrong, and why
+
+Written after building the host. Both errors survived into code and were
+caught by measurement rather than by review, so they are recorded here rather
+than quietly edited out.
+
+**`footingWidthIn` — "one line, module exposes it". It does not.**
+`footingWidthIn` is a nullable FIELD on the normalised level assembly, not a
+function on `DraftLevelAssembly`; `level-assembly.js`'s export list does not
+contain it. Null there means *derive from the foundation wall type* — ICF on
+24", everything else on 20" — so the row both named a function that does not
+exist and, had it existed, would have dropped a derivation. The page swallowed
+the resulting `TypeError` into `painter failed`.
+
+The cause is exact and worth naming: **I counted occurrences of the name and
+recorded that as "the module exposes it".** Counting a name is not confirming
+an export. Every module call in the built `cutEnv` is now checked against its
+module's export block.
+
+**`walls()`, `floors()`, `roofs()` — "yes, already built". They exist, and
+they answer a different question.** Those are `MODEL.html`'s ON-SCREEN
+accessors: each filters to the active level *and* the active layer view. A
+section cuts through every level at once — that is what a section is — so they
+are the wrong list by definition, and under a cut view they filter to nothing
+at all, because no item's `view` is ever `cut:S1`.
+
+Handing the painter that empty world did not fail loudly. `drawCutView` falls
+back to an **elevation** when the cut crosses no walls, so the page drew a
+believable picture from nothing and every test passed: `ink > 0` is true of an
+elevation, and no assertion said *section*. It was found by running the same
+cut through `proto/elevation-harness.js`'s env in node — 8 crossings there, 0
+in the page.
+
+**The general form, for the next inventory of this kind.** An accessor
+contract can be met name-by-name and still be met with the wrong answers
+behind it. A row saying "the page can answer this today" is a claim about
+behaviour, and only running it proves it. The third implementation of the
+contract existing is what made the disagreement visible; that is an argument
+for keeping the harness, not a coincidence.
+
 ---
 
 ## 0. A note on line numbers
@@ -42,14 +90,14 @@ because it means neither side carries a spare.
 
 | accessor | old page supplies it from | can `MODEL.html` answer it today? |
 |---|---|---|
-| `walls()` | `this._walls` | **yes** — `walls()` at `:429` |
-| `floors()` | `this._floors` | **yes** — `floors()` at `:433` |
-| `roofs()` | `this._roofs` | **yes** — `roofs()` at `:438` |
+| `walls()` | `this._walls` | **NO — see the correction below.** `walls()` at `:429` exists and answers a different question |
+| `floors()` | `this._floors` | **NO — see the correction below.** Same as `walls()` |
+| `roofs()` | `this._roofs` | **NO — see the correction below.** Same as `walls()` |
 | `masterPointById()` | `this._masterPointById` | **yes** — `:1605` |
 | `levelAssembly()` | `this._levelAssembly` | **one line** — `LA.normaliseLevelAssembly`, already called at `:1175` |
 | `levelFloorFt()` | `this._levelFloorFt` | **one line** — `LA.levelFloorFt`, already called at `:1182` |
 | `levelWallTopFt()` | `this._levelWallTopFt` | **one line** — `LA.levelWallTopFt`, module exposes it |
-| `footingWidthIn()` | `this._footingWidthIn` | **one line** — `LA.footingWidthIn`, module exposes it |
+| `footingWidthIn()` | `this._footingWidthIn` | **NO — the module does not expose it.** See the correction below |
 | `buildType()` | `this.state.buildType` | **from the drawing** — see §1.1 |
 | `elevationDatum()` | `this.state.elevationDatum` | **from the drawing** — see §1.1 |
 | `floorLevels()` | `this._floorLevels()` | **close** — `stairLevels()` `:1166-1190` builds the same shape |

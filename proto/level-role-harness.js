@@ -34,8 +34,10 @@
 //
 // SO THE FIRST CHECK IS A SCAN, NOT AN ANCHOR. It does not name the three
 // callers that were wrong -- it walks every caller file and requires EVERY
-// `normaliseLevelAssembly(` to pass a role and EVERY `defaultLevelAssembly(`
-// to pass one too. A fourth caller added tomorrow with no role fails here
+// `normaliseLevelAssembly(` to pass a role, EVERY `defaultLevelAssembly(` to
+// pass one too, and EVERY `levelAssemblyFor(` -- the module lookup that
+// derives the role itself -- to pass the level id it derives it FROM. A
+// fourth caller added tomorrow with no role fails here
 // without anyone remembering to add it, which an anchored slice per known site
 // would not do. The scan counts what it found and fails on zero, because a
 // scan that matches nothing reports a clean sweep of an empty set.
@@ -159,6 +161,32 @@ check('every defaultLevelAssembly call passes a role', ({ src }) => {
     .map(call => `${FILES[key]}:${call.line}`));
   return [bad.join(', '), ''];
 });
+// THE THIRD ROLE-CARRYING ENTRY POINT, and the reason this file went red the
+// day MODEL.html stopped hand-rolling its lookup. levelAssemblyFor(assemblies,
+// levelId) asks levelRole ITSELF, so a caller using it cannot get the role
+// wrong by omission -- but the scan only knew two names, so the page that had
+// just done the right thing reported ZERO calls and failed the emptiness check
+// below.
+//
+// THE FIX IS NOT TO DROP MODEL.html FROM CALLERS. That switches the guard off
+// for the page being built to replace the old one, which is the opposite of
+// what this file is for. The fix is to count the module call as what it is, so
+// that calling through the module EARNS the silence.
+//
+// Counted, and still guarded: the role is derived from the SECOND argument, so
+// a call that omits it derives one from `undefined` and frames a plain floor
+// as surely as the role-less calls above did. Silence is earned by passing
+// both arguments, not by naming the function.
+//
+// This is the same lesson as the two checks above, one level up: a scan
+// written against a list of known names cannot see a caller that stopped using
+// them, and reads that absence as a clean sweep.
+check('every levelAssemblyFor call passes the level id its role comes from', ({ src }) => {
+  const bad = CALLERS.flatMap(key => callsOf(src[key], 'levelAssemblyFor')
+    .filter(call => call.args.length < 2)
+    .map(call => `${FILES[key]}:${call.line}`));
+  return [bad.join(', '), ''];
+});
 // THE COMPANION THE EMPTINESS ASSERTIONS NEED. Both checks above pass on a
 // scan that finds nothing -- a rename, a broken regex, a caller list that
 // drifted off the real filenames. Each caller file must contribute at least
@@ -166,7 +194,8 @@ check('every defaultLevelAssembly call passes a role', ({ src }) => {
 check('and the scan actually found a call in every caller file', ({ src }) => {
   const empty = CALLERS.filter(key =>
     !callsOf(src[key], 'normaliseLevelAssembly').length
-    && !callsOf(src[key], 'defaultLevelAssembly').length);
+    && !callsOf(src[key], 'defaultLevelAssembly').length
+    && !callsOf(src[key], 'levelAssemblyFor').length);
   return [empty.map(key => FILES[key]).join(', '), ''];
 });
 // And that the scanner can still see a role-less call at all: fed one, it must
@@ -458,8 +487,19 @@ console.log(`level role harness: ${CHECKS.length - baseline.length}/${CHECKS.len
 // wrong number rather than an error. The first three ARE what was on main this
 // morning, put back one file at a time.
 const MUTATIONS = [
+  // RETARGETED, for the second time and for the same reason as the note below:
+  // MODEL.html stopped hand-rolling the lookup and now calls the module's
+  // levelAssemblyFor, so this mutation was aimed at text that no longer exists
+  // and the harness refused it -- `1 mutation(s) never applied`. A mutation
+  // pointed at deleted code is indistinguishable from one the code survives,
+  // so it is followed to the new address rather than dropped.
+  //
+  // The role-less shape at the new address is omitting the level id, which is
+  // what the role is derived from. It is caught by the levelAssemblyFor check
+  // rather than the normaliseLevelAssembly one -- which is the point: the new
+  // check has to bite on the real file, not only on a sample.
   ['MODEL.html goes back to asking role-less', 'modelHtml',
-    s => s.replace('LA.normaliseLevelAssembly(assemblies[id], LA.levelRole(id))', 'LA.normaliseLevelAssembly(assemblies[id])')],
+    s => s.replace('.levelAssemblyFor(drawing?.levelAssemblies, id)', '.levelAssemblyFor(drawing?.levelAssemblies)')],
   ['LAYOUT.dc.html goes back to asking role-less', 'layout',
     s => s.replace('normaliseLevelAssembly(assemblies[levelId], levelRole(levelId))', 'normaliseLevelAssembly(assemblies[levelId])')],
   ['the elevation harness goes back to measuring a plain-floor building', 'elevation',

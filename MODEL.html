@@ -445,12 +445,29 @@
   //
   // A level is not one drawing. Choosing the level and not the drawing is
   // choosing half.
+  // A CUT IS A VIEW, and it is named in the URL like every other one.
+  // SPEC-model-html-cut-views.md called for "a state saying which one you are
+  // looking at" and the first draft of that spec proposed building one. The
+  // page already had it: `?view=` keyed through the URL. A second source of
+  // truth for what is on screen is the defect shape this project spent the
+  // week removing, so the section reuses the mechanism instead — which also
+  // means it is shareable, survives a reload, and inherits the level-change
+  // handling below for free.
+  const CUT_VIEW = 'cut:';
+  const cutForViewId = id => (typeof id === 'string' && id.startsWith(CUT_VIEW)
+    ? cuts().find(cut => String(cut.id) === id.slice(CUT_VIEW.length)) || null
+    : null);
+  const activeCut = () => cutForViewId(params.get('view'));
+
   const activeViewId = () => {
     const LV = window.DraftLayerViews;
     const levelId = activeLevelId();
     const views = LV.layerViewsForLevelId(levelId);
-    if (!views.length) return null;               // ROOF / SITE hold everything
     const asked = params.get('view');
+    // Before the layer-view lookup, or a cut would be reported as a view the
+    // level does not have and warn on every paint.
+    if (cutForViewId(asked)) return asked;
+    if (!views.length) return null;               // ROOF / SITE hold everything
     if (asked && views.some(v => v.id === asked)) return asked;
     if (asked) {
       console.warn(`MODEL: level ${levelId} has no view "${asked}"; using its `
@@ -1218,16 +1235,148 @@
   // neither does this. A stair descends to the subfloor below, and on the
   // lowest floor past the foundation wall onto the slab -- stair-geometry.js
   // owns that rule; this only answers the four questions it asks.
+  // THE ROLE, NOT JUST THE ID. Passing no role means every level frames like a
+  // plain floor, and MODEL.dc.html stopped believing that on 6 Sep (PR #323,
+  // Devin's ruling). This page's whole job is to paint what that page saved, so
+  // the two must ask the module the same question.
+  //
+  // ONE DEFINITION, TWO CALLERS — stairLevels below and cutEnv after it. It was
+  // scoped inside stairLevels until the cut-view host needed the same answer,
+  // and two level-assembly lookups that could drift apart is how the derive/
+  // store divergence got in last time.
+  // levelAssemblyFor IS this lookup, exported for exactly this reason: the
+  // module's own comment says the TABLE had one home while the LOOKUP had
+  // four, and that is how #325's role-less callers happened. Rolling a fifth
+  // copy here would have re-made that bug in the file that warns about it.
+  const assemblyFor = id => window.DraftLevelAssembly
+    .levelAssemblyFor(drawing?.levelAssemblies, id);
+
+  // ── the cut-view env ────────────────────────────────────────────────────────
+  // SPEC-model-html-cut-views.md. cut-view.js's drawCutView reads its world
+  // through EIGHTEEN accessors and nothing else — there is no destructuring of
+  // `env` anywhere in that file, so this object is the whole contract rather
+  // than a sample, and MODEL.dc.html's _cutViewEnv supplies exactly the same
+  // eighteen. Neither end carries a spare.
+  //
+  // NOT ONE OF THEM NEEDS PAGE STATE. Measured rather than assumed: the two
+  // that look like state on the old page (`buildType`, `elevationDatum`) are
+  // PERSISTED_KEYS entries, and even `garageFoundation` bottoms out in
+  // persisted keys — `boneyardOutlines`, which this page reads though it offers
+  // no boneyard gestures, and `sectionTable`. So the env is a function of the
+  // drawing plus the shared modules, and the host inherits none of the old
+  // page's state machine.
+  //
+  // proto/elevation-harness.js:buildEnv is the third implementation of this
+  // contract and the one the offline timing runs against; where the two could
+  // drift, that harness is the reference.
+  const cutEnv = () => {
+    const LA = window.DraftLevelAssembly;
+    const LV = window.DraftLayerViews;
+    const G = window.DraftGeometry2D;
+    const F = window.DraftFormatters;
+    const ftIn = feet => F.formatArchitecturalInches(feet * 12);
+
+    // A garage outline's master lives on the boneyard shelf; an outline that
+    // IS a master carries its own shelfId. The old page reads the same two
+    // ways round (_garageMaster).
+    const garageMaster = garage => {
+      if (garage?.shelfId != null) return garage;
+      return (drawing?.boneyardOutlines || [])
+        .find(master => master.id === garage?.masterId) || null;
+    };
+    const garageDetached = garage =>
+      garage?.detached === true || garageMaster(garage)?.detached === true;
+
+    return {
+      floorLevels: () => LV.floorLevels(drawing?.levels),
+      levelAssembly: levelId => assemblyFor(levelId),
+      levelFloorFt: levelId => LA.levelFloorFt(assemblyFor(levelId)),
+      levelWallTopFt: (levelId, view = 'plan') =>
+        LA.levelWallTopFt(drawing?.walls || [], levelId, view),
+      // NOT a module function — footingWidthIn is a FIELD on the normalised
+      // assembly, and a nullable one: null means "derive from the foundation
+      // wall type", ICF on 24" and everything else on 20". I called
+      // LA.footingWidthIn() here because I had counted occurrences of the name
+      // instead of reading level-assembly.js's export block, and the page
+      // swallowed the TypeError into "painter failed". Counting a name is not
+      // confirming an export. The two constants are inlined because they are
+      // not exported either — MODEL.dc.html, LAYOUT.dc.html and the elevation
+      // harness each hold their own pair, and this is the fourth.
+      footingWidthIn: levelId => {
+        const stored = assemblyFor(levelId).footingWidthIn;
+        if (stored) return stored;
+        const icf = (drawing?.walls || []).some(wall => wall.levelId === levelId
+          && (wall.view || 'plan') === 'foundation'
+          && String(wall.wallType || '').startsWith('icf'));
+        return icf ? 24 : 20;
+      },
+      // THE WHOLE DRAWING, NOT THE PAGE'S VIEW OF IT. walls(), roofs(),
+      // floors() and outlines() are this page's ON-SCREEN accessors: each one
+      // filters to the active level and the active layer view. A section cuts
+      // through EVERY level at once — that is what a section is — so handing
+      // the painter those filtered lists is a category error, and under a cut
+      // view they filter to nothing at all, because no item's `view` is ever
+      // "cut:S1".
+      //
+      // It did not fail loudly. drawCutView falls back to an ELEVATION when
+      // the cut crosses no walls, so the page painted a plausible picture from
+      // an empty world and every test passed: `ink > 0` is true of an
+      // elevation, and nothing asserted a section. Found by running the same
+      // cut through proto/elevation-harness.js's env, which reported 8
+      // crossings where this one reported none — the third env existing is
+      // what made the disagreement visible, and the spec now asserts the
+      // crossing count rather than that something was drawn.
+      walls: () => drawing?.walls || [],
+      roofs: () => drawing?.roofs || [],
+      floors: () => drawing?.floors || [],
+      fenestrations: () => drawing?.fenestrations || [],
+      garageOutlines: levelId => (drawing?.outlines || [])
+        .filter(outline => outline.levelId === levelId && outline.garage),
+      // Ported from _garageFoundation: the outline answers first, then the
+      // master, then the section table's row for this garage's kind.
+      garageFoundation: garage => {
+        const stored = garage?.foundation || garageMaster(garage)?.foundation;
+        if (stored === 'thickened' || stored === 'frostwall') return stored;
+        if (stored === 'gradebeam') return 'gradebeam';
+        const row = garageDetached(garage) ? 'detachedGarage' : 'attachedGarage';
+        const cell = drawing?.sectionTable?.rows?.[row]?.garageFoundation;
+        if (cell === 'frostwall') return 'frostwall';
+        if (cell === 'thickened' && row === 'detachedGarage') return 'thickened';
+        return 'gradebeam';
+      },
+      buildType: () => drawing?.buildType ?? null,
+      // BOTH ENDS AND THE MIDDLE, as the old page asks it: an edge lying along
+      // an outline needs all three on the boundary, or a chord across a
+      // concave outline would read as an edge of it. The segment walk comes
+      // from geometry-2d.js rather than a private copy.
+      edgeOnOutline: (a, b, outline, eps = 0.1) => {
+        if (!outline) return false;
+        const count = G.outlineSegmentCount(outline);
+        const onBoundary = pt => (outline.points || []).some((point, index) => {
+          if (index >= count) return false;
+          return G.pointToSegment(pt, G.outlineSegment(outline, index)).d <= eps;
+        });
+        return onBoundary(a) && onBoundary(b)
+          && onBoundary({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+      },
+      masterPointById: srcId => masterPointById(srcId),
+      gableCornerStyle: () => structureStandards().gableCorner,
+      // The sign is suppressed when the drawing carries a datum, because the
+      // datum already says what the number is measured from.
+      elevLabel: elev => {
+        const sign = elev > 0 && !drawing?.elevationDatum ? '+' : '';
+        return sign + (drawing?.units !== 'metric'
+          ? ftIn(elev) : F.formatMetres(elev));
+      },
+      ftIn,
+      elevationDatum: () => drawing?.elevationDatum ?? null,
+    };
+  };
+
   const stairLevels = () => {
     const LA = window.DraftLevelAssembly;
     const LV = window.DraftLayerViews;
     const all = drawing?.walls || [];
-    const assemblies = drawing?.levelAssemblies || {};
-    // THE ROLE, NOT JUST THE ID. Passing no role means every level frames
-    // like a plain floor, and MODEL.dc.html stopped believing that on 6 Sep
-    // (PR #323, Devin's ruling). This page's whole job is to paint what that
-    // page saved, so the two must ask the module the same question.
-    const assemblyFor = id => LA.normaliseLevelAssembly(assemblies[id], LA.levelRole(id));
     return {
       floors: (drawing?.levels || [])
         .filter(level => LV.layerViewsForLevelId(level.id).some(view => view.id === 'floor'))
@@ -1329,14 +1478,33 @@
     });
   };
 
+  // THE FRAME TIME IS AN INSTRUMENT, not a test hook. Measured here rather
+  // than in the spec because the page offers nothing to time from outside:
+  // dispatching a resize and timing it measures canvas REALLOCATION, which on
+  // this fixture swamped the paint so completely that fifty section paints per
+  // frame moved the median from 0.20ms to 0.90ms and the budget check still
+  // passed. A check that survives fifty times the work is not a check, and the
+  // number it produced was not the section's cost. This times the paint body
+  // and nothing else, and the readout carries it, so what the spec asserts is
+  // the same number a drafter can see on a slow drawing.
+  let lastPaintMs = 0;
+
   const paint = () => {
+    const t0 = performance.now();
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
     ctx.fillStyle = skin['surface-page'];
     ctx.fillRect(0, 0, cssW, cssH);
     try {
-      if (drawing) {
+      // THE SECTION INSTEAD OF THE PLAN, when a cut is the active view. The
+      // painter is the shared one (cut-view.js), reading through cutEnv()'s
+      // eighteen accessors — the same contract MODEL.dc.html supplies and the
+      // same one proto/elevation-harness.js mirrors offline.
+      const cut = drawing ? activeCut() : null;
+      if (cut) {
+        window.DraftCutView.drawCutView(cutEnv(), ctx, cssW, cssH, cut);
+      } else if (drawing) {
         paintGrid();
         // "Underlays sit beneath everything drawn: over the grid, under
         // geometry" -- MODEL.dc.html's own words at the same seam. A tracing
@@ -1406,7 +1574,13 @@
     // The delete affordance exists exactly while there is something to delete.
     // A button that is always there and usually does nothing teaches a drafter
     // to distrust it.
-    if (deleteButton) deleteButton.hidden = !selectedSeg;
+    // ...and not under a section, where the selection it would delete is not
+    // on screen to point at. The comment above is the reason: an affordance
+    // that acts on something invisible is the same distrust, one step worse.
+    if (deleteButton) deleteButton.hidden = !selectedSeg || !!activeCut();
+    // Before updateReadout, so the readout reports the frame it describes and
+    // not the cost of writing itself.
+    lastPaintMs = performance.now() - t0;
     updateReadout();
   };
 
@@ -1433,8 +1607,49 @@
   // PDF underlays on THIS level: the ones the drafter would expect to see.
   const pdfUnderlays = () => underlays().filter(u => u.kind === 'pdf').length;
 
+  // THE READOUT FOLLOWS THE SECTION, or it stops being an instrument the
+  // moment the page is most novel. The first cut branch in paint() returned
+  // early, straight past updateReadout, so a page opened cold on ?view=cut:
+  // painted a correct section and sat at "loading..." underneath it for ever.
+  //
+  // The spec did not catch it, and the reason is worth keeping: the test
+  // asserted the readout contains "walls" AFTER switching view, when the plan
+  // paint's readout was still on screen. True whether the section updated the
+  // readout or never touched it -- an assertion two world states satisfy,
+  // which is the defect shape this session has met at every rung. It is now
+  // asserted on a COLD load, where only one state can produce it.
+  //
+  // The counts come from the painter's OWN exported passes with the painter's
+  // own axis, not a second derivation: sectionLevelStack and
+  // sectionWallCrossings are what drawCutView itself calls, so the instrument
+  // cannot drift from the picture it describes. The three states it reports
+  // are the painter's three: no level stack, no crossings (an elevation, not
+  // a section), and a section with walls in it.
+  const sectionReadout = cut => {
+    const CV = window.DraftCutView;
+    const env = cutEnv();
+    const stack = CV.sectionLevelStack(env);
+    const crossings = stack ? CV.sectionWallCrossings(env, cut, CV.cutAxis(cut)) : [];
+    const what = !stack ? 'no level stack'
+      : (crossings.length ? `walls cut <b>${crossings.length}</b>`
+        : 'crosses no walls — an elevation');
+    return `section <b>${cut.name || cut.id}</b>   ${what}   `
+      + `of <b>${(drawing.walls || []).length}</b> in the drawing
+`
+      + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
+      + `view <b>${CUT_VIEW}${cut.id}</b>   `
+      + `${theme}/${mode}   `
+      + `scale <b>fit to the cut</b>   `
+      + `paint <b>${lastPaintMs.toFixed(2)}</b> ms`;
+  };
+
   const updateReadout = () => {
     if (!drawing) return;
+    // Before the plan counts, which describe a picture that is not on screen:
+    // walls() and the rest filter by layer view, and under a section every one
+    // of them reads 0 while the section shows the whole house.
+    const cut = activeCut();
+    if (cut) { readout.innerHTML = sectionReadout(cut); return; }
     readout.innerHTML =
       `walls <b>${shownOfTotal(walls().length, drawing.walls)}</b>   `
       + `lines <b>${shownOfTotal(lines().length, drawing.lines)}</b>   `
@@ -1481,7 +1696,10 @@
       // has no way to tell a missing feature from a broken page. Naming it
       // costs one clause and turns an absence into a fact.
       + (pdfUnderlays() ? `   <b>${pdfUnderlays()} PDF underlay`
-          + `${pdfUnderlays() === 1 ? '' : 's'} not drawn</b> (needs pdf.js)` : '');
+          + `${pdfUnderlays() === 1 ? '' : 's'} not drawn</b> (needs pdf.js)` : '')
+      // The frame this readout describes, on both views, so a plan and a
+      // section on the same drawing can be compared by looking at them.
+      + `   paint <b>${lastPaintMs.toFixed(2)}</b> ms`;
   };
 
   // ── the level switcher, and the view switcher ─────────────────────────────
@@ -1526,8 +1744,12 @@
     // ROOF and SITE have no layer views -- the view filter switches itself
     // off there and they show everything they hold. A picker on those levels
     // would be offering a choice that changes nothing, so there isn't one.
-    viewWrap.hidden = !views.length;
-    if (!views.length) return;
+    // THE CUTS COUNT TOWARDS HAVING A PICKER AT ALL. ROOF and SITE hold no
+    // layer views, and hiding the picker there used to be right because a
+    // choice that changes nothing is not a choice. Sections are offered on
+    // every level, so on those two the picker now holds exactly the cuts.
+    viewWrap.hidden = !views.length && !cuts().length;
+    if (viewWrap.hidden) return;
     const current = onActiveLevel().viewId;
     viewPick.innerHTML = '';
     views.forEach(view => {
@@ -1535,6 +1757,19 @@
       option.value = view.id;
       option.textContent = view.label;
       option.selected = view.id === current;
+      viewPick.append(option);
+    });
+    // THE CUTS, AFTER THE LAYER VIEWS. A section is a fact about the house
+    // rather than about one level, so every level offers the same ones; the
+    // old page's rail does the same. Switching level still leaves a section —
+    // goToLevel drops a `?view=` the new level's layer views do not carry, and
+    // a cut id never does, which is the old page's behaviour arrived at for
+    // free rather than re-implemented.
+    cuts().forEach(cut => {
+      const option = document.createElement('option');
+      option.value = CUT_VIEW + cut.id;
+      option.textContent = cut.name || String(cut.id);
+      option.selected = option.value === current;
       viewPick.append(option);
     });
   };
