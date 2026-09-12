@@ -230,6 +230,250 @@ test.describe('MODEL.html write tier', () => {
         + 'whole is a green that proves nothing').toEqual(before);
     });
 
+  // GATE WIDENING 1 of 3: UNDERLAYS.
+  //
+  // The bone house has none, so the gate has never carried one through. An
+  // underlay is the only persisted entity whose PAYLOAD lives outside the
+  // drawing — the image bytes are a separate named file in the store and only
+  // the placement metadata is in the JSON — which makes it the entity most
+  // likely to be treated as scenery by a page that never has to draw it well.
+  //
+  // Planted into the stored file rather than drawn, because there is no
+  // gesture on either page that creates one without a file picker. The record
+  // is shaped exactly as drawing-format.js emits one, so anything the round
+  // trip changes is the round trip's doing and not a normaliser correcting a
+  // handmade object.
+  //
+  // MEASURED, NOT FIXED. Movie's standing order on the gate: widen one item at
+  // a time and report the raw result.
+  test('gate widening: an underlay survives the round trip', async ({ page }) => {
+    await houseWithPassthroughs(page);
+
+    await page.evaluate(async bucket => {
+      const store = window.SharedFileStore;
+      const at = await store.loadSharedFileAt(bucket);
+      const drawing = JSON.parse(await at.file.text());
+      drawing.underlays = [{
+        id: 'ul-1',
+        levelId: drawing.levels[0].id,
+        kind: 'pdf',
+        name: 'survey.pdf',
+        page: 2,
+        x: -12.5, z: 7.25,
+        widthFt: 40, heightFt: 30,
+        opacity: 0.45,
+        scaleRaw: '1/8" = 1\'-0"',
+        scaleRatio: 96,
+        scaleUnit: 'imperial',
+        layer: 'UNDERLAY',
+      }];
+      await store.saveSharedFile(
+        new File([JSON.stringify(drawing)], 'd.json', { type: 'application/json' }),
+        bucket, { ifRev: at.rev });
+    }, h.STORAGE_BUCKET);
+
+    const before = await h.savedDrawing(page);
+    expect(before.underlays, 'the underlay must really be in the file first')
+      .toHaveLength(1);
+
+    await page.goto('/MODEL.html');
+    await expect(readout(page)).toContainText('walls', { timeout: 6000 });
+    await saveButton(page).click();
+    await expect(saveButton(page)).toHaveText('SAVED', { timeout: 6000 });
+
+    const after = await h.savedDrawing(page);
+    expect(after.underlays,
+      'every placement field the drafter set — page, opacity, scale, position — '
+      + 'must come back as it went in').toEqual(before.underlays);
+    expect(after, 'and the rest of the drawing with it').toEqual(before);
+  });
+
+  // GATE WIDENING 2 of 3: TWO WALLS MEETING AT ONE POINT WITH DIFFERENT srcIds.
+  //
+  // srcId lives on the POINT, not the wall (drawing-format.js:51): it links a
+  // corner to the boneyard master it was generated from, with offX/offZ holding
+  // the offset. MODEL.html rebuilds reference equality at shared corners on
+  // load, so two walls that meet end up holding ONE point object — and one
+  // object can carry one link.
+  //
+  // The load path already anticipates this and says so: "First point into a
+  // pooled corner wins, matching the identity the old page saved." This test
+  // asks whether that is true of the FILE, which is a different question from
+  // whether it is true of the page.
+  //
+  // MEASURED, NOT FIXED — AND IT FOUND SOMETHING. The round trip collapses the
+  // two links into one:
+  //
+  //     coincident-b.start   srcId  bone-master-B -> bone-master-A
+  //                          offX   -1.5          -> 0.25
+  //                          offZ    2            -> -0.5
+  //
+  // Wall B's corner is silently re-parented to wall A's master, at A's offset.
+  // Nothing on screen changes today, and nothing in the file records that it
+  // happened — but the next time master A moves it drags B's corner with it, to
+  // a position derived from the wrong offset. That is the boneyard link doing
+  // the opposite of its job.
+  //
+  // test.fail() rather than a fixed expectation, deliberately. Asserting the
+  // current behaviour would write the defect into the suite as the contract,
+  // which is the failure this spec file spent the week removing. As a marked
+  // failure it does two things a passing test cannot: it stays visible as an
+  // open finding, and it goes RED THE DAY SOMEBODY FIXES IT, so the fix cannot
+  // land silently and the ruling gets written down.
+  //
+  // ONE THING THIS IS NOT: the handmade points below omit `y`, and the round
+  // trip returns them carrying `y: 0`. That is the fixture, not the page — the
+  // old page writes `y` on every point and the bone round-trips it exactly, as
+  // the whole-file test below proves. Recorded so the next reader does not
+  // re-derive it as a second finding.
+  //
+  // WHAT IS STILL UNMEASURED: whether a real gesture can produce two coincident
+  // corners with different masters. This shows the format can express it and
+  // the round trip does not survive it; it does not show a drafter can reach
+  // it. And the same question of MODEL.dc.html is unasked — if the old page
+  // collapses them too, this is the format's identity model rather than the
+  // new page's bug.
+  test.fail('gate widening: two walls meet at one point carrying different srcIds',
+    async ({ page }) => {
+      await houseWithPassthroughs(page);
+
+      await page.evaluate(async bucket => {
+        const store = window.SharedFileStore;
+        const at = await store.loadSharedFileAt(bucket);
+        const drawing = JSON.parse(await at.file.text());
+        const levelId = drawing.levels[0].id;
+        const corner = { x: 40, z: 40 };
+        // Same level, same view, same body, coincident to the last decimal —
+        // everything the pool keys on. The two links differ, which is the only
+        // thing being asked about.
+        drawing.walls.push({
+          id: 'coincident-a', levelId, view: 'plan', wallType: 'stud_2x6',
+          start: { x: 30, z: 40 },
+          end: { ...corner, srcId: 'bone-master-A', offX: 0.25, offZ: -0.5 },
+          baseHeight: 0, topHeight: 8, refLine: 'left',
+        });
+        drawing.walls.push({
+          id: 'coincident-b', levelId, view: 'plan', wallType: 'stud_2x6',
+          start: { ...corner, srcId: 'bone-master-B', offX: -1.5, offZ: 2 },
+          end: { x: 40, z: 50 },
+          baseHeight: 0, topHeight: 8, refLine: 'left',
+        });
+        await store.saveSharedFile(
+          new File([JSON.stringify(drawing)], 'd.json', { type: 'application/json' }),
+          bucket, { ifRev: at.rev });
+      }, h.STORAGE_BUCKET);
+
+      const before = await h.savedDrawing(page);
+      const linkOf = (drawing, id, endKey) =>
+        drawing.walls.find(wall => wall.id === id)?.[endKey];
+      expect(linkOf(before, 'coincident-a', 'end').srcId,
+        'the two links must really differ in the file before the round trip')
+        .toBe('bone-master-A');
+      expect(linkOf(before, 'coincident-b', 'start').srcId).toBe('bone-master-B');
+
+      await page.goto('/MODEL.html');
+      await expect(readout(page)).toContainText('walls', { timeout: 6000 });
+      await saveButton(page).click();
+      await expect(saveButton(page)).toHaveText('SAVED', { timeout: 6000 });
+
+      const after = await h.savedDrawing(page);
+      expect({
+        a: linkOf(after, 'coincident-a', 'end'),
+        b: linkOf(after, 'coincident-b', 'start'),
+      }, 'each wall must keep its own link to its own master — a corner two '
+        + 'walls share is still two walls').toEqual({
+        a: linkOf(before, 'coincident-a', 'end'),
+        b: linkOf(before, 'coincident-b', 'start'),
+      });
+    });
+
+  // GATE WIDENING 3 of 3: THE TWO-HOP. old writes -> new saves -> old reopens
+  // and saves. This did not exist in any form; the gate has only ever measured
+  // one hop, and one hop cannot see a difference the old page's own loader
+  // would forgive on the way back in.
+  //
+  // THE PROBLEM WITH THE SECOND HOP: there is no gesture that makes the old
+  // page save without editing something. It writes on every edit and on
+  // nothing else. So the vehicle is a drawn line — and a drawn line is a
+  // difference, which would turn a strict whole-file compare into a compare
+  // with an exception carved out of it, which is a normaliser wearing a
+  // different hat.
+  //
+  // THE CONTROL ARM IS THE ANSWER. Both arms build the same bone and draw the
+  // same line; only one of them detours through MODEL.html in between. The
+  // vehicle appears on both sides, so it cancels, and the comparison stays a
+  // STRICT toEqual on the whole file. Anything the detour changed is the only
+  // thing that can show up.
+  //
+  //     control:  bone -> line -> save
+  //     two-hop:  bone -> MODEL.html SAVE -> reopen old -> line -> save
+  //
+  // Separate browser contexts, because the two arms need separate IndexedDB.
+  //
+  // WHAT A GREEN HERE MEANS, precisely: the old page reads back everything
+  // MODEL.html wrote and re-saves it identically to a file that never left the
+  // old page. Not that the file is byte-identical to the one-hop result — the
+  // line makes sure of that — but that the detour is invisible to the page
+  // that owns the format.
+  test('gate widening: the two-hop — old writes, new saves, old saves again',
+    async ({ browser }) => {
+      const LINE = [-6, 2, 6, 2];
+
+      const arm = async detour => {
+        const context = await browser.newContext();
+        const page = await context.newPage();
+        try {
+          await houseWithPassthroughs(page);
+
+          if (detour) {
+            await page.goto('/MODEL.html');
+            await expect(readout(page)).toContainText('walls', { timeout: 6000 });
+            await saveButton(page).click();
+            await expect(saveButton(page)).toHaveText('SAVED', { timeout: 6000 });
+            // Back to the page that owns the format, reading what the new page
+            // wrote.
+            await h.openModel(page, { webgl: false, rails: false });
+          }
+
+          await h.selectTool(page, 'Line');
+          await h.clickWorld(page, LINE[0], LINE[1]);
+          await h.clickWorld(page, LINE[2], LINE[3]);
+          await page.keyboard.press('Enter');
+          await h.waitForSaved(page);
+
+          return await h.savedDrawing(page);
+        } finally {
+          await context.close();
+        }
+      };
+
+      const control = await arm(false);
+      const twoHop = await arm(true);
+
+      // THE CONTROL MUST REALLY CARRY THE VEHICLE, or both arms are comparing
+      // two bones and the line never happened — a green that proves nothing,
+      // which is exactly the shape this gate keeps producing.
+      const bone = await (async () => {
+        const context = await browser.newContext();
+        const page = await context.newPage();
+        try {
+          await houseWithPassthroughs(page);
+          return await h.savedDrawing(page);
+        } finally {
+          await context.close();
+        }
+      })();
+      expect(control.lines.length,
+        'the drawn line must really be in the control arm, or the comparison '
+        + 'below is between two untouched bones')
+        .toBe(bone.lines.length + 1);
+
+      expect(twoHop,
+        'a detour through MODEL.html must be invisible to the page that owns '
+        + 'the format — same bone, same edit, same file')
+        .toEqual(control);
+    });
+
   test('a save through the new page equals the save the old page wrote, key for key', async ({ page }) => {
     const before = await houseWithPassthroughs(page);
     const legacy = before.drawing;
