@@ -102,6 +102,25 @@ test('THE AGREEMENT: a layer row moves the level, the view, the picker and the p
       .toEqual([HOUSE.levels.find(l => String(l.id) === levelId).name]);
   });
 
+test('the panel does not take a name the chrome bar already uses', async ({ page }) => {
+  await openPanel(page);
+
+  // ONE SELECTOR, ONE CONTROL. The panel's level buttons were first given
+  // `data-level-pick` -- the attribute the CHROME BAR'S select carries, and
+  // the one model-html-switcher.spec.js drives it by. `[data-level-pick]`
+  // then resolved to six elements and four switcher tests failed on strict
+  // mode, nineteen minutes into CI, because no spec here had ever run
+  // alongside that one.
+  //
+  // A panel row and a chrome control are not the same control even when they
+  // do the same thing, so this asserts the chrome's hooks stay singular with
+  // the panel on screen. Cheap, and it fails in seconds instead of in a shard.
+  for (const sel of ['[data-level-pick]', '[data-view-pick]', '[data-model-save]',
+    '[data-draw-wall]', '[data-props-slot]', '[data-levels-panel]']) {
+    expect(await page.locator(sel).count(), `${sel} is no longer unique`).toBe(1);
+  }
+});
+
 test('the panel is in the right-edge group and goes away with it', async ({ page }) => {
   await openPanel(page);
   await expect(page.locator('#levels-panel')).toBeVisible();

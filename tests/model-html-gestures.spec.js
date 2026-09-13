@@ -392,7 +392,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
               : el.dataset.deleteLevel !== undefined ? 'delete-level'
                 : el.dataset.deleteCut !== undefined ? 'delete-cut'
                   : el.dataset.layer !== undefined ? 'layer-row'
-                    : el.dataset.levelPick !== undefined ? 'level-row'
+                    : el.dataset.levelRow !== undefined ? 'level-row'
                       : el.dataset.view3d !== undefined ? 'view-3d'
                         : el.tagName === 'BUTTON' ? 'cut-row' : el.tagName))].sort(),
         };
