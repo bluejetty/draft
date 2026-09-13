@@ -986,11 +986,11 @@
       // depths but not this difference, so both pages compute it.
       garageEdgeTaperRunIn: S.GARAGE_EDGE_DEPTH_IN - S.GARAGE_SLAB_THICKNESS_IN,
       // drawFloor2D's own five-colour set. This page shows committed slabs
-      // only -- it has no draw tool and no selection -- so the preview and
-      // selected entries are wired to the committed look and to the brand
-      // accent. Deliberate placeholders, not omissions: were a preview ever
-      // to appear it would read as committed, which is visible and
-      // diagnosable, rather than throwing on an absent colour.
+      // only -- its one draw gesture and its selection are both wall-only --
+      // so the preview and selected entries are wired to the committed look
+      // and to the brand accent. Deliberate placeholders, not omissions:
+      // were a preview ever to appear it would read as committed, which is
+      // visible and diagnosable, rather than throwing on an absent colour.
       colors: {
         fill: skin['draw-floor'],
         fillPreview: skin['draw-floor'],
@@ -1178,10 +1178,11 @@
   };
 
   // drawWallSeg2D's two colours, plus the two preview entries it also reads.
-  // Same split floorEnv and dimensionEnv use: this page has no draw tool, so
-  // `preview` is the constant false at the call below and both preview
-  // branches are unreachable -- but they are DEFINED, because a caller should
-  // answer the whole interface, and because wiring a draw tool up later must
+  // Same split floorEnv and dimensionEnv use: this page's wall gesture commits
+  // on the second tap and paints no ghost between them, so `preview` is the
+  // constant false at the call below and both preview branches are
+  // unreachable -- but they are DEFINED, because a caller should answer the
+  // whole interface, and because wiring a rubber-band preview up later must
   // not be the moment someone discovers the key was missing.
   //
   // Preview takes the committed look rather than the accent here, unlike the

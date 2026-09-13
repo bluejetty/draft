@@ -208,6 +208,30 @@ Seat, canvas and epoch are identical for both kinds — an elevation simply draw
 its name where its picture would go — so a faster elevation painter becomes a
 thumbnail without moving a seat.
 
+### OVERTURNED, 13 Sep — the elevations are pictures again (`76ab2e0`)
+
+**The ruling above lasted one pull request, and it was reversed the right way:
+by someone finding out *why* the number was what it was.** The 28 ms was not
+the cost of drawing an elevation. It was the cost of `drawElevationView`
+sampling the roof silhouette at **240×40 with 24 bisections per column** —
+about eleven samples per pixel on an 82 px seat, every one of them thrown
+away by the rasteriser.
+
+`coarseSilhouette` is an opt-in for callers drawing small: 40×10. One
+elevation, measured — **27.96 ms full, 7.45 ms coarse**; four of them, ~112 ms
+before and ~30 ms after. In the browser, a committed edit went from 97–146 ms
+with long tasks of 86–136 ms, to **31–54 ms with no long task at all**.
+
+**Full-size views and LAYOUT's sheets pass no flag and are untouched.** That
+is the line that matters for a permit set: the thumbnails got cheaper, the
+drawings did not get coarser.
+
+**The paragraph above it stands unedited**, for the same reason it stood the
+first time. A ruling that is overturned by a measurement should stay legible
+as a ruling, so the next reader can see which kind of argument beat it — and
+the seat shape the deferral insisted on is precisely what let the picture drop
+into the chair without moving it.
+
 ---
 
 ## 3. The empty seats
