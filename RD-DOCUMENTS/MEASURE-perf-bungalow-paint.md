@@ -6,10 +6,19 @@ against came from `proto/repro-garage-house.draft`, a fixture an order of
 magnitude smaller. This is that offer paid off: the real bytes, through the
 shipping page.
 
-The file itself is **not committed** — the repo is public and this is a real
-drawing of a real address. It is gitignored at `proto/movie-house.draft`;
-`proto/movie-house-paint.js` and `proto/movie-house-canvas-sweep.js` read it
-from there.
+The file is `proto/perf-bungalow.draft`, which **arrives with #393** —
+Skipper committed it there, byte-identical to what is measured below (same md5,
+37069 bytes), under the name the tool-column order's acceptance already used.
+It is a **test fixture only**, on Movie's own condition: never shown on the
+site, never offered as a sample plan. `proto/README.md` carries the condition
+in his words. `proto/perf-bungalow-paint.js` and
+`proto/perf-bungalow-canvas-sweep.js` read it from that path.
+
+One line in `proto/README.md` this measurement corrects: it says the 2.50
+dimensions-per-wall ratio matters because "the dimension pass is a real share
+of a plan paint". The ratio is real and the share is real — 0.40 ms of 1.90 ms,
+21% — but the total is 1.90 ms, so it is a fifth of nothing. The fixture earns
+its keep on the beams, the columns and the washroom stack, not on the dims.
 
 ## What the file actually contains
 
@@ -70,7 +79,7 @@ columns are all on FOUNDATION, `view: "foundation"`, `auto: true`, footing
 
 ## Where the paint goes
 
-`proto/movie-house-paint.js`. Subtractive: every arm opens the **shipping**
+`proto/perf-bungalow-paint.js`. Subtractive: every arm opens the **shipping**
 `MODEL.html` and reads its own readout; the arms differ only in the bytes
 handed to the page, one collection emptied per arm. Nothing inside the page is
 patched, so what is timed is the page Movie runs. Five loads per arm, median.
@@ -102,7 +111,7 @@ what the `scale` column is for.
 
 Not the entities: subtraction accounts for the whole 1.90 ms.
 
-Not the pixels either. `proto/movie-house-canvas-sweep.js` sweeps canvas area
+Not the pixels either. `proto/perf-bungalow-canvas-sweep.js` sweeps canvas area
 and device pixel ratio across **22x** — 1.05 Mpx up to 23.04 Mpx, including
 2277x1280 which is Movie's 1366-wide window at his 60% browser zoom:
 

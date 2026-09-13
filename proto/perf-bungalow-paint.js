@@ -1,8 +1,9 @@
-// THE FIXTURE IS NOT IN THIS REPO. proto/movie-house.draft is Movie's own
-// house, and bluejetty/draft is public, so it is gitignored rather than
-// committed alongside the synthetic repro-*.draft files. Put the file at
-// that path to re-run this; the results it produced are recorded in
-// RD-DOCUMENTS/MEASURE-movie-house-paint.md and in the sibling .json.
+// THE FIXTURE IS proto/perf-bungalow.draft, which arrives with #393 --
+// Skipper committed it there, byte-identical to the file measured here (same
+// md5, 37069 bytes), under the name this order's acceptance already used. It
+// is a TEST FIXTURE ONLY on Movie's own condition: never shown on the site,
+// never offered as a sample plan. See proto/README.md. Results are recorded
+// in RD-DOCUMENTS/MEASURE-perf-bungalow-paint.md and the sibling .json.
 //
 // WHERE THE 33 ms GOES, on Movie's own house.
 //
@@ -33,7 +34,7 @@ const fs = require('fs');
 const path = require('path');
 
 const HOUSE = JSON.parse(fs.readFileSync(
-  path.join(__dirname, 'movie-house.draft'), 'utf8'));
+  path.join(__dirname, 'perf-bungalow.draft'), 'utf8'));
 const RELOADS = 5;
 const BUCKET = 'model-drawing';
 const BASE = process.env.BASE_URL || 'http://localhost:4173';
@@ -127,7 +128,7 @@ async function sample(page, saved) {
     console.log(`  ${r.name.trim().replace('minus ', '').padEnd(16)}`
       + `${share >= 0 ? '+' : ''}${share.toFixed(2)} ms${flag}`);
   }
-  fs.writeFileSync(path.join(__dirname, 'movie-house-paint.json'),
+  fs.writeFileSync(path.join(__dirname, 'perf-bungalow-paint.json'),
     JSON.stringify(rows, null, 2));
-  console.log('\nwrote proto/movie-house-paint.json');
+  console.log('\nwrote proto/perf-bungalow-paint.json');
 })();

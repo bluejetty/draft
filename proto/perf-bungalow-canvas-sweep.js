@@ -1,12 +1,13 @@
-// THE FIXTURE IS NOT IN THIS REPO. proto/movie-house.draft is Movie's own
-// house, and bluejetty/draft is public, so it is gitignored rather than
-// committed alongside the synthetic repro-*.draft files. Put the file at
-// that path to re-run this; the results it produced are recorded in
-// RD-DOCUMENTS/MEASURE-movie-house-paint.md and in the sibling .json.
+// THE FIXTURE IS proto/perf-bungalow.draft, which arrives with #393 --
+// Skipper committed it there, byte-identical to the file measured here (same
+// md5, 37069 bytes), under the name this order's acceptance already used. It
+// is a TEST FIXTURE ONLY on Movie's own condition: never shown on the site,
+// never offered as a sample plan. See proto/README.md. Results are recorded
+// in RD-DOCUMENTS/MEASURE-perf-bungalow-paint.md and the sibling .json.
 //
 // IS THE 33 ms PIXELS OR ENTITIES?
 //
-// proto/movie-house-paint.js measured Movie's own file at paint 1.90 ms on a
+// proto/perf-bungalow-paint.js measured Movie's own file at paint 1.90 ms on a
 // 1600x900 headless Chromium — against the 33 ms his screenshot shows. The
 // bytes are identical, so the difference is not in the drawing. Subtracting
 // collections one at a time (that script) showed no collection worth more
@@ -28,7 +29,7 @@ const fs = require('fs');
 const path = require('path');
 
 const HOUSE = JSON.parse(fs.readFileSync(
-  path.join(__dirname, 'movie-house.draft'), 'utf8'));
+  path.join(__dirname, 'perf-bungalow.draft'), 'utf8'));
 const RELOADS = 3;
 const BASE = process.env.BASE_URL || 'http://localhost:4173';
 
@@ -93,6 +94,6 @@ const median = xs => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
     ? 'NO ROW REACHES 33 ms. Canvas area does not explain Movie\'s number on '
       + 'this box; what is left is the browser engine (Firefox, untestable here).'
     : 'A row reaches Movie\'s number: the cost is fill-bound, not entity-bound.');
-  fs.writeFileSync(path.join(__dirname, 'movie-house-canvas-sweep.json'),
+  fs.writeFileSync(path.join(__dirname, 'perf-bungalow-canvas-sweep.json'),
     JSON.stringify(rows, null, 2));
 })();

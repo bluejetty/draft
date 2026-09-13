@@ -1,10 +1,3 @@
 node_modules/
 test-results/
 playwright-report/
-
-# Movie's own house, sent as a measurement fixture (13 Sep). THIS REPO IS
-# PUBLIC. The other proto/*.draft files are synthetic repros; this one is a
-# real drawing of a real address, so it stays out of the history until Movie
-# says otherwise. proto/movie-house-paint.js and -canvas-sweep.js read it from
-# this path — drop the file back in to re-run them.
-proto/movie-house.draft
