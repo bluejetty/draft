@@ -35,5 +35,21 @@ specific must want to live along the bottom, and the case gets made then.
 
 ## Status
 
-Not built. The other four items of that order — both sidebars, the view rail
-moving into the right panel, the properties slot, and the top bar — are built.
+The withdrawn item stays withdrawn. **The named need arrived on 13 Sep** and
+what got built is the other thing this ruling described.
+
+Movie asked for the instrument cluster by name — "the length T-square, ruler
+and other stuff are down there we need" — and for the skin switcher and the
+TOY / DRAFTING board switch to live on it. That is a need naming its own
+shape, which is the condition above, and it is the **instrument cluster**,
+not the status bar: no X/Y readout, no level or view readout, no second SAVED
+light. The save state stays beside SAVE in the top bar where `:102` pins it,
+and `#readout` keeps the counts.
+
+So `MODEL.html` now has a bottom edge and `tests/model-html-strip.spec.js`
+holds its shape. The three claims in the table above are still false and
+`tests/bottom-strip.spec.js` still keeps #259's status line retired on the
+dc page.
+
+The other four items of that order — both sidebars, the view rail moving into
+the right panel, the properties slot, and the top bar — are built.
