@@ -2606,7 +2606,14 @@
       const name = document.createElement('button');
       name.type = 'button';
       name.className = 'lv-name';
-      name.dataset.levelPick = String(level.id);
+      // NOT `data-level-pick`, which is the CHROME BAR'S SELECT. Naming these
+      // buttons that made `locator('[data-level-pick]')` resolve to six
+      // elements, and model-html-switcher.spec.js -- which drives the select
+      // by exactly that attribute -- failed four ways on strict mode. The
+      // collision was invisible here because that spec was never run against
+      // the panel; CI found it. A panel row and a chrome control are not the
+      // same control even when they do the same thing.
+      name.dataset.levelRow = String(level.id);
       name.textContent = level.name || `level ${level.id}`;
       name.title = `Switch to ${level.name || level.id}`;
       name.addEventListener('click', () => goToLevel(level.id));
