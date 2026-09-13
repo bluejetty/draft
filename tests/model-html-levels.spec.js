@@ -116,3 +116,111 @@ test('the panel is in the right-edge group and goes away with it', async ({ page
   // The seats stay: reachable means one click, not simultaneously visible.
   await expect(page.locator('.seat').first()).toBeVisible();
 });
+
+test('+ ADD appends a real level, and the panel grows by one card', async ({ page }) => {
+  await openPanel(page);
+  const before = await page.locator('.lv-card').count();
+
+  // The old page asks for a name and an elevation; both prompts are answered
+  // here so the test drives the same path a drafter does rather than calling
+  // an internal.
+  await page.evaluate(() => {
+    window.prompt = q => (/Level name/.test(q) ? 'ATTIC' : '20');
+  });
+  await page.locator('[data-add-level]').click();
+  await page.waitForTimeout(250);
+
+  expect(await page.locator('.lv-card').count()).toBe(before + 1);
+  const names = await page.locator('.lv-card .lv-name').allTextContents();
+  expect(names, 'the new level must be named from the prompt').toContain('ATTIC');
+
+  // ABOVE THE TOP FLOOR AND BELOW ROOF — the old page's stacking rule, and the
+  // reason the seating chart puts it where it does. Appending at the end would
+  // read as correct on a count and be wrong on the rail.
+  expect(names.indexOf('ATTIC')).toBeLessThan(names.indexOf('2ND FL'));
+  expect(names.indexOf('ATTIC')).toBeGreaterThan(names.indexOf('ROOF'));
+
+  // It is an EDIT, so the page says so before anything is written.
+  await expect(page.locator('[data-model-save]')).toHaveText(/unsaved/i);
+});
+
+test('delete cascades: nothing is left pointing at the level that is gone',
+  async ({ page }) => {
+    await openPanel(page);
+
+    // WHAT THIS ASSERTS AND WHY IT IS NOT THE READOUT. An earlier version
+    // checked that the wall and dimension counts fell, and it PASSED with
+    // fenestrations, fixtures, stairs, notes and roomTags deleted from the
+    // collection list -- which is the exact bug the old page's own comment
+    // records having shipped five times. The readout does not carry those
+    // five, so the check could not see the thing it was written for.
+    //
+    // So: take the level's id, delete it, save, and require that NO item in
+    // ANY level-owned collection still carries that id. Written over the whole
+    // list, so it covers a collection the moment a fixture has one.
+    const victim = await page.evaluate(() => {
+      const card = [...document.querySelectorAll('.lv-card')]
+        .find(c => c.querySelector('.lv-layer'));
+      return card.dataset.level;
+    });
+    const before = await h.savedDrawing(page);
+    const owned = ['lines', 'walls', 'floors', 'shapes', 'roofs', 'outlines',
+      'surfaceOpenings', 'dimensions', 'columns', 'beams', 'fenestrations',
+      'fixtures', 'stairs', 'notes', 'roomTags', 'electricDevices', 'underlays'];
+    const countOn = (doc, id) => Object.fromEntries(owned
+      .map(k => [k, (doc[k] || []).filter(i => i && String(i.levelId) === String(id)).length])
+      .filter(([, n]) => n > 0));
+    const had = countOn(before, victim);
+    // NOT A VACUOUS PASS: the level must actually have owned something, or
+    // "nothing points at it afterwards" is true of an empty level.
+    expect(Object.keys(had).length,
+      `level ${victim} owns nothing — deleting it would prove nothing`)
+      .toBeGreaterThan(2);
+
+    await page.evaluate(() => { window.confirm = () => true; });
+    await page.locator(`[data-delete-level="${victim}"]`).click();
+    await page.waitForTimeout(300);
+    await page.locator('[data-model-save]').click();
+    await expect(page.locator('[data-model-save]')).toHaveText(/saved/i, { timeout: 6000 });
+
+    const after = await h.savedDrawing(page);
+    expect(countOn(after, victim),
+      `these collections were left pointing at deleted level ${victim} `
+      + `(it owned ${JSON.stringify(had)})`).toEqual({});
+    expect((after.levels || []).map(l => String(l.id)))
+      .not.toContain(String(victim));
+  });
+
+test('deleting the level you are STANDING on moves you to a real one',
+  async ({ page }) => {
+    // The path the fallback does NOT cover: `?level=` naming the level being
+    // deleted. Left alone it would point at a level that no longer exists, and
+    // the page would warn and quietly show a different one than the URL claims.
+    await openPanel(page);
+    const standing = await page.locator('#level-pick').inputValue();
+    await page.goto(page.url().replace(/([?&])level=\d+/, '$1') + `&level=${standing}`);
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+
+    await page.evaluate(() => { window.confirm = () => true; });
+    await page.locator(`[data-delete-level="${standing}"]`).click();
+    await page.waitForTimeout(300);
+
+    const ids = await page.locator('.lv-card').evaluateAll(els => els.map(e => e.dataset.level));
+    expect(ids, 'the deleted level is still in the panel').not.toContain(standing);
+    const now = new URL(page.url()).searchParams.get('level');
+    if (now !== null) {
+      expect(ids, 'the URL still names the level that was just deleted').toContain(now);
+    }
+    expect(ids).toContain(await page.locator('#level-pick').inputValue());
+  });
+
+test('a cancelled confirm deletes nothing', async ({ page }) => {
+  await openPanel(page);
+  const before = await page.locator('.lv-card').count();
+  await page.evaluate(() => { window.confirm = () => false; });
+  await page.locator('[data-delete-level]').first().click();
+  await page.waitForTimeout(200);
+  expect(await page.locator('.lv-card').count()).toBe(before);
+  await expect(page.locator('[data-model-save]'),
+    'a cancelled delete marked the drawing dirty').not.toHaveText(/unsaved/i);
+});
