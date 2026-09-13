@@ -46,11 +46,79 @@ from a spec that did measure. Rows marked `?` say what would settle them.
 
 ---
 
+## DRIVEN, 12 Sep — `tests/model-html-gestures.spec.js`
+
+**Gilligan, against `main` at `71f031c`.** The verdict column below is now
+measured by opening `MODEL.html` in a browser and attempting the gesture. 11
+tests, all green; no product file was touched.
+
+**The rule every verdict is held to: a gesture counts as `present` only if its
+effect survives a reload.** Placed, saved, reopened, still there. Where a
+gesture has no persisted consequence — Escape, fit, T-square — the visible state
+is asserted instead and the row says so.
+
+**Reading and driving disagreed on two rows**, and that list is the product of
+this pass:
+
+| row | read | driven |
+|---|---|---|
+| Select a thing | `present` — "walls only, as far as I read" | **`partial`** — a wall answers a click; a floor and a dimension do not, measured by clicking each and pressing Delete |
+| Switch layer view | `present` — "hides itself on ROOF and SITE" | `present`, **and the hiding is real** — but the hidden picker keeps the previous level's options, and it refills correctly when it returns |
+
+Nothing else moved. **Every other `present` row survived being driven**, which
+is worth as much as the two that did not: the source reads were right nine times
+out of eleven.
+
+**THE MUTATION.** `drawPress` made a no-op: **DRAW A WALL fails on the reload
+assertion** (the wall is not in the file) and UNDO fails with it, while **all
+eight absence rows stay green**. Both halves matter — the spec can tell a
+working gesture from a missing one, and the absences are not passing because the
+page is broken.
+
+**Two measurements retracted before they were reported**, both caught by a
+control rather than by review:
+
+1. *Nothing selects, walls included.* The one-item fixtures were parked on
+   `levels[0]`, which is not the level the page shows, so every click landed on
+   empty canvas. Fixed by putting the fixture where the house is and asserting
+   the readout paints it `1/1` before clicking.
+2. *The layer-view picker never comes back once hidden.* The "return" leg picked
+   an arbitrary other level, which also had no layer views. Returning to the
+   level the page started on — proved to have a picker first — shows it comes
+   back correctly.
+
+**Still not driven, and named rather than glossed:** the both-pages comparison
+for stacked washrooms / source links. The keys are shown to round-trip untouched
+through `MODEL.html`; the old page was not run on the same fixture.
+
+### Re-run against `30de120`, after the cut-view rail landed
+
+This pass was written against `71f031c`. **#386 landed under it while it was
+open, and two of its eleven checks went red on the merge — both correctly.**
+
+- **The control enumeration named six buttons it had never seen** — `E1 · FRONT`,
+  `E2 · LEFT`, `E3 · BACK`, `E4 · RIGHT`, `S1`, `S2`. That is the check doing
+  precisely the job it was written for: a control that no parity row mentions
+  means a row is wrong. Two rows added above.
+- **The layer-view picker stopped hiding on ROOF and SITE** — not because the
+  hiding broke, but because those levels stopped being empty. The seats put the
+  four elevations on every level. The check now guards the two properties that
+  do not depend on which levels happen to be bare: a visible picker is never
+  empty, and it never shows a view belonging to the level before it.
+
+**Nothing was found wrong with the clicks**, which is what everyone including me
+expected to break: the rail sits top-right and this spec's gestures land within
+80 px of the canvas centre. That is luck of geometry rather than design, and it
+is worth knowing that a click landing on chrome fails in exactly the voice of a
+gesture that does not work.
+
+---
+
 ## The table
 
 | gesture | old page | new page | verdict | note |
 |---|---|---|---|---|
-| Draw a wall | wall tool | **present** — `drawPress`, chaining, shared corners | must-have | armed by a button, not a tool |
+| Draw a wall | wall tool | **present** — survives a reload | must-have | **driven**; the mutation row: `drawPress` no-op makes this fail |
 | Draw a line | line tool | absent | must-have | |
 | Draw a floor | floor tool | absent | must-have | it paints floors it cannot create |
 | Draw an outline | outline tool | absent | must-have | BUILD HOUSE reads outlines |
@@ -58,27 +126,29 @@ from a spec that did measure. Rows marked `?` say what would settle them.
 | Place a stair | stair tool | absent | must-have | paints, cannot place |
 | Place fenestration | fenestration tool | absent | must-have | |
 | Place a dimension | dimension tool | absent | must-have | paints, cannot place |
-| Beam / column / trim / shape / node / annotation / fixture | seven tools | absent | ? | each needs Movie's read on whether a day's work needs it |
+| Beam / column / trim / shape / node / annotation / fixture | seven tools | **absent — unreachable, measured** | ? **Movie's call, not mine** | **driven**: the page's entire control surface is `draw-wall`, `delete-wall`, `save`, `take-over`, `level-pick`, `view-pick` and zero inputs. Whether their absence blocks a day's work is not a measurement |
 | Cut a section | cut tool | absent | must-have | and no viewer either — see cut-view spec |
-| Select a thing | select tool | **present** — `selectedSeg` | must-have | walls only, as far as I read |
+| Select a thing | select tool | **partial** — a wall answers a click, a floor and a dimension do not | must-have | **driven**: click each, press Delete; only the wall goes. Read as `present` |
 | Drag an endpoint | corner drag | **present** — pointer drag, undo captures `move` | must-have | |
 | Delete a thing | delete | **present** — button, `Delete`, `Backspace` | must-have | |
 | Change a wall's type | wall-type picker on a group | **absent** | must-have | #377 established there is no change-type verb at all |
-| Undo | undo stack | **present** — `Ctrl/Cmd+Z`, one press per gesture | must-have | covers add, remove, move |
+| Undo | undo stack | **present** — one press per gesture, **counted** | must-have | **driven**: three walls drawn, one press takes back one, three take back all three |
 | **Redo** | redo | **absent** | must-have | the handler excludes `shiftKey`; there is no `redo` in the file |
-| **Switch level** | level rail | **present** — `level-pick` in the chrome bar, its `change` handler, `goToLevel` | must-have | keyed by `?level=` in the URL, not by an index |
-| Switch layer view within a level | layer view rail | **present** — `view-pick`, filled from `DraftLayerViews.layerViewsForLevelId` | must-have | hides itself on ROOF and SITE, which hold no layer views |
+| **Switch level** | level rail | **present** — and the choice survives a reload | must-have | **driven** through `level-pick`; keyed by `?level=`, not by an index |
+| Switch layer view within a level | layer view rail | **present**, and the picker belongs to the level it is on | must-have | **driven** on every level. The old note said it hides on ROOF and SITE; **#386 ended that** — the four elevations are on every level now, so no level is empty and the picker always shows. Guarded instead: a visible picker is never empty, and never shows a view carried over from the level before |
 | Add / delete / insert a level | level rail | **absent** | must-have | re-derived in this page's own vocabulary: no add/insert/remove verb, and no `levels` mutation. It re-emits the levels it loaded |
-| Level locks | lock toggles | **absent** | ? | re-derived the same way: no lock verb in the chrome bar, no URL parameter, no mutation. The persisted key is re-emitted, not honoured |
-| ASSEMBLY / group / ungroup | assembly rail | absent | ? | my #375 spec drives it on the old page; nothing here |
-| Stacked washrooms, source links | boneyard/assembly work | absent | ? | |
+| Level locks | lock toggles | **absent — no verb; the key is carried untouched** | **settled** | **driven**: the page's whole control surface is four buttons and two selects, none of them a lock; a seeded lock and its `nextLevelLockId` come back byte-identical after a save |
+| ASSEMBLY / group / ungroup | assembly rail | **absent — no verb; groups carried untouched** | **settled** | **driven**: no control exists, and a seeded group survives a save unchanged |
+| Stacked washrooms, source links | boneyard/assembly work | **absent on this page; keys carried untouched** | **partly settled** | **driven** one-sided only: the keys round-trip through `MODEL.html`. The old page was NOT run on the same fixture — that comparison is still owed |
 | Elevation / section previews | right-hand cards | absent | must-have | `SPEC-model-html-cut-views.md` — 18 accessors, 6 absent |
-| INSERT PHOTO+PDF underlay | INSERT | **partial** — paints underlays, filters by level | ? | it draws them; I did not find an insert gesture |
-| T-square | down by default, `t` stows | **absent** | ? | zero references; `DEFINITIONS.md` says down-by-default |
-| Boneyard | shelves, unplaced geometry | **absent, deliberately** | ? | the page says so: "No boneyard on this page: it holds no unplaced geometry and offers no way to switch to it" |
+| INSERT PHOTO+PDF underlay | INSERT | **partial — paints, cannot insert** | **settled** | **driven**: a seeded underlay is carried and painted; the page has **no `input` element of any type**, so there is nowhere to choose a file |
+| T-square | down by default, `t` stows | **absent** | **settled** | **driven**: `t` and `T` pressed; neither the readout nor the file changes by one byte |
+| Boneyard | shelves, unplaced geometry | **absent, deliberately** | **settled** | **driven**: the old page reaches it through a negative pseudo-level id; the level picker offers no negative option and every option is a real level |
 | Pan / zoom / fit | mouse, `0` | **present** | must-have | |
 | Escape cancels and clears selection | one press, tool survives | **present** | must-have | measured from the old page and documented in the new one |
 | Save | press | **present** — press, plus the rung-4 hide-save | must-have | |
+| Cut-view seats (E1–E4, S1–S2) | right-hand cards | **present** — six buttons, added by #386 | must-have | **driven** only as far as their existence: the control enumeration names them. Whether each seat paints what it claims is `model-html-seats.spec.js`, not this file |
+| Chrome over the drawing area | `#save` / `#chrome` / `#readout` overlay as **strips** | the cut-view rail is a **block**, top-right, and swallows taps there | ? **Movie's call** | the difference the row exists to record: strips leave the sheet reachable, a block takes a corner of it away. Placement is a look-at-it decision, not a measurement |
 
 ---
 
