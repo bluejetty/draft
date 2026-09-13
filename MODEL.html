@@ -979,26 +979,38 @@
     .filter(o => onActiveLevel().byLevel(o));
 
   // Every point that defines the drawing's extent, for fit-to-content.
-  const allPoints = () => {
+  const allPoints = (wide = false) => {
     const pts = [];
     walls().forEach(w => { if (w.start && w.end) pts.push(w.start, w.end); });
     lines().forEach(l => { if (l.start && l.end) pts.push(l.start, l.end); });
     floors().forEach(f => (f.points || []).forEach(p => pts.push(p)));
-    // ROOFS AND OUTLINES COUNT TOO, and leaving them out was a real bug rather
-    // than a thumbnail detail. ROOF and SITE hold no walls, lines or floors at
-    // all -- a roof footprint and an outline is the whole of them -- so fit()
-    // found no points, fell back to scale 6 at the world origin, and drew the
-    // level off the side of the canvas. It showed up when the plan seats
-    // started fitting those two levels, but it is the same on the main canvas:
-    // pressing 0 on ROOF fitted to nothing. MODEL.dc.html's own thumbnail
-    // bounds (:7269) take all five collections; this now takes the same five.
-    roofs().forEach(r => (r.points || []).forEach(p => pts.push(p)));
-    outlines().forEach(o => (o.points || []).forEach(p => pts.push(p)));
+    // ROOFS AND OUTLINES ONLY WHEN ASKED, and the scoping is the point.
+    //
+    // ROOF and SITE hold no walls, lines or floors at all -- a roof footprint
+    // and an outline is the whole of them -- so a fit over the three above
+    // finds nothing, falls back to scale 6 at the world origin, and draws the
+    // level off the side of the canvas. The plan seats have to fit those two
+    // levels, so they ask for all five, the way MODEL.dc.html's own thumbnail
+    // bounds do (:7269).
+    //
+    // THE MAIN VIEW DELIBERATELY DOES NOT, even though it has the same gap.
+    // Adding them there changes the default zoom of every drawing that owns a
+    // roof or an outline -- which is nearly all of them -- and that showed up
+    // immediately: model-html-corner.spec.js released a corner 2px from
+    // another and it landed 0.66ft away instead of snapping, because 2px is a
+    // different distance once the scale moves. Fixing a real fit bug is not a
+    // licence to re-zoom the drafter's page inside a rail change. The gap is
+    // written up rather than smuggled; pressing 0 on ROOF still fits to
+    // nothing, and that is one line to change when somebody rules on it.
+    if (wide) {
+      roofs().forEach(r => (r.points || []).forEach(p => pts.push(p)));
+      outlines().forEach(o => (o.points || []).forEach(p => pts.push(p)));
+    }
     return pts.filter(p => Number.isFinite(p?.x) && Number.isFinite(p?.z));
   };
 
-  const fit = () => {
-    const pts = allPoints();
+  const fit = (wide = false) => {
+    const pts = allPoints(wide);
     if (!pts.length) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     pts.forEach(p => {
@@ -3236,7 +3248,9 @@
       ctx.save();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, cssW, cssH);
-      fit();
+      // WIDE: this level may be ROOF or SITE, whose whole content is a roof
+      // footprint and an outline. See allPoints.
+      fit(true);
       // GEOMETRY ONLY. No grid, no underlays: a grid at 82px across is noise,
       // and an underlay is a decoded image per seat per edit. The old page's
       // thumbnail makes the same cut (:7269 draws the level's own geometry).
