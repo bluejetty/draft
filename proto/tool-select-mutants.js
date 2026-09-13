@@ -71,13 +71,13 @@ const MUTANTS = [
     name: 'a window takes what it crosses, not what it encloses',
     find: "        if (inside(item.start) && inside(item.end)) out.push({ type: 'wall', item });",
     with: "        if (inside(item.start) || inside(item.end)) out.push({ type: 'wall', item });",
-    test: 'fully encloses',
+    test: 'one end of a wall',
   },
   {
     name: 'a floor only needs one corner in the box',
     find: '        if (pts.length >= 3 && pts.every(inside)) out.push',
     with: '        if (pts.length >= 3 && pts.some(inside)) out.push',
-    test: 'fully encloses',
+    test: 'every corner is in the box',
   },
   {
     name: 'ALL LEVELS stops reaching past the active level',
@@ -117,9 +117,19 @@ const MUTANTS = [
   },
 ];
 
+// `grep` runs only the check a mutant is aimed at, which is fast. But an
+// aimed mutant that survives has TWO possible meanings -- the suite cannot see
+// this defect, or the mutant was pointed at the wrong check -- and those look
+// identical in the output. That has now happened twice in this file: the
+// enclosure mutants stayed aimed at the weak check they had exposed, so the
+// new checks written to catch them were never run against them.
+//
+// So a survivor is re-run against the WHOLE spec before it is called a
+// survivor. Slower, and only on survivors, which are meant to be rare.
 const run = grep => {
   try {
-    execSync(`npx playwright test tests/model-tool-select.spec.js -g ${JSON.stringify(grep)} --reporter=line`,
+    execSync(`npx playwright test tests/model-tool-select.spec.js`
+      + (grep ? ` -g ${JSON.stringify(grep)}` : '') + ' --reporter=line',
       { cwd: '/home/user/draft', stdio: 'pipe' });
     return 'passed';
   } catch { return 'failed'; }
@@ -155,10 +165,15 @@ for (const m of MUTANTS) {
   }
   ran += 1;
   fs.writeFileSync(PATH, before.replace(m.find, m.with));
-  const result = run(m.test);
+  let result = run(m.test);
+  let note = '';
+  if (result === 'passed') {
+    // Aimed check let it through. Was anything else watching?
+    if (run(null) === 'failed') { result = 'failed'; note = '  (caught by another check -- re-aim `test`)'; }
+  }
   execSync('git checkout -- MODEL.html', { cwd: '/home/user/draft' });
   if (result === 'failed') killed += 1;
-  console.log(`  ${result === 'failed' ? 'KILLED  ' : 'SURVIVED'}  ${m.name}`);
+  console.log(`  ${result === 'failed' ? 'KILLED  ' : 'SURVIVED'}  ${m.name}${note}`);
 }
 console.log(`\n${killed}/${ran} killed` + (ambiguous ? `, ${ambiguous} AMBIGUOUS -- anchors that match more than one site` : ''));
 process.exit(killed === ran && ran === MUTANTS.length && !ambiguous ? 0 : 1);
