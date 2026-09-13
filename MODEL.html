@@ -173,6 +173,27 @@
      mid-gesture must be able to see that the next tap draws. */
   #chrome button.armed { color: var(--accent); border-color: var(--accent); }
 
+  /* THE BUILD BAR, top centre: the chrome bar owns the top-left and the
+     sidebars own both edges, so the middle of the top edge is what is left.
+     Measured like the rest -- see tests/model-html-topbar.spec.js. */
+  #build-bar { position:fixed; top:12px; left:50%; transform:translateX(-50%);
+    z-index:6; display:flex; align-items:flex-start; gap:6px; }
+  #build-bar[hidden] { display:none; }
+  #build-families, #build-entries { display:flex; gap:4px; }
+  #build-entries[hidden] { display:none; }
+  #build-bar button { font-family: var(--font-ui); font-size:11px; font-weight:600;
+    letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;
+    color: var(--ink-primary); padding:6px 10px; border-radius:6px;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none); }
+  #build-bar button:hover { border-color: var(--accent); color: var(--accent); }
+  /* The family whose submenu is open, and the type the drawing carries, both
+     read as the page's one attention colour -- the same signal the wall tool
+     uses when it is armed. */
+  #build-bar button.open, #build-bar button.chosen {
+    color: var(--accent); border-color: var(--accent); }
+  #bone { font-weight:700; letter-spacing:0.1em; }
+
   /* ── THE SHELL ─────────────────────────────────────────────────────────
      Two pull-out sidebars and their tabs. The SHAPE is MODEL.dc.html's
      (.rail-tab at :147-150): a full-height tab on each edge, vertical
@@ -360,6 +381,17 @@
      The left panel is the tool palette's home and is empty until Gilligan's
      seven land -- the slot exists so a tool is not built against a canvas that
      is about to lose its edge. -->
+<!-- THE TOP BAR: the house the drafter is going to build, and the bone that
+     builds it. MODEL.dc.html's row is "three families between the turtle and
+     the bone", each opening ONE submenu (Movie, 6 Sep) -- that shape, from the
+     same data, through build-menu.js.
+     WHAT IS NOT HERE: the generator. See the seam note beside ModelBuild. -->
+<div id="build-bar" data-build-bar hidden>
+  <div id="build-families" data-build-families></div>
+  <div id="build-entries" data-build-entries hidden></div>
+  <button id="bone" type="button" data-bone-press title="Build the house you picked">BONE</button>
+</div>
+
 <button id="left-tab" class="rail-tab" type="button" data-left-tab hidden>DRAFTING TOOLS</button>
 <aside id="left-rail" data-left-rail hidden>
   <div id="tool-slot" data-tool-slot></div>
@@ -407,6 +439,9 @@
      alternative was office defaults, which would have shown four elevation
      marks to a drafter who had switched them off. -->
 <script src="./cut-marks.js"></script>
+<!-- The house types the build bar offers. Lifted out of MODEL.dc.html so both
+     pages read one list (build-menu.js says why). -->
+<script src="./build-menu.js"></script>
 <script src="./profile-manager.js"></script>
 <!-- Stairs. stair-geometry.js is the riser math and the plan parts; it is not
      a painter either, it is the two ANSWERS drawStairs2D asks its caller for
@@ -2055,6 +2090,128 @@
       .addEventListener('click', () => setRail(param, !railOpen(param)));
   });
 
+  // ── the build bar, and the seam behind it ─────────────────────────────────
+  // THE BUTTON SAYS WHICH HOUSE. SOMETHING ELSE BUILDS IT.
+  //
+  // That split is the whole point of this bar and it is Devin's instruction,
+  // not a convenience: the drafter is moving to a premade design per house
+  // type in place of generated rooms, so whatever produces geometry today is
+  // being replaced. Wire the buttons to it and the bar is built twice.
+  //
+  // WHAT THIS SIDE OWNS: which family is open, which entry was pressed, and
+  // writing the chosen `buildType` to the drawing -- that key IS the persisted
+  // vocabulary for this question (drawing-format.js BUILD_TYPES), normalised
+  // through the format exactly as MODEL.dc.html normalises it at :14159.
+  //
+  // WHAT IT DOES NOT OWN: a single foot of geometry. No outline, no rooms, no
+  // walls. If this code ever decides where a bedroom goes, it has crossed the
+  // seam and should be deleted back to here.
+  //
+  // ONE HALF OF THE OLD PAGE'S ARMING DELIBERATELY DOES NOT COME ACROSS.
+  // _pressBuildType does two things: it records the type AND arms the outline
+  // tool so the next press starts tracing the house (:14156). This page has no
+  // outline tool -- its whole control surface is draw-wall, delete-wall, save
+  // and the two pickers -- so carrying the trace-arm would mean inventing the
+  // tool it arms. The type is recorded; the tracing waits for whoever builds
+  // that tool.
+  //
+  // THE SEAM, for whoever writes the geometry side:
+  //
+  //   window.ModelBuild.onChoose(fn)   fn({ family, entry }) when a house type
+  //                                    is picked. entry carries type, garage,
+  //                                    overGarage, foundation -- the old
+  //                                    page's own vocabulary, from the same
+  //                                    build-menu.js.
+  //   window.ModelBuild.onBuild(fn)    fn({ family, entry }) when BONE is
+  //                                    pressed. This is "build it now"; the
+  //                                    bar does nothing else with the press.
+  //   window.ModelBuild.chosen()       the current choice, or null.
+  //
+  // BONE FIRES EVEN WITH NOTHING CHOSEN, with entry null. That is deliberate:
+  // "the bone builds it" is the old page's phrase and on a drawing that
+  // already has a type the drafter has chosen nothing this session. Deciding
+  // what an empty press means is the geometry side's call, not the bar's.
+  const BM = window.DraftBuildMenu;
+  const buildBar = document.getElementById('build-bar');
+  const familyRow = document.getElementById('build-families');
+  const entryRow = document.getElementById('build-entries');
+  let openFamilyId = null;
+  const chooseHandlers = [];
+  const buildHandlers = [];
+  let chosenEntryId = null;
+
+  const chosen = () => {
+    if (!chosenEntryId) return null;
+    const entry = BM.entryById(chosenEntryId);
+    if (!entry) return null;
+    const family = BM.BUILD_MENU
+      .find(f => f.entries.some(e => e.id === chosenEntryId)) || null;
+    return { family, entry };
+  };
+
+  window.ModelBuild = Object.freeze({
+    chosen,
+    onChoose: fn => { if (typeof fn === 'function') chooseHandlers.push(fn); },
+    onBuild: fn => { if (typeof fn === 'function') buildHandlers.push(fn); },
+  });
+
+  const pressEntry = entryId => {
+    chosenEntryId = entryId;
+    openFamilyId = null;
+    const picked = chosen();
+    // THE TYPE REACHES THE FILE; garage, overGarage and foundation do not.
+    // build-menu.js says why in Movie's own words: a garage is an outline
+    // carrying garage:true, so storing one would put a claim in the file that
+    // its own geometry could contradict.
+    const type = picked?.entry?.type ?? null;
+    if (drawing && type && drawing.buildType !== type) {
+      drawing.buildType = window.DraftDrawingFormat.buildType(type);
+      markDirty();
+    }
+    buildChrome();
+    syncBuildBar();
+    paint();
+    chooseHandlers.forEach(fn => fn(picked));
+  };
+
+  const syncBuildBar = () => {
+    if (!drawing) return;
+    familyRow.replaceChildren(...BM.BUILD_MENU.map(family => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.buildFamily = family.id;
+      button.textContent = family.label;
+      button.title = family.title;
+      button.classList.toggle('open', openFamilyId === family.id);
+      // A family with the chosen entry under it wears the mark, so the bar
+      // says what the drawing carries even with every submenu shut.
+      const holds = family.entries.some(e => e.id === chosenEntryId);
+      button.classList.toggle('chosen', holds && openFamilyId !== family.id);
+      button.onclick = () => {
+        openFamilyId = openFamilyId === family.id ? null : family.id;
+        syncBuildBar();
+      };
+      return button;
+    }));
+
+    const open = openFamilyId ? BM.familyById(openFamilyId) : null;
+    entryRow.hidden = !open;
+    entryRow.replaceChildren(...(open ? open.entries.map(entry => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.buildEntry = entry.id;
+      button.textContent = entry.label;
+      button.classList.toggle('chosen', entry.id === chosenEntryId);
+      button.onclick = () => pressEntry(entry.id);
+      return button;
+    }) : []));
+    buildBar.hidden = false;
+  };
+
+  document.getElementById('bone').addEventListener('click', () => {
+    buildHandlers.forEach(fn => fn(chosen()));
+  });
+
   // ── the per-tool properties slot ──────────────────────────────────────────
   // THE CONTRACT, for Gilligan, written so it can be built against without
   // reading anything below it:
@@ -3245,6 +3402,7 @@
     // The shell comes up with the drawing, for the same reason the switchers
     // do: a tab that opens an empty panel is furniture.
     syncShell();
+    syncBuildBar();
     // The switchers can only be built once the drawing is on the page: their
     // options ARE its levels. Before this the bar stays hidden, like #save.
     buildChrome();
