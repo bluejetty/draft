@@ -288,10 +288,15 @@ prose says.
 | rung | what it is | who | state |
 |---|---|---|---|
 | **3a** | **MODEL.html becomes a writer** — select, move a corner, save, guard the close, move a whole wall | Devin's crew | **four of four DONE**, PRs #346 / #347 |
-| **3b** | **The level switcher** — chrome on the page for the level tier 2a already filters by | Gilligan | ordered, not started |
-| **3c** | **Draw and delete a wall** — the two verbs that make the page a drafting surface rather than an editor of walls that already exist | Gilligan | queued behind 3b |
+| **3b** | **The level switcher** — chrome on the page for the level tier 2a already filters by | Gilligan | **DONE**, `0e018c2` — a level switcher AND a layer-view switcher, both keyed by the URL |
+| **3c** | **Draw and delete a wall** — the two verbs that make the page a drafting surface rather than an editor of walls that already exist | Gilligan | **DONE**, `435778e` — draw, delete, and undo either |
 | **3d** | **The rest of the autosave ruling** — rungs 2–5: the change broadcast, then the named edit lease. Its first job is done: the ruling is written down, `RULING-autosave-two-writers.md` | unassigned | **PLANNED**, spec in hand |
-| **3e…** | **One old-page verb per rung**, never a batch, in whatever order a real drafter reaches for them | unassigned | **PLANNED**, 19 tool states to go |
+| **3e…** | **One old-page verb per rung**, never a batch, in whatever order a real drafter reaches for them | unassigned | **PLANNED**, 18 tool states to go — `wall` is off the list, 3c took it |
+| **3f** | **The cut-view host** — a place to stand inside a section, and the three ways back out | Skipper | **DONE**, `8eeb9f4` |
+| **3g** | **The six seats** — E1–E4, S1–S2, and the picker/rail/readout/lookup all asking one list | Skipper | **DONE**, `aa065cb` + `93f41ff` |
+| **3h** | **Live elevation thumbnails** — the seats become pictures again without the stutter | Skipper | **DONE**, `76ab2e0` |
+| **3i** | **The chrome shell** — top bar, two collapsible sidebars, a slot for per-tool properties | Skipper | **IN FLIGHT** |
+| **3j** | **The seven small tools** — beam, column, trim, shape, node, annotation, fixture | Gilligan | **MEASURING FIRST** — preserved / painted / linked, before any palette is built |
 | **gate** | **The swap** — two `href`s in `index.html`, its own PR, nothing sooner | Movie rules | **PLANNED** |
 
 Skins are not a rung on this ladder. `palette.js` calls its own night values
@@ -374,31 +379,65 @@ is one half of a story whose other half is a named edit lease and a change
 broadcast, and that is rungs 2–5 of the autosave ruling, not something to take
 on the way past a corner drag.
 
+### Tier 3b–3h — what landed after the plan below was written *(13 Sep)*
+
+The section under this one was written on 9 Sep and opens *"nothing below has
+landed"*. **That sentence has been false since 3b merged**, and it is the
+exact failure this file keeps recording against other documents: a plan that
+was true when written, left standing while the work walked past it. The plan
+is kept — it is still the reasoning behind the rungs — but read it as of 9
+Sep, not as of today.
+
+| rung | commit | what is now true on the page |
+|---|---|---|
+| 3b | `0e018c2` | `level-pick` and `view-pick` in the chrome bar. **Keyed by id through `?level=`, never by an index**, and `goToLevel` drops a `?view=` the new level does not have. The hazard above was avoided rather than survived |
+| 3c | `435778e` | `draw-wall` arms, a second tap commits, and the next wall starts where the last one ended. `delete-wall`, `Delete` and `Backspace` remove the selection. Undo covers add, remove and move — **one press per gesture** |
+| 3f | `8eeb9f4` | The host. A cut view is reached by `?view=cut:<id>`, extending 3b's mechanism rather than growing a second source of truth for "what am I looking at" — §5 item 2 of the cut-view spec, taken as written |
+| 3g | `aa065cb`, `93f41ff` | Six seats. `allCuts()` — stored cuts plus derived elevations — feeds the picker, the rail, the readout and the lookup, so none of the four can disagree about which views exist. The derived elevations were unreachable before it |
+| 3h | `76ab2e0` | `coarseSilhouette`: elevation silhouettes sample 40×10 for a seat instead of 240×40 with 24 bisections. **Full-size views and LAYOUT's printed sheets keep the old resolution** — the thumbnails got cheaper, the drawings did not get coarser |
+
+**One ruling died here and it is worth keeping the corpse visible.** #386
+shipped *"sections live, elevations labelled"* on the argument that a label
+identifies an elevation as well as a picture would. #387 overturned it by
+finding *why* an elevation cost 28 ms and making it cost 7.45 — the ruling was
+not argued down, it was measured down. `SPEC-model-html-cut-views.md` §2
+carries the record.
+
+**What is not done, said plainly:** there is still no redo, no add/insert/
+delete level, no change-wall-type, no tool palette, and eighteen of the
+nineteen old-page tool states remain unreachable. The page can now draw,
+edit, delete, switch and look. It cannot yet be a drafter's only page.
+
+---
+
 ### The ladder ahead — PLANNED *(drafted by Devin 9 Sep, checked against the repo the same day)*
 
-**Nothing below has landed. No commits, by the rule at the top of this
-section.** Written down anyway, because the cost of tier 3's first five days
-was a plan that existed only in one agent's head. Three of the plan's factual
+**Read as of 9 Sep.** When this was written nothing below had landed; 3b, 3c
+and the cut-view rungs have since, and the table above carries their commits.
+Written down at the time because the cost of tier 3's first five days was a
+plan that existed only in one agent's head. Three of the plan's factual
 premises were checked against the repo before it went in here; **two were
 wrong, and both are corrected below rather than repeated.**
 
-**3b — the level switcher.** Gilligan, in flight. Ids never indexes, and the
-spec names a drawing with an inserted level. The hazard is stated above.
+**3b — the level switcher.** Gilligan, in flight *(landed, `0e018c2`)*. Ids
+never indexes, and the spec names a drawing with an inserted level. The hazard
+is stated above.
 
-**3c — draw and delete a wall.** Gilligan, queued. New endpoints join the
-corner pool or the page loses the property rung two is built on; the default
-wall type comes from `_contextWallType()` on the old page rather than a
-constant chosen here (`MODEL.dc.html:9016` — the FOUNDATION set and the
-stud/insul set are different lists, and picking wrong is silent); saves go
-through `ifRev`; the deliverable is an old-page round-trip spec, and every
-field written names its deriver and its storer. **A note on the delete half:
-the old page has no DELETE BUTTON for a wall.** Delete is the `delete`
-keybinding (`profile-manager.js:128`, default `Delete`) over a SELECT-tool
-selection (`MODEL.dc.html:22209`, refusal at `:22196`), and it is a multi-kind
-operation there — walls, floors, roofs, fenestrations, dimensions, fixtures
-and outline nodes all answer the same key, with a *"this corner carries built
-geometry"* refusal in front of it. 3c takes the wall case only, and should
-say so out loud, since the drafter presses the same key for all of them.
+**3c — draw and delete a wall.** Gilligan, queued *(landed, `435778e`)*. New
+endpoints join the corner pool or the page loses the property rung two is
+built on; the default wall type comes from `_contextWallType()` on the old
+page rather than a constant chosen here (`MODEL.dc.html:9016` — the
+FOUNDATION set and the stud/insul set are different lists, and picking wrong
+is silent); saves go through `ifRev`; the deliverable is an old-page
+round-trip spec, and every field written names its deriver and its storer.
+**A note on the delete half: the old page has no DELETE BUTTON for a wall.**
+Delete is the `delete` keybinding (`profile-manager.js:128`, default
+`Delete`) over a SELECT-tool selection (`MODEL.dc.html:22209`, refusal at
+`:22196`), and it is a multi-kind operation there — walls, floors, roofs,
+fenestrations, dimensions, fixtures and outline nodes all answer the same
+key, with a *"this corner carries built geometry"* refusal in front of it.
+3c takes the wall case only, and should say so out loud, since the drafter
+presses the same key for all of them.
 
 **3d — the rest of the autosave ruling.** Its first job was writing the ruling
 down, because rungs 2–5 existed nowhere in this repository — measured, not
@@ -453,6 +492,16 @@ test, not a tool, and its whole write surface is two paths — a move-drag
 commit and an undo, both ending at `markDirty()` (`MODEL.html:1615`, `:1679`).
 No create, no delete. That is the real baseline 3c builds on.
 
+> **Half of that is now history, and the half that survives is the important
+> one.** 3c (`435778e`) added create and delete, so the write surface is no
+> longer two paths — but it added them **as buttons, not as tool states**.
+> `activeTool` is still `null` and still never set; `draw-wall` arms a flag.
+> So the count stands at eighteen unreachable verbs, and the question 3e opens
+> with is unchanged and now urgent: **button or palette?** Answered once, then
+> answered eighteen times whether anyone means to or not. Seven of the
+> eighteen are being measured for data survival before any of them get a
+> control — beam, column, trim, shape, node, annotation, fixture.
+
 **"The bone itself" is not a verb**, so the plan's five-item sketch had a
 category error in it as well as a shortfall. `boneyardActive` is an orthogonal
 mode flag (38 references in the old page, plus 11 for `activeBoneyardShelfId`)
@@ -506,9 +555,10 @@ module today and holds no table of its own.
 **The stale sentence is `level-assembly.js:21`** — *"LAYOUT.dc.html still
 holds its own copy; adopting this there is a separate change with its own test
 surface"* — left standing in the module's header three days after the
-adoption, and it is what the plan was read off. **Flagged, not fixed: it is
-product code and this pass is docs.** It is one comment line and it belongs in
-the next PR that touches that file.
+adoption, and it is what the plan was read off. **Flagged then, fixed 13 Sep**
+— it sat flagged longer than the one-line fix took, on the grounds that a docs
+pass should not touch product code. A stale comment costs nothing until
+someone plans off it, and someone already had.
 
 So LAYOUT's ladder starts where MODEL's did — read the real drawing, paint it
 with the real painters — with `layout-plan.js`, `wall-types.js` and
