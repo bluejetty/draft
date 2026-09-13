@@ -106,6 +106,8 @@ if (!window.DraftPalette) {
                         // wherever an end cap crosses bare paper. Both values
                         // clear 3.0 on both of theirs.
     'draw-shape',       // reference shapes: the drafter's own scratch geometry
+    'draw-beam',        // beams: one span between two supports, flush or dropped
+    'draw-column',      // teleposts and piles, and the cross that marks their centre
     'draw-roof',        // the roof footprint outline, its fill wash and its
                         // GABLE / EAVE tags. The wash and the tag text are
                         // DERIVED from this one value at low alpha rather
@@ -159,6 +161,20 @@ if (!window.DraftPalette) {
       'draw-wall':       '#2f3335',   // 1.30 on the page -- poche, deliberately quiet
       'draw-wall-edge':  '#a7aeb1',   // 5.67 on the wall, 7.35 on the page
       'draw-shape':      '#3f8f7a',
+      // STRUCTURE GETS ITS OWN TWO KEYS, and they are new rather than lifted.
+      // MODEL.dc.html paints beams #7a4a21 and columns #1d1f20 on its single
+      // skin. Both are already-known failures on this one, measured with the
+      // same calculator that reproduces every number in this file: the beam
+      // brown is 2.23 here, under the 3.0 non-text floor and the exact value
+      // draw-roof was moved off for that reason; the column ink is 1.00,
+      // literally surface-page, the same way notes and fixtures vanished.
+      //
+      // The column takes the remedy already proven for those two -- body ink's
+      // twin. The beam clears the floor at 5.04 and sits UNDER draw-roof's 5.95
+      // deliberately: a roof outline should stay the louder of the two browns.
+      // Day keeps the old page's exact values, so the day reading is unchanged.
+      'draw-beam':       '#b8834e',   // 5.04 night / 2.94 day -- see day column
+      'draw-column':     '#e7e5e2',   // 13.16 -- ink's twin, as note and fixture
       // 5.95 on the page. The old value was #7a4a21 on BOTH skins, which is
       // 2.23 here -- under the 3.0 non-text floor, and the last colour in the
       // app that was actually broken rather than merely quiet. It also
@@ -199,6 +215,9 @@ if (!window.DraftPalette) {
                                       // values are what render-2d.js hardcoded before
                                       // this role existed, so DAY IS UNCHANGED.
       'draw-shape':      '#2f6b5b',
+      // The old page's own values, unchanged: 6.64 and 14.79 on this ground.
+      'draw-beam':       '#7a4a21',   // 6.64
+      'draw-column':     '#1d1f20',   // 14.79 -- ink-primary, as the old page
       'draw-roof':       '#7a4a21',   // 6.64 on the page
       'draw-roof-guide': '#a3703f',   // 3.79 -- under the roof's 6.64, same as night's ordering.
                                       // Both values are what render-2d.js hardcoded before this

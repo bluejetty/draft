@@ -688,6 +688,14 @@
 
   const shapes = () => (drawing?.shapes || [])
     .filter(sh => onActiveLevel().byLevel(sh));
+
+  // BEAMS AND COLUMNS take the level AND view rule: a foundation beam has no
+  // business on the main floor's plan, and the old page files them by view the
+  // same way.
+  const beams = () => (drawing?.beams || [])
+    .filter(b => onActiveLevel().byLevel(b) && onActiveLevel().onPlan(b));
+  const columns = () => (drawing?.columns || [])
+    .filter(c => onActiveLevel().byLevel(c) && onActiveLevel().onPlan(c));
   // Outlines take the same LEVEL-ONLY rule as roofs -- rule four above. They
   // are the room and garage footprints, level-wide, so no view filter.
   const outlines = () => (drawing?.outlines || [])
@@ -873,6 +881,20 @@
   const paintEnv = () => ({
     wallTypes: window.DraftWallTypes.WALL_TYPES,
     shapeColor: skin['draw-shape'],
+    // STRUCTURE'S TWO COLOURS AND THE LABEL FONT. The painters take these from
+    // env rather than holding literals, because the old page's values are known
+    // failures on this page's night ground: its beam brown is 2.23 and its
+    // column ink is 1.00 -- the same colour as surface-page, which is how notes
+    // and fixtures once vanished entirely. palette.js carries both new roles
+    // with the numbers.
+    //
+    // labelFont is stated rather than inherited. Two painters in render-2d.js
+    // already read env.labelFont and this page never supplied it, so their
+    // labels drew in whatever font the canvas last had -- assigning undefined
+    // to ctx.font is ignored silently, which is a default nobody chose.
+    beamColor: skin['draw-beam'],
+    columnColor: skin['draw-column'],
+    labelFont: "600 9px 'Barlow Condensed', system-ui, sans-serif",
     // THE ROOF READS THE SKIN, and that is the whole point of the pair.
     // drawRoof2D used one brown for both skins -- #7a4a21, which is 6.64 on
     // the day page and 2.23 on the night one, under the 3.0 non-text floor.
@@ -922,6 +944,23 @@
       if ((roof.points || []).length < 3) return;
       R.drawRoof2D(ctx, toS, roof, {}, paintEnv());
     });
+  };
+
+  // STRUCTURE THE DRAFTER NEVER DREW. BUILD HOUSE lands a mid-span beam and
+  // its teleposts whenever a clear span passes 19', so every built house in the
+  // store already holds beams and columns -- which this page kept faithfully
+  // through every save and did not draw. A drafter could not see the structure
+  // holding their floor up.
+  const paintStructure = () => {
+    const R = window.DraftRender2D;
+    const env = paintEnv();
+    beams().forEach(beam => R.drawBeam2D(ctx, toS, beam, {}, env));
+    // The footing is the page's answer, not the painter's. Only a pile changes
+    // the drawn shape; a telepost is the square, which is the default.
+    columns().forEach(column => R.drawColumn2D(ctx, toS, column, {
+      footing: /pile/i.test(String(column.footing || ''))
+        ? { pile: true, sizeIn: 6, label: column.footing } : null,
+    }, env));
   };
 
   const paintShapes = () => {
@@ -1636,7 +1675,7 @@
         // geometry" -- MODEL.dc.html's own words at the same seam. A tracing
         // image that painted over the walls would be worse than none.
         paintUnderlays();
-        paintFloors(); paintRoofs(); paintShapes();
+        paintFloors(); paintRoofs(); paintShapes(); paintStructure();
         paintOutlines();
         paintLines(); paintWalls();
         // Fixtures ride ON the walls, so they go after them and before the
