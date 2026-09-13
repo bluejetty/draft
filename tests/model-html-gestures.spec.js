@@ -457,15 +457,39 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // the same, and this check is why they were found: two of them describe
       // the control surface by listing it, and that list is no longer four
       // buttons and two selects.
+      // AND A THIRD TIME, with the bottom instrument strip. Two instruments
+      // (`strip-ruler`, `strip-tsquare`), one text input (the LENGTH box) and
+      // six switch buttons in three pairs. They needed the same reading as
+      // BUNGALOW did, because a RULER looks exactly like a drawing verb:
+      //
+      //   - THE RULER DRAWS NOTHING. It measures between two presses and
+      //     writes no entity; model-html-strip.spec.js holds the wall count
+      //     across a full measurement, which is what makes that a fact.
+      //   - THE T-SQUARE IS A CONSTRAINT ON THE EXISTING draw-wall GESTURE,
+      //     not a second way to make a wall. With it down the page draws the
+      //     same off-square walls it always did.
+      //   - THE LENGTH BOX COMMITS THROUGH draw-wall's own gesture: it is
+      //     dead until a run is in hand, so it cannot start one.
+      //   - TOY/DRAFTING, RUFF/ROUGH and NIGHT/DAY set board and skin state.
+      //     They change what the page LOOKS like and what it remembers, and
+      //     no absence row is about either.
+      //
+      // So every `absent` row below still stands. The list grows; the table
+      // does not change.
       expect(controls,
         'the parity table\'s absences are only as good as this list — if a '
         + 'control appears here that no row mentions, a row is wrong')
         .toEqual({
           buttons: ['left-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
-            'delete-wall', 'draw-wall', 'save', 'take-over'].sort(),
+            'delete-wall', 'draw-wall', 'save', 'take-over',
+            'strip-ruler', 'strip-tsquare',
+            'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY'].sort(),
           selects: ['level-pick', 'view-pick'],
-          inputs: [],
+          // THE LENGTH BOX, and it is named as a type rather than an id
+          // because what this row guards is a FILE INPUT appearing without
+          // anyone noticing — the surface an INSERT UNDERLAY verb would need.
+          inputs: ['text'],
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as

@@ -84,7 +84,7 @@
      corner is actually being dragged -- equal specificity, later rule. */
   #plan.over-corner, #plan.over-wall { cursor:move; }
 
-  #readout { position:fixed; left:12px; bottom:12px; z-index:5;
+  #readout { position:fixed; left:12px; bottom:46px; z-index:5;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px;
     padding:8px 11px; white-space:pre; pointer-events:none;
@@ -94,9 +94,93 @@
     font-variant-numeric:tabular-nums; letter-spacing:0.01em; }
   #readout b { color: var(--accent); font-weight:600; }
 
-  #hint { position:fixed; right:12px; bottom:12px; z-index:5; color: var(--ink-quiet);
+  #hint { position:fixed; right:12px; bottom:calc(var(--strip-h) + 12px); z-index:5; color: var(--ink-quiet);
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; pointer-events:none; }
+
+  /* THE INSTRUMENT STRIP — one bar across the foot of the page, the shape
+     MODEL.dc.html:1963 carries: PROJECT at the left, the drafting instruments
+     holding the centre, the switches at the right.
+
+     A CHIP HAS THREE STATES AND THEY MEAN DIFFERENT THINGS, which is the
+     whole reason the old strip reads as an instrument panel rather than a
+     toolbar. `.lit` is engaged. The base state is an instrument that exists
+     and is down. `.dormant` is an instrument this page has NOT built — drawn
+     at a quarter of the ink, not clickable, and carrying a title that says
+     so. Dormant rather than absent because the old strip's spacing IS the
+     panel: six instruments flanking the cluster is what makes the ruler and
+     the T-square sit dead centre, and a bar that drops them re-centres
+     itself every time one is built.
+
+     It is the one place on this page that says what state the board is in,
+     so the readout and the hint move up to clear it rather than over it. */
+  /* ONE HOME FOR THE STRIP'S HEIGHT. It was 34px here and the hint's 46px
+     was 34 + 12 written out by hand, so the bottom band's size lived in two
+     literals that had to agree and nothing made them. They did not: the
+     sidebars' height was tuned to a hint at bottom:12px, the strip moved it
+     to 46, and the pairwise chrome check went red on `right-rail overlaps
+     hint` -- its sixth catch, and the second one this file has produced from
+     one distance being written down twice. */
+  :root { --strip-h: 34px;
+    /* THE BAND THE SIDEBARS MUST STAY OUT OF: the strip, the 12px gap above
+       it, and the readout that sits in that gap -- two lines of instrument
+       text, about 53px. The readout's height cannot be derived in CSS, so it
+       is one named number here rather than one per sidebar, and the pairwise
+       chrome check is what proves it: when the readout grows a line, that
+       check goes red instead of a sidebar quietly sitting on it. */
+    --bottom-band: calc(var(--strip-h) + 77px); }
+  #strip { position:fixed; left:0; right:0; bottom:0; z-index:6; height:var(--strip-h);
+    display:flex; align-items:center; gap:10px; padding:0 12px;
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    border-top:1px solid var(--edge-panel);
+    font-family: var(--font-ui); font-size:12px; font-weight:600;
+    letter-spacing:0.04em; color: var(--ink-secondary);
+    user-select:none; }
+  #strip a, #strip button { font:inherit; letter-spacing:inherit; }
+  #strip .grow { flex:1; }
+  #strip-project { display:inline-flex; align-items:center; height:20px;
+    padding:0 8px; text-transform:uppercase; text-decoration:none;
+    color: var(--ink-primary); border:1px solid var(--edge-panel);
+    border-radius:4px; flex-shrink:0; }
+  #strip-message { font-size:11px; text-transform:uppercase;
+    color: var(--ink-quiet); white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; max-width:24vw; }
+
+  /* THE CLUSTER IS ABSOLUTELY CENTRED, not laid out between the two ends.
+     Flexed between them it would slide left and right as the message text
+     changes length, and a ruler that moves while you read a number is worse
+     than one an inch off centre. */
+  #strip-center { position:absolute; left:50%; top:0; height:var(--strip-h);
+    transform:translateX(-50%); display:flex; align-items:center; gap:10px;
+    padding:0 8px; }
+  .chip { display:inline-flex; align-items:center; gap:3px; padding:2px 4px;
+    border:1px solid transparent; border-radius:4px; background:none;
+    color: var(--ink-secondary); cursor:pointer; }
+  .chip:hover { border-color: var(--edge-panel); }
+  .chip.lit { color: var(--accent); border-color: var(--accent); }
+  .chip.dormant { color: var(--ink-quiet); opacity:0.35; cursor:default; }
+  .chip.dormant:hover { border-color:transparent; }
+  #strip .num { font-family: var(--font-mono); font-size:12px;
+    font-variant-numeric:tabular-nums; color: var(--ink-primary); }
+  #strip-len { min-width:74px; text-align:right; }
+  #strip-ang { min-width:44px; color: var(--ink-quiet); }
+  #strip-length-box { display:flex; align-items:center; gap:5px;
+    font-size:11px; color: var(--ink-quiet); }
+  #frozen-length { width:96px; text-align:right; padding:3px 6px;
+    font-family: var(--font-mono); font-size:12px;
+    background-color: var(--surface-chip); color: var(--ink-primary);
+    border:1px solid var(--edge-panel); border-radius:4px; outline:none; }
+  #frozen-length:disabled { color: var(--ink-quiet); opacity:0.5; }
+  #frozen-length:focus { border-color: var(--accent); }
+
+  #strip-switches { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  #strip-switches .set { display:flex; align-items:center;
+    border:1px solid var(--edge-panel); border-radius:4px; overflow:hidden; }
+  #strip-switches button { padding:3px 8px; font-size:11px;
+    text-transform:uppercase; cursor:pointer; border:none; background:none;
+    color: var(--ink-quiet); }
+  #strip-switches button[aria-pressed="true"] { color: var(--accent-ink);
+    background-color: var(--accent); }
 
   /* A CHROME-BAR BUTTON NOW, not a fixed corner one -- it sits in the flex row
      with the level and view pickers. */
@@ -260,15 +344,17 @@
        "drag to pan" hint at bottom:12px and the pairwise chrome check caught
        it -- the fifth collision that check has found, and the fifth that was
        invisible until something was measured rather than looked at. The hint
-       is 12px up and 17px tall, so the panel has to end above 100vh - 29.
+       sits above the strip, so the panel has to end above the hint's top.
 
-       AND THE PADDING IS OUTSIDE THIS NUMBER. max-height sizes the CONTENT
-       box, and this aside has padding:10px, so the panel stands 20px taller
-       than whatever is written here. The first attempt used 100vh - 96 and
-       measured 644px tall, not 624 -- bottom at 692 against a hint whose top
-       is 691, overlapping by a single pixel and still red. 116 leaves it
-       ending at 100vh - 48, nineteen clear. */
-    max-height:calc(100vh - 116px); z-index:5; overflow-y:auto;
+       PINNED BY `bottom`, NOT BY max-height, and that is the fix for a fault
+       this cost twice. max-height sizes the CONTENT box, so with padding:10px
+       the panel stood 20px taller than the number asked for -- 644 where 624
+       was written -- and overlapped the hint by a single pixel. Giving the box
+       a top AND a bottom lets the browser do that arithmetic, and deriving the
+       bottom from --strip-h means the strip can move without this going stale
+       again. The collapsed cap below is a max-height still, and being smaller
+       it wins. */
+    bottom:var(--bottom-band); z-index:5; overflow-y:auto;
     overscroll-behavior:contain; padding:10px;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none); }
   aside[hidden] { display:none; }
@@ -556,6 +642,106 @@
   <div id="props-slot" data-props-slot hidden></div>
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
+
+<!-- THE INSTRUMENT STRIP. The icons are MODEL.dc.html:1975-2072's own paths,
+     kept identical so the two pages read as the same board; the colours are
+     not, because that strip is #fbfbfc with #1d1f20 ink baked in and this
+     page has a night skin. Everything here paints in currentColor and takes
+     it from a palette role. -->
+<div id="strip" data-instrument-strip>
+  <a id="strip-project" data-project-corner-bl href="./PROJECT.html">PROJECT</a>
+  <span id="strip-message" data-strip-message></span>
+  <div class="grow"></div>
+
+  <div id="strip-center" data-strip-center>
+    <span class="chip dormant" data-mode-compass title="COMPASS — not built on this page yet">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M8 2 L3.5 13.5 M8 2 L12.5 13.5"></path>
+        <circle cx="8" cy="2.5" r="1.2" stroke-width="0.9"></circle>
+        <path d="M4.5 11 A7 7 0 0 0 11.5 11" stroke-width="0.9"></path>
+      </svg>
+    </span>
+    <span class="chip dormant" data-mode-triangle title="TRIANGLE set square — not built on this page yet">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M2.5 13.5 L13.5 13.5 L2.5 2.5 Z"></path>
+        <path d="M5 11.5 L8.5 11.5 L5 8 Z" stroke-width="0.9"></path>
+      </svg>
+    </span>
+    <span class="chip dormant" data-mode-brush title="DRAFTING BRUSH — not built on this page yet">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M2.5 8.5 Q8 5 13.5 8.5 L13.5 10.5 Q8 7 2.5 10.5 Z"></path>
+        <path d="M4 10.7 V12.6 M6.5 9.6 V11.8 M9.5 9.6 V11.8 M12 10.7 V12.6" stroke-width="0.9"></path>
+      </svg>
+    </span>
+
+    <span id="strip-len" class="num" data-model-len></span>
+    <span id="strip-ang" class="num" data-model-ang></span>
+
+    <button type="button" id="strip-ruler" class="chip" data-mode-ruler
+      title="RULER — measure between two points without drawing anything">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <rect x="1.5" y="6" width="13" height="5"></rect>
+        <path d="M4.5 6 V8.2 M7.5 6 V8.2 M10.5 6 V8.2 M13 6 V8.2" stroke-width="0.9"></path>
+      </svg>
+    </button>
+
+    <span id="strip-length-box">
+      <span>LENGTH</span>
+      <input id="frozen-length" data-frozen-length type="text" disabled
+        placeholder="—" aria-label="Frozen length" autocomplete="off" />
+    </span>
+
+    <button type="button" id="strip-tsquare" class="chip" data-mode-tsquare
+      title="T-SQUARE — holds the wall being drawn square to the sheet">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M1 3 H15"></path>
+        <path d="M8 3 V15"></path>
+        <path d="M8 6.5 H10.5 M8 9.5 H10.5 M8 12.5 H10.5" stroke-width="0.9"></path>
+      </svg>
+    </button>
+
+    <span class="chip" data-mode-protractor title="PROTRACTOR — reads the angle of the run in hand">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M2 12.5 A6 6 0 0 1 14 12.5 Z"></path>
+        <path d="M8 12.5 L11.6 8.3" stroke-width="0.9"></path>
+        <path d="M4.2 9.9 L5.1 10.8 M8 6.5 V7.9 M11.8 9.9 L10.9 10.8" stroke-width="0.9"></path>
+      </svg>
+      <span id="strip-protractor-angle" data-protractor-angle>—</span>
+    </span>
+
+    <span class="chip dormant" data-mode-scale title="SCALE — three-sided architect's rule — not built on this page yet">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M2 11 L8 4 L14 11 Z"></path>
+        <path d="M5.5 11 L8 8 L10.5 11" stroke-width="0.9"></path>
+      </svg>
+    </span>
+    <span class="chip dormant" data-mode-shield title="ERASING SHIELD — not built on this page yet">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <rect x="2.5" y="3.5" width="11" height="9" rx="1"></rect>
+        <circle cx="6" cy="6.5" r="0.9" stroke-width="0.9"></circle>
+        <path d="M9 9.5 H12" stroke-width="0.9"></path>
+        <path d="M9.5 6 L11.5 7.5" stroke-width="0.9"></path>
+      </svg>
+    </span>
+  </div>
+
+  <div class="grow"></div>
+  <div id="strip-switches">
+    <span class="set" data-board-switch>
+      <button type="button" data-board="toy" aria-pressed="false">TOY</button>
+      <button type="button" data-board="drafting" aria-pressed="false">DRAFTING</button>
+    </span>
+    <span class="set" data-theme-switch>
+      <button type="button" data-theme="ruff" aria-pressed="false">RUFF</button>
+      <button type="button" data-theme="rough" aria-pressed="false">ROUGH</button>
+    </span>
+    <span class="set" data-mode-switch>
+      <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
+      <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
+    </span>
+  </div>
+</div>
+
 <div id="notice"><div id="notice-body"></div></div>
 
 <!-- ORDER IS LOAD-BEARING, not tidiness. cut-view.js destructures
@@ -638,9 +824,28 @@
       + `Known: ${allowed.join(', ')}`);
     return fallback;
   };
-  const theme = pick('theme', window.DraftPalette.THEMES, 'ruff');
-  const mode = pick('mode', window.DraftPalette.MODES, 'night');
-  const skin = window.DraftPalette.apply(document, theme, mode);
+  // THE CHOICE OUTLIVES THE TAB, and the query string still wins. A drafter
+  // who picks DAY on the strip gets DAY tomorrow morning; a ?mode= in a URL
+  // someone pasted is a deliberate override for that visit and does not
+  // overwrite what the drafter chose. Stored under one key rather than in the
+  // profile package: the package is office standards, and a skin is not one.
+  const SKIN_KEY = 'draft-skin';
+  const stored = (() => {
+    try { return JSON.parse(localStorage.getItem(SKIN_KEY) || 'null') || {}; }
+    catch { return {}; }
+  })();
+  const storedOr = (name, allowed, fallback) =>
+    (allowed.includes(stored[name]) ? stored[name] : fallback);
+  // `let`, and this is the whole seam the switcher hangs on. Every painter
+  // reads `skin['role']` INSIDE its own function (30 sites, checked), so
+  // re-resolving here and repainting changes the drawing's colours without a
+  // reload -- and a reload is what a switcher must avoid, because this page
+  // holds unsaved edits.
+  let theme = pick('theme', window.DraftPalette.THEMES,
+    storedOr('theme', window.DraftPalette.THEMES, 'ruff'));
+  let mode = pick('mode', window.DraftPalette.MODES,
+    storedOr('mode', window.DraftPalette.MODES, 'night'));
+  let skin = window.DraftPalette.apply(document, theme, mode);
   'use strict';
 
   const BUCKET = 'model-drawing';
@@ -662,6 +867,16 @@
   const leaseBanner = document.getElementById('lease');
   const leaseMessage = leaseBanner && leaseBanner.querySelector('[data-lease-message]');
   const takeOverButton = document.getElementById('take-over');
+
+  // ── the instruments' own state ────────────────────────────────────────────
+  // Declared here rather than beside the strip's wiring because paint() reads
+  // the ruler, and paint() is defined a thousand lines above it. A `let` read
+  // before its declaration is a throw, not an undefined, and the boot paint
+  // would hit it.
+  let tsquareOn = false;    // T-SQUARE down: the run in hand is held square
+  let rulerOn = false;      // RULER down: presses measure instead of drawing
+  let rulerFrom = null;     // the ruler's first press, in world feet
+  let cursorWorld = null;   // where the cursor last was, for the live readouts
 
   // View state in world units (feet). scale is screen pixels per foot.
   // Deliberately plain arithmetic: MODEL.dc.html projects through a three.js
@@ -2027,6 +2242,22 @@
           ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+        // THE RULER'S OWN LINE, dashed so it cannot be mistaken for geometry.
+        // It is the only mark on this canvas that is not in the drawing and
+        // never will be, and the dash is how a drafter knows that without
+        // being told.
+        if (rulerFrom && cursorWorld) {
+          const a = toS(rulerFrom), b = toS(cursorWorld);
+          ctx.save();
+          ctx.strokeStyle = skin['accent'];
+          ctx.setLineDash([5, 4]);
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
           ctx.stroke();
           ctx.restore();
         }
@@ -3803,13 +4034,26 @@
     // reach; it just no longer owns the state.
     drawButton.classList.toggle('armed', next === 'wall');
     canvas.style.cursor = next === RESTING_TOOL ? '' : 'crosshair';
+    // The instrument strip is a third reader of the same fact, added by #398
+    // against the boolean this replaced. It reads the register now like
+    // everything else does.
+    stripRefresh();
     toolListeners.forEach(fn => fn(next));
   };
 
   // A drawn endpoint snaps to an existing corner exactly as a dragged one
   // does, and for the same reason: landing ON a corner is what makes the join
   // mitre. Nothing is moving during a draw, so nothing is excluded.
-  const drawPoint = at => cornerSnap(at, []) || { x: at.x, y: 0, z: at.z };
+  //
+  // THE T-SQUARE GOES FIRST AND THE CORNER SNAP MAY STILL OVERRIDE IT, but
+  // only along the axis it is already on (squareTo's second half). A snap
+  // that pulled the run off square would make the instrument a suggestion,
+  // and an instrument a drafter cannot trust is worse than no instrument --
+  // this is the same wall the old page holds when its T-square is down.
+  const drawPoint = at => {
+    const wanted = squareTo(drawStart, at);
+    return cornerSnap(wanted, []) || { x: wanted.x, y: 0, z: wanted.z };
+  };
 
   const drawPress = at => {
     if (!drawStart) { drawStart = drawPoint(at); paint(); return; }
@@ -3824,9 +4068,206 @@
     // the start, so the corner is shared by identity.
     drawStart = wall.end;
     selectedSeg = wall;
+    stripRefresh();
     paint();
   };
 
+  // ── the instrument strip ──────────────────────────────────────────────────
+  // MODEL.dc.html:1963's bottom panel, rebuilt on this page's terms. Movie,
+  // 13 Sep: "we also still need the bottom bar which should look like lights
+  // for [an] instrument panel like on the Model.dc.html version. the length
+  // T-square, ruler and other stuff are down there we need. and the skin
+  // switcher can be there too."
+  //
+  // FOUR INSTRUMENTS ARE REAL AND SIX ARE DORMANT, and the strip says which
+  // is which rather than offering ten buttons where four work. The dormant
+  // six hold their seats (see the stylesheet's note on spacing) with a title
+  // that names them as unbuilt -- the same refusal as the panel's disabled 3D
+  // chair, which is the house rule: a control that lies about what the page
+  // can do is worse than a gap.
+  const strip = document.getElementById('strip');
+  const stripMessage = document.getElementById('strip-message');
+  const lenOut = document.getElementById('strip-len');
+  const angOut = document.getElementById('strip-ang');
+  const protractorOut = document.getElementById('strip-protractor-angle');
+  const rulerChip = strip.querySelector('[data-mode-ruler]');
+  const tsquareChip = strip.querySelector('[data-mode-tsquare]');
+  const lengthBox = document.getElementById('frozen-length');
+
+  const F = window.DraftFormatters;
+  const feetLabel = ft => F.formatArchitecturalInches(ft * 12);
+  // Compass bearing off the +X axis, the reading a protractor gives: 0-180
+  // either way rather than 0-360, because a wall drawn left has the same
+  // angle as the same wall drawn right and a drafter reading 183° would
+  // reasonably think it was out of square.
+  const angleLabel = (from, to) => {
+    const deg = Math.atan2(-(to.z - from.z), to.x - from.x) * 180 / Math.PI;
+    const folded = deg <= -90 ? deg + 180 : (deg > 90 ? deg - 180 : deg);
+    return `${folded.toFixed(1)}°`;
+  };
+
+  // WHAT THE T-SQUARE ACTUALLY DOES. The longer leg wins, so the run follows
+  // the direction the hand is already going rather than jumping axes under
+  // the cursor.
+  const squareTo = (from, at) => {
+    if (!tsquareOn || !from) return at;
+    return Math.abs(at.x - from.x) >= Math.abs(at.z - from.z)
+      ? { x: at.x, z: from.z } : { x: from.x, z: at.z };
+  };
+
+  // The run the instruments are reading: the wall being drawn if there is
+  // one, otherwise the ruler's measure. Null when the drafter is doing
+  // neither, and the readouts go blank rather than holding a stale number --
+  // a length that stays on screen after the gesture ends is the one thing a
+  // drafter should never be able to misread.
+  const runInHand = () => {
+    if (!cursorWorld) return null;
+    if (drawStart && activeTool === 'wall') return { from: drawStart, to: squareTo(drawStart, cursorWorld) };
+    if (rulerFrom) return { from: rulerFrom, to: cursorWorld };
+    return null;
+  };
+
+  // FOUR READS OF `drawArmed` BECAME READS OF THE REGISTER. #398 wrote this
+  // strip against the armed boolean; the tool register replaced that boolean
+  // with a tool id, and the merge that brought the two together was clean --
+  // the strip and the column live in different parts of the file. The same
+  // shape as deleteLevel's `setArmed(false)` earlier today, from the other
+  // side: git has nothing to say when one branch deletes a name another branch
+  // starts using.
+  function stripRefresh() {
+    const run = runInHand();
+    const dist = run ? Math.hypot(run.to.x - run.from.x, run.to.z - run.from.z) : null;
+    lenOut.textContent = dist === null ? '' : feetLabel(dist);
+    angOut.textContent = run ? angleLabel(run.from, run.to) : '';
+    protractorOut.textContent = run ? angleLabel(run.from, run.to) : '—';
+    rulerChip.classList.toggle('lit', rulerOn);
+    tsquareChip.classList.toggle('lit', tsquareOn);
+    // THE LENGTH BOX IS LIVE ONLY WHILE A WALL IS IN HAND, because that is
+    // the only moment a typed length has an anchor and a direction to be
+    // measured along. Enabled at any other time it would take a number and
+    // have nowhere to put it.
+    const typable = !!(activeTool === 'wall' && drawStart && cursorWorld);
+    if (lengthBox.disabled === typable) {
+      lengthBox.disabled = !typable;
+      if (!typable) lengthBox.value = '';
+    }
+    // While the drafter is typing, the box is his; the live length would
+    // overwrite the digits mid-word.
+    if (typable && document.activeElement !== lengthBox) {
+      lengthBox.value = dist === null ? '' : feetLabel(dist);
+    }
+    stripMessage.textContent = rulerOn
+      ? (rulerFrom ? 'ruler — second point' : 'ruler — first point')
+      : (activeTool === 'wall' ? (drawStart ? 'wall — second point' : 'wall — first point') : '');
+  }
+
+  const rulerPress = at => {
+    if (!rulerFrom) { rulerFrom = { x: at.x, z: at.z }; }
+    else { rulerFrom = null; }
+    cursorWorld = at;
+    stripRefresh();
+    paint();
+  };
+
+  rulerChip.addEventListener('click', () => {
+    rulerOn = !rulerOn;
+    rulerFrom = null;
+    canvas.style.cursor = rulerOn ? 'crosshair' : (activeTool === 'wall' ? 'crosshair' : '');
+    stripRefresh();
+    paint();
+  });
+  tsquareChip.addEventListener('click', () => {
+    tsquareOn = !tsquareOn;
+    stripRefresh();
+    paint();
+  });
+
+  // TYPING A LENGTH COMMITS THE WALL, which is the instrument's whole point:
+  // a drafter who knows the wall is 12'-6" should not have to find 12'-6"
+  // with a mouse. The DIRECTION is the one the cursor is already giving --
+  // squared first if the T-square is down -- so the typed number replaces the
+  // distance and nothing else.
+  const commitTypedLength = () => {
+    const parsed = F.parseArchitecturalLength(lengthBox.value);
+    if (!parsed.ok) { stripMessage.textContent = parsed.error; return; }
+    const feet = parsed.inches / 12;
+    if (!(feet > 0) || !drawStart || !cursorWorld) return;
+    const aim = squareTo(drawStart, cursorWorld);
+    const dx = aim.x - drawStart.x, dz = aim.z - drawStart.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) { stripMessage.textContent = 'point away from the start first'; return; }
+    const end = { x: drawStart.x + dx / len * feet, y: 0, z: drawStart.z + dz / len * feet };
+    const wall = commitWall(drawStart, end);
+    drawStart = wall.end;
+    selectedSeg = wall;
+    lengthBox.blur();
+    stripRefresh();
+    paint();
+  };
+  lengthBox.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commitTypedLength(); }
+    if (e.key === 'Escape') { e.preventDefault(); lengthBox.blur(); stripRefresh(); }
+    // The page's own keys (0 to fit, Escape, Delete) must not fire while a
+    // length is being typed -- a drafter typing 10' would otherwise refit the
+    // view under his hands.
+    e.stopPropagation();
+  });
+
+  // ── the switches ──────────────────────────────────────────────────────────
+  // SKIN WITHOUT A RELOAD. Every painter reads its colours from `skin` inside
+  // its own body, so re-resolving the palette and repainting is the whole
+  // change -- and it has to be, because this page can be holding an unsaved
+  // edit and a reload would be asked to throw it away to change a colour.
+  const themeButtons = [...strip.querySelectorAll('[data-theme]')];
+  const modeButtons = [...strip.querySelectorAll('[data-skin-mode]')];
+  const boardButtons = [...strip.querySelectorAll('[data-board]')];
+
+  const markSwitch = (buttons, attr, value) =>
+    buttons.forEach(b => b.setAttribute('aria-pressed', String(b.dataset[attr] === value)));
+
+  const applySkin = () => {
+    skin = window.DraftPalette.apply(document, theme, mode);
+    markSwitch(themeButtons, 'theme', theme);
+    markSwitch(modeButtons, 'skinMode', mode);
+    try { localStorage.setItem(SKIN_KEY, JSON.stringify({ theme, mode })); }
+    catch { /* a private window refusing storage is not a reason to refuse the skin */ }
+    paint();
+  };
+  themeButtons.forEach(b => b.addEventListener('click', () => { theme = b.dataset.theme; applySkin(); }));
+  modeButtons.forEach(b => b.addEventListener('click', () => { mode = b.dataset.skinMode; applySkin(); }));
+
+  // THE BOARD SWITCH IS A SWITCH AND NOTHING IS WIRED BEHIND IT YET, and that
+  // is said out loud rather than implied. Movie, 13 Sep, asked for it on the
+  // PC strip; the sentence defining what TOY MODE restricts was cut off
+  // mid-word and has not arrived, so what exists is the choice, remembered
+  // across reloads and readable by whoever builds the constraints -- not a
+  // claim that they exist. The title on each button says so; when the rules
+  // land they read `body[data-board]` and nothing here moves.
+  const BOARDS = ['toy', 'drafting'];
+  let board = BOARDS.includes(stored.board) ? stored.board : 'toy';
+  const applyBoard = () => {
+    document.body.setAttribute('data-board', board);
+    markSwitch(boardButtons, 'board', board);
+    try {
+      const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
+      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, board }));
+    } catch { /* as above */ }
+  };
+  boardButtons.forEach(b => {
+    b.title = 'Board mode — remembered, but nothing is constrained by it yet';
+    b.addEventListener('click', () => { board = b.dataset.board; applyBoard(); });
+  });
+
+  markSwitch(themeButtons, 'theme', theme);
+  markSwitch(modeButtons, 'skinMode', mode);
+  applyBoard();
+  stripRefresh();
+
+  // ONE LISTENER, THE REGISTER'S. #398 wrote this against the armed
+  // boolean (`setArmed(!drawArmed)`); the register replaced that, and the
+  // merge offered both because the strip and the tool column were added at
+  // the same point in the file. Keeping both listeners would have given the
+  // button two handlers that disagree about what armed means.
   drawButton.addEventListener('click',
     () => setTool(activeTool === 'wall' ? RESTING_TOOL : 'wall'));
 
@@ -3893,8 +4334,7 @@
     });
   });
 
-  buildToolColumn();
-  deleteButton.addEventListener('click', () => {
+  buildToolColumn();  deleteButton.addEventListener('click', () => {
     if (!selectedSeg) return;
     deleteWall(selectedSeg);
     paint();
@@ -3909,6 +4349,12 @@
   canvas.addEventListener('pointerdown', e => {
     const rect = canvas.getBoundingClientRect();
     const at = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+    // THE RULER TAKES THE PRESS BEFORE ANYTHING ELSE, because it is the one
+    // instrument that must be usable ON TOP of whatever is being drawn: a
+    // drafter measures between two corners of a wall he is halfway through
+    // placing. It writes nothing to the drawing -- two presses and a number
+    // on the strip -- so taking the press costs him no geometry.
+    if (rulerOn) { rulerPress(at); return; }
     // ARMED TAKES THE PRESS WHOLE, before the corner/body hit test and before
     // panning. Otherwise the first tap of a wall that starts on an existing
     // corner would be read as grabbing that corner, and the drafter would drag
@@ -3978,6 +4424,11 @@
       // a selected wall, whose grab zone has no marks on it at all.
       const rect = canvas.getBoundingClientRect();
       const at = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+      // The instruments read the cursor, which is what makes them
+      // instruments: length and angle are live while the run is in hand and
+      // blank when it is not, exactly as the old strip behaves.
+      cursorWorld = at;
+      stripRefresh();
       const corner = cornerAt(at);
       canvas.classList.toggle('over-corner', !!corner);
       canvas.classList.toggle('over-wall', !corner && !!wallBodyAt(at));
@@ -4055,6 +4506,10 @@
     if (e.key === 'Escape') {
       drawStart = null;
       selectedSeg = null;
+      // A half-taken measure is an in-progress gesture like any other, so it
+      // goes down with them. The ruler itself stays up, the way the tool does.
+      rulerFrom = null;
+      stripRefresh();
       paint();
       return;
     }
