@@ -156,28 +156,41 @@ test('NOT FIXED is a different assembly, not the same one with a flag off',
     expect(groups[0].name).toBe('ASSEMBLY 1');
   });
 
-test('clicking one member takes the whole assembly', async ({ page }) => {
-  await open(page);
-  await pickTwoWalls(page);
-  await assemble(page, { name: 'pair', fixed: true });
-  expect(await selCount(page), 'the new assembly is what is selected').toBe(2);
+test('clicking one member takes THAT member — the assembly is not expanded',
+  async ({ page }) => {
+    // A DELIBERATE DIVERGENCE FROM THE OLD PAGE, left open rather than decided
+    // in this PR. Its _addItemsAndTheirGroups pulls a hit item's group in with
+    // it, and that shipped here first — then broke ten checks in
+    // model-html-draw-delete.spec.js, whose fixture groups w-a with w-b. A tap
+    // meant to select ONE wall selected two, the DELETE button (which means
+    // "exactly one wall") went dark, and "delete this wall" had quietly become
+    // "delete this assembly".
+    //
+    // That is a product decision — a drafter who groups two walls and presses
+    // Delete on one may or may not mean both — and this order says only that
+    // ASSEMBLY groups and UNGROUP releases. Nothing in it needs the expansion:
+    // selectedGroups() counts a group as selected when ANY member is, which is
+    // the old page's own test, so UNGROUP still works from a click on one wall
+    // (asserted below). Established behaviour wins while the question is open.
+    await open(page);
+    await pickTwoWalls(page);
+    await assemble(page, { name: 'pair', fixed: true });
+    expect(await selCount(page), 'the new assembly is what is selected').toBe(2);
 
-  // Put it down, then pick up ONE of its walls.
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(60);
-  expect(await selCount(page)).toBe(0);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(60);
+    expect(await selCount(page)).toBe(0);
 
-  await page.mouse.click(...await at(page, 0, -W));
-  await page.waitForTimeout(80);
-  expect(await selCount(page),
-    'one wall clicked, both walls selected').toBe(2);
+    // ONE wall of the assembly, and one is what is selected.
+    await page.mouse.click(...await at(page, 0, -W));
+    await page.waitForTimeout(80);
+    expect(await selCount(page),
+      'the assembly is not pulled in behind the wall that was clicked').toBe(1);
 
-  // And a wall outside it is still just itself, or "always selects two" would
-  // satisfy the assertion above.
-  await page.mouse.click(...await at(page, 0, W));
-  await page.waitForTimeout(80);
-  expect(await selCount(page)).toBe(1);
-});
+    // And the DELETE button still means what it meant — the reading that broke
+    // when the expansion was in.
+    await expect(page.locator('[data-delete-wall]')).toBeVisible();
+  });
 
 test('UNGROUP appears only for an assembly, and releases it without deleting',
   async ({ page }) => {
@@ -218,16 +231,16 @@ test('an item belongs to one assembly, and an emptied one goes',
     await assemble(page, { name: 'first', fixed: true });
     expect(await savedGroups(page)).toHaveLength(1);
 
-    // Take ONE of those two walls into a new assembly with a third.
+    // Both of those walls plus a third, built click by click -- a click takes
+    // the wall it hit and no more, so the set is assembled by shift-adding.
     await page.keyboard.press('Escape');
     await page.waitForTimeout(60);
-    // Clicking a member takes the whole first assembly, so build the new set
-    // by shift-removing the member we do not want.
-    await page.mouse.click(...await at(page, 0, -W));
+    await page.mouse.click(...await at(page, 0, -W));   // w-n, in the first
     await page.waitForTimeout(60);
-    expect(await selCount(page)).toBe(2);
     await page.keyboard.down('Shift');
-    await page.mouse.click(...await at(page, 0, W));   // add the south wall
+    await page.mouse.click(...await at(page, W, 0));    // w-e, in the first
+    await page.waitForTimeout(60);
+    await page.mouse.click(...await at(page, 0, W));    // w-s, in nothing yet
     await page.waitForTimeout(60);
     await page.keyboard.up('Shift');
     expect(await selCount(page)).toBe(3);

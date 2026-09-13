@@ -3658,18 +3658,26 @@
     .some(m => selection.some(entry =>
       entry.type === m.type && String(entry.item?.id) === String(m.id))));
 
-  // CLICKING A MEMBER TAKES THE WHOLE ASSEMBLY. An assembly whose parts can be
-  // picked one at a time is not an assembly; the old page pulls a hit item's
-  // group in with it (_addItemsAndTheirGroups) and this is that, over the
-  // types this page can select.
-  const withGroup = entry => {
-    const group = entry && groupOf(entry);
-    if (!group) return entry ? [entry] : [];
-    const members = itemsOfGroup(group);
-    // The hit itself first, so a one-wall reading (selectedWall) still points
-    // at what the drafter actually pressed when the group holds only it.
-    return members.length ? members : [entry];
-  };
+  // CLICKING A MEMBER TAKES THAT MEMBER, NOT THE WHOLE ASSEMBLY -- and this is
+  // a deliberate divergence from the old page, left open rather than decided
+  // here.
+  //
+  // The old page pulls a hit item's group in with it
+  // (_addItemsAndTheirGroups), and that shipped here first. It broke ten
+  // checks in tests/model-html-draw-delete.spec.js, whose fixture groups w-a
+  // with w-b: a tap meant to select ONE wall selected two, the DELETE button
+  // (which means "exactly one wall") went dark, and "delete this wall" had
+  // quietly become "delete this assembly". That last one is a product
+  // decision -- a drafter who groups two walls and presses Delete on one may
+  // or may not mean both -- and it is not mine to make inside a PR whose
+  // order says only that ASSEMBLY groups and UNGROUP releases.
+  //
+  // NOTHING IN THE ACCEPTANCE NEEDS THE EXPANSION. selectedGroups() counts a
+  // group as selected when ANY member is, which is the old page's own test, so
+  // UNGROUP still releases an assembly from a click on one of its walls. The
+  // expansion was parity I reached for, not a requirement, and the established
+  // behaviour wins while the question is open.
+  const withGroup = entry => (entry ? [entry] : []);
 
   // Returns { type, item } or null, in the old page's precedence.
   const hitAt = worldPt => {
@@ -4624,9 +4632,9 @@
       if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
       if (band.active) {
         const raw = enclosedBy(band.from, band.to);
-        // A box that catches one wall of an assembly catches the assembly, as
-        // a click on it does. Deduped by item, because several caught members
-        // pull in the same group.
+        // Deduped by item. withGroup is the identity today (see its note), so
+        // this is a straight copy -- kept as the shape it will need if the
+        // whole-assembly question above is ever answered yes.
         const caught = [];
         raw.forEach(entry => withGroup(entry).forEach(w => {
           if (!caught.some(c => c.item === w.item)) caught.push(w);
@@ -4682,9 +4690,6 @@
           const at = selection.findIndex(entry => entry.item === hit.item);
           const whole = withGroup(hit);
           setSelection(at >= 0
-            // Removing a member removes its whole assembly, for the same
-            // reason adding one adds it: half an assembly is not a state a
-            // drafter asked for.
             ? selection.filter(entry => !whole.some(w => w.item === entry.item))
             : selection.concat(whole.filter(w =>
               !selection.some(entry => entry.item === w.item))));
