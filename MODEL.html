@@ -610,6 +610,29 @@
 
   /* The empty and error states say what to do, because a black screen with
      nothing on it is indistinguishable from a page that failed to boot. */
+  /* The promotion confirm sits above everything, including the notice, because
+     it is the one thing a drafter must answer before the page does what they
+     asked. [hidden] is spelled out: the author display below would otherwise
+     beat the UA rule, which is the bug the UNGROUP button had. */
+  #promote { position:fixed; inset:0; z-index:7; display:flex;
+    align-items:center; justify-content:center; padding:24px;
+    background:rgba(0,0,0,0.35); }
+  #promote[hidden] { display:none; }
+  .promote-card { max-width:26em; padding:16px 18px; border-radius:4px;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel);
+    background-image: var(--surface-panel-tex, none); }
+  .promote-card p { margin:0 0 12px; font-family: var(--font-ui);
+    font-size:13px; line-height:1.4; color: var(--ink-primary); }
+  .promote-row { display:flex; gap:8px; }
+  .promote-row button { flex:1; padding:7px 10px; cursor:pointer;
+    border-radius:3px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip);
+    background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); font-family: var(--font-ui); font-size:11px;
+    font-weight:600; letter-spacing:0.04em; }
+  .promote-row button:hover { border-color: var(--accent); color: var(--accent); }
+  [data-promote-go] { border-color: var(--accent); color: var(--accent); }
   #notice { position:fixed; inset:0; z-index:6; display:none;
     align-items:center; justify-content:center; padding:24px; text-align:center; }
   #notice.show { display:flex; }
@@ -792,6 +815,20 @@
 </div>
 
 <div id="notice"><div id="notice-body"></div></div>
+<!-- THE PROMOTION CONFIRM. Its own element rather than a window.confirm,
+     because §7 names the two answers -- Continue, Stay in TOY -- and OK/Cancel
+     does not say which one keeps the drawing where it is. deleteLevel uses
+     window.confirm and is right to: "delete this level" needs no vocabulary of
+     its own. This one does. -->
+<div id="promote" data-promote hidden>
+  <div class="promote-card">
+    <p data-promote-text>Entering an exact length switches this drawing to DRAFTING.</p>
+    <div class="promote-row">
+      <button type="button" data-promote-go>Continue</button>
+      <button type="button" data-promote-stay>Stay in TOY</button>
+    </div>
+  </div>
+</div>
 
 <!-- ORDER IS LOAD-BEARING, not tidiness. cut-view.js destructures
      window.DraftWallTypes and window.DraftFormatters at MODULE SCOPE
@@ -4563,11 +4600,63 @@
   // with a mouse. The DIRECTION is the one the cursor is already giving --
   // squared first if the T-square is down -- so the typed number replaces the
   // distance and nothing else.
+  // ── the promotion, and the question that comes first ──────────────────────
+  // §7: "Entering an exact length anywhere promotes the drawing to DRAFTING",
+  // and the drafter is ASKED BEFORE it happens, not told after. Movie ruled
+  // this against a typed-length exception inside TOY, and his version is
+  // better for the reason he gave: TOY then has one law with no exceptions,
+  // and the promotion is visible instead of a hidden mode flip.
+  //
+  // WHAT "ASKS ONCE PER DRAWING" MEANS, and this is a reading of the order
+  // rather than a quotation from it. §7 says the confirm "asks once per
+  // drawing, then remembers", and separately that Stay in TOY "commits nothing
+  // and changes nothing -- no wall, no mode change, no half-application".
+  // Those two pull opposite ways on whether a Stay counts as an answer, so:
+  //
+  //   Continue  sets boardPromptSeen, promotes, and commits the length.
+  //   Stay      changes NOTHING, the flag included -- so the next typed length
+  //             asks again.
+  //
+  // The annoyance §7 names is "a dialog people learn to click through without
+  // reading", and that is the drafter who keeps saying Continue; once they
+  // have, they are never asked again. A drafter who keeps saying Stay keeps
+  // being asked because they keep trying to do the thing TOY does not allow,
+  // and the alternative -- silently promoting them later on the strength of a
+  // refusal -- is worse. FLAGGED for Movie rather than settled by me.
+  const promote = document.getElementById('promote');
+  let pendingPromotion = null;
+
+  const askToPromote = onContinue => {
+    pendingPromotion = onContinue;
+    promote.hidden = false;
+    promote.querySelector('[data-promote-go]').focus();
+  };
+  const closePromote = () => { pendingPromotion = null; promote.hidden = true; };
+
+  promote.querySelector('[data-promote-go]').addEventListener('click', () => {
+    const go = pendingPromotion;
+    closePromote();
+    if (drawing) { drawing.boardPromptSeen = true; markDirty(); }
+    setBoard('drafting');
+    if (go) go();
+  });
+  // NOTHING AT ALL, which is the whole of Stay's contract. No wall, no board,
+  // no flag: a refusal that recorded itself would be a change.
+  promote.querySelector('[data-promote-stay]').addEventListener('click', closePromote);
+
   const commitTypedLength = () => {
     const parsed = F.parseArchitecturalLength(lengthBox.value);
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return; }
     const feet = parsed.inches / 12;
     if (!(feet > 0) || !drawStart || !cursorWorld) return;
+    // ASKED BEFORE ANYTHING HAPPENS. The length is re-read inside the
+    // continuation rather than captured here, so what commits is what the box
+    // says when the drafter answers -- and if the gesture has moved on, the
+    // guards above run again on the way through.
+    if (board === 'toy' && !drawing?.boardPromptSeen) {
+      askToPromote(() => commitTypedLength());
+      return;
+    }
     const aim = squareTo(drawStart, cursorWorld);
     const dx = aim.x - drawStart.x, dz = aim.z - drawStart.z;
     const len = Math.hypot(dx, dz);
