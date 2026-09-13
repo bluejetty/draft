@@ -229,6 +229,13 @@ test.describe('MODEL.html tier 1', () => {
     // that stops the viewer disagreeing with the drafter is the same trade
     // profile-manager.js won above.
     //
+    // build-menu.js joined for the top bar, and it is the cheapest entry on
+    // this list: no code runs from it, it is the house types the build bar
+    // offers, declared as data. It is here rather than inline because the
+    // same list is MODEL.dc.html's, and a second copy is how the level lookup
+    // came to have four homes. A dependency that DELETES a duplicate is the
+    // one kind this list should grow by.
+    //
     // Keep it exact rather than loosening it to a `toContain`. It caught the
     // palette being added the same hour it was added, and it caught these two
     // the same hour as well, which is what an exact list is for: the
@@ -239,7 +246,7 @@ test.describe('MODEL.html tier 1', () => {
       './shared-file-store.js', './wall-types.js', './formatters.js',
       './cut-view.js', './drawing-format.js', './render-2d.js',
       './fixture-geometry.js', './closets.js',
-      './cut-marks.js', './profile-manager.js',
+      './cut-marks.js', './build-menu.js', './profile-manager.js',
       './level-assembly.js', './stair-geometry.js',
     ]);
   });
