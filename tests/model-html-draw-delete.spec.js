@@ -105,11 +105,20 @@ const tapAt = async (page, x, z) => {
   const hit = await page.evaluate(({ px, py }) => {
     const el = document.elementFromPoint(px, py);
     if (!el) return 'nothing';
-    if (el.id) return `${el.tagName.toLowerCase()}#${el.id}`;
     // A seat's screen is a bare <canvas> with no id of its own, which reads as
     // "the tap reached canvas, not the canvas". Name the seat instead.
     const seat = el.closest('[data-seat]');
     if (seat) return `the ${seat.dataset.seat} seat on the view rail`;
+    // THE SHELL'S PANELS, for the same reason. A click eaten by a sidebar is
+    // the same failure as one eaten by a seat, and the drafter's whole
+    // complaint about chrome is that it takes the sheet -- so when it takes a
+    // tap, the panel that took it gets named.
+    if (el.closest('#left-rail')) return 'the left sidebar';
+    if (el.closest('#right-rail')) return 'the right sidebar';
+    if (el.id === 'left-tab' || el.id === 'right-tab') {
+      return `the ${el.id === 'left-tab' ? 'left' : 'right'} sidebar's tab`;
+    }
+    if (el.id) return `${el.tagName.toLowerCase()}#${el.id}`;
     return el.tagName.toLowerCase();
   }, { px: box.x + cx, py: box.y + cy });
   expect(hit,
