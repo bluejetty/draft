@@ -113,24 +113,49 @@ test('both sidebars start shut, and shut costs less sheet than the overlay did',
       .toBeLessThan(6);
   });
 
-test('the collapsed right panel still seats all six views', async ({ page }) => {
-  await openShell(page);
+test('the collapsed right panel keeps the whole chart, six of it in sight',
+  async ({ page }) => {
+    await openShell(page);
 
-  // THE POINT OF THE RULING. MODEL.dc.html keeps a column of its rail visible
-  // under an open panel so every view stays one tap away; a panel that shut to
-  // zero would have taken that away. Collapsed here is a width, not an absence.
-  await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
-  await expect(page.locator('.seat')).toHaveCount(6);
-  for (const seat of ['E1', 'E2', 'E3', 'E4', 'S1', 'S2']) {
-    await expect(page.locator(`.seat[data-seat="${seat}"]`)).toBeVisible();
-  }
+    // THE RULING SURVIVED THE CHART GROWING, but its shape changed and the
+    // measurement is why. Collapsed used to show all six seats at 4.5%. The
+    // derived chart seats FOURTEEN, and at fourteen there is no arrangement
+    // that stays cheap -- 3 columns 13.2%, 4 columns 14.3%, 5 columns 14.5%,
+    // 6 columns 19.9%, every one worse than the full-height version rejected
+    // in #389 for being worse than the overlay it replaced.
+    //
+    // So collapsed is capped at two rows and scrolls, which is what
+    // MODEL.dc.html does with its own rail: 4.3% of the drawing, better than
+    // the 5.4% this shell shipped at, with more than twice the seats. Six are
+    // in sight -- the whole rail as it stood before -- and the rest are one
+    // scroll, not one more click.
+    await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
+    await expect(page.locator('.seat')).toHaveCount(14);
+    const panel = await page.locator('#right-rail').boundingBox();
+    expect(panel.height, 'the collapsed strip grew past its cap — re-measure the sheet')
+      .toBeLessThan(180);
 
-  // And a seat still works from the collapsed strip — visible is not the same
-  // as reachable, and the claim is that no view is ever more than a tap away.
-  await page.locator('.seat[data-seat="S1"]').click();
-  await page.waitForTimeout(200);
-  expect(page.url()).toContain('view=cut%3AS1');
-});
+    // THE FIRST SIX ARE IN SIGHT, and "in sight" is asked of the panel's own
+    // scroll box rather than of visibility: a seat scrolled out of a
+    // clipping panel still reports visible to a CSS check.
+    const inSight = await page.evaluate(() => {
+      const box = document.getElementById('right-rail').getBoundingClientRect();
+      return [...document.querySelectorAll('.seat')]
+        .filter(el => el.getBoundingClientRect().bottom <= box.bottom + 1)
+        .map(el => el.dataset.seat);
+    });
+    expect(inSight.length,
+      'collapsed must show at least the six seats the rail used to hold')
+      .toBeGreaterThanOrEqual(6);
+    expect(inSight[0]).toBe('E1');
+
+    // And a seat still works from the collapsed strip — visible is not the
+    // same as reachable, and the claim is that no view is ever more than a
+    // tap away.
+    await page.locator('.seat[data-seat="E1"]').click();
+    await page.waitForTimeout(200);
+    expect(page.url()).toContain('view=cut%3AE1');
+  });
 
 test('the properties slot belongs to the open panel, not the strip', async ({ page }) => {
   await openShell(page);

@@ -360,18 +360,33 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // asserted against the module in model-html-levels.spec.js, which is a
       // stronger claim than naming them here.
       const controls = await page.evaluate(() => {
+        // THREE SURFACES ARE PARTITIONED OUT, all for one reason: each is
+        // DERIVED, so naming its contents here would guard the fixture instead
+        // of the control surface, and each is asserted exhaustively somewhere
+        // stronger.
+        //
+        //   the LEVELS / LAYERS panel  -- rows from drawing.levels and
+        //     layerViewsForLevelId; asserted in model-html-levels.spec.js
+        //   the VIEW RAIL             -- the seating chart is derived now
+        //     (four elevations, ROOF | SITE, a pair per level with layer
+        //     views, then the sections); asserted against the old page's own
+        //     chart in model-html-seats.spec.js
+        //   the TOOL COLUMN           -- seventeen keys from tool-roster.js
+        //     with the letters resolved through SETTINGS; asserted against
+        //     the roster itself in model-tool-column.spec.js
+        //
+        // KEPT AS THREE PREDICATES rather than one widened `inPanel`, because
+        // panelKinds below counts what the PANEL may hold and folding the rail
+        // into that word would quietly change what it asserts.
+        //
+        // What this list is for is the part that must not grow without anyone
+        // noticing, so the column is counted BY KIND: a context menu host or a
+        // file input smuggled into the slot arrives as 'BUTTON' or 'INPUT' and
+        // fails.
         const inPanel = el => el.closest('#levels-panel') !== null;
-        // THE TOOL COLUMN IS PARTITIONED OUT FOR THE PANEL'S OWN REASON, and
-        // it is a change in shape rather than a loosening. Its keys are
-        // DERIVED from tool-roster.js -- seventeen of them, with the letters
-        // resolved through SETTINGS -- so naming them here would duplicate
-        // what model-tool-column.spec.js already asserts against the roster
-        // itself, which is the stronger claim. What this list is for is the
-        // part that must not grow without anyone noticing, so the column is
-        // counted BY KIND below: a context menu host or a file input smuggled
-        // into the slot arrives as 'BUTTON' or 'INPUT' and fails.
+        const inRail = el => el.closest('#view-rail') !== null;
         const inTools = el => el.closest('#tool-slot') !== null;
-        const outside = el => !inPanel(el) && !inTools(el);
+        const outside = el => !inPanel(el) && !inRail(el) && !inTools(el);
         const toolKind = el => (el.dataset.toolKey !== undefined ? 'tool-key'
           : el.dataset.selMode !== undefined ? 'sel-mode'
             : el.dataset.selFilter !== undefined ? 'sel-filter'
@@ -394,6 +409,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // AND THE PANEL, counted rather than named: every control inside it
           // must be one of the four kinds it is allowed to hold. A context
           // menu host or a file input smuggled in there would fail this.
+          // Every control in the rail is a seat, or this fails naming the tag.
+          railKinds: [...new Set([...document.querySelectorAll('#view-rail *')]
+            .filter(el => el.tagName === 'BUTTON' || el.tagName === 'INPUT'
+              || el.tagName === 'SELECT')
+            .map(el => (el.classList.contains('seat') ? 'seat' : el.tagName)))].sort(),
           panelKinds: [...new Set([...document.querySelectorAll('#levels-panel *')]
             .filter(el => el.tagName === 'BUTTON' || el.tagName === 'INPUT'
               || el.tagName === 'SELECT')
@@ -448,12 +468,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         'the parity table\'s absences are only as good as this list — if a '
         + 'control appears here that no row mentions, a row is wrong')
         .toEqual({
-          buttons: ['E1 · FRONT', 'E2 · LEFT', 'E3 · BACK', 'E4 · RIGHT', 'S1', 'S2',
-            'left-tab', 'right-tab',
+          buttons: ['left-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
             'delete-wall', 'draw-wall', 'save', 'take-over'].sort(),
           selects: ['level-pick', 'view-pick'],
           inputs: [],
+          railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as
           // 'BUTTON' or 'INPUT' and fail.
