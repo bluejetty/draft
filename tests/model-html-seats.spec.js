@@ -83,6 +83,13 @@ async function drawWall(page, x1, z1, x2, z2) {
   await page.waitForTimeout(50);
   await page.mouse.click(...at(x2, z2));
   await page.waitForTimeout(80);
+  // DISARM. The button TOGGLES and the tool stays armed after a wall commits,
+  // so a second call would arm-off and its two taps would select rather than
+  // draw. Left out, every edit after the first silently committed nothing --
+  // and an edit that commits nothing repaints nothing, which reads exactly
+  // like an edit that was free.
+  await page.locator('[data-draw-wall]').click();
+  await page.waitForTimeout(40);
 }
 
 test('the rail seats all six, in the old page\'s pairing', async ({ page }) => {
@@ -187,47 +194,85 @@ test('the thumbnails repaint on an edit and NOT on mouse traffic', async ({ page
   // section paints on every pan and zoom would be a per-frame cost for six
   // pictures that did not change. MODEL.dc.html says it in one line at :7203:
   // "Repaints only when the model changes (the epoch), never on mouse traffic."
+  // WAIT FOR THE FIRST PAINT TO LAND FIRST. The repaint is scheduled on a
+  // requestAnimationFrame now, not run inside paint(), so immediately after
+  // load the rail has been SCHEDULED and not yet drawn and railMs still reads
+  // its initial 0. Sampling there and again after the resizes compared
+  // "before the first paint" with "after it" and blamed the resizes for a
+  // repaint they did not cause.
+  await expect.poll(() => railMs(page), { timeout: 5000 })
+    .toBeGreaterThan(0);
+
   const before = await railMs(page);
   await page.evaluate(() => {
     for (let i = 0; i < 10; i += 1) window.dispatchEvent(new Event('resize'));
   });
-  await page.waitForTimeout(100);
+  // Two frames' grace, so a repaint the resizes DID schedule would have run.
+  await page.waitForTimeout(200);
   expect(await railMs(page), 'ten repaints must not touch the rail').toBe(before);
 
   // An EDIT moves it. Without this half, the assertion above is satisfied by a
   // rail that never repaints at all — which is the same picture as a rail that
   // correctly skipped the repaint, and the defect this suite keeps meeting.
   await drawWall(page, -2, -2, 2, -2);
+  await page.waitForTimeout(200);
   const after = await railMs(page);
   expect(after, 'an edit repaints the rail').not.toBe(before);
 });
 
-test('the rail costs a fraction of a frame, because the elevations are labels',
+test('an edit never blocks the main thread, even with four live elevations',
   async ({ page }) => {
     await openWith(page, [SECTION]);
 
-    // Repaints provoked by real committed edits, and the number read is the
-    // page's own — the readout carries what the rail actually spent.
-    const times = [];
-    for (let i = 0; i < 5; i += 1) {
-      await drawWall(page, -2 + i * 0.4, -2, 2 + i * 0.4, -2);
-      times.push(await railMs(page));
+    // WHAT A DRAFTER FEELS, not a millisecond budget. The old assertion here
+    // read `rail < 10ms`, which encoded the labels ruling; Movie reversed that
+    // after seeing it — the dc page shows live elevations and he wants them —
+    // so the question changed from "how cheap" to "does it stutter".
+    //
+    // A long task IS the stutter: the browser reports any main-thread block
+    // over 50ms, which is what turns a wall landing instantly into a wall
+    // landing after a lurch. Measured rather than budgeted, so this stays
+    // honest if the machine running it is slower than mine.
+    //
+    // Two things had to be true together for this to pass, and they are the
+    // two things that were wrong before:
+    //   - the repaint runs on a requestAnimationFrame, not inside the click
+    //     handler, which is what MODEL.dc.html does at :7188;
+    //   - the seats paint with coarseSilhouette, which takes an elevation from
+    //     ~28ms to ~7ms, so four of them fit in a frame budget at all.
+    // Drop either and this goes red.
+    await page.evaluate(() => {
+      window.__long = [];
+      new PerformanceObserver(list => list.getEntries()
+        .forEach(e => window.__long.push(Math.round(e.duration))))
+        .observe({ entryTypes: ['longtask'] });
+    });
+
+    const rails = [];
+    for (let i = 0; i < 4; i += 1) {
+      const before = await page.evaluate(() =>
+        Number(/walls \d+\/(\d+)/.exec(document.getElementById('readout').textContent)[1]));
+      // Parallel walls on their own z, not near-collinear ones: overlapping
+      // runs snap onto the wall already there and commit nothing, which is
+      // what the guard below caught on the first attempt.
+      await drawWall(page, -3, -1.5 - i * 0.9, 3, -1.5 - i * 0.9);
+      await page.waitForTimeout(300);
+      const after = await page.evaluate(() =>
+        Number(/walls \d+\/(\d+)/.exec(document.getElementById('readout').textContent)[1]));
+      // A VOID SAMPLE IS NOT A FAST ONE. An edit that did not commit bumps no
+      // epoch and repaints nothing, and reads exactly like an edit that was
+      // free — which is how an earlier version of this measurement reported
+      // "no long tasks" from four edits that never happened.
+      expect(after, `edit ${i + 1} did not commit — the sample would be void`)
+        .toBeGreaterThan(before);
+      rails.push(await railMs(page));
     }
-    times.sort((a, b) => a - b);
-    const median = times[Math.floor(times.length / 2)];
-    console.log(`  rail repaint, 24-wall house, 5 section seats: ${median.toFixed(2)} ms median`);
 
-    // IDENTICAL SAMPLES ARE NOT A MEASUREMENT. Reading one stale number five
-    // times looks exactly like a stable result; it is how the first version of
-    // this measurement "proved" the rail cost 113.6 ms on every edit, when in
-    // fact nothing had repainted at all.
-    expect(new Set(times).size,
+    const long = await page.evaluate(() => window.__long.slice());
+    console.log(`  rail repaint per edit: ${rails.map(m => m.toFixed(0)).join(', ')} ms`
+      + `   long tasks: ${long.length ? long.join(', ') + ' ms' : 'none'}`);
+
+    expect(long, `an edit blocked the main thread: ${long.join(', ')} ms`).toEqual([]);
+    expect(new Set(rails).size,
       'every sample identical — the rail probably never repainted').toBeGreaterThan(1);
-
-    // The budget is what the ruling rests on: four live elevations measured
-    // 148 ms per wall drawn, which is a freeze. Ten is generous against the
-    // ~1.3 ms this costs and still an order of magnitude below the old cost,
-    // so it fails long before a live elevation could creep back in.
-    expect(median, 'a labelled elevation seat must not cost what a painted one did')
-      .toBeLessThan(10);
   });
