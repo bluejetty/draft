@@ -220,6 +220,77 @@ test('the thumbnails repaint on an edit and NOT on mouse traffic', async ({ page
   expect(after, 'an edit repaints the rail').not.toBe(before);
 });
 
+test('the seats paint one per frame, which is what keeps the task short',
+  async ({ page }) => {
+    // THE LONGTASK CHECK BELOW IS PROBABILISTIC AND THIS ONE IS NOT, which is
+    // why both exist. Before the split, four elevations in one frame came to
+    // 47 ms against the browser's 50 ms threshold, so the block was reported
+    // on about three runs in five -- meaning that check PASSED twice in five
+    // on a page that was broken, and would pass always on a faster machine.
+    // An assertion satisfied by more than one world state is the defect this
+    // suite keeps meeting; this one names the mechanism instead of the
+    // symptom, so a revert to painting all six in one frame fails it every
+    // time rather than two times in five.
+    //
+    // PATCHING THIS MODULE HAS A TRAP IN IT, recorded because it cost two
+    // probes that both reported confident nonsense: cut-view.js:1758 exports
+    // through `window.DraftCutView = Object.freeze({...})`, so assigning onto
+    // the module is a SILENT no-op in sloppy mode. The first probe reported
+    // "0 painter calls" on a page whose seats were painting perfectly. Replace
+    // the frozen object; do not mutate it.
+    await h.openModel(page, { webgl: false });
+    await page.evaluate(async ({ bucket, saved, sections }) => {
+      saved.cuts = sections;
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, saved: REPRO, sections: [SECTION] });
+
+    await page.addInitScript(() => {
+      window.__paints = [];
+      window.__frame = 0;
+      const tick = () => { window.__frame += 1; requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+      let store;
+      Object.defineProperty(window, 'DraftCutView', {
+        configurable: true,
+        get: () => store,
+        set: mod => {
+          const real = mod.drawCutView;
+          store = Object.freeze({ ...mod,
+            drawCutView(env, c, w, hgt, cut, opts) {
+              window.__paints.push({ seat: cut && cut.id, frame: window.__frame });
+              return real.apply(this, arguments);
+            } });
+        },
+      });
+    });
+    await page.goto('/MODEL.html?mode=night');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    await page.waitForTimeout(400);
+
+    await page.evaluate(() => { window.__paints = []; });
+    await drawWall(page, -3, -1.5, 3, -1.5);
+    await page.waitForTimeout(600);
+
+    const paints = await page.evaluate(() => window.__paints.slice());
+    // THE EDIT HAS TO HAVE REPAINTED AT ALL, or every assertion below is true
+    // of a rail that did nothing -- the void-sample fault this file already
+    // carries a guard for on the timing test.
+    expect(paints.length, 'the edit repainted no seat at all').toBeGreaterThan(1);
+
+    const perFrame = new Map();
+    paints.forEach(p => perFrame.set(p.frame, (perFrame.get(p.frame) || 0) + 1));
+    const worst = Math.max(...perFrame.values());
+    console.log(`  ${paints.length} seats painted across ${perFrame.size} frames`
+      + `, worst frame ${worst}`);
+
+    // ONE SEAT PER FRAME. The whole fix in one line: the longest task the rail
+    // can produce is one elevation, not four, and the total work is unchanged.
+    expect(worst,
+      `${worst} seats painted in a single frame -- the rail is back to one long task`)
+      .toBe(1);
+  });
+
 test('an edit never blocks the main thread, even with four live elevations',
   async ({ page }) => {
     await openWith(page, [SECTION]);
