@@ -112,6 +112,30 @@ expected to break: the rail sits top-right and this spec's gestures land within
 is worth knowing that a click landing on chrome fails in exactly the voice of a
 gesture that does not work.
 
+### Re-run after the chrome shell, #389
+
+**It happened a second time, on the same check and for the same reason.** The
+shell put six more controls on the page — `left-tab`, `right-tab`, `BUNGALOW`,
+`BILEVEL`, `DETACHED GARAGE`, `bone` — and the enumeration went red on CI
+naming every one of them. **Four rows above were wrong**, two of them because
+they describe the control surface by *listing* it, which is a note that goes
+stale the moment a button is added anywhere on the page.
+
+The row worth arguing about is **Draw an outline**. A reader who saw BUNGALOW
+on the page would reasonably conclude BUILD HOUSE had arrived, and it has not:
+the old page's `_pressBuildType` records a type *and* arms the outline tool,
+and only the first half came across, because this page has no outline tool to
+arm. That is a claim a test has to hold rather than a note, so
+`model-html-topbar.spec.js` asserts the wall count does not move across a
+family press, an entry press or BONE.
+
+**The luck of geometry ran out and was replaced by a measurement.** The clicks
+still land, but not by accident now: the rail is inside a sidebar that starts
+shut, and the chrome-on-chrome check asserts every pair of chrome boxes is
+disjoint in both panel states. Four collisions were caught that way, each of
+which had first surfaced somewhere else entirely — as a 180-second timeout, or
+as a tap guard naming `level-pick`.
+
 ---
 
 ## The table
@@ -121,12 +145,12 @@ gesture that does not work.
 | Draw a wall | wall tool | **present** — survives a reload | must-have | **driven**; the mutation row: `drawPress` no-op makes this fail |
 | Draw a line | line tool | absent | must-have | |
 | Draw a floor | floor tool | absent | must-have | it paints floors it cannot create |
-| Draw an outline | outline tool | absent | must-have | BUILD HOUSE reads outlines |
+| Draw an outline | outline tool | absent | must-have | BUILD HOUSE reads outlines. **#389 put the house-type buttons and BONE on the page and this row did not move**: the old page's `_pressBuildType` also arms the outline tool, and that half was deliberately left behind — there is no outline tool to arm. The bar records a choice; `model-html-topbar.spec.js` holds the wall count across every press |
 | Place a roof | roof tool | absent | must-have | paints, cannot place |
 | Place a stair | stair tool | absent | must-have | paints, cannot place |
 | Place fenestration | fenestration tool | absent | must-have | |
 | Place a dimension | dimension tool | absent | must-have | paints, cannot place |
-| Beam / column / trim / shape / node / annotation / fixture | seven tools | **absent — unreachable, measured** | ? **Movie's call, not mine** | **driven**: the page's entire control surface is `draw-wall`, `delete-wall`, `save`, `take-over`, `level-pick`, `view-pick` and zero inputs. Whether their absence blocks a day's work is not a measurement |
+| Beam / column / trim / shape / node / annotation / fixture | seven tools | **absent — unreachable, measured** | ? **Movie's call, not mine** | **driven**: the page's entire DRAWING surface is `draw-wall`, `delete-wall`, `save`, `take-over`, `level-pick`, `view-pick` and zero inputs. #389 added chrome around it — two sidebar tabs, three house-type families and BONE — and none of those is a tool: the tabs open panels, and the build bar is on the far side of a seam that draws nothing. The left panel is the slot those seven will land in. Whether their absence blocks a day's work is still not a measurement |
 | Cut a section | cut tool | absent | must-have | and no viewer either — see cut-view spec |
 | Select a thing | select tool | **partial** — a wall answers a click, a floor and a dimension do not | must-have | **driven**: click each, press Delete; only the wall goes. Read as `present` |
 | Drag an endpoint | corner drag | **present** — pointer drag, undo captures `move` | must-have | |
@@ -137,7 +161,7 @@ gesture that does not work.
 | **Switch level** | level rail | **present** — and the choice survives a reload | must-have | **driven** through `level-pick`; keyed by `?level=`, not by an index |
 | Switch layer view within a level | layer view rail | **present**, and the picker belongs to the level it is on | must-have | **driven** on every level. The old note said it hides on ROOF and SITE; **#386 ended that** — the four elevations are on every level now, so no level is empty and the picker always shows. Guarded instead: a visible picker is never empty, and never shows a view carried over from the level before |
 | Add / delete / insert a level | level rail | **absent** | must-have | re-derived in this page's own vocabulary: no add/insert/remove verb, and no `levels` mutation. It re-emits the levels it loaded |
-| Level locks | lock toggles | **absent — no verb; the key is carried untouched** | **settled** | **driven**: the page's whole control surface is four buttons and two selects, none of them a lock; a seeded lock and its `nextLevelLockId` come back byte-identical after a save |
+| Level locks | lock toggles | **absent — no verb; the key is carried untouched** | **settled** | **driven**: no control on the page is a lock — not the four drawing buttons, and not the seat, tab and build-bar chrome #389 added around them; a seeded lock and its `nextLevelLockId` come back byte-identical after a save |
 | ASSEMBLY / group / ungroup | assembly rail | **absent — no verb; groups carried untouched** | **settled** | **driven**: no control exists, and a seeded group survives a save unchanged |
 | Stacked washrooms, source links | boneyard/assembly work | **absent on this page; keys carried untouched** | **partly settled** | **driven** one-sided only: the keys round-trip through `MODEL.html`. The old page was NOT run on the same fixture — that comparison is still owed |
 | Elevation / section previews | right-hand cards | absent | must-have | `SPEC-model-html-cut-views.md` — 18 accessors, 6 absent |
@@ -148,7 +172,7 @@ gesture that does not work.
 | Escape cancels and clears selection | one press, tool survives | **present** | must-have | measured from the old page and documented in the new one |
 | Save | press | **present** — press, plus the rung-4 hide-save | must-have | |
 | Cut-view seats (E1–E4, S1–S2) | right-hand cards | **present** — six buttons, added by #386 | must-have | **driven** only as far as their existence: the control enumeration names them. Whether each seat paints what it claims is `model-html-seats.spec.js`, not this file |
-| Chrome over the drawing area | `#save` / `#chrome` / `#readout` overlay as **strips** | the cut-view rail is a **block**, top-right, and swallows taps there | ? **Movie's call** | the difference the row exists to record: strips leave the sheet reachable, a block takes a corner of it away. Placement is a look-at-it decision, not a measurement |
+| Chrome over the drawing area | `#save` / `#chrome` / `#readout` overlay as **strips**, plus pull-out tabs on both edges | **present, and now measured** — #389 moved the rail into a collapsible right sidebar and added a left one, both shut by default | ? **Movie's call** | the block in the corner is gone, so the difference this row recorded no longer holds. It IS a measurement now: the drawing hidden by all chrome is 7.3% both shut and 8.6% both open, on `repro-garage-house`. What is still a look-at-it decision is whether that is too much |
 
 ---
 

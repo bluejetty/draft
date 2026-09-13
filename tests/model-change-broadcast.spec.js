@@ -371,6 +371,41 @@ test.describe('rung 2 — MODEL.dc.html hears it too', () => {
     await h.waitForSaved(page);
   }
 
+  // THE DRAWING MESSAGE IS A FLASH, NOT A STATE, and polling a flash is how
+  // you get a 3.75% red. Measured on merged main (`76ab2e0`, 6 runs, all six
+  // identical in shape): after Control+z the element reads "Undone." for
+  // 60–81 ms and is then overwritten by the conflict banner — `_undo` →
+  // `_restoreSnapshot` → `_markUnsaved()` queues a write that is still refused,
+  // because this page is still behind, and the refusal sets `drawingMessage`
+  // in its turn. Nothing is slow; the window is 70 ms wide. `toContainText`
+  // usually catches it on its first poll and, when the scheduler puts that
+  // poll 100 ms late, never catches it at all and spends its 4 s budget
+  // looking at the banner that replaced it.
+  //
+  // So record the transitions and assert against the record. This waits on
+  // the event, not on the DOM happening to still show it, and it says the
+  // same thing the old assertion meant to say. Forced red, forced green and
+  // the general shape are in
+  // RD-DOCUMENTS/BOARD-the-drawing-message-is-a-flash.md.
+  const recordDrawingMessages = page => page.evaluate(() => {
+    const read = () => {
+      const el = document.querySelector('[data-model-drawing-message]');
+      return el ? el.textContent.trim() : '';
+    };
+    const log = window.__drawingMessages = [read()];
+    const push = () => {
+      const text = read();
+      if (text !== log[log.length - 1]) log.push(text);
+    };
+    new MutationObserver(push).observe(document.body,
+      { subtree: true, childList: true, characterData: true });
+  });
+
+  const sawDrawingMessage = (page, needle, why) => expect.poll(
+    () => page.evaluate(
+      text => (window.__drawingMessages || []).some(seen => seen.includes(text)), needle),
+    { message: why, timeout: 4000 }).toBe(true);
+
   async function drawALine(page, x1, z1, x2, z2) {
     await h.selectTool(page, 'Line');
     await h.clickWorld(page, x1, z1);
@@ -456,10 +491,10 @@ test.describe('rung 2 — MODEL.dc.html hears it too', () => {
       // THE EFFECT BEFORE THE WORDING. The drafter's line is still there to be
       // undone; a page that had re-read would have replaced the drawing it
       // lives in and there would be nothing to undo.
+      await recordDrawingMessages(page);
       await page.keyboard.press('Control+z');
-      await expect(page.locator('[data-model-drawing-message]'),
-        'the unsaved line and its history must have survived the other page\'s write')
-        .toContainText('Undone', { timeout: 4000 });
+      await sawDrawingMessage(page, 'Undone',
+        'the unsaved line and its history must have survived the other page\'s write');
       await expect(page.locator('[data-model-status]'),
         'and the page must still be holding an unsaved edit').toHaveText('UNSAVED');
       expect(h.allLines(await h.savedDrawing(page)),

@@ -98,7 +98,9 @@
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; pointer-events:none; }
 
-  #save { position:fixed; right:12px; top:12px; z-index:5; display:none;
+  /* A CHROME-BAR BUTTON NOW, not a fixed corner one -- it sits in the flex row
+     with the level and view pickers. */
+  #save { display:none;
     font-family: var(--font-ui); font-size:13px; font-weight:600;
     letter-spacing:0.06em; text-transform:uppercase;
     color: var(--ink-primary); cursor:pointer;
@@ -116,7 +118,9 @@
      only thing left to do is say so. Quiet on purpose: it reports a fact about
      the file, it does not ask for a decision, and it sits under SAVE rather
      than over the drawing. */
-  #elsewhere { position:fixed; right:12px; top:46px; z-index:5;
+  /* Follows SAVE to the left: it is SAVE's note, and it was under the shell
+     for the same reason SAVE was. */
+  #elsewhere { position:fixed; left:12px; top:52px; z-index:5;
     font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
     text-transform:uppercase; color: var(--ink-quiet);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
@@ -149,7 +153,13 @@
      `viewWrap.hidden = true` would set the attribute, change nothing on
      screen, and leave a picker offering a choice that does nothing on ROOF
      and SITE -- hidden in the DOM and visible to the drafter. */
-  #chrome { position:fixed; left:12px; top:12px; z-index:5;
+  /* THE TOP ROW OWNS THE POSITION; its two children just flow inside it.
+     Inset past the tabs on both edges (26px each plus air) so the row never
+     sits on one. */
+  #top-row { position:fixed; top:12px; left:40px; right:40px; z-index:6;
+    display:flex; gap:12px; align-items:flex-start; pointer-events:none; }
+  #top-row > * { pointer-events:auto; }
+  #chrome { flex:0 0 auto;
     display:flex; gap:10px; align-items:center; }
   #chrome[hidden], #chrome label[hidden] { display:none; }
   #chrome label { display:flex; align-items:center; gap:6px;
@@ -168,6 +178,127 @@
   /* Armed. The accent is the page's one attention colour, and a drafter
      mid-gesture must be able to see that the next tap draws. */
   #chrome button.armed { color: var(--accent); border-color: var(--accent); }
+
+  /* THE BUILD BAR, top centre: the chrome bar owns the top-left and the
+     sidebars own both edges, so the middle of the top edge is what is left.
+     Measured like the rest -- see tests/model-html-topbar.spec.js. */
+  /* Centred in WHAT IS LEFT after the chrome bar, rather than in the window.
+     flex:1 with centred content keeps it looking centred and makes an overlap
+     impossible however wide either side grows. */
+  #build-bar { flex:1 1 auto;
+    display:flex; align-items:flex-start; justify-content:center; gap:6px; }
+  #build-bar[hidden] { display:none; }
+  #build-families, #build-entries { display:flex; gap:4px; }
+  #build-entries[hidden] { display:none; }
+  #build-bar button { font-family: var(--font-ui); font-size:11px; font-weight:600;
+    letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;
+    color: var(--ink-primary); padding:6px 10px; border-radius:6px;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none); }
+  #build-bar button:hover { border-color: var(--accent); color: var(--accent); }
+  /* The family whose submenu is open, and the type the drawing carries, both
+     read as the page's one attention colour -- the same signal the wall tool
+     uses when it is armed. */
+  #build-bar button.open, #build-bar button.chosen {
+    color: var(--accent); border-color: var(--accent); }
+  #bone { font-weight:700; letter-spacing:0.1em; }
+
+  /* ── THE SHELL ─────────────────────────────────────────────────────────
+     Two pull-out sidebars and their tabs. The SHAPE is MODEL.dc.html's
+     (.rail-tab at :147-150): a full-height tab on each edge, vertical
+     lettering, the panel sliding in beside it. The stylesheet is not carried
+     across -- that page has one light skin and hardcodes #fff and #1d1f20,
+     so every colour here is a palette token.
+
+     BOTH START CLOSED, which is the old page's own default
+     ("pull-out tabs: both side rails start hidden", :3009) and the only
+     state that costs the drafter no drawing area at all. The four
+     combinations are measured in tests/model-html-shell.spec.js. */
+  /* THE TAB IS AS TALL AS ITS WORD, not as tall as the sheet. MODEL.dc.html's
+     tabs run the full edge (:147, top:0 bottom:0) because that page's canvas
+     is inset; here the canvas is full-bleed, so a full-height tab is a full-
+     height bite out of the drawing. Measured: the full-height pair plus a
+     full-height collapsed strip hid 9.7% of the house with both panels SHUT,
+     which was worse than the 5.5% of the corner rail they replaced. */
+  /* TOP-ALIGNED, NOT CENTRED, and this is the largest single number in the
+     shell. fit() centres the drawing, so a vertically centred panel sits
+     exactly where the house is: centred cost 4.5% of the drawing with both
+     panels shut, top-aligned costs 1.3%. Bottom-aligned ties it at 1.2% and
+     loses, because the readout and the hint already live along that edge. */
+  /* BELOW THE TOP ROW, not beside it. The row spans the sheet's top edge, so
+     a panel starting at the same y sits under it -- measured with a pairwise
+     box check across every piece of chrome, and top:12 put the row over BOTH
+     rails (over the first seat row on the right, over the tool slot on the
+     left when open). Bottom-anchoring is cheaper still but puts the rails on
+     #readout and #hint, which already live along that edge.
+     Only this clears everything: shut 7.3% of the drawing against 3.4% at
+     top:12. Four points is what a top bar costs, and chrome that covers
+     chrome is a defect where drawing area is a price -- both panels collapse,
+     so the drafter can have the sheet back. */
+  .rail-tab { position:fixed; top:48px; z-index:6;
+    height:auto; max-height:52vh; padding:14px 6px;
+    display:flex; align-items:center; justify-content:center;
+    border:1px solid var(--edge-panel); cursor:pointer;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); font-family: var(--font-ui); font-size:13px;
+    font-weight:600; letter-spacing:0.14em; line-height:1;
+    writing-mode:vertical-rl; text-transform:uppercase; }
+  .rail-tab:hover { color: var(--accent); border-color: var(--accent); }
+  .rail-tab[hidden] { display:none; }
+  #left-tab { left:0; border-left:none; border-radius:0 4px 4px 0; }
+  /* The right tab reads bottom-to-top so both tabs run outward from the edge
+     they hang on. */
+  #right-tab { right:0; border-right:none; border-radius:4px 0 0 4px;
+    writing-mode:vertical-lr; }
+  /* A panel is pinned to its own edge and is as tall as it needs to be, for
+     the same reason as the tab: full height costs drawing area that a panel
+     holding three rows of seats is not using. */
+  aside { position:fixed; top:48px;
+    max-height:calc(100vh - 60px); z-index:5; overflow-y:auto;
+    overscroll-behavior:contain; padding:10px;
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none); }
+  aside[hidden] { display:none; }
+  #left-rail { left:28px; border-right:1px solid var(--edge-panel); min-width:120px; }
+  #right-rail { right:28px; border-left:1px solid var(--edge-panel); }
+  /* THE RIGHT PANEL COLLAPSES TO A SEAT, NOT TO NOTHING (Devin, 12 Sep).
+     MODEL.dc.html's rail comment (:1766) says the open LEVELS panel covers
+     only the outer column and "the inner column always keeps its seat, so
+     every view stays one tap away" -- a property it protects deliberately,
+     and one that a panel closing to zero would have destroyed.
+     So collapsed still holds all six seats and drops the properties, which has
+     no such claim on the edge.
+
+     BUT NOT AS A SEAT-WIDE STRIP, and the measurement is why. A strip one seat
+     across is six seats TALL, and a tall narrow panel is the worst possible
+     shape here: fit() centres a house that is wider than it is deep, so a
+     column runs down through it while a squat block sits past its end. On
+     repro-garage-house, collapsed, percentage of the DRAWING hidden:
+
+         1 column   97x486   9.4%     <- the strip, and the worst of them
+         2 columns 187x246   6.5%
+         3 columns 277x166   4.5%     <- widest and shortest, the best
+         (expanded 195x254   6.7%)
+
+     One column also cost MORE than leaving the panel open, which would have
+     made collapsing pointless, and more than the 5.5% of the corner overlay
+     this shell replaced. So collapsed goes WIDE and SHORT: same six seats,
+     same order, no properties, 4.5%. */
+  #right-rail[data-collapsed] { padding:6px; }
+  #right-rail[data-collapsed] #view-rail { grid-template-columns:repeat(3, 84px); }
+  #right-rail[data-collapsed] #props-slot { display:none; }
+  /* The tool palette's home. Empty by design: Gilligan's seven go here, and a
+     panel with nothing in it is still the thing that proves the canvas has
+     already given up the edge. */
+  #tool-slot:empty::after { content:'TOOLS'; display:block; padding:6px 2px;
+    font-family: var(--font-ui); font-size:9px; letter-spacing:0.1em;
+    color: var(--ink-quiet); opacity:0.5; }
+  #props-slot[hidden] { display:none; }
+  .props-title { font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet);
+    margin-bottom:6px; }
+  #props-slot { margin-top:10px; padding-top:10px;
+    border-top:1px solid var(--edge-panel);
+    font-family: var(--font-ui); font-size:10px; color: var(--ink-quiet); }
 
   /* THE SEATING CHART: six cut views, all six always shown. The shape is
      MODEL.dc.html's rail (:188-200) and the PAIRING is its own -- E1|E3 over
@@ -192,13 +323,13 @@
      hid 9.6% of the drawing, at 84px it hides 5.5%, for the same six views.
      A single tall column was worse than either (10.9%) -- fit() puts the house
      against the right edge, so a column runs straight down the work. */
-  #view-rail { position:fixed; right:12px; top:80px; z-index:5;
-    pointer-events:none;
-    display:grid; grid-template-columns:repeat(2, 84px); gap:6px;
-    /* Room to grow, and a floor under it: the plan cards roughly double the
-       row count, and a rail that runs off the bottom of the sheet hides the
-       views it exists to offer. It scrolls before it disappears. */
-    max-height:calc(100vh - 100px); overflow-y:auto; overscroll-behavior:contain; }
+  /* A TENANT OF THE RIGHT PANEL, not a corner overlay. It was fixed at
+     right:12px/top:80px and hid 5.5% of the drawing whatever the drafter was
+     doing; inside the panel it hides nothing when the panel is shut. */
+  #view-rail { display:grid; grid-template-columns:repeat(2, 84px); gap:6px;
+    /* No max-height of its own any more: the panel it sits in scrolls, so the
+       plan cards can double the row count without the rail needing a second
+       scroller inside the first. */ }
   #view-rail[hidden] { display:none; }
   .seat { pointer-events:auto;
     width:84px; padding:0; text-align:left; cursor:pointer; overflow:hidden;
@@ -245,19 +376,66 @@
 
 <canvas id="plan"></canvas>
 <div id="readout">loading…</div>
+<!-- ONE TOP ROW, so the two cannot land on each other. They were separately
+     fixed-positioned -- the chrome bar at left:12 and the build bar centred at
+     left:50% -- and both are as wide as their CONTENT: the chrome bar grows
+     with the level and view names, the build bar with the family labels. On a
+     drawing whose level names run long the chrome bar reached under the build
+     bar and BUNGALOW swallowed the SAVE button -- the second time this shell
+     landed on SAVE. Tuning the numbers would have fixed one drawing; a flex
+     row cannot overlap at any width. -->
+<div id="top-row" data-top-row>
 <div id="chrome" hidden>
   <label>Level <select id="level-pick" data-level-pick></select></label>
   <label id="view-wrap">View <select id="view-pick" data-view-pick></select></label>
   <button id="draw-wall" type="button" data-draw-wall>Draw wall</button>
   <button id="delete-wall" type="button" data-delete-wall hidden>Delete wall</button>
+  <!-- SAVE MOVED IN HERE, out of the top-right corner. The shell owns the
+       sheet's margins now, and the right tab landed on top of this button:
+       its centre was owned by the canvas, so every spec that pressed SAVE
+       timed out. Pushing the shell down the sheet instead would have cleared
+       it and cost 1.4% -> 6.5% of the drawing, because that moves the panels
+       towards the middle where fit() puts the house. Moving one button costs
+       nothing. -->
+  <button id="save" type="button" data-model-save>SAVE</button>
 </div>
-<button id="save" type="button" data-model-save>SAVE</button>
+<!-- THE TOP BAR: the house the drafter is going to build, and the bone that
+     builds it. MODEL.dc.html's row is "three families between the turtle and
+     the bone", each opening ONE submenu (Movie, 6 Sep) -- that shape, from the
+     same data, through build-menu.js.
+     WHAT IS NOT HERE: the generator. See the seam note beside ModelBuild. -->
+<div id="build-bar" data-build-bar hidden>
+  <div id="build-families" data-build-families></div>
+  <div id="build-entries" data-build-entries hidden></div>
+  <button id="bone" type="button" data-bone-press title="Build the house you picked">BONE</button>
+</div>
+</div>
+
 <div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
 <div id="lease" data-lease-banner hidden>
   <span data-lease-message></span>
   <button id="take-over" type="button" data-take-over>TAKE OVER</button>
 </div>
-<div id="view-rail" hidden></div>
+
+<!-- THE SHELL. Two pull-out sidebars, each with a tab on its own edge, after
+     MODEL.dc.html's shape (:1762-1763) rather than its stylesheet. Devin's
+     split: LEFT is what you are about to do, RIGHT is what you are looking at.
+     The left panel is the tool palette's home and is empty until Gilligan's
+     seven land -- the slot exists so a tool is not built against a canvas that
+     is about to lose its edge. -->
+
+<button id="left-tab" class="rail-tab" type="button" data-left-tab hidden>DRAFTING TOOLS</button>
+<aside id="left-rail" data-left-rail hidden>
+  <div id="tool-slot" data-tool-slot></div>
+</aside>
+
+<button id="right-tab" class="rail-tab" type="button" data-right-tab hidden>VIEWS · PROPERTIES</button>
+<aside id="right-rail" data-right-rail data-collapsed hidden>
+  <div id="view-rail"></div>
+  <!-- PER-TOOL PROPERTIES, the slot and nothing in it. Gilligan fills this;
+       the contract is in the comment beside setToolProperties below. -->
+  <div id="props-slot" data-props-slot hidden></div>
+</aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 <div id="notice"><div id="notice-body"></div></div>
 
@@ -293,6 +471,9 @@
      alternative was office defaults, which would have shown four elevation
      marks to a drafter who had switched them off. -->
 <script src="./cut-marks.js"></script>
+<!-- The house types the build bar offers. Lifted out of MODEL.dc.html so both
+     pages read one list (build-menu.js says why). -->
+<script src="./build-menu.js"></script>
 <script src="./profile-manager.js"></script>
 <!-- Stairs. stair-geometry.js is the riser math and the plan parts; it is not
      a painter either, it is the two ANSWERS drawStairs2D asks its caller for
@@ -813,11 +994,11 @@
       // depths but not this difference, so both pages compute it.
       garageEdgeTaperRunIn: S.GARAGE_EDGE_DEPTH_IN - S.GARAGE_SLAB_THICKNESS_IN,
       // drawFloor2D's own five-colour set. This page shows committed slabs
-      // only -- it has no draw tool and no selection -- so the preview and
-      // selected entries are wired to the committed look and to the brand
-      // accent. Deliberate placeholders, not omissions: were a preview ever
-      // to appear it would read as committed, which is visible and
-      // diagnosable, rather than throwing on an absent colour.
+      // only -- its one draw gesture and its selection are both wall-only --
+      // so the preview and selected entries are wired to the committed look
+      // and to the brand accent. Deliberate placeholders, not omissions:
+      // were a preview ever to appear it would read as committed, which is
+      // visible and diagnosable, rather than throwing on an absent colour.
       colors: {
         fill: skin['draw-floor'],
         fillPreview: skin['draw-floor'],
@@ -1036,10 +1217,11 @@
   };
 
   // drawWallSeg2D's two colours, plus the two preview entries it also reads.
-  // Same split floorEnv and dimensionEnv use: this page has no draw tool, so
-  // `preview` is the constant false at the call below and both preview
-  // branches are unreachable -- but they are DEFINED, because a caller should
-  // answer the whole interface, and because wiring a draw tool up later must
+  // Same split floorEnv and dimensionEnv use: this page's wall gesture commits
+  // on the second tap and paints no ghost between them, so `preview` is the
+  // constant false at the call below and both preview branches are
+  // unreachable -- but they are DEFINED, because a caller should answer the
+  // whole interface, and because wiring a rubber-band preview up later must
   // not be the moment someone discovers the key was missing.
   //
   // Preview takes the committed look rather than the accent here, unlike the
@@ -1920,6 +2102,224 @@
   // level is inserted. A switcher carrying the index would pass every test on
   // a default drawing and paint the wrong level on a real one -- broken and
   // passing looking identical, which is the failure this whole rung is about.
+  // ── the shell ─────────────────────────────────────────────────────────────
+  // THE URL IS THE STATE, as it is for `?level=` and `?view=`. A sidebar's
+  // open/shut is what the drafter is looking at, so it lives where everything
+  // else about that lives -- which makes it survive a reload and be shareable
+  // without a second mechanism, and keeps this page's one-source-of-truth rule
+  // intact. localStorage would have been a second home for view state.
+  //
+  // EACH SIDE IS ITS OWN PARAMETER. Devin's control is that closing the left
+  // must not disturb the right, and two independent flags is the shape that
+  // cannot get that wrong -- one packed value would have to be parsed, and a
+  // parse is where "independent" quietly stops being true.
+  //
+  // BOTH DEFAULT SHUT, which is MODEL.dc.html's own default (:3009, "pull-out
+  // tabs: both side rails start hidden") and the only state that costs the
+  // drafter nothing. tests/model-html-shell.spec.js measures all four.
+  const RAILS = [
+    { side: 'left', param: 'left', tab: 'left-tab', panel: 'left-rail' },
+    { side: 'right', param: 'right', tab: 'right-tab', panel: 'right-rail' },
+  ];
+  const railOpen = param => params.get(param) === '1';
+  const setRail = (param, open) => {
+    if (open) params.set(param, '1'); else params.delete(param);
+    syncUrl();
+    syncShell();
+    // The canvas did not change size -- the panels float over it, as every
+    // other piece of this page's chrome does -- but the rail's seats only
+    // exist to be looked at, so opening the right one has to paint them.
+    paint();
+  };
+
+  // THE TWO SIDES COLLAPSE DIFFERENTLY, and that asymmetry is the ruling
+  // rather than an inconsistency. The left holds tools: nothing there has a
+  // claim to be permanently reachable, so shut means gone. The right holds
+  // the view rail, and MODEL.dc.html keeps a column of it visible under an
+  // open panel on purpose (:1766) -- "every view stays one tap away". Shut to
+  // zero would have taken that away, so shut means ONE SEAT WIDE: all six
+  // seats, single column, no properties.
+  const syncShell = () => {
+    const leftOpen = railOpen('left');
+    const leftPanel = document.getElementById('left-rail');
+    leftPanel.hidden = !leftOpen;
+    const leftTab = document.getElementById('left-tab');
+    leftTab.hidden = false;
+    leftTab.setAttribute('aria-expanded', String(leftOpen));
+
+    const rightOpen = railOpen('right');
+    const rightPanel = document.getElementById('right-rail');
+    // Never hidden: collapsed is a width, not an absence.
+    rightPanel.hidden = false;
+    rightPanel.toggleAttribute('data-collapsed', !rightOpen);
+    const rightTab = document.getElementById('right-tab');
+    rightTab.hidden = false;
+    rightTab.setAttribute('aria-expanded', String(rightOpen));
+  };
+
+  RAILS.forEach(({ param, tab }) => {
+    document.getElementById(tab)
+      .addEventListener('click', () => setRail(param, !railOpen(param)));
+  });
+
+  // ── the build bar, and the seam behind it ─────────────────────────────────
+  // THE BUTTON SAYS WHICH HOUSE. SOMETHING ELSE BUILDS IT.
+  //
+  // That split is the whole point of this bar and it is Devin's instruction,
+  // not a convenience: the drafter is moving to a premade design per house
+  // type in place of generated rooms, so whatever produces geometry today is
+  // being replaced. Wire the buttons to it and the bar is built twice.
+  //
+  // WHAT THIS SIDE OWNS: which family is open, which entry was pressed, and
+  // writing the chosen `buildType` to the drawing -- that key IS the persisted
+  // vocabulary for this question (drawing-format.js BUILD_TYPES), normalised
+  // through the format exactly as MODEL.dc.html normalises it at :14159.
+  //
+  // WHAT IT DOES NOT OWN: a single foot of geometry. No outline, no rooms, no
+  // walls. If this code ever decides where a bedroom goes, it has crossed the
+  // seam and should be deleted back to here.
+  //
+  // ONE HALF OF THE OLD PAGE'S ARMING DELIBERATELY DOES NOT COME ACROSS.
+  // _pressBuildType does two things: it records the type AND arms the outline
+  // tool so the next press starts tracing the house (:14156). This page has no
+  // outline tool -- its whole control surface is draw-wall, delete-wall, save
+  // and the two pickers -- so carrying the trace-arm would mean inventing the
+  // tool it arms. The type is recorded; the tracing waits for whoever builds
+  // that tool.
+  //
+  // THE SEAM, for whoever writes the geometry side:
+  //
+  //   window.ModelBuild.onChoose(fn)   fn({ family, entry }) when a house type
+  //                                    is picked. entry carries type, garage,
+  //                                    overGarage, foundation -- the old
+  //                                    page's own vocabulary, from the same
+  //                                    build-menu.js.
+  //   window.ModelBuild.onBuild(fn)    fn({ family, entry }) when BONE is
+  //                                    pressed. This is "build it now"; the
+  //                                    bar does nothing else with the press.
+  //   window.ModelBuild.chosen()       the current choice, or null.
+  //
+  // BONE FIRES EVEN WITH NOTHING CHOSEN, with entry null. That is deliberate:
+  // "the bone builds it" is the old page's phrase and on a drawing that
+  // already has a type the drafter has chosen nothing this session. Deciding
+  // what an empty press means is the geometry side's call, not the bar's.
+  const BM = window.DraftBuildMenu;
+  const buildBar = document.getElementById('build-bar');
+  const familyRow = document.getElementById('build-families');
+  const entryRow = document.getElementById('build-entries');
+  let openFamilyId = null;
+  const chooseHandlers = [];
+  const buildHandlers = [];
+  let chosenEntryId = null;
+
+  const chosen = () => {
+    if (!chosenEntryId) return null;
+    const entry = BM.entryById(chosenEntryId);
+    if (!entry) return null;
+    const family = BM.BUILD_MENU
+      .find(f => f.entries.some(e => e.id === chosenEntryId)) || null;
+    return { family, entry };
+  };
+
+  window.ModelBuild = Object.freeze({
+    chosen,
+    onChoose: fn => { if (typeof fn === 'function') chooseHandlers.push(fn); },
+    onBuild: fn => { if (typeof fn === 'function') buildHandlers.push(fn); },
+  });
+
+  const pressEntry = entryId => {
+    chosenEntryId = entryId;
+    openFamilyId = null;
+    const picked = chosen();
+    // THE TYPE REACHES THE FILE; garage, overGarage and foundation do not.
+    // build-menu.js says why in Movie's own words: a garage is an outline
+    // carrying garage:true, so storing one would put a claim in the file that
+    // its own geometry could contradict.
+    const type = picked?.entry?.type ?? null;
+    if (drawing && type && drawing.buildType !== type) {
+      drawing.buildType = window.DraftDrawingFormat.buildType(type);
+      markDirty();
+    }
+    buildChrome();
+    syncBuildBar();
+    paint();
+    chooseHandlers.forEach(fn => fn(picked));
+  };
+
+  const syncBuildBar = () => {
+    if (!drawing) return;
+    familyRow.replaceChildren(...BM.BUILD_MENU.map(family => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.buildFamily = family.id;
+      button.textContent = family.label;
+      button.title = family.title;
+      button.classList.toggle('open', openFamilyId === family.id);
+      // A family with the chosen entry under it wears the mark, so the bar
+      // says what the drawing carries even with every submenu shut.
+      const holds = family.entries.some(e => e.id === chosenEntryId);
+      button.classList.toggle('chosen', holds && openFamilyId !== family.id);
+      button.onclick = () => {
+        openFamilyId = openFamilyId === family.id ? null : family.id;
+        syncBuildBar();
+      };
+      return button;
+    }));
+
+    const open = openFamilyId ? BM.familyById(openFamilyId) : null;
+    entryRow.hidden = !open;
+    entryRow.replaceChildren(...(open ? open.entries.map(entry => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.buildEntry = entry.id;
+      button.textContent = entry.label;
+      button.classList.toggle('chosen', entry.id === chosenEntryId);
+      button.onclick = () => pressEntry(entry.id);
+      return button;
+    }) : []));
+    buildBar.hidden = false;
+  };
+
+  document.getElementById('bone').addEventListener('click', () => {
+    buildHandlers.forEach(fn => fn(chosen()));
+  });
+
+  // ── the per-tool properties slot ──────────────────────────────────────────
+  // THE CONTRACT, for Gilligan, written so it can be built against without
+  // reading anything below it:
+  //
+  //   window.ModelProps.set(title, node)   puts `node` in the right panel
+  //                                        under `title` and shows the slot.
+  //   window.ModelProps.clear()            empties it and hides the slot.
+  //   window.ModelProps.slot()             the element, if something would
+  //                                        rather append to it directly.
+  //
+  // WHAT THE SHELL PROMISES: the slot exists whenever the page has a drawing,
+  // it sits under the view rail in the right panel, and it is hidden while
+  // empty so a shut-looking panel never has an empty PROPERTIES heading in it.
+  // Opening the right panel is the caller's business, not the slot's -- a tool
+  // arming should not yank a panel open under a drafter who closed it.
+  //
+  // WHAT IT DOES NOT DO: it holds no state, reads no tool, and knows nothing
+  // about beams, columns, fixtures or annotations. The armed tool decides what
+  // goes here and when; this only owns the space and the show/hide.
+  const propsSlot = document.getElementById('props-slot');
+  window.ModelProps = Object.freeze({
+    slot: () => propsSlot,
+    clear: () => { propsSlot.replaceChildren(); propsSlot.hidden = true; },
+    set: (title, node) => {
+      propsSlot.replaceChildren();
+      if (title) {
+        const head = document.createElement('div');
+        head.className = 'props-title';
+        head.textContent = title;
+        propsSlot.append(head);
+      }
+      if (node) propsSlot.append(node);
+      propsSlot.hidden = !(title || node);
+    },
+  });
+
   const chromeBar = document.getElementById('chrome');
   const levelPick = document.getElementById('level-pick');
   const viewPick = document.getElementById('view-pick');
@@ -3071,6 +3471,10 @@
     bumpModelEpoch();
     fit();
     paint();
+    // The shell comes up with the drawing, for the same reason the switchers
+    // do: a tab that opens an empty panel is furniture.
+    syncShell();
+    syncBuildBar();
     // The switchers can only be built once the drawing is on the page: their
     // options ARE its levels. Before this the bar stays hidden, like #save.
     buildChrome();

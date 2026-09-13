@@ -18,8 +18,8 @@
 // truth). Edit a wall height, save, and the stored rise is stale -- so the two
 // boards would have drawn the same drawing with different riser counts.
 //
-// Pure, and it reads nothing. LAYOUT.dc.html still holds its own copy; adopting
-// this there is a separate change with its own test surface.
+// Pure, and it reads nothing. Every caller reads it here -- LAYOUT.dc.html
+// adopted it in c420e80 and holds no table of its own.
 if (!window.DraftLevelAssembly) {
 (() => {
   // 8'-1 1/8": eight foot studs on a plate, plus the double top plate.
