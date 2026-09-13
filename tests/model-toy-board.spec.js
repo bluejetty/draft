@@ -319,8 +319,39 @@ test('DRAFTING still commits the off-axis, off-foot wall — TOY does not leak',
     const dz = Math.abs(w.e[1] - w.s[1]);
     const dx = Math.abs(w.e[0] - w.s[0]);
     expect(dz, 'still off axis').toBeGreaterThan(0.1);
-    expect(Math.abs(dx - Math.round(dx)), 'still off the foot')
+
+    // THE RUN'S LENGTH, not its dx. The mutation gate caught this: with the
+    // foot rounding leaking into DRAFTING, the endpoint is scaled ALONG the
+    // run, so dx comes back fractional and "still off the foot" passed while
+    // the wall was exactly 5 feet long. The length is the thing TOY rounds, so
+    // the length is the thing DRAFTING must be free of.
+    const len = Math.hypot(dx, dz);
+    expect(Math.abs(len - Math.round(len)), 'and its LENGTH is off the foot')
       .toBeGreaterThan(0.01);
+  });
+
+test('the foot is measured along the run, not rounded coordinate by coordinate',
+  async ({ page }) => {
+    // THE GATE FOUND THIS INVISIBLE. Every other TOY check starts a run at the
+    // origin, where a whole-foot start makes "round each coordinate" and
+    // "round the length" give the same answer -- so a build that did the wrong
+    // one of those passed everything.
+    //
+    // It matters on any drawing that existed before TOY: round the coordinates
+    // and a run from a fractional corner gets whole-foot POSITIONS and a
+    // fractional LENGTH, which is exactly backwards. "Everything adjustable is
+    // to the nearest foot" is about how far a wall moves, not where the grid
+    // says it may sit.
+    await open(page, base({ board: 'toy' }));
+    // Start off the foot, so the two rules diverge.
+    const w = await drawnWall(page, [0.37, 0], [5.4, 0.8]);
+    expect(w, 'a wall was committed').toBeTruthy();
+
+    const len = Math.hypot(w.e[0] - w.s[0], w.e[1] - w.s[1]);
+    expect(Math.abs(len - Math.round(len)),
+      'the LENGTH lands on the foot').toBeLessThan(1e-9);
+    expect(Math.abs(w.s[0] - Math.round(w.s[0])),
+      'from a start that does not').toBeGreaterThan(0.01);
   });
 
 test('TOY squares without the T-square, which it has no way to switch on',
