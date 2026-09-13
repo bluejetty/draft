@@ -4452,11 +4452,38 @@
   // onto itself -- (0,0) -> (4, 0.06) where squaring gives (4, 0). A comment
   // describing behaviour the code does not have is worse than no comment: it
   // is the reason nobody looked.
+  // WHOLE FEET IN TOY, ON THE NUMBER THAT REACHES commitWall. §1 says that in
+  // those words, and it is the whole of the difference between a constraint
+  // and a display convention: rounding the readout would show 12'-0" over a
+  // wall the file records as 12.037, and the drafter would find out later,
+  // from a dimension string that disagrees with the plan it measures.
+  //
+  // MEASURED FROM THE START, NOT ROUNDED IN PLACE. The run's LENGTH is what
+  // lands on the foot, so the far end moves to make it so; rounding the
+  // endpoint's coordinates instead would give whole-foot positions and a
+  // fractional length whenever the start was itself fractional -- which it is,
+  // on any drawing that existed before TOY.
+  //
+  // AND IT ROUNDS AFTER THE SNAP, so a corner the snap legitimately reached is
+  // not then nudged off it. A snap that lands on a real corner is the one case
+  // where the foot gives way: the corner is where the geometry actually joins.
+  const onTheFoot = (from, pt) => {
+    if (!from) return pt;
+    const dx = pt.x - from.x, dz = pt.z - from.z;
+    // One of these is zero under the square, so this is the run's length.
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-9) return pt;
+    const feet = Math.max(1, Math.round(len));
+    return { x: from.x + (dx / len) * feet, y: 0, z: from.z + (dz / len) * feet };
+  };
+
   const drawPoint = at => {
     const wanted = squareTo(drawStart, at);
     const fixed = squaredAxis(drawStart, at);
     const snapped = fixed ? axisSnap(wanted, fixed) : cornerSnap(wanted, []);
-    return snapped || { x: wanted.x, y: 0, z: wanted.z };
+    if (snapped) return snapped;
+    const free = { x: wanted.x, y: 0, z: wanted.z };
+    return board === 'toy' ? onTheFoot(drawStart, free) : free;
   };
 
   const drawPress = at => {
@@ -4513,8 +4540,19 @@
   // WHAT THE T-SQUARE ACTUALLY DOES. The longer leg wins, so the run follows
   // the direction the hand is already going rather than jumping axes under
   // the cursor.
+  // TOY SQUARES BECAUSE THE BOARD SAYS SO, not because an instrument is up.
+  // §1: "Four directions only, +X/-X/+Z/-Z from the start point", and TOY has
+  // no instruments for a drafter to switch on -- §6 takes the tools away. So
+  // the T-square is one reason to square and the board is another, and a run
+  // is held square if EITHER holds.
+  //
+  // Acceptance #4 is what keeps this honest in the other direction: in
+  // DRAFTING with the T-square down, nothing squares and the same gesture
+  // commits the same off-axis wall it commits today. TOY must not leak.
+  const squaring = () => tsquareOn || board === 'toy';
+
   const squareTo = (from, at) => {
-    if (!tsquareOn || !from) return at;
+    if (!squaring() || !from) return at;
     return Math.abs(at.x - from.x) >= Math.abs(at.z - from.z)
       ? { x: at.x, z: from.z } : { x: from.x, z: at.z };
   };
@@ -4524,7 +4562,7 @@
   // already axis-aligned comes back from squareTo unchanged, and "unchanged"
   // then means both "not squaring" and "squaring, already square".
   const squaredAxis = (from, at) => {
-    if (!tsquareOn || !from) return null;
+    if (!squaring() || !from) return null;
     return Math.abs(at.x - from.x) >= Math.abs(at.z - from.z) ? 'z' : 'x';
   };
 

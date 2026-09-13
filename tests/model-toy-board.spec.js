@@ -261,3 +261,78 @@ test('in DRAFTING a typed length just commits', async ({ page }) => {
   await expect(page.locator('[data-promote]')).toBeHidden();
   expect(await wallCount(page)).toBe(before + 1);
 });
+
+// ── §1: four directions, whole feet, and no leaking into DRAFTING ───────────
+
+// The committed geometry, read out of the file. §1 says to assert that and not
+// the cursor, because a page that rounds only what it DISPLAYS shows 12'-0"
+// over a wall the file records as 12.037 — and the drafter finds out later,
+// from a dimension string that disagrees with the plan it measures.
+async function drawnWall(page, from, to) {
+  const box = await page.locator('#plan').boundingBox();
+  const scale = await page.evaluate(() => Number(
+    /scale ([\d.]+) px\/ft/.exec(document.getElementById('readout').textContent)[1]));
+  const at = (x, z) => [box.x + box.width / 2 + x * scale, box.y + box.height / 2 + z * scale];
+  const armed = await page.locator('[data-draw-wall]')
+    .evaluate(el => el.classList.contains('armed'));
+  if (!armed) await page.locator('[data-draw-wall]').click();
+  await page.mouse.click(...at(...from));
+  await page.waitForTimeout(60);
+  await page.mouse.click(...at(...to));
+  await page.waitForTimeout(120);
+  await page.locator('#save').click();
+  await page.waitForTimeout(400);
+  const saved = await stored(page);
+  const seeded = new Set(['n', 'e', 's', 'w']);
+  const made = saved.walls.filter(w => !seeded.has(w.id)).pop();
+  return made && {
+    s: [Number(made.start.x.toFixed(6)), Number(made.start.z.toFixed(6))],
+    e: [Number(made.end.x.toFixed(6)), Number(made.end.z.toFixed(6))],
+  };
+}
+
+test('TOY commits an axis-aligned whole-foot wall from an off-axis, off-foot drag',
+  async ({ page }) => {
+    // Acceptance #1, and the aim is deliberately awkward: 5.4 ft across and
+    // 0.8 ft down, so an honest build has to both square it and round it.
+    await open(page, base({ board: 'toy' }));
+    const w = await drawnWall(page, [0, 0], [5.4, 0.8]);
+    expect(w, 'a wall was committed').toBeTruthy();
+
+    const dz = Math.abs(w.e[1] - w.s[1]);
+    const dx = Math.abs(w.e[0] - w.s[0]);
+    expect(dz, 'exactly axis-aligned').toBeLessThan(1e-9);
+    expect(Math.abs(dx - Math.round(dx)), 'a whole number of feet')
+      .toBeLessThan(1e-9);
+    expect(Math.round(dx), 'and the nearest foot to the 5.4 aimed at').toBe(5);
+  });
+
+test('DRAFTING still commits the off-axis, off-foot wall — TOY does not leak',
+  async ({ page }) => {
+    // ACCEPTANCE #4, and it is the half that makes the one above mean
+    // something: a page that squared and rounded everywhere would pass every
+    // TOY check and quietly take DRAFTING's precision away.
+    await open(page, base({ board: 'drafting' }));
+    const w = await drawnWall(page, [0, 0], [5.4, 0.8]);
+    expect(w, 'a wall was committed').toBeTruthy();
+
+    const dz = Math.abs(w.e[1] - w.s[1]);
+    const dx = Math.abs(w.e[0] - w.s[0]);
+    expect(dz, 'still off axis').toBeGreaterThan(0.1);
+    expect(Math.abs(dx - Math.round(dx)), 'still off the foot')
+      .toBeGreaterThan(0.01);
+  });
+
+test('TOY squares without the T-square, which it has no way to switch on',
+  async ({ page }) => {
+    // §6 takes the instruments away in TOY, so squaring cannot depend on one
+    // being up. The chip is dark here and the wall is square anyway.
+    await open(page, base({ board: 'toy' }));
+    const lit = await page.locator('[data-mode-tsquare]')
+      .evaluate(el => el.classList.contains('lit'));
+    expect(lit, 'the T-square is down').toBe(false);
+
+    const w = await drawnWall(page, [0, -6], [4.3, -5.2]);
+    expect(Math.abs(w.e[1] - w.s[1]), 'square with the instrument down')
+      .toBeLessThan(1e-9);
+  });
