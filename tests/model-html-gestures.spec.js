@@ -361,12 +361,31 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // stronger claim than naming them here.
       const controls = await page.evaluate(() => {
         const inPanel = el => el.closest('#levels-panel') !== null;
+        // THE TOOL COLUMN IS PARTITIONED OUT FOR THE PANEL'S OWN REASON, and
+        // it is a change in shape rather than a loosening. Its keys are
+        // DERIVED from tool-roster.js -- seventeen of them, with the letters
+        // resolved through SETTINGS -- so naming them here would duplicate
+        // what model-tool-column.spec.js already asserts against the roster
+        // itself, which is the stronger claim. What this list is for is the
+        // part that must not grow without anyone noticing, so the column is
+        // counted BY KIND below: a context menu host or a file input smuggled
+        // into the slot arrives as 'BUTTON' or 'INPUT' and fails.
+        const inTools = el => el.closest('#tool-slot') !== null;
+        const outside = el => !inPanel(el) && !inTools(el);
+        const toolKind = el => (el.dataset.toolKey !== undefined ? 'tool-key'
+          : el.dataset.selMode !== undefined ? 'sel-mode'
+            : el.dataset.selFilter !== undefined ? 'sel-filter'
+              : el.tagName.toLowerCase());
         return {
-          buttons: [...document.querySelectorAll('button')].filter(b => !inPanel(b))
+          buttons: [...document.querySelectorAll('button')].filter(outside)
             .map(b => b.id || b.textContent.trim()).sort(),
-          selects: [...document.querySelectorAll('select')].filter(s => !inPanel(s))
+          selects: [...document.querySelectorAll('select')].filter(outside)
             .map(s => s.id).sort(),
-          inputs: [...document.querySelectorAll('input')].map(i => i.type).sort(),
+          inputs: [...document.querySelectorAll('input')].filter(outside)
+            .map(i => i.type).sort(),
+          toolKinds: [...new Set([...document.querySelectorAll('#tool-slot *')]
+            .filter(el => ['BUTTON', 'INPUT', 'SELECT'].includes(el.tagName))
+            .map(toolKind))].sort(),
           // AND THE PANEL, counted rather than named: every control inside it
           // must be one of the four kinds it is allowed to hold. A context
           // menu host or a file input smuggled in there would fail this.
@@ -398,6 +417,20 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // checking rather than waving through, because BUNGALOW looks exactly
       // like the BUILD HOUSE verb the table records as absent.
       //
+      // AND A THIRD TIME, with the tool column -- seventeen keys, which is what
+      // took this red on CI while every suite I had thought to run locally was
+      // green. THE CHECK DID ITS JOB AND I DID NOT DO MINE: a change that adds
+      // a control column is precisely the change this assertion exists to
+      // notice, and it was not in the set I ran. Running the suites related to
+      // the work is not the same as running the suites the work disturbs.
+      //
+      // The verdict for the keys themselves: none of them is a drawing verb
+      // YET. A key sets `activeTool` and nothing else -- WALL is the only one
+      // with a gesture behind it, and that gesture is the same `draw-wall`
+      // this list already names, now driven through the register instead of a
+      // boolean. So no absence row below changes; the parity table carries a
+      // row for the column.
+      //
       // IT IS NOT THAT VERB. The bar sits on a seam: it records which type was
       // chosen and something else, not yet built, decides what geometry that
       // produces. `model-html-topbar.spec.js` holds the wall count across a
@@ -421,6 +454,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // 'BUTTON' or 'INPUT' and fail.
           panelKinds: ['add-level', 'cut-row', 'delete-level', 'layer-row',
             'level-row', 'view-3d'].sort(),
+          // The column's kinds. SELECTION's three modes and OBJECT TYPE's five
+          // filters are named rather than counted for the same reason the keys
+          // are not: a control the classifier cannot name arrives as 'button'
+          // and fails, which is how the chips were noticed here in the first
+          // place.
+          toolKinds: ['sel-filter', 'sel-mode', 'tool-key'],
         });
     });
 
