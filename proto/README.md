@@ -16,11 +16,16 @@ A dealt BUNGALOW saved off Movie's own machine, kept because its shape is
 unlike the other three and because the timing questions need a real drawing
 rather than a convenient one.
 
-**It is NOT a reference plan, and not a sample house.** Movie's condition, in
-his words:
+**Test fixture only. Never shown on the site, never offered as a sample plan
+or a reference for any house type. Replaceable on request.** Movie's condition,
+in his words:
 
 > "its not the sample house, but they can use it if they need it for coding,
 > not to be used as an example bilevel"
+
+> "the bungalow draft file is only for testing but not for display on the
+> website they can save it if they want too or i can get them another whenever
+> they need it"
 
 The authored HOME PLANS are drawn separately. Do not cite this file as how a
 bungalow is laid out, and do not build a house template from it.
@@ -39,7 +44,11 @@ described from memory:
   that were not meant to be drawn. They are lines, not walls — the walls are
   all orthogonal — and they are kept rather than tidied, because a fixture
   that only contains what someone meant to draw is not a fixture.
+- **2 groups, 1 level lock, 2 surface openings** — none of which the other
+  fixtures carry, and each one a code path that otherwise only runs on
+  hand-built test data.
 - `fixtures: 0`, `roomTags: 0`. It is a dimensioned shell, not a full house.
+  Worth knowing before anyone calls it a complete drawing.
 
 ### The reason it exists at all
 
