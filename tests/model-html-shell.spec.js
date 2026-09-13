@@ -57,7 +57,10 @@ async function openShell(page, query = '') {
 const hiddenPct = page => page.evaluate(() => {
   const canvas = document.getElementById('plan');
   const c = canvas.getBoundingClientRect();
-  const boxes = ['left-tab', 'left-rail', 'right-tab', 'right-rail']
+  // THE TOP ROW COUNTS TOO. It was left out while it was two separately
+  // positioned elements, which is part of how the build bar came to be sitting
+  // on the SAVE button without any measurement noticing.
+  const boxes = ['left-tab', 'left-rail', 'right-tab', 'right-rail', 'top-row']
     .map(id => document.getElementById(id))
     .filter(el => el && !el.hidden)
     .map(el => el.getBoundingClientRect())
@@ -101,8 +104,13 @@ test('both sidebars start shut, and shut costs less sheet than the overlay did',
     // back towards it. Two placement mistakes were caught by this number
     // rather than by looking: full-height tabs copied from the old page (9.7%)
     // and panels centred where fit() centres the house (4.5%).
-    expect(pct, 'shut must stay well under the 5.5% corner overlay it replaced')
-      .toBeLessThan(3);
+    // RE-BASED after the panels moved below the top row. That move was forced
+    // by the collision check above and cost four points: the row spans the top
+    // edge, so a panel level with it sits underneath it. 6% leaves room for
+    // the measurement to wander without letting the shell drift back toward
+    // the full-height version that started at 9.7%.
+    expect(pct, 'the shell is taking more of the sheet than it should')
+      .toBeLessThan(6);
   });
 
 test('the collapsed right panel still seats all six views', async ({ page }) => {
@@ -205,6 +213,79 @@ test('each side remembers its own state across a reload', async ({ page }) => {
   await expect(page.locator('#left-rail'), 'the left forgot across a reload').toBeVisible();
   await expect(page.locator('#right-rail'), 'the right invented a state across a reload')
     .toHaveAttribute('data-collapsed', '');
+});
+
+test('NO PIECE OF CHROME COVERS ANY OTHER, shut or open', async ({ page }) => {
+  // THE GUARD THIS SHELL KEPT NEEDING. Four collisions were shipped and caught
+  // one at a time, each as a confusing failure somewhere else:
+  //
+  //   the right tab over SAVE          eleven draw-delete tests, 180s timeouts
+  //   the build bar over SAVE          stale-merge-refusal, "BUNGALOW ...
+  //                                    intercepts pointer events"
+  //   the top row over the left rail   the tap guard below, hitting level-pick
+  //   the top row over the right rail  found only by this check
+  //
+  // Every one came from placing a fixed element by coordinate and reasoning
+  // about where it would land. This asserts the RELATIONSHIP across every
+  // pair, so the next one fails here, named, instead of surfacing three
+  // specs away as a timeout.
+  await openShell(page);
+  const ids = ['top-row', 'left-tab', 'left-rail', 'right-tab', 'right-rail',
+    'readout', 'hint', 'elsewhere'];
+  const clashesIn = () => page.evaluate(list => {
+    const vis = list.map(id => document.getElementById(id))
+      .filter(el => el && !el.hidden && getComputedStyle(el).display !== 'none')
+      .map(el => ({ id: el.id, r: el.getBoundingClientRect() }))
+      .filter(o => o.r.width > 0 && o.r.height > 0);
+    const out = [];
+    for (let i = 0; i < vis.length; i += 1) {
+      for (let j = i + 1; j < vis.length; j += 1) {
+        const a = vis[i].r; const b = vis[j].r;
+        if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) {
+          out.push(`${vis[i].id} overlaps ${vis[j].id}`);
+        }
+      }
+    }
+    return out;
+  }, ids);
+
+  expect(await clashesIn(), 'chrome overlaps chrome with both panels shut').toEqual([]);
+
+  await page.locator('#left-tab').click();
+  await page.locator('#right-tab').click();
+  await page.waitForTimeout(200);
+  expect(await clashesIn(), 'chrome overlaps chrome with both panels open').toEqual([]);
+});
+
+test('the chrome bar and the build bar cannot overlap at any width', async ({ page }) => {
+  await openShell(page);
+
+  // TWO SEPARATELY FIXED-POSITIONED BARS, EACH AS WIDE AS ITS CONTENT, is how
+  // the build bar came to be sitting on SAVE: the chrome bar grows with the
+  // level and view names and the build bar with the family labels, so on a
+  // drawing with long level names they met. CI caught it as a 180-second
+  // timeout on a spec that had nothing to do with either
+  // (stale-merge-refusal), with "BUNGALOW ... intercepts pointer events".
+  //
+  // They are one flex row now, so this cannot recur at any width — and the
+  // check is on the RELATIONSHIP rather than on coordinates, because pinning
+  // numbers would pass on the exact drawing that was measured and nothing else.
+  const geom = await page.evaluate(() => {
+    const chrome = document.getElementById('chrome').getBoundingClientRect();
+    const bar = document.getElementById('build-bar').getBoundingClientRect();
+    const save = document.getElementById('save').getBoundingClientRect();
+    const owner = document.elementFromPoint(save.x + save.width / 2, save.y + save.height / 2);
+    return {
+      overlap: chrome.right > bar.left,
+      nested: document.getElementById('chrome').contains(document.getElementById('build-bar')),
+      saveOwner: owner ? (owner.id || owner.tagName) : 'none',
+    };
+  });
+  expect(geom.overlap, 'the chrome bar reaches under the build bar').toBe(false);
+  // The malformed-DOM check: an unclosed #chrome swallowed the build bar and
+  // every measurement after it described a tree that was not the page's.
+  expect(geom.nested, '#chrome is not closed — it contains the build bar').toBe(false);
+  expect(geom.saveOwner, 'something is sitting on the SAVE button').toBe('save');
 });
 
 test('a tap that lands on a sidebar says which one', async ({ page }) => {

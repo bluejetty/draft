@@ -153,7 +153,13 @@
      `viewWrap.hidden = true` would set the attribute, change nothing on
      screen, and leave a picker offering a choice that does nothing on ROOF
      and SITE -- hidden in the DOM and visible to the drafter. */
-  #chrome { position:fixed; left:12px; top:12px; z-index:5;
+  /* THE TOP ROW OWNS THE POSITION; its two children just flow inside it.
+     Inset past the tabs on both edges (26px each plus air) so the row never
+     sits on one. */
+  #top-row { position:fixed; top:12px; left:40px; right:40px; z-index:6;
+    display:flex; gap:12px; align-items:flex-start; pointer-events:none; }
+  #top-row > * { pointer-events:auto; }
+  #chrome { flex:0 0 auto;
     display:flex; gap:10px; align-items:center; }
   #chrome[hidden], #chrome label[hidden] { display:none; }
   #chrome label { display:flex; align-items:center; gap:6px;
@@ -176,8 +182,11 @@
   /* THE BUILD BAR, top centre: the chrome bar owns the top-left and the
      sidebars own both edges, so the middle of the top edge is what is left.
      Measured like the rest -- see tests/model-html-topbar.spec.js. */
-  #build-bar { position:fixed; top:12px; left:50%; transform:translateX(-50%);
-    z-index:6; display:flex; align-items:flex-start; gap:6px; }
+  /* Centred in WHAT IS LEFT after the chrome bar, rather than in the window.
+     flex:1 with centred content keeps it looking centred and makes an overlap
+     impossible however wide either side grows. */
+  #build-bar { flex:1 1 auto;
+    display:flex; align-items:flex-start; justify-content:center; gap:6px; }
   #build-bar[hidden] { display:none; }
   #build-families, #build-entries { display:flex; gap:4px; }
   #build-entries[hidden] { display:none; }
@@ -216,7 +225,17 @@
      exactly where the house is: centred cost 4.5% of the drawing with both
      panels shut, top-aligned costs 1.3%. Bottom-aligned ties it at 1.2% and
      loses, because the readout and the hint already live along that edge. */
-  .rail-tab { position:fixed; top:12px; z-index:6;
+  /* BELOW THE TOP ROW, not beside it. The row spans the sheet's top edge, so
+     a panel starting at the same y sits under it -- measured with a pairwise
+     box check across every piece of chrome, and top:12 put the row over BOTH
+     rails (over the first seat row on the right, over the tool slot on the
+     left when open). Bottom-anchoring is cheaper still but puts the rails on
+     #readout and #hint, which already live along that edge.
+     Only this clears everything: shut 7.3% of the drawing against 3.4% at
+     top:12. Four points is what a top bar costs, and chrome that covers
+     chrome is a defect where drawing area is a price -- both panels collapse,
+     so the drafter can have the sheet back. */
+  .rail-tab { position:fixed; top:48px; z-index:6;
     height:auto; max-height:52vh; padding:14px 6px;
     display:flex; align-items:center; justify-content:center;
     border:1px solid var(--edge-panel); cursor:pointer;
@@ -234,8 +253,8 @@
   /* A panel is pinned to its own edge and is as tall as it needs to be, for
      the same reason as the tab: full height costs drawing area that a panel
      holding three rows of seats is not using. */
-  aside { position:fixed; top:12px;
-    max-height:calc(100vh - 24px); z-index:5; overflow-y:auto;
+  aside { position:fixed; top:48px;
+    max-height:calc(100vh - 60px); z-index:5; overflow-y:auto;
     overscroll-behavior:contain; padding:10px;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none); }
   aside[hidden] { display:none; }
@@ -357,6 +376,15 @@
 
 <canvas id="plan"></canvas>
 <div id="readout">loading…</div>
+<!-- ONE TOP ROW, so the two cannot land on each other. They were separately
+     fixed-positioned -- the chrome bar at left:12 and the build bar centred at
+     left:50% -- and both are as wide as their CONTENT: the chrome bar grows
+     with the level and view names, the build bar with the family labels. On a
+     drawing whose level names run long the chrome bar reached under the build
+     bar and BUNGALOW swallowed the SAVE button -- the second time this shell
+     landed on SAVE. Tuning the numbers would have fixed one drawing; a flex
+     row cannot overlap at any width. -->
+<div id="top-row" data-top-row>
 <div id="chrome" hidden>
   <label>Level <select id="level-pick" data-level-pick></select></label>
   <label id="view-wrap">View <select id="view-pick" data-view-pick></select></label>
@@ -370,17 +398,7 @@
        towards the middle where fit() puts the house. Moving one button costs
        nothing. -->
   <button id="save" type="button" data-model-save>SAVE</button>
-<div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
-<div id="lease" data-lease-banner hidden>
-  <span data-lease-message></span>
-  <button id="take-over" type="button" data-take-over>TAKE OVER</button>
 </div>
-<!-- THE SHELL. Two pull-out sidebars, each with a tab on its own edge, after
-     MODEL.dc.html's shape (:1762-1763) rather than its stylesheet. Devin's
-     split: LEFT is what you are about to do, RIGHT is what you are looking at.
-     The left panel is the tool palette's home and is empty until Gilligan's
-     seven land -- the slot exists so a tool is not built against a canvas that
-     is about to lose its edge. -->
 <!-- THE TOP BAR: the house the drafter is going to build, and the bone that
      builds it. MODEL.dc.html's row is "three families between the turtle and
      the bone", each opening ONE submenu (Movie, 6 Sep) -- that shape, from the
@@ -391,6 +409,20 @@
   <div id="build-entries" data-build-entries hidden></div>
   <button id="bone" type="button" data-bone-press title="Build the house you picked">BONE</button>
 </div>
+</div>
+
+<div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
+<div id="lease" data-lease-banner hidden>
+  <span data-lease-message></span>
+  <button id="take-over" type="button" data-take-over>TAKE OVER</button>
+</div>
+
+<!-- THE SHELL. Two pull-out sidebars, each with a tab on its own edge, after
+     MODEL.dc.html's shape (:1762-1763) rather than its stylesheet. Devin's
+     split: LEFT is what you are about to do, RIGHT is what you are looking at.
+     The left panel is the tool palette's home and is empty until Gilligan's
+     seven land -- the slot exists so a tool is not built against a canvas that
+     is about to lose its edge. -->
 
 <button id="left-tab" class="rail-tab" type="button" data-left-tab hidden>DRAFTING TOOLS</button>
 <aside id="left-rail" data-left-rail hidden>
