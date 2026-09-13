@@ -570,7 +570,15 @@
 
   const BUCKET = 'model-drawing';
   const canvas = document.getElementById('plan');
-  const ctx = canvas.getContext('2d');
+  // NOT const, and this is the one binding that decides whether a seat can
+  // show a plan. Every painter on this page draws into `ctx` and projects
+  // through toS(), both module-level -- so a thumbnail either swaps them for
+  // the length of one draw or becomes a SECOND, smaller renderer. The old
+  // page took the second road (_drawPlanThumb2D) and this page took the first
+  // for its cut seats already: "the same painter that draws the full-size
+  // view, through the same env". A miniature that can disagree with the plan
+  // it claims to show is the defect this suite keeps meeting.
+  let ctx = canvas.getContext('2d');
   const readout = document.getElementById('readout');
   const notice = document.getElementById('notice');
   const noticeBody = document.getElementById('notice-body');
@@ -585,6 +593,15 @@
   // camera, but the painters take `toS` as a parameter and never ask where it
   // came from, so tier 1 owes three.js nothing.
   const view = { cx: 0, cz: 0, scale: 6 };
+  // WHILE A SEAT IS BEING PAINTED, this says which level and which drawing of
+  // it -- and it is deliberately the ONLY override. activeLevelId and
+  // activeViewId read it, and everything downstream (walls, lines, floors,
+  // roofs, dimensions, the fit) already reads THEM, so one hook aims the
+  // entire existing filter chain at another level instead of seventeen
+  // painters growing a parameter. It is a second source of truth for "what is
+  // active" for exactly as long as one synchronous draw, restored in a
+  // `finally` so a throwing painter cannot leave the page pointing at a seat.
+  let thumbTarget = null;
   let drawing = null;
   // The bucket revision the drawing was read at, handed back as `ifRev` on
   // save so a write that would land on top of someone else's is REFUSED
@@ -696,6 +713,7 @@
   const MAIN_FLOOR_LEVEL_ID = 3;
   const levelIds = () => (drawing?.levels || []).map(level => Number(level.id));
   const activeLevelId = () => {
+    if (thumbTarget) return thumbTarget.levelId;
     const asked = Number(params.get('level'));
     if (Number.isFinite(asked) && levelIds().includes(asked)) return asked;
     if (params.get('level') !== null && drawing) {
@@ -754,6 +772,7 @@
   const activeCut = () => cutForViewId(params.get('view'));
 
   const activeViewId = () => {
+    if (thumbTarget) return thumbTarget.viewId;
     const LV = window.DraftLayerViews;
     const levelId = activeLevelId();
     const views = LV.layerViewsForLevelId(levelId);
@@ -928,6 +947,16 @@
     walls().forEach(w => { if (w.start && w.end) pts.push(w.start, w.end); });
     lines().forEach(l => { if (l.start && l.end) pts.push(l.start, l.end); });
     floors().forEach(f => (f.points || []).forEach(p => pts.push(p)));
+    // ROOFS AND OUTLINES COUNT TOO, and leaving them out was a real bug rather
+    // than a thumbnail detail. ROOF and SITE hold no walls, lines or floors at
+    // all -- a roof footprint and an outline is the whole of them -- so fit()
+    // found no points, fell back to scale 6 at the world origin, and drew the
+    // level off the side of the canvas. It showed up when the plan seats
+    // started fitting those two levels, but it is the same on the main canvas:
+    // pressing 0 on ROOF fitted to nothing. MODEL.dc.html's own thumbnail
+    // bounds (:7269) take all five collections; this now takes the same five.
+    roofs().forEach(r => (r.points || []).forEach(p => pts.push(p)));
+    outlines().forEach(o => (o.points || []).forEach(p => pts.push(p)));
     return pts.filter(p => Number.isFinite(p?.x) && Number.isFinite(p?.z));
   };
 
@@ -2851,7 +2880,71 @@
   // where Movie wants to find them. Rows 2, 3 and 5 are not built; when they
   // are, they go between these two groups rather than after them, which is why
   // the order is written down now instead of inferred from the array later.
-  const SEAT_ORDER = ['E1', 'E3', 'E2', 'E4', 'S1', 'S2'];
+  // THE SEATING CHART IS DERIVED, not listed. MODEL.dc.html:7160
+  // `_viewRailCards` walks `state.levels` to build it, and that is the whole
+  // reason the LEVELS / LAYERS panel came first: add a level and two seats
+  // appear, delete one and two leave. A fixed list of fourteen looks right on
+  // Movie's bungalow today and is wrong the first time he adds a floor.
+  //
+  // Counted from the old page on proto/perf-bungalow.draft rather than taken
+  // from the order, which said twelve -- it is twelve FILLED seats and two
+  // empty section chairs, fourteen elements:
+  //
+  //     E1 · FRONT            E3 · BACK
+  //     E2 · LEFT             E4 · RIGHT
+  //     ROOF PLAN             SITE PLAN
+  //     2ND FL PLAN (WALLS)   2ND FL LAYOUT (FLOOR)
+  //     MAIN FL PLAN (WALLS)  MAIN FL LAYOUT (FLOOR)
+  //     FOUNDATION            BASEMENT (WALLS)
+  //     S1                    S2
+  //
+  // The rail is two columns, so the flat order is row-major: inner, outer,
+  // inner, outer. SITE and ROOF are seated as a PAIR in row three rather than
+  // getting a plan/layout row each, because layerViewsForLevelId answers with
+  // none for them -- the same fact the panel shows by giving their cards no
+  // layer rows.
+  // ROOF is level 7 and SITE is level 8 -- MODEL.dc.html:7201 seats them by
+  // id, and layer-views.js calls the pair WHOLE_LEVEL_IDS. By id rather than
+  // by name, so renaming a level cannot empty the row; and if a drawing has
+  // no ROOF, that seat is ABSENT rather than an empty chair, which is the old
+  // page's own `push` skipping a falsy card.
+  const ROOF_LEVEL_ID = 7, SITE_LEVEL_ID = 8;
+  const seatingChart = () => {
+    const LV = window.DraftLayerViews;
+    const levels = drawing?.levels || [];
+    const byId = id => levels.find(level => Number(level.id) === id) || null;
+    const seats = [];
+    const planSeat = (level, viewId, label) => {
+      if (level) seats.push({ kind: 'plan', levelId: Number(level.id), viewId, label });
+    };
+    ['E1', 'E3', 'E2', 'E4'].forEach(id => seats.push({ kind: 'cut', name: id }));
+    planSeat(byId(ROOF_LEVEL_ID), null, 'ROOF PLAN');
+    planSeat(byId(SITE_LEVEL_ID), null, 'SITE PLAN');
+    levels.forEach(level => {
+      const views = LV.layerViewsForLevelId(level.id);
+      if (!views.length) return;
+      // THE FOUNDATION PAIR IS `foundation` AND `plan`, and the second one is
+      // labelled BASEMENT (WALLS) -- there is no `basement` view id. Reading
+      // the label as if it named a view is how this would have seated a blank.
+      if (views.some(view => view.id === 'foundation')) {
+        planSeat(level, 'foundation', 'FOUNDATION');
+        planSeat(level, 'plan', 'BASEMENT (WALLS)');
+      } else {
+        planSeat(level, 'plan', `${level.name} PLAN (WALLS)`);
+        planSeat(level, 'floor', `${level.name} LAYOUT (FLOOR)`);
+      }
+    });
+    // SECTIONS FILL ACROSS, with two chairs standing ready before anything is
+    // cut (:7215). Padded to a minimum of two, not to an even number: the
+    // rows above are balanced pairs, so appending in order is the old page's
+    // "whichever column is shorter".
+    const stored = cuts();
+    for (let n = 0; n < Math.max(2, stored.length); n += 1) {
+      seats.push({ kind: 'cut', name: `S${n + 1}` });
+    }
+    return seats;
+  };
+
   const rail = document.getElementById('view-rail');
   let railEpoch = -1;
   let railFrame = null;
@@ -2893,14 +2986,59 @@
     };
   };
 
+  // ONE SPEC FOR EITHER KIND OF SEAT. A cut seat shows a section or an
+  // elevation and a plan seat shows a level's drawing, but both answer the
+  // same four questions -- what it is called, what it says on hover, whether
+  // it is the view on screen, and where a press goes -- so the rail below
+  // does not care which it is holding.
+  const seatSpec = entry => {
+    if (entry.kind === 'cut') {
+      const base = seatFor(entry.name);
+      return { ...base,
+        key: `cut:${entry.name}`,
+        active: Boolean(base.cut) && params.get('view') === CUT_VIEW + base.cut.id,
+        press: base.cut ? () => goToView(CUT_VIEW + base.cut.id) : null };
+    }
+    // A PLAN SEAT IS LIVE WHENEVER THE PAGE IS ON THAT LEVEL AND DRAWING.
+    // Asked of activeLevelId/activeViewId rather than of the URL, because a
+    // level with no `?view=` is still showing its default -- the same reason
+    // the panel's lit row is computed and not read off the query string.
+    const onIt = !cutForViewId(params.get('view'))
+      && activeLevelId() === entry.levelId
+      && (entry.viewId === null || activeViewId() === entry.viewId);
+    return {
+      cut: null,
+      plan: entry,
+      key: `plan:${entry.levelId}:${entry.viewId || ''}`,
+      label: entry.label,
+      title: `${entry.label} — tap to bring this plan center`,
+      active: onIt,
+      press: () => {
+        if (activeLevelId() !== entry.levelId) goToLevel(entry.levelId);
+        if (entry.viewId) goToView(entry.viewId);
+        else { params.delete('view'); syncUrl(); buildChrome(); paint(); }
+      },
+    };
+  };
+
+  // THE SEATS THE RAIL IS CURRENTLY HOLDING, so the DOM is rebuilt when the
+  // CHART changes and not on every paint. Adding a level adds two seats and
+  // deleting one takes two away -- that is the item this whole order exists
+  // to demonstrate, so the rail cannot assume its own length.
+  let railKeys = '';
   const syncRail = () => {
     if (!drawing) return;
-    if (!rail.children.length) {
-      SEAT_ORDER.forEach(name => {
+    const chart = seatingChart();
+    const specs = chart.map(seatSpec);
+    const keys = specs.map(spec => spec.key).join('|');
+    if (keys !== railKeys) {
+      railKeys = keys;
+      rail.innerHTML = '';
+      specs.forEach(spec => {
         const seat = document.createElement('button');
         seat.type = 'button';
         seat.className = 'seat';
-        seat.dataset.seat = name;
+        seat.dataset.seat = spec.key;
         const screen = document.createElement('canvas');
         // 2x the CSS size, so the lines are crisp on a retina panel. The old
         // page uses 232x152 for a 116x76 seat (:7306); these seats are 82x54,
@@ -2913,16 +3051,16 @@
         rail.append(seat);
       });
     }
-    const active = params.get('view');
-    const specs = SEAT_ORDER.map(seatFor);
     specs.forEach((spec, i) => {
       const seat = rail.children[i];
       seat.title = spec.title;
       seat.lastChild.textContent = spec.label;
-      seat.disabled = !spec.cut;
-      seat.classList.toggle('active',
-        Boolean(spec.cut) && active === CUT_VIEW + spec.cut.id);
-      seat.onclick = spec.cut ? () => goToView(CUT_VIEW + spec.cut.id) : null;
+      // A CHAIR, NOT A BUTTON, for a seat with nothing behind it -- and a
+      // plan seat always has something behind it, because the chart only
+      // seats levels the drawing actually holds.
+      seat.disabled = !spec.press;
+      seat.classList.toggle('active', spec.active);
+      seat.onclick = spec.press;
     });
 
     // THE THUMBNAILS, ON THE NEXT FRAME, AND ONLY WHEN THE DRAWING MOVED.
@@ -2995,7 +3133,7 @@
     if (railQueue === null || railEpoch !== modelEpoch) {
       railEpoch = modelEpoch;
       railPassEnv = cutEnv();
-      railQueue = SEAT_ORDER.map((name, i) => ({ spec: seatFor(name), i }));
+      railQueue = seatingChart().map((entry, i) => ({ spec: seatSpec(entry), i }));
       railPassMs = 0;
     }
     const t0 = performance.now();
@@ -3024,8 +3162,54 @@
     updateReadout();
   };
 
+  // A LEVEL'S PLAN IN MINIATURE, drawn by the painters that draw the big one.
+  // The viewport is swapped for the length of the call and restored in a
+  // `finally`: ctx, the canvas size, the device ratio, the camera and the
+  // thumb target all go back even if a painter throws, because a page left
+  // pointing at a 82x54 seat would paint the drawing into a thumbnail and
+  // look like the canvas had died.
+  //
+  // fit() is the page's own fit, not a second one -- it reads allPoints(),
+  // which reads the filtered collections, which read activeLevelId(), which
+  // reads thumbTarget. So the seat frames THAT level by the same rule the
+  // drafter gets from pressing 0.
+  const paintPlanThumb = (screen, levelId, viewId) => {
+    const savedCtx = ctx, savedW = cssW, savedH = cssH, savedDpr = dpr;
+    const savedView = { cx: view.cx, cz: view.cz, scale: view.scale };
+    try {
+      thumbTarget = { levelId: Number(levelId), viewId: viewId || null };
+      ctx = screen.getContext('2d');
+      // The seat canvas is 2x its CSS box, the same trick the main canvas
+      // uses, so the miniature is crisp on a retina panel.
+      dpr = 2; cssW = screen.width / dpr; cssH = screen.height / dpr;
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, cssW, cssH);
+      fit();
+      // GEOMETRY ONLY. No grid, no underlays: a grid at 82px across is noise,
+      // and an underlay is a decoded image per seat per edit. The old page's
+      // thumbnail makes the same cut (:7269 draws the level's own geometry).
+      paintFloors(); paintRoofs(); paintShapes();
+      paintOutlines(); paintLines(); paintWalls();
+      ctx.restore();
+    } finally {
+      ctx = savedCtx; cssW = savedW; cssH = savedH; dpr = savedDpr;
+      view.cx = savedView.cx; view.cz = savedView.cz; view.scale = savedView.scale;
+      thumbTarget = null;
+    }
+  };
+
   const paintSeat = (spec, i, env) => {
-    const screen = rail.children[i].firstChild;
+    const screen = rail.children[i] && rail.children[i].firstChild;
+    if (!screen) return;
+    // A PLAN SEAT GOES THROUGH THE PAGE'S OWN PAINTERS, not a second
+    // miniature renderer -- see paintPlanThumb. It returns before the
+    // clearRect below because it clears inside its own viewport swap, where
+    // the size it is clearing is the size it is about to draw into.
+    if (spec.plan) {
+      paintPlanThumb(screen, spec.plan.levelId, spec.plan.viewId);
+      return;
+    }
     const c = screen.getContext('2d');
     c.clearRect(0, 0, screen.width, screen.height);
     if (!spec.cut) return;
