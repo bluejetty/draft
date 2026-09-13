@@ -326,6 +326,24 @@
     font-size:6.5px; font-weight:600; letter-spacing:0.02em;
     text-transform:uppercase; line-height:1.1; text-align:center;
     padding:0 1px; overflow:hidden; }
+  /* SELECTION and OBJECT TYPE. Chips wrap rather than scroll: ALL LEVELS and
+     FENESTRATION are long words in a 120px panel, and a row that scrolls
+     sideways hides the chip a drafter is looking for. */
+  .sel-row { display:flex; flex-wrap:wrap; gap:3px; }
+  .sel-chip { flex:1 1 auto; padding:5px 4px; cursor:pointer;
+    border:1px solid var(--edge-panel); border-radius:2px;
+    background-color: var(--surface-chip);
+    background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); font-family: var(--font-ui); font-size:9px;
+    font-weight:600; letter-spacing:0.04em; line-height:1; }
+  .sel-chip:hover { border-color: var(--accent); color: var(--accent); }
+  .sel-chip[aria-pressed="true"] { border-color: var(--accent);
+    color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .sel-help { margin-top:5px; font-family: var(--font-ui); font-size:9px;
+    line-height:1.25; color: var(--ink-quiet); }
+  /* The old page's warning red (#b04050, :23622), and it means one thing: a
+     filter is engaged. Not "the cursor is over something excluded". */
+  .sel-help[data-engaged] { color:#b04050; }
   #props-slot[hidden] { display:none; }
   .props-title { font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet);
@@ -2074,6 +2092,14 @@
       // section on the same drawing can be compared by looking at them.
       // The rail's six thumbnails, and this is the cost of an EDIT, not of a
       // frame: it only moves when the epoch does.
+      // WHAT IS SELECTED, because with the OBJECT TYPE filter engaged a click
+      // that grabs nothing and a click that grabs something look identical on
+      // a busy screen -- the highlight is under the cursor and the cursor is
+      // over it. The readout is this page's own reporting surface for exactly
+      // that problem (it already says `walls 8/20` rather than making a
+      // drafter count), so the selection goes here rather than into a test
+      // hook nothing but a spec would ever read.
+      + (selection.length ? `   <b>${selection.length} selected</b>` : '')
       + `   paint <b>${lastPaintMs.toFixed(2)}</b> ms`
       + `   rail <b>${lastRailMs.toFixed(2)}</b> ms`;
   };
@@ -2647,6 +2673,13 @@
   // corner handle on one of ten walls would be a handle on an ambiguity.
   let selection = [];
 
+  // THE TWO PANEL STATES, with the old page's own vocabularies and defaults
+  // (:2792-2793). `window-all` is a THIRD MODE, not a modifier on `window`:
+  // WINDOW drags a blue box over the current level, ALL LEVELS drags a red one
+  // over every level, and they are mutually exclusive.
+  let selectionMode = 'click';        // 'click' | 'window' | 'window-all'
+  let selectFilter = 'all';           // 'all' | 'line' | 'wall' | 'outline' | 'floor'
+
   const selectedWall = () => (selection.length === 1 && selection[0].type === 'wall'
     ? selection[0].item : null);
 
@@ -2670,25 +2703,141 @@
     return best;
   };
 
+  // ── what a click can hit ──────────────────────────────────────────────────
+  // THE OLD PAGE'S PRECEDENCE, in its order (_handleSelectClick :18185). It is
+  // not arbitrary: a vertex beats the segments through it, a segment beats the
+  // outline edge behind it, and a floor is last because it is the biggest
+  // target on screen and would otherwise swallow everything drawn on top of it.
+  //
+  // WHAT IS MISSING HERE AND WHY IT IS NOT A BUG. The old page's chain also
+  // tests fenestrations, fixtures, surface openings, dimensions and roofs. None
+  // of those five is in the OBJECT TYPE vocabulary ('all' | 'line' | 'wall' |
+  // 'outline' | 'floor', :2793), so they are reachable only under ALL, and none
+  // of them has a tool on this page yet. Selecting is not saving -- the file
+  // keeps every one of them untouched -- so this page selects less than the old
+  // one for now, and says so rather than pretending the chain is complete.
+  //
+  // THE TOOLTIP AND THE HANDLER DISAGREE IN THE OLD PAGE, and the handler wins
+  // here. `title: 'Only outline nodes respond to Select'` says nodes;
+  // _findOutlineEdgeHit and the corner branch above it both select the WHOLE
+  // outline, from an edge or from a corner. Copying the tooltip would have
+  // produced a filter that behaves differently from the one it was ported from.
+  const segAt = (list, worldPt) => {
+    const G = window.DraftGeometry2D;
+    const thresh = SELECT_GRAB_PX / view.scale;
+    let best = null, bestD = thresh;
+    list.forEach(item => {
+      if (!item.start || !item.end) return;
+      const { d } = G.pointToSegment(worldPt, item);
+      if (d < bestD) { bestD = d; best = item; }
+    });
+    return best;
+  };
+
+  const lineAt = worldPt => segAt(lines(), worldPt);
+
+  // A ray cast, which is the standard test and the only one that answers
+  // correctly for the concave footprints this program draws all day -- an L or
+  // a courtyard has points outside its own bounding box's interior.
+  const pointInRing = (ring, pt) => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+      const a = ring[i], b = ring[j];
+      if (!a || !b) continue;
+      if ((a.z > pt.z) !== (b.z > pt.z)
+        && pt.x < ((b.x - a.x) * (pt.z - a.z)) / (b.z - a.z) + a.x) inside = !inside;
+    }
+    return inside;
+  };
+
+  const floorAt = worldPt => floors()
+    .find(floor => pointInRing(floor.points || [], worldPt)) || null;
+
+  // An outline is selected WHOLE, from any of its edges or any of its corners.
+  const outlineAt = worldPt => {
+    const G = window.DraftGeometry2D;
+    const thresh = SELECT_GRAB_PX / view.scale;
+    return outlines().find(outline => {
+      const pts = outline.points || [];
+      return pts.some((a, i) => {
+        const b = pts[(i + 1) % pts.length];
+        if (!a || !b || pts.length < 2) return false;
+        return G.pointToSegment(worldPt, { start: a, end: b }).d < thresh;
+      });
+    }) || null;
+  };
+
+  // 'all' passes everything; any other filter passes only its own type. The old
+  // page's whole rule, in one line (_selectFilterAllows :18180).
+  const filterAllows = type => selectFilter === 'all' || selectFilter === type;
+
+  // Returns { type, item } or null, in the old page's precedence.
+  const hitAt = worldPt => {
+    if (filterAllows('wall')) {
+      const wall = segAt(walls(), worldPt);
+      if (wall) return { type: 'wall', item: wall };
+    }
+    if (filterAllows('line')) {
+      const line = lineAt(worldPt);
+      if (line) return { type: 'line', item: line };
+    }
+    if (filterAllows('outline')) {
+      const outline = outlineAt(worldPt);
+      if (outline) return { type: 'outline', item: outline };
+    }
+    if (filterAllows('floor')) {
+      const floor = floorAt(worldPt);
+      if (floor) return { type: 'floor', item: floor };
+    }
+    return null;
+  };
+
+  // EVERY SELECTED ITEM, not just the one wall. The highlight is what tells a
+  // drafter what a Delete or an ASSEMBLY is about to act on, so a selection of
+  // ten that paints one is worse than useless -- it names the wrong thing with
+  // total confidence.
+  //
+  // HANDLES ONLY ON A LONE WALL. They are the grab targets for the corner drag,
+  // and cornerAt() only offers them when exactly one wall is selected
+  // (selectedWall()). Drawing them on ten walls would advertise ten grabs that
+  // do nothing, which is the same lie one step down.
   const paintSelection = () => {
-    const selectedSeg = selectedWall();
-    if (!selectedSeg) return;
-    // Only if it is still on screen's level: a selection kept across a level
-    // change would paint a highlight over nothing.
-    if (!walls().includes(selectedSeg)) return;
-    const a = toS(selectedSeg.start), b = toS(selectedSeg.end);
+    if (!selection.length) return;
+    const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines() };
+    const lone = selectedWall();
     ctx.save();
     ctx.strokeStyle = SELECT_INK;
     ctx.lineWidth = 7;
     ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-    // Square handles at each end -- the same 8px squares the old page draws,
-    // and the grab targets the corner drag will use next.
-    ctx.fillStyle = SELECT_HANDLE;
-    [a, b].forEach(pt => ctx.fillRect(pt.x - 4, pt.y - 4, 8, 8));
+    ctx.lineJoin = 'round';
+    selection.forEach(({ type, item }) => {
+      // Only if it is still on screen's level: a selection kept across a level
+      // change would paint a highlight over nothing.
+      if (!(onScreen[type] || []).includes(item)) return;
+      if (type === 'wall' || type === 'line') {
+        const a = toS(item.start), b = toS(item.end);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        if (item === lone) {
+          // Square handles at each end -- the same 8px squares the old page
+          // draws, and the grab targets the corner drag uses.
+          ctx.fillStyle = SELECT_HANDLE;
+          [a, b].forEach(pt => ctx.fillRect(pt.x - 4, pt.y - 4, 8, 8));
+        }
+        return;
+      }
+      const pts = (item.points || []).filter(Boolean);
+      if (pts.length < 2) return;
+      ctx.beginPath();
+      pts.forEach((pt, i) => {
+        const p = toS(pt);
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+    });
     ctx.restore();
   };
 
@@ -3166,6 +3315,110 @@
   });
 
   buildToolColumn();
+
+  // ── SELECTION and OBJECT TYPE ─────────────────────────────────────────────
+  // THE HELP STRINGS ARE THE OLD PAGE'S, VERBATIM (:23597 and :23619). They are
+  // not decoration: the mode help is the only place the shift-drag shortcut is
+  // written down, and the filter help is the only thing that tells a drafter
+  // why the thing under the cursor stopped responding. Paraphrasing them would
+  // have quietly dropped facts a drafter depends on.
+  const MODES = [
+    { id: 'click', label: 'ITEMS' },
+    { id: 'window', label: 'WINDOW' },
+    { id: 'window-all', label: 'ALL LEVELS' },
+  ];
+  const MODE_HELP = {
+    click: 'Click items to select; Shift adds or removes. Press and drag for a '
+      + 'blue window — hold Shift while dragging for a red all-levels window.',
+    window: 'Drag a blue box to select fully enclosed items on the current level.',
+    'window-all': 'Drag a red box to select fully enclosed items on every level.',
+  };
+  const FILTERS = [
+    { id: 'all', label: 'ALL', aria: 'Grab any object type' },
+    { id: 'line', label: 'LINE', aria: 'Grab only lines' },
+    { id: 'wall', label: 'WALL', aria: 'Grab only walls' },
+    { id: 'outline', label: 'OUTLINE', aria: 'Grab only outlines' },
+    { id: 'floor', label: 'FLOOR', aria: 'Grab only floors' },
+  ];
+  const filterHelp = () => (selectFilter === 'all'
+    ? 'Engage a type so Select only grabs that object — even under other geometry.'
+    : `${selectFilter.toUpperCase()} is engaged: nothing else responds. `
+      + 'Click ALL — or press Esc with nothing selected — to release.');
+
+  // PICKING A MODE ALSO ARMS SELECT, which is the old page's own behaviour
+  // (setClickSelectionMode and its two siblings all set activeTool: 'select').
+  // Without it a drafter with WALL armed could press WINDOW, see it light, and
+  // still draw a wall on the next drag.
+  const setSelectionMode = id => {
+    selectionMode = id;
+    setTool('select');
+    syncSelectionPanel();
+  };
+
+  const setSelectFilter = id => { selectFilter = id; syncSelectionPanel(); };
+
+  let syncSelectionPanel = () => {};
+
+  const buildSelectionPanel = () => {
+    const slot = document.getElementById('tool-slot');
+    if (!slot) return;
+    const chip = (dataKey, entry, onPick) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sel-chip';
+      btn.dataset[dataKey] = entry.id;
+      btn.textContent = entry.label;
+      if (entry.aria) btn.setAttribute('aria-label', entry.aria);
+      btn.addEventListener('click', () => onPick(entry.id));
+      return btn;
+    };
+    const section = (name, chips, help) => {
+      const box = document.createElement('div');
+      box.dataset.toolGroup = name.toLowerCase().replace(/\s+/g, '-');
+      const title = document.createElement('div');
+      title.dataset.toolGroupName = '';
+      title.textContent = name;
+      const row = document.createElement('div');
+      row.className = 'sel-row';
+      row.append(...chips);
+      box.append(title, row, help);
+      return box;
+    };
+
+    const modeHelp = document.createElement('div');
+    modeHelp.className = 'sel-help';
+    modeHelp.dataset.selHelp = '';
+    const filterHelpEl = document.createElement('div');
+    filterHelpEl.className = 'sel-help';
+    filterHelpEl.dataset.filterHelp = '';
+
+    slot.append(
+      section('SELECTION',
+        MODES.map(m => chip('selMode', m, setSelectionMode)), modeHelp),
+      section('OBJECT TYPE',
+        FILTERS.map(f => chip('selFilter', f, setSelectFilter)), filterHelpEl));
+
+    syncSelectionPanel = () => {
+      slot.querySelectorAll('[data-sel-mode]').forEach(btn => {
+        btn.setAttribute('aria-pressed',
+          String(btn.dataset.selMode === selectionMode));
+      });
+      slot.querySelectorAll('[data-sel-filter]').forEach(btn => {
+        btn.setAttribute('aria-pressed',
+          String(btn.dataset.selFilter === selectFilter));
+      });
+      modeHelp.textContent = MODE_HELP[selectionMode];
+      filterHelpEl.textContent = filterHelp();
+      // RED WHENEVER A FILTER IS ENGAGED -- not when the cursor is over
+      // something the filter excludes. selectFilterHelpColor (:23622) is a
+      // straight ternary on selectFilter, and a cursor-driven red would mean
+      // hit-testing on every mousemove, which the old page does not do.
+      filterHelpEl.toggleAttribute('data-engaged', selectFilter !== 'all');
+    };
+    syncSelectionPanel();
+  };
+
+  buildSelectionPanel();
   deleteButton.addEventListener('click', () => {
     const wall = selectedWall();
     if (!wall) return;
@@ -3284,10 +3537,26 @@
     // wall gets no pan they can see.
     if (dragging.moved <= 4 && e) {
       const rect = canvas.getBoundingClientRect();
-      const hit = wallAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
-      // An empty click clears, which is the other half of select: without it
-      // the drafter has no way to put a selection down.
-      setSelection(hit ? [{ type: 'wall', item: hit }] : []);
+      const hit = hitAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+      // SHIFT ADDS OR REMOVES, which is what the mode help line promises and
+      // the only way to build a selection of more than one by clicking. A
+      // shift-click on something already selected takes it OUT -- the old
+      // page's own toggle, and the reason the help says "adds or removes"
+      // rather than "adds".
+      if (e.shiftKey) {
+        if (hit) {
+          const at = selection.findIndex(entry => entry.item === hit.item);
+          setSelection(at >= 0
+            ? selection.filter((_, i) => i !== at)
+            : selection.concat([hit]));
+        }
+        // A shift-click on empty space keeps the selection. Clearing it would
+        // make an inaccurate shift-click destroy the set a drafter just built.
+      } else {
+        // An empty click clears, which is the other half of select: without it
+        // the drafter has no way to put a selection down.
+        setSelection(hit ? [hit] : []);
+      }
       paint();
     }
     dragging = null;
@@ -3327,6 +3596,11 @@
     // it is the affordance a drafter with no keyboard can reach.
     if (e.key === 'Escape') {
       drawStart = null;
+      // ESC WITH NOTHING SELECTED RELEASES THE FILTER, which is the release
+      // the filter help line promises in writing (:22418-22419). With
+      // something selected Esc clears the selection first, so a drafter never
+      // loses both in one press.
+      if (!selection.length && selectFilter !== 'all') setSelectFilter('all');
       setSelection([]);
       paint();
       return;
