@@ -353,6 +353,28 @@
   /* The old page's warning red (#b04050, :23622), and it means one thing: a
      filter is engaged. Not "the cursor is over something excluded". */
   .sel-help[data-engaged] { color:#b04050; }
+  /* ASSEMBLY and UNGROUP run the panel's width -- they are commands, not a
+     choice between siblings, and a full-width button is what says so. */
+  .asm-wide { display:block; width:100%; margin-bottom:3px; }
+  /* AN AUTHOR `display` BEATS THE BROWSER'S `[hidden]`, which is a rule of the
+     cascade rather than a quirk: [hidden]{display:none} lives in the UA
+     stylesheet and any author display wins it. Without this line UNGROUP is
+     visible whenever it has been rendered, hidden attribute and all -- it
+     showed with nothing selected, which invites a press that cannot do
+     anything. Caught by the spec, not by looking. */
+  .asm-wide[hidden] { display:none; }
+  .asm-wide:disabled { opacity:0.42; cursor:not-allowed;
+    border-color: var(--edge-panel); color: var(--ink-quiet); }
+  .asm-wide:disabled:hover { border-color: var(--edge-panel);
+    color: var(--ink-quiet); }
+  [data-assembly-dialog] { margin-top:6px; padding-top:6px;
+    border-top:1px solid var(--edge-panel); }
+  [data-assembly-dialog][hidden] { display:none; }
+  [data-assembly-name] { box-sizing:border-box; width:100%; margin-bottom:4px;
+    padding:5px 4px; border:1px solid var(--edge-panel); border-radius:2px;
+    background: var(--surface-chip); color: var(--ink);
+    font-family: var(--font-ui); font-size:10px; letter-spacing:0.04em;
+    text-transform:uppercase; }
   #props-slot[hidden] { display:none; }
   .props-title { font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet);
@@ -2693,7 +2715,16 @@
   const selectedWall = () => (selection.length === 1 && selection[0].type === 'wall'
     ? selection[0].item : null);
 
-  const setSelection = next => { selection = next; };
+  // ONE PLACE THE SELECTION CHANGES, so anything that watches it cannot fall
+  // out of step. The assembly panel's button states and help line are a
+  // function of the selection, and a panel updated at each call site instead
+  // would be a second copy of "what is selected" -- the failure this file has
+  // now corrected twice.
+  const selectionWatchers = [];
+  const setSelection = next => {
+    selection = next;
+    selectionWatchers.forEach(fn => fn());
+  };
 
   // Nearest wall to a world point, or null. The threshold is converted from
   // pixels at the CURRENT zoom, so the grab zone stays the same size on screen
@@ -2838,6 +2869,52 @@
     ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y),
       Math.abs(b.x - a.x), Math.abs(b.y - a.y));
     ctx.restore();
+  };
+
+  // ── assemblies ────────────────────────────────────────────────────────────
+  // A GROUP NAMES ITS MEMBERS BY TYPE AND ID, never by object reference
+  // (_createGroup :17940). That is what lets it survive a save and a reload,
+  // where every object in the drawing is a new one: the ids come back, the
+  // references do not.
+  //
+  // A GROUP IS "SELECTED" IF ANY ONE MEMBER IS -- the old page's own test
+  // (_selectedGroups :…, `items.some(isSelected)`), not "all members". So
+  // clicking one wall of an assembly and pressing UNGROUP releases the whole
+  // thing, which is what a drafter means by it.
+  const groups = () => (drawing?.groups || []);
+
+  const memberKey = entry => `${entry.type}:${entry.item?.id}`;
+
+  const itemsOfGroup = group => {
+    const want = new Set((group.members || []).map(m => `${m.type}:${m.id}`));
+    const out = [];
+    const sweep = (type, list) => list.forEach(item => {
+      if (want.has(`${type}:${item.id}`)) out.push({ type, item });
+    });
+    sweep('wall', walls());
+    sweep('line', lines());
+    sweep('floor', floors());
+    return out;
+  };
+
+  const groupOf = entry => groups().find(group => (group.members || [])
+    .some(m => m.type === entry.type && String(m.id) === String(entry.item?.id))) || null;
+
+  const selectedGroups = () => groups().filter(group => (group.members || [])
+    .some(m => selection.some(entry =>
+      entry.type === m.type && String(entry.item?.id) === String(m.id))));
+
+  // CLICKING A MEMBER TAKES THE WHOLE ASSEMBLY. An assembly whose parts can be
+  // picked one at a time is not an assembly; the old page pulls a hit item's
+  // group in with it (_addItemsAndTheirGroups) and this is that, over the
+  // types this page can select.
+  const withGroup = entry => {
+    const group = entry && groupOf(entry);
+    if (!group) return entry ? [entry] : [];
+    const members = itemsOfGroup(group);
+    // The hit itself first, so a one-wall reading (selectedWall) still points
+    // at what the drafter actually pressed when the group holds only it.
+    return members.length ? members : [entry];
   };
 
   // Returns { type, item } or null, in the old page's precedence.
@@ -3488,6 +3565,185 @@
   };
 
   buildSelectionPanel();
+
+  // ── ASSEMBLY and UNGROUP ──────────────────────────────────────────────────
+  // WHAT AN ASSEMBLY IS, in the file: a named set of members recorded by TYPE
+  // AND ID, never by object reference (_createGroup :17940). Ids are what
+  // survive a save; references are not.
+  //
+  // ESCAPE IN THE NAME FIELD CREATES A "NOT FIXED" ASSEMBLY. It does not
+  // cancel. That is the old page's binding (onGroupNameKey :23685-23687:
+  // Enter -> _createGroup(true), Escape -> _createGroup(false)) and it is
+  // ported faithfully because this order says the roster is not a place to
+  // improve on -- but it is worth someone's decision rather than quiet
+  // inheritance: everywhere else on both pages Escape backs out, so a drafter
+  // reaching for it to abandon the dialog gets an assembly they did not want.
+  // Flagged, not fixed.
+  const nextGroupNumber = () => {
+    const n = Number(drawing?.nextGroupId);
+    return Number.isFinite(n) && n > 0 ? n : (groups().length + 1);
+  };
+
+  const createAssembly = fixed => {
+    const chosen = selection.slice();
+    if (!chosen.length) { closeAssemblyDialog(); return; }
+    const members = [];
+    chosen.forEach(entry => {
+      if (!entry.item || entry.item.id == null) return;
+      const key = memberKey(entry);
+      if (!members.some(m => `${m.type}:${m.id}` === key)) {
+        members.push({ type: entry.type, id: entry.item.id });
+      }
+    });
+    if (!members.length) { closeAssemblyDialog(); return; }
+    // AN ITEM BELONGS TO ONE ASSEMBLY. Taking it into a new one takes it out
+    // of its old one, and an assembly left with nothing in it goes -- the old
+    // page's own two lines, and without them a drafter can build overlapping
+    // assemblies that disagree about what moves with what.
+    const taken = new Set(members.map(m => `${m.type}:${m.id}`));
+    drawing.groups = groups()
+      .map(group => ({ ...group,
+        members: (group.members || [])
+          .filter(m => !taken.has(`${m.type}:${m.id}`)) }))
+      .filter(group => group.members.length > 0);
+
+    const n = nextGroupNumber();
+    const typed = (assemblyName || '').trim().toUpperCase();
+    const firstWall = chosen.find(entry => entry.type === 'wall')?.item;
+    const group = {
+      id: `group-${n}`,
+      name: typed || `ASSEMBLY ${n}`,
+      fixed: fixed === true,
+      stretchBehavior: fixed === true ? 'rigid' : 'item-geometry',
+      members,
+      // The first wall's settings ride the assembly, so a later change to the
+      // assembly has something to change FROM. Null when it holds no wall.
+      wallSettings: firstWall ? {
+        wallType: firstWall.wallType,
+        baseHeight: firstWall.baseHeight,
+        topHeight: firstWall.topHeight,
+        refLine: firstWall.refLine,
+      } : null,
+    };
+    drawing.groups.push(group);
+    drawing.nextGroupId = n + 1;
+    // The new assembly is what is selected afterwards -- all of it, which is
+    // also the drafter's confirmation that it took.
+    setSelection(itemsOfGroup(group));
+    assemblyName = '';
+    closeAssemblyDialog();
+    markDirty();
+    paint();
+  };
+
+  const ungroupSelected = () => {
+    const going = selectedGroups();
+    if (!going.length) return;
+    const ids = new Set(going.map(group => group.id));
+    // THE ITEMS SURVIVE; only the grouping goes. Ungroup is not delete, and
+    // the members stay selected so the drafter can see what they just freed.
+    drawing.groups = groups().filter(group => !ids.has(group.id));
+    syncAssembly();
+    markDirty();
+    paint();
+  };
+
+  let assemblyName = '';
+  let assemblyDialogOpen = false;
+  let syncAssembly = () => {};
+  const closeAssemblyDialog = () => { assemblyDialogOpen = false; syncAssembly(); };
+
+  const buildAssemblyPanel = () => {
+    const slot = document.getElementById('tool-slot');
+    if (!slot) return;
+    const box = document.createElement('div');
+    box.dataset.toolGroup = 'assembly';
+    const title = document.createElement('div');
+    title.dataset.toolGroupName = '';
+    title.textContent = 'ASSEMBLY';
+
+    const asmBtn = document.createElement('button');
+    asmBtn.type = 'button';
+    asmBtn.className = 'sel-chip asm-wide';
+    asmBtn.dataset.assemblyStart = '';
+    asmBtn.addEventListener('click', () => {
+      if (!selection.length) return;
+      assemblyDialogOpen = true;
+      syncAssembly();
+      slot.querySelector('[data-assembly-name]')?.focus();
+    });
+
+    const unBtn = document.createElement('button');
+    unBtn.type = 'button';
+    unBtn.className = 'sel-chip asm-wide';
+    unBtn.dataset.assemblyUngroup = '';
+    unBtn.addEventListener('click', ungroupSelected);
+
+    const help = document.createElement('div');
+    help.className = 'sel-help';
+    help.dataset.assemblyHelp = '';
+
+    const dialog = document.createElement('div');
+    dialog.dataset.assemblyDialog = '';
+    dialog.hidden = true;
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.dataset.assemblyName = '';
+    nameInput.placeholder = 'NAME';
+    nameInput.addEventListener('input', e => { assemblyName = e.target.value; });
+    nameInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); createAssembly(true); }
+      // See the note above: Escape here CREATES, it does not cancel.
+      if (e.key === 'Escape') { e.preventDefault(); createAssembly(false); }
+      // The page's own Escape clears the selection, which would empty the
+      // dialog out from under itself.
+      e.stopPropagation();
+    });
+    const row = document.createElement('div');
+    row.className = 'sel-row';
+    const fixedBtn = document.createElement('button');
+    fixedBtn.type = 'button';
+    fixedBtn.className = 'sel-chip';
+    fixedBtn.dataset.assemblyFixed = '';
+    fixedBtn.textContent = 'FIXED';
+    fixedBtn.addEventListener('click', () => createAssembly(true));
+    const looseBtn = document.createElement('button');
+    looseBtn.type = 'button';
+    looseBtn.className = 'sel-chip';
+    looseBtn.dataset.assemblyLoose = '';
+    looseBtn.textContent = 'NOT FIXED';
+    looseBtn.addEventListener('click', () => createAssembly(false));
+    row.append(fixedBtn, looseBtn);
+    dialog.append(nameInput, row);
+
+    box.append(title, asmBtn, unBtn, help, dialog);
+    slot.append(box);
+
+    syncAssembly = () => {
+      const n = selection.length;
+      const held = selectedGroups();
+      const key = window.DraftToolRoster?.keyFor('select')
+        ? window.DraftToolRoster.bindings() : {};
+      const gKey = window.DraftKeyboard?.keyBindingLabel(key.group) || '';
+      asmBtn.textContent = gKey ? `ASSEMBLY  [${gKey}]` : 'ASSEMBLY';
+      asmBtn.disabled = n === 0;
+      unBtn.textContent = 'UNGROUP';
+      unBtn.disabled = held.length === 0;
+      unBtn.hidden = held.length === 0;
+      // The old page's own two sentences (:23631-23633), and the red is its
+      // own too: nothing selected is the state that stops the button working.
+      help.textContent = n
+        ? `${n} selected item${n === 1 ? '' : 's'} · make a named assembly.`
+        : 'Select drawing items before assembling them.';
+      help.toggleAttribute('data-engaged', n === 0);
+      dialog.hidden = !assemblyDialogOpen;
+      if (!assemblyDialogOpen) nameInput.value = assemblyName = '';
+    };
+    syncAssembly();
+  };
+
+  buildAssemblyPanel();
+  selectionWatchers.push(() => syncAssembly());
   deleteButton.addEventListener('click', () => {
     const wall = selectedWall();
     if (!wall) return;
@@ -3613,7 +3869,14 @@
       bandDrag = null;
       if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
       if (band.active) {
-        const caught = enclosedBy(band.from, band.to);
+        const raw = enclosedBy(band.from, band.to);
+        // A box that catches one wall of an assembly catches the assembly, as
+        // a click on it does. Deduped by item, because several caught members
+        // pull in the same group.
+        const caught = [];
+        raw.forEach(entry => withGroup(entry).forEach(w => {
+          if (!caught.some(c => c.item === w.item)) caught.push(w);
+        }));
         // SHIFT ADDS TO WHAT IS THERE, exactly as it does for a click, and the
         // old page's own `!shiftHeld` replace flag. Without it a drafter can
         // build a selection by clicking but not by boxing, which is the
@@ -3663,16 +3926,21 @@
       if (e.shiftKey) {
         if (hit) {
           const at = selection.findIndex(entry => entry.item === hit.item);
+          const whole = withGroup(hit);
           setSelection(at >= 0
-            ? selection.filter((_, i) => i !== at)
-            : selection.concat([hit]));
+            // Removing a member removes its whole assembly, for the same
+            // reason adding one adds it: half an assembly is not a state a
+            // drafter asked for.
+            ? selection.filter(entry => !whole.some(w => w.item === entry.item))
+            : selection.concat(whole.filter(w =>
+              !selection.some(entry => entry.item === w.item))));
         }
         // A shift-click on empty space keeps the selection. Clearing it would
         // make an inaccurate shift-click destroy the set a drafter just built.
       } else {
         // An empty click clears, which is the other half of select: without it
         // the drafter has no way to put a selection down.
-        setSelection(hit ? [hit] : []);
+        setSelection(withGroup(hit));
       }
       paint();
     }
