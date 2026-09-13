@@ -293,6 +293,39 @@
     font-family: var(--font-ui); font-size:9px; letter-spacing:0.1em;
     color: var(--ink-quiet); opacity:0.5; }
   #props-slot[hidden] { display:none; }
+
+  /* THE LEVELS / LAYERS PANEL. Movie: "i will also need the LEVELS / LAYERS
+     menu too", and "the level layers should be a tab on the right side like
+     in the DC files". It is a third pane in the right-edge group rather than
+     a second rotated tab on the same edge -- Devin's ruling, and he withdrew
+     the "must not bury the rail" line with it: reachable means one click, not
+     simultaneously visible. Two tabs on one edge is how the chrome-on-chrome
+     collisions of #389 happened.
+
+     Carried from MODEL.dc.html:1850-1955 by SHAPE, not by stylesheet: a card
+     per level with its layer rows inside, the active one lit. */
+  #levels-panel { display:flex; flex-direction:column; gap:6px; margin-top:8px;
+    max-height:42vh; overflow-y:auto; scrollbar-width:none; }
+  #levels-panel::-webkit-scrollbar { display:none; }
+  #right-rail[data-collapsed] #levels-panel { display:none; }
+  .lv-head { display:flex; align-items:center; gap:6px; }
+  .lv-head-title { flex:1; font-family: var(--font-ui); font-size:9px;
+    letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet); }
+  .lv-datum { font-family: var(--font-ui); font-size:9px; letter-spacing:0.04em;
+    color: var(--ink-quiet); opacity:0.8; }
+  .lv-card { display:flex; gap:0; border:1px solid var(--rule); background:transparent; }
+  .lv-bar { width:4px; flex:0 0 4px; }
+  .lv-body { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .lv-name { font-family: var(--font-ui); font-size:10px; letter-spacing:0.06em;
+    text-align:left; padding:4px 6px; background:none; border:0; color: var(--ink);
+    cursor:pointer; text-transform:uppercase; }
+  .lv-card[data-active] .lv-name { font-weight:700; }
+  .lv-layers { display:flex; flex-direction:column; }
+  .lv-layer { font-family: var(--font-ui); font-size:9px; letter-spacing:0.04em;
+    text-align:left; padding:3px 6px 3px 12px; background:none; border:0;
+    color: var(--ink-quiet); cursor:pointer; }
+  .lv-layer[data-active] { background: var(--accent); color: var(--on-accent);
+    font-weight:700; }
   .props-title { font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet);
     margin-bottom:6px; }
@@ -432,6 +465,10 @@
 <button id="right-tab" class="rail-tab" type="button" data-right-tab hidden>VIEWS · PROPERTIES</button>
 <aside id="right-rail" data-right-rail data-collapsed hidden>
   <div id="view-rail"></div>
+  <!-- LEVELS / LAYERS. The rail's EDITOR, not its companion: the layer rows
+       inside a level card are the same objects as the seats, so adding a
+       level adds two seats and deleting one takes them away. -->
+  <div id="levels-panel" data-levels-panel></div>
   <!-- PER-TOOL PROPERTIES, the slot and nothing in it. Gilligan fills this;
        the contract is in the comment beside setToolProperties below. -->
   <div id="props-slot" data-props-slot hidden></div>
@@ -2284,6 +2321,7 @@
   const chromeBar = document.getElementById('chrome');
   const levelPick = document.getElementById('level-pick');
   const viewPick = document.getElementById('view-pick');
+  const levelsPanel = document.getElementById('levels-panel');
   const viewWrap = document.getElementById('view-wrap');
 
   // replaceState, not pushState: a switch is a change of viewpoint, not a
@@ -2335,6 +2373,103 @@
     });
   };
 
+  // THE PANEL IS A VIEW OF `drawing.levels`, never a second copy of it. Every
+  // row here drives goToLevel / goToView -- the same two entry points the
+  // pickers use -- so the card, the seat, the picker and the plan cannot
+  // disagree about what is active. That is the seam Devin drew between this
+  // panel and the tool column: the panel owns the level/view state and
+  // everything else reads it.
+  //
+  // The layer rows come from layerViewsForLevelId and are NOT hard-coded.
+  // ROOF and SITE answer with none, which is why their cards carry no rows --
+  // the same fact that puts them in one rail row together rather than two.
+  // WHICH ROW IS LIT, in one place. buildLevelsPanel draws the rows and this
+  // lights them, so the rule lives once -- the level lookup having had four
+  // homes (#325) is the reason that matters here rather than being tidy.
+  const markActiveLayer = () => {
+    if (!levelsPanel) return;
+    const activeId = activeLevelId();
+    const LV = window.DraftLayerViews;
+    const asked = params.get('view');
+    const live = asked && LV.layerViewsForLevelId(activeId).some(v => v.id === asked)
+      ? asked : LV.defaultLayerViewId(activeId);
+    levelsPanel.querySelectorAll('.lv-layer').forEach(row => {
+      row.toggleAttribute('data-active', row.dataset.layer === `${activeId}:${live}`);
+    });
+    levelsPanel.querySelectorAll('.lv-card').forEach(card => {
+      card.toggleAttribute('data-active', Number(card.dataset.level) === activeId);
+    });
+  };
+
+  const buildLevelsPanel = () => {
+    if (!levelsPanel) return;
+    const levels = drawing?.levels || [];
+    const LV = window.DraftLayerViews;
+    const activeId = activeLevelId();
+    levelsPanel.innerHTML = '';
+    if (!levels.length) return;
+
+    const head = document.createElement('div');
+    head.className = 'lv-head';
+    const title = document.createElement('div');
+    title.className = 'lv-head-title';
+    title.textContent = 'Levels';
+    const datum = document.createElement('div');
+    datum.className = 'lv-datum';
+    // The old page's DATUM readout. It reads the stored elevationDatum rather
+    // than assuming 0, because a drafter who has moved it would otherwise see
+    // a panel confidently disagreeing with his own drawing.
+    datum.textContent = `DATUM ${Number(drawing?.elevationDatum || 0)}'`;
+    head.append(title, datum);
+    levelsPanel.append(head);
+
+    levels.forEach(level => {
+      const card = document.createElement('div');
+      card.className = 'lv-card';
+      card.dataset.level = String(level.id);
+      if (Number(level.id) === activeId) card.toggleAttribute('data-active', true);
+
+      const bar = document.createElement('div');
+      bar.className = 'lv-bar';
+      bar.style.background = level.color || 'var(--rule)';
+
+      const body = document.createElement('div');
+      body.className = 'lv-body';
+
+      const name = document.createElement('button');
+      name.type = 'button';
+      name.className = 'lv-name';
+      name.dataset.levelPick = String(level.id);
+      name.textContent = level.name || `level ${level.id}`;
+      name.title = `Switch to ${level.name || level.id}`;
+      name.addEventListener('click', () => goToLevel(level.id));
+      body.append(name);
+
+      const views = LV.layerViewsForLevelId(level.id);
+      if (views.length) {
+        const stack = document.createElement('div');
+        stack.className = 'lv-layers';
+        views.forEach(view => {
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'lv-layer';
+          row.dataset.layer = `${level.id}:${view.id}`;
+          row.textContent = view.label || view.id;
+          row.addEventListener('click', () => {
+            if (Number(level.id) !== activeId) goToLevel(level.id);
+            goToView(view.id);
+          });
+          stack.append(row);
+        });
+        body.append(stack);
+      }
+
+      card.append(bar, body);
+      levelsPanel.append(card);
+    });
+    markActiveLayer();
+  };
+
   const buildChrome = () => {
     const levels = drawing?.levels || [];
     levelPick.innerHTML = '';
@@ -2346,6 +2481,7 @@
       levelPick.append(option);
     });
     fillViewPick();
+    buildLevelsPanel();
     chromeBar.hidden = false;
   };
 
@@ -2379,6 +2515,13 @@
     // the picker are two controls on ONE piece of state, and a seat that left
     // the picker behind would put two answers on screen at once.
     if (!viewWrap.hidden) viewPick.value = viewId;
+    // AND THE PANEL, which is the THIRD control on this one piece of state.
+    // The comment above warned about exactly this and I still missed it: a
+    // layer row clicked on another level moved the URL, the plan and the
+    // picker to STAIR while the panel went on lighting PLAN, because
+    // goToLevel rebuilt the panel before goToView had set the view. Two
+    // answers on screen at once, which is what that rule exists to stop.
+    markActiveLayer();
     paint();
   };
 
