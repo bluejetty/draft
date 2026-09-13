@@ -360,7 +360,17 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // asserted against the module in model-html-levels.spec.js, which is a
       // stronger claim than naming them here.
       const controls = await page.evaluate(() => {
-        const inPanel = el => el.closest('#levels-panel') !== null;
+        // THE RAIL GOES THE SAME WAY THE PANEL DID, and for the same reason.
+        // Its seats were named here when #386 added six of them, and that was
+        // right while the chart was a fixed list. It is DERIVED now -- four
+        // elevations, ROOF | SITE, a pair per level with layer views, then the
+        // sections -- so the labels track drawing.levels and naming them here
+        // would guard the fixture instead of the surface. What the rail holds
+        // is asserted exhaustively against the old page's own chart in
+        // model-html-seats.spec.js; what matters HERE is that it holds seats
+        // and nothing else.
+        const inPanel = el => el.closest('#levels-panel') !== null
+          || el.closest('#view-rail') !== null;
         return {
           buttons: [...document.querySelectorAll('button')].filter(b => !inPanel(b))
             .map(b => b.id || b.textContent.trim()).sort(),
@@ -370,6 +380,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // AND THE PANEL, counted rather than named: every control inside it
           // must be one of the four kinds it is allowed to hold. A context
           // menu host or a file input smuggled in there would fail this.
+          // Every control in the rail is a seat, or this fails naming the tag.
+          railKinds: [...new Set([...document.querySelectorAll('#view-rail *')]
+            .filter(el => el.tagName === 'BUTTON' || el.tagName === 'INPUT'
+              || el.tagName === 'SELECT')
+            .map(el => (el.classList.contains('seat') ? 'seat' : el.tagName)))].sort(),
           panelKinds: [...new Set([...document.querySelectorAll('#levels-panel *')]
             .filter(el => el.tagName === 'BUTTON' || el.tagName === 'INPUT'
               || el.tagName === 'SELECT')
@@ -410,12 +425,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         'the parity table\'s absences are only as good as this list — if a '
         + 'control appears here that no row mentions, a row is wrong')
         .toEqual({
-          buttons: ['E1 · FRONT', 'E2 · LEFT', 'E3 · BACK', 'E4 · RIGHT', 'S1', 'S2',
-            'left-tab', 'right-tab',
+          buttons: ['left-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
             'delete-wall', 'draw-wall', 'save', 'take-over'].sort(),
           selects: ['level-pick', 'view-pick'],
           inputs: [],
+          railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as
           // 'BUTTON' or 'INPUT' and fail.
