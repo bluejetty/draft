@@ -2519,7 +2519,17 @@
     // PENDING GEOMETRY BELONGS TO THE FLOOR IT WAS STARTED ON. Discard it
     // before the level list changes, or a half-drawn wall commits into
     // whichever floor the page lands on next.
-    setArmed(false);
+    //
+    // THIS WAS `setArmed(false)` AND THE MERGE THAT BROKE IT WAS CLEAN. The
+    // tool register replaced the armed boolean, and setArmed went with it;
+    // this call arrived from a branch written against the old shape, in a
+    // region of the file neither side had touched, so git had nothing to
+    // report. The line threw, deleteLevel stopped at its first statement, and
+    // a level "deleted" with all its geometry still in the file -- which is
+    // why tests/model-html-levels.spec.js's cascade check is worth its length.
+    // setTool does what setArmed did and clears the pending anchor too, which
+    // is what the paragraph above is actually asking for.
+    setTool(RESTING_TOOL);
     const id = Number(levels[idx].id);
     // ASKED BEFORE THE LEVEL IS REMOVED, and that ordering is the whole of it.
     // Asking afterwards returns the FALLBACK -- activeLevelId drops to MAIN FL
