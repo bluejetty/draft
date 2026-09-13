@@ -98,7 +98,9 @@
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; pointer-events:none; }
 
-  #save { position:fixed; right:12px; top:12px; z-index:5; display:none;
+  /* A CHROME-BAR BUTTON NOW, not a fixed corner one -- it sits in the flex row
+     with the level and view pickers. */
+  #save { display:none;
     font-family: var(--font-ui); font-size:13px; font-weight:600;
     letter-spacing:0.06em; text-transform:uppercase;
     color: var(--ink-primary); cursor:pointer;
@@ -116,7 +118,9 @@
      only thing left to do is say so. Quiet on purpose: it reports a fact about
      the file, it does not ask for a decision, and it sits under SAVE rather
      than over the drawing. */
-  #elsewhere { position:fixed; right:12px; top:46px; z-index:5;
+  /* Follows SAVE to the left: it is SAVE's note, and it was under the shell
+     for the same reason SAVE was. */
+  #elsewhere { position:fixed; left:12px; top:52px; z-index:5;
     font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
     text-transform:uppercase; color: var(--ink-quiet);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
@@ -337,8 +341,14 @@
   <label id="view-wrap">View <select id="view-pick" data-view-pick></select></label>
   <button id="draw-wall" type="button" data-draw-wall>Draw wall</button>
   <button id="delete-wall" type="button" data-delete-wall hidden>Delete wall</button>
-</div>
-<button id="save" type="button" data-model-save>SAVE</button>
+  <!-- SAVE MOVED IN HERE, out of the top-right corner. The shell owns the
+       sheet's margins now, and the right tab landed on top of this button:
+       its centre was owned by the canvas, so every spec that pressed SAVE
+       timed out. Pushing the shell down the sheet instead would have cleared
+       it and cost 1.4% -> 6.5% of the drawing, because that moves the panels
+       towards the middle where fit() puts the house. Moving one button costs
+       nothing. -->
+  <button id="save" type="button" data-model-save>SAVE</button>
 <div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
 <div id="lease" data-lease-banner hidden>
   <span data-lease-message></span>
@@ -350,12 +360,12 @@
      The left panel is the tool palette's home and is empty until Gilligan's
      seven land -- the slot exists so a tool is not built against a canvas that
      is about to lose its edge. -->
-<button id="left-tab" type="button" data-left-tab hidden>DRAFTING TOOLS</button>
+<button id="left-tab" class="rail-tab" type="button" data-left-tab hidden>DRAFTING TOOLS</button>
 <aside id="left-rail" data-left-rail hidden>
   <div id="tool-slot" data-tool-slot></div>
 </aside>
 
-<button id="right-tab" type="button" data-right-tab hidden>VIEWS · PROPERTIES</button>
+<button id="right-tab" class="rail-tab" type="button" data-right-tab hidden>VIEWS · PROPERTIES</button>
 <aside id="right-rail" data-right-rail data-collapsed hidden>
   <div id="view-rail"></div>
   <!-- PER-TOOL PROPERTIES, the slot and nothing in it. Gilligan fills this;
