@@ -47,7 +47,9 @@ const V = (x, z) => ({ x, y: 0, z });
 // run would land on and INSIDE the corner-snap radius. If the snap is
 // unrestricted it will pull the run's endpoint onto the bait and off square.
 const BAIT_X = 4;
-const BAIT_OFF = 0.06;          // ft off the axis; snap radius is ~0.13 ft here
+const BAIT_OFF = 0.06;
+const ON_X = -4.05;      // on-axis bait: an endpoint at (ON_X, 6), which is
+                         // the axis the second run is squared onto          // ft off the axis; snap radius is ~0.13 ft here
 const wall = (id, a, b) => ({ id, start: a, end: b, levelId: 3, view: 'plan',
   wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' });
 const FIX = {
@@ -56,6 +58,11 @@ const FIX = {
     wall('n', V(-10, -10), V(10, -10)),
     wall('s', V(-10, 10), V(10, 10)),
     wall('bait', V(BAIT_X, BAIT_OFF), V(BAIT_X, 6)),
+    // ON the axis and inside the radius. The axis lock must still take this
+    // one, or "square" has been bought by a snap that never fires -- which
+    // looks identical from the wall alone and loses the mitre the snap exists
+    // for.
+    wall('onaxis', V(ON_X, 6), V(ON_X, 0)),
   ],
   lines: [], floors: [], roofs: [], fenestrations: [], dimensions: [],
   outlines: [], shapes: [], surfaceOpenings: [], stairs: [], notes: [],
@@ -125,6 +132,32 @@ const FIX = {
     console.log(Math.abs(made.e[1] - BAIT_OFF) < 1e-6
       ? '   and it landed exactly ON the bait corner, which names the cause'
       : '   (not on the bait — something else moved it)');
+  }
+  // SECOND HALF: aim west at -4, where a corner sits at -4.05 ON the axis.
+  await p.locator('[data-draw-wall]').click();          // disarm
+  await p.waitForTimeout(60);
+  await p.locator('[data-draw-wall]').click();          // re-arm, fresh chain
+  await p.waitForTimeout(60);
+  await p.mouse.click(...at(0, 6));
+  await p.waitForTimeout(60);
+  await p.mouse.click(...at(-4, 6));
+  await p.waitForTimeout(120);
+  await p.locator('#save').click();
+  await p.waitForTimeout(400);
+  const after = await p.evaluate(async () => {
+    const f = await window.SharedFileStore.loadSharedFile('model-drawing');
+    return JSON.parse(await f.text()).walls.map(w => ({ id: w.id,
+      s: [Number(w.start.x.toFixed(4)), Number(w.start.z.toFixed(4))],
+      e: [Number(w.end.x.toFixed(4)), Number(w.end.z.toFixed(4))] }));
+  });
+  const second = after.find(w => !seeded.has(w.id) && w.id !== made.id);
+  if (!second) console.log('\nsecond run: NO WALL — the probe did not draw');
+  else {
+    console.log(`\nthe on-axis run: (${second.s}) -> (${second.e})`);
+    const tookIt = Math.abs(second.e[0] - ON_X) < 1e-6 && Math.abs(second.e[1] - 6) < 1e-6;
+    console.log(tookIt
+      ? `SNAPPED ALONG THE AXIS onto ${ON_X} — the mitre still works`
+      : `did NOT take the on-axis corner at ${ON_X}: the lock is too tight`);
   }
   await b.close();
 })();

@@ -4058,6 +4058,34 @@
     window.DraftGeometry2D.nearestVertex(
       snapCandidates([moving]), worldPt, CORNER_SNAP_PX / view.scale);
 
+  // A SNAP THAT ONLY SLIDES ALONG THE AXIS. When a run is being held square,
+  // one coordinate is fixed by the square and the other is free; a corner off
+  // the fixed one is not reachable without breaking the square, and the square
+  // wins.
+  //
+  // THE SNAP CONTRIBUTES ITS ALONG-AXIS COORDINATE AND NOTHING ELSE. The
+  // squared coordinate is kept exactly, so the run cannot come off square by
+  // any amount at all, and the free coordinate comes from the corner, so the
+  // endpoint still lines up with it.
+  //
+  // FILTERING CANDIDATES BY "ON THE AXIS" WAS THE FIRST ATTEMPT AND IT WAS
+  // WRONG, in a way only measuring showed. The axis is `drawStart`'s fixed
+  // coordinate, and when a run starts in empty space that value came from the
+  // cursor -- 5.9987, not 6 -- so no model corner is ever exactly on it and
+  // the snap silently never fired. Which reads as "square", because it is
+  // square: a lock too tight and a lock working look the same from the wall
+  // alone. That is why the probe checks both halves.
+  //
+  // Projecting needs no tolerance and cannot drift: whatever the corner's
+  // fixed coordinate is, it is discarded.
+  const axisSnap = (worldPt, fixed) => {
+    const corner = cornerSnap(worldPt, []);
+    if (!corner) return null;
+    return fixed === 'z'
+      ? { x: corner.x, y: 0, z: worldPt.z }
+      : { x: worldPt.x, y: 0, z: corner.z };
+  };
+
   // ── move a whole wall ─────────────────────────────────────────────────────
   // BOTH ENDS BY THE SAME DELTA. Their corners are pooled, so the neighbouring
   // walls that meet them travel too and the outline deforms around the moved
@@ -4374,14 +4402,24 @@
   // does, and for the same reason: landing ON a corner is what makes the join
   // mitre. Nothing is moving during a draw, so nothing is excluded.
   //
-  // THE T-SQUARE GOES FIRST AND THE CORNER SNAP MAY STILL OVERRIDE IT, but
-  // only along the axis it is already on (squareTo's second half). A snap
-  // that pulled the run off square would make the instrument a suggestion,
-  // and an instrument a drafter cannot trust is worse than no instrument --
-  // this is the same wall the old page holds when its T-square is down.
+  // THE T-SQUARE GOES FIRST AND THE CORNER SNAP MAY ONLY SLIDE ALONG IT. A
+  // snap that pulled the run off square would make the instrument a
+  // suggestion, and an instrument a drafter cannot trust is worse than no
+  // instrument.
+  //
+  // THIS COMMENT USED TO SAY THAT AND THE CODE DID NOT DO IT. It cited
+  // "squareTo's second half"; squareTo has no second half, and cornerSnap was
+  // an unrestricted nearest-vertex search. Measured in
+  // proto/tsquare-snap-override.js: with the T-square lit, a bait corner
+  // 0.06 ft off the axis and inside the 0.129 ft radius pulled the endpoint
+  // onto itself -- (0,0) -> (4, 0.06) where squaring gives (4, 0). A comment
+  // describing behaviour the code does not have is worse than no comment: it
+  // is the reason nobody looked.
   const drawPoint = at => {
     const wanted = squareTo(drawStart, at);
-    return cornerSnap(wanted, []) || { x: wanted.x, y: 0, z: wanted.z };
+    const fixed = squaredAxis(drawStart, at);
+    const snapped = fixed ? axisSnap(wanted, fixed) : cornerSnap(wanted, []);
+    return snapped || { x: wanted.x, y: 0, z: wanted.z };
   };
 
   const drawPress = at => {
@@ -4442,6 +4480,15 @@
     if (!tsquareOn || !from) return at;
     return Math.abs(at.x - from.x) >= Math.abs(at.z - from.z)
       ? { x: at.x, z: from.z } : { x: from.x, z: at.z };
+  };
+
+  // WHICH COORDINATE THE SQUARE FIXED, or null when nothing is squaring. The
+  // caller needs this and cannot get it by comparing points: a run that is
+  // already axis-aligned comes back from squareTo unchanged, and "unchanged"
+  // then means both "not squaring" and "squaring, already square".
+  const squaredAxis = (from, at) => {
+    if (!tsquareOn || !from) return null;
+    return Math.abs(at.x - from.x) >= Math.abs(at.z - from.z) ? 'z' : 'x';
   };
 
   // The run the instruments are reading: the wall being drawn if there is
