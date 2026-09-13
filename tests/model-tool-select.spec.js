@@ -220,6 +220,34 @@ test('shift adds and shift removes', async ({ page }) => {
     'shift on a selected item removes it').toBe(1);
 });
 
+test('a plain click on empty space puts the selection down', async ({ page }) => {
+  // THE MUTATION GATE FOUND THIS MISSING. Nine mutants died; "a plain click
+  // stops clearing the selection" lived, because the Esc check clears the
+  // selection by another route and every other check only ever adds to it.
+  // Clicking empty space is a drafter's only way to put a selection down with
+  // the mouse -- Esc is the keyboard's -- and nothing was watching it.
+  await open(page);
+  await page.mouse.click(...await at(page, 0, -WALL));
+  await page.waitForTimeout(60);
+  expect(await selCount(page)).toBe(1);
+
+  // (6, 6) is inside the square and well clear of the walls and the probe
+  // line, so this is empty space rather than a near miss.
+  await page.mouse.click(...await at(page, 6, 6));
+  await page.waitForTimeout(60);
+  expect(await selCount(page), 'an empty click clears').toBe(0);
+
+  // And shift does NOT clear, which is the other half: an inaccurate
+  // shift-click must not destroy the set a drafter just built.
+  await page.mouse.click(...await at(page, 0, -WALL));
+  await page.waitForTimeout(60);
+  await page.keyboard.down('Shift');
+  await page.mouse.click(...await at(page, 6, 6));
+  await page.waitForTimeout(60);
+  await page.keyboard.up('Shift');
+  expect(await selCount(page), 'a shift-click on nothing keeps the set').toBe(1);
+});
+
 test('Esc clears the selection first and releases the filter second',
   async ({ page }) => {
     await open(page);
