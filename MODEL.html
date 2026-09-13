@@ -1923,7 +1923,7 @@
     // ...and not under a section, where the selection it would delete is not
     // on screen to point at. The comment above is the reason: an affordance
     // that acts on something invisible is the same distrust, one step worse.
-    if (deleteButton) deleteButton.hidden = !selectedSeg || !!activeCut();
+    if (deleteButton) deleteButton.hidden = !selectedWall() || !!activeCut();
     // Before updateReadout, so the readout reports the frame it describes and
     // not the cost of writing itself.
     lastPaintMs = performance.now() - t0;
@@ -2627,7 +2627,30 @@
   const SELECT_INK = 'rgba(89,128,166,0.55)';   // MODEL.dc.html:7385
   const SELECT_HANDLE = '#5980a6';              // MODEL.dc.html:7388
   const SELECT_GRAB_PX = 12;                    // MODEL.dc.html:16707, _findLineHit
-  let selectedSeg = null;
+  // ── the selection ─────────────────────────────────────────────────────────
+  // A SET, NOT A WALL. This was `let selectedSeg = null` -- correct while a
+  // wall was the only selectable thing on the page, and the wrong shape for
+  // ITEMS/WINDOW/ALL LEVELS, which select many things of several types at
+  // once. Same correction as the tool register a few hundred lines down: the
+  // single-value variable becomes the general one, and the old narrow reading
+  // becomes a VIEW of it rather than a second copy kept in step by hand.
+  //
+  // ENTRIES ARE { type, item }, because a bare item cannot answer "is this a
+  // wall or a line" -- both are `{ start, end }` and the OBJECT TYPE filter
+  // has to tell them apart. `type` is the filter vocabulary
+  // (MODEL.dc.html:2793): 'line' | 'wall' | 'outline' | 'floor'.
+  //
+  // selectedWall() IS THE OLD MEANING, exactly: the one wall the corner drag,
+  // the body drag, the delete button and the highlight act on. It is null the
+  // moment the selection holds anything other than a single wall, which is
+  // what those four should do when a drafter has ten things selected -- a
+  // corner handle on one of ten walls would be a handle on an ambiguity.
+  let selection = [];
+
+  const selectedWall = () => (selection.length === 1 && selection[0].type === 'wall'
+    ? selection[0].item : null);
+
+  const setSelection = next => { selection = next; };
 
   // Nearest wall to a world point, or null. The threshold is converted from
   // pixels at the CURRENT zoom, so the grab zone stays the same size on screen
@@ -2648,6 +2671,7 @@
   };
 
   const paintSelection = () => {
+    const selectedSeg = selectedWall();
     if (!selectedSeg) return;
     // Only if it is still on screen's level: a selection kept across a level
     // change would paint a highlight over nothing.
@@ -2718,6 +2742,7 @@
   // then drag: without that rule every pan begun near any corner anywhere in
   // the drawing would move it instead of sliding the sheet.
   const cornerAt = worldPt => {
+    const selectedSeg = selectedWall();
     if (!selectedSeg || !walls().includes(selectedSeg)) return null;
     const G = window.DraftGeometry2D;
     const ends = [selectedSeg.start, selectedSeg.end].filter(Boolean);
@@ -2766,6 +2791,7 @@
   // to grab. Zoom in and it appears. That is the old page's own precedence
   // producing it, not a rule added here.
   const wallBodyAt = worldPt => {
+    const selectedSeg = selectedWall();
     if (!selectedSeg || !walls().includes(selectedSeg)) return null;
     if (!selectedSeg.start || !selectedSeg.end) return null;
     const { d } = window.DraftGeometry2D.pointToSegment(worldPt, selectedSeg);
@@ -2993,7 +3019,7 @@
     // each splice lands at the index it was taken from.
     deps.reverse();
     const retired = retirePoolCorners([wall.start, wall.end]);
-    if (selectedSeg === wall) selectedSeg = null;
+    setSelection(selection.filter(entry => entry.item !== wall));
     undoStack.push({ kind: 'remove', wall, index, deps, retired });
     markDirty();
     return wall;
@@ -3069,7 +3095,7 @@
     // ended, so a room is four taps and not eight. The pooled END object is
     // the start, so the corner is shared by identity.
     drawStart = wall.end;
-    selectedSeg = wall;
+    setSelection([{ type: 'wall', item: wall }]);
     paint();
   };
 
@@ -3141,8 +3167,9 @@
 
   buildToolColumn();
   deleteButton.addEventListener('click', () => {
-    if (!selectedSeg) return;
-    deleteWall(selectedSeg);
+    const wall = selectedWall();
+    if (!wall) return;
+    deleteWall(wall);
     paint();
   });
 
@@ -3260,7 +3287,7 @@
       const hit = wallAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
       // An empty click clears, which is the other half of select: without it
       // the drafter has no way to put a selection down.
-      selectedSeg = hit || null;
+      setSelection(hit ? [{ type: 'wall', item: hit }] : []);
       paint();
     }
     dragging = null;
@@ -3300,7 +3327,7 @@
     // it is the affordance a drafter with no keyboard can reach.
     if (e.key === 'Escape') {
       drawStart = null;
-      selectedSeg = null;
+      setSelection([]);
       paint();
       return;
     }
@@ -3311,9 +3338,9 @@
     // and nothing else, so the key does the one thing it can do and is silent
     // on the rest — said out loud here because the drafter presses the same
     // key for all of them and a silent no-op reads as a broken page.
-    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedSeg) {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedWall()) {
       e.preventDefault();
-      deleteWall(selectedSeg);
+      deleteWall(selectedWall());
       paint();
       return;
     }
@@ -3337,7 +3364,7 @@
       } else if (step.kind === 'add') {
         const at = drawing.walls.indexOf(step.wall);
         if (at >= 0) drawing.walls.splice(at, 1);
-        if (selectedSeg === step.wall) selectedSeg = null;
+        setSelection(selection.filter(entry => entry.item !== step.wall));
         // AND RETIRE THE CORNERS IT INTRODUCED, or the pool keeps a phantom
         // the next drawn wall snaps to — a corner belonging to a wall that no
         // longer exists, invisible and magnetic.
@@ -3529,7 +3556,7 @@
     // been replaced. Kept, an undo would splice a wall from the previous
     // drawing back into this one, or move a corner nothing is joined to.
     undoStack.length = 0;
-    selectedSeg = null;
+    setSelection([]);
     drawStart = null;
     return true;
   };
