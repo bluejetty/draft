@@ -334,6 +334,9 @@
     letter-spacing:0.06em; padding:2px 5px; }
   .lv-del { border:0; font-size:12px; line-height:1; padding:2px 6px; }
   .lv-del:hover, .lv-add:hover { color: var(--ink); }
+  .lv-empty { font-family: var(--font-ui); font-size:9px; letter-spacing:0.04em;
+    color: var(--ink-quiet); opacity:0.7; padding:3px 6px; }
+  .lv-layer[disabled] { opacity:0.35; cursor:default; }
   .props-title { font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet);
     margin-bottom:6px; }
@@ -2646,6 +2649,125 @@
       card.append(bar, body);
       levelsPanel.append(card);
     });
+
+    // ── ELEVATIONS ──────────────────────────────────────────────────────────
+    // Real, and the same four the rail seats: autoElevationCuts is the one
+    // home for that derivation, so the panel and the seats cannot disagree
+    // about which elevations exist or what they are called.
+    const section = (label, extra) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'lv-head';
+      wrap.style.marginTop = '8px';
+      const t = document.createElement('div');
+      t.className = 'lv-head-title';
+      t.textContent = label;
+      wrap.append(t);
+      if (extra) wrap.append(extra);
+      levelsPanel.append(wrap);
+      return wrap;
+    };
+    const rowButton = (text, title, onClick, active) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'lv-layer';
+      b.textContent = text;
+      b.title = title;
+      if (active) b.toggleAttribute('data-active', true);
+      if (onClick) b.addEventListener('click', onClick);
+      else b.disabled = true;
+      levelsPanel.append(b);
+      return b;
+    };
+
+    section('Elevations');
+    const viewNow = params.get('view');
+    autoElevationCuts().forEach(cut => {
+      rowButton(`${cut.id} · ${elevationName(cut.id)}`,
+        `${cut.id} — the ${elevationName(cut.id)} elevation; tap to bring it center`,
+        () => goToView(CUT_VIEW + cut.id),
+        viewNow === CUT_VIEW + cut.id);
+    });
+
+    // ── SECTIONS ────────────────────────────────────────────────────────────
+    const stored = cuts();
+    section('Sections');
+    if (!stored.length) {
+      // THE OLD PAGE SAYS "Press [C] to cut a view" AND THIS PAGE MUST NOT.
+      // There is no [C] handler here and no cut tool -- grep the file. A hint
+      // telling a drafter to press a key that does nothing is worse than no
+      // hint, and it is the same seam the build bar is built on: say what is
+      // true of THIS page, not what was true of the old one.
+      const none = document.createElement('div');
+      none.className = 'lv-empty';
+      none.dataset.noSections = '';
+      none.textContent = 'No sections. This page has no cut tool — sections are cut in LAYOUT.';
+      levelsPanel.append(none);
+    }
+    stored.forEach(cut => {
+      const row = document.createElement('div');
+      row.className = 'lv-card-head';
+      const b = rowButton(cut.name || cut.id,
+        `${cut.name || cut.id} — tap to bring this section center`,
+        () => goToView(CUT_VIEW + cut.id),
+        viewNow === CUT_VIEW + cut.id);
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'lv-del';
+      del.dataset.deleteCut = String(cut.id);
+      del.textContent = '×';
+      del.title = `Delete ${cut.name || cut.id}`;
+      del.addEventListener('click', event => {
+        event.stopPropagation();
+        if (!window.confirm(`Delete section "${cut.name || cut.id}"?`)) return;
+        drawing.cuts = cuts().filter(c => c.id !== cut.id);
+        // A drafter looking AT the section being deleted has to be moved off
+        // it, or the page keeps painting a cut the drawing no longer has.
+        if (params.get('view') === CUT_VIEW + cut.id) {
+          params.delete('view');
+          syncUrl();
+        }
+        markDirty();
+        buildChrome();
+        paint();
+      });
+      b.style.flex = '1';
+      levelsPanel.removeChild(b);
+      row.append(b, del);
+      levelsPanel.append(row);
+    });
+
+    // ── BONEYARD ────────────────────────────────────────────────────────────
+    // LISTED, NOT EDITED, and that is a ruling rather than an omission.
+    // PARITY-model-html-vs-dc.md records the boneyard as "absent,
+    // deliberately" on this page, and model-html-gestures.spec.js drives it:
+    // the level picker offers no negative pseudo-level, so there is nowhere
+    // for a new shelf to be used. "+ SHELF" would write a shelf into the file
+    // that this page can never open.
+    const shelves = drawing?.boneyardShelves || [];
+    section('Boneyard');
+    if (!shelves.length) {
+      const none = document.createElement('div');
+      none.className = 'lv-empty';
+      none.textContent = 'No shelves.';
+      levelsPanel.append(none);
+    }
+    shelves.forEach(shelf => {
+      const row = document.createElement('div');
+      row.className = 'lv-empty';
+      row.dataset.shelf = String(shelf.id);
+      row.textContent = shelf.name || `shelf ${shelf.id}`;
+      levelsPanel.append(row);
+    });
+
+    // ── 3D VIEW ─────────────────────────────────────────────────────────────
+    // A CHAIR, NOT A BUTTON, which is this page's own rule for a view that
+    // does not exist yet. There is no WebGL, no three.js and no perspective
+    // camera in this file at all -- so an enabled 3D VIEW would be a button
+    // that cannot do the one thing its label promises.
+    const threeD = rowButton('⬡ 3D VIEW',
+      'No 3D view on this page yet — the drawing is 2D only here', null, false);
+    threeD.dataset.view3d = '';
+
     markActiveLayer();
   };
 

@@ -224,3 +224,95 @@ test('a cancelled confirm deletes nothing', async ({ page }) => {
   await expect(page.locator('[data-model-save]'),
     'a cancelled delete marked the drawing dirty').not.toHaveText(/unsaved/i);
 });
+
+test('ELEVATIONS are the module\'s four, and pressing one enters that view',
+  async ({ page }) => {
+    await openPanel(page);
+    // FROM autoElevationCuts, the one home for that derivation, so the panel
+    // cannot name a different set of elevations than the rail seats.
+    const fromPage = await page.evaluate(() => [...document.querySelectorAll('.lv-layer')]
+      .map(b => b.textContent).filter(t => /^E\d · /.test(t)));
+    expect(fromPage).toHaveLength(4);
+    expect(fromPage.map(t => t.split(' · ')[0])).toEqual(['E1', 'E2', 'E3', 'E4']);
+
+    await page.locator('.lv-layer', { hasText: /^E3 · / }).click();
+    await page.waitForTimeout(250);
+    expect(new URL(page.url()).searchParams.get('view')).toBe('cut:E3');
+    // The seat for the same elevation lights too: one piece of state.
+    await expect(page.locator('.seat.active')).toHaveCount(1);
+  });
+
+test('SECTIONS tells the truth about a page with no cut tool', async ({ page }) => {
+  await openPanel(page);
+
+  // THE OLD PAGE SAYS "Press [C] to cut a view". THIS PAGE HAS NO [C].
+  // Carrying that hint across would tell a drafter to press a key that does
+  // nothing — the same seam the build bar is built on. So the empty state
+  // says what is true here, and this asserts BOTH halves: the claim is not
+  // made, and the key really does nothing.
+  const empty = page.locator('[data-no-sections]');
+  await expect(empty).toBeVisible();
+  await expect(empty).not.toContainText('[C]');
+
+  const before = await h.savedDrawing(page);
+  await page.locator('body').press('c');
+  await page.waitForTimeout(200);
+  await expect(page.locator('[data-model-save]'),
+    'pressing C changed the drawing — this page claims no cut tool').not.toHaveText(/unsaved/i);
+  expect((await h.savedDrawing(page)).cuts || []).toEqual(before.cuts || []);
+});
+
+test('a stored section gets a row and a delete that works', async ({ page }) => {
+  // `cuts` is LAYOUT's to author, so the fixture writes one directly rather
+  // than pretending this page can cut.
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, saved }) => {
+    saved.cuts = [{ id: 'S1', name: 'S1', elev: 0, levelId: null,
+      startPt: { x: -20, z: 0 }, endPt: { x: 30, z: 0 }, dirVec: { x: 0, z: 1 } }];
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, saved: HOUSE });
+  await page.goto('/MODEL.html?mode=night&right=1');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+
+  await expect(page.locator('[data-no-sections]')).toHaveCount(0);
+  await expect(page.locator('[data-delete-cut="S1"]')).toBeVisible();
+
+  // LOOK AT IT FIRST. Deleting a section the drafter is not on exercises only
+  // half the code: the other half moves them off a cut the drawing no longer
+  // has, and without this the page goes on painting a deleted section. An
+  // earlier version of this test deleted without entering the view and passed
+  // with that branch mutated dead.
+  await page.locator('[data-delete-cut="S1"]').locator('xpath=preceding-sibling::button[1]').click()
+    .catch(async () => { await page.locator('.lv-layer', { hasText: /^S1$/ }).click(); });
+  await page.waitForTimeout(250);
+  expect(new URL(page.url()).searchParams.get('view'),
+    'the test did not actually enter the section view').toBe('cut:S1');
+
+  await page.evaluate(() => { window.confirm = () => true; });
+  await page.locator('[data-delete-cut="S1"]').click();
+  await page.waitForTimeout(250);
+  await expect(page.locator('[data-no-sections]')).toBeVisible();
+  await expect(page.locator('[data-model-save]')).toHaveText(/unsaved/i);
+  // AND THE DRAFTER IS NO LONGER LOOKING AT IT.
+  expect(new URL(page.url()).searchParams.get('view'),
+    'the page is still showing a section the drawing no longer has').not.toBe('cut:S1');
+});
+
+test('the BONEYARD is listed and not editable, and 3D is a chair', async ({ page }) => {
+  await openPanel(page);
+
+  // BONEYARD: listed, never edited. PARITY-model-html-vs-dc.md records the
+  // boneyard as "absent, deliberately" on this page and the gestures spec
+  // drives it — the level picker offers no negative pseudo-level — so a
+  // "+ SHELF" would write a shelf into the file this page can never open.
+  expect(await page.locator('[data-shelf]').count(),
+    'the fixture has one shelf and the panel must show it').toBe(1);
+  expect(await page.locator('[data-add-shelf]').count(),
+    'a + SHELF button would create something this page cannot reach').toBe(0);
+
+  // 3D: a chair, not a button. Movie is leaving 3D to last, and there is no
+  // WebGL, three.js or perspective camera in this file at all — so the seat
+  // is held without the label promising anything.
+  await expect(page.locator('[data-view3d]')).toBeDisabled();
+});
