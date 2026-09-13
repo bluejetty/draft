@@ -373,7 +373,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         const inTools = el => el.closest('#tool-slot') !== null;
         const outside = el => !inPanel(el) && !inTools(el);
         const toolKind = el => (el.dataset.toolKey !== undefined ? 'tool-key'
-          : el.tagName.toLowerCase());
+          : el.dataset.selMode !== undefined ? 'sel-mode'
+            : el.dataset.selFilter !== undefined ? 'sel-filter'
+              : el.tagName.toLowerCase());
         return {
           buttons: [...document.querySelectorAll('button')].filter(outside)
             .map(b => b.id || b.textContent.trim()).sort(),
@@ -452,8 +454,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // 'BUTTON' or 'INPUT' and fail.
           panelKinds: ['add-level', 'cut-row', 'delete-level', 'layer-row',
             'level-row', 'view-3d'].sort(),
-          // The column holds keys and nothing else at this stage.
-          toolKinds: ['tool-key'],
+          // The column's kinds. SELECTION's three modes and OBJECT TYPE's five
+          // filters are named rather than counted for the same reason the keys
+          // are not: a control the classifier cannot name arrives as 'button'
+          // and fails, which is how the chips were noticed here in the first
+          // place.
+          toolKinds: ['sel-filter', 'sel-mode', 'tool-key'],
         });
     });
 
