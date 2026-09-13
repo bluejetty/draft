@@ -57,8 +57,8 @@ const MUTANTS = [
   },
   {
     name: 'a plain click stops clearing the selection',
-    find: '        setSelection(hit ? [hit] : []);',
-    with: '        if (hit) setSelection([hit]);',
+    find: "        // the drafter has no way to put a selection down.\n        setSelection(hit ? [hit] : []);",
+    with: "        // the drafter has no way to put a selection down.\n        if (hit) setSelection([hit]);",
     test: 'a plain click on empty space',
   },
   {
@@ -66,6 +66,48 @@ const MUTANTS = [
     find: "      if (!selection.length && selectFilter !== 'all') setSelectFilter('all');",
     with: "      if (selectFilter !== 'all') setSelectFilter('all');",
     test: 'Esc clears the selection',
+  },
+  {
+    name: 'a window takes what it crosses, not what it encloses',
+    find: "        if (inside(item.start) && inside(item.end)) out.push({ type: 'wall', item });",
+    with: "        if (inside(item.start) || inside(item.end)) out.push({ type: 'wall', item });",
+    test: 'fully encloses',
+  },
+  {
+    name: 'a floor only needs one corner in the box',
+    find: '        if (pts.length >= 3 && pts.every(inside)) out.push',
+    with: '        if (pts.length >= 3 && pts.some(inside)) out.push',
+    test: 'fully encloses',
+  },
+  {
+    name: 'ALL LEVELS stops reaching past the active level',
+    find: "    const all = selectionMode === 'window-all';",
+    with: '    const all = false;',
+    test: 'ALL LEVELS reaches upstairs',
+  },
+  {
+    name: 'WINDOW starts reaching every level too',
+    find: "    const all = selectionMode === 'window-all';",
+    with: '    const all = true;',
+    test: 'ALL LEVELS reaches upstairs',
+  },
+  {
+    name: 'the filter stops restricting a window',
+    find: "    if (filterAllows('line')) {\n      scope('lines', lines).forEach(item => {",
+    with: '    if (true) {\n      scope(\'lines\', lines).forEach(item => {',
+    test: 'the OBJECT TYPE filter restricts a window',
+  },
+  {
+    name: 'a shift-drag replaces instead of adding',
+    find: '        setSelection(band.shift\n          ? selection.concat(caught.filter(c =>\n            !selection.some(entry => entry.item === c.item)))\n          : caught);',
+    with: '        setSelection(caught);',
+    test: 'shift-drag adds to the selection',
+  },
+  {
+    name: 'a tap in a window mode stops selecting',
+    find: "        const hit = hitAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));\n        setSelection(hit ? [hit] : []);\n      }\n      paint();\n      return;",
+    with: '        setSelection([]);\n      }\n      paint();\n      return;',
+    test: 'a tap in a window mode still selects',
   },
   {
     name: 'the readout stops reporting the selection',
@@ -92,11 +134,23 @@ if (dirty) {
 }
 
 const PATH = '/home/user/draft/MODEL.html';
-let killed = 0, ran = 0;
+let killed = 0, ran = 0, ambiguous = 0;
 for (const m of MUTANTS) {
   const before = fs.readFileSync(PATH, 'utf8');
-  if (!before.includes(m.find)) {
+  const hits = before.split(m.find).length - 1;
+  if (hits === 0) {
     console.log(`  SKIPPED (anchor not found): ${m.name}`);
+    continue;
+  }
+  // AN AMBIGUOUS ANCHOR IS WORSE THAN A MISSING ONE. String.replace takes the
+  // FIRST match, so a `find` that now occurs twice quietly mutates a site the
+  // test was never watching, the test passes, and the run reports a survivor
+  // that was never actually attacked. That is exactly what happened to "a
+  // plain click stops clearing the selection" the moment the window drag added
+  // a second `setSelection(hit ? [hit] : [])`.
+  if (hits > 1) {
+    console.log(`  AMBIGUOUS (${hits} matches, refusing to guess): ${m.name}`);
+    ambiguous += 1;
     continue;
   }
   ran += 1;
@@ -106,5 +160,5 @@ for (const m of MUTANTS) {
   if (result === 'failed') killed += 1;
   console.log(`  ${result === 'failed' ? 'KILLED  ' : 'SURVIVED'}  ${m.name}`);
 }
-console.log(`\n${killed}/${ran} killed`);
-process.exit(killed === ran && ran === MUTANTS.length ? 0 : 1);
+console.log(`\n${killed}/${ran} killed` + (ambiguous ? `, ${ambiguous} AMBIGUOUS -- anchors that match more than one site` : ''));
+process.exit(killed === ran && ran === MUTANTS.length && !ambiguous ? 0 : 1);

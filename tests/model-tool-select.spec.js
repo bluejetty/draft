@@ -60,6 +60,12 @@ const FIXTURE = {
     ['w-e', V(WALL, -WALL), V(WALL, WALL)],
     ['w-s', V(WALL, WALL), V(-WALL, WALL)],
     ['w-w', V(-WALL, WALL), V(-WALL, -WALL)],
+    // A STUB IN THE TOP-LEFT, short enough that a small box holds one end and
+    // not the other. The square's own walls run corner to corner, so no box
+    // that stays on the canvas can hold exactly one of their ends -- and
+    // without such a box, `&&` and `||` in the enclosure test behave
+    // identically and the mutation for it cannot be caught.
+    ['w-stub', V(-8, -7), V(-2, -7)],
   ].map(([id, start, end]) => ({
     id, start, end, levelId: 3, view: 'plan',
     wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left',
@@ -74,7 +80,19 @@ const FIXTURE = {
     id: 'l-upstairs', start: V(-3, -3), end: V(3, -3),
     levelId: 5, view: 'plan', layer: 'draft', bulge: 0,
   }],
-  floors: [], roofs: [], fenestrations: [], dimensions: [], outlines: [],
+  // A FLOOR THE WINDOW CAN HALF-CATCH. Without one, the mutation "a floor only
+  // needs one corner in the box" cannot be caught by anything -- the fixture
+  // had no floors, so the floor branch of the enclosure test was never run.
+  // It straddles the origin so a box over one quadrant holds some corners and
+  // not others.
+  floors: [{
+    // SMALL ENOUGH THAT A BOX ROUND IT STAYS ON THE CANVAS. fit() zooms so
+    // ±10ft nearly fills the height, which leaves about ±11.6ft of reachable
+    // sheet; a box out at ±12 begins off-screen where the mouse cannot press.
+    id: 'f-probe', levelId: 3, view: 'floor',
+    points: [V(-5, -5), V(5, -5), V(5, 5), V(-5, 5)],
+  }],
+  roofs: [], fenestrations: [], dimensions: [], outlines: [],
   shapes: [], surfaceOpenings: [], stairs: [], notes: [], roomTags: [],
   columns: [], beams: [], boneyardOutlines: [], boneyardShelves: [],
   groups: [], levelLocks: [], underlays: [],
@@ -328,6 +346,48 @@ test('a window takes what it fully encloses, not what it crosses',
       'the probe line is enclosed; the west wall is only crossed').toBe(1);
   });
 
+test('one end of a wall inside the box is not enough', async ({ page }) => {
+  // THE MUTATION GATE FOUND THE CHECK ABOVE TOO WEAK. Its box encloses NEITHER
+  // end of the west wall, so a build that took anything with EITHER end inside
+  // -- `||` where the rule says `&&` -- behaved identically and the mutant
+  // lived. The distinction only shows on a box holding exactly one end, which
+  // is what the stub wall in the fixture exists for.
+  await open(page);
+  await page.locator('[data-sel-mode="window"]').click();
+
+  // The stub runs (-8,-7) to (-2,-7). This box holds the first end only.
+  await dragBox(page, [-5, -5], [-10, -9]);
+  expect(await selCount(page),
+    'one end in, one end out: the wall stays behind').toBe(0);
+
+  // And the whole stub does come, or "takes nothing" would satisfy the line
+  // above just as well.
+  await dragBox(page, [0, -5], [-10, -9]);
+  expect(await selCount(page), 'both ends in: the wall comes').toBe(1);
+});
+
+test('a floor comes only when every corner is in the box', async ({ page }) => {
+  // Same hole, one type over: the fixture had no floors, so the floor branch
+  // of the enclosure test ran in no check at all and "some corner" passed for
+  // "every corner".
+  //
+  // DRIVEN IN ALL LEVELS MODE, and that is not a dodge. A floor carries
+  // `view: 'floor'`, so floors() -- which filters to the view on screen --
+  // holds none of them in PLAN, and a window over the current level correctly
+  // finds nothing. window-all reads the raw collection, exactly as the old
+  // page's `this._floors` does, which is where the floor branch actually runs.
+  await open(page);
+  await page.locator('[data-sel-mode="window-all"]').click();
+
+  // The floor spans ±5. This box holds one of its four corners.
+  await dragBox(page, [0, 0], [7, 7]);
+  expect(await selCount(page), 'a quarter of a floor is not a floor').toBe(0);
+
+  // And all four, with both lines.
+  await dragBox(page, [7, 7], [-7, -7]);
+  expect(await selCount(page), 'the floor and the two lines').toBe(3);
+});
+
 test('ALL LEVELS reaches upstairs and WINDOW does not', async ({ page }) => {
   await open(page);
 
@@ -337,7 +397,12 @@ test('ALL LEVELS reaches upstairs and WINDOW does not', async ({ page }) => {
 
   await page.locator('[data-sel-mode="window-all"]').click();
   await dragBox(page, [-6, -6], [6, 6]);
-  expect(await selCount(page), 'ALL LEVELS also takes the line upstairs').toBe(2);
+  // THREE, and the third is worth naming: the upstairs line, plus the FLOOR,
+  // which window-all reaches because it reads the raw collection rather than
+  // what is painted in PLAN. Same box, same drag -- the mode is the only thing
+  // that changed, and it went from one to three.
+  expect(await selCount(page),
+    'ALL LEVELS also takes the line upstairs and the floor').toBe(3);
 });
 
 test('the OBJECT TYPE filter restricts a window too', async ({ page }) => {
