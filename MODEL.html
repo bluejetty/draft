@@ -286,12 +286,46 @@
   #right-rail[data-collapsed] { padding:6px; }
   #right-rail[data-collapsed] #view-rail { grid-template-columns:repeat(3, 84px); }
   #right-rail[data-collapsed] #props-slot { display:none; }
-  /* The tool palette's home. Empty by design: Gilligan's seven go here, and a
-     panel with nothing in it is still the thing that proves the canvas has
-     already given up the edge. */
+  /* THE TOOL COLUMN. Four square keys a row, which is the old page's own
+     shape and not a taste: at four across, DRAW/EDIT is three rows and BUILD
+     is two, and the whole roster is reachable without the panel scrolling on
+     a laptop. Three across would push it to six rows and start scrolling the
+     one thing a drafter reaches for constantly.
+
+     THE COMMAND LETTER SITS TOP-LEFT AND THE NAME ALONG THE BOTTOM, leaving
+     the middle of the face clear. That gap is deliberate: the old page's keys
+     carry an icon there and this page has none yet, so the space is held open
+     rather than closed up and re-opened later at every caller. */
   #tool-slot:empty::after { content:'TOOLS'; display:block; padding:6px 2px;
     font-family: var(--font-ui); font-size:9px; letter-spacing:0.1em;
     color: var(--ink-quiet); opacity:0.5; }
+  [data-tool-group] + [data-tool-group] { margin-top:10px; }
+  [data-tool-group-name] { font-family: var(--font-ui); font-size:9px;
+    font-weight:600; letter-spacing:0.1em; text-transform:uppercase;
+    color: var(--ink-quiet); margin-bottom:5px; }
+  .tool-keys { display:grid; grid-template-columns:repeat(4, 40px); gap:4px; }
+  .tool-key { position:relative; width:40px; height:40px; padding:0;
+    display:block; cursor:pointer; border-radius:3px;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip);
+    background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); font-family: var(--font-ui); }
+  .tool-key:hover { border-color: var(--accent); color: var(--accent); }
+  /* ARMED IS THE ACCENT, the same signal #draw-wall has always used, because
+     the two are now one register and a drafter should not have to learn that
+     the column means something different from the button. */
+  .tool-key[aria-pressed="true"] { border-color: var(--accent);
+    color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  [data-tool-letter] { position:absolute; top:2px; left:4px; font-size:11px;
+    font-weight:600; line-height:1; }
+  /* The five bare faces keep the same box: a key whose letter box collapses
+     would sit differently from its neighbours and read as a different kind of
+     key, which is a thing about the tool that is not true. */
+  [data-tool-letter]:empty::after { content:'\200b'; }
+  [data-tool-name] { position:absolute; left:0; right:0; bottom:2px;
+    font-size:6.5px; font-weight:600; letter-spacing:0.02em;
+    text-transform:uppercase; line-height:1.1; text-align:center;
+    padding:0 1px; overflow:hidden; }
   #props-slot[hidden] { display:none; }
   .props-title { font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet);
@@ -475,6 +509,10 @@
      pages read one list (build-menu.js says why). -->
 <script src="./build-menu.js"></script>
 <script src="./profile-manager.js"></script>
+<!-- The seventeen tools as data, so the keypad renders a list rather than
+     seventeen hand-written buttons that can drift apart. It reads
+     profile-manager.js for the SETTINGS remaps, so it comes after it. -->
+<script src="./tool-roster.js"></script>
 <!-- Stairs. stair-geometry.js is the riser math and the plan parts; it is not
      a painter either, it is the two ANSWERS drawStairs2D asks its caller for
      (layoutFor, partsFor), which lived on the MODEL.dc.html component.
@@ -2972,14 +3010,46 @@
   // pan and gets a wall.
   const drawButton = document.getElementById('draw-wall');
   const deleteButton = document.getElementById('delete-wall');
-  let drawArmed = false;
+  // ── the tool register ─────────────────────────────────────────────────────
+  // ONE VARIABLE HOLDS WHICH TOOL IS ARMED, and it holds a tool id, never a
+  // boolean. This was `let drawArmed = false` — correct while WALL was the only
+  // tool on the page, and the wrong shape the moment a second one exists. A
+  // seventeen-key column hung off its own state beside a live boolean gives the
+  // page two ideas of what is armed; a drafter would then press SELECT, see the
+  // column agree, and still commit a wall on the next tap, because the boolean
+  // never heard about it. That is the same two-sources-of-truth failure this
+  // page's own shell comment warns about for the active level, one panel over.
+  //
+  // SELECT IS THE RESTING TOOL, not "nothing armed". The old page has no
+  // no-tool state (its Select is `standardTool('Select', …)`, one of the four),
+  // and a column with no key lit looks exactly like a column that stopped
+  // working. Pressing the armed key puts it back to select.
+  //
+  // WHAT THIS DOES NOT DO: it does not know how any tool behaves. Every gesture
+  // still reads the register and decides for itself; the register only says
+  // which one gets the press.
+  const RESTING_TOOL = 'select';
+  let activeTool = RESTING_TOOL;
   let drawStart = null;
+  const toolListeners = [];
 
-  const setArmed = on => {
-    drawArmed = on;
+  const setTool = id => {
+    const roster = window.DraftToolRoster;
+    // An unknown id would silently arm nothing and read as "select is on",
+    // which is a broken state that looks like a working one.
+    const next = roster && roster.get(id) ? id : RESTING_TOOL;
+    activeTool = next;
+    // Any half-finished gesture belongs to the tool being put down. Carrying an
+    // anchor across a tool change is how a chain commits into the next tool's
+    // first tap.
     drawStart = null;
-    drawButton.classList.toggle('armed', on);
-    canvas.style.cursor = on ? 'crosshair' : '';
+    // THE LEGACY BUTTON IS A VIEW OF THE REGISTER, not a second copy of it.
+    // tests/model-html-seats.spec.js arms and disarms through this button on
+    // every run, and it stays the affordance a drafter with no keyboard can
+    // reach; it just no longer owns the state.
+    drawButton.classList.toggle('armed', next === 'wall');
+    canvas.style.cursor = next === RESTING_TOOL ? '' : 'crosshair';
+    toolListeners.forEach(fn => fn(next));
   };
 
   // A drawn endpoint snaps to an existing corner exactly as a dragged one
@@ -3003,7 +3073,73 @@
     paint();
   };
 
-  drawButton.addEventListener('click', () => setArmed(!drawArmed));
+  drawButton.addEventListener('click',
+    () => setTool(activeTool === 'wall' ? RESTING_TOOL : 'wall'));
+
+  // ── the tool column ───────────────────────────────────────────────────────
+  // SEVENTEEN KEYS, RENDERED FROM THE LIST. tool-roster.js holds the roster;
+  // this builds it and wires it to the register above. Nothing here decides
+  // what a tool does — pressing a key sets `activeTool` and that is all — so a
+  // tool whose gesture is not written yet still lights, still says what it
+  // would do, and still puts the previous one down. A key that did nothing at
+  // all would be worse than no key: it would look like a working tool.
+  //
+  // THE LETTERS ARE READ ONCE AT BUILD, from SETTINGS through the roster. A
+  // remap made in another tab lands on the next load, which is how every other
+  // profile-backed value on this page behaves.
+  const buildToolColumn = () => {
+    const roster = window.DraftToolRoster;
+    const slot = document.getElementById('tool-slot');
+    if (!roster || !slot) return;
+    const resolved = roster.bindings();
+    slot.replaceChildren(...roster.GROUPS.map(group => {
+      const box = document.createElement('div');
+      box.dataset.toolGroup = group.id;
+      const name = document.createElement('div');
+      name.dataset.toolGroupName = '';
+      name.textContent = group.label;
+      const keys = document.createElement('div');
+      keys.className = 'tool-keys';
+      keys.append(...roster.inGroup(group.id).map(tool => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tool-key';
+        btn.dataset.toolKey = tool.id;
+        btn.dataset.toolKind = tool.kind;
+        btn.setAttribute('aria-pressed', String(tool.id === activeTool));
+        // The title is the whole name, because the face is 40px and
+        // FENESTRATION does not fit on it at a readable size.
+        btn.title = tool.name;
+        const letter = document.createElement('span');
+        letter.dataset.toolLetter = '';
+        letter.textContent = roster.keyFor(tool.id, resolved);
+        const label = document.createElement('span');
+        label.dataset.toolName = '';
+        label.textContent = tool.name;
+        btn.append(letter, label);
+        // PRESSING THE ARMED KEY RETURNS TO SELECT rather than to nothing --
+        // see the register's comment. Pressing SELECT while select is armed is
+        // therefore a no-op, which is right: it is the resting state.
+        btn.addEventListener('click',
+          () => setTool(tool.id === activeTool ? RESTING_TOOL : tool.id));
+        return btn;
+      }));
+      box.append(name, keys);
+      return box;
+    }));
+  };
+
+  // The register tells the column, never the other way round. Any future
+  // arming path -- a keyboard shortcut, a tool that puts itself down when it
+  // finishes -- lights the right key for free, because it goes through
+  // setTool and setTool is what fires this.
+  toolListeners.push(next => {
+    document.querySelectorAll('[data-tool-key]').forEach(btn => {
+      btn.setAttribute('aria-pressed', String(btn.dataset.toolKey === next));
+    });
+  });
+
+  buildToolColumn();
   deleteButton.addEventListener('click', () => {
     if (!selectedSeg) return;
     deleteWall(selectedSeg);
@@ -3023,7 +3159,7 @@
     // panning. Otherwise the first tap of a wall that starts on an existing
     // corner would be read as grabbing that corner, and the drafter would drag
     // the building instead of drawing against it.
-    if (drawArmed) { drawPress(at); return; }
+    if (activeTool === 'wall') { drawPress(at); return; }
     // VERTEX BEFORE BODY — the old page's own precedence (_findVertexHit at
     // MODEL.dc.html:16791, then _findLineHit at :16799). A press near a corner
     // is a corner press even though it is also on the wall.
