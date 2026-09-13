@@ -376,6 +376,50 @@
     font-family: var(--font-ui); font-size:10px; letter-spacing:0.04em;
     text-transform:uppercase; }
   #props-slot[hidden] { display:none; }
+
+  /* THE LEVELS / LAYERS PANEL. Movie: "i will also need the LEVELS / LAYERS
+     menu too", and "the level layers should be a tab on the right side like
+     in the DC files". It is a third pane in the right-edge group rather than
+     a second rotated tab on the same edge -- Devin's ruling, and he withdrew
+     the "must not bury the rail" line with it: reachable means one click, not
+     simultaneously visible. Two tabs on one edge is how the chrome-on-chrome
+     collisions of #389 happened.
+
+     Carried from MODEL.dc.html:1850-1955 by SHAPE, not by stylesheet: a card
+     per level with its layer rows inside, the active one lit. */
+  #levels-panel { display:flex; flex-direction:column; gap:6px; margin-top:8px;
+    max-height:42vh; overflow-y:auto; scrollbar-width:none; }
+  #levels-panel::-webkit-scrollbar { display:none; }
+  #right-rail[data-collapsed] #levels-panel { display:none; }
+  .lv-head { display:flex; align-items:center; gap:6px; }
+  .lv-head-title { flex:1; font-family: var(--font-ui); font-size:9px;
+    letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet); }
+  .lv-datum { font-family: var(--font-ui); font-size:9px; letter-spacing:0.04em;
+    color: var(--ink-quiet); opacity:0.8; }
+  .lv-card { display:flex; gap:0; border:1px solid var(--rule); background:transparent; }
+  .lv-bar { width:4px; flex:0 0 4px; }
+  .lv-body { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .lv-name { font-family: var(--font-ui); font-size:10px; letter-spacing:0.06em;
+    text-align:left; padding:4px 6px; background:none; border:0; color: var(--ink);
+    cursor:pointer; text-transform:uppercase; }
+  .lv-card[data-active] .lv-name { font-weight:700; }
+  .lv-layers { display:flex; flex-direction:column; }
+  .lv-layer { font-family: var(--font-ui); font-size:9px; letter-spacing:0.04em;
+    text-align:left; padding:3px 6px 3px 12px; background:none; border:0;
+    color: var(--ink-quiet); cursor:pointer; }
+  .lv-layer[data-active] { background: var(--accent); color: var(--on-accent);
+    font-weight:700; }
+  .lv-card-head { display:flex; align-items:center; }
+  .lv-card-head .lv-name { flex:1; }
+  .lv-add, .lv-del { font-family: var(--font-ui); background:none; cursor:pointer;
+    color: var(--ink-quiet); }
+  .lv-add { border:1px solid var(--rule); font-size:9px; font-weight:700;
+    letter-spacing:0.06em; padding:2px 5px; }
+  .lv-del { border:0; font-size:12px; line-height:1; padding:2px 6px; }
+  .lv-del:hover, .lv-add:hover { color: var(--ink); }
+  .lv-empty { font-family: var(--font-ui); font-size:9px; letter-spacing:0.04em;
+    color: var(--ink-quiet); opacity:0.7; padding:3px 6px; }
+  .lv-layer[disabled] { opacity:0.35; cursor:default; }
   .props-title { font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet);
     margin-bottom:6px; }
@@ -515,6 +559,10 @@
 <button id="right-tab" class="rail-tab" type="button" data-right-tab hidden>VIEWS · PROPERTIES</button>
 <aside id="right-rail" data-right-rail data-collapsed hidden>
   <div id="view-rail"></div>
+  <!-- LEVELS / LAYERS. The rail's EDITOR, not its companion: the layer rows
+       inside a level card are the same objects as the seats, so adding a
+       level adds two seats and deleting one takes them away. -->
+  <div id="levels-panel" data-levels-panel></div>
   <!-- PER-TOOL PROPERTIES, the slot and nothing in it. Gilligan fills this;
        the contract is in the comment beside setToolProperties below. -->
   <div id="props-slot" data-props-slot hidden></div>
@@ -2380,6 +2428,7 @@
   const chromeBar = document.getElementById('chrome');
   const levelPick = document.getElementById('level-pick');
   const viewPick = document.getElementById('view-pick');
+  const levelsPanel = document.getElementById('levels-panel');
   const viewWrap = document.getElementById('view-wrap');
 
   // replaceState, not pushState: a switch is a change of viewpoint, not a
@@ -2431,6 +2480,400 @@
     });
   };
 
+  // THE PANEL IS A VIEW OF `drawing.levels`, never a second copy of it. Every
+  // row here drives goToLevel / goToView -- the same two entry points the
+  // pickers use -- so the card, the seat, the picker and the plan cannot
+  // disagree about what is active. That is the seam Devin drew between this
+  // panel and the tool column: the panel owns the level/view state and
+  // everything else reads it.
+  //
+  // The layer rows come from layerViewsForLevelId and are NOT hard-coded.
+  // ROOF and SITE answer with none, which is why their cards carry no rows --
+  // the same fact that puts them in one rail row together rather than two.
+  // COPIED FROM MODEL.dc.html:2292, not remembered. Its own comment records
+  // why it is one list: fenestrations, fixtures, stairs, notes and roomTags
+  // were each missing from the delete at some point, so deleting a level left
+  // its doors, windows, appliances, stairs, annotations and room names behind
+  // -- pointing at a level id that no longer existed, invisible on every
+  // level, and carried through save after save. Retyping it from memory is
+  // how that happens a second time.
+  //
+  // NOT here, deliberately and for the old page's reasons: boneyardOutlines
+  // (the master is storage, not a level), groups (membership spans levels and
+  // is cleaned below), and cuts (owned by level id, handled separately).
+  const LEVEL_OWNED_COLLECTIONS = [
+    'lines', 'walls', 'floors', 'shapes', 'roofs', 'outlines',
+    'surfaceOpenings', 'dimensions', 'columns', 'beams',
+    'fenestrations', 'fixtures', 'stairs', 'notes', 'roomTags',
+    'electricDevices', 'underlays',
+  ];
+
+  // ADD A LEVEL — MODEL.dc.html:9850 `_addLevel`, carried rather than invented.
+  // The elevation it suggests is the assembly below plus its floor sandwich,
+  // NOT a round 9': a suggestion that disagrees with the construction the
+  // level cards already show is worse than no suggestion.
+  const addLevel = () => {
+    if (!drawing) return;
+    const LV = window.DraftLayerViews;
+    const LA = window.DraftLevelAssembly;
+    const floors = LV.floorLevels(drawing.levels || []);
+    const count = floors.length + 1;
+    const suggestedName = `${count === 1 ? '1ST' : count === 2 ? '2ND'
+      : count === 3 ? '3RD' : `${count}TH`} FL`;
+    const name = window.prompt('Level name:', suggestedName);
+    if (name === null) return;
+    const topFloor = floors[floors.length - 1];
+    const assemblyOf = id => LA.levelAssemblyFor(drawing.levelAssemblies, id);
+    const suggestedElev = topFloor
+      ? Math.round(((Number(topFloor.elev) || 0)
+        + assemblyOf(topFloor.id).wallHeightFt
+        + LA.levelFloorFt(assemblyOf(topFloor.id))) * 10000) / 10000
+      : 0;
+    const elevRaw = window.prompt(
+      topFloor
+        ? `Elevation in feet, top of this floor (negative = below grade).\n`
+          + `Suggested: ${suggestedElev} — ${topFloor.name} wall + floor.`
+        : 'Elevation in feet (negative = below grade):',
+      String(suggestedElev));
+    if (elevRaw === null) return;
+    const elev = parseFloat(elevRaw);
+    if (Number.isNaN(elev)) return;
+
+    const id = Number.isInteger(drawing.nextLevelId) ? drawing.nextLevelId : 1;
+    const level = { id, name: String(name).toUpperCase().trim(), elev, visible: true };
+    // Every regular level carries a copy of each BONEYARD master outline, so a
+    // freshly added floor starts with the inherited geometry rather than bare.
+    (drawing.boneyardOutlines || []).forEach(master => {
+      drawing.outlines = drawing.outlines || [];
+      drawing.outlines.push({ ...master, id: newDrawingItemId('outline'), levelId: id });
+    });
+    // ABOVE THE TOP FLOOR AND BELOW ROOF, which is where the old page stacks a
+    // new storey -- levels are stored top-down, so that is the top floor's own
+    // index rather than the end of the list.
+    const levels = [...(drawing.levels || [])];
+    const insertIdx = topFloor
+      ? levels.findIndex(entry => entry.id === topFloor.id)
+      : levels.length;
+    levels.splice(insertIdx < 0 ? levels.length : insertIdx, 0, level);
+    drawing.levels = levels;
+    drawing.nextLevelId = id + 1;
+    markDirty();
+    buildChrome();
+    paint();
+    return level;
+  };
+
+  // DELETE A LEVEL — MODEL.dc.html:9895 `_deleteLevel`. It does not refuse and
+  // does not orphan: it confirms, then takes everything the level owned.
+  const deleteLevel = levelId => {
+    if (!drawing) return false;
+    const levels = drawing.levels || [];
+    if (levels.length <= 1) { window.alert('Cannot delete the last level.'); return false; }
+    const idx = levels.findIndex(level => Number(level.id) === Number(levelId));
+    if (idx < 0) return false;
+    if (!window.confirm(`Delete level "${levels[idx].name}"? `
+      + 'Geometry on this level will be removed.')) return false;
+
+    // PENDING GEOMETRY BELONGS TO THE FLOOR IT WAS STARTED ON. Discard it
+    // before the level list changes, or a half-drawn wall commits into
+    // whichever floor the page lands on next.
+    setArmed(false);
+    const id = Number(levels[idx].id);
+    // ASKED BEFORE THE LEVEL IS REMOVED, and that ordering is the whole of it.
+    // Asking afterwards returns the FALLBACK -- activeLevelId drops to MAIN FL
+    // and then to the first level when `?level=` names one that is gone -- so
+    // the test "am I standing on the level being deleted" was never true and
+    // the URL went on naming a level the drawing no longer had.
+    const wasStandingHere = activeLevelId() === id;
+
+    const droppedUnderlays = (drawing.underlays || []).filter(u => u && u.levelId === id);
+    const goneIds = new Set();
+    LEVEL_OWNED_COLLECTIONS.forEach(field => {
+      if (!Array.isArray(drawing[field])) return;
+      drawing[field].forEach(item => { if (item && item.levelId === id) goneIds.add(String(item.id)); });
+      drawing[field] = drawing[field].filter(item => !item || item.levelId !== id);
+    });
+    // An underlay's PICTURE lives outside the drawing, in its own bucket keyed
+    // by the underlay id, so dropping the record is only half of it -- the
+    // bytes would sit in the browser profile for ever with nothing pointing at
+    // them.
+    droppedUnderlays.forEach(underlay => {
+      window.SharedFileStore?.removeNamedFile?.(underlay.id, 'underlays')
+        ?.catch(error => console.warn('Underlay binary removal failed:', error));
+    });
+    // Cuts are owned by a level id, not by elevation: two levels can sit at the
+    // same height, so only this level's own sections go with it.
+    if (Array.isArray(drawing.cuts)) {
+      drawing.cuts = drawing.cuts.filter(cut => cut && cut.levelId !== id);
+    }
+    // Groups reference members by {type, id} and can span levels, so they are
+    // cleaned rather than dropped -- and a group left holding a dead id would
+    // adopt the next item given that id, which is the fault the wall cascade
+    // above already guards.
+    if (Array.isArray(drawing.groups)) {
+      drawing.groups.forEach(group => {
+        if (group && Array.isArray(group.members)) {
+          group.members = group.members.filter(m => m && !goneIds.has(String(m.id)));
+        }
+      });
+      drawing.groups = drawing.groups.filter(g => g && Array.isArray(g.members) && g.members.length >= 2);
+    }
+    drawing.backgroundLevelIds = (drawing.backgroundLevelIds || []).filter(x => Number(x) !== id);
+    if (drawing.backgroundLevelViews && typeof drawing.backgroundLevelViews === 'object') {
+      delete drawing.backgroundLevelViews[String(id)];
+    }
+    drawing.levels = levels.filter((_, i) => i !== idx);
+
+    // The drafter has to land somewhere real. If the level being deleted is
+    // the one on screen, step to its neighbour rather than leaving `?level=`
+    // pointing at a level that no longer exists.
+    if (wasStandingHere) {
+      const next = drawing.levels[Math.min(idx, drawing.levels.length - 1)];
+      params.set('level', String(next.id));
+      params.delete('view');
+      syncUrl();
+    }
+    markDirty();
+    buildChrome();
+    paint();
+    return true;
+  };
+
+  // WHICH ROW IS LIT, in one place. buildLevelsPanel draws the rows and this
+  // lights them, so the rule lives once -- the level lookup having had four
+  // homes (#325) is the reason that matters here rather than being tidy.
+  const markActiveLayer = () => {
+    if (!levelsPanel) return;
+    const activeId = activeLevelId();
+    const LV = window.DraftLayerViews;
+    const asked = params.get('view');
+    const live = asked && LV.layerViewsForLevelId(activeId).some(v => v.id === asked)
+      ? asked : LV.defaultLayerViewId(activeId);
+    levelsPanel.querySelectorAll('.lv-layer').forEach(row => {
+      row.toggleAttribute('data-active', row.dataset.layer === `${activeId}:${live}`);
+    });
+    levelsPanel.querySelectorAll('.lv-card').forEach(card => {
+      card.toggleAttribute('data-active', Number(card.dataset.level) === activeId);
+    });
+  };
+
+  const buildLevelsPanel = () => {
+    if (!levelsPanel) return;
+    const levels = drawing?.levels || [];
+    const LV = window.DraftLayerViews;
+    const activeId = activeLevelId();
+    levelsPanel.innerHTML = '';
+    if (!levels.length) return;
+
+    const head = document.createElement('div');
+    head.className = 'lv-head';
+    const title = document.createElement('div');
+    title.className = 'lv-head-title';
+    title.textContent = 'Levels';
+    const datum = document.createElement('div');
+    datum.className = 'lv-datum';
+    // The old page's DATUM readout. It reads the stored elevationDatum rather
+    // than assuming 0, because a drafter who has moved it would otherwise see
+    // a panel confidently disagreeing with his own drawing.
+    datum.textContent = `DATUM ${Number(drawing?.elevationDatum || 0)}'`;
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'lv-add';
+    add.dataset.addLevel = '';
+    add.textContent = '+ ADD';
+    add.title = 'Add a level above the top floor';
+    add.addEventListener('click', addLevel);
+    head.append(title, datum, add);
+    levelsPanel.append(head);
+
+    levels.forEach(level => {
+      const card = document.createElement('div');
+      card.className = 'lv-card';
+      card.dataset.level = String(level.id);
+      if (Number(level.id) === activeId) card.toggleAttribute('data-active', true);
+
+      const bar = document.createElement('div');
+      bar.className = 'lv-bar';
+      bar.style.background = level.color || 'var(--rule)';
+
+      const body = document.createElement('div');
+      body.className = 'lv-body';
+
+      const name = document.createElement('button');
+      name.type = 'button';
+      name.className = 'lv-name';
+      // NOT `data-level-pick`, which is the CHROME BAR'S SELECT. Naming these
+      // buttons that made `locator('[data-level-pick]')` resolve to six
+      // elements, and model-html-switcher.spec.js -- which drives the select
+      // by exactly that attribute -- failed four ways on strict mode. The
+      // collision was invisible here because that spec was never run against
+      // the panel; CI found it. A panel row and a chrome control are not the
+      // same control even when they do the same thing.
+      name.dataset.levelRow = String(level.id);
+      name.textContent = level.name || `level ${level.id}`;
+      name.title = `Switch to ${level.name || level.id}`;
+      name.addEventListener('click', () => goToLevel(level.id));
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'lv-del';
+      del.dataset.deleteLevel = String(level.id);
+      del.textContent = '×';
+      del.title = `Delete ${level.name || level.id}`;
+      del.addEventListener('click', event => {
+        event.stopPropagation();
+        deleteLevel(level.id);
+      });
+
+      const headRow = document.createElement('div');
+      headRow.className = 'lv-card-head';
+      headRow.append(name, del);
+      body.append(headRow);
+
+      const views = LV.layerViewsForLevelId(level.id);
+      if (views.length) {
+        const stack = document.createElement('div');
+        stack.className = 'lv-layers';
+        views.forEach(view => {
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'lv-layer';
+          row.dataset.layer = `${level.id}:${view.id}`;
+          row.textContent = view.label || view.id;
+          row.addEventListener('click', () => {
+            if (Number(level.id) !== activeId) goToLevel(level.id);
+            goToView(view.id);
+          });
+          stack.append(row);
+        });
+        body.append(stack);
+      }
+
+      card.append(bar, body);
+      levelsPanel.append(card);
+    });
+
+    // ── ELEVATIONS ──────────────────────────────────────────────────────────
+    // Real, and the same four the rail seats: autoElevationCuts is the one
+    // home for that derivation, so the panel and the seats cannot disagree
+    // about which elevations exist or what they are called.
+    const section = (label, extra) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'lv-head';
+      wrap.style.marginTop = '8px';
+      const t = document.createElement('div');
+      t.className = 'lv-head-title';
+      t.textContent = label;
+      wrap.append(t);
+      if (extra) wrap.append(extra);
+      levelsPanel.append(wrap);
+      return wrap;
+    };
+    const rowButton = (text, title, onClick, active) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'lv-layer';
+      b.textContent = text;
+      b.title = title;
+      if (active) b.toggleAttribute('data-active', true);
+      if (onClick) b.addEventListener('click', onClick);
+      else b.disabled = true;
+      levelsPanel.append(b);
+      return b;
+    };
+
+    section('Elevations');
+    const viewNow = params.get('view');
+    autoElevationCuts().forEach(cut => {
+      rowButton(`${cut.id} · ${elevationName(cut.id)}`,
+        `${cut.id} — the ${elevationName(cut.id)} elevation; tap to bring it center`,
+        () => goToView(CUT_VIEW + cut.id),
+        viewNow === CUT_VIEW + cut.id);
+    });
+
+    // ── SECTIONS ────────────────────────────────────────────────────────────
+    const stored = cuts();
+    section('Sections');
+    if (!stored.length) {
+      // THE OLD PAGE SAYS "Press [C] to cut a view" AND THIS PAGE MUST NOT.
+      // There is no [C] handler here and no cut tool -- grep the file. A hint
+      // telling a drafter to press a key that does nothing is worse than no
+      // hint, and it is the same seam the build bar is built on: say what is
+      // true of THIS page, not what was true of the old one.
+      const none = document.createElement('div');
+      none.className = 'lv-empty';
+      none.dataset.noSections = '';
+      none.textContent = 'No sections. This page has no cut tool — sections are cut in LAYOUT.';
+      levelsPanel.append(none);
+    }
+    stored.forEach(cut => {
+      const row = document.createElement('div');
+      row.className = 'lv-card-head';
+      const b = rowButton(cut.name || cut.id,
+        `${cut.name || cut.id} — tap to bring this section center`,
+        () => goToView(CUT_VIEW + cut.id),
+        viewNow === CUT_VIEW + cut.id);
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'lv-del';
+      del.dataset.deleteCut = String(cut.id);
+      del.textContent = '×';
+      del.title = `Delete ${cut.name || cut.id}`;
+      del.addEventListener('click', event => {
+        event.stopPropagation();
+        if (!window.confirm(`Delete section "${cut.name || cut.id}"?`)) return;
+        drawing.cuts = cuts().filter(c => c.id !== cut.id);
+        // A drafter looking AT the section being deleted has to be moved off
+        // it, or the page keeps painting a cut the drawing no longer has.
+        if (params.get('view') === CUT_VIEW + cut.id) {
+          params.delete('view');
+          syncUrl();
+        }
+        markDirty();
+        buildChrome();
+        paint();
+      });
+      b.style.flex = '1';
+      levelsPanel.removeChild(b);
+      row.append(b, del);
+      levelsPanel.append(row);
+    });
+
+    // ── BONEYARD ────────────────────────────────────────────────────────────
+    // LISTED, NOT EDITED, and that is a ruling rather than an omission.
+    // PARITY-model-html-vs-dc.md records the boneyard as "absent,
+    // deliberately" on this page, and model-html-gestures.spec.js drives it:
+    // the level picker offers no negative pseudo-level, so there is nowhere
+    // for a new shelf to be used. "+ SHELF" would write a shelf into the file
+    // that this page can never open.
+    const shelves = drawing?.boneyardShelves || [];
+    section('Boneyard');
+    if (!shelves.length) {
+      const none = document.createElement('div');
+      none.className = 'lv-empty';
+      none.textContent = 'No shelves.';
+      levelsPanel.append(none);
+    }
+    shelves.forEach(shelf => {
+      const row = document.createElement('div');
+      row.className = 'lv-empty';
+      row.dataset.shelf = String(shelf.id);
+      row.textContent = shelf.name || `shelf ${shelf.id}`;
+      levelsPanel.append(row);
+    });
+
+    // ── 3D VIEW ─────────────────────────────────────────────────────────────
+    // A CHAIR, NOT A BUTTON, which is this page's own rule for a view that
+    // does not exist yet. There is no WebGL, no three.js and no perspective
+    // camera in this file at all -- so an enabled 3D VIEW would be a button
+    // that cannot do the one thing its label promises.
+    const threeD = rowButton('⬡ 3D VIEW',
+      'No 3D view on this page yet — the drawing is 2D only here', null, false);
+    threeD.dataset.view3d = '';
+
+    markActiveLayer();
+  };
+
   const buildChrome = () => {
     const levels = drawing?.levels || [];
     levelPick.innerHTML = '';
@@ -2442,6 +2885,7 @@
       levelPick.append(option);
     });
     fillViewPick();
+    buildLevelsPanel();
     chromeBar.hidden = false;
   };
 
@@ -2475,6 +2919,13 @@
     // the picker are two controls on ONE piece of state, and a seat that left
     // the picker behind would put two answers on screen at once.
     if (!viewWrap.hidden) viewPick.value = viewId;
+    // AND THE PANEL, which is the THIRD control on this one piece of state.
+    // The comment above warned about exactly this and I still missed it: a
+    // layer row clicked on another level moved the URL, the plan and the
+    // picker to STAIR while the panel went on lighting PLAN, because
+    // goToLevel rebuilt the panel before goToView had set the view. Two
+    // answers on screen at once, which is what that rule exists to stop.
+    markActiveLayer();
     paint();
   };
 
@@ -2507,6 +2958,12 @@
   const rail = document.getElementById('view-rail');
   let railEpoch = -1;
   let railFrame = null;
+  // A PASS IN FLIGHT: the seats still to paint, the env they are being painted
+  // against, and the total so far. One seat lands per frame, so a pass spans
+  // several -- see repaintSeats for why, and for what that does NOT fix.
+  let railQueue = null;
+  let railPassEnv = null;
+  let railPassMs = 0;
 
   // WHICH CUT SITS IN A SEAT. Elevations are looked up BY ID -- E3 is the back
   // of the house wherever it falls in the array. Sections are seated BY
@@ -2598,71 +3055,116 @@
     // runs. One pending frame at a time, and it draws whatever the epoch says
     // when it arrives -- not once per bump.
     if (railEpoch !== modelEpoch && railFrame === null) {
-      railFrame = requestAnimationFrame(() => { railFrame = null; repaintSeats(); });
+      railFrame = requestAnimationFrame(stepSeats);
     }
     rail.hidden = false;
   };
 
-  const repaintSeats = () => {
-    if (!drawing || !rail.children.length) return;
-    {
+  // ONE SEAT PER FRAME, and the reason is a measurement rather than a taste.
+  //
+  // Painting all six in one rAF is a single task the length of the whole rail,
+  // and on `repro-garage-house` that task is 47 ms against the browser's 50 ms
+  // longtask threshold -- so the page reported a main-thread block on about
+  // three runs in five. Attributed rather than guessed: the longtask entry's
+  // startTime equals the first painter call's, to the millisecond, across
+  // three runs, and it is always the FIRST edit.
+  //
+  //     EDIT 1  E1 15.1  E3 14.7  E2 9.7  E4 6.9  S1 0.8  = 47.2 ms  -> 50 ms long task
+  //     EDIT 2  E1 10.3  E3  9.6  E2 7.6  E4 9.7  S1 0.9  = 38.1 ms     none
+  //     EDIT 4  E1  7.2  E3  6.7  E2 7.1  E4 5.4  S1 0.5  = 26.9 ms     none
+  //
+  // Devin's ruling, and the trade in his words: a drafter cannot see four
+  // thumbnails land in one frame anyway; they CAN feel a 47 ms lurch. The work
+  // is identical, the longest task becomes one elevation instead of four, and
+  // the cost is that the last seat settles a few frames after the edit.
+  //
+  // WHAT THIS DOES NOT FIX, kept here because it would otherwise be forgotten
+  // the moment the spec goes green:
+  //   - The steady state is four elevations at ~7 ms = 28 ms, 56% of the
+  //     threshold. Splitting the frame buys headroom; it does not retire the
+  //     question, and the honest answer is still a cheaper elevation painter.
+  //   - E1 and E3 cost 15-16 ms on the first edit against ~7 ms after it.
+  //     That is a FIRST-PAINT cost, not an outlier to cut -- it was chased and
+  //     it is warmup, so nobody need chase it twice.
+  // The standing pre-ruling on both: make the painter cheaper, do not move the
+  // line.
+  const stepSeats = () => {
+    railFrame = null;
+    if (!drawing || !rail.children.length) { railQueue = null; return; }
+    // A FRESH PASS when there is none, or when an edit landed mid-pass. The
+    // epoch check is the coalescing the single-frame version did at the
+    // scheduler; at seat granularity it has to happen here too, or a pass
+    // started before an edit would finish painting the model as it was.
+    if (railQueue === null || railEpoch !== modelEpoch) {
       railEpoch = modelEpoch;
-      const specs = SEAT_ORDER.map(seatFor);
-      const t0 = performance.now();
-      const env = cutEnv();
-      specs.forEach((spec, i) => {
-        const screen = rail.children[i].firstChild;
-        const c = screen.getContext('2d');
-        c.clearRect(0, 0, screen.width, screen.height);
-        if (!spec.cut) return;
-        // A TRUE MINIATURE where one is affordable: the same painter that
-        // draws the full-size view, through the same env. MODEL.dc.html's
-        // thumbnail painter is a one-line wrapper over drawCutView (:10117),
-        // so this is not a second, smaller renderer that could drift.
-        //
-        // ELEVATIONS DO NOT GET ONE, and the reason is what the seat is FOR,
-        // not what it costs. A thumbnail earns its keep where the name does
-        // not identify the view: S1 and S2 tell a drafter nothing about which
-        // section is which, so a picture is the only way to tell them apart.
-        // E1 FRONT and E3 BACK already do the job a picture would.
-        //
-        // The cost only makes the correct answer also the cheap one, and it
-        // is worth recording because it was measured the wrong way first.
-        // Per seat, 232x152, repro-garage-house:
-        //
-        //     E1 46.8 ms   E2 43.2 ms   E3 47.6 ms   E4 43.7 ms   S1 0.32 ms
-        //
-        // About 100x, holding across three houses and IDENTICAL at 232x152
-        // and 900x600 -- so it is the painter's hidden-line geometry, not
-        // fill. Four live elevations is ~180 ms of blocking JS on every edit;
-        // in the browser, before this, the rail cost 148 ms per wall drawn.
-        //
-        // THE SHAPE IS KEPT ON PURPOSE. Seat, canvas and epoch are unchanged
-        // and an elevation draws its name where its picture would go, so a
-        // faster elevation painter becomes a thumbnail here without moving a
-        // seat -- Devin's "labels behind the same seat", taken literally.
-        // COARSE, because the seat is 82 px wide. The roof silhouette's full
-        // 240-sample resolution is eleven samples per pixel here and costs
-        // ~28 ms an elevation; at 40 it is one sample per two pixels and costs
-        // ~7 ms. Four elevations: 112 ms against 30 ms, for a picture that
-        // cannot differ at this size.
-        window.DraftCutView.drawCutView(env, c, screen.width, screen.height, spec.cut,
-          { coarseSilhouette: true });
-      });
-      // THE NUMBER THE WHOLE LIVE-THUMBNAIL DECISION RESTS ON, on screen
-      // rather than in a commit message. The spec recommended label-only seats
-      // precisely because nobody had measured this; it is measured here, on
-      // whatever house the drafter actually has open, and it is the cost of an
-      // EDIT rather than of a frame.
-      lastRailMs = performance.now() - t0;
-      // AND SAY SO. updateReadout runs inside paint(), which is over before
-      // this frame fires, so without this the readout carries the PREVIOUS
-      // repaint's number for ever -- 0 on the first load, and one edit behind
-      // after that. The synchronous version ordered these deliberately for
-      // exactly this reason; deferring the paint put the staleness back, and
-      // the instrument being one step behind is the fault it exists to catch.
-      updateReadout();
+      railPassEnv = cutEnv();
+      railQueue = SEAT_ORDER.map((name, i) => ({ spec: seatFor(name), i }));
+      railPassMs = 0;
     }
+    const t0 = performance.now();
+    const { spec, i } = railQueue.shift();
+    paintSeat(spec, i, railPassEnv);
+    railPassMs += performance.now() - t0;
+    if (railQueue.length) {
+      railFrame = requestAnimationFrame(stepSeats);
+      return;
+    }
+    railQueue = null;
+    railPassEnv = null;
+    // THE NUMBER THE WHOLE LIVE-THUMBNAIL DECISION RESTS ON, on screen
+    // rather than in a commit message. The spec recommended label-only seats
+    // precisely because nobody had measured this; it is measured here, on
+    // whatever house the drafter actually has open, and it is the cost of an
+    // EDIT rather than of a frame. It is still the whole pass -- splitting the
+    // frames changed when the work happens, not how much of it there is.
+    lastRailMs = railPassMs;
+    // AND SAY SO. updateReadout runs inside paint(), which is over before
+    // this frame fires, so without this the readout carries the PREVIOUS
+    // repaint's number for ever -- 0 on the first load, and one edit behind
+    // after that. The synchronous version ordered these deliberately for
+    // exactly this reason; deferring the paint put the staleness back, and
+    // the instrument being one step behind is the fault it exists to catch.
+    updateReadout();
+  };
+
+  const paintSeat = (spec, i, env) => {
+    const screen = rail.children[i].firstChild;
+    const c = screen.getContext('2d');
+    c.clearRect(0, 0, screen.width, screen.height);
+    if (!spec.cut) return;
+    // A TRUE MINIATURE where one is affordable: the same painter that
+    // draws the full-size view, through the same env. MODEL.dc.html's
+    // thumbnail painter is a one-line wrapper over drawCutView (:10117),
+    // so this is not a second, smaller renderer that could drift.
+    //
+    // ELEVATIONS DO NOT GET ONE, and the reason is what the seat is FOR,
+    // not what it costs. A thumbnail earns its keep where the name does
+    // not identify the view: S1 and S2 tell a drafter nothing about which
+    // section is which, so a picture is the only way to tell them apart.
+    // E1 FRONT and E3 BACK already do the job a picture would.
+    //
+    // The cost only makes the correct answer also the cheap one, and it
+    // is worth recording because it was measured the wrong way first.
+    // Per seat, 232x152, repro-garage-house:
+    //
+    //     E1 46.8 ms   E2 43.2 ms   E3 47.6 ms   E4 43.7 ms   S1 0.32 ms
+    //
+    // About 100x, holding across three houses and IDENTICAL at 232x152
+    // and 900x600 -- so it is the painter's hidden-line geometry, not
+    // fill. Four live elevations is ~180 ms of blocking JS on every edit;
+    // in the browser, before this, the rail cost 148 ms per wall drawn.
+    //
+    // THE SHAPE IS KEPT ON PURPOSE. Seat, canvas and epoch are unchanged
+    // and an elevation draws its name where its picture would go, so a
+    // faster elevation painter becomes a thumbnail here without moving a
+    // seat -- Devin's "labels behind the same seat", taken literally.
+    // COARSE, because the seat is 82 px wide. The roof silhouette's full
+    // 240-sample resolution is eleven samples per pixel here and costs
+    // ~28 ms an elevation; at 40 it is one sample per two pixels and costs
+    // ~7 ms. Four elevations: 112 ms against 30 ms, for a picture that
+    // cannot differ at this size.
+    window.DraftCutView.drawCutView(env, c, screen.width, screen.height, spec.cut,
+      { coarseSilhouette: true });
   };
 
   // ── selection ─────────────────────────────────────────────────────────────

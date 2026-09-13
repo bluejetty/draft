@@ -350,11 +350,38 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // SORTED, because this asks WHICH controls exist, not what order the DOM
       // happens to put them in. Order is a layout fact and would make the check
       // go red for a rearrangement that changes nothing a drafter can do.
-      const controls = await page.evaluate(() => ({
-        buttons: [...document.querySelectorAll('button')].map(b => b.id || b.textContent.trim()).sort(),
-        selects: [...document.querySelectorAll('select')].map(s => s.id).sort(),
-        inputs: [...document.querySelectorAll('input')].map(i => i.type).sort(),
-      }));
+      // THE PANEL'S OWN ROWS ARE EXCLUDED HERE AND CHECKED SEPARATELY BELOW,
+      // and that is a change in shape rather than a loosening. The LEVELS /
+      // LAYERS panel puts one row per level, one per layer view and one per
+      // elevation on the page -- all DERIVED from drawing.levels and
+      // layerViewsForLevelId, so the list would change with the fixture and
+      // say nothing about a hidden control. What this list is for is the part
+      // that must not grow without anyone noticing; the panel's contents are
+      // asserted against the module in model-html-levels.spec.js, which is a
+      // stronger claim than naming them here.
+      const controls = await page.evaluate(() => {
+        const inPanel = el => el.closest('#levels-panel') !== null;
+        return {
+          buttons: [...document.querySelectorAll('button')].filter(b => !inPanel(b))
+            .map(b => b.id || b.textContent.trim()).sort(),
+          selects: [...document.querySelectorAll('select')].filter(s => !inPanel(s))
+            .map(s => s.id).sort(),
+          inputs: [...document.querySelectorAll('input')].map(i => i.type).sort(),
+          // AND THE PANEL, counted rather than named: every control inside it
+          // must be one of the four kinds it is allowed to hold. A context
+          // menu host or a file input smuggled in there would fail this.
+          panelKinds: [...new Set([...document.querySelectorAll('#levels-panel *')]
+            .filter(el => el.tagName === 'BUTTON' || el.tagName === 'INPUT'
+              || el.tagName === 'SELECT')
+            .map(el => el.dataset.addLevel !== undefined ? 'add-level'
+              : el.dataset.deleteLevel !== undefined ? 'delete-level'
+                : el.dataset.deleteCut !== undefined ? 'delete-cut'
+                  : el.dataset.layer !== undefined ? 'layer-row'
+                    : el.dataset.levelRow !== undefined ? 'level-row'
+                      : el.dataset.view3d !== undefined ? 'view-3d'
+                        : el.tagName === 'BUTTON' ? 'cut-row' : el.tagName))].sort(),
+        };
+      });
       // THE SIX SEATS ARRIVED WHILE THIS PR WAS OPEN, and this assertion is how
       // that was noticed rather than merged past: it went red on the merge with
       // #386, naming the six buttons it had never seen. That is the check doing
@@ -389,6 +416,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'delete-wall', 'draw-wall', 'save', 'take-over'].sort(),
           selects: ['level-pick', 'view-pick'],
           inputs: [],
+          // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
+          // no unlabelled button: an entry this cannot name would arrive as
+          // 'BUTTON' or 'INPUT' and fail.
+          panelKinds: ['add-level', 'cut-row', 'delete-level', 'layer-row',
+            'level-row', 'view-3d'].sort(),
         });
     });
 
@@ -416,6 +448,18 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
   test('T-SQUARE — pressing `t` does nothing the page or the file can show',
     async ({ page }) => {
       await seeded(page);
+      // LET THE RAIL SETTLE FIRST. The readout carries `rail N ms`, which the
+      // seat repaint writes when its pass finishes -- and since the seats now
+      // paint ONE PER FRAME to keep the task short, that pass spans several
+      // frames after load. Snapshotting mid-pass and comparing afterwards
+      // compares two different moments of an instrument, not the effect of a
+      // keypress: it read `rail 0.00 ms` before and `rail 35.20 ms` after,
+      // and blamed the T-square. Wait for it to stop moving, then measure.
+      await expect
+        .poll(async () => (/rail ([\d.]+) ms/.exec(await readout(page).textContent()) || [])[1],
+          { timeout: 5000 })
+        .not.toBe('0.00');
+      await page.waitForTimeout(200);
       const before = await readout(page).textContent();
       const beforeFile = JSON.stringify(await h.savedDrawing(page));
 
