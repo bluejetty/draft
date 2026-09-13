@@ -390,7 +390,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         const toolKind = el => (el.dataset.toolKey !== undefined ? 'tool-key'
           : el.dataset.selMode !== undefined ? 'sel-mode'
             : el.dataset.selFilter !== undefined ? 'sel-filter'
-              : el.tagName.toLowerCase());
+              : el.dataset.assemblyStart !== undefined ? 'assembly-start'
+                : el.dataset.assemblyUngroup !== undefined ? 'assembly-ungroup'
+                  : el.dataset.assemblyFixed !== undefined ? 'assembly-fixed'
+                    : el.dataset.assemblyLoose !== undefined ? 'assembly-loose'
+                      : el.dataset.assemblyName !== undefined ? 'assembly-name'
+                        : el.tagName.toLowerCase());
         return {
           buttons: [...document.querySelectorAll('button')].filter(outside)
             .map(b => b.id || b.textContent.trim()).sort(),
@@ -503,7 +508,17 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // are not: a control the classifier cannot name arrives as 'button'
           // and fails, which is how the chips were noticed here in the first
           // place.
-          toolKinds: ['sel-filter', 'sel-mode', 'tool-key'],
+          //
+          // AND THE ASSEMBLY NAME FIELD IS THE PAGE'S FIRST INPUT. That is why
+          // it is named here rather than counted: `inputs` above is what the
+          // INSERT UNDERLAY row rests on, and an input appearing anywhere on
+          // this page has to be accounted for by someone. It is a text field
+          // in the tool column, not a file picker -- the underlay row's own
+          // check asserts `input[type=file]` is still zero, which is the
+          // guarantee that row actually needs.
+          toolKinds: ['assembly-fixed', 'assembly-loose', 'assembly-name',
+            'assembly-start', 'assembly-ungroup',
+            'sel-filter', 'sel-mode', 'tool-key'].sort(),
         });
     });
 
@@ -571,8 +586,21 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       'and every option must be a real level id').toBe(true);
   });
 
-  test('LEVEL LOCKS, GROUPS and SOURCE LINKS — no verb, and the keys are re-emitted untouched',
+  test('LEVEL LOCKS and SOURCE LINKS — no verb, and the keys are re-emitted untouched',
     async ({ page }) => {
+      // GROUPS LEFT THIS ROW. It used to read "LEVEL LOCKS, GROUPS and SOURCE
+      // LINKS — no verb", and that stopped being true the moment ASSEMBLY and
+      // UNGROUP landed in the tool column. The parity table's row moved from
+      // absent to present with it.
+      //
+      // The carry-through assertion below still covers groups, and still
+      // should: a page that HAS a verb must also hand back untouched the
+      // groups nobody touched. What changed is the claim in the title, and
+      // leaving that stale while quietly teaching the control census to accept
+      // the new buttons would have been the exact failure the census exists to
+      // prevent — a control on the page that no row mentions, silenced instead
+      // of answered.
+      //
       // THE SECOND QUESTION. Once "there is no verb" is established, the thing
       // that matters to a drafter is whether the page HONOURS the key or merely
       // carries it. A page that silently drops a lock is worse than one that
@@ -598,8 +626,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
 
       expect({ groups: after.groups, levelLocks: after.levelLocks,
         nextLevelLockId: after.nextLevelLockId },
-      'a page with no verb for these must hand them back exactly as it found '
-      + 'them — carrying is the whole job')
+      'locks have no verb and must come back exactly as they went in; groups '
+      + 'now HAVE one, and must still come back untouched when it is not used')
         .toEqual({ groups: before.groups, levelLocks: before.levelLocks,
           nextLevelLockId: before.nextLevelLockId });
     });
