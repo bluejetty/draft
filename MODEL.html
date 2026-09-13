@@ -329,8 +329,17 @@
   /* SELECTION and OBJECT TYPE. Chips wrap rather than scroll: ALL LEVELS and
      FENESTRATION are long words in a 120px panel, and a row that scrolls
      sideways hides the chip a drafter is looking for. */
+  /* THE COLUMN IS AS WIDE AS THE KEYPAD AND NO WIDER. Measured, because the
+     first version was not: `flex:1 1 auto` chips plus the words FENESTRATION
+     and ALL LEVELS pushed the panel to 451px, against the keypad's 172. A
+     panel two and a half times the width it needs is drawing area taken for
+     nothing, and it is the same occlusion cost Skipper measured and cut on the
+     right. Fixing the slot's width makes the chips wrap inside it instead of
+     stretching it. */
+  #tool-slot { width:172px; }
   .sel-row { display:flex; flex-wrap:wrap; gap:3px; }
-  .sel-chip { flex:1 1 auto; padding:5px 4px; cursor:pointer;
+  .sel-chip { flex:0 1 auto; min-width:0; overflow-wrap:anywhere;
+    padding:5px 4px; cursor:pointer;
     border:1px solid var(--edge-panel); border-radius:2px;
     background-color: var(--surface-chip);
     background-image: var(--surface-chip-tex, none);
@@ -1896,6 +1905,7 @@
         // (:7380 against :7432), so the highlight is never buried under the
         // geometry it marks but never covers the annotation either.
         paintSelection();
+        paintBand();
         // Cut marks go with the annotation rather than the geometry: they are
         // a fact ABOUT the drawing, and the bone paints them late for the same
         // reason (MODEL.dc.html:7432, after every piece of linework and just
@@ -2771,6 +2781,65 @@
   // page's whole rule, in one line (_selectFilterAllows :18180).
   const filterAllows = type => selectFilter === 'all' || selectFilter === type;
 
+  // ── the window drag ───────────────────────────────────────────────────────
+  // FULLY ENCLOSED, NOT CROSSED. The old page's own rule
+  // (_handleWindowSelection :18282): every point of an item must be inside the
+  // box. A crossing window -- catching anything the box touches -- is a
+  // different tool with different node rules, and its own comment there says
+  // so: "A future Stretch command can use a crossing window".
+  //
+  // OUTLINES ARE NOT IN A WINDOW, and that is the old page's behaviour rather
+  // than an omission here. Its window reaches lines, walls, floors and
+  // dimensions; outlines are click-only. So OUTLINE engaged plus a window drag
+  // selects nothing, which is correct and would look exactly like a bug if it
+  // were not written down.
+  let bandDrag = null;
+
+  const enclosedBy = (a, b) => {
+    const minX = Math.min(a.x, b.x), maxX = Math.max(a.x, b.x);
+    const minZ = Math.min(a.z, b.z), maxZ = Math.max(a.z, b.z);
+    const inside = pt => pt && pt.x >= minX && pt.x <= maxX
+      && pt.z >= minZ && pt.z <= maxZ;
+    // ALL LEVELS reads the whole collection; WINDOW reads what is on screen.
+    const all = selectionMode === 'window-all';
+    const scope = (key, onScreen) => (all ? (drawing?.[key] || []) : onScreen());
+    const out = [];
+    if (filterAllows('wall')) {
+      scope('walls', walls).forEach(item => {
+        if (inside(item.start) && inside(item.end)) out.push({ type: 'wall', item });
+      });
+    }
+    if (filterAllows('line')) {
+      scope('lines', lines).forEach(item => {
+        if (inside(item.start) && inside(item.end)) out.push({ type: 'line', item });
+      });
+    }
+    if (filterAllows('floor')) {
+      scope('floors', floors).forEach(item => {
+        const pts = (item.points || []).filter(Boolean);
+        if (pts.length >= 3 && pts.every(inside)) out.push({ type: 'floor', item });
+      });
+    }
+    return out;
+  };
+
+  // Blue for the current level, red for every level -- the two colours the
+  // mode help promises in words, so the box a drafter sees matches the
+  // sentence they just read.
+  const BAND_INK = { window: SELECT_HANDLE, 'window-all': '#b04050' };
+
+  const paintBand = () => {
+    if (!bandDrag || !bandDrag.active) return;
+    const a = toS(bandDrag.from), b = toS(bandDrag.to);
+    ctx.save();
+    ctx.strokeStyle = BAND_INK[selectionMode] || SELECT_HANDLE;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y),
+      Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+    ctx.restore();
+  };
+
   // Returns { type, item } or null, in the old page's precedence.
   const hitAt = worldPt => {
     if (filterAllows('wall')) {
@@ -3440,6 +3509,16 @@
     // corner would be read as grabbing that corner, and the drafter would drag
     // the building instead of drawing against it.
     if (activeTool === 'wall') { drawPress(at); return; }
+    // A WINDOW MODE TAKES THE PRESS BEFORE THE PAN, and before the corner and
+    // body tests too. Otherwise a box begun on a selected wall would grab that
+    // wall instead, and the drafter would drag the building across the sheet
+    // while trying to draw a box round it.
+    if (activeTool === RESTING_TOOL && selectionMode !== 'click') {
+      bandDrag = { from: at, to: at, sx: e.clientX, sy: e.clientY,
+        active: false, shift: e.shiftKey };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
     // VERTEX BEFORE BODY — the old page's own precedence (_findVertexHit at
     // MODEL.dc.html:16791, then _findLineHit at :16799). A press near a corner
     // is a corner press even though it is also on the wall.
@@ -3464,6 +3543,19 @@
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', e => {
+    if (bandDrag) {
+      // The same 4px arm the corner drag uses: under that it is a click, and a
+      // one-pixel box that selects nothing is indistinguishable from a tap
+      // that missed.
+      if (!bandDrag.active
+        && Math.hypot(e.clientX - bandDrag.sx, e.clientY - bandDrag.sy) > DRAG_ARM_PX) {
+        bandDrag.active = true;
+      }
+      const rect = canvas.getBoundingClientRect();
+      bandDrag.to = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+      if (bandDrag.active) paint();
+      return;
+    }
     if (moveDrag) {
       const md = moveDrag;
       if (!md.active && Math.hypot(e.clientX - md.sx, e.clientY - md.sy) > DRAG_ARM_PX) md.active = true;
@@ -3516,6 +3608,31 @@
     paint();
   });
   const endDrag = e => {
+    if (bandDrag) {
+      const band = bandDrag;
+      bandDrag = null;
+      if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      if (band.active) {
+        const caught = enclosedBy(band.from, band.to);
+        // SHIFT ADDS TO WHAT IS THERE, exactly as it does for a click, and the
+        // old page's own `!shiftHeld` replace flag. Without it a drafter can
+        // build a selection by clicking but not by boxing, which is the
+        // inconsistency that makes a tool feel broken rather than limited.
+        setSelection(band.shift
+          ? selection.concat(caught.filter(c =>
+            !selection.some(entry => entry.item === c.item)))
+          : caught);
+      } else {
+        // A press that never armed is a click, and a click still selects --
+        // the old page runs _handleSelectClick for "a clean click (no drag) in
+        // select mode" whichever window mode is armed.
+        const rect = canvas.getBoundingClientRect();
+        const hit = hitAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+        setSelection(hit ? [hit] : []);
+      }
+      paint();
+      return;
+    }
     if (moveDrag) {
       const md = moveDrag;
       // A grab that never armed moved nothing, so there is nothing to undo —

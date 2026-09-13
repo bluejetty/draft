@@ -1,0 +1,38 @@
+[
+  {
+    "label": "laptop",
+    "open": false,
+    "pct": 0,
+    "panel": "tab only"
+  },
+  {
+    "label": "laptop",
+    "open": true,
+    "pct": 9.265857172015131,
+    "panel": "193x442"
+  },
+  {
+    "label": "desktop",
+    "open": false,
+    "pct": 0,
+    "panel": "tab only"
+  },
+  {
+    "label": "desktop",
+    "open": true,
+    "pct": 4.502585022891437,
+    "panel": "193x442"
+  },
+  {
+    "label": "small",
+    "open": false,
+    "pct": 0,
+    "panel": "tab only"
+  },
+  {
+    "label": "small",
+    "open": true,
+    "pct": 13.25878184600012,
+    "panel": "193x442"
+  }
+]
