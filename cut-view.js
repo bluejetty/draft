@@ -890,7 +890,21 @@ if (!window.DraftCutView) {
       facesByRoof = new Map(roofs
         .filter(roof => roof.points && roof.points.length >= 3)
         .map(roof => [roof, geo().roofFaces(roof, geo().roofSkeleton(roof))]));
-      const steps = 240, depthSteps = 40;
+      // THE ROOF SILHOUETTE'S RESOLUTION, and the painter's whole cost. This
+      // walks the cut, and at each spot walks the viewing depth, bisecting for
+      // the tallest roof surface -- 240 x 40 x up to 24 iterations. Measured on
+      // repro-garage-house, it is where an elevation's ~28 ms goes; a section
+      // never reaches here and costs 0.3 ms.
+      //
+      // `coarseSilhouette` is for callers drawing SMALL. A rail seat is 82 px
+      // wide, where 240 samples is eleven per pixel and 40 is one per two --
+      // detail the seat cannot show. It takes the elevation to ~7 ms, so four
+      // live thumbnails cost ~30 ms instead of ~112.
+      //
+      // OPT-IN, so the full-size view and LAYOUT's sheets are untouched: the
+      // number that matters on a printed sheet is the one that was always here.
+      const coarse = Boolean(opts && opts.coarseSilhouette);
+      const steps = coarse ? 40 : 240, depthSteps = coarse ? 10 : 40;
       for (let i = 0; i <= steps; i++) {
         const s = i / steps;
         const bx = cut.startPt.x + (cut.endPt.x - cut.startPt.x) * s;

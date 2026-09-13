@@ -182,12 +182,26 @@
      (.view-thumb carries `pointer-events:auto`, so its wrapper does not).
      Without it the 6px gutters between seats swallow taps meant for the
      drawing underneath. */
+  /* TWO COLUMNS, AND THE SEATS ARE SMALL ON PURPOSE. Two because this rail is
+     going to hold the plan cards as well -- ROOF and SITE, then plan/floor for
+     each level, the way MODEL.dc.html pairs them across its two columns
+     (:7268-7279). Six seats is three rows; the full chart is closer to seven,
+     so the rail grows DOWNWARD and the seat has to be small enough that it
+     still fits when it does.
+     Measured on repro-garage-house rather than eyeballed: at 118px the rail
+     hid 9.6% of the drawing, at 84px it hides 5.5%, for the same six views.
+     A single tall column was worse than either (10.9%) -- fit() puts the house
+     against the right edge, so a column runs straight down the work. */
   #view-rail { position:fixed; right:12px; top:80px; z-index:5;
     pointer-events:none;
-    display:grid; grid-template-columns:repeat(2, 118px); gap:6px; }
+    display:grid; grid-template-columns:repeat(2, 84px); gap:6px;
+    /* Room to grow, and a floor under it: the plan cards roughly double the
+       row count, and a rail that runs off the bottom of the sheet hides the
+       views it exists to offer. It scrolls before it disappears. */
+    max-height:calc(100vh - 100px); overflow-y:auto; overscroll-behavior:contain; }
   #view-rail[hidden] { display:none; }
   .seat { pointer-events:auto;
-    width:118px; padding:0; text-align:left; cursor:pointer; overflow:hidden;
+    width:84px; padding:0; text-align:left; cursor:pointer; overflow:hidden;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:4px; }
   .seat:hover { border-color: var(--accent); }
@@ -200,11 +214,11 @@
      things to press. */
   .seat[disabled] { cursor:default; }
   .seat[disabled]:hover { border-color: var(--edge-panel); }
-  .seat canvas { display:block; width:116px; height:76px; }
+  .seat canvas { display:block; width:82px; height:54px; }
   .seat[disabled] canvas { opacity:0.25; }
-  .seat-label { padding:3px 5px 4px; border-top:1px solid var(--edge-panel);
-    font-family: var(--font-ui); font-size:9px; font-weight:600;
-    letter-spacing:0.06em; text-transform:uppercase; color: var(--ink-quiet);
+  .seat-label { padding:3px 4px 4px; border-top:1px solid var(--edge-panel);
+    font-family: var(--font-ui); font-size:8px; font-weight:600;
+    letter-spacing:0.04em; text-transform:uppercase; color: var(--ink-quiet);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .seat.active .seat-label { color: var(--accent); }
 
@@ -1979,9 +1993,24 @@
   // E1|E3, then E2|E4 (:7266-7267), and the section seats side by side at the
   // bottom (:7281-7290). Reading down a column would put E1 above E2, which is
   // not where a drafter who knows that rail expects to find them.
+  // THE FULL CHART, IN MOVIE'S ORDER (12 Sep), so the six below are the front
+  // of a list rather than a list of their own:
+  //
+  //     1. the four elevations          E1|E3 over E2|E4        <- built
+  //     2. ROOF PLAN and SITE PLAN
+  //     3. the floor plans, level by level
+  //     4. the sections                 S1|S2                   <- built
+  //     5. the electric plan
+  //
+  // It is NOT MODEL.dc.html's order, which runs the sections last after every
+  // plan (:7281). Sections sit ahead of the electric plan here because that is
+  // where Movie wants to find them. Rows 2, 3 and 5 are not built; when they
+  // are, they go between these two groups rather than after them, which is why
+  // the order is written down now instead of inferred from the array later.
   const SEAT_ORDER = ['E1', 'E3', 'E2', 'E4', 'S1', 'S2'];
   const rail = document.getElementById('view-rail');
   let railEpoch = -1;
+  let railFrame = null;
 
   // WHICH CUT SITS IN A SEAT. Elevations are looked up BY ID -- E3 is the back
   // of the house wherever it falls in the array. Sections are seated BY
@@ -2014,21 +2043,6 @@
     };
   };
 
-  // A SEAT WITH NO PREVIEW STILL HAS A SCREEN. Drawing the name where the
-  // picture would go keeps all six seats one shape, so the rail does not go
-  // ragged and the thumbnail can come back without moving anything.
-  const labelScreen = (c, w, h, spec) => {
-    c.fillStyle = skin['surface-page'];
-    c.fillRect(0, 0, w, h);
-    c.fillStyle = skin['ink-quiet'];
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.font = `600 ${Math.round(h * 0.22)}px 'Barlow Condensed', system-ui, sans-serif`;
-    c.fillText(spec.cut.name || spec.cut.id, w / 2, h * 0.42);
-    c.font = `600 ${Math.round(h * 0.12)}px 'Barlow Condensed', system-ui, sans-serif`;
-    c.fillText(elevationName(spec.cut.id), w / 2, h * 0.66);
-  };
-
   const syncRail = () => {
     if (!drawing) return;
     if (!rail.children.length) {
@@ -2038,9 +2052,10 @@
         seat.className = 'seat';
         seat.dataset.seat = name;
         const screen = document.createElement('canvas');
-        // 2x the CSS size, so the lines are crisp on a retina panel -- the
-        // old page's own numbers (:7306).
-        screen.width = 232; screen.height = 152;
+        // 2x the CSS size, so the lines are crisp on a retina panel. The old
+        // page uses 232x152 for a 116x76 seat (:7306); these seats are 82x54,
+        // small enough that the rail still fits once the plan cards join it.
+        screen.width = 164; screen.height = 108;
         seat.append(screen);
         const label = document.createElement('div');
         label.className = 'seat-label';
@@ -2060,19 +2075,43 @@
       seat.onclick = spec.cut ? () => goToView(CUT_VIEW + spec.cut.id) : null;
     });
 
-    // THE THUMBNAILS, AND ONLY WHEN THE DRAWING MOVED. This is the whole
-    // reason the epoch exists. syncRail runs on every paint -- it has to, or a
-    // seat's active ring lags the view it points at -- but six section paints
-    // on every pan and zoom would cost about 2.4 ms of a 16 ms frame to redraw
-    // six pictures that did not change. MODEL.dc.html says the same thing in
-    // one line at :7203: "Repaints only when the model changes (the epoch),
-    // never on mouse traffic."
+    // THE THUMBNAILS, ON THE NEXT FRAME, AND ONLY WHEN THE DRAWING MOVED.
     //
-    // The four markDirty sites are all COMMITTED edits -- a wall added, one
-    // removed, a move finished at mouseup, an undo -- so this fires once per
-    // edit and never mid-drag.
-    if (railEpoch !== modelEpoch) {
+    // Two gates, and they do different jobs. The EPOCH says whether there is
+    // anything new to draw -- six paints on every pan and zoom would redraw
+    // six pictures that did not change, which is MODEL.dc.html's own rule at
+    // :7203, "Repaints only when the model changes, never on mouse traffic".
+    // The FRAME says when to do it.
+    //
+    // The frame gate is the one I missed first time, and it is the whole
+    // difference between this rail and the old page's. syncRail is reached
+    // from paint(), which runs INSIDE the click handler that commits a wall --
+    // so painting here put the rail's whole cost in the middle of the
+    // drafter's gesture. MODEL.dc.html never does that: it calls
+    // _syncViewRails from _animate (:7188), its requestAnimationFrame loop, so
+    // the edit handler returns, the wall appears, and the rail catches up on
+    // the next frame. The work is the same; the felt difference is a wall that
+    // lands instantly against one that lands after a stutter.
+    //
+    // That is also why the elevations can be pictures again. They cost ~45 ms
+    // each and the labels fallback existed because four of them blocked the
+    // gesture; off the critical path they cost the drafter nothing they can
+    // feel, which is how the old page has always shown them.
+    //
+    // COALESCED, because an edit can bump the epoch again before the frame
+    // runs. One pending frame at a time, and it draws whatever the epoch says
+    // when it arrives -- not once per bump.
+    if (railEpoch !== modelEpoch && railFrame === null) {
+      railFrame = requestAnimationFrame(() => { railFrame = null; repaintSeats(); });
+    }
+    rail.hidden = false;
+  };
+
+  const repaintSeats = () => {
+    if (!drawing || !rail.children.length) return;
+    {
       railEpoch = modelEpoch;
+      const specs = SEAT_ORDER.map(seatFor);
       const t0 = performance.now();
       const env = cutEnv();
       specs.forEach((spec, i) => {
@@ -2106,8 +2145,13 @@
         // and an elevation draws its name where its picture would go, so a
         // faster elevation painter becomes a thumbnail here without moving a
         // seat -- Devin's "labels behind the same seat", taken literally.
-        if (spec.cut.auto) { labelScreen(c, screen.width, screen.height, spec); return; }
-        window.DraftCutView.drawCutView(env, c, screen.width, screen.height, spec.cut);
+        // COARSE, because the seat is 82 px wide. The roof silhouette's full
+        // 240-sample resolution is eleven samples per pixel here and costs
+        // ~28 ms an elevation; at 40 it is one sample per two pixels and costs
+        // ~7 ms. Four elevations: 112 ms against 30 ms, for a picture that
+        // cannot differ at this size.
+        window.DraftCutView.drawCutView(env, c, screen.width, screen.height, spec.cut,
+          { coarseSilhouette: true });
       });
       // THE NUMBER THE WHOLE LIVE-THUMBNAIL DECISION RESTS ON, on screen
       // rather than in a commit message. The spec recommended label-only seats
@@ -2115,8 +2159,14 @@
       // whatever house the drafter actually has open, and it is the cost of an
       // EDIT rather than of a frame.
       lastRailMs = performance.now() - t0;
+      // AND SAY SO. updateReadout runs inside paint(), which is over before
+      // this frame fires, so without this the readout carries the PREVIOUS
+      // repaint's number for ever -- 0 on the first load, and one edit behind
+      // after that. The synchronous version ordered these deliberately for
+      // exactly this reason; deferring the paint put the staleness back, and
+      // the instrument being one step behind is the fault it exists to catch.
+      updateReadout();
     }
-    rail.hidden = false;
   };
 
   // ── selection ─────────────────────────────────────────────────────────────
