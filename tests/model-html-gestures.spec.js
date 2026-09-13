@@ -364,11 +364,28 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // They are cut-view SEATS, not drawing verbs: each shows a section or an
       // elevation. No absence row below is affected, and the parity table now
       // carries a row for them.
+      //
+      // AND IT HAPPENED AGAIN, with the chrome shell: two sidebar tabs, three
+      // house-type families and BONE. Same verdict for the tabs — a tab opens
+      // a panel and draws nothing — but the four build controls needed
+      // checking rather than waving through, because BUNGALOW looks exactly
+      // like the BUILD HOUSE verb the table records as absent.
+      //
+      // IT IS NOT THAT VERB. The bar sits on a seam: it records which type was
+      // chosen and something else, not yet built, decides what geometry that
+      // produces. `model-html-topbar.spec.js` holds the wall count across a
+      // family press, an entry press and BONE, so "Draw an outline — absent"
+      // and every tool row below still stand. Four parity rows were wrong all
+      // the same, and this check is why they were found: two of them describe
+      // the control surface by listing it, and that list is no longer four
+      // buttons and two selects.
       expect(controls,
         'the parity table\'s absences are only as good as this list — if a '
         + 'control appears here that no row mentions, a row is wrong')
         .toEqual({
           buttons: ['E1 · FRONT', 'E2 · LEFT', 'E3 · BACK', 'E4 · RIGHT', 'S1', 'S2',
+            'left-tab', 'right-tab',
+            'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
             'delete-wall', 'draw-wall', 'save', 'take-over'].sort(),
           selects: ['level-pick', 'view-pick'],
           inputs: [],
