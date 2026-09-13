@@ -4626,7 +4626,20 @@
   // claim that they exist. The title on each button says so; when the rules
   // land they read `body[data-board]` and nothing here moves.
   const BOARDS = ['toy', 'drafting'];
-  let board = BOARDS.includes(stored.board) ? stored.board : 'toy';
+  // THE DRAWING OWNS THE BOARD; localStorage only seeds a drawing that has
+  // never recorded one. §7 of the TOY bones order is explicit -- a per-browser
+  // flag means "the same drafter meets it on every file while a second drafter
+  // never sees it at all" -- and acceptance #11 wants a PROMOTED DRAWING to
+  // reload as DRAFTING, which is a fact about one file.
+  //
+  // The remembered value is kept as the seed rather than dropped, so a fresh
+  // page still opens on the board the drafter last used, which is what it does
+  // today. A drawing that HAS chosen overrides it, always.
+  const rememberedBoard = BOARDS.includes(stored.board) ? stored.board : 'toy';
+  let board = rememberedBoard;
+
+  const boardOfDrawing = () =>
+    window.DraftDrawingFormat.board(drawing?.board) || rememberedBoard;
   const applyBoard = () => {
     document.body.setAttribute('data-board', board);
     markSwitch(boardButtons, 'board', board);
@@ -4637,8 +4650,21 @@
   };
   boardButtons.forEach(b => {
     b.title = 'Board mode — remembered, but nothing is constrained by it yet';
-    b.addEventListener('click', () => { board = b.dataset.board; applyBoard(); });
+    b.addEventListener('click', () => { setBoard(b.dataset.board); });
   });
+
+  // ONE PLACE THE BOARD CHANGES, so the drawing and the switch cannot drift.
+  // Everything that moves a board -- the buttons here, and the promotion the
+  // LENGTH box will raise -- goes through this.
+  const setBoard = next => {
+    if (!BOARDS.includes(next) || next === board) return;
+    board = next;
+    if (drawing) {
+      drawing.board = window.DraftDrawingFormat.board(next);
+      markDirty();
+    }
+    applyBoard();
+  };
 
   markSwitch(themeButtons, 'theme', theme);
   markSwitch(modeButtons, 'skinMode', mode);
@@ -5383,6 +5409,13 @@
     refusedItems = { walls: [], lines: [], floors: [], dimensions: [] };
     drawing = {
       ...parsed,
+      // NORMALISED, NOT PASSED THROUGH. `...parsed` would carry whatever the
+      // file said -- a board of "TOY", or of "banana" -- and the switch would
+      // then hold a value BOARDS does not contain. Round-tripping junk is the
+      // Write Tier's job for GEOMETRY it cannot understand; a scalar the page
+      // acts on gets normalised on the way in.
+      board: F.board(parsed.board),
+      boardPromptSeen: F.boardPromptSeen(parsed.boardPromptSeen),
       walls: F.walls(parsed.walls, levelIds, {
         wallTypes: WT.WALL_TYPES,
         legacyWallTypes: WT.LEGACY_WALL_TYPES,
@@ -5484,6 +5517,13 @@
     undoStack.length = 0;
     setSelection([]);
     drawStart = null;
+
+    // THE DRAWING'S BOARD BECOMES THE PAGE'S. A file that recorded one wins;
+    // one that never did leaves the remembered board alone, so opening an old
+    // drawing does not silently move a drafter off the board they were on.
+    // No markDirty: adopting what the file already says is not a change to it.
+    board = boardOfDrawing();
+    applyBoard();
     return true;
   };
 
