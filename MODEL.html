@@ -2411,6 +2411,12 @@
   const rail = document.getElementById('view-rail');
   let railEpoch = -1;
   let railFrame = null;
+  // A PASS IN FLIGHT: the seats still to paint, the env they are being painted
+  // against, and the total so far. One seat lands per frame, so a pass spans
+  // several -- see repaintSeats for why, and for what that does NOT fix.
+  let railQueue = null;
+  let railPassEnv = null;
+  let railPassMs = 0;
 
   // WHICH CUT SITS IN A SEAT. Elevations are looked up BY ID -- E3 is the back
   // of the house wherever it falls in the array. Sections are seated BY
@@ -2502,71 +2508,116 @@
     // runs. One pending frame at a time, and it draws whatever the epoch says
     // when it arrives -- not once per bump.
     if (railEpoch !== modelEpoch && railFrame === null) {
-      railFrame = requestAnimationFrame(() => { railFrame = null; repaintSeats(); });
+      railFrame = requestAnimationFrame(stepSeats);
     }
     rail.hidden = false;
   };
 
-  const repaintSeats = () => {
-    if (!drawing || !rail.children.length) return;
-    {
+  // ONE SEAT PER FRAME, and the reason is a measurement rather than a taste.
+  //
+  // Painting all six in one rAF is a single task the length of the whole rail,
+  // and on `repro-garage-house` that task is 47 ms against the browser's 50 ms
+  // longtask threshold -- so the page reported a main-thread block on about
+  // three runs in five. Attributed rather than guessed: the longtask entry's
+  // startTime equals the first painter call's, to the millisecond, across
+  // three runs, and it is always the FIRST edit.
+  //
+  //     EDIT 1  E1 15.1  E3 14.7  E2 9.7  E4 6.9  S1 0.8  = 47.2 ms  -> 50 ms long task
+  //     EDIT 2  E1 10.3  E3  9.6  E2 7.6  E4 9.7  S1 0.9  = 38.1 ms     none
+  //     EDIT 4  E1  7.2  E3  6.7  E2 7.1  E4 5.4  S1 0.5  = 26.9 ms     none
+  //
+  // Devin's ruling, and the trade in his words: a drafter cannot see four
+  // thumbnails land in one frame anyway; they CAN feel a 47 ms lurch. The work
+  // is identical, the longest task becomes one elevation instead of four, and
+  // the cost is that the last seat settles a few frames after the edit.
+  //
+  // WHAT THIS DOES NOT FIX, kept here because it would otherwise be forgotten
+  // the moment the spec goes green:
+  //   - The steady state is four elevations at ~7 ms = 28 ms, 56% of the
+  //     threshold. Splitting the frame buys headroom; it does not retire the
+  //     question, and the honest answer is still a cheaper elevation painter.
+  //   - E1 and E3 cost 15-16 ms on the first edit against ~7 ms after it.
+  //     That is a FIRST-PAINT cost, not an outlier to cut -- it was chased and
+  //     it is warmup, so nobody need chase it twice.
+  // The standing pre-ruling on both: make the painter cheaper, do not move the
+  // line.
+  const stepSeats = () => {
+    railFrame = null;
+    if (!drawing || !rail.children.length) { railQueue = null; return; }
+    // A FRESH PASS when there is none, or when an edit landed mid-pass. The
+    // epoch check is the coalescing the single-frame version did at the
+    // scheduler; at seat granularity it has to happen here too, or a pass
+    // started before an edit would finish painting the model as it was.
+    if (railQueue === null || railEpoch !== modelEpoch) {
       railEpoch = modelEpoch;
-      const specs = SEAT_ORDER.map(seatFor);
-      const t0 = performance.now();
-      const env = cutEnv();
-      specs.forEach((spec, i) => {
-        const screen = rail.children[i].firstChild;
-        const c = screen.getContext('2d');
-        c.clearRect(0, 0, screen.width, screen.height);
-        if (!spec.cut) return;
-        // A TRUE MINIATURE where one is affordable: the same painter that
-        // draws the full-size view, through the same env. MODEL.dc.html's
-        // thumbnail painter is a one-line wrapper over drawCutView (:10117),
-        // so this is not a second, smaller renderer that could drift.
-        //
-        // ELEVATIONS DO NOT GET ONE, and the reason is what the seat is FOR,
-        // not what it costs. A thumbnail earns its keep where the name does
-        // not identify the view: S1 and S2 tell a drafter nothing about which
-        // section is which, so a picture is the only way to tell them apart.
-        // E1 FRONT and E3 BACK already do the job a picture would.
-        //
-        // The cost only makes the correct answer also the cheap one, and it
-        // is worth recording because it was measured the wrong way first.
-        // Per seat, 232x152, repro-garage-house:
-        //
-        //     E1 46.8 ms   E2 43.2 ms   E3 47.6 ms   E4 43.7 ms   S1 0.32 ms
-        //
-        // About 100x, holding across three houses and IDENTICAL at 232x152
-        // and 900x600 -- so it is the painter's hidden-line geometry, not
-        // fill. Four live elevations is ~180 ms of blocking JS on every edit;
-        // in the browser, before this, the rail cost 148 ms per wall drawn.
-        //
-        // THE SHAPE IS KEPT ON PURPOSE. Seat, canvas and epoch are unchanged
-        // and an elevation draws its name where its picture would go, so a
-        // faster elevation painter becomes a thumbnail here without moving a
-        // seat -- Devin's "labels behind the same seat", taken literally.
-        // COARSE, because the seat is 82 px wide. The roof silhouette's full
-        // 240-sample resolution is eleven samples per pixel here and costs
-        // ~28 ms an elevation; at 40 it is one sample per two pixels and costs
-        // ~7 ms. Four elevations: 112 ms against 30 ms, for a picture that
-        // cannot differ at this size.
-        window.DraftCutView.drawCutView(env, c, screen.width, screen.height, spec.cut,
-          { coarseSilhouette: true });
-      });
-      // THE NUMBER THE WHOLE LIVE-THUMBNAIL DECISION RESTS ON, on screen
-      // rather than in a commit message. The spec recommended label-only seats
-      // precisely because nobody had measured this; it is measured here, on
-      // whatever house the drafter actually has open, and it is the cost of an
-      // EDIT rather than of a frame.
-      lastRailMs = performance.now() - t0;
-      // AND SAY SO. updateReadout runs inside paint(), which is over before
-      // this frame fires, so without this the readout carries the PREVIOUS
-      // repaint's number for ever -- 0 on the first load, and one edit behind
-      // after that. The synchronous version ordered these deliberately for
-      // exactly this reason; deferring the paint put the staleness back, and
-      // the instrument being one step behind is the fault it exists to catch.
-      updateReadout();
+      railPassEnv = cutEnv();
+      railQueue = SEAT_ORDER.map((name, i) => ({ spec: seatFor(name), i }));
+      railPassMs = 0;
     }
+    const t0 = performance.now();
+    const { spec, i } = railQueue.shift();
+    paintSeat(spec, i, railPassEnv);
+    railPassMs += performance.now() - t0;
+    if (railQueue.length) {
+      railFrame = requestAnimationFrame(stepSeats);
+      return;
+    }
+    railQueue = null;
+    railPassEnv = null;
+    // THE NUMBER THE WHOLE LIVE-THUMBNAIL DECISION RESTS ON, on screen
+    // rather than in a commit message. The spec recommended label-only seats
+    // precisely because nobody had measured this; it is measured here, on
+    // whatever house the drafter actually has open, and it is the cost of an
+    // EDIT rather than of a frame. It is still the whole pass -- splitting the
+    // frames changed when the work happens, not how much of it there is.
+    lastRailMs = railPassMs;
+    // AND SAY SO. updateReadout runs inside paint(), which is over before
+    // this frame fires, so without this the readout carries the PREVIOUS
+    // repaint's number for ever -- 0 on the first load, and one edit behind
+    // after that. The synchronous version ordered these deliberately for
+    // exactly this reason; deferring the paint put the staleness back, and
+    // the instrument being one step behind is the fault it exists to catch.
+    updateReadout();
+  };
+
+  const paintSeat = (spec, i, env) => {
+    const screen = rail.children[i].firstChild;
+    const c = screen.getContext('2d');
+    c.clearRect(0, 0, screen.width, screen.height);
+    if (!spec.cut) return;
+    // A TRUE MINIATURE where one is affordable: the same painter that
+    // draws the full-size view, through the same env. MODEL.dc.html's
+    // thumbnail painter is a one-line wrapper over drawCutView (:10117),
+    // so this is not a second, smaller renderer that could drift.
+    //
+    // ELEVATIONS DO NOT GET ONE, and the reason is what the seat is FOR,
+    // not what it costs. A thumbnail earns its keep where the name does
+    // not identify the view: S1 and S2 tell a drafter nothing about which
+    // section is which, so a picture is the only way to tell them apart.
+    // E1 FRONT and E3 BACK already do the job a picture would.
+    //
+    // The cost only makes the correct answer also the cheap one, and it
+    // is worth recording because it was measured the wrong way first.
+    // Per seat, 232x152, repro-garage-house:
+    //
+    //     E1 46.8 ms   E2 43.2 ms   E3 47.6 ms   E4 43.7 ms   S1 0.32 ms
+    //
+    // About 100x, holding across three houses and IDENTICAL at 232x152
+    // and 900x600 -- so it is the painter's hidden-line geometry, not
+    // fill. Four live elevations is ~180 ms of blocking JS on every edit;
+    // in the browser, before this, the rail cost 148 ms per wall drawn.
+    //
+    // THE SHAPE IS KEPT ON PURPOSE. Seat, canvas and epoch are unchanged
+    // and an elevation draws its name where its picture would go, so a
+    // faster elevation painter becomes a thumbnail here without moving a
+    // seat -- Devin's "labels behind the same seat", taken literally.
+    // COARSE, because the seat is 82 px wide. The roof silhouette's full
+    // 240-sample resolution is eleven samples per pixel here and costs
+    // ~28 ms an elevation; at 40 it is one sample per two pixels and costs
+    // ~7 ms. Four elevations: 112 ms against 30 ms, for a picture that
+    // cannot differ at this size.
+    window.DraftCutView.drawCutView(env, c, screen.width, screen.height, spec.cut,
+      { coarseSilhouette: true });
   };
 
   // ── selection ─────────────────────────────────────────────────────────────
