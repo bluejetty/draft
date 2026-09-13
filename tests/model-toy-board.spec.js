@@ -107,6 +107,26 @@ test('the board round-trips, and a file that never had one still does not',
       .toBe(null);
   });
 
+test('a junk board is normalised out of the file, not carried in it',
+  async ({ page }) => {
+    // THE MUTATION GATE FOUND THIS MISSING. Dropping the load-time normalise
+    // left every other check green, because boardOfDrawing() normalises too --
+    // so junk never reaches the switch by either route. What it does reach,
+    // unnormalised, is the SAVE: the file would keep "banana" as its board
+    // for ever, a value no page can honour.
+    //
+    // The house rule is already written down one key over, in this suite's own
+    // sibling: "buildType: the reader normalises what it does not know, and
+    // the writer never emits it". Same treatment.
+    await open(page, base({ board: 'banana' }));
+    await page.locator('[data-draw-wall]').click();
+    await page.locator('[data-draw-wall]').click();
+    await page.locator('#save').click();
+    await page.waitForTimeout(400);
+    expect((await stored(page)).board,
+      'the junk did not survive the round trip').toBe(null);
+  });
+
 test('a junk board in the file does not reach the switch', async ({ page }) => {
   // The load normalises rather than spreading `...parsed` through. Without
   // that the switch would hold a value BOARDS does not contain, and the
