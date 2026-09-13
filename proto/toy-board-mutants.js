@@ -6,6 +6,19 @@
 //
 // All six board checks went green first try, which is the state that means
 // nothing until each has been seen to fail.
+//
+// RESULT: 6/6. Five died on the first run; the survivor is worth keeping in
+// mind because of WHERE it pointed. Dropping the load-time normalise
+// (`board: F.board(parsed.board)` -> `board: parsed.board`) left every check
+// green, because boardOfDrawing() normalises too -- so junk never reaches the
+// switch by either route, and every check I had written was aimed at the
+// switch. What the mutant actually changes is what the SAVE keeps: the file
+// would carry "banana" as its board for ever, a value no page can honour.
+//
+// The rule for that was already written down one key over, in
+// persisted-format's own words: "buildType: the reader normalises what it does
+// not know, and the writer never emits it". A survivor that looks like a
+// redundant line is usually a check aimed at the wrong surface.
 const { execSync } = require('child_process');
 const fs = require('fs');
 
