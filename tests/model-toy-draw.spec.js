@@ -647,6 +647,20 @@ async function nudge(page, from, to) {
   const [sx, sy] = at(...from);
   await page.mouse.click(sx, sy);                 // select: wallBodyAt needs it
   await page.waitForTimeout(80);
+  // §4 CHANGED WHAT THAT CLICK MEANS ON THE SECOND PASS. The first nudge
+  // leaves the wall SELECTED, so the next nudge's select-click lands on a wall
+  // that is already chosen -- which is §4's gesture, and the choice opens over
+  // the canvas and swallows the drag underneath it.
+  //
+  // So the helper does what a drafter would do, rather than pretending the
+  // choice is not there: he clicked the wall, he meant to move it, he takes
+  // MOVE THIS WALL and drags. Dismissing it any other way would be the helper
+  // routing around a modal the drafter cannot route around.
+  const choice = page.locator('[data-bone-choice]');
+  if (await choice.isVisible()) {
+    await choice.locator('[data-break-move]').click();
+    await page.waitForTimeout(60);
+  }
   await page.mouse.move(sx, sy);
   await page.mouse.down();
   const [ex, ey] = at(...to);
@@ -1002,4 +1016,198 @@ test('a press on the open end resumes the run instead of being refused',
     // never drew anything and never said anything -- the trap this file keeps
     // walking into. The second wall has to actually exist.
     expect(drawn, 'both walls were drawn, not just the first').toBe(2);
+  });
+
+// ── §4: BREAKING THE BONE ───────────────────────────────────────────────────
+//
+// Movie: "they will be allowed to 'BREAK the bone' every foot if they want to
+// by clicking on it". The order's own reason: it "lets TOY draw a real house
+// -- break the bone and the two halves move independently, so an L, a
+// bump-out and a garage offset are all reachable".
+//
+// THE BREAK POINT IS MEASURED ALONG THE RUN, and that is not a detail. TOY
+// rounds a run's LENGTH, never its coordinates -- model-toy-board.spec.js:333
+// is the rule, and tonight I broke it once already by rounding a point's x and
+// z to foot marks. A bone that starts off the foot has its foot marks at
+// whole-foot DISTANCES from its start, so a break measured by rounding world
+// coordinates lands somewhere that is not a mark on this bone at all.
+const boneChoice = page => page.locator('[data-bone-choice]');
+
+async function selectThen(page, at, spot) {
+  const [x, y] = at(...spot);
+  await page.mouse.click(x, y);          // select: wallBodyAt needs it
+  await page.waitForTimeout(80);
+  await page.mouse.click(x, y);          // click again: the choice
+  await page.waitForTimeout(120);
+}
+
+const wallsNamed = page => page.evaluate(async bucket => {
+  const f = await window.SharedFileStore.loadSharedFile(bucket);
+  return (JSON.parse(await f.text()).walls || []).map(w => ({
+    id: w.id,
+    s: [Number(w.start.x.toFixed(4)), Number(w.start.z.toFixed(4))],
+    e: [Number(w.end.x.toFixed(4)), Number(w.end.z.toFixed(4))],
+  }));
+}, BUCKET);
+
+test('§4 — clicking a selected bone offers break here or move this wall',
+  async ({ page }) => {
+    await open(page, base({ board: 'toy' }));
+    const { at } = await frame(page);
+    await selectThen(page, at, [0, -10]);
+    await expect(boneChoice(page), 'the choice is on screen').toBeVisible();
+    await expect(boneChoice(page), 'and it names both ways out')
+      .toContainText(/break/i);
+    await expect(boneChoice(page)).toContainText(/move/i);
+  });
+
+test('§4 — BREAK HERE splits the wall at the foot mark that was clicked',
+  async ({ page }) => {
+    await open(page, base({ board: 'toy' }));
+    const { at } = await frame(page);
+    const before = (await wallsNamed(page)).length;
+    // The north wall runs (-10,-10) -> (10,-10). Click 13.4 ft along it, so
+    // the mark is at 13 ft -> x = -10 + 13 = 3. A click ON a whole foot would
+    // pass whether the rounding happens or not.
+    await selectThen(page, at, [3.4, -10]);
+    await boneChoice(page).locator('[data-break-here]').click();
+    await page.waitForTimeout(120);
+    await saveIt(page);
+
+    const walls = await wallsNamed(page);
+    expect(walls.length, 'one wall became two').toBe(before + 1);
+    const halves = walls.filter(w => w.s[1] === -10 && w.e[1] === -10
+      && Math.min(w.s[0], w.e[0]) >= -10 && Math.max(w.s[0], w.e[0]) <= 10);
+    expect(halves.length, 'the north run is two walls now').toBe(2);
+    const xs = halves.flatMap(w => [w.s[0], w.e[0]]).sort((a, b) => a - b);
+    expect(xs, 'sharing the clicked foot mark at x=3').toEqual([-10, 3, 3, 10]);
+  });
+
+test('§4 — the mark is measured ALONG THE RUN, not by rounding coordinates',
+  async ({ page }) => {
+    // THE CHECK THAT SEPARATES THE TWO RULES, and nothing else here can.
+    // On the square fixture every corner is a whole foot, so "round the
+    // distance along the run" and "round the coordinate" agree everywhere --
+    // the same blind spot model-toy-board.spec.js:333 warns about. So this
+    // bone starts at x = -10.4: its foot marks are at -9.4, -8.4, ... and a
+    // coordinate-rounding build puts the break on a whole x instead.
+    await open(page, base({
+      board: 'toy',
+      walls: [
+        ['n', V(-10.4, -10), V(9.6, -10)], ['e', V(9.6, -10), V(9.6, 10)],
+        ['s', V(9.6, 10), V(-10.4, 10)], ['w', V(-10.4, 10), V(-10.4, -10)],
+      ].map(([id, start, end]) => ({ id, start, end, levelId: 3, view: 'plan',
+        wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' })),
+    }));
+    const { at } = await frame(page);
+    // Click 5.4 ft along the run -> the mark is 5 ft along -> x = -10.4 + 5.
+    await selectThen(page, at, [-5, -10]);
+    await boneChoice(page).locator('[data-break-here]').click();
+    await page.waitForTimeout(120);
+    await saveIt(page);
+
+    const xs = (await wallsNamed(page))
+      .filter(w => w.s[1] === -10 && w.e[1] === -10)
+      .flatMap(w => [w.s[0], w.e[0]])
+      .filter(x => x > -10.4 && x < 9.6);
+    expect(xs.length, 'the run was broken once').toBe(2);
+    expect(xs[0], 'the break sits a whole number of FEET ALONG THE RUN')
+      .toBeCloseTo(-5.4, 6);
+    expect(Number.isInteger(xs[0]),
+      'and NOT on a rounded world coordinate').toBe(false);
+  });
+
+test('§4 — MOVE THIS WALL leaves the bone exactly as it was',
+  async ({ page }) => {
+    await open(page, base({ board: 'toy' }));
+    const { at } = await frame(page);
+    const before = await wallsNamed(page);
+    await selectThen(page, at, [3.4, -10]);
+    await boneChoice(page).locator('[data-break-move]').click();
+    await page.waitForTimeout(120);
+    await saveIt(page);
+    expect(await wallsNamed(page),
+      'choosing move broke nothing').toEqual(before);
+    await expect(boneChoice(page), 'and the choice went away').toBeHidden();
+  });
+
+test('§4 — DRAFTING never offers the choice', async ({ page }) => {
+    await open(page, base({ board: 'drafting' }));
+    const { at } = await frame(page);
+    await selectThen(page, at, [0, -10]);
+    await expect(boneChoice(page), 'no bone choice off the TOY board')
+      .toBeHidden();
+  });
+
+// ── §4 ACCEPTANCE 7a: A BREAK ON A MASTERED LEVEL CUTS THE MASTER ───────────
+//
+// Movie, 14 Sep: "yes break master and all that area attached to it locked to
+// it". I built this BACKWARDS first -- `if (o.masterId) continue`, "a master's
+// copy is not ours to cut" -- and every check I had written passed, because
+// all of them draw ONE unmastered bone. The order names the cost exactly: the
+// first house drawn is master-derived, so refusing the break there makes the
+// very first bone anyone wants to cut the one bone that will not cut.
+//
+// THE ORDER ALSO WRITES THIS CHECK'S FAILURE MODE FOR ME: "a check that only
+// looks at the floor that was clicked passes with the propagation deleted, and
+// this order has produced four of those in one day." So floors 1 and 3 and the
+// master are asserted, and the clicked floor is the least interesting of them.
+const OUT = (id, levelId, masterId, pts) => ({
+  id, levelId, masterId, garage: false, open: false, detached: false,
+  foundation: null, overriddenSrcIds: [],
+  points: pts.map(([x, z]) => ({ x, y: 0, z, srcId: null, offX: 0, offZ: 0 })),
+});
+const RING = [[-10, -10], [10, -10], [10, 10], [-10, 10]];
+
+const threeStorey = () => base({
+  board: 'toy',
+  levels: [{ id: 3, name: 'MAIN FL', elev: 0 },
+    { id: 4, name: '2ND FL', elev: 9 }, { id: 5, name: '3RD FL', elev: 18 }],
+  boneyardOutlines: [OUT('master-1', null, null, RING)],
+  outlines: [
+    OUT('lvl-3', 3, 'master-1', RING),
+    OUT('lvl-4', 4, 'master-1', RING),
+    OUT('lvl-5', 5, 'master-1', RING),
+  ],
+});
+
+const ringOf = (page, id, where) => page.evaluate(async ({ bucket, oid, w }) => {
+  const f = await window.SharedFileStore.loadSharedFile(bucket);
+  const d = JSON.parse(await f.text());
+  const list = w === 'master' ? (d.boneyardOutlines || []) : (d.outlines || []);
+  const o = list.find(x => String(x.id) === oid);
+  return o ? (o.points || []).map(p => [Number(p.x.toFixed(4)), Number(p.z.toFixed(4))]) : null;
+}, { bucket: BUCKET, oid: id, w: where });
+
+test('§4 7a — a break on a mastered level cuts the master and every level on it',
+  async ({ page }) => {
+    await open(page, threeStorey());
+    const { at } = await frame(page);
+    await selectThen(page, at, [3.4, -10]);
+    await boneChoice(page).locator('[data-break-here]').click();
+    await page.waitForTimeout(150);
+    await saveIt(page);
+
+    const mark = [3, -10];
+    const has = ring => !!ring && ring.some(p => p[0] === mark[0] && p[1] === mark[1]);
+
+    // THE CLICKED FLOOR IS THE LEAST INTERESTING ASSERTION HERE -- it passes
+    // with the propagation deleted, which is the check the order warns about.
+    expect(has(await ringOf(page, 'lvl-3', 'level')),
+      'the floor that was clicked took the cut').toBe(true);
+    // THESE ARE THE ONES THAT MATTER.
+    expect(has(await ringOf(page, 'master-1', 'master')),
+      'the MASTER took the cut').toBe(true);
+    expect(has(await ringOf(page, 'lvl-4', 'level')),
+      'and floor 2, which nobody clicked').toBe(true);
+    expect(has(await ringOf(page, 'lvl-5', 'level')),
+      'and floor 3').toBe(true);
+
+    // AND IT IS A JOINT, NOT A RESHAPE: one point gained, the corners kept.
+    const lvl4 = await ringOf(page, 'lvl-4', 'level');
+    expect(lvl4.length, 'exactly one point was added').toBe(RING.length + 1);
+    for (const corner of RING) {
+      expect(lvl4.some(p => p[0] === corner[0] && p[1] === corner[1]),
+        `the original corner ${corner} is still there`).toBe(true);
+    }
   });

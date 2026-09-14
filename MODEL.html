@@ -639,6 +639,13 @@
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
   #promote[hidden] { display:none; }
+  /* SAME SHELL AS #promote, deliberately. It is the same kind of question --
+     a modal with two ways out -- and a second look would read as a second
+     kind of thing. */
+  #bone-choice { position:fixed; inset:0; z-index:7; display:flex;
+    align-items:center; justify-content:center; padding:24px;
+    background:rgba(0,0,0,0.35); }
+  #bone-choice[hidden] { display:none; }
   .promote-card { max-width:26em; padding:16px 18px; border-radius:4px;
     border:1px solid var(--edge-panel);
     background-color: var(--surface-panel);
@@ -852,6 +859,22 @@
     <div class="promote-row">
       <button type="button" data-promote-go>Continue</button>
       <button type="button" data-promote-stay>Stay in TOY</button>
+    </div>
+  </div>
+</div>
+
+<!-- §4's CHOICE. Movie: "they will be allowed to 'BREAK the bone' every foot
+     if they want to by clicking on it". A click on a bone offers both ways on,
+     because the order names both -- and MOVE THIS WALL is not decoration even
+     though the drag already moves it: a drafter who clicked to look must be
+     able to leave without changing anything, and a choice with one button is
+     an announcement. -->
+<div id="bone-choice" data-bone-choice hidden>
+  <div class="promote-card">
+    <p data-bone-text>Break the bone here, or move this wall?</p>
+    <div class="promote-row">
+      <button type="button" data-break-here>Break here</button>
+      <button type="button" data-break-move>Move this wall</button>
     </div>
   </div>
 </div>
@@ -4802,6 +4825,126 @@
   // question on this page is asked: a grab radius, not an equality. And it
   // returns THE STORED END, so the run resumes exactly where it left off
   // rather than a snap-width away from itself.
+  // ── §4: BREAKING THE BONE ────────────────────────────────────────────────
+  //
+  // Movie: "they will be allowed to 'BREAK the bone' every foot if they want
+  // to by clicking on it". The order is explicit that the marks are a set to
+  // choose from, not a bone pre-chopped into forty segments: "same result, one
+  // decision at a time".
+  //
+  // THE MARK IS A DISTANCE ALONG THE RUN, NOT A ROUNDED COORDINATE, and that
+  // is the rule I broke once already tonight. TOY rounds a run's LENGTH
+  // (model-toy-board.spec.js:333), so a bone whose start sits at x = -10.4 has
+  // its marks at -9.4, -8.4, ... Rounding the clicked point's x would put the
+  // break at a whole number that is not a mark on this bone at all -- whole
+  // POSITIONS and a fractional LENGTH, which is exactly backwards.
+  const breakMarkOn = (wall, at) => {
+    const rx = wall.end.x - wall.start.x, rz = wall.end.z - wall.start.z;
+    const run = Math.hypot(rx, rz);
+    if (run < 2) return null;              // no interior mark to break at
+    const along = ((at.x - wall.start.x) * rx + (at.z - wall.start.z) * rz) / run;
+    // CLAMPED OFF BOTH ENDS. A break AT a corner is not a break -- it would
+    // make a zero-length half, and the format drops anything under 1e-6 on
+    // load, so it would be a wall that vanishes on the next reload.
+    const feet = Math.min(Math.max(Math.round(along), 1), Math.floor(run) - 1 || 1);
+    if (feet <= 0 || feet >= run) return null;
+    return { x: wall.start.x + (rx / run) * feet, y: 0,
+      z: wall.start.z + (rz / run) * feet };
+  };
+
+  // The bone gains the point BETWEEN the two corners it lies between, never
+  // appended: an outline is an ordered ring, so a point on the end is a
+  // different shape, not the same shape with a joint in it.
+  const insertOnEdge = (o, a, b, pt) => {
+    const same = (p, q) => Math.hypot(p.x - q.x, p.z - q.z) < 1e-6;
+    const pts = o.points || [];
+    for (let i = 0; i < pts.length; i += 1) {
+      const j = (i + 1) % pts.length;
+      if ((same(pts[i], a) && same(pts[j], b)) || (same(pts[i], b) && same(pts[j], a))) {
+        pts.splice(i + 1, 0, { x: pt.x, y: 0, z: pt.z });
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // A BREAK ON A MASTERED LEVEL CUTS THE MASTER, ruled 14 Sep: "yes break
+  // master and all that area attached to it locked to it".
+  //
+  // I BUILT THIS BACKWARDS FIRST. The line here read `if (o.masterId)
+  // continue` -- "a master's copy is not ours to cut" -- which is the opposite
+  // of the ruling, and the order names exactly why it matters: THE FIRST HOUSE
+  // DRAWN IS MASTER-DERIVED, so refusing the break on a mastered outline makes
+  // the very first bone anyone wants to cut the one bone that will not cut. It
+  // would have passed every check I had written, because all of them draw one
+  // unmastered bone.
+  //
+  // So the master governs the break exactly as it governs a move -- one rule
+  // for the master, not one for moving and another for cutting -- and every
+  // level locked to it takes the same cut. The unlocked exit is §5a's and is
+  // not invented here.
+  // TAKES THE ORIGINAL ENDS, not a wall. The first version took the new tail
+  // wall and read its `start` -- which is the break point, because breakBoneAt
+  // has already moved it. So it searched every ring for an edge from the mark
+  // to the far corner, an edge that does not exist yet, matched nothing, and
+  // cut no bone at all. The five §4 checks all passed anyway: they assert the
+  // WALLS, and the wall split was fine. Only 7a, which reads the rings, saw it.
+  const boneGainsPoint = (a, b, pt) => {
+    const all = drawing.outlines || [];
+    const hit = all.find(o => insertOnEdge(o, a, b, pt));
+    if (!hit) return false;
+    if (!hit.masterId) return true;        // a purely local bone cuts alone
+    // The master, then every OTHER level that follows it. The clicked level is
+    // already cut, and the geometry is the master's, so each copy takes the
+    // cut at the same place on the same edge rather than at a point computed
+    // again per level.
+    (drawing.boneyardOutlines || []).forEach(m => {
+      if (m.id === hit.masterId) insertOnEdge(m, a, b, pt);
+    });
+    all.forEach(o => {
+      if (o === hit || o.masterId !== hit.masterId) return;
+      insertOnEdge(o, a, b, pt);
+    });
+    return true;
+  };
+
+  const breakBoneAt = (wall, pt) => {
+    // CAPTURED BEFORE THE MUTATION, because the ring still describes the wall
+    // as it was and that is the edge the break has to be placed on.
+    const was = { a: { x: wall.start.x, z: wall.start.z },
+      b: { x: wall.end.x, z: wall.end.z } };
+    const mid = poolVertex(pt, wall.levelId, wall.view);
+    const tail = { ...wall, id: newDrawingItemId('wall'), start: mid, end: wall.end };
+    wall.end = mid;
+    const at = (drawing.walls || []).indexOf(wall);
+    drawing.walls.splice(at < 0 ? drawing.walls.length : at + 1, 0, tail);
+    boneGainsPoint(was.a, was.b, pt);
+    undoStack.push({ kind: 'add', wall: tail });
+    markDirty();
+    paint();
+    return tail;
+  };
+
+  const boneChoice = document.getElementById('bone-choice');
+  let boneChoiceFor = null;
+  const closeBoneChoice = () => { boneChoiceFor = null; boneChoice.hidden = true; };
+  const offerBoneChoice = (wall, at) => {
+    const pt = breakMarkOn(wall, at);
+    if (!pt) { sayOnStrip('this wall is too short to break'); return; }
+    boneChoiceFor = { wall, pt };
+    boneChoice.hidden = false;
+    boneChoice.querySelector('[data-break-here]').focus();
+  };
+  boneChoice.querySelector('[data-break-here]').addEventListener('click', () => {
+    const pick = boneChoiceFor;
+    closeBoneChoice();
+    if (pick) breakBoneAt(pick.wall, pick.pt);
+  });
+  // NOTHING AT ALL, the same contract as Stay in TOY: the drag already moves
+  // the wall, so this button's whole job is to leave without changing
+  // anything. A choice that always did something would not be a choice.
+  boneChoice.querySelector('[data-break-move]').addEventListener('click', closeBoneChoice);
+
   const toyOpenEnd = at => {
     if (board !== 'toy' || !pendingBone) return null;
     const open = pendingBone.points[pendingBone.points.length - 1];
@@ -6066,6 +6209,14 @@
       if (md.active) {
         undoStack.push({ kind: 'move', before: md.before });
         markDirty();
+      } else if (board === 'toy' && md.kind === 'wall' && md.body) {
+        // §4's CLICK, and it costs no new gesture. `wallBodyAt` only returns a
+        // wall that is ALREADY SELECTED, so reaching here means the drafter
+        // pressed a wall he had already chosen and let go without dragging --
+        // which is the click the order describes, and is not a press that
+        // could have been anything else. The drag is still the move; this is
+        // the look.
+        offerBoneChoice(md.body, md.grab);
       }
       moveDrag = null;
       if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
@@ -6175,6 +6326,7 @@
       // message. Escape already puts down every other half-taken gesture on
       // this page (the pending wall start, a half-taken measure), so the
       // unfinished run goes down the same way rather than by a key of its own.
+      if (boneChoiceFor) { closeBoneChoice(); return; }
       if (pendingBone) {
         pendingBone = null;
         sayOnStrip('run cancelled');
