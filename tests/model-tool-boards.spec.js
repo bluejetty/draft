@@ -182,11 +182,25 @@ test('a tool TOY DOES offer survives the switch', async ({ page }) => {
   expect(await armed(page)).toEqual(['wall']);
 });
 
-test('a drawing that opens on TOY has the keys down from the first paint',
+test('the load path constrains, even against a browser remembering DRAFTING',
   async ({ page }) => {
-    // THE LOAD PATH IS A THIRD ENTRY, not the switch. `board = boardOfDrawing()`
-    // runs after the column is built, so a page that only constrained on click
+    // THE LOAD PATH IS A THIRD ENTRY, not the switch: `board = boardOfDrawing()`
+    // runs AFTER the column is built, so a page that only constrained on click
     // would open a TOY file with all seventeen keys live.
+    //
+    // THE FIRST HALF OF THIS TEST IS THE WHOLE POINT, and it is here because
+    // the version without it was a check whose broken state looked like its
+    // passing state. It opened a TOY file on a fresh browser, where the
+    // REMEMBERED board is already 'toy' -- so the keys were down from the
+    // initial build and the load path was never exercised. Deleting the
+    // notification that the board changed left it green; the mutation gate
+    // caught the defect on a different check, which is how the hole showed.
+    //
+    // So DRAFTING is remembered first. Now the seed and the file disagree, and
+    // only the drawing winning at load can put the keys down.
+    await open(page, base({ board: 'drafting' }));
+    expect(await downKeys(page), 'the seed is DRAFTING').toEqual([]);
+
     await open(page, base({ board: 'toy' }));
     expect(await downKeys(page)).toHaveLength(15);
   });

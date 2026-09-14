@@ -89,7 +89,7 @@ const MUTANTS = [
     name: 'the board never tells anyone it changed',
     find: '    boardListeners.forEach(fn => fn(board));',
     with: '',
-    test: 'from the first paint' },
+    test: 'against a browser remembering DRAFTING' },
 
   // ── §8 ──────────────────────────────────────────────────────────────────
   { file: 'MODEL.html',
