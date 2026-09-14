@@ -479,6 +479,14 @@ test('an unfinished run refuses a new one, and says so', async ({ page }) => {
   // silent drop would sail past. The two taps are still the live run, so
   // continuing it from where it stopped closes the shape it was always going
   // to be, with the original corners in it.
+  //
+  // RESUMING MEANS PRESSING AT THE END THE RUN STOPPED AT. My first version
+  // pressed straight at the far corner and was refused -- correctly, since a
+  // press anywhere else is exactly what the rule forbids. The refusal is not
+  // "you may not draw", it is "this run is still open": press its open end and
+  // it continues.
+  await page.mouse.click(...at(6, 0));
+  await page.waitForTimeout(60);
   await page.mouse.click(...at(6, 6));
   await page.waitForTimeout(80);
   await saveIt(page);

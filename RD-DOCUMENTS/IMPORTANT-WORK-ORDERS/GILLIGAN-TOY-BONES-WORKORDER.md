@@ -149,6 +149,16 @@ Never drop them silently.
 Acceptance: two taps down, a tap started away from them **makes nothing new and
 loses nothing**, and the page says why.
 
+**And the way out — ruled 14 Sep.** You saw the consequence and named it: with
+the refusal in, a run once started cannot be abandoned. Movie ruled **(a)**:
+
+- **Escape cancels the pending run.**
+- **Putting the tool down cancels it too** — a tool the drafter has put away
+  must not still be holding his taps.
+
+So the refusal only ever fires while he is actually mid-run, which is the only
+time it reads as help rather than as a trap.
+
 ### The bone is the only handle
 
 > Movie: *"they will only use the BONES for editing"*
@@ -347,6 +357,8 @@ nothing.
     **nothing** and **loses nothing** — the two taps are still there — and the
     page says the run is unfinished. Assert all three; the silent drop passes
     a check that only counts bones.
+2f. Escape with a run pending clears it, and so does putting the tool down —
+    after either, a new run starts freely and is not refused.
 3. In TOY, an unavailable tool cannot be armed and is visibly down.
 4. In DRAFTING the same gestures commit the off-axis, off-foot wall they
    commit today. **TOY must not leak.**
