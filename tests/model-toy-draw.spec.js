@@ -1225,3 +1225,66 @@ test('§4 7a — a break on a mastered level cuts the master and every level on 
       'the mark sits BETWEEN the two corners of the wall that was cut')
       .toEqual([[-10, -10], [10, -10]]);
   });
+
+test('§4 — a click near a corner breaks at the first mark IN, never at the corner',
+  async ({ page }) => {
+    // THE GATE ASKED FOR THIS ONE. A mutant removing the clamp -- so `feet` is
+    // a bare Math.round(along) -- survived every §4 check, because all of them
+    // click near the MIDDLE of a wall where clamped and unclamped agree. The
+    // clamp only does anything at the ends.
+    //
+    // It matters: rounded to 0 the break lands ON the start corner and makes a
+    // zero-length half, which drawing-format drops on load -- the silent loss
+    // this page has been bitten by twice.
+    //
+    // A SMALLER HOUSE, NOT A ZOOM, and that took three runs to arrive at.
+    // VERTEX BEATS BODY: cornerAt owns everything within CORNER_GRAB_PX (30px)
+    // / view.scale, so the press must be further from the corner than that and
+    // still under half a foot along, or Math.round never reaches 0. Widening
+    // the gap by zooming failed twice -- the wheel keeps the point under the
+    // CURSOR fixed, so it drifts view.cx, and frame()'s at() assumes the origin
+    // is at the canvas centre; after one wheel tick every coordinate it
+    // returns is wrong, and the press lands on nothing.
+    //
+    // fit() scales to the drawn bounds, so a smaller house fits at a larger
+    // scale and the corner's grip shrinks in FEET. No view state is touched
+    // and at() stays true. A five-foot house still left the corner owning
+    // 0.484 ft, hence this one.
+    await open(page, base({
+      board: 'toy',
+      walls: [
+        ['n', V(-2.5, -2.5), V(2.5, -2.5)], ['e', V(2.5, -2.5), V(2.5, 2.5)],
+        ['s', V(2.5, 2.5), V(-2.5, 2.5)], ['w', V(-2.5, 2.5), V(-2.5, -2.5)],
+      ].map(([id, start, end]) => ({ id, start, end, levelId: 3, view: 'plan',
+        wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' })),
+    }));
+    const scale = await page.evaluate(() => Number(
+      /scale ([\d.]+) px\/ft/.exec(document.getElementById('readout').textContent)[1]));
+    const grabFt = 30 / scale;
+    expect(grabFt, `at ${scale} px/ft the corner owns ${grabFt.toFixed(3)} ft; `
+      + 'it must own under half a foot or the clamp cannot be reached')
+      .toBeLessThan(0.44);
+    // Clear of the corner's grip, still under the half foot where Math.round
+    // drops to zero -- the only window in which the clamp does anything.
+    const offset = grabFt + (0.49 - grabFt) / 2;
+    const { at } = await frame(page);
+    await selectThen(page, at, [-2.5 + offset, -2.5]);
+    await expect(boneChoice(page),
+      `at ${offset.toFixed(3)} ft from the corner the press grabs the BODY`)
+      .toBeVisible();
+    await boneChoice(page).locator('[data-break-here]').click();
+    await page.waitForTimeout(120);
+    await saveIt(page);
+
+    const walls = await wallsNamed(page);
+    const run = walls.filter(w => w.s[1] === -2.5 && w.e[1] === -2.5);
+    expect(run.length, 'the wall was broken').toBe(2);
+    const xs = run.flatMap(w => [w.s[0], w.e[0]]).sort((a, b) => a - b);
+    expect(xs, 'broken one foot IN, not on the corner at -2.5')
+      .toEqual([-2.5, -1.5, -1.5, 2.5]);
+    // AND NO NULL HALF, the failure the clamp exists to prevent.
+    for (const w of walls) {
+      expect(Math.hypot(w.e[0] - w.s[0], w.e[1] - w.s[1]),
+        `wall ${w.id} has a real length`).toBeGreaterThan(1e-6);
+    }
+  });
