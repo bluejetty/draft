@@ -55,6 +55,71 @@
 
   const byId = new Map(TOOLS.map(tool => [tool.id, tool]));
 
+  // ── WHICH TOOLS A BOARD OFFERS ────────────────────────────────────────────
+  // ONE PLACE DECIDES, and it is here rather than in the page, because this is
+  // the file that owns the list. §6 of the TOY bones order is "no other
+  // tools", and the answer has to be one answer: the keypad, the register and
+  // the board switch all ask this function, so a key cannot look available
+  // while the register refuses it -- a disagreement a drafter reads as the
+  // page being broken.
+  //
+  // THE RULING IT IMPLEMENTS is Skipper's, in
+  // RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/SPEC-toy-mode-constraints.md: "A wall
+  // can be manipulated ONLY through a grip tab. There is no drafting tool in
+  // TOY MODE."
+  //
+  // WALL IS THE ONE EXCEPTION, AND IT IS NOW RULED RATHER THAN INFERRED.
+  // Movie, 13 Sep, relayed: the spec's sentence is the older document, and the
+  // OUTLINE GETS DRAWN IN TOY -- drawing the outline is not a drafting tool,
+  // it is how a TOY house begins. So §6 reads: no drafting tools EXCEPT the
+  // one gesture that makes the outline. §1's squaring and foot-landing is that
+  // gesture's rule, and would have been dead code under any other reading.
+  //
+  // WHY THE KEY IS 'wall' AND NOT 'outline'. The gesture that makes the
+  // outline on this page today IS draw-wall -- there is no separate outline
+  // tool in the roster, and §1 was built on the wall gesture. The ruling is
+  // about the GESTURE, not the key, so if the outline ever becomes a tool of
+  // its own this list names that one instead and WALL goes down with the rest.
+  // Recorded here because a future reader would otherwise see a wall exception
+  // where the rule is an outline exception.
+  //
+  // SELECT IS NOT A DRAFTING TOOL, it is the resting state -- the page falls
+  // back to it whenever it puts a tool down. A board that did not offer it
+  // would leave the page with no legal state to rest in -- the fallback would
+  // land on a refused tool -- so tests/model-tool-boards.spec.js asserts
+  // RESTING is available on EVERY board rather than trusting the list below.
+  const BOARDS = Object.freeze(['toy', 'drafting']);
+  const RESTING = 'select';
+  const TOY_TOOLS = Object.freeze([RESTING, 'wall']);
+
+  // An unknown board is treated as DRAFTING -- the unrestricted one. The other
+  // way round, an unknown board would silently strip sixteen tools off the
+  // column and look exactly like TOY working, which is the failure mode this
+  // whole file is arranged against.
+  const availableOn = (id, board) => {
+    if (!byId.has(id)) return false;
+    return board === 'toy' ? TOY_TOOLS.includes(id) : true;
+  };
+  const availableIn = board => TOOLS.filter(tool => availableOn(tool.id, board));
+
+  // THE OTHER TWO SURFACES §6 NAMES. Its sentence is "the seventeen-key
+  // column, the selection filters, the assembly verbs -- none of them operate
+  // in TOY", and the first of those three was all I built. These are the other
+  // two, and they answer from here for the reason the tools do: one place, so
+  // a panel cannot look live while the board refuses it.
+  //
+  // ALL-OR-NOTHING, UNLIKE TOOLS. A board offers SOME tools -- TOY keeps the
+  // gesture that makes the outline -- but a panel is one capability and it is
+  // either on the board or it is not. Modelling panels as a list of individual
+  // controls would invite a half-lit SELECTION panel, which is the shape of
+  // thing this section exists to forbid.
+  const PANELS = Object.freeze(['selection', 'assembly']);
+  const panelOn = (panel, board) => {
+    if (!PANELS.includes(panel)) return false;
+    return board !== 'toy';
+  };
+
+
   // REMAPS COME FROM SETTINGS, and they come through the same two functions the
   // old page uses (:22765-22766) rather than a second reading of the same
   // stored object. A profile that moves TRIM off Q must move this key face too,
@@ -81,6 +146,12 @@
   window.DraftToolRoster = Object.freeze({
     GROUPS,
     TOOLS,
+    BOARDS,
+    RESTING,
+    availableOn,
+    availableIn,
+    PANELS,
+    panelOn,
     get: id => byId.get(id) || null,
     inGroup: group => TOOLS.filter(tool => tool.group === group),
     bindings,

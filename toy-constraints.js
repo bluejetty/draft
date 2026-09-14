@@ -63,6 +63,12 @@ if (!window.DraftToyConstraints) {
     GROUP_MEMBER_BLOCKED: 'GROUP_MEMBER_BLOCKED',
     OBJECT_CLEARANCE: 'OBJECT_CLEARANCE',
     NEEDS_A_BEAM: 'NEEDS_A_BEAM',
+    // WOULD ANGLE A NEIGHBOUR, which is not the same as TOUCHES_NON_ORTHOGONAL.
+    // That one is about geometry that is ALREADY angled and cannot be reasoned
+    // about. This is about geometry that is square now and would not be after
+    // the move -- the wall being dragged is fine, its neighbour is fine, and
+    // the move is what breaks it.
+    WOULD_ANGLE_NEIGHBOUR: 'WOULD_ANGLE_NEIGHBOUR',
     NO_MOVE: 'NO_MOVE',
   });
 
@@ -495,10 +501,19 @@ if (!window.DraftToyConstraints) {
       const bound = ((room && room.bounds) || []).find(b => groupIds.includes(b.wallId));
       culprit = bound ? bound.wallId : null;
     }
+    // GROUP_MEMBER_BLOCKED means "a wall travelling WITH you is blocked", so
+    // the rewrite belongs to refusals whose culprit is a group member. A
+    // neighbour that would be left on an angle is not travelling with you --
+    // it is standing still while one of its ends is dragged -- and naming that
+    // "a wall joined to this one cannot move that far" tells the drafter to
+    // look at a distance when the problem is a shape. The refusal already
+    // names its own wall, so it keeps its own reason and only gains the id.
     if (culprit && culprit !== grabbedId) {
-      said.reason = REASON.GROUP_MEMBER_BLOCKED;
       said.blockedBy = culprit;
-      said.underlying = blocked.reason;
+      if (blocked.reason !== REASON.WOULD_ANGLE_NEIGHBOUR) {
+        said.reason = REASON.GROUP_MEMBER_BLOCKED;
+        said.underlying = blocked.reason;
+      }
     }
     return said;
   };
@@ -522,7 +537,21 @@ if (!window.DraftToyConstraints) {
   // in the harness: with no `bearing` flags in play today's gatherer welds
   // every end-to-end pair, so that empty list is what the current context
   // produces. That is a fact about the gatherer, not a hole in this function.
-  const endStretches = (wall, groupIds, walls, delta) => {
+  // `detached` IS THE CALLER SAYING "THIS ONE IS NOT ATTACHED", and it exists
+  // because welding here is done by COORDINATE, not identity. Two walls whose
+  // ends sit at the same point are welded as far as this module can see -- and
+  // that is right for ordinary geometry, where a shared corner IS a shared
+  // corner.
+  //
+  // It stops being right the moment a caller UNSHARES one. MODEL's §4 break
+  // lets a drafter drag half a run out into a bump-out: it gives the dragged
+  // wall its own corner, leaves the old corner with the neighbour, and spans
+  // the two with a connector. At the instant the drag arms, those two corners
+  // are still at the same coordinates -- so this module predicts the
+  // neighbour will be dragged into a diagonal and refuses a move that would do
+  // nothing of the kind. The page knows which walls it is actually going to
+  // move; this is how it says so.
+  const endStretches = (wall, groupIds, walls, delta, detached) => {
     if (!wall || !wall.start || !wall.end || !delta) return [];
     const runX = wall.end.x - wall.start.x;
     const runZ = wall.end.z - wall.start.z;
@@ -535,6 +564,7 @@ if (!window.DraftToyConstraints) {
     const stretches = [];
     (walls || []).forEach(other => {
       if (groupIds.includes(other.id) || !other.start || !other.end) return;
+      if (detached && detached.includes(other.id)) return;
       ['start', 'end'].forEach(endName => {
         const corner = other[endName];
         const welded = moving.some(m => [m.start, m.end]
@@ -547,6 +577,51 @@ if (!window.DraftToyConstraints) {
       });
     });
     return stretches;
+  };
+
+  // WHAT THE MOVE WOULD DO TO THE SHAPE, which nothing else here asks.
+  //
+  // `isLegal` cannot answer it: `configAfterMove` advances declared numbers --
+  // room dimensions, spans, cantilevers -- and never moves a single vertex, so
+  // the configuration it judges has the ORIGINAL geometry in it. Whether the
+  // result is still square is invisible to it by construction.
+  //
+  // It is visible HERE, because `endStretches` already computes where each
+  // touching wall's corner lands. A neighbour PERPENDICULAR to the moved wall
+  // just gets longer and stays square -- that is the ordinary case and the
+  // only one the checks had. A neighbour COLLINEAR with it gets one end pushed
+  // sideways and becomes a diagonal, which is the one thing TOY exists to make
+  // unreachable.
+  //
+  // MEASURED, NOT ARGUED: seeding a run already broken into two collinear
+  // walls and dragging one half produced `n2: (0,-11) -> (10,-10)` with an
+  // empty strip. A diagonal, in TOY, silently.
+  const wouldAngle = (wall, groupIds, walls, delta, detached) => {
+    const stretches = endStretches(wall, groupIds, walls, delta, detached);
+    if (!stretches.length) return null;
+    const runX = wall.end.x - wall.start.x;
+    const runZ = wall.end.z - wall.start.z;
+    const run = Math.hypot(runX, runZ);
+    if (run < 1e-9) return null;
+    const offX = (-runZ / run) * delta;
+    const offZ = (runX / run) * delta;
+    for (const stretch of stretches) {
+      const other = (walls || []).find(w => w.id === stretch.wallId);
+      // NO `already angled` SKIP HERE, and the gate was asked before it went.
+      // `inertReason` refuses the move outright when the dragged wall touches
+      // any non-orthogonal wall, and it runs before this loop -- so by the
+      // time a stretch is being read, every wall touching this one is square.
+      // A mutant removing the skip survived the whole spec, which agrees.
+      //
+      // Reasoned first, asked second, deleted third. The reverse order is what
+      // cost the `ask = land` line this morning.
+      if (!other) continue;
+      const corner = other[stretch.end];
+      const moved = { ...other,
+        [stretch.end]: { ...corner, x: corner.x + offX, z: corner.z + offZ } };
+      if (!isOrthogonal(moved)) return other.id;
+    }
+    return null;
   };
 
   // ── WHICH KIND OF MOVE THAT WAS ───────────────────────────────────────
@@ -621,7 +696,14 @@ if (!window.DraftToyConstraints) {
     const step = wanted > 0 ? stepFt : -stepFt;
     let blocked = null;
     for (let d = wanted; Math.abs(d) >= stepFt - 1e-9; d -= step) {
-      const verdict = isLegal(configAfterMove(base, groupIds, d));
+      // TOY ONLY, and deliberately so. DRAFTING's whole freedom is that a wall
+      // may sit off-axis, so a rule forbidding a move because it angles
+      // something would be the foot light's leak wearing a third coat.
+      const angled = mode === MODE.TOY
+        ? wouldAngle(wall, groupIds, walls, d, ctx.detached) : null;
+      const verdict = angled
+        ? { ok: false, violations: [{ reason: REASON.WOULD_ANGLE_NEIGHBOUR, wallId: angled }] }
+        : isLegal(configAfterMove(base, groupIds, d));
       if (verdict.ok) {
         const result = { delta: d, group: groupIds };
         const advisory = (configAfterMove(base, groupIds, d).walls || [])
@@ -643,7 +725,7 @@ if (!window.DraftToyConstraints) {
         }
         result.kind = kindOf(wall, d, blocked && blocked.reason);
         result.lengthFt = geo().distance(wall.start, wall.end);
-        result.stretches = endStretches(wall, groupIds, walls, d);
+        result.stretches = endStretches(wall, groupIds, walls, d, ctx.detached);
         // The advisory band describes where the wall LANDED, so it is the
         // later word on `band`. The two can only both exist in DRAFTING, where
         // BUMP_FOUNDATION is permitted and only BUMP_AND_PILES blocks; in TOY

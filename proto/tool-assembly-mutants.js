@@ -140,5 +140,10 @@ for (const m of MUTANTS) {
   if (result === 'failed') killed += 1;
   console.log(`  ${result === 'failed' ? 'KILLED  ' : 'SURVIVED'}  ${m.name}${note}`);
 }
-console.log(`\n${killed}/${ran} killed` + (ambiguous ? `, ${ambiguous} AMBIGUOUS -- anchors that match more than one site` : ''));
+// READ AGAINST WHAT WAS DEFINED, never against what ran. A SKIPPED mutant
+// leaves `ran` smaller, so `10/10 killed` prints like a clean sheet while the
+// exit code says otherwise -- and the line is what gets read.
+console.log(`\n${killed}/${ran} killed, ${MUTANTS.length} defined`
+  + (ran < MUTANTS.length ? ` -- ${MUTANTS.length - ran} NEVER RAN` : '')
+  + (ambiguous ? `, ${ambiguous} AMBIGUOUS -- anchors that match more than one site` : ''));
 process.exit(killed === ran && ran === MUTANTS.length && !ambiguous ? 0 : 1);

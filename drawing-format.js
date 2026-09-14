@@ -1032,6 +1032,29 @@ if (!window.DraftDrawingFormat) {
   const SPLIT_BUILD_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);
   const buildType = raw => oneOf(raw, BUILD_TYPES, null);
 
+  // ── the board ─────────────────────────────────────────────────────────────
+  // WHICH BOARD THIS DRAWING IS ON, and it belongs to the DRAWING rather than
+  // the browser. GILLIGAN-TOY-BONES-WORKORDER §7: "the same drafter meets it
+  // on every file while a second drafter never sees it at all" is what a
+  // per-browser flag produces, and acceptance #11 wants "a promoted drawing"
+  // -- one file -- to reload as DRAFTING. MODEL.html kept `board` in the skin
+  // key in localStorage, which cannot answer either.
+  //
+  // NULL IS A REAL VALUE AND NOT A DEFAULT IN DISGUISE. A file written before
+  // boards existed never chose one, and saying so is different from saying it
+  // chose TOY. The page supplies its own default when it reads null; the
+  // format does not invent a choice nobody made, which is the same rule
+  // autoDimFirstOffsetFt follows for "null means derive".
+  const BOARDS = Object.freeze(['toy', 'drafting']);
+  const board = raw => oneOf(raw, BOARDS, null);
+
+  // WHETHER THE PROMOTION CONFIRM HAS BEEN ANSWERED ON THIS DRAWING. §7 again:
+  // it asks once per drawing and then remembers, because "a confirm on every
+  // typed length is a dialog people learn to click through without reading".
+  // Separate from `board` because a drafter may promote and switch back, and
+  // switching back must not re-arm a question they have already answered.
+  const boardPromptSeen = raw => raw === true;
+
   // THE FIRST AUTO-DIMENSION OFFSET — the gap between the plan and the closest
   // auto string. Ruled by Commander Devin, 6 Sep, on Skipper's proposal.
   //
@@ -1435,6 +1458,9 @@ if (!window.DraftDrawingFormat) {
     roofIntent,
     buildType,
     BUILD_TYPES,
+    board,
+    BOARDS,
+    boardPromptSeen,
     autoDimFirstOffsetFt,
     AUTO_DIM_FIRST_OFFSET_FT,
     SPLIT_BUILD_TYPES,

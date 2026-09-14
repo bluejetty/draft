@@ -480,6 +480,18 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       //   - TOY/DRAFTING, RUFF/ROUGH and NIGHT/DAY set board and skin state.
       //     They change what the page LOOKS like and what it remembers, and
       //     no absence row is about either.
+      //   - CONTINUE and STAY IN TOY are the promotion confirm's two answers.
+      //     The dialog is raised by typing a length on the TOY board and it
+      //     asks one question about the BOARD; Continue moves the drawing to
+      //     DRAFTING and lets the length it interrupted commit through
+      //     draw-wall's own gesture, and Stay in TOY does nothing at all.
+      //     Neither is a way to make anything, so neither touches a row.
+      //   - BREAK HERE and MOVE THIS WALL are §4's two answers, raised by
+      //     clicking a wall that is already selected on the TOY board. BREAK
+      //     HERE puts a joint in an existing bone at a foot mark; MOVE THIS
+      //     WALL does nothing at all, and the move it names is the drag that
+      //     was already there. So neither MAKES anything either, and no
+      //     absence row is about either.
       //
       // So every `absent` row below still stands. The list grows; the table
       // does not change.
@@ -491,7 +503,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
             'delete-wall', 'draw-wall', 'save', 'take-over',
             'strip-ruler', 'strip-tsquare',
-            'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY'].sort(),
+            'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY',
+            'Continue', 'Stay in TOY',
+            'Break here', 'Move this wall'].sort(),
           selects: ['level-pick', 'view-pick'],
           // THE LENGTH BOX, and it is named as a type rather than an id
           // because what this row guards is a FILE INPUT appearing without

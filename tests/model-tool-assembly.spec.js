@@ -42,6 +42,17 @@ const FIXTURE = {
   roomTags: [], columns: [], beams: [], boneyardOutlines: [],
   boneyardShelves: [], groups: [], levelLocks: [], nextGroupId: 1,
   underlays: [],
+  // A DRAFTING BOARD, NAMED. §6 gives TOY a walls-only tool column and puts the
+  // rest away, and the page now defaults to TOY -- so every open() here waited
+  // on a button that is correctly absent, at three minutes a test. That is what
+  // cancelled CI shard 3 after forty minutes, twice, with no failure text on
+  // the PR to say why.
+  //
+  // These suites are about what the tool does once the drafter has it, not
+  // about which board offers it. §6's own gate owns that question. So the board
+  // is stated rather than inherited, which is the same correction the strip,
+  // shell and seats checks needed.
+  board: 'drafting',
 };
 
 async function open(page) {

@@ -439,6 +439,22 @@
      the column means something different from the button. */
   .tool-key[aria-pressed="true"] { border-color: var(--accent);
     color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  /* AN UNAVAILABLE TOOL LOOKS DOWN, and it has to look down MEASURABLY. An
+     opacity of 0.9 would satisfy "the rule exists" while looking identical on
+     screen, and a `disabled` attribute with no rule behind it at all is the
+     broken state that looks exactly like the working one -- so
+     tests/model-tool-boards.spec.js reads the COMPUTED opacity, not the
+     attribute. Three signals, none of them the accent: the key is dimmed, it
+     loses the hover promise, and the cursor says it will not take the press. */
+  .tool-key:disabled, .tool-key:disabled:hover { opacity:0.35; cursor:not-allowed;
+    border-color: var(--edge-panel); color: var(--ink-quiet); box-shadow:none; }
+  /* Fixed to the viewport and out of the way of hit-testing: a label that
+     ate the pointer would break the very gesture it is reporting on. */
+  #draw-len { position:fixed; z-index:40; pointer-events:none;
+    font-family: var(--font-mono); font-size:12px; font-weight:600;
+    padding:2px 6px; border-radius:3px; white-space:nowrap;
+    background: var(--surface-panel); color: var(--ink-primary);
+    border:1px solid var(--edge-panel); }
   [data-tool-letter] { position:absolute; top:2px; left:4px; font-size:11px;
     font-weight:600; line-height:1; }
   /* The five bare faces keep the same box: a key whose letter box collapses
@@ -469,6 +485,11 @@
     color: var(--ink-quiet); font-family: var(--font-ui); font-size:9px;
     font-weight:600; letter-spacing:0.04em; line-height:1; }
   .sel-chip:hover { border-color: var(--accent); color: var(--accent); }
+  /* §6's other two surfaces go down the same way the keys do, and the same
+     0.35 so one number governs "unavailable" across the whole column. Read as
+     computed opacity by the spec, never as the attribute. */
+  .sel-chip:disabled, .sel-chip:disabled:hover { opacity:0.35; cursor:not-allowed;
+    border-color: var(--edge-panel); color: var(--ink-quiet); box-shadow:none; }
   .sel-chip[aria-pressed="true"] { border-color: var(--accent);
     color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .sel-help { margin-top:5px; font-family: var(--font-ui); font-size:9px;
@@ -610,6 +631,36 @@
 
   /* The empty and error states say what to do, because a black screen with
      nothing on it is indistinguishable from a page that failed to boot. */
+  /* The promotion confirm sits above everything, including the notice, because
+     it is the one thing a drafter must answer before the page does what they
+     asked. [hidden] is spelled out: the author display below would otherwise
+     beat the UA rule, which is the bug the UNGROUP button had. */
+  #promote { position:fixed; inset:0; z-index:7; display:flex;
+    align-items:center; justify-content:center; padding:24px;
+    background:rgba(0,0,0,0.35); }
+  #promote[hidden] { display:none; }
+  /* SAME SHELL AS #promote, deliberately. It is the same kind of question --
+     a modal with two ways out -- and a second look would read as a second
+     kind of thing. */
+  #bone-choice { position:fixed; inset:0; z-index:7; display:flex;
+    align-items:center; justify-content:center; padding:24px;
+    background:rgba(0,0,0,0.35); }
+  #bone-choice[hidden] { display:none; }
+  .promote-card { max-width:26em; padding:16px 18px; border-radius:4px;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel);
+    background-image: var(--surface-panel-tex, none); }
+  .promote-card p { margin:0 0 12px; font-family: var(--font-ui);
+    font-size:13px; line-height:1.4; color: var(--ink-primary); }
+  .promote-row { display:flex; gap:8px; }
+  .promote-row button { flex:1; padding:7px 10px; cursor:pointer;
+    border-radius:3px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip);
+    background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); font-family: var(--font-ui); font-size:11px;
+    font-weight:600; letter-spacing:0.04em; }
+  .promote-row button:hover { border-color: var(--accent); color: var(--accent); }
+  [data-promote-go] { border-color: var(--accent); color: var(--accent); }
   #notice { position:fixed; inset:0; z-index:6; display:none;
     align-items:center; justify-content:center; padding:24px; text-align:center; }
   #notice.show { display:flex; }
@@ -691,6 +742,11 @@
   <div id="props-slot" data-props-slot hidden></div>
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
+<!-- THE LENGTH THE DRAFTER CAN SEE WHILE HE DRAWS. Movie, 13 Sep: "show the
+     line length on screen to the user during the line drawing when their
+     finger on screen for ipad". Fixed rather than absolute so it needs no
+     positioned ancestor and can follow clientX/clientY straight. -->
+<div id="draw-len" data-draw-length hidden></div>
 
 <!-- THE INSTRUMENT STRIP. The icons are MODEL.dc.html:1975-2072's own paths,
      kept identical so the two pages read as the same board; the colours are
@@ -777,6 +833,11 @@
   <div class="grow"></div>
   <div id="strip-switches">
     <span class="set" data-board-switch>
+      <!-- NO title HERE. These two are set from script below, and a static one
+           would be overwritten -- which is exactly what happened when this
+           markup was given titles first: they read correctly in the file and
+           never reached the page. The wording, and the check that holds it to
+           the truth, live with the assignment. -->
       <button type="button" data-board="toy" aria-pressed="false">TOY</button>
       <button type="button" data-board="drafting" aria-pressed="false">DRAFTING</button>
     </span>
@@ -792,6 +853,36 @@
 </div>
 
 <div id="notice"><div id="notice-body"></div></div>
+<!-- THE PROMOTION CONFIRM. Its own element rather than a window.confirm,
+     because §7 names the two answers -- Continue, Stay in TOY -- and OK/Cancel
+     does not say which one keeps the drawing where it is. deleteLevel uses
+     window.confirm and is right to: "delete this level" needs no vocabulary of
+     its own. This one does. -->
+<div id="promote" data-promote hidden>
+  <div class="promote-card">
+    <p data-promote-text>Entering an exact length switches this drawing to DRAFTING.</p>
+    <div class="promote-row">
+      <button type="button" data-promote-go>Continue</button>
+      <button type="button" data-promote-stay>Stay in TOY</button>
+    </div>
+  </div>
+</div>
+
+<!-- §4's CHOICE. Movie: "they will be allowed to 'BREAK the bone' every foot
+     if they want to by clicking on it". A click on a bone offers both ways on,
+     because the order names both -- and MOVE THIS WALL is not decoration even
+     though the drag already moves it: a drafter who clicked to look must be
+     able to leave without changing anything, and a choice with one button is
+     an announcement. -->
+<div id="bone-choice" data-bone-choice hidden>
+  <div class="promote-card">
+    <p data-bone-text>Break the bone here, or move this wall?</p>
+    <div class="promote-row">
+      <button type="button" data-break-here>Break here</button>
+      <button type="button" data-break-move>Move this wall</button>
+    </div>
+  </div>
+</div>
 
 <!-- ORDER IS LOAD-BEARING, not tidiness. cut-view.js destructures
      window.DraftWallTypes and window.DraftFormatters at MODULE SCOPE
@@ -833,6 +924,17 @@
      seventeen hand-written buttons that can drift apart. It reads
      profile-manager.js for the SETTINGS remaps, so it comes after it. -->
 <script src="./tool-roster.js"></script>
+<!-- §3's CONSTRAINT PATH, AND IT WAS NEVER LOADED HERE. toyWallDelta asked for
+     window.DraftToyConstraints, got undefined, and returned null -- so the TOY
+     bone drag silently fell through to wallSnapDelta and behaved exactly like
+     DRAFTING. Nothing threw: the guard `if (!T || !C || !wall) return null` is
+     written to be safe on a page without the modules, which made a missing
+     script indistinguishable from a wall that needs no constraining.
+     room-standards.js comes with them because toy-constraints.js reads it at
+     call time; MODEL.dc.html:25-29 loads the same three, in this order. -->
+<script src="./room-standards.js"></script>
+<script src="./toy-constraints.js"></script>
+<script src="./toy-context.js"></script>
 <!-- Stairs. stair-geometry.js is the riser math and the plan parts; it is not
      a painter either, it is the two ANSWERS drawStairs2D asks its caller for
      (layoutFor, partsFor), which lived on the MODEL.dc.html component.
@@ -4105,6 +4207,34 @@
     window.DraftGeometry2D.nearestVertex(
       snapCandidates([moving]), worldPt, CORNER_SNAP_PX / view.scale);
 
+  // A SNAP THAT ONLY SLIDES ALONG THE AXIS. When a run is being held square,
+  // one coordinate is fixed by the square and the other is free; a corner off
+  // the fixed one is not reachable without breaking the square, and the square
+  // wins.
+  //
+  // THE SNAP CONTRIBUTES ITS ALONG-AXIS COORDINATE AND NOTHING ELSE. The
+  // squared coordinate is kept exactly, so the run cannot come off square by
+  // any amount at all, and the free coordinate comes from the corner, so the
+  // endpoint still lines up with it.
+  //
+  // FILTERING CANDIDATES BY "ON THE AXIS" WAS THE FIRST ATTEMPT AND IT WAS
+  // WRONG, in a way only measuring showed. The axis is `drawStart`'s fixed
+  // coordinate, and when a run starts in empty space that value came from the
+  // cursor -- 5.9987, not 6 -- so no model corner is ever exactly on it and
+  // the snap silently never fired. Which reads as "square", because it is
+  // square: a lock too tight and a lock working look the same from the wall
+  // alone. That is why the probe checks both halves.
+  //
+  // Projecting needs no tolerance and cannot drift: whatever the corner's
+  // fixed coordinate is, it is discarded.
+  const axisSnap = (worldPt, fixed) => {
+    const corner = cornerSnap(worldPt, []);
+    if (!corner) return null;
+    return fixed === 'z'
+      ? { x: corner.x, y: 0, z: worldPt.z }
+      : { x: worldPt.x, y: 0, z: corner.z };
+  };
+
   // ── move a whole wall ─────────────────────────────────────────────────────
   // BOTH ENDS BY THE SAME DELTA. Their corners are pooled, so the neighbouring
   // walls that meet them travel too and the outline deforms around the moved
@@ -4306,8 +4436,106 @@
     };
     drawing.walls.push(wall);
     undoStack.push({ kind: 'add', wall });
+    extendToyBone(startPt, endPt, levelId);
     markDirty();
     return wall;
+  };
+
+  // ── §2: THE GESTURE MAKES THE BONE, NOT ONLY THE WALLS ───────────────────
+  //
+  // Movie, 13 Sep: "yes the toy house will have the bones and those will be
+  // what TOY can manipulate". Before this, commitWall pushed to drawing.walls
+  // and touched nothing else, and the only place this page made a level
+  // outline was adding a level (:2919) -- so a hand-drawn TOY house had no
+  // bone, and §2's "the outline becomes a bone" had nothing to become one.
+  //
+  // TOY ONLY. Writing the outline on every board would change what every
+  // DRAFTING drawing contains, which is a much larger claim than this order
+  // makes and is what the DRAFTING half of acceptance 2b guards.
+  //
+  // masterId NULL, which is the format's "purely local outline"
+  // (drawing-format.js:893). A hand-drawn house came from no master, so this
+  // record IS the bone rather than a copy of one -- and that is exactly the
+  // shape §2 says not to invent a second store for.
+  //
+  // THE ID IS A STRING HERE AND THAT IS CORRECT, in deliberate contrast to a
+  // column's. drawing-format.js reads an outline id with String() (:921) and a
+  // column's with Number() (:512). Same page, same allocator, opposite
+  // requirements -- so newDrawingItemId is right for this one and wrong for
+  // that one, and neither is a house style.
+  // A SECOND RUN AWAY FROM THE HOUSE IS A SECOND BONE. Ruled 13 Sep, against
+  // the alternative of one bone per level: a detached garage is a separate
+  // footprint by definition, so one level can carry two bones and each is
+  // grabbed on its own. The first version of this joined every run on a level
+  // into one outline, which drew a polygon running from the house across the
+  // yard to the garage -- a shape nobody drew, and one §4's break-the-bone
+  // would have had to pretend was a loop.
+  //
+  // WHICH BONE A RUN BELONGS TO IS DECIDED BY ITS FIRST POINT: a run that
+  // starts where a bone ended continues it, and a run that starts anywhere
+  // else opens a new one. That is the same fact the chain already uses -- the
+  // next wall starts where the last ended -- rather than a second rule.
+  let pendingBone = null;
+  const sameSpot = (a, b) => !!a && !!b && Math.hypot(a.x - b.x, a.z - b.z) < 1e-6;
+  const endsAt = (bone, at) => sameSpot(bone?.points?.[bone.points.length - 1], at);
+  const toyBoneFor = (levelId, from) => (drawing.outlines || [])
+    .find(o => Number(o.levelId) === Number(levelId) && !o.masterId
+      && endsAt(o, from)) || null;
+
+  const extendToyBone = (from, to, levelId) => {
+    if (board !== 'toy') return;
+    const same = sameSpot;
+    const pt = p => ({ x: p.x, y: 0, z: p.z });
+    let bone = toyBoneFor(levelId, from);
+    if (!bone && pendingBone
+        && Number(pendingBone.levelId) === Number(levelId)
+        && endsAt(pendingBone, from)) {
+      bone = pendingBone;
+    }
+    if (!bone) {
+      // NOT PUSHED YET. The format refuses an outline under three points
+      // (:918), so a one- or two-point record written into the file is a
+      // record the reader throws away -- the silent, one-reload-later loss
+      // this page has now been bitten by twice. It is held here until it is
+      // a shape the reader will keep.
+      // ONE PENDING BONE AT A TIME, and it is never overwritten: drawPress
+      // refuses a disconnected run while one is unfinished, so reaching here
+      // with a pending bone that does not end at `from` is not a state the
+      // gesture can produce.
+      // NO ID YET. The counter is PERSISTED, so taking a number here spends it
+      // on a record that may never exist: a one-wall run is not a bone (the
+      // format refuses an outline under three points), and every abandoned run
+      // would leave a permanent gap between the counter and the file's
+      // contents. model-html-draw-delete.spec.js:169 reads the counter after
+      // one drawn wall and is the check that says so -- 9 where 8 was the
+      // wall's own successor.
+      //
+      // The id is taken at the push below, where the bone becomes a thing the
+      // reader will keep. Nothing reads pendingBone.id before then.
+      pendingBone = { id: null, masterId: null,
+        levelId, points: [pt(from)], overriddenSrcIds: [] };
+      bone = pendingBone;
+    }
+    // NO DEDUPE HERE, AND THE GATE IS WHY. This read
+    //   `if (!same(last, to)) bone.points.push(pt(to))`
+    // to stop a shared corner being stored twice -- and the mutant that
+    // removes the guard survived every check, including one asserting the
+    // exact corner list. It survived because the guard CANNOT FIRE: `to`
+    // equals the bone's last point only if a wall ends where it starts, and
+    // drawPress refuses that before commitWall is reached, treating the second
+    // press as a correction. The shared corner is already one point because a
+    // chained wall's start IS the previous end.
+    //
+    // So the line was unreachable, and a guard nothing can exercise is a
+    // claim about a case that does not exist. Removed rather than left
+    // sitting under a permanent survivor.
+    bone.points.push(pt(to));
+    if (bone === pendingBone && bone.points.length >= 3) {
+      drawing.outlines = drawing.outlines || [];
+      bone.id = newDrawingItemId('outline');   // spent only now that it lands
+      drawing.outlines.push(bone);
+      pendingBone = null;
+    }
   };
 
   // ── STRUCTURE: PLACING A COLUMN AND A BEAM ───────────────────────────────
@@ -4489,13 +4717,29 @@
   const RESTING_TOOL = 'select';
   let activeTool = RESTING_TOOL;
   let drawStart = null;
+  // Where the wall gesture's pointer went down, and whether that press opened
+  // the run. Read by the pointerup that places the line; see its comment.
+  let wallPress = null;
   const toolListeners = [];
+  // THE BOARD'S LISTENERS ARE DECLARED HERE, beside the tool's, for one dull
+  // reason: `applyBoard` runs at load and the tool column builder is a `const`
+  // defined several hundred lines further down, so applyBoard cannot name it
+  // without landing in its temporal dead zone. An array declared up here can
+  // be filled in later and fired from anywhere.
+  const boardListeners = [];
 
   const setTool = id => {
     const roster = window.DraftToolRoster;
     // An unknown id would silently arm nothing and read as "select is on",
     // which is a broken state that looks like a working one.
-    const next = roster && roster.get(id) ? id : RESTING_TOOL;
+    //
+    // §6, "no other tools": THE REGISTER ASKS THE SAME FUNCTION THE KEYPAD
+    // ASKS. Greying a key is presentation and presentation can be got round --
+    // a keyboard shortcut, a restored session, a tool that arms itself when a
+    // gesture finishes. Refusing here is what makes the board a rule rather
+    // than a look, and it falls back to the resting tool for the same reason
+    // an unknown id does: there is no such thing as no tool.
+    const next = roster && roster.availableOn(id, board) ? id : RESTING_TOOL;
     activeTool = next;
     // Any half-finished gesture belongs to the tool being put down. Carrying an
     // anchor across a tool change is how a chain commits into the next tool's
@@ -4521,18 +4765,421 @@
   // does, and for the same reason: landing ON a corner is what makes the join
   // mitre. Nothing is moving during a draw, so nothing is excluded.
   //
-  // THE T-SQUARE GOES FIRST AND THE CORNER SNAP MAY STILL OVERRIDE IT, but
-  // only along the axis it is already on (squareTo's second half). A snap
-  // that pulled the run off square would make the instrument a suggestion,
-  // and an instrument a drafter cannot trust is worse than no instrument --
-  // this is the same wall the old page holds when its T-square is down.
+  // THE T-SQUARE GOES FIRST AND THE CORNER SNAP MAY ONLY SLIDE ALONG IT. A
+  // snap that pulled the run off square would make the instrument a
+  // suggestion, and an instrument a drafter cannot trust is worse than no
+  // instrument.
+  //
+  // THIS COMMENT USED TO SAY THAT AND THE CODE DID NOT DO IT. It cited
+  // "squareTo's second half"; squareTo has no second half, and cornerSnap was
+  // an unrestricted nearest-vertex search. Measured in
+  // proto/tsquare-snap-override.js: with the T-square lit, a bait corner
+  // 0.06 ft off the axis and inside the 0.129 ft radius pulled the endpoint
+  // onto itself -- (0,0) -> (4, 0.06) where squaring gives (4, 0). A comment
+  // describing behaviour the code does not have is worse than no comment: it
+  // is the reason nobody looked.
+  // WHOLE FEET IN TOY, ON THE NUMBER THAT REACHES commitWall. §1 says that in
+  // those words, and it is the whole of the difference between a constraint
+  // and a display convention: rounding the readout would show 12'-0" over a
+  // wall the file records as 12.037, and the drafter would find out later,
+  // from a dimension string that disagrees with the plan it measures.
+  //
+  // MEASURED FROM THE START, NOT ROUNDED IN PLACE. The run's LENGTH is what
+  // lands on the foot, so the far end moves to make it so; rounding the
+  // endpoint's coordinates instead would give whole-foot positions and a
+  // fractional length whenever the start was itself fractional -- which it is,
+  // on any drawing that existed before TOY.
+  //
+  // AND IT ROUNDS AFTER THE SNAP, so a corner the snap legitimately reached is
+  // not then nudged off it. A snap that lands on a real corner is the one case
+  // where the foot gives way: the corner is where the geometry actually joins.
+  const onTheFoot = (from, pt) => {
+    if (!from) return pt;
+    const dx = pt.x - from.x, dz = pt.z - from.z;
+    // One of these is zero under the square, so this is the run's length.
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-9) return pt;
+    const feet = Math.max(1, Math.round(len));
+    return { x: from.x + (dx / len) * feet, y: 0, z: from.z + (dz / len) * feet };
+  };
+
   const drawPoint = at => {
     const wanted = squareTo(drawStart, at);
-    return cornerSnap(wanted, []) || { x: wanted.x, y: 0, z: wanted.z };
+    const fixed = squaredAxis(drawStart, at);
+    const snapped = fixed ? axisSnap(wanted, fixed) : cornerSnap(wanted, []);
+    if (snapped) return snapped;
+    const free = { x: wanted.x, y: 0, z: wanted.z };
+    return board === 'toy' ? onTheFoot(drawStart, free) : free;
+  };
+
+  // AN UNFINISHED RUN REFUSES A NEW ONE, AND SAYS SO. Ruled 13 Sep, after I
+  // reported the boundary rather than hardening it: starting a disconnected
+  // run while the first had only two taps used to drop those taps silently.
+  // Nothing was lost from a saved file -- a two-point run was never a shape
+  // the reader keeps -- but the drafter's hand had done something the screen
+  // forgot, which is the quiet half of every failure this board is arranged
+  // against.
+  //
+  // REFUSED AT THE FIRST PRESS OF THE NEW RUN, before any wall is made. The
+  // run is what is refused, so refusing it after committing its first wall
+  // would be a half-application -- the same thing "Stay in TOY commits nothing
+  // and changes nothing" forbids one section over.
+  // PRESSING ON THE OPEN END RESUMES THE RUN, and this is what §2's refusal
+  // was missing. §2 asks whether the press continues the pending run and
+  // tested it with `sameSpot` at 1e-6 -- an EQUALITY test between two points
+  // computed by different routes.
+  //
+  // They cannot match. TOY rounds a run's LENGTH, not its coordinates
+  // (model-toy-board.spec.js:333 makes that a rule), so committing the first
+  // wall moves its end up to half a foot from the pixel the drafter released
+  // on. Press there again to carry on and the raw press is nowhere near the
+  // stored end by 1e-6 -- often further than CORNER_SNAP_PX, so cornerSnap
+  // does not rescue it either -- and §2 refused a run that was continuing.
+  // The wall was silently not drawn, with only the strip to say why.
+  //
+  // So the question is asked the way every other "did the drafter hit this"
+  // question on this page is asked: a grab radius, not an equality. And it
+  // returns THE STORED END, so the run resumes exactly where it left off
+  // rather than a snap-width away from itself.
+  // ── §4: BREAKING THE BONE ────────────────────────────────────────────────
+  //
+  // Movie: "they will be allowed to 'BREAK the bone' every foot if they want
+  // to by clicking on it". The order is explicit that the marks are a set to
+  // choose from, not a bone pre-chopped into forty segments: "same result, one
+  // decision at a time".
+  //
+  // THE MARK IS A DISTANCE ALONG THE RUN, NOT A ROUNDED COORDINATE, and that
+  // is the rule I broke once already tonight. TOY rounds a run's LENGTH
+  // (model-toy-board.spec.js:333), so a bone whose start sits at x = -10.4 has
+  // its marks at -9.4, -8.4, ... Rounding the clicked point's x would put the
+  // break at a whole number that is not a mark on this bone at all -- whole
+  // POSITIONS and a fractional LENGTH, which is exactly backwards.
+  const breakMarkOn = (wall, at) => {
+    const rx = wall.end.x - wall.start.x, rz = wall.end.z - wall.start.z;
+    const run = Math.hypot(rx, rz);
+    if (run < 2) return null;              // no interior mark to break at
+    const along = ((at.x - wall.start.x) * rx + (at.z - wall.start.z) * rz) / run;
+    // CLAMPED OFF BOTH ENDS. A break AT a corner is not a break -- it would
+    // make a zero-length half, and the format drops anything under 1e-6 on
+    // load, so it would be a wall that vanishes on the next reload.
+    // CLAMPED OFF BOTH ENDS, and the clamp IS the guard. A `feet <= 0 || feet
+    // >= run` line sat here too and the gate showed it surviving: the clamp
+    // already pins feet to [1, floor(run) - 1], so nothing could ever reach
+    // it. A guard nothing can exercise is a claim about a case that does not
+    // exist -- the same dead-guard shape as the already-angled skip in
+    // wouldAngle, removed on the same evidence.
+    const feet = Math.min(Math.max(Math.round(along), 1), Math.floor(run) - 1 || 1);
+    return { x: wall.start.x + (rx / run) * feet, y: 0,
+      z: wall.start.z + (rz / run) * feet };
+  };
+
+  // The bone gains the point BETWEEN the two corners it lies between, never
+  // appended: an outline is an ordered ring, so a point on the end is a
+  // different shape, not the same shape with a joint in it.
+  const insertOnEdge = (o, a, b, pt) => {
+    const same = (p, q) => Math.hypot(p.x - q.x, p.z - q.z) < 1e-6;
+    const pts = o.points || [];
+    for (let i = 0; i < pts.length; i += 1) {
+      const j = (i + 1) % pts.length;
+      if ((same(pts[i], a) && same(pts[j], b)) || (same(pts[i], b) && same(pts[j], a))) {
+        pts.splice(i + 1, 0, { x: pt.x, y: 0, z: pt.z });
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // A BREAK ON A MASTERED LEVEL CUTS THE MASTER, ruled 14 Sep: "yes break
+  // master and all that area attached to it locked to it".
+  //
+  // I BUILT THIS BACKWARDS FIRST. The line here read `if (o.masterId)
+  // continue` -- "a master's copy is not ours to cut" -- which is the opposite
+  // of the ruling, and the order names exactly why it matters: THE FIRST HOUSE
+  // DRAWN IS MASTER-DERIVED, so refusing the break on a mastered outline makes
+  // the very first bone anyone wants to cut the one bone that will not cut. It
+  // would have passed every check I had written, because all of them draw one
+  // unmastered bone.
+  //
+  // So the master governs the break exactly as it governs a move -- one rule
+  // for the master, not one for moving and another for cutting -- and every
+  // level locked to it takes the same cut. The unlocked exit is §5a's and is
+  // not invented here.
+  // TAKES THE ORIGINAL ENDS, not a wall. The first version took the new tail
+  // wall and read its `start` -- which is the break point, because breakBoneAt
+  // has already moved it. So it searched every ring for an edge from the mark
+  // to the far corner, an edge that does not exist yet, matched nothing, and
+  // cut no bone at all. The five §4 checks all passed anyway: they assert the
+  // WALLS, and the wall split was fine. Only 7a, which reads the rings, saw it.
+  const boneGainsPoint = (a, b, pt) => {
+    const all = drawing.outlines || [];
+    const hit = all.find(o => insertOnEdge(o, a, b, pt));
+    if (!hit) return false;
+    if (!hit.masterId) return true;        // a purely local bone cuts alone
+    // The master, then every OTHER level that follows it. The clicked level is
+    // already cut, and the geometry is the master's, so each copy takes the
+    // cut at the same place on the same edge rather than at a point computed
+    // again per level.
+    (drawing.boneyardOutlines || []).forEach(m => {
+      if (m.id === hit.masterId) insertOnEdge(m, a, b, pt);
+    });
+    all.forEach(o => {
+      if (o === hit || o.masterId !== hit.masterId) return;
+      insertOnEdge(o, a, b, pt);
+    });
+    return true;
+  };
+
+  const breakBoneAt = (wall, pt) => {
+    // CAPTURED BEFORE THE MUTATION, because the ring still describes the wall
+    // as it was and that is the edge the break has to be placed on.
+    const was = { a: { x: wall.start.x, z: wall.start.z },
+      b: { x: wall.end.x, z: wall.end.z } };
+    const mid = poolVertex(pt, wall.levelId, wall.view);
+    const tail = { ...wall, id: newDrawingItemId('wall'), start: mid, end: wall.end };
+    wall.end = mid;
+    const at = (drawing.walls || []).indexOf(wall);
+    drawing.walls.splice(at < 0 ? drawing.walls.length : at + 1, 0, tail);
+    boneGainsPoint(was.a, was.b, pt);
+    rebuildRoofs();                        // §5: the ring changed
+    undoStack.push({ kind: 'add', wall: tail });
+    markDirty();
+    paint();
+    return tail;
+  };
+
+  // ── §4's SECOND HALF: THE CONNECTOR ──────────────────────────────────────
+  //
+  // "After a break the two halves are independent bones and each obeys §3."
+  // A joint alone does not deliver that. The halves of a broken run are
+  // COLLINEAR and share a corner, so dragging one swings the other -- §3b
+  // refuses it rather than produce a diagonal, which is safe and leaves the L
+  // and the bump-out the order names as the POINT of §4 unreachable.
+  //
+  // What makes them reachable: the drag UNSHARES that corner. The dragged
+  // wall takes its own vertex, the neighbour keeps the old one, and a
+  // connector wall spans the two. As the drag proceeds the connector grows --
+  // perpendicular to the wall being dragged, because the move is -- and that
+  // connector IS the side of the bump-out. Nothing is left angled, so §3b has
+  // nothing to refuse.
+  //
+  // ONLY FOR COLLINEAR NEIGHBOURS. A perpendicular neighbour just gets longer
+  // and stays square, which is §3's whole behaviour on an ordinary house;
+  // splitting corners there would drop a zero-length wall into the drawing on
+  // every drag.
+  //
+  // ONCE, WHEN THE DRAG ARMS, not on every pointermove -- a connector per
+  // mouse event would be several hundred walls across one gesture.
+  const collinearWith = (wall, other) => {
+    const rx = wall.end.x - wall.start.x, rz = wall.end.z - wall.start.z;
+    const ox = other.end.x - other.start.x, oz = other.end.z - other.start.z;
+    const a = Math.hypot(rx, rz), b = Math.hypot(ox, oz);
+    if (a < 1e-9 || b < 1e-9) return false;
+    return Math.abs((rx * oz - rz * ox) / (a * b)) < 1e-6;
+  };
+
+  const splitRunCorners = md => {
+    if (board !== 'toy' || md.kind !== 'wall' || !md.body) return;
+    const wall = md.body;
+    md.before.forEach(b => {
+      const v = b.vtx;
+      const touching = (drawing.walls || [])
+        .filter(w => w !== wall && (w.start === v || w.end === v));
+      if (!touching.some(other => collinearWith(wall, other))) return;
+      // A SEPARATE VERTEX AT THE SAME PLACE, and poolVertex must not be used:
+      // mergeVertex merges by position and would hand back the very corner
+      // being unshared. The pool's own rule allows this -- "two corners at the
+      // same place are still two corners if the pool never merged them".
+      const fresh = { x: v.x, y: 0, z: v.z,
+        srcId: v.srcId ?? null, offX: v.offX ?? 0, offZ: v.offZ ?? 0 };
+      vertexPool.push(fresh);
+      if (wall.start === v) wall.start = fresh; else wall.end = fresh;
+      b.vtx = fresh;
+      const conn = { ...wall, id: newDrawingItemId('wall'), start: fresh, end: v };
+      // Which neighbour this corner was shared WITH, so the constraint call
+      // can be told it is no longer carried by the move.
+      conn.detachedFrom = (touching.find(other => collinearWith(wall, other)) || {}).id;
+      drawing.walls.push(conn);
+      undoStack.push({ kind: 'add', wall: conn });
+      md.connectors = (md.connectors || []).concat(conn);
+    });
+    if (md.connectors) markDirty();
+  };
+
+  // ── §5: A ROOF OVER WHATEVER NOTHING SITS ON ─────────────────────────────
+  //
+  // Movie, 14 Sep: a roof belongs to "every part of a floor that nothing sits
+  // on" -- so it is a FUNCTION of the difference between one storey's
+  // footprint and the one above it, recomputed when either bone moves, not a
+  // thing attached to the top storey. A ranch is the degenerate case.
+  //
+  // THE GEOMETRY IS geometry-2d.js's, not a second opinion. uncoveredRegions
+  // does the rectilinear difference and returns rectangles, because a storey
+  // set back on all sides leaves a RING and the format's roof has `points`
+  // with no holes.
+  //
+  // WHICH ROOFS ARE OURS: `sourceShapeId`, which the format already carries
+  // (drawing-format.js:490) and which means "where this came from". A roof
+  // built from a bone names that bone; a roof a drafter drew names nothing and
+  // is NEVER touched here. No new field, and no guessing.
+  const storeyAbove = levelId => {
+    const here = (drawing.levels || []).find(l => Number(l.id) === Number(levelId));
+    if (!here) return null;
+    return (drawing.levels || [])
+      .filter(l => (Number(l.elev) || 0) > (Number(here.elev) || 0))
+      .sort((a, b) => (Number(a.elev) || 0) - (Number(b.elev) || 0))[0] || null;
+  };
+
+  const boneOf = levelId => (drawing.outlines || [])
+    .find(o => Number(o.levelId) === Number(levelId)) || null;
+
+  // The edge that dies into the storey above is a GABLE -- ruled 14 Sep, "the
+  // roof should terminate where it meets the upper storey wall like a garage
+  // roof that is dropped". A gable end is vertical and carries no eave
+  // overhang, which is the property that matters: an eave there would hang two
+  // feet of roof straight into the house above.
+  //
+  // The format has no third kind -- an edge is `gable` if it says so and
+  // `eave` otherwise -- so this needs no format change and no older reader
+  // sees anything it cannot read.
+  const edgeKinds = (ring, upper) => {
+    if (!upper) return ring.map(() => 'eave');
+    const onUpper = pt => (upper.points || []).some((a, i) => {
+      const b = upper.points[(i + 1) % upper.points.length];
+      const cross = (b.x - a.x) * (pt.z - a.z) - (b.z - a.z) * (pt.x - a.x);
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (len < 1e-9 || Math.abs(cross) / len > 1e-6) return false;
+      const t = ((pt.x - a.x) * (b.x - a.x) + (pt.z - a.z) * (b.z - a.z)) / (len * len);
+      return t >= -1e-6 && t <= 1 + 1e-6;
+    });
+    return ring.map((pt, i) => {
+      const next = ring[(i + 1) % ring.length];
+      return onUpper(pt) && onUpper(next) ? 'gable' : 'eave';
+    });
+  };
+
+  // THE BONE FOLLOWS THE DRAG, and until §5 it did not.
+  //
+  // §2 is explicit: "a level's bone drives that level's FLOOR and WALL nodes"
+  // and "the bone is not a separate drawing that happens to look like the
+  // plan". But §3's drag moves wall VERTICES and nothing else, so every TOY
+  // drag left the outline behind as a stale snapshot of where the house used
+  // to be. Invisible on screen -- the walls are what paints -- and invisible
+  // to every §3 check, which all read walls.
+  //
+  // §5 is what made it bite: roofs derive from the bone, so a bone that never
+  // moved produced a roof over the old footprint. The drag moved the wall a
+  // foot and the roof stayed where it was.
+  //
+  // By the ORIGINAL position, not by identity: an outline point is a plain
+  // record, not the pooled vertex object the wall holds, so the two are only
+  // ever connected by where they sit.
+  //
+  // ON THIS LEVEL ONLY. The first version walked every outline in the drawing
+  // and moved any point sitting at the dragged corner -- so dragging the main
+  // floor's wall silently reshaped the SECOND FLOOR's bone, because storeys
+  // stacked on the same footprint have points at identical coordinates. A
+  // §5 check caught it: the storey above followed the floor below and the
+  // roof between them never changed. Matching by position is right; matching
+  // by position across levels is not.
+  const boneFollows = (before, levelId) => {
+    const rings = (drawing.outlines || [])
+      .filter(o => Number(o.levelId) === Number(levelId));
+    before.forEach(b => {
+      if (b.x === b.vtx.x && b.z === b.vtx.z) return;
+      rings.forEach(ring => (ring.points || []).forEach(pt => {
+        if (Math.hypot(pt.x - b.x, pt.z - b.z) > 1e-6) return;
+        pt.x = b.vtx.x;
+        pt.z = b.vtx.z;
+      }));
+    });
+  };
+
+  const rebuildRoofs = () => {
+    const G = window.DraftGeometry2D;
+    if (!G || !G.uncoveredRegions) return;
+    const mine = new Set();
+    (drawing.levels || []).forEach(level => {
+      const bone = boneOf(level.id);
+      if (!bone) return;
+      mine.add(String(bone.id));
+      const above = storeyAbove(level.id);
+      const cover = above ? boneOf(above.id) : null;
+      const regions = G.uncoveredRegions(bone.points || [], cover ? cover.points : null);
+      // DROP THIS BONE'S OLD ROOFS FIRST, so a storey pushed back out takes
+      // its roof away with it rather than leaving the old one behind. "A roof
+      // appears" is satisfied by an implementation that only ever adds.
+      drawing.roofs = (drawing.roofs || [])
+        .filter(r => String(r.sourceShapeId || '') !== String(bone.id));
+      regions.forEach(ring => {
+        drawing.roofs.push({
+          id: newDrawingItemId('roof'),
+          points: ring.map(pt => ({ x: pt.x, y: 0, z: pt.z })),
+          levelId: Number(level.id),
+          sourceLevelId: above ? Number(above.id) : null,
+          sourceShapeId: String(bone.id),
+          edges: edgeKinds(ring, cover),
+          // THE FORMAT'S OWN DEFAULTS, written out rather than left implicit:
+          // pitch 4 is the 4/12 that was ruled, overhang 2 is what a roof
+          // reads back as anyway (drawing-format.js:493-494).
+          overhang: 2,
+          pitch: 4,
+          garage: false,
+        });
+      });
+    });
+    markDirty();
+  };
+
+  const boneChoice = document.getElementById('bone-choice');
+  let boneChoiceFor = null;
+  const closeBoneChoice = () => { boneChoiceFor = null; boneChoice.hidden = true; };
+  const offerBoneChoice = (wall, at) => {
+    const pt = breakMarkOn(wall, at);
+    if (!pt) { sayOnStrip('this wall is too short to break'); return; }
+    boneChoiceFor = { wall, pt };
+    boneChoice.hidden = false;
+    boneChoice.querySelector('[data-break-here]').focus();
+  };
+  boneChoice.querySelector('[data-break-here]').addEventListener('click', () => {
+    const pick = boneChoiceFor;
+    closeBoneChoice();
+    if (pick) breakBoneAt(pick.wall, pick.pt);
+  });
+  // NOTHING AT ALL, the same contract as Stay in TOY: the drag already moves
+  // the wall, so this button's whole job is to leave without changing
+  // anything. A choice that always did something would not be a choice.
+  boneChoice.querySelector('[data-break-move]').addEventListener('click', closeBoneChoice);
+
+  const toyOpenEnd = at => {
+    if (board !== 'toy' || !pendingBone) return null;
+    const open = pendingBone.points[pendingBone.points.length - 1];
+    if (!open) return null;
+    const reach = CORNER_GRAB_PX / view.scale;
+    return Math.hypot(at.x - open.x, at.z - open.z) <= reach
+      ? { x: open.x, y: 0, z: open.z }
+      : null;
+  };
+
+  const toyRunRefused = at => {
+    if (board !== 'toy' || !pendingBone) return false;
+    if (endsAt(pendingBone, at)) return false;      // this press continues it
+    // NAMES BOTH WAYS OUT, because the order's wording does: "finish or cancel
+    // the run you started". Escape is the cancel.
+    sayOnStrip('finish or cancel the run you started — Esc cancels');
+    return true;
   };
 
   const drawPress = at => {
-    if (!drawStart) { drawStart = drawPoint(at); paint(); return; }
+    if (!drawStart) {
+      // Resume before refusing: a press on the open end is the drafter
+      // carrying on, which is the one case the refusal must not catch.
+      const open = toyOpenEnd(at);
+      if (open) { clearNotice(); drawStart = open; paint(); return; }
+      if (toyRunRefused(drawPoint(at))) return;
+      clearNotice();
+      drawStart = drawPoint(at); paint(); return;
+    }
+    clearNotice();
     const end = drawPoint(at);
     // A wall of no length is not a wall — the format drops anything under
     // 1e-6 on load, so committing one would write a record that vanishes on
@@ -4563,6 +5210,19 @@
   // can do is worse than a gap.
   const strip = document.getElementById('strip');
   const stripMessage = document.getElementById('strip-message');
+  // What the page is SAYING, as against what it is reporting. Cleared by the
+  // next press that does something, so a refusal never sits over a gesture
+  // that has since succeeded.
+  let stripNotice = '';
+  // BOTH HALVES GO THROUGH A FUNCTION THAT REPAINTS. Saying it and clearing it
+  // are the same operation with different text, and the bug both times was the
+  // repaint: first stripRefresh overwrote a notice that had been set, then a
+  // notice was cleared and the strip kept showing it because nothing repainted
+  // until an unrelated pointermove happened along. A message has two halves --
+  // it must appear and it must STOP -- and a bare assignment does neither on
+  // its own.
+  const sayOnStrip = text => { stripNotice = text; stripRefresh(); };
+  const clearNotice = () => { if (stripNotice) sayOnStrip(''); };
   const lenOut = document.getElementById('strip-len');
   const angOut = document.getElementById('strip-ang');
   const protractorOut = document.getElementById('strip-protractor-angle');
@@ -4585,10 +5245,30 @@
   // WHAT THE T-SQUARE ACTUALLY DOES. The longer leg wins, so the run follows
   // the direction the hand is already going rather than jumping axes under
   // the cursor.
+  // TOY SQUARES BECAUSE THE BOARD SAYS SO, not because an instrument is up.
+  // §1: "Four directions only, +X/-X/+Z/-Z from the start point", and TOY has
+  // no instruments for a drafter to switch on -- §6 takes the tools away. So
+  // the T-square is one reason to square and the board is another, and a run
+  // is held square if EITHER holds.
+  //
+  // Acceptance #4 is what keeps this honest in the other direction: in
+  // DRAFTING with the T-square down, nothing squares and the same gesture
+  // commits the same off-axis wall it commits today. TOY must not leak.
+  const squaring = () => tsquareOn || board === 'toy';
+
   const squareTo = (from, at) => {
-    if (!tsquareOn || !from) return at;
+    if (!squaring() || !from) return at;
     return Math.abs(at.x - from.x) >= Math.abs(at.z - from.z)
       ? { x: at.x, z: from.z } : { x: from.x, z: at.z };
+  };
+
+  // WHICH COORDINATE THE SQUARE FIXED, or null when nothing is squaring. The
+  // caller needs this and cannot get it by comparing points: a run that is
+  // already axis-aligned comes back from squareTo unchanged, and "unchanged"
+  // then means both "not squaring" and "squaring, already square".
+  const squaredAxis = (from, at) => {
+    if (!squaring() || !from) return null;
+    return Math.abs(at.x - from.x) >= Math.abs(at.z - from.z) ? 'z' : 'x';
   };
 
   // The run the instruments are reading: the wall being drawn if there is
@@ -4598,9 +5278,42 @@
   // drafter should never be able to misread.
   const runInHand = () => {
     if (!cursorWorld) return null;
-    if (drawStart && activeTool === 'wall') return { from: drawStart, to: squareTo(drawStart, cursorWorld) };
+    // drawPoint, NOT squareTo, AND THAT IS A BUG FIX RATHER THAN A TIDY-UP.
+    // squareTo only squares; drawPoint is what the commit calls, and in TOY it
+    // also lands the run on the whole foot. Reading the cursor through the
+    // weaker of the two made the strip say 5.4 ft over a wall that committed
+    // at 5. §1: the readout must be "the same number commitWall will receive,
+    // not the cursor measured separately -- two readings of one distance
+    // drift, and the drafter believes the one he can see." This has been
+    // wrong on the TOY board since §1 landed.
+    if (drawStart && activeTool === 'wall') return { from: drawStart, to: drawPoint(cursorWorld) };
     if (rulerFrom) return { from: rulerFrom, to: cursorWorld };
     return null;
+  };
+
+  // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
+  // runInHand, so both read what commitWall will receive -- §1 asks for the
+  // on-screen number and the committed number to be ASSERTED EQUAL, and the
+  // only way to keep that true is for there to be one number.
+  //
+  // PLACEMENT IS THE WHOLE DIFFERENCE BETWEEN THE TWO POINTERS. §1: "by the
+  // cursor on PC, clear of the finger on touch". On a touch screen the thing
+  // being read is exactly the thing the hand is covering, so it goes well
+  // above the contact point and centred on it; a mouse has nothing to hide
+  // behind it, so it sits low and to the right where a cursor label belongs.
+  const drawLenEl = document.getElementById('draw-len');
+  let pointerScreen = null;
+  const syncDrawLength = () => {
+    if (!drawLenEl) return;
+    const run = activeTool === 'wall' && drawStart ? runInHand() : null;
+    if (!run || !pointerScreen) { drawLenEl.hidden = true; return; }
+    drawLenEl.hidden = false;
+    drawLenEl.textContent =
+      feetLabel(Math.hypot(run.to.x - run.from.x, run.to.z - run.from.z));
+    const touch = pointerScreen.type === 'touch';
+    drawLenEl.style.left = `${pointerScreen.x + (touch ? 0 : 14)}px`;
+    drawLenEl.style.top = `${pointerScreen.y + (touch ? -54 : 16)}px`;
+    drawLenEl.style.transform = touch ? 'translateX(-50%)' : 'none';
   };
 
   // FOUR READS OF `drawArmed` BECAME READS OF THE REGISTER. #398 wrote this
@@ -4632,9 +5345,21 @@
     if (typable && document.activeElement !== lengthBox) {
       lengthBox.value = dist === null ? '' : feetLabel(dist);
     }
-    stripMessage.textContent = rulerOn
+    // A NOTICE OUTLIVES ONE REFRESH, and it has to. Both the refusal and the
+    // cancel wrote straight to stripMessage and were erased microseconds later
+    // by this line -- the page said the true thing and then said the routine
+    // thing over the top of it, which on screen is the page saying nothing.
+    // Found by the check asserting the message was VISIBLE rather than that
+    // the code had set it, which is the difference between the two halves of
+    // every failure today.
+    stripMessage.textContent = stripNotice || (rulerOn
       ? (rulerFrom ? 'ruler — second point' : 'ruler — first point')
-      : (activeTool === 'wall' ? (drawStart ? 'wall — second point' : 'wall — first point') : '');
+      : (activeTool === 'wall' ? (drawStart ? 'wall — second point' : 'wall — first point') : ''));
+    // Last, and from here rather than from the pointer handlers, so the label
+    // goes out the moment the run does -- every path that ends a run already
+    // calls stripRefresh, and a length still on screen after the gesture is
+    // over is the one thing a drafter should never be able to misread.
+    syncDrawLength();
   }
 
   const rulerPress = at => {
@@ -4663,11 +5388,63 @@
   // with a mouse. The DIRECTION is the one the cursor is already giving --
   // squared first if the T-square is down -- so the typed number replaces the
   // distance and nothing else.
+  // ── the promotion, and the question that comes first ──────────────────────
+  // §7: "Entering an exact length anywhere promotes the drawing to DRAFTING",
+  // and the drafter is ASKED BEFORE it happens, not told after. Movie ruled
+  // this against a typed-length exception inside TOY, and his version is
+  // better for the reason he gave: TOY then has one law with no exceptions,
+  // and the promotion is visible instead of a hidden mode flip.
+  //
+  // WHAT "ASKS ONCE PER DRAWING" MEANS, and this is a reading of the order
+  // rather than a quotation from it. §7 says the confirm "asks once per
+  // drawing, then remembers", and separately that Stay in TOY "commits nothing
+  // and changes nothing -- no wall, no mode change, no half-application".
+  // Those two pull opposite ways on whether a Stay counts as an answer, so:
+  //
+  //   Continue  sets boardPromptSeen, promotes, and commits the length.
+  //   Stay      changes NOTHING, the flag included -- so the next typed length
+  //             asks again.
+  //
+  // The annoyance §7 names is "a dialog people learn to click through without
+  // reading", and that is the drafter who keeps saying Continue; once they
+  // have, they are never asked again. A drafter who keeps saying Stay keeps
+  // being asked because they keep trying to do the thing TOY does not allow,
+  // and the alternative -- silently promoting them later on the strength of a
+  // refusal -- is worse. FLAGGED for Movie rather than settled by me.
+  const promote = document.getElementById('promote');
+  let pendingPromotion = null;
+
+  const askToPromote = onContinue => {
+    pendingPromotion = onContinue;
+    promote.hidden = false;
+    promote.querySelector('[data-promote-go]').focus();
+  };
+  const closePromote = () => { pendingPromotion = null; promote.hidden = true; };
+
+  promote.querySelector('[data-promote-go]').addEventListener('click', () => {
+    const go = pendingPromotion;
+    closePromote();
+    if (drawing) { drawing.boardPromptSeen = true; markDirty(); }
+    setBoard('drafting');
+    if (go) go();
+  });
+  // NOTHING AT ALL, which is the whole of Stay's contract. No wall, no board,
+  // no flag: a refusal that recorded itself would be a change.
+  promote.querySelector('[data-promote-stay]').addEventListener('click', closePromote);
+
   const commitTypedLength = () => {
     const parsed = F.parseArchitecturalLength(lengthBox.value);
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return; }
     const feet = parsed.inches / 12;
     if (!(feet > 0) || !drawStart || !cursorWorld) return;
+    // ASKED BEFORE ANYTHING HAPPENS. The length is re-read inside the
+    // continuation rather than captured here, so what commits is what the box
+    // says when the drafter answers -- and if the gesture has moved on, the
+    // guards above run again on the way through.
+    if (board === 'toy' && !drawing?.boardPromptSeen) {
+      askToPromote(() => commitTypedLength());
+      return;
+    }
     const aim = squareTo(drawStart, cursorWorld);
     const dx = aim.x - drawStart.x, dz = aim.z - drawStart.z;
     const len = Math.hypot(dx, dz);
@@ -4726,19 +5503,61 @@
   // claim that they exist. The title on each button says so; when the rules
   // land they read `body[data-board]` and nothing here moves.
   const BOARDS = ['toy', 'drafting'];
-  let board = BOARDS.includes(stored.board) ? stored.board : 'toy';
+  // THE DRAWING OWNS THE BOARD; localStorage only seeds a drawing that has
+  // never recorded one. §7 of the TOY bones order is explicit -- a per-browser
+  // flag means "the same drafter meets it on every file while a second drafter
+  // never sees it at all" -- and acceptance #11 wants a PROMOTED DRAWING to
+  // reload as DRAFTING, which is a fact about one file.
+  //
+  // The remembered value is kept as the seed rather than dropped, so a fresh
+  // page still opens on the board the drafter last used, which is what it does
+  // today. A drawing that HAS chosen overrides it, always.
+  const rememberedBoard = BOARDS.includes(stored.board) ? stored.board : 'toy';
+  let board = rememberedBoard;
+
+  const boardOfDrawing = () =>
+    window.DraftDrawingFormat.board(drawing?.board) || rememberedBoard;
   const applyBoard = () => {
     document.body.setAttribute('data-board', board);
     markSwitch(boardButtons, 'board', board);
+    boardListeners.forEach(fn => fn(board));
     try {
       const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
       localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, board }));
     } catch { /* as above */ }
   };
   boardButtons.forEach(b => {
-    b.title = 'Board mode — remembered, but nothing is constrained by it yet';
-    b.addEventListener('click', () => { board = b.dataset.board; applyBoard(); });
+    // §8 of the TOY bones order: this title said "remembered, but nothing is
+    // constrained by it yet" for as long as that was true. §6 made it false
+    // -- the board decides which tools the column offers -- and the disclaimer
+    // went rather than being left to mislead.
+    //
+    // §1–§5 have since made it false a second time, in the direction a drafter
+    // meets FIRST. The tool roster is what TOY takes away; squareness and the
+    // whole foot are what it DOES, on the very first wall, and a title that
+    // named only the roster left the drafter to discover the geometry rule by
+    // being surprised by it. Both facts, one sentence each side of the comma.
+    //
+    // STILL NOT PROMISING THE UNBUILT: this names what a drafter can confirm
+    // by drawing one wall today. model-html-strip.spec.js:353 holds it to that.
+    b.title = b.dataset.board === 'toy'
+      ? 'TOY board — walls only, square and whole-foot; the other tools are put away'
+      : 'DRAFTING board — the full tool column, any angle and any length';
+    b.addEventListener('click', () => { setBoard(b.dataset.board); });
   });
+
+  // ONE PLACE THE BOARD CHANGES, so the drawing and the switch cannot drift.
+  // Everything that moves a board -- the buttons here, and the promotion the
+  // LENGTH box will raise -- goes through this.
+  const setBoard = next => {
+    if (!BOARDS.includes(next) || next === board) return;
+    board = next;
+    if (drawing) {
+      drawing.board = window.DraftDrawingFormat.board(next);
+      markDirty();
+    }
+    applyBoard();
+  };
 
   markSwitch(themeButtons, 'theme', theme);
   markSwitch(modeButtons, 'skinMode', mode);
@@ -4784,9 +5603,10 @@
         btn.dataset.toolKey = tool.id;
         btn.dataset.toolKind = tool.kind;
         btn.setAttribute('aria-pressed', String(tool.id === activeTool));
-        // The title is the whole name, because the face is 40px and
-        // FENESTRATION does not fit on it at a readable size.
-        btn.title = tool.name;
+        // The disabled state and the title are NOT set here -- see
+        // refreshToolAvailability below, which this function calls once the
+        // keys exist. One place decides the face, for the same reason one
+        // place decides availability.
         const letter = document.createElement('span');
         letter.dataset.toolLetter = '';
         letter.textContent = roster.keyFor(tool.id, resolved);
@@ -4804,7 +5624,38 @@
       box.append(name, keys);
       return box;
     }));
+    refreshToolAvailability();
   };
+
+  // §6 ON THE FACE, AND IT IS A WALK RATHER THAN A REBUILD. `disabled` rather
+  // than hidden: a key that vanishes on TOY tells a drafter the tool does not
+  // exist, and moves every key below it, so switching boards would reshuffle
+  // the column under their finger. Down and still in its place says the true
+  // thing -- this board does not offer it.
+  //
+  // WHY THIS IS NOT buildToolColumn() CALLED AGAIN. #tool-slot is shared: the
+  // SELECTION and ASSEMBLY panels append into the same element, and this
+  // builder is the only one that calls replaceChildren. Re-running it on a
+  // board change wiped both of them -- the page kept its seventeen keys and
+  // lost every selection mode, filter and assembly control. My own boards spec
+  // stayed green through it, because it only ever looked at tool keys; 25
+  // checks in three MERGED suites went red. Availability changes on a board
+  // switch, the letters do not, so nothing needs rebuilding.
+  function refreshToolAvailability() {
+    const roster = window.DraftToolRoster;
+    if (!roster) return;
+    document.querySelectorAll('[data-tool-key]').forEach(btn => {
+      const tool = roster.get(btn.dataset.toolKey);
+      if (!tool) return;
+      const usable = roster.availableOn(tool.id, board);
+      btn.disabled = !usable;
+      // The title is the whole name, because the face is 40px and
+      // FENESTRATION does not fit on it at a readable size. When the key is
+      // down the title is the only place the REASON fits.
+      btn.title = usable ? tool.name
+        : `${tool.name} — the TOY board does not offer this tool`;
+    });
+  }
 
   // The register tells the column, never the other way round. Any future
   // arming path -- a keyboard shortcut, a tool that puts itself down when it
@@ -4817,6 +5668,30 @@
   });
 
   buildToolColumn();
+
+  // A BOARD CHANGE PUTS DOWN A TOOL THE NEW BOARD DOES NOT OFFER, and ONLY
+  // such a tool. Leaving it armed would keep ROOF live behind a greyed ROOF
+  // key -- the column telling the truth about the key and a lie about the
+  // state, and the next drag still drawing a roof on the toy board.
+  //
+  // THE CONDITION IS NOT DECORATION. The first version called setTool on every
+  // board change, and setTool clears `drawStart` because a tool change
+  // abandons the gesture that belonged to the old tool. A BOARD change is not
+  // a tool change: PROMOTION crosses boards in the middle of a run on purpose
+  // -- typing a length in TOY offers DRAFTING and then commits that same run
+  // -- so disarming unconditionally cut the anchor out from under the commit
+  // and the wall was never made. model-toy-board.spec.js:224 caught it; the
+  // gesture survives a crossing that keeps its tool.
+  boardListeners.push(() => {
+    const roster = window.DraftToolRoster;
+    if (roster && !roster.availableOn(activeTool, board)) setTool(RESTING_TOOL);
+    refreshToolAvailability();
+    // THE OTHER TWO SURFACES. Leaving these out is exactly the gap that made
+    // §6 a third built: the keys obeyed the board and the panels did not, and
+    // nothing said so because the spec only looked at keys.
+    syncSelectionPanel();
+    syncAssembly();
+  });
 
   // ── SELECTION and OBJECT TYPE ─────────────────────────────────────────────
   // THE HELP STRINGS ARE THE OLD PAGE'S, VERBATIM (:23597 and :23619). They are
@@ -4901,16 +5776,28 @@
         FILTERS.map(f => chip('selFilter', f, setSelectFilter)), filterHelpEl));
 
     syncSelectionPanel = () => {
+      // §6: "the selection filters ... none of them operate in TOY". The board
+      // answer comes from the roster, not from a `board === 'toy'` written
+      // here, so this panel and the keypad cannot disagree about a board.
+      const on = window.DraftToolRoster?.panelOn('selection', board) !== false;
       slot.querySelectorAll('[data-sel-mode]').forEach(btn => {
         btn.setAttribute('aria-pressed',
           String(btn.dataset.selMode === selectionMode));
+        btn.disabled = !on;
       });
       slot.querySelectorAll('[data-sel-filter]').forEach(btn => {
         btn.setAttribute('aria-pressed',
           String(btn.dataset.selFilter === selectFilter));
+        btn.disabled = !on;
       });
-      modeHelp.textContent = MODE_HELP[selectionMode];
-      filterHelpEl.textContent = filterHelp();
+      // THE HELP SAYS WHY, and it replaces the mode help rather than sitting
+      // beside it: MODE_HELP describes a shortcut for a gesture this board
+      // does not have, and leaving it up would teach a drafter a control that
+      // is right there and dead.
+      modeHelp.textContent = on ? MODE_HELP[selectionMode]
+        : 'The TOY board edits through bones. Selection modes and filters are '
+          + 'on the DRAFTING board.';
+      filterHelpEl.textContent = on ? filterHelp() : '';
       // RED WHENEVER A FILTER IS ENGAGED -- not when the cursor is over
       // something the filter excludes. selectFilterHelpColor (:23622) is a
       // straight ternary on selectFilter, and a cursor-driven red would mean
@@ -5081,17 +5968,23 @@
       const key = window.DraftToolRoster?.keyFor('select')
         ? window.DraftToolRoster.bindings() : {};
       const gKey = window.DraftKeyboard?.keyBindingLabel(key.group) || '';
+      // §6: "the assembly verbs ... none of them operate in TOY". The board
+      // beats the selection count -- a TOY drafter with items selected must
+      // still find ASSEMBLY down, or the rule holds only while nothing is
+      // picked, which is the half nobody would test.
+      const on = window.DraftToolRoster?.panelOn('assembly', board) !== false;
       asmBtn.textContent = gKey ? `ASSEMBLY  [${gKey}]` : 'ASSEMBLY';
-      asmBtn.disabled = n === 0;
+      asmBtn.disabled = !on || n === 0;
       unBtn.textContent = 'UNGROUP';
-      unBtn.disabled = held.length === 0;
+      unBtn.disabled = !on || held.length === 0;
       unBtn.hidden = held.length === 0;
       // The old page's own two sentences (:23631-23633), and the red is its
       // own too: nothing selected is the state that stops the button working.
-      help.textContent = n
-        ? `${n} selected item${n === 1 ? '' : 's'} · make a named assembly.`
-        : 'Select drawing items before assembling them.';
-      help.toggleAttribute('data-engaged', n === 0);
+      help.textContent = !on
+        ? 'Assemblies are a DRAFTING board verb.'
+        : (n ? `${n} selected item${n === 1 ? '' : 's'} · make a named assembly.`
+             : 'Select drawing items before assembling them.');
+      help.toggleAttribute('data-engaged', !on || n === 0);
       dialog.hidden = !assemblyDialogOpen;
       if (!assemblyDialogOpen) nameInput.value = assemblyName = '';
     };
@@ -5190,6 +6083,163 @@
   // the wall's body, and `before` is the list of pooled vertices it will move
   // with the numbers they started with.
   let moveDrag = null;
+
+  // ── §3: MOVING A BONE ────────────────────────────────────────────────────
+  //
+  // THE WALL MOVES PERPENDICULAR TO ITSELF. A wall running along x travels in
+  // z and vice versa; the component along its own run is dropped rather than
+  // constrained, because sliding a wall lengthwise is not a move this board
+  // offers.
+  const runAxisOf = w => (Math.abs(w.end.x - w.start.x) >= Math.abs(w.end.z - w.start.z)
+    ? 'x' : 'z');
+  const posOnMoveAxis = w => (runAxisOf(w) === 'x' ? w.start.z : w.start.x);
+
+  // THE FIRST NUDGE OF AN OFF-GRID WALL LANDS IT ON THE FOOT MARK. Movie,
+  // 13 Sep: "make the first point land on a ft point how about so we don't
+  // have that problem" -- so a wall at 12'-0½" goes to 13'-0", then 14'-0".
+  //
+  // WHY THIS LIVES HERE AND NOT IN THE MODULE. allowedMove quantises the
+  // DELTA, never the position: quantiseFeet(d, step) = round(d/step)*step. It
+  // cannot land a wall on the grid because it never looks at where the wall
+  // is. Teaching it to is the second constraint path §3 forbids. So the PAGE
+  // decides what distance to ask for, and the module still decides whether
+  // that distance is allowed -- which is the division of labour the order
+  // describes.
+  //
+  // The half-inch is given up ONCE, on the wall the drafter deliberately
+  // moved. A wall nobody touches is never re-gridded, which is what keeps the
+  // 31 Aug rule intact: opening an old plan in TOY moves nothing.
+  const FOOT = 1;
+  const offGridBy = pos => {
+    const frac = pos - Math.floor(pos);
+    return Math.min(frac, FOOT - frac) < 1e-6 ? 0 : frac;
+  };
+  // ONE FUNCTION, AND IT RETURNS THE STEP. This was a landingDelta returning
+  // null for an on-grid wall, and a caller turning that null into FOOT -- and
+  // the gate showed the null branch was redundant twice over: with `ask` now
+  // always the drafter's distance, an on-grid wall computes a step of exactly
+  // FOOT down either path, so the two arms produced identical answers and the
+  // mutant deleting the guard changed nothing.
+  //
+  // The distance to the next foot mark IN THE DIRECTION OF TRAVEL is the whole
+  // rule, and on a wall already on the grid that distance IS a foot. Saying it
+  // once is shorter than saying it twice and calling one of them a special
+  // case.
+  const landingStep = (pos, direction) => {
+    const frac = offGridBy(pos);
+    if (!frac) return FOOT;
+    return direction > 0 ? FOOT - frac : frac;
+  };
+
+  // THE MODULE'S REASONS, IN THE DRAFTER'S WORDS. toy-constraints.js names
+  // them as codes on purpose -- it is a node module with no screen -- so the
+  // page is where they become a sentence. Movie's rule for TOY is that a
+  // refusal is explained "in the room's own words", and a code is not that.
+  //
+  // The default is the code itself rather than a shrug: an unnamed reason is a
+  // bug in this list, and printing it is how anyone finds out. A generic
+  // "cannot move that" would hide the gap for ever.
+  const BLOCKER_WORDS = {
+    NOT_ORTHOGONAL: 'this wall is not square, so the toy cannot move it',
+    TOUCHES_NON_ORTHOGONAL: 'this wall meets an angled wall, so the toy cannot move it',
+    MIN_ROOM: 'that would make a room too small',
+    OPENING_WOULD_NOT_FIT: 'a door or window would not fit after that',
+    CANTILEVER: 'that would overhang more than 2 ft — bring the foundation out first',
+    GROUP_MEMBER_BLOCKED: 'a wall joined to this one cannot move that far',
+    OBJECT_CLEARANCE: 'something in the room would not have room left',
+    NEEDS_A_BEAM: 'that span would need a beam',
+    // The wall the drafter grabbed is square and so is its neighbour; moving
+    // it is what would bend one. So this says what the MOVE would do, not what
+    // the wall is -- the other two ortho lines above are about the wall.
+    WOULD_ANGLE_NEIGHBOUR: 'that would leave the next wall on an angle — break it first',
+  };
+  const blockerSays = verdict =>
+    BLOCKER_WORDS[verdict.reason] || `cannot move it: ${verdict.reason}`;
+
+  const toyWallDelta = (md, dx, dz) => {
+    const T = window.DraftToyConstraints;
+    const C = window.DraftToyContext;
+    const wall = md.body;
+    if (!T || !C || !wall) return null;
+    const axis = runAxisOf(wall);
+    // Perpendicular only. The along-run component is discarded, not clamped.
+    const wanted = axis === 'x' ? dz : dx;
+    if (!wanted) return { dx: 0, dz: 0 };
+
+    // TWO THINGS, AND I REMOVED ONE OF THEM AS REDUNDANT AN HOUR AGO. The gate
+    // had shown `ask = land` changing nothing, so I dropped it -- but it was
+    // only ever exercised pulling -z, where the distance to the mark behind is
+    // 0.958 and quantising a one-foot ask by 0.958 lands on the mark anyway.
+    // Push +z from the same wall and the distance to the mark AHEAD is 0.042:
+    // quantising a one-foot ask by 0.042 gives 1.008, and the wall sails past
+    // the mark to -5.03.
+    //
+    // So the step alone does not carry the rule. THE FIRST NUDGE OF AN
+    // OFF-GRID WALL IS THE LANDING, whatever the drag distance -- that is what
+    // `ask` says -- and the step is what stops the module rounding the landing
+    // back off the grid. Both, and neither is decoration.
+    //
+    // The lesson is the one from the fixture that only ran -z: a gate result
+    // is only as good as the directions the checks take. I generalised from
+    // one arm of a branch and deleted a line that carried the other.
+    const pos = posOnMoveAxis(wall);
+    const dir = Math.sign(wanted);
+    const land = landingStep(pos, dir);
+    const ask = offGridBy(pos) ? dir * land : wanted;
+    const probe = { ...wall, stepFt: land };
+    // ZERO-LENGTH WALLS ARE NOT GEOMETRY, and handing one to the module makes
+    // it refuse the very drag that is about to give the wall its length. §4's
+    // connector is born with both ends at the same point; `isOrthogonal`
+    // reports false for a run of no length, so `inertReason` sees the dragged
+    // wall TOUCHING a non-orthogonal wall and calls it inert. The move is
+    // refused by the thing the move creates.
+    //
+    // The format drops anything under 1e-6 on load, so a wall this short is
+    // not a record the drawing will keep either. The module is asked about
+    // real walls.
+    const ctx = C.gather({ walls: (drawing.walls || [])
+      .filter(w => Math.hypot(w.end.x - w.start.x, w.end.z - w.start.z) >= 1e-6)
+      .map(w => ({ ...w })) });
+    // THE PAGE HAS TO SAY WHAT ACTUALLY MOVES, and until now it did not.
+    //
+    // Left to itself the module builds a weld group: any two walls whose ends
+    // touch are welded, so a CLOSED ROOM is one group and dragging any wall of
+    // it is judged as picking the whole house up and setting it down a foot
+    // away. That is trivially legal, which is why `allowedMove` has answered
+    // an unconditional yes here since §3 landed -- every room minimum, every
+    // cantilever band, every beam-span rule in the module was unreachable from
+    // this page, and no mutant could show it because the answer is the same
+    // whether the rules work or not.
+    //
+    // Measured: dragging `n` on the plain square returned group [n,e,s,w] and
+    // no stretches. The page then moved ONE wall and stretched its neighbours,
+    // which is a different operation from the one that was approved.
+    //
+    // `welds` is the module's own override, so this is telling it the truth
+    // rather than defeating it: the group is the dragged wall, and the walls
+    // hanging off its corners are STRETCHES -- which is exactly what this page
+    // does to them.
+    const verdict = T.allowedMove(probe, ask,
+      { ...ctx, mode: T.MODE.TOY, welds: [[wall.id]],
+        // §4: the corners this drag already unshared. Their neighbours still
+        // sit at the same coordinates until the first delta lands, so without
+        // this the module refuses the bump-out as a diagonal it would have
+        // caused -- a refusal about geometry the page has already resolved.
+        detached: (md.connectors || []).map(c => c.detachedFrom).filter(Boolean) });
+    // §3: "A BLOCKED DRAG STOPS DEAD AND THE BLOCKER SAYS WHY. Never elastic."
+    // The saying is the half that was missing: allowedMove has always returned
+    // a reason and this page has always stored it, and nothing put it on
+    // screen. That is the same fault as a refusal written and overwritten --
+    // a rule that exists to speak, silent -- so it goes through sayOnStrip
+    // like every other thing this page says, and the next drag that actually
+    // moves something clears it.
+    const stopped = verdict.reason && verdict.delta === 0;
+    md.blocked = stopped ? verdict : null;
+    if (stopped) sayOnStrip(blockerSays(verdict));
+    else if (verdict.delta) clearNotice();
+    const moved = verdict.delta || 0;
+    return axis === 'x' ? { dx: 0, dz: moved } : { dx: moved, dz: 0 };
+  };
   canvas.addEventListener('pointerdown', e => {
     const rect = canvas.getBoundingClientRect();
     const at = toWorld(e.clientX - rect.left, e.clientY - rect.top);
@@ -5203,9 +6253,36 @@
     // panning. Otherwise the first tap of a wall that starts on an existing
     // corner would be read as grabbing that corner, and the drafter would drag
     // the building instead of drawing against it.
+    // #392's two placement tools, kept from main, and §1's wall gesture kept
+    // from this branch. The conflict was only that both rewrote this dispatch:
+    // main added COLUMN and BEAM beside a one-line wall case, and §1 replaced
+    // that one line with the press/lift split. Neither claim is about the other.
     if (activeTool === 'column') { placeColumn(at); return; }
     if (activeTool === 'beam') { beamPress(at); return; }
-    if (activeTool === 'wall') { drawPress(at); return; }
+    if (activeTool === 'wall') {
+      // §1: "either drag, or press again and drag -- both must work". The lift
+      // needs two facts this press knows and pointerup does not: where the
+      // finger went down, and whether this press OPENED the run. Without the
+      // second, the PC click-click's second press would commit on the down and
+      // then again on the up.
+      wallPress = { x: e.clientX, y: e.clientY, opened: !drawStart,
+        touch: e.pointerType === 'touch' };
+      // THE POINTER TYPE DECIDES WHICH HANDLER FIRES THE SHARED COMMIT, and
+      // that split is §1's, not an invention: "for PC the line creation will
+      // be normal pc method ... Touch gets the press-drag-lift."
+      //
+      // A MOUSE COMMITS ON THE DOWN -- click to set, move, click to place, and
+      // the closing click must land the wall at the point clicked.
+      //
+      // A FINGER NEVER COMMITS ON THE DOWN. §1 requires press-again-and-drag
+      // to reach the same wall as press-drag-lift; if the second touch
+      // committed where it landed, the drag after it would be ignored and the
+      // wall would end at the moment the finger arrived rather than where it
+      // left. The lift below closes every touch run.
+      if (wallPress.touch && drawStart) { paint(); return; }
+      drawPress(at);
+      return;
+    }
     // A WINDOW MODE TAKES THE PRESS BEFORE THE PAN, and before the corner and
     // body tests too. Otherwise a box begun on a selected wall would grab that
     // wall instead, and the drafter would drag the building across the sheet
@@ -5227,6 +6304,9 @@
       const ends = corner ? [corner] : movingEnds(body);
       moveDrag = {
         kind: corner ? 'corner' : 'wall',
+        // The wall itself, not just its moving ends: §3's constraint call
+        // needs the run to know which way perpendicular is.
+        body,
         grab: at,
         before: ends.map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ })),
         sx: e.clientX, sy: e.clientY, active: false,
@@ -5255,7 +6335,13 @@
     }
     if (moveDrag) {
       const md = moveDrag;
-      if (!md.active && Math.hypot(e.clientX - md.sx, e.clientY - md.sy) > DRAG_ARM_PX) md.active = true;
+      if (!md.active && Math.hypot(e.clientX - md.sx, e.clientY - md.sy) > DRAG_ARM_PX) {
+        md.active = true;
+        // §4: unshare any corner this wall shares with a COLLINEAR neighbour,
+        // before the first delta lands, so the connector grows with the drag
+        // instead of appearing at the end of it.
+        splitRunCorners(md);
+      }
       if (md.active) {
         const rect = canvas.getBoundingClientRect();
         const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
@@ -5273,8 +6359,16 @@
           // distance" exactly true, rather than true to within the float drift
           // of a hundred pointermove events.
           let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
-          const snapped = wallSnapDelta(md.before, dx, dz);
-          if (snapped) { dx = snapped.dx; dz = snapped.dz; }
+          // §3: ON THE TOY BOARD THE MOVE IS toy-constraints.js's TO DECIDE.
+          // Not a second constraint path -- the page proposes a distance and
+          // allowedMove rounds it, welds the group, refuses what it must and
+          // says why. DRAFTING keeps wallSnapDelta exactly as it was.
+          const toy = board === 'toy' ? toyWallDelta(md, dx, dz) : null;
+          if (toy) { dx = toy.dx; dz = toy.dz; }
+          else {
+            const snapped = wallSnapDelta(md.before, dx, dz);
+            if (snapped) { dx = snapped.dx; dz = snapped.dz; }
+          }
           md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
         }
         // Live, on every move, exactly where the old page relinks — not once
@@ -5297,6 +6391,7 @@
       // instruments: length and angle are live while the run is in hand and
       // blank when it is not, exactly as the old strip behaves.
       cursorWorld = at;
+      pointerScreen = { x: e.clientX, y: e.clientY, type: e.pointerType };
       stripRefresh();
       const corner = cornerAt(at);
       canvas.classList.toggle('over-corner', !!corner);
@@ -5349,6 +6444,19 @@
       if (md.active) {
         undoStack.push({ kind: 'move', before: md.before });
         markDirty();
+        // §5: the bone moved, so what the storey above covers has changed and
+        // the roofs under it are stale. Recomputed on the RELEASE, not on
+        // every pointermove -- a roof record per mouse event would be hundreds
+        // across one drag.
+        if (board === 'toy') { boneFollows(md.before, md.body?.levelId); rebuildRoofs(); }
+      } else if (board === 'toy' && md.kind === 'wall' && md.body) {
+        // §4's CLICK, and it costs no new gesture. `wallBodyAt` only returns a
+        // wall that is ALREADY SELECTED, so reaching here means the drafter
+        // pressed a wall he had already chosen and let go without dragging --
+        // which is the click the order describes, and is not a press that
+        // could have been anything else. The drag is still the move; this is
+        // the look.
+        offerBoneChoice(md.body, md.grab);
       }
       moveDrag = null;
       if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
@@ -5391,6 +6499,34 @@
     canvas.classList.remove('dragging');
     if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
   };
+  // THE LIFT PLACES THE LINE. Movie, 13 Sep: "when the pointer lifts place the
+  // line". Registered before endDrag and separate from it: a wall press
+  // returns out of pointerdown before any pan or band drag is armed, so this
+  // has no state to share with that one and nothing to unwind.
+  //
+  // IT CALLS drawPress -- THE SAME COMMIT BOTH GESTURES USE. §1 is explicit
+  // that press-drag-lift and PC click-click "are the same wall by the time it
+  // reaches commitWall; that is acceptance #2, and it is the reason the commit
+  // must not live in either handler."
+  canvas.addEventListener('pointerup', e => {
+    const press = wallPress;
+    wallPress = null;
+    if (!press || !drawStart || activeTool !== 'wall') return;
+    // A LIFT THAT DID NOT TRAVEL, ON A PRESS THAT OPENED THE RUN, IS A TAP --
+    // the first half of a gesture, whichever pointer is doing it. Committing
+    // here would turn every PC click into a zero-length wall attempt, and
+    // would stop a finger from tapping once to set a start.
+    //
+    // A press that did NOT open the run is a closing press, and on touch it
+    // closes on the lift however far it travelled: that is both
+    // press-again-and-drag and a plain two-tap, and neither has any other
+    // handler left to commit it. On a mouse the down already committed, so
+    // there is nothing here to do.
+    const travelled = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_ARM_PX;
+    if (press.opened ? !travelled : !press.touch) return;
+    const rect = canvas.getBoundingClientRect();
+    drawPress(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+  });
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
 
@@ -5424,6 +6560,17 @@
     // it is the affordance a drafter with no keyboard can reach.
     if (e.key === 'Escape') {
       drawStart = null;
+      // AND THE UNFINISHED BONE GOES WITH IT. The refusal below says "finish
+      // or cancel the run you started", so a cancel has to exist -- a message
+      // naming a way out that the page does not offer is worse than no
+      // message. Escape already puts down every other half-taken gesture on
+      // this page (the pending wall start, a half-taken measure), so the
+      // unfinished run goes down the same way rather than by a key of its own.
+      if (boneChoiceFor) { closeBoneChoice(); return; }
+      if (pendingBone) {
+        pendingBone = null;
+        sayOnStrip('run cancelled');
+      }
       // ESC WITH NOTHING SELECTED RELEASES THE FILTER, which is the release
       // the filter help line promises in writing (:22418-22419). With
       // something selected Esc clears the selection first, so a drafter never
@@ -5563,11 +6710,38 @@
     // how many are being carried, so a malformed drawing reads as a fact rather
     // than as a page that quietly lost -- or quietly kept -- geometry.
     const F = window.DraftDrawingFormat;
-    const levelIds = new Set((parsed.levels || []).map(level => Number(level.id)));
+    // SHELVES ARE OWNERS TOO, and this page did not know it.
+    //
+    // drawing-format.js is sign-agnostic -- `levelId()` accepts whatever is in
+    // the set it is handed -- so what may own a wall is decided HERE. This
+    // page built the set from levels alone, while MODEL.dc.html:5486 builds
+    // `new Set([...levelIds, ...boneyardShelves.map(s => -s.id)])`.
+    //
+    // The consequence is the silent loss this format punishes hardest: a wall
+    // parked on a shelf at levelId -1 is dropped on load, with no error,
+    // because dropping what it cannot own is the reader's whole job. The
+    // boneyard order's estimate rests on "parking a wall on a shelf needs no
+    // format change at all" -- true, and it needs THIS, which is not a format
+    // change either but is a precondition rather than an assumption.
+    //
+    // A shelf's owner id is -shelfId. boneyardShelves always yields at least
+    // SHELF 1 (drawing-format.js:827), so a drawing saved before shelves
+    // existed still gets its default shelf and nothing changes for it.
+    const shelfIds = window.DraftDrawingFormat
+      .boneyardShelves(parsed.boneyardShelves).map(shelf => -shelf.id);
+    const levelIds = new Set((parsed.levels || [])
+      .map(level => Number(level.id)).concat(shelfIds));
     const WT = window.DraftWallTypes;
     refusedItems = { walls: [], lines: [], floors: [], dimensions: [] };
     drawing = {
       ...parsed,
+      // NORMALISED, NOT PASSED THROUGH. `...parsed` would carry whatever the
+      // file said -- a board of "TOY", or of "banana" -- and the switch would
+      // then hold a value BOARDS does not contain. Round-tripping junk is the
+      // Write Tier's job for GEOMETRY it cannot understand; a scalar the page
+      // acts on gets normalised on the way in.
+      board: F.board(parsed.board),
+      boardPromptSeen: F.boardPromptSeen(parsed.boardPromptSeen),
       walls: F.walls(parsed.walls, levelIds, {
         wallTypes: WT.WALL_TYPES,
         legacyWallTypes: WT.LEGACY_WALL_TYPES,
@@ -5669,6 +6843,13 @@
     undoStack.length = 0;
     setSelection([]);
     drawStart = null;
+
+    // THE DRAWING'S BOARD BECOMES THE PAGE'S. A file that recorded one wins;
+    // one that never did leaves the remembered board alone, so opening an old
+    // drawing does not silently move a drafter off the board they were on.
+    // No markDirty: adopting what the file already says is not a change to it.
+    board = boardOfDrawing();
+    applyBoard();
     return true;
   };
 
@@ -5800,10 +6981,37 @@
     return out;
   };
 
+  // READERS NORMALISE, WRITERS NEVER INVENT. The loader materialises `board`
+  // and `boardPromptSeen` on `drawing` because the page ACTS on them -- a board
+  // of "banana" must not reach the switch (see the normalise comment above) --
+  // and `...drawing` then wrote both into every file this page saved.
+  //
+  // THAT IS THE 12" FOUNDATION AGAIN, pointing the other way. A drafter who
+  // opened a drawing and pressed SAVE had asked to draw nothing, and the file
+  // came back with two keys the page that owns the format never writes. The
+  // Write Tier's acceptance line is "every key equal, deep" and it was red for
+  // exactly as long as this was true; three of its checks say the same fact.
+  //
+  // `board: null` is the ABSENCE spelled out -- it means "never chosen", which
+  // is what a missing key already means -- and `boardPromptSeen: false` means
+  // "not yet answered", likewise. Neither carries an instruction, so neither is
+  // written. A REAL choice is: 'drafting' is a member of BOARDS and not the
+  // null, so switching back to DRAFTING persists, and `boardPromptSeen: true`
+  // persists, which is what keeps §7 from re-arming a question already answered.
+  const storedChoice = () => ({
+    ...(drawing.board ? { board: drawing.board } : {}),
+    ...(drawing.boardPromptSeen === true ? { boardPromptSeen: true } : {}),
+  });
+
   const serializeDrawing = () => {
     const point = p => window.DraftDrawingFormat.pointForStorage(p);
+    // Destructured out of the spread rather than overwritten with `undefined`,
+    // so the key is genuinely absent from the OBJECT and not merely absent from
+    // its JSON -- the omission must not depend on this having one caller.
+    const { board: _board, boardPromptSeen: _seen, ...rest } = drawing;
     return {
-      ...drawing,
+      ...rest,
+      ...storedChoice(),
       walls: withRefused('walls', drawing.walls.map(wall => {
         // Restored ONLY while the wall still carries the type this page
         // substituted; a deliberate later change is the drafter's edit and is

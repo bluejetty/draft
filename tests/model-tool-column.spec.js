@@ -63,8 +63,21 @@ async function seedHouse(page) {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(saved)], 'drawing.json',
         { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, saved: REPRO });
+  }, { bucket: BUCKET, saved: { ...REPRO, board: 'drafting' } });
 }
+
+// WHY THE FIXTURE NOW RECORDS A BOARD. §6 made the board decide which tools
+// the column offers, and a drawing that has never chosen one opens on TOY,
+// which offers SELECT and WALL only. This file's subject is the REGISTER --
+// "one tool, not seventeen booleans" -- and LINE is an arbitrary example of a
+// tool to arm, so the board it needs is fixture rather than subject.
+//
+// THE DEFAULT THAT MAKES THIS NECESSARY IS RULED, not incidental. A drafter
+// opening the app for the first time gets TOY, and so fifteen keys down;
+// Movie confirmed that on 13 Sep. It was harmless while nothing was
+// constrained by the board and it is a decision now, so
+// tests/model-tool-boards.spec.js pins it with a check rather than leaving it
+// to be discovered.
 
 async function openColumn(page, query = '?left=1') {
   await h.openModel(page, { webgl: false });
