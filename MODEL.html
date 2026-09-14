@@ -6687,7 +6687,27 @@
     // how many are being carried, so a malformed drawing reads as a fact rather
     // than as a page that quietly lost -- or quietly kept -- geometry.
     const F = window.DraftDrawingFormat;
-    const levelIds = new Set((parsed.levels || []).map(level => Number(level.id)));
+    // SHELVES ARE OWNERS TOO, and this page did not know it.
+    //
+    // drawing-format.js is sign-agnostic -- `levelId()` accepts whatever is in
+    // the set it is handed -- so what may own a wall is decided HERE. This
+    // page built the set from levels alone, while MODEL.dc.html:5486 builds
+    // `new Set([...levelIds, ...boneyardShelves.map(s => -s.id)])`.
+    //
+    // The consequence is the silent loss this format punishes hardest: a wall
+    // parked on a shelf at levelId -1 is dropped on load, with no error,
+    // because dropping what it cannot own is the reader's whole job. The
+    // boneyard order's estimate rests on "parking a wall on a shelf needs no
+    // format change at all" -- true, and it needs THIS, which is not a format
+    // change either but is a precondition rather than an assumption.
+    //
+    // A shelf's owner id is -shelfId. boneyardShelves always yields at least
+    // SHELF 1 (drawing-format.js:827), so a drawing saved before shelves
+    // existed still gets its default shelf and nothing changes for it.
+    const shelfIds = window.DraftDrawingFormat
+      .boneyardShelves(parsed.boneyardShelves).map(shelf => -shelf.id);
+    const levelIds = new Set((parsed.levels || [])
+      .map(level => Number(level.id)).concat(shelfIds));
     const WT = window.DraftWallTypes;
     refusedItems = { walls: [], lines: [], floors: [], dimensions: [] };
     drawing = {
