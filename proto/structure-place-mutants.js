@@ -69,7 +69,10 @@ const MUTANTS = [
     name: 'putting a tool down leaves the beam anchor, so BEAM finishes under COLUMN',
     find: '    drawStart = null;\n    beamStart = null;',
     with: '    drawStart = null;',
-    test: 'a placed beam survives save and reload' },
+    // RE-AIMED. This pointed at the round trip, which never changes tools with
+    // a beam half made -- so the mutant died somewhere else and the gate said
+    // so. A kill credited to the wrong check reads exactly like a clean sheet.
+    test: 'abandons a half-made beam' },
 ];
 
 const run = grep => {
