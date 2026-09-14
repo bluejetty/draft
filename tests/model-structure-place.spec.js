@@ -204,7 +204,19 @@ test('placing a column opens its properties, and the choice survives reload',
       return F.columns(raw.columns, ids)[0];
     }, BUCKET);
     expect(back.footing).toBe('pile10');
-    expect(back.padIn, 'a pile carries no pad size').toBeUndefined();
+
+    // READ THE RAW FILE, NOT THE REBUILD, and the gate is why. My first
+    // version asserted padIn through DraftDrawingFormat and the mutant that
+    // KEEPS padIn on a pile survived it -- because the reader drops padIn for
+    // piles itself (:534), so the rebuild looks identical either way. The
+    // claim in MODEL.html is that the page's record and the reader's rebuild
+    // are the SAME object; only the file as written can show that.
+    const raw = await page.evaluate(async bucket => {
+      const f = await window.SharedFileStore.loadSharedFile(bucket);
+      return JSON.parse(await f.text()).columns[0];
+    }, BUCKET);
+    expect(raw.padIn, 'the page did not write a pad size onto a pile')
+      .toBeUndefined();
   });
 
 test('placing a beam shows its mode and its span', async ({ page }) => {
@@ -266,3 +278,41 @@ test('undo takes back a placed column, and does not spend a step doing nothing',
     await expect(page.locator('#readout'), 'and the wall before it is still reachable')
       .toContainText('walls 4/4');
   });
+
+test('putting the tool down abandons a half-made beam', async ({ page }) => {
+  // THE GATE FOUND THIS HOLE. Removing `beamStart = null` from setTool
+  // survived every check in this file, because none of them changed tools with
+  // a beam half made -- so the anchor surviving a tool change was untested and
+  // a beam started under BEAM could have finished under COLUMN.
+  await open(page, base({}));
+  const { at } = await frame(page);
+  await page.locator('[data-tool-key="beam"]').click();
+  await page.mouse.click(...at(-8, -4));          // first press: the anchor
+  await page.waitForTimeout(80);
+
+  // Away and back. The anchor belongs to the gesture that was put down.
+  await page.locator('[data-tool-key="column"]').click();
+  await page.waitForTimeout(60);
+  await page.locator('[data-tool-key="beam"]').click();
+  await page.waitForTimeout(60);
+
+  await page.mouse.click(...at(0, 6));            // a NEW first press
+  await page.waitForTimeout(80);
+  await page.mouse.click(...at(8, 6));            // and its second
+  await page.waitForTimeout(120);
+  await save(page);
+
+  const beams = await page.evaluate(async bucket => {
+    const f = await window.SharedFileStore.loadSharedFile(bucket);
+    const raw = JSON.parse(await f.text());
+    const F = window.DraftDrawingFormat;
+    const ids = new Set((raw.levels || []).map(l => Number(l.id)));
+    return F.beams(raw.beams, ids);
+  }, BUCKET);
+  expect(beams, 'one beam, not two, and not one from the abandoned anchor')
+    .toHaveLength(1);
+  // The surviving anchor would have made this beam start at -8, closing the
+  // run the drafter walked away from.
+  expect(Math.round(beams[0].start.x), 'it starts where the NEW press was')
+    .toBe(0);
+});
