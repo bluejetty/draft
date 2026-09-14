@@ -5415,6 +5415,70 @@
   // the wall's body, and `before` is the list of pooled vertices it will move
   // with the numbers they started with.
   let moveDrag = null;
+
+  // ── §3: MOVING A BONE ────────────────────────────────────────────────────
+  //
+  // THE WALL MOVES PERPENDICULAR TO ITSELF. A wall running along x travels in
+  // z and vice versa; the component along its own run is dropped rather than
+  // constrained, because sliding a wall lengthwise is not a move this board
+  // offers.
+  const runAxisOf = w => (Math.abs(w.end.x - w.start.x) >= Math.abs(w.end.z - w.start.z)
+    ? 'x' : 'z');
+  const posOnMoveAxis = w => (runAxisOf(w) === 'x' ? w.start.z : w.start.x);
+
+  // THE FIRST NUDGE OF AN OFF-GRID WALL LANDS IT ON THE FOOT MARK. Movie,
+  // 13 Sep: "make the first point land on a ft point how about so we don't
+  // have that problem" -- so a wall at 12'-0½" goes to 13'-0", then 14'-0".
+  //
+  // WHY THIS LIVES HERE AND NOT IN THE MODULE. allowedMove quantises the
+  // DELTA, never the position: quantiseFeet(d, step) = round(d/step)*step. It
+  // cannot land a wall on the grid because it never looks at where the wall
+  // is. Teaching it to is the second constraint path §3 forbids. So the PAGE
+  // decides what distance to ask for, and the module still decides whether
+  // that distance is allowed -- which is the division of labour the order
+  // describes.
+  //
+  // The half-inch is given up ONCE, on the wall the drafter deliberately
+  // moved. A wall nobody touches is never re-gridded, which is what keeps the
+  // 31 Aug rule intact: opening an old plan in TOY moves nothing.
+  const FOOT = 1;
+  const offGridBy = pos => {
+    const frac = pos - Math.floor(pos);
+    return Math.min(frac, FOOT - frac) < 1e-6 ? 0 : frac;
+  };
+  const landingDelta = (pos, direction) => {
+    const frac = offGridBy(pos);
+    if (!frac) return null;             // already on the grid: a normal move
+    return direction > 0 ? (FOOT - frac) : -frac;
+  };
+
+  const toyWallDelta = (md, dx, dz) => {
+    const T = window.DraftToyConstraints;
+    const C = window.DraftToyContext;
+    const wall = md.body;
+    if (!T || !C || !wall) return null;
+    const axis = runAxisOf(wall);
+    // Perpendicular only. The along-run component is discarded, not clamped.
+    const wanted = axis === 'x' ? dz : dx;
+    if (!wanted) return { dx: 0, dz: 0 };
+
+    const land = landingDelta(posOnMoveAxis(wall), Math.sign(wanted));
+    // A LANDING MOVE IS THE WHOLE OF THE FIRST NUDGE, whatever the drag
+    // distance. One deliberate move puts the wall on the grid and every move
+    // after is a whole foot -- which is the shape of the ruling rather than a
+    // shortcut around it.
+    const ask = land === null ? wanted : land;
+    // stepFt rides on the wall so the module's own quantiser keeps a landing
+    // distance intact instead of rounding it back off the grid. stepFor reads
+    // exactly this key (toy-constraints.js), so it is the module's hook and
+    // not a way round it.
+    const probe = { ...wall, stepFt: land === null ? FOOT : Math.abs(land) };
+    const ctx = C.gather({ walls: (drawing.walls || []).map(w => ({ ...w })) });
+    const verdict = T.allowedMove(probe, ask, { ...ctx, mode: T.MODE.TOY });
+    md.blocked = verdict.reason && verdict.delta === 0 ? verdict : null;
+    const moved = verdict.delta || 0;
+    return axis === 'x' ? { dx: 0, dz: moved } : { dx: moved, dz: 0 };
+  };
   canvas.addEventListener('pointerdown', e => {
     const rect = canvas.getBoundingClientRect();
     const at = toWorld(e.clientX - rect.left, e.clientY - rect.top);
@@ -5473,6 +5537,9 @@
       const ends = corner ? [corner] : movingEnds(body);
       moveDrag = {
         kind: corner ? 'corner' : 'wall',
+        // The wall itself, not just its moving ends: §3's constraint call
+        // needs the run to know which way perpendicular is.
+        body,
         grab: at,
         before: ends.map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ })),
         sx: e.clientX, sy: e.clientY, active: false,
@@ -5519,8 +5586,16 @@
           // distance" exactly true, rather than true to within the float drift
           // of a hundred pointermove events.
           let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
-          const snapped = wallSnapDelta(md.before, dx, dz);
-          if (snapped) { dx = snapped.dx; dz = snapped.dz; }
+          // §3: ON THE TOY BOARD THE MOVE IS toy-constraints.js's TO DECIDE.
+          // Not a second constraint path -- the page proposes a distance and
+          // allowedMove rounds it, welds the group, refuses what it must and
+          // says why. DRAFTING keeps wallSnapDelta exactly as it was.
+          const toy = board === 'toy' ? toyWallDelta(md, dx, dz) : null;
+          if (toy) { dx = toy.dx; dz = toy.dz; }
+          else {
+            const snapped = wallSnapDelta(md.before, dx, dz);
+            if (snapped) { dx = snapped.dx; dz = snapped.dz; }
+          }
           md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
         }
         // Live, on every move, exactly where the old page relinks — not once
