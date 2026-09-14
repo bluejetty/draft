@@ -48,8 +48,17 @@ async function open(page, file) {
       new File([JSON.stringify(f)], 'drawing.json',
         { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, f: file });
-  await page.goto('/MODEL.html');
+  // ?left=1 OPENS THE LEFT RAIL, and without it this file measures a column
+  // that is not on screen. `<aside id="left-rail" hidden>` is the default, so
+  // the three checks that CLICK a key each timed out while the four that only
+  // read `disabled`, the computed opacity and the title all passed -- against
+  // elements inside a display:none panel. Passing there proved the CSS rule
+  // and nothing about what a drafter sees, which is the same defect this file
+  // is written against, arriving in its own fixture.
+  await page.goto('/MODEL.html?left=1');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  // The column is ON SCREEN before anything is measured on it.
+  await expect(page.locator('[data-tool-key="wall"]')).toBeVisible();
 }
 
 const key = (page, id) => page.locator(`[data-tool-key="${id}"]`);
@@ -95,7 +104,6 @@ test('on TOY the other fifteen keys are down, and on DRAFTING none are',
     expect(down).not.toContain('select');
     expect(down).not.toContain('wall');
 
-    await key(page, 'select').evaluate(() => {});  // column is built
     await page.locator('[data-board="drafting"]').click();
     await page.waitForTimeout(80);
     // Both directions. "always down" would satisfy the half above.
