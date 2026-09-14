@@ -537,7 +537,21 @@ if (!window.DraftToyConstraints) {
   // in the harness: with no `bearing` flags in play today's gatherer welds
   // every end-to-end pair, so that empty list is what the current context
   // produces. That is a fact about the gatherer, not a hole in this function.
-  const endStretches = (wall, groupIds, walls, delta) => {
+  // `detached` IS THE CALLER SAYING "THIS ONE IS NOT ATTACHED", and it exists
+  // because welding here is done by COORDINATE, not identity. Two walls whose
+  // ends sit at the same point are welded as far as this module can see -- and
+  // that is right for ordinary geometry, where a shared corner IS a shared
+  // corner.
+  //
+  // It stops being right the moment a caller UNSHARES one. MODEL's §4 break
+  // lets a drafter drag half a run out into a bump-out: it gives the dragged
+  // wall its own corner, leaves the old corner with the neighbour, and spans
+  // the two with a connector. At the instant the drag arms, those two corners
+  // are still at the same coordinates -- so this module predicts the
+  // neighbour will be dragged into a diagonal and refuses a move that would do
+  // nothing of the kind. The page knows which walls it is actually going to
+  // move; this is how it says so.
+  const endStretches = (wall, groupIds, walls, delta, detached) => {
     if (!wall || !wall.start || !wall.end || !delta) return [];
     const runX = wall.end.x - wall.start.x;
     const runZ = wall.end.z - wall.start.z;
@@ -550,6 +564,7 @@ if (!window.DraftToyConstraints) {
     const stretches = [];
     (walls || []).forEach(other => {
       if (groupIds.includes(other.id) || !other.start || !other.end) return;
+      if (detached && detached.includes(other.id)) return;
       ['start', 'end'].forEach(endName => {
         const corner = other[endName];
         const welded = moving.some(m => [m.start, m.end]
@@ -581,8 +596,8 @@ if (!window.DraftToyConstraints) {
   // MEASURED, NOT ARGUED: seeding a run already broken into two collinear
   // walls and dragging one half produced `n2: (0,-11) -> (10,-10)` with an
   // empty strip. A diagonal, in TOY, silently.
-  const wouldAngle = (wall, groupIds, walls, delta) => {
-    const stretches = endStretches(wall, groupIds, walls, delta);
+  const wouldAngle = (wall, groupIds, walls, delta, detached) => {
+    const stretches = endStretches(wall, groupIds, walls, delta, detached);
     if (!stretches.length) return null;
     const runX = wall.end.x - wall.start.x;
     const runZ = wall.end.z - wall.start.z;
@@ -684,7 +699,8 @@ if (!window.DraftToyConstraints) {
       // TOY ONLY, and deliberately so. DRAFTING's whole freedom is that a wall
       // may sit off-axis, so a rule forbidding a move because it angles
       // something would be the foot light's leak wearing a third coat.
-      const angled = mode === MODE.TOY ? wouldAngle(wall, groupIds, walls, d) : null;
+      const angled = mode === MODE.TOY
+        ? wouldAngle(wall, groupIds, walls, d, ctx.detached) : null;
       const verdict = angled
         ? { ok: false, violations: [{ reason: REASON.WOULD_ANGLE_NEIGHBOUR, wallId: angled }] }
         : isLegal(configAfterMove(base, groupIds, d));
@@ -709,7 +725,7 @@ if (!window.DraftToyConstraints) {
         }
         result.kind = kindOf(wall, d, blocked && blocked.reason);
         result.lengthFt = geo().distance(wall.start, wall.end);
-        result.stretches = endStretches(wall, groupIds, walls, d);
+        result.stretches = endStretches(wall, groupIds, walls, d, ctx.detached);
         // The advisory band describes where the wall LANDED, so it is the
         // later word on `band`. The two can only both exist in DRAFTING, where
         // BUMP_FOUNDATION is permitted and only BUMP_AND_PILES blocks; in TOY

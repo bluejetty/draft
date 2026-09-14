@@ -840,36 +840,44 @@ const wallEnds = (page, id) => page.evaluate(async ({ bucket, wid }) => {
 const squareRun = ([x1, z1, x2, z2]) =>
   Math.abs(x2 - x1) < 1e-6 || Math.abs(z2 - z1) < 1e-6;
 
-test('TOY refuses a drag that would leave the next wall on an angle',
+test('TOY never leaves the next wall on an angle — by connector now, not refusal',
   async ({ page }) => {
+    // THIS CHECK CHANGED ITS MECHANISM AND KEPT ITS CLAIM, which is the whole
+    // point of writing down what a check is FOR.
+    //
+    // §3b found that TOY could draw a diagonal: seeded with a run already
+    // broken into two collinear walls, dragging one half gave
+    // `n2: (0,-11) -> (10,-10)` with an empty strip. The fix then was to
+    // REFUSE the drag, and this check asserted the refusal.
+    //
+    // §4's connector supersedes that. The drag is now permitted and the
+    // collinear corner is unshared, so the neighbour is never bent and there
+    // is nothing left to refuse. The rule §3b protects -- TOY NEVER LEAVES A
+    // WALL ON AN ANGLE -- is unchanged; it is now kept by construction rather
+    // than by refusal.
+    //
+    // So the check asserts the INVARIANT, not the mechanism. Had it kept
+    // asserting "the strip says no", it would have gone red for an improvement
+    // and told me the feature was broken.
+    //
+    // The module's own WOULD_ANGLE_NEIGHBOUR rule is still proven, directly,
+    // in 'asked of the module, not of the page' below -- other callers reach
+    // it without the page's connector.
     await open(page, brokenRun());
     const { at } = await frame(page);
-    // The middle of n1, which is the half being pulled.
-    const [sx, sy] = at(-5, -10);
-    await page.mouse.click(sx, sy);
-    await page.waitForTimeout(80);
-    await page.mouse.move(sx, sy);
-    await page.mouse.down();
-    const [ex, ey] = at(-5, -11);
-    await page.mouse.move(ex, ey, { steps: 8 });
-    await page.mouse.up();
-    await page.waitForTimeout(150);
+    await nudge(page, [-5, -10], [-5, -11]);
 
-    // THE POSITIVE HALF FIRST. "n2 is not angled" is satisfied by a page where
-    // nothing moved at all, by one where TOY is switched off, and by one where
-    // the drag never armed -- an assertion the absence of the feature
-    // satisfies is not an assertion. So the refusal has to SPEAK before the
-    // geometry is worth reading.
-    await expect(page.locator('#strip-message'),
-      'the refusal is on screen').not.toHaveText('');
-    await expect(page.locator('#strip-message'),
-      'and it names the angle, not a distance').toContainText('angle');
-
-    await saveIt(page);
-    expect(squareRun(await wallEnds(page, 'n2')),
-      'the neighbour is still square').toBe(true);
-    expect(await wallZ(page, 'n1'),
-      'and the refused drag stopped dead rather than moving anyway').toBe(-10);
+    const walls = await wallsNamed(page);
+    for (const w of walls) {
+      expect(square([...w.s, ...w.e]),
+        `${w.id} is square: (${w.s}) -> (${w.e})`).toBe(true);
+    }
+    // POSITIVE HALF: it actually moved. "nothing is angled" is satisfied by a
+    // page that refuses every drag, which is what this file keeps warning
+    // about and what the previous version of this check would now pass on.
+    const n1 = walls.find(w => w.id === 'n1');
+    expect([n1.s[1], n1.e[1]], 'and the wall the drafter dragged did move')
+      .toEqual([-11, -11]);
   });
 
 test('the same drag in DRAFTING is not refused — the angle rule is TOY only',
@@ -1287,4 +1295,76 @@ test('§4 — a click near a corner breaks at the first mark IN, never at the co
       expect(Math.hypot(w.e[0] - w.s[0], w.e[1] - w.s[1]),
         `wall ${w.id} has a real length`).toBeGreaterThan(1e-6);
     }
+  });
+
+// ── §4 SECOND HALF: THE CONNECTOR ───────────────────────────────────────────
+//
+// "After a break the two halves are independent bones and each obeys §3", and
+// they are not independent yet. Break a run and drag one half and §3b refuses
+// it -- correctly, because the halves are COLLINEAR and dragging one swings
+// the other. Safe, but the L and the bump-out the order names as the point of
+// §4 are unreachable.
+//
+// What makes them reachable is the drag SPLITTING the shared corner and
+// growing a connector wall between the old corner and the new one. That
+// connector IS the side of the bump-out. Nothing is angled, so §3b has nothing
+// to refuse.
+const brokenAt = x => base({
+  board: 'toy',
+  walls: [
+    ['n1', V(-10, -10), V(x, -10)], ['n2', V(x, -10), V(10, -10)],
+    ['e', V(10, -10), V(10, 10)],
+    ['s', V(10, 10), V(-10, 10)], ['w', V(-10, 10), V(-10, -10)],
+  ].map(([id, start, end]) => ({ id, start, end, levelId: 3, view: 'plan',
+    wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' })),
+});
+
+const square = ([x1, z1, x2, z2]) =>
+  Math.abs(x2 - x1) < 1e-6 || Math.abs(z2 - z1) < 1e-6;
+
+test('§4 — dragging one half of a broken run grows a connector, not a diagonal',
+  async ({ page }) => {
+    await open(page, brokenAt(0));
+    const { at } = await frame(page);
+    await nudge(page, [-5, -10], [-5, -11]);
+
+    const walls = await wallsNamed(page);
+    for (const w of walls) {
+      expect(square([...w.s, ...w.e]),
+        `${w.id} is still square: (${w.s}) -> (${w.e})`).toBe(true);
+    }
+    // THE HALF THAT MOVED, AND THE HALF THAT DID NOT. Asserting only the
+    // mover passes an implementation that drags both, which is the state
+    // before any of this.
+    const n1 = walls.find(w => w.id === 'n1');
+    const n2 = walls.find(w => w.id === 'n2');
+    expect([n1.s[1], n1.e[1]], 'the dragged half went out one foot')
+      .toEqual([-11, -11]);
+    expect([n2.s[1], n2.e[1]], 'the other half stayed exactly where it was')
+      .toEqual([-10, -10]);
+
+    // AND THE SIDE OF THE BUMP-OUT EXISTS. Without it the two halves are
+    // simply disconnected and the house has a one-foot gap in its wall -- a
+    // state that looks fine in a wall count and is not a building.
+    const joiner = walls.find(w => !['n1', 'n2', 'e', 's', 'w'].includes(w.id));
+    expect(joiner, 'a connector wall was made').toBeTruthy();
+    const ends = [joiner.s, joiner.e].sort((a, b) => a[1] - b[1]);
+    expect(ends, 'it runs from the new corner back to the old one')
+      .toEqual([[0, -11], [0, -10]]);
+  });
+
+test('§4 — an ordinary drag makes no connector: the neighbours just stretch',
+  async ({ page }) => {
+    // THE OTHER SIDE OF THE BRANCH, and §3's whole behaviour. On the plain
+    // square a wall's neighbours are PERPENDICULAR: they lengthen and stay
+    // square, and splitting a corner there would leave a spurious zero-length
+    // wall in the drawing on every single drag.
+    await open(page, base({ board: 'toy' }));
+    const before = (await wallsNamed(page)).length;
+    await nudge(page, [0, -10], [0, -11]);
+    const walls = await wallsNamed(page);
+    expect(walls.length, 'no wall was added').toBe(before);
+    const e = walls.find(w => w.id === 'e');
+    expect(square([...e.s, ...e.e]),
+      'the perpendicular neighbour just got longer').toBe(true);
   });

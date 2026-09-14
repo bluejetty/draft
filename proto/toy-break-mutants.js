@@ -71,6 +71,33 @@ const MUTANTS = [
     // where clamped and unclamped agree -- so 7a never saw it and the gate's
     // ambiguity flag caught that the kill came from somewhere else.
     test: 'near a corner' },
+
+  // ── §4's SECOND HALF: THE CONNECTOR ──────────────────────────────────────
+  // Four mutants, and every one is a failure actually hit building this.
+  { file: 'MODEL.html',
+    name: 'THE CORNER IS NEVER UNSHARED: dragging half a run swings the other half',
+    find: '        splitRunCorners(md);',
+    with: '        /* mutant */',
+    test: 'grows a connector' },
+  { file: 'MODEL.html',
+    name: 'EVERY neighbour is split, so an ordinary drag drops a null wall each time',
+    // The other arm. A perpendicular neighbour just stretches; splitting there
+    // would leave a zero-length wall in the drawing on every single drag.
+    find: '      if (!touching.some(other => collinearWith(wall, other))) return;',
+    with: '      if (!touching.length) return;',
+    test: 'makes no connector' },
+  { file: 'MODEL.html',
+    name: 'ZERO-LENGTH WALLS GO TO THE MODULE: the connector refuses its own drag',
+    // Found by reading inertReason: a wall of no length is not orthogonal, so
+    // the connector made the wall that created it inert.
+    find: '      .filter(w => Math.hypot(w.end.x - w.start.x, w.end.z - w.start.z) >= 1e-6)',
+    with: '',
+    test: 'grows a connector' },
+  { file: 'toy-constraints.js',
+    name: 'DETACHED IS IGNORED: the module refuses a bend the page already prevented',
+    find: '      if (detached && detached.includes(other.id)) return;',
+    with: '      if (false) return;',
+    test: 'grows a connector' },
 ];
 
 

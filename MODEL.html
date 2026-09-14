@@ -4930,6 +4930,64 @@
     return tail;
   };
 
+  // ── §4's SECOND HALF: THE CONNECTOR ──────────────────────────────────────
+  //
+  // "After a break the two halves are independent bones and each obeys §3."
+  // A joint alone does not deliver that. The halves of a broken run are
+  // COLLINEAR and share a corner, so dragging one swings the other -- §3b
+  // refuses it rather than produce a diagonal, which is safe and leaves the L
+  // and the bump-out the order names as the POINT of §4 unreachable.
+  //
+  // What makes them reachable: the drag UNSHARES that corner. The dragged
+  // wall takes its own vertex, the neighbour keeps the old one, and a
+  // connector wall spans the two. As the drag proceeds the connector grows --
+  // perpendicular to the wall being dragged, because the move is -- and that
+  // connector IS the side of the bump-out. Nothing is left angled, so §3b has
+  // nothing to refuse.
+  //
+  // ONLY FOR COLLINEAR NEIGHBOURS. A perpendicular neighbour just gets longer
+  // and stays square, which is §3's whole behaviour on an ordinary house;
+  // splitting corners there would drop a zero-length wall into the drawing on
+  // every drag.
+  //
+  // ONCE, WHEN THE DRAG ARMS, not on every pointermove -- a connector per
+  // mouse event would be several hundred walls across one gesture.
+  const collinearWith = (wall, other) => {
+    const rx = wall.end.x - wall.start.x, rz = wall.end.z - wall.start.z;
+    const ox = other.end.x - other.start.x, oz = other.end.z - other.start.z;
+    const a = Math.hypot(rx, rz), b = Math.hypot(ox, oz);
+    if (a < 1e-9 || b < 1e-9) return false;
+    return Math.abs((rx * oz - rz * ox) / (a * b)) < 1e-6;
+  };
+
+  const splitRunCorners = md => {
+    if (board !== 'toy' || md.kind !== 'wall' || !md.body) return;
+    const wall = md.body;
+    md.before.forEach(b => {
+      const v = b.vtx;
+      const touching = (drawing.walls || [])
+        .filter(w => w !== wall && (w.start === v || w.end === v));
+      if (!touching.some(other => collinearWith(wall, other))) return;
+      // A SEPARATE VERTEX AT THE SAME PLACE, and poolVertex must not be used:
+      // mergeVertex merges by position and would hand back the very corner
+      // being unshared. The pool's own rule allows this -- "two corners at the
+      // same place are still two corners if the pool never merged them".
+      const fresh = { x: v.x, y: 0, z: v.z,
+        srcId: v.srcId ?? null, offX: v.offX ?? 0, offZ: v.offZ ?? 0 };
+      vertexPool.push(fresh);
+      if (wall.start === v) wall.start = fresh; else wall.end = fresh;
+      b.vtx = fresh;
+      const conn = { ...wall, id: newDrawingItemId('wall'), start: fresh, end: v };
+      // Which neighbour this corner was shared WITH, so the constraint call
+      // can be told it is no longer carried by the move.
+      conn.detachedFrom = (touching.find(other => collinearWith(wall, other)) || {}).id;
+      drawing.walls.push(conn);
+      undoStack.push({ kind: 'add', wall: conn });
+      md.connectors = (md.connectors || []).concat(conn);
+    });
+    if (md.connectors) markDirty();
+  };
+
   const boneChoice = document.getElementById('bone-choice');
   let boneChoiceFor = null;
   const closeBoneChoice = () => { boneChoiceFor = null; boneChoice.hidden = true; };
@@ -5980,7 +6038,19 @@
     const land = landingStep(pos, dir);
     const ask = offGridBy(pos) ? dir * land : wanted;
     const probe = { ...wall, stepFt: land };
-    const ctx = C.gather({ walls: (drawing.walls || []).map(w => ({ ...w })) });
+    // ZERO-LENGTH WALLS ARE NOT GEOMETRY, and handing one to the module makes
+    // it refuse the very drag that is about to give the wall its length. §4's
+    // connector is born with both ends at the same point; `isOrthogonal`
+    // reports false for a run of no length, so `inertReason` sees the dragged
+    // wall TOUCHING a non-orthogonal wall and calls it inert. The move is
+    // refused by the thing the move creates.
+    //
+    // The format drops anything under 1e-6 on load, so a wall this short is
+    // not a record the drawing will keep either. The module is asked about
+    // real walls.
+    const ctx = C.gather({ walls: (drawing.walls || [])
+      .filter(w => Math.hypot(w.end.x - w.start.x, w.end.z - w.start.z) >= 1e-6)
+      .map(w => ({ ...w })) });
     // THE PAGE HAS TO SAY WHAT ACTUALLY MOVES, and until now it did not.
     //
     // Left to itself the module builds a weld group: any two walls whose ends
@@ -6001,7 +6071,12 @@
     // hanging off its corners are STRETCHES -- which is exactly what this page
     // does to them.
     const verdict = T.allowedMove(probe, ask,
-      { ...ctx, mode: T.MODE.TOY, welds: [[wall.id]] });
+      { ...ctx, mode: T.MODE.TOY, welds: [[wall.id]],
+        // §4: the corners this drag already unshared. Their neighbours still
+        // sit at the same coordinates until the first delta lands, so without
+        // this the module refuses the bump-out as a diagonal it would have
+        // caused -- a refusal about geometry the page has already resolved.
+        detached: (md.connectors || []).map(c => c.detachedFrom).filter(Boolean) });
     // §3: "A BLOCKED DRAG STOPS DEAD AND THE BLOCKER SAYS WHY. Never elastic."
     // The saying is the half that was missing: allowedMove has always returned
     // a reason and this page has always stored it, and nothing put it on
@@ -6111,7 +6186,13 @@
     }
     if (moveDrag) {
       const md = moveDrag;
-      if (!md.active && Math.hypot(e.clientX - md.sx, e.clientY - md.sy) > DRAG_ARM_PX) md.active = true;
+      if (!md.active && Math.hypot(e.clientX - md.sx, e.clientY - md.sy) > DRAG_ARM_PX) {
+        md.active = true;
+        // §4: unshare any corner this wall shares with a COLLINEAR neighbour,
+        // before the first delta lands, so the connector grows with the drag
+        // instead of appearing at the end of it.
+        splitRunCorners(md);
+      }
       if (md.active) {
         const rect = canvas.getBoundingClientRect();
         const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
