@@ -113,9 +113,24 @@ test('the board round-trips, and a file that never had one still does not',
     await page.locator('#save').click();
     await page.waitForTimeout(400);
     const after = await stored(page);
-    expect(after.board ?? null,
-      'a file that never chose is not given a choice by being opened')
-      .toBe(null);
+    // ABSENT, NOT NULL, and the difference is the whole check.
+    //
+    // This line read `expect(after.board ?? null).toBe(null)` and was green
+    // while SIX CI checks were red on this exact fact. `?? null` is satisfied
+    // by the key being ABSENT and by it being PRESENT as null, equally -- so
+    // the assertion could not see the thing its own title names, and the page
+    // wrote `board: null` into every drawing it saved for a day.
+    //
+    // That is worth naming: an assertion satisfied by the feature's absence
+    // proves nothing, and `??`/`||` in an expect is where it usually hides.
+    // The Write Tier saw it (write-tier.spec.js:580, key for key) because it
+    // compares whole objects and a whole object knows absent from null.
+    expect('board' in after,
+      'a file that never chose is not given a choice by being opened -- not '
+      + 'even a null one, which the old page never writes').toBe(false);
+    expect('boardPromptSeen' in after,
+      'and is not given an answered-the-prompt flag it never answered')
+      .toBe(false);
   });
 
 test('a junk board is normalised out of the file, not carried in it',
@@ -134,8 +149,12 @@ test('a junk board is normalised out of the file, not carried in it',
     await page.locator('[data-draw-wall]').click();
     await page.locator('#save').click();
     await page.waitForTimeout(400);
-    expect((await stored(page)).board,
-      'the junk did not survive the round trip').toBe(null);
+    // Same correction as above: "not carried in it" is a claim about the KEY,
+    // and `toBe(null)` is met by a carried null. The house rule this test
+    // quotes says the writer never emits it, so the key is gone.
+    expect('board' in await stored(page),
+      'the junk did not survive the round trip, as a value OR as a null')
+      .toBe(false);
   });
 
 test('a junk board in the file does not reach the switch', async ({ page }) => {

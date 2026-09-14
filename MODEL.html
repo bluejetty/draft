@@ -833,6 +833,11 @@
   <div class="grow"></div>
   <div id="strip-switches">
     <span class="set" data-board-switch>
+      <!-- NO title HERE. These two are set from script below, and a static one
+           would be overwritten -- which is exactly what happened when this
+           markup was given titles first: they read correctly in the file and
+           never reached the page. The wording, and the check that holds it to
+           the truth, live with the assignment. -->
       <button type="button" data-board="toy" aria-pressed="false">TOY</button>
       <button type="button" data-board="drafting" aria-pressed="false">DRAFTING</button>
     </span>
@@ -4497,7 +4502,17 @@
       // refuses a disconnected run while one is unfinished, so reaching here
       // with a pending bone that does not end at `from` is not a state the
       // gesture can produce.
-      pendingBone = { id: newDrawingItemId('outline'), masterId: null,
+      // NO ID YET. The counter is PERSISTED, so taking a number here spends it
+      // on a record that may never exist: a one-wall run is not a bone (the
+      // format refuses an outline under three points), and every abandoned run
+      // would leave a permanent gap between the counter and the file's
+      // contents. model-html-draw-delete.spec.js:169 reads the counter after
+      // one drawn wall and is the check that says so -- 9 where 8 was the
+      // wall's own successor.
+      //
+      // The id is taken at the push below, where the bone becomes a thing the
+      // reader will keep. Nothing reads pendingBone.id before then.
+      pendingBone = { id: null, masterId: null,
         levelId, points: [pt(from)], overriddenSrcIds: [] };
       bone = pendingBone;
     }
@@ -4517,6 +4532,7 @@
     bone.points.push(pt(to));
     if (bone === pendingBone && bone.points.length >= 3) {
       drawing.outlines = drawing.outlines || [];
+      bone.id = newDrawingItemId('outline');   // spent only now that it lands
       drawing.outlines.push(bone);
       pendingBone = null;
     }
@@ -5512,14 +5528,21 @@
   };
   boardButtons.forEach(b => {
     // §8 of the TOY bones order: this title said "remembered, but nothing is
-    // constrained by it yet" for as long as that was true. §6 makes it false
-    // -- the board now decides which tools the column offers -- so the
-    // disclaimer goes rather than being left to mislead. What it says instead
-    // is the constraint that exists TODAY, not the finished feature: bones and
-    // grip tabs are still to come, and this sentence does not promise them.
+    // constrained by it yet" for as long as that was true. §6 made it false
+    // -- the board decides which tools the column offers -- and the disclaimer
+    // went rather than being left to mislead.
+    //
+    // §1–§5 have since made it false a second time, in the direction a drafter
+    // meets FIRST. The tool roster is what TOY takes away; squareness and the
+    // whole foot are what it DOES, on the very first wall, and a title that
+    // named only the roster left the drafter to discover the geometry rule by
+    // being surprised by it. Both facts, one sentence each side of the comma.
+    //
+    // STILL NOT PROMISING THE UNBUILT: this names what a drafter can confirm
+    // by drawing one wall today. model-html-strip.spec.js:353 holds it to that.
     b.title = b.dataset.board === 'toy'
-      ? 'TOY board — walls only; the other tools are put away'
-      : 'DRAFTING board — the full tool column';
+      ? 'TOY board — walls only, square and whole-foot; the other tools are put away'
+      : 'DRAFTING board — the full tool column, any angle and any length';
     b.addEventListener('click', () => { setBoard(b.dataset.board); });
   });
 
@@ -6958,10 +6981,37 @@
     return out;
   };
 
+  // READERS NORMALISE, WRITERS NEVER INVENT. The loader materialises `board`
+  // and `boardPromptSeen` on `drawing` because the page ACTS on them -- a board
+  // of "banana" must not reach the switch (see the normalise comment above) --
+  // and `...drawing` then wrote both into every file this page saved.
+  //
+  // THAT IS THE 12" FOUNDATION AGAIN, pointing the other way. A drafter who
+  // opened a drawing and pressed SAVE had asked to draw nothing, and the file
+  // came back with two keys the page that owns the format never writes. The
+  // Write Tier's acceptance line is "every key equal, deep" and it was red for
+  // exactly as long as this was true; three of its checks say the same fact.
+  //
+  // `board: null` is the ABSENCE spelled out -- it means "never chosen", which
+  // is what a missing key already means -- and `boardPromptSeen: false` means
+  // "not yet answered", likewise. Neither carries an instruction, so neither is
+  // written. A REAL choice is: 'drafting' is a member of BOARDS and not the
+  // null, so switching back to DRAFTING persists, and `boardPromptSeen: true`
+  // persists, which is what keeps §7 from re-arming a question already answered.
+  const storedChoice = () => ({
+    ...(drawing.board ? { board: drawing.board } : {}),
+    ...(drawing.boardPromptSeen === true ? { boardPromptSeen: true } : {}),
+  });
+
   const serializeDrawing = () => {
     const point = p => window.DraftDrawingFormat.pointForStorage(p);
+    // Destructured out of the spread rather than overwritten with `undefined`,
+    // so the key is genuinely absent from the OBJECT and not merely absent from
+    // its JSON -- the omission must not depend on this having one caller.
+    const { board: _board, boardPromptSeen: _seen, ...rest } = drawing;
     return {
-      ...drawing,
+      ...rest,
+      ...storedChoice(),
       walls: withRefused('walls', drawing.walls.map(wall => {
         // Restored ONLY while the wall still carries the type this page
         // substituted; a deliberate later change is the drafter's edit and is

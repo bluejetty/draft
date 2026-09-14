@@ -345,6 +345,17 @@ test('an edit never blocks the main thread, even with four live elevations',
   async ({ page }) => {
     await openWith(page, [SECTION]);
 
+    // MEASURED ON A DRAFTING BOARD, and the void-sample guard below is what
+    // said so. These are three (four) SEPARATE two-tap runs, and on the default
+    // TOY board §1 refuses a new run while one is unfinished — a rule with its
+    // own check (model-toy-draw.spec.js:447), which also proves putting the
+    // tool down does not cancel the run. So every edit after the first was
+    // correctly refused, committed nothing, and this read as a chrome
+    // regression. The subject here is what the chrome costs, not what the
+    // board allows, so the board is named rather than inherited.
+    await page.locator('#strip-switches [data-board="drafting"]').click();
+    await expect(page.locator('body')).toHaveAttribute('data-board', 'drafting');
+
     // WHAT A DRAFTER FEELS, not a millisecond budget. The old assertion here
     // read `rail < 10ms`, which encoded the labels ruling; Movie reversed that
     // after seeing it — the dc page shows live elevations and he wants them —

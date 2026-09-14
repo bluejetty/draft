@@ -24,10 +24,20 @@ const readout = page => page.locator('#readout');
 // there — the same transform trick model-html-draw-delete.spec.js uses, and
 // for the same reason: the page publishes its scale in the readout, so a
 // spec needs no test hook to know where a world point lands.
-async function seed(page) {
+// THE BOARD IS A FACT OF THE DRAWING, so a test about a DRAFTING rule says so
+// in the file rather than leaning on whatever the page defaults to. The default
+// is TOY (Movie's stated default for the PC board), and TOY squares the wall,
+// rounds it to the foot and asks before a typed length promotes -- so three
+// checks in this file were asserting DRAFTING behaviour on a TOY board and
+// reading the difference as a regression in the instruments.
+//
+// They are DRAFTING's rules and they still hold; naming the board is asserting
+// the layer the rule is ABOUT. The TOY side of each is covered where it
+// belongs, in model-toy-board.spec.js.
+async function seed(page, { board } = {}) {
   await page.goto('/MODEL.dc.html');
   await page.waitForFunction(() => !!window.SharedFileStore, null, { timeout: 10000 });
-  await page.evaluate(async ({ bucket, level }) => {
+  await page.evaluate(async ({ bucket, level, board }) => {
     const wall = {
       id: 'w-a', levelId: level, view: 'plan', wallType: 'stud_2x6',
       baseHeight: 0, topHeight: 8, refLine: 'left',
@@ -47,10 +57,11 @@ async function seed(page) {
       stairs: [], groups: [],
       nextDrawingItemId: 7, wallRefLine: 'left', wallBaseHeight: 0,
       wallTopHeight: 8, activeWallType: 'stud_2x6',
+      ...(board ? { board } : {}),
     };
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(d)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, level: MAIN_FL });
+  }, { bucket: BUCKET, level: MAIN_FL, board: board || null });
 }
 
 async function openModel(page, search = '') {
@@ -168,7 +179,12 @@ test.describe('MODEL.html instrument strip', () => {
 
   test('the T-SQUARE holds the wall square, and the page is not square without it',
     async ({ page }) => {
-      await seed(page);
+      // ON A DRAFTING BOARD, because "not square without it" is a DRAFTING
+      // claim: TOY squares every wall whether the T-square is up or down, and
+      // has no way to switch that off (model-toy-board.spec.js:357). Without
+      // this line the control case below draws a squared wall and the check
+      // reads it as the T-square leaking.
+      await seed(page, { board: 'drafting' });
       await openModel(page);
       await page.locator('#draw-wall').click();
 
@@ -208,7 +224,11 @@ test.describe('MODEL.html instrument strip', () => {
 
   test('the LENGTH box commits a typed wall, and is dead when there is nothing to measure',
     async ({ page }) => {
-      await seed(page);
+      // DRAFTING, for the same reason and a sharper one: §7 makes a typed
+      // length on a TOY board ASK before it promotes, so on the default board
+      // the typed wall does not commit until a confirm is answered. That
+      // question is the subject of its own checks; this one is about the box.
+      await seed(page, { board: 'drafting' });
       await openModel(page);
 
       const box = page.locator('#frozen-length');
@@ -330,7 +350,7 @@ test.describe('MODEL.html instrument strip', () => {
       .toHaveAttribute('data-mode', 'night');
   });
 
-  test('the board switch remembers the choice and does not pretend to enforce it',
+  test('the board switch remembers the choice, and its title says what it enforces',
     async ({ page }) => {
       await seed(page);
       await openModel(page);
@@ -349,11 +369,22 @@ test.describe('MODEL.html instrument strip', () => {
       await expect(page.locator('body'), 'the board outlives the tab')
         .toHaveAttribute('data-board', 'drafting');
 
-      // THE HONESTY CHECK, and the reason this test exists at all. TOY MODE's
-      // definition has not arrived — the sentence defining it was cut off
-      // mid-word — so the switch records a choice and constrains nothing, and
-      // it has to SAY that. The day someone wires the constraints, this line
-      // is the one that tells them to change the title.
-      await expect(toy).toHaveAttribute('title', /nothing is constrained/);
+      // THE HONESTY CHECK, and the reason this test exists at all. It read
+      //   await expect(toy).toHaveAttribute('title', /nothing is constrained/);
+      // for exactly as long as that was true, under a note saying "the day
+      // someone wires the constraints, this line is the one that tells them to
+      // change the title". That day came: §1–§5 square the wall, round it to
+      // the foot, and hold the shape rectilinear through a drag.
+      //
+      // THE CLAIM IS UNCHANGED — the title must describe what the board really
+      // does — and only the truth it checks has moved. The regex names a
+      // constraint a drafter can confirm by drawing one wall, so a title that
+      // goes back to promising nothing is red, and so is one that keeps
+      // promising squareness after someone unwires it.
+      await expect(toy).toHaveAttribute('title', /square and whole-foot/);
+      await expect(page.locator('#strip-switches [data-board="drafting"]'),
+        'and the other switch says what it does instead, or "square" reads as '
+        + 'a property of the strip rather than of TOY')
+        .toHaveAttribute('title', /any angle and any length/);
     });
 });

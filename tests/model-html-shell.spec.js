@@ -338,6 +338,17 @@ test('a tap that lands on a sidebar says which one', async ({ page }) => {
 test('the shell does not put a long task back', async ({ page }) => {
   await openShell(page, '&left=1&right=1');
 
+  // MEASURED ON A DRAFTING BOARD, and the void-sample guard below is what
+  // said so. These are three (four) SEPARATE two-tap runs, and on the default
+  // TOY board §1 refuses a new run while one is unfinished — a rule with its
+  // own check (model-toy-draw.spec.js:447), which also proves putting the
+  // tool down does not cancel the run. So every edit after the first was
+  // correctly refused, committed nothing, and this read as a chrome
+  // regression. The subject here is what the chrome costs, not what the
+  // board allows, so the board is named rather than inherited.
+  await page.locator('#strip-switches [data-board="drafting"]').click();
+  await expect(page.locator('body')).toHaveAttribute('data-board', 'drafting');
+
   // The order's bar: the last table read 31–54 ms per committed click with no
   // long tasks, and the shell must not undo that. Measured with BOTH panels
   // open, which is the most chrome the page can have on screen at once.
