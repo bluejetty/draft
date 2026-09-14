@@ -50,6 +50,39 @@ const MUTANTS = [
     find: "      pendingBone = { id: newDrawingItemId('outline'), masterId: null,",
     with: "      pendingBone = { id: newDrawingItemId('outline'), masterId: 'made-up',",
     test: 'acceptance 2b' },
+  // ── THE FOUR BEHAVIOURS THAT LANDED AFTER THIS GATE LAST RAN ────────────
+  // Each is one deleted line from silently not happening, and the notice-slot
+  // bug is why they are here rather than on a list: a refusal that sets text
+  // and is overwritten passes every check that inspects state.
+  { file: 'MODEL.html',
+    name: 'THE REFUSAL NEVER FIRES: a disconnected run is allowed while one is open',
+    find: '      if (toyRunRefused(drawPoint(at))) return;',
+    with: '',
+    test: 'refuses a new one' },
+  { file: 'MODEL.html',
+    name: 'the refusal refuses but says nothing',
+    find: "    sayOnStrip('finish or cancel the run you started — Esc cancels');",
+    with: '',
+    test: 'refuses a new one' },
+  { file: 'MODEL.html',
+    name: 'THE NOTICE IS OVERWRITTEN AGAIN: stripRefresh stops preferring it',
+    find: '    stripMessage.textContent = stripNotice || (rulerOn',
+    with: '    stripMessage.textContent = (rulerOn',
+    test: 'refuses a new one' },
+  { file: 'MODEL.html',
+    name: 'Escape stops cancelling, so the refusal names a way out that is gone',
+    find: '      if (pendingBone) {\n        pendingBone = null;\n        sayOnStrip(\'run cancelled\');\n      }',
+    with: '',
+    test: 'Escape cancels' },
+  { file: 'MODEL.html',
+    name: 'the notice sticks, sitting over a gesture that has since succeeded',
+    // A COMMENT WAS NOT A MUTANT. The first version of this entry appended a
+    // comment line and changed no behaviour at all -- it would have survived
+    // for ever and taught me to read one survivor as normal. A mutant that
+    // cannot fail is the gate's own version of a check that cannot fail.
+    find: "      if (toyRunRefused(drawPoint(at))) return;\n      stripNotice = '';",
+    with: '      if (toyRunRefused(drawPoint(at))) return;',
+    test: 'Escape cancels' },
 ];
 
 const run = grep => {
