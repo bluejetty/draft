@@ -134,6 +134,21 @@ makes.
 So §4's break-the-bone keeps its assumption: **a bone is a real loop**. It is
 just that a level may have more than one.
 
+### An unfinished run refuses the next one — ruled 14 Sep
+
+You recorded the pending-bone slot as a limit rather than a rule: start a
+disconnected run while the previous run holds only two taps and those two taps
+vanish. Nothing is lost from the file — a two-point run was never a shape — but
+the drafter's hand did something the screen forgot, and that is the shape of
+fault this whole order exists to refuse. Put to Movie, who ruled:
+
+**The new run is refused, out loud, while a run is unfinished.** Say which —
+"finish or cancel the run you started" — and leave the two taps where they are.
+Never drop them silently.
+
+Acceptance: two taps down, a tap started away from them **makes nothing new and
+loses nothing**, and the page says why.
+
 ### The bone is the only handle
 
 > Movie: *"they will only use the BONES for editing"*
@@ -328,6 +343,10 @@ nothing.
     **second outline and a second bone** — not one polygon joining the two.
     Assert two bones after reload, and assert dragging one leaves the other
     where it was.
+2e. With a run unfinished (two taps down), a tap started away from it creates
+    **nothing** and **loses nothing** — the two taps are still there — and the
+    page says the run is unfinished. Assert all three; the silent drop passes
+    a check that only counts bones.
 3. In TOY, an unavailable tool cannot be armed and is visibly down.
 4. In DRAFTING the same gestures commit the off-axis, off-foot wall they
    commit today. **TOY must not leak.**

@@ -444,13 +444,54 @@ test('one wall in TOY is not yet a bone, and nothing is written', async ({ page 
   expect(o.kept.length).toBe(0);
 });
 
-test('a disconnected run does not adopt an unfinished bone', async ({ page }) => {
-  // THE OTHER HOLE. The second-bone check starts its garage after the house is
-  // a finished four-point bone, so the pending slot is empty by then and the
-  // membership test never runs against it. Here the first run stops at ONE
-  // wall -- still pending, never written -- and the garage starts far away.
-  // Joining it would make one bone spanning the yard, from a run the drafter
-  // had already walked away from.
+test('an unfinished run refuses a new one, and says so', async ({ page }) => {
+  // RULED 13 SEP, replacing the boundary I reported. Starting a disconnected
+  // run while the first has only two taps used to drop those taps silently.
+  // Now the new run is refused and the strip says why -- the drafter's hand
+  // did something, so the screen has to account for it.
+  await open(page, base({ board: 'toy', walls: [] }));
+  const { at } = await frame(page);
+  await armWall(page);
+  await page.mouse.click(...at(0, 0));
+  await page.waitForTimeout(60);
+  await page.mouse.click(...at(6, 0));       // two taps: a run, not yet a shape
+  await page.waitForTimeout(60);
+  await page.locator('[data-draw-wall]').click();
+  await page.waitForTimeout(60);
+  await page.locator('[data-draw-wall]').click();
+
+  await page.mouse.click(...at(24, 0));      // somewhere else entirely
+  await page.waitForTimeout(80);
+  await expect(page.locator('#strip-message'),
+    'the refusal is on screen, not only in the data')
+    .toContainText('finish or cancel');
+
+  // AND NOTHING WAS MADE BY THE REFUSED PRESS. A refusal that still commits
+  // the first wall of the new run is the half-application §7 forbids one
+  // section over.
+  await page.mouse.click(...at(32, 0));
+  await page.waitForTimeout(80);
+  await saveIt(page);
+  expect((await outlinesIn(page)).kept.length,
+    'nothing was created by the refused press').toBe(0);
+
+  // AND NOTHING WAS LOST -- the third assertion 2e asks for, and the one the
+  // silent drop would sail past. The two taps are still the live run, so
+  // continuing it from where it stopped closes the shape it was always going
+  // to be, with the original corners in it.
+  await page.mouse.click(...at(6, 6));
+  await page.waitForTimeout(80);
+  await saveIt(page);
+  const after = (await outlinesIn(page)).kept;
+  expect(after.length, 'the run finished into one bone').toBe(1);
+  expect(after[0].points.map(p => [Math.round(p.x), Math.round(p.z)]),
+    'and it still begins with the two taps that were there before the refusal')
+    .toEqual([[0, 0], [6, 0], [6, 6]]);
+});
+
+test('Escape cancels the unfinished run the refusal names', async ({ page }) => {
+  // The refusal says "finish or cancel", so the cancel has to exist: a message
+  // naming a way out the page does not offer is worse than no message.
   await open(page, base({ board: 'toy', walls: [] }));
   const { at } = await frame(page);
   await armWall(page);
@@ -458,16 +499,20 @@ test('a disconnected run does not adopt an unfinished bone', async ({ page }) =>
   await page.waitForTimeout(60);
   await page.mouse.click(...at(6, 0));
   await page.waitForTimeout(60);
-  await page.locator('[data-draw-wall]').click();
+  await page.keyboard.press('Escape');
   await page.waitForTimeout(60);
-  await page.locator('[data-draw-wall]').click();
-  for (const [x, z] of [[24, 0], [32, 0], [32, 6], [24, 6]]) {
-    await page.mouse.click(...at(x, z));
-    await page.waitForTimeout(60);
-  }
+  await expect(page.locator('#strip-message')).toContainText('cancelled');
+
+  // AND THE REFUSAL IS GONE WITH IT: a new run somewhere else is now allowed.
+  await page.mouse.click(...at(24, 0));
+  await page.waitForTimeout(60);
+  await page.mouse.click(...at(32, 0));
+  await page.waitForTimeout(60);
+  await page.mouse.click(...at(32, 6));
+  await page.waitForTimeout(80);
   await saveIt(page);
-  const { kept } = await outlinesIn(page);
-  expect(kept.length, 'one bone -- the garage').toBe(1);
+  const kept = (await outlinesIn(page)).kept;
+  expect(kept.length, 'the new run was allowed to become a bone').toBe(1);
   expect(kept[0].points.map(p => Math.round(p.x)),
-    'and it does not reach back to the abandoned run').not.toContain(0);
+    'and it is the new run, not the cancelled one').not.toContain(0);
 });

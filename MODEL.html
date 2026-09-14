@@ -4412,10 +4412,10 @@
       // record the reader throws away -- the silent, one-reload-later loss
       // this page has now been bitten by twice. It is held here until it is
       // a shape the reader will keep.
-      // ONE PENDING BONE AT A TIME, and a new run replaces an unfinished one.
-      // A two-point run is not yet a shape the reader keeps, so nothing is
-      // lost from the file -- but the drafter's two taps are dropped, which is
-      // a boundary rather than a rule and is recorded as one.
+      // ONE PENDING BONE AT A TIME, and it is never overwritten: drawPress
+      // refuses a disconnected run while one is unfinished, so reaching here
+      // with a pending bone that does not end at `from` is not a state the
+      // gesture can produce.
       pendingBone = { id: newDrawingItemId('outline'), masterId: null,
         levelId, points: [pt(from)], overriddenSrcIds: [] };
       bone = pendingBone;
@@ -4615,8 +4615,33 @@
     return board === 'toy' ? onTheFoot(drawStart, free) : free;
   };
 
+  // AN UNFINISHED RUN REFUSES A NEW ONE, AND SAYS SO. Ruled 13 Sep, after I
+  // reported the boundary rather than hardening it: starting a disconnected
+  // run while the first had only two taps used to drop those taps silently.
+  // Nothing was lost from a saved file -- a two-point run was never a shape
+  // the reader keeps -- but the drafter's hand had done something the screen
+  // forgot, which is the quiet half of every failure this board is arranged
+  // against.
+  //
+  // REFUSED AT THE FIRST PRESS OF THE NEW RUN, before any wall is made. The
+  // run is what is refused, so refusing it after committing its first wall
+  // would be a half-application -- the same thing "Stay in TOY commits nothing
+  // and changes nothing" forbids one section over.
+  const toyRunRefused = at => {
+    if (board !== 'toy' || !pendingBone) return false;
+    if (endsAt(pendingBone, at)) return false;      // this press continues it
+    // NAMES BOTH WAYS OUT, because the order's wording does: "finish or cancel
+    // the run you started". Escape is the cancel.
+    stripMessage.textContent =
+      'finish or cancel the run you started — Esc cancels';
+    return true;
+  };
+
   const drawPress = at => {
-    if (!drawStart) { drawStart = drawPoint(at); paint(); return; }
+    if (!drawStart) {
+      if (toyRunRefused(drawPoint(at))) return;
+      drawStart = drawPoint(at); paint(); return;
+    }
     const end = drawPoint(at);
     // A wall of no length is not a wall — the format drops anything under
     // 1e-6 on load, so committing one would write a record that vanishes on
@@ -5774,6 +5799,16 @@
     // it is the affordance a drafter with no keyboard can reach.
     if (e.key === 'Escape') {
       drawStart = null;
+      // AND THE UNFINISHED BONE GOES WITH IT. The refusal below says "finish
+      // or cancel the run you started", so a cancel has to exist -- a message
+      // naming a way out that the page does not offer is worse than no
+      // message. Escape already puts down every other half-taken gesture on
+      // this page (the pending wall start, a half-taken measure), so the
+      // unfinished run goes down the same way rather than by a key of its own.
+      if (pendingBone) {
+        pendingBone = null;
+        stripMessage.textContent = 'run cancelled';
+      }
       // ESC WITH NOTHING SELECTED RELEASES THE FILTER, which is the release
       // the filter help line promises in writing (:22418-22419). With
       // something selected Esc clears the selection first, so a drafter never
