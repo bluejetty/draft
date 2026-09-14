@@ -559,9 +559,15 @@ const angled = extra => base({
 test('§3 — a blocked drag stops dead, and the strip says why', async ({ page }) => {
   await open(page, angled({}));
   const { at } = await frame(page);
-  // Grab the wall's middle, well away from either end, so this is a body drag
-  // and not a corner drag.
+  // SELECT IT FIRST. wallBodyAt only returns a wall that is already selected
+  // -- "the body of a selected wall, whose grab zone has no marks on it at
+  // all" -- so a press on an unselected wall starts a PAN, and my first
+  // version of this check dragged the sheet instead of the wall. The strip
+  // was empty because nothing was ever refused, not because the refusal was
+  // silent: two different bugs with one symptom.
   const [gx, gy] = at(-2, -1.5);
+  await page.mouse.click(gx, gy);
+  await page.waitForTimeout(80);
   await page.mouse.move(gx, gy);
   await page.mouse.down();
   await page.mouse.move(gx, gy + 60, { steps: 8 });
