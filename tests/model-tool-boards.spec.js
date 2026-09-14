@@ -5,10 +5,12 @@
 // THE RULING is Skipper's, written down in
 // RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/SPEC-toy-mode-constraints.md: "A wall can
 // be manipulated ONLY through a grip tab. There is no drafting tool in TOY
-// MODE." WALL survives because §1 of this order had TOY square the run and
-// land it on the foot -- a rule about DRAWING a wall, which would be dead code
-// on a board with no wall tool. SELECT survives because it is the resting
-// state, not a drafting tool.
+// MODE." That sentence is the older document. Movie ruled on 13 Sep: the
+// OUTLINE GETS DRAWN IN TOY, drawing the outline is not a drafting tool but
+// how a TOY house begins, so the rule is "no drafting tools except the one
+// gesture that makes the outline". On this page that gesture is draw-wall, and
+// §1's squaring and foot-landing is its rule. SELECT survives because it is
+// the resting state, not a drafting tool.
 //
 // WHAT THIS SPEC IS ARRANGED AGAINST is one shape of lie: the key looking
 // down while the register still takes the tool. Greying is presentation and
@@ -213,10 +215,11 @@ test('a browser that has never chosen opens on TOY, with the keys down',
     // the board, so which one a fresh browser got did not matter. It decides
     // what a first-time drafter can press now.
     //
-    // This check does not argue the answer is right. It makes the answer
-    // VISIBLE: ruling the other way is one word in MODEL.html and one word
-    // here, and neither can move without the other going red. An incidental
-    // default that fifteen keys depend on is the thing worth refusing.
+    // RULED, not merely current: Movie, 13 Sep, confirmed TOY is the
+    // first-run default. The check stays because the reason for it does -- an
+    // incidental default that fifteen keys depend on is the thing worth
+    // refusing, and now that it is a decision it should fail loudly if
+    // something moves it by accident.
     await open(page, base({}));   // the file records no board either
     expect(await boardOf(page)).toBe('toy');
     expect(await downKeys(page)).toHaveLength(15);

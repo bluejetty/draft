@@ -68,12 +68,20 @@
   // can be manipulated ONLY through a grip tab. There is no drafting tool in
   // TOY MODE."
   //
-  // WALL IS THE ONE EXCEPTION AND IT IS DELIBERATE, not a hole. §1 of the same
-  // order had TOY square the run and land it on the foot, which is a rule
-  // about DRAWING a wall in TOY -- work that would be dead code if TOY offered
-  // no wall tool. So the spec's sentence governs EDITING (the grip tab owns
-  // that) and §1 governs drawing. Read together: TOY draws walls and edits
-  // through bones, and offers nothing else.
+  // WALL IS THE ONE EXCEPTION, AND IT IS NOW RULED RATHER THAN INFERRED.
+  // Movie, 13 Sep, relayed: the spec's sentence is the older document, and the
+  // OUTLINE GETS DRAWN IN TOY -- drawing the outline is not a drafting tool,
+  // it is how a TOY house begins. So §6 reads: no drafting tools EXCEPT the
+  // one gesture that makes the outline. §1's squaring and foot-landing is that
+  // gesture's rule, and would have been dead code under any other reading.
+  //
+  // WHY THE KEY IS 'wall' AND NOT 'outline'. The gesture that makes the
+  // outline on this page today IS draw-wall -- there is no separate outline
+  // tool in the roster, and §1 was built on the wall gesture. The ruling is
+  // about the GESTURE, not the key, so if the outline ever becomes a tool of
+  // its own this list names that one instead and WALL goes down with the rest.
+  // Recorded here because a future reader would otherwise see a wall exception
+  // where the rule is an outline exception.
   //
   // SELECT IS NOT A DRAFTING TOOL, it is the resting state -- the page falls
   // back to it whenever it puts a tool down. A board that did not offer it

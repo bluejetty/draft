@@ -72,13 +72,12 @@ async function seedHouse(page) {
 // "one tool, not seventeen booleans" -- and LINE is an arbitrary example of a
 // tool to arm, so the board it needs is fixture rather than subject.
 //
-// WHAT THAT DOES NOT SETTLE, and it is not settled by being worked around
-// here: a drafter opening the app for the first time now gets fifteen keys
-// down, because the default for a browser that has never chosen is TOY. That
-// was harmless while nothing was constrained by the board. It is a product
-// decision now, it is Movie's, and tests/model-tool-boards.spec.js pins the
-// current answer with a check so it moves deliberately rather than by
-// accident.
+// THE DEFAULT THAT MAKES THIS NECESSARY IS RULED, not incidental. A drafter
+// opening the app for the first time gets TOY, and so fifteen keys down;
+// Movie confirmed that on 13 Sep. It was harmless while nothing was
+// constrained by the board and it is a decision now, so
+// tests/model-tool-boards.spec.js pins it with a check rather than leaving it
+// to be discovered.
 
 async function openColumn(page, query = '?left=1') {
   await h.openModel(page, { webgl: false });
