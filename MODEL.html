@@ -4924,6 +4924,7 @@
     const at = (drawing.walls || []).indexOf(wall);
     drawing.walls.splice(at < 0 ? drawing.walls.length : at + 1, 0, tail);
     boneGainsPoint(was.a, was.b, pt);
+    rebuildRoofs();                        // §5: the ring changed
     undoStack.push({ kind: 'add', wall: tail });
     markDirty();
     paint();
@@ -4986,6 +4987,131 @@
       md.connectors = (md.connectors || []).concat(conn);
     });
     if (md.connectors) markDirty();
+  };
+
+  // ── §5: A ROOF OVER WHATEVER NOTHING SITS ON ─────────────────────────────
+  //
+  // Movie, 14 Sep: a roof belongs to "every part of a floor that nothing sits
+  // on" -- so it is a FUNCTION of the difference between one storey's
+  // footprint and the one above it, recomputed when either bone moves, not a
+  // thing attached to the top storey. A ranch is the degenerate case.
+  //
+  // THE GEOMETRY IS geometry-2d.js's, not a second opinion. uncoveredRegions
+  // does the rectilinear difference and returns rectangles, because a storey
+  // set back on all sides leaves a RING and the format's roof has `points`
+  // with no holes.
+  //
+  // WHICH ROOFS ARE OURS: `sourceShapeId`, which the format already carries
+  // (drawing-format.js:490) and which means "where this came from". A roof
+  // built from a bone names that bone; a roof a drafter drew names nothing and
+  // is NEVER touched here. No new field, and no guessing.
+  const storeyAbove = levelId => {
+    const here = (drawing.levels || []).find(l => Number(l.id) === Number(levelId));
+    if (!here) return null;
+    return (drawing.levels || [])
+      .filter(l => (Number(l.elev) || 0) > (Number(here.elev) || 0))
+      .sort((a, b) => (Number(a.elev) || 0) - (Number(b.elev) || 0))[0] || null;
+  };
+
+  const boneOf = levelId => (drawing.outlines || [])
+    .find(o => Number(o.levelId) === Number(levelId)) || null;
+
+  // The edge that dies into the storey above is a GABLE -- ruled 14 Sep, "the
+  // roof should terminate where it meets the upper storey wall like a garage
+  // roof that is dropped". A gable end is vertical and carries no eave
+  // overhang, which is the property that matters: an eave there would hang two
+  // feet of roof straight into the house above.
+  //
+  // The format has no third kind -- an edge is `gable` if it says so and
+  // `eave` otherwise -- so this needs no format change and no older reader
+  // sees anything it cannot read.
+  const edgeKinds = (ring, upper) => {
+    if (!upper) return ring.map(() => 'eave');
+    const onUpper = pt => (upper.points || []).some((a, i) => {
+      const b = upper.points[(i + 1) % upper.points.length];
+      const cross = (b.x - a.x) * (pt.z - a.z) - (b.z - a.z) * (pt.x - a.x);
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (len < 1e-9 || Math.abs(cross) / len > 1e-6) return false;
+      const t = ((pt.x - a.x) * (b.x - a.x) + (pt.z - a.z) * (b.z - a.z)) / (len * len);
+      return t >= -1e-6 && t <= 1 + 1e-6;
+    });
+    return ring.map((pt, i) => {
+      const next = ring[(i + 1) % ring.length];
+      return onUpper(pt) && onUpper(next) ? 'gable' : 'eave';
+    });
+  };
+
+  // THE BONE FOLLOWS THE DRAG, and until §5 it did not.
+  //
+  // §2 is explicit: "a level's bone drives that level's FLOOR and WALL nodes"
+  // and "the bone is not a separate drawing that happens to look like the
+  // plan". But §3's drag moves wall VERTICES and nothing else, so every TOY
+  // drag left the outline behind as a stale snapshot of where the house used
+  // to be. Invisible on screen -- the walls are what paints -- and invisible
+  // to every §3 check, which all read walls.
+  //
+  // §5 is what made it bite: roofs derive from the bone, so a bone that never
+  // moved produced a roof over the old footprint. The drag moved the wall a
+  // foot and the roof stayed where it was.
+  //
+  // By the ORIGINAL position, not by identity: an outline point is a plain
+  // record, not the pooled vertex object the wall holds, so the two are only
+  // ever connected by where they sit.
+  //
+  // ON THIS LEVEL ONLY. The first version walked every outline in the drawing
+  // and moved any point sitting at the dragged corner -- so dragging the main
+  // floor's wall silently reshaped the SECOND FLOOR's bone, because storeys
+  // stacked on the same footprint have points at identical coordinates. A
+  // §5 check caught it: the storey above followed the floor below and the
+  // roof between them never changed. Matching by position is right; matching
+  // by position across levels is not.
+  const boneFollows = (before, levelId) => {
+    const rings = (drawing.outlines || [])
+      .filter(o => Number(o.levelId) === Number(levelId));
+    before.forEach(b => {
+      if (b.x === b.vtx.x && b.z === b.vtx.z) return;
+      rings.forEach(ring => (ring.points || []).forEach(pt => {
+        if (Math.hypot(pt.x - b.x, pt.z - b.z) > 1e-6) return;
+        pt.x = b.vtx.x;
+        pt.z = b.vtx.z;
+      }));
+    });
+  };
+
+  const rebuildRoofs = () => {
+    const G = window.DraftGeometry2D;
+    if (!G || !G.uncoveredRegions) return;
+    const mine = new Set();
+    (drawing.levels || []).forEach(level => {
+      const bone = boneOf(level.id);
+      if (!bone) return;
+      mine.add(String(bone.id));
+      const above = storeyAbove(level.id);
+      const cover = above ? boneOf(above.id) : null;
+      const regions = G.uncoveredRegions(bone.points || [], cover ? cover.points : null);
+      // DROP THIS BONE'S OLD ROOFS FIRST, so a storey pushed back out takes
+      // its roof away with it rather than leaving the old one behind. "A roof
+      // appears" is satisfied by an implementation that only ever adds.
+      drawing.roofs = (drawing.roofs || [])
+        .filter(r => String(r.sourceShapeId || '') !== String(bone.id));
+      regions.forEach(ring => {
+        drawing.roofs.push({
+          id: newDrawingItemId('roof'),
+          points: ring.map(pt => ({ x: pt.x, y: 0, z: pt.z })),
+          levelId: Number(level.id),
+          sourceLevelId: above ? Number(above.id) : null,
+          sourceShapeId: String(bone.id),
+          edges: edgeKinds(ring, cover),
+          // THE FORMAT'S OWN DEFAULTS, written out rather than left implicit:
+          // pitch 4 is the 4/12 that was ruled, overhang 2 is what a roof
+          // reads back as anyway (drawing-format.js:493-494).
+          overhang: 2,
+          pitch: 4,
+          garage: false,
+        });
+      });
+    });
+    markDirty();
   };
 
   const boneChoice = document.getElementById('bone-choice');
@@ -6295,6 +6421,11 @@
       if (md.active) {
         undoStack.push({ kind: 'move', before: md.before });
         markDirty();
+        // §5: the bone moved, so what the storey above covers has changed and
+        // the roofs under it are stale. Recomputed on the RELEASE, not on
+        // every pointermove -- a roof record per mouse event would be hundreds
+        // across one drag.
+        if (board === 'toy') { boneFollows(md.before, md.body?.levelId); rebuildRoofs(); }
       } else if (board === 'toy' && md.kind === 'wall' && md.body) {
         // §4's CLICK, and it costs no new gesture. `wallBodyAt` only returns a
         // wall that is ALREADY SELECTED, so reaching here means the drafter

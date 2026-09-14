@@ -1368,3 +1368,131 @@ test('§4 — an ordinary drag makes no connector: the neighbours just stretch',
     expect(square([...e.s, ...e.e]),
       'the perpendicular neighbour just got longer').toBe(true);
   });
+
+// ── §5: A ROOF OVER WHATEVER NOTHING SITS ON ────────────────────────────────
+//
+// Movie, 14 Sep: "the highest floor bone should also control the roof bone so
+// the roof will change, additionally, if a main floor is added a roof should
+// be added on it at the lower level if the 2nd floor doesn't cover it, or also
+// if the 2nd floor is pulled back a main floor roof should cover the open
+// ceiling."
+//
+// So the roof is a FUNCTION of the difference between a storey's footprint and
+// the one above it, recomputed when either bone moves -- not a thing attached
+// to the top storey. A ranch is the degenerate case: nothing above, so the
+// whole floor is uncovered.
+const roofsOf = page => page.evaluate(async bucket => {
+  const f = await window.SharedFileStore.loadSharedFile(bucket);
+  return (JSON.parse(await f.text()).roofs || []).map(r => ({
+    levelId: r.levelId,
+    from: r.sourceShapeId || null,
+    edges: r.edges,
+    pitch: r.pitch,
+    box: [Math.min(...r.points.map(p => p.x)), Math.min(...r.points.map(p => p.z)),
+      Math.max(...r.points.map(p => p.x)), Math.max(...r.points.map(p => p.z))],
+  }));
+}, BUCKET);
+
+const twoStorey = (upperZ) => base({
+  board: 'toy',
+  levels: [{ id: 3, name: 'MAIN FL', elev: 0 }, { id: 4, name: '2ND FL', elev: 9 }],
+  outlines: [
+    OUT('main-1', 3, null, [[-10, -10], [10, -10], [10, 10], [-10, 10]]),
+    OUT('up-1', 4, null, [[-10, -10], [10, -10], [10, upperZ], [-10, upperZ]]),
+  ],
+});
+
+test('§5 — a storey pulled back leaves a roof over the ceiling it opened',
+  async ({ page }) => {
+    // THE DRAG PULLS THE FLOOR IN, not out, and that is not cosmetic. Dragging
+    // it OUTWARD opens a second strip -- the new foot of floor beyond the
+    // storey above -- so the answer is two roofs, which is correct and was not
+    // what this check said. It only ever read as one because a bug in
+    // boneFollows was dragging the upper storey's bone along with the lower's.
+    await open(page, twoStorey(0));
+    const { at } = await frame(page);
+    await nudge(page, [0, 10], [0, 9]);         // move a bone: roofs rebuild
+
+    const roofs = (await roofsOf(page)).filter(r => r.levelId === 3);
+    expect(roofs.length, 'the main floor took a roof').toBe(1);
+    expect(roofs[0].box, 'over exactly the part the 2nd floor does not cover')
+      .toEqual([-10, 0, 10, 9]);
+  });
+
+test('§5 — a ranch takes one roof over the whole floor', async ({ page }) => {
+    await open(page, base({
+      board: 'toy',
+      outlines: [OUT('main-1', 3, null, [[-10, -10], [10, -10], [10, 10], [-10, 10]])],
+    }));
+    const { at } = await frame(page);
+    await nudge(page, [0, -10], [0, -11]);
+    const roofs = (await roofsOf(page)).filter(r => r.levelId === 3);
+    expect(roofs.length, 'one roof').toBe(1);
+    // The north bone moved out a foot, so the floor -- and its roof -- grew.
+    expect(roofs[0].box, 'over the whole floor as it now stands')
+      .toEqual([-10, -11, 10, 10]);
+  });
+
+test('§5 — the roof comes up HIPPED, and only the shared edge is a gable',
+  async ({ page }) => {
+    // "make the roofs cottage default and switchable to gable", and the format
+    // already does it: an edge is `gable` only if it says so, otherwise eave.
+    // Cottage-by-default is behaviour to NOT BREAK rather than a feature.
+    //
+    // The one exception is ruled: the edge where the lower roof meets the
+    // storey above is a GABLE -- it dies into that wall and must not carry an
+    // eave's 2ft overhang, which would drive straight into the house.
+    await open(page, twoStorey(0));
+    const { at } = await frame(page);
+    await nudge(page, [0, -10], [0, -11]);
+
+    const roof = (await roofsOf(page)).find(r => r.levelId === 3);
+    expect(roof, 'the roof exists').toBeTruthy();
+    expect(roof.pitch, 'pitch 4 -- the 4/12 the format already defaults to').toBe(4);
+    const gables = roof.edges.filter(e => e === 'gable').length;
+    expect(gables, 'exactly one edge is a gable').toBe(1);
+    expect(roof.edges.filter(e => e === 'eave').length,
+      'and the other three are eaves -- hipped, not gabled all round').toBe(3);
+  });
+
+test('§5 — a floor pulled back under its storey loses the roof it had',
+  async ({ page }) => {
+    // THE REMOVAL, which nothing else asserts: "a roof appears" is satisfied
+    // by an implementation that only ever adds, and the order says plainly
+    // "push it back out and that roof goes again".
+    //
+    // ONE DRAG, ON A SYMMETRIC FIXTURE, and both of those were learned the
+    // hard way. Two drags left the wall selected so §4's choice opened
+    // mid-gesture; adding a reload between them made it worse, because after
+    // the first drag the drawing is no longer symmetric about the origin and
+    // fit() re-centres on the midpoint of DRAWN BOUNDS -- the trap written at
+    // the top of this file -- so every click afterwards lands half a foot out.
+    //
+    // THE ROOF IS SEEDED, so this asserts REMOVAL rather than absence. A check
+    // that drags and finds no roof passes a page that never made one.
+    await open(page, base({
+      board: 'toy',
+      levels: [{ id: 3, name: 'MAIN FL', elev: 0 }, { id: 4, name: '2ND FL', elev: 9 }],
+      walls: [
+        ['n', V(-11, -11), V(11, -11)], ['e', V(11, -11), V(11, 11)],
+        ['s', V(11, 11), V(-11, 11)], ['w', V(-11, 11), V(-11, -11)],
+      ].map(([id, start, end]) => ({ id, start, end, levelId: 3, view: 'plan',
+        wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' })),
+      outlines: [
+        OUT('main-1', 3, null, [[-11, -11], [11, -11], [11, 11], [-11, 11]]),
+        OUT('up-1', 4, null, [[-11, -11], [11, -11], [11, 10], [-11, 10]]),
+      ],
+      roofs: [{ id: 'roof-seed', levelId: 3, sourceLevelId: 4,
+        sourceShapeId: 'main-1', overhang: 2, pitch: 4, garage: false,
+        edges: ['gable', 'eave', 'eave', 'eave'],
+        points: [{ x: -11, y: 0, z: 10 }, { x: 11, y: 0, z: 10 },
+          { x: 11, y: 0, z: 11 }, { x: -11, y: 0, z: 11 }] }],
+    }));
+    expect((await roofsOf(page)).filter(r => r.levelId === 3).length,
+      'the fixture really carries the roof this check removes').toBe(1);
+
+    await nudge(page, [0, 11], [0, 10]);        // pull the floor back under
+
+    expect((await roofsOf(page)).filter(r => r.levelId === 3).length,
+      'covered again, so the roof goes').toBe(0);
+  });
