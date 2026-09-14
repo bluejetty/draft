@@ -4350,8 +4350,63 @@
     };
     drawing.walls.push(wall);
     undoStack.push({ kind: 'add', wall });
+    extendToyBone(startPt, endPt, levelId);
     markDirty();
     return wall;
+  };
+
+  // ── §2: THE GESTURE MAKES THE BONE, NOT ONLY THE WALLS ───────────────────
+  //
+  // Movie, 13 Sep: "yes the toy house will have the bones and those will be
+  // what TOY can manipulate". Before this, commitWall pushed to drawing.walls
+  // and touched nothing else, and the only place this page made a level
+  // outline was adding a level (:2919) -- so a hand-drawn TOY house had no
+  // bone, and §2's "the outline becomes a bone" had nothing to become one.
+  //
+  // TOY ONLY. Writing the outline on every board would change what every
+  // DRAFTING drawing contains, which is a much larger claim than this order
+  // makes and is what the DRAFTING half of acceptance 2b guards.
+  //
+  // masterId NULL, which is the format's "purely local outline"
+  // (drawing-format.js:893). A hand-drawn house came from no master, so this
+  // record IS the bone rather than a copy of one -- and that is exactly the
+  // shape §2 says not to invent a second store for.
+  //
+  // THE ID IS A STRING HERE AND THAT IS CORRECT, in deliberate contrast to a
+  // column's. drawing-format.js reads an outline id with String() (:921) and a
+  // column's with Number() (:512). Same page, same allocator, opposite
+  // requirements -- so newDrawingItemId is right for this one and wrong for
+  // that one, and neither is a house style.
+  let pendingBone = null;
+  const toyBoneFor = levelId => (drawing.outlines || [])
+    .find(o => Number(o.levelId) === Number(levelId) && !o.masterId) || null;
+
+  const extendToyBone = (from, to, levelId) => {
+    if (board !== 'toy') return;
+    const same = (a, b) => a && b && Math.hypot(a.x - b.x, a.z - b.z) < 1e-6;
+    const pt = p => ({ x: p.x, y: 0, z: p.z });
+    let bone = toyBoneFor(levelId);
+    if (!bone) {
+      // NOT PUSHED YET. The format refuses an outline under three points
+      // (:918), so a one- or two-point record written into the file is a
+      // record the reader throws away -- the silent, one-reload-later loss
+      // this page has now been bitten by twice. It is held here until it is
+      // a shape the reader will keep.
+      if (!pendingBone || Number(pendingBone.levelId) !== Number(levelId)) {
+        pendingBone = { id: newDrawingItemId('outline'), masterId: null,
+          levelId, points: [pt(from)], overriddenSrcIds: [] };
+      }
+      bone = pendingBone;
+    }
+    const last = bone.points[bone.points.length - 1];
+    // A chained wall starts where the last one ended, so the shared corner is
+    // one point and not two.
+    if (!same(last, to)) bone.points.push(pt(to));
+    if (bone === pendingBone && bone.points.length >= 3) {
+      drawing.outlines = drawing.outlines || [];
+      drawing.outlines.push(bone);
+      pendingBone = null;
+    }
   };
 
   // DELETE CASCADES, IT DOES NOT REFUSE — MODEL.dc.html:22225-22251 does, and
