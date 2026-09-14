@@ -532,3 +532,53 @@ test('Escape cancels the unfinished run the refusal names', async ({ page }) => 
   expect(kept[0].points.map(p => Math.round(p.x)),
     'and it is the new run, not the cancelled one').not.toContain(0);
 });
+
+// ── §3: A BLOCKED DRAG STOPS DEAD AND THE BLOCKER SAYS WHY ──────────────────
+//
+// WRITTEN BEFORE THE CODE, and that ordering is the one thing today earned.
+// allowedMove already returns a reason; MODEL.html already stores it in
+// md.blocked; nothing displays it. That is the "never written" row of the
+// message table — and the other three rows (hidden, overwritten, never
+// cleared) all shipped green today because the check read state instead of
+// the screen. So this asserts the strip, and it asserts it twice: the refusal
+// appears, and the wall did not move.
+//
+// AN ANGLED WALL IS THE REFUSAL THAT NEEDS NO SETUP. toy-constraints.js calls
+// inert geometry ineligible before it considers anything else — it is the
+// answer that keeps old drawings open — so a diagonal is refused on its own
+// merits rather than by contriving a room too small to shrink.
+const angled = extra => base({
+  board: 'toy',
+  walls: [
+    { id: 'diag', start: V(-8, -6), end: V(4, 3), levelId: 3, view: 'plan',
+      wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' },
+  ],
+  ...extra,
+});
+
+test('§3 — a blocked drag stops dead, and the strip says why', async ({ page }) => {
+  await open(page, angled({}));
+  const { at } = await frame(page);
+  // Grab the wall's middle, well away from either end, so this is a body drag
+  // and not a corner drag.
+  const [gx, gy] = at(-2, -1.5);
+  await page.mouse.move(gx, gy);
+  await page.mouse.down();
+  await page.mouse.move(gx, gy + 60, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+
+  await expect(page.locator('#strip-message'),
+    'the blocker is on screen, not only in md.blocked')
+    .not.toHaveText('');
+  await expect(page.locator('#strip-message')).toContainText(/cannot|angled|not/i);
+
+  // STOPS DEAD, NEVER ELASTIC: the wall is where it was.
+  await saveIt(page);
+  const moved = await page.evaluate(async bucket => {
+    const f = await window.SharedFileStore.loadSharedFile(bucket);
+    const w = JSON.parse(await f.text()).walls.find(w => w.id === 'diag');
+    return [Number(w.start.x.toFixed(4)), Number(w.start.z.toFixed(4))];
+  }, BUCKET);
+  expect(moved, 'the refused drag moved nothing').toEqual([-8, -6]);
+});

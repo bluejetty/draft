@@ -896,6 +896,17 @@
      seventeen hand-written buttons that can drift apart. It reads
      profile-manager.js for the SETTINGS remaps, so it comes after it. -->
 <script src="./tool-roster.js"></script>
+<!-- §3's CONSTRAINT PATH, AND IT WAS NEVER LOADED HERE. toyWallDelta asked for
+     window.DraftToyConstraints, got undefined, and returned null -- so the TOY
+     bone drag silently fell through to wallSnapDelta and behaved exactly like
+     DRAFTING. Nothing threw: the guard `if (!T || !C || !wall) return null` is
+     written to be safe on a page without the modules, which made a missing
+     script indistinguishable from a wall that needs no constraining.
+     room-standards.js comes with them because toy-constraints.js reads it at
+     call time; MODEL.dc.html:25-29 loads the same three, in this order. -->
+<script src="./room-standards.js"></script>
+<script src="./toy-constraints.js"></script>
+<script src="./toy-context.js"></script>
 <!-- Stairs. stair-geometry.js is the riser math and the plan parts; it is not
      a painter either, it is the two ANSWERS drawStairs2D asks its caller for
      (layoutFor, partsFor), which lived on the MODEL.dc.html component.
@@ -5498,6 +5509,27 @@
     return direction > 0 ? (FOOT - frac) : -frac;
   };
 
+  // THE MODULE'S REASONS, IN THE DRAFTER'S WORDS. toy-constraints.js names
+  // them as codes on purpose -- it is a node module with no screen -- so the
+  // page is where they become a sentence. Movie's rule for TOY is that a
+  // refusal is explained "in the room's own words", and a code is not that.
+  //
+  // The default is the code itself rather than a shrug: an unnamed reason is a
+  // bug in this list, and printing it is how anyone finds out. A generic
+  // "cannot move that" would hide the gap for ever.
+  const BLOCKER_WORDS = {
+    NOT_ORTHOGONAL: 'this wall is not square, so the toy cannot move it',
+    TOUCHES_NON_ORTHOGONAL: 'this wall meets an angled wall, so the toy cannot move it',
+    MIN_ROOM: 'that would make a room too small',
+    OPENING_WOULD_NOT_FIT: 'a door or window would not fit after that',
+    CANTILEVER: 'that would overhang more than 2 ft — bring the foundation out first',
+    GROUP_MEMBER_BLOCKED: 'a wall joined to this one cannot move that far',
+    OBJECT_CLEARANCE: 'something in the room would not have room left',
+    NEEDS_A_BEAM: 'that span would need a beam',
+  };
+  const blockerSays = verdict =>
+    BLOCKER_WORDS[verdict.reason] || `cannot move it: ${verdict.reason}`;
+
   const toyWallDelta = (md, dx, dz) => {
     const T = window.DraftToyConstraints;
     const C = window.DraftToyContext;
@@ -5521,7 +5553,17 @@
     const probe = { ...wall, stepFt: land === null ? FOOT : Math.abs(land) };
     const ctx = C.gather({ walls: (drawing.walls || []).map(w => ({ ...w })) });
     const verdict = T.allowedMove(probe, ask, { ...ctx, mode: T.MODE.TOY });
-    md.blocked = verdict.reason && verdict.delta === 0 ? verdict : null;
+    // §3: "A BLOCKED DRAG STOPS DEAD AND THE BLOCKER SAYS WHY. Never elastic."
+    // The saying is the half that was missing: allowedMove has always returned
+    // a reason and this page has always stored it, and nothing put it on
+    // screen. That is the same fault as a refusal written and overwritten --
+    // a rule that exists to speak, silent -- so it goes through sayOnStrip
+    // like every other thing this page says, and the next drag that actually
+    // moves something clears it.
+    const stopped = verdict.reason && verdict.delta === 0;
+    md.blocked = stopped ? verdict : null;
+    if (stopped) sayOnStrip(blockerSays(verdict));
+    else if (verdict.delta) clearNotice();
     const moved = verdict.delta || 0;
     return axis === 'x' ? { dx: 0, dz: moved } : { dx: moved, dz: 0 };
   };
