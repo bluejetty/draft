@@ -448,6 +448,13 @@
      loses the hover promise, and the cursor says it will not take the press. */
   .tool-key:disabled, .tool-key:disabled:hover { opacity:0.35; cursor:not-allowed;
     border-color: var(--edge-panel); color: var(--ink-quiet); box-shadow:none; }
+  /* Fixed to the viewport and out of the way of hit-testing: a label that
+     ate the pointer would break the very gesture it is reporting on. */
+  #draw-len { position:fixed; z-index:40; pointer-events:none;
+    font-family: var(--font-mono); font-size:12px; font-weight:600;
+    padding:2px 6px; border-radius:3px; white-space:nowrap;
+    background: var(--surface-panel); color: var(--ink-primary);
+    border:1px solid var(--edge-panel); }
   [data-tool-letter] { position:absolute; top:2px; left:4px; font-size:11px;
     font-weight:600; line-height:1; }
   /* The five bare faces keep the same box: a key whose letter box collapses
@@ -728,6 +735,11 @@
   <div id="props-slot" data-props-slot hidden></div>
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
+<!-- THE LENGTH THE DRAFTER CAN SEE WHILE HE DRAWS. Movie, 13 Sep: "show the
+     line length on screen to the user during the line drawing when their
+     finger on screen for ipad". Fixed rather than absolute so it needs no
+     positioned ancestor and can follow clientX/clientY straight. -->
+<div id="draw-len" data-draw-length hidden></div>
 
 <!-- THE INSTRUMENT STRIP. The icons are MODEL.dc.html:1975-2072's own paths,
      kept identical so the two pages read as the same board; the colours are
@@ -4424,6 +4436,9 @@
   const RESTING_TOOL = 'select';
   let activeTool = RESTING_TOOL;
   let drawStart = null;
+  // Where the wall gesture's pointer went down, and whether that press opened
+  // the run. Read by the pointerup that places the line; see its comment.
+  let wallPress = null;
   const toolListeners = [];
   // THE BOARD'S LISTENERS ARE DECLARED HERE, beside the tool's, for one dull
   // reason: `applyBoard` runs at load and the tool column builder is a `const`
@@ -4600,9 +4615,42 @@
   // drafter should never be able to misread.
   const runInHand = () => {
     if (!cursorWorld) return null;
-    if (drawStart && activeTool === 'wall') return { from: drawStart, to: squareTo(drawStart, cursorWorld) };
+    // drawPoint, NOT squareTo, AND THAT IS A BUG FIX RATHER THAN A TIDY-UP.
+    // squareTo only squares; drawPoint is what the commit calls, and in TOY it
+    // also lands the run on the whole foot. Reading the cursor through the
+    // weaker of the two made the strip say 5.4 ft over a wall that committed
+    // at 5. §1: the readout must be "the same number commitWall will receive,
+    // not the cursor measured separately -- two readings of one distance
+    // drift, and the drafter believes the one he can see." This has been
+    // wrong on the TOY board since §1 landed.
+    if (drawStart && activeTool === 'wall') return { from: drawStart, to: drawPoint(cursorWorld) };
     if (rulerFrom) return { from: rulerFrom, to: cursorWorld };
     return null;
+  };
+
+  // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
+  // runInHand, so both read what commitWall will receive -- §1 asks for the
+  // on-screen number and the committed number to be ASSERTED EQUAL, and the
+  // only way to keep that true is for there to be one number.
+  //
+  // PLACEMENT IS THE WHOLE DIFFERENCE BETWEEN THE TWO POINTERS. §1: "by the
+  // cursor on PC, clear of the finger on touch". On a touch screen the thing
+  // being read is exactly the thing the hand is covering, so it goes well
+  // above the contact point and centred on it; a mouse has nothing to hide
+  // behind it, so it sits low and to the right where a cursor label belongs.
+  const drawLenEl = document.getElementById('draw-len');
+  let pointerScreen = null;
+  const syncDrawLength = () => {
+    if (!drawLenEl) return;
+    const run = activeTool === 'wall' && drawStart ? runInHand() : null;
+    if (!run || !pointerScreen) { drawLenEl.hidden = true; return; }
+    drawLenEl.hidden = false;
+    drawLenEl.textContent =
+      feetLabel(Math.hypot(run.to.x - run.from.x, run.to.z - run.from.z));
+    const touch = pointerScreen.type === 'touch';
+    drawLenEl.style.left = `${pointerScreen.x + (touch ? 0 : 14)}px`;
+    drawLenEl.style.top = `${pointerScreen.y + (touch ? -54 : 16)}px`;
+    drawLenEl.style.transform = touch ? 'translateX(-50%)' : 'none';
   };
 
   // FOUR READS OF `drawArmed` BECAME READS OF THE REGISTER. #398 wrote this
@@ -4637,6 +4685,11 @@
     stripMessage.textContent = rulerOn
       ? (rulerFrom ? 'ruler — second point' : 'ruler — first point')
       : (activeTool === 'wall' ? (drawStart ? 'wall — second point' : 'wall — first point') : '');
+    // Last, and from here rather than from the pointer handlers, so the label
+    // goes out the moment the run does -- every path that ends a run already
+    // calls stripRefresh, and a length still on screen after the gesture is
+    // over is the one thing a drafter should never be able to misread.
+    syncDrawLength();
   }
 
   const rulerPress = at => {
@@ -5288,7 +5341,16 @@
     // panning. Otherwise the first tap of a wall that starts on an existing
     // corner would be read as grabbing that corner, and the drafter would drag
     // the building instead of drawing against it.
-    if (activeTool === 'wall') { drawPress(at); return; }
+    if (activeTool === 'wall') {
+      // §1: "either drag, or press again and drag -- both must work". The lift
+      // needs two facts this press knows and pointerup does not: where the
+      // finger went down, and whether this press OPENED the run. Without the
+      // second, the PC click-click's second press would commit on the down and
+      // then again on the up.
+      wallPress = { x: e.clientX, y: e.clientY, opened: !drawStart };
+      drawPress(at);
+      return;
+    }
     // A WINDOW MODE TAKES THE PRESS BEFORE THE PAN, and before the corner and
     // body tests too. Otherwise a box begun on a selected wall would grab that
     // wall instead, and the drafter would drag the building across the sheet
@@ -5380,6 +5442,7 @@
       // instruments: length and angle are live while the run is in hand and
       // blank when it is not, exactly as the old strip behaves.
       cursorWorld = at;
+      pointerScreen = { x: e.clientX, y: e.clientY, type: e.pointerType };
       stripRefresh();
       const corner = cornerAt(at);
       canvas.classList.toggle('over-corner', !!corner);
@@ -5474,6 +5537,27 @@
     canvas.classList.remove('dragging');
     if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
   };
+  // THE LIFT PLACES THE LINE. Movie, 13 Sep: "when the pointer lifts place the
+  // line". Registered before endDrag and separate from it: a wall press
+  // returns out of pointerdown before any pan or band drag is armed, so this
+  // has no state to share with that one and nothing to unwind.
+  //
+  // IT CALLS drawPress -- THE SAME COMMIT BOTH GESTURES USE. §1 is explicit
+  // that press-drag-lift and PC click-click "are the same wall by the time it
+  // reaches commitWall; that is acceptance #2, and it is the reason the commit
+  // must not live in either handler."
+  canvas.addEventListener('pointerup', e => {
+    const press = wallPress;
+    wallPress = null;
+    if (!press || !press.opened || !drawStart || activeTool !== 'wall') return;
+    // A LIFT THAT DID NOT TRAVEL IS A TAP, and a tap is the first half of the
+    // PC gesture -- the drafter is about to move and click again. Committing
+    // here would turn every PC click into a zero-length wall attempt.
+    // DRAG_ARM_PX is the page's own threshold for "this is a drag now".
+    if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < DRAG_ARM_PX) return;
+    const rect = canvas.getBoundingClientRect();
+    drawPress(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+  });
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
 
