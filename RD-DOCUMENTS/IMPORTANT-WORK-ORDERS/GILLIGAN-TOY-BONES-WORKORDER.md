@@ -61,6 +61,30 @@ TOY is the default board, and the outline is drawn on it.
 First press sets the point. Then **either drag, or press again and drag** —
 both must work; a drafter who lifts his finger has not cancelled anything.
 
+**The lift places the line.** Ruled 13 Sep: *"when the pointer lifts place the
+line"*. Today `drawPress` is wired to `pointerdown` only and nothing listens
+for `pointerup`, so the drag gesture has never committed anything — the check
+named for it taps twice. Build the `pointerup` commit, and make the check
+perform the gesture whose name it carries.
+
+**A live length readout follows the draw.** Ruled 13 Sep: *"show the line
+length on screen to the user during the line drawing when their finger on
+screen for ipad"*. Whole feet in TOY. Two conditions:
+
+- It reads the **same number `commitWall` will receive**, not the cursor
+  measured separately — two readings of one distance drift, and the drafter
+  believes the one he can see.
+- It sits **by the cursor on PC, clear of the finger on touch**. Same number,
+  different placement: on a touch screen the thing being read is exactly the
+  thing the hand is covering.
+
+**PC keeps the normal gesture.** Ruled 13 Sep: *"for PC the line creation will
+be normal pc method"* — click to set the start, move with the line rubber-
+banding and the length live, click to place. Touch gets the press-drag-lift.
+The two are the same wall by the time it reaches `commitWall`; that is
+acceptance #2, and it is the reason the commit must not live in either
+handler.
+
 - **Four directions only**, +X/−X/+Z/−Z from the start point. Ruled again
   today: *"lets just leave them both 90's for now, i'll take care of angles
   later."* Angles are Movie's, not this order's.
@@ -231,7 +255,11 @@ nothing.
 1. In TOY, a press-drag-release ending off-axis and off-foot commits a wall
    that is exactly axis-aligned and a whole number of feet. Assert the
    committed geometry, not the cursor.
-2. Press-again-and-drag reaches the same wall as press-drag-release.
+2. Press-again-and-drag reaches the same wall as press-drag-release, and the
+   check performs each gesture rather than naming one and tapping twice.
+   A length reads on screen while the line is being drawn, in whole feet in
+   TOY, and it is the number that reaches `commitWall` — assert them equal,
+   not merely both present.
 3. In TOY, an unavailable tool cannot be armed and is visibly down.
 4. In DRAFTING the same gestures commit the off-axis, off-foot wall they
    commit today. **TOY must not leak.**
