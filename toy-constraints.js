@@ -592,7 +592,15 @@ if (!window.DraftToyConstraints) {
     const offZ = (runX / run) * delta;
     for (const stretch of stretches) {
       const other = (walls || []).find(w => w.id === stretch.wallId);
-      if (!other || !isOrthogonal(other)) continue;   // already angled: not this move's doing
+      // NO `already angled` SKIP HERE, and the gate was asked before it went.
+      // `inertReason` refuses the move outright when the dragged wall touches
+      // any non-orthogonal wall, and it runs before this loop -- so by the
+      // time a stretch is being read, every wall touching this one is square.
+      // A mutant removing the skip survived the whole spec, which agrees.
+      //
+      // Reasoned first, asked second, deleted third. The reverse order is what
+      // cost the `ask = land` line this morning.
+      if (!other) continue;
       const corner = other[stretch.end];
       const moved = { ...other,
         [stretch.end]: { ...corner, x: corner.x + offX, z: corner.z + offZ } };

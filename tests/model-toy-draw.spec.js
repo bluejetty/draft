@@ -904,3 +904,48 @@ test('the ordinary square still drags — pinning the weld group did not freeze 
     expect(squareRun(await wallEnds(page, 'e')),
       'and its perpendicular neighbour just got longer').toBe(true);
   });
+
+test('the angle rule is TOY only — asked of the module, not of the page',
+  async ({ page }) => {
+    // THE CHECK BELOW THIS ONE CANNOT SEE THIS, and the gate said so: a mutant
+    // dropping the module's `mode === MODE.TOY` guard SURVIVED it.
+    //
+    // It survived because in DRAFTING the page never calls the module at all
+    // -- `board === 'toy' ? toyWallDelta(...) : null` -- so no guard inside
+    // the module can change what DRAFTING does on this page. The check passes
+    // because the path is ABSENT, not because the rule is TOY-only. That is
+    // the same shape as "TOY must not leak into DRAFTING" passing with TOY
+    // switched off entirely, which is the trap this file already carries a
+    // note about, found again by the gate rather than by me.
+    //
+    // The module is shared -- the offline harnesses call it with MODE.DRAFTING
+    // -- so the leak is real for other callers even though this page cannot
+    // reach it. So it is asked of the module directly, and asserted BOTH ways:
+    // the same drawing, the same wall, the same delta, refused in TOY and
+    // permitted in DRAFTING. One verdict alone would be satisfied by a module
+    // that refuses everything or permits everything.
+    await open(page, brokenRun());
+    const verdicts = await page.evaluate(() => {
+      const T = window.DraftToyConstraints;
+      const C = window.DraftToyContext;
+      const V = (x, z) => ({ x, y: 0, z });
+      const mk = (id, start, end) => ({ id, start, end, levelId: 3, view: 'plan',
+        wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' });
+      const walls = [
+        mk('n1', V(-10, -10), V(0, -10)), mk('n2', V(0, -10), V(10, -10)),
+        mk('e', V(10, -10), V(10, 10)), mk('s', V(10, 10), V(-10, 10)),
+        mk('w', V(-10, 10), V(-10, -10)),
+      ];
+      const ask = mode => {
+        const ctx = C.gather({ walls: walls.map(w => ({ ...w })) });
+        const v = T.allowedMove({ ...walls[0] }, -1,
+          { ...ctx, mode, welds: [['n1']] });
+        return { delta: v.delta, reason: v.reason || null };
+      };
+      return { toy: ask(T.MODE.TOY), drafting: ask(T.MODE.DRAFTING) };
+    });
+    expect(verdicts.toy.delta, 'TOY refuses the move that would angle n2').toBe(0);
+    expect(verdicts.toy.reason, 'and names the angle').toBe('WOULD_ANGLE_NEIGHBOUR');
+    expect(verdicts.drafting.delta, 'DRAFTING permits the very same move').toBe(-1);
+    expect(verdicts.drafting.reason, 'with nothing to say about it').toBe(null);
+  });

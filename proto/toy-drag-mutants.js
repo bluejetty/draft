@@ -128,17 +128,31 @@ const MUTANTS = [
     name: 'THE ANGLE RULE LEAKS INTO DRAFTING, where off-axis is the freedom',
     find: '      const angled = mode === MODE.TOY ? wouldAngle(wall, groupIds, walls, d) : null;',
     with: '      const angled = wouldAngle(wall, groupIds, walls, d);',
-    test: 'the angle rule is TOY only' },
+    // ASKED OF THE MODULE. Aimed at the page check first, where it SURVIVED:
+    // DRAFTING never calls the module from this page, so the page cannot tell
+    // a TOY-only rule from a rule that does not exist.
+    test: 'asked of the module, not of the page' },
   { file: 'toy-constraints.js',
     name: 'the refusal is renamed to a distance problem it is not',
     find: '      if (blocked.reason !== REASON.WOULD_ANGLE_NEIGHBOUR) {',
     with: '      if (true) {',
     test: 'leave the next wall on an angle' },
   { file: 'toy-constraints.js',
-    name: 'ASKING THE GATE: is the already-angled skip reachable at all?',
-    find: '      if (!other || !isOrthogonal(other)) continue;   // already angled: not this move\'s doing',
-    with: '      if (!other) continue;',
-    test: null },
+    name: 'THE ANGLE TEST IS INVERTED: square neighbours refuse, bent ones pass',
+    // Replaces the "is the skip reachable" question, which the gate answered:
+    // it SURVIVED the whole spec, agreeing with inertReason that nothing can
+    // reach it, so the guard is gone rather than left under a permanent
+    // survivor.
+    //
+    // MY FIRST REPLACEMENT WAS A DUD and I caught it before running it: moving
+    // the stretched wall's PINNED end instead of its welded one still leaves
+    // n2 bent, so it refuses exactly as the real code does and would have
+    // survived while looking like a real mutation. Inverting the test is
+    // reachable in both directions -- the square must still drag, the broken
+    // run must still refuse -- so one check cannot satisfy it by accident.
+    find: '      if (!isOrthogonal(moved)) return other.id;',
+    with: '      if (isOrthogonal(moved)) return other.id;',
+    test: 'the ordinary square still drags' },
 ];
 
 const run = grep => {
