@@ -4632,16 +4632,17 @@
     if (endsAt(pendingBone, at)) return false;      // this press continues it
     // NAMES BOTH WAYS OUT, because the order's wording does: "finish or cancel
     // the run you started". Escape is the cancel.
-    stripMessage.textContent =
-      'finish or cancel the run you started — Esc cancels';
+    sayOnStrip('finish or cancel the run you started — Esc cancels');
     return true;
   };
 
   const drawPress = at => {
     if (!drawStart) {
       if (toyRunRefused(drawPoint(at))) return;
+      stripNotice = '';
       drawStart = drawPoint(at); paint(); return;
     }
+    stripNotice = '';
     const end = drawPoint(at);
     // A wall of no length is not a wall — the format drops anything under
     // 1e-6 on load, so committing one would write a record that vanishes on
@@ -4672,6 +4673,11 @@
   // can do is worse than a gap.
   const strip = document.getElementById('strip');
   const stripMessage = document.getElementById('strip-message');
+  // What the page is SAYING, as against what it is reporting. Cleared by the
+  // next press that does something, so a refusal never sits over a gesture
+  // that has since succeeded.
+  let stripNotice = '';
+  const sayOnStrip = text => { stripNotice = text; stripRefresh(); };
   const lenOut = document.getElementById('strip-len');
   const angOut = document.getElementById('strip-ang');
   const protractorOut = document.getElementById('strip-protractor-angle');
@@ -4794,9 +4800,16 @@
     if (typable && document.activeElement !== lengthBox) {
       lengthBox.value = dist === null ? '' : feetLabel(dist);
     }
-    stripMessage.textContent = rulerOn
+    // A NOTICE OUTLIVES ONE REFRESH, and it has to. Both the refusal and the
+    // cancel wrote straight to stripMessage and were erased microseconds later
+    // by this line -- the page said the true thing and then said the routine
+    // thing over the top of it, which on screen is the page saying nothing.
+    // Found by the check asserting the message was VISIBLE rather than that
+    // the code had set it, which is the difference between the two halves of
+    // every failure today.
+    stripMessage.textContent = stripNotice || (rulerOn
       ? (rulerFrom ? 'ruler — second point' : 'ruler — first point')
-      : (activeTool === 'wall' ? (drawStart ? 'wall — second point' : 'wall — first point') : '');
+      : (activeTool === 'wall' ? (drawStart ? 'wall — second point' : 'wall — first point') : ''));
     // Last, and from here rather than from the pointer handlers, so the label
     // goes out the moment the run does -- every path that ends a run already
     // calls stripRefresh, and a length still on screen after the gesture is
@@ -5807,7 +5820,7 @@
       // unfinished run goes down the same way rather than by a key of its own.
       if (pendingBone) {
         pendingBone = null;
-        stripMessage.textContent = 'run cancelled';
+        sayOnStrip('run cancelled');
       }
       // ESC WITH NOTHING SELECTED RELEASES THE FILTER, which is the release
       // the filter help line promises in writing (:22418-22419). With
