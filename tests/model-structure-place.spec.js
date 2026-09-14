@@ -158,3 +158,107 @@ test('a beam of no length is not written at all', async ({ page }) => {
   expect(s.rawBeams, 'nothing was written').toBe(0);
   expect(s.beams).toBe(0);
 });
+
+test('the readout counts columns and beams', async ({ page }) => {
+  // Until now it counted walls/lines/floors/roofs/shapes/outlines/dims/
+  // underlays and neither of these, so a placement had no on-page evidence at
+  // all -- part of why this half could sit unfinished without looking broken.
+  await open(page, base({}));
+  const { at } = await frame(page);
+  await expect(page.locator('#readout')).toContainText('columns 0/0');
+  await page.locator('[data-tool-key="column"]').click();
+  await page.mouse.click(...at(2, 3));
+  await page.waitForTimeout(120);
+  await expect(page.locator('#readout')).toContainText('columns 1/1');
+  await expect(page.locator('#readout')).toContainText('beams 0/0');
+});
+
+test('placing a column opens its properties, and the choice survives reload',
+  async ({ page }) => {
+    await open(page, base({}));
+    const { at } = await frame(page);
+    await page.locator('[data-tool-key="column"]').click();
+    await page.mouse.click(...at(2, 3));
+    await page.waitForTimeout(120);
+
+    const row = page.locator('[data-prop-row="footing"]');
+    await expect(row, 'the panel shows what was just placed').toBeVisible();
+    await expect(row.locator('[data-prop-value="pad36"]'))
+      .toHaveAttribute('aria-pressed', 'true');
+
+    await row.locator('[data-prop-value="pile10"]').click();
+    await page.waitForTimeout(80);
+    await save(page);
+    // THROUGH THE READER, not off the panel: footing is an enumeration the
+    // format validates, and a value it does not know is replaced by the
+    // default on load -- silently, and only one reload later.
+    const back = await page.evaluate(async bucket => {
+      const f = await window.SharedFileStore.loadSharedFile(bucket);
+      const raw = JSON.parse(await f.text());
+      const F = window.DraftDrawingFormat;
+      const ids = new Set((raw.levels || []).map(l => Number(l.id)));
+      return F.columns(raw.columns, ids)[0];
+    }, BUCKET);
+    expect(back.footing).toBe('pile10');
+    expect(back.padIn, 'a pile carries no pad size').toBeUndefined();
+  });
+
+test('placing a beam shows its mode and its span', async ({ page }) => {
+  await open(page, base({}));
+  const { at } = await frame(page);
+  await page.locator('[data-tool-key="beam"]').click();
+  await page.mouse.click(...at(-6, 2));
+  await page.waitForTimeout(80);
+  await page.mouse.click(...at(6, 2));
+  await page.waitForTimeout(120);
+
+  await expect(page.locator('[data-prop-row="beam"]')).toBeVisible();
+  await expect(page.locator('[data-prop-value="flush"]'))
+    .toHaveAttribute('aria-pressed', 'true');
+  // The span is read from the geometry rather than stored: a stored length and
+  // a moved endpoint are two facts that can disagree.
+  await expect(page.locator('[data-prop-span]')).toContainText("12'");
+
+  await page.locator('[data-prop-value="dropped"]').click();
+  await page.waitForTimeout(80);
+  await save(page);
+  const back = await page.evaluate(async bucket => {
+    const f = await window.SharedFileStore.loadSharedFile(bucket);
+    const raw = JSON.parse(await f.text());
+    const F = window.DraftDrawingFormat;
+    const ids = new Set((raw.levels || []).map(l => Number(l.id)));
+    return F.beams(raw.beams, ids)[0];
+  }, BUCKET);
+  expect(back.mode).toBe('dropped');
+});
+
+test('undo takes back a placed column, and does not spend a step doing nothing',
+  async ({ page }) => {
+    // THE UNDO STEP IS ITS OWN KIND. The existing 'add' step is wall-shaped --
+    // drawing.walls.indexOf(step.wall) -- so a column pushed through it would
+    // pop a step, find nothing, and quietly spend the drafter's undo. The
+    // second half of this check is what catches that: after taking the column
+    // back, one more undo must still reach the WALL drawn before it.
+    await open(page, base({}));
+    const { at } = await frame(page);
+    await page.locator('[data-draw-wall]').click();
+    await page.mouse.click(...at(-8, -6));
+    await page.waitForTimeout(60);
+    await page.mouse.click(...at(-2, -6));
+    await page.waitForTimeout(80);
+    await expect(page.locator('#readout')).toContainText('walls 5/5');
+
+    await page.locator('[data-tool-key="column"]').click();
+    await page.mouse.click(...at(2, 3));
+    await page.waitForTimeout(80);
+    await expect(page.locator('#readout')).toContainText('columns 1/1');
+
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(80);
+    await expect(page.locator('#readout'), 'the column went back')
+      .toContainText('columns 0/0');
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(80);
+    await expect(page.locator('#readout'), 'and the wall before it is still reachable')
+      .toContainText('walls 4/4');
+  });

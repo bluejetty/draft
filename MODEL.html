@@ -2477,6 +2477,14 @@
       + `shapes <b>${shownOfTotal(shapes().length, drawing.shapes)}</b>   `
       + `outlines <b>${shownOfTotal(outlines().length, drawing.outlines)}</b>   `
       + `dims <b>${shownOfTotal(dimensions().length, drawing.dimensions)}</b>   `
+      // COLUMNS AND BEAMS, and until now the readout had neither. The page has
+      // painted both since the painter landed, so a drafter placing one had no
+      // on-page way to see it arrive -- which is part of why this half of #392
+      // could sit unfinished without looking broken. shownOfTotal, like every
+      // row above: the left number is this level and view, the right is the
+      // whole drawing.
+      + `columns <b>${shownOfTotal(columns().length, drawing.columns)}</b>   `
+      + `beams <b>${shownOfTotal(beams().length, drawing.beams)}</b>   `
       // BOTH SIDES LEVEL-SCOPED. The loader decodes every underlay in the
       // drawing, not just this level's, so that switching level is instant --
       // which means underlayImages.size counts images the drafter cannot
@@ -4344,7 +4352,7 @@
   const placeColumn = at => {
     const { levelId, viewId } = onActiveLevel();
     drawing.columns = drawing.columns || [];
-    return addItem(drawing.columns, {
+    return selectPlaced('column', addItem(drawing.columns, {
       id: newStructureId(drawing.columns),
       point: { x: at.x, y: 0, z: at.z },
       levelId,
@@ -4356,7 +4364,16 @@
       // record this page writes and the record the reader rebuilds are the
       // same object rather than one filled in behind the page's back.
       footing: 'pad36',
-    });
+    }));
+  };
+
+  // WHAT WAS JUST PLACED IS WHAT IS SELECTED, exactly as commitWall does for a
+  // wall. It is also what gives the properties panel something to show: this
+  // page cannot hit-test a column, so the placement is the only moment the
+  // selection can arrive.
+  const selectPlaced = (type, item) => {
+    setSelection([{ type, item }]);
+    return item;
   };
 
   let beamStart = null;
@@ -4379,11 +4396,15 @@
       end,
       levelId,
       view: wallHomeView(viewId),
+      // Named for the same reason footing is: the record this page writes and
+      // the record the reader rebuilds should be the same object, not one
+      // filled in behind the page's back.
+      mode: 'flush',
     });
     // No chaining: a beam is one span between two supports, not a run. The
     // next beam starts where the drafter next presses.
     beamStart = null;
-    return beam;
+    return selectPlaced('beam', beam);
   };
 
   // DELETE CASCADES, IT DOES NOT REFUSE — MODEL.dc.html:22225-22251 does, and
@@ -5079,6 +5100,84 @@
 
   buildAssemblyPanel();
   selectionWatchers.push(() => syncAssembly());
+
+  // ── THE STRUCTURE PROPERTIES PANEL ───────────────────────────────────────
+  //
+  // WHAT IT DOES NOT DO, said plainly rather than left to be discovered: it
+  // does not make an existing column or beam clickable. This page's hit-test
+  // knows walls, lines and floors; teaching it structure is the selection
+  // system's job and not #392's. So the panel shows the item the drafter just
+  // PLACED, which is the moment its properties are wanted and the moment
+  // commitWall already selects its wall in.
+  //
+  // ONE VALUE PER ROW, AND THE VALUES ARE THE FORMAT'S. footing and mode are
+  // enumerations drawing-format.js validates (:517 and :563); anything not on
+  // those lists is silently replaced with the default on the next load, so the
+  // panel offers exactly what the reader accepts and nothing else.
+  const FOOTINGS = [['pad36', 'PAD 36"'], ['pad42', 'PAD 42"'],
+    ['pile8', 'PILE 8"'], ['pile10', 'PILE 10"'], ['pile12', 'PILE 12"']];
+  const BEAM_MODES = [['flush', 'FLUSH'], ['dropped', 'DROPPED']];
+
+  const propRow = (label, options, current, pick) => {
+    const row = document.createElement('div');
+    row.dataset.propRow = label.toLowerCase();
+    const name = document.createElement('div');
+    name.className = 'props-title';
+    name.textContent = label;
+    const chips = document.createElement('div');
+    chips.className = 'chip-row';
+    chips.append(...options.map(([id, face]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sel-chip';
+      btn.dataset.propValue = id;
+      btn.textContent = face;
+      btn.setAttribute('aria-pressed', String(id === current));
+      btn.addEventListener('click', () => pick(id));
+      return btn;
+    }));
+    row.append(name, chips);
+    return row;
+  };
+
+  const showStructureProps = () => {
+    const P = window.ModelProps;
+    if (!P) return;
+    const picked = selection.length === 1 ? selection[0] : null;
+    if (!picked || (picked.type !== 'column' && picked.type !== 'beam')) return;
+    const item = picked.item;
+    const box = document.createElement('div');
+    if (picked.type === 'column') {
+      box.append(propRow('FOOTING', FOOTINGS, item.footing, id => {
+        item.footing = id;
+        // A pile has a fixed diameter, so a pad's custom size is meaningless
+        // on one. The format drops padIn for piles anyway (:534); dropping it
+        // here too keeps the page's record and the reader's identical.
+        if (id.startsWith('pile')) delete item.padIn;
+        markDirty();
+        showStructureProps();
+        paint();
+      }));
+    } else {
+      const span = Math.hypot(item.end.x - item.start.x, item.end.z - item.start.z);
+      box.append(propRow('BEAM', BEAM_MODES, item.mode, id => {
+        item.mode = id;
+        markDirty();
+        showStructureProps();
+        paint();
+      }));
+      const len = document.createElement('div');
+      len.dataset.propSpan = '';
+      len.className = 'props-title';
+      // The span is read from the geometry, never stored: a stored length and
+      // a moved endpoint are two facts that can disagree, and the drafter
+      // would believe the one on the panel.
+      len.textContent = `SPAN ${feetLabel(span)}`;
+      box.append(len);
+    }
+    P.set(picked.type === 'column' ? 'COLUMN' : 'BEAM', box);
+  };
+  selectionWatchers.push(showStructureProps);
   deleteButton.addEventListener('click', () => {
     const wall = selectedWall();
     if (!wall) return;
