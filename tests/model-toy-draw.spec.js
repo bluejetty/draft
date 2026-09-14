@@ -949,3 +949,57 @@ test('the angle rule is TOY only — asked of the module, not of the page',
     expect(verdicts.drafting.delta, 'DRAFTING permits the very same move').toBe(-1);
     expect(verdicts.drafting.reason, 'with nothing to say about it').toBe(null);
   });
+
+test('a press on the open end resumes the run instead of being refused',
+  async ({ page }) => {
+    // WHAT THE §2 REFUSAL WAS CATCHING BY MISTAKE, found three layers away: a
+    // merged DRAFTING-era gestures check lost two of three walls, and the strip
+    // said "finish or cancel the run you started".
+    //
+    // §2 asked "does this press continue the run?" with `sameSpot` at 1e-6 --
+    // an EQUALITY test. It can never be true. TOY rounds a run's LENGTH, not
+    // its coordinates (model-toy-board.spec.js:333 makes that a rule and warns
+    // that a build doing the other one passes everything), so committing a
+    // wall moves its end away from the pixel the drafter released on. Coming
+    // back to carry on, the press is near the open end but not ON it, and the
+    // run was refused.
+    //
+    // MY FIRST FIX WAS THE WRONG ONE and that merged check is what said so: I
+    // rounded the first point to a foot mark, which gives whole-foot POSITIONS
+    // and a fractional LENGTH -- exactly backwards, and exactly what it exists
+    // to prevent. The fault was never where the point lands; it was asking an
+    // equality question about a press. Pressing on the open end is now a grab
+    // radius, like every other "did the drafter hit this" on the page.
+    await open(page, base({ board: 'toy' }));
+    const { at } = await frame(page);
+
+    // First run: two clicks, tool down. One wall, so the bone is still open --
+    // the format needs three points and §2 holds it back until then.
+    await armWall(page);
+    await page.mouse.click(...at(-6, -6));
+    await page.mouse.click(...at(2, -6));
+    await page.waitForTimeout(80);
+    await armWall(page);                       // put the tool DOWN
+
+    // Come back and carry on from the open end. Movie's ruling is that putting
+    // the tool down does NOT cancel the run, so this must be a continuation.
+    await armWall(page);
+    await page.mouse.click(...at(2, -6));
+    await page.mouse.click(...at(2, -1));
+    await page.waitForTimeout(100);
+
+    await expect(page.locator('#strip-message'),
+      'the refusal did NOT fire on a press that continues the run')
+      .not.toContainText('finish or cancel');
+
+    await saveIt(page);
+    const drawn = await page.evaluate(async bucket => {
+      const f = await window.SharedFileStore.loadSharedFile(bucket);
+      const d = JSON.parse(await f.text());
+      return (d.walls || []).filter(w => !['n', 'e', 's', 'w'].includes(w.id)).length;
+    }, BUCKET);
+    // THE POSITIVE HALF. "no refusal on the strip" is satisfied by a page that
+    // never drew anything and never said anything -- the trap this file keeps
+    // walking into. The second wall has to actually exist.
+    expect(drawn, 'both walls were drawn, not just the first').toBe(2);
+  });

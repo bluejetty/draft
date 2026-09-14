@@ -4785,6 +4785,33 @@
   // run is what is refused, so refusing it after committing its first wall
   // would be a half-application -- the same thing "Stay in TOY commits nothing
   // and changes nothing" forbids one section over.
+  // PRESSING ON THE OPEN END RESUMES THE RUN, and this is what §2's refusal
+  // was missing. §2 asks whether the press continues the pending run and
+  // tested it with `sameSpot` at 1e-6 -- an EQUALITY test between two points
+  // computed by different routes.
+  //
+  // They cannot match. TOY rounds a run's LENGTH, not its coordinates
+  // (model-toy-board.spec.js:333 makes that a rule), so committing the first
+  // wall moves its end up to half a foot from the pixel the drafter released
+  // on. Press there again to carry on and the raw press is nowhere near the
+  // stored end by 1e-6 -- often further than CORNER_SNAP_PX, so cornerSnap
+  // does not rescue it either -- and §2 refused a run that was continuing.
+  // The wall was silently not drawn, with only the strip to say why.
+  //
+  // So the question is asked the way every other "did the drafter hit this"
+  // question on this page is asked: a grab radius, not an equality. And it
+  // returns THE STORED END, so the run resumes exactly where it left off
+  // rather than a snap-width away from itself.
+  const toyOpenEnd = at => {
+    if (board !== 'toy' || !pendingBone) return null;
+    const open = pendingBone.points[pendingBone.points.length - 1];
+    if (!open) return null;
+    const reach = CORNER_GRAB_PX / view.scale;
+    return Math.hypot(at.x - open.x, at.z - open.z) <= reach
+      ? { x: open.x, y: 0, z: open.z }
+      : null;
+  };
+
   const toyRunRefused = at => {
     if (board !== 'toy' || !pendingBone) return false;
     if (endsAt(pendingBone, at)) return false;      // this press continues it
@@ -4796,6 +4823,10 @@
 
   const drawPress = at => {
     if (!drawStart) {
+      // Resume before refusing: a press on the open end is the drafter
+      // carrying on, which is the one case the refusal must not catch.
+      const open = toyOpenEnd(at);
+      if (open) { clearNotice(); drawStart = open; paint(); return; }
       if (toyRunRefused(drawPoint(at))) return;
       clearNotice();
       drawStart = drawPoint(at); paint(); return;
