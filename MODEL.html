@@ -5503,10 +5503,21 @@
     const frac = pos - Math.floor(pos);
     return Math.min(frac, FOOT - frac) < 1e-6 ? 0 : frac;
   };
-  const landingDelta = (pos, direction) => {
+  // ONE FUNCTION, AND IT RETURNS THE STEP. This was a landingDelta returning
+  // null for an on-grid wall, and a caller turning that null into FOOT -- and
+  // the gate showed the null branch was redundant twice over: with `ask` now
+  // always the drafter's distance, an on-grid wall computes a step of exactly
+  // FOOT down either path, so the two arms produced identical answers and the
+  // mutant deleting the guard changed nothing.
+  //
+  // The distance to the next foot mark IN THE DIRECTION OF TRAVEL is the whole
+  // rule, and on a wall already on the grid that distance IS a foot. Saying it
+  // once is shorter than saying it twice and calling one of them a special
+  // case.
+  const landingStep = (pos, direction) => {
     const frac = offGridBy(pos);
-    if (!frac) return null;             // already on the grid: a normal move
-    return direction > 0 ? (FOOT - frac) : -frac;
+    if (!frac) return FOOT;
+    return direction > 0 ? FOOT - frac : frac;
   };
 
   // THE MODULE'S REASONS, IN THE DRAFTER'S WORDS. toy-constraints.js names
@@ -5540,23 +5551,14 @@
     const wanted = axis === 'x' ? dz : dx;
     if (!wanted) return { dx: 0, dz: 0 };
 
-    const land = landingDelta(posOnMoveAxis(wall), Math.sign(wanted));
-    // A LANDING MOVE IS THE WHOLE OF THE FIRST NUDGE, whatever the drag
-    // distance. One deliberate move puts the wall on the grid and every move
-    // after is a whole foot -- which is the shape of the ruling rather than a
-    // shortcut around it.
-    // ASK FOR WHAT THE DRAFTER ASKED FOR; stepFt is what lands it. The gate
-    // found these two lines encoding the same intent twice: with stepFt set to
-    // the landing distance, quantiseFeet(-1, 0.958) already returns -0.958, so
-    // substituting `land` for the ask changed nothing and its mutant survived.
-    // One of the pair was redundant, and this is the one to drop -- stepFt is
-    // the module's own hook and does the work either way.
+    // THE STEP IS THE WHOLE MECHANISM. stepFt rides on the wall, the module's
+    // own quantiser rounds the drafter's distance to a multiple of it
+    // (stepFor, toy-constraints.js), and on an off-grid wall the first such
+    // multiple is the foot mark. So a landing and a whole-foot move are the
+    // same operation with a different step, not two rules.
+    const probe = { ...wall,
+      stepFt: landingStep(posOnMoveAxis(wall), Math.sign(wanted)) };
     const ask = wanted;
-    // stepFt rides on the wall so the module's own quantiser keeps a landing
-    // distance intact instead of rounding it back off the grid. stepFor reads
-    // exactly this key (toy-constraints.js), so it is the module's hook and
-    // not a way round it.
-    const probe = { ...wall, stepFt: land === null ? FOOT : Math.abs(land) };
     const ctx = C.gather({ walls: (drawing.walls || []).map(w => ({ ...w })) });
     const verdict = T.allowedMove(probe, ask, { ...ctx, mode: T.MODE.TOY });
     // §3: "A BLOCKED DRAG STOPS DEAD AND THE BLOCKER SAYS WHY. Never elastic."

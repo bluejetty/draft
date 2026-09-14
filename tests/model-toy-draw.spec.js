@@ -752,7 +752,12 @@ test('a DRAFTING wall drags freely — the constraint path is TOY only',
     }));
     await nudge(page, [0, -8.37], [0, -10.62]);
     const z = await wallZ(page, 'n');
+    // IT MOVED, AND IT MOVED TO THE ODD PLACE. Asserting only "still
+    // fractional" let the leak mutant survive: routed through the TOY path the
+    // drag was REFUSED, the wall stayed at -8.37, and -8.37 is fractional --
+    // so a check about the number alone passed while the wall never moved.
+    expect(z, 'the drag moved it').not.toBeCloseTo(-8.37, 3);
     expect(Math.abs(z - Math.round(z)),
-      'DRAFTING kept the fractional position it was dragged to')
+      'and DRAFTING kept the fractional position it was dragged to')
       .toBeGreaterThan(0.01);
   });

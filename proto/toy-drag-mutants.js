@@ -53,10 +53,15 @@ const MUTANTS = [
     with: '    const probe = { ...wall };',
     test: 'first nudge lands on the foot' },
   { file: 'MODEL.html',
-    name: 'a wall already on the grid gets landed again, so it never moves a foot',
-    find: '    const frac = offGridBy(pos);\n    if (!frac) return null;',
-    with: '    const frac = offGridBy(pos);',
-    test: 'the next is a whole foot' },
+    name: 'the landing ignores which way the wall is going',
+    // REPLACES the on-grid guard mutant, which survived because the guard had
+    // become redundant -- an on-grid wall computes a step of FOOT down either
+    // path. The direction is what is left, and it is real: land the wall on
+    // the mark BEHIND it while the drafter pulls forward and the wall jumps
+    // the wrong way.
+    find: "    return direction > 0 ? FOOT - frac : frac;",
+    with: '    return frac;',
+    test: 'first nudge lands on the foot' },
   { file: 'MODEL.html',
     name: 'the move is not perpendicular: the along-run component rides too',
     find: "    const wanted = axis === 'x' ? dz : dx;",
