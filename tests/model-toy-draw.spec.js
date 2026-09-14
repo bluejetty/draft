@@ -588,3 +588,86 @@ test('§3 — a blocked drag stops dead, and the strip says why', async ({ page 
   }, BUCKET);
   expect(moved, 'the refused drag moved nothing').toEqual([-8, -6]);
 });
+
+// ── ACCEPTANCE 2c: THE WALL THAT IS NOT ON THE GRID ─────────────────────────
+//
+// Movie, 13 Sep, offered 13'-0½" or 13'-0" and answered with a third: "make
+// the first point land on a ft point how about so we don't have that problem".
+// The first nudge lands the wall on the nearest foot mark; every move after is
+// a whole foot.
+//
+// THE ORDER WARNS ABOUT THIS CHECK IN ADVANCE and the warning is the reason it
+// is written this way: "a house born in TOY is already on the grid, so this
+// rule is invisible there -- which means the check has to be written on an
+// IMPORTED off-grid wall, or it asserts nothing." So the fixture is a drawing
+// that arrived off-grid, not one this page drew.
+//
+// AND A WALL NOBODY TOUCHES MUST NOT MOVE. That is what keeps Movie's answer
+// inside the 31 Aug rule rather than breaking it -- the half-inch is given up
+// once, on the wall the drafter deliberately moved. A check that only asserted
+// the moved wall would pass a page that quietly re-gridded the whole drawing
+// on open, which is the one thing the rule forbids. The lone wall is far from
+// the room and joined to nothing, so nothing can move it by stretching.
+const OFF = -6.042;                     // 6'-0½" off the foot, as imported
+//
+// SYMMETRIC ABOUT THE ORIGIN, AND THE MIRROR WALL IS WHY. fit() centres on the
+// midpoint of DRAWN BOUNDS, not on (0,0), and at() here assumes the origin is
+// at the canvas centre. One lone wall out at (20..30, 14) dragged the centre to
+// (10, 4) and every click in this check landed somewhere else entirely -- the
+// press selected nothing, the drag became a PAN, and the wall sat at -6.042
+// looking exactly like a refused move. The trap is written at the top of this
+// file, in a fixture I copied and then broke.
+//
+// So there are TWO untouched walls, mirrored, and both are asserted. That is
+// better than one anyway: "a wall nobody touched did not move" is a stronger
+// claim when the walls sit on opposite sides of the thing that did.
+const offGrid = () => base({
+  board: 'toy',
+  walls: [
+    ['n', V(-10, OFF), V(10, OFF)], ['e', V(10, OFF), V(10, 10)],
+    ['s', V(10, 10), V(-10, 10)], ['w', V(-10, 10), V(-10, OFF)],
+    ['lone', V(20, 14), V(30, 14)], ['lone2', V(-30, -14), V(-20, -14)],
+  ].map(([id, start, end]) => ({ id, start, end, levelId: 3, view: 'plan',
+    wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' })),
+});
+
+const wallZ = (page, id) => page.evaluate(async ({ bucket, wid }) => {
+  const f = await window.SharedFileStore.loadSharedFile(bucket);
+  const w = JSON.parse(await f.text()).walls.find(w => w.id === wid);
+  return Number(w.start.z.toFixed(4));
+}, { bucket: BUCKET, wid: id });
+
+async function nudge(page, from, to) {
+  const { at } = await frame(page);
+  const [sx, sy] = at(...from);
+  await page.mouse.click(sx, sy);                 // select: wallBodyAt needs it
+  await page.waitForTimeout(80);
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  const [ex, ey] = at(...to);
+  await page.mouse.move(ex, ey, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+  await saveIt(page);
+}
+
+test('acceptance 2c — the first nudge lands on the foot, the next is a whole foot',
+  async ({ page }) => {
+    await open(page, offGrid());
+    // Grab the north wall's middle and pull it a foot further out (-z).
+    await nudge(page, [0, OFF], [0, OFF - 1]);
+    expect(await wallZ(page, 'n'), 'the first nudge landed it on the foot mark')
+      .toBe(-7);
+
+    await nudge(page, [0, -7], [0, -8]);
+    expect(await wallZ(page, 'n'), 'and the next move is a whole foot')
+      .toBe(-8);
+
+    // THE HALF-INCH IS GIVEN UP ONCE, ON THE WALL THAT WAS MOVED.
+    expect(await wallZ(page, 'lone'), 'a wall nobody touched did not move')
+      .toBe(14);
+    expect(await wallZ(page, 'lone2'), 'nor the one on the other side')
+      .toBe(-14);
+    expect(await wallZ(page, 's'), 'and neither did the far side of the room')
+      .toBe(10);
+  });
