@@ -668,7 +668,19 @@ test('acceptance 2c — the first nudge lands on the foot, the next is a whole f
     expect(await wallZ(page, 'n'), 'and the next move is a whole foot')
       .toBe(-8);
 
+    // AND THE OTHER DIRECTION, because the sign is a real part of the rule and
+    // nothing above could see it: every nudge so far pulls -z, where "the mark
+    // behind" and "the mark ahead" happen to give the same answer for this
+    // wall. A mutant ignoring the direction survived on that. The south wall
+    // is off-grid nowhere, so this uses a fresh drawing and pushes +z.
+    await open(page, offGrid());
+    await nudge(page, [0, OFF], [0, OFF + 1]);
+    expect(await wallZ(page, 'n'), 'pushed the other way it lands on the mark ahead')
+      .toBe(-6);
+
+    await open(page, offGrid());
     // THE HALF-INCH IS GIVEN UP ONCE, ON THE WALL THAT WAS MOVED.
+    await nudge(page, [0, OFF], [0, OFF - 1]);
     expect(await wallZ(page, 'lone'), 'a wall nobody touched did not move')
       .toBe(14);
     expect(await wallZ(page, 'lone2'), 'nor the one on the other side')
@@ -756,8 +768,11 @@ test('a DRAFTING wall drags freely — the constraint path is TOY only',
     // fractional" let the leak mutant survive: routed through the TOY path the
     // drag was REFUSED, the wall stayed at -8.37, and -8.37 is fractional --
     // so a check about the number alone passed while the wall never moved.
-    expect(z, 'the drag moved it').not.toBeCloseTo(-8.37, 3);
-    expect(Math.abs(z - Math.round(z)),
-      'and DRAFTING kept the fractional position it was dragged to')
-      .toBeGreaterThan(0.01);
+    // THE EXACT PLACE IT WAS DRAGGED TO, and nothing looser. "Moved, and still
+    // fractional" let the leak mutant survive twice: routed through the TOY
+    // path the drag quantises to a multiple of the landing step and arrives at
+    // -10.89 -- moved, fractional, and wrong. Only the actual distance can
+    // tell a free drag from a rounded one.
+    expect(Math.abs(z - (-10.62)),
+      'DRAFTING moved it exactly as far as it was dragged').toBeLessThan(0.12);
   });

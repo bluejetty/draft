@@ -49,7 +49,11 @@ const MUTANTS = [
   // change.
   { file: 'MODEL.html',
     name: 'the landing distance is quantised away by a whole-foot step',
-    find: '    const probe = { ...wall, stepFt: land === null ? FOOT : Math.abs(land) };',
+    // RE-ANCHORED after the landing was collapsed into one function. The old
+    // anchor named a line that no longer exists, so the gate printed SKIPPED
+    // and totalled 7/9 -- the count is against 10 defined, which is the only
+    // reason the skip was visible at all.
+    find: '    const probe = { ...wall,\n      stepFt: landingStep(posOnMoveAxis(wall), Math.sign(wanted)) };',
     with: '    const probe = { ...wall };',
     test: 'first nudge lands on the foot' },
   { file: 'MODEL.html',
