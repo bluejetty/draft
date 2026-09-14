@@ -98,6 +98,38 @@ const MUTANTS = [
     find: '  const blockerSays = verdict =>\n    BLOCKER_WORDS[verdict.reason] || `cannot move it: ${verdict.reason}`;',
     with: "  const blockerSays = () => 'cannot move that';",
     test: 'a blocked drag stops dead' },
+
+  // ── §3b: THE DIAGONAL ────────────────────────────────────────────────────
+  // Five for the two faults that let TOY draw a diagonal. The first two are
+  // the faults themselves; the third is the leak; the fourth is the refusal
+  // naming the wrong rule. The fifth is a guard I believe is UNREACHABLE and
+  // am asking the gate about rather than deleting on my own reasoning -- the
+  // last time I deleted a line the gate called redundant, it was load-bearing.
+  { file: 'MODEL.html',
+    name: 'THE PAGE LIES ABOUT WHAT MOVES: the weld group swallows the house',
+    find: '      { ...ctx, mode: T.MODE.TOY, welds: [[wall.id]] });',
+    with: '      { ...ctx, mode: T.MODE.TOY });',
+    test: 'leave the next wall on an angle' },
+  { file: 'toy-constraints.js',
+    name: 'NOTHING CHECKS THE SHAPE AFTER THE MOVE, so the diagonal comes back',
+    find: '      const angled = mode === MODE.TOY ? wouldAngle(wall, groupIds, walls, d) : null;',
+    with: '      const angled = null;',
+    test: 'leave the next wall on an angle' },
+  { file: 'toy-constraints.js',
+    name: 'THE ANGLE RULE LEAKS INTO DRAFTING, where off-axis is the freedom',
+    find: '      const angled = mode === MODE.TOY ? wouldAngle(wall, groupIds, walls, d) : null;',
+    with: '      const angled = wouldAngle(wall, groupIds, walls, d);',
+    test: 'the angle rule is TOY only' },
+  { file: 'toy-constraints.js',
+    name: 'the refusal is renamed to a distance problem it is not',
+    find: '      if (blocked.reason !== REASON.WOULD_ANGLE_NEIGHBOUR) {',
+    with: '      if (true) {',
+    test: 'leave the next wall on an angle' },
+  { file: 'toy-constraints.js',
+    name: 'ASKING THE GATE: is the already-angled skip reachable at all?',
+    find: '      if (!other || !isOrthogonal(other)) continue;   // already angled: not this move\'s doing',
+    with: '      if (!other) continue;',
+    test: null },
 ];
 
 const run = grep => {
@@ -109,7 +141,11 @@ const run = grep => {
   } catch { return 'failed'; }
 };
 
-const dirty = execSync('git status --porcelain MODEL.html',
+// EVERY FILE THIS GATE MUTATES, not just the page. The restore is
+// `git checkout -- <file>`, so a file left out of this guard has any
+// uncommitted work in it silently destroyed the first time a mutant touches
+// it. §3b added toy-constraints.js to the targets; it belongs here too.
+const dirty = execSync('git status --porcelain MODEL.html toy-constraints.js',
   { cwd: '/home/user/draft' }).toString().trim();
 if (dirty) {
   console.error('REFUSING TO RUN: uncommitted changes; this restores from HEAD.\n' + dirty);
