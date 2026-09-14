@@ -184,7 +184,11 @@ test('a tremor during the press does not move where the run started',
     const [x, y] = at(0, 0);
     await page.mouse.move(x, y);
     await page.mouse.down();
-    await page.mouse.move(x + 3, y + 3);   // under DRAG_ARM_PX: still a press
+    // 2px EACH WAY, NOT 3. Diagonal displacement is the hypotenuse, and 3,3 is
+    // 4.24px -- over DRAG_ARM_PX's 4, so my first version of this line was a
+    // DRAG being called a tremor, and it committed. 2,2 is 2.83 and is what
+    // the threshold is meant to absorb.
+    await page.mouse.move(x + 2, y + 2);
     await page.mouse.up();
     await page.mouse.move(...at(6, 0));
     await page.mouse.click(...at(6, 0));
