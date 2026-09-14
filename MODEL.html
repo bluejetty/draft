@@ -4934,14 +4934,24 @@
 
   buildToolColumn();
 
-  // A BOARD CHANGE PUTS DOWN A TOOL THE NEW BOARD DOES NOT OFFER. Rebuilding
-  // the faces alone would leave ROOF armed behind a greyed ROOF key -- the
-  // next drag would still draw a roof on the toy board, and the column would
-  // be telling the truth about the key and a lie about the state. setTool goes
-  // first so the rebuild renders the corrected register rather than the stale
-  // one; it also drops any half-finished gesture, which belongs to the board
-  // being left.
-  boardListeners.push(() => { setTool(activeTool); refreshToolAvailability(); });
+  // A BOARD CHANGE PUTS DOWN A TOOL THE NEW BOARD DOES NOT OFFER, and ONLY
+  // such a tool. Leaving it armed would keep ROOF live behind a greyed ROOF
+  // key -- the column telling the truth about the key and a lie about the
+  // state, and the next drag still drawing a roof on the toy board.
+  //
+  // THE CONDITION IS NOT DECORATION. The first version called setTool on every
+  // board change, and setTool clears `drawStart` because a tool change
+  // abandons the gesture that belonged to the old tool. A BOARD change is not
+  // a tool change: PROMOTION crosses boards in the middle of a run on purpose
+  // -- typing a length in TOY offers DRAFTING and then commits that same run
+  // -- so disarming unconditionally cut the anchor out from under the commit
+  // and the wall was never made. model-toy-board.spec.js:224 caught it; the
+  // gesture survives a crossing that keeps its tool.
+  boardListeners.push(() => {
+    const roster = window.DraftToolRoster;
+    if (roster && !roster.availableOn(activeTool, board)) setTool(RESTING_TOOL);
+    refreshToolAvailability();
+  });
 
   // ── SELECTION and OBJECT TYPE ─────────────────────────────────────────────
   // THE HELP STRINGS ARE THE OLD PAGE'S, VERBATIM (:23597 and :23619). They are

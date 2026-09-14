@@ -62,6 +62,7 @@ async function open(page, file) {
 }
 
 const key = (page, id) => page.locator(`[data-tool-key="${id}"]`);
+const boardOf = page => page.evaluate(() => document.body.getAttribute('data-board'));
 const armed = page => page.evaluate(() => {
   const on = [...document.querySelectorAll('[data-tool-key]')]
     .filter(b => b.getAttribute('aria-pressed') === 'true');
@@ -202,6 +203,22 @@ test('the load path constrains, even against a browser remembering DRAFTING',
     expect(await downKeys(page), 'the seed is DRAFTING').toEqual([]);
 
     await open(page, base({ board: 'toy' }));
+    expect(await downKeys(page)).toHaveLength(15);
+  });
+
+test('a browser that has never chosen opens on TOY, with the keys down',
+  async ({ page }) => {
+    // THE DEFAULT IS PINNED HERE because §6 gave it consequences. Until now
+    // `rememberedBoard = ... : 'toy'` was inert -- nothing was constrained by
+    // the board, so which one a fresh browser got did not matter. It decides
+    // what a first-time drafter can press now.
+    //
+    // This check does not argue the answer is right. It makes the answer
+    // VISIBLE: ruling the other way is one word in MODEL.html and one word
+    // here, and neither can move without the other going red. An incidental
+    // default that fifteen keys depend on is the thing worth refusing.
+    await open(page, base({}));   // the file records no board either
+    expect(await boardOf(page)).toBe('toy');
     expect(await downKeys(page)).toHaveLength(15);
   });
 

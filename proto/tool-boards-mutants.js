@@ -77,13 +77,13 @@ const MUTANTS = [
     test: 'forced back on' },
   { file: 'MODEL.html',
     name: 'a board change repaints the faces but leaves the tool armed',
-    find: '  boardListeners.push(() => { setTool(activeTool); refreshToolAvailability(); });',
-    with: '  boardListeners.push(() => { refreshToolAvailability(); });',
+    find: '    if (roster && !roster.availableOn(activeTool, board)) setTool(RESTING_TOOL);',
+    with: '',
     test: 'puts down a tool TOY does not offer' },
   { file: 'MODEL.html',
     name: 'a board change disarms EVERYTHING, including what the board offers',
-    find: '  boardListeners.push(() => { setTool(activeTool); refreshToolAvailability(); });',
-    with: '  boardListeners.push(() => { setTool(RESTING_TOOL); refreshToolAvailability(); });',
+    find: '    if (roster && !roster.availableOn(activeTool, board)) setTool(RESTING_TOOL);',
+    with: '    setTool(RESTING_TOOL);',
     test: 'survives the switch' },
   { file: 'MODEL.html',
     name: 'the board never tells anyone it changed',
@@ -93,8 +93,8 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'THE BUG ITSELF: a board change rebuilds the slot and wipes its neighbours',
-    find: '  boardListeners.push(() => { setTool(activeTool); refreshToolAvailability(); });',
-    with: '  boardListeners.push(() => { setTool(activeTool); buildToolColumn(); });',
+    find: '    refreshToolAvailability();\n  });',
+    with: '    buildToolColumn();\n  });',
     test: 'leaves the panels that share the tool slot alone' },
 
   // ── §8 ──────────────────────────────────────────────────────────────────
