@@ -4639,10 +4639,10 @@
   const drawPress = at => {
     if (!drawStart) {
       if (toyRunRefused(drawPoint(at))) return;
-      stripNotice = '';
+      clearNotice();
       drawStart = drawPoint(at); paint(); return;
     }
-    stripNotice = '';
+    clearNotice();
     const end = drawPoint(at);
     // A wall of no length is not a wall — the format drops anything under
     // 1e-6 on load, so committing one would write a record that vanishes on
@@ -4677,7 +4677,15 @@
   // next press that does something, so a refusal never sits over a gesture
   // that has since succeeded.
   let stripNotice = '';
+  // BOTH HALVES GO THROUGH A FUNCTION THAT REPAINTS. Saying it and clearing it
+  // are the same operation with different text, and the bug both times was the
+  // repaint: first stripRefresh overwrote a notice that had been set, then a
+  // notice was cleared and the strip kept showing it because nothing repainted
+  // until an unrelated pointermove happened along. A message has two halves --
+  // it must appear and it must STOP -- and a bare assignment does neither on
+  // its own.
   const sayOnStrip = text => { stripNotice = text; stripRefresh(); };
+  const clearNotice = () => { if (stripNotice) sayOnStrip(''); };
   const lenOut = document.getElementById('strip-len');
   const angOut = document.getElementById('strip-ang');
   const protractorOut = document.getElementById('strip-protractor-angle');
