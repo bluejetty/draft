@@ -205,6 +205,34 @@ test('the load path constrains, even against a browser remembering DRAFTING',
     expect(await downKeys(page)).toHaveLength(15);
   });
 
+test('a board change leaves the panels that share the tool slot alone',
+  async ({ page }) => {
+    // THE CHECK THAT WAS MISSING, and its absence cost 25 red checks in three
+    // MERGED suites while every check in this file stayed green.
+    //
+    // #tool-slot is shared. buildToolColumn calls replaceChildren on it;
+    // buildSelectionPanel and buildAssemblyPanel APPEND into it. Rebuilding
+    // the column on a board change therefore deleted both of them, and the
+    // page loads with a board change in it -- `board = boardOfDrawing()` runs
+    // after all three panels exist. Every selection mode, filter and assembly
+    // control vanished on load.
+    //
+    // Nothing in this file saw it, because everything in this file looks at
+    // tool keys, and tool keys were the one thing the rebuild preserved. A
+    // suite that only inspects what its own feature touches cannot see what
+    // that feature destroys.
+    await open(page, base({ board: 'drafting' }));
+    await expect(page.locator('[data-sel-mode]').first()).toBeVisible();
+
+    await page.locator('[data-board="toy"]').click();
+    await page.waitForTimeout(80);
+    await expect(page.locator('[data-sel-mode]').first(),
+      'the selection panel survives a board change').toBeVisible();
+    // The keys are still doing their job, so this is not passing by having
+    // stopped constraining.
+    expect(await downKeys(page)).toHaveLength(15);
+  });
+
 test('the board buttons no longer disclaim that nothing is constrained',
   async ({ page }) => {
     // §8. The disclaimer was true until §6; leaving it would now mislead.

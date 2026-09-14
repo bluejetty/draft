@@ -4868,18 +4868,10 @@
         btn.dataset.toolKey = tool.id;
         btn.dataset.toolKind = tool.kind;
         btn.setAttribute('aria-pressed', String(tool.id === activeTool));
-        // §6 AGAIN, AND FROM THE SAME ANSWER. `disabled` rather than hidden:
-        // a key that vanishes on TOY tells a drafter the tool does not exist,
-        // and moves every key below it, so switching boards would reshuffle
-        // the column under their finger. Down and still in its place says the
-        // true thing -- this board does not offer it.
-        const usable = roster.availableOn(tool.id, board);
-        btn.disabled = !usable;
-        // The title is the whole name, because the face is 40px and
-        // FENESTRATION does not fit on it at a readable size. When the key is
-        // down the title is the only place the REASON fits.
-        btn.title = usable ? tool.name
-          : `${tool.name} — the TOY board does not offer this tool`;
+        // The disabled state and the title are NOT set here -- see
+        // refreshToolAvailability below, which this function calls once the
+        // keys exist. One place decides the face, for the same reason one
+        // place decides availability.
         const letter = document.createElement('span');
         letter.dataset.toolLetter = '';
         letter.textContent = roster.keyFor(tool.id, resolved);
@@ -4897,7 +4889,38 @@
       box.append(name, keys);
       return box;
     }));
+    refreshToolAvailability();
   };
+
+  // §6 ON THE FACE, AND IT IS A WALK RATHER THAN A REBUILD. `disabled` rather
+  // than hidden: a key that vanishes on TOY tells a drafter the tool does not
+  // exist, and moves every key below it, so switching boards would reshuffle
+  // the column under their finger. Down and still in its place says the true
+  // thing -- this board does not offer it.
+  //
+  // WHY THIS IS NOT buildToolColumn() CALLED AGAIN. #tool-slot is shared: the
+  // SELECTION and ASSEMBLY panels append into the same element, and this
+  // builder is the only one that calls replaceChildren. Re-running it on a
+  // board change wiped both of them -- the page kept its seventeen keys and
+  // lost every selection mode, filter and assembly control. My own boards spec
+  // stayed green through it, because it only ever looked at tool keys; 25
+  // checks in three MERGED suites went red. Availability changes on a board
+  // switch, the letters do not, so nothing needs rebuilding.
+  function refreshToolAvailability() {
+    const roster = window.DraftToolRoster;
+    if (!roster) return;
+    document.querySelectorAll('[data-tool-key]').forEach(btn => {
+      const tool = roster.get(btn.dataset.toolKey);
+      if (!tool) return;
+      const usable = roster.availableOn(tool.id, board);
+      btn.disabled = !usable;
+      // The title is the whole name, because the face is 40px and
+      // FENESTRATION does not fit on it at a readable size. When the key is
+      // down the title is the only place the REASON fits.
+      btn.title = usable ? tool.name
+        : `${tool.name} — the TOY board does not offer this tool`;
+    });
+  }
 
   // The register tells the column, never the other way round. Any future
   // arming path -- a keyboard shortcut, a tool that puts itself down when it
@@ -4918,7 +4941,7 @@
   // first so the rebuild renders the corrected register rather than the stale
   // one; it also drops any half-finished gesture, which belongs to the board
   // being left.
-  boardListeners.push(() => { setTool(activeTool); buildToolColumn(); });
+  boardListeners.push(() => { setTool(activeTool); refreshToolAvailability(); });
 
   // ── SELECTION and OBJECT TYPE ─────────────────────────────────────────────
   // THE HELP STRINGS ARE THE OLD PAGE'S, VERBATIM (:23597 and :23619). They are
