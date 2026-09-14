@@ -184,6 +184,54 @@ for (const theme of P.THEMES) {
     check(`${theme}/${mode}  draw-origin over a floor`,
       origOnFloor >= 3.0, `${origOnFloor.toFixed(2)} (min 3.0)`);
 
+    // STRUCTURE: THE TWO ROLES THAT WERE COMMENTS RATHER THAN CHECKS.
+    //
+    // Movie, 14 Sep: "check the contrast numbers on the beam colours." Every
+    // figure in palette.js checked out when measured -- and that is exactly
+    // the problem this block fixes. draw-beam and draw-column carried their
+    // numbers as COMMENTS, in the one file whose stated job is that a skin is
+    // "legible by measurement rather than by squint," while this harness
+    // passed green without ever looking at either role. A number nothing
+    // re-measures is a claim, and the next edit to those hexes would have
+    // moved them silently. Same class as the roof's 2.23: known, written
+    // down, unpoliced.
+    //
+    // THREE GROUNDS, because structure is drawn INSIDE the building. Bare
+    // page is the ground a beam is almost never actually on -- it spans a
+    // floor, and it lands on walls at each end. Measuring the page alone is
+    // the comfortable wrong answer that draw-floor-edge and draw-origin were
+    // both caught by. The wall poche is the worst of the three (night beam
+    // 3.89 against 5.04 on the page), so it is the one that decides.
+    //
+    // 3.0, the WCAG non-text floor: a beam is a line and a column is a cross
+    // in a circle. Neither carries a string.
+    [['draw-beam', 'surface-page', 'the page'],
+      ['draw-beam', 'draw-floor', 'a floor'],
+      ['draw-beam', 'draw-wall', 'the wall it bears on'],
+      ['draw-column', 'surface-page', 'the page'],
+      ['draw-column', 'draw-floor', 'a floor']].forEach(([role, ground, where]) => {
+      const ratio = P.contrast(v[role], v[ground], v['surface-page']);
+      check(`${theme}/${mode}  ${role} on ${where}`, ratio >= 3.0,
+        `${ratio.toFixed(2)} (min 3.0)`);
+    });
+
+    // The beam never outshouts the roof. palette.js says the night beam
+    // "sits UNDER draw-roof's 5.95 deliberately: a roof outline should stay
+    // the louder of the two browns" -- prose, until here. Asserting each
+    // against the page separately passes with the beam brighter, which is the
+    // same inversion the roof guides had.
+    //
+    // <=, not <, and that is not a softened bar. On DAY both roles are the
+    // old page's #7a4a21 and measure 6.64 exactly, because day was left
+    // untouched on purpose. Demanding < would fail on a skin that is working
+    // as designed -- a check that goes red when nothing is wrong. What this
+    // forbids is the real regression: a beam lifted PAST the roof.
+    const beamOnPage = P.contrast(v['draw-beam'], v['surface-page']);
+    const roofLouder = P.contrast(v['draw-roof'], v['surface-page']);
+    check(`${theme}/${mode}  the beam stays no louder than the roof`,
+      beamOnPage <= roofLouder,
+      `beam ${beamOnPage.toFixed(2)} <= roof ${roofLouder.toFixed(2)}`);
+
     // THE ROOF, AND THE ORDER IT HAS TO KEEP.
     //
     // draw-roof was #7a4a21 on BOTH skins until 4 Sep -- 6.64 on the day page

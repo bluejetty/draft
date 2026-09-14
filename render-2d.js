@@ -416,6 +416,91 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+  // A BEAM IS ONE SPAN BETWEEN TWO SUPPORTS, flush or dropped
+  // (MODEL.dc.html:2402). The old page draws it as a 3px line, dashed when
+  // dropped, with the mode written above the midpoint — this is that drawing,
+  // moved into the module so the cut views and LAYOUT's sheets can reach it
+  // too. A painter that lives in one page is the five-copies mistake again.
+  //
+  // COLOUR COMES FROM env, NOT FROM HERE. The old page's #7a4a21 is 2.23 on
+  // this page's night ground, under the 3.0 non-text floor, and hardcoding it
+  // would repeat the fault draw-roof was moved off for.
+  //
+  // pxPerFt IS DERIVED FROM toS rather than passed. A caller that computed it
+  // differently from the transform it also passed would draw a beam whose
+  // label sits somewhere the beam is not, and the two would drift silently.
+  const COLUMN_SIZE_IN = 3;   // 3"ø adjustable steel telepost, MODEL.dc.html:2431
+
+  function drawBeam2D(ctx, toS, beam, options = {}, env) {
+    if (!beam?.start || !beam?.end) return;
+    const { preview = false } = options;
+    const a = toS(beam.start);
+    const b = toS(beam.end);
+    ctx.save();
+    ctx.strokeStyle = env.beamColor;
+    ctx.lineWidth = 3;
+    ctx.setLineDash(beam.mode === 'dropped' ? [8, 5] : []);
+    if (preview) ctx.globalAlpha = 0.72;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (!preview && !env.isPrinting) {
+      ctx.fillStyle = env.beamColor;
+      ctx.font = env.labelFont;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM',
+        (a.x + b.x) / 2, (a.y + b.y) / 2 - 5);
+    }
+    ctx.restore();
+  }
+
+  // A TELEPOST IS A SQUARE, A PILE IS A CIRCLE, and both carry the cross that
+  // marks their centre — the cross is what a drafter aligns to, so it extends
+  // past the body and is drawn even when the body is not.
+  //
+  // The footing is resolved BY THE CALLER and passed in, the way drawFixture2D
+  // takes its host wall: which footing a column has is the page's rule, not the
+  // painter's, and a painter that guessed would answer differently from the
+  // page that owns the answer.
+  function drawColumn2D(ctx, toS, column, options = {}, env) {
+    if (!column?.point) return;
+    const { footing = null, centreOnly = false, preview = false } = options;
+    const origin = toS({ x: 0, y: column.point.y || 0, z: 0 });
+    const unit = toS({ x: 1, y: column.point.y || 0, z: 0 });
+    const pxPerFt = Math.max(0.001, Math.hypot(unit.x - origin.x, unit.y - origin.y));
+    const c = toS(column.point);
+    const pile = footing?.pile === true;
+    const sizeIn = pile ? (footing.sizeIn || 6) : COLUMN_SIZE_IN;
+    const half = Math.max(2.5, (sizeIn / 12) * pxPerFt / 2);
+
+    ctx.save();
+    ctx.strokeStyle = env.columnColor;
+    ctx.lineWidth = 1.5;
+    if (preview) ctx.globalAlpha = 0.72;
+    if (!centreOnly) {
+      ctx.beginPath();
+      if (pile) ctx.arc(c.x, c.y, half, 0, Math.PI * 2);
+      else ctx.rect(c.x - half, c.y - half, half * 2, half * 2);
+      ctx.stroke();
+    }
+    const cross = half + 4;
+    ctx.beginPath();
+    ctx.moveTo(c.x - cross, c.y); ctx.lineTo(c.x + cross, c.y);
+    ctx.moveTo(c.x, c.y - cross); ctx.lineTo(c.x, c.y + cross);
+    ctx.stroke();
+    if (pile && footing.label && !preview && !env.isPrinting) {
+      ctx.fillStyle = env.columnColor;
+      ctx.font = env.labelFont;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(footing.label, c.x, c.y + half + 3);
+    }
+    ctx.restore();
+  }
+
   function drawFixture2D(ctx, toS, fixture, options, wall, env) {
     const geo = env.fixtureGeometry(fixture, wall);
     if (!geo) return;
@@ -1541,6 +1626,8 @@ if (!window.DraftRender2D) {
     drawStairNotes2D,
     drawCutMarks2D,
     drawCutPreview2D,
+    drawBeam2D,
+    drawColumn2D,
   });
 })();
 }
