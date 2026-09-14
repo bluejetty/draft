@@ -40,7 +40,7 @@ const MUTANTS = [
     name: 'TOY LEAKS: every board goes through the constraint path',
     find: "          const toy = board === 'toy' ? toyWallDelta(md, dx, dz) : null;",
     with: '          const toy = toyWallDelta(md, dx, dz);',
-    test: 'DRAFTING keeps the off-axis' },
+    test: 'the constraint path is TOY only' },
   // THE MUTANT THAT PROVED A REDUNDANCY rather than a hole is gone with the
   // line it mutated. `ask = land === null ? wanted : land` survived because
   // stepFt already lands the wall: quantiseFeet(-1, 0.958) is -0.958 whichever
