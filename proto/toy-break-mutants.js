@@ -67,7 +67,10 @@ const MUTANTS = [
     // break off the corners, so that is what gets mutated.
     find: '    const feet = Math.min(Math.max(Math.round(along), 1), Math.floor(run) - 1 || 1);',
     with: '    const feet = Math.round(along);',
-    test: '7a' },
+    // AIMED AT THE CHECK WRITTEN FOR IT. It named 7a, which clicks mid-wall
+    // where clamped and unclamped agree -- so 7a never saw it and the gate's
+    // ambiguity flag caught that the kill came from somewhere else.
+    test: 'near a corner' },
 ];
 
 
