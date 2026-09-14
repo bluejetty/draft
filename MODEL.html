@@ -1275,6 +1275,14 @@
 
   const shapes = () => (drawing?.shapes || [])
     .filter(sh => onActiveLevel().byLevel(sh));
+
+  // BEAMS AND COLUMNS take the level AND view rule: a foundation beam has no
+  // business on the main floor's plan, and the old page files them by view the
+  // same way.
+  const beams = () => (drawing?.beams || [])
+    .filter(b => onActiveLevel().byLevel(b) && onActiveLevel().onPlan(b));
+  const columns = () => (drawing?.columns || [])
+    .filter(c => onActiveLevel().byLevel(c) && onActiveLevel().onPlan(c));
   // Outlines take the same LEVEL-ONLY rule as roofs -- rule four above. They
   // are the room and garage footprints, level-wide, so no view filter.
   const outlines = () => (drawing?.outlines || [])
@@ -1482,6 +1490,20 @@
   const paintEnv = () => ({
     wallTypes: window.DraftWallTypes.WALL_TYPES,
     shapeColor: skin['draw-shape'],
+    // STRUCTURE'S TWO COLOURS AND THE LABEL FONT. The painters take these from
+    // env rather than holding literals, because the old page's values are known
+    // failures on this page's night ground: its beam brown is 2.23 and its
+    // column ink is 1.00 -- the same colour as surface-page, which is how notes
+    // and fixtures once vanished entirely. palette.js carries both new roles
+    // with the numbers.
+    //
+    // labelFont is stated rather than inherited. Two painters in render-2d.js
+    // already read env.labelFont and this page never supplied it, so their
+    // labels drew in whatever font the canvas last had -- assigning undefined
+    // to ctx.font is ignored silently, which is a default nobody chose.
+    beamColor: skin['draw-beam'],
+    columnColor: skin['draw-column'],
+    labelFont: "600 9px 'Barlow Condensed', system-ui, sans-serif",
     // THE ROOF READS THE SKIN, and that is the whole point of the pair.
     // drawRoof2D used one brown for both skins -- #7a4a21, which is 6.64 on
     // the day page and 2.23 on the night one, under the 3.0 non-text floor.
@@ -1531,6 +1553,23 @@
       if ((roof.points || []).length < 3) return;
       R.drawRoof2D(ctx, toS, roof, {}, paintEnv());
     });
+  };
+
+  // STRUCTURE THE DRAFTER NEVER DREW. BUILD HOUSE lands a mid-span beam and
+  // its teleposts whenever a clear span passes 19', so every built house in the
+  // store already holds beams and columns -- which this page kept faithfully
+  // through every save and did not draw. A drafter could not see the structure
+  // holding their floor up.
+  const paintStructure = () => {
+    const R = window.DraftRender2D;
+    const env = paintEnv();
+    beams().forEach(beam => R.drawBeam2D(ctx, toS, beam, {}, env));
+    // The footing is the page's answer, not the painter's. Only a pile changes
+    // the drawn shape; a telepost is the square, which is the default.
+    columns().forEach(column => R.drawColumn2D(ctx, toS, column, {
+      footing: /pile/i.test(String(column.footing || ''))
+        ? { pile: true, sizeIn: 6, label: column.footing } : null,
+    }, env));
   };
 
   const paintShapes = () => {
@@ -2246,7 +2285,7 @@
         // geometry" -- MODEL.dc.html's own words at the same seam. A tracing
         // image that painted over the walls would be worse than none.
         paintUnderlays();
-        paintFloors(); paintRoofs(); paintShapes();
+        paintFloors(); paintRoofs(); paintShapes(); paintStructure();
         paintOutlines();
         paintLines(); paintWalls();
         // Fixtures ride ON the walls, so they go after them and before the
@@ -2438,6 +2477,14 @@
       + `shapes <b>${shownOfTotal(shapes().length, drawing.shapes)}</b>   `
       + `outlines <b>${shownOfTotal(outlines().length, drawing.outlines)}</b>   `
       + `dims <b>${shownOfTotal(dimensions().length, drawing.dimensions)}</b>   `
+      // COLUMNS AND BEAMS, and until now the readout had neither. The page has
+      // painted both since the painter landed, so a drafter placing one had no
+      // on-page way to see it arrive -- which is part of why this half of #392
+      // could sit unfinished without looking broken. shownOfTotal, like every
+      // row above: the left number is this level and view, the right is the
+      // whole drawing.
+      + `columns <b>${shownOfTotal(columns().length, drawing.columns)}</b>   `
+      + `beams <b>${shownOfTotal(beams().length, drawing.beams)}</b>   `
       // BOTH SIDES LEVEL-SCOPED. The loader decodes every underlay in the
       // drawing, not just this level's, so that switching level is instant --
       // which means underlayImages.size counts images the drafter cannot
@@ -4263,6 +4310,103 @@
     return wall;
   };
 
+  // ── STRUCTURE: PLACING A COLUMN AND A BEAM ───────────────────────────────
+  //
+  // AN INTEGER ID, AND NOT newDrawingItemId. This is the whole trap in #392's
+  // other half. That helper returns the STRING `column-7`, which is what
+  // commitWall uses and what the wall reader accepts -- but drawing-format.js
+  // reads a column's id at :512 and a beam's at :549 with `Number(id)` and
+  // drops the record when it is not an integer. Measured before any of this
+  // was written:
+  //
+  //   F.columns([{ id: 'column-7', point, levelId: 3, view: 'plan' }])  ->  []
+  //   F.columns([{ id: 7,          point, levelId: 3, view: 'plan' }])  ->  [ ... ]
+  //
+  // So the obvious implementation puts a column on the canvas, saves a file
+  // that reads correctly, and loses it on the next load with no error at
+  // either end. Highest-plus-one rather than a counter, because the format
+  // dedupes on id: a repeat drops every record after the first, equally
+  // silently.
+  const newStructureId = list => {
+    let max = 0;
+    for (const item of (list || [])) {
+      const n = Number(item?.id);
+      if (Number.isInteger(n) && n > max) max = n;
+    }
+    return max + 1;
+  };
+
+  // A SECOND UNDO KIND RATHER THAN A WIDER FIRST ONE. The existing 'add' step
+  // is wall-shaped -- `drawing.walls.indexOf(step.wall)` -- so pushing a column
+  // through it would pop a step, find nothing, and silently spend the
+  // drafter's undo. Widening that branch would touch wall undo, which is
+  // merged and covered; this leaves it alone.
+  const addItem = (list, item) => {
+    list.push(item);
+    undoStack.push({ kind: 'add-item', list, item });
+    markDirty();
+    paint();
+    return item;
+  };
+
+  const placeColumn = at => {
+    const { levelId, viewId } = onActiveLevel();
+    drawing.columns = drawing.columns || [];
+    return selectPlaced('column', addItem(drawing.columns, {
+      id: newStructureId(drawing.columns),
+      point: { x: at.x, y: 0, z: at.z },
+      levelId,
+      // A column answers to the same home-view rule a wall does: everything on
+      // this page reads 'plan' except floors. Placed on the FOUNDATION plan it
+      // belongs to the foundation, not to a default.
+      view: wallHomeView(viewId),
+      // The format's own default, named here rather than left out, so the
+      // record this page writes and the record the reader rebuilds are the
+      // same object rather than one filled in behind the page's back.
+      footing: 'pad36',
+    }));
+  };
+
+  // WHAT WAS JUST PLACED IS WHAT IS SELECTED, exactly as commitWall does for a
+  // wall. It is also what gives the properties panel something to show: this
+  // page cannot hit-test a column, so the placement is the only moment the
+  // selection can arrive.
+  const selectPlaced = (type, item) => {
+    setSelection([{ type, item }]);
+    return item;
+  };
+
+  let beamStart = null;
+  const beamPress = at => {
+    if (!beamStart) { beamStart = { x: at.x, y: 0, z: at.z }; paint(); return null; }
+    const end = { x: at.x, y: 0, z: at.z };
+    // A BEAM OF NO LENGTH IS NOT A BEAM, and the reader agrees: the format
+    // drops anything under 0.001 (drawing-format.js:553). Writing one would
+    // put a record in the file that vanishes on load -- the same silent loss
+    // as a string id, by a different route. Treat the second press as a
+    // correction, exactly as drawPress does for a wall.
+    if (Math.hypot(end.x - beamStart.x, end.z - beamStart.z) < 0.001) {
+      beamStart = end; paint(); return null;
+    }
+    const { levelId, viewId } = onActiveLevel();
+    drawing.beams = drawing.beams || [];
+    const beam = addItem(drawing.beams, {
+      id: newStructureId(drawing.beams),
+      start: beamStart,
+      end,
+      levelId,
+      view: wallHomeView(viewId),
+      // Named for the same reason footing is: the record this page writes and
+      // the record the reader rebuilds should be the same object, not one
+      // filled in behind the page's back.
+      mode: 'flush',
+    });
+    // No chaining: a beam is one span between two supports, not a run. The
+    // next beam starts where the drafter next presses.
+    beamStart = null;
+    return selectPlaced('beam', beam);
+  };
+
   // DELETE CASCADES, IT DOES NOT REFUSE — MODEL.dc.html:22225-22251 does, and
   // the round-trip proof is about the two pages agreeing on what delete MEANS.
   // A refusal here would also need a message surface this page does not have
@@ -4355,8 +4499,11 @@
     activeTool = next;
     // Any half-finished gesture belongs to the tool being put down. Carrying an
     // anchor across a tool change is how a chain commits into the next tool's
-    // first tap.
+    // first tap -- and the beam's anchor is a second one of exactly the same
+    // kind, so it goes the same way. Leaving it would let a beam started under
+    // BEAM finish under COLUMN.
     drawStart = null;
+    beamStart = null;
     // THE LEGACY BUTTON IS A VIEW OF THE REGISTER, not a second copy of it.
     // tests/model-html-seats.spec.js arms and disarms through this button on
     // every run, and it stays the affordance a drafter with no keyboard can
@@ -4953,6 +5100,84 @@
 
   buildAssemblyPanel();
   selectionWatchers.push(() => syncAssembly());
+
+  // ── THE STRUCTURE PROPERTIES PANEL ───────────────────────────────────────
+  //
+  // WHAT IT DOES NOT DO, said plainly rather than left to be discovered: it
+  // does not make an existing column or beam clickable. This page's hit-test
+  // knows walls, lines and floors; teaching it structure is the selection
+  // system's job and not #392's. So the panel shows the item the drafter just
+  // PLACED, which is the moment its properties are wanted and the moment
+  // commitWall already selects its wall in.
+  //
+  // ONE VALUE PER ROW, AND THE VALUES ARE THE FORMAT'S. footing and mode are
+  // enumerations drawing-format.js validates (:517 and :563); anything not on
+  // those lists is silently replaced with the default on the next load, so the
+  // panel offers exactly what the reader accepts and nothing else.
+  const FOOTINGS = [['pad36', 'PAD 36"'], ['pad42', 'PAD 42"'],
+    ['pile8', 'PILE 8"'], ['pile10', 'PILE 10"'], ['pile12', 'PILE 12"']];
+  const BEAM_MODES = [['flush', 'FLUSH'], ['dropped', 'DROPPED']];
+
+  const propRow = (label, options, current, pick) => {
+    const row = document.createElement('div');
+    row.dataset.propRow = label.toLowerCase();
+    const name = document.createElement('div');
+    name.className = 'props-title';
+    name.textContent = label;
+    const chips = document.createElement('div');
+    chips.className = 'chip-row';
+    chips.append(...options.map(([id, face]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sel-chip';
+      btn.dataset.propValue = id;
+      btn.textContent = face;
+      btn.setAttribute('aria-pressed', String(id === current));
+      btn.addEventListener('click', () => pick(id));
+      return btn;
+    }));
+    row.append(name, chips);
+    return row;
+  };
+
+  const showStructureProps = () => {
+    const P = window.ModelProps;
+    if (!P) return;
+    const picked = selection.length === 1 ? selection[0] : null;
+    if (!picked || (picked.type !== 'column' && picked.type !== 'beam')) return;
+    const item = picked.item;
+    const box = document.createElement('div');
+    if (picked.type === 'column') {
+      box.append(propRow('FOOTING', FOOTINGS, item.footing, id => {
+        item.footing = id;
+        // A pile has a fixed diameter, so a pad's custom size is meaningless
+        // on one. The format drops padIn for piles anyway (:534); dropping it
+        // here too keeps the page's record and the reader's identical.
+        if (id.startsWith('pile')) delete item.padIn;
+        markDirty();
+        showStructureProps();
+        paint();
+      }));
+    } else {
+      const span = Math.hypot(item.end.x - item.start.x, item.end.z - item.start.z);
+      box.append(propRow('BEAM', BEAM_MODES, item.mode, id => {
+        item.mode = id;
+        markDirty();
+        showStructureProps();
+        paint();
+      }));
+      const len = document.createElement('div');
+      len.dataset.propSpan = '';
+      len.className = 'props-title';
+      // The span is read from the geometry, never stored: a stored length and
+      // a moved endpoint are two facts that can disagree, and the drafter
+      // would believe the one on the panel.
+      len.textContent = `SPAN ${feetLabel(span)}`;
+      box.append(len);
+    }
+    P.set(picked.type === 'column' ? 'COLUMN' : 'BEAM', box);
+  };
+  selectionWatchers.push(showStructureProps);
   deleteButton.addEventListener('click', () => {
     const wall = selectedWall();
     if (!wall) return;
@@ -4978,6 +5203,8 @@
     // panning. Otherwise the first tap of a wall that starts on an existing
     // corner would be read as grabbing that corner, and the drafter would drag
     // the building instead of drawing against it.
+    if (activeTool === 'column') { placeColumn(at); return; }
+    if (activeTool === 'beam') { beamPress(at); return; }
     if (activeTool === 'wall') { drawPress(at); return; }
     // A WINDOW MODE TAKES THE PRESS BEFORE THE PAN, and before the corner and
     // body tests too. Otherwise a box begun on a selected wall would grab that
@@ -5240,6 +5467,11 @@
           // whose difference nothing on screen would show.
           if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
         });
+      } else if (step.kind === 'add-item') {
+        // Structure placement. The list is captured in the step, so this works
+        // for columns and beams without knowing which it is holding.
+        const at = step.list.indexOf(step.item);
+        if (at >= 0) step.list.splice(at, 1);
       } else if (step.kind === 'add') {
         const at = drawing.walls.indexOf(step.wall);
         if (at >= 0) drawing.walls.splice(at, 1);

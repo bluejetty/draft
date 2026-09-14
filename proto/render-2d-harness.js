@@ -502,6 +502,83 @@ suite('drawUnderlays2D', 'a real underlay is drawn at its own opacity', R => {
   expect('and the state is put back', count(ctx, 'restore'), 1);
 });
 
+// ── drawBeam2D and drawColumn2D ──
+// Structure the drafter never drew. BUILD HOUSE lands a mid-span beam and its
+// teleposts whenever a clear span passes 19', so these two paint entities that
+// already exist in every built house.
+//
+// SENTINELS, for the same reason the roof and shape suites use them: asserting
+// against the real skin value would pass with a literal still in place, which
+// is exactly the fault both of those suites were written to catch. #7a4a21 and
+// #1d1f20 are the old page's own beam and column colours, and both are known
+// failures on the night ground -- so a check that accepted them would be
+// blessing the bug.
+const SENTINEL_BEAM = '#0088ff';
+const SENTINEL_COLUMN = '#ff00aa';
+const structEnv = over => ({
+  beamColor: SENTINEL_BEAM, columnColor: SENTINEL_COLUMN,
+  labelFont: '600 9px sans-serif', isPrinting: false, ...over,
+});
+const SPAN = { id: 1, start: { x: 0, z: 0 }, end: { x: 10, z: 0 }, mode: 'flush' };
+
+suite('drawBeam2D', 'a flush beam is a solid line in the skin colour', R => {
+  const ctx = recordingCtx();
+  R.drawBeam2D(ctx, toS, SPAN, {}, structEnv());
+  expect('stroked in the skin colour', sets(ctx, 'strokeStyle').includes(SENTINEL_BEAM), true);
+  expect('and no old-page brown survives',
+    sets(ctx, 'strokeStyle').map(String).some(v => v.includes('7a4a21')), false);
+  expect('the dash list is empty for a flush beam',
+    JSON.stringify(calls(ctx, 'setLineDash')[0]), '[[]]');
+  expect('it says which kind it is', calls(ctx, 'fillText')[0][0], 'FLUSH BEAM');
+});
+
+suite('drawBeam2D', 'a dropped beam is dashed, and says so', R => {
+  const ctx = recordingCtx();
+  R.drawBeam2D(ctx, toS, { ...SPAN, mode: 'dropped' }, {}, structEnv());
+  expect('dashed', JSON.stringify(calls(ctx, 'setLineDash')[0]), '[[8,5]]');
+  expect('and labelled DROPPED', calls(ctx, 'fillText')[0][0], 'DROPPED BEAM');
+});
+
+suite('drawBeam2D', 'a printing pass draws the beam and drops the label', R => {
+  const ctx = recordingCtx();
+  R.drawBeam2D(ctx, toS, SPAN, {}, structEnv({ isPrinting: true }));
+  expect('the span is still stroked', count(ctx, 'stroke') > 0, true);
+  expect('but nothing is written', count(ctx, 'fillText'), 0);
+});
+
+suite('drawBeam2D', 'a beam with no ends is not a beam', R => {
+  const ctx = recordingCtx();
+  R.drawBeam2D(ctx, toS, { id: 2, mode: 'flush' }, {}, structEnv());
+  expect('nothing is painted', painted(ctx), false);
+});
+
+suite('drawColumn2D', 'a telepost is a square with a centre cross', R => {
+  const ctx = recordingCtx();
+  R.drawColumn2D(ctx, toS, { id: 1, point: { x: 0, z: 0 } }, {}, structEnv());
+  expect('drawn in the skin colour', sets(ctx, 'strokeStyle').includes(SENTINEL_COLUMN), true);
+  expect('and not in the old page ink that vanishes on night',
+    sets(ctx, 'strokeStyle').map(String).some(v => v.includes('1d1f20')), false);
+  expect('a rectangle, not a circle', count(ctx, 'rect') > 0 && count(ctx, 'arc') === 0, true);
+  // The cross is two strokes past the body on both axes: four moveTo/lineTo
+  // pairs in total, two of them the cross.
+  expect('the centre cross is drawn', count(ctx, 'moveTo') >= 2, true);
+});
+
+suite('drawColumn2D', 'a pile is a circle at its own diameter, and carries its label', R => {
+  const ctx = recordingCtx();
+  R.drawColumn2D(ctx, toS, { id: 2, point: { x: 0, z: 0 } },
+    { footing: { pile: true, sizeIn: 12, label: 'PILE 12' } }, structEnv());
+  expect('a circle, not a square', count(ctx, 'arc') > 0 && count(ctx, 'rect') === 0, true);
+  expect('labelled with its footing', calls(ctx, 'fillText')[0][0], 'PILE 12');
+});
+
+suite('drawColumn2D', 'centreOnly keeps the cross and drops the body', R => {
+  const ctx = recordingCtx();
+  R.drawColumn2D(ctx, toS, { id: 3, point: { x: 0, z: 0 } }, { centreOnly: true }, structEnv());
+  expect('no body', count(ctx, 'rect') + count(ctx, 'arc'), 0);
+  expect('but the cross the drafter aligns to is still there', count(ctx, 'stroke') > 0, true);
+});
+
 // ── drawShape2D ──
 const shapeEnv = over => ({
   shapeColor: '#3f8f7a', isPrinting: false,
@@ -2239,6 +2316,19 @@ function coverage() {
   console.log('\nbranch mutations');
   console.log('─'.repeat(72));
   let missed = 0;
+  // STRUCTURE'S FOUR. Each breaks one half of a pair that a reader cannot tell
+  // apart from the outside: the two beam modes, and the two column footings.
+  const beamModeIgnored = src => src.replace(
+    "ctx.setLineDash(beam.mode === 'dropped' ? [8, 5] : []);",
+    'ctx.setLineDash([]);');
+  const dropBeamEnvColour = src => src.replace(
+    /ctx\.strokeStyle = env\.beamColor;/, "ctx.strokeStyle = '#7a4a21';");
+  const columnShapeIgnored = src => src.replace(
+    'if (pile) ctx.arc(c.x, c.y, half, 0, Math.PI * 2);\n      else ctx.rect(c.x - half, c.y - half, half * 2, half * 2);',
+    'ctx.rect(c.x - half, c.y - half, half * 2, half * 2);');
+  const dropColumnEnvColour = src => src.replace(
+    /ctx\.strokeStyle = env\.columnColor;/, "ctx.strokeStyle = '#1d1f20';");
+
   const BRANCH_MUTATIONS = [
     ['strokeSegPath2D bulge branch', dropBulge],
     ['drawWallSeg2D mitre path', dropMitre],
@@ -2252,6 +2342,10 @@ function coverage() {
     ['drawWallSeg2D env colours', dropWallEnvColours],
     ['drawWallSeg2D colour fallbacks', dropWallColourFallback],
     ['drawWallSeg2D dots take the body colour', wallDotsTakeTheFill],
+    ['drawBeam2D dropped and flush draw the same', beamModeIgnored],
+    ['drawBeam2D back on the old page brown', dropBeamEnvColour],
+    ['drawColumn2D pile and telepost draw the same', columnShapeIgnored],
+    ['drawColumn2D back on the old page ink', dropColumnEnvColour],
   ];
   BRANCH_MUTATIONS.forEach(([label, mutate]) => {
     const caught = runAll(load(mutate)).filter(r => r.failed || r.threw);
