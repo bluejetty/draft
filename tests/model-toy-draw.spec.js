@@ -514,6 +514,14 @@ test('Escape cancels the unfinished run the refusal names', async ({ page }) => 
   // AND THE REFUSAL IS GONE WITH IT: a new run somewhere else is now allowed.
   await page.mouse.click(...at(24, 0));
   await page.waitForTimeout(60);
+  // THE NOTICE GOES WHEN A PRESS SUCCEEDS. The gate caught this missing: a
+  // mutant removing the clear survived, because the check read the notice
+  // once and never looked again. "run cancelled" left sitting over a live new
+  // run is the same lie as any other stale message -- the page reporting
+  // something that stopped being true.
+  await expect(page.locator('#strip-message'),
+    'the cancel notice does not sit over the run that followed it')
+    .not.toContainText('cancelled');
   await page.mouse.click(...at(32, 0));
   await page.waitForTimeout(60);
   await page.mouse.click(...at(32, 6));
