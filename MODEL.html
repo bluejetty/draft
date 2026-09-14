@@ -5537,6 +5537,10 @@
     GROUP_MEMBER_BLOCKED: 'a wall joined to this one cannot move that far',
     OBJECT_CLEARANCE: 'something in the room would not have room left',
     NEEDS_A_BEAM: 'that span would need a beam',
+    // The wall the drafter grabbed is square and so is its neighbour; moving
+    // it is what would bend one. So this says what the MOVE would do, not what
+    // the wall is -- the other two ortho lines above are about the wall.
+    WOULD_ANGLE_NEIGHBOUR: 'that would leave the next wall on an angle — break it first',
   };
   const blockerSays = verdict =>
     BLOCKER_WORDS[verdict.reason] || `cannot move it: ${verdict.reason}`;
@@ -5573,7 +5577,27 @@
     const ask = offGridBy(pos) ? dir * land : wanted;
     const probe = { ...wall, stepFt: land };
     const ctx = C.gather({ walls: (drawing.walls || []).map(w => ({ ...w })) });
-    const verdict = T.allowedMove(probe, ask, { ...ctx, mode: T.MODE.TOY });
+    // THE PAGE HAS TO SAY WHAT ACTUALLY MOVES, and until now it did not.
+    //
+    // Left to itself the module builds a weld group: any two walls whose ends
+    // touch are welded, so a CLOSED ROOM is one group and dragging any wall of
+    // it is judged as picking the whole house up and setting it down a foot
+    // away. That is trivially legal, which is why `allowedMove` has answered
+    // an unconditional yes here since §3 landed -- every room minimum, every
+    // cantilever band, every beam-span rule in the module was unreachable from
+    // this page, and no mutant could show it because the answer is the same
+    // whether the rules work or not.
+    //
+    // Measured: dragging `n` on the plain square returned group [n,e,s,w] and
+    // no stretches. The page then moved ONE wall and stretched its neighbours,
+    // which is a different operation from the one that was approved.
+    //
+    // `welds` is the module's own override, so this is telling it the truth
+    // rather than defeating it: the group is the dragged wall, and the walls
+    // hanging off its corners are STRETCHES -- which is exactly what this page
+    // does to them.
+    const verdict = T.allowedMove(probe, ask,
+      { ...ctx, mode: T.MODE.TOY, welds: [[wall.id]] });
     // §3: "A BLOCKED DRAG STOPS DEAD AND THE BLOCKER SAYS WHY. Never elastic."
     // The saying is the half that was missing: allowedMove has always returned
     // a reason and this page has always stored it, and nothing put it on

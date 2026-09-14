@@ -63,6 +63,12 @@ if (!window.DraftToyConstraints) {
     GROUP_MEMBER_BLOCKED: 'GROUP_MEMBER_BLOCKED',
     OBJECT_CLEARANCE: 'OBJECT_CLEARANCE',
     NEEDS_A_BEAM: 'NEEDS_A_BEAM',
+    // WOULD ANGLE A NEIGHBOUR, which is not the same as TOUCHES_NON_ORTHOGONAL.
+    // That one is about geometry that is ALREADY angled and cannot be reasoned
+    // about. This is about geometry that is square now and would not be after
+    // the move -- the wall being dragged is fine, its neighbour is fine, and
+    // the move is what breaks it.
+    WOULD_ANGLE_NEIGHBOUR: 'WOULD_ANGLE_NEIGHBOUR',
     NO_MOVE: 'NO_MOVE',
   });
 
@@ -495,10 +501,19 @@ if (!window.DraftToyConstraints) {
       const bound = ((room && room.bounds) || []).find(b => groupIds.includes(b.wallId));
       culprit = bound ? bound.wallId : null;
     }
+    // GROUP_MEMBER_BLOCKED means "a wall travelling WITH you is blocked", so
+    // the rewrite belongs to refusals whose culprit is a group member. A
+    // neighbour that would be left on an angle is not travelling with you --
+    // it is standing still while one of its ends is dragged -- and naming that
+    // "a wall joined to this one cannot move that far" tells the drafter to
+    // look at a distance when the problem is a shape. The refusal already
+    // names its own wall, so it keeps its own reason and only gains the id.
     if (culprit && culprit !== grabbedId) {
-      said.reason = REASON.GROUP_MEMBER_BLOCKED;
       said.blockedBy = culprit;
-      said.underlying = blocked.reason;
+      if (blocked.reason !== REASON.WOULD_ANGLE_NEIGHBOUR) {
+        said.reason = REASON.GROUP_MEMBER_BLOCKED;
+        said.underlying = blocked.reason;
+      }
     }
     return said;
   };
@@ -547,6 +562,43 @@ if (!window.DraftToyConstraints) {
       });
     });
     return stretches;
+  };
+
+  // WHAT THE MOVE WOULD DO TO THE SHAPE, which nothing else here asks.
+  //
+  // `isLegal` cannot answer it: `configAfterMove` advances declared numbers --
+  // room dimensions, spans, cantilevers -- and never moves a single vertex, so
+  // the configuration it judges has the ORIGINAL geometry in it. Whether the
+  // result is still square is invisible to it by construction.
+  //
+  // It is visible HERE, because `endStretches` already computes where each
+  // touching wall's corner lands. A neighbour PERPENDICULAR to the moved wall
+  // just gets longer and stays square -- that is the ordinary case and the
+  // only one the checks had. A neighbour COLLINEAR with it gets one end pushed
+  // sideways and becomes a diagonal, which is the one thing TOY exists to make
+  // unreachable.
+  //
+  // MEASURED, NOT ARGUED: seeding a run already broken into two collinear
+  // walls and dragging one half produced `n2: (0,-11) -> (10,-10)` with an
+  // empty strip. A diagonal, in TOY, silently.
+  const wouldAngle = (wall, groupIds, walls, delta) => {
+    const stretches = endStretches(wall, groupIds, walls, delta);
+    if (!stretches.length) return null;
+    const runX = wall.end.x - wall.start.x;
+    const runZ = wall.end.z - wall.start.z;
+    const run = Math.hypot(runX, runZ);
+    if (run < 1e-9) return null;
+    const offX = (-runZ / run) * delta;
+    const offZ = (runX / run) * delta;
+    for (const stretch of stretches) {
+      const other = (walls || []).find(w => w.id === stretch.wallId);
+      if (!other || !isOrthogonal(other)) continue;   // already angled: not this move's doing
+      const corner = other[stretch.end];
+      const moved = { ...other,
+        [stretch.end]: { ...corner, x: corner.x + offX, z: corner.z + offZ } };
+      if (!isOrthogonal(moved)) return other.id;
+    }
+    return null;
   };
 
   // ── WHICH KIND OF MOVE THAT WAS ───────────────────────────────────────
@@ -621,7 +673,13 @@ if (!window.DraftToyConstraints) {
     const step = wanted > 0 ? stepFt : -stepFt;
     let blocked = null;
     for (let d = wanted; Math.abs(d) >= stepFt - 1e-9; d -= step) {
-      const verdict = isLegal(configAfterMove(base, groupIds, d));
+      // TOY ONLY, and deliberately so. DRAFTING's whole freedom is that a wall
+      // may sit off-axis, so a rule forbidding a move because it angles
+      // something would be the foot light's leak wearing a third coat.
+      const angled = mode === MODE.TOY ? wouldAngle(wall, groupIds, walls, d) : null;
+      const verdict = angled
+        ? { ok: false, violations: [{ reason: REASON.WOULD_ANGLE_NEIGHBOUR, wallId: angled }] }
+        : isLegal(configAfterMove(base, groupIds, d));
       if (verdict.ok) {
         const result = { delta: d, group: groupIds };
         const advisory = (configAfterMove(base, groupIds, d).walls || [])

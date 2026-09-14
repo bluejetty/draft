@@ -235,6 +235,63 @@ The numbers exist: `CANTILEVER_FREE_FT = 2`, `CANTILEVER_PILES_FT = 4.5`
 rung**, not new numbers. The piled rungs above 4'-6" stay in the module and
 come back when Movie lifts the "for now".
 
+## 3b. THE DIAGONAL TOY COULD DRAW — found while sizing §4
+
+Probing what a §4 break would produce, before building it: a run already split
+into two collinear walls sharing a corner. Dragging one half gave
+
+    n2: (0,-11) -> (10,-10)        a diagonal, in TOY, strip empty
+
+No §4 needed to reach it. Any drawing with two collinear walls sharing a
+corner did this, and §3 shipped with it.
+
+**Two faults, one symptom.**
+
+1. **The page never told the module what moves.** `weldGroup` welds any two
+   walls whose ends touch, so a closed room is ONE group and `allowedMove` was
+   being asked "may I pick the whole house up and set it down a foot away" --
+   always yes. Measured on the plain square: `group [n,e,s,w]`, `stretches []`,
+   `reason null`. Meanwhile the page moves one wall and stretches its
+   neighbours: a different operation from the one approved.
+
+   So every room minimum, cantilever band, clearance and beam-span rule in
+   `toy-constraints.js` was **unreachable from MODEL.html**. The only refusal
+   §3 ever demonstrated was `inertReason` -- the dragged wall being itself
+   diagonal -- which fires before any of that machinery.
+
+   Fix: the page passes `welds: [[wall.id]]`, the module's own override. The
+   group is the dragged wall; its corner neighbours are stretches, which is
+   what the page actually does to them.
+
+2. **Nothing checked the shape after the move.** `configAfterMove` advances
+   declared numbers -- room dimensions, spans, cantilevers -- and never moves a
+   vertex, so `isLegal` judges a configuration carrying the ORIGINAL geometry.
+   The module computed the neighbour stretching `10.00 -> 10.05` -- which is
+   the diagonal, sqrt(10^2 + 1^2) -- and returned ok.
+
+   Fix: `wouldAngle`, beside `endStretches` where the moved corners already
+   are, and a `WOULD_ANGLE_NEIGHBOUR` reason. TOY only -- DRAFTING's freedom is
+   that a wall may sit off-axis, and a rule forbidding a move for angling
+   something is the foot light's leak wearing a third coat.
+
+   `describeBlocker` also had to stop rewriting it to `GROUP_MEMBER_BLOCKED`.
+   That code means "a wall travelling WITH you is blocked"; a neighbour left on
+   an angle is standing still with one end dragged, and naming it a distance
+   problem points the drafter at the wrong thing.
+
+**Why no gate caught it.** Every fixture was the square, where a wall's
+neighbours are PERPENDICULAR -- they lengthen and stay square. Collinear
+neighbours were never in a fixture. Same blind spot as the -z-only nudge and
+the along-x-only wall: *the fixture in front of me exercised one side.* Third
+time in one session, which makes it the habit to design against rather than a
+run of bad luck.
+
+**What it does to §4.** A joint is not enough. Break a run, drag one half, and
+the other half swings -- so "the two halves move independently" cannot be
+delivered by inserting a corner. The break must split the shared corner and
+the drag must create the connector wall: that connector IS the side of the
+bump-out, which is what §4 says the break is for.
+
 ## 4. Breaking the bone
 
 > Movie: *"they will be allowed to 'BREAK the bone' every foot if they want to

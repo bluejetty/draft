@@ -776,3 +776,131 @@ test('a DRAFTING wall drags freely — the constraint path is TOY only',
     expect(Math.abs(z - (-10.62)),
       'DRAFTING moved it exactly as far as it was dragged').toBeLessThan(0.12);
   });
+
+// ── THE DIAGONAL TOY COULD STILL DRAW ───────────────────────────────────────
+//
+// Found by probing what a §4 break WOULD produce, before building §4: a run
+// already split into two collinear walls sharing a corner. Dragging one half
+// gave `n2: (0,-11) -> (10,-10)` -- a diagonal, in TOY, with an empty strip.
+//
+// TWO FAULTS UNDER IT, and neither could be seen from the square:
+//
+//  1. The page never told the module what moves. Left alone the module welds
+//     every touching wall into one group, so a CLOSED ROOM is one group and
+//     the question being answered was "may I pick the whole house up and set
+//     it down a foot away" -- always yes. Measured: group [n,e,s,w], no
+//     stretches, reason null. Every room minimum, cantilever band and span
+//     rule in the module was unreachable from this page, and no mutant could
+//     show it, because an unconditional yes looks the same whether the rules
+//     work or not.
+//  2. Even told the truth, nothing checked the SHAPE after the move.
+//     `configAfterMove` advances declared numbers and never moves a vertex,
+//     so `isLegal` judges a configuration with the original geometry in it.
+//     The module computed the neighbour stretching 10.00 -> 10.05 -- which IS
+//     the diagonal, sqrt(10^2 + 1^2) -- and returned ok.
+//
+// A wall PERPENDICULAR to the one being dragged just gets longer and stays
+// square, which is every neighbour in the square fixture. That is why this
+// went unseen: the same blind spot as the -z-only nudge and the along-x-only
+// wall, a third time. The fixture in front of me exercised one side.
+const brokenRun = () => base({
+  board: 'toy',
+  walls: [
+    ['n1', V(-10, -10), V(0, -10)], ['n2', V(0, -10), V(10, -10)],
+    ['e', V(10, -10), V(10, 10)],
+    ['s', V(10, 10), V(-10, 10)], ['w', V(-10, 10), V(-10, -10)],
+  ].map(([id, start, end]) => ({ id, start, end, levelId: 3, view: 'plan',
+    wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' })),
+});
+
+const wallEnds = (page, id) => page.evaluate(async ({ bucket, wid }) => {
+  const f = await window.SharedFileStore.loadSharedFile(bucket);
+  const w = JSON.parse(await f.text()).walls.find(w => w.id === wid);
+  return [w.start.x, w.start.z, w.end.x, w.end.z].map(n => Number(n.toFixed(4)));
+}, { bucket: BUCKET, wid: id });
+
+// A wall is square iff one of its two runs is zero. Asserting THE ANGLE, not
+// a pair of coordinates: a check written as toEqual([...]) passes for any
+// number of wrong-but-square results and fails for right-but-shifted ones,
+// and the rule here is about squareness.
+const squareRun = ([x1, z1, x2, z2]) =>
+  Math.abs(x2 - x1) < 1e-6 || Math.abs(z2 - z1) < 1e-6;
+
+test('TOY refuses a drag that would leave the next wall on an angle',
+  async ({ page }) => {
+    await open(page, brokenRun());
+    const { at } = await frame(page);
+    // The middle of n1, which is the half being pulled.
+    const [sx, sy] = at(-5, -10);
+    await page.mouse.click(sx, sy);
+    await page.waitForTimeout(80);
+    await page.mouse.move(sx, sy);
+    await page.mouse.down();
+    const [ex, ey] = at(-5, -11);
+    await page.mouse.move(ex, ey, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+
+    // THE POSITIVE HALF FIRST. "n2 is not angled" is satisfied by a page where
+    // nothing moved at all, by one where TOY is switched off, and by one where
+    // the drag never armed -- an assertion the absence of the feature
+    // satisfies is not an assertion. So the refusal has to SPEAK before the
+    // geometry is worth reading.
+    await expect(page.locator('#strip-message'),
+      'the refusal is on screen').not.toHaveText('');
+    await expect(page.locator('#strip-message'),
+      'and it names the angle, not a distance').toContainText('angle');
+
+    await saveIt(page);
+    expect(squareRun(await wallEnds(page, 'n2')),
+      'the neighbour is still square').toBe(true);
+    expect(await wallZ(page, 'n1'),
+      'and the refused drag stopped dead rather than moving anyway').toBe(-10);
+  });
+
+test('the same drag in DRAFTING is not refused — the angle rule is TOY only',
+  async ({ page }) => {
+    // THE LEAK, BOTH DIRECTIONS. DRAFTING's freedom is that a wall may sit off
+    // axis; a rule that forbids a move for angling something would be exactly
+    // the leak the foot-light order warns about, wearing a third coat. And it
+    // is a positive assertion -- the wall MOVED -- because "DRAFTING was not
+    // refused" is satisfied by a DRAFTING that cannot drag at all.
+    await open(page, { ...brokenRun(), board: 'drafting' });
+    const { at } = await frame(page);
+    const [sx, sy] = at(-5, -10);
+    await page.mouse.click(sx, sy);
+    await page.waitForTimeout(80);
+    await page.mouse.move(sx, sy);
+    await page.mouse.down();
+    const [ex, ey] = at(-5, -11);
+    await page.mouse.move(ex, ey, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    await saveIt(page);
+    expect(await wallZ(page, 'n1'),
+      'DRAFTING moved the wall it was asked to move').toBe(-11);
+  });
+
+test('the ordinary square still drags — pinning the weld group did not freeze it',
+  async ({ page }) => {
+    // THE REGRESSION THE WELD PIN COULD HAVE CAUSED. Telling the module the
+    // group is one wall makes every rule in it reachable for the first time,
+    // so the ordinary case has to be re-proved rather than assumed: a room
+    // minimum that was never consulted before could now refuse the drag that
+    // every other check in this file depends on.
+    await open(page, base({ board: 'toy' }));
+    const { at } = await frame(page);
+    const [sx, sy] = at(0, -10);
+    await page.mouse.click(sx, sy);
+    await page.waitForTimeout(80);
+    await page.mouse.move(sx, sy);
+    await page.mouse.down();
+    const [ex, ey] = at(0, -11);
+    await page.mouse.move(ex, ey, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    await saveIt(page);
+    expect(await wallZ(page, 'n'), 'the square still moves a foot').toBe(-11);
+    expect(squareRun(await wallEnds(page, 'e')),
+      'and its perpendicular neighbour just got longer').toBe(true);
+  });
