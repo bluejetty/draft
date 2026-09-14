@@ -5551,14 +5551,27 @@
     const wanted = axis === 'x' ? dz : dx;
     if (!wanted) return { dx: 0, dz: 0 };
 
-    // THE STEP IS THE WHOLE MECHANISM. stepFt rides on the wall, the module's
-    // own quantiser rounds the drafter's distance to a multiple of it
-    // (stepFor, toy-constraints.js), and on an off-grid wall the first such
-    // multiple is the foot mark. So a landing and a whole-foot move are the
-    // same operation with a different step, not two rules.
-    const probe = { ...wall,
-      stepFt: landingStep(posOnMoveAxis(wall), Math.sign(wanted)) };
-    const ask = wanted;
+    // TWO THINGS, AND I REMOVED ONE OF THEM AS REDUNDANT AN HOUR AGO. The gate
+    // had shown `ask = land` changing nothing, so I dropped it -- but it was
+    // only ever exercised pulling -z, where the distance to the mark behind is
+    // 0.958 and quantising a one-foot ask by 0.958 lands on the mark anyway.
+    // Push +z from the same wall and the distance to the mark AHEAD is 0.042:
+    // quantising a one-foot ask by 0.042 gives 1.008, and the wall sails past
+    // the mark to -5.03.
+    //
+    // So the step alone does not carry the rule. THE FIRST NUDGE OF AN
+    // OFF-GRID WALL IS THE LANDING, whatever the drag distance -- that is what
+    // `ask` says -- and the step is what stops the module rounding the landing
+    // back off the grid. Both, and neither is decoration.
+    //
+    // The lesson is the one from the fixture that only ran -z: a gate result
+    // is only as good as the directions the checks take. I generalised from
+    // one arm of a branch and deleted a line that carried the other.
+    const pos = posOnMoveAxis(wall);
+    const dir = Math.sign(wanted);
+    const land = landingStep(pos, dir);
+    const ask = offGridBy(pos) ? dir * land : wanted;
+    const probe = { ...wall, stepFt: land };
     const ctx = C.gather({ walls: (drawing.walls || []).map(w => ({ ...w })) });
     const verdict = T.allowedMove(probe, ask, { ...ctx, mode: T.MODE.TOY });
     // §3: "A BLOCKED DRAG STOPS DEAD AND THE BLOCKER SAYS WHY. Never elastic."

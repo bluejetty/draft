@@ -53,9 +53,17 @@ const MUTANTS = [
     // anchor named a line that no longer exists, so the gate printed SKIPPED
     // and totalled 7/9 -- the count is against 10 defined, which is the only
     // reason the skip was visible at all.
-    find: '    const probe = { ...wall,\n      stepFt: landingStep(posOnMoveAxis(wall), Math.sign(wanted)) };',
+    find: '    const probe = { ...wall, stepFt: land };',
     with: '    const probe = { ...wall };',
     test: 'first nudge lands on the foot' },
+  { file: 'MODEL.html',
+    name: 'THE ASK IS NOT THE LANDING: a one-foot drag sails past the mark',
+    // The line I deleted as redundant and had to restore. Only a +z nudge can
+    // see it: pulling -z, quantising by 0.958 lands on the mark whatever is
+    // asked for. Aimed at the direction check for exactly that reason.
+    find: '    const ask = offGridBy(pos) ? dir * land : wanted;',
+    with: '    const ask = wanted;',
+    test: 'pushed the other way' },
   { file: 'MODEL.html',
     name: 'the landing ignores which way the wall is going',
     // REPLACES the on-grid guard mutant, which survived because the guard had
