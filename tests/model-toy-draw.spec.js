@@ -577,7 +577,12 @@ test('§3 — a blocked drag stops dead, and the strip says why', async ({ page 
   await expect(page.locator('#strip-message'),
     'the blocker is on screen, not only in md.blocked')
     .not.toHaveText('');
-  await expect(page.locator('#strip-message')).toContainText(/cannot|angled|not/i);
+  // THE SPECIFIC REASON, not merely a refusal. The gate caught the loose
+  // version: a mutant returning one flat "cannot move that" for every blocker
+  // matched /cannot/ and survived. A refusal that never says WHICH rule
+  // stopped you is the same as no reason at all -- and §3's rule is that the
+  // blocker says why.
+  await expect(page.locator('#strip-message')).toContainText('not square');
 
   // STOPS DEAD, NEVER ELASTIC: the wall is where it was.
   await saveIt(page);
@@ -703,4 +708,51 @@ test('acceptance 2d — dragging one bone leaves the other where it was',
     expect(await wallZ(page, 'bn'), 'the other bone did not follow').toBe(-8);
     expect(await wallZ(page, 'bs'), 'nor its far side').toBe(8);
     expect(await wallZ(page, 'be'), 'nor its sides').toBe(-8);
+  });
+
+test('a side wall moves along its own perpendicular, not always in z',
+  async ({ page }) => {
+    // THE GATE FOUND THIS HOLE. Every wall dragged in the checks above runs
+    // along x, where the perpendicular IS z -- so a mutant that always took dz
+    // changed nothing and survived. A wall running along Z is the only place
+    // the axis choice can be seen at all.
+    await open(page, base({
+      board: 'toy',
+      walls: [
+        ['n', V(-12, -8), V(12, -8)], ['e', V(12, -8), V(12, 8)],
+        ['s', V(12, 8), V(-12, 8)], ['w', V(-12, 8), V(-12, -8)],
+      ].map(([id, start, end]) => ({ id, start, end, levelId: 3, view: 'plan',
+        wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' })),
+    }));
+    // Grab the EAST wall (runs along z) and pull it outward in x.
+    await nudge(page, [12, 0], [14, 0]);
+    const ex = await page.evaluate(async bucket => {
+      const f = await window.SharedFileStore.loadSharedFile(bucket);
+      const w = JSON.parse(await f.text()).walls.find(w => w.id === 'e');
+      return [Number(w.start.x.toFixed(4)), Number(w.start.z.toFixed(4))];
+    }, BUCKET);
+    expect(ex[0], 'it moved in x, its own perpendicular').toBe(14);
+    expect(ex[1], 'and not along its own run').toBe(-8);
+  });
+
+test('a DRAFTING wall drags freely — the constraint path is TOY only',
+  async ({ page }) => {
+    // THE OTHER SURVIVOR, and the leak that matters most. Acceptance #4's
+    // existing check draws a NEW wall in DRAFTING; this one MOVES an existing
+    // one, which is the path the constraint sits in. Without it, a mutant
+    // sending every board through toyWallDelta rounds real DRAFTING plans to
+    // the foot and no check objects.
+    await open(page, base({
+      board: 'drafting',
+      walls: [
+        ['n', V(-12, -8.37), V(12, -8.37)], ['e', V(12, -8.37), V(12, 8)],
+        ['s', V(12, 8), V(-12, 8)], ['w', V(-12, 8), V(-12, -8.37)],
+      ].map(([id, start, end]) => ({ id, start, end, levelId: 3, view: 'plan',
+        wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' })),
+    }));
+    await nudge(page, [0, -8.37], [0, -10.62]);
+    const z = await wallZ(page, 'n');
+    expect(Math.abs(z - Math.round(z)),
+      'DRAFTING kept the fractional position it was dragged to')
+      .toBeGreaterThan(0.01);
   });

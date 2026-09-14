@@ -5545,7 +5545,13 @@
     // distance. One deliberate move puts the wall on the grid and every move
     // after is a whole foot -- which is the shape of the ruling rather than a
     // shortcut around it.
-    const ask = land === null ? wanted : land;
+    // ASK FOR WHAT THE DRAFTER ASKED FOR; stepFt is what lands it. The gate
+    // found these two lines encoding the same intent twice: with stepFt set to
+    // the landing distance, quantiseFeet(-1, 0.958) already returns -0.958, so
+    // substituting `land` for the ask changed nothing and its mutant survived.
+    // One of the pair was redundant, and this is the one to drop -- stepFt is
+    // the module's own hook and does the work either way.
+    const ask = wanted;
     // stepFt rides on the wall so the module's own quantiser keeps a landing
     // distance intact instead of rounding it back off the grid. stepFor reads
     // exactly this key (toy-constraints.js), so it is the module's hook and

@@ -41,11 +41,12 @@ const MUTANTS = [
     find: "          const toy = board === 'toy' ? toyWallDelta(md, dx, dz) : null;",
     with: '          const toy = toyWallDelta(md, dx, dz);',
     test: 'DRAFTING keeps the off-axis' },
-  { file: 'MODEL.html',
-    name: 'the off-grid wall moves a whole foot and stays off the grid',
-    find: '    const ask = land === null ? wanted : land;',
-    with: '    const ask = wanted;',
-    test: 'first nudge lands on the foot' },
+  // THE MUTANT THAT PROVED A REDUNDANCY rather than a hole is gone with the
+  // line it mutated. `ask = land === null ? wanted : land` survived because
+  // stepFt already lands the wall: quantiseFeet(-1, 0.958) is -0.958 whichever
+  // value is asked for. Two lines encoding one intent, and the gate is what
+  // said so -- the code is one line shorter and the mutant has nothing left to
+  // change.
   { file: 'MODEL.html',
     name: 'the landing distance is quantised away by a whole-foot step',
     find: '    const probe = { ...wall, stepFt: land === null ? FOOT : Math.abs(land) };',
@@ -60,7 +61,11 @@ const MUTANTS = [
     name: 'the move is not perpendicular: the along-run component rides too',
     find: "    const wanted = axis === 'x' ? dz : dx;",
     with: '    const wanted = dz;',
-    test: 'dragging one bone leaves the other' },
+    // AIMED AT A WALL THAT RUNS ALONG Z. Every wall dragged in the checks
+    // above runs along x, where `dz` is the right answer anyway -- so the
+    // mutant changed nothing and survived. A side wall is the only place the
+    // difference shows.
+    test: 'a side wall moves along its own perpendicular' },
   { file: 'MODEL.html',
     name: 'a refused drag moves anyway, elastic instead of dead',
     find: '    const moved = verdict.delta || 0;',
