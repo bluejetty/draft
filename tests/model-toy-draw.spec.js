@@ -378,3 +378,43 @@ test('a DRAFTING house is still walls alone — TOY does not leak', async ({ pag
   await saveIt(page);
   expect((await outlinesIn(page)).written, 'DRAFTING writes no outline').toBe(0);
 });
+
+test('a run drawn away from the house is a second bone, not one polygon',
+  async ({ page }) => {
+    // RULED 13 SEP, against one-bone-per-level. A detached garage is a separate
+    // footprint, so one level carries two bones and each is grabbed on its own.
+    //
+    // The version this replaces joined every run on a level into one outline,
+    // which drew a shape running from the house across the yard to the garage.
+    // Nobody drew that, and §4's break-the-bone would have had to treat it as a
+    // loop. The check asserts TWO bones and that neither holds the other's
+    // corners -- a single merged outline has all six points and would satisfy
+    // any check that only counted points.
+    await open(page, base({ board: 'toy', walls: [] }));
+    const { at } = await frame(page);
+    await armWall(page);
+    for (const [x, z] of [[0, 0], [10, 0], [10, 6], [0, 6]]) {
+      await page.mouse.click(...at(x, z));
+      await page.waitForTimeout(60);
+    }
+    // Away from the house, and not touching it: the run starts where nothing
+    // ended, which is what makes it a second footprint.
+    await page.locator('[data-draw-wall]').click();   // put the chain down
+    await page.waitForTimeout(60);
+    await page.locator('[data-draw-wall]').click();
+    for (const [x, z] of [[24, 0], [32, 0], [32, 6], [24, 6]]) {
+      await page.mouse.click(...at(x, z));
+      await page.waitForTimeout(60);
+    }
+    await saveIt(page);
+
+    const { kept } = await outlinesIn(page);
+    expect(kept.length, 'two bones on one level').toBe(2);
+    const xs = kept.map(o => o.points.map(p => Math.round(p.x)));
+    const house = xs.find(list => list.includes(0));
+    const garage = xs.find(list => list.includes(24));
+    expect(house, 'the house bone exists').toBeTruthy();
+    expect(garage, 'and the garage bone is its own').toBeTruthy();
+    expect(house, 'the house does not reach across the yard').not.toContain(24);
+    expect(garage, 'and the garage does not reach back').not.toContain(0);
+  });

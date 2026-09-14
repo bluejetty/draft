@@ -4377,25 +4377,47 @@
   // column's with Number() (:512). Same page, same allocator, opposite
   // requirements -- so newDrawingItemId is right for this one and wrong for
   // that one, and neither is a house style.
+  // A SECOND RUN AWAY FROM THE HOUSE IS A SECOND BONE. Ruled 13 Sep, against
+  // the alternative of one bone per level: a detached garage is a separate
+  // footprint by definition, so one level can carry two bones and each is
+  // grabbed on its own. The first version of this joined every run on a level
+  // into one outline, which drew a polygon running from the house across the
+  // yard to the garage -- a shape nobody drew, and one §4's break-the-bone
+  // would have had to pretend was a loop.
+  //
+  // WHICH BONE A RUN BELONGS TO IS DECIDED BY ITS FIRST POINT: a run that
+  // starts where a bone ended continues it, and a run that starts anywhere
+  // else opens a new one. That is the same fact the chain already uses -- the
+  // next wall starts where the last ended -- rather than a second rule.
   let pendingBone = null;
-  const toyBoneFor = levelId => (drawing.outlines || [])
-    .find(o => Number(o.levelId) === Number(levelId) && !o.masterId) || null;
+  const sameSpot = (a, b) => !!a && !!b && Math.hypot(a.x - b.x, a.z - b.z) < 1e-6;
+  const endsAt = (bone, at) => sameSpot(bone?.points?.[bone.points.length - 1], at);
+  const toyBoneFor = (levelId, from) => (drawing.outlines || [])
+    .find(o => Number(o.levelId) === Number(levelId) && !o.masterId
+      && endsAt(o, from)) || null;
 
   const extendToyBone = (from, to, levelId) => {
     if (board !== 'toy') return;
-    const same = (a, b) => a && b && Math.hypot(a.x - b.x, a.z - b.z) < 1e-6;
+    const same = sameSpot;
     const pt = p => ({ x: p.x, y: 0, z: p.z });
-    let bone = toyBoneFor(levelId);
+    let bone = toyBoneFor(levelId, from);
+    if (!bone && pendingBone
+        && Number(pendingBone.levelId) === Number(levelId)
+        && endsAt(pendingBone, from)) {
+      bone = pendingBone;
+    }
     if (!bone) {
       // NOT PUSHED YET. The format refuses an outline under three points
       // (:918), so a one- or two-point record written into the file is a
       // record the reader throws away -- the silent, one-reload-later loss
       // this page has now been bitten by twice. It is held here until it is
       // a shape the reader will keep.
-      if (!pendingBone || Number(pendingBone.levelId) !== Number(levelId)) {
-        pendingBone = { id: newDrawingItemId('outline'), masterId: null,
-          levelId, points: [pt(from)], overriddenSrcIds: [] };
-      }
+      // ONE PENDING BONE AT A TIME, and a new run replaces an unfinished one.
+      // A two-point run is not yet a shape the reader keeps, so nothing is
+      // lost from the file -- but the drafter's two taps are dropped, which is
+      // a boundary rather than a rule and is recorded as one.
+      pendingBone = { id: newDrawingItemId('outline'), masterId: null,
+        levelId, points: [pt(from)], overriddenSrcIds: [] };
       bone = pendingBone;
     }
     const last = bone.points[bone.points.length - 1];

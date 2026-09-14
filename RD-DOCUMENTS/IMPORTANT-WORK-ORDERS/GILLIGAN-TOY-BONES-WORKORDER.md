@@ -119,6 +119,21 @@ creates a level outline is adding a level, copying from `boneyardOutlines`
 (`MODEL.html:2919`). Drawing in TOY must now write the outline too. The
 outline is the house's shape; the walls are what that shape is built from.
 
+### A disconnected run is a second bone — ruled 13 Sep
+
+You found that the bone accumulates along the chain, so a second run started
+away from the house joins the same outline and closes a polygon nobody drew —
+house to garage across the yard. Put to Movie, who ruled **(a)**:
+
+**A run that does not connect to an existing outline starts a new outline and
+a new bone on that level.** One level may hold several. A house and a detached
+garage are two footprints and two bones, each grabbed on its own — which is
+what §1 already implied by naming the garage among the things the gesture
+makes.
+
+So §4's break-the-bone keeps its assumption: **a bone is a real loop**. It is
+just that a level may have more than one.
+
 ### The bone is the only handle
 
 > Movie: *"they will only use the BONES for editing"*
@@ -309,6 +324,10 @@ nothing.
     mark; nudged again it moves a whole foot. Assert both, and assert the
     walls nobody touched did not move. Written on an imported drawing — on a
     TOY-born house this check asserts nothing.
+2d. A second run drawn **not touching** the first, on the same level, makes a
+    **second outline and a second bone** — not one polygon joining the two.
+    Assert two bones after reload, and assert dragging one leaves the other
+    where it was.
 3. In TOY, an unavailable tool cannot be armed and is visibly down.
 4. In DRAFTING the same gestures commit the off-axis, off-foot wall they
    commit today. **TOY must not leak.**
