@@ -80,7 +80,13 @@ const MUTANTS = [
     // comment line and changed no behaviour at all -- it would have survived
     // for ever and taught me to read one survivor as normal. A mutant that
     // cannot fail is the gate's own version of a check that cannot fail.
-    find: "      if (toyRunRefused(drawPoint(at))) return;\n      stripNotice = '';",
+    // RE-ANCHORED, AND THE SKIP IS WHY THIS LINE EXISTS. The fix for the last
+    // survivor renamed `stripNotice = ''` to clearNotice(), so this anchor
+    // stopped matching and the gate printed SKIPPED -- then totalled "10/10
+    // killed", which reads exactly like a clean sheet. A mutant that did not
+    // run is not a mutant that died, and the count has to be read against the
+    // number defined, never on its own.
+    find: '      if (toyRunRefused(drawPoint(at))) return;\n      clearNotice();',
     with: '      if (toyRunRefused(drawPoint(at))) return;',
     test: 'Escape cancels' },
 ];
