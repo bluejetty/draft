@@ -60,10 +60,14 @@ const MUTANTS = [
     with: "      } else if (md.kind === 'wall' && md.body) {",
     test: 'DRAFTING never offers' },
   { file: 'MODEL.html',
-    name: 'a break at a corner is allowed, making a half the format drops on load',
-    find: '    if (feet <= 0 || feet >= run) return null;',
-    with: '    if (false) return null;',
-    test: 'BREAK HERE splits the wall' },
+    name: 'THE CLAMP GOES: a break can land on the corner and make a null half',
+    // Re-aimed. The mutant here attacked `if (feet <= 0 || feet >= run)`,
+    // which SURVIVED -- the clamp below already makes it unreachable, so the
+    // guard was dead and is gone. The clamp is the thing actually keeping a
+    // break off the corners, so that is what gets mutated.
+    find: '    const feet = Math.min(Math.max(Math.round(along), 1), Math.floor(run) - 1 || 1);',
+    with: '    const feet = Math.round(along);',
+    test: '7a' },
 ];
 
 

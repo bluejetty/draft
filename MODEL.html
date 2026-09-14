@@ -4846,8 +4846,13 @@
     // CLAMPED OFF BOTH ENDS. A break AT a corner is not a break -- it would
     // make a zero-length half, and the format drops anything under 1e-6 on
     // load, so it would be a wall that vanishes on the next reload.
+    // CLAMPED OFF BOTH ENDS, and the clamp IS the guard. A `feet <= 0 || feet
+    // >= run` line sat here too and the gate showed it surviving: the clamp
+    // already pins feet to [1, floor(run) - 1], so nothing could ever reach
+    // it. A guard nothing can exercise is a claim about a case that does not
+    // exist -- the same dead-guard shape as the already-angled skip in
+    // wouldAngle, removed on the same evidence.
     const feet = Math.min(Math.max(Math.round(along), 1), Math.floor(run) - 1 || 1);
-    if (feet <= 0 || feet >= run) return null;
     return { x: wall.start.x + (rx / run) * feet, y: 0,
       z: wall.start.z + (rz / run) * feet };
   };

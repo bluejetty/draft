@@ -1210,4 +1210,18 @@ test('§4 7a — a break on a mastered level cuts the master and every level on 
       expect(lvl4.some(p => p[0] === corner[0] && p[1] === corner[1]),
         `the original corner ${corner} is still there`).toBe(true);
     }
+    // WHERE IT SITS IN THE RING, which is the whole of "joint, not reshape"
+    // and which everything above is blind to. A mutant that APPENDED the mark
+    // survived all of it: the ring still has five points, still has every
+    // corner, still has the mark. It is a different POLYGON -- a spike
+    // doubling back -- and only the ORDER says so.
+    //
+    // Third time tonight that a check tested membership when the claim was
+    // about structure.
+    const k = lvl4.findIndex(p => p[0] === mark[0] && p[1] === mark[1]);
+    const before = lvl4[(k - 1 + lvl4.length) % lvl4.length];
+    const after = lvl4[(k + 1) % lvl4.length];
+    expect([before, after],
+      'the mark sits BETWEEN the two corners of the wall that was cut')
+      .toEqual([[-10, -10], [10, -10]]);
   });
