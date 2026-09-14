@@ -32,7 +32,7 @@ const MUTANTS = [
     name: 'the bone follows across LEVELS, so a floor reshapes the storey above',
     find: '    const rings = (drawing.outlines || [])\n      .filter(o => Number(o.levelId) === Number(levelId));',
     with: '    const rings = (drawing.outlines || []);',
-    test: 'a roof over the ceiling it opened' },
+    test: 'does not reshape the storey above' },
   { file: 'MODEL.html',
     name: 'EVERY EDGE IS AN EAVE, so the roof hangs two feet into the storey above',
     find: "      return onUpper(pt) && onUpper(next) ? 'gable' : 'eave';",

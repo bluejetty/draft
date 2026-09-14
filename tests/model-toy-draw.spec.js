@@ -1496,3 +1496,54 @@ test('§5 — a floor pulled back under its storey loses the roof it had',
     expect((await roofsOf(page)).filter(r => r.levelId === 3).length,
       'covered again, so the roof goes').toBe(0);
   });
+
+test('§5 — dragging one floor does not reshape the storey above it',
+  async ({ page }) => {
+    // THE FAULT MY OWN FIRST FIX INTRODUCED, and the gate caught that nothing
+    // watched for it coming back.
+    //
+    // boneFollows matches outline points by POSITION, because an outline point
+    // is a plain record and the wall holds a pooled vertex -- where they sit
+    // is the only thing connecting them. The first version walked EVERY
+    // outline, and storeys stacked on one footprint have points at identical
+    // coordinates, so dragging the main floor's wall silently dragged the
+    // second floor's bone with it.
+    //
+    // THE SHARED EDGE IS THE WHOLE POINT OF THIS FIXTURE. §5's other checks
+    // drag the SOUTH wall, where the upper storey (pulled back to z=0) has no
+    // point at all -- so the bug is invisible to them and the mutant survived
+    // every one. This drags the NORTH wall, which both storeys share.
+    //
+    // And it asserts the UPPER BONE directly rather than a roof downstream of
+    // it: the rule is about what a drag may touch, so that is what is read.
+    await open(page, twoStorey(0));
+    const before = await page.evaluate(async bucket => {
+      const f = await window.SharedFileStore.loadSharedFile(bucket);
+      const o = (JSON.parse(await f.text()).outlines || [])
+        .find(x => String(x.id) === 'up-1');
+      return o.points.map(p => [p.x, p.z]);
+    }, BUCKET);
+    expect(before.some(p => p[1] === -10),
+      'the fixture really shares the north edge, or this proves nothing')
+      .toBe(true);
+
+    await nudge(page, [0, -10], [0, -11]);      // the shared edge
+
+    const after = await page.evaluate(async bucket => {
+      const f = await window.SharedFileStore.loadSharedFile(bucket);
+      const o = (JSON.parse(await f.text()).outlines || [])
+        .find(x => String(x.id) === 'up-1');
+      return o.points.map(p => [p.x, p.z]);
+    }, BUCKET);
+    expect(after, 'the storey above is exactly where it was').toEqual(before);
+
+    // AND THE FLOOR REALLY MOVED -- "the upper is unchanged" is satisfied by a
+    // page where the drag did nothing at all.
+    const main = await page.evaluate(async bucket => {
+      const f = await window.SharedFileStore.loadSharedFile(bucket);
+      const o = (JSON.parse(await f.text()).outlines || [])
+        .find(x => String(x.id) === 'main-1');
+      return Math.min(...o.points.map(p => p.z));
+    }, BUCKET);
+    expect(main, 'while the floor that was dragged did move').toBe(-11);
+  });
