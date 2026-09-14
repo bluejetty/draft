@@ -357,8 +357,12 @@ test('acceptance 2b — a house drawn in TOY has an outline, not walls alone',
     // written with a string id.
     expect(o.kept.length, 'and a reload keeps it').toBeGreaterThan(0);
     const bone = o.kept[0];
-    expect(bone.points.length, 'with a point for each corner drawn')
-      .toBeGreaterThanOrEqual(3);
+    // EXACTLY FOUR, NOT AT LEAST THREE. The gate caught the loose version: a
+    // mutant that stores the shared corner twice gives MORE points and sailed
+    // through `>= 3`. Four presses, four corners -- a chained wall starts
+    // where the last one ended, so that corner is one point and not two.
+    expect(bone.points.map(p => [Math.round(p.x), Math.round(p.z)]),
+      'one point per corner pressed').toEqual([[0, 0], [12, 0], [12, 8], [0, 8]]);
     expect(bone.masterId, 'hand drawn, so no master: this IS the bone').toBeNull();
   });
 
@@ -418,3 +422,52 @@ test('a run drawn away from the house is a second bone, not one polygon',
     expect(house, 'the house does not reach across the yard').not.toContain(24);
     expect(garage, 'and the garage does not reach back').not.toContain(0);
   });
+
+test('one wall in TOY is not yet a bone, and nothing is written', async ({ page }) => {
+  // THE GATE FOUND THIS HOLE. A mutant that pushes the outline before it has
+  // three points survived every check here, because every check drew four
+  // corners -- by save time the record had grown to a shape the reader keeps,
+  // so the early push made no difference. It makes all the difference to a run
+  // that STOPS at one wall: a two-point outline is written into the file and
+  // thrown away on load, which is a drawing that has a bone until it is
+  // reopened.
+  await open(page, base({ board: 'toy', walls: [] }));
+  const { at } = await frame(page);
+  await armWall(page);
+  await page.mouse.click(...at(0, 0));
+  await page.waitForTimeout(60);
+  await page.mouse.click(...at(12, 0));
+  await page.waitForTimeout(120);
+  await saveIt(page);
+  const o = await outlinesIn(page);
+  expect(o.written, 'nothing the reader would discard reached the file').toBe(0);
+  expect(o.kept.length).toBe(0);
+});
+
+test('a disconnected run does not adopt an unfinished bone', async ({ page }) => {
+  // THE OTHER HOLE. The second-bone check starts its garage after the house is
+  // a finished four-point bone, so the pending slot is empty by then and the
+  // membership test never runs against it. Here the first run stops at ONE
+  // wall -- still pending, never written -- and the garage starts far away.
+  // Joining it would make one bone spanning the yard, from a run the drafter
+  // had already walked away from.
+  await open(page, base({ board: 'toy', walls: [] }));
+  const { at } = await frame(page);
+  await armWall(page);
+  await page.mouse.click(...at(0, 0));
+  await page.waitForTimeout(60);
+  await page.mouse.click(...at(6, 0));
+  await page.waitForTimeout(60);
+  await page.locator('[data-draw-wall]').click();
+  await page.waitForTimeout(60);
+  await page.locator('[data-draw-wall]').click();
+  for (const [x, z] of [[24, 0], [32, 0], [32, 6], [24, 6]]) {
+    await page.mouse.click(...at(x, z));
+    await page.waitForTimeout(60);
+  }
+  await saveIt(page);
+  const { kept } = await outlinesIn(page);
+  expect(kept.length, 'one bone -- the garage').toBe(1);
+  expect(kept[0].points.map(p => Math.round(p.x)),
+    'and it does not reach back to the abandoned run').not.toContain(0);
+});

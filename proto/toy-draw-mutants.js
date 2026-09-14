@@ -33,7 +33,9 @@ const MUTANTS = [
     name: 'a finger commits on the down again, so the drag after it is ignored',
     find: "      if (wallPress.touch && drawStart) { paint(); return; }",
     with: '',
-    test: 'click-move-click reaches the same wall' },
+    // RE-AIMED: this pointed at the mouse gesture, which the mutant does not
+    // touch. It is the finger's press-again-and-drag that it breaks.
+    test: 'presses again and drags' },
   { file: 'MODEL.html',
     name: 'the mouse stops committing on the down',
     find: "      if (wallPress.touch && drawStart) { paint(); return; }",
@@ -43,7 +45,10 @@ const MUTANTS = [
     name: 'the drag threshold goes, so the first press commits on its own lift',
     find: '    const travelled = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_ARM_PX;',
     with: '    const travelled = true;',
-    test: 'click-move-click reaches the same wall' },
+    // RE-AIMED at the check written for it. The threshold's real job is
+    // absorbing a tremor, not rescuing the PC click -- drawPress already does
+    // that -- so the tremor check is the one that can see it go.
+    test: 'a tremor during the press' },
   { file: 'MODEL.html',
     name: 'THE SHIPPED DEFECT: the readout measures the cursor, the commit rounds it',
     find: "    if (drawStart && activeTool === 'wall') return { from: drawStart, to: drawPoint(cursorWorld) };",
