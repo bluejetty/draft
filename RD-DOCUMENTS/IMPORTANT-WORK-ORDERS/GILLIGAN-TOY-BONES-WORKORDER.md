@@ -99,7 +99,27 @@ shape is made of.
 
 ## 2. The outline becomes a bone, and bones are the only handle
 
-When the outline is made, the drafter sees the **BONE outline**. From then on:
+When the outline is made, the drafter sees the **BONE outline**.
+
+### Where the bone comes from — ruled 13 Sep
+
+Asked whether a hand-drawn TOY house gets a bone at all, or whether bones only
+ever arrive from BONE / the boneyard, Movie ruled:
+
+> *"yes the toy house will have the bones and those will be what TOY can
+> manipulate"*
+
+So **the TOY draw gesture creates the level outline, and the outline makes the
+bone** — one gesture, walls and bone together. There is no such thing as a TOY
+house without a bone, because there would be nothing to edit it with.
+
+This is a change to §1, and you found it: today `commitWall` pushes to
+`drawing.walls` and touches nothing else, and the only place `MODEL.html`
+creates a level outline is adding a level, copying from `boneyardOutlines`
+(`MODEL.html:2919`). Drawing in TOY must now write the outline too. The
+outline is the house's shape; the walls are what that shape is built from.
+
+### The bone is the only handle
 
 > Movie: *"they will only use the BONES for editing"*
 
@@ -133,6 +153,28 @@ the floor comes with it.
 - **A blocked drag stops dead and the blocker says why.** Never elastic. This
   is ruled and has a whole section of the 31 Aug spec behind it; do not soften
   it.
+
+### The wall that is not on the grid — ruled 13 Sep
+
+A plan drawn in DRAFTING has walls at odd places. Put one at 12'-0½", nudge it
+a foot in TOY: 13'-0½" (a foot from where it sat) or 13'-0" (the grid)?
+Offered both, Movie answered with a third and better one:
+
+> *"make the first point land on a ft point how about so we don't have that
+> problem"*
+
+confirmed as: **the first nudge lands the wall on the nearest foot mark, and
+every move after that is a whole foot.** 12'-0½" → 13'-0", then 14'-0",
+15'-0".
+
+The half-inch is given up **once, on the wall the drafter deliberately moved**.
+That is what keeps it inside the 31 Aug rule rather than breaking it: TOY never
+touches a wall nobody touched. Opening an old plan in TOY moves nothing.
+
+A house born in TOY is already on the grid, so this rule is invisible there —
+which means **the check has to be written on an imported off-grid wall**, or it
+asserts nothing. Assert the landing foot mark, and assert that the other walls
+in the same drawing did not move.
 
 ### The 2'-0" cap belongs to the floor, not to the board
 
@@ -260,6 +302,13 @@ nothing.
    A length reads on screen while the line is being drawn, in whole feet in
    TOY, and it is the number that reaches `commitWall` — assert them equal,
    not merely both present.
+2b. A house drawn by hand in TOY has a **level outline and a bone** when the
+    gesture finishes — not walls alone. Assert the outline exists in the
+    saved drawing, reload, and assert the bone is there to grab.
+2c. An **imported off-grid wall** nudged once in TOY lands on the nearest foot
+    mark; nudged again it moves a whole foot. Assert both, and assert the
+    walls nobody touched did not move. Written on an imported drawing — on a
+    TOY-born house this check asserts nothing.
 3. In TOY, an unavailable tool cannot be armed and is visibly down.
 4. In DRAFTING the same gestures commit the off-axis, off-foot wall they
    commit today. **TOY must not leak.**
