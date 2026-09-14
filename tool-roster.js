@@ -102,6 +102,23 @@
   };
   const availableIn = board => TOOLS.filter(tool => availableOn(tool.id, board));
 
+  // THE OTHER TWO SURFACES §6 NAMES. Its sentence is "the seventeen-key
+  // column, the selection filters, the assembly verbs -- none of them operate
+  // in TOY", and the first of those three was all I built. These are the other
+  // two, and they answer from here for the reason the tools do: one place, so
+  // a panel cannot look live while the board refuses it.
+  //
+  // ALL-OR-NOTHING, UNLIKE TOOLS. A board offers SOME tools -- TOY keeps the
+  // gesture that makes the outline -- but a panel is one capability and it is
+  // either on the board or it is not. Modelling panels as a list of individual
+  // controls would invite a half-lit SELECTION panel, which is the shape of
+  // thing this section exists to forbid.
+  const PANELS = Object.freeze(['selection', 'assembly']);
+  const panelOn = (panel, board) => {
+    if (!PANELS.includes(panel)) return false;
+    return board !== 'toy';
+  };
+
 
   // REMAPS COME FROM SETTINGS, and they come through the same two functions the
   // old page uses (:22765-22766) rather than a second reading of the same
@@ -133,6 +150,8 @@
     RESTING,
     availableOn,
     availableIn,
+    PANELS,
+    panelOn,
     get: id => byId.get(id) || null,
     inGroup: group => TOOLS.filter(tool => tool.group === group),
     bindings,

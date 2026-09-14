@@ -253,6 +253,53 @@ test('a board change leaves the panels that share the tool slot alone',
     expect(await downKeys(page)).toHaveLength(15);
   });
 
+test('the selection filters do not operate in TOY, and do in DRAFTING',
+  async ({ page }) => {
+    // §6 NAMES THREE SURFACES, not one: "the seventeen-key column, the
+    // selection filters, the assembly verbs -- none of them operate in TOY".
+    // I built the first and reported the section done. These are the other
+    // two, and the spec that missed them only ever looked at tool keys.
+    await open(page, base({ board: 'toy' }));
+    const chips = page.locator('[data-sel-mode], [data-sel-filter]');
+    const n = await chips.count();
+    expect(n).toBeGreaterThan(3);
+    expect(await chips.evaluateAll(els => els.filter(e => e.disabled).length),
+      'every mode and filter chip is down').toBe(n);
+    // Measured, not asserted -- the attribute with no rule behind it looks
+    // identical to a live chip.
+    expect(await chips.first().evaluate(el =>
+      parseFloat(getComputedStyle(el).opacity))).toBeLessThan(0.6);
+
+    await page.locator('[data-board="drafting"]').click();
+    await page.waitForTimeout(80);
+    expect(await chips.evaluateAll(els => els.filter(e => e.disabled).length),
+      'and every one comes back on DRAFTING').toBe(0);
+  });
+
+test('the assembly verbs do not operate in TOY, even with items selected',
+  async ({ page }) => {
+    // THE BOARD BEATS THE SELECTION COUNT. ASSEMBLY is already disabled when
+    // nothing is picked, so a TOY check on an empty selection would pass
+    // against the OLD reason and prove nothing about the board. Selecting
+    // first is what makes this check about §6.
+    await open(page, base({ board: 'drafting' }));
+    await page.locator('[data-sel-mode="click"]').click();
+    await page.waitForTimeout(60);
+    const box = await page.locator('#plan').boundingBox();
+    const scale = await page.evaluate(() => Number(
+      /scale ([\d.]+) px\/ft/.exec(document.getElementById('readout').textContent)[1]));
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2 - 10 * scale);
+    await page.waitForTimeout(80);
+    const asm = page.locator('[data-assembly-start]');
+    expect(await asm.isDisabled(), 'a wall is picked, so ASSEMBLY is live')
+      .toBe(false);
+
+    await page.locator('[data-board="toy"]').click();
+    await page.waitForTimeout(80);
+    expect(await asm.isDisabled(), 'and the board puts it down anyway')
+      .toBe(true);
+  });
+
 test('the board buttons no longer disclaim that nothing is constrained',
   async ({ page }) => {
     // §8. The disclaimer was true until §6; leaving it would now mislead.

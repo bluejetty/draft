@@ -478,6 +478,11 @@
     color: var(--ink-quiet); font-family: var(--font-ui); font-size:9px;
     font-weight:600; letter-spacing:0.04em; line-height:1; }
   .sel-chip:hover { border-color: var(--accent); color: var(--accent); }
+  /* §6's other two surfaces go down the same way the keys do, and the same
+     0.35 so one number governs "unavailable" across the whole column. Read as
+     computed opacity by the spec, never as the attribute. */
+  .sel-chip:disabled, .sel-chip:disabled:hover { opacity:0.35; cursor:not-allowed;
+    border-color: var(--edge-panel); color: var(--ink-quiet); box-shadow:none; }
   .sel-chip[aria-pressed="true"] { border-color: var(--accent);
     color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .sel-help { margin-top:5px; font-family: var(--font-ui); font-size:9px;
@@ -4951,6 +4956,11 @@
     const roster = window.DraftToolRoster;
     if (roster && !roster.availableOn(activeTool, board)) setTool(RESTING_TOOL);
     refreshToolAvailability();
+    // THE OTHER TWO SURFACES. Leaving these out is exactly the gap that made
+    // §6 a third built: the keys obeyed the board and the panels did not, and
+    // nothing said so because the spec only looked at keys.
+    syncSelectionPanel();
+    syncAssembly();
   });
 
   // ── SELECTION and OBJECT TYPE ─────────────────────────────────────────────
@@ -5036,16 +5046,28 @@
         FILTERS.map(f => chip('selFilter', f, setSelectFilter)), filterHelpEl));
 
     syncSelectionPanel = () => {
+      // §6: "the selection filters ... none of them operate in TOY". The board
+      // answer comes from the roster, not from a `board === 'toy'` written
+      // here, so this panel and the keypad cannot disagree about a board.
+      const on = window.DraftToolRoster?.panelOn('selection', board) !== false;
       slot.querySelectorAll('[data-sel-mode]').forEach(btn => {
         btn.setAttribute('aria-pressed',
           String(btn.dataset.selMode === selectionMode));
+        btn.disabled = !on;
       });
       slot.querySelectorAll('[data-sel-filter]').forEach(btn => {
         btn.setAttribute('aria-pressed',
           String(btn.dataset.selFilter === selectFilter));
+        btn.disabled = !on;
       });
-      modeHelp.textContent = MODE_HELP[selectionMode];
-      filterHelpEl.textContent = filterHelp();
+      // THE HELP SAYS WHY, and it replaces the mode help rather than sitting
+      // beside it: MODE_HELP describes a shortcut for a gesture this board
+      // does not have, and leaving it up would teach a drafter a control that
+      // is right there and dead.
+      modeHelp.textContent = on ? MODE_HELP[selectionMode]
+        : 'The TOY board edits through bones. Selection modes and filters are '
+          + 'on the DRAFTING board.';
+      filterHelpEl.textContent = on ? filterHelp() : '';
       // RED WHENEVER A FILTER IS ENGAGED -- not when the cursor is over
       // something the filter excludes. selectFilterHelpColor (:23622) is a
       // straight ternary on selectFilter, and a cursor-driven red would mean
@@ -5216,17 +5238,23 @@
       const key = window.DraftToolRoster?.keyFor('select')
         ? window.DraftToolRoster.bindings() : {};
       const gKey = window.DraftKeyboard?.keyBindingLabel(key.group) || '';
+      // §6: "the assembly verbs ... none of them operate in TOY". The board
+      // beats the selection count -- a TOY drafter with items selected must
+      // still find ASSEMBLY down, or the rule holds only while nothing is
+      // picked, which is the half nobody would test.
+      const on = window.DraftToolRoster?.panelOn('assembly', board) !== false;
       asmBtn.textContent = gKey ? `ASSEMBLY  [${gKey}]` : 'ASSEMBLY';
-      asmBtn.disabled = n === 0;
+      asmBtn.disabled = !on || n === 0;
       unBtn.textContent = 'UNGROUP';
-      unBtn.disabled = held.length === 0;
+      unBtn.disabled = !on || held.length === 0;
       unBtn.hidden = held.length === 0;
       // The old page's own two sentences (:23631-23633), and the red is its
       // own too: nothing selected is the state that stops the button working.
-      help.textContent = n
-        ? `${n} selected item${n === 1 ? '' : 's'} · make a named assembly.`
-        : 'Select drawing items before assembling them.';
-      help.toggleAttribute('data-engaged', n === 0);
+      help.textContent = !on
+        ? 'Assemblies are a DRAFTING board verb.'
+        : (n ? `${n} selected item${n === 1 ? '' : 's'} · make a named assembly.`
+             : 'Select drawing items before assembling them.');
+      help.toggleAttribute('data-engaged', !on || n === 0);
       dialog.hidden = !assemblyDialogOpen;
       if (!assemblyDialogOpen) nameInput.value = assemblyName = '';
     };
