@@ -90,8 +90,17 @@ const MUTANTS = [
     test: 'a blocked drag stops dead' },
   { file: 'MODEL.html',
     name: 'THE BLOCKER GOES SILENT, which is where this section started',
+    // A NO-OP, NOT A DELETION, and the difference is the whole mutant.
+    // Removing the line outright left `else if (verdict.delta) ...` dangling,
+    // so the page stopped PARSING -- and a mutant that breaks the syntax is
+    // killed by every check at once, whether or not any of them asserts what
+    // it names. It read KILLED while proving only that the file compiles.
+    //
+    // Caught by reading the live diff during a run rather than the result, and
+    // it is the same defect as the swallowed exit code and the check that
+    // named no test: a green whose cause is not the thing being claimed.
     find: '    if (stopped) sayOnStrip(blockerSays(verdict));',
-    with: '',
+    with: '    if (stopped) { /* mutant: the blocker says nothing */ }',
     test: 'a blocked drag stops dead' },
   { file: 'MODEL.html',
     name: 'every refusal says the same thing, so the reason is decoration',
