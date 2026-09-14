@@ -160,6 +160,82 @@ if (!window.DraftGeometry2D) {
   // whether the hole is actually in the floor it is charged against. Cutting
   // the hole geometrically would have answered that for free; subtracting it
   // has to ask out loud.
+  // ── WHAT NOTHING SITS ON ─────────────────────────────────────────────────
+  //
+  // Movie, 14 Sep: "if a main floor is added a roof should be added on it at
+  // the lower level if the 2nd floor doesn't cover it, or also if the 2nd
+  // floor is pulled back a main floor roof should cover the open ceiling".
+  //
+  // So a roof is not a thing attached to the top storey. It belongs to every
+  // part of a floor the storey above does not cover, which is a polygon
+  // DIFFERENCE -- and this module had no boolean operation of any kind.
+  //
+  // RECTILINEAR, BY DECOMPOSITION, and that is a decision worth its lines. A
+  // general clipper is a large and delicate thing; TOY guarantees every
+  // footprint is axis-aligned (there are no angles in TOY, ruled 14 Sep), so
+  // the cheap exact method works: cut the plane on every x and every z either
+  // outline mentions, ask of each cell whether it is inside the lower and
+  // outside the upper, and glue the surviving cells back into rectangles.
+  //
+  // IT RETURNS RECTANGLES, NOT ONE POLYGON, and that is architecture rather
+  // than laziness. A storey set back on all four sides leaves a RING
+  // uncovered, and a ring is not expressible as a roof footprint -- the format
+  // stores `points`, with no holes. Four lean-to roofs, one per side, is how
+  // such a house is actually built and what the format can hold.
+  const uncoveredRegions = (lower, upper) => {
+    if (!Array.isArray(lower) || lower.length < 3) return [];
+    const inside = (ring, x, z) => {
+      let on = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+        const a = ring[i], b = ring[j];
+        if ((a.z > z) !== (b.z > z)
+          && x < ((b.x - a.x) * (z - a.z)) / (b.z - a.z) + a.x) on = !on;
+      }
+      return on;
+    };
+    const cover = Array.isArray(upper) && upper.length >= 3 ? upper : null;
+    const axis = pick => {
+      const all = lower.map(pick).concat(cover ? cover.map(pick) : []);
+      return [...new Set(all.map(v => Number(v.toFixed(6))))].sort((a, b) => a - b);
+    };
+    const xs = axis(p => p.x), zs = axis(p => p.z);
+    if (xs.length < 2 || zs.length < 2) return [];
+
+    // One row of flags per band of z, so the glue below can run down columns.
+    const open = [];
+    for (let r = 0; r < zs.length - 1; r += 1) {
+      const zMid = (zs[r] + zs[r + 1]) / 2;
+      open.push(xs.slice(0, -1).map((x, c) => {
+        const xMid = (x + xs[c + 1]) / 2;
+        return inside(lower, xMid, zMid) && !(cover && inside(cover, xMid, zMid));
+      }));
+    }
+
+    // GREEDY MAXIMAL RECTANGLES: take a cell, run right while the row stays
+    // open, then run DOWN while every column of that span stays open, and
+    // strike out what was taken. Fewest pieces for the common shapes -- one
+    // rectangle for a storey pulled back from one side, four for a setback all
+    // round -- and no piece is ever left one cell wide by accident.
+    const out = [];
+    for (let r = 0; r < open.length; r += 1) {
+      for (let c = 0; c < open[r].length; c += 1) {
+        if (!open[r][c]) continue;
+        let c2 = c;
+        while (c2 + 1 < open[r].length && open[r][c2 + 1]) c2 += 1;
+        let r2 = r;
+        while (r2 + 1 < open.length
+          && open[r2 + 1].slice(c, c2 + 1).every(Boolean)) r2 += 1;
+        for (let rr = r; rr <= r2; rr += 1) {
+          for (let cc = c; cc <= c2; cc += 1) open[rr][cc] = false;
+        }
+        const x0 = xs[c], x1 = xs[c2 + 1], z0 = zs[r], z1 = zs[r2 + 1];
+        out.push([{ x: x0, y: 0, z: z0 }, { x: x1, y: 0, z: z0 },
+          { x: x1, y: 0, z: z1 }, { x: x0, y: 0, z: z1 }]);
+      }
+    }
+    return out;
+  };
+
   const ringInsideRing = (inner, outer) => {
     if (!Array.isArray(inner) || !Array.isArray(outer)) return false;
     if (inner.length < 3 || outer.length < 3) return false;
@@ -1089,6 +1165,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     segmentIntersection,
     selfIntersects,
     ringInsideRing,
+    uncoveredRegions,
     nearestIntersection,
     roomLoops,
     offsetOutline,
