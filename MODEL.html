@@ -439,6 +439,15 @@
      the column means something different from the button. */
   .tool-key[aria-pressed="true"] { border-color: var(--accent);
     color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  /* AN UNAVAILABLE TOOL LOOKS DOWN, and it has to look down MEASURABLY. An
+     opacity of 0.9 would satisfy "the rule exists" while looking identical on
+     screen, and a `disabled` attribute with no rule behind it at all is the
+     broken state that looks exactly like the working one -- so
+     tests/model-tool-boards.spec.js reads the COMPUTED opacity, not the
+     attribute. Three signals, none of them the accent: the key is dimmed, it
+     loses the hover promise, and the cursor says it will not take the press. */
+  .tool-key:disabled, .tool-key:disabled:hover { opacity:0.35; cursor:not-allowed;
+    border-color: var(--edge-panel); color: var(--ink-quiet); box-shadow:none; }
   [data-tool-letter] { position:absolute; top:2px; left:4px; font-size:11px;
     font-weight:600; line-height:1; }
   /* The five bare faces keep the same box: a key whose letter box collapses
@@ -4411,12 +4420,25 @@
   let activeTool = RESTING_TOOL;
   let drawStart = null;
   const toolListeners = [];
+  // THE BOARD'S LISTENERS ARE DECLARED HERE, beside the tool's, for one dull
+  // reason: `applyBoard` runs at load and the tool column builder is a `const`
+  // defined several hundred lines further down, so applyBoard cannot name it
+  // without landing in its temporal dead zone. An array declared up here can
+  // be filled in later and fired from anywhere.
+  const boardListeners = [];
 
   const setTool = id => {
     const roster = window.DraftToolRoster;
     // An unknown id would silently arm nothing and read as "select is on",
     // which is a broken state that looks like a working one.
-    const next = roster && roster.get(id) ? id : RESTING_TOOL;
+    //
+    // §6, "no other tools": THE REGISTER ASKS THE SAME FUNCTION THE KEYPAD
+    // ASKS. Greying a key is presentation and presentation can be got round --
+    // a keyboard shortcut, a restored session, a tool that arms itself when a
+    // gesture finishes. Refusing here is what makes the board a rule rather
+    // than a look, and it falls back to the resting tool for the same reason
+    // an unknown id does: there is no such thing as no tool.
+    const next = roster && roster.availableOn(id, board) ? id : RESTING_TOOL;
     activeTool = next;
     // Any half-finished gesture belongs to the tool being put down. Carrying an
     // anchor across a tool change is how a chain commits into the next tool's
@@ -4770,13 +4792,22 @@
   const applyBoard = () => {
     document.body.setAttribute('data-board', board);
     markSwitch(boardButtons, 'board', board);
+    boardListeners.forEach(fn => fn(board));
     try {
       const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
       localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, board }));
     } catch { /* as above */ }
   };
   boardButtons.forEach(b => {
-    b.title = 'Board mode — remembered, but nothing is constrained by it yet';
+    // §8 of the TOY bones order: this title said "remembered, but nothing is
+    // constrained by it yet" for as long as that was true. §6 makes it false
+    // -- the board now decides which tools the column offers -- so the
+    // disclaimer goes rather than being left to mislead. What it says instead
+    // is the constraint that exists TODAY, not the finished feature: bones and
+    // grip tabs are still to come, and this sentence does not promise them.
+    b.title = b.dataset.board === 'toy'
+      ? 'TOY board — walls only; the other tools are put away'
+      : 'DRAFTING board — the full tool column';
     b.addEventListener('click', () => { setBoard(b.dataset.board); });
   });
 
@@ -4837,9 +4868,18 @@
         btn.dataset.toolKey = tool.id;
         btn.dataset.toolKind = tool.kind;
         btn.setAttribute('aria-pressed', String(tool.id === activeTool));
+        // §6 AGAIN, AND FROM THE SAME ANSWER. `disabled` rather than hidden:
+        // a key that vanishes on TOY tells a drafter the tool does not exist,
+        // and moves every key below it, so switching boards would reshuffle
+        // the column under their finger. Down and still in its place says the
+        // true thing -- this board does not offer it.
+        const usable = roster.availableOn(tool.id, board);
+        btn.disabled = !usable;
         // The title is the whole name, because the face is 40px and
-        // FENESTRATION does not fit on it at a readable size.
-        btn.title = tool.name;
+        // FENESTRATION does not fit on it at a readable size. When the key is
+        // down the title is the only place the REASON fits.
+        btn.title = usable ? tool.name
+          : `${tool.name} — the TOY board does not offer this tool`;
         const letter = document.createElement('span');
         letter.dataset.toolLetter = '';
         letter.textContent = roster.keyFor(tool.id, resolved);
@@ -4870,6 +4910,15 @@
   });
 
   buildToolColumn();
+
+  // A BOARD CHANGE PUTS DOWN A TOOL THE NEW BOARD DOES NOT OFFER. Rebuilding
+  // the faces alone would leave ROOF armed behind a greyed ROOF key -- the
+  // next drag would still draw a roof on the toy board, and the column would
+  // be telling the truth about the key and a lie about the state. setTool goes
+  // first so the rebuild renders the corrected register rather than the stale
+  // one; it also drops any half-finished gesture, which belongs to the board
+  // being left.
+  boardListeners.push(() => { setTool(activeTool); buildToolColumn(); });
 
   // ── SELECTION and OBJECT TYPE ─────────────────────────────────────────────
   // THE HELP STRINGS ARE THE OLD PAGE'S, VERBATIM (:23597 and :23619). They are
