@@ -671,3 +671,36 @@ test('acceptance 2c — the first nudge lands on the foot, the next is a whole f
     expect(await wallZ(page, 's'), 'and neither did the far side of the room')
       .toBe(10);
   });
+
+test('acceptance 2d — dragging one bone leaves the other where it was',
+  async ({ page }) => {
+    // 2d's SECOND CLAUSE, and it needed §3 before it could be written at all:
+    // "assert two bones after reload, AND assert dragging one leaves the other
+    // where it was." The first clause has been green since the second-bone
+    // rule landed; this is the half that was owed.
+    //
+    // Two rooms, mirrored about the origin so fit() centres on (0,0) -- the
+    // trap two checks above cost an hour, so the shape is deliberate here
+    // rather than inherited.
+    const rooms = base({
+      board: 'toy',
+      walls: [
+        ['an', V(-24, -8), V(-8, -8)], ['ae', V(-8, -8), V(-8, 8)],
+        ['as', V(-8, 8), V(-24, 8)], ['aw', V(-24, 8), V(-24, -8)],
+        ['bn', V(8, -8), V(24, -8)], ['be', V(24, -8), V(24, 8)],
+        ['bs', V(24, 8), V(8, 8)], ['bw', V(8, 8), V(8, -8)],
+      ].map(([id, start, end]) => ({ id, start, end, levelId: 3, view: 'plan',
+        wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' })),
+    });
+    await open(page, rooms);
+    await nudge(page, [-16, -8], [-16, -10]);
+
+    expect(await wallZ(page, 'an'), 'the bone that was dragged moved a foot')
+      .toBe(-10);
+    // THE OTHER BONE IS UNTOUCHED, every wall of it. Asserting only its north
+    // wall would pass a page that dragged the whole drawing and happened to
+    // leave one edge alone.
+    expect(await wallZ(page, 'bn'), 'the other bone did not follow').toBe(-8);
+    expect(await wallZ(page, 'bs'), 'nor its far side').toBe(8);
+    expect(await wallZ(page, 'be'), 'nor its sides').toBe(-8);
+  });
