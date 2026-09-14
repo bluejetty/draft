@@ -247,6 +247,12 @@ test.describe('MODEL.html tier 1', () => {
       './cut-view.js', './drawing-format.js', './render-2d.js',
       './fixture-geometry.js', './closets.js',
       './cut-marks.js', './build-menu.js', './profile-manager.js',
+      // ADDED ON PURPOSE, which is what this list is for. tool-roster.js is
+      // the seventeen tools as data -- 80 lines, no dependency of its own, and
+      // it exists so the tool column renders a list instead of seventeen
+      // hand-written buttons that can drift apart. This assertion caught it
+      // the same hour it was added, exactly as intended.
+      './tool-roster.js',
       './level-assembly.js', './stair-geometry.js',
     ]);
   });

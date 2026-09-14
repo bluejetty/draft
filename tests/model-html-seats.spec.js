@@ -1,4 +1,4 @@
-// THE VIEW RAIL ON MODEL.html — six seats, E1-E4 and S1-S2.
+// THE VIEW RAIL ON MODEL.html — the seating chart, DERIVED from the levels.
 //
 // Spec of record: RD-DOCUMENTS/SPEC-model-html-cut-views.md §2 and §3.
 //
@@ -48,6 +48,21 @@ async function openWith(page, cuts = []) {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 
+// THE RAIL TAKES SEVERAL FRAMES TO SETTLE, and at fourteen seats that is long
+// enough to read a half-painted rail. One seat lands per frame -- the fix that
+// keeps an edit off the 50 ms longtask threshold -- so a fourteen-seat pass is
+// about fourteen frames, ~230ms, where the six-seat rail was ~100ms. Reading
+// immediately after load got `S1 ink=0` and looked exactly like a seat that
+// does not paint; the same seat reads 3576 two hundred milliseconds later.
+// Waiting is the honest fix: the number is real and the drafter sees it too.
+async function settleRail(page) {
+  await expect
+    .poll(async () => (/rail ([\d.]+) ms/.exec(await page.locator('#readout').textContent()) || [])[1],
+      { timeout: 6000 })
+    .not.toBe('0.00');
+  await page.waitForTimeout(120);
+}
+
 const seatData = page => page.locator('.seat').evaluateAll(els => els.map(el => ({
   seat: el.dataset.seat,
   label: el.lastChild.textContent,
@@ -92,13 +107,43 @@ async function drawWall(page, x1, z1, x2, z2) {
   await page.waitForTimeout(40);
 }
 
-test('the rail seats all six, in the old page\'s pairing', async ({ page }) => {
+test('the rail seats the chart the old page seats', async ({ page }) => {
   await openWith(page, [SECTION]);
+  await settleRail(page);
   const seats = await seatData(page);
 
-  // SIX, ALWAYS SIX. A seating chart with gaps in it is a worse answer to
-  // "what can I look at" than one with empty chairs (spec §3).
-  expect(seats.map(s => s.seat)).toEqual(['E1', 'E3', 'E2', 'E4', 'S1', 'S2']);
+  // DERIVED, NOT LISTED. MODEL.dc.html:7160 walks state.levels to build this,
+  // and a fixed list of fourteen looks right on this fixture and is wrong the
+  // first time a floor is added -- which is why the ADD / delete acceptance
+  // below is the real test of it and this one is the shape.
+  //
+  // COUNTED OFF THE OLD PAGE rather than taken from the order. The order said
+  // twelve; the old page seats FOURTEEN on the same file -- twelve filled and
+  // two empty section chairs -- read out of its own two rail columns:
+  //
+  //     E1 · FRONT            E3 · BACK
+  //     E2 · LEFT             E4 · RIGHT
+  //     ROOF PLAN             SITE PLAN
+  //     2ND FL PLAN (WALLS)   2ND FL LAYOUT (FLOOR)
+  //     MAIN FL PLAN (WALLS)  MAIN FL LAYOUT (FLOOR)
+  //     FOUNDATION            BASEMENT (WALLS)
+  //     S1                    S2
+  expect(seats.map(s => s.label)).toEqual([
+    'E1 · FRONT', 'E3 · BACK', 'E2 · LEFT', 'E4 · RIGHT',
+    'ROOF PLAN', 'SITE PLAN',
+    '2ND FL PLAN (WALLS)', '2ND FL LAYOUT (FLOOR)',
+    'MAIN FL PLAN (WALLS)', 'MAIN FL LAYOUT (FLOOR)',
+    'FOUNDATION', 'BASEMENT (WALLS)',
+    'S1', 'S2',
+  ]);
+
+  // THE FOUNDATION PAIR IS NOT plan|floor, and getting that from the label
+  // rather than the code is how it would seat a blank: the second card is the
+  // `plan` view LABELLED "BASEMENT (WALLS)". There is no `basement` view id.
+  expect(seats.find(s => s.label === 'BASEMENT (WALLS)').seat).toBe('1:plan');
+  expect(seats.find(s => s.label === 'FOUNDATION').seat).toBe('1:foundation');
+  // ROOF and SITE take the whole level, so they carry no view at all.
+  expect(seats.find(s => s.label === 'ROOF PLAN').seat).toBe('7:all');
 
   // THE PAIRING IS THE OLD PAGE'S, and reading down a column rather than
   // across it is the way to get this wrong: MODEL.dc.html fills two columns
@@ -115,6 +160,7 @@ test('the rail seats all six, in the old page\'s pairing', async ({ page }) => {
 test('a section seat paints a real section, and an elevation seat carries its name',
   async ({ page }) => {
     await openWith(page, [SECTION]);
+    await settleRail(page);
     const seats = await seatData(page);
 
     // Both kinds put ink on their screen — that is the point of keeping one
@@ -220,6 +266,81 @@ test('the thumbnails repaint on an edit and NOT on mouse traffic', async ({ page
   expect(after, 'an edit repaints the rail').not.toBe(before);
 });
 
+test('the seats paint one per frame, which is what keeps the task short',
+  async ({ page }) => {
+    // THE LONGTASK CHECK BELOW IS PROBABILISTIC AND THIS ONE IS NOT, which is
+    // why both exist. Before the split, four elevations in one frame came to
+    // 47 ms against the browser's 50 ms threshold, so the block was reported
+    // on about three runs in five -- meaning that check PASSED twice in five
+    // on a page that was broken, and would pass always on a faster machine.
+    // An assertion satisfied by more than one world state is the defect this
+    // suite keeps meeting; this one names the mechanism instead of the
+    // symptom, so a revert to painting all six in one frame fails it every
+    // time rather than two times in five.
+    //
+    // PATCHING THIS MODULE HAS A TRAP IN IT, recorded because it cost two
+    // probes that both reported confident nonsense: cut-view.js:1758 exports
+    // through `window.DraftCutView = Object.freeze({...})`, so assigning onto
+    // the module is a SILENT no-op in sloppy mode. The first probe reported
+    // "0 painter calls" on a page whose seats were painting perfectly. Replace
+    // the frozen object; do not mutate it.
+    await h.openModel(page, { webgl: false });
+    await page.evaluate(async ({ bucket, saved, sections }) => {
+      saved.cuts = sections;
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, saved: REPRO, sections: [SECTION] });
+
+    await page.addInitScript(() => {
+      window.__paints = [];
+      window.__frame = 0;
+      const tick = () => { window.__frame += 1; requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+      // HOOKED ON clearRect, NOT ON THE PAINTER, and that is the second
+      // version of this check. The first patched DraftCutView.drawCutView,
+      // which only the CUT seats go through -- once the plan seats arrived it
+      // counted five of fourteen and reported "5 seats across 5 frames" on a
+      // rail that was painting nine more it could not see. A check that
+      // silently narrows to a subset is worse than one that fails.
+      //
+      // Every seat of either kind starts by clearing its own canvas, so this
+      // is the one call both paths share, and `.seat` scopes it to the rail.
+      const realClear = CanvasRenderingContext2D.prototype.clearRect;
+      CanvasRenderingContext2D.prototype.clearRect = function (...args) {
+        const host = this.canvas && this.canvas.parentElement;
+        if (host && host.classList && host.classList.contains('seat')) {
+          window.__paints.push({ seat: host.dataset.seat, frame: window.__frame });
+        }
+        return realClear.apply(this, args);
+      };
+    });
+    await page.goto('/MODEL.html?mode=night');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    await page.waitForTimeout(400);
+
+    await page.evaluate(() => { window.__paints = []; });
+    await drawWall(page, -3, -1.5, 3, -1.5);
+    await page.waitForTimeout(600);
+
+    const paints = await page.evaluate(() => window.__paints.slice());
+    // THE EDIT HAS TO HAVE REPAINTED AT ALL, or every assertion below is true
+    // of a rail that did nothing -- the void-sample fault this file already
+    // carries a guard for on the timing test.
+    expect(paints.length, 'the edit repainted no seat at all').toBeGreaterThan(1);
+
+    const perFrame = new Map();
+    paints.forEach(p => perFrame.set(p.frame, (perFrame.get(p.frame) || 0) + 1));
+    const worst = Math.max(...perFrame.values());
+    console.log(`  ${paints.length} seats painted across ${perFrame.size} frames`
+      + `, worst frame ${worst}`);
+
+    // ONE SEAT PER FRAME. The whole fix in one line: the longest task the rail
+    // can produce is one elevation, not four, and the total work is unchanged.
+    expect(worst,
+      `${worst} seats painted in a single frame -- the rail is back to one long task`)
+      .toBe(1);
+  });
+
 test('an edit never blocks the main thread, even with four live elevations',
   async ({ page }) => {
     await openWith(page, [SECTION]);
@@ -276,3 +397,44 @@ test('an edit never blocks the main thread, even with four live elevations',
     expect(new Set(rails).size,
       'every sample identical — the rail probably never repainted').toBeGreaterThan(1);
   });
+
+test('ADD A LEVEL AND TWO SEATS APPEAR; DELETE IT AND THEY LEAVE', async ({ page }) => {
+  // THE ACCEPTANCE TEST OF THE WHOLE ORDER, and the reason the LEVELS /
+  // LAYERS panel had to come first: "a rail built against a level list nobody
+  // can edit cannot be shown to be right". A fixed list of fourteen passes
+  // every other check in this file and fails this one.
+  await openWith(page, [SECTION]);
+  await settleRail(page);
+  const before = await seatData(page);
+
+  await page.locator('#right-tab').click();
+  await page.evaluate(() => {
+    window.prompt = q => (/Level name/.test(q) ? 'ATTIC' : '20');
+  });
+  await page.locator('[data-add-level]').click();
+  await settleRail(page);
+
+  // WITHOUT A RELOAD. The page is never navigated in this test.
+  const added = await seatData(page);
+  expect(added.length, 'a new level must add exactly two seats')
+    .toBe(before.length + 2);
+  expect(added.map(s => s.label)).toContain('ATTIC PLAN (WALLS)');
+  expect(added.map(s => s.label)).toContain('ATTIC LAYOUT (FLOOR)');
+
+  // AND THEY LAND IN THE RIGHT ROW, above the floor below them rather than at
+  // the end: the chart is ordered by the building, not by insertion.
+  const labels = added.map(s => s.label);
+  expect(labels.indexOf('ATTIC PLAN (WALLS)'))
+    .toBeLessThan(labels.indexOf('2ND FL PLAN (WALLS)'));
+
+  // DELETE IT AND THEY LEAVE, and nothing else moves.
+  await page.evaluate(() => { window.confirm = () => true; });
+  const atticId = await page.evaluate(() => [...document.querySelectorAll('.lv-card')]
+    .find(c => c.querySelector('.lv-name').textContent === 'ATTIC').dataset.level);
+  await page.locator(`[data-delete-level="${atticId}"]`).click();
+  await settleRail(page);
+
+  const after = await seatData(page);
+  expect(after.map(s => s.label), 'the seats are exactly what they were before the level existed')
+    .toEqual(before.map(s => s.label));
+});

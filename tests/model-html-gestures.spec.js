@@ -350,11 +350,82 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // SORTED, because this asks WHICH controls exist, not what order the DOM
       // happens to put them in. Order is a layout fact and would make the check
       // go red for a rearrangement that changes nothing a drafter can do.
-      const controls = await page.evaluate(() => ({
-        buttons: [...document.querySelectorAll('button')].map(b => b.id || b.textContent.trim()).sort(),
-        selects: [...document.querySelectorAll('select')].map(s => s.id).sort(),
-        inputs: [...document.querySelectorAll('input')].map(i => i.type).sort(),
-      }));
+      // THE PANEL'S OWN ROWS ARE EXCLUDED HERE AND CHECKED SEPARATELY BELOW,
+      // and that is a change in shape rather than a loosening. The LEVELS /
+      // LAYERS panel puts one row per level, one per layer view and one per
+      // elevation on the page -- all DERIVED from drawing.levels and
+      // layerViewsForLevelId, so the list would change with the fixture and
+      // say nothing about a hidden control. What this list is for is the part
+      // that must not grow without anyone noticing; the panel's contents are
+      // asserted against the module in model-html-levels.spec.js, which is a
+      // stronger claim than naming them here.
+      const controls = await page.evaluate(() => {
+        // THREE SURFACES ARE PARTITIONED OUT, all for one reason: each is
+        // DERIVED, so naming its contents here would guard the fixture instead
+        // of the control surface, and each is asserted exhaustively somewhere
+        // stronger.
+        //
+        //   the LEVELS / LAYERS panel  -- rows from drawing.levels and
+        //     layerViewsForLevelId; asserted in model-html-levels.spec.js
+        //   the VIEW RAIL             -- the seating chart is derived now
+        //     (four elevations, ROOF | SITE, a pair per level with layer
+        //     views, then the sections); asserted against the old page's own
+        //     chart in model-html-seats.spec.js
+        //   the TOOL COLUMN           -- seventeen keys from tool-roster.js
+        //     with the letters resolved through SETTINGS; asserted against
+        //     the roster itself in model-tool-column.spec.js
+        //
+        // KEPT AS THREE PREDICATES rather than one widened `inPanel`, because
+        // panelKinds below counts what the PANEL may hold and folding the rail
+        // into that word would quietly change what it asserts.
+        //
+        // What this list is for is the part that must not grow without anyone
+        // noticing, so the column is counted BY KIND: a context menu host or a
+        // file input smuggled into the slot arrives as 'BUTTON' or 'INPUT' and
+        // fails.
+        const inPanel = el => el.closest('#levels-panel') !== null;
+        const inRail = el => el.closest('#view-rail') !== null;
+        const inTools = el => el.closest('#tool-slot') !== null;
+        const outside = el => !inPanel(el) && !inRail(el) && !inTools(el);
+        const toolKind = el => (el.dataset.toolKey !== undefined ? 'tool-key'
+          : el.dataset.selMode !== undefined ? 'sel-mode'
+            : el.dataset.selFilter !== undefined ? 'sel-filter'
+              : el.dataset.assemblyStart !== undefined ? 'assembly-start'
+                : el.dataset.assemblyUngroup !== undefined ? 'assembly-ungroup'
+                  : el.dataset.assemblyFixed !== undefined ? 'assembly-fixed'
+                    : el.dataset.assemblyLoose !== undefined ? 'assembly-loose'
+                      : el.dataset.assemblyName !== undefined ? 'assembly-name'
+                        : el.tagName.toLowerCase());
+        return {
+          buttons: [...document.querySelectorAll('button')].filter(outside)
+            .map(b => b.id || b.textContent.trim()).sort(),
+          selects: [...document.querySelectorAll('select')].filter(outside)
+            .map(s => s.id).sort(),
+          inputs: [...document.querySelectorAll('input')].filter(outside)
+            .map(i => i.type).sort(),
+          toolKinds: [...new Set([...document.querySelectorAll('#tool-slot *')]
+            .filter(el => ['BUTTON', 'INPUT', 'SELECT'].includes(el.tagName))
+            .map(toolKind))].sort(),
+          // AND THE PANEL, counted rather than named: every control inside it
+          // must be one of the four kinds it is allowed to hold. A context
+          // menu host or a file input smuggled in there would fail this.
+          // Every control in the rail is a seat, or this fails naming the tag.
+          railKinds: [...new Set([...document.querySelectorAll('#view-rail *')]
+            .filter(el => el.tagName === 'BUTTON' || el.tagName === 'INPUT'
+              || el.tagName === 'SELECT')
+            .map(el => (el.classList.contains('seat') ? 'seat' : el.tagName)))].sort(),
+          panelKinds: [...new Set([...document.querySelectorAll('#levels-panel *')]
+            .filter(el => el.tagName === 'BUTTON' || el.tagName === 'INPUT'
+              || el.tagName === 'SELECT')
+            .map(el => el.dataset.addLevel !== undefined ? 'add-level'
+              : el.dataset.deleteLevel !== undefined ? 'delete-level'
+                : el.dataset.deleteCut !== undefined ? 'delete-cut'
+                  : el.dataset.layer !== undefined ? 'layer-row'
+                    : el.dataset.levelRow !== undefined ? 'level-row'
+                      : el.dataset.view3d !== undefined ? 'view-3d'
+                        : el.tagName === 'BUTTON' ? 'cut-row' : el.tagName))].sort(),
+        };
+      });
       // THE SIX SEATS ARRIVED WHILE THIS PR WAS OPEN, and this assertion is how
       // that was noticed rather than merged past: it went red on the merge with
       // #386, naming the six buttons it had never seen. That is the check doing
@@ -371,6 +442,20 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // checking rather than waving through, because BUNGALOW looks exactly
       // like the BUILD HOUSE verb the table records as absent.
       //
+      // AND A THIRD TIME, with the tool column -- seventeen keys, which is what
+      // took this red on CI while every suite I had thought to run locally was
+      // green. THE CHECK DID ITS JOB AND I DID NOT DO MINE: a change that adds
+      // a control column is precisely the change this assertion exists to
+      // notice, and it was not in the set I ran. Running the suites related to
+      // the work is not the same as running the suites the work disturbs.
+      //
+      // The verdict for the keys themselves: none of them is a drawing verb
+      // YET. A key sets `activeTool` and nothing else -- WALL is the only one
+      // with a gesture behind it, and that gesture is the same `draw-wall`
+      // this list already names, now driven through the register instead of a
+      // boolean. So no absence row below changes; the parity table carries a
+      // row for the column.
+      //
       // IT IS NOT THAT VERB. The bar sits on a seam: it records which type was
       // chosen and something else, not yet built, decides what geometry that
       // produces. `model-html-topbar.spec.js` holds the wall count across a
@@ -379,16 +464,61 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // the same, and this check is why they were found: two of them describe
       // the control surface by listing it, and that list is no longer four
       // buttons and two selects.
+      // AND A THIRD TIME, with the bottom instrument strip. Two instruments
+      // (`strip-ruler`, `strip-tsquare`), one text input (the LENGTH box) and
+      // six switch buttons in three pairs. They needed the same reading as
+      // BUNGALOW did, because a RULER looks exactly like a drawing verb:
+      //
+      //   - THE RULER DRAWS NOTHING. It measures between two presses and
+      //     writes no entity; model-html-strip.spec.js holds the wall count
+      //     across a full measurement, which is what makes that a fact.
+      //   - THE T-SQUARE IS A CONSTRAINT ON THE EXISTING draw-wall GESTURE,
+      //     not a second way to make a wall. With it down the page draws the
+      //     same off-square walls it always did.
+      //   - THE LENGTH BOX COMMITS THROUGH draw-wall's own gesture: it is
+      //     dead until a run is in hand, so it cannot start one.
+      //   - TOY/DRAFTING, RUFF/ROUGH and NIGHT/DAY set board and skin state.
+      //     They change what the page LOOKS like and what it remembers, and
+      //     no absence row is about either.
+      //
+      // So every `absent` row below still stands. The list grows; the table
+      // does not change.
       expect(controls,
         'the parity table\'s absences are only as good as this list — if a '
         + 'control appears here that no row mentions, a row is wrong')
         .toEqual({
-          buttons: ['E1 · FRONT', 'E2 · LEFT', 'E3 · BACK', 'E4 · RIGHT', 'S1', 'S2',
-            'left-tab', 'right-tab',
+          buttons: ['left-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
-            'delete-wall', 'draw-wall', 'save', 'take-over'].sort(),
+            'delete-wall', 'draw-wall', 'save', 'take-over',
+            'strip-ruler', 'strip-tsquare',
+            'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY'].sort(),
           selects: ['level-pick', 'view-pick'],
-          inputs: [],
+          // THE LENGTH BOX, and it is named as a type rather than an id
+          // because what this row guards is a FILE INPUT appearing without
+          // anyone noticing — the surface an INSERT UNDERLAY verb would need.
+          inputs: ['text'],
+          railKinds: ['seat'],
+          // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
+          // no unlabelled button: an entry this cannot name would arrive as
+          // 'BUTTON' or 'INPUT' and fail.
+          panelKinds: ['add-level', 'cut-row', 'delete-level', 'layer-row',
+            'level-row', 'view-3d'].sort(),
+          // The column's kinds. SELECTION's three modes and OBJECT TYPE's five
+          // filters are named rather than counted for the same reason the keys
+          // are not: a control the classifier cannot name arrives as 'button'
+          // and fails, which is how the chips were noticed here in the first
+          // place.
+          //
+          // AND THE ASSEMBLY NAME FIELD IS THE PAGE'S FIRST INPUT. That is why
+          // it is named here rather than counted: `inputs` above is what the
+          // INSERT UNDERLAY row rests on, and an input appearing anywhere on
+          // this page has to be accounted for by someone. It is a text field
+          // in the tool column, not a file picker -- the underlay row's own
+          // check asserts `input[type=file]` is still zero, which is the
+          // guarantee that row actually needs.
+          toolKinds: ['assembly-fixed', 'assembly-loose', 'assembly-name',
+            'assembly-start', 'assembly-ungroup',
+            'sel-filter', 'sel-mode', 'tool-key'].sort(),
         });
     });
 
@@ -416,6 +546,18 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
   test('T-SQUARE — pressing `t` does nothing the page or the file can show',
     async ({ page }) => {
       await seeded(page);
+      // LET THE RAIL SETTLE FIRST. The readout carries `rail N ms`, which the
+      // seat repaint writes when its pass finishes -- and since the seats now
+      // paint ONE PER FRAME to keep the task short, that pass spans several
+      // frames after load. Snapshotting mid-pass and comparing afterwards
+      // compares two different moments of an instrument, not the effect of a
+      // keypress: it read `rail 0.00 ms` before and `rail 35.20 ms` after,
+      // and blamed the T-square. Wait for it to stop moving, then measure.
+      await expect
+        .poll(async () => (/rail ([\d.]+) ms/.exec(await readout(page).textContent()) || [])[1],
+          { timeout: 5000 })
+        .not.toBe('0.00');
+      await page.waitForTimeout(200);
       const before = await readout(page).textContent();
       const beforeFile = JSON.stringify(await h.savedDrawing(page));
 
@@ -444,8 +586,21 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       'and every option must be a real level id').toBe(true);
   });
 
-  test('LEVEL LOCKS, GROUPS and SOURCE LINKS — no verb, and the keys are re-emitted untouched',
+  test('LEVEL LOCKS and SOURCE LINKS — no verb, and the keys are re-emitted untouched',
     async ({ page }) => {
+      // GROUPS LEFT THIS ROW. It used to read "LEVEL LOCKS, GROUPS and SOURCE
+      // LINKS — no verb", and that stopped being true the moment ASSEMBLY and
+      // UNGROUP landed in the tool column. The parity table's row moved from
+      // absent to present with it.
+      //
+      // The carry-through assertion below still covers groups, and still
+      // should: a page that HAS a verb must also hand back untouched the
+      // groups nobody touched. What changed is the claim in the title, and
+      // leaving that stale while quietly teaching the control census to accept
+      // the new buttons would have been the exact failure the census exists to
+      // prevent — a control on the page that no row mentions, silenced instead
+      // of answered.
+      //
       // THE SECOND QUESTION. Once "there is no verb" is established, the thing
       // that matters to a drafter is whether the page HONOURS the key or merely
       // carries it. A page that silently drops a lock is worse than one that
@@ -471,8 +626,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
 
       expect({ groups: after.groups, levelLocks: after.levelLocks,
         nextLevelLockId: after.nextLevelLockId },
-      'a page with no verb for these must hand them back exactly as it found '
-      + 'them — carrying is the whole job')
+      'locks have no verb and must come back exactly as they went in; groups '
+      + 'now HAVE one, and must still come back untouched when it is not used')
         .toEqual({ groups: before.groups, levelLocks: before.levelLocks,
           nextLevelLockId: before.nextLevelLockId });
     });
