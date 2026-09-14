@@ -301,3 +301,80 @@ test('acceptance #4 — DRAFTING keeps the off-axis, off-foot wall the drag make
     expect(Math.abs(span - Math.round(span)),
       'DRAFTING keeps the fractional length too').toBeGreaterThan(0.01);
   });
+
+// ── §2: THE OUTLINE THE GESTURE MAKES ───────────────────────────────────────
+//
+// ACCEPTANCE 2b. Ruled 13 Sep: "yes the toy house will have the bones and those
+// will be what TOY can manipulate" -- so the TOY draw gesture writes the level
+// OUTLINE as well as the walls. One gesture, walls and bone together.
+//
+// This was a measurement before it was a ruling: commitWall pushes to
+// drawing.walls and touches nothing else, and the only place MODEL.html makes
+// a level outline is adding a level, copying a boneyard master
+// (MODEL.html:2919). A hand-drawn TOY house had no bone at all, so §2's "the
+// outline becomes a bone" had nothing to become one.
+//
+// THE OUTLINE IS THE FORMAT'S OWN, not a second store: drawing-format.js:893
+// takes points with srcId/offX/offZ, masterId, and overriddenSrcIds. A hand
+// drawn house has no master, so masterId is null -- "purely local outlines" in
+// the format's own words -- and that is what makes it a bone rather than a
+// copy of one.
+const outlinesIn = page => page.evaluate(async bucket => {
+  const f = await window.SharedFileStore.loadSharedFile(bucket);
+  const raw = JSON.parse(await f.text());
+  const F = window.DraftDrawingFormat;
+  const ids = new Set((raw.levels || []).map(l => Number(l.id)));
+  return { kept: F.outlines(raw.outlines, ids), written: (raw.outlines || []).length };
+}, BUCKET);
+
+async function saveIt(page) {
+  await page.locator('#save').click();
+  await page.waitForTimeout(400);
+}
+
+test('acceptance 2b — a house drawn in TOY has an outline, not walls alone',
+  async ({ page }) => {
+    // A THREE-SIDED RUN, because the format refuses an outline under three
+    // points (:918). Two walls would leave nothing to assert and the check
+    // would pass on a page that writes no outline at all.
+    await open(page, base({ board: 'toy', walls: [] }));
+    const { at } = await frame(page);
+    await armWall(page);
+    await page.mouse.click(...at(0, 0));
+    await page.waitForTimeout(60);
+    await page.mouse.click(...at(12, 0));
+    await page.waitForTimeout(60);
+    await page.mouse.click(...at(12, 8));
+    await page.waitForTimeout(60);
+    await page.mouse.click(...at(0, 8));
+    await page.waitForTimeout(120);
+    await saveIt(page);
+
+    const o = await outlinesIn(page);
+    expect(o.written, 'the gesture wrote an outline').toBeGreaterThan(0);
+    // THROUGH THE READER. An outline the format drops is a bone that is gone
+    // on the next load -- the same silent, one-reload-later loss as a column
+    // written with a string id.
+    expect(o.kept.length, 'and a reload keeps it').toBeGreaterThan(0);
+    const bone = o.kept[0];
+    expect(bone.points.length, 'with a point for each corner drawn')
+      .toBeGreaterThanOrEqual(3);
+    expect(bone.masterId, 'hand drawn, so no master: this IS the bone').toBeNull();
+  });
+
+test('a DRAFTING house is still walls alone — TOY does not leak', async ({ page }) => {
+  // The mirror, and it is what stops the outline being written unconditionally.
+  // Without it "always write an outline" satisfies 2b and changes what every
+  // DRAFTING drawing contains.
+  await open(page, base({ board: 'drafting', walls: [] }));
+  const { at } = await frame(page);
+  await armWall(page);
+  await page.mouse.click(...at(0, 0));
+  await page.waitForTimeout(60);
+  await page.mouse.click(...at(12, 0));
+  await page.waitForTimeout(60);
+  await page.mouse.click(...at(12, 8));
+  await page.waitForTimeout(120);
+  await saveIt(page);
+  expect((await outlinesIn(page)).written, 'DRAFTING writes no outline').toBe(0);
+});
