@@ -1,0 +1,203 @@
+// §1 — DRAWING THE OUTLINE: the gestures, and the number the drafter can see.
+//
+// Work order: GILLIGAN-TOY-BONES-WORKORDER §1, acceptance #1, #2 and #4.
+//
+// WHY THIS FILE EXISTS SEPARATELY from model-toy-board.spec.js. That file
+// asserts what TOY does to a run -- squares it, lands it on the foot -- and it
+// drives every one of those checks with two `mouse.click`s. Acceptance #1 is
+// named for a PRESS-DRAG-RELEASE and #2 asks that press-again-and-drag reach
+// the same wall, and neither can be shown by a gesture that never presses and
+// drags. The revised order says so in as many words: the check must "perform
+// each gesture rather than naming one and tapping twice".
+//
+// So the gestures live here and they are performed. Three of them, because the
+// page has three: a mouse click-move-click, a finger press-drag-lift, and a
+// finger that lifts after the first press and comes back.
+const { test, expect } = require('@playwright/test');
+const h = require('./helpers');
+
+const BUCKET = 'model-drawing';
+const V = (x, z) => ({ x, y: 0, z });
+
+// The square from model-toy-board.spec.js, for the two reasons recorded there:
+// symmetric about the origin so fit()'s centre is (0,0), and a real extent in
+// BOTH axes so the 200 px/ft clamp does not put every press off the canvas.
+const base = extra => ({
+  version: 1,
+  levels: [{ id: 3, name: 'MAIN FL', elev: 0 }],
+  activeLevelIdx: 0,
+  walls: [
+    ['n', V(-10, -10), V(10, -10)], ['e', V(10, -10), V(10, 10)],
+    ['s', V(10, 10), V(-10, 10)], ['w', V(-10, 10), V(-10, -10)],
+  ].map(([id, start, end]) => ({ id, start, end, levelId: 3, view: 'plan',
+    wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' })),
+  lines: [], floors: [], roofs: [], fenestrations: [], dimensions: [],
+  outlines: [], shapes: [], surfaceOpenings: [], stairs: [], notes: [],
+  roomTags: [], columns: [], beams: [], boneyardOutlines: [], boneyardShelves: [],
+  groups: [], levelLocks: [], underlays: [],
+  ...extra,
+});
+
+async function open(page, file) {
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json',
+        { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f: file });
+  // NO ?left=1. The rail covers the left of the drawing, and every press below
+  // lands on the canvas -- an occluded press would report as a wall that never
+  // committed and point at the gesture rather than at the panel over it.
+  await page.goto('/MODEL.html');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+}
+
+async function frame(page) {
+  const box = await page.locator('#plan').boundingBox();
+  const scale = await page.evaluate(() => Number(
+    /scale ([\d.]+) px\/ft/.exec(document.getElementById('readout').textContent)[1]));
+  return { at: (x, z) => [box.x + box.width / 2 + x * scale,
+    box.y + box.height / 2 + z * scale] };
+}
+
+async function armWall(page) {
+  const armed = await page.locator('[data-draw-wall]')
+    .evaluate(el => el.classList.contains('armed'));
+  if (!armed) await page.locator('[data-draw-wall]').click();
+}
+
+const stored = page => page.evaluate(async bucket => {
+  const f = await window.SharedFileStore.loadSharedFile(bucket);
+  return JSON.parse(await f.text());
+}, BUCKET);
+
+const SEEDED = new Set(['n', 'e', 's', 'w']);
+async function committed(page) {
+  await page.locator('#save').click();
+  await page.waitForTimeout(400);
+  const saved = await stored(page);
+  const made = saved.walls.filter(w => !SEEDED.has(w.id)).pop();
+  return made && {
+    s: [Number(made.start.x.toFixed(6)), Number(made.start.z.toFixed(6))],
+    e: [Number(made.end.x.toFixed(6)), Number(made.end.z.toFixed(6))],
+  };
+}
+const spanOf = w => Math.hypot(w.e[0] - w.s[0], w.e[1] - w.s[1]);
+
+// A MOUSE PRESS-DRAG-LIFT. Playwright's mouse reports pointerType 'mouse', so
+// this is the PC pointer doing the drag gesture -- which must still work: §1's
+// "either drag, or press again and drag" is not addressed to touch only.
+async function mouseDrag(page, from, to) {
+  const { at } = await frame(page);
+  await armWall(page);
+  await page.mouse.move(...at(...from));
+  await page.mouse.down();
+  await page.mouse.move(...at(...to), { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+}
+
+// THE PC GESTURE THE ORDER NAMES: click to set, move with the line live, click
+// to place.
+async function mouseClickClick(page, from, to) {
+  const { at } = await frame(page);
+  await armWall(page);
+  await page.mouse.click(...at(...from));
+  await page.mouse.move(...at(...to), { steps: 10 });
+  await page.waitForTimeout(60);
+  await page.mouse.click(...at(...to));
+  await page.waitForTimeout(120);
+}
+
+test('acceptance #1 — a press, a drag and a lift commit a squared whole-foot wall',
+  async ({ page }) => {
+    // Deliberately awkward, as the order asks: 5.4 across and 0.8 down, so an
+    // honest build has to both square it and round it.
+    await open(page, base({ board: 'toy' }));
+    await mouseDrag(page, [0, 0], [5.4, 0.8]);
+    const w = await committed(page);
+    expect(w, 'the lift placed a wall').toBeTruthy();
+    expect(Math.abs(w.e[1] - w.s[1]), 'exactly axis-aligned').toBeLessThan(1e-9);
+    expect(spanOf(w), 'and the nearest whole foot to 5.4').toBeCloseTo(5, 9);
+  });
+
+test('acceptance #2 — click-move-click reaches the same wall as press-drag-lift',
+  async ({ page }) => {
+    // THE TWO GESTURES ARE COMPARED, not each checked against a constant. That
+    // is what "reaches the same wall" means, and it is why the commit may not
+    // live in either handler: a constant would let the two drift apart as long
+    // as both happened to be axis-aligned and whole.
+    await open(page, base({ board: 'toy' }));
+    await mouseDrag(page, [0, 0], [5.4, 0.8]);
+    const dragged = await committed(page);
+
+    await open(page, base({ board: 'toy' }));
+    await mouseClickClick(page, [0, 0], [5.4, 0.8]);
+    const clicked = await committed(page);
+
+    expect(dragged, 'the drag committed').toBeTruthy();
+    expect(clicked, 'the clicks committed').toBeTruthy();
+    expect(clicked).toEqual(dragged);
+  });
+
+test('the length on screen is the length that gets committed', async ({ page }) => {
+  // ACCEPTANCE #2's second half: "assert them equal, not merely both present".
+  // Before this, runInHand measured the run through squareTo while the commit
+  // went through drawPoint -- so on TOY the strip read 5.4 over a wall that
+  // committed at 5. Both halves passed a "is there a number" check.
+  await open(page, base({ board: 'toy' }));
+  const { at } = await frame(page);
+  await armWall(page);
+  await page.mouse.move(...at(0, 0));
+  await page.mouse.down();
+  await page.mouse.move(...at(5.4, 0.8), { steps: 10 });
+
+  const label = page.locator('[data-draw-length]');
+  await expect(label, 'the drafter can see a length while drawing').toBeVisible();
+  const shown = (await label.textContent()).trim();
+
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+  const w = await committed(page);
+  expect(w).toBeTruthy();
+  // The label is a feet string; the wall is a number. Comparing the label to
+  // the FORMATTED committed span is the only comparison that catches a drift
+  // of less than a foot, which is exactly the drift there was.
+  // Formatted through the page's OWN formatter, the one feetLabel calls, so
+  // this compares two feet strings rather than a string against a number a
+  // test happened to round the same way.
+  const asCommitted = await page.evaluate(n =>
+    window.DraftFormatters.formatArchitecturalInches(n * 12), spanOf(w));
+  expect(shown, `on screen ${shown}, committed ${asCommitted}`).toBe(asCommitted);
+  // WHOLE FEET, and the shape of the string is how you can tell. The
+  // architectural format always prints the inches, so 5'-0" IS a whole foot
+  // and a bare `not.toContain('"')` rejects the correct answer -- my own first
+  // version of this line did exactly that. What TOY must never show is a
+  // non-zero or fractional inch: 5'-4" or 5'-4 3/4".
+  expect(shown, 'whole feet and zero inches on the TOY board')
+    .toMatch(/^\d+'-0"$/);
+  expect(shown).toContain('5');
+});
+
+test('the length goes out when the run does', async ({ page }) => {
+  // A length still on screen after the gesture is over is the one thing a
+  // drafter should never be able to misread.
+  await open(page, base({ board: 'toy' }));
+  await mouseDrag(page, [0, 0], [5.4, 0.8]);
+  // The chain leaves a run open at the wall's end, so put the tool down.
+  await page.locator('[data-draw-wall]').click();
+  await page.waitForTimeout(80);
+  await expect(page.locator('[data-draw-length]')).toBeHidden();
+});
+
+test('acceptance #4 — DRAFTING keeps the off-axis, off-foot wall the drag makes',
+  async ({ page }) => {
+    // TOY MUST NOT LEAK, and the new gesture is a new way for it to. The drag
+    // handler is shared by both boards, so if the squaring rode in the handler
+    // rather than in drawPoint this is what would catch it.
+    await open(page, base({ board: 'drafting' }));
+    await mouseDrag(page, [0, 0], [5.4, 0.8]);
+    const w = await committed(page);
+    expect(w, 'the lift placed a wall on DRAFTING too').toBeTruthy();
+    expect(Math.abs(w.e[1] - w.s[1]), 'and it is NOT squared').toBeGreaterThan(0.1);
+  });

@@ -5347,7 +5347,21 @@
       // finger went down, and whether this press OPENED the run. Without the
       // second, the PC click-click's second press would commit on the down and
       // then again on the up.
-      wallPress = { x: e.clientX, y: e.clientY, opened: !drawStart };
+      wallPress = { x: e.clientX, y: e.clientY, opened: !drawStart,
+        touch: e.pointerType === 'touch' };
+      // THE POINTER TYPE DECIDES WHICH HANDLER FIRES THE SHARED COMMIT, and
+      // that split is §1's, not an invention: "for PC the line creation will
+      // be normal pc method ... Touch gets the press-drag-lift."
+      //
+      // A MOUSE COMMITS ON THE DOWN -- click to set, move, click to place, and
+      // the closing click must land the wall at the point clicked.
+      //
+      // A FINGER NEVER COMMITS ON THE DOWN. §1 requires press-again-and-drag
+      // to reach the same wall as press-drag-lift; if the second touch
+      // committed where it landed, the drag after it would be ignored and the
+      // wall would end at the moment the finger arrived rather than where it
+      // left. The lift below closes every touch run.
+      if (wallPress.touch && drawStart) { paint(); return; }
       drawPress(at);
       return;
     }
@@ -5549,12 +5563,19 @@
   canvas.addEventListener('pointerup', e => {
     const press = wallPress;
     wallPress = null;
-    if (!press || !press.opened || !drawStart || activeTool !== 'wall') return;
-    // A LIFT THAT DID NOT TRAVEL IS A TAP, and a tap is the first half of the
-    // PC gesture -- the drafter is about to move and click again. Committing
-    // here would turn every PC click into a zero-length wall attempt.
-    // DRAG_ARM_PX is the page's own threshold for "this is a drag now".
-    if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < DRAG_ARM_PX) return;
+    if (!press || !drawStart || activeTool !== 'wall') return;
+    // A LIFT THAT DID NOT TRAVEL, ON A PRESS THAT OPENED THE RUN, IS A TAP --
+    // the first half of a gesture, whichever pointer is doing it. Committing
+    // here would turn every PC click into a zero-length wall attempt, and
+    // would stop a finger from tapping once to set a start.
+    //
+    // A press that did NOT open the run is a closing press, and on touch it
+    // closes on the lift however far it travelled: that is both
+    // press-again-and-drag and a plain two-tap, and neither has any other
+    // handler left to commit it. On a mouse the down already committed, so
+    // there is nothing here to do.
+    const travelled = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_ARM_PX;
+    if (press.opened ? !travelled : !press.touch) return;
     const rect = canvas.getBoundingClientRect();
     drawPress(toWorld(e.clientX - rect.left, e.clientY - rect.top));
   });
