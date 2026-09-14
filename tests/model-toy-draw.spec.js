@@ -109,6 +109,95 @@ async function mouseClickClick(page, from, to) {
   await page.waitForTimeout(120);
 }
 
+// A FINGER, AND IT HAS TO BE SYNTHETIC. page.mouse reports pointerType
+// 'mouse', so every gesture above drives the PC path -- I built a pointer-type
+// split and tested one side of it, and the gate said so: the mutant that makes
+// a finger commit on the down survived because no check had a finger. These
+// dispatch PointerEvents with pointerType 'touch' at exact client coordinates,
+// which also makes them repeatable in a way mouse.move is not.
+async function touchGesture(page, steps) {
+  const { at } = await frame(page);
+  await armWall(page);
+  const pts = steps.map(([kind, x, z]) => [kind, ...at(x, z)]);
+  await page.evaluate(list => {
+    const c = document.getElementById('plan');
+    for (const [kind, x, y] of list) {
+      c.dispatchEvent(new PointerEvent(kind, {
+        pointerId: 1, pointerType: 'touch', isPrimary: true,
+        clientX: x, clientY: y, bubbles: true, cancelable: true }));
+    }
+  }, pts);
+  await page.waitForTimeout(120);
+}
+
+test('a finger that presses, drags and lifts reaches the mouse\'s wall',
+  async ({ page }) => {
+    // §1 gives touch the press-drag-lift and PC the click-move-click, and says
+    // they are "the same wall by the time it reaches commitWall". Compared to
+    // each other, for the reason acceptance #2 is: a constant would let the
+    // two pointers drift apart while both stayed plausible.
+    await open(page, base({ board: 'toy' }));
+    await touchGesture(page, [['pointerdown', 0, 0],
+      ['pointermove', 3, 0.4], ['pointermove', 5.4, 0.8], ['pointerup', 5.4, 0.8]]);
+    const byFinger = await committed(page);
+
+    await open(page, base({ board: 'toy' }));
+    await mouseClickClick(page, [0, 0], [5.4, 0.8]);
+    const byMouse = await committed(page);
+
+    expect(byFinger, 'the finger placed a wall').toBeTruthy();
+    expect(byFinger).toEqual(byMouse);
+  });
+
+test('a finger that lifts, presses again and drags reaches the same wall',
+  async ({ page }) => {
+    // THE GESTURE THE TOUCH BRANCH EXISTS FOR, and the one the surviving
+    // mutant broke. The second press lands at the MIDPOINT and the finger then
+    // drags on to the end: if the down committed where it landed, this wall
+    // would stop at 3 ft instead of 5.
+    await open(page, base({ board: 'toy' }));
+    await touchGesture(page, [['pointerdown', 0, 0], ['pointerup', 0, 0]]);
+    await touchGesture(page, [['pointerdown', 3, 0.4],
+      ['pointermove', 5.4, 0.8], ['pointerup', 5.4, 0.8]]);
+    const w = await committed(page);
+
+    await open(page, base({ board: 'toy' }));
+    await mouseClickClick(page, [0, 0], [5.4, 0.8]);
+    expect(w, 'press-again-and-drag placed a wall').toBeTruthy();
+    expect(w).toEqual(await committed(page));
+  });
+
+test('a tremor during the press does not move where the run started',
+  async ({ page }) => {
+    // WHAT DRAG_ARM_PX IS ACTUALLY FOR, and my comment beside it was wrong. I
+    // wrote that without the threshold "every PC click becomes a zero-length
+    // wall attempt"; the gate disproved it -- drawPress treats a sub-0.001
+    // second point as a CORRECTION, so nothing visible breaks. What really
+    // breaks is this: a press with a few pixels of tremor commits nothing but
+    // moves the run's start to where the tremor ended.
+    //
+    // DRAFTING, because TOY would round the difference away, and compared
+    // against the same gesture held still rather than against a tolerance.
+    await open(page, base({ board: 'drafting' }));
+    const { at } = await frame(page);
+    await armWall(page);
+    const [x, y] = at(0, 0);
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 3, y + 3);   // under DRAG_ARM_PX: still a press
+    await page.mouse.up();
+    await page.mouse.move(...at(6, 0));
+    await page.mouse.click(...at(6, 0));
+    await page.waitForTimeout(120);
+    const shaky = await committed(page);
+
+    await open(page, base({ board: 'drafting' }));
+    await mouseClickClick(page, [0, 0], [6, 0]);
+    const steady = await committed(page);
+    expect(shaky, 'the shaky press still drew').toBeTruthy();
+    expect(shaky, 'and drew the same wall a steady one does').toEqual(steady);
+  });
+
 test('acceptance #1 — a press, a drag and a lift commit a squared whole-foot wall',
   async ({ page }) => {
     // Deliberately awkward, as the order asks: 5.4 across and 0.8 down, so an
@@ -200,4 +289,11 @@ test('acceptance #4 — DRAFTING keeps the off-axis, off-foot wall the drag make
     const w = await committed(page);
     expect(w, 'the lift placed a wall on DRAFTING too').toBeTruthy();
     expect(Math.abs(w.e[1] - w.s[1]), 'and it is NOT squared').toBeGreaterThan(0.1);
+    // AND NOT ROUNDED, which is the half that was missing. onTheFoot rounds the
+    // length ALONG THE RUN and keeps the direction, so a 5.4/0.8 drag stays
+    // visibly off-axis at about 0.73 even when TOY's rounding has leaked into
+    // DRAFTING -- the squared check alone passed straight through that mutant.
+    const span = Math.hypot(w.e[0] - w.s[0], w.e[1] - w.s[1]);
+    expect(Math.abs(span - Math.round(span)),
+      'DRAFTING keeps the fractional length too').toBeGreaterThan(0.01);
   });
