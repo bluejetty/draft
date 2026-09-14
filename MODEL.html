@@ -4420,10 +4420,20 @@
         levelId, points: [pt(from)], overriddenSrcIds: [] };
       bone = pendingBone;
     }
-    const last = bone.points[bone.points.length - 1];
-    // A chained wall starts where the last one ended, so the shared corner is
-    // one point and not two.
-    if (!same(last, to)) bone.points.push(pt(to));
+    // NO DEDUPE HERE, AND THE GATE IS WHY. This read
+    //   `if (!same(last, to)) bone.points.push(pt(to))`
+    // to stop a shared corner being stored twice -- and the mutant that
+    // removes the guard survived every check, including one asserting the
+    // exact corner list. It survived because the guard CANNOT FIRE: `to`
+    // equals the bone's last point only if a wall ends where it starts, and
+    // drawPress refuses that before commitWall is reached, treating the second
+    // press as a correction. The shared corner is already one point because a
+    // chained wall's start IS the previous end.
+    //
+    // So the line was unreachable, and a guard nothing can exercise is a
+    // claim about a case that does not exist. Removed rather than left
+    // sitting under a permanent survivor.
+    bone.points.push(pt(to));
     if (bone === pendingBone && bone.points.length >= 3) {
       drawing.outlines = drawing.outlines || [];
       drawing.outlines.push(bone);

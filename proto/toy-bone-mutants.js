@@ -29,7 +29,9 @@ const MUTANTS = [
     name: 'a one- or two-point bone reaches the file and the reader drops it',
     find: '    if (bone === pendingBone && bone.points.length >= 3) {',
     with: '    if (bone === pendingBone) {',
-    test: 'acceptance 2b' },
+    // RE-AIMED at the check written for it: a four-corner run passes three
+    // points either way, so only a run that STOPS at one wall can see this.
+    test: 'one wall in TOY is not yet a bone' },
   { file: 'MODEL.html',
     name: 'THE POLYGON NOBODY DREW: any run joins any bone on the level',
     find: "    .find(o => Number(o.levelId) === Number(levelId) && !o.masterId\n      && endsAt(o, from)) || null;",
@@ -39,12 +41,10 @@ const MUTANTS = [
     name: 'the pending bone is joined regardless of where the run starts',
     find: '    if (!bone && pendingBone\n        && Number(pendingBone.levelId) === Number(levelId)\n        && endsAt(pendingBone, from)) {',
     with: '    if (!bone && pendingBone\n        && Number(pendingBone.levelId) === Number(levelId)) {',
-    test: 'a second bone, not one polygon' },
-  { file: 'MODEL.html',
-    name: 'the shared corner is stored twice',
-    find: '    if (!same(last, to)) bone.points.push(pt(to));',
-    with: '    bone.points.push(pt(to));',
-    test: 'acceptance 2b' },
+    // RE-AIMED: the second-bone check starts its garage after the house is a
+    // finished bone, so the pending slot is empty and this never runs against
+    // it. The unfinished-run check is the one that can see it.
+    test: 'does not adopt an unfinished bone' },
   { file: 'MODEL.html',
     name: 'the bone claims a master it never came from',
     find: "      pendingBone = { id: newDrawingItemId('outline'), masterId: null,",
