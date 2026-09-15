@@ -1610,6 +1610,10 @@
      detached garage. The bone reads it to know whether there is anything
      left to offer. -->
 <script src="./building-bodies.js"></script>
+<!-- Where an ordered garage stands. A traced loop says where it goes by
+     being traced; an autobuilt one has to be told, and that is a rule about
+     buildings rather than about this page. -->
+<script src="./garage-site.js"></script>
 <script src="./profile-manager.js"></script>
 <!-- The seventeen tools as data, so the keypad renders a list rather than
      seventeen hand-written buttons that can drift apart. It reads
@@ -4108,6 +4112,19 @@
       paintSign();
       return;
     }
+    // AND ONE DETACHED GARAGE IS THE CAP (Movie's standing rule). Building
+    // a second would put two of a body the project may hold one of, and
+    // the tile is pressable because the board opens on a half-full
+    // project -- so the refusal belongs at the order, not at the tile.
+    if (picked?.entry?.needsSize
+        && window.DraftBuildingBodies.hasDetachedGarage(drawing)) {
+      signRefusal = {
+        line: 'YOU\u2019VE GOT ONE ALREADY.',
+        note: 'One house and one detached garage is the lot.',
+      };
+      paintSign();
+      return;
+    }
     fireOrder();
   });
   // Escape shuts the sign, as it shuts every other thing this page puts over
@@ -6289,7 +6306,12 @@
     return retired;
   };
 
-  const commitWall = (startPt, endPt) => {
+  // `bone: false` for a run that brings its own outline. The autobuilt
+  // garage writes a garage-flagged loop of its own, and letting the TOY
+  // bone grow a second one off the same four walls would leave the level
+  // holding two footprints for one building -- one of them saying nothing
+  // about being a garage, which is the record building-bodies.js counts.
+  const commitWall = (startPt, endPt, { bone = true } = {}) => {
     const { levelId, viewId } = onActiveLevel();
     const homeView = wallHomeView(viewId);
     const wall = {
@@ -6309,7 +6331,7 @@
     };
     drawing.walls.push(wall);
     undoStack.push({ kind: 'add', wall });
-    extendToyBone(startPt, endPt, levelId);
+    if (bone) extendToyBone(startPt, endPt, levelId);
     markDirty();
     return wall;
   };
@@ -6410,6 +6432,66 @@
       pendingBone = null;
     }
   };
+
+  // ── THE ORDERED GARAGE BUILDS ITSELF ─────────────────────────────────────
+  //
+  // Movie, 15 Sep: "now i need the garage to be AUTOBUILT ... it should
+  // make a rectangle outline of that size and then build it with the
+  // project data". This is the FIRST listener on the order seam: until now
+  // a press recorded what was wanted and drew nothing.
+  //
+  // THE OUTLINE IS THE ORDER AND THE WALLS FOLLOW IT, in that sequence,
+  // because the loop is what says "this is a detached garage of this size"
+  // -- four walls alone are a shape the file cannot tell from a shed. The
+  // walls are committed through the same commitWall the drafter's own
+  // trace uses, so the garage carries the project's wall type, heights and
+  // reference line rather than a second set of defaults invented here.
+  //
+  // WHERE IT STANDS IS garage-site.js's ANSWER, not this page's: PROJECT
+  // will place one too, and a second derivation of "beside the house" is
+  // the copy the ruling is about.
+  //
+  // ONE PRESS, ONE UNDO. Five separate steps would have Ctrl+Z leave three
+  // walls and a garage-flagged loop standing around them, which is not a
+  // state any gesture can otherwise produce.
+  const buildOrderedGarage = order => {
+    if (!drawing || !order?.entry?.needsSize || !order.size) return null;
+    const { levelId } = onActiveLevel();
+    const corners = window.DraftGarageSite.plotFor(drawing, levelId, order.size);
+    if (!corners) return null;
+    drawing.outlines = drawing.outlines || [];
+    const outline = {
+      id: newDrawingItemId('outline'),
+      masterId: null,
+      levelId,
+      garage: true,
+      // DETACHED, SAID ON THE RECORD. It is the detached family's own tile,
+      // and an outline that only implies it would not spend the detached
+      // garage's slot -- building-bodies.js reads the flag, not the family.
+      detached: true,
+      foundation: order.entry.foundation || null,
+      points: corners.map(pt => ({ x: pt.x, y: 0, z: pt.z })),
+      overriddenSrcIds: [],
+    };
+    drawing.outlines.push(outline);
+    // The four walls' own 'add' steps are dropped for the single 'built'
+    // one below. Left in, the first Ctrl+Z would take the whole garage and
+    // the next four would each hunt a wall that is already gone.
+    const mark = undoStack.length;
+    const walls = corners.map((corner, index) =>
+      commitWall(corner, corners[(index + 1) % corners.length], { bone: false }));
+    undoStack.length = mark;
+    undoStack.push({ kind: 'built', walls, outline, list: drawing.outlines });
+    markDirty();
+    paint();
+    return outline;
+  };
+  // AND THE BOARD GETS OUT OF THE WAY once it has built what was ordered:
+  // the drafter's next move is to look at the garage, and it is behind the
+  // sign.
+  window.ModelBuild.onOrder(order => {
+    if (buildOrderedGarage(order)) setSign(false);
+  });
 
   // ── STRUCTURE: PLACING A COLUMN AND A BEAM ───────────────────────────────
   //
@@ -8899,6 +8981,18 @@
         // in the step, so one branch puts a line, floor, outline, column or
         // beam back without knowing which it is holding.
         step.list.splice(Math.min(step.index, step.list.length), 0, step.item);
+      } else if (step.kind === 'built') {
+        // A WHOLE ORDER GOES BACK AT ONCE, walls and the loop that names
+        // them, and the corners it minted are retired with them -- the
+        // same reason single-wall undo retires its own.
+        step.walls.forEach(wall => {
+          const at = drawing.walls.indexOf(wall);
+          if (at >= 0) drawing.walls.splice(at, 1);
+        });
+        setSelection(selection.filter(entry => !step.walls.includes(entry.item)));
+        retirePoolCorners(step.walls.flatMap(wall => [wall.start, wall.end]));
+        const outlineAt = step.list.indexOf(step.outline);
+        if (outlineAt >= 0) step.list.splice(outlineAt, 1);
       } else if (step.kind === 'add') {
         const at = drawing.walls.indexOf(step.wall);
         if (at >= 0) drawing.walls.splice(at, 1);
