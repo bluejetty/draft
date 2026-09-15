@@ -416,7 +416,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
                   : el.dataset.assemblyFixed !== undefined ? 'assembly-fixed'
                     : el.dataset.assemblyLoose !== undefined ? 'assembly-loose'
                       : el.dataset.assemblyName !== undefined ? 'assembly-name'
-                        : el.tagName.toLowerCase());
+                        : el.dataset.levelLock !== undefined ? 'level-lock'
+                          : el.dataset.levelLockBreak !== undefined ? 'level-lock-break'
+                            : el.tagName.toLowerCase());
         return {
           buttons: [...document.querySelectorAll('button')].filter(outside)
             .map(b => b.id || b.textContent.trim()).sort(),
@@ -572,8 +574,16 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // it, and `dt-bone` is the SECOND bone, on the post. It fires the
           // same seam the foot's bone does, and the seam's own suite asserts
           // both draw nothing -- so BUILD HOUSE stays absent, twice over.
+          //
+          // COPY and PASTE joined this page with the boneyard's cross-workspace
+          // clipboard and were NOT declared here at the time -- my own commit,
+          // and the same omission #401 caught in the drive-thru series for
+          // OUTLINE. It sat undetected because that work ran the boneyard spec
+          // and not this one; the census found it the moment anything else
+          // touched the list. Declared now rather than after a third one.
           buttons: ['left-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
+            'copy', 'paste',
             'delete', 'save', 'take-over',
             'file-new', 'file-open', 'file-save-as',
             'REAL ESTATE LAYOUT', 'ESTIMATES',
@@ -643,8 +653,18 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // in the tool column, not a file picker -- the underlay row's own
           // check asserts `input[type=file]` is still zero, which is the
           // guarantee that row actually needs.
+          // LEVEL LOCK AND BREAK LOCK are the two verbs the level-lock port
+          // added, and they are DECLARED here rather than found here later.
+          // This list is the reason #401 caught OUTLINE arriving undeclared,
+          // and the order for this port says the control goes in it in the
+          // same commit for exactly that reason.
+          //
+          // They live beside ASSEMBLY rather than in the LEVELS panel: a lock
+          // is made FROM assemblies, and the assemblies are what the drafter
+          // has in his hand when he wants one.
           toolKinds: ['assembly-fixed', 'assembly-loose', 'assembly-name',
             'assembly-start', 'assembly-ungroup',
+            'level-lock', 'level-lock-break',
             'sel-filter', 'sel-mode', 'tool-key'].sort(),
         });
     });
@@ -726,12 +746,20 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       'and every option must be a real level id').toBe(true);
   });
 
-  test('LEVEL LOCKS and SOURCE LINKS — no verb, and the keys are re-emitted untouched',
+  test('SOURCE LINKS have no verb; LEVEL LOCKS now do — and the keys are re-emitted untouched',
     async ({ page }) => {
-      // GROUPS LEFT THIS ROW. It used to read "LEVEL LOCKS, GROUPS and SOURCE
-      // LINKS — no verb", and that stopped being true the moment ASSEMBLY and
-      // UNGROUP landed in the tool column. The parity table's row moved from
-      // absent to present with it.
+      // GROUPS LEFT THIS ROW, AND NOW LOCKS HAVE TOO. It first read "LEVEL
+      // LOCKS, GROUPS and SOURCE LINKS — no verb"; that stopped being true for
+      // GROUPS when ASSEMBLY and UNGROUP landed in the tool column, and it has
+      // now stopped being true for LOCKS as well: the level-lock port added
+      // LEVEL LOCK and BREAK LOCK beside them. Both times the row moved from
+      // absent to present and the TITLE moved with it.
+      //
+      // That is the whole discipline here. Teaching the control census to
+      // accept two new buttons while leaving a title that says they do not
+      // exist would be the exact failure the census exists to prevent -- a
+      // control on the page that no row mentions, silenced instead of
+      // answered. SOURCE LINKS are the only half of the original claim left.
       //
       // The carry-through assertion below still covers groups, and still
       // should: a page that HAS a verb must also hand back untouched the

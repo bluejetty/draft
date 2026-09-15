@@ -1435,6 +1435,15 @@
      treats as a fallback, not the truth, so the two boards would have drawn
      different riser counts for the same drawing after any wall-height edit. -->
 <script src="./level-assembly.js"></script>
+<!-- LEVEL LOCK holds the rules for an assembly that is the same place on the
+     plan on more than one floor: which lock holds a group, who its siblings
+     are, that a lock of one is not a lock, and that a corner shared by two
+     walls of one assembly is moved ONCE. Pinned by
+     proto/level-lock-harness.js, which a page cannot be.
+
+     No dependency of its own -- it is arithmetic over ids and points -- so it
+     sits here rather than earlier or later for any load-order reason. -->
+<script src="./level-lock.js"></script>
 <script src="./stair-geometry.js"></script>
 
 <script>
@@ -5239,6 +5248,119 @@
   const groupOf = entry => groups().find(group => (group.members || [])
     .some(m => m.type === entry.type && String(m.id) === String(entry.item?.id))) || null;
 
+  // ── LEVEL LOCK ─────────────────────────────────────────────────────────────
+  // A PORT of MODEL.dc.html's level-lock tier (:17750-17825), and the split is
+  // the module's: level-lock.js owns every RULE -- which lock holds a group,
+  // who its siblings are, that a lock of one is not a lock, that a shared
+  // corner moves once -- and this page owns the real point objects and the
+  // relinking of dragged vertices. Nothing below re-decides anything the
+  // module already decides; the order is explicit that reaching for it is the
+  // point, so the page cannot quietly grow a second copy of siblingIds the day
+  // the module changes.
+  const levelLocks = () => (drawing?.levelLocks || []);
+
+  // THE SIBLINGS ARE ON OTHER FLOORS, WHICH IS THE ENTIRE POINT, so they must
+  // be found in the WHOLE drawing and not through the level-filtered
+  // accessors. itemsOfGroup sweeps walls()/lines()/floors(), and those answer
+  // for the ACTIVE level only -- so a lock asked for its sibling's items while
+  // the drafter stands on the other floor gets an empty list, moves nothing,
+  // and reports success. The lock would then be a feature that works only when
+  // both assemblies are on the level you are already looking at, which is the
+  // one case a level lock is not for.
+  const itemsOfGroupAnywhere = group => {
+    const want = new Set((group?.members || []).map(m => `${m.type}:${m.id}`));
+    const out = [];
+    const sweep = (type, list) => (list || []).forEach(item => {
+      if (item && want.has(`${type}:${item.id}`)) out.push(item);
+    });
+    sweep('wall', drawing?.walls);
+    sweep('line', drawing?.lines);
+    sweep('floor', drawing?.floors);
+    return out;
+  };
+
+  const levelLockFor = group =>
+    (group ? window.DraftLevelLock.lockFor(levelLocks(), group.id) : null);
+
+  const levelLockSiblings = group => (group
+    ? window.DraftLevelLock.siblingIds(levelLocks(), group.id)
+      .map(id => groups().find(other => other.id === id))
+      .filter(Boolean)
+    : []);
+
+  // EVERY POINT ONCE. A corner shared by two walls of one assembly is ONE
+  // object in the vertex pool, so walking items and moving their points would
+  // move it twice and tear the assembly apart at its own corners. uniquePoints
+  // is identity-based and is exactly the instrument for it -- which is why it
+  // is the module's and not re-rolled here.
+  const translateItemsBy = (items, dx, dz) => {
+    const points = window.DraftLevelLock.uniquePoints(items);
+    window.DraftLevelLock.translate(points, dx, dz);
+    // The half that stays here: a dragged linked vertex re-measures its master
+    // offset rather than dropping the link, same as every other move on this
+    // page. The module owns geometry, not the boneyard.
+    points.forEach(relinkVertex);
+    return points.length;
+  };
+
+  // MOVE THE SIBLINGS, and only the siblings. Called with the delta the member
+  // group has ALREADY moved by, so the mover is never moved twice: the caller
+  // owns its own move and this owns the others. A check that watches only the
+  // siblings passes on a page that moves the mover at double speed, which is
+  // why the acceptance asserts the mover's own delta too.
+  //
+  // PLAN ONLY. Per-floor properties -- heights, the storey a wall sits on --
+  // stay per-floor: a lock says "the same place on the plan", not "the same
+  // storey", which is the whole reason it spans storeys at all.
+  const applyLevelLockDelta = (group, dx, dz) => {
+    if (!group || (Math.abs(dx) < 1e-9 && Math.abs(dz) < 1e-9)) return 0;
+    const siblings = levelLockSiblings(group);
+    if (!siblings.length) return 0;
+    let moved = 0;
+    siblings.forEach(sibling => {
+      moved += translateItemsBy(itemsOfGroupAnywhere(sibling), dx, dz);
+    });
+    return moved;
+  };
+
+  // BREAKING IS AN EXPLICIT ACT. A drag never breaks a lock and neither does
+  // distance -- the same principle as storey detachment in the BONE model. If
+  // the drafter has not said so the lock holds, however far apart the
+  // assemblies end up.
+  //
+  // It REMOVES rather than marks: a broken lock and no lock behave
+  // identically, and one of them is a state to carry, migrate and get wrong.
+  const breakLevelLock = lock => {
+    if (!lock) return false;
+    const before = levelLocks().length;
+    drawing.levelLocks = window.DraftLevelLock.breakLock(levelLocks(), lock.id);
+    if (drawing.levelLocks.length === before) return false;
+    // ON THE STRIP, NOT IN A MODAL. MODEL.dc.html says this through
+    // drawingMessage -- a line, not a door -- and a modal here would be the
+    // page stopping the drafter to tell him the thing he just asked for
+    // happened. It also sat over the SAVE button afterwards, which is how it
+    // was caught.
+    sayOnStrip(`${lock.name} broken — each floor's assembly moves alone now.`);
+    markDirty();
+    return true;
+  };
+
+  // A LOCK OF ONE IS NOT A LOCK, and makeLock refuses it -- the same rule
+  // drawing-format.js enforces on load, so this verb cannot create what a
+  // reload would drop. Refused HERE by asking the module rather than by
+  // counting members here, which is the check the acceptance names.
+  const lockGroupsAcrossLevels = (chosen, name = 'LEVEL LOCK') => {
+    const nextId = Number.isInteger(drawing?.nextLevelLockId)
+      ? drawing.nextLevelLockId : 1;
+    const lock = window.DraftLevelLock.makeLock(
+      `lock-${nextId}`, name, (chosen || []).map(group => group?.id));
+    if (!lock) return null;
+    drawing.nextLevelLockId = nextId + 1;
+    (drawing.levelLocks || (drawing.levelLocks = [])).push(lock);
+    markDirty();
+    return lock;
+  };
+
   const selectedGroups = () => groups().filter(group => (group.members || [])
     .some(m => selection.some(entry =>
       entry.type === m.type && String(entry.item?.id) === String(m.id))));
@@ -7419,9 +7541,45 @@
 
     const unBtn = document.createElement('button');
     unBtn.type = 'button';
-    unBtn.className = 'sel-chip asm-wide';
+    unBtn.className = 'sel-chip';
     unBtn.dataset.assemblyUngroup = '';
     unBtn.addEventListener('click', ungroupSelected);
+
+    // LEVEL LOCK LIVES BESIDE ASSEMBLY, not in the LEVELS panel. The order
+    // leaves the placement to me and this is the reason: a lock is made FROM
+    // assemblies and it is the assembly the drafter has in his hand when he
+    // wants one. The LEVELS panel knows about storeys, not about which
+    // assembly on each storey is the same room -- putting the verb there would
+    // mean picking the assemblies somewhere else and then walking to another
+    // panel to join them.
+    const lockBtn = document.createElement('button');
+    lockBtn.type = 'button';
+    lockBtn.className = 'sel-chip';
+    lockBtn.dataset.levelLock = '';
+    lockBtn.addEventListener('click', () => {
+      const chosen = selectedGroups();
+      // A LOCK OF ONE IS NOT A LOCK and the MODULE refuses it -- this verb
+      // hands it the list and believes the answer, rather than counting to two
+      // here. Counting here is how the page grows a second, weaker rule that
+      // disagrees with the loader the day one of them changes.
+      const lock = lockGroupsAcrossLevels(chosen);
+      if (!lock) {
+        sayOnStrip('a level lock needs two assemblies — one has nothing to '
+          + 'be held against');
+        return;
+      }
+      syncAssembly();
+      paint();
+    });
+
+    const breakBtn = document.createElement('button');
+    breakBtn.type = 'button';
+    breakBtn.className = 'sel-chip';
+    breakBtn.dataset.levelLockBreak = '';
+    breakBtn.addEventListener('click', () => {
+      const lock = selectedGroups().map(levelLockFor).find(Boolean);
+      if (lock && breakLevelLock(lock)) { syncAssembly(); paint(); }
+    });
 
     const help = document.createElement('div');
     help.className = 'sel-help';
@@ -7460,7 +7618,19 @@
     row.append(fixedBtn, looseBtn);
     dialog.append(nameInput, row);
 
-    box.append(title, asmBtn, unBtn, help, dialog);
+    // ONE ROW FOR THE THREE VERBS THAT ACT ON AN ASSEMBLY THAT ALREADY
+    // EXISTS. Not a tidy: two extra full-width rows grew the right panel until
+    // it covered world (4,-3), and model-html-draw-delete caught it as "the
+    // tap reached the right sidebar, not the canvas" -- the same shape as the
+    // instrument strip overflowing at 1280, one tier down. The panel was
+    // already at that edge and one row tipped it.
+    //
+    // UNGROUP keeps its own width when it is alone, because BREAK LOCK is
+    // hidden until there is a lock to break.
+    const actRow = document.createElement('div');
+    actRow.className = 'sel-row';
+    actRow.append(unBtn, lockBtn, breakBtn);
+    box.append(title, asmBtn, actRow, help, dialog);
     slot.append(box);
 
     syncAssembly = () => {
@@ -7479,6 +7649,27 @@
       unBtn.textContent = 'UNGROUP';
       unBtn.disabled = !on || held.length === 0;
       unBtn.hidden = held.length === 0;
+      // THE LOCK VERBS ARE SYNCED HERE, in the same pass that owns these
+      // buttons' state. Two places deciding one button's state is how they
+      // drift -- the boneyard card cost an hour to exactly that.
+      const lockedNow = held.map(levelLockFor).find(Boolean) || null;
+      lockBtn.textContent = 'LEVEL LOCK';
+      // OFFERED WITH ONE, AND REFUSED BY THE MODULE. Disabling this at
+      // `held.length < 2` would be THE PAGE COUNTING TO TWO -- a second, weaker
+      // copy of makeLock's rule, sitting where it can drift from the loader
+      // that enforces the same thing. The gate proved it: with the count here,
+      // a mutant replacing makeLock with the page's own maker SURVIVED,
+      // because the button never fired and nothing ever asked the module.
+      //
+      // So the verb is live whenever an assembly is held, the module refuses a
+      // lock of one, and the strip says why. A drafter finds out what a lock
+      // needs by being told, rather than by a grey button that explains
+      // nothing.
+      lockBtn.disabled = !on || held.length === 0 || !!lockedNow;
+      lockBtn.hidden = held.length === 0;
+      breakBtn.textContent = lockedNow ? `BREAK ${lockedNow.name}` : 'BREAK LOCK';
+      breakBtn.disabled = !on || !lockedNow;
+      breakBtn.hidden = !lockedNow;
       // The old page's own two sentences (:23631-23633), and the red is its
       // own too: nothing selected is the state that stops the button working.
       help.textContent = !on
@@ -7800,6 +7991,51 @@
     if (corner || body) {
       // A grabbed corner or wall takes the gesture whole: no pan starts, so
       // the sheet cannot slide out from under geometry being placed.
+      // A RIGID ASSEMBLY MOVES WHOLE, and until now this page wrote that it
+      // was rigid and then ignored it. createAssembly stamps `fixed` and
+      // `stretchBehavior: 'rigid'` (:6573) and NOTHING READ EITHER -- so a
+      // drafter who ticked "stays rigid" got a group whose walls still moved
+      // one at a time, and the tick did nothing at all.
+      //
+      // This is the gesture the level-lock port needs: MODEL.dc.html gates the
+      // lock on `sd.rigid && sd.group` (:7059), a drag armed only when a node
+      // of a rigid assembly is grabbed (:11142). Without it applyLevelLockDelta
+      // would be a function with no caller, which the order forbids for the
+      // same reason the propagation port had to arrive with its drag.
+      //
+      // A CORNER PRESS STILL TAKES THE CORNER. Reshaping one node of a rigid
+      // assembly is a different question from moving it, and it is not this
+      // order's to answer -- MODEL.dc.html refuses that press outright
+      // (:10956) and this page has never refused it. Left as it was rather
+      // than changed in passing.
+      const rigidGroup = (!corner && body)
+        ? groups().find(g => g?.fixed === true
+            && (g.members || []).some(m => m.type === 'wall'
+              && String(m.id) === String(body.id)))
+        : null;
+      if (rigidGroup) {
+        // EVERY POINT ONCE, through the module, for the reason uniquePoints
+        // exists: a corner shared by two walls of this assembly is one object,
+        // and moving it twice tears the assembly at its own corners.
+        const pts = window.DraftLevelLock.uniquePoints(
+          itemsOfGroupAnywhere(rigidGroup));
+        moveDrag = {
+          kind: 'group', body, group: rigidGroup, grab: at,
+          before: pts.map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ })),
+          // THE SIBLINGS GO IN THE UNDO SNAPSHOT TOO, taken here at arm time
+          // while nothing has moved yet. Undo restores from `before`, and a
+          // snapshot holding only the assembly the drafter grabbed would put
+          // that one back and leave every floor the lock carried sitting where
+          // the drag left it -- one Ctrl+Z, two buildings, no longer locked to
+          // each other in fact while the file still says they are.
+          lockBefore: levelLockSiblings(rigidGroup).flatMap(sib =>
+            window.DraftLevelLock.uniquePoints(itemsOfGroupAnywhere(sib))
+              .map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ }))),
+          sx: e.clientX, sy: e.clientY, active: false,
+        };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
       const ends = corner ? [corner] : movingEnds(body);
       moveDrag = {
         kind: corner ? 'corner' : 'wall',
@@ -7844,6 +8080,30 @@
       if (md.active) {
         const rect = canvas.getBoundingClientRect();
         const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        if (md.kind === 'group') {
+          // THE ASSEMBLY MOVES BY THE DELTA, measured absolutely from the
+          // grab for the same reason the wall branch below does it: every
+          // point travels exactly the same distance, rather than the same
+          // distance to within the float drift of a hundred pointermove
+          // events. Each point is written from its OWN start, so the assembly
+          // keeps its shape no matter how many events the drag took.
+          const dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+          md.before.forEach(b => relinkVertex(b.vtx));
+          // THE LOCKED SIBLINGS DO NOT MOVE HERE. They move ONCE, on the
+          // release, by the drag's TOTAL displacement -- which is what
+          // MODEL.dc.html does (:7059, inside the pointerup handler at :6973,
+          // with `sd.anchor.x - sd.starts.get(sd.anchor).x`).
+          //
+          // Worth naming, because the call site reads like a move handler and
+          // was read as one: the delta DC passes is the total from the drag's
+          // start, so calling it per pointermove would translate the siblings
+          // by the whole distance again on every event and run them away
+          // exponentially. Release is not a style choice there, it is what
+          // that delta means.
+          paint();
+          return;
+        }
         if (md.kind === 'corner') {
           // The corner goes TO the cursor, not by the cursor's delta — the old
           // page's node drag writes the point through (MODEL.dc.html:10848),
@@ -7965,12 +8225,26 @@
       // A grab that never armed moved nothing, so there is nothing to undo —
       // and a snapshot pushed for it would make one Ctrl+Z do nothing visible.
       if (md.active) {
-        undoStack.push({ kind: 'move', before: md.before });
+        // Both halves of a locked move go into ONE history entry: the drafter
+        // made one gesture, so one Ctrl+Z undoes all of it. See lockBefore.
+        undoStack.push({ kind: 'move',
+          before: md.lockBefore ? [...md.before, ...md.lockBefore] : md.before });
         markDirty();
         // §5: the bone moved, so what the storey above covers has changed and
         // the roofs under it are stale. Recomputed on the RELEASE, not on
         // every pointermove -- a roof record per mouse event would be hundreds
         // across one drag.
+        // THE LOCKED SIBLINGS MOVE NOW, once, by the whole distance the
+        // assembly travelled -- measured from the snapshot taken when the drag
+        // armed, which is the same total MODEL.dc.html reads off its anchor.
+        //
+        // On the RELEASE for the same reason §4's propagation and §5's roofs
+        // are: a drag is hundreds of pointermove events and each one would
+        // otherwise re-walk every point of every sibling assembly.
+        if (md.kind === 'group' && md.group && md.before.length) {
+          const a = md.before[0];
+          applyLevelLockDelta(md.group, a.vtx.x - a.x, a.vtx.z - a.z);
+        }
         if (board === 'toy') { boneFollows(md.before, md.body?.levelId); rebuildRoofs(); }
         // §4: A MASTER POINT MOVED, so every level that follows it moves now.
         // On the RELEASE rather than each pointermove, for §5's reason: the
