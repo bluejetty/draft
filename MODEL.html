@@ -1909,8 +1909,23 @@
   // available along the left edge -- model-toy-draw.spec.js opens without
   // ?left=1 for exactly that reason. One thing at a time; the bars are what
   // #401 is red over.
+  // SET WHILE THE PRESENTATION IS BEING PHOTOGRAPHED. See chromeInsets.
+  let shootingPaper = false;
+
   const chromeInsets = () => {
-    if (thumbTarget) return { top: 0, bottom: 0 };
+    // NO BAR IS OVER A PICTURE. Two callers frame an IMAGE rather than the
+    // sheet: paintPlanThumb, which borrows fit() for an 82x54 seat, and
+    // wholePlanShot, which fits the plan and photographs the canvas for page
+    // two of the presentation. Neither result has a bar anywhere near it --
+    // the bars are DOM elements sitting ON TOP of the canvas, so they are not
+    // in the PNG and never were -- and insetting either one frames it around
+    // furniture that is not in the room.
+    //
+    // MEASURED, because "the plan prints a bit smaller" is not something
+    // anyone spots by looking: with the insets applied the walls spanned
+    // 76.4% of the printed page's height against 86% without them, a tenth
+    // of the sheet given to white bands at the top and bottom.
+    if (thumbTarget || shootingPaper) return { top: 0, bottom: 0 };
     const tall = id => {
       const el = document.getElementById(id);
       if (!el || el.hidden) return 0;
@@ -4589,11 +4604,16 @@
   // never asked for, with their own pan and zoom gone.
   const wholePlanShot = () => {
     const saved = { cx: view.cx, cz: view.cz, scale: view.scale };
+    // The bars are not in the photograph, so they are not in the framing
+    // either -- chromeInsets reads this. Cleared BEFORE the restoring paint
+    // below, so the drafter's own view comes back framed the way it was.
+    shootingPaper = true;
     try {
       fit(true);
       paint();
       return canvas.toDataURL('image/png');
     } finally {
+      shootingPaper = false;
       view.cx = saved.cx; view.cz = saved.cz; view.scale = saved.scale;
       paint();
     }

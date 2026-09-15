@@ -209,3 +209,101 @@ test('a seat thumbnail is NOT inset — the bars are not over an 82x54 canvas',
       + 'offscreen canvas, so the bars\' heights are nothing to do with them')
       .toEqual(tallBars);
   });
+
+// ── AND THE PRESENTATION IS NOT FRAMED AROUND THE BARS EITHER ────────────────
+//
+// wholePlanShot fits the plan and photographs the canvas for page two of the
+// presentation (PRINTSCREEN). A canvas photograph contains canvas pixels; the
+// two dark bars are DOM elements sitting ON TOP of the canvas, so they are not
+// in the PNG and never were. Insetting that fit frames the printed plan around
+// furniture that is not in the room, and the plan comes out smaller with a
+// white band across the top and bottom of the sheet.
+//
+// Nothing in the printscreen spec can see it -- that file asserts page two
+// differs from page one and that the pictures are daylight, neither of which
+// changes -- and "the plan prints a bit smaller" is not a thing anyone spots
+// by looking.
+//
+// MEASURED IN DARK INK, and the first version of this check was WRONG in a way
+// worth keeping. It counted pixels with alpha above 8, which is every pixel:
+// paint() opens with a fillRect over the whole canvas, so the capture is
+// opaque corner to corner and the "span" was 100% of the height whatever the
+// fit did. It passed with no gate at all. Counting pixels that merely DIFFER
+// from the corner colour failed the same way for a different reason -- this
+// fixture has no drawingOrigin, so the datum falls back to 0,0 and the grid
+// draws across the whole sheet.
+//
+// The walls are the only dark thing in the picture. Luminance 240 is the
+// ground and the grid; the wall ink sits at 32-64 with almost nothing between.
+// So: rows containing a pixel under 64, top to bottom.
+//
+//     insets applied   walls span 76.4% of the page  (rows 87..636 of 720)
+//     insets gated     walls span 86.7%              (rows 48..671 of 720)
+//
+// 86% is what fit()'s own margin is for. A tenth of the sheet was going to
+// white bands.
+test('the printed whole-plan page is not letterboxed by bars that are not in the picture',
+  async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__printCalls = 0;
+      window.print = () => {
+        window.__printCalls += 1;
+        window.__printedHtml = document.getElementById('presentation')?.outerHTML || '';
+      };
+    });
+    // THE ORDINARY VIEWPORT, not the short one the reach checks use. At
+    // 1280x720 the reach bug was five pixels and arguable; the same insets
+    // take a tenth of the printed page, which is a separate consequence
+    // rather than the same one restated.
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await h.openModel(page, { webgl: false });
+    await page.evaluate(async ({ bucket, f }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(f)], 'drawing.json',
+          { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, f: plan });
+    await page.goto('/MODEL.html');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+
+    await page.locator('#printscreen').click();
+    await expect.poll(() => page.evaluate(() => window.__printCalls || 0))
+      .toBeGreaterThan(0);
+
+    const span = await page.evaluate(() => new Promise((done, fail) => {
+      const doc = new DOMParser().parseFromString(window.__printedHtml, 'text/html');
+      const srcs = [...doc.querySelectorAll('.pres-art img')]
+        .map(i => i.getAttribute('src'));
+      if (srcs.length < 2) { fail(new Error('no page-two picture to measure')); return; }
+      const img = new Image();
+      img.onload = () => {
+        const pad = document.createElement('canvas');
+        pad.width = img.width; pad.height = img.height;
+        const pen = pad.getContext('2d');
+        pen.drawImage(img, 0, 0);
+        const { data } = pen.getImageData(0, 0, img.width, img.height);
+        let top = -1, bot = -1, dark = 0;
+        for (let y = 0; y < img.height; y++) {
+          let ink = false;
+          for (let x = 0; x < img.width; x++) {
+            const i = (y * img.width + x) * 4;
+            const L = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+            if (L < 64) { ink = true; dark++; }
+          }
+          if (ink) { if (top < 0) top = y; bot = y; }
+        }
+        done({ top, bot, dark, h: img.height,
+          frac: top < 0 ? 0 : (bot - top + 1) / img.height });
+      };
+      img.src = srcs[1];                       // page 2: the whole plan
+    }));
+
+    // The picture has walls in it at all -- a blank capture would otherwise
+    // report a span of 0 and sail past a "greater than" line.
+    expect(span.dark, 'the printed page carries wall ink').toBeGreaterThan(500);
+    // 0.86 is what an uninset fit gives; insetting drops it to 0.76. The line
+    // sits between the two and near neither.
+    expect(span.frac, `the plan fills ${(span.frac * 100).toFixed(1)}% of the `
+      + `printed page's height (rows ${span.top}..${span.bot} of ${span.h}); `
+      + 'uninset gives 86.7%, insetting gives 76.4%')
+      .toBeGreaterThan(0.82);
+  });
