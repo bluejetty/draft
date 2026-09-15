@@ -90,6 +90,15 @@ test('PRINTSCREEN sits after the stacks and before the instruments', async ({ pa
       ruler: all.indexOf(document.getElementById('strip-ruler')),
     };
   });
+  // FOUND FIRST, ORDERED SECOND. `indexOf` answers -1 for an element that is
+  // not in the bar -- because it moved out, or because the selector stopped
+  // matching it -- and -1 is less than every real seat, so `units < toy`
+  // passes loudest exactly when UNITS has fallen off the bar altogether.
+  // Two of these four were moved by the same commit that re-ordered them.
+  for (const [name, at] of Object.entries(order)) {
+    expect(at, `${name} is not on the top bar at all`).toBeGreaterThanOrEqual(0);
+  }
+
   // Movie re-ordered the bar on 15 Sep: the stacks first, PRINTSCREEN "by
   // itself" after them, the instruments centred past it.
   expect(order.units).toBeLessThan(order.toy);

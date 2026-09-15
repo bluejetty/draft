@@ -310,6 +310,7 @@ test('every control is a tenant of a bar, and the counters sit above the foot',
       const box = id => document.getElementById(id).getBoundingClientRect();
       return {
         settings: owner('settings-corner'),
+        units: owner('units-corner'),
         mode: owner('mode-corner'),
         file: owner('file-row'),
         page: owner('page-row'),
@@ -328,6 +329,13 @@ test('every control is a tenant of a bar, and the counters sit above the foot',
     // is first and not merely present.
     expect(where.topRow, 'the old top row is gone, not hidden').toBe(false);
     expect(where.settings).toBe('strip');
+    // THE UNIT STACK IS ITS OWN TENANT NOW (Movie, 15 Sep). It used to be one
+    // button inside the settings corner, so "the settings corner is first"
+    // used to place it; a separate corner has to be placed on its own or the
+    // sentence above stops being about anything this test reads.
+    expect(where.units).toBe('strip');
+    expect(where.stripOrder.indexOf('units-corner'))
+      .toBe(where.stripOrder.indexOf('settings-corner') + 1);
     expect(where.mode).toBe('strip');
     expect(where.file).toBe('strip');
     expect(where.stripOrder.indexOf('settings-corner')).toBe(0);
