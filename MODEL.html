@@ -664,12 +664,18 @@
      instrument strip got when PRINTSCREEN overflowed it at 1280: bound the
      furniture and let its contents yield, rather than trim whichever tenant
      happens to be longest this week.
-     288px is the seat grid's own width (two 82px seats, their gaps and the
-     panel's padding) -- the widest thing the rail has to show properly. Past
-     that a level name ellipsises, which is a label the drafter can still read
-     the start of, against a panel eating the sheet, which he cannot draw on. */
+     277px IS MEASURED, NOT ESTIMATED, and the difference mattered. I first
+     bounded this at 288 -- the seat grid's own width, worked out from two 82px
+     seats and their gaps -- and model-change-broadcast still failed: at 288 the
+     rail's left edge sits at x=964, and a tap aimed at world (6,-2) lands at
+     967, three pixels inside it. 277 is what the rail measures on main, where
+     that tap clears by eight. An estimate that is nearly right is a panel that
+     nearly stays off the sheet.
+     Past this width a level name ellipsises -- a label the drafter can still
+     read the start of, against a panel eating the drawing, which he cannot
+     draw on. */
   #right-rail { right:28px; border-left:1px solid var(--edge-panel);
-    max-width:288px; }
+    max-width:277px; }
   /* THE RIGHT PANEL COLLAPSES TO A SEAT, NOT TO NOTHING (Devin, 12 Sep).
      MODEL.dc.html's rail comment (:1766) says the open LEVELS panel covers
      only the outer column and "the inner column always keeps its seat, so
@@ -1115,6 +1121,26 @@
          places, because it is a verb. -->
     <button id="delete" type="button" data-delete hidden
       title="Delete what is selected">DELETE</button>
+  <!-- COPY AND PASTE ACROSS WORKSPACES. Movie, 14 Sep: "copy and paste stuff
+       in there that won't show on the plan (to save for later / reference)".
+       What is held survives a change of level or shelf -- that outliving is
+       the one genuinely new thing in the boneyard order, since DC's own copy
+       is a single gesture inside one workspace.
+
+       BESIDE DELETE, and they were NOT when this branch rebased. Resolving the
+       MODEL.html conflict by hand put them after the drive-thru sign's frame
+       but still INSIDE #drivethru -- so they inherited a shut modal's
+       `visibility:hidden` and sat at y=1303, off the bottom of the sheet.
+       Their `hidden` PROPERTY was false the whole time, which is why nothing
+       reading the property noticed; model-boneyard caught it because it asks
+       for real visibility, and it is the only reason this did not ship.
+
+       HIDDEN WHEN THEY HAVE NOTHING TO DO, like DELETE beside them: a verb
+       that looks live and does nothing is worse than a gap. -->
+  <button id="copy" type="button" data-copy hidden
+    title="Copy what is selected — paste it on any level or shelf">COPY</button>
+  <button id="paste" type="button" data-paste hidden
+    title="Paste the copy here, on whatever level or shelf is showing">PASTE</button>
   </div>
   <div class="grow"></div>
   <!-- THE SHEETS THAT COME OFF THIS MODEL, far right (Movie, 15 Sep). Two
@@ -1181,24 +1207,6 @@
       <img src="./assets/bone-red.png" alt="BONE — build it" />
     </button>
   </div>
-  <!-- COPY AND PASTE ACROSS WORKSPACES. Movie, 14 Sep: "copy and paste stuff
-       in there that won't show on the plan (to save for later / reference)".
-       What is held survives a change of level or shelf -- that outliving is
-       the one genuinely new thing in the boneyard order, since DC's own copy
-       is a single gesture inside one workspace.
-
-       HIDDEN WHEN THEY HAVE NOTHING TO DO, like DELETE above them: a verb
-       that looks live and does nothing is worse than a gap.
-
-       DELETE IS NOT RE-ADDED HERE. It already sits with the house strip on
-       main, where the chrome shell put it; carrying my side of this conflict
-       whole would have put a SECOND element with id="delete" on the page --
-       two controls answering one selector, and every check that asserts the
-       one DELETE still passing on the first one it found. -->
-  <button id="copy" type="button" data-copy hidden
-    title="Copy what is selected — paste it on any level or shelf">COPY</button>
-  <button id="paste" type="button" data-paste hidden
-    title="Paste the copy here, on whatever level or shelf is showing">PASTE</button>
 </div>
 <!-- THE LENGTH THE DRAFTER CAN SEE WHILE HE DRAWS. Movie, 13 Sep: "show the
      line length on screen to the user during the line drawing when their

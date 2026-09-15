@@ -453,10 +453,13 @@ test('the right panel stays inside its bound, and keeps every control it holds',
     expect(verdict.missing, 'there is a right rail to measure').toBeFalsy();
     expect(verdict.controls, 'and it holds controls worth protecting')
       .toBeGreaterThan(0);
-    // 288px is the bound MODEL.html sets, and the number is the seat grid's own
-    // width -- the widest thing the rail has to show properly.
-    expect(verdict.w, `the right panel is ${verdict.w}px wide; bounded at 288`)
-      .toBeLessThanOrEqual(288);
+    // 277px is the bound MODEL.html sets, and it is MEASURED -- the width the
+    // rail has on main, where every tap in the suite clears it. An earlier
+    // estimate of 288 left the edge three pixels over a tap in
+    // model-change-broadcast, which is the whole reason this number is not
+    // worked out from the seat grid.
+    expect(verdict.w, `the right panel is ${verdict.w}px wide; bounded at 277`)
+      .toBeLessThanOrEqual(277);
     // NOT CLIPPED INTO UNREACHABILITY. A control whose box ends past the
     // panel's own right edge is a control the drafter cannot press.
     expect(verdict.escaped,

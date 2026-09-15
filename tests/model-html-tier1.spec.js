@@ -246,7 +246,15 @@ test.describe('MODEL.html tier 1', () => {
       './shared-file-store.js', './wall-types.js', './formatters.js',
       './cut-view.js', './drawing-format.js', './render-2d.js',
       './fixture-geometry.js', './closets.js',
-      './cut-marks.js', './build-menu.js', './profile-manager.js',
+      './cut-marks.js', './build-menu.js',
+      // building-bodies.js is DEVIN'S, carried in this branch with his
+      // garage-sizing commits: what counts as "a house already stands" and "a
+      // garage already stands", which PROJECT and the drive-thru tiles both
+      // ask. Declared here rather than left to his own PR, because it is THIS
+      // branch that loads it -- an undeclared dependency is undeclared no
+      // matter whose commit brought it.
+      './building-bodies.js',
+      './profile-manager.js',
       // ADDED ON PURPOSE, which is what this list is for. tool-roster.js is
       // the seventeen tools as data -- 80 lines, no dependency of its own, and
       // it exists so the tool column renders a list instead of seventeen
@@ -280,7 +288,19 @@ test.describe('MODEL.html tier 1', () => {
       // which is the kind of entry to watch. A transitive dependency is still
       // a dependency, and the honest place to say so is here.
       './room-standards.js', './toy-constraints.js', './toy-context.js',
-      './level-assembly.js', './stair-geometry.js',
+      './level-assembly.js',
+      // AND THIS LIST CAUGHT TWO MORE, the third time it has earned its keep
+      // and the reason it stays an EXACT list rather than a `toContain` --
+      // which would have let both of these in silently.
+      //
+      // level-lock.js (86 lines, mine) holds the rules for an assembly that
+      // stands in the same place on more than one floor: which lock holds a
+      // group, who its siblings are, that a lock of one is not a lock, that a
+      // shared corner moves once. MODEL.dc.html runs the same module, so this
+      // is cut-view.js's bargain again -- a second copy would be two pages
+      // disagreeing about what a lock does. No dependency of its own; it is
+      // arithmetic over ids and points.
+      './level-lock.js', './stair-geometry.js',
     ]);
   });
 

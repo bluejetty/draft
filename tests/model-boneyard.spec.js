@@ -223,11 +223,10 @@ const copyBtn = page => page.locator('[data-copy]');
 const pasteBtn = page => page.locator('[data-paste]');
 
 const clickWorld = async (page, x, z) => {
-  const box = await page.locator('#plan').boundingBox();
-  const scale = await page.evaluate(() => Number(
-    /scale ([\d.]+) px\/ft/.exec(document.getElementById('readout').textContent)[1]));
-  await page.mouse.click(box.x + box.width / 2 + x * scale,
-    box.y + box.height / 2 + z * scale);
+  // ASKS THE PAGE WHERE THE POINT IS. See dragMaster below for what computing
+  // it here costs.
+  const { at } = await h.planFrame(page);
+  await page.mouse.click(...at(x, z));
   await page.waitForTimeout(80);
 };
 
@@ -591,20 +590,25 @@ const copyOn = levelId => ({
 // On the boneyard the master IS everything drawn, so its own bounds give the
 // centre exactly.
 const dragMaster = async (page, from, to) => {
-  const box = await page.locator('#plan').boundingBox();
-  const scale = await page.evaluate(() => Number(
-    /scale ([\d.]+) px\/ft/.exec(document.getElementById('readout').textContent)[1]));
-  // THE CENTRE IS THE ORIGIN HERE, and that is measured rather than assumed.
-  // fit() runs at LOAD, against everything drawn -- which at load is the
-  // LEVEL's geometry, since the page opens on a level and not on the boneyard.
-  // The fixture's four walls are symmetric about (0,0), so the centre is the
-  // origin and stays there: switching to a shelf does not re-fit.
+  // THE PAGE IS ASKED WHERE THE POINT IS, and this helper has now been wrong
+  // twice for two different reasons -- which is why it no longer works it out.
   //
-  // I first "fixed" a failure by computing the centre from the MASTER's
-  // bounds, which is what fit() would use if the boneyard were what it had
-  // fitted to. It is not, and that made the mapping wrong in a second way.
-  const at = (x, z) => [box.x + box.width / 2 + x * scale,
-    box.y + box.height / 2 + z * scale];
+  // FIRST it computed the centre from the MASTER's bounds, which is what fit()
+  // would use if the boneyard were what it had fitted to. It is not: fit()
+  // runs at LOAD, against the LEVEL's geometry, because the page opens on a
+  // level. That was replaced by "the centre is the origin", measured from the
+  // fixture being symmetric about (0,0).
+  //
+  // THEN THE ORIGIN STOPPED BEING THE CENTRE. fit() insets the view for the
+  // two dark bars, so the camera sits off-centre by half their difference --
+  // and when the drive-thru commits changed a bar's height, that offset moved
+  // and every press this helper aimed drifted with it. The master landed at
+  // -12.072 instead of -12: not the propagation, the aim.
+  //
+  // planFrame reads the camera the page publishes on #plan. A mapping worked
+  // out here is a second copy of fit()'s arithmetic, and it has now drifted
+  // from the first copy twice.
+  const { at } = await h.planFrame(page);
   // SELECTION FIRST, then the grab -- the page's own rule for a corner.
   await page.mouse.click(...at(...from));
   await page.waitForTimeout(80);
