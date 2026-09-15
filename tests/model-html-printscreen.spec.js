@@ -181,6 +181,10 @@ test('the logo follows the ROUGH switch', async ({ page }) => {
 // that way is this one, and nothing else in the suite would notice it.
 test('the drafter\'s own view is where it was afterwards', async ({ page }) => {
   await openHouse(page);
+  // DAY, so that page 1 and the screen buffer are comparable byte for byte:
+  // at night the presentation is painted in daylight on purpose, and this
+  // check is about the FRAMING rather than the colours.
+  await page.locator('#mode-corner [data-skin-mode="day"]').click();
   await settleRail(page);
   // Somewhere that is deliberately NOT the fit, so a restore that quietly
   // refits shows up.
@@ -205,6 +209,61 @@ test('the drafter\'s own view is where it was afterwards', async ({ page }) => {
   // would mean one of the two pages is a copy of the other.
   expect(shots[0]).toBe(before);
   expect(shots[1]).not.toBe(shots[0]);
+});
+
+// DAYLIGHT (Movie, 15 Sep). The paper was always white; the PICTURES carried
+// whatever skin the drafter was in, so a drafter working at night handed a
+// client three black rectangles. The sheet is a presentation, and a night
+// screen photographed onto paper is not one.
+test('the pictures are daylight even when the drafter is working at night', async ({ page }) => {
+  await openHouse(page);
+  await settleRail(page);
+  await expect(page.locator('#mode-corner [data-skin-mode="night"]'))
+    .toHaveAttribute('aria-pressed', 'true');
+
+  const nightScreen = await planBuffer(page);
+  await page.locator('#printscreen').click();
+
+  // Read the printed PNGs back through a canvas, COMPOSITED OVER WHITE,
+  // because white is what they land on: the plan seats paint on transparency
+  // and carry only their ink, so judging their pixels raw calls a perfectly
+  // good tile black. What is being caught is the night skin's dark GROUND
+  // being painted into the picture, and paper is where that shows.
+  const light = await page.evaluate(async () => {
+    const doc = new DOMParser().parseFromString(window.__printedHtml, 'text/html');
+    const srcs = [...doc.querySelectorAll('.pres-art img, .pres-tile img')]
+      .map(img => img.getAttribute('src'));
+    const pad = document.createElement('canvas');
+    const pen = pad.getContext('2d');
+    return Promise.all(srcs.map(src => new Promise(done => {
+      const img = new Image();
+      img.onload = () => {
+        pad.width = img.width; pad.height = img.height;
+        pen.fillStyle = '#fff';
+        pen.fillRect(0, 0, img.width, img.height);
+        pen.drawImage(img, 0, 0);
+        const { data } = pen.getImageData(0, 0, img.width, img.height);
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 4) sum += data[i] + data[i + 1] + data[i + 2];
+        done(sum / (data.length / 4) / 3);
+      };
+      img.src = src;
+    })));
+  });
+
+  expect(light.length, 'no pictures to judge').toBeGreaterThan(2);
+  light.forEach((mean, i) =>
+    expect(mean, `picture ${i + 1} printed on a night ground`).toBeGreaterThan(160));
+
+  // AND THE DRAFTER IS STILL AT NIGHT. Taking the picture is not the drafter
+  // changing their mind about the skin, so the switch, the stored choice and
+  // the screen all have to be where they were left.
+  await expect(page.locator('#mode-corner [data-skin-mode="night"]'))
+    .toHaveAttribute('aria-pressed', 'true');
+  expect(await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('draft-skin') || '{}').mode)).not.toBe('day');
+  expect(await planBuffer(page),
+    'the drafter was left looking at a daylit screen').toBe(nightScreen);
 });
 
 // THE SHEET IS TORN UP. It holds full-size PNGs of the drawing, so left

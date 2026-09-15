@@ -4538,6 +4538,42 @@
     return art;
   };
 
+  // EVERY PICTURE IS TAKEN IN DAYLIGHT, whatever skin the drafter is working
+  // in (Movie, 15 Sep). The paper around the pictures was already white and
+  // black; the pictures themselves carried the night skin, so a drafter
+  // working at night handed a client three black rectangles -- a page that
+  // costs a cartridge to print and reads as a photograph of a screen rather
+  // than a drawing.
+  //
+  // The palette is re-applied and the page repainted, which is exactly what
+  // the DAY switch does, EXCEPT that it does not touch the stored skin: this
+  // is a picture being taken, not a drafter changing their mind, and the
+  // choice has to be there when they look up. Nothing is awaited inside, so
+  // the browser never paints a frame mid-press and the screen does not blink
+  // white.
+  const inDaylight = shoot => {
+    if (mode === 'day') return shoot();
+    try {
+      skin = window.DraftPalette.apply(document, theme, 'day');
+      return shoot();
+    } finally {
+      skin = window.DraftPalette.apply(document, theme, mode);
+      paint();
+      paintRailNow();
+    }
+  };
+
+  // THE RAIL, SYNCHRONOUSLY, and only from here. Its own repaint lands one
+  // seat per frame so an edit never stutters -- right for editing, useless
+  // for a press that must hand back finished pictures in the same task. The
+  // whole pass is ~30 ms, which is a cost a print press can carry and a
+  // gesture cannot.
+  const paintRailNow = () => {
+    if (!drawing || !rail.children.length) return;
+    const env = cutEnv();
+    seatingChart().forEach((entry, i) => paintSeat(seatSpec(entry), i, env));
+  };
+
   // WHOLE-PLAN SHOT. The camera is put back and the page repainted in a
   // `finally` for the same reason paintPlanThumb does it: a throw halfway
   // through would otherwise leave the drafter looking at a fitted view they
@@ -4593,19 +4629,24 @@
     sheet.id = 'presentation';
     sheet.dataset.presentation = '';
     const name = drawing?.projectInfo?.projectName || 'UNTITLED';
-    // Page 1 is taken BEFORE page 2, because page 2 moves the camera to fit
-    // and page 1 is the whole point of the button: the view as it stands.
-    const asItStands = canvas.toDataURL('image/png');
-    sheet.append(
-      presentationPage(`${name} — this view`, presentationArt(asItStands)),
-      presentationPage(`${name} — the whole plan`, presentationArt(wholePlanShot())));
-    // THE TILES PAGE IS DROPPED WHEN THE RAIL IS EMPTY rather than printed
-    // blank. A new drawing has no views yet, and a page carrying nothing but
-    // a disclaimer is a page a client has to be told to ignore.
-    const tiles = presentationTiles();
-    if (tiles.children.length) {
-      sheet.append(presentationPage(`${name} — the views`, tiles));
-    }
+    inDaylight(() => {
+      // Page 1 is taken BEFORE page 2, because page 2 moves the camera to fit
+      // and page 1 is the whole point of the button: the view as it stands.
+      // It is repainted first all the same -- the buffer on screen is still
+      // the night one until something draws over it.
+      paint();
+      sheet.append(
+        presentationPage(`${name} — this view`, presentationArt(canvas.toDataURL('image/png'))),
+        presentationPage(`${name} — the whole plan`, presentationArt(wholePlanShot())));
+      // THE TILES PAGE IS DROPPED WHEN THE RAIL IS EMPTY rather than printed
+      // blank. A new drawing has no views yet, and a page carrying nothing but
+      // a disclaimer is a page a client has to be told to ignore.
+      paintRailNow();
+      const tiles = presentationTiles();
+      if (tiles.children.length) {
+        sheet.append(presentationPage(`${name} — the views`, tiles));
+      }
+    });
     document.body.append(sheet);
     return sheet;
   };
