@@ -150,6 +150,82 @@ test('the sheets come out landscape', async ({ page }) => {
   expect(w, `the paper came out ${w}x${h}, taller than it is wide`).toBeGreaterThan(h);
 });
 
+// THE GAP IS MEASURED ON PAPER, not read out of the stylesheet. The first
+// version of this check declared 1/8" in the grid and the tiles still stood
+// 92px apart: a figure carries 40px of browser margin of its own, so the
+// space between two tiles was the margins, not the gap, and the picture was
+// that much narrower for it.
+test('an eighth of an inch between the view tiles', async ({ page }) => {
+  await openHouse(page);
+  await settleRail(page);
+  await page.locator('#printscreen').click();
+  await page.emulateMedia({ media: 'print' });
+
+  const gaps = await page.evaluate(() => {
+    const tiles = [...document.querySelectorAll('#presentation .pres-tile')]
+      .map(tile => tile.getBoundingClientRect());
+    const row = tiles.filter(box => Math.abs(box.top - tiles[0].top) < 1);
+    return row.slice(1).map((box, i) => box.left - row[i].right);
+  });
+
+  expect(gaps.length,
+    'only one tile in the top row to measure from').toBeGreaterThan(0);
+  gaps.forEach(gap =>
+    expect(gap, `the tiles are ${gap}px apart`).toBeCloseTo(12, 0));
+});
+
+// MORE THAN TWELVE VIEWS OPENS ANOTHER SHEET (Movie, 15 Sep). Left to spill,
+// the grid did break onto a fourth page by itself -- and the tiles that
+// landed there had no title, no NOT TO SCALE and no logo over them, which is
+// the one thing this whole feature exists to prevent.
+test('a thirteenth view opens a fourth page, marked like the rest', async ({ page }) => {
+  await openHouse(page);
+  await settleRail(page);
+
+  const seated = await page.evaluate(() => {
+    const rail = document.getElementById('view-rail');
+    const isInked = seat => {
+      const c = seat.firstChild;
+      const { data } = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+      for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) return true;
+      return false;
+    };
+    const inked = [...rail.querySelectorAll('.seat:not([disabled])')].find(isInked);
+    while ([...rail.querySelectorAll('.seat:not([disabled])')]
+      .filter(isInked).length <= 12) {
+      const spare = inked.cloneNode(true);
+      spare.dataset.seat = `spare-${rail.children.length}`;
+      spare.firstChild.width = inked.firstChild.width;
+      spare.firstChild.height = inked.firstChild.height;
+      spare.firstChild.getContext('2d').drawImage(inked.firstChild, 0, 0);
+      rail.append(spare);
+    }
+    return [...rail.querySelectorAll('.seat:not([disabled])')].filter(isInked).length;
+  });
+  expect(seated, 'the rail never reached thirteen inked seats').toBeGreaterThan(12);
+
+  await page.locator('#printscreen').click();
+
+  const marks = await page.evaluate(() => {
+    const doc = new DOMParser().parseFromString(window.__printedHtml, 'text/html');
+    return [...doc.querySelectorAll('.pres-page')].map(sheet => ({
+      tiles: sheet.querySelectorAll('.pres-tile').length,
+      scale: sheet.querySelector('.pres-scale')?.textContent,
+      logo: !!sheet.querySelector('.pres-mark img'),
+    }));
+  });
+
+  expect(marks.length, 'the thirteenth tile did not open a sheet').toBe(4);
+  expect(marks[2].tiles,
+    'more than twelve tiles were crowded onto one sheet').toBe(12);
+  expect(marks[3].tiles).toBe(seated - 12);
+  marks.forEach((sheet, i) => {
+    expect(sheet.scale,
+      `sheet ${i + 1} printed without NOT TO SCALE`).toBe('NOT TO SCALE');
+    expect(sheet.logo, `sheet ${i + 1} printed without the logo`).toBe(true);
+  });
+});
+
 // THE DISCLAIMER IS CHECKED FOR ITS POSITION, not just its presence. Movie
 // asked for it ABOVE the logo: below it, the eye reaches the brand first and
 // the page reads as something the office is standing behind.

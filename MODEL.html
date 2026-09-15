@@ -231,9 +231,12 @@
        the six seats that exist today. Four across on landscape paper, where
        three left a hand's width of margin down each side. */
     .pres-tiles { display:grid; grid-template-columns:repeat(4, 1fr);
-      gap:6mm; align-content:start; width:100%; }
+      gap:0.125in; align-content:start; width:100%; }
+    /* A FIGURE CARRIES 40px OF BROWSER MARGIN. Narrowing the grid gap alone
+       left the tiles 92px apart -- the gap the eye sees is the margin, not
+       the grid's. */
     .pres-tile { display:flex; flex-direction:column; align-items:center;
-      gap:2mm; }
+      gap:2mm; margin:0; }
     .pres-tile img { width:100%; border:0.3mm solid #000; }
     .pres-tile figcaption { font-family:'Barlow Condensed',system-ui,sans-serif;
       font-size:8pt; letter-spacing:.05em; text-transform:uppercase; }
@@ -4611,10 +4614,21 @@
     return false;
   });
 
+  // TWELVE TO A SHEET (Movie, 15 Sep: "if needed the layouts can go to 4th
+  // page when more than 12"). A grid left to spill breaks across paper by
+  // itself, but the overflow lands on a page with no title, no NOT TO SCALE
+  // and no logo on it -- a loose sheet of pictures with nothing saying what
+  // they are. Cut deliberately, every sheet is a whole page again.
+  const TILES_PER_SHEET = 12;
+
   const presentationTiles = () => {
-    const grid = document.createElement('div');
-    grid.className = 'pres-tiles';
-    inkedSeats().forEach(seat => {
+    const grids = [];
+    inkedSeats().forEach((seat, i) => {
+      if (i % TILES_PER_SHEET === 0) {
+        const grid = document.createElement('div');
+        grid.className = 'pres-tiles';
+        grids.push(grid);
+      }
       const tile = document.createElement('figure');
       tile.className = 'pres-tile';
       tile.dataset.presTile = seat.dataset.seat;
@@ -4624,9 +4638,9 @@
       const caption = document.createElement('figcaption');
       caption.textContent = seat.lastChild.textContent;
       tile.append(img, caption);
-      grid.append(tile);
+      grids[grids.length - 1].append(tile);
     });
-    return grid;
+    return grids;
   };
 
   const buildPresentation = () => {
@@ -4648,10 +4662,8 @@
       // blank. A new drawing has no views yet, and a page carrying nothing but
       // a disclaimer is a page a client has to be told to ignore.
       paintRailNow();
-      const tiles = presentationTiles();
-      if (tiles.children.length) {
-        sheet.append(presentationPage(`${name} — the views`, tiles));
-      }
+      presentationTiles().forEach((grid, i) => sheet.append(presentationPage(
+        i ? `${name} — the views, continued` : `${name} — the views`, grid)));
     });
     document.body.append(sheet);
     return sheet;
