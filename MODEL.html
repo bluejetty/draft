@@ -1637,7 +1637,39 @@
   // level is inserted. See RD-DOCUMENTS/SPEC-model-html-tiers.md.
   const MAIN_FLOOR_LEVEL_ID = 3;
   const levelIds = () => (drawing?.levels || []).map(level => Number(level.id));
+  // ── THE BONEYARD'S OWN STATE ──────────────────────────────────────────────
+  // A SHELF IS A LEVEL WITH A NEGATIVE ID. That is the whole of the port, and
+  // it is `MODEL.dc.html:9061` verbatim: `_boneyardLevelId(shelfId) { return
+  // -shelfId; }`. Every level-owned thing in the format is keyed by levelId
+  // and the loader accepts -shelfId as an owner (since c8654eb), so parking a
+  // wall on a shelf needs no format change and no `shelfId` on any entity.
+  //
+  // boneyardActive IS NOT DRAWING DATA, and DC agrees -- its loader sets
+  // `boneyardActive: false` unconditionally (:5606). Which shelf is active IS
+  // stored, because it is a fact about the drawing; whether the drafter was
+  // looking at the boneyard when he saved is a fact about his afternoon.
+  let boneyardActive = false;
+  // DERIVED, NOT STORED, and the distinction is the one that cost a day of red
+  // CI yesterday: "readers normalise, writers never invent". boneyardShelves()
+  // always yields at least SHELF 1 (drawing-format.js:827), so a drawing saved
+  // before shelves existed SHOWS the default -- which acceptance 6 asks for --
+  // without a default shelf being written into a file that never had one.
+  // Only + SHELF writes the key, and that is the drafter's own instruction.
+  const shelves = () => window.DraftDrawingFormat.boneyardShelves(drawing?.boneyardShelves);
+  const activeShelfId = () => {
+    const want = Number(drawing?.activeBoneyardShelfId);
+    return shelves().some(s => Number(s.id) === want) ? want
+      : Number(shelves()[0]?.id || 1);
+  };
+  const boneyardLevelId = (shelfId = activeShelfId()) => -shelfId;
+
   const activeLevelId = () => {
+    // FIRST, because the boneyard is a whole drafting context and not a filter
+    // laid over a level: DC answers the same question the same way at :9089.
+    // Everything downstream -- walls(), lines(), floors(), what a new wall is
+    // stamped with -- reads this one function, which is why the card needs no
+    // second filter anywhere.
+    if (boneyardActive) return boneyardLevelId();
     if (thumbTarget) return thumbTarget.levelId;
     const asked = Number(params.get('level'));
     if (Number.isFinite(asked) && levelIds().includes(asked)) return asked;
@@ -3848,16 +3880,39 @@
     const live = !inCut && asked
       && LV.layerViewsForLevelId(activeId).some(v => v.id === asked)
       ? asked : LV.defaultLayerViewId(activeId);
+    // THIS PASS OWNS `data-active`, and that is why the boneyard is named in
+    // it rather than lighting itself during the build. It runs over EVERY
+    // .lv-card and .lv-layer after buildLevelsPanel, so a card that set the
+    // attribute on itself a moment earlier has it taken straight back off --
+    // which is exactly what the boneyard card did for an hour: `toggleAttribute
+    // ('data-active', true)` ran, under a condition measured true, and the
+    // attribute was gone by the time anything could read it.
+    //
+    // Two places deciding which row is lit is how the panel and the canvas
+    // come to disagree. One place, and the boneyard is one of the things it
+    // knows can be active.
     levelsPanel.querySelectorAll('.lv-layer').forEach(row => {
+      if (row.dataset.shelf !== undefined) {
+        row.toggleAttribute('data-active',
+          boneyardActive && Number(row.dataset.shelf) === activeShelfId());
+        return;
+      }
       if (row.dataset.viewRow) {
         row.toggleAttribute('data-active', row.dataset.viewRow === asked);
         return;
       }
+      // A LEVEL'S LAYER ROW IS NEVER LIT ON THE BONEYARD. Without this the
+      // panel shows MAIN FL's FLOOR PLAN lit while the canvas draws a shelf.
       row.toggleAttribute('data-active',
-        !inCut && row.dataset.layer === `${activeId}:${live}`);
+        !inCut && !boneyardActive && row.dataset.layer === `${activeId}:${live}`);
     });
     levelsPanel.querySelectorAll('.lv-card').forEach(card => {
-      card.toggleAttribute('data-active', Number(card.dataset.level) === activeId);
+      if (card.dataset.boneyard !== undefined) {
+        card.toggleAttribute('data-active', boneyardActive);
+        return;
+      }
+      card.toggleAttribute('data-active',
+        !boneyardActive && Number(card.dataset.level) === activeId);
     });
   };
 
@@ -4040,26 +4095,68 @@
       levelsPanel.append(row);
     });
 
-    // ── BONEYARD ────────────────────────────────────────────────────────────
-    // LISTED, NOT EDITED, and that is a ruling rather than an omission.
-    // PARITY-model-html-vs-dc.md records the boneyard as "absent,
-    // deliberately" on this page, and model-html-gestures.spec.js drives it:
-    // the level picker offers no negative pseudo-level, so there is nowhere
-    // for a new shelf to be used. "+ SHELF" would write a shelf into the file
-    // that this page can never open.
-    const shelves = drawing?.boneyardShelves || [];
+    // ── THE BONEYARD ────────────────────────────────────────────────────────
+    // THIS READ "LISTED, NOT EDITED, and that is a ruling rather than an
+    // omission" -- the shelf names printed as dead text because "the level
+    // picker offers no negative pseudo-level, so there is nowhere for a new
+    // shelf to be used. '+ SHELF' would write a shelf into the file that this
+    // page can never open." That reasoning was exactly right and is now spent:
+    // activeLevelId() answers -shelfId, so there IS somewhere for a shelf to
+    // be used, and a wall parked on one survives the reload (c8654eb).
+    //
+    // Movie ruled it back on, 14 Sep: "yes boneyard should be working so i can
+    // copy and paste stuff in there that won't show on the plan".
+    //
+    // PINNED LAST, and that is a rule rather than an accident of order: a
+    // basement added beneath the foundation lands ABOVE this card, because
+    // the boneyard is not a storey. Built after the level loop for exactly
+    // that reason, and acceptance 7 asserts it by POSITION -- a row that
+    // sorts last in the markup but paints halfway up is still wrong.
+    const shelfList = shelves();
     section('Boneyard');
-    if (!shelves.length) {
-      const none = document.createElement('div');
-      none.className = 'lv-empty';
-      none.textContent = 'No shelves.';
-      levelsPanel.append(none);
-    }
-    shelves.forEach(shelf => {
-      const row = document.createElement('div');
-      row.className = 'lv-empty';
+    const bone = document.createElement('div');
+    bone.className = 'lv-card';
+    bone.dataset.boneyard = '';
+    if (boneyardActive) bone.toggleAttribute('data-active', true);
+    bone.title = 'BONEYARD — shelf storage: geometry parks in its exact '
+      + 'position, never prints';
+
+    const boneHead = document.createElement('div');
+    boneHead.className = 'lv-head';
+    const boneName = document.createElement('div');
+    boneName.className = 'lv-head-title';
+    boneName.textContent = 'BONEYARD';
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 'lv-add';
+    plus.dataset.addShelf = '';
+    plus.textContent = '+ SHELF';
+    // DC'S OWN TOOLTIP, which states the reason shelves exist at all rather
+    // than what the button does: a drafter who cannot see why he would want a
+    // second shelf never presses it.
+    plus.title = 'Add a shelf — park geometry at the same spot on different '
+      + 'shelves without overlap';
+    plus.addEventListener('click', event => { event.stopPropagation(); addShelf(); });
+    boneHead.append(boneName, plus);
+    bone.append(boneHead);
+    bone.addEventListener('click', () => goToBoneyard());
+    levelsPanel.append(bone);
+
+    shelfList.forEach(shelf => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'lv-layer';
       row.dataset.shelf = String(shelf.id);
-      row.textContent = shelf.name || `shelf ${shelf.id}`;
+      if (boneyardActive && Number(shelf.id) === activeShelfId()) {
+        row.toggleAttribute('data-active', true);
+      }
+      row.textContent = shelf.name || `SHELF ${shelf.id}`;
+      row.title = `Show only ${shelf.name || `SHELF ${shelf.id}`} — each shelf `
+        + 'keeps its own geometry';
+      row.addEventListener('click', event => {
+        event.stopPropagation();
+        goToBoneyard(Number(shelf.id));
+      });
       levelsPanel.append(row);
     });
 
@@ -4084,7 +4181,55 @@
     if (fileRow) fileRow.hidden = false;
   };
 
+  // ONE WAY INTO THE BONEYARD, and one way out. The card and every shelf row
+  // come through here, so the panel, the plan and what a new wall is stamped
+  // with cannot disagree about where the drafter is.
+  //
+  // CHANGES WHAT IS LOOKED AT AND, WHEN THE SHELF MOVES, ONE THING THAT IS
+  // SAVED. Which shelf is active is a fact about the drawing -- reopen it
+  // tomorrow and the shelf you were working on is the one you get -- so a
+  // shelf switch marks dirty. Being ON the boneyard is not saved at all, the
+  // same call DC makes at :5606.
+  const goToBoneyard = (shelfId = null) => {
+    const want = shelfId === null ? activeShelfId() : Number(shelfId);
+    const moved = drawing && Number(drawing.activeBoneyardShelfId) !== want;
+    if (drawing && moved) { drawing.activeBoneyardShelfId = want; markDirty(); }
+    boneyardActive = true;
+    // A HALF-TAKEN GESTURE DOES NOT FOLLOW YOU ACROSS, which is the same rule
+    // Escape enforces and the same one DC applies on _selectBoneyard (:9). A
+    // run begun on MAIN FL and finished on a shelf would weld two workspaces
+    // together through one wall.
+    drawStart = null;
+    pendingBone = null;
+    selection = [];
+    buildChrome();
+    paint();
+  };
+
+  const addShelf = () => {
+    if (!drawing) return;
+    const list = shelves();
+    // THE ALLOCATOR IS STORED, not `list.length + 1`. Delete SHELF 2 of three
+    // and the count says 2 while SHELF 3 still holds geometry; the next shelf
+    // would take an id that is already an owner and adopt that geometry on
+    // sight. Same family as the duplicate-id bug #392 paid for.
+    const next = Math.max(
+      Number.isInteger(drawing.nextBoneyardShelfId) ? drawing.nextBoneyardShelfId : 1,
+      ...list.map(s => Number(s.id) + 1), 2);
+    drawing.boneyardShelves = [...list, { id: next, name: `SHELF ${next}` }];
+    drawing.nextBoneyardShelfId = next + 1;
+    drawing.activeBoneyardShelfId = next;
+    markDirty();
+    boneyardActive = true;
+    buildChrome();
+    paint();
+  };
+
   const goToLevel = id => {
+    // LEAVING THE BONEYARD IS PART OF ARRIVING AT A LEVEL. Without this the
+    // card stays lit while the plan shows MAIN FL, and the two readouts the
+    // drafter has disagree about where he is.
+    boneyardActive = false;
     params.set('level', String(id));
     // THE VIEW IS KEPT WHERE THE NEW LEVEL HAS IT, dropped where it does not.
     // MAIN FL and 2ND FL share the same four views, so a drafter comparing

@@ -446,7 +446,26 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
                   : el.dataset.layer !== undefined ? 'layer-row'
                     : el.dataset.levelRow !== undefined ? 'level-row'
                       : el.dataset.view3d !== undefined ? 'view-3d'
-                        : el.tagName === 'BUTTON' ? 'cut-row' : el.tagName))].sort(),
+                        // THE BONEYARD'S TWO, named rather than absorbed. They
+                        // arrived with the shelf UI and this check stayed GREEN
+                        // through it: the fallback below turns any unnamed
+                        // button into 'cut-row', so three new kinds of control
+                        // entered the panel and the list that exists to notice
+                        // exactly that did not move.
+                        //
+                        // THE COMMENT ON THE EXPECTED LIST SAYS THE OPPOSITE --
+                        // "no unlabelled button: an entry this cannot name
+                        // would arrive as 'BUTTON' or 'INPUT' and fail" -- and
+                        // for the TOOL COLUMN's classifier below that is true
+                        // and is how its chips were caught. For the panel it is
+                        // not: `? 'cut-row'` is the same idea with the safety
+                        // off. Naming what can be named shrinks what the
+                        // fallback can swallow; giving a cut row its own marker
+                        // so the fallback could fail loudly is a change of its
+                        // own and is not smuggled in here.
+                        : el.dataset.addShelf !== undefined ? 'add-shelf'
+                          : el.dataset.shelf !== undefined ? 'shelf-row'
+                            : el.tagName === 'BUTTON' ? 'cut-row' : el.tagName))].sort(),
         };
       });
       // THE SIX SEATS ARRIVED WHILE THIS PR WAS OPEN, and this assertion is how
@@ -610,7 +629,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // no unlabelled button: an entry this cannot name would arrive as
           // 'BUTTON' or 'INPUT' and fail.
           panelKinds: ['add-level', 'cut-row', 'delete-level', 'layer-row',
-            'level-row', 'view-3d'].sort(),
+            'level-row', 'view-3d', 'add-shelf', 'shelf-row'].sort(),
           // The column's kinds. SELECTION's three modes and OBJECT TYPE's five
           // filters are named rather than counted for the same reason the keys
           // are not: a control the classifier cannot name arrives as 'button'
