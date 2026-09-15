@@ -211,3 +211,257 @@ test('leaving the boneyard puts the level geometry back', async ({ page }) => {
   await expect(card(page)).not.toHaveAttribute('data-active', '');
   expect((await shown(page)).shown, 'MAIN FL has its four walls again').toBe(4);
 });
+
+// ── COPY / PASTE ACROSS WORKSPACES ─────────────────────────────────────────
+// THE ONE GENUINELY NEW THING IN THE ORDER. DC's copy is one gesture inside
+// one workspace -- capture, base, destination, done. Movie's ask outlives the
+// gesture: "copy and paste stuff in there that won't show on the plan (to save
+// for later / reference)". So what is held survives a change of level or
+// shelf, and pasting clones onto whatever is active.
+
+const copyBtn = page => page.locator('[data-copy]');
+const pasteBtn = page => page.locator('[data-paste]');
+
+const clickWorld = async (page, x, z) => {
+  const box = await page.locator('#plan').boundingBox();
+  const scale = await page.evaluate(() => Number(
+    /scale ([\d.]+) px\/ft/.exec(document.getElementById('readout').textContent)[1]));
+  await page.mouse.click(box.x + box.width / 2 + x * scale,
+    box.y + box.height / 2 + z * scale);
+  await page.waitForTimeout(80);
+};
+
+test('ACCEPTANCE 3: copy a wall from a level, paste it on a shelf',
+  async ({ page }) => {
+    await open(page, base({}));
+
+    await clickWorld(page, 0, -10);                 // the north wall
+    await expect(copyBtn(page), 'COPY is live with something selected')
+      .toBeVisible();
+    await copyBtn(page).click();
+
+    await card(page).click();                        // switch to the boneyard
+    await pasteBtn(page).click();
+
+    const file = await saveIt(page);
+    const parked = file.walls.filter(w => Number(w.levelId) === -1);
+    expect(parked.length, 'one wall landed on SHELF 1').toBe(1);
+    expect(Number(parked[0].levelId), 'and it is owned by the shelf').toBe(-1);
+
+    // THE ORIGINAL IS STILL ON THE PLAN. It is a COPY -- the order says so in
+    // as many words -- and a paste that moved the wall would satisfy every
+    // other line here.
+    const original = file.walls.find(w => w.id === 'm-n');
+    expect(original, 'the original is still on MAIN FL').toBeTruthy();
+    expect(Number(original.levelId)).toBe(MAIN);
+
+    // AND THE TWO HAVE DIFFERENT IDS. "#392 has already paid for one id bug
+    // tonight, and a duplicate id is the same family."
+    expect(parked[0].id).not.toBe('m-n');
+  });
+
+test('ACCEPTANCE 4: copy it back from the shelf to a level, with a new id again',
+  async ({ page }) => {
+    await open(page, base({
+      walls: [...base({}).walls, wall('parked', -1, V(-4, -4), V(4, -4))],
+    }));
+
+    await card(page).click();
+    await clickWorld(page, 0, -4);                   // the parked wall
+    await copyBtn(page).click();
+
+    await page.locator(`[data-level="${MAIN}"]`).click();
+    await pasteBtn(page).click();
+
+    const file = await saveIt(page);
+    const onMain = file.walls.filter(w => Number(w.levelId) === MAIN);
+    expect(onMain.length, 'MAIN FL gained the wall: four plus one').toBe(5);
+
+    const landed = onMain.find(w => !['m-n', 'm-e', 'm-s', 'm-w'].includes(w.id));
+    expect(landed, 'and it is a new record').toBeTruthy();
+    expect(landed.id, 'with a new id, not the one it had on the shelf')
+      .not.toBe('parked');
+
+    // AND THE SHELF KEPT ITS OWN. Copying back is the same verb backwards, so
+    // it must not empty the shelf.
+    expect(file.walls.some(w => w.id === 'parked' && Number(w.levelId) === -1),
+      'the shelf still holds what was parked there').toBe(true);
+  });
+
+test('a pasted wall does not join a group that lives on another workspace',
+  async ({ page }) => {
+    // THE ORDER'S OWN RULE: "do not let a pasted wall join a group that lives
+    // on another level". A shelf copy tied to a group on MAIN FL would MOVE
+    // when that group moved, and not moving is the entire reason to park it.
+    //
+    // I WROTE THIS CHECK AGAINST THE WRONG MODEL FIRST, and the check is what
+    // said so. It asserted a `groupId` on the wall and went red reporting that
+    // the ORIGINAL's groupId was undefined -- because membership is not on the
+    // item at all. A group carries `members: [{type, id}]` (see
+    // model-tool-assembly.spec.js:147) and the wall normaliser drops any
+    // groupId, so a wall does not know what it belongs to; the group does.
+    //
+    // That makes the rule hold BY CONSTRUCTION rather than by a strip: the
+    // paste allocates a fresh id, and no group's member list names it. Which
+    // is worth an assertion precisely BECAUSE it is free -- the day someone
+    // makes paste reuse an id, or copy the member rows along, this is what
+    // notices. So the claim is checked where membership actually lives.
+    await open(page, base({
+      groups: [{
+        id: 'g-1', name: 'NORTH', fixed: true,
+        members: [{ type: 'wall', id: 'm-n' }, { type: 'wall', id: 'm-e' }],
+      }],
+    }));
+
+    await clickWorld(page, 0, -10);
+    await copyBtn(page).click();
+    await card(page).click();
+    await pasteBtn(page).click();
+
+    const file = await saveIt(page);
+    const parked = file.walls.find(w => Number(w.levelId) === -1);
+    expect(parked, 'the copy landed').toBeTruthy();
+
+    const group = (file.groups || []).find(g => g.id === 'g-1');
+    expect(group, 'the group survived the round trip').toBeTruthy();
+    expect(group.members.map(m => m.id).sort(),
+      'the group still names its original two, and not the copy')
+      .toEqual(['m-e', 'm-n']);
+    expect(group.members.some(m => m.id === parked.id),
+      'the parked copy is a member of nothing').toBe(false);
+  });
+
+test('COPY and PASTE stand down when they have nothing to do', async ({ page }) => {
+  // A VERB THAT LOOKS LIVE AND DOES NOTHING is worse than a gap -- the same
+  // rule the dormant strip chips follow, and the same one that made DELETE
+  // hidden rather than inert.
+  await open(page, base({}));
+  await expect(copyBtn(page), 'nothing selected: COPY has nothing to take')
+    .toBeHidden();
+  await expect(pasteBtn(page), 'nothing held: PASTE has nothing to put down')
+    .toBeHidden();
+
+  await clickWorld(page, 0, -10);
+  await expect(copyBtn(page)).toBeVisible();
+  await expect(pasteBtn(page), 'selecting is not copying').toBeHidden();
+
+  await copyBtn(page).click();
+  await expect(pasteBtn(page), 'and now there is something to put down')
+    .toBeVisible();
+});
+
+// ── ACCEPTANCE 5, TRANSLATED ───────────────────────────────────────────────
+// The order asks: "Print with a populated shelf and the shelf's contents
+// appear nowhere -- assert the printed output, not the boneyardActive flag."
+//
+// MEASURED, MODEL.html HAS NO PRINTING AT ALL: no window.print, no @media
+// print, no print control. So the check as written cannot be built here, and
+// faking one against `boneyardActive` is exactly what the order forbids.
+//
+// What it is FOR does exist on this page. The fear is a drafter's parked
+// geometry turning up where the drawing is shown -- "he finds out from the
+// plans examiner" -- and this page shows the drawing in two places besides
+// the plan: the view rail's seat thumbnails, and any section view. A shelf
+// leaking into a seat is the same failure with a different sheet.
+//
+// THIS CAUGHT A REAL ONE. activeLevelId() answered the boneyard BEFORE it
+// answered thumbTarget, so with the boneyard open every seat in the rail
+// painted the shelf instead of its own level.
+test("ACCEPTANCE 5: a shelf's contents stay off every level's thumbnail",
+  async ({ page }) => {
+    await open(page, base({
+      // THE SHELF IS POPULATED AND THE LEVEL IS NOT EMPTY, both load-bearing.
+      // A check run against an empty shelf passes on a page that leaks, and
+      // one against an empty level cannot tell a leak from a blank seat.
+      walls: [...base({}).walls, wall('parked', -1, V(-4, -4), V(4, -4))],
+    }));
+
+    await card(page).click();
+    await expect(card(page)).toHaveAttribute('data-active', '');
+
+    // AND THE PLAN ITSELF still shows only the shelf, so nothing below can
+    // pass because the boneyard quietly failed to engage.
+    expect((await shown(page)).shown,
+      'the boneyard is genuinely open -- one parked wall, not the four')
+      .toBe(1);
+
+    // THE SEATS THEMSELVES, PIXEL FOR PIXEL. An earlier draft of this check
+    // asserted that seats EXIST and that the plan had switched -- and would
+    // not have caught the leak it was written for, which is the same
+    // satisfied-by-absence shape this session keeps finding in other people's
+    // checks and is no better in mine.
+    //
+    // What a level's seat shows cannot depend on whether the drafter happens
+    // to be looking at a shelf. So the seats are captured with the boneyard
+    // OPEN and again with it CLOSED, and the two must be identical. A
+    // thumbnail painting the shelf differs from one painting its own level,
+    // and that difference is the whole failure.
+    const seatShots = () => page.evaluate(() =>
+      [...document.querySelectorAll('#view-rail .seat canvas')]
+        .map(c => c.toDataURL()));
+
+    const open_ = await seatShots();
+    expect(open_.length, 'the rail has seats to leak into').toBeGreaterThan(0);
+
+    await page.locator(`[data-level="${MAIN}"]`).click();
+    await expect(card(page)).not.toHaveAttribute('data-active', '');
+    const closed = await seatShots();
+
+    expect(closed.length, 'the same seats are there either way')
+      .toBe(open_.length);
+    expect(open_,
+      "a level's thumbnail shows that level, whether or not a shelf is open")
+      .toEqual(closed);
+
+    // THE CONTROL, because "identical" is also what two BLANK sets of seats
+    // look like, and a rail that painted nothing at all would sail through
+    // the line above.
+    const blank = await page.evaluate(() => {
+      const c = document.createElement('canvas');
+      const live = document.querySelector('#view-rail .seat canvas');
+      c.width = live.width; c.height = live.height;
+      return c.toDataURL();
+    });
+    expect(closed.some(shot => shot !== blank),
+      'at least one seat actually painted something').toBe(true);
+  });
+
+test('a shelf added to a gapped list takes a FREE id, not the next row number',
+  async ({ page }) => {
+    // THE GATE FOUND THIS MISSING and the finding is the useful kind. The
+    // mutant that replaces the allocator with `list.length + 1` SURVIVED every
+    // other check here, because they all add shelves to a drawing whose ids
+    // run 1,2,3 -- where the row count and the next free id agree, and the two
+    // are indistinguishable.
+    //
+    // They part company over a GAP. MODEL.html cannot delete a shelf, so my
+    // first thought was that no such drawing exists -- but MODEL.dc.html can,
+    // and a file is a file. Shelves 1 and 3 with 2 deleted is an ordinary
+    // artefact, and `length + 1` answers 3: the id of a shelf that is already
+    // there, holding geometry. The drafter presses + SHELF and is handed
+    // somebody else's parked wall.
+    //
+    // The lesson is the one this session keeps paying for: when a mutant
+    // survives and no case comes to mind, GENERATE the case rather than
+    // conclude there is not one.
+    await open(page, base({
+      boneyardShelves: [{ id: 1, name: 'SHELF 1' }, { id: 3, name: 'SHELF 3' }],
+      nextBoneyardShelfId: 4,
+      walls: [...base({}).walls, wall('on-3', -3, V(-4, -4), V(4, -4))],
+    }));
+
+    await card(page).click();
+    await addShelf(page).click();
+
+    // NOT 3, WHICH IS TAKEN.
+    await expect(shelfRow(page, 3), 'SHELF 3 is still its own row')
+      .toHaveCount(1);
+    expect((await shown(page)).shown,
+      'the new shelf is EMPTY -- it did not adopt what is parked on SHELF 3')
+      .toBe(0);
+
+    const file = await saveIt(page);
+    const ids = (file.boneyardShelves || []).map(s => Number(s.id)).sort((a, b) => a - b);
+    expect(ids, 'the gap is left alone and the new shelf takes a free id')
+      .toEqual([1, 3, 4]);
+  });

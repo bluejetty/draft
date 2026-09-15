@@ -1120,6 +1120,24 @@
       <img src="./assets/bone-red.png" alt="BONE — build it" />
     </button>
   </div>
+  <!-- COPY AND PASTE ACROSS WORKSPACES. Movie, 14 Sep: "copy and paste stuff
+       in there that won't show on the plan (to save for later / reference)".
+       What is held survives a change of level or shelf -- that outliving is
+       the one genuinely new thing in the boneyard order, since DC's own copy
+       is a single gesture inside one workspace.
+
+       HIDDEN WHEN THEY HAVE NOTHING TO DO, like DELETE above them: a verb
+       that looks live and does nothing is worse than a gap.
+
+       DELETE IS NOT RE-ADDED HERE. It already sits with the house strip on
+       main, where the chrome shell put it; carrying my side of this conflict
+       whole would have put a SECOND element with id="delete" on the page --
+       two controls answering one selector, and every check that asserts the
+       one DELETE still passing on the first one it found. -->
+  <button id="copy" type="button" data-copy hidden
+    title="Copy what is selected — paste it on any level or shelf">COPY</button>
+  <button id="paste" type="button" data-paste hidden
+    title="Paste the copy here, on whatever level or shelf is showing">PASTE</button>
 </div>
 <!-- THE LENGTH THE DRAFTER CAN SEE WHILE HE DRAWS. Movie, 13 Sep: "show the
      line length on screen to the user during the line drawing when their
@@ -1664,13 +1682,27 @@
   const boneyardLevelId = (shelfId = activeShelfId()) => -shelfId;
 
   const activeLevelId = () => {
-    // FIRST, because the boneyard is a whole drafting context and not a filter
-    // laid over a level: DC answers the same question the same way at :9089.
-    // Everything downstream -- walls(), lines(), floors(), what a new wall is
-    // stamped with -- reads this one function, which is why the card needs no
-    // second filter anywhere.
-    if (boneyardActive) return boneyardLevelId();
+    // THUMBTARGET FIRST, AND THE ORDER OF THESE TWO IS A BUG I SHIPPED FOR AN
+    // HOUR. The boneyard check was written above this line, which reads
+    // naturally -- the boneyard is a whole drafting context, not a filter laid
+    // over a level -- and is wrong, because a seat thumbnail is not asking
+    // "where is the drafter". It is asking "what does LEVEL n look like", and
+    // it sets thumbTarget to say so.
+    //
+    // With the boneyard open, a boneyard-first answer paints the SHELF into
+    // every seat in the rail: MAIN FL's thumbnail showing a parked kitchen.
+    // That is the failure acceptance 5 is about -- "a drafter parks a rejected
+    // kitchen on SHELF 2 and sends the set to the city" -- arriving by a
+    // different road than printing, and this page has no printing.
+    //
+    // A THUMBNAIL IS ALWAYS ABOUT ITS OWN TARGET. Nothing else can be true of
+    // it, so nothing may be asked before it.
     if (thumbTarget) return thumbTarget.levelId;
+    // Then the boneyard, which IS a whole drafting context: everything
+    // downstream -- walls(), lines(), floors(), what a new wall is stamped
+    // with -- reads this one function, which is why the card needs no second
+    // filter anywhere. DC answers the same question the same way at :9089.
+    if (boneyardActive) return boneyardLevelId();
     const asked = Number(params.get('level'));
     if (Number.isFinite(asked) && levelIds().includes(asked)) return asked;
     if (params.get('level') !== null && drawing) {
@@ -3062,6 +3094,21 @@
     // they can.
     if (deleteButton) {
       deleteButton.hidden = !selection.length || !!activeCut() || modalUp();
+    }
+    // THE SAME RULE AS DELETE, and asked here for the same reason: a section
+    // view or a modal suppresses every verb, because neither is a workspace a
+    // paste could land on.
+    if (copyButton) {
+      copyButton.hidden = !selection.length || !!activeCut() || modalUp();
+    }
+    if (pasteButton) {
+      // PASTE ASKS WHAT IS HELD, NOT WHAT IS SELECTED -- the two are different
+      // questions and this is the whole of the cross-workspace behaviour.
+      // A drafter copies on MAIN FL, switches to a shelf (which clears the
+      // selection, because a selection is a fact about one workspace) and
+      // pastes. If PASTE read the selection it would be dead exactly when it
+      // is wanted.
+      pasteButton.hidden = !held.length || !!activeCut() || modalUp();
     }
     // Before updateReadout, so the readout reports the frame it describes and
     // not the cost of writing itself.
@@ -5796,6 +5843,83 @@
     return true;
   };
 
+  // ── COPY AND PASTE, ACROSS WORKSPACES ──────────────────────────────────────
+  // Movie, 14 Sep: "copy and paste stuff in there that won't show on the plan
+  // (to save for later / reference)".
+  //
+  // WHAT MAKES THIS NEW rather than a port. DC's copy is one gesture inside
+  // one workspace -- capture a rectangle, give a base point, give a
+  // destination, done -- and Movie's ask OUTLIVES the gesture: take it here,
+  // put it down over there, possibly after looking at three other shelves.
+  // So COPY takes a snapshot and PASTE reads that snapshot, and the two are
+  // joined by `held` rather than by one uninterrupted drag.
+  //
+  // RAW SNAPSHOTS, taken at COPY. Holding references to the live items would
+  // let an edit -- or a DELETE -- between the copy and the paste reach back
+  // into what the drafter thought he had taken.
+  const copySelection = () => {
+    if (!drawing || !selection.length) return 0;
+    held = selection
+      .filter(entry => entry.type === 'wall' || SELECTION_LISTS[entry.type])
+      .map(entry => ({ type: entry.type, raw: JSON.parse(JSON.stringify(entry.item)) }));
+    return held.length;
+  };
+
+  const pasteHeld = () => {
+    if (!drawing || !held.length) return 0;
+    const owner = activeLevelId();
+    const landed = [];
+    held.forEach(({ type, raw }) => {
+      const key = type === 'wall' ? 'walls' : SELECTION_LISTS[type];
+      if (!key) return;
+      // EVERY LINK TO WHERE IT CAME FROM IS CUT, and each strip is its own
+      // rule rather than one tidy-up:
+      //
+      //   id        REALLOCATED, always. "Never paste an item carrying the id
+      //             it had on the level it came from" -- #392 paid for one id
+      //             bug already and a duplicate id is the same family.
+      //   levelId   THE ACTIVE WORKSPACE, which is what makes this a paste
+      //             ONTO a shelf: a level's id, or -shelfId on a shelf.
+      //   groupId   DROPPED, though MEASURED IT IS ALREADY A NO-OP HERE and
+      //             that is worth saying rather than implying a guard that is
+      //             not doing the work. The order's rule is "do not let a
+      //             pasted wall join a group that lives on another level", and
+      //             on this page membership is not on the item: a group holds
+      //             `members: [{type, id}]` and the wall normaliser keeps no
+      //             groupId. Reallocating the id is therefore what actually
+      //             enforces the rule -- no member row names the copy. The
+      //             strip stays for anything that does carry one.
+      //   srcId     DROPPED, with offX/offZ. Those link a corner to a
+      //             boneyard master so propagation can find it; a pasted copy
+      //             is new geometry, not a second face of the master, and
+      //             leaving the link would have the master drag the parked
+      //             copy around.
+      const { id: _id, groupId: _g, ...rest } = raw;
+      const copy = { ...rest, id: newDrawingItemId(type), levelId: owner };
+      ['start', 'end', 'point', 'anchor'].forEach(field => {
+        if (!copy[field] || typeof copy[field] !== 'object') return;
+        const { srcId: _s, offX: _ox, offZ: _oz, ...pt } = copy[field];
+        copy[field] = { ...pt };
+      });
+      if (Array.isArray(copy.points)) {
+        copy.points = copy.points.map(pt => {
+          const { srcId: _s, offX: _ox, offZ: _oz, ...keep } = pt || {};
+          return { ...keep };
+        });
+      }
+      drawing[key] = drawing[key] || [];
+      drawing[key].push(copy);
+      landed.push({ type, item: copy });
+    });
+    if (!landed.length) return 0;
+    markDirty();
+    // SELECTED WHERE IT LANDED, so the drafter can see what he just put down
+    // and move it without hunting for it.
+    setSelection(landed);
+    paint();
+    return landed.length;
+  };
+
   // A COPY OF THE SELECTION FIRST. deleteWall calls setSelection, which
   // rebuilds the array being walked; iterating the live one deletes every
   // second thing and reports success.
@@ -5824,6 +5948,13 @@
   // for one register is the drift this pass exists to end, and the key is the
   // survivor because the other sixteen tools are already only there.
   const deleteButton = document.getElementById('delete');
+  const copyButton = document.getElementById('copy');
+  const pasteButton = document.getElementById('paste');
+
+  // WHAT IS HELD. Not the selection, and not a reference to it: raw snapshots
+  // taken at COPY, so an edit or a delete between the copy and the paste
+  // cannot reach back into what the drafter took.
+  let held = [];
 
   // WHAT COUNTS AS A MODAL. Each of these covers the whole viewport at
   // z-index 7 and asks a question that has to be answered first; the foot
@@ -7261,6 +7392,8 @@
   };
   selectionWatchers.push(showStructureProps);
   deleteButton.addEventListener('click', pressDelete);
+  if (copyButton) copyButton.addEventListener('click', () => { copySelection(); paint(); });
+  if (pasteButton) pasteButton.addEventListener('click', () => { pasteHeld(); });
 
   // ── pan and zoom ──────────────────────────────────────────────────────────
   let dragging = null;
