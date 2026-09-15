@@ -183,7 +183,26 @@
     color: var(--ink-primary); }
   #settings-corner a:hover, #settings-corner button:hover {
     border-color: var(--accent); color: var(--accent); }
-  #units-toggle { padding:4px 8px; }
+  /* THE UNIT STACK borrows the settings stack's rows exactly -- same font,
+     same 64px minimum, same 1px gap -- because the DC corner's fault was
+     two 44px targets on top of each other, and the cure is the row height
+     that already works two inches to the left, not a new shape. */
+  #units-corner { display:flex; align-items:center; flex:0 0 auto; }
+  #units-corner .stack { display:flex; flex-direction:column; gap:1px; }
+  #units-corner button {
+    font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.05em; text-transform:uppercase;
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:64px; padding:2px 6px; cursor:pointer;
+    border:1px solid var(--edge-panel); border-radius:3px;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); }
+  #units-corner button:hover { border-color: var(--accent); color: var(--accent); }
+  /* SHADED MEANS IN FORCE (Movie, 15 Sep). The same accent fill the mode
+     corner uses, so a drafter reads "this one is on" once and it is true
+     everywhere on the page. */
+  #units-corner button[aria-pressed="true"] { color: var(--accent-ink);
+    background-color: var(--accent); border-color: var(--accent); }
   /* PRINTSCREEN borrows the settings corner's own button rules rather than
      inventing a third button shape on the same bar. */
   #printscreen {
@@ -302,15 +321,28 @@
   #mode-corner { display:flex; align-items:center; gap:5px; flex:0 0 auto;
     font-family: var(--font-ui); font-size:12px; font-weight:600;
     letter-spacing:0.04em; }
-  #mode-corner .set { display:flex; align-items:center;
+  #mode-corner .set, #house-strip .set { display:flex; align-items:center;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:4px; overflow:hidden; }
-  #mode-corner button { font:inherit; letter-spacing:inherit;
+  /* STACKED, and the stack is why the bar got NARROWER rather than wider
+     when the units gained a second button: TOY over DRAFTING is the width of
+     DRAFTING alone, where side by side it was both plus a divider. The bar
+     overflowed 1280 by 142px once already (PRINTSCREEN, 15 Sep); a
+     rearrangement that spent width would have walked back into it. */
+  #mode-corner .set.stack { flex-direction:column; align-items:stretch; }
+  #mode-corner button, #house-strip .set button { font:inherit; letter-spacing:inherit;
     padding:4px 7px; font-size:11px;
     text-transform:uppercase; cursor:pointer; border:none; background:none;
     color: var(--ink-quiet); }
-  #mode-corner button[aria-pressed="true"] { color: var(--accent-ink);
+  #mode-corner .set.stack button { padding:2px 7px; font-size:9px; }
+  #mode-corner button[aria-pressed="true"],
+  #house-strip .set button[aria-pressed="true"] { color: var(--accent-ink);
     background-color: var(--accent); }
+  /* A BUTTON'S WIDTH OF AIR (Movie, 15 Sep), on the inner side of each
+     switch. 44px is the page row's own button plus its gap, so the space
+     reads as "one missing button" rather than as a guessed margin. */
+  #house-strip .set.spaced { margin-left:44px; }
+  #house-strip .set.spaced-after { margin-right:44px; }
 
   /* THE FILE ROW, upper-right (§1): what the FILE is -- NEW, OPEN, SAVE with
      its three words, SAVE AS, and the extension the generated name takes.
@@ -350,7 +382,11 @@
   #page-row, #sheet-row { flex:0 0 auto; display:flex; align-items:center; gap:4px;
     font-family: var(--font-ui); font-size:11px; font-weight:600;
     letter-spacing:0.06em; }
-  #page-row a, #page-row button, #page-row span,
+  /* THE SWITCH SPANS ARE NOT PAGES. `#page-row span` is the chip treatment
+     for MODEL's you-are-here, and RUFF/ROUGH sitting in the same row would
+     have taken it -- a switch wearing a page's border, inside the row that
+     means "places you can go". */
+  #page-row a, #page-row button, #page-row > span:not(.set),
   #sheet-row a, #sheet-row button { font:inherit;
     letter-spacing:inherit; display:inline-flex; align-items:center;
     height:24px; padding:0 8px; text-transform:uppercase; text-decoration:none;
@@ -619,10 +655,20 @@
   .rail-tab:hover { color: var(--accent); border-color: var(--accent); }
   .rail-tab[hidden] { display:none; }
   #left-tab { left:0; border-left:none; border-radius:0 4px 4px 0; }
-  /* The right tab reads bottom-to-top so both tabs run outward from the edge
-     they hang on. */
-  #right-tab { right:0; border-right:none; border-radius:4px 0 0 4px;
-    writing-mode:vertical-lr; }
+  /* The right tabs read bottom-to-top so both edges' tabs run outward from
+     the edge they hang on. */
+  #right-tab, #previews-tab { right:0; border-right:none;
+    border-radius:4px 0 0 4px; writing-mode:vertical-lr;
+    max-height:32vh; }
+  /* THE SECOND TAB STARTS WHERE THE FIRST ENDS, and the gap is derived
+     rather than eyeballed: 32vh is each tab's cap, so 32vh + 8px clears the
+     first at every window height instead of at the one I happened to test.
+     A fixed pixel top would have overlapped the moment the viewport grew. */
+  #previews-tab { top: calc(var(--rail-top) + 32vh + 8px); }
+  /* THE TAB OF THE OPEN PANE IS LIT, so the edge says which of the two the
+     panel is showing without the drafter opening both to find out. */
+  .rail-tab[aria-selected="true"] { color: var(--accent);
+    border-color: var(--accent); }
   /* A panel is pinned to its own edge and is as tall as it needs to be, for
      the same reason as the tab: full height costs drawing area that a panel
      holding three rows of seats is not using. */
@@ -728,8 +774,20 @@
      the nine tenths of a point buys the thing §7c will not go without --
      a level switch that is still there when the rail is shut. */
   #right-rail[data-collapsed] { box-sizing:border-box; padding:6px; max-height:182px; }
-  #right-rail[data-collapsed] #view-rail { grid-template-columns:repeat(3, 84px); }
+  /* THE SEAT GRID IS TWO COLUMNS, OPEN OR COLLAPSED (Movie, 15 Sep: "only
+     the one with 2 columns"). The three-column collapsed variant above was
+     measured and it did hide less of the drawing -- 4.3% against the two
+     column 5.8% in the chart -- so this is a price being paid knowingly,
+     not the chart being forgotten. What it buys is one seat grid instead of
+     two: the rail a drafter learns open is the rail he meets collapsed,
+     where the widths changing under a collapse made the same six seats land
+     in different places depending on a state he was not thinking about. */
   #right-rail[data-collapsed] #props-slot { display:none; }
+  /* PROPERTIES BELONG TO THE LEVELS PANE. The slot shows itself when a tool
+     fills it, and that press can happen while the seats are showing -- so
+     the pane rules it out here rather than trusting every future caller to
+     remember which pane is up. */
+  #right-rail[data-pane-showing="previews"] #props-slot { display:none; }
   /* THE TOOL COLUMN. Four square keys a row, which is the old page's own
      shape and not a taste: at four across, DRAW/EDIT is three rows and BUILD
      is two, and the whole roster is reachable without the panel scrolling on
@@ -852,7 +910,7 @@
 
      Carried from MODEL.dc.html:1850-1955 by SHAPE, not by stylesheet: a card
      per level with its layer rows inside, the active one lit. */
-  #levels-panel { display:flex; flex-direction:column; gap:6px; margin-top:8px;
+  #levels-panel { display:flex; flex-direction:column; gap:6px;
     max-height:42vh; overflow-y:auto; scrollbar-width:none; }
   #levels-panel::-webkit-scrollbar { display:none; }
   /* THE LEVELS SURVIVE THE COLLAPSE (§7c). This rule used to read
@@ -873,6 +931,21 @@
   #right-rail[data-collapsed] #levels-panel .lv-card { flex:0 0 auto; }
   #right-rail[data-collapsed] #levels-panel .lv-layers,
   #right-rail[data-collapsed] #levels-panel .lv-del { display:none; }
+  /* ONE PANE SHOWS AT A TIME, and `hidden` is not enough on its own: both
+     panes set `display` in their own rules, which beats the attribute's UA
+     style. Named rather than matched by [data-pane] because the collapsed
+     rules above carry two ids and would outrank an attribute selector, and
+     placed after them because they tie on specificity -- a hidden pane that
+     draws itself anyway is the silent kind of wrong this page keeps paying
+     for. */
+  #right-rail #levels-panel[hidden],
+  #right-rail #view-rail[hidden] { display:none; }
+  /* EXCEPT THE CHIPS, SHUT (§7c). Collapsed, the levels panel is not a pane
+     -- it is the level switch, reduced to the names, and it is the only one
+     the page has left now the chrome bar's picker is gone. Shutting the rail
+     on the previews pane would otherwise take the drafter's level switch away
+     as a side effect of which tab he last pressed. */
+  #right-rail[data-collapsed] #levels-panel[hidden] { display:flex; }
   .lv-head { display:flex; align-items:center; gap:6px; }
   .lv-head-title { flex:1; font-family: var(--font-ui); font-size:9px;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet); }
@@ -1042,16 +1115,36 @@
   <div id="tool-slot" data-tool-slot></div>
 </aside>
 
-<button id="right-tab" class="rail-tab" type="button" data-right-tab hidden>VIEWS · PROPERTIES</button>
+<!-- TWO TABS ON THE RIGHT EDGE (Movie, 15 Sep): "2 seperate tabs top will be
+     LEVELS / LAYERS, and then next down LAYOUT PREVIEWS".
+
+     THIS OVERTURNS A RULING OF MINE, and the reason it can is that the
+     ruling's evidence was about OVERLAP, not about count: two tabs on one
+     edge is how #389's chrome-on-chrome collisions happened, when both were
+     pinned to the same top. These two are pinned in sequence -- the second
+     starts where the first ends -- and the pairwise chrome check measures
+     every pair of boxes on the page, so a tab that grows into its neighbour
+     fails a run rather than reaching a drafter.
+
+     ONE PANE AT A TIME, because the panel is bounded at 288px and stacking
+     both panes inside it was the arrangement that made the rail scroll past
+     the levels to reach the seats. Pressing the open tab shuts the rail;
+     pressing the other swaps the pane without shutting. -->
+<button id="right-tab" class="rail-tab" type="button" data-right-tab
+  data-pane-tab="levels" hidden>LEVELS / LAYERS</button>
+<button id="previews-tab" class="rail-tab" type="button" data-previews-tab
+  data-pane-tab="previews" hidden>LAYOUT PREVIEWS</button>
 <aside id="right-rail" data-right-rail data-collapsed hidden>
-  <div id="view-rail"></div>
   <!-- LEVELS / LAYERS. The rail's EDITOR, not its companion: the layer rows
        inside a level card are the same objects as the seats, so adding a
        level adds two seats and deleting one takes them away. -->
-  <div id="levels-panel" data-levels-panel></div>
+  <div id="levels-panel" data-levels-panel data-pane="levels"></div>
   <!-- PER-TOOL PROPERTIES, the slot and nothing in it. Gilligan fills this;
-       the contract is in the comment beside setToolProperties below. -->
+       the contract is in the comment beside setToolProperties below. It
+       rides with LEVELS / LAYERS: properties belong to the thing selected,
+       which is what that pane is about. -->
   <div id="props-slot" data-props-slot hidden></div>
+  <div id="view-rail" data-pane="previews"></div>
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 
@@ -1088,6 +1181,13 @@
        has always kept its dormant chips: the row is the map of the job. -->
   <button type="button" data-page="real-estate" disabled
     title="REAL ESTATE LAYOUT — the marketing floor plan, not built yet">REAL ESTATE LAYOUT</button>
+  <!-- THE FINISH SWITCH, a button's width clear of the pages (Movie, 15 Sep:
+       "add extra space of about 1 button between them"). The gap is the
+       sentence: this is not a seventh page, and a switch flush against the
+       page row would read as one. --><span class="set spaced" data-theme-switch data-switch-home>
+    <button type="button" data-theme="ruff" aria-pressed="false">RUFF</button>
+    <button type="button" data-theme="rough" aria-pressed="false">ROUGH</button>
+  </span>
 </div>
   <div class="grow"></div>
   <!-- THE MIDDLE PAIR (Movie, 15 Sep): "2 buttons, the DRIVE-THRU MENU, and
@@ -1148,6 +1248,12 @@
        row's dormant chips always were -- the row is the map of the job, and
        a map with a town missing teaches the drafter a shape that is wrong. -->
   <div id="sheet-row" data-sheet-row>
+    <!-- NIGHT/DAY, the mirror of RUFF/ROUGH at the other end and spaced the
+         same way, so the two switches read as a pair holding the bar's ends
+         rather than as two more sheets. --><span class="set spaced-after" data-mode-switch data-switch-home>
+      <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
+      <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
+    </span>
     <a data-page="construction" href="./LAYOUT.dc.html"
       title="The construction layout: the sheet that goes to site">CONSTRUCTION LAYOUT</a>
     <a data-page="specs" href="./SPECS.html"
@@ -1220,17 +1326,11 @@
      page has a night skin. Everything here paints in currentColor and takes
      it from a palette role. -->
 <div id="strip" data-instrument-strip>
-  <!-- THE SETTINGS CORNER, first on the bar: the two profile pages and the
-       unit in force. SETTINGS and STANDARDS are PAGES on this side of the
-       shop (SETTINGS.html, STANDARDS.html), where MODEL.dc.html opens them as
-       dialogs -- the page row already teaches that a place you go is a link,
-       and a modal that only links onward would be a door in front of a door.
-
-       UNITS IS ONE BUTTON NAMING THE UNIT IN FORCE, which is MODEL.dc.html's
-       own ruling (:435-442) and its reason: two stacked buttons at a 44px
-       touch target overlap, so METRIC ate every tap aimed at IMPERIAL. The
-       label is a STATEMENT, not a command -- "UNITS: IMPERIAL" cannot be
-       misread as "tapping makes it imperial" the way a lone "METRIC" can. -->
+  <!-- THE SETTINGS CORNER, first on the bar: the two profile pages. SETTINGS
+       and STANDARDS are PAGES on this side of the shop (SETTINGS.html,
+       STANDARDS.html), where MODEL.dc.html opens them as dialogs -- the page
+       row already teaches that a place you go is a link, and a modal that
+       only links onward would be a door in front of a door. -->
   <div id="settings-corner" data-settings-corner>
     <div id="settings-stack">
       <a data-page="settings" href="./SETTINGS.html"
@@ -1238,25 +1338,34 @@
       <a data-page="standards" href="./STANDARDS.html"
         title="Company standard layers, names and print rules">STANDARDS</a>
     </div>
-    <button type="button" id="units-toggle" data-unit-toggle>UNITS: IMPERIAL</button>
   </div>
-  <!-- PRINTSCREEN (Movie, 15 Sep), and it is NOT a print of the drawing.
-       There is no print path on this page on purpose: a sheet's scale and
-       title block live on the layout, and a second renderer here would be a
-       second thing the city could be handed. What this makes is a
-       PRESENTATION -- three screen grabs for a client to look at -- and
-       every page says NOT TO SCALE above the logo so it can never be walked
-       into a builder's office as a drawing. Its place on the bar is Movie's:
-       between UNITS and the mode corner. -->
-  <button type="button" id="printscreen" data-printscreen
-    title="Three pages to show a client — this view, the whole plan, and the views rail. Not to scale.">PRINTSCREEN</button>
+  <!-- UNITS, THE SECOND STACK (Movie, 15 Sep): "put IMPERIAL (and then under a
+       second button) METRIC - and shade in the one being used".
+
+       THIS REPLACES A DC RULING RATHER THAN IGNORING IT. MODEL.dc.html
+       (:435-442) made units ONE button naming the unit in force because its
+       two stacked buttons, at a 44px touch target, OVERLAPPED -- METRIC ate
+       every tap aimed at IMPERIAL. The failure was the hit boxes, not the
+       stacking: these two are the settings stack's own 9px rows, the shape
+       already standing beside them without that fault. What kept the ruling
+       honest was a measurement, so what replaces it carries one --
+       model-html-topbar asserts each button's own centre hits ITSELF, which
+       is the exact check the old corner would have failed. -->
+  <div id="units-corner" data-units-corner data-switch-home>
+    <div class="stack">
+      <button type="button" data-units="imperial" aria-pressed="true"
+        title="Read this drawing in feet and inches">IMPERIAL</button>
+      <button type="button" data-units="metric" aria-pressed="false"
+        title="Read this drawing in metres">METRIC</button>
+    </div>
+  </div>
 <!-- THE MODE CORNER (§7b): WHAT THE DRAWING IS. Carried whole out of the foot
      strip -- same buttons, same data-* attributes, same listeners. TOY still
      means cardinal, square and whole-foot and DRAFTING is still one-way; a
      control that changed meaning because it changed corner would be the
      re-scope §7b forbids. -->
-<div id="mode-corner" data-mode-corner>
-  <span class="set" data-board-switch>
+<div id="mode-corner" data-mode-corner data-switch-home>
+  <span class="set stack" data-board-switch>
     <!-- NO title HERE. These two are set from script below, and a static one
          would be overwritten -- which is exactly what happened when this
          markup was given titles first: they read correctly in the file and
@@ -1265,15 +1374,24 @@
     <button type="button" data-board="toy" aria-pressed="false">TOY</button>
     <button type="button" data-board="drafting" aria-pressed="false">DRAFTING</button>
   </span>
-  <span class="set" data-theme-switch>
-    <button type="button" data-theme="ruff" aria-pressed="false">RUFF</button>
-    <button type="button" data-theme="rough" aria-pressed="false">ROUGH</button>
-  </span>
-  <span class="set" data-mode-switch>
-    <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
-    <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
-  </span>
 </div>
+<!-- RUFF/ROUGH AND NIGHT/DAY WENT DOWNSTAIRS (Movie, 15 Sep), to either side
+     of the bottom bar. They are not instruments and they are not what the
+     drawing IS in the sense TOY/DRAFTING is -- they are how the sheet is
+     LOOKED AT -- and the bottom bar is where the page's other "which way am I
+     looking at this" controls already live. The markup moved whole: same
+     data-* attributes, same listeners, same aria-pressed shading. -->
+  <!-- PRINTSCREEN (Movie, 15 Sep), and it is NOT a print of the drawing.
+       There is no print path on this page on purpose: a sheet's scale and
+       title block live on the layout, and a second renderer here would be a
+       second thing the city could be handed. What this makes is a
+       PRESENTATION -- three screen grabs for a client to look at -- and
+       every page says NOT TO SCALE above the logo so it can never be walked
+       into a builder's office as a drawing. Its place on the bar is Movie's:
+       "next over printscreen button by itself", after the three stacks and
+       before the instruments. -->
+  <button type="button" id="printscreen" data-printscreen
+    title="Three pages to show a client — this view, the whole plan, and the views rail. Not to scale.">PRINTSCREEN</button>
   <span id="strip-message" data-strip-message></span>
   <div class="grow"></div>
 
@@ -3467,10 +3585,12 @@
   // BOTH DEFAULT SHUT, which is MODEL.dc.html's own default (:3009, "pull-out
   // tabs: both side rails start hidden") and the only state that costs the
   // drafter nothing. tests/model-html-shell.spec.js measures all four.
-  const RAILS = [
-    { side: 'left', param: 'left', tab: 'left-tab', panel: 'left-rail' },
-    { side: 'right', param: 'right', tab: 'right-tab', panel: 'right-rail' },
-  ];
+  //
+  // THE TABLE OF RAILS IS GONE, not mislaid: it paired one tab with one
+  // param, and the right edge now has two tabs driving one param plus a
+  // pane. A row that said `tab: 'right-tab'` would have been a second,
+  // wrong answer to "which tab opens the right rail" sitting beside the
+  // real one.
   const railOpen = param => params.get(param) === '1';
   const setRail = (param, open) => {
     if (open) params.set(param, '1'); else params.delete(param);
@@ -3489,6 +3609,27 @@
   // open panel on purpose (:1766) -- "every view stays one tap away". Shut to
   // zero would have taken that away, so shut means ONE SEAT WIDE: all six
   // seats, single column, no properties.
+  // WHICH PANE THE RIGHT RAIL IS SHOWING, in the URL beside `right` for the
+  // same reason `right` is there: it is what the drafter is looking at, it
+  // survives a reload, and it is shareable. `right` still says OPEN or SHUT
+  // on its own, so every check written against `?right=1` keeps its meaning
+  // -- the pane is a second, independent fact, not a repacking of the first.
+  const PANES = ['levels', 'previews'];
+  const paneShowing = () =>
+    PANES.includes(params.get('pane')) ? params.get('pane') : 'levels';
+  const setPane = pane => {
+    // Pressing the tab that is already up SHUTS the rail, which is what the
+    // one tab did and the gesture a drafter already has. Pressing the other
+    // swaps panes and leaves it open -- shutting on a swap would make the
+    // second tab cost two presses to use.
+    if (pane === paneShowing() && railOpen('right')) { setRail('right', false); return; }
+    params.set('pane', pane);
+    if (!railOpen('right')) { setRail('right', true); return; }
+    syncUrl();
+    syncShell();
+    paint();
+  };
+
   const syncShell = () => {
     const leftOpen = railOpen('left');
     const leftPanel = document.getElementById('left-rail');
@@ -3502,14 +3643,23 @@
     // Never hidden: collapsed is a width, not an absence.
     rightPanel.hidden = false;
     rightPanel.toggleAttribute('data-collapsed', !rightOpen);
-    const rightTab = document.getElementById('right-tab');
-    rightTab.hidden = false;
-    rightTab.setAttribute('aria-expanded', String(rightOpen));
+    const pane = paneShowing();
+    rightPanel.dataset.paneShowing = pane;
+    rightPanel.querySelectorAll('[data-pane]').forEach(el => {
+      el.hidden = el.dataset.pane !== pane;
+    });
+    [...document.querySelectorAll('.rail-tab[data-pane-tab]')].forEach(tab => {
+      tab.hidden = false;
+      tab.setAttribute('aria-expanded',
+        String(rightOpen && tab.dataset.paneTab === pane));
+      tab.setAttribute('aria-selected', String(tab.dataset.paneTab === pane));
+    });
   };
 
-  RAILS.forEach(({ param, tab }) => {
-    document.getElementById(tab)
-      .addEventListener('click', () => setRail(param, !railOpen(param)));
+  document.getElementById('left-tab')
+    .addEventListener('click', () => setRail('left', !railOpen('left')));
+  [...document.querySelectorAll('.rail-tab[data-pane-tab]')].forEach(tab => {
+    tab.addEventListener('click', () => setPane(tab.dataset.paneTab));
   });
 
   // ── the build bar, and the seam behind it ─────────────────────────────────
@@ -4018,22 +4168,30 @@
   // it is the one this page can keep -- a re-snap that rounded a permit
   // drawing's walls on a button press is the opposite of what Movie asked
   // the foot light for.
-  const unitsToggle = document.getElementById('units-toggle');
+  //
+  // TWO BUTTONS NOW, NOT ONE (Movie, 15 Sep), and the shading is what makes
+  // that safe to say: with a toggle, the label had to carry the state,
+  // which is why it read "UNITS: IMPERIAL" rather than "IMPERIAL". Two
+  // buttons name the two systems and the accent says which is in force, so
+  // neither label has to do a second job. Each is a SET, not a toggle --
+  // pressing IMPERIAL while imperial is in force does nothing, where a
+  // toggle pressed twice by a slipping thumb changed the drawing.
+  const unitButtons =
+    [...document.querySelectorAll('#units-corner button[data-units]')];
   const metric = () => drawing?.units === 'metric';
   const paintUnits = () => {
-    if (!unitsToggle) return;
-    unitsToggle.textContent = metric() ? 'UNITS: METRIC' : 'UNITS: IMPERIAL';
-    unitsToggle.title = metric()
-      ? 'The drawing is in metric — tap to switch to imperial'
-      : 'The drawing is in imperial — tap to switch to metric';
+    unitButtons.forEach(b => b.setAttribute('aria-pressed',
+      String((b.dataset.units === 'metric') === metric())));
   };
-  unitsToggle?.addEventListener('click', () => {
+  unitButtons.forEach(b => b.addEventListener('click', () => {
     if (!drawing) return;
-    drawing.units = metric() ? 'imperial' : 'metric';
+    const wanted = b.dataset.units === 'metric';
+    if (wanted === metric()) return;
+    drawing.units = wanted ? 'metric' : 'imperial';
     markDirty();
     paintUnits();
     paint();
-  });
+  }));
 
   // replaceState, not pushState: a switch is a change of viewpoint, not a
   // navigation, and forty pushes would bury whatever page the drafter came
@@ -7368,13 +7526,20 @@
   // THE THREE SWITCHES LIVE IN THE MODE CORNER, not the strip: §7b moved them
   // to the head-left so the strip carries instruments and readings only.
   //
-  // BUTTONS ONLY, and inside the corner. `html` carries `data-theme` and
-  // `body` carries `data-board` -- those are the marks the switches SET --
-  // so a document-wide query hands the switch code its own output as a
+  // BUTTONS ONLY, AND INSIDE A DECLARED HOME. `html` carries `data-theme`
+  // and `body` carries `data-board` -- those are the marks the switches SET
+  // -- so a document-wide query hands the switch code its own output as a
   // control: every click then bubbles to `html`, re-reads the theme off it
   // and rewrites the skin key without the board in it.
+  //
+  // THE HOME IS AN ATTRIBUTE, NOT A LIST OF IDS, because the switches no
+  // longer live in one place: TOY/DRAFTING is on the strip and RUFF/ROUGH
+  // and NIGHT/DAY went to the bottom bar (Movie, 15 Sep). `#mode-corner,
+  // #house-strip` would have worked today and gone stale the first time one
+  // moved again -- and it fails SILENTLY, with the switch simply never
+  // wired, which is the failure shape this page keeps paying for.
   const switchSet = attr =>
-    [...document.querySelectorAll(`#mode-corner button[${attr}]`)];
+    [...document.querySelectorAll(`[data-switch-home] button[${attr}]`)];
   const themeButtons = switchSet('data-theme');
   const modeButtons = switchSet('data-skin-mode');
   const boardButtons = switchSet('data-board');

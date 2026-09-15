@@ -42,7 +42,12 @@ async function openWith(page, cuts = []) {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, saved: REPRO, sections: cuts });
-  await page.goto('/MODEL.html?mode=night');
+  // THE SEATS LIVE BEHIND THE LAYOUT PREVIEWS TAB (Movie, 15 Sep). The right
+  // edge shows one pane at a time and opens on LEVELS / LAYERS, so a spec
+  // about seats has to say which pane it is standing in -- the alternative,
+  // pressing a seat in a pane that is not up, is the sort of click that
+  // "works" against a hidden element and proves nothing.
+  await page.goto('/MODEL.html?mode=night&pane=previews');
   // THE READY SIGNAL IS THE READOUT, not `data-model-ready` — that attribute
   // belongs to MODEL.dc.html and this page never sets it.
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });

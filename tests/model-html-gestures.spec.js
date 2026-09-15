@@ -604,7 +604,14 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             //
             // No absence row changes. Nothing listens on onOrder yet, and the
             // page could already reach this board.
-            'units-toggle', 'dt-open', 'dt-close', 'dt-bone', 'outline',
+            // UNITS IS TWO BUTTONS NOW, not one naming the unit in force
+            // (Movie, 15 Sep). They carry no id, so the census sees them by
+            // their faces. Neither authors an entity: they change how a
+            // length is READ, which is why no absence row moves.
+            'IMPERIAL', 'METRIC',
+            // The previews tab, the second of the right edge's two.
+            'previews-tab',
+            'dt-open', 'dt-close', 'dt-bone', 'outline',
             // PRINTSCREEN PRINTS THE SCREEN, and that is the whole of it: a
             // three-page presentation made from pictures the page has
             // already painted -- this view, the whole plan, the rail's
