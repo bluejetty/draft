@@ -52,6 +52,7 @@ async function openPage(page) {
 const boxes = async page => ({
   open: await page.locator('#dt-open').boundingBox(),
   bone: await page.locator('#bone').boundingBox(),
+  outline: await page.locator('#outline').boundingBox(),
   sign: await page.locator('#dt-frame').boundingBox(),
 });
 
@@ -78,8 +79,8 @@ test('the foot bar: PROJECT and MODEL left, the pair in the middle, the sheets r
     // and not this suite's business.
     expect(await page.locator('#dt-bar > *:not([hidden])').evaluateAll(els => els.map(
       el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
-    'the middle of the foot is the drive-thru and the bone')
-      .toEqual(['DRIVE-THRU MENU', 'BONE']);
+    'the middle of the foot is the drive-thru, the bone and the outline')
+      .toEqual(['DRIVE-THRU MENU', 'BONE', 'OUTLINE']);
 
     // AND THE PAGES THAT ARE NOT BUILT ARE STILL DOWN. Moving a chip between
     // groups must not have quietly lit it.
@@ -101,7 +102,8 @@ test('the sign rises from the foot and covers both presses', async ({ page }) =>
   // COVERS BOTH, which is the requirement in Movie's own words. Read as
   // containment of each press's rectangle in the board's, so a sign that
   // rises but stops short of the bone fails here rather than in a squint.
-  for (const [name, box] of [['DRIVE-THRU MENU', up.open], ['BONE', up.bone]]) {
+  for (const [name, box] of [['DRIVE-THRU MENU', up.open], ['BONE', up.bone],
+    ['OUTLINE', up.outline]]) {
     expect(box.y >= up.sign.y && box.y + box.height <= up.sign.y + up.sign.height
       && box.x >= up.sign.x && box.x + box.width <= up.sign.x + up.sign.width,
     `the board left ${name} showing underneath it`).toBe(true);
@@ -187,29 +189,76 @@ test('opening the window and shutting it again is not an edit', async ({ page })
     .toBe(before);
 });
 
-test('the bone on the post is the same bone, not a second one', async ({ page }) => {
-  await openPage(page);
-  await h.openDriveThru(page);
+test('the post\'s bone orders off the menu; the foot\'s builds what was drawn',
+  async ({ page }) => {
+    await openPage(page);
+    await h.openDriveThru(page);
 
-  // ONE VERB, TWO PRESSES. The seam is `ModelBuild.onBuild`; both bones fire
-  // it with the same order, or the premade designs end up wired to whichever
-  // bone the drafter happened to press.
-  const seen = await page.evaluate(async () => {
-    const log = [];
-    window.ModelBuild.onBuild(p => log.push(p?.entry?.id ?? 'null'));
-    document.querySelector('#dt-tiles [data-build-family="bungalow"]').click();
-    await new Promise(r => setTimeout(r, 60));
-    document.querySelector('#dt-tiles [data-build-entry]').click();
-    await new Promise(r => setTimeout(r, 60));
-    const chosen = window.ModelBuild.chosen()?.entry?.id ?? 'null';
-    document.getElementById('dt-bone').click();
-    document.getElementById('bone').click();
-    return { log, chosen };
+    // TWO BONES, TWO VERBS. Movie, 15 Sep: "the bone on the drivethru menu
+    // will auto build the house that is provided for their selection... the
+    // bone on the screen will be for if they draw their own OUTLINE".
+    //
+    // This suite used to assert the opposite -- one seam, two presses -- and
+    // it was wrong about the feature, not about the code. Wired together,
+    // the premade designs would land under a drafter who had traced his own
+    // walls and pressed the bone beneath them, wiping the thing he drew. The
+    // separation is the whole safety of the arrangement, so it is checked in
+    // both directions: each press fires its own seam and NOT the other's.
+    const seen = await page.evaluate(async () => {
+      const built = [];
+      const ordered = [];
+      window.ModelBuild.onBuild(p => built.push(p?.entry?.id ?? 'null'));
+      window.ModelBuild.onOrder(p => ordered.push(p?.entry?.id ?? 'null'));
+      document.querySelector('#dt-tiles [data-build-family="bungalow"]').click();
+      await new Promise(r => setTimeout(r, 60));
+      document.querySelector('#dt-tiles [data-build-entry]').click();
+      await new Promise(r => setTimeout(r, 60));
+      const chosen = window.ModelBuild.chosen()?.entry?.id ?? 'null';
+      document.getElementById('dt-bone').click();
+      document.getElementById('bone').click();
+      return { built, ordered, chosen };
+    });
+
+    expect(seen.ordered, 'the sign\'s bone did not order the chosen design')
+      .toEqual([seen.chosen]);
+    expect(seen.built, 'the foot\'s bone did not fire the outline seam once')
+      .toEqual([seen.chosen]);
   });
 
-  expect(seen.log, 'the two bones did not fire one seam with one order')
-    .toEqual([seen.chosen, seen.chosen]);
-});
+test('OUTLINE calls up the same board, and its bone means draw it yourself',
+  async ({ page }) => {
+    await openPage(page);
+
+    // Movie, 15 Sep: "if they press it lets also have the same drivethru
+    // menu come up, but when they press the bone at the end after that
+    // round, they are guided through drawing" it. ONE BOARD, TWO EXITS --
+    // and the only thing separating them is which button called it up, so
+    // the round has to survive the trip to the seam or the premade design
+    // lands on a drafter who asked to draw his own.
+    await page.locator('#outline').click();
+    await expect(page.locator('#drivethru'))
+      .not.toHaveAttribute('data-shut', '', { timeout: 5000 });
+
+    const seen = await page.evaluate(async () => {
+      const ordered = [];
+      window.ModelBuild.onOrder(p => ordered.push(p?.round ?? 'none'));
+      document.querySelector('#dt-tiles [data-build-family="bungalow"]').click();
+      await new Promise(r => setTimeout(r, 60));
+      document.querySelector('#dt-tiles [data-build-entry]').click();
+      await new Promise(r => setTimeout(r, 60));
+      const note = document.querySelector('[data-drivethru-note]').textContent;
+      document.getElementById('dt-bone').click();
+      return { ordered, note };
+    });
+
+    expect(seen.ordered, 'the OUTLINE round did not reach the seam')
+      .toEqual(['outline']);
+    // AND GRUFF SAYS WHICH ROUND IT IS. Both rounds end on the same bone;
+    // the screen is the drafter's only warning of what pressing it does.
+    expect(seen.note.toLowerCase(),
+      'the dog promised to build it on the round where the drafter draws it')
+      .toContain('drawing it');
+  });
 
 test('every tile is on the shelf and says its own name, card or no card',
   async ({ page }) => {
