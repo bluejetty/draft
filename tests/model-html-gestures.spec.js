@@ -546,7 +546,24 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'delete', 'save', 'take-over',
             'file-new', 'file-open', 'file-save-as',
             'REAL ESTATE LAYOUT', 'ESTIMATES',
-            'units-toggle', 'dt-open', 'dt-close', 'dt-bone',
+            // OUTLINE ARRIVED WITH 0006 AND WAS NOT LISTED, which is this
+            // check doing precisely the job it advertises: "a control appears
+            // here that no row mentions". Added rather than the list loosened.
+            //
+            // It is not a new verb. `#outline` (data-drivethru-outline) calls
+            // up the SAME drive-thru board as the sign's bone, through the
+            // same lit delay, and tags the round 'outline'.
+            //
+            // WHAT THAT TAG DECIDES is the bone at the END of the round: an
+            // 'outline' round guides the drafter through tracing his own
+            // shape, where the default drops the premade design for the type
+            // he picked. Same board, same press, different thing at the end --
+            // which is why Gruff's line changes to match, since that line is
+            // the drafter's only warning of what the bone will do.
+            //
+            // No absence row changes. Nothing listens on onOrder yet, and the
+            // page could already reach this board.
+            'units-toggle', 'dt-open', 'dt-close', 'dt-bone', 'outline',
             'strip-ruler', 'strip-tsquare',
             'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'Continue', 'Stay in TOY',
