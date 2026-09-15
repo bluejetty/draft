@@ -294,10 +294,17 @@ test('every control is a tenant of a bar, and the counters sit above the foot',
       .toBeGreaterThan(where.stripOrder.indexOf('settings-corner'));
     expect(where.stripOrder[where.stripOrder.length - 1]).toBe('file-row');
 
-    // THE FOOT BAR: the page row leads it, the build bar and DELETE follow.
+    // THE FOOT BAR: the page row leads it, the middle pair sits between the
+    // two ends, and the sheets close it (Movie, 15 Sep). The build bar is no
+    // longer a tenant of the foot at all -- it went up onto Gruff's board,
+    // which is the sign, not the bar, and lives outside both.
     expect(where.page).toBe('house-strip');
     expect(where.footOrder[0]).toBe('page-row');
-    expect(where.footOrder).toContain('build-bar');
+    expect(where.footOrder.indexOf('dt-bar'))
+      .toBeGreaterThan(where.footOrder.indexOf('page-row'));
+    expect(where.footOrder[where.footOrder.length - 1]).toBe('sheet-row');
+    expect(where.footOrder, 'the house menu is on the sign now, not in the bar')
+      .not.toContain('build-bar');
 
     // THE COUNTERS CAME BACK DOWN -- "to the bottom of the grid area just
     // above the darker area" -- and the view reads there with them, which is

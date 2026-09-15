@@ -532,11 +532,21 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // `delete-wall` are gone from this list because the shell took the
           // bar they sat in: WALL is a key in the column now, and DELETE is
           // one generic verb (`delete`) rather than a wall-only one.
+          //
+          // AND A FIFTH TIME, with the dashboard (Movie, 15 Sep). UNITS is a
+          // reading, not a making -- it changes the numbers the drafter is
+          // shown and the unit the file records, and moves no point -- so no
+          // absence row moves. The three drive-thru presses are the house
+          // menu's new door: `dt-open` raises Gruff's sign, `dt-close` drops
+          // it, and `dt-bone` is the SECOND bone, on the post. It fires the
+          // same seam the foot's bone does, and the seam's own suite asserts
+          // both draw nothing -- so BUILD HOUSE stays absent, twice over.
           buttons: ['left-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
             'delete', 'save', 'take-over',
             'file-new', 'file-open', 'file-save-as',
             'REAL ESTATE LAYOUT', 'ESTIMATES',
+            'units-toggle', 'dt-open', 'dt-close', 'dt-bone',
             'strip-ruler', 'strip-tsquare',
             'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'Continue', 'Stay in TOY',
@@ -547,7 +557,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // would have slipped past the button census entirely -- and a
           // navigation control that draws nothing is still a control this
           // list has to account for.
-          anchors: ['PROJECT', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS'].sort(),
+          // SETTINGS and STANDARDS join them: destinations in the top bar,
+          // and links for the same reason PROJECT is one.
+          anchors: ['PROJECT', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS',
+            'SETTINGS', 'STANDARDS'].sort(),
           selects: ['file-ext'],
           // THE LENGTH BOX and the SAVE AS name, plus ONE file input -- the
           // drawing picker OPEN hangs on. It is named here rather than

@@ -185,13 +185,16 @@
     border-color: var(--accent); color: var(--accent); }
   #units-toggle { padding:4px 8px; }
 
-  /* THE CLUSTER IS ABSOLUTELY CENTRED, not laid out between the two ends.
-     Flexed between them it would slide left and right as the message text
-     changes length, and a ruler that moves while you read a number is worse
-     than one an inch off centre. */
-  #strip-center { position:absolute; left:50%; top:0; height:var(--strip-h);
-    transform:translateX(-50%); display:flex; align-items:center; gap:10px;
-    padding:0 8px; }
+  /* THE INSTRUMENTS SIT IN THE BAR, not on top of it. They were centred by
+     absolute position, which takes no room in the flow -- so the two grow
+     spacers either side of them shared the whole bar between the corners and
+     the instruments floated over whatever ended up in the middle. With
+     SETTINGS, STANDARDS and UNITS added to the left end that turned out to be
+     the mode corner: the TRIANGLE chip landed on DAY and ate the tap.
+     A flex child between the same two spacers is centred by the same
+     arithmetic and cannot overlap anything. */
+  #strip-center { flex:0 0 auto; height:var(--strip-h);
+    display:flex; align-items:center; gap:10px; padding:0 8px; }
   .chip { display:inline-flex; align-items:center; gap:3px; padding:2px 4px;
     border:1px solid transparent; border-radius:4px; background:none;
     color: var(--ink-secondary); cursor:pointer; }
@@ -265,22 +268,25 @@
      A BUTTON THAT GOES NOWHERE LOOKS LIKE IT GOES NOWHERE -- the dormant
      chip's own treatment, quarter ink and no pointer, because a control that
      lights and does nothing is a worse lie than one that is plainly down. */
-  #page-row { flex:0 0 auto; display:flex; align-items:center; gap:4px;
+  #page-row, #sheet-row { flex:0 0 auto; display:flex; align-items:center; gap:4px;
     font-family: var(--font-ui); font-size:11px; font-weight:600;
     letter-spacing:0.06em; }
-  #page-row a, #page-row button, #page-row span { font:inherit;
+  #page-row a, #page-row button, #page-row span,
+  #sheet-row a, #sheet-row button { font:inherit;
     letter-spacing:inherit; display:inline-flex; align-items:center;
     height:24px; padding:0 8px; text-transform:uppercase; text-decoration:none;
     border-radius:4px; border:1px solid var(--edge-panel);
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     color: var(--ink-primary); cursor:pointer; }
-  #page-row a:hover, #page-row button:hover { border-color: var(--accent);
+  #page-row a:hover, #page-row button:hover,
+  #sheet-row a:hover, #sheet-row button:hover { border-color: var(--accent);
     color: var(--accent); }
   /* HERE, not a link to here. A button that reloads the page you are on
      loses an unsaved corner to a stray thumb. */
   #page-row [aria-current="page"] { color: var(--accent);
     border-color: var(--accent); cursor:default; }
-  #page-row button:disabled, #page-row button:disabled:hover {
+  #page-row button:disabled, #page-row button:disabled:hover,
+  #sheet-row button:disabled, #sheet-row button:disabled:hover {
     color: var(--ink-quiet); opacity:0.35; cursor:not-allowed;
     border-color: var(--edge-panel); }
 
@@ -317,12 +323,15 @@
   body[data-lease-held="0"] #elsewhere { top:calc(var(--note-top) + 68px); }
 
   /* THE HOUSE STRIP, along the foot (§7b): what the drafter PICKS. This is
-     the region the drive-thru sign will rise into and cover, which is why
+     the region the drive-thru sign rises into and covers, which is why
      nothing read while drawing lives here -- and why DELETE, which does live
-     here, is unavailable while the sign is up. The sign is not built; the
-     page's modal layer (#promote, #bone-choice, z-index 7 over the whole
-     viewport) is the mechanism it will use, and it already covers this strip
-     at z-index 6. */
+     here, is unavailable while the sign is up.
+
+     THREE GROUPS ACROSS IT (Movie, 15 Sep): the two live places on the left,
+     the two drive-thru presses in the middle, the sheets that come off this
+     model on the far right. The middle pair is what the sign covers, and it
+     is the only pair there for exactly that reason -- a control the sign
+     hides is a control the drafter cannot reach while ordering. */
   #house-strip { position:fixed; left:0; right:0; bottom:0; z-index:6;
     min-height:var(--house-h);
     display:flex; align-items:center; gap:8px; padding:0 12px;
@@ -341,23 +350,86 @@
   #delete:hover { color: var(--accent); border-color: var(--accent); }
   #delete[hidden] { display:none; }
 
-  /* THE BUILD BAR, centred in the house strip. */
-  #build-bar { flex:0 1 auto;
-    display:flex; align-items:center; justify-content:center; gap:6px; }
-  #build-bar[hidden] { display:none; }
-  #build-families, #build-entries { display:flex; gap:4px; }
-  #build-entries[hidden] { display:none; }
-  #build-bar button { font-family: var(--font-ui); font-size:11px; font-weight:600;
-    letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;
-    color: var(--ink-primary); padding:6px 10px; border-radius:6px;
+  /* THE MIDDLE PAIR: the sign and the bone, the only two presses the sign
+     covers. DELETE travels with them because it is a verb, not a place. */
+  #dt-bar { flex:0 0 auto; display:flex; align-items:center; gap:8px; }
+  #dt-open { font-family: var(--font-ui); font-size:12px; font-weight:700;
+    letter-spacing:0.08em; text-transform:uppercase; cursor:pointer;
+    color: var(--ink-primary); padding:6px 14px; border-radius:6px;
     border:1px solid var(--edge-panel);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none); }
-  #build-bar button:hover { border-color: var(--accent); color: var(--accent); }
+  #dt-open:hover, #dt-open[aria-expanded="true"] {
+    color: var(--accent); border-color: var(--accent); }
+
+  /* THE DRIVE-THRU SIGN. It rises from the foot and covers the two presses
+     in the middle of the strip -- z-index 7, the page's modal layer, over
+     the strip's 6. Off screen rather than hidden while shut so the rise is a
+     movement the drafter can follow; `visibility` goes with it so nothing
+     under the foot takes a stray press.
+
+     THE BOARD IS ONE IMAGE and every zone on it is a percentage of that
+     image, measured off assets/drivethru-menu-board.png (1024x1024). The
+     art moves, the zones move with it, and nothing here hardcodes a pixel.
+     The same arrangement as gruff-drivethru.js, for the same reason: the
+     board is a PICTURE, and only the controls painted on top of it take a
+     press. */
+  #drivethru { position:fixed; left:50%; bottom:0; z-index:7;
+    width:min(560px, calc(100vw - 24px)); transform:translate(-50%, 0);
+    transition:transform 220ms ease-out, visibility 220ms;
+    pointer-events:none; }
+  #drivethru[data-shut] { transform:translate(-50%, 104%); visibility:hidden; }
+  #dt-frame { position:relative; width:100%; aspect-ratio:1 / 1; }
+  #dt-board { position:absolute; inset:0; width:100%; height:100%;
+    display:block; pointer-events:none; }
+  /* Gruff's screen: what he is saying, and the one line under it that says
+     what the press will do. Live so a drafter on a reader hears the order
+     move without watching the board. */
+  #dt-screen { position:absolute; left:41.2%; top:7.6%; width:50.4%; height:33.4%;
+    box-sizing:border-box; padding:3% 4%; pointer-events:none;
+    display:flex; flex-direction:column; justify-content:center; gap:6px;
+    font-family: var(--font-mono); color:#ff4033;
+    text-shadow:0 0 10px rgba(255,64,51,0.45); letter-spacing:0.03em;
+    line-height:1.35; overflow:hidden; }
+  #dt-line { font-size:clamp(11px, 2.1vw, 17px); font-weight:600; }
+  #dt-note { font-size:clamp(9px, 1.5vw, 13px); opacity:0.7; }
+  /* The tile strip: the house types, on the board's own shelf. */
+  #dt-tiles { position:absolute; left:8.6%; top:44.4%; width:81.3%; height:19%;
+    box-sizing:border-box; display:flex; flex-direction:column;
+    justify-content:center; gap:4px; pointer-events:none; }
+  #dt-tiles > * { pointer-events:auto; }
+  #dt-bone { position:absolute; left:50%; top:71.5%; width:14%;
+    transform:translateX(-50%); aspect-ratio:1 / 1; border:none; padding:0;
+    border-radius:50%; background:transparent; cursor:pointer;
+    pointer-events:auto; }
+  #dt-bone img { width:100%; height:100%; display:block; }
+  #dt-bone:hover img { filter:brightness(1.12); }
+  #dt-close { position:absolute; right:2%; top:1%; pointer-events:auto;
+    font-family: var(--font-ui); font-size:11px; font-weight:700;
+    letter-spacing:0.08em; cursor:pointer; color:#f2efe9;
+    background:rgba(0,0,0,0.45); border:1px solid rgba(242,239,233,0.45);
+    border-radius:4px; padding:3px 8px; }
+  #dt-close:hover { border-color:#ff4033; color:#ff4033; }
+
+  /* THE BUILD BAR, now the sign's tile shelf rather than a row on the foot. */
+  #build-bar { flex:0 1 auto;
+    display:flex; flex-direction:column; align-items:stretch; gap:4px; }
+  #build-bar[hidden] { display:none; }
+  #build-families, #build-entries { display:flex; gap:4px;
+    justify-content:center; flex-wrap:wrap; }
+  #build-entries[hidden] { display:none; }
+  /* The tiles are the board's own blueprint cards: paper, blue ink, a hard
+     edge. They are not palette tokens because the board is one picture in
+     one light, and a night-skin chip on it would read as a hole. */
+  #build-bar button { font-family: var(--font-ui); font-size:clamp(8px, 1.15vw, 11px);
+    font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
+    cursor:pointer; color:#1f3f6b; padding:4px 8px; border-radius:2px;
+    border:1px solid #1f3f6b; background:#f1e9d2; }
+  #build-bar button:hover { background:#fff8e6; }
   /* The family whose submenu is open, and the type the drawing carries, both
      read as the page's one attention colour -- the same signal the wall tool
      uses when it is armed. */
   #build-bar button.open, #build-bar button.chosen {
-    color: var(--accent); border-color: var(--accent); }
+    color:#8f2a1d; border-color:#8f2a1d; box-shadow:inset 0 0 0 1px #8f2a1d; }
   #bone { font-weight:700; letter-spacing:0.1em; }
 
   /* ── THE SHELL ─────────────────────────────────────────────────────────
@@ -838,26 +910,79 @@
     title="The project: every drawing in this job">PROJECT</a>
   <span data-page="model" aria-current="page"
     title="The model — you are here">MODEL</span>
+  <!-- REAL ESTATE LAYOUT STAYS LEFT (Movie, 15 Sep). It is a drawing OF the
+       model rather than a sheet off it -- the marketing plan, not a set the
+       site builds from -- so it keeps company with MODEL and not with the
+       construction sheets. DOWN rather than absent, for the reason the row
+       has always kept its dormant chips: the row is the map of the job. -->
   <button type="button" data-page="real-estate" disabled
     title="REAL ESTATE LAYOUT — the marketing floor plan, not built yet">REAL ESTATE LAYOUT</button>
-  <a data-page="construction" href="./LAYOUT.dc.html"
-    title="The construction layout: the sheet that goes to site">CONSTRUCTION LAYOUT</a>
-  <a data-page="specs" href="./SPECS.html"
-    title="The specifications for this house">SPECIFICATIONS</a>
-  <button type="button" data-page="estimates" disabled
-    title="ESTIMATES — quantities and costs off this model, not built yet">ESTIMATES</button>
 </div>
   <div class="grow"></div>
-  <div id="build-bar" data-build-bar hidden>
-    <div id="build-families" data-build-families></div>
-    <div id="build-entries" data-build-entries hidden></div>
+  <!-- THE MIDDLE PAIR (Movie, 15 Sep): "2 buttons, the DRIVE-THRU MENU, and
+       the BONE". Exactly two, because the sign rises over this spot and
+       covers whatever is here -- anything else standing between them would
+       go under the board with them and be unreachable mid-order. The build
+       families went up onto the board itself; they ARE the menu. -->
+  <div id="dt-bar" data-drivethru-bar>
+    <button id="dt-open" type="button" data-drivethru-open
+      aria-expanded="false" aria-controls="drivethru"
+      title="Gruff's drive-thru: pick a house type">DRIVE-THRU MENU</button>
     <button id="bone" type="button" data-bone-press title="Build the house you picked">BONE</button>
+    <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
+         for one of the types. It rides with the pair rather than with the
+         places, because it is a verb. -->
+    <button id="delete" type="button" data-delete hidden
+      title="Delete what is selected">DELETE</button>
   </div>
   <div class="grow"></div>
-  <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
-       for one of the types. -->
-  <button id="delete" type="button" data-delete hidden
-    title="Delete what is selected">DELETE</button>
+  <!-- THE SHEETS THAT COME OFF THIS MODEL, far right (Movie, 15 Sep). Two
+       exist; ESTIMATES is DOWN rather than absent for the reason the page
+       row's dormant chips always were -- the row is the map of the job, and
+       a map with a town missing teaches the drafter a shape that is wrong. -->
+  <div id="sheet-row" data-sheet-row>
+    <a data-page="construction" href="./LAYOUT.dc.html"
+      title="The construction layout: the sheet that goes to site">CONSTRUCTION LAYOUT</a>
+    <a data-page="specs" href="./SPECS.html"
+      title="The specifications for this house">SPECIFICATIONS</a>
+    <button type="button" data-page="estimates" disabled
+      title="ESTIMATES — quantities and costs off this model, not built yet">ESTIMATES</button>
+  </div>
+</div>
+
+<!-- GRUFF'S DRIVE-THRU SIGN. Movie, 15 Sep: the menu "should pop up from the
+     bottom of the screen and cover both the DRIVE-THRU MENU BUTTON and the
+     BONE BUTTON (there will be another BONE BUTTON on the Drivethru menu)",
+     and "the dog on screen will take them through the menu of home types".
+     So: one board, Gruff talking on its screen, the house types on its
+     shelf, and his own bone on the post.
+
+     IT ORDERS; IT DOES NOT DRAW. Picking a tile is the same press the build
+     bar always was -- it records a type and produces no geometry -- and the
+     bone fires window.ModelBuild's build handlers. The premade design per
+     house type attaches at that seam, which is why nothing here knows what
+     a bungalow looks like. -->
+<div id="drivethru" data-drivethru-window data-shut role="dialog"
+  aria-modal="false" aria-label="Gruff's drive-thru: pick a house type">
+  <div id="dt-frame">
+    <img id="dt-board" data-drivethru-board src="./assets/drivethru-menu-board.png" alt="" />
+    <button id="dt-close" type="button" data-drivethru-close
+      title="Shut the drive-thru">CLOSE</button>
+    <div id="dt-screen" aria-live="polite">
+      <div id="dt-line" data-drivethru-line></div>
+      <div id="dt-note" data-drivethru-note></div>
+    </div>
+    <div id="dt-tiles" data-drivethru-tiles>
+      <div id="build-bar" data-build-bar hidden>
+        <div id="build-families" data-build-families></div>
+        <div id="build-entries" data-build-entries hidden></div>
+      </div>
+    </div>
+    <button id="dt-bone" type="button" data-drivethru-bone
+      title="Build the house you picked">
+      <img src="./assets/bone-red.png" alt="BONE — build it" />
+    </button>
+  </div>
 </div>
 <!-- THE LENGTH THE DRAFTER CAN SEE WHILE HE DRAWS. Movie, 13 Sep: "show the
      line length on screen to the user during the line drawing when their
@@ -3014,6 +3139,11 @@
     chooseHandlers.forEach(fn => fn(picked));
   };
 
+  // Set below, once the sign has its elements. Declared here because the
+  // sign says what the menu is showing, so every redraw of the menu is a
+  // redraw of the sign -- one call site, not four.
+  let paintSign = () => {};
+
   const syncBuildBar = () => {
     if (!drawing) return;
     familyRow.replaceChildren(...BM.BUILD_MENU.map(family => {
@@ -3046,11 +3176,73 @@
       return button;
     }) : []));
     buildBar.hidden = false;
+    paintSign();
   };
 
-  document.getElementById('bone').addEventListener('click', () => {
-    buildHandlers.forEach(fn => fn(chosen()));
+  const fireBuild = () => { buildHandlers.forEach(fn => fn(chosen())); };
+  document.getElementById('bone').addEventListener('click', fireBuild);
+
+  // ── GRUFF'S DRIVE-THRU SIGN ───────────────────────────────────────────
+  // Movie, 15 Sep: the sign rises from the foot and covers the two presses
+  // in the middle of the strip, carries its own bone, and "the dog on
+  // screen will take them through the menu of home types".
+  //
+  // IT IS THE BUILD BAR WITH A FACE. The tiles are the same family and
+  // entry chips, from the same build-menu.js, firing the same pressEntry --
+  // so the seam is untouched: an order records a type and draws nothing,
+  // and the bone fires the build handlers whether it is the one on the foot
+  // or the one on the post. The premade design per house type attaches
+  // there, and this knows nothing about geometry.
+  //
+  // WHAT GRUFF SAYS IS DERIVED, never stored: it reads the menu's own state
+  // each paint, so a line that disagrees with the tiles cannot happen.
+  const sign = document.getElementById('drivethru');
+  const signOpen = document.getElementById('dt-open');
+  const signLine = document.getElementById('dt-line');
+  const signNote = document.getElementById('dt-note');
+  const signShut = () => sign.hasAttribute('data-shut');
+
+  paintSign = () => {
+    const picked = chosen();
+    const open = openFamilyId ? BM.familyById(openFamilyId) : null;
+    if (picked) {
+      signLine.textContent = `ONE ${picked.entry.label}. GOOD CHOICE.`;
+      signNote.textContent = 'Press the bone and I\u2019ll build it.';
+    } else if (open) {
+      signLine.textContent = `${open.label} \u2014 WHICH ONE?`;
+      signNote.textContent = open.title;
+    } else {
+      signLine.textContent = 'WELCOME TO THE DRIVE-THRU. WHAT ARE WE BUILDING?';
+      signNote.textContent = 'Pick a house type off the board.';
+    }
+  };
+
+  // OPENING THE SIGN CHANGES NOTHING BUT THE SIGN. It reads the menu and
+  // moves; it does not choose, build, mark the drawing dirty or touch a
+  // level. A drafter who opens it to look and shuts it again has made no
+  // edit, and the spec says so.
+  const setSign = show => {
+    sign.toggleAttribute('data-shut', !show);
+    signOpen.setAttribute('aria-expanded', String(show));
+    if (show) paintSign();
+    // The board covers the pair; nothing under it should be tabbed into.
+    signOpen.disabled = show;
+  };
+  signOpen.addEventListener('click', () => setSign(signShut()));
+  document.getElementById('dt-close').addEventListener('click', () => {
+    setSign(false);
+    signOpen.focus();
   });
+  document.getElementById('dt-bone').addEventListener('click', fireBuild);
+  // Escape shuts the sign, as it shuts every other thing this page puts over
+  // the drawing. Captured before the drawing's own Escape so an open sign is
+  // not also a cleared selection.
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || signShut()) return;
+    event.stopPropagation();
+    setSign(false);
+    signOpen.focus();
+  }, true);
 
   // ── the per-tool properties slot ──────────────────────────────────────────
   // THE CONTRACT, for Gilligan, written so it can be built against without

@@ -1,0 +1,212 @@
+// GRUFF'S DRIVE-THRU on MODEL.html — the foot's middle pair and the sign.
+//
+// Movie, 15 Sep: "the middle area i'd like to change it so there will be 2
+// buttons, the DRIVE-THRU MENU, and the BONE... when it is pressed the drive
+// thru menu should pop up from the bottom of the screen and cover both the
+// DRIVETHRU MENU BUTTON, and the BONE BUTTON (there will be another BONE
+// BUTTON on the Drivethru menu.) and when it pops up the dog on screen will
+// take them through the menu of home types."
+//
+// WHAT THIS SUITE IS FOR, and it is not the picture. A menu that rises is
+// easy to eyeball and easy to get subtly wrong in the two ways that cost
+// something later:
+//
+//   - THE SIGN IS A WINDOW, NOT AN EDIT. Opening it to look at the board and
+//     shutting it again must leave the drawing byte-identical. A popup that
+//     marks a file dirty teaches the drafter to ignore the unsaved guard,
+//     and then the guard is worth nothing on the day it matters.
+//   - THE SECOND BONE IS THE SAME BONE. Two presses with one verb between
+//     them; the moment the post's bone grows its own build path, the premade
+//     designs get written twice and diverge. It fires the seam, or it is a
+//     decoration.
+//
+// The board's cover is asserted in geometry rather than by eye, because
+// "covers both buttons" is the requirement and a sign that stops an inch
+// short reads as a bug in the bar, not in the sign.
+const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
+const h = require('./helpers');
+
+const BUCKET = 'model-drawing';
+const REPRO = JSON.parse(fs.readFileSync(
+  path.join(__dirname, '..', 'proto', 'repro-garage-house.draft'), 'utf8'));
+
+// MODEL.html, reached the way every other MODEL.html spec reaches it: through
+// openModel for its init scripts -- the seeded wallet, the parked features,
+// the coach already seen -- and then a navigation to the page under test.
+async function openPage(page) {
+  await h.openModel(page, { webgl: false });
+  // A DRAWING IN THE STORE, because MODEL.html reads the shared file and an
+  // empty store gives "no drawing saved" -- a page with no drawing has no
+  // build bar to put on the board.
+  await page.evaluate(async ({ bucket, saved }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, saved: REPRO });
+  await page.goto('/MODEL.html?mode=night');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+}
+
+// The rectangles, in page pixels, of the two presses the board must cover.
+const boxes = async page => ({
+  open: await page.locator('#dt-open').boundingBox(),
+  bone: await page.locator('#bone').boundingBox(),
+  sign: await page.locator('#dt-frame').boundingBox(),
+});
+
+test('the foot bar: PROJECT and MODEL left, the pair in the middle, the sheets right',
+  async ({ page }) => {
+    await openPage(page);
+
+    // THE THREE GROUPS IN ORDER, read off the bar itself. Asserted by group
+    // rather than by one flat list because the arrangement IS the ruling --
+    // the sheets went right so the middle could be two presses wide.
+    expect(await page.locator('#page-row > *').evaluateAll(els => els.map(
+      el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
+    'the foot\'s left end is the project, the page you are on, and the '
+    + 'marketing plan that is a drawing of it')
+      .toEqual(['PROJECT', 'MODEL', 'REAL ESTATE LAYOUT']);
+
+    expect(await page.locator('#sheet-row > *').evaluateAll(els => els.map(
+      el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
+    'the sheets belong at the far right, in reading order')
+      .toEqual(['CONSTRUCTION LAYOUT', 'SPECIFICATIONS', 'ESTIMATES']);
+
+    // The middle is the two presses and nothing else -- DELETE lives here too
+    // but is hidden until something is selected, which is the shell's rule
+    // and not this suite's business.
+    expect(await page.locator('#dt-bar > *:not([hidden])').evaluateAll(els => els.map(
+      el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
+    'the middle of the foot is the drive-thru and the bone')
+      .toEqual(['DRIVE-THRU MENU', 'BONE']);
+
+    // AND THE PAGES THAT ARE NOT BUILT ARE STILL DOWN. Moving a chip between
+    // groups must not have quietly lit it.
+    await expect(page.locator('#page-row [data-page="real-estate"]')).toBeDisabled();
+    await expect(page.locator('#sheet-row [data-page="estimates"]')).toBeDisabled();
+  });
+
+test('the sign rises from the foot and covers both presses', async ({ page }) => {
+  await openPage(page);
+  await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
+
+  const down = await boxes(page);
+  expect(down.sign.y, 'the sign is parked below the foot until it is called')
+    .toBeGreaterThan(down.open.y);
+
+  await h.openDriveThru(page);
+  const up = await boxes(page);
+
+  // COVERS BOTH, which is the requirement in Movie's own words. Read as
+  // containment of each press's rectangle in the board's, so a sign that
+  // rises but stops short of the bone fails here rather than in a squint.
+  for (const [name, box] of [['DRIVE-THRU MENU', up.open], ['BONE', up.bone]]) {
+    expect(box.y >= up.sign.y && box.y + box.height <= up.sign.y + up.sign.height
+      && box.x >= up.sign.x && box.x + box.width <= up.sign.x + up.sign.width,
+    `the board left ${name} showing underneath it`).toBe(true);
+  }
+
+  // And it goes back down, leaving the foot as it was.
+  await page.locator('[data-drivethru-close]').click();
+  await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
+  await expect(page.locator('#dt-open')).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('the board carries the office\'s house types and its own bone',
+  async ({ page }) => {
+    await openPage(page);
+    await h.openDriveThru(page);
+
+    // THE TYPES ARE build-menu.js's TYPES, not a list painted on a board.
+    // The sign is the build bar with a face; if it ever holds its own copy
+    // of the menu, the two pages start disagreeing about what the office
+    // builds, which is the duplication the module was lifted out to end.
+    const fromModule = await page.evaluate(() =>
+      window.DraftBuildMenu.BUILD_MENU.map(f => f.label));
+    expect(await page.locator('#dt-tiles [data-build-family]').allTextContents(),
+      'the board\'s tiles are not the module\'s families')
+      .toEqual(fromModule);
+
+    // Every home type Movie put on the board is reachable: the families plus
+    // the entries underneath them. One basic example per type is the content
+    // question and it belongs to build-menu.js; that they are all ORDERABLE
+    // from the window is this suite's.
+    for (const family of fromModule) {
+      await page.locator(`#dt-tiles [data-build-family]`)
+        .filter({ hasText: new RegExp(`^${family}$`) }).click();
+      await expect(page.locator('#dt-tiles [data-build-entry]').first()).toBeVisible();
+    }
+
+    await expect(page.locator('#dt-bone')).toBeVisible();
+  });
+
+test('the dog talks the drafter through it, and says what was ordered',
+  async ({ page }) => {
+    await openPage(page);
+    await h.openDriveThru(page);
+
+    // GRUFF SPEAKS BEFORE HE IS SPOKEN TO. An empty screen on a board that
+    // exists to guide is the whole feature missing.
+    await expect(page.locator('[data-drivethru-line]')).not.toBeEmpty();
+
+    await page.locator('#dt-tiles [data-build-family="bungalow"]').click();
+    // The sign names the family it has just opened, so the screen and the
+    // tiles cannot be showing two different things.
+    await expect(page.locator('[data-drivethru-line]')).toContainText('BUNGALOW');
+
+    const entry = page.locator('#dt-tiles [data-build-entry]').first();
+    const ordered = (await entry.textContent()).trim();
+    await entry.click();
+    await expect(page.locator('[data-drivethru-line]')).toContainText(ordered);
+  });
+
+test('opening the window and shutting it again is not an edit', async ({ page }) => {
+  await openPage(page);
+
+  // THE FILE BEFORE, and the guard's own opinion of it.
+  // SAVE is also the status word on this page (`data-save-status`), so the
+  // guard's opinion is readable without a helper: the word plus the dirty
+  // mark it wears.
+  const clean = () => page.evaluate(() => {
+    const save = document.getElementById('save');
+    return `${save.textContent.trim()}|${save.className}`;
+  });
+  const before = await clean();
+
+  await h.openDriveThru(page);
+  await page.locator('#dt-tiles [data-build-family="bungalow"]').click();
+  await page.locator('[data-drivethru-close]').click();
+  await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
+
+  // LOOKING IS NOT EDITING. Raising the board, opening a family to read what
+  // is under it and dropping the board again touches no geometry and no
+  // stored field -- so the unsaved guard must still say exactly what it said
+  // before the drafter pulled up to the window.
+  expect(await clean(), 'opening the drive-thru dirtied the drawing')
+    .toBe(before);
+});
+
+test('the bone on the post is the same bone, not a second one', async ({ page }) => {
+  await openPage(page);
+  await h.openDriveThru(page);
+
+  // ONE VERB, TWO PRESSES. The seam is `ModelBuild.onBuild`; both bones fire
+  // it with the same order, or the premade designs end up wired to whichever
+  // bone the drafter happened to press.
+  const seen = await page.evaluate(async () => {
+    const log = [];
+    window.ModelBuild.onBuild(p => log.push(p?.entry?.id ?? 'null'));
+    document.querySelector('#dt-tiles [data-build-family="bungalow"]').click();
+    await new Promise(r => setTimeout(r, 60));
+    document.querySelector('#dt-tiles [data-build-entry]').click();
+    await new Promise(r => setTimeout(r, 60));
+    const chosen = window.ModelBuild.chosen()?.entry?.id ?? 'null';
+    document.getElementById('dt-bone').click();
+    document.getElementById('bone').click();
+    return { log, chosen };
+  });
+
+  expect(seen.log, 'the two bones did not fire one seam with one order')
+    .toEqual([seen.chosen, seen.chosen]);
+});

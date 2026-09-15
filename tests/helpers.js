@@ -343,6 +343,23 @@ async function pickBuild(page, type, { tap = false } = {}) {
   else await entry.click();
 }
 
+// MODEL.html's HOUSE TYPES MOVED ONTO GRUFF'S DRIVE-THRU SIGN (Movie, 15
+// Sep): the foot keeps two presses, DRIVE-THRU MENU and BONE, and the family
+// and entry chips are tiles on the board the sign raises. So a spec that
+// wants a chip has to order at the window first.
+//
+// IDEMPOTENT, and it WAITS for the board rather than sleeping: the sign
+// slides, and a click sent mid-rise lands on nothing. Every spec goes
+// through here for the reason pickBuild exists — when the menu moves again,
+// one function moves.
+async function openDriveThru(page) {
+  const sign = page.locator('#drivethru');
+  if (await sign.getAttribute('data-shut') === null) return;
+  await page.locator('[data-drivethru-open]').click();
+  await expect(sign).not.toHaveAttribute('data-shut', '');
+  await expect(page.locator('#build-families button').first()).toBeVisible();
+}
+
 // ── MODEL.html: the level and the view, now that the two SELECTs are gone ──
 //
 // §7 deleted the chrome bar, and with it `#level-pick` and `#view-pick`. The
@@ -478,6 +495,7 @@ module.exports = {
   clickWorld,
   selectTool,
   pickBuild,
+  openDriveThru,
   BUILD_FAMILY,
   activeToolLabels,
   waitForSaved,
