@@ -330,3 +330,136 @@ test('the house button lights first, and the sign follows it up',
     // an open sign is a button that looks like it is still working.
     await expect(press).not.toHaveAttribute('data-lit', '');
   });
+
+// ── ARRIVING THROUGH THE FRONT DOOR ──────────────────────────────────────
+// Movie, 15 Sep: "when they enter into the model area from the front entry
+// screen the drivethru should pop up after about 2 seconds."
+//
+// THE FLAG IS THE POINT OF THESE TWO. A board that rises on arrival and a
+// board that rises on every load look identical the first time and differ
+// every time after, on a drafter who is mid-drawing -- which is the version
+// that costs a press. So both halves are asserted: it rises from the entry
+// screen, and it stays down on a plain load and on the reload after.
+test('coming in from the front screen, the board rises by itself',
+  async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+    await page.evaluate(async ({ bucket, saved }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, saved: REPRO });
+
+    await page.goto('/MODEL.html?from=entry');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+
+    // Same two seconds as the press: the house glows first, then the board.
+    await expect(page.locator('#dt-open')).toHaveAttribute('data-lit', '');
+    await expect(page.locator('#drivethru'))
+      .not.toHaveAttribute('data-shut', '', { timeout: 5000 });
+
+    // THE FLAG IS SPENT AS IT IS READ, so the reload lands in the drawing.
+    expect(new URL(page.url()).searchParams.get('from'),
+      'the arrival flag stayed in the address and will fire again on reload')
+      .toBe(null);
+    await page.reload();
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    await page.waitForTimeout(3000);
+    await expect(page.locator('#drivethru'),
+      'the board rose again on a reload, over a drafter already at work')
+      .toHaveAttribute('data-shut', '');
+  });
+
+test('a hand on the page inside the two seconds calls the board off',
+  async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+    await page.evaluate(async ({ bucket, saved }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, saved: REPRO });
+
+    await page.goto('/MODEL.html?from=entry');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    await expect(page.locator('#dt-open')).toHaveAttribute('data-lit', '');
+
+    // Someone who starts drawing inside the glow has said what they came
+    // for; the board rising over them would take the press they were making.
+    await page.mouse.click(400, 300);
+    await page.waitForTimeout(3000);
+    await expect(page.locator('#drivethru'),
+      'the board came up over a drafter who had already started')
+      .toHaveAttribute('data-shut', '');
+    await expect(page.locator('#dt-open')).not.toHaveAttribute('data-lit', '');
+  });
+
+// ── THE BONE WITH NOTHING BEHIND IT ──────────────────────────────────────
+// Movie, 15 Sep: "what happens if they are in model area and they press the
+// bone if no outline?" then "take them to the full house flow (not the
+// outline flow) if there isn't a house and detached garage already... it
+// will do nothing once both house and garage both made."
+//
+// It used to be nothing at all -- the seam fired with a null choice and the
+// screen said not one word, which reads as a dead bone.
+test('the bone with nothing chosen opens the house round, not the outline one',
+  async ({ page }) => {
+    await openPage(page);
+
+    const fired = await page.evaluate(() => {
+      const seen = [];
+      window.ModelBuild.onBuild(p => seen.push(p));
+      document.getElementById('bone').click();
+      return seen.length;
+    });
+    // THE SEAM STILL HEARS IT. What an empty press means to the geometry
+    // side is the geometry side's call; the bar only stops being silent.
+    expect(fired, 'the empty press stopped reaching the build seam').toBe(1);
+
+    await expect(page.locator('#drivethru'))
+      .not.toHaveAttribute('data-shut', '', { timeout: 5000 });
+    await expect(page.locator('[data-drivethru-line]')).toContainText('NOTHING TO BUILD');
+
+    // THE HOUSE ROUND, NEVER THE OUTLINE ROUND. A drafter who pressed the
+    // bone asked for a house, not for a drawing lesson -- and the round is
+    // invisible until the bone on the post is pressed, so it is read off
+    // the seam rather than off the board.
+    const round = await page.evaluate(async () => {
+      const seen = [];
+      window.ModelBuild.onOrder(p => seen.push(p?.round ?? 'none'));
+      document.querySelector('#dt-tiles [data-build-family="bungalow"]').click();
+      await new Promise(r => setTimeout(r, 60));
+      document.querySelector('#dt-tiles [data-build-entry]').click();
+      await new Promise(r => setTimeout(r, 60));
+      document.getElementById('dt-bone').click();
+      return seen;
+    });
+    expect(round, 'the bone sent the drafter down the guided trace he did not ask for')
+      .toEqual(['menu']);
+
+    // AND THE REFUSAL IS SPENT, not stuck on the board behind the choice
+    // that answers it.
+    await expect(page.locator('[data-drivethru-line]')).not.toContainText('NOTHING TO BUILD');
+  });
+
+test('with a house and a detached garage already standing, the bone does nothing',
+  async ({ page }) => {
+    // ONE HOUSE AND ONE DETACHED GARAGE IS THE CAP (Movie). With both up
+    // there is nothing the board could offer, and a board that rises with
+    // every tile spent wastes the press it just took.
+    await h.openModel(page, { webgl: false });
+    const full = JSON.parse(JSON.stringify(REPRO));
+    // The fixture's garage is ATTACHED, which is part of the house and does
+    // not spend the detached slot -- so the drawing is completed here by
+    // detaching the garage master, the way the shelf records it.
+    full.boneyardOutlines.find(m => m.garage).detached = true;
+    await page.evaluate(async ({ bucket, saved }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, saved: full });
+    await page.goto('/MODEL.html?mode=night');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+
+    await page.locator('#bone').click();
+    await page.waitForTimeout(3000);
+    await expect(page.locator('#drivethru'),
+      'the board rose on a project that has nothing left to build')
+      .toHaveAttribute('data-shut', '');
+    await expect(page.locator('#dt-open')).not.toHaveAttribute('data-lit', '');
+  });

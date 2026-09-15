@@ -544,17 +544,20 @@
   #bone .said {
     position:absolute; width:1px; height:1px; margin:-1px; padding:0;
     overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
-  /* THE OTHER WAY IN. Lettering rather than artwork until Movie draws one,
-     and it lights the same way the house does so both rounds feel like the
-     same pull-up to the same window. */
-  #outline { font-family: var(--font-ui); font-size:12px; font-weight:700;
-    letter-spacing:0.08em; text-transform:uppercase; cursor:pointer;
-    color: var(--ink-primary); padding:6px 14px; border-radius:6px;
-    border:1px solid var(--edge-panel);
-    background-color: var(--surface-chip);
-    background-image: var(--surface-chip-tex, none); }
-  #outline:hover, #outline[data-lit] {
-    color: var(--accent); border-color: var(--accent); }
+  /* THE OTHER WAY IN, and Movie drew it: the dotted house, unlit and lit.
+     Same two-file, stacked-and-revealed arrangement as the drive-thru press
+     for the same reason -- both images are painted before a finger arrives,
+     so the glow cannot flicker while the browser fetches the second one. */
+  #outline { position:relative; display:block; padding:0; border:none;
+    background:none; line-height:0; cursor:pointer; }
+  #outline img { display:block; height:var(--foot-press-h, 34px); width:auto; }
+  #outline .lit { position:absolute; left:0; top:0; opacity:0;
+    transition:opacity 90ms linear; pointer-events:none; }
+  #outline[data-lit] .lit { opacity:1; }
+  #outline:hover img { filter:brightness(1.12); }
+  #outline .said {
+    position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+    overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
 
   /* ── THE SHELL ─────────────────────────────────────────────────────────
      Two pull-out sidebars and their tabs. The SHAPE is MODEL.dc.html's
@@ -1086,7 +1089,10 @@
          drawing" it themselves. One board, two exits. -->
     <button id="outline" type="button" data-drivethru-outline
       aria-expanded="false" aria-controls="drivethru"
-      title="Pick a type, then draw its outline yourself">OUTLINE</button>
+      title="Pick a type, then draw its outline yourself"><img
+        src="./assets/btn-outline-off.png" alt="" /><img class="lit"
+        src="./assets/btn-outline-on.png" alt=""
+        /><span class="said">OUTLINE</span></button>
     <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
          for one of the types. It rides with the pair rather than with the
          places, because it is a verb. -->
@@ -1430,6 +1436,10 @@
 <!-- The house types the build bar offers. Lifted out of MODEL.dc.html so both
      pages read one list (build-menu.js says why). -->
 <script src="./build-menu.js"></script>
+<!-- What the project already holds, against Movie's cap of one house and one
+     detached garage. The bone reads it to know whether there is anything
+     left to offer. -->
+<script src="./building-bodies.js"></script>
 <script src="./profile-manager.js"></script>
 <!-- The seventeen tools as data, so the keypad renders a list rather than
      seventeen hand-written buttons that can drift apart. It reads
@@ -3632,7 +3642,8 @@
     const order = { ...(chosen() || { family: null, entry: null }), round };
     orderHandlers.forEach(fn => fn(order));
   };
-  document.getElementById('bone').addEventListener('click', fireBuild);
+  // The foot bone is wired under the sign, because an empty press is
+  // answered by the sign and the sign does not exist yet up here.
 
   // ── GRUFF'S DRIVE-THRU SIGN ───────────────────────────────────────────
   // Movie, 15 Sep: the sign rises from the foot and covers the two presses
@@ -3655,10 +3666,18 @@
   const signOutline = document.getElementById('outline');
   const signShut = () => sign.hasAttribute('data-shut');
 
+  // WHAT GRUFF SAYS WHEN HE IS REFUSING, set by the press that was refused
+  // and spent by the next paint, so it cannot outlive the moment it explains.
+  let signRefusal = null;
+
   paintSign = () => {
     const picked = chosen();
     const open = openFamilyId ? BM.familyById(openFamilyId) : null;
-    if (picked) {
+    if (signRefusal) {
+      signLine.textContent = signRefusal.line;
+      signNote.textContent = signRefusal.note;
+      signRefusal = null;
+    } else if (picked) {
       signLine.textContent = `ONE ${picked.entry.label}. GOOD CHOICE.`;
       // THE SAME BOARD SAYS WHICH ROUND IT IS. Both rounds end on the same
       // bone, so the screen is the only thing telling the drafter whether
@@ -3712,6 +3731,68 @@
   };
   signOpen.addEventListener('click', () => callSign(signOpen, 'menu'));
   signOutline.addEventListener('click', () => callSign(signOutline, 'outline'));
+
+  // THE BONE ON THE SCREEN WITH NOTHING TO BUILD (Movie, 15 Sep: "what
+  // happens if they press the bone if no outline?" -- then: "take them to
+  // the full house flow (not the outline flow) if there isn't a house and
+  // detached garage already... it will do nothing once both house and
+  // garage both made").
+  //
+  // THE HOUSE ROUND, NEVER THE OUTLINE ROUND. A drafter who pressed the
+  // bone asked for a house, not for a drawing lesson; sending him down the
+  // guided trace would answer a question he did not ask.
+  //
+  // AND NOTHING AT ALL WHEN THE PROJECT IS FULL. One house and one detached
+  // garage is the cap, so with both standing there is nothing the board
+  // could offer -- a board that rises with every tile spent is a board that
+  // wastes a press. What counts as standing is building-bodies.js's answer,
+  // not this page's: PROJECT and the drive-thru's own tiles will ask the
+  // same question, and three derivations of it would be two too many.
+  //
+  // The seam still hears every press either way -- what an empty press
+  // means to the geometry side stays the geometry side's call.
+  document.getElementById('bone').addEventListener('click', () => {
+    fireBuild();
+    if (chosen()) return;
+    if (window.DraftBuildingBodies.isFull(drawing)) return;
+    signRefusal = {
+      line: 'NOTHING TO BUILD YET.',
+      note: 'Pick a type off the board and I\u2019ll build it.',
+    };
+    if (!signShut()) { paintSign(); return; }
+    callSign(signOpen, 'menu');
+  });
+
+  // ARRIVING FROM THE FRONT DOOR PULLS UP TO THE WINDOW BY ITSELF (Movie,
+  // 15 Sep): "when they enter into the model area from the front entry
+  // screen the drivethru should pop up after about 2 seconds". The same
+  // call as the press, so it is the same two seconds of glow and the same
+  // board -- one behaviour, not a second copy of it.
+  //
+  // ONLY FROM THE ENTRY SCREEN, and the address says so. A board that rose
+  // on every load would rise on every reload, over a drafter who is mid-
+  // drawing; the flag is spent as it is read so a refresh lands in the
+  // drawing rather than in the drive-thru again.
+  //
+  // AND A HAND ON THE PAGE CANCELS IT. Someone who starts working inside
+  // those two seconds has said what they came for, and the board rising
+  // over them would take the press they were making.
+  if (new URLSearchParams(location.search).get('from') === 'entry') {
+    const spent = new URL(location.href);
+    spent.searchParams.delete('from');
+    history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
+    const cancel = () => {
+      ['pointerdown', 'keydown', 'wheel'].forEach(type =>
+        document.removeEventListener(type, cancel, true));
+      if (!lighting) return;
+      window.clearTimeout(lighting);
+      lighting = 0;
+      signOpen.toggleAttribute('data-lit', false);
+    };
+    ['pointerdown', 'keydown', 'wheel'].forEach(type =>
+      document.addEventListener(type, cancel, true));
+    callSign(signOpen, 'menu');
+  }
   document.getElementById('dt-close').addEventListener('click', () => {
     setSign(false);
     signOpen.focus();
