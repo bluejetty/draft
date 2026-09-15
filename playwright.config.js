@@ -174,6 +174,41 @@ module.exports = defineConfig({
   // in the meantime: CI failed a spec on #313 that that PR's diff could not
   // reach, which cost a comment, a re-run, and twenty minutes of doubt.
   timeout: 180_000,
+
+  // THE RUN REPORTS EVEN WHEN IT OVERRUNS. Ruled by Movie, 15 Sep: "a hung
+  // test must fail by name, under the job limit, not cancel the shard".
+  //
+  // WHAT HAPPENED, because the mechanism is not the obvious one. On 14 Sep CI
+  // shard 3 was CANCELLED at its 40-minute job cap on two consecutive runs and
+  // reported no failure text at all -- a grey badge, which I twice read as
+  // inconclusive. Behind it were fifteen tests waiting on controls that §6
+  // correctly puts away on a TOY board, and twenty real failures in total.
+  //
+  // THE PER-TEST TIMEOUT WAS NOT THE FAULT and is not touched here. Each of
+  // those fifteen DID fail by name at 180s, exactly as designed. What broke is
+  // that fifteen times 180s is forty-five minutes, so the RUNNER killed
+  // Playwright before the reporter could say any of it. A cancelled job
+  // reports nothing, which is why nothing on the PR named a cause.
+  //
+  // Lowering `timeout` would be the wrong fix twice over: it is the value
+  // measured in BOARD-test-budget.md (90s gave 2/2/1 failures across three
+  // runs, 180s gave zero), and it would trade a silent overrun for false reds
+  // on honest work -- the "a red that isn't real" failure this file already
+  // spends forty lines guarding against.
+  //
+  // So the ceiling goes on the RUN instead. Playwright stops itself at
+  // globalTimeout and prints what it has, with names; the job cap (raised to
+  // 45m in test.yml) now sits above that, so the runner never takes the
+  // reporter down mid-sentence. Red and legible beats grey and silent.
+  //
+  // 35 MINUTES, AGAINST MEASURED DURATIONS rather than a round number. The
+  // slowest honest shard is shard 1 at 26.5m (14 Sep) and 27m (15 Sep), on
+  // CI's own boxes. 35 leaves eight minutes over the worst real run and still
+  // ends ten minutes inside the job cap. Raising `timeout` or adding heavy
+  // specs eats that margin, so the two numbers are stated together and move
+  // together.
+  globalTimeout: 35 * 60_000,
+
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
     viewport: { width: 1280, height: 900 },

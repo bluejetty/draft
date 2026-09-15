@@ -148,21 +148,28 @@ test.describe('MODEL.html instrument strip', () => {
       expect(twice, 'a page reachable from both bars is two ways to one place')
         .toEqual([]);
 
-      // THE FOUR THAT WORK. Asserted as a set, so an instrument quietly
+      // THE FIVE THAT WORK. Asserted as a set, so an instrument quietly
       // demoted to dormant during a refactor fails here rather than being
       // discovered by a drafter.
+      //
+      // SCALE JOINED THEM. It is the foot light now — the architect's rule
+      // was the one dormant chip whose whole job is measuring in feet, so the
+      // icon already said what the switch does. Moved rather than dropped
+      // from the list below: this check's value is that the two sets are
+      // exhaustive, and an instrument that left one has to arrive in the
+      // other or the count stops meaning anything.
       for (const sel of ['[data-mode-ruler]', '[data-mode-tsquare]',
-        '[data-mode-protractor]', '#frozen-length']) {
+        '[data-mode-protractor]', '[data-mode-scale]', '#frozen-length']) {
         await expect(page.locator(sel)).toBeVisible();
         await expect(page.locator(sel)).not.toHaveClass(/dormant/);
       }
 
-      // THE SIX THAT DO NOT, each marked dormant and each saying so in its
+      // THE FOUR THAT DO NOT, each marked dormant and each saying so in its
       // own title. This is the panel's own rule — the disabled 3D chair —
       // applied to the strip: a chip that looks live and does nothing is
       // worse than a gap.
       for (const sel of ['[data-mode-compass]', '[data-mode-triangle]',
-        '[data-mode-brush]', '[data-mode-scale]', '[data-mode-shield]']) {
+        '[data-mode-brush]', '[data-mode-shield]']) {
         const chip = page.locator(sel);
         await expect(chip).toHaveClass(/dormant/);
         await expect(chip).toHaveAttribute('title', /not built/);

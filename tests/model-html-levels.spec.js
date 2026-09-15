@@ -42,7 +42,11 @@ test('a card per level, and the layer rows are the module\'s not a copy', async 
   // written out here. A hardcoded expectation would pass just as well on a
   // panel holding its own copy of the level table -- which is how that lookup
   // came to have four homes (#325), and what this panel must not become.
-  const names = await page.locator('.lv-card .lv-name').allTextContents();
+  // SCOPED TO `[data-level]`, because the panel now holds a card that is NOT
+  // a level: the BONEYARD, which is storage outside the stack. This check's
+  // claim is "a card per LEVEL" and the selector says so now, rather than
+  // meaning it only while nothing else happened to be a .lv-card.
+  const names = await page.locator('.lv-card[data-level] .lv-name').allTextContents();
   expect(names).toEqual(HOUSE.levels.map(l => l.name));
 
   // ROOF AND SITE HAVE NO LAYER VIEWS and must therefore show no rows. This
@@ -51,7 +55,7 @@ test('a card per level, and the layer rows are the module\'s not a copy', async 
   // would be disagreeing with the rail it edits.
   const rows = await page.evaluate(() => {
     const out = {};
-    document.querySelectorAll('.lv-card').forEach(card => {
+    document.querySelectorAll('.lv-card[data-level]').forEach(card => {
       out[card.querySelector('.lv-name').textContent] =
         [...card.querySelectorAll('.lv-layer')].map(r => r.textContent);
     });
@@ -344,17 +348,32 @@ test('a stored section gets a row and a delete that works', async ({ page }) => 
     'the page is still showing a section the drawing no longer has').not.toBe('cut:S1');
 });
 
-test('the BONEYARD is listed and not editable, and 3D is a chair', async ({ page }) => {
+test('the BONEYARD is a workspace now, and 3D is still a chair', async ({ page }) => {
   await openPanel(page);
 
-  // BONEYARD: listed, never edited. PARITY-model-html-vs-dc.md records the
-  // boneyard as "absent, deliberately" on this page and the gestures spec
-  // drives it — the level picker offers no negative pseudo-level — so a
-  // "+ SHELF" would write a shelf into the file this page can never open.
+  // THIS CHECK ENCODED A RULING THAT HAS BEEN REVERSED, and the reversal is
+  // the point rather than a loosening. It read:
+  //
+  //   expect(await page.locator('[data-add-shelf]').count(),
+  //     'a + SHELF button would create something this page cannot reach')
+  //     .toBe(0);
+  //
+  // on the grounds that "the level picker offers no negative pseudo-level, so
+  // a + SHELF would write a shelf into the file this page can never open".
+  // That was true and is no longer: activeLevelId() answers -shelfId, and a
+  // wall parked on a shelf survives the reload (c8654eb). Movie ruled the
+  // boneyard back on, 14 Sep.
+  //
+  // So the claim flips rather than relaxing: the button must EXIST, and the
+  // card must be reachable. A page that merely stopped asserting the absence
+  // would pass with dead text again.
   expect(await page.locator('[data-shelf]').count(),
     'the fixture has one shelf and the panel must show it').toBe(1);
   expect(await page.locator('[data-add-shelf]').count(),
-    'a + SHELF button would create something this page cannot reach').toBe(0);
+    'and + SHELF is a real control now').toBe(1);
+  await expect(page.locator('[data-boneyard]'),
+    'the card selects, rather than printing its shelves as dead text')
+    .toHaveCount(1);
 
   // 3D: a chair, not a button. Movie is leaving 3D to last, and there is no
   // WebGL, three.js or perspective camera in this file at all — so the seat

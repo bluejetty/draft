@@ -330,3 +330,252 @@ test('the house button lights first, and the sign follows it up',
     // an open sign is a button that looks like it is still working.
     await expect(press).not.toHaveAttribute('data-lit', '');
   });
+
+// ── ARRIVING THROUGH THE FRONT DOOR ──────────────────────────────────────
+// Movie, 15 Sep: "when they enter into the model area from the front entry
+// screen the drivethru should pop up after about 2 seconds."
+//
+// THE FLAG IS THE POINT OF THESE TWO. A board that rises on arrival and a
+// board that rises on every load look identical the first time and differ
+// every time after, on a drafter who is mid-drawing -- which is the version
+// that costs a press. So both halves are asserted: it rises from the entry
+// screen, and it stays down on a plain load and on the reload after.
+test('coming in from the front screen, the board rises by itself',
+  async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+    await page.evaluate(async ({ bucket, saved }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, saved: REPRO });
+
+    await page.goto('/MODEL.html?from=entry');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+
+    // Same two seconds as the press: the house glows first, then the board.
+    await expect(page.locator('#dt-open')).toHaveAttribute('data-lit', '');
+    await expect(page.locator('#drivethru'))
+      .not.toHaveAttribute('data-shut', '', { timeout: 5000 });
+
+    // THE FLAG IS SPENT AS IT IS READ, so the reload lands in the drawing.
+    expect(new URL(page.url()).searchParams.get('from'),
+      'the arrival flag stayed in the address and will fire again on reload')
+      .toBe(null);
+    await page.reload();
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    await page.waitForTimeout(3000);
+    await expect(page.locator('#drivethru'),
+      'the board rose again on a reload, over a drafter already at work')
+      .toHaveAttribute('data-shut', '');
+  });
+
+test('a hand on the page inside the two seconds calls the board off',
+  async ({ page }) => {
+    await h.openModel(page, { webgl: false });
+    await page.evaluate(async ({ bucket, saved }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, saved: REPRO });
+
+    await page.goto('/MODEL.html?from=entry');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    await expect(page.locator('#dt-open')).toHaveAttribute('data-lit', '');
+
+    // Someone who starts drawing inside the glow has said what they came
+    // for; the board rising over them would take the press they were making.
+    await page.mouse.click(400, 300);
+    await page.waitForTimeout(3000);
+    await expect(page.locator('#drivethru'),
+      'the board came up over a drafter who had already started')
+      .toHaveAttribute('data-shut', '');
+    await expect(page.locator('#dt-open')).not.toHaveAttribute('data-lit', '');
+  });
+
+// ── THE BONE WITH NOTHING BEHIND IT ──────────────────────────────────────
+// Movie, 15 Sep: "what happens if they are in model area and they press the
+// bone if no outline?" then "take them to the full house flow (not the
+// outline flow) if there isn't a house and detached garage already... it
+// will do nothing once both house and garage both made."
+//
+// It used to be nothing at all -- the seam fired with a null choice and the
+// screen said not one word, which reads as a dead bone.
+test('the bone with nothing chosen opens the house round, not the outline one',
+  async ({ page }) => {
+    await openPage(page);
+
+    const fired = await page.evaluate(() => {
+      const seen = [];
+      window.ModelBuild.onBuild(p => seen.push(p));
+      document.getElementById('bone').click();
+      return seen.length;
+    });
+    // THE SEAM STILL HEARS IT. What an empty press means to the geometry
+    // side is the geometry side's call; the bar only stops being silent.
+    expect(fired, 'the empty press stopped reaching the build seam').toBe(1);
+
+    await expect(page.locator('#drivethru'))
+      .not.toHaveAttribute('data-shut', '', { timeout: 5000 });
+    await expect(page.locator('[data-drivethru-line]')).toContainText('NOTHING TO BUILD');
+
+    // THE HOUSE ROUND, NEVER THE OUTLINE ROUND. A drafter who pressed the
+    // bone asked for a house, not for a drawing lesson -- and the round is
+    // invisible until the bone on the post is pressed, so it is read off
+    // the seam rather than off the board.
+    const round = await page.evaluate(async () => {
+      const seen = [];
+      window.ModelBuild.onOrder(p => seen.push(p?.round ?? 'none'));
+      document.querySelector('#dt-tiles [data-build-family="bungalow"]').click();
+      await new Promise(r => setTimeout(r, 60));
+      document.querySelector('#dt-tiles [data-build-entry]').click();
+      await new Promise(r => setTimeout(r, 60));
+      document.getElementById('dt-bone').click();
+      return seen;
+    });
+    expect(round, 'the bone sent the drafter down the guided trace he did not ask for')
+      .toEqual(['menu']);
+
+    // AND THE REFUSAL IS SPENT, not stuck on the board behind the choice
+    // that answers it.
+    await expect(page.locator('[data-drivethru-line]')).not.toContainText('NOTHING TO BUILD');
+  });
+
+test('with a house and a detached garage already standing, the bone does nothing',
+  async ({ page }) => {
+    // ONE HOUSE AND ONE DETACHED GARAGE IS THE CAP (Movie). With both up
+    // there is nothing the board could offer, and a board that rises with
+    // every tile spent wastes the press it just took.
+    await h.openModel(page, { webgl: false });
+    const full = JSON.parse(JSON.stringify(REPRO));
+    // The fixture's garage is ATTACHED, which is part of the house and does
+    // not spend the detached slot -- so the drawing is completed here by
+    // detaching the garage master, the way the shelf records it.
+    full.boneyardOutlines.find(m => m.garage).detached = true;
+    await page.evaluate(async ({ bucket, saved }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, saved: full });
+    await page.goto('/MODEL.html?mode=night');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+
+    await page.locator('#bone').click();
+    await page.waitForTimeout(3000);
+    await expect(page.locator('#drivethru'),
+      'the board rose on a project that has nothing left to build')
+      .toHaveAttribute('data-shut', '');
+    await expect(page.locator('#dt-open')).not.toHaveAttribute('data-lit', '');
+  });
+
+// ── HOW BIG IS THE GARAGE ────────────────────────────────────────────────
+// Movie, 15 Sep: "we could make a detached garage and even allow them to
+// enter the size give them choices 16x24 24x26 25x25 (or 4th option allow
+// them to enter ___FT X ___FT)".
+//
+// THE SIZE ROW IS ON THE SIGN, NOT A SECOND SUBMENU. The board is "only 1
+// submenu each" (Movie, 6 Sep), and the fourth option is two fields, which
+// a tile cannot carry.
+const openGarage = async page => {
+  await h.openDriveThru(page);
+  await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
+  await page.locator('#dt-tiles [data-build-entry="detached-thickened"]').click();
+};
+
+test('the detached garage is asked how big, and the house never is',
+  async ({ page }) => {
+    await openPage(page);
+    await openGarage(page);
+
+    await expect(page.locator('#build-sizes')).toBeVisible();
+    await expect(page.locator('#size-stock button'))
+      .toHaveText(["16' x 24'", "24' x 26'", "25' x 25'", 'OTHER']);
+    // AND GRUFF ASKS RATHER THAN PROMISING. Saying "press the bone and
+    // I'll build it" with the size still open promises what the bone is
+    // about to refuse.
+    await expect(page.locator('[data-drivethru-line]')).toContainText('HOW BIG');
+
+    // A HOUSE'S SIZE ARRIVES WITH ITS PREMADE DESIGN, so the row goes away
+    // again -- a bungalow asked for its dimensions would be the drive-thru
+    // asking a question the catalogue already answered.
+    await page.locator('#dt-tiles [data-build-family="bungalow"]').click();
+    await page.locator('#dt-tiles [data-build-entry="bungalow"]').click();
+    await expect(page.locator('#build-sizes')).toBeHidden();
+  });
+
+test('a stock size rides the order to the seam', async ({ page }) => {
+  await openPage(page);
+  await openGarage(page);
+  await page.locator('#size-stock [data-build-size="24x26"]').click();
+  await expect(page.locator('[data-drivethru-line]')).toContainText("24' x 26'");
+
+  const ordered = await page.evaluate(() => {
+    const seen = [];
+    window.ModelBuild.onOrder(order => seen.push(order.size));
+    document.getElementById('dt-bone').click();
+    return seen;
+  });
+  expect(ordered.length, 'the order never reached the seam').toBe(1);
+  expect({ w: ordered[0]?.widthFt, d: ordered[0]?.depthFt },
+    'the size the drafter pressed is not the size that was ordered')
+    .toEqual({ w: 24, d: 26 });
+});
+
+test('the fourth option is two fields, and they are checked before the bone',
+  async ({ page }) => {
+    await openPage(page);
+    await openGarage(page);
+    await page.locator('#size-stock [data-build-size="custom"]').click();
+    await expect(page.locator('#size-custom')).toBeVisible();
+
+    // A GARAGE WITH NO SIZE IS NOT AN ORDER. The size is the whole design
+    // of a box, so the bone refuses out loud rather than firing a seam
+    // with nothing in it -- and this is the half that would rot silently,
+    // because an empty field reads as 0 to anything that only asks "is it
+    // a number".
+    let fired = await page.evaluate(() => {
+      const seen = [];
+      window.ModelBuild.onOrder(order => seen.push(order));
+      document.getElementById('dt-bone').click();
+      return seen.length;
+    });
+    expect(fired, 'a garage with no size was ordered anyway').toBe(0);
+    await expect(page.locator('[data-drivethru-line]')).toContainText('HOW BIG');
+
+    // AND A SLIPPED FINGER IS NOT A BUILDING either: 4ft parks nothing.
+    await page.locator('#size-w').fill('4');
+    await page.locator('#size-d').fill('900');
+    fired = await page.evaluate(() => {
+      const seen = [];
+      window.ModelBuild.onOrder(order => seen.push(order));
+      document.getElementById('dt-bone').click();
+      return seen.length;
+    });
+    expect(fired, 'a 4ft by 900ft garage was ordered').toBe(0);
+
+    await page.locator('#size-w').fill('18');
+    await page.locator('#size-d').fill('22');
+    await expect(page.locator('[data-drivethru-line]')).toContainText("18' x 22'");
+    const ordered = await page.evaluate(() => {
+      const seen = [];
+      window.ModelBuild.onOrder(order => seen.push(order.size));
+      document.getElementById('dt-bone').click();
+      return seen;
+    });
+    expect({ w: ordered[0]?.widthFt, d: ordered[0]?.depthFt, own: ordered[0]?.custom },
+      'the typed pair did not reach the seam as a size')
+      .toEqual({ w: 18, d: 22, own: true });
+  });
+
+test('a size does not follow the drafter onto the next thing he picks',
+  async ({ page }) => {
+    await openPage(page);
+    await openGarage(page);
+    await page.locator('#size-stock [data-build-size="16x24"]').click();
+    await expect(page.locator('[data-drivethru-line]')).toContainText("16' x 24'");
+
+    // PRESSING A DIFFERENT FOUNDATION IS A NEW QUESTION. Carrying the last
+    // answer across would build a 16x24 for a drafter who never saw the
+    // size asked on the tile he actually pressed.
+    await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
+    await page.locator('#dt-tiles [data-build-entry="detached-frostwall"]').click();
+    await expect(page.locator('[data-drivethru-line]')).toContainText('HOW BIG');
+    await expect(page.locator('#size-stock [data-build-size="16x24"]'))
+      .not.toHaveClass(/chosen/);
+  });

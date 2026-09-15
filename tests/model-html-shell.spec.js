@@ -422,6 +422,51 @@ test('the file row and the build bar cannot overlap at any width', async ({ page
   expect(geom.saveOwner, 'something is sitting on the SAVE button').toBe('save');
 });
 
+test('the right panel stays inside its bound, and keeps every control it holds',
+  async ({ page }) => {
+    // THE SAME GAP AS THE TOP BAR'S, one tier over. `aside` is position:fixed
+    // with no width, so it is SHRINK-TO-FIT -- as wide as its widest content
+    // wants, with nothing stopping it. The boneyard's card put a title AND a
+    // + SHELF button on one line and took the rail from 277px to 343px; its
+    // left edge moved to x=909, over the drawing, and a tap aimed at world
+    // (4,-3) in model-html-draw-delete reached the panel instead of the canvas.
+    //
+    // TWO ASSERTIONS, BECAUSE THE FIX HAS TWO WAYS TO GO WRONG. A max-width
+    // stops the panel eating the sheet; it can just as easily CLIP a control
+    // instead, which trades a bug you can see for one you cannot. So: the rail
+    // is within its bound, AND every control inside it is still inside its box.
+    await openShell(page);
+    const verdict = await page.evaluate(() => {
+      const rail = document.getElementById('right-rail');
+      if (!rail) return { missing: true };
+      const box = rail.getBoundingClientRect();
+      const controls = [...rail.querySelectorAll('button, a, input, select')]
+        .filter(el => el.offsetParent !== null);
+      const escaped = controls.map(el => {
+        const r = el.getBoundingClientRect();
+        return { name: el.id || el.className || el.textContent.trim().slice(0, 18),
+          right: Math.round(r.right), bottom: Math.round(r.bottom) };
+      }).filter(c => c.right > Math.round(box.right) + 1);
+      return { w: Math.round(box.width), right: Math.round(box.right),
+        controls: controls.length, escaped: escaped.slice(0, 6) };
+    });
+    expect(verdict.missing, 'there is a right rail to measure').toBeFalsy();
+    expect(verdict.controls, 'and it holds controls worth protecting')
+      .toBeGreaterThan(0);
+    // 277px is the bound MODEL.html sets, and it is MEASURED -- the width the
+    // rail has on main, where every tap in the suite clears it. An earlier
+    // estimate of 288 left the edge three pixels over a tap in
+    // model-change-broadcast, which is the whole reason this number is not
+    // worked out from the seat grid.
+    expect(verdict.w, `the right panel is ${verdict.w}px wide; bounded at 277`)
+      .toBeLessThanOrEqual(277);
+    // NOT CLIPPED INTO UNREACHABILITY. A control whose box ends past the
+    // panel's own right edge is a control the drafter cannot press.
+    expect(verdict.escaped,
+      'every control in the right panel is inside it, not clipped past its edge')
+      .toEqual([]);
+  });
+
 test('no tenant of the top bar is pushed off the sheet', async ({ page }) => {
   // THE GAP THE OVERLAP CHECK ABOVE LEFT. Two bars that never meet each other
   // can still both run off the right edge, and a flex row does exactly that

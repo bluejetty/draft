@@ -248,7 +248,26 @@ jobs:
     # two thirds. Each shard re-pays checkout, npm ci and the browser install
     # (23s last measured), but they pay it in parallel: +30s to the wall clock,
     # not four times over.
-    timeout-minutes: 40
+    # 45, AND IT SITS ABOVE playwright.config.js's 35-MINUTE globalTimeout.
+    # The two numbers are one mechanism and must not be edited apart.
+    #
+    # It was 40, and on 14 Sep shard 3 hit it on two consecutive runs and was
+    # CANCELLED -- a grey badge with no failure text, twice read as
+    # inconclusive. Fifteen tests were waiting on controls §6 correctly puts
+    # away on a TOY board; twenty real failures sat behind that badge. The
+    # per-test timeout was working perfectly: each one failed by name at 180s.
+    # Fifteen times 180s simply outran the cap, and the runner killed the
+    # reporter mid-sentence.
+    #
+    # THE SENTENCE BELOW ALREADY SAYS WHY THIS MATTERS, about sibling shards:
+    # "one red and three cancelled is a mystery". A shard cancelled by its own
+    # cap is the same mystery arriving by a different road. Playwright now
+    # stops itself at 35m and prints what it has; this cap only has to stay
+    # far enough above that the reporter is never interrupted.
+    #
+    # Ruled by Movie, 15 Sep: "a hung test must fail by name, under the job
+    # limit, not cancel the shard".
+    timeout-minutes: 45
     strategy:
       # ALL FOUR RESULTS, ALWAYS. A failing shard must not cancel its siblings:
       # three green and one red is a diagnosis, and one red and three cancelled

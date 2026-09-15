@@ -528,6 +528,23 @@
   #build-bar button.card .said { position:absolute; width:1px; height:1px;
     margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0);
     white-space:nowrap; border:0; }
+  /* THE SIZE ROW sits under the entry chips, on the same shelf, because it
+     is the same question continued: which garage. The fields wear the
+     board's paper and ink rather than the browser's, or they read as a
+     form dropped on a picture. */
+  #build-sizes { display:flex; gap:4px; justify-content:center;
+    align-items:center; flex-wrap:wrap; }
+  #build-sizes[hidden] { display:none; }
+  #size-stock { display:flex; gap:4px; justify-content:center; flex-wrap:wrap; }
+  #size-custom { display:flex; gap:3px; align-items:center;
+    font-family:var(--font-ui); font-size:clamp(8px, 1.15vw, 11px);
+    font-weight:700; letter-spacing:0.04em; color:#1f3f6b; }
+  #size-custom[hidden] { display:none; }
+  #size-custom input { width:4.2em; font-family:var(--font-ui);
+    font-size:clamp(8px, 1.15vw, 11px); font-weight:700; text-align:center;
+    color:#1f3f6b; background:#f1e9d2; border:1px solid #1f3f6b;
+    border-radius:2px; padding:3px 4px; }
+  #size-custom input:focus { outline:2px solid #8f2a1d; outline-offset:1px; }
   /* The family whose submenu is open, and the type the drawing carries, both
      read as the page's one attention colour -- the same signal the wall tool
      uses when it is armed. */
@@ -544,17 +561,20 @@
   #bone .said {
     position:absolute; width:1px; height:1px; margin:-1px; padding:0;
     overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
-  /* THE OTHER WAY IN. Lettering rather than artwork until Movie draws one,
-     and it lights the same way the house does so both rounds feel like the
-     same pull-up to the same window. */
-  #outline { font-family: var(--font-ui); font-size:12px; font-weight:700;
-    letter-spacing:0.08em; text-transform:uppercase; cursor:pointer;
-    color: var(--ink-primary); padding:6px 14px; border-radius:6px;
-    border:1px solid var(--edge-panel);
-    background-color: var(--surface-chip);
-    background-image: var(--surface-chip-tex, none); }
-  #outline:hover, #outline[data-lit] {
-    color: var(--accent); border-color: var(--accent); }
+  /* THE OTHER WAY IN, and Movie drew it: the dotted house, unlit and lit.
+     Same two-file, stacked-and-revealed arrangement as the drive-thru press
+     for the same reason -- both images are painted before a finger arrives,
+     so the glow cannot flicker while the browser fetches the second one. */
+  #outline { position:relative; display:block; padding:0; border:none;
+    background:none; line-height:0; cursor:pointer; }
+  #outline img { display:block; height:var(--foot-press-h, 34px); width:auto; }
+  #outline .lit { position:absolute; left:0; top:0; opacity:0;
+    transition:opacity 90ms linear; pointer-events:none; }
+  #outline[data-lit] .lit { opacity:1; }
+  #outline:hover img { filter:brightness(1.12); }
+  #outline .said {
+    position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+    overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
 
   /* ── THE SHELL ─────────────────────────────────────────────────────────
      Two pull-out sidebars and their tabs. The SHAPE is MODEL.dc.html's
@@ -628,7 +648,34 @@
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none); }
   aside[hidden] { display:none; }
   #left-rail { left:28px; border-right:1px solid var(--edge-panel); min-width:120px; }
-  #right-rail { right:28px; border-left:1px solid var(--edge-panel); }
+  /* THE PANEL IS BOUNDED, and this is the rule that keeps it off the sheet.
+     `aside` is position:fixed with no width, so it is SHRINK-TO-FIT: as wide
+     as its widest content's MAX-content, with nothing stopping it. That was
+     survivable while the LEVELS panel held level cards; the boneyard's card
+     put a title AND a + SHELF button on one line and took the rail from 277px
+     to 343px, which moved its left edge to x=909 and put it over the drawing.
+     model-html-draw-delete caught it: a tap aimed at world (4,-3) reached the
+     right sidebar instead of the canvas. I shipped that in the boneyard commit
+     because the run covered the boneyard cascade and not that spec.
+     WHY A BOUND RATHER THAN A SHAVE. The card was not uniquely guilty --
+     measured, FOUNDATION's card wanted exactly the same 343px -- so trimming
+     the boneyard's label would have handed the width to the next card and the
+     bug would have come back wearing different clothes. The same answer the
+     instrument strip got when PRINTSCREEN overflowed it at 1280: bound the
+     furniture and let its contents yield, rather than trim whichever tenant
+     happens to be longest this week.
+     277px IS MEASURED, NOT ESTIMATED, and the difference mattered. I first
+     bounded this at 288 -- the seat grid's own width, worked out from two 82px
+     seats and their gaps -- and model-change-broadcast still failed: at 288 the
+     rail's left edge sits at x=964, and a tap aimed at world (6,-2) lands at
+     967, three pixels inside it. 277 is what the rail measures on main, where
+     that tap clears by eight. An estimate that is nearly right is a panel that
+     nearly stays off the sheet.
+     Past this width a level name ellipsises -- a label the drafter can still
+     read the start of, against a panel eating the drawing, which he cannot
+     draw on. */
+  #right-rail { right:28px; border-left:1px solid var(--edge-panel);
+    max-width:277px; }
   /* THE RIGHT PANEL COLLAPSES TO A SEAT, NOT TO NOTHING (Devin, 12 Sep).
      MODEL.dc.html's rail comment (:1766) says the open LEVELS panel covers
      only the outer column and "the inner column always keeps its seat, so
@@ -1065,12 +1112,35 @@
          drawing" it themselves. One board, two exits. -->
     <button id="outline" type="button" data-drivethru-outline
       aria-expanded="false" aria-controls="drivethru"
-      title="Pick a type, then draw its outline yourself">OUTLINE</button>
+      title="Pick a type, then draw its outline yourself"><img
+        src="./assets/btn-outline-off.png" alt="" /><img class="lit"
+        src="./assets/btn-outline-on.png" alt=""
+        /><span class="said">OUTLINE</span></button>
     <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
          for one of the types. It rides with the pair rather than with the
          places, because it is a verb. -->
     <button id="delete" type="button" data-delete hidden
       title="Delete what is selected">DELETE</button>
+  <!-- COPY AND PASTE ACROSS WORKSPACES. Movie, 14 Sep: "copy and paste stuff
+       in there that won't show on the plan (to save for later / reference)".
+       What is held survives a change of level or shelf -- that outliving is
+       the one genuinely new thing in the boneyard order, since DC's own copy
+       is a single gesture inside one workspace.
+
+       BESIDE DELETE, and they were NOT when this branch rebased. Resolving the
+       MODEL.html conflict by hand put them after the drive-thru sign's frame
+       but still INSIDE #drivethru -- so they inherited a shut modal's
+       `visibility:hidden` and sat at y=1303, off the bottom of the sheet.
+       Their `hidden` PROPERTY was false the whole time, which is why nothing
+       reading the property noticed; model-boneyard caught it because it asks
+       for real visibility, and it is the only reason this did not ship.
+
+       HIDDEN WHEN THEY HAVE NOTHING TO DO, like DELETE beside them: a verb
+       that looks live and does nothing is worse than a gap. -->
+  <button id="copy" type="button" data-copy hidden
+    title="Copy what is selected — paste it on any level or shelf">COPY</button>
+  <button id="paste" type="button" data-paste hidden
+    title="Paste the copy here, on whatever level or shelf is showing">PASTE</button>
   </div>
   <div class="grow"></div>
   <!-- THE SHEETS THAT COME OFF THIS MODEL, far right (Movie, 15 Sep). Two
@@ -1113,6 +1183,23 @@
       <div id="build-bar" data-build-bar hidden>
         <div id="build-families" data-build-families></div>
         <div id="build-entries" data-build-entries hidden></div>
+        <!-- HOW BIG THE GARAGE IS, and only the garage asks (Movie, 15 Sep).
+             Three sizes and a pair of fields, on the shelf under the entry
+             that raised the question -- a house's size arrives with its
+             premade design, a garage's size IS the design. -->
+        <div id="build-sizes" data-build-sizes hidden>
+          <div id="size-stock" data-build-size-stock></div>
+          <div id="size-custom" data-build-size-custom hidden>
+            <label class="said" for="size-w">Garage width in feet</label>
+            <input id="size-w" data-build-size-width type="number" inputmode="numeric"
+              min="8" max="60" step="1" placeholder="__" />
+            <span aria-hidden="true">FT X</span>
+            <label class="said" for="size-d">Garage depth in feet</label>
+            <input id="size-d" data-build-size-depth type="number" inputmode="numeric"
+              min="8" max="60" step="1" placeholder="__" />
+            <span aria-hidden="true">FT</span>
+          </div>
+        </div>
       </div>
     </div>
     <button id="dt-bone" type="button" data-drivethru-bone
@@ -1246,12 +1333,13 @@
       <span id="strip-protractor-angle" data-protractor-angle>—</span>
     </span>
 
-    <span class="chip dormant" data-mode-scale title="SCALE — three-sided architect's rule — not built on this page yet">
+    <button type="button" id="strip-scale" class="chip" data-mode-scale
+      title="FOOT — every point and every drag lands on the whole foot">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <path d="M2 11 L8 4 L14 11 Z"></path>
         <path d="M5.5 11 L8 8 L10.5 11" stroke-width="0.9"></path>
       </svg>
-    </span>
+    </button>
     <span class="chip dormant" data-mode-shield title="ERASING SHIELD — not built on this page yet">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <rect x="2.5" y="3.5" width="11" height="9" rx="1"></rect>
@@ -1390,6 +1478,10 @@
 <!-- The house types the build bar offers. Lifted out of MODEL.dc.html so both
      pages read one list (build-menu.js says why). -->
 <script src="./build-menu.js"></script>
+<!-- What the project already holds, against Movie's cap of one house and one
+     detached garage. The bone reads it to know whether there is anything
+     left to offer. -->
+<script src="./building-bodies.js"></script>
 <script src="./profile-manager.js"></script>
 <!-- The seventeen tools as data, so the keypad renders a list rather than
      seventeen hand-written buttons that can drift apart. It reads
@@ -1416,6 +1508,15 @@
      treats as a fallback, not the truth, so the two boards would have drawn
      different riser counts for the same drawing after any wall-height edit. -->
 <script src="./level-assembly.js"></script>
+<!-- LEVEL LOCK holds the rules for an assembly that is the same place on the
+     plan on more than one floor: which lock holds a group, who its siblings
+     are, that a lock of one is not a lock, and that a corner shared by two
+     walls of one assembly is moved ONCE. Pinned by
+     proto/level-lock-harness.js, which a page cannot be.
+
+     No dependency of its own -- it is arithmetic over ids and points -- so it
+     sits here rather than earlier or later for any load-order reason. -->
+<script src="./level-lock.js"></script>
 <script src="./stair-geometry.js"></script>
 
 <script>
@@ -1496,9 +1597,26 @@
   // before its declaration is a throw, not an undefined, and the boot paint
   // would hit it.
   let tsquareOn = false;    // T-SQUARE down: the run in hand is held square
+  // THE FOOT LIGHT. A PAGE SETTING, NOT DRAWING DATA -- a drawing carrying
+  // "the foot light was on" would arrive in someone else's session and start
+  // rounding his walls, so it rides in SKIN_KEY with the board and the theme.
+  //
+  // THE ORDER SAYS IT RIDES WITH THE T-SQUARE, "same store, same restore-on-
+  // load". Measured, the T-SQUARE HAS NO STORE: `tsquareOn` is a plain `let`
+  // that resets to false on every load, and nothing writes it anywhere. So
+  // the instruction cannot be followed literally; what it asks for is
+  // acceptance 3 -- survives reload, off on a page that has never seen it --
+  // and SKIN_KEY is where this page already keeps exactly that kind of
+  // setting. Reported rather than quietly reinterpreted.
+  let footOn = stored.footLight === true;
   let rulerOn = false;      // RULER down: presses measure instead of drawing
   let rulerFrom = null;     // the ruler's first press, in world feet
   let cursorWorld = null;   // where the cursor last was, for the live readouts
+  // THE CORNER UNDER THE CURSOR, or null. Painted, not just cursored -- see
+  // paintHoverCorner. Held as the POOLED VERTEX OBJECT rather than a copy of
+  // its numbers, so a corner that moves under the cursor keeps its highlight
+  // without anything re-finding it.
+  let hoverCorner = null;
 
   // View state in world units (feet). scale is screen pixels per foot.
   // Deliberately plain arithmetic: MODEL.dc.html projects through a three.js
@@ -1624,8 +1742,80 @@
   // level is inserted. See RD-DOCUMENTS/SPEC-model-html-tiers.md.
   const MAIN_FLOOR_LEVEL_ID = 3;
   const levelIds = () => (drawing?.levels || []).map(level => Number(level.id));
+  // ── THE BONEYARD'S OWN STATE ──────────────────────────────────────────────
+  // A SHELF IS A LEVEL WITH A NEGATIVE ID. That is the whole of the port, and
+  // it is `MODEL.dc.html:9061` verbatim: `_boneyardLevelId(shelfId) { return
+  // -shelfId; }`. Every level-owned thing in the format is keyed by levelId
+  // and the loader accepts -shelfId as an owner (since c8654eb), so parking a
+  // wall on a shelf needs no format change and no `shelfId` on any entity.
+  //
+  // boneyardActive IS NOT DRAWING DATA, and DC agrees -- its loader sets
+  // `boneyardActive: false` unconditionally (:5606). Which shelf is active IS
+  // stored, because it is a fact about the drawing; whether the drafter was
+  // looking at the boneyard when he saved is a fact about his afternoon.
+  let boneyardActive = false;
+  // DERIVED, NOT STORED, and the distinction is the one that cost a day of red
+  // CI yesterday: "readers normalise, writers never invent". boneyardShelves()
+  // always yields at least SHELF 1 (drawing-format.js:827), so a drawing saved
+  // before shelves existed SHOWS the default -- which acceptance 6 asks for --
+  // without a default shelf being written into a file that never had one.
+  // Only + SHELF writes the key, and that is the drafter's own instruction.
+  const shelves = () => window.DraftDrawingFormat.boneyardShelves(drawing?.boneyardShelves);
+  const activeShelfId = () => {
+    const want = Number(drawing?.activeBoneyardShelfId);
+    return shelves().some(s => Number(s.id) === want) ? want
+      : Number(shelves()[0]?.id || 1);
+  };
+  const boneyardLevelId = (shelfId = activeShelfId()) => -shelfId;
+
+  // ONE PREDICATE FOR "THE BONEYARD IS WHAT IS BEING DRAWN", and it exists
+  // because the leak came back through a second door.
+  //
+  // activeLevelId() already answers thumbTarget BEFORE the boneyard, so the
+  // seat thumbnails were safe -- and then outlines() asked `boneyardActive`
+  // DIRECTLY, which is the same question without the precedence, and every
+  // seat painted the shelf's master again. Two spellings of one state is how a
+  // rule gets enforced in one place and forgotten in the other.
+  //
+  // A THUMBNAIL IS ALWAYS ABOUT ITS OWN TARGET, so it can never be about the
+  // boneyard, and nothing else needs to know why.
+  //
+  // THE `!thumbTarget` HALF IS UNPROVEN, and saying so is the point. I added
+  // it believing a red check had caught the shelf painting into every seat.
+  // It had not: that red was a RACE in the check itself, capturing a seat
+  // canvas mid-paint. With the race fixed, removing `!thumbTarget` changes
+  // nothing acceptance 5 can see -- tried with a wall on the shelf, then with
+  // a master on the shelf, then with the real flag reaching drawOutlines2D.
+  //
+  // It stays because it is the same precedence activeLevelId() enforces two
+  // functions up, and two spellings of one state that disagree is a fault
+  // waiting for its first witness. But it is a DEFENSIVE guard, not a gated
+  // one, and the honest label matters more than the tidy claim: nobody should
+  // read this line as measured when it is not.
+  const showingBoneyard = () => boneyardActive && !thumbTarget;
+
   const activeLevelId = () => {
+    // THUMBTARGET FIRST, AND THE ORDER OF THESE TWO IS A BUG I SHIPPED FOR AN
+    // HOUR. The boneyard check was written above this line, which reads
+    // naturally -- the boneyard is a whole drafting context, not a filter laid
+    // over a level -- and is wrong, because a seat thumbnail is not asking
+    // "where is the drafter". It is asking "what does LEVEL n look like", and
+    // it sets thumbTarget to say so.
+    //
+    // With the boneyard open, a boneyard-first answer paints the SHELF into
+    // every seat in the rail: MAIN FL's thumbnail showing a parked kitchen.
+    // That is the failure acceptance 5 is about -- "a drafter parks a rejected
+    // kitchen on SHELF 2 and sends the set to the city" -- arriving by a
+    // different road than printing, and this page has no printing.
+    //
+    // A THUMBNAIL IS ALWAYS ABOUT ITS OWN TARGET. Nothing else can be true of
+    // it, so nothing may be asked before it.
     if (thumbTarget) return thumbTarget.levelId;
+    // Then the boneyard, which IS a whole drafting context: everything
+    // downstream -- walls(), lines(), floors(), what a new wall is stamped
+    // with -- reads this one function, which is why the card needs no second
+    // filter anywhere. DC answers the same question the same way at :9089.
+    if (boneyardActive) return boneyardLevelId();
     const asked = Number(params.get('level'));
     if (Number.isFinite(asked) && levelIds().includes(asked)) return asked;
     if (params.get('level') !== null && drawing) {
@@ -1858,8 +2048,17 @@
     .filter(c => onActiveLevel().byLevel(c) && onActiveLevel().onPlan(c));
   // Outlines take the same LEVEL-ONLY rule as roofs -- rule four above. They
   // are the room and garage footprints, level-wide, so no view filter.
-  const outlines = () => (drawing?.outlines || [])
-    .filter(o => onActiveLevel().byLevel(o));
+  // ON THE BONEYARD THE MASTERS ARE THE SHELF'S CONTENTS. A master lives in
+  // boneyardOutlines keyed by shelfId rather than in drawing.outlines keyed by
+  // levelId, so the byLevel filter can never reach one -- and until now this
+  // page drew nothing at all on a shelf that held only a master.
+  //
+  // That is also what made §4 unbuildable: the order says "the page has no
+  // gesture to move a master at all", and a master you cannot see is one you
+  // cannot grab.
+  const outlines = () => (showingBoneyard()
+    ? (drawing?.boneyardOutlines || []).filter(o => Number(o.shelfId) === activeShelfId())
+    : (drawing?.outlines || []).filter(o => onActiveLevel().byLevel(o)));
 
   // Every point that defines the drawing's extent, for fit-to-content.
   const allPoints = (wide = false) => {
@@ -2249,9 +2448,18 @@
     const G = window.DraftGeometry2D;
     R.drawOutlines2D(ctx, toS, {
       isPrinting: false,
-      // No boneyard on this page: it holds no unplaced geometry and offers no
-      // way to switch to it. The false is what selects the LEVEL colours below.
-      boneyardActive: false,
+      // THIS READ `boneyardActive: false` under "No boneyard on this page: it
+      // holds no unplaced geometry and offers no way to switch to it". Both
+      // halves were true when written and neither is now: the card selects,
+      // shelves hold geometry, and the masters ARE what a shelf draws.
+      //
+      // The flag picks the colours, so leaving it false painted a master in
+      // LEVEL ink while the drafter was standing on a shelf -- the page
+      // telling him he was somewhere he was not.
+      //
+      // showingBoneyard() rather than boneyardActive, for the precedence a
+      // thumbnail needs: a seat is always about its own level.
+      boneyardActive: showingBoneyard(),
       outlines: outlines(),
       boneyardOutlines: [],
       // Handles belong to the outline and select tools. This page has neither.
@@ -2949,6 +3157,9 @@
         // (:7380 against :7432), so the highlight is never buried under the
         // geometry it marks but never covers the annotation either.
         paintSelection();
+        // AFTER the selection, so a hovered corner of a selected wall reads as
+        // the ring over its own handle rather than under it.
+        paintHoverCorner();
         paintBand();
         // Cut marks go with the annotation rather than the geometry: they are
         // a fact ABOUT the drawing, and the bone paints them late for the same
@@ -3017,6 +3228,21 @@
     // they can.
     if (deleteButton) {
       deleteButton.hidden = !selection.length || !!activeCut() || modalUp();
+    }
+    // THE SAME RULE AS DELETE, and asked here for the same reason: a section
+    // view or a modal suppresses every verb, because neither is a workspace a
+    // paste could land on.
+    if (copyButton) {
+      copyButton.hidden = !selection.length || !!activeCut() || modalUp();
+    }
+    if (pasteButton) {
+      // PASTE ASKS WHAT IS HELD, NOT WHAT IS SELECTED -- the two are different
+      // questions and this is the whole of the cross-workspace behaviour.
+      // A drafter copies on MAIN FL, switches to a shelf (which clears the
+      // selection, because a selection is a fact about one workspace) and
+      // pastes. If PASTE read the selection it would be dead exactly when it
+      // is wanted.
+      pasteButton.hidden = !held.length || !!activeCut() || modalUp();
     }
     // Before updateReadout, so the readout reports the frame it describes and
     // not the cost of writing itself.
@@ -3400,7 +3626,31 @@
     onOrder: fn => { if (typeof fn === 'function') orderHandlers.push(fn); },
   });
 
+  // HOW BIG, for the entries that ask (the detached garage, and only it).
+  // A stock id, 'custom', or null for not answered yet. The typed pair
+  // lives in the fields themselves rather than being mirrored here: two
+  // places holding one number is how they come to disagree.
+  let chosenSizeId = null;
+  const sizeRow = document.getElementById('build-sizes');
+  const sizeStock = document.getElementById('size-stock');
+  const sizeCustom = document.getElementById('size-custom');
+  const sizeWidth = document.getElementById('size-w');
+  const sizeDepth = document.getElementById('size-d');
+
+  // THE SIZE THE ORDER WOULD CARRY, or null if the question is open. A
+  // typed pair that is blank or out of bounds is NOT a size -- the bone
+  // refuses rather than building a garage nobody asked for.
+  const chosenSize = () => {
+    if (!chosen()?.entry?.needsSize || !chosenSizeId) return null;
+    if (chosenSizeId !== 'custom') return BM.garageSizeById(chosenSizeId);
+    return BM.customGarageSize(sizeWidth.value, sizeDepth.value);
+  };
+
   const pressEntry = entryId => {
+    // A NEW ENTRY IS A NEW QUESTION. Carrying the last garage's size onto
+    // the next press would build a 16x24 for a drafter who pressed a
+    // different tile and never saw the size asked.
+    if (entryId !== chosenEntryId) chosenSizeId = null;
     chosenEntryId = entryId;
     openFamilyId = null;
     const picked = chosen();
@@ -3455,18 +3705,60 @@
       button.onclick = () => pressEntry(entry.id);
       return button;
     }) : []));
+
+    // THE SIZE ROW BELONGS TO THE CHOSEN ENTRY, not to the open submenu:
+    // it is the question that follows the press, so it stays up after the
+    // submenu shuts and the drafter can still see what he answered.
+    const asks = chosen()?.entry?.needsSize === true;
+    sizeRow.hidden = !asks;
+    if (asks) {
+      sizeStock.replaceChildren(...BM.GARAGE_SIZES.map(size => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.buildSize = size.id;
+        button.textContent = size.label;
+        button.classList.toggle('chosen', size.id === chosenSizeId);
+        button.onclick = () => { chosenSizeId = size.id; syncBuildBar(); };
+        return button;
+      }), (() => {
+        // THE FOURTH IS NOT A SIZE, it is the fields. It presses like the
+        // other three so the row reads as one question with four answers.
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.buildSize = 'custom';
+        button.textContent = 'OTHER';
+        button.classList.toggle('chosen', chosenSizeId === 'custom');
+        button.onclick = () => {
+          chosenSizeId = 'custom';
+          syncBuildBar();
+          sizeWidth.focus();
+        };
+        return button;
+      })());
+      sizeCustom.hidden = chosenSizeId !== 'custom';
+    }
+
     buildBar.hidden = false;
     paintSign();
   };
+  // A TYPED FIGURE REDRAWS THE SIGN AND NOTHING ELSE. Rebuilding the row on
+  // every keystroke would take the field's focus away mid-number.
+  [sizeWidth, sizeDepth].forEach(field =>
+    field.addEventListener('input', () => paintSign()));
 
   const fireBuild = () => { buildHandlers.forEach(fn => fn(chosen())); };
   // THE ORDER CARRIES ITS ROUND: 'menu' means hand over the premade design
   // for this type, 'outline' means walk the drafter through drawing it.
+  // AND ITS SIZE, when the entry asked for one. `size` is null on every
+  // other order rather than absent, so the geometry side reads one shape.
   const fireOrder = () => {
-    const order = { ...(chosen() || { family: null, entry: null }), round };
+    const order = {
+      ...(chosen() || { family: null, entry: null }), round, size: chosenSize(),
+    };
     orderHandlers.forEach(fn => fn(order));
   };
-  document.getElementById('bone').addEventListener('click', fireBuild);
+  // The foot bone is wired under the sign, because an empty press is
+  // answered by the sign and the sign does not exist yet up here.
 
   // ── GRUFF'S DRIVE-THRU SIGN ───────────────────────────────────────────
   // Movie, 15 Sep: the sign rises from the foot and covers the two presses
@@ -3489,11 +3781,31 @@
   const signOutline = document.getElementById('outline');
   const signShut = () => sign.hasAttribute('data-shut');
 
+  // WHAT GRUFF SAYS WHEN HE IS REFUSING, set by the press that was refused
+  // and spent by the next paint, so it cannot outlive the moment it explains.
+  let signRefusal = null;
+
   paintSign = () => {
     const picked = chosen();
     const open = openFamilyId ? BM.familyById(openFamilyId) : null;
-    if (picked) {
-      signLine.textContent = `ONE ${picked.entry.label}. GOOD CHOICE.`;
+    if (signRefusal) {
+      signLine.textContent = signRefusal.line;
+      signNote.textContent = signRefusal.note;
+      signRefusal = null;
+    } else if (picked?.entry?.needsSize && !chosenSize()) {
+      // THE GARAGE IS ASKED HOW BIG BEFORE IT IS PROMISED. Saying "press
+      // the bone and I'll build it" with the size still open would promise
+      // something the bone is about to refuse.
+      signLine.textContent = `${picked.entry.label}. HOW BIG?`;
+      signNote.textContent = chosenSizeId === 'custom'
+        ? `Type the two figures \u2014 anything from ${BM.GARAGE_SIZE_MIN_FT} to `
+          + `${BM.GARAGE_SIZE_MAX_FT} feet.`
+        : 'Pick a size off the shelf, or press OTHER and type your own.';
+    } else if (picked) {
+      const size = chosenSize();
+      signLine.textContent = size
+        ? `ONE ${size.label} ${picked.entry.label}. GOOD CHOICE.`
+        : `ONE ${picked.entry.label}. GOOD CHOICE.`;
       // THE SAME BOARD SAYS WHICH ROUND IT IS. Both rounds end on the same
       // bone, so the screen is the only thing telling the drafter whether
       // the house arrives built or he draws it -- and that is the whole
@@ -3546,6 +3858,68 @@
   };
   signOpen.addEventListener('click', () => callSign(signOpen, 'menu'));
   signOutline.addEventListener('click', () => callSign(signOutline, 'outline'));
+
+  // THE BONE ON THE SCREEN WITH NOTHING TO BUILD (Movie, 15 Sep: "what
+  // happens if they press the bone if no outline?" -- then: "take them to
+  // the full house flow (not the outline flow) if there isn't a house and
+  // detached garage already... it will do nothing once both house and
+  // garage both made").
+  //
+  // THE HOUSE ROUND, NEVER THE OUTLINE ROUND. A drafter who pressed the
+  // bone asked for a house, not for a drawing lesson; sending him down the
+  // guided trace would answer a question he did not ask.
+  //
+  // AND NOTHING AT ALL WHEN THE PROJECT IS FULL. One house and one detached
+  // garage is the cap, so with both standing there is nothing the board
+  // could offer -- a board that rises with every tile spent is a board that
+  // wastes a press. What counts as standing is building-bodies.js's answer,
+  // not this page's: PROJECT and the drive-thru's own tiles will ask the
+  // same question, and three derivations of it would be two too many.
+  //
+  // The seam still hears every press either way -- what an empty press
+  // means to the geometry side stays the geometry side's call.
+  document.getElementById('bone').addEventListener('click', () => {
+    fireBuild();
+    if (chosen()) return;
+    if (window.DraftBuildingBodies.isFull(drawing)) return;
+    signRefusal = {
+      line: 'NOTHING TO BUILD YET.',
+      note: 'Pick a type off the board and I\u2019ll build it.',
+    };
+    if (!signShut()) { paintSign(); return; }
+    callSign(signOpen, 'menu');
+  });
+
+  // ARRIVING FROM THE FRONT DOOR PULLS UP TO THE WINDOW BY ITSELF (Movie,
+  // 15 Sep): "when they enter into the model area from the front entry
+  // screen the drivethru should pop up after about 2 seconds". The same
+  // call as the press, so it is the same two seconds of glow and the same
+  // board -- one behaviour, not a second copy of it.
+  //
+  // ONLY FROM THE ENTRY SCREEN, and the address says so. A board that rose
+  // on every load would rise on every reload, over a drafter who is mid-
+  // drawing; the flag is spent as it is read so a refresh lands in the
+  // drawing rather than in the drive-thru again.
+  //
+  // AND A HAND ON THE PAGE CANCELS IT. Someone who starts working inside
+  // those two seconds has said what they came for, and the board rising
+  // over them would take the press they were making.
+  if (new URLSearchParams(location.search).get('from') === 'entry') {
+    const spent = new URL(location.href);
+    spent.searchParams.delete('from');
+    history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
+    const cancel = () => {
+      ['pointerdown', 'keydown', 'wheel'].forEach(type =>
+        document.removeEventListener(type, cancel, true));
+      if (!lighting) return;
+      window.clearTimeout(lighting);
+      lighting = 0;
+      signOpen.toggleAttribute('data-lit', false);
+    };
+    ['pointerdown', 'keydown', 'wheel'].forEach(type =>
+      document.addEventListener(type, cancel, true));
+    callSign(signOpen, 'menu');
+  }
   document.getElementById('dt-close').addEventListener('click', () => {
     setSign(false);
     signOpen.focus();
@@ -3556,7 +3930,26 @@
   // still a press the geometry side is told about, and it carries the round
   // so "build me one" and "walk me through drawing one" cannot be confused
   // for each other by whoever writes them.
-  document.getElementById('dt-bone').addEventListener('click', fireOrder);
+  //
+  // EXCEPT A GARAGE WITH NO SIZE, which is not an order. The size is the
+  // whole design of a box, so an order without one has nothing in it --
+  // and the drafter who typed 4ft by 900ft is told so rather than watching
+  // a press do nothing.
+  document.getElementById('dt-bone').addEventListener('click', () => {
+    const picked = chosen();
+    if (picked?.entry?.needsSize && !chosenSize()) {
+      signRefusal = {
+        line: 'HOW BIG, THOUGH?',
+        note: chosenSizeId === 'custom'
+          ? `Both figures, between ${BM.GARAGE_SIZE_MIN_FT} and `
+            + `${BM.GARAGE_SIZE_MAX_FT} feet.`
+          : 'Pick a size off the shelf, or press OTHER and type your own.',
+      };
+      paintSign();
+      return;
+    }
+    fireOrder();
+  });
   // Escape shuts the sign, as it shuts every other thing this page puts over
   // the drawing. Captured before the drawing's own Escape so an open sign is
   // not also a cleared selection.
@@ -3714,9 +4107,47 @@
     const level = { id, name: String(name).toUpperCase().trim(), elev, visible: true };
     // Every regular level carries a copy of each BONEYARD master outline, so a
     // freshly added floor starts with the inherited geometry rather than bare.
+    //
+    // LINKED, AND WITH ITS OWN POINTS. This read
+    //
+    //   drawing.outlines.push({ ...master, id: ..., levelId: id });
+    //
+    // and was wrong twice, in opposite directions that hid each other.
+    //
+    // NO LINK. The copy carried no masterId and its points no srcId, so
+    // nothing could find it again. _propagateMasterOutline (MODEL.dc.html:
+    // 12057) selects copies by `outline.masterId === master.id` and then each
+    // point by `point.srcId`; with both null the ported propagation would have
+    // moved NOTHING, on every drawing this page has ever made -- and a check
+    // for it would have passed by finding no work to do. That is the order's
+    // "the master is a stamp, not a governor", measured.
+    //
+    // AND TOTAL ALIASING. `{ ...master }` is a shallow spread, so the copy and
+    // the master shared ONE points array. Moving a corner on the second floor
+    // moved the master and therefore every other floor -- not by propagation
+    // but by there only ever being one set of coordinates, which also makes a
+    // per-level override impossible to express.
+    //
+    // offX/offZ start at ZERO because the copy starts coincident, and
+    // relinkVertex re-measures them on every drag. That is the same
+    // srcId/offset contract the dimension ends, beams and columns already use.
     (drawing.boneyardOutlines || []).forEach(master => {
       drawing.outlines = drawing.outlines || [];
-      drawing.outlines.push({ ...master, id: newDrawingItemId('outline'), levelId: id });
+      drawing.outlines.push({
+        ...master,
+        id: newDrawingItemId('outline'),
+        levelId: id,
+        masterId: master.id,
+        shelfId: undefined,          // a level copy is not shelf storage
+        overriddenSrcIds: [],
+        points: (master.points || []).map(pt => ({
+          ...pt,
+          id: undefined,             // the copy's point is not the master's
+          srcId: pt.id,
+          offX: 0,
+          offZ: 0,
+        })),
+      });
     });
     // ABOVE THE TOP FLOOR AND BELOW ROOF, which is where the old page stacks a
     // new storey -- levels are stored top-down, so that is the top floor's own
@@ -3835,16 +4266,39 @@
     const live = !inCut && asked
       && LV.layerViewsForLevelId(activeId).some(v => v.id === asked)
       ? asked : LV.defaultLayerViewId(activeId);
+    // THIS PASS OWNS `data-active`, and that is why the boneyard is named in
+    // it rather than lighting itself during the build. It runs over EVERY
+    // .lv-card and .lv-layer after buildLevelsPanel, so a card that set the
+    // attribute on itself a moment earlier has it taken straight back off --
+    // which is exactly what the boneyard card did for an hour: `toggleAttribute
+    // ('data-active', true)` ran, under a condition measured true, and the
+    // attribute was gone by the time anything could read it.
+    //
+    // Two places deciding which row is lit is how the panel and the canvas
+    // come to disagree. One place, and the boneyard is one of the things it
+    // knows can be active.
     levelsPanel.querySelectorAll('.lv-layer').forEach(row => {
+      if (row.dataset.shelf !== undefined) {
+        row.toggleAttribute('data-active',
+          boneyardActive && Number(row.dataset.shelf) === activeShelfId());
+        return;
+      }
       if (row.dataset.viewRow) {
         row.toggleAttribute('data-active', row.dataset.viewRow === asked);
         return;
       }
+      // A LEVEL'S LAYER ROW IS NEVER LIT ON THE BONEYARD. Without this the
+      // panel shows MAIN FL's FLOOR PLAN lit while the canvas draws a shelf.
       row.toggleAttribute('data-active',
-        !inCut && row.dataset.layer === `${activeId}:${live}`);
+        !inCut && !boneyardActive && row.dataset.layer === `${activeId}:${live}`);
     });
     levelsPanel.querySelectorAll('.lv-card').forEach(card => {
-      card.toggleAttribute('data-active', Number(card.dataset.level) === activeId);
+      if (card.dataset.boneyard !== undefined) {
+        card.toggleAttribute('data-active', boneyardActive);
+        return;
+      }
+      card.toggleAttribute('data-active',
+        !boneyardActive && Number(card.dataset.level) === activeId);
     });
   };
 
@@ -4027,26 +4481,68 @@
       levelsPanel.append(row);
     });
 
-    // ── BONEYARD ────────────────────────────────────────────────────────────
-    // LISTED, NOT EDITED, and that is a ruling rather than an omission.
-    // PARITY-model-html-vs-dc.md records the boneyard as "absent,
-    // deliberately" on this page, and model-html-gestures.spec.js drives it:
-    // the level picker offers no negative pseudo-level, so there is nowhere
-    // for a new shelf to be used. "+ SHELF" would write a shelf into the file
-    // that this page can never open.
-    const shelves = drawing?.boneyardShelves || [];
+    // ── THE BONEYARD ────────────────────────────────────────────────────────
+    // THIS READ "LISTED, NOT EDITED, and that is a ruling rather than an
+    // omission" -- the shelf names printed as dead text because "the level
+    // picker offers no negative pseudo-level, so there is nowhere for a new
+    // shelf to be used. '+ SHELF' would write a shelf into the file that this
+    // page can never open." That reasoning was exactly right and is now spent:
+    // activeLevelId() answers -shelfId, so there IS somewhere for a shelf to
+    // be used, and a wall parked on one survives the reload (c8654eb).
+    //
+    // Movie ruled it back on, 14 Sep: "yes boneyard should be working so i can
+    // copy and paste stuff in there that won't show on the plan".
+    //
+    // PINNED LAST, and that is a rule rather than an accident of order: a
+    // basement added beneath the foundation lands ABOVE this card, because
+    // the boneyard is not a storey. Built after the level loop for exactly
+    // that reason, and acceptance 7 asserts it by POSITION -- a row that
+    // sorts last in the markup but paints halfway up is still wrong.
+    const shelfList = shelves();
     section('Boneyard');
-    if (!shelves.length) {
-      const none = document.createElement('div');
-      none.className = 'lv-empty';
-      none.textContent = 'No shelves.';
-      levelsPanel.append(none);
-    }
-    shelves.forEach(shelf => {
-      const row = document.createElement('div');
-      row.className = 'lv-empty';
+    const bone = document.createElement('div');
+    bone.className = 'lv-card';
+    bone.dataset.boneyard = '';
+    if (boneyardActive) bone.toggleAttribute('data-active', true);
+    bone.title = 'BONEYARD — shelf storage: geometry parks in its exact '
+      + 'position, never prints';
+
+    const boneHead = document.createElement('div');
+    boneHead.className = 'lv-head';
+    const boneName = document.createElement('div');
+    boneName.className = 'lv-head-title';
+    boneName.textContent = 'BONEYARD';
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 'lv-add';
+    plus.dataset.addShelf = '';
+    plus.textContent = '+ SHELF';
+    // DC'S OWN TOOLTIP, which states the reason shelves exist at all rather
+    // than what the button does: a drafter who cannot see why he would want a
+    // second shelf never presses it.
+    plus.title = 'Add a shelf — park geometry at the same spot on different '
+      + 'shelves without overlap';
+    plus.addEventListener('click', event => { event.stopPropagation(); addShelf(); });
+    boneHead.append(boneName, plus);
+    bone.append(boneHead);
+    bone.addEventListener('click', () => goToBoneyard());
+    levelsPanel.append(bone);
+
+    shelfList.forEach(shelf => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'lv-layer';
       row.dataset.shelf = String(shelf.id);
-      row.textContent = shelf.name || `shelf ${shelf.id}`;
+      if (boneyardActive && Number(shelf.id) === activeShelfId()) {
+        row.toggleAttribute('data-active', true);
+      }
+      row.textContent = shelf.name || `SHELF ${shelf.id}`;
+      row.title = `Show only ${shelf.name || `SHELF ${shelf.id}`} — each shelf `
+        + 'keeps its own geometry';
+      row.addEventListener('click', event => {
+        event.stopPropagation();
+        goToBoneyard(Number(shelf.id));
+      });
       levelsPanel.append(row);
     });
 
@@ -4071,7 +4567,55 @@
     if (fileRow) fileRow.hidden = false;
   };
 
+  // ONE WAY INTO THE BONEYARD, and one way out. The card and every shelf row
+  // come through here, so the panel, the plan and what a new wall is stamped
+  // with cannot disagree about where the drafter is.
+  //
+  // CHANGES WHAT IS LOOKED AT AND, WHEN THE SHELF MOVES, ONE THING THAT IS
+  // SAVED. Which shelf is active is a fact about the drawing -- reopen it
+  // tomorrow and the shelf you were working on is the one you get -- so a
+  // shelf switch marks dirty. Being ON the boneyard is not saved at all, the
+  // same call DC makes at :5606.
+  const goToBoneyard = (shelfId = null) => {
+    const want = shelfId === null ? activeShelfId() : Number(shelfId);
+    const moved = drawing && Number(drawing.activeBoneyardShelfId) !== want;
+    if (drawing && moved) { drawing.activeBoneyardShelfId = want; markDirty(); }
+    boneyardActive = true;
+    // A HALF-TAKEN GESTURE DOES NOT FOLLOW YOU ACROSS, which is the same rule
+    // Escape enforces and the same one DC applies on _selectBoneyard (:9). A
+    // run begun on MAIN FL and finished on a shelf would weld two workspaces
+    // together through one wall.
+    drawStart = null;
+    pendingBone = null;
+    selection = [];
+    buildChrome();
+    paint();
+  };
+
+  const addShelf = () => {
+    if (!drawing) return;
+    const list = shelves();
+    // THE ALLOCATOR IS STORED, not `list.length + 1`. Delete SHELF 2 of three
+    // and the count says 2 while SHELF 3 still holds geometry; the next shelf
+    // would take an id that is already an owner and adopt that geometry on
+    // sight. Same family as the duplicate-id bug #392 paid for.
+    const next = Math.max(
+      Number.isInteger(drawing.nextBoneyardShelfId) ? drawing.nextBoneyardShelfId : 1,
+      ...list.map(s => Number(s.id) + 1), 2);
+    drawing.boneyardShelves = [...list, { id: next, name: `SHELF ${next}` }];
+    drawing.nextBoneyardShelfId = next + 1;
+    drawing.activeBoneyardShelfId = next;
+    markDirty();
+    boneyardActive = true;
+    buildChrome();
+    paint();
+  };
+
   const goToLevel = id => {
+    // LEAVING THE BONEYARD IS PART OF ARRIVING AT A LEVEL. Without this the
+    // card stays lit while the plan shows MAIN FL, and the two readouts the
+    // drafter has disagree about where he is.
+    boneyardActive = false;
     params.set('level', String(id));
     // THE VIEW IS KEPT WHERE THE NEW LEVEL HAS IT, dropped where it does not.
     // MAIN FL and 2ND FL share the same four views, so a drafter comparing
@@ -4952,6 +5496,119 @@
   const groupOf = entry => groups().find(group => (group.members || [])
     .some(m => m.type === entry.type && String(m.id) === String(entry.item?.id))) || null;
 
+  // ── LEVEL LOCK ─────────────────────────────────────────────────────────────
+  // A PORT of MODEL.dc.html's level-lock tier (:17750-17825), and the split is
+  // the module's: level-lock.js owns every RULE -- which lock holds a group,
+  // who its siblings are, that a lock of one is not a lock, that a shared
+  // corner moves once -- and this page owns the real point objects and the
+  // relinking of dragged vertices. Nothing below re-decides anything the
+  // module already decides; the order is explicit that reaching for it is the
+  // point, so the page cannot quietly grow a second copy of siblingIds the day
+  // the module changes.
+  const levelLocks = () => (drawing?.levelLocks || []);
+
+  // THE SIBLINGS ARE ON OTHER FLOORS, WHICH IS THE ENTIRE POINT, so they must
+  // be found in the WHOLE drawing and not through the level-filtered
+  // accessors. itemsOfGroup sweeps walls()/lines()/floors(), and those answer
+  // for the ACTIVE level only -- so a lock asked for its sibling's items while
+  // the drafter stands on the other floor gets an empty list, moves nothing,
+  // and reports success. The lock would then be a feature that works only when
+  // both assemblies are on the level you are already looking at, which is the
+  // one case a level lock is not for.
+  const itemsOfGroupAnywhere = group => {
+    const want = new Set((group?.members || []).map(m => `${m.type}:${m.id}`));
+    const out = [];
+    const sweep = (type, list) => (list || []).forEach(item => {
+      if (item && want.has(`${type}:${item.id}`)) out.push(item);
+    });
+    sweep('wall', drawing?.walls);
+    sweep('line', drawing?.lines);
+    sweep('floor', drawing?.floors);
+    return out;
+  };
+
+  const levelLockFor = group =>
+    (group ? window.DraftLevelLock.lockFor(levelLocks(), group.id) : null);
+
+  const levelLockSiblings = group => (group
+    ? window.DraftLevelLock.siblingIds(levelLocks(), group.id)
+      .map(id => groups().find(other => other.id === id))
+      .filter(Boolean)
+    : []);
+
+  // EVERY POINT ONCE. A corner shared by two walls of one assembly is ONE
+  // object in the vertex pool, so walking items and moving their points would
+  // move it twice and tear the assembly apart at its own corners. uniquePoints
+  // is identity-based and is exactly the instrument for it -- which is why it
+  // is the module's and not re-rolled here.
+  const translateItemsBy = (items, dx, dz) => {
+    const points = window.DraftLevelLock.uniquePoints(items);
+    window.DraftLevelLock.translate(points, dx, dz);
+    // The half that stays here: a dragged linked vertex re-measures its master
+    // offset rather than dropping the link, same as every other move on this
+    // page. The module owns geometry, not the boneyard.
+    points.forEach(relinkVertex);
+    return points.length;
+  };
+
+  // MOVE THE SIBLINGS, and only the siblings. Called with the delta the member
+  // group has ALREADY moved by, so the mover is never moved twice: the caller
+  // owns its own move and this owns the others. A check that watches only the
+  // siblings passes on a page that moves the mover at double speed, which is
+  // why the acceptance asserts the mover's own delta too.
+  //
+  // PLAN ONLY. Per-floor properties -- heights, the storey a wall sits on --
+  // stay per-floor: a lock says "the same place on the plan", not "the same
+  // storey", which is the whole reason it spans storeys at all.
+  const applyLevelLockDelta = (group, dx, dz) => {
+    if (!group || (Math.abs(dx) < 1e-9 && Math.abs(dz) < 1e-9)) return 0;
+    const siblings = levelLockSiblings(group);
+    if (!siblings.length) return 0;
+    let moved = 0;
+    siblings.forEach(sibling => {
+      moved += translateItemsBy(itemsOfGroupAnywhere(sibling), dx, dz);
+    });
+    return moved;
+  };
+
+  // BREAKING IS AN EXPLICIT ACT. A drag never breaks a lock and neither does
+  // distance -- the same principle as storey detachment in the BONE model. If
+  // the drafter has not said so the lock holds, however far apart the
+  // assemblies end up.
+  //
+  // It REMOVES rather than marks: a broken lock and no lock behave
+  // identically, and one of them is a state to carry, migrate and get wrong.
+  const breakLevelLock = lock => {
+    if (!lock) return false;
+    const before = levelLocks().length;
+    drawing.levelLocks = window.DraftLevelLock.breakLock(levelLocks(), lock.id);
+    if (drawing.levelLocks.length === before) return false;
+    // ON THE STRIP, NOT IN A MODAL. MODEL.dc.html says this through
+    // drawingMessage -- a line, not a door -- and a modal here would be the
+    // page stopping the drafter to tell him the thing he just asked for
+    // happened. It also sat over the SAVE button afterwards, which is how it
+    // was caught.
+    sayOnStrip(`${lock.name} broken — each floor's assembly moves alone now.`);
+    markDirty();
+    return true;
+  };
+
+  // A LOCK OF ONE IS NOT A LOCK, and makeLock refuses it -- the same rule
+  // drawing-format.js enforces on load, so this verb cannot create what a
+  // reload would drop. Refused HERE by asking the module rather than by
+  // counting members here, which is the check the acceptance names.
+  const lockGroupsAcrossLevels = (chosen, name = 'LEVEL LOCK') => {
+    const nextId = Number.isInteger(drawing?.nextLevelLockId)
+      ? drawing.nextLevelLockId : 1;
+    const lock = window.DraftLevelLock.makeLock(
+      `lock-${nextId}`, name, (chosen || []).map(group => group?.id));
+    if (!lock) return null;
+    drawing.nextLevelLockId = nextId + 1;
+    (drawing.levelLocks || (drawing.levelLocks = [])).push(lock);
+    markDirty();
+    return lock;
+  };
+
   const selectedGroups = () => groups().filter(group => (group.members || [])
     .some(m => selection.some(entry =>
       entry.type === m.type && String(entry.item?.id) === String(m.id))));
@@ -5007,6 +5664,36 @@
   // and cornerAt() only offers them when exactly one wall is selected
   // (selectedWall()). Drawing them on ten walls would advertise ten grabs that
   // do nothing, which is the same lie one step down.
+  // ── the corner under the cursor ────────────────────────────────────────────
+  // THE PAGE ALREADY KNEW WHERE THE GRAB WAS AND ONLY WHISPERED IT. `cornerAt`
+  // has been running on every pointermove since the corner drag landed, but its
+  // only output was a CSS cursor -- so the drafter learned where a node was
+  // grabbable by sweeping the mouse and watching the pointer flicker, and on a
+  // touch screen, where there is no cursor at all, never learned it.
+  //
+  // A RING, NOT A FILLED SQUARE. The 8px squares belong to the SELECTED wall's
+  // own ends and mean "this is yours, drag it"; hover is a weaker claim -- "you
+  // could take this" -- and drawing the same mark for both would make the
+  // selected handles stop meaning anything. Same ink, hollow, one pixel
+  // narrower than the grab circle it stands for.
+  //
+  // IT IS NOT A SECOND HIT TEST. It paints whatever cornerAt already returned,
+  // so the ring cannot promise a grab the drag would refuse: the two cannot
+  // disagree, because there is only one of them.
+  const HOVER_RING = 'rgba(89,128,166,0.85)';
+  const paintHoverCorner = () => {
+    if (!hoverCorner) return;
+    const p = toS(hoverCorner);
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
+    ctx.save();
+    ctx.strokeStyle = HOVER_RING;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  };
+
   const paintSelection = () => {
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines() };
@@ -5087,6 +5774,94 @@
     return null;
   };
 
+  // ── §4: THE MASTER GOVERNS ─────────────────────────────────────────────────
+  // A PORT of MODEL.dc.html:12057 `_propagateMasterOutline(master)`, and the
+  // order is emphatic that it must be one: "the propagation is not the
+  // outline, it is the dozen things that ride the outline. A fresh
+  // implementation gets the corners right and silently leaves the dimension
+  // strings, the teleposts and the garage behind."
+  //
+  // So every rider below is carried across, each with its own loop, and the
+  // gate mutates them away SEPARATELY -- a check that only reads the outline
+  // passes with all four deleted.
+  //
+  // THE CONTRACT IS srcId + OFFSET, and it is already this page's: relinkVertex
+  // just below re-measures offX/offZ against the master on every drag, so a
+  // rider that has been dragged off the corner keeps the gap it was given.
+  // Propagation is the write half of the same contract relinkVertex reads.
+  //
+  // NAMES: storage calls a master point's id `id` (drawing-format.js:698) and
+  // only MODEL.dc.html renames it `pointId` in memory (:5828). This page reads
+  // the file's own spelling, which is what masterPointById already does.
+  const propagateMasterOutline = master => {
+    if (!master || !drawing) return 0;
+    const byId = new Map((master.points || []).map(pt => [String(pt.id), pt]));
+    if (!byId.size) return 0;
+    let moved = 0;
+
+    // THE COPIES. DC selects them by masterId and each point by srcId; both
+    // links are stamped at addLevel, which is what the previous commit fixed.
+    (drawing.outlines || []).forEach(outline => {
+      if (String(outline.masterId || '') !== String(master.id)) return;
+      const overridden = new Set(outline.overriddenSrcIds || []);
+      (outline.points || []).forEach(pt => {
+        if (!pt.srcId) return;
+        const src = byId.get(String(pt.srcId));
+        if (!src) return;
+        // §5a: A HAND-MOVED POINT FREEZES. It stays exactly where the
+        // drafter put it and the master moves out from under it.
+        //
+        // THIS IS A DELIBERATE DIVERGENCE FROM MODEL.dc.html, which rides the
+        // point at its stored offset (:12057). Movie ruled the other way, and
+        // the reason is what an override MEANS: the drafter took this one
+        // corner off the master by hand. Riding keeps it following the master
+        // forever at a fixed gap, which is the one thing the override was
+        // pressed to stop -- it makes "overridden" mean "offset", and there is
+        // already a word for offset, on every rider below.
+        //
+        // The port landed first and this is its own commit, per the order:
+        // "the two changes fail differently and a combined one cannot be
+        // bisected". A freeze that is wrong strands a corner; a port that is
+        // wrong moves the whole plan.
+        //
+        // offX/offZ ARE LEFT ALONE rather than cleared. relinkVertex owns
+        // them and re-measures against the master on every drag, so they are
+        // re-established the moment this point is dragged again -- and a
+        // frozen point that still remembers its gap is what makes clearing an
+        // override put it back on the corner it came from, whenever that verb
+        // arrives. Clearing them here would throw that away silently.
+        if (overridden.has(pt.srcId)) return;
+        pt.x = src.x; pt.z = src.z; pt.bulge = src.bulge || 0;
+        moved += 1;
+      });
+    });
+
+    // RIDER 1: POOLED WALL VERTICES. Generated walls hold points linked to the
+    // master they were built from; each follows at the offset measured when it
+    // was generated or last dragged.
+    const ride = vtx => {
+      const src = vtx?.srcId ? byId.get(String(vtx.srcId)) : null;
+      if (!src) return;
+      vtx.x = src.x + (vtx.offX || 0);
+      vtx.z = src.z + (vtx.offZ || 0);
+      moved += 1;
+    };
+    (drawing.walls || []).forEach(w => { ride(w.start); ride(w.end); });
+
+    // RIDER 2: AUTO-DIMENSION ENDS, so a footprint edit keeps every string
+    // outside the moved plan instead of stranding it over the old wall.
+    (drawing.dimensions || []).forEach(d => { ride(d.start); ride(d.end); });
+
+    // RIDER 3: AUTO-BEAMS snapped to a jog corner (board #244), corner
+    // teleposts with them -- the same srcId/offset contract.
+    (drawing.beams || []).forEach(b => { ride(b.start); ride(b.end); });
+
+    // RIDER 4: COLUMNS, which carry one point rather than two.
+    (drawing.columns || []).forEach(c => ride(c.point));
+
+    return moved;
+  };
+
   const relinkVertex = vtx => {
     if (!vtx?.srcId) return;
     const src = masterPointById(vtx.srcId);
@@ -5097,6 +5872,17 @@
   // then drag: without that rule every pan begun near any corner anywhere in
   // the drawing would move it instead of sliding the sheet.
   const cornerAt = worldPt => {
+    // THE MASTER'S OWN CORNERS, on the boneyard, and this is §4's missing
+    // gesture. Same rule as a wall's: SELECTION FIRST, then the grab -- so a
+    // pan begun near a corner still pans, and only the outline the drafter
+    // chose offers handles.
+    if (showingBoneyard()) {
+      const lone = selection.length === 1 && selection[0].type === 'outline'
+        ? selection[0].item : null;
+      if (!lone || !outlines().includes(lone)) return null;
+      const G = window.DraftGeometry2D;
+      return G.nearestVertex(lone.points || [], worldPt, CORNER_GRAB_PX / view.scale);
+    }
     const selectedSeg = selectedWall();
     if (!selectedSeg || !walls().includes(selectedSeg)) return null;
     const G = window.DraftGeometry2D;
@@ -5638,6 +6424,83 @@
     return true;
   };
 
+  // ── COPY AND PASTE, ACROSS WORKSPACES ──────────────────────────────────────
+  // Movie, 14 Sep: "copy and paste stuff in there that won't show on the plan
+  // (to save for later / reference)".
+  //
+  // WHAT MAKES THIS NEW rather than a port. DC's copy is one gesture inside
+  // one workspace -- capture a rectangle, give a base point, give a
+  // destination, done -- and Movie's ask OUTLIVES the gesture: take it here,
+  // put it down over there, possibly after looking at three other shelves.
+  // So COPY takes a snapshot and PASTE reads that snapshot, and the two are
+  // joined by `held` rather than by one uninterrupted drag.
+  //
+  // RAW SNAPSHOTS, taken at COPY. Holding references to the live items would
+  // let an edit -- or a DELETE -- between the copy and the paste reach back
+  // into what the drafter thought he had taken.
+  const copySelection = () => {
+    if (!drawing || !selection.length) return 0;
+    held = selection
+      .filter(entry => entry.type === 'wall' || SELECTION_LISTS[entry.type])
+      .map(entry => ({ type: entry.type, raw: JSON.parse(JSON.stringify(entry.item)) }));
+    return held.length;
+  };
+
+  const pasteHeld = () => {
+    if (!drawing || !held.length) return 0;
+    const owner = activeLevelId();
+    const landed = [];
+    held.forEach(({ type, raw }) => {
+      const key = type === 'wall' ? 'walls' : SELECTION_LISTS[type];
+      if (!key) return;
+      // EVERY LINK TO WHERE IT CAME FROM IS CUT, and each strip is its own
+      // rule rather than one tidy-up:
+      //
+      //   id        REALLOCATED, always. "Never paste an item carrying the id
+      //             it had on the level it came from" -- #392 paid for one id
+      //             bug already and a duplicate id is the same family.
+      //   levelId   THE ACTIVE WORKSPACE, which is what makes this a paste
+      //             ONTO a shelf: a level's id, or -shelfId on a shelf.
+      //   groupId   DROPPED, though MEASURED IT IS ALREADY A NO-OP HERE and
+      //             that is worth saying rather than implying a guard that is
+      //             not doing the work. The order's rule is "do not let a
+      //             pasted wall join a group that lives on another level", and
+      //             on this page membership is not on the item: a group holds
+      //             `members: [{type, id}]` and the wall normaliser keeps no
+      //             groupId. Reallocating the id is therefore what actually
+      //             enforces the rule -- no member row names the copy. The
+      //             strip stays for anything that does carry one.
+      //   srcId     DROPPED, with offX/offZ. Those link a corner to a
+      //             boneyard master so propagation can find it; a pasted copy
+      //             is new geometry, not a second face of the master, and
+      //             leaving the link would have the master drag the parked
+      //             copy around.
+      const { id: _id, groupId: _g, ...rest } = raw;
+      const copy = { ...rest, id: newDrawingItemId(type), levelId: owner };
+      ['start', 'end', 'point', 'anchor'].forEach(field => {
+        if (!copy[field] || typeof copy[field] !== 'object') return;
+        const { srcId: _s, offX: _ox, offZ: _oz, ...pt } = copy[field];
+        copy[field] = { ...pt };
+      });
+      if (Array.isArray(copy.points)) {
+        copy.points = copy.points.map(pt => {
+          const { srcId: _s, offX: _ox, offZ: _oz, ...keep } = pt || {};
+          return { ...keep };
+        });
+      }
+      drawing[key] = drawing[key] || [];
+      drawing[key].push(copy);
+      landed.push({ type, item: copy });
+    });
+    if (!landed.length) return 0;
+    markDirty();
+    // SELECTED WHERE IT LANDED, so the drafter can see what he just put down
+    // and move it without hunting for it.
+    setSelection(landed);
+    paint();
+    return landed.length;
+  };
+
   // A COPY OF THE SELECTION FIRST. deleteWall calls setSelection, which
   // rebuilds the array being walked; iterating the live one deletes every
   // second thing and reports success.
@@ -5666,6 +6529,13 @@
   // for one register is the drift this pass exists to end, and the key is the
   // survivor because the other sixteen tools are already only there.
   const deleteButton = document.getElementById('delete');
+  const copyButton = document.getElementById('copy');
+  const pasteButton = document.getElementById('paste');
+
+  // WHAT IS HELD. Not the selection, and not a reference to it: raw snapshots
+  // taken at COPY, so an edit or a delete between the copy and the paste
+  // cannot reach back into what the drafter took.
+  let held = [];
 
   // WHAT COUNTS AS A MODAL. Each of these covers the whole viewport at
   // z-index 7 and asks a question that has to be answered first; the foot
@@ -5778,6 +6648,23 @@
   // AND IT ROUNDS AFTER THE SNAP, so a corner the snap legitimately reached is
   // not then nudged off it. A snap that lands on a real corner is the one case
   // where the foot gives way: the corner is where the geometry actually joins.
+  // THE FOOT IS ROUNDED FOR TWO REASONS AND THE SWITCH REACHES ONE OF THEM.
+  // Read this beside `squaring()` -- same shape, same reason. `||` is what
+  // makes the leak impossible in both directions that matter:
+  //
+  //   TOY cannot be UNROUNDED by the light, because the board arm does not
+  //   consult it. §3's gate carries "TOY LEAKS: every board goes through the
+  //   constraint path"; a light that could unround TOY is that same defect
+  //   wearing the other coat, and the order asks for a check on both.
+  //
+  //   DRAFTING is not rounded unless the drafter lit it. Off by default, and
+  //   a drafter who has never touched it never finds his plan on the grid.
+  //
+  // AND IT ROUNDS DISTANCE ONLY. onTheFoot takes the run's LENGTH to the
+  // nearest foot along the direction the hand gave it; it does not square.
+  // The T-SQUARE is a different instrument and this is not a second one.
+  const onTheFoot_if = () => board === 'toy' || footOn;
+
   const onTheFoot = (from, pt) => {
     if (!from) return pt;
     const dx = pt.x - from.x, dz = pt.z - from.z;
@@ -5794,7 +6681,7 @@
     const snapped = fixed ? axisSnap(wanted, fixed) : cornerSnap(wanted, []);
     if (snapped) return snapped;
     const free = { x: wanted.x, y: 0, z: wanted.z };
-    return board === 'toy' ? onTheFoot(drawStart, free) : free;
+    return onTheFoot_if() ? onTheFoot(drawStart, free) : free;
   };
 
   // AN UNFINISHED RUN REFUSES A NEW ONE, AND SAYS SO. Ruled 13 Sep, after I
@@ -6213,6 +7100,7 @@
   const protractorOut = document.getElementById('strip-protractor-angle');
   const rulerChip = strip.querySelector('[data-mode-ruler]');
   const tsquareChip = strip.querySelector('[data-mode-tsquare]');
+  const scaleChip = strip.querySelector('[data-mode-scale]');
   const lengthBox = document.getElementById('frozen-length');
 
   const F = window.DraftFormatters;
@@ -6316,6 +7204,7 @@
     protractorOut.textContent = run ? angleLabel(run.from, run.to) : '—';
     rulerChip.classList.toggle('lit', rulerOn);
     tsquareChip.classList.toggle('lit', tsquareOn);
+    scaleChip.classList.toggle('lit', footOn);
     // THE LENGTH BOX IS LIVE ONLY WHILE A WALL IS IN HAND, because that is
     // the only moment a typed length has an anchor and a direction to be
     // measured along. Enabled at any other time it would take a number and
@@ -6364,6 +7253,20 @@
   });
   tsquareChip.addEventListener('click', () => {
     tsquareOn = !tsquareOn;
+    stripRefresh();
+    paint();
+  });
+
+  // THE SAME CONTROL AS THE T-SQUARE, with one line more: the store. The
+  // order says to follow that neighbour exactly, and this does -- toggle,
+  // refresh, paint -- but the T-SQUARE keeps nothing across a reload and
+  // acceptance 3 requires that this does.
+  scaleChip.addEventListener('click', () => {
+    footOn = !footOn;
+    try {
+      const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
+      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, footLight: footOn }));
+    } catch { /* a browser refusing storage still gets the light, for this tab */ }
     stripRefresh();
     paint();
   });
@@ -6916,9 +7819,45 @@
 
     const unBtn = document.createElement('button');
     unBtn.type = 'button';
-    unBtn.className = 'sel-chip asm-wide';
+    unBtn.className = 'sel-chip';
     unBtn.dataset.assemblyUngroup = '';
     unBtn.addEventListener('click', ungroupSelected);
+
+    // LEVEL LOCK LIVES BESIDE ASSEMBLY, not in the LEVELS panel. The order
+    // leaves the placement to me and this is the reason: a lock is made FROM
+    // assemblies and it is the assembly the drafter has in his hand when he
+    // wants one. The LEVELS panel knows about storeys, not about which
+    // assembly on each storey is the same room -- putting the verb there would
+    // mean picking the assemblies somewhere else and then walking to another
+    // panel to join them.
+    const lockBtn = document.createElement('button');
+    lockBtn.type = 'button';
+    lockBtn.className = 'sel-chip';
+    lockBtn.dataset.levelLock = '';
+    lockBtn.addEventListener('click', () => {
+      const chosen = selectedGroups();
+      // A LOCK OF ONE IS NOT A LOCK and the MODULE refuses it -- this verb
+      // hands it the list and believes the answer, rather than counting to two
+      // here. Counting here is how the page grows a second, weaker rule that
+      // disagrees with the loader the day one of them changes.
+      const lock = lockGroupsAcrossLevels(chosen);
+      if (!lock) {
+        sayOnStrip('a level lock needs two assemblies — one has nothing to '
+          + 'be held against');
+        return;
+      }
+      syncAssembly();
+      paint();
+    });
+
+    const breakBtn = document.createElement('button');
+    breakBtn.type = 'button';
+    breakBtn.className = 'sel-chip';
+    breakBtn.dataset.levelLockBreak = '';
+    breakBtn.addEventListener('click', () => {
+      const lock = selectedGroups().map(levelLockFor).find(Boolean);
+      if (lock && breakLevelLock(lock)) { syncAssembly(); paint(); }
+    });
 
     const help = document.createElement('div');
     help.className = 'sel-help';
@@ -6957,7 +7896,19 @@
     row.append(fixedBtn, looseBtn);
     dialog.append(nameInput, row);
 
-    box.append(title, asmBtn, unBtn, help, dialog);
+    // ONE ROW FOR THE THREE VERBS THAT ACT ON AN ASSEMBLY THAT ALREADY
+    // EXISTS. Not a tidy: two extra full-width rows grew the right panel until
+    // it covered world (4,-3), and model-html-draw-delete caught it as "the
+    // tap reached the right sidebar, not the canvas" -- the same shape as the
+    // instrument strip overflowing at 1280, one tier down. The panel was
+    // already at that edge and one row tipped it.
+    //
+    // UNGROUP keeps its own width when it is alone, because BREAK LOCK is
+    // hidden until there is a lock to break.
+    const actRow = document.createElement('div');
+    actRow.className = 'sel-row';
+    actRow.append(unBtn, lockBtn, breakBtn);
+    box.append(title, asmBtn, actRow, help, dialog);
     slot.append(box);
 
     syncAssembly = () => {
@@ -6976,6 +7927,27 @@
       unBtn.textContent = 'UNGROUP';
       unBtn.disabled = !on || held.length === 0;
       unBtn.hidden = held.length === 0;
+      // THE LOCK VERBS ARE SYNCED HERE, in the same pass that owns these
+      // buttons' state. Two places deciding one button's state is how they
+      // drift -- the boneyard card cost an hour to exactly that.
+      const lockedNow = held.map(levelLockFor).find(Boolean) || null;
+      lockBtn.textContent = 'LEVEL LOCK';
+      // OFFERED WITH ONE, AND REFUSED BY THE MODULE. Disabling this at
+      // `held.length < 2` would be THE PAGE COUNTING TO TWO -- a second, weaker
+      // copy of makeLock's rule, sitting where it can drift from the loader
+      // that enforces the same thing. The gate proved it: with the count here,
+      // a mutant replacing makeLock with the page's own maker SURVIVED,
+      // because the button never fired and nothing ever asked the module.
+      //
+      // So the verb is live whenever an assembly is held, the module refuses a
+      // lock of one, and the strip says why. A drafter finds out what a lock
+      // needs by being told, rather than by a grey button that explains
+      // nothing.
+      lockBtn.disabled = !on || held.length === 0 || !!lockedNow;
+      lockBtn.hidden = held.length === 0;
+      breakBtn.textContent = lockedNow ? `BREAK ${lockedNow.name}` : 'BREAK LOCK';
+      breakBtn.disabled = !on || !lockedNow;
+      breakBtn.hidden = !lockedNow;
       // The old page's own two sentences (:23631-23633), and the red is its
       // own too: nothing selected is the state that stops the button working.
       help.textContent = !on
@@ -7070,6 +8042,8 @@
   };
   selectionWatchers.push(showStructureProps);
   deleteButton.addEventListener('click', pressDelete);
+  if (copyButton) copyButton.addEventListener('click', () => { copySelection(); paint(); });
+  if (pasteButton) pasteButton.addEventListener('click', () => { pasteHeld(); });
 
   // ── pan and zoom ──────────────────────────────────────────────────────────
   let dragging = null;
@@ -7295,6 +8269,51 @@
     if (corner || body) {
       // A grabbed corner or wall takes the gesture whole: no pan starts, so
       // the sheet cannot slide out from under geometry being placed.
+      // A RIGID ASSEMBLY MOVES WHOLE, and until now this page wrote that it
+      // was rigid and then ignored it. createAssembly stamps `fixed` and
+      // `stretchBehavior: 'rigid'` (:6573) and NOTHING READ EITHER -- so a
+      // drafter who ticked "stays rigid" got a group whose walls still moved
+      // one at a time, and the tick did nothing at all.
+      //
+      // This is the gesture the level-lock port needs: MODEL.dc.html gates the
+      // lock on `sd.rigid && sd.group` (:7059), a drag armed only when a node
+      // of a rigid assembly is grabbed (:11142). Without it applyLevelLockDelta
+      // would be a function with no caller, which the order forbids for the
+      // same reason the propagation port had to arrive with its drag.
+      //
+      // A CORNER PRESS STILL TAKES THE CORNER. Reshaping one node of a rigid
+      // assembly is a different question from moving it, and it is not this
+      // order's to answer -- MODEL.dc.html refuses that press outright
+      // (:10956) and this page has never refused it. Left as it was rather
+      // than changed in passing.
+      const rigidGroup = (!corner && body)
+        ? groups().find(g => g?.fixed === true
+            && (g.members || []).some(m => m.type === 'wall'
+              && String(m.id) === String(body.id)))
+        : null;
+      if (rigidGroup) {
+        // EVERY POINT ONCE, through the module, for the reason uniquePoints
+        // exists: a corner shared by two walls of this assembly is one object,
+        // and moving it twice tears the assembly at its own corners.
+        const pts = window.DraftLevelLock.uniquePoints(
+          itemsOfGroupAnywhere(rigidGroup));
+        moveDrag = {
+          kind: 'group', body, group: rigidGroup, grab: at,
+          before: pts.map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ })),
+          // THE SIBLINGS GO IN THE UNDO SNAPSHOT TOO, taken here at arm time
+          // while nothing has moved yet. Undo restores from `before`, and a
+          // snapshot holding only the assembly the drafter grabbed would put
+          // that one back and leave every floor the lock carried sitting where
+          // the drag left it -- one Ctrl+Z, two buildings, no longer locked to
+          // each other in fact while the file still says they are.
+          lockBefore: levelLockSiblings(rigidGroup).flatMap(sib =>
+            window.DraftLevelLock.uniquePoints(itemsOfGroupAnywhere(sib))
+              .map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ }))),
+          sx: e.clientX, sy: e.clientY, active: false,
+        };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
       const ends = corner ? [corner] : movingEnds(body);
       moveDrag = {
         kind: corner ? 'corner' : 'wall',
@@ -7308,7 +8327,11 @@
       canvas.setPointerCapture(e.pointerId);
       return;
     }
+    // THE RING GOES WITH THE CLASSES. This runs when a press takes the
+    // gesture: a highlight left burning under a wall being dragged says "you
+    // could grab this" about a corner already in hand.
     canvas.classList.remove('over-corner', 'over-wall');
+    if (hoverCorner) { hoverCorner = null; paint(); }
     dragging = { sx: e.clientX, sy: e.clientY, cx: view.cx, cz: view.cz, moved: 0 };
     canvas.classList.add('dragging');
     canvas.setPointerCapture(e.pointerId);
@@ -7339,6 +8362,30 @@
       if (md.active) {
         const rect = canvas.getBoundingClientRect();
         const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        if (md.kind === 'group') {
+          // THE ASSEMBLY MOVES BY THE DELTA, measured absolutely from the
+          // grab for the same reason the wall branch below does it: every
+          // point travels exactly the same distance, rather than the same
+          // distance to within the float drift of a hundred pointermove
+          // events. Each point is written from its OWN start, so the assembly
+          // keeps its shape no matter how many events the drag took.
+          const dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          md.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+          md.before.forEach(b => relinkVertex(b.vtx));
+          // THE LOCKED SIBLINGS DO NOT MOVE HERE. They move ONCE, on the
+          // release, by the drag's TOTAL displacement -- which is what
+          // MODEL.dc.html does (:7059, inside the pointerup handler at :6973,
+          // with `sd.anchor.x - sd.starts.get(sd.anchor).x`).
+          //
+          // Worth naming, because the call site reads like a move handler and
+          // was read as one: the delta DC passes is the total from the drag's
+          // start, so calling it per pointermove would translate the siblings
+          // by the whole distance again on every event and run them away
+          // exponentially. Release is not a style choice there, it is what
+          // that delta means.
+          paint();
+          return;
+        }
         if (md.kind === 'corner') {
           // The corner goes TO the cursor, not by the cursor's delta — the old
           // page's node drag writes the point through (MODEL.dc.html:10848),
@@ -7359,7 +8406,31 @@
           // says why. DRAFTING keeps wallSnapDelta exactly as it was.
           const toy = board === 'toy' ? toyWallDelta(md, dx, dz) : null;
           if (toy) { dx = toy.dx; dz = toy.dz; }
-          else {
+          else if (footOn) {
+            // THE FOOT LIGHT'S DRAG, and it is NOT the TOY path with a
+            // different name. toyWallDelta discards the along-run component,
+            // welds the group and refuses a move that would leave a
+            // neighbour on an angle -- all correct for TOY and all wrong
+            // here, because acceptance 6 says DRAFTING's other freedoms are
+            // untouched. The light rounds DISTANCE. That is the whole of it.
+            //
+            // quantiseFeet is toy-constraints.js's own `round(d/step)*step`,
+            // reached rather than copied: the order says if you find yourself
+            // writing rounding code you are in the wrong function.
+            //
+            // PER AXIS, because a free drag has two components and the wall
+            // must land a whole foot in each. Quantising the MAGNITUDE and
+            // keeping the bearing would move an axis-aligned wall a whole
+            // foot -- the same answer -- but leave a diagonal drag's ends on
+            // no foot at all, which is the opposite of what the light says.
+            //
+            // It replaces wallSnapDelta rather than running after it, the way
+            // the TOY arm replaces it: with the light lit the foot IS the
+            // snap, and rounding a corner snap afterwards would pull the wall
+            // back off the corner it had just caught.
+            const Q = window.DraftToyConstraints;
+            if (Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
+          } else {
             const snapped = wallSnapDelta(md.before, dx, dz);
             if (snapped) { dx = snapped.dx; dz = snapped.dz; }
           }
@@ -7390,6 +8461,16 @@
       const corner = cornerAt(at);
       canvas.classList.toggle('over-corner', !!corner);
       canvas.classList.toggle('over-wall', !corner && !!wallBodyAt(at));
+      // REPAINT ONLY WHEN THE ANSWER CHANGES, and identity is what decides:
+      // cornerAt hands back the POOLED VERTEX OBJECT, so `!==` is "a different
+      // corner", not "different numbers". A pointermove fires on every pixel
+      // and this branch is the page's hot path -- repainting on each one would
+      // put a full canvas redraw behind a mouse sweep across the sheet, which
+      // is the cost the rail's one-seat-per-frame rule exists to avoid.
+      //
+      // Entering a corner, leaving it, and crossing straight from one to its
+      // neighbour are all the same test, which is why it is one line.
+      if (corner !== hoverCorner) { hoverCorner = corner; paint(); }
       return;
     }
     dragging.moved = Math.max(dragging.moved,
@@ -7436,13 +8517,40 @@
       // A grab that never armed moved nothing, so there is nothing to undo —
       // and a snapshot pushed for it would make one Ctrl+Z do nothing visible.
       if (md.active) {
-        undoStack.push({ kind: 'move', before: md.before });
+        // Both halves of a locked move go into ONE history entry: the drafter
+        // made one gesture, so one Ctrl+Z undoes all of it. See lockBefore.
+        undoStack.push({ kind: 'move',
+          before: md.lockBefore ? [...md.before, ...md.lockBefore] : md.before });
         markDirty();
         // §5: the bone moved, so what the storey above covers has changed and
         // the roofs under it are stale. Recomputed on the RELEASE, not on
         // every pointermove -- a roof record per mouse event would be hundreds
         // across one drag.
+        // THE LOCKED SIBLINGS MOVE NOW, once, by the whole distance the
+        // assembly travelled -- measured from the snapshot taken when the drag
+        // armed, which is the same total MODEL.dc.html reads off its anchor.
+        //
+        // On the RELEASE for the same reason §4's propagation and §5's roofs
+        // are: a drag is hundreds of pointermove events and each one would
+        // otherwise re-walk every point of every sibling assembly.
+        if (md.kind === 'group' && md.group && md.before.length) {
+          const a = md.before[0];
+          applyLevelLockDelta(md.group, a.vtx.x - a.x, a.vtx.z - a.z);
+        }
         if (board === 'toy') { boneFollows(md.before, md.body?.levelId); rebuildRoofs(); }
+        // §4: A MASTER POINT MOVED, so every level that follows it moves now.
+        // On the RELEASE rather than each pointermove, for §5's reason: the
+        // riders are hundreds of records and a drag is hundreds of events.
+        //
+        // Guarded by "was this actually a master's point", not by "are we on
+        // the boneyard": the two are the same today and would part the day
+        // anything else can edit a master, and the wrong one of them would go
+        // on looking correct.
+        if (md.kind === 'corner') {
+          const owner = (drawing?.boneyardOutlines || [])
+            .find(m => (m.points || []).includes(md.before[0].vtx));
+          if (owner) propagateMasterOutline(owner);
+        }
       } else if (board === 'toy' && md.kind === 'wall' && md.body) {
         // §4's CLICK, and it costs no new gesture. `wallBodyAt` only returns a
         // wall that is ALREADY SELECTED, so reaching here means the drafter
