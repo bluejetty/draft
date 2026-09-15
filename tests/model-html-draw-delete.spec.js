@@ -10,6 +10,7 @@
 // them from the same helpers the page uses — asking the module the same
 // question the page asks it would let a wrong answer agree with itself.
 const { test, expect } = require('@playwright/test');
+const h = require('./helpers');
 
 const BUCKET = 'model-drawing';
 const MAIN_FL = 3, FOUNDATION = 1;
@@ -134,7 +135,7 @@ const tapAt = async (page, x, z) => {
 // wall settles it.
 async function assertMappingSane(page) {
   await tapAt(page, -4, 0);
-  await expect(page.locator('[data-delete-wall]'),
+  await expect(page.locator('[data-delete]'),
     'a tap on w-a selects it, so world (0,0) really is canvas centre').toBeVisible();
   await page.keyboard.press('Escape');
 }
@@ -152,7 +153,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
       await openNewPage(page);
       expect(await wallsShown(page)).toEqual({ shown: 2, total: 2 });
 
-      await page.locator('[data-draw-wall]').click();
+      await h.armWall(page);
       await tapAt(page, -4, 3);
       await tapAt(page, 4, 3);
       expect(await wallsShown(page)).toEqual({ shown: 3, total: 3 });
@@ -184,7 +185,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
     async ({ page }) => {
       await seed(page);
       await openNewPage(page);
-      await page.locator('[data-draw-wall]').click();
+      await h.armWall(page);
       // Start on the shared corner of w-a and w-b.
       await tapAt(page, 0, 0);
       await tapAt(page, 0, 3);
@@ -209,10 +210,10 @@ test.describe('MODEL.html draw + delete a wall', () => {
     async ({ page }) => {
       await seed(page);
       await openNewPage(page);
-      await page.locator('[data-draw-wall]').click();
+      await h.armWall(page);
       await tapAt(page, 0, 0);                       // start ON w-a/w-b's shared corner
       await tapAt(page, 0, 3);
-      await page.locator('[data-draw-wall]').click();  // disarm; the wall stays selected
+      await h.disarmWall(page);  // the wall stays selected
 
       // THIS IS WHAT THE COORDINATE CHECK COULD NOT SEE. cornerSnap already
       // puts a fresh, unpooled endpoint at exactly the corner's coordinates,
@@ -247,7 +248,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
   test("a drawing that says 'centre' writes 'center'", async ({ page }) => {
     await seed(page, `d.wallRefLine = 'centre'; return d;`);
     await openNewPage(page);
-    await page.locator('[data-draw-wall]').click();
+    await h.armWall(page);
     await tapAt(page, -4, 3);
     await tapAt(page, 4, 3);
     await page.locator('[data-model-save]').click();
@@ -265,7 +266,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
     await seed(page);
     await page.goto(`/MODEL.html?level=${FOUNDATION}`);
     await expect(readout(page)).toContainText('FOUNDATION', { timeout: 6000 });
-    await page.locator('[data-draw-wall]').click();
+    await h.armWall(page);
     await tapAt(page, -4, 3);
     await tapAt(page, 4, 3);
     await page.locator('[data-model-save]').click();
@@ -284,8 +285,8 @@ test.describe('MODEL.html draw + delete a wall', () => {
       await seed(page);
       await openNewPage(page);
       await tapAt(page, -4, 0);                      // select w-a
-      await expect(page.locator('[data-delete-wall]')).toBeVisible();
-      await page.locator('[data-delete-wall]').click();
+      await expect(page.locator('[data-delete]')).toBeVisible();
+      await page.locator('[data-delete]').click();
       expect(await wallsShown(page)).toEqual({ shown: 1, total: 1 });
 
       await page.locator('[data-model-save]').click();
@@ -307,7 +308,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
     async ({ page }) => {
       await seed(page);
       await openNewPage(page);
-      await page.locator('[data-draw-wall]').click();
+      await h.armWall(page);
       await tapAt(page, -4, 3);
       await tapAt(page, 4, 3);
       expect(await wallsShown(page)).toEqual({ shown: 3, total: 3 });
@@ -325,7 +326,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
     await seed(page);
     await openNewPage(page);
     await tapAt(page, -4, 0);
-    await page.locator('[data-delete-wall]').click();
+    await page.locator('[data-delete]').click();
     expect(await wallsShown(page)).toEqual({ shown: 1, total: 1 });
 
     await page.keyboard.press('Control+z');
@@ -362,7 +363,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await openNewPage(page);
       await tapAt(page, 4, 0);                       // select w-b
-      await page.locator('[data-delete-wall]').click();
+      await page.locator('[data-delete]').click();
       await page.keyboard.press('Control+z');        // w-b is back
       expect(await wallsShown(page)).toEqual({ shown: 2, total: 2 });
 
@@ -372,10 +373,10 @@ test.describe('MODEL.html draw + delete a wall', () => {
       // the pool is what the next drawn endpoint searches. Leave them out and
       // this draw mints a fresh object at the same coordinates: every number
       // right, the drawing right, the mitre silently gone.
-      await page.locator('[data-draw-wall]').click();
+      await h.armWall(page);
       await tapAt(page, 8, 0);                       // onto w-b's restored free end
       await tapAt(page, 8, 3);
-      await page.locator('[data-draw-wall]').click();  // disarm; new wall selected
+      await h.disarmWall(page);  // new wall selected
 
       const box = await page.locator('#plan').boundingBox();
       const scale = await scaleOf(page);
@@ -407,10 +408,10 @@ test.describe('MODEL.html draw + delete a wall', () => {
     async ({ page }) => {
       await seed(page);
       await openNewPage(page);
-      await page.locator('[data-draw-wall]').click();
+      await h.armWall(page);
       await tapAt(page, -4, 3);                       // a wall is pending
       await tapAt(page, 4, 3);                        // committed, chain live, wall selected
-      await expect(page.locator('[data-delete-wall]')).toBeVisible();
+      await expect(page.locator('[data-delete]')).toBeVisible();
 
       await page.keyboard.press('Escape');
 
@@ -419,8 +420,8 @@ test.describe('MODEL.html draw + delete a wall', () => {
       // two presses to reach the selection, or that disarmed the tool, would
       // teach a drafter one habit on this page and cost them their tool on
       // the other.
-      await expect(page.locator('[data-delete-wall]'), 'the selection went').toBeHidden();
-      await expect(page.locator('[data-draw-wall]'), 'the tool stayed').toHaveClass(/armed/);
+      await expect(page.locator('[data-delete]'), 'the selection went').toBeHidden();
+      expect(await h.wallArmed(page), 'the tool stayed').toBe(true);
 
       // And the chain really is broken: the next two taps make ONE wall, not a
       // wall joined to the abandoned one.
@@ -433,7 +434,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
     async ({ page }) => {
       await seed(page);
       await openNewPage(page);
-      await page.locator('[data-draw-wall]').click();
+      await h.armWall(page);
       await tapAt(page, -4, 3);
       await tapAt(page, 4, 3);
       // DISARM DELIBERATELY. The gesture CHAINS after a commit — the next wall
@@ -441,10 +442,10 @@ test.describe('MODEL.html draw + delete a wall', () => {
       // pending start and leaves the mode armed. A tap then draws instead of
       // selecting, and the delete lands on the wrong wall. That is the page
       // behaving as designed; the test has to say which mode it wants.
-      await page.locator('[data-draw-wall]').click();
-      await expect(page.locator('[data-draw-wall]')).not.toHaveClass(/armed/);
+      await h.disarmWall(page);
+      expect(await h.wallArmed(page)).toBe(false);
       await tapAt(page, 4, 0);                      // select w-b
-      await page.locator('[data-delete-wall]').click();
+      await page.locator('[data-delete]').click();
       await page.locator('[data-model-save]').click();
       await expect(page.locator('[data-model-save]')).toHaveText(/saved/i, { timeout: 6000 });
       const afterNew = await stored(page);

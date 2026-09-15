@@ -1417,8 +1417,38 @@ if (!window.DraftDrawingFormat) {
     return stored;
   };
 
+  // WHAT A DOWNLOADED DRAWING IS CALLED. Both pages used to hand every
+  // download the same name -- `model-drawing.json` -- so a drafter who saved
+  // four times had model-drawing.json, (1), (2), (3) in their downloads with
+  // nothing but the browser's arrival order to tell them apart, and the
+  // second save of a session overwrote the first on any OS that does not
+  // number duplicates.
+  //
+  // LOCAL TIME, TO THE MINUTE: 20260913T2201.draft (Movie, 13 Sep). Not UTC,
+  // because the name is read by the person who pressed the button and their
+  // clock is the one on the wall; not seconds, because two saves inside one
+  // minute are the same drafting minute and a seconds field invites a file
+  // per keystroke.
+  //
+  // The extension is scrubbed to the same shape the old page scrubbed it to,
+  // and every one of the four the picker offers is plain JSON inside.
+  const drawingFileExtension = value => String(value || 'json')
+    .toLowerCase()
+    .replace(/^\./, '')
+    .replace(/[^a-z0-9_-]/g, '') || 'json';
+
+  const drawingFileName = (extension, at) => {
+    const when = at instanceof Date ? at : new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}`
+      + `T${pad(when.getHours())}${pad(when.getMinutes())}`;
+    return `${stamp}.${drawingFileExtension(extension)}`;
+  };
+
   window.DraftDrawingFormat = {
     VERSION,
+    drawingFileExtension,
+    drawingFileName,
     checkEnvelope,
     point,
     levelId,

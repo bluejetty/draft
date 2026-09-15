@@ -11,7 +11,14 @@
 // drawing and paints the wrong level the first time anybody inserts one.
 // Broken and passing look identical until real use, so the inserted-level
 // case is built by hand here rather than hoped for.
+//
+// §7 MOVED THE CONTROL, NOT THE SUBJECT. The two SELECTs in the chrome bar
+// are gone; the LEVELS panel's cards and layer rows are the switcher now, and
+// every drive here goes through the helpers so the next move costs one
+// function. What is asserted -- that the switch repaints the level asked for,
+// by ID and never by index -- is untouched.
 const { test, expect } = require('@playwright/test');
+const h = require('./helpers');
 
 const BUCKET = 'model-drawing';
 const MAIN_FL = 3, SECOND_FL = 5, FOUNDATION = 1;
@@ -95,7 +102,7 @@ test.describe('MODEL.html level + view switchers', () => {
     await expect(readout(page)).toContainText('MAIN FL', { timeout: 6000 });
     expect(await countOf(page, 'walls')).toEqual({ shown: 4, total: 6 });
 
-    await page.locator('[data-level-pick]').selectOption(String(SECOND_FL));
+    await h.pickModelLevel(page, SECOND_FL);
     await expect(readout(page)).toContainText('2ND FL');
 
     // THE CONTROL: 2 differs from 4, so "it repainted" cannot be satisfied by
@@ -104,7 +111,7 @@ test.describe('MODEL.html level + view switchers', () => {
     expect(page.url()).toContain(`level=${SECOND_FL}`);
 
     // And back, so the switch is not one-way.
-    await page.locator('[data-level-pick]').selectOption(String(MAIN_FL));
+    await h.pickModelLevel(page, MAIN_FL);
     await expect(readout(page)).toContainText('MAIN FL');
     expect(await countOf(page, 'walls')).toEqual({ shown: 4, total: 6 });
   });
@@ -118,7 +125,7 @@ test.describe('MODEL.html level + view switchers', () => {
     expect(await countOf(page, 'walls')).toEqual({ shown: 4, total: 6 });
     expect(await countOf(page, 'floors')).toEqual({ shown: 0, total: 1 });
 
-    await page.locator('[data-view-pick]').selectOption('floor');
+    await h.pickModelLayer(page, MAIN_FL, 'floor');
     await expect(readout(page)).toContainText('view floor');
 
     // The floor layout is a different drawing OF THE SAME LEVEL: the floor
@@ -145,38 +152,42 @@ test.describe('MODEL.html level + view switchers', () => {
       .not.toBe(MAIN_FL);
     expect(order[4]).toBe(MAIN_FL);
 
-    await page.locator('[data-level-pick]').selectOption(String(MAIN_FL));
+    await h.pickModelLevel(page, MAIN_FL);
     await expect(readout(page)).toContainText('MAIN FL');
     expect(await countOf(page, 'walls'),
       'index-carrying switcher would paint 2ND FL here').toEqual({ shown: 4, total: 6 });
 
     // The inserted level itself is reachable and holds nothing — which is a
     // fact about the drawing, not a failed paint.
-    await page.locator('[data-level-pick]').selectOption('9');
+    await h.pickModelLevel(page, 9);
     await expect(readout(page)).toContainText('ATTIC');
     expect(await countOf(page, 'walls')).toEqual({ shown: 0, total: 6 });
   });
 
-  test('a level with no layer views offers no view picker', async ({ page }) => {
+  test('a level with no layer views offers no layer rows', async ({ page }) => {
     await seed(page);
     await page.goto('/MODEL.html');
     await expect(readout(page)).toContainText('MAIN FL', { timeout: 6000 });
-    await expect(page.locator('[data-view-pick]')).toBeVisible();
+    expect(await h.modelLayerIds(page, MAIN_FL)).toContain('floor');
 
     // ROOF (7) and SITE (8) have no layer views: the filter switches itself
-    // off and they show everything they hold, so a picker there would offer a
+    // off and they show everything they hold, so rows there would offer a
     // choice that changes nothing.
-    await page.locator('[data-level-pick]').selectOption('7');
+    await h.pickModelLevel(page, 7);
     await expect(readout(page)).toContainText('ROOF');
-    await expect(page.locator('[data-view-pick]')).toBeHidden();
+    expect(await h.modelLayerIds(page, 7)).toEqual([]);
     await expect(readout(page)).toContainText('view all');
   });
 
-  test('?level= still works, and the switcher agrees with it', async ({ page }) => {
+  test('?level= still works, and the panel agrees with it', async ({ page }) => {
     await seed(page);
     await page.goto(`/MODEL.html?level=${FOUNDATION}`);
     await expect(readout(page)).toContainText('FOUNDATION', { timeout: 6000 });
-    await expect(page.locator('[data-level-pick]'))
-      .toHaveValue(String(FOUNDATION));
+    expect(await h.modelLevelId(page)).toBe(String(FOUNDATION));
+    // The panel lights the level the URL named, or the one control left on
+    // the page is disagreeing with the address bar.
+    await h.openModelRail(page);
+    expect(await page.locator('.lv-card[data-active]').getAttribute('data-level'))
+      .toBe(String(FOUNDATION));
   });
 });

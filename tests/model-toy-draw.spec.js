@@ -60,12 +60,6 @@ async function frame(page) {
     box.y + box.height / 2 + z * scale] };
 }
 
-async function armWall(page) {
-  const armed = await page.locator('[data-draw-wall]')
-    .evaluate(el => el.classList.contains('armed'));
-  if (!armed) await page.locator('[data-draw-wall]').click();
-}
-
 const stored = page => page.evaluate(async bucket => {
   const f = await window.SharedFileStore.loadSharedFile(bucket);
   return JSON.parse(await f.text());
@@ -89,7 +83,7 @@ const spanOf = w => Math.hypot(w.e[0] - w.s[0], w.e[1] - w.s[1]);
 // "either drag, or press again and drag" is not addressed to touch only.
 async function mouseDrag(page, from, to) {
   const { at } = await frame(page);
-  await armWall(page);
+  await h.armWall(page);
   await page.mouse.move(...at(...from));
   await page.mouse.down();
   await page.mouse.move(...at(...to), { steps: 10 });
@@ -101,7 +95,7 @@ async function mouseDrag(page, from, to) {
 // to place.
 async function mouseClickClick(page, from, to) {
   const { at } = await frame(page);
-  await armWall(page);
+  await h.armWall(page);
   await page.mouse.click(...at(...from));
   await page.mouse.move(...at(...to), { steps: 10 });
   await page.waitForTimeout(60);
@@ -117,7 +111,7 @@ async function mouseClickClick(page, from, to) {
 // which also makes them repeatable in a way mouse.move is not.
 async function touchGesture(page, steps) {
   const { at } = await frame(page);
-  await armWall(page);
+  await h.armWall(page);
   const pts = steps.map(([kind, x, z]) => [kind, ...at(x, z)]);
   await page.evaluate(list => {
     const c = document.getElementById('plan');
@@ -180,7 +174,7 @@ test('a tremor during the press does not move where the run started',
     // against the same gesture held still rather than against a tolerance.
     await open(page, base({ board: 'drafting' }));
     const { at } = await frame(page);
-    await armWall(page);
+    await h.armWall(page);
     const [x, y] = at(0, 0);
     await page.mouse.move(x, y);
     await page.mouse.down();
@@ -240,7 +234,7 @@ test('the length on screen is the length that gets committed', async ({ page }) 
   // committed at 5. Both halves passed a "is there a number" check.
   await open(page, base({ board: 'toy' }));
   const { at } = await frame(page);
-  await armWall(page);
+  await h.armWall(page);
   await page.mouse.move(...at(0, 0));
   await page.mouse.down();
   await page.mouse.move(...at(5.4, 0.8), { steps: 10 });
@@ -278,7 +272,7 @@ test('the length goes out when the run does', async ({ page }) => {
   await open(page, base({ board: 'toy' }));
   await mouseDrag(page, [0, 0], [5.4, 0.8]);
   // The chain leaves a run open at the wall's end, so put the tool down.
-  await page.locator('[data-draw-wall]').click();
+  await h.disarmWall(page);
   await page.waitForTimeout(80);
   await expect(page.locator('[data-draw-length]')).toBeHidden();
 });
@@ -339,7 +333,7 @@ test('acceptance 2b — a house drawn in TOY has an outline, not walls alone',
     // would pass on a page that writes no outline at all.
     await open(page, base({ board: 'toy', walls: [] }));
     const { at } = await frame(page);
-    await armWall(page);
+    await h.armWall(page);
     await page.mouse.click(...at(0, 0));
     await page.waitForTimeout(60);
     await page.mouse.click(...at(12, 0));
@@ -372,7 +366,7 @@ test('a DRAFTING house is still walls alone — TOY does not leak', async ({ pag
   // DRAFTING drawing contains.
   await open(page, base({ board: 'drafting', walls: [] }));
   const { at } = await frame(page);
-  await armWall(page);
+  await h.armWall(page);
   await page.mouse.click(...at(0, 0));
   await page.waitForTimeout(60);
   await page.mouse.click(...at(12, 0));
@@ -396,16 +390,16 @@ test('a run drawn away from the house is a second bone, not one polygon',
     // any check that only counted points.
     await open(page, base({ board: 'toy', walls: [] }));
     const { at } = await frame(page);
-    await armWall(page);
+    await h.armWall(page);
     for (const [x, z] of [[0, 0], [10, 0], [10, 6], [0, 6]]) {
       await page.mouse.click(...at(x, z));
       await page.waitForTimeout(60);
     }
     // Away from the house, and not touching it: the run starts where nothing
     // ended, which is what makes it a second footprint.
-    await page.locator('[data-draw-wall]').click();   // put the chain down
+    await h.disarmWall(page);   // put the chain down
     await page.waitForTimeout(60);
-    await page.locator('[data-draw-wall]').click();
+    await h.armWall(page);
     for (const [x, z] of [[24, 0], [32, 0], [32, 6], [24, 6]]) {
       await page.mouse.click(...at(x, z));
       await page.waitForTimeout(60);
@@ -433,7 +427,7 @@ test('one wall in TOY is not yet a bone, and nothing is written', async ({ page 
   // reopened.
   await open(page, base({ board: 'toy', walls: [] }));
   const { at } = await frame(page);
-  await armWall(page);
+  await h.armWall(page);
   await page.mouse.click(...at(0, 0));
   await page.waitForTimeout(60);
   await page.mouse.click(...at(12, 0));
@@ -451,14 +445,14 @@ test('an unfinished run refuses a new one, and says so', async ({ page }) => {
   // did something, so the screen has to account for it.
   await open(page, base({ board: 'toy', walls: [] }));
   const { at } = await frame(page);
-  await armWall(page);
+  await h.armWall(page);
   await page.mouse.click(...at(0, 0));
   await page.waitForTimeout(60);
   await page.mouse.click(...at(6, 0));       // two taps: a run, not yet a shape
   await page.waitForTimeout(60);
-  await page.locator('[data-draw-wall]').click();
+  await h.disarmWall(page);
   await page.waitForTimeout(60);
-  await page.locator('[data-draw-wall]').click();
+  await h.armWall(page);
 
   await page.mouse.click(...at(24, 0));      // somewhere else entirely
   await page.waitForTimeout(80);
@@ -502,7 +496,7 @@ test('Escape cancels the unfinished run the refusal names', async ({ page }) => 
   // naming a way out the page does not offer is worse than no message.
   await open(page, base({ board: 'toy', walls: [] }));
   const { at } = await frame(page);
-  await armWall(page);
+  await h.armWall(page);
   await page.mouse.click(...at(0, 0));
   await page.waitForTimeout(60);
   await page.mouse.click(...at(6, 0));
@@ -997,15 +991,15 @@ test('a press on the open end resumes the run instead of being refused',
 
     // First run: two clicks, tool down. One wall, so the bone is still open --
     // the format needs three points and §2 holds it back until then.
-    await armWall(page);
+    await h.armWall(page);
     await page.mouse.click(...at(-6, -6));
     await page.mouse.click(...at(2, -6));
     await page.waitForTimeout(80);
-    await armWall(page);                       // put the tool DOWN
+    await h.disarmWall(page);                    // put the tool DOWN
 
     // Come back and carry on from the open end. Movie's ruling is that putting
     // the tool down does NOT cancel the run, so this must be a continuation.
-    await armWall(page);
+    await h.armWall(page);
     await page.mouse.click(...at(2, -6));
     await page.mouse.click(...at(2, -1));
     await page.waitForTimeout(100);

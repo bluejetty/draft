@@ -3520,13 +3520,17 @@ class Component extends DCLogic {
     };
   }
 
-  _drawingFile() {
-    const extension = String(this.state.saveExtension || 'json')
-      .toLowerCase()
-      .replace(/^\./, '')
-      .replace(/[^a-z0-9_-]/g, '') || 'json';
+  // THE NAME IS THE FORMAT MODULE'S, not this page's, and it is a timestamp
+  // rather than `model-drawing.<ext>`: four saves used to make four files
+  // whose only difference was the browser's own (1)(2)(3), and on any OS that
+  // does not number duplicates the second save overwrote the first. The
+  // scrubbing that used to live here went with it, so both pages name a
+  // download the same way.
+  _drawingFile(name) {
     const contents = JSON.stringify(this._serializeDrawing());
-    return new File([contents], `model-drawing.${extension}`, { type: 'application/json' });
+    const fileName = name
+      || window.DraftDrawingFormat.drawingFileName(this.state.saveExtension);
+    return new File([contents], fileName, { type: 'application/json' });
   }
 
   _downloadDrawingFile() {

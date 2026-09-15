@@ -228,12 +228,13 @@ test('the WALL filter stops a line responding, and ALL lets it back',
   async ({ page }) => {
     await open(page);
 
-    // Under ALL the line at z = 0 is selectable. The DELETE button is the
-    // page's own tell for "exactly one wall is selected", so it must stay
-    // hidden here: a line was picked, not a wall.
+    // Under ALL the line at z = 0 is selectable. DELETE is the page's own
+    // tell for "something is selected" -- §7c widened it from a wall-only
+    // button to one verb over the whole selection, so a picked LINE shows it
+    // now where a wall-only DELETE stayed hidden.
     await page.mouse.click(...await at(page, 0, LINE_Z));
     await page.waitForTimeout(80);
-    await expect(page.locator('[data-delete-wall]')).toBeHidden();
+    await expect(page.locator('[data-delete]')).toBeVisible();
     const litUnderAll = await selCount(page);
 
     await page.locator('[data-sel-filter="wall"]').click();
@@ -248,7 +249,7 @@ test('the WALL filter stops a line responding, and ALL lets it back',
     // is still grabbable with WALL engaged.
     await page.mouse.click(...await at(page, 0, -WALL));
     await page.waitForTimeout(80);
-    await expect(page.locator('[data-delete-wall]')).toBeVisible();
+    await expect(page.locator('[data-delete]')).toBeVisible();
   });
 
 test('shift adds and shift removes', async ({ page }) => {
@@ -263,9 +264,11 @@ test('shift adds and shift removes', async ({ page }) => {
   expect(await selCount(page),
     'shift adds a second wall').toBe(2);
 
-  // The handles go with it: two walls selected is no longer "one wall", so the
-  // corner grab and the DELETE button both stand down.
-  await expect(page.locator('[data-delete-wall]')).toBeHidden();
+  // The corner handles go with it: two walls selected is no longer "one
+  // wall", so the corner grab stands down. DELETE does NOT -- it takes the
+  // whole selection now, and a verb that hid the moment a second item was
+  // picked was the wall-only button's limit, not a rule about deleting.
+  await expect(page.locator('[data-delete]')).toBeVisible();
 
   await page.mouse.click(...await at(page, 0, WALL));
   await page.waitForTimeout(60);

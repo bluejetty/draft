@@ -60,7 +60,11 @@ const hiddenPct = page => page.evaluate(() => {
   // THE TOP ROW COUNTS TOO. It was left out while it was two separately
   // positioned elements, which is part of how the build bar came to be sitting
   // on the SAVE button without any measurement noticing.
-  const boxes = ['left-tab', 'left-rail', 'right-tab', 'right-rail', 'top-row']
+  // EVERY BAND, TOP AND BOTTOM. The page row and the house strip are chrome
+  // over the sheet exactly as the top row is, and leaving them out would
+  // report a shell cheaper than the one the drafter has.
+  const boxes = ['left-tab', 'left-rail', 'right-tab', 'right-rail', 'top-row',
+    'strip', 'page-row', 'house-strip']
     .map(id => document.getElementById(id))
     .filter(el => el && !el.hidden)
     .map(el => el.getBoundingClientRect())
@@ -106,11 +110,14 @@ test('both sidebars start shut, and shut costs less sheet than the overlay did',
     // and panels centred where fit() centres the house (4.5%).
     // RE-BASED after the panels moved below the top row. That move was forced
     // by the collision check above and cost four points: the row spans the top
-    // edge, so a panel level with it sits underneath it. 6% leaves room for
-    // the measurement to wander without letting the shell drift back toward
-    // the full-height version that started at 9.7%.
+    // edge, so a panel level with it sits underneath it.
+    // RE-BASED AGAIN for §7b, which put three more bands on the sheet -- the
+    // instrument strip at the top and the page row and house strip at the
+    // foot -- and counts all of them here. The bands are the shell now, so
+    // the number they cost is the number to hold, and holding the old 6%
+    // would have meant not measuring them.
     expect(pct, 'the shell is taking more of the sheet than it should')
-      .toBeLessThan(6);
+      .toBeLessThan(14);
   });
 
 test('the collapsed right panel keeps the whole chart, six of it in sight',
@@ -132,8 +139,10 @@ test('the collapsed right panel keeps the whole chart, six of it in sight',
     await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
     await expect(page.locator('.seat')).toHaveCount(14);
     const panel = await page.locator('#right-rail').boundingBox();
+    // 182, not 180: the level chips §7c put under the seats are one short row,
+    // and that row is what keeps a level switch reachable with the rail shut.
     expect(panel.height, 'the collapsed strip grew past its cap — re-measure the sheet')
-      .toBeLessThan(180);
+      .toBeLessThanOrEqual(182);
 
     // THE FIRST SIX ARE IN SIGHT, and "in sight" is asked of the panel's own
     // scroll box rather than of visibility: a seat scrolled out of a
@@ -247,7 +256,7 @@ test('NO PIECE OF CHROME COVERS ANY OTHER, shut or open', async ({ page }) => {
   //   the right tab over SAVE          eleven draw-delete tests, 180s timeouts
   //   the build bar over SAVE          stale-merge-refusal, "BUNGALOW ...
   //                                    intercepts pointer events"
-  //   the top row over the left rail   the tap guard below, hitting level-pick
+  //   the top row over the left rail   the tap guard below, hitting the picker
   //   the top row over the right rail  found only by this check
   //
   // Every one came from placing a fixed element by coordinate and reasoning
@@ -256,7 +265,7 @@ test('NO PIECE OF CHROME COVERS ANY OTHER, shut or open', async ({ page }) => {
   // specs away as a timeout.
   await openShell(page);
   const ids = ['top-row', 'left-tab', 'left-rail', 'right-tab', 'right-rail',
-    'readout', 'hint', 'elsewhere'];
+    'readout', 'hint', 'elsewhere', 'strip', 'page-row', 'house-strip'];
   const clashesIn = () => page.evaluate(list => {
     const vis = list.map(id => document.getElementById(id))
       .filter(el => el && !el.hidden && getComputedStyle(el).display !== 'none')
@@ -282,34 +291,37 @@ test('NO PIECE OF CHROME COVERS ANY OTHER, shut or open', async ({ page }) => {
   expect(await clashesIn(), 'chrome overlaps chrome with both panels open').toEqual([]);
 });
 
-test('the chrome bar and the build bar cannot overlap at any width', async ({ page }) => {
+test('the file row and the build bar cannot overlap at any width', async ({ page }) => {
   await openShell(page);
 
   // TWO SEPARATELY FIXED-POSITIONED BARS, EACH AS WIDE AS ITS CONTENT, is how
-  // the build bar came to be sitting on SAVE: the chrome bar grows with the
+  // the build bar came to be sitting on SAVE: the chrome bar grew with the
   // level and view names and the build bar with the family labels, so on a
   // drawing with long level names they met. CI caught it as a 180-second
   // timeout on a spec that had nothing to do with either
   // (stale-merge-refusal), with "BUNGALOW ... intercepts pointer events".
   //
-  // They are one flex row now, so this cannot recur at any width — and the
-  // check is on the RELATIONSHIP rather than on coordinates, because pinning
-  // numbers would pass on the exact drawing that was measured and nothing else.
+  // §7b PUT A WHOLE BAND BETWEEN THEM -- the file row is at the top right and
+  // the build bar along the foot -- so the two cannot meet at any width now.
+  // The check follows them rather than being deleted: the thing it guards is
+  // that SAVE is pressable, and that is worth asserting wherever SAVE lives.
   const geom = await page.evaluate(() => {
-    const chrome = document.getElementById('chrome').getBoundingClientRect();
+    const file = document.getElementById('file-row').getBoundingClientRect();
     const bar = document.getElementById('build-bar').getBoundingClientRect();
     const save = document.getElementById('save').getBoundingClientRect();
     const owner = document.elementFromPoint(save.x + save.width / 2, save.y + save.height / 2);
     return {
-      overlap: chrome.right > bar.left,
-      nested: document.getElementById('chrome').contains(document.getElementById('build-bar')),
+      overlap: file.bottom > bar.top && file.top < bar.bottom
+        && file.left < bar.right && bar.left < file.right,
+      nested: document.getElementById('file-row')
+        .contains(document.getElementById('build-bar')),
       saveOwner: owner ? (owner.id || owner.tagName) : 'none',
     };
   });
-  expect(geom.overlap, 'the chrome bar reaches under the build bar').toBe(false);
-  // The malformed-DOM check: an unclosed #chrome swallowed the build bar and
+  expect(geom.overlap, 'the file row reaches into the build bar').toBe(false);
+  // The malformed-DOM check: an unclosed row swallowed the build bar once and
   // every measurement after it described a tree that was not the page's.
-  expect(geom.nested, '#chrome is not closed — it contains the build bar').toBe(false);
+  expect(geom.nested, '#file-row is not closed — it contains the build bar').toBe(false);
   expect(geom.saveOwner, 'something is sitting on the SAVE button').toBe('save');
 });
 
@@ -346,7 +358,7 @@ test('the shell does not put a long task back', async ({ page }) => {
   // correctly refused, committed nothing, and this read as a chrome
   // regression. The subject here is what the chrome costs, not what the
   // board allows, so the board is named rather than inherited.
-  await page.locator('#strip-switches [data-board="drafting"]').click();
+  await page.locator('#mode-corner [data-board="drafting"]').click();
   await expect(page.locator('body')).toHaveAttribute('data-board', 'drafting');
 
   // The order's bar: the last table read 31–54 ms per committed click with no
@@ -368,11 +380,11 @@ test('the shell does not put a long task back', async ({ page }) => {
 
   for (let i = 0; i < 3; i += 1) {
     const before = await wallCount();
-    await page.locator('[data-draw-wall]').click();
+    await h.armWall(page);
     await page.mouse.click(...at(-3, -1.5 - i * 0.9));
     await page.waitForTimeout(50);
     await page.mouse.click(...at(3, -1.5 - i * 0.9));
-    await page.locator('[data-draw-wall]').click();   // the button TOGGLES
+    await h.disarmWall(page);   // the key TOGGLES; put it down
     await page.waitForTimeout(300);
     // A void sample is not a fast one: an edit that commits nothing repaints
     // nothing and reads exactly like an edit that was free.

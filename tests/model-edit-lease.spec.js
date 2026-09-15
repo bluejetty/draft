@@ -391,7 +391,7 @@ const scaleOf = async page => {
 async function drawWallOn(page, points) {
   const box = await page.locator('#plan').boundingBox();
   const scale = await scaleOf(page);
-  await page.locator('[data-draw-wall]').click();
+  await h.armWall(page);
   for (const [x, z] of points) {
     const cx = box.width / 2 + x * scale;
     const cy = box.height / 2 + z * scale;

@@ -64,12 +64,12 @@ test('a cut is offered as a view, and picking it paints the section', async ({ p
   // other page's name" fault the parity retraction was about.
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 
-  // The picker carries it beside the layer views.
-  const options = await page.locator('#view-pick option').allTextContents();
-  expect(options, 'the cut must be offered as a view').toContain('S1');
+  // The panel carries it, under SECTIONS and beside the layer rows.
+  expect(await h.modelCutOffered(page, 'S1'), 'the cut must be offered as a view')
+    .toBe(true);
 
   const plan = await ink(page);
-  await page.selectOption('#view-pick', 'cut:S1');
+  await h.pickModelCut(page, 'S1');
   await page.waitForTimeout(300);
 
   // THE URL IS THE STATE. Not a page variable — this is what makes the view
@@ -111,7 +111,12 @@ test('a section survives a reload, because the URL carries it', async ({ page })
   await expect(page.locator('#readout')).toContainText('section S1', { timeout: 10000 });
   await page.waitForTimeout(300);
 
-  expect(await page.locator('#view-pick').inputValue()).toBe('cut:S1');
+  // THE PANEL AGREES WITH THE URL. The `#view-pick` this used to read is
+  // gone; the section's own row carries the lit mark instead, and a cold
+  // load that painted the cut while the panel lit a layer row would be the
+  // same disagreement the select could show.
+  await h.openModelRail(page);
+  await expect(page.locator('.lv-layer[data-active]')).toHaveText('S1');
   expect(await ink(page), 'the section paints on a cold load').toBeGreaterThan(0);
   // And it is a section: see the note in the first test — an elevation would
   // satisfy the ink check above just as well.
@@ -137,10 +142,12 @@ test('switching level leaves the section, as the old page does', async ({ page }
   // extending the existing mechanism produced the old page's behaviour without
   // a line of leave-path code. A host that can be entered and not left is the
   // defect the spec's §4 exists to prevent.
-  const levels = await page.locator('#level-pick option').count();
+  await h.openModelRail(page);
+  const levels = await page.locator('[data-level-row]').count();
   test.skip(levels < 2, 'needs two levels to switch between');
-  const other = await page.locator('#level-pick option').nth(1).getAttribute('value');
-  await page.selectOption('#level-pick', other);
+  const other = await page.locator('[data-level-row]').nth(1)
+    .getAttribute('data-level-row');
+  await h.pickModelLevel(page, other);
   await page.waitForTimeout(300);
 
   expect(page.url(), 'the section must not survive a level change').not.toContain('cut%3AS1');

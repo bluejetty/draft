@@ -84,7 +84,13 @@
      corner is actually being dragged -- equal specificity, later rule. */
   #plan.over-corner, #plan.over-wall { cursor:move; }
 
-  #readout { position:fixed; left:12px; bottom:46px; z-index:5;
+  /* THE COUNTERS READ AT THE TOP NOW (§7b). They used to sit above the strip
+     at the foot of the sheet; the drive-thru sign rises from there and would
+     cover the one panel a drafter reads while drawing. Third band down --
+     instruments, then the mode corner and the file row, then this -- so the
+     numbers never share a line with a control that can grow with a level
+     name. */
+  #readout { position:fixed; left:40px; top:var(--readout-top); z-index:5;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px;
     padding:8px 11px; white-space:pre; pointer-events:none;
@@ -94,13 +100,15 @@
     font-variant-numeric:tabular-nums; letter-spacing:0.01em; }
   #readout b { color: var(--accent); font-weight:600; }
 
-  #hint { position:fixed; right:12px; bottom:calc(var(--strip-h) + 12px); z-index:5; color: var(--ink-quiet);
+  #hint { position:fixed; right:12px; bottom:calc(var(--house-h) + 12px); z-index:5; color: var(--ink-quiet);
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; pointer-events:none; }
 
-  /* THE INSTRUMENT STRIP — one bar across the foot of the page, the shape
-     MODEL.dc.html:1963 carries: PROJECT at the left, the drafting instruments
-     holding the centre, the switches at the right.
+  /* THE INSTRUMENT STRIP — one bar across the HEAD of the page, the shape
+     MODEL.dc.html:1963 carries: the message at the left and the drafting
+     instruments holding the centre. PROJECT went to the page row at the
+     lower left and the switches to the mode corner at the upper left, both
+     by §7b; what is left here is only what the drafter READS.
 
      A CHIP HAS THREE STATES AND THEY MEAN DIFFERENT THINGS, which is the
      whole reason the old strip reads as an instrument panel rather than a
@@ -113,7 +121,7 @@
      itself every time one is built.
 
      It is the one place on this page that says what state the board is in,
-     so the readout and the hint move up to clear it rather than over it. */
+     so the readout sits below it rather than under it. */
   /* ONE HOME FOR THE STRIP'S HEIGHT. It was 34px here and the hint's 46px
      was 34 + 12 written out by hand, so the bottom band's size lived in two
      literals that had to agree and nothing made them. They did not: the
@@ -122,26 +130,34 @@
      hint` -- its sixth catch, and the second one this file has produced from
      one distance being written down twice. */
   :root { --strip-h: 34px;
-    /* THE BAND THE SIDEBARS MUST STAY OUT OF: the strip, the 12px gap above
-       it, and the readout that sits in that gap -- two lines of instrument
-       text, about 53px. The readout's height cannot be derived in CSS, so it
-       is one named number here rather than one per sidebar, and the pairwise
-       chrome check is what proves it: when the readout grows a line, that
-       check goes red instead of a sidebar quietly sitting on it. */
-    --bottom-band: calc(var(--strip-h) + 77px); }
-  #strip { position:fixed; left:0; right:0; bottom:0; z-index:6; height:var(--strip-h);
+    /* THE HOUSE STRIP, along the foot: BUNGALOW / BILEVEL / DETACHED GARAGE /
+       BONE and the one DELETE. Named for the same reason --strip-h is: the
+       hint, the page row and both sidebars all stop above it, and that
+       distance was written out by hand three times the last time this file
+       had two bands. */
+    --house-h: 40px;
+    /* THE BAND THE SIDEBARS MUST STAY OUT OF at the foot: the house strip and
+       the page row above it, which is one row of buttons plus its gaps. */
+    --bottom-band: calc(var(--house-h) + 52px);
+    /* THE TOP BANDS, top down: the instrument strip, then the mode corner and
+       the file row, then the readout. Each derived from the one above it so a
+       taller strip moves the lot rather than leaving two of them behind --
+       the fault --strip-h was introduced to end. */
+    --top-row-top: calc(var(--strip-h) + 8px);
+    --readout-top: calc(var(--strip-h) + 48px);
+    --rail-top: calc(var(--strip-h) + 108px); }
+  /* AT THE TOP OF THE SHEET NOW, not the foot (§7b). Movie: the drive-thru
+     sign rises from the bottom and covers the house row, so nothing the
+     drafter reads WHILE DRAWING may live down there. */
+  #strip { position:fixed; left:0; right:0; top:0; z-index:6; height:var(--strip-h);
     display:flex; align-items:center; gap:10px; padding:0 12px;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
-    border-top:1px solid var(--edge-panel);
+    border-bottom:1px solid var(--edge-panel);
     font-family: var(--font-ui); font-size:12px; font-weight:600;
     letter-spacing:0.04em; color: var(--ink-secondary);
     user-select:none; }
   #strip a, #strip button { font:inherit; letter-spacing:inherit; }
   #strip .grow { flex:1; }
-  #strip-project { display:inline-flex; align-items:center; height:20px;
-    padding:0 8px; text-transform:uppercase; text-decoration:none;
-    color: var(--ink-primary); border:1px solid var(--edge-panel);
-    border-radius:4px; flex-shrink:0; }
   #strip-message { font-size:11px; text-transform:uppercase;
     color: var(--ink-quiet); white-space:nowrap; overflow:hidden;
     text-overflow:ellipsis; max-width:24vw; }
@@ -173,28 +189,78 @@
   #frozen-length:disabled { color: var(--ink-quiet); opacity:0.5; }
   #frozen-length:focus { border-color: var(--accent); }
 
-  #strip-switches { display:flex; align-items:center; gap:6px; flex-shrink:0; }
-  #strip-switches .set { display:flex; align-items:center;
+  /* THE MODE CORNER, upper-left (§7b): what the drawing IS -- board, finish,
+     day/night. It sat at the right-hand end of the foot strip; Movie moved it
+     to the corner the old LEVEL / VIEW / DRAW WALL / SAVE bar vacated. The
+     buttons and what they do are untouched: this is a position, not a
+     re-scope. */
+  #mode-corner { display:flex; align-items:center; gap:6px; flex:0 0 auto;
+    font-family: var(--font-ui); font-size:12px; font-weight:600;
+    letter-spacing:0.04em; }
+  #mode-corner .set { display:flex; align-items:center;
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:4px; overflow:hidden; }
-  #strip-switches button { padding:3px 8px; font-size:11px;
+  #mode-corner button { font:inherit; letter-spacing:inherit;
+    padding:4px 9px; font-size:11px;
     text-transform:uppercase; cursor:pointer; border:none; background:none;
     color: var(--ink-quiet); }
-  #strip-switches button[aria-pressed="true"] { color: var(--accent-ink);
+  #mode-corner button[aria-pressed="true"] { color: var(--accent-ink);
     background-color: var(--accent); }
 
-  /* A CHROME-BAR BUTTON NOW, not a fixed corner one -- it sits in the flex row
-     with the level and view pickers. */
-  #save { display:none;
-    font-family: var(--font-ui); font-size:13px; font-weight:600;
+  /* THE FILE ROW, upper-right (§1): what the FILE is -- NEW, OPEN, SAVE with
+     its three words, SAVE AS, and the extension the generated name takes.
+     The row from MODEL.dc.html:573-590 without its PROJECT button: Movie has
+     another place for that and it is the page row at the lower left. */
+  #file-row { flex:0 0 auto; display:flex; align-items:center; gap:6px; }
+  #file-row[hidden] { display:none; }
+  #file-row button, #file-row select {
+    font-family: var(--font-ui); font-size:12px; font-weight:600;
     letter-spacing:0.06em; text-transform:uppercase;
     color: var(--ink-primary); cursor:pointer;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
-    border:1px solid var(--edge-panel); border-radius:6px; padding:7px 16px; }
-  #save.show { display:block; }
+    border:1px solid var(--edge-panel); border-radius:6px; padding:6px 12px; }
+  #file-row button:hover, #file-row select:hover { border-color: var(--accent); }
+  #file-row select { padding:5px 6px; text-transform:none; }
+  /* SAVE IS ALSO THE STATUS, and that is a decision rather than a shortcut.
+     §1 draws NEW · OPEN · SAVE · status · SAVE AS, and the .dc page has two
+     elements there because its SAVE is a download and its status describes a
+     different write. Here they are one write, so a separate word beside the
+     button would be a second reading of one fact -- the drift this page has
+     paid for twice -- and the three words SAVE / UNSAVED / SAVED are already
+     load-bearing in the specs. `data-save-status` is on the button that
+     carries them. */
+  #save { display:none; }
+  #file-row #save.show { display:inline-block; }
   #save:disabled { color: var(--ink-quiet); cursor:default; }
   /* Unsaved edits. The accent is the page's one attention colour, so the
      button stops being furniture the moment there is something to lose. */
   #save.dirty { color: var(--accent); border-color: var(--accent); }
+
+  /* THE PAGE ROW, lower-left (§7b): where the drafter GOES. PROJECT stayed
+     where it was and gained five neighbours.
+
+     A BUTTON THAT GOES NOWHERE LOOKS LIKE IT GOES NOWHERE -- the dormant
+     chip's own treatment, quarter ink and no pointer, because a control that
+     lights and does nothing is a worse lie than one that is plainly down. */
+  #page-row { position:fixed; left:12px; bottom:calc(var(--house-h) + 10px);
+    z-index:6; display:flex; align-items:center; gap:4px;
+    font-family: var(--font-ui); font-size:11px; font-weight:600;
+    letter-spacing:0.06em; }
+  #page-row a, #page-row button, #page-row span { font:inherit;
+    letter-spacing:inherit; display:inline-flex; align-items:center;
+    height:24px; padding:0 8px; text-transform:uppercase; text-decoration:none;
+    border-radius:4px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    color: var(--ink-primary); cursor:pointer; }
+  #page-row a:hover, #page-row button:hover { border-color: var(--accent);
+    color: var(--accent); }
+  /* HERE, not a link to here. A button that reloads the page you are on
+     loses an unsaved corner to a stray thumb. */
+  #page-row [aria-current="page"] { color: var(--accent);
+    border-color: var(--accent); cursor:default; }
+  #page-row button:disabled, #page-row button:disabled:hover {
+    color: var(--ink-quiet); opacity:0.35; cursor:not-allowed;
+    border-color: var(--edge-panel); }
 
   /* RUNG 2's QUIET NOTE. A page holding an unsaved edit re-reads nothing when
      another page writes — throwing away this drafter's work to avoid throwing
@@ -204,7 +270,7 @@
      than over the drawing. */
   /* Follows SAVE to the left: it is SAVE's note, and it was under the shell
      for the same reason SAVE was. */
-  #elsewhere { position:fixed; left:12px; top:52px; z-index:5;
+  #elsewhere { position:fixed; right:12px; top:var(--readout-top); z-index:5;
     font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
     text-transform:uppercase; color: var(--ink-quiet);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
@@ -215,7 +281,7 @@
      editing this" is not something a drafter can act on, and it carries the one
      press that resolves it. Sat under SAVE with the change note, so the page has
      one place where it says things about the file rather than three. */
-  #lease { position:fixed; right:12px; top:46px; z-index:6;
+  #lease { position:fixed; right:12px; top:calc(var(--readout-top) + 34px); z-index:6;
     display:flex; gap:10px; align-items:center;
     font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
     text-transform:uppercase; color: var(--ink-primary);
@@ -226,51 +292,49 @@
     color: var(--accent); background:none; border:1px solid var(--accent);
     border-radius:4px; padding:3px 8px; cursor:pointer; }
   /* The change note steps down when the banner is up, so they never overlap. */
-  body[data-lease-held="0"] #elsewhere { top:78px; }
+  body[data-lease-held="0"] #elsewhere { top:calc(var(--readout-top) + 68px); }
 
-  /* TIER 3b chrome: the level and view switchers. Same panel idiom as the
-     readout, top-left so it clears #save (top-right) and #hint (bottom-right)
-     at a narrow width.
-
-     THE [hidden] RULE IS LOAD-BEARING, not tidiness. `display:flex` on the bar
-     beats the browser's own `[hidden] { display:none }`, so without this line
-     `viewWrap.hidden = true` would set the attribute, change nothing on
-     screen, and leave a picker offering a choice that does nothing on ROOF
-     and SITE -- hidden in the DOM and visible to the drafter. */
   /* THE TOP ROW OWNS THE POSITION; its two children just flow inside it.
      Inset past the tabs on both edges (26px each plus air) so the row never
-     sits on one. */
-  #top-row { position:fixed; top:12px; left:40px; right:40px; z-index:6;
-    display:flex; gap:12px; align-items:flex-start; pointer-events:none; }
+     sits on one.
+
+     ONE FLEX ROW, STILL, AND FOR THE SAME REASON: the mode corner grows with
+     nothing and the file row grows with the extension picker, but two
+     separately fixed-positioned bars is how the build bar came to be sitting
+     on SAVE. A flex row cannot overlap at any width. */
+  #top-row { position:fixed; top:var(--top-row-top); left:40px; right:40px; z-index:6;
+    display:flex; gap:12px; align-items:center;
+    justify-content:space-between; pointer-events:none; }
   #top-row > * { pointer-events:auto; }
-  #chrome { flex:0 0 auto;
-    display:flex; gap:10px; align-items:center; }
-  #chrome[hidden], #chrome label[hidden] { display:none; }
-  #chrome label { display:flex; align-items:center; gap:6px;
-    font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
-    text-transform:uppercase; color: var(--ink-quiet); }
-  /* TIER 3c, and §3.4 of its order is the reason these are BUTTONS. The old
-     page deletes with a keybinding over a SELECT selection; this page's stated
-     drafter is on an iPad and has no keyboard, so a verb reachable only by
-     Ctrl/Delete is a verb half its audience cannot use. The key works too. */
-  #chrome button { font-family: var(--font-ui); font-size:12px; font-weight:600;
-    letter-spacing:0.04em; text-transform:uppercase; cursor:pointer;
+
+  /* THE HOUSE STRIP, along the foot (§7b): what the drafter PICKS. This is
+     the region the drive-thru sign will rise into and cover, which is why
+     nothing read while drawing lives here -- and why DELETE, which does live
+     here, is unavailable while the sign is up. The sign is not built; the
+     page's modal layer (#promote, #bone-choice, z-index 7 over the whole
+     viewport) is the mechanism it will use, and it already covers this strip
+     at z-index 6. */
+  #house-strip { position:fixed; left:0; right:0; bottom:0; z-index:6;
+    min-height:var(--house-h);
+    display:flex; align-items:center; gap:10px; padding:0 12px;
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    border-top:1px solid var(--edge-panel); }
+  #house-strip .grow { flex:1; }
+  /* THE ONE DELETE (§7a). Not per type, and not only for walls: it acts on
+     the selection, whatever is in it. It is on screen exactly while there is
+     something to delete -- and the iPad has no Delete key, so this button is
+     the only way to delete anything at all there. */
+  #delete { font-family: var(--font-ui); font-size:12px; font-weight:600;
+    letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;
     color: var(--ink-primary);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
-    border:1px solid var(--edge-panel); border-radius:6px; padding:6px 12px; }
-  #chrome button[hidden] { display:none; }
-  /* Armed. The accent is the page's one attention colour, and a drafter
-     mid-gesture must be able to see that the next tap draws. */
-  #chrome button.armed { color: var(--accent); border-color: var(--accent); }
+    border:1px solid var(--edge-panel); border-radius:6px; padding:6px 14px; }
+  #delete:hover { color: var(--accent); border-color: var(--accent); }
+  #delete[hidden] { display:none; }
 
-  /* THE BUILD BAR, top centre: the chrome bar owns the top-left and the
-     sidebars own both edges, so the middle of the top edge is what is left.
-     Measured like the rest -- see tests/model-html-topbar.spec.js. */
-  /* Centred in WHAT IS LEFT after the chrome bar, rather than in the window.
-     flex:1 with centred content keeps it looking centred and makes an overlap
-     impossible however wide either side grows. */
-  #build-bar { flex:1 1 auto;
-    display:flex; align-items:flex-start; justify-content:center; gap:6px; }
+  /* THE BUILD BAR, centred in the house strip. */
+  #build-bar { flex:0 1 auto;
+    display:flex; align-items:center; justify-content:center; gap:6px; }
   #build-bar[hidden] { display:none; }
   #build-families, #build-entries { display:flex; gap:4px; }
   #build-entries[hidden] { display:none; }
@@ -319,7 +383,7 @@
      top:12. Four points is what a top bar costs, and chrome that covers
      chrome is a defect where drawing area is a price -- both panels collapse,
      so the drafter can have the sheet back. */
-  .rail-tab { position:fixed; top:48px; z-index:6;
+  .rail-tab { position:fixed; top:var(--rail-top); z-index:6;
     height:auto; max-height:52vh; padding:14px 6px;
     display:flex; align-items:center; justify-content:center;
     border:1px solid var(--edge-panel); cursor:pointer;
@@ -337,7 +401,7 @@
   /* A panel is pinned to its own edge and is as tall as it needs to be, for
      the same reason as the tab: full height costs drawing area that a panel
      holding three rows of seats is not using. */
-  aside { position:fixed; top:48px;
+  aside { position:fixed; top:var(--rail-top);
     /* STOPS ABOVE THE HINT. 100vh - 60 let the panel run to within 12px of the
        bottom, which was fine while it held a rail and an empty slot and is not
        once the LEVELS / LAYERS panel is inside it: expanded, it reached the
@@ -406,7 +470,12 @@
      one scroll away. Devin withdrew "simultaneously visible" in favour of
      "reachable means one click"; this is that ruling costing eight seats a
      scroll rather than costing the drafter 13% of the sheet. */
-  #right-rail[data-collapsed] { padding:6px; max-height:150px; }
+  /* 150px WAS TWO ROWS OF SEATS; the level chips below add one short row,
+     and 182 is that row. The chart above is what makes this a price rather
+     than a preference: 277x194 hides 5.2% of the drawing against 4.3%, and
+     the nine tenths of a point buys the thing §7c will not go without --
+     a level switch that is still there when the rail is shut. */
+  #right-rail[data-collapsed] { box-sizing:border-box; padding:6px; max-height:182px; }
   #right-rail[data-collapsed] #view-rail { grid-template-columns:repeat(3, 84px); }
   #right-rail[data-collapsed] #props-slot { display:none; }
   /* THE TOOL COLUMN. Four square keys a row, which is the old page's own
@@ -434,9 +503,9 @@
     background-image: var(--surface-chip-tex, none);
     color: var(--ink-quiet); font-family: var(--font-ui); }
   .tool-key:hover { border-color: var(--accent); color: var(--accent); }
-  /* ARMED IS THE ACCENT, the same signal #draw-wall has always used, because
-     the two are now one register and a drafter should not have to learn that
-     the column means something different from the button. */
+  /* ARMED IS THE ACCENT, the same signal every armed control on the page
+     uses, because a drafter should not have to learn that the tool column
+     means something different from the rest of the chrome. */
   .tool-key[aria-pressed="true"] { border-color: var(--accent);
     color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   /* AN UNAVAILABLE TOOL LOOKS DOWN, and it has to look down MEASURABLY. An
@@ -534,7 +603,24 @@
   #levels-panel { display:flex; flex-direction:column; gap:6px; margin-top:8px;
     max-height:42vh; overflow-y:auto; scrollbar-width:none; }
   #levels-panel::-webkit-scrollbar { display:none; }
-  #right-rail[data-collapsed] #levels-panel { display:none; }
+  /* THE LEVELS SURVIVE THE COLLAPSE (§7c). This rule used to read
+     `display:none`, which was true while the chrome bar carried a LEVEL
+     picker: the panel was the second way to switch and the picker was the
+     first. §7 deletes the picker, so a collapsed rail would have left the
+     page with NO way to change level -- the hole the order names, and the
+     reason it forbids deleting the picker before this line changes.
+
+     COLLAPSED IS THE NAMES ONLY: no layer rows, no datum, no add or delete,
+     the cards wrapping across the panel's width the way the seats do. Same
+     buttons and the same `data-level-row` the expanded panel carries, so the
+     collapsed rail is the SAME control drawn short -- not a second one that
+     can come to disagree with it. */
+  #right-rail[data-collapsed] #levels-panel { display:flex; flex-flow:row wrap;
+    gap:4px; margin-top:6px; max-height:none; overflow:visible; }
+  #right-rail[data-collapsed] #levels-panel > *:not(.lv-card) { display:none; }
+  #right-rail[data-collapsed] #levels-panel .lv-card { flex:0 0 auto; }
+  #right-rail[data-collapsed] #levels-panel .lv-layers,
+  #right-rail[data-collapsed] #levels-panel .lv-del { display:none; }
   .lv-head { display:flex; align-items:center; gap:6px; }
   .lv-head-title { flex:1; font-family: var(--font-ui); font-size:9px;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet); }
@@ -624,11 +710,6 @@
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .seat.active .seat-label { color: var(--accent); }
 
-  #chrome select { font-family: var(--font-ui); font-size:12px;
-    color: var(--ink-primary); cursor:pointer;
-    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
-    border:1px solid var(--edge-panel); border-radius:6px; padding:5px 8px; }
-
   /* The empty and error states say what to do, because a black screen with
      nothing on it is indistinguishable from a page that failed to boot. */
   /* The promotion confirm sits above everything, including the notice, because
@@ -646,6 +727,19 @@
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
   #bone-choice[hidden] { display:none; }
+  /* AND THE SAME SHELL AGAIN for the two file questions, for the same reason:
+     three kinds of modal would teach the drafter that they are three
+     different kinds of thing. They are one -- a question that must be
+     answered before the page does what was asked. */
+  #file-guard, #save-as { position:fixed; inset:0; z-index:7; display:flex;
+    align-items:center; justify-content:center; padding:24px;
+    background:rgba(0,0,0,0.35); }
+  #file-guard[hidden], #save-as[hidden] { display:none; }
+  #save-as-name { width:100%; box-sizing:border-box; margin:0 0 12px;
+    padding:7px 9px; border-radius:3px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip); color: var(--ink-primary);
+    font-family: var(--font-mono); font-size:13px; }
+  #save-as-name:focus { border-color: var(--accent); outline:none; }
   .promote-card { max-width:26em; padding:16px 18px; border-radius:4px;
     border:1px solid var(--edge-panel);
     background-color: var(--surface-panel);
@@ -679,36 +773,60 @@
 <div id="readout">loading…</div>
 <!-- ONE TOP ROW, so the two cannot land on each other. They were separately
      fixed-positioned -- the chrome bar at left:12 and the build bar centred at
-     left:50% -- and both are as wide as their CONTENT: the chrome bar grows
-     with the level and view names, the build bar with the family labels. On a
-     drawing whose level names run long the chrome bar reached under the build
-     bar and BUNGALOW swallowed the SAVE button -- the second time this shell
-     landed on SAVE. Tuning the numbers would have fixed one drawing; a flex
-     row cannot overlap at any width. -->
+     left:50% -- and both are as wide as their CONTENT, and on a drawing whose
+     level names ran long the chrome bar reached under the build bar and
+     BUNGALOW swallowed the SAVE button. Tuning the numbers would have fixed
+     one drawing; a flex row cannot overlap at any width. The two ends have
+     changed tenants since -- the mode corner at the left, the file row at the
+     right -- and the reason for the row has not. -->
 <div id="top-row" data-top-row>
-<div id="chrome" hidden>
-  <label>Level <select id="level-pick" data-level-pick></select></label>
-  <label id="view-wrap">View <select id="view-pick" data-view-pick></select></label>
-  <button id="draw-wall" type="button" data-draw-wall>Draw wall</button>
-  <button id="delete-wall" type="button" data-delete-wall hidden>Delete wall</button>
-  <!-- SAVE MOVED IN HERE, out of the top-right corner. The shell owns the
-       sheet's margins now, and the right tab landed on top of this button:
-       its centre was owned by the canvas, so every spec that pressed SAVE
-       timed out. Pushing the shell down the sheet instead would have cleared
-       it and cost 1.4% -> 6.5% of the drawing, because that moves the panels
-       towards the middle where fit() puts the house. Moving one button costs
-       nothing. -->
-  <button id="save" type="button" data-model-save>SAVE</button>
+<!-- THE MODE CORNER (§7b): WHAT THE DRAWING IS. Carried whole out of the foot
+     strip -- same buttons, same data-* attributes, same listeners. TOY still
+     means cardinal, square and whole-foot and DRAFTING is still one-way; a
+     control that changed meaning because it changed corner would be the
+     re-scope §7b forbids. -->
+<div id="mode-corner" data-mode-corner>
+  <span class="set" data-board-switch>
+    <!-- NO title HERE. These two are set from script below, and a static one
+         would be overwritten -- which is exactly what happened when this
+         markup was given titles first: they read correctly in the file and
+         never reached the page. The wording, and the check that holds it to
+         the truth, live with the assignment. -->
+    <button type="button" data-board="toy" aria-pressed="false">TOY</button>
+    <button type="button" data-board="drafting" aria-pressed="false">DRAFTING</button>
+  </span>
+  <span class="set" data-theme-switch>
+    <button type="button" data-theme="ruff" aria-pressed="false">RUFF</button>
+    <button type="button" data-theme="rough" aria-pressed="false">ROUGH</button>
+  </span>
+  <span class="set" data-mode-switch>
+    <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
+    <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
+  </span>
 </div>
-<!-- THE TOP BAR: the house the drafter is going to build, and the bone that
-     builds it. MODEL.dc.html's row is "three families between the turtle and
-     the bone", each opening ONE submenu (Movie, 6 Sep) -- that shape, from the
-     same data, through build-menu.js.
-     WHAT IS NOT HERE: the generator. See the seam note beside ModelBuild. -->
-<div id="build-bar" data-build-bar hidden>
-  <div id="build-families" data-build-families></div>
-  <div id="build-entries" data-build-entries hidden></div>
-  <button id="bone" type="button" data-bone-press title="Build the house you picked">BONE</button>
+<!-- THE FILE ROW (§1): WHAT THE FILE IS. NEW · OPEN · SAVE · SAVE AS · the
+     extension, after MODEL.dc.html:573-590. SAVE carries the status word
+     itself -- see the stylesheet note. The picker chooses what the GENERATED
+     NAME ends in and nothing else: every one of the four is plain JSON, which
+     is why OPEN takes all four without asking which it was given. -->
+<div id="file-row" data-file-row hidden>
+  <button id="file-new" type="button" data-file-new title="Start an empty drawing">NEW</button>
+  <button id="file-open" type="button" data-file-open title="Open a drawing file">OPEN</button>
+  <input id="file-input" type="file" data-file-input hidden
+    accept=".json,.draft,.model,.plan,application/json" />
+  <!-- SAVE MOVED OUT OF THE TOP-LEFT BAR, not out of the shell: the right tab
+       once landed on top of this button and every spec that pressed SAVE
+       timed out, so where it sits is measured, not chosen. The pairwise
+       chrome check is what keeps it that way. -->
+  <button id="save" type="button" data-model-save data-save-status>SAVE</button>
+  <button id="file-save-as" type="button" data-file-save-as
+    title="Save, and download a copy under a name you pick">SAVE AS</button>
+  <select id="file-ext" data-file-ext aria-label="File extension for the saved copy">
+    <option value="draft" selected>.draft</option>
+    <option value="json">.json</option>
+    <option value="model">.model</option>
+    <option value="plan">.plan</option>
+  </select>
 </div>
 </div>
 
@@ -742,6 +860,48 @@
   <div id="props-slot" data-props-slot hidden></div>
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
+
+<!-- THE PAGE ROW (§7b), lower left: the six pages of the job, in the order
+     Movie listed them. Four exist. REAL ESTATE LAYOUT and ESTIMATES do not,
+     and they are DOWN rather than absent for the same reason a dormant chip
+     is on the strip: the row is the map of the job, and a map with two towns
+     missing teaches the drafter a shape that is wrong. Each says what it will
+     be when it is built. -->
+<div id="page-row" data-page-row>
+  <a data-page="project" data-project-corner-bl href="./PROJECT.html"
+    title="The project: every drawing in this job">PROJECT</a>
+  <span data-page="model" aria-current="page"
+    title="The model — you are here">MODEL</span>
+  <button type="button" data-page="real-estate" disabled
+    title="REAL ESTATE LAYOUT — the marketing floor plan, not built yet">REAL ESTATE LAYOUT</button>
+  <a data-page="construction" href="./LAYOUT.dc.html"
+    title="The construction layout: the sheet that goes to site">CONSTRUCTION LAYOUT</a>
+  <a data-page="specs" href="./SPECS.html"
+    title="The specifications for this house">SPECIFICATIONS</a>
+  <button type="button" data-page="estimates" disabled
+    title="ESTIMATES — quantities and costs off this model, not built yet">ESTIMATES</button>
+</div>
+
+<!-- THE HOUSE STRIP (§7b), along the foot: what the drafter PICKS.
+     MODEL.dc.html's row is "three families between the turtle and the bone",
+     each opening ONE submenu (Movie, 6 Sep) -- that shape, from the same data,
+     through build-menu.js. It was at the top of the sheet; the drive-thru sign
+     rises from the foot and will cover exactly this row, which is why the
+     things a drafter reads WHILE DRAWING went the other way.
+     WHAT IS NOT HERE: the generator. See the seam note beside ModelBuild. -->
+<div id="house-strip" data-house-strip>
+  <div class="grow"></div>
+  <div id="build-bar" data-build-bar hidden>
+    <div id="build-families" data-build-families></div>
+    <div id="build-entries" data-build-entries hidden></div>
+    <button id="bone" type="button" data-bone-press title="Build the house you picked">BONE</button>
+  </div>
+  <div class="grow"></div>
+  <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
+       for one of the types. -->
+  <button id="delete" type="button" data-delete hidden
+    title="Delete what is selected">DELETE</button>
+</div>
 <!-- THE LENGTH THE DRAFTER CAN SEE WHILE HE DRAWS. Movie, 13 Sep: "show the
      line length on screen to the user during the line drawing when their
      finger on screen for ipad". Fixed rather than absolute so it needs no
@@ -754,7 +914,6 @@
      page has a night skin. Everything here paints in currentColor and takes
      it from a palette role. -->
 <div id="strip" data-instrument-strip>
-  <a id="strip-project" data-project-corner-bl href="./PROJECT.html">PROJECT</a>
   <span id="strip-message" data-strip-message></span>
   <div class="grow"></div>
 
@@ -831,25 +990,6 @@
   </div>
 
   <div class="grow"></div>
-  <div id="strip-switches">
-    <span class="set" data-board-switch>
-      <!-- NO title HERE. These two are set from script below, and a static one
-           would be overwritten -- which is exactly what happened when this
-           markup was given titles first: they read correctly in the file and
-           never reached the page. The wording, and the check that holds it to
-           the truth, live with the assignment. -->
-      <button type="button" data-board="toy" aria-pressed="false">TOY</button>
-      <button type="button" data-board="drafting" aria-pressed="false">DRAFTING</button>
-    </span>
-    <span class="set" data-theme-switch>
-      <button type="button" data-theme="ruff" aria-pressed="false">RUFF</button>
-      <button type="button" data-theme="rough" aria-pressed="false">ROUGH</button>
-    </span>
-    <span class="set" data-mode-switch>
-      <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
-      <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
-    </span>
-  </div>
 </div>
 
 <div id="notice"><div id="notice-body"></div></div>
@@ -880,6 +1020,40 @@
     <div class="promote-row">
       <button type="button" data-break-here>Break here</button>
       <button type="button" data-break-move>Move this wall</button>
+    </div>
+  </div>
+</div>
+
+<!-- THE UNSAVED GUARD (§1). NEW and OPEN both throw away what is on screen,
+     so both ask first -- and SAVE FIRST really saves: it goes through the same
+     press SAVE does, lease and revision included, and if that write is refused
+     the drawing is NOT discarded. A guard that offered to save and then
+     carried on regardless would be worse than no guard, because the drafter
+     read the word SAVE and believed it. -->
+<div id="file-guard" data-file-guard hidden>
+  <div class="promote-card">
+    <p data-file-guard-text>This drawing has unsaved edits.</p>
+    <div class="promote-row">
+      <button type="button" data-guard-save>Save first</button>
+      <button type="button" data-guard-discard>Discard</button>
+      <button type="button" data-guard-cancel>Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- SAVE AS. The generated name is already in the box and already selected,
+     so the drafter types over it or presses SAVE and takes it. §1: the name is
+     a local timestamp to the MINUTE -- 20260913T2201.draft -- because two
+     saves in one minute are the same drafting minute and a seconds field
+     invites a file per keystroke. -->
+<div id="save-as" data-save-as hidden>
+  <div class="promote-card">
+    <p>Save a copy as</p>
+    <input id="save-as-name" data-save-as-name type="text" spellcheck="false"
+      autocomplete="off" aria-label="File name" />
+    <div class="promote-row">
+      <button type="button" data-save-as-go>Save</button>
+      <button type="button" data-save-as-cancel>Cancel</button>
     </div>
   </div>
 </div>
@@ -2471,7 +2645,13 @@
     // ...and not under a section, where the selection it would delete is not
     // on screen to point at. The comment above is the reason: an affordance
     // that acts on something invisible is the same distrust, one step worse.
-    if (deleteButton) deleteButton.hidden = !selectedWall() || !!activeCut();
+    // ...and not under a modal either: the drive-thru sign will rise from the
+    // foot and cover this exact strip, so a DELETE still live underneath it
+    // would be a button the drafter cannot see being pressed through a sign
+    // they can.
+    if (deleteButton) {
+      deleteButton.hidden = !selection.length || !!activeCut() || modalUp();
+    }
     // Before updateReadout, so the readout reports the frame it describes and
     // not the cost of writing itself.
     lastPaintMs = performance.now() - t0;
@@ -2745,8 +2925,8 @@
   // ONE HALF OF THE OLD PAGE'S ARMING DELIBERATELY DOES NOT COME ACROSS.
   // _pressBuildType does two things: it records the type AND arms the outline
   // tool so the next press starts tracing the house (:14156). This page has no
-  // outline tool -- its whole control surface is draw-wall, delete-wall, save
-  // and the two pickers -- so carrying the trace-arm would mean inventing the
+  // outline tool -- the tool column arms a wall and the file row saves it --
+  // so carrying the trace-arm would mean inventing the
   // tool it arms. The type is recorded; the tracing waits for whoever builds
   // that tool.
   //
@@ -2883,11 +3063,17 @@
     },
   });
 
-  const chromeBar = document.getElementById('chrome');
-  const levelPick = document.getElementById('level-pick');
-  const viewPick = document.getElementById('view-pick');
+  // THE LEVEL AND VIEW PICKERS ARE GONE (§7). They were the chrome bar's two
+  // SELECTs and the panel's cards were the second way to do the same two
+  // things -- one piece of state with two controls on it, which is the drift
+  // this page has paid for repeatedly. The panel is the survivor because it
+  // says MORE: the layer rows, the datum, the colours, ADD and DELETE. The
+  // one thing the pickers had over it was that they were reachable with the
+  // rail shut, and that is why the collapsed rail now keeps the level names
+  // (see `#right-rail[data-collapsed] #levels-panel` in the stylesheet)
+  // rather than hiding them.
   const levelsPanel = document.getElementById('levels-panel');
-  const viewWrap = document.getElementById('view-wrap');
+  const fileRow = document.getElementById('file-row');
 
   // replaceState, not pushState: a switch is a change of viewpoint, not a
   // navigation, and forty pushes would bury whatever page the drafter came
@@ -2896,46 +3082,6 @@
     const query = params.toString();
     history.replaceState(null, '',
       query ? `${location.pathname}?${query}` : location.pathname);
-  };
-
-  const fillViewPick = () => {
-    const views = window.DraftLayerViews.layerViewsForLevelId(activeLevelId());
-    // ROOF and SITE have no layer views -- the view filter switches itself
-    // off there and they show everything they hold. A picker on those levels
-    // would be offering a choice that changes nothing, so there isn't one.
-    // THE CUTS COUNT TOWARDS HAVING A PICKER AT ALL. ROOF and SITE hold no
-    // layer views, and hiding the picker there used to be right because a
-    // choice that changes nothing is not a choice. Sections are offered on
-    // every level, so on those two the picker now holds exactly the cuts.
-    viewWrap.hidden = !views.length && !allCuts().length;
-    if (viewWrap.hidden) return;
-    const current = onActiveLevel().viewId;
-    viewPick.innerHTML = '';
-    views.forEach(view => {
-      const option = document.createElement('option');
-      option.value = view.id;
-      option.textContent = view.label;
-      option.selected = view.id === current;
-      viewPick.append(option);
-    });
-    // THE CUTS, AFTER THE LAYER VIEWS. A section is a fact about the house
-    // rather than about one level, so every level offers the same ones; the
-    // old page's rail does the same. Switching level still leaves a section —
-    // goToLevel drops a `?view=` the new level's layer views do not carry, and
-    // a cut id never does, which is the old page's behaviour arrived at for
-    // free rather than re-implemented.
-    // EVERY CUT VIEW, not only the stored sections. This listed cuts() alone,
-    // which was consistent while elevations were unreachable and became a lie
-    // the moment they were not: a drafter arriving on ?view=cut:E1 would see a
-    // picker whose value matched no option and read as showing something else.
-    // The picker and the lookup ask allCuts() so they cannot disagree.
-    allCuts().forEach(cut => {
-      const option = document.createElement('option');
-      option.value = CUT_VIEW + cut.id;
-      option.textContent = cutLabel(cut);
-      option.selected = option.value === current;
-      viewPick.append(option);
-    });
   };
 
   // THE PANEL IS A VIEW OF `drawing.levels`, never a second copy of it. Every
@@ -3115,10 +3261,20 @@
     const activeId = activeLevelId();
     const LV = window.DraftLayerViews;
     const asked = params.get('view');
-    const live = asked && LV.layerViewsForLevelId(activeId).some(v => v.id === asked)
+    // A CUT IS A VIEW TOO. Standing in a section, no layer row is lit: the
+    // section's own row carries the mark, and lighting FLOOR PLAN under a
+    // painted section is the panel disagreeing with the canvas.
+    const inCut = typeof asked === 'string' && asked.startsWith(CUT_VIEW);
+    const live = !inCut && asked
+      && LV.layerViewsForLevelId(activeId).some(v => v.id === asked)
       ? asked : LV.defaultLayerViewId(activeId);
     levelsPanel.querySelectorAll('.lv-layer').forEach(row => {
-      row.toggleAttribute('data-active', row.dataset.layer === `${activeId}:${live}`);
+      if (row.dataset.viewRow) {
+        row.toggleAttribute('data-active', row.dataset.viewRow === asked);
+        return;
+      }
+      row.toggleAttribute('data-active',
+        !inCut && row.dataset.layer === `${activeId}:${live}`);
     });
     levelsPanel.querySelectorAll('.lv-card').forEach(card => {
       card.toggleAttribute('data-active', Number(card.dataset.level) === activeId);
@@ -3170,13 +3326,9 @@
       const name = document.createElement('button');
       name.type = 'button';
       name.className = 'lv-name';
-      // NOT `data-level-pick`, which is the CHROME BAR'S SELECT. Naming these
-      // buttons that made `locator('[data-level-pick]')` resolve to six
-      // elements, and model-html-switcher.spec.js -- which drives the select
-      // by exactly that attribute -- failed four ways on strict mode. The
-      // collision was invisible here because that spec was never run against
-      // the panel; CI found it. A panel row and a chrome control are not the
-      // same control even when they do the same thing.
+      // `data-level-row`, and it stays that way now that the chrome bar's
+      // select is gone: these rows are THE way to change level, and a name
+      // that once collided with the select is the name every spec drives.
       name.dataset.levelRow = String(level.id);
       name.textContent = level.name || `level ${level.id}`;
       name.title = `Switch to ${level.name || level.id}`;
@@ -3256,7 +3408,7 @@
       rowButton(`${cut.id} · ${elevationName(cut.id)}`,
         `${cut.id} — the ${elevationName(cut.id)} elevation; tap to bring it center`,
         () => goToView(CUT_VIEW + cut.id),
-        viewNow === CUT_VIEW + cut.id);
+        viewNow === CUT_VIEW + cut.id).dataset.viewRow = CUT_VIEW + cut.id;
     });
 
     // ── SECTIONS ────────────────────────────────────────────────────────────
@@ -3281,6 +3433,7 @@
         `${cut.name || cut.id} — tap to bring this section center`,
         () => goToView(CUT_VIEW + cut.id),
         viewNow === CUT_VIEW + cut.id);
+      b.dataset.viewRow = CUT_VIEW + cut.id;
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'lv-del';
@@ -3342,19 +3495,12 @@
     markActiveLayer();
   };
 
+  // THE ONE REBUILD, and it is now the panel's. Everything that used to call
+  // buildChrome() to re-fill two SELECTs calls it to redraw the cards, which
+  // is the same job with one control left instead of three.
   const buildChrome = () => {
-    const levels = drawing?.levels || [];
-    levelPick.innerHTML = '';
-    levels.forEach(level => {
-      const option = document.createElement('option');
-      option.value = String(level.id);
-      option.textContent = level.name || `level ${level.id}`;
-      option.selected = Number(level.id) === activeLevelId();
-      levelPick.append(option);
-    });
-    fillViewPick();
     buildLevelsPanel();
-    chromeBar.hidden = false;
+    if (fileRow) fileRow.hidden = false;
   };
 
   const goToLevel = id => {
@@ -3374,30 +3520,21 @@
     paint();
   };
 
-  levelPick.addEventListener('change', () => goToLevel(levelPick.value));
   // ONE WAY INTO A VIEW, for the picker and for a seat press. Both change
   // what is looked at and nothing that is saved: a query parameter and a
   // repaint, with `drawing` untouched and markDirty uncalled.
   const goToView = viewId => {
     params.set('view', viewId);
     syncUrl();
-    // No buildChrome(): the level did not change, so the option lists are
-    // still right. The picker's own selection is moved here rather than by
-    // the browser, because a seat press has to move it too -- the rail and
-    // the picker are two controls on ONE piece of state, and a seat that left
-    // the picker behind would put two answers on screen at once.
-    if (!viewWrap.hidden) viewPick.value = viewId;
-    // AND THE PANEL, which is the THIRD control on this one piece of state.
-    // The comment above warned about exactly this and I still missed it: a
-    // layer row clicked on another level moved the URL, the plan and the
-    // picker to STAIR while the panel went on lighting PLAN, because
-    // goToLevel rebuilt the panel before goToView had set the view. Two
-    // answers on screen at once, which is what that rule exists to stop.
+    // No buildChrome(): the level did not change, so the cards are still
+    // right. What DOES have to move is which row is lit -- a layer row
+    // clicked on another level once moved the URL and the plan to STAIR
+    // while the panel went on lighting PLAN, because goToLevel rebuilt the
+    // panel before goToView had set the view. Two answers on screen at once,
+    // which is the fault this page keeps having to be shown.
     markActiveLayer();
     paint();
   };
-
-  viewPick.addEventListener('change', () => goToView(viewPick.value));
 
   // ── the view rail ─────────────────────────────────────────────────────────
   // SIX SEATS, ALWAYS SIX. The rail shows E1-E4 and S1-S2 whether or not those
@@ -4308,6 +4445,7 @@
   //   { kind: 'move',   before }              the corner / wall drag, as before
   //   { kind: 'add',    wall }                undo removes it again
   //   { kind: 'remove', wall, index, deps }   undo puts it and its dependents back
+  //   { kind: 'remove-item', list, index, item }  the same for a non-wall
   //
   // The pool is still what keeps 'move' small — restoring those objects'
   // numbers puts back every wall that travelled with them. 'add' and 'remove'
@@ -4685,17 +4823,88 @@
     return wall;
   };
 
+  // ── one DELETE, for everything selected (§7a) ─────────────────────────────
+  // THE VERB IS WIDENED, `selectedWall()` IS NOT. That helper answers "is a
+  // single wall selected", which is what the length box and the wall gestures
+  // ask it; widening it to mean "the selected thing" would quietly hand those
+  // callers a floor. So the narrow question stays narrow and the deleting
+  // happens out here, over the selection itself.
+  //
+  // AND THE WALL CASCADE IS CALLED, NOT REIMPLEMENTED. deleteWall carries the
+  // fenestrations, fixtures, group members and pooled corners with it; a
+  // second removal path that only spliced drawing.walls would leave every one
+  // of those behind, which is the exact orphan class its own comment
+  // describes.
+  const SELECTION_LISTS = Object.freeze({
+    line: 'lines',
+    floor: 'floors',
+    outline: 'outlines',
+    column: 'columns',
+    beam: 'beams',
+  });
+
+  const deleteEntry = entry => {
+    if (!entry || !drawing) return false;
+    if (entry.type === 'wall') return !!deleteWall(entry.item);
+    const key = SELECTION_LISTS[entry.type];
+    const list = key ? drawing[key] : null;
+    if (!Array.isArray(list)) return false;
+    const index = list.indexOf(entry.item);
+    if (index < 0) return false;
+    list.splice(index, 1);
+    undoStack.push({ kind: 'remove-item', list, index, item: entry.item });
+    markDirty();
+    return true;
+  };
+
+  // A COPY OF THE SELECTION FIRST. deleteWall calls setSelection, which
+  // rebuilds the array being walked; iterating the live one deletes every
+  // second thing and reports success.
+  const deleteSelection = () => {
+    if (!drawing || !selection.length) return 0;
+    const doomed = selection.slice();
+    let gone = 0;
+    doomed.forEach(entry => { if (deleteEntry(entry)) gone += 1; });
+    if (!gone) return 0;
+    setSelection(selection.filter(entry => !doomed.includes(entry)));
+    return gone;
+  };
+
   // ── the draw gesture ──────────────────────────────────────────────────────
   // TWO PRESSES, one wall. The first sets a start and the second commits, so
   // the gesture works with a finger, a pen or a mouse without a drag — the old
   // page's wall tool is press-press too (its chain committer is the same shape
   // repeated).
   //
-  // ARMED IS A MODE, and it is visible: the button carries the accent while
-  // the next tap will draw. A mode nobody can see is how a drafter loses a
-  // pan and gets a wall.
-  const drawButton = document.getElementById('draw-wall');
-  const deleteButton = document.getElementById('delete-wall');
+  // ARMED IS A MODE, and it is visible: the WALL key in the tool column
+  // carries the accent while the next tap will draw. A mode nobody can see is
+  // how a drafter loses a pan and gets a wall.
+  //
+  // DRAW WALL, THE BUTTON, IS GONE (§7). It was the chrome bar's own arming
+  // control and the tool column's WALL key was the second one; two buttons
+  // for one register is the drift this pass exists to end, and the key is the
+  // survivor because the other sixteen tools are already only there.
+  const deleteButton = document.getElementById('delete');
+
+  // WHAT COUNTS AS A MODAL. Each of these covers the whole viewport at
+  // z-index 7 and asks a question that has to be answered first; the foot
+  // strip sits at 6, under all of them. The drive-thru sign is not built and
+  // will be the fifth entry in this list rather than a new mechanism.
+  const MODAL_IDS = ['promote', 'bone-choice', 'file-guard', 'save-as'];
+  const modalUp = () => MODAL_IDS.some(id => {
+    const node = document.getElementById(id);
+    return !!node && !node.hidden;
+  });
+
+  // ONE DELETE PRESS, whichever control did the pressing. The button and the
+  // two keys were separate implementations of the same sentence and only one
+  // of them was ever taught anything new.
+  const pressDelete = () => {
+    if (activeCut() || modalUp()) return 0;
+    const gone = deleteSelection();
+    if (gone) paint();
+    return gone;
+  };
   // ── the tool register ─────────────────────────────────────────────────────
   // ONE VARIABLE HOLDS WHICH TOOL IS ARMED, and it holds a tool id, never a
   // boolean. This was `let drawArmed = false` — correct while WALL was the only
@@ -4748,11 +4957,6 @@
     // BEAM finish under COLUMN.
     drawStart = null;
     beamStart = null;
-    // THE LEGACY BUTTON IS A VIEW OF THE REGISTER, not a second copy of it.
-    // tests/model-html-seats.spec.js arms and disarms through this button on
-    // every run, and it stays the affordance a drafter with no keyboard can
-    // reach; it just no longer owns the state.
-    drawButton.classList.toggle('armed', next === 'wall');
     canvas.style.cursor = next === RESTING_TOOL ? '' : 'crosshair';
     // The instrument strip is a third reader of the same fact, added by #398
     // against the boolean this replaced. It reads the register now like
@@ -5477,9 +5681,19 @@
   // its own body, so re-resolving the palette and repainting is the whole
   // change -- and it has to be, because this page can be holding an unsaved
   // edit and a reload would be asked to throw it away to change a colour.
-  const themeButtons = [...strip.querySelectorAll('[data-theme]')];
-  const modeButtons = [...strip.querySelectorAll('[data-skin-mode]')];
-  const boardButtons = [...strip.querySelectorAll('[data-board]')];
+  // THE THREE SWITCHES LIVE IN THE MODE CORNER, not the strip: §7b moved them
+  // to the head-left so the strip carries instruments and readings only.
+  //
+  // BUTTONS ONLY, and inside the corner. `html` carries `data-theme` and
+  // `body` carries `data-board` -- those are the marks the switches SET --
+  // so a document-wide query hands the switch code its own output as a
+  // control: every click then bubbles to `html`, re-reads the theme off it
+  // and rewrites the skin key without the board in it.
+  const switchSet = attr =>
+    [...document.querySelectorAll(`#mode-corner button[${attr}]`)];
+  const themeButtons = switchSet('data-theme');
+  const modeButtons = switchSet('data-skin-mode');
+  const boardButtons = switchSet('data-board');
 
   const markSwitch = (buttons, attr, value) =>
     buttons.forEach(b => b.setAttribute('aria-pressed', String(b.dataset[attr] === value)));
@@ -5488,7 +5702,12 @@
     skin = window.DraftPalette.apply(document, theme, mode);
     markSwitch(themeButtons, 'theme', theme);
     markSwitch(modeButtons, 'skinMode', mode);
-    try { localStorage.setItem(SKIN_KEY, JSON.stringify({ theme, mode })); }
+    // MERGED, not replaced: the board seed shares this key, and a skin write
+    // that rebuilt the object dropped it.
+    try {
+      const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
+      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, theme, mode }));
+    }
     catch { /* a private window refusing storage is not a reason to refuse the skin */ }
     paint();
   };
@@ -5569,8 +5788,6 @@
   // merge offered both because the strip and the tool column were added at
   // the same point in the file. Keeping both listeners would have given the
   // button two handlers that disagree about what armed means.
-  drawButton.addEventListener('click',
-    () => setTool(activeTool === 'wall' ? RESTING_TOOL : 'wall'));
 
   // ── the tool column ───────────────────────────────────────────────────────
   // SEVENTEEN KEYS, RENDERED FROM THE LIST. tool-roster.js holds the roster;
@@ -6071,11 +6288,7 @@
     P.set(picked.type === 'column' ? 'COLUMN' : 'BEAM', box);
   };
   selectionWatchers.push(showStructureProps);
-  deleteButton.addEventListener('click', () => {
-    const wall = selectedWall();
-    if (!wall) return;
-    deleteWall(wall);    paint();
-  });
+  deleteButton.addEventListener('click', pressDelete);
 
   // ── pan and zoom ──────────────────────────────────────────────────────────
   let dragging = null;
@@ -6584,17 +6797,15 @@
       paint();
       return;
     }
-    // 3c TAKES THE WALL CASE ONLY. The old page's `delete` answers for walls,
-    // floors, roofs, fenestrations, surface openings, dimensions, fixtures and
-    // outline nodes at once (MODEL.dc.html:22209), behind a "this corner
-    // carries built geometry" refusal (:22196). This page can select a wall
-    // and nothing else, so the key does the one thing it can do and is silent
-    // on the rest — said out loud here because the drafter presses the same
-    // key for all of them and a silent no-op reads as a broken page.
-    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedWall()) {
+    // THE KEY AND THE BUTTON ARE THE SAME VERB (§7a). They were two
+    // implementations of one sentence, and the button's was the narrower of
+    // the two: a drafter who rubber-banded a wall and a floor could delete
+    // the wall and watch the floor stay. Both now call pressDelete, so
+    // neither can learn something the other does not.
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (!selection.length) return;
       e.preventDefault();
-      deleteWall(selectedWall());
-      paint();
+      pressDelete();
       return;
     }
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
@@ -6619,6 +6830,11 @@
         // for columns and beams without knowing which it is holding.
         const at = step.list.indexOf(step.item);
         if (at >= 0) step.list.splice(at, 1);
+      } else if (step.kind === 'remove-item') {
+        // The mirror of 'add-item', and the same trick: the list is captured
+        // in the step, so one branch puts a line, floor, outline, column or
+        // beam back without knowing which it is holding.
+        step.list.splice(Math.min(step.index, step.list.length), 0, step.item);
       } else if (step.kind === 'add') {
         const at = drawing.walls.indexOf(step.wall);
         if (at >= 0) drawing.walls.splice(at, 1);
@@ -7037,6 +7253,11 @@
   //
   // markSaved() is inside the await rather than after it at the call site, so a
   // page cannot say SAVED before the store has taken the bytes.
+  // The BYTES come back, so a download is a copy of what the store took and
+  // not a second serialization of the same drawing. Serializing twice would
+  // let the file on disk and the file in the store differ -- by an id
+  // allocated between the two calls, say -- while both claimed to be the
+  // save the drafter pressed once.
   const writeDrawing = async () => {
     const contents = JSON.stringify(serializeDrawing());
     const file = new File([contents], 'model-drawing.json', { type: 'application/json' });
@@ -7048,22 +7269,32 @@
       lease: { scope: LEASE_SCOPE, holderId: holderId(), generation: leaseGeneration },
     });
     markSaved();
+    return contents;
   };
 
-  const save = async () => {
-    if (!drawing) return;
+  // Returns whether the write landed, because SAVE FIRST in the unsaved guard
+  // has to know: a guard that offered to save, failed, and threw the drawing
+  // away anyway would be worse than no guard at all.
+  const save = async ({ download = null } = {}) => {
+    if (!drawing) return false;
     // A READ-ONLY PAGE DOES NOT ASK. The store would refuse it anyway — that gate
     // is the authority and is tested on its own — but a page that fires a write
     // it knows will be refused spends the drafter's attention to learn something
     // it already knew.
-    if (!holdsLease()) { paintLease(); return; }
+    if (!holdsLease()) { paintLease(); return false; }
     saveButton.disabled = true;
     saveButton.textContent = 'SAVING…';
     try {
-      await writeDrawing();
+      // THE STORE FIRST, THE DISK SECOND, and the download only if the store
+      // took it. A refused write that still handed the drafter a file would
+      // give them a copy of a drawing the shared store does not have, named
+      // as though it were saved.
+      const contents = await writeDrawing();
+      if (download) downloadDrawing(contents, download);
       // The note described a difference this save has just resolved.
       if (elsewhereNote) elsewhereNote.hidden = true;
       saveButton.disabled = false;
+      return true;
     } catch (error) {
       // The edit is still unsaved, so the button must still say so. Dropping
       // back to a neutral SAVE here would tell a drafter whose write just
@@ -7080,18 +7311,181 @@
         leaseGeneration = null;
         leaseHolder = error.holderId;
         paintLease();
-        return;
+        return false;
       }
       if (error?.stale) {
         say('The drawing changed underneath this page',
           `<p>Another page saved since this one loaded. Nothing was written.
               Reload to pick up the current drawing, then save again.</p>`);
-        return;
+        return false;
       }
       say('The save failed', `<p><code>${String(error && error.message || error)}</code></p>`);
+      return false;
     }
   };
-  saveButton.addEventListener('click', save);
+  saveButton.addEventListener('click', () => save());
+
+  // ── the file row (§1) ─────────────────────────────────────────────────────
+  // NEW · OPEN · SAVE · SAVE AS · the extension. SAVE is above, because it is
+  // the store's business and predates the row; everything that is only about
+  // a FILE lives here.
+  const fileExtPick = document.getElementById('file-ext');
+  const fileInput = document.getElementById('file-input');
+  const fileGuard = document.getElementById('file-guard');
+  const fileGuardText = fileGuard && fileGuard.querySelector('[data-file-guard-text]');
+  const saveAsBox = document.getElementById('save-as');
+  const saveAsName = document.getElementById('save-as-name');
+
+  const chosenExtension = () => (fileExtPick ? fileExtPick.value : 'draft');
+  const generatedFileName = () =>
+    window.DraftDrawingFormat.drawingFileName(chosenExtension());
+
+  const downloadDrawing = (contents, name) => {
+    const file = new File([contents], name, { type: 'application/json' });
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = file.name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
+  // THE GUARD IS ONE FUNCTION WITH THREE WAYS OUT, and the caller's work
+  // happens in the callback rather than after the call: `await`ing a modal
+  // and carrying on would run the discard path on Cancel the first time
+  // somebody forgot to check the answer.
+  let guardProceed = null;
+  const closeGuard = () => {
+    guardProceed = null;
+    if (fileGuard) fileGuard.hidden = true;
+    paint();
+  };
+
+  const guardUnsaved = (what, proceed) => {
+    if (!dirty) { proceed(); return; }
+    guardProceed = proceed;
+    if (fileGuardText) {
+      fileGuardText.textContent =
+        `This drawing has unsaved edits. Save before ${what}?`;
+    }
+    if (fileGuard) fileGuard.hidden = false;
+    paint();
+  };
+
+  if (fileGuard) {
+    fileGuard.querySelector('[data-guard-save]').addEventListener('click', async () => {
+      const proceed = guardProceed;
+      // SAVE FIRST MEANS SAVED. A refused lease or a stale revision leaves the
+      // drawing exactly where it is and the guard up, so the drafter still
+      // has the edits and the message explaining why.
+      if (!(await save())) return;
+      closeGuard();
+      if (proceed) proceed();
+    });
+    fileGuard.querySelector('[data-guard-discard]').addEventListener('click', () => {
+      const proceed = guardProceed;
+      closeGuard();
+      if (proceed) proceed();
+    });
+    fileGuard.querySelector('[data-guard-cancel]').addEventListener('click', closeGuard);
+  }
+
+  // A BLANK DRAWING IS THE OLD PAGE'S FIVE LEVELS, not an empty object: a
+  // drawing with no levels has nowhere to draw, and the ids are the ones both
+  // pages hard-code (MODEL.dc.html DEFAULT_LEVELS, and ROOF_LEVEL_ID /
+  // SITE_LEVEL_ID here). It goes in through adoptFile like every other load,
+  // so a new drawing is built by the one reader rather than assembled on the
+  // page and hoped over.
+  const BLANK_LEVELS = [
+    { id: 8, name: 'SITE', elev: 0, visible: true },
+    { id: 7, name: 'ROOF', elev: 18, visible: true },
+    { id: 5, name: '2ND FL', elev: 9, visible: true },
+    { id: 3, name: 'MAIN FL', elev: 0, visible: true },
+    { id: 1, name: 'FOUNDATION', elev: -10, visible: true },
+  ];
+
+  const adoptAndShow = async file => {
+    if (!(await adoptFile(file))) return false;
+    bumpModelEpoch();
+    fit();
+    paint();
+    syncShell();
+    syncBuildBar();
+    buildChrome();
+    loadUnderlayImages();
+    // UNSAVED ON ARRIVAL, not saved: what is on screen is not what the store
+    // holds until somebody presses SAVE, and a page that said SAVED over a
+    // drawing the store has never seen is the lie this button exists to
+    // avoid.
+    markDirty();
+    return true;
+  };
+
+  const newDrawing = () => guardUnsaved('starting a new one', async () => {
+    const blank = JSON.stringify({
+      version: window.DraftDrawingFormat.VERSION,
+      levels: BLANK_LEVELS.map(level => ({ ...level })),
+      activeLevelIdx: 3,
+      nextLevelId: 9,
+      nextDrawingItemId: 1,
+    });
+    await adoptAndShow(new File([blank], 'new-drawing.json', { type: 'application/json' }));
+  });
+
+  const openDrawing = () => guardUnsaved('opening another', () => {
+    if (fileInput) fileInput.click();
+  });
+
+  if (fileInput) {
+    fileInput.addEventListener('change', async event => {
+      const file = event.target.files && event.target.files[0];
+      // CLEARED EITHER WAY, so opening the same file twice in a row fires a
+      // second change event instead of silently doing nothing.
+      event.target.value = '';
+      if (file) await adoptAndShow(file);
+    });
+  }
+
+  document.getElementById('file-new').addEventListener('click', newDrawing);
+  document.getElementById('file-open').addEventListener('click', openDrawing);
+
+  // SAVE AS SAVES. It is the same write as SAVE with a download hung off the
+  // end of it, in that order, so the copy on disk is a copy of what the store
+  // took -- byte for byte, from one serialization.
+  const openSaveAs = () => {
+    if (!drawing || !saveAsBox || !saveAsName) return;
+    saveAsName.value = generatedFileName();
+    saveAsBox.hidden = false;
+    paint();
+    saveAsName.focus();
+    // SELECTED, NOT EMPTY. The generated name is the answer most of the time
+    // and typing over a selection is one keystroke; an empty box would make
+    // the drafter invent a name they did not want to think about.
+    saveAsName.select();
+  };
+  const closeSaveAs = () => {
+    if (saveAsBox) saveAsBox.hidden = true;
+    paint();
+  };
+
+  document.getElementById('file-save-as').addEventListener('click', openSaveAs);
+  if (saveAsBox) {
+    saveAsBox.querySelector('[data-save-as-go]').addEventListener('click', async () => {
+      const typed = saveAsName.value.trim() || generatedFileName();
+      closeSaveAs();
+      await save({ download: typed });
+    });
+    saveAsBox.querySelector('[data-save-as-cancel]').addEventListener('click', closeSaveAs);
+    saveAsName.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        saveAsBox.querySelector('[data-save-as-go]').click();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closeSaveAs();
+      }
+    });
+  }
 
   // THE LAST THING BETWEEN AN EDIT AND LOSING IT. MODEL.dc.html never needed
   // this: _markUnsaved (MODEL.dc.html:6199) writes on every edit, so there is

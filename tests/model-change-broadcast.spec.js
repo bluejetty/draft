@@ -114,7 +114,7 @@ const tapAt = async (page, x, z) => {
 // Draw mode chains: after a commit the pending start is the wall just ended,
 // so n+1 taps draw n walls and Escape puts the chain down.
 async function drawWalls(page, points) {
-  await page.locator('[data-draw-wall]').click();
+  await h.armWall(page);
   for (const [x, z] of points) await tapAt(page, x, z);
   await page.keyboard.press('Escape');
 }

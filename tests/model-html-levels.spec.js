@@ -70,7 +70,7 @@ test('a card per level, and the layer rows are the module\'s not a copy', async 
   expect(rows.ROOF, 'ROOF has no layer views and must show no rows').toEqual([]);
 });
 
-test('THE AGREEMENT: a layer row moves the level, the view, the picker and the panel together',
+test('THE AGREEMENT: a layer row moves the level, the view, the readout and the panel together',
   async ({ page }) => {
     await openPanel(page);
 
@@ -89,11 +89,13 @@ test('THE AGREEMENT: a layer row moves the level, the view, the picker and the p
     await page.locator(`[data-layer="${target}"]`).click();
     await page.waitForTimeout(250);
 
-    // FOUR CONTROLS, ONE ANSWER.
+    // FOUR READINGS, ONE ANSWER. The two SELECTs §7 deleted were two of them;
+    // the readout is what a drafter reads instead, so it takes their place
+    // rather than the check losing half its subject.
     expect(new URL(page.url()).searchParams.get('level')).toBe(levelId);
     expect(new URL(page.url()).searchParams.get('view')).toBe(viewId);
-    expect(await page.locator('#level-pick').inputValue()).toBe(levelId);
-    expect(await page.locator('#view-pick').inputValue()).toBe(viewId);
+    expect(await h.modelLevelId(page)).toBe(levelId);
+    expect(await h.modelViewId(page)).toBe(viewId);
     expect(await page.locator('.lv-layer[data-active]')
       .evaluateAll(els => els.map(e => e.dataset.layer)),
     'the panel lit a different row than the page is showing').toEqual([target]);
@@ -102,39 +104,63 @@ test('THE AGREEMENT: a layer row moves the level, the view, the picker and the p
       .toEqual([HOUSE.levels.find(l => String(l.id) === levelId).name]);
   });
 
-test('the panel does not take a name the chrome bar already uses', async ({ page }) => {
+test('every chrome hook is still exactly one control', async ({ page }) => {
   await openPanel(page);
 
   // ONE SELECTOR, ONE CONTROL. The panel's level buttons were first given
-  // `data-level-pick` -- the attribute the CHROME BAR'S select carries, and
-  // the one model-html-switcher.spec.js drives it by. `[data-level-pick]`
+  // `data-level-pick` -- the attribute the chrome bar's select carried, and
+  // the one model-html-switcher.spec.js drove it by. `[data-level-pick]`
   // then resolved to six elements and four switcher tests failed on strict
   // mode, nineteen minutes into CI, because no spec here had ever run
   // alongside that one.
   //
-  // A panel row and a chrome control are not the same control even when they
-  // do the same thing, so this asserts the chrome's hooks stay singular with
-  // the panel on screen. Cheap, and it fails in seconds instead of in a shard.
-  for (const sel of ['[data-level-pick]', '[data-view-pick]', '[data-model-save]',
-    '[data-draw-wall]', '[data-props-slot]', '[data-levels-panel]']) {
+  // The select is gone and the collision with it cannot recur, but the rule
+  // it taught outlived it: a hook a spec drives by must name one thing. The
+  // list is the hooks the shell left standing, DELETE among them -- §7a gave
+  // the one button two attributes for a while, which is the same fault in
+  // the other direction.
+  for (const sel of ['[data-model-save]', '[data-file-new]', '[data-file-open]',
+    '[data-file-save-as]', '[data-file-ext]', '[data-delete]',
+    '[data-tool-key="wall"]', '[data-props-slot]', '[data-levels-panel]']) {
     expect(await page.locator(sel).count(), `${sel} is no longer unique`).toBe(1);
   }
 });
 
-test('the panel is in the right-edge group and goes away with it', async ({ page }) => {
-  await openPanel(page);
-  await expect(page.locator('#levels-panel')).toBeVisible();
+test('the panel is in the right-edge group, and collapsing it keeps the level names',
+  async ({ page }) => {
+    await openPanel(page);
+    await expect(page.locator('#levels-panel')).toBeVisible();
+    await expect(page.locator('.lv-datum')).toBeVisible();
 
-  // ONE TAB GROUP, NOT TWO. Devin's ruling: LEVELS/LAYERS is a third pane
-  // beside VIEWS and PROPERTIES rather than a second rotated tab on the same
-  // edge, because two tabs on one edge is how #389's chrome-on-chrome
-  // collisions happened. So it collapses with the panel that holds it.
-  await page.locator('#right-tab').click();
-  await page.waitForTimeout(200);
-  await expect(page.locator('#levels-panel')).toBeHidden();
-  // The seats stay: reachable means one click, not simultaneously visible.
-  await expect(page.locator('.seat').first()).toBeVisible();
-});
+    // ONE TAB GROUP, NOT TWO. Devin's ruling: LEVELS/LAYERS is a third pane
+    // beside VIEWS and PROPERTIES rather than a second rotated tab on the
+    // same edge, because two tabs on one edge is how #389's chrome-on-chrome
+    // collisions happened. So it collapses with the panel that holds it.
+    //
+    // WHAT COLLAPSING NO LONGER DOES IS HIDE IT (§7c). While the chrome bar
+    // had a level select, the panel was the SECOND way to change level and
+    // could go away with the rail; §7 deleted the select, so a collapsed
+    // rail that hid the cards would leave the page with no way to change
+    // level at all. Collapsed is the NAMES ONLY -- same buttons, same hook.
+    await page.locator('#right-tab').click();
+    await page.waitForTimeout(200);
+    await expect(page.locator('.lv-datum'), 'collapsed must drop the editing furniture')
+      .toBeHidden();
+    await expect(page.locator('.lv-layer').first()).toBeHidden();
+    const rows = page.locator('[data-level-row]');
+    await expect(rows.first(), 'a collapsed rail left no way to change level')
+      .toBeVisible();
+
+    // Reachable, not merely present: the switch still works from here.
+    const target = await page.evaluate(() => [...document.querySelectorAll('.lv-card')]
+      .find(c => !c.hasAttribute('data-active')).dataset.level);
+    await page.locator(`[data-level-row="${target}"]`).click();
+    await page.waitForTimeout(250);
+    expect(await h.modelLevelId(page)).toBe(target);
+
+    // The seats stay: reachable means one click, not simultaneously visible.
+    await expect(page.locator('.seat').first()).toBeVisible();
+  });
 
 test('+ ADD appends a real level, and the panel grows by one card', async ({ page }) => {
   await openPanel(page);
@@ -216,7 +242,7 @@ test('deleting the level you are STANDING on moves you to a real one',
     // deleted. Left alone it would point at a level that no longer exists, and
     // the page would warn and quietly show a different one than the URL claims.
     await openPanel(page);
-    const standing = await page.locator('#level-pick').inputValue();
+    const standing = await h.modelLevelId(page);
     await page.goto(page.url().replace(/([?&])level=\d+/, '$1') + `&level=${standing}`);
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 
@@ -230,7 +256,7 @@ test('deleting the level you are STANDING on moves you to a real one',
     if (now !== null) {
       expect(ids, 'the URL still names the level that was just deleted').toContain(now);
     }
-    expect(ids).toContain(await page.locator('#level-pick').inputValue());
+    expect(ids).toContain(await h.modelLevelId(page));
   });
 
 test('a cancelled confirm deletes nothing', async ({ page }) => {

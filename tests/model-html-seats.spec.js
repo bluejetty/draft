@@ -93,17 +93,17 @@ async function drawWall(page, x1, z1, x2, z2) {
   const box = await page.locator('#plan').boundingBox();
   const scale = await scaleOf(page);
   const at = (x, z) => [box.x + box.width / 2 + x * scale, box.y + box.height / 2 + z * scale];
-  await page.locator('[data-draw-wall]').click();
+  await h.armWall(page);
   await page.mouse.click(...at(x1, z1));
   await page.waitForTimeout(50);
   await page.mouse.click(...at(x2, z2));
   await page.waitForTimeout(80);
-  // DISARM. The button TOGGLES and the tool stays armed after a wall commits,
+  // DISARM. The key TOGGLES and the tool stays armed after a wall commits,
   // so a second call would arm-off and its two taps would select rather than
   // draw. Left out, every edit after the first silently committed nothing --
   // and an edit that commits nothing repaints nothing, which reads exactly
   // like an edit that was free.
-  await page.locator('[data-draw-wall]').click();
+  await h.disarmWall(page);
   await page.waitForTimeout(40);
 }
 
@@ -190,9 +190,13 @@ test('pressing a seat brings that view center, and the picker follows it',
     await expect(page.locator('#readout')).toContainText('section S1');
     await expect(page.locator('#readout')).toContainText('walls cut');
 
-    // The rail and the picker are two controls on ONE piece of state. A seat
-    // that left the picker behind would put two answers on screen at once.
-    expect(await page.locator('#view-pick').inputValue()).toBe('cut:S1');
+    // The rail and the levels panel are two controls on ONE piece of state.
+    // A seat that left the panel behind would put two answers on screen at
+    // once -- the picker this used to read went with the chrome bar, and the
+    // section's own row carries the lit mark instead.
+    await h.openModelRail(page);
+    await expect(page.locator('[data-view-row="cut:S1"]'))
+      .toHaveAttribute('data-active', '');
     await expect(page.locator('.seat[data-seat="S1"]')).toHaveClass(/active/);
   });
 
@@ -353,7 +357,7 @@ test('an edit never blocks the main thread, even with four live elevations',
     // correctly refused, committed nothing, and this read as a chrome
     // regression. The subject here is what the chrome costs, not what the
     // board allows, so the board is named rather than inherited.
-    await page.locator('#strip-switches [data-board="drafting"]').click();
+    await page.locator('#mode-corner [data-board="drafting"]').click();
     await expect(page.locator('body')).toHaveAttribute('data-board', 'drafting');
 
     // WHAT A DRAFTER FEELS, not a millisecond budget. The old assertion here

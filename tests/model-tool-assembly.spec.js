@@ -200,7 +200,7 @@ test('clicking one member takes THAT member — the assembly is not expanded',
 
     // And the DELETE button still means what it meant — the reading that broke
     // when the expansion was in.
-    await expect(page.locator('[data-delete-wall]')).toBeVisible();
+    await expect(page.locator('[data-delete]')).toBeVisible();
   });
 
 test('UNGROUP appears only for an assembly, and releases it without deleting',

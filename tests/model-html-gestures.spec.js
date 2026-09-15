@@ -71,10 +71,10 @@ async function centre(page) {
 // were in the drawing before, so the caller can name which wall is new.
 async function drawWall(page, from, to) {
   const c = await centre(page);
-  await page.locator('#draw-wall').click();
+  await h.armWall(page);
   await page.mouse.click(c.x + from[0], c.y + from[1]);
   await page.mouse.click(c.x + to[0], c.y + to[1]);
-  await page.locator('#draw-wall').click();   // disarm, so the next click selects
+  await h.disarmWall(page);   // so the next click selects
 }
 
 async function savedWalls(page) {
@@ -189,10 +189,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         const label = kind === 'dimension' ? 'dims' : plural;
         const shown = async () => (await readout(arm).textContent()).includes(`${label} 1/1`);
         if (!(await shown())) {
-          const values = await arm.locator('#view-pick option')
-            .evaluateAll(nodes => nodes.map(n => n.value));
-          for (const value of values) {
-            await arm.locator('#view-pick').selectOption(value);
+          const levelId = await h.modelLevelId(arm);
+          for (const view of await h.modelLayerIds(arm, levelId)) {
+            await h.pickModelLayer(arm, levelId, view);
             if (await shown()) break;
           }
         }
@@ -213,42 +212,56 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // item that was selected goes, an item that was not stays. Reported as a
       // shape rather than three separate assertions so a failure prints the
       // whole answer at once.
+      //
+      // THE FLOOR ANSWERS NOW, and the row moved for a real reason rather
+      // than a drifting fixture: DELETE used to be `delete-wall` and could
+      // only take a wall, so a floor that WAS selected read as unselectable
+      // through this measurement. The shell's one generic DELETE removes
+      // whatever is selected, so the click a floor always answered finally
+      // shows. A dimension still answers nothing.
       expect(answers,
         'the parity row must say which entities answer a click, not "select"')
-        .toEqual({ wall: true, floor: false, dimension: false });
+        .toEqual({ wall: true, floor: true, dimension: false });
     });
 
-  test('SWITCH LEVEL and SWITCH LAYER VIEW — driven through the chrome bar',
+  test('SWITCH LEVEL and SWITCH LAYER VIEW — driven through the levels panel',
     async ({ page }) => {
       await seeded(page);
       const before = await readout(page).textContent();
 
-      const options = await page.locator('#level-pick option').allTextContents();
-      expect(options.length, 'the level picker must offer more than one level')
+      // THE TWO SELECTS ARE GONE with the chrome bar the shell replaced; the
+      // panel's own rows are the way to change level and layer now, which is
+      // what these helpers drive. The claim is unchanged -- the page must
+      // follow the choice, and the choice must survive a reload.
+      await h.openModelRail(page);
+      const ids = await page.locator('[data-level-row]')
+        .evaluateAll(nodes => nodes.map(n => ({
+          id: Number(n.dataset.levelRow), name: n.textContent.trim(),
+        })));
+      expect(ids.length, 'the panel must offer more than one level')
         .toBeGreaterThan(1);
 
-      const other = options.find(name => !before.includes(name.trim()));
-      await page.locator('#level-pick').selectOption({ label: other });
+      const other = ids.find(level => !before.includes(level.name));
+      await h.pickModelLevel(page, other.id);
       await expect(readout(page),
         'picking another level must change what the page says it is showing')
-        .toContainText(other.trim());
+        .toContainText(other.name);
 
       // AND IT IS KEYED BY THE LEVEL, NOT BY AN INDEX — the row says `?level=`,
       // so a reload of the resulting URL must land on the same level.
       await page.reload();
       await expect(readout(page), 'the chosen level must survive a reload')
-        .toContainText(other.trim(), { timeout: 6000 });
+        .toContainText(other.name, { timeout: 6000 });
 
-      // THE LAYER-VIEW PICKER hides itself where a level holds no layer views.
-      // Read as "hides itself"; here it is asked whether it hides or merely
-      // offers an empty list — those look identical to a reader and completely
-      // different to a drafter.
-      const viewPick = page.locator('#view-pick');
-      const visible = await viewPick.isVisible();
-      const count = await page.locator('#view-pick option').count();
-      expect(visible ? count > 0 : true,
-        'a visible layer-view picker must have something in it — an empty '
-        + 'picker is worse than a hidden one').toBe(true);
+      // AND THE LAYER ROWS BELONG TO THE LEVEL. A level with no layer views
+      // shows no rows rather than an empty list -- the same claim the hidden
+      // picker carried, now made of the rows themselves.
+      await h.openModelRail(page);
+      const rows = await h.modelLayerIds(page, other.id);
+      const lit = page.locator(`[data-layer^="${other.id}:"][data-active]`);
+      expect(rows.length ? await lit.count() : 0,
+        'a level that offers layer rows must show which one is live')
+        .toBe(rows.length ? 1 : 0);
     });
 
   test('ESCAPE and FIT — no persisted consequence, so the visible state is the assertion',
@@ -259,7 +272,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       // Arm DRAW, place one end, then Escape. The old page's Escape cancels the
       // gesture AND clears the selection while KEEPING the tool.
       const c = await centre(page);
-      await page.locator('#draw-wall').click();
+      await h.armWall(page);
       await page.mouse.click(c.x - 40, c.y + 40);
       await page.keyboard.press('Escape');
       await page.mouse.click(c.x + 40, c.y + 40);   // would have closed the wall
@@ -301,25 +314,33 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       //   2. THE PICKER BELONGS TO THE LEVEL. A picker still holding the
       //      previous level's views would offer a layer set that does not
       //      exist on the level the drafter is on.
-      const levels = await page.locator('#level-pick option')
-        .evaluateAll(nodes => nodes.map(n => ({ value: n.value, label: n.textContent.trim() })));
-      expect(levels.length, 'the level picker must offer levels to walk')
+      //
+      // AND THE PICKER ITSELF IS GONE — the shell took the chrome bar with it
+      // and the panel's layer rows are what a drafter presses now. Both
+      // properties survive the move word for word: a level either shows rows
+      // or shows none, and the lit row belongs to the level being stood on.
+      await h.openModelRail(page);
+      const levels = await page.locator('[data-level-row]')
+        .evaluateAll(nodes => nodes.map(n => ({
+          value: Number(n.dataset.levelRow), label: n.textContent.trim(),
+        })));
+      expect(levels.length, 'the panel must offer levels to walk')
         .toBeGreaterThan(1);
 
       const seen = {};
       for (const level of levels) {
-        await page.locator('#level-pick').selectOption(level.value);
+        await h.pickModelLevel(page, level.value);
         await expect(readout(page)).toContainText(level.label, { timeout: 6000 });
-        const visible = await page.locator('#view-pick').isVisible();
-        const options = await page.locator('#view-pick option')
-          .evaluateAll(nodes => nodes.map(n => n.value));
-        if (visible) {
-          expect(options.length,
-            `${level.label}: a visible layer-view picker must have something in `
-            + 'it — an empty picker is worse than a hidden one').toBeGreaterThan(0);
-          const shown = await page.locator('#view-pick').inputValue();
-          expect(options.includes(shown),
-            `${level.label}: the picker must be showing one of its own options, `
+        await h.openModelRail(page);
+        const options = await h.modelLayerIds(page, level.value);
+        if (options.length) {
+          const lit = await page.locator(`[data-layer^="${level.value}:"][data-active]`)
+            .evaluateAll(nodes => nodes.map(n => n.dataset.layer.split(':')[1]));
+          expect(lit.length,
+            `${level.label}: a level with layer rows must show exactly one lit`)
+            .toBe(1);
+          expect(options.includes(lit[0]),
+            `${level.label}: the lit row must be one of this level's own, `
             + 'not a view carried over from the level before it').toBe(true);
         }
         seen[level.label] = options.length;
@@ -399,6 +420,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         return {
           buttons: [...document.querySelectorAll('button')].filter(outside)
             .map(b => b.id || b.textContent.trim()).sort(),
+          anchors: [...document.querySelectorAll('a')].filter(outside)
+            .map(a => a.textContent.trim()).sort(),
           selects: [...document.querySelectorAll('select')].filter(outside)
             .map(s => s.id).sort(),
           inputs: [...document.querySelectorAll('input')].filter(outside)
@@ -499,18 +522,39 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         'the parity table\'s absences are only as good as this list — if a '
         + 'control appears here that no row mentions, a row is wrong')
         .toEqual({
+          //
+          // AND A FOURTH TIME, with the chrome shell proper. The file row
+          // (NEW / OPEN / SAVE AS and the extension select), the page row's
+          // two dark destinations, the unsaved guard's three answers and the
+          // SAVE AS card's two. Read the same way as the rest: NEW and OPEN
+          // REPLACE the drawing and SAVE AS writes the one in hand -- none of
+          // them MAKES an entity, so no absence row moves. `draw-wall` and
+          // `delete-wall` are gone from this list because the shell took the
+          // bar they sat in: WALL is a key in the column now, and DELETE is
+          // one generic verb (`delete`) rather than a wall-only one.
           buttons: ['left-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
-            'delete-wall', 'draw-wall', 'save', 'take-over',
+            'delete', 'save', 'take-over',
+            'file-new', 'file-open', 'file-save-as',
+            'REAL ESTATE LAYOUT', 'ESTIMATES',
             'strip-ruler', 'strip-tsquare',
             'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'Continue', 'Stay in TOY',
-            'Break here', 'Move this wall'].sort(),
-          selects: ['level-pick', 'view-pick'],
-          // THE LENGTH BOX, and it is named as a type rather than an id
-          // because what this row guards is a FILE INPUT appearing without
-          // anyone noticing — the surface an INSERT UNDERLAY verb would need.
-          inputs: ['text'],
+            'Break here', 'Move this wall',
+            'Save first', 'Discard', 'Cancel',   // the unsaved guard
+            'Save', 'Cancel'].sort(),           // the SAVE AS card
+          // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
+          // would have slipped past the button census entirely -- and a
+          // navigation control that draws nothing is still a control this
+          // list has to account for.
+          anchors: ['PROJECT', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS'].sort(),
+          selects: ['file-ext'],
+          // THE LENGTH BOX and the SAVE AS name, plus ONE file input -- the
+          // drawing picker OPEN hangs on. It is named here rather than
+          // counted because this row is what the INSERT UNDERLAY absence
+          // rests on; that row's own check asserts the picker takes drawings
+          // and not images.
+          inputs: ['file', 'text', 'text'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as
@@ -551,10 +595,20 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       expect((await h.savedDrawing(page)).underlays,
         'the underlay must be in the file this page loaded').toHaveLength(1);
 
-      // AND THERE IS NOWHERE TO PUT A NEW ONE. A file picker is the only way a
-      // drafter supplies an image, and the page has no input of any kind.
-      expect(await page.locator('input[type=file]').count(),
-        'an INSERT gesture needs somewhere to choose a file').toBe(0);
+      // AND THERE IS STILL NOWHERE TO PUT A NEW ONE. The page grew a file
+      // input with the shell -- OPEN needs one -- so "no file input at all"
+      // stopped being the honest form of this claim. The claim that matters
+      // is unchanged and is now said directly: the ONE picker on the page
+      // takes DRAWINGS, and an image cannot be offered to it.
+      const pickers = page.locator('input[type=file]');
+      expect(await pickers.count(),
+        'the only file picker on this page is the one OPEN reads a drawing with')
+        .toBe(1);
+      const accept = await pickers.getAttribute('accept');
+      expect(accept, 'OPEN names the drawing extensions it reads').toBeTruthy();
+      expect(accept.includes('image') || accept.includes('.png') || accept.includes('.pdf'),
+        'an underlay is an image or a PDF, and the drawing picker must not take one')
+        .toBe(false);
     });
 
   test('T-SQUARE — pressing `t` does nothing the page or the file can show',
@@ -588,12 +642,15 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         'and it must not have touched the file either').toBe(beforeFile);
     });
 
-  test('BONEYARD — the level picker offers no way to reach one', async ({ page }) => {
+  test('BONEYARD — the levels panel offers no way to reach one', async ({ page }) => {
     await seeded(page);
     // The old page reaches the boneyard through a pseudo-level with a NEGATIVE
     // id. If this page could reach it, that is where it would show.
-    const values = await page.locator('#level-pick option')
-      .evaluateAll(nodes => nodes.map(n => n.value));
+    await h.openModelRail(page);
+    const values = await page.locator('[data-level-row]')
+      .evaluateAll(nodes => nodes.map(n => n.dataset.levelRow));
+    expect(values.length, 'the panel must list the levels it is read for')
+      .toBeGreaterThan(0);
     expect(values.filter(v => Number(v) < 0),
       'a boneyard would appear as a negative pseudo-level id').toEqual([]);
     expect(values.every(v => Number.isFinite(Number(v))),

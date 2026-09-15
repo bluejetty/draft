@@ -14,6 +14,7 @@
 // the pixels — and the two controls that are honestly inert are asserted to
 // SAY they are inert.
 const { test, expect } = require('@playwright/test');
+const h = require('./helpers');
 
 const BUCKET = 'model-drawing';
 const MAIN_FL = 3;
@@ -129,7 +130,13 @@ test.describe('MODEL.html instrument strip', () => {
       await openModel(page);
 
       await expect(page.locator('[data-instrument-strip]')).toBeVisible();
-      await expect(page.locator('#strip-project')).toHaveText('PROJECT');
+      // PROJECT LEFT THE STRIP IN §7b. It is a place to go, not an
+      // instrument, so it sits in the page row along the foot with the other
+      // five destinations; the check follows it rather than being dropped.
+      await expect(page.locator('#page-row [data-page="project"]')).toHaveText('PROJECT');
+      await expect(page.locator('#strip [data-page]'),
+        'a destination left behind in the strip is a second way to the same page')
+        .toHaveCount(0);
 
       // THE FOUR THAT WORK. Asserted as a set, so an instrument quietly
       // demoted to dormant during a refactor fails here rather than being
@@ -161,7 +168,7 @@ test.describe('MODEL.html instrument strip', () => {
       const ang = page.locator('#strip-ang');
       await expect(len, 'nothing in hand, nothing on the instruments').toHaveText('');
 
-      await page.locator('#draw-wall').click();
+      await h.armWall(page);
       await tapAt(page, -4, -4);          // the run starts
       await hoverAt(page, 0, -4);         // 4 feet along +X
 
@@ -186,7 +193,7 @@ test.describe('MODEL.html instrument strip', () => {
       // reads it as the T-square leaking.
       await seed(page, { board: 'drafting' });
       await openModel(page);
-      await page.locator('#draw-wall').click();
+      await h.armWall(page);
 
       // OFF SQUARE FIRST — the control case, and the one that makes the
       // assertion below mean something. Two taps that are deliberately not
@@ -235,7 +242,7 @@ test.describe('MODEL.html instrument strip', () => {
       await expect(box, 'no run in hand: a typed length would have nowhere to go')
         .toBeDisabled();
 
-      await page.locator('#draw-wall').click();
+      await h.armWall(page);
       await tapAt(page, -4, -4);
       await hoverAt(page, 2, -4);        // aiming along +X
       await expect(box).toBeEnabled();
@@ -281,7 +288,7 @@ test.describe('MODEL.html instrument strip', () => {
       // rather than a mode the drafter gets stuck in.
       await page.locator('[data-mode-ruler]').click();
       await expect(page.locator('[data-mode-ruler]')).not.toHaveClass(/lit/);
-      await page.locator('#draw-wall').click();
+      await h.armWall(page);
       await tapAt(page, -4, 3);
       await tapAt(page, 2, 3);
       expect(await wallCount(page), 'the wall tool survived the ruler').toBe(before + 1);
@@ -357,12 +364,13 @@ test.describe('MODEL.html instrument strip', () => {
 
       // TOY by default, which is Movie's stated default for the PC board.
       await expect(page.locator('body')).toHaveAttribute('data-board', 'toy');
-      // Scoped to the strip: `body` carries the same attribute, which is the
-      // point of it — the constraints, when they exist, read the body.
-      const toy = page.locator('#strip-switches [data-board="toy"]');
+      // `body` carries the same attribute, which is the point of it -- the
+      // constraints, when they exist, read the body.
+      // Scoped to the mode corner, where §7b put the board switch.
+      const toy = page.locator('#mode-corner [data-board="toy"]');
       await expect(toy).toHaveAttribute('aria-pressed', 'true');
 
-      await page.locator('#strip-switches [data-board="drafting"]').click();
+      await page.locator('#mode-corner [data-board="drafting"]').click();
       await expect(page.locator('body')).toHaveAttribute('data-board', 'drafting');
       await page.reload();
       await expect(readout(page)).toContainText('walls', { timeout: 6000 });
@@ -382,7 +390,7 @@ test.describe('MODEL.html instrument strip', () => {
       // goes back to promising nothing is red, and so is one that keeps
       // promising squareness after someone unwires it.
       await expect(toy).toHaveAttribute('title', /square and whole-foot/);
-      await expect(page.locator('#strip-switches [data-board="drafting"]'),
+      await expect(page.locator('#mode-corner [data-board="drafting"]'),
         'and the other switch says what it does instead, or "square" reads as '
         + 'a property of the strip rather than of TOY')
         .toHaveAttribute('title', /any angle and any length/);
