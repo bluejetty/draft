@@ -1349,8 +1349,18 @@
        stacking: these two are the settings stack's own 9px rows, the shape
        already standing beside them without that fault. What kept the ruling
        honest was a measurement, so what replaces it carries one --
-       model-html-topbar asserts each button's own centre hits ITSELF, which
-       is the exact check the old corner would have failed. -->
+       model-html-shell's "a tap aimed at a stacked button lands on that
+       button" sends a tap at each button's own CENTRE COORDINATE and asserts
+       the boxes never overlap, which is the exact check the old corner would
+       have failed. It measures all three of the bar's stacks, the settings
+       rows this argument leans on included.
+
+       THIS CITATION WAS WRONG WHEN THE STACK SHIPPED. It named
+       model-html-topbar, which is about house families and holds no hit test
+       of any kind, so the ruling was overturned on the strength of a
+       measurement nobody had taken. The check named here exists and is
+       mutation-gated by proto/units-stack-mutants.js -- a claim of coverage
+       is the one kind of comment that can be checked by reading it. -->
   <div id="units-corner" data-units-corner data-switch-home>
     <div class="stack">
       <button type="button" data-units="imperial" aria-pressed="true"

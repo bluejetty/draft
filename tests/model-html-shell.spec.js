@@ -399,6 +399,99 @@ test('UNITS shades the unit in force and switches the drawing over', async ({ pa
   await expect(metric).toHaveAttribute('aria-pressed', 'false');
 });
 
+// THE CHECK THAT LETS THE STACKS EXIST AT ALL.
+//
+// Two of the top bar's corners now stack a pair of buttons vertically:
+// IMPERIAL over METRIC, and TOY over DRAFTING. Stacking units is a REVERSAL
+// of MODEL.dc.html:435-442, which made units one button naming the unit in
+// force after its two stacked buttons -- grown to a 44px touch target by
+// padding out and pulling the margin back -- OVERLAPPED, so METRIC ate every
+// tap aimed at IMPERIAL.
+//
+// The reversal's whole argument is that the fault was the HIT BOXES and not
+// the stacking: these rows are the settings stack's own 19px, the shape
+// already standing two inches to the left without that fault. That argument
+// is only worth what a measurement says, and the DC ruling it overturns was
+// itself kept honest by one. So this is that measurement, and it is aimed at
+// the exact failure DC hit -- not at the stylesheet, which can say
+// `flex-direction:column` while a padded hit box reaches up over its
+// neighbour anyway.
+//
+// A TAP IS SENT AT A COORDINATE, not at a locator: `locator.click()` asks
+// Playwright for the element's own centre and dispatches there, so it lands
+// on the right control even when the pixel belongs to something else. That
+// is the DC bug passing unnoticed.
+test('a tap aimed at a stacked button lands on that button, not its neighbour',
+  async ({ page }) => {
+    await openShell(page);
+
+    const STACKS = [
+      ['the unit stack', '#units-corner button[data-units]'],
+      ['the board stack', '#mode-corner .set.stack button[data-board]'],
+      // THE PRECEDENT IS MEASURED TOO. The reversal's argument is that these
+      // rows -- SETTINGS over STANDARDS, the same 19px -- are the shape
+      // already standing beside the units without DC's fault. An argument
+      // resting on a control nobody measures is worth what the citation that
+      // sent me here was worth.
+      ['the settings stack', '#settings-stack a'],
+    ];
+
+    for (const [what, selector] of STACKS) {
+      const boxes = await page.evaluate(sel => {
+        return [...document.querySelectorAll(sel)].map(el => {
+          const r = el.getBoundingClientRect();
+          const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+          const hit = document.elementFromPoint(cx, cy);
+          return {
+            label: (el.textContent || '').trim(),
+            top: r.top, bottom: r.bottom, height: r.height,
+            // `contains` because a button may wrap its label in a node, and
+            // the tap legitimately lands on that child.
+            hitsSelf: el === hit || el.contains(hit),
+            hitLabel: (hit?.textContent || '').trim().slice(0, 24),
+          };
+        });
+      }, selector);
+
+      expect(boxes.length, `${what} is not two buttons`).toBe(2);
+
+      for (const b of boxes) {
+        expect(b.hitsSelf,
+          `${what}: a tap on ${b.label}'s own centre landed on "${b.hitLabel}"`)
+          .toBe(true);
+      }
+
+      // AND THE BOXES DO NOT OVERLAP AT ALL, which is the stronger half: a
+      // centre can hit itself while the edges still steal each other's taps,
+      // and the edge is where a thumb aiming at the upper button actually
+      // lands. DC's pair overlapped by 14px and its centres were still fine.
+      const [first, second] = boxes;
+      expect(second.top,
+        `${what}: ${second.label} reaches up over ${first.label} — `
+        + 'the DC overlap, back again')
+        .toBeGreaterThanOrEqual(first.bottom);
+    }
+
+    // AND THE TAP DOES WHAT THE BUTTON SAYS. The overlap DC suffered was only
+    // a bug because the wrong unit took the press, so the last word is the
+    // state: a coordinate tap on IMPERIAL's centre leaves IMPERIAL in force.
+    await page.locator('#units-corner button[data-units="metric"]').click();
+    await expect(page.locator('#units-corner button[data-units="metric"]'))
+      .toHaveAttribute('aria-pressed', 'true');
+
+    const aim = await page.evaluate(() => {
+      const r = document.querySelector('#units-corner button[data-units="imperial"]')
+        .getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    await page.mouse.click(aim.x, aim.y);
+    await expect(page.locator('#units-corner button[data-units="imperial"]'),
+      'a tap aimed at IMPERIAL did not put imperial in force')
+      .toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#units-corner button[data-units="metric"]'))
+      .toHaveAttribute('aria-pressed', 'false');
+  });
+
 // THE RIGHT EDGE HAS TWO TABS NOW (Movie, 15 Sep): "top will be LEVELS /
 // LAYERS, and then next down LAYOUT PREVIEWS". One pane shows at a time, and
 // the pane is in the URL for the same reason the rail's open/shut is.
