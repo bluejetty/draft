@@ -1803,6 +1803,52 @@
     return pts.filter(p => Number.isFinite(p?.x) && Number.isFinite(p?.z));
   };
 
+  // THE TWO DARK BARS SIT ON TOP OF THE CANVAS, not beside it. #plan is the
+  // full height of the sheet and #strip / #house-strip are `position:fixed`
+  // over its top and foot, so a fit computed against cssH frames the drawing
+  // into a rectangle that is partly covered -- and geometry under a bar cannot
+  // be grabbed by ANYONE, drafter or check. It is not a drawing bug, it is a
+  // reach bug: the wall is painted, it is just not pressable.
+  //
+  // This was live before the bars grew and nothing said so, because the band
+  // it stole was small enough that the hit tolerance covered it. Widening the
+  // instrument strip from 34px to 44px pushed the top edge of the plan 10px
+  // further under the bar and tests/model-toy-draw.spec.js:758 started
+  // failing -- the press landed 2px INSIDE the strip. Shaving 10px back off
+  // the bar would have moved the cliff rather than removed it, and put it
+  // under whichever control gets added next.
+  //
+  // MEASURED, NOT ASSUMED. --house-h is a `min-height`, so the foot bar is
+  // free to be taller than the variable says as soon as its row wraps;
+  // reading the variable would be right until it wasn't. The elements are
+  // asked how tall they actually are.
+  //
+  // NOT DURING A SEAT. paintPlanThumb borrows fit() to frame a level into an
+  // 82x54 offscreen canvas, and no bar is over THAT -- insetting it would
+  // shrink every thumbnail by a band that isn't there. thumbTarget is already
+  // the page's word for "painting a seat, not the sheet".
+  //
+  // THE SIDE RAILS ARE NOT HANDLED HERE and this does not pretend to. They
+  // are toggleable, they overlay the same way, and the same reach bug is
+  // available along the left edge -- model-toy-draw.spec.js opens without
+  // ?left=1 for exactly that reason. One thing at a time; the bars are what
+  // #401 is red over.
+  const chromeInsets = () => {
+    if (thumbTarget) return { top: 0, bottom: 0 };
+    const tall = id => {
+      const el = document.getElementById(id);
+      if (!el || el.hidden) return 0;
+      const r = el.getBoundingClientRect();
+      return Number.isFinite(r?.height) ? r.height : 0;
+    };
+    const top = tall('strip'), bottom = tall('house-strip');
+    // A sheet that is nearly all bar is a broken layout, not a tight fit.
+    // Refusing the inset there leaves the old framing rather than dividing
+    // the drawing into a sliver -- visibly wrong beats invisibly tiny.
+    if (!(cssH > 0) || top + bottom > cssH * 0.6) return { top: 0, bottom: 0 };
+    return { top, bottom };
+  };
+
   const fit = (wide = false) => {
     const pts = allPoints(wide);
     if (!pts.length) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
@@ -1811,15 +1857,23 @@
       if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
       if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
     });
+    const ins = chromeInsets();
+    // What is left of the sheet once the bars have taken their band.
+    const openH = Math.max(cssH - ins.top - ins.bottom, 1);
     view.cx = (minX + maxX) / 2;
-    view.cz = (minZ + maxZ) / 2;
     // A drawing one foot across must not zoom to a thousand pixels per foot,
     // and a zero-extent one must not divide by zero.
     const spanX = Math.max(maxX - minX, 1);
     const spanZ = Math.max(maxZ - minZ, 1);
     const margin = 0.86;
-    view.scale = Math.min(cssW / spanX, cssH / spanZ) * margin;
+    view.scale = Math.min(cssW / spanX, openH / spanZ) * margin;
     view.scale = Math.max(0.25, Math.min(view.scale, 200));
+    // CENTRE IN THE OPEN BAND, not on the canvas. toS puts view.cz at cssH/2
+    // and that stays true -- panning and zooming are untouched. The drawing's
+    // own middle is offset so it lands at the middle of what is uncovered:
+    // half the DIFFERENCE between the bars, in feet. Equal bars, no offset,
+    // which is why this was invisible while they matched.
+    view.cz = (minZ + maxZ) / 2 - (ins.top - ins.bottom) / 2 / view.scale;
   };
 
   // ── painting ──────────────────────────────────────────────────────────────
@@ -2863,6 +2917,21 @@
     // Before updateReadout, so the readout reports the frame it describes and
     // not the cost of writing itself.
     lastPaintMs = performance.now() - t0;
+    // THE CAMERA, SAID OUT LOUD. toS is the one place that turns a world point
+    // into a screen point, and until now nothing outside this file could ask
+    // it anything -- so a check wanting to press ON a wall had to rebuild the
+    // mapping from the readout's scale and a GUESS that the view is centred on
+    // world 0,0. That guess holds only for a fixture symmetric about the
+    // origin, and model-toy-draw.spec.js:758 is not one: fitted, its centre is
+    // z=-0.185, so every press that helper aimed landed ~7px off the thing it
+    // named. It passed anyway while bare canvas was forgiving, and stopped the
+    // day a bar moved into the 7px.
+    //
+    // A second copy of the arithmetic is how the two drift; this is the first
+    // copy, published. The canvas already wears data-* for the same reason the
+    // panels do. Three numbers, one attribute, one write a frame.
+    canvas.setAttribute('data-view',
+      `${view.cx.toFixed(6)} ${view.cz.toFixed(6)} ${view.scale.toFixed(6)}`);
     // AFTER the canvas timing and BEFORE the readout. After, because `paint`
     // in the readout means the main canvas and folding six thumbnails into it
     // would make one frame an edit read like a slow one. Before, because the

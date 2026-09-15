@@ -52,13 +52,44 @@ async function open(page, file) {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 
-async function frame(page) {
-  const box = await page.locator('#plan').boundingBox();
-  const scale = await page.evaluate(() => Number(
-    /scale ([\d.]+) px\/ft/.exec(document.getElementById('readout').textContent)[1]));
-  return { at: (x, z) => [box.x + box.width / 2 + x * scale,
-    box.y + box.height / 2 + z * scale] };
-}
+// THE PAGE IS ASKED WHERE A WORLD POINT LANDS; this used to work it out.
+//
+// The old body read the scale off the readout and then added x*scale to the
+// centre of the canvas box -- which assumes the view is centred on world 0,0.
+// fit() centres on the midpoint of the DRAWN BOUNDS, so that assumption holds
+// only for a fixture symmetric about the origin. Half this file's fixtures are
+// (the -10..10 square in `base`); the DRAFTING drag below is NOT -- its z runs
+// -8.37 to 8, fitting to a centre of -0.185 -- and every press it aimed was
+// landing ~7px above the wall it named. It hit regardless while the pixels
+// above that wall were bare canvas and within the grab tolerance, so the error
+// was invisible until the instrument strip grew into those pixels and the
+// press started landing on the bar instead. A check that passes for a reason
+// other than the one it claims is not a check; see helpers.planFrame.
+const frame = page => h.planFrame(page);
+
+// ROUNDED TO N PLACES, AND NEGATIVE ZERO IS ZERO.
+//
+// `Number((-1.9e-7).toFixed(6))` is -0, and both toEqual and toBe call -0 a
+// DIFFERENT NUMBER from 0. Two walls agreeing to six decimal places could
+// therefore compare unequal on the sign of a quantity the page itself calls
+// zero -- MODEL.html's offGridBy treats anything inside 1e-6 ft as on the foot
+// mark, and 1.9e-7 ft is two millionths of an inch.
+//
+// It never fired while every fixture here was symmetric about the origin: the
+// presses landed on exactly 0.0 and the dust was exactly 0. The moment fit()
+// began insetting for the two bars the view centre moved off zero, the same
+// press picked up 1.9e-7 ft of float, and the finger gesture compared unequal
+// to the mouse gesture for a wall in the IDENTICAL place -- the two differing
+// only because page.mouse rounds client coordinates to whole pixels and a
+// dispatched PointerEvent does not.
+//
+// Rounding that does not fold -0 into 0 is not rounding. It lives on this side
+// of page.evaluate, so the browser halves below return their numbers RAW and
+// every one of them is rounded here, in one place.
+const r = (n, places = 4) => {
+  const v = Number(Number(n).toFixed(places));
+  return v === 0 ? 0 : v;      // -0 === 0 is true, so both arrive as +0
+};
 
 const stored = page => page.evaluate(async bucket => {
   const f = await window.SharedFileStore.loadSharedFile(bucket);
@@ -72,8 +103,8 @@ async function committed(page) {
   const saved = await stored(page);
   const made = saved.walls.filter(w => !SEEDED.has(w.id)).pop();
   return made && {
-    s: [Number(made.start.x.toFixed(6)), Number(made.start.z.toFixed(6))],
-    e: [Number(made.end.x.toFixed(6)), Number(made.end.z.toFixed(6))],
+    s: [r(made.start.x, 6), r(made.start.z, 6)],
+    e: [r(made.end.x, 6), r(made.end.z, 6)],
   };
 }
 const spanOf = w => Math.hypot(w.e[0] - w.s[0], w.e[1] - w.s[1]);
@@ -583,9 +614,9 @@ test('§3 — a blocked drag stops dead, and the strip says why', async ({ page 
   const moved = await page.evaluate(async bucket => {
     const f = await window.SharedFileStore.loadSharedFile(bucket);
     const w = JSON.parse(await f.text()).walls.find(w => w.id === 'diag');
-    return [Number(w.start.x.toFixed(4)), Number(w.start.z.toFixed(4))];
+    return [w.start.x, w.start.z];
   }, BUCKET);
-  expect(moved, 'the refused drag moved nothing').toEqual([-8, -6]);
+  expect(moved.map(n => r(n)), 'the refused drag moved nothing').toEqual([-8, -6]);
 });
 
 // ── ACCEPTANCE 2c: THE WALL THAT IS NOT ON THE GRID ─────────────────────────
@@ -609,17 +640,23 @@ test('§3 — a blocked drag stops dead, and the strip says why', async ({ page 
 // the room and joined to nothing, so nothing can move it by stretching.
 const OFF = -6.042;                     // 6'-0½" off the foot, as imported
 //
-// SYMMETRIC ABOUT THE ORIGIN, AND THE MIRROR WALL IS WHY. fit() centres on the
-// midpoint of DRAWN BOUNDS, not on (0,0), and at() here assumes the origin is
-// at the canvas centre. One lone wall out at (20..30, 14) dragged the centre to
-// (10, 4) and every click in this check landed somewhere else entirely -- the
-// press selected nothing, the drag became a PAN, and the wall sat at -6.042
-// looking exactly like a refused move. The trap is written at the top of this
-// file, in a fixture I copied and then broke.
+// SYMMETRIC ABOUT THE ORIGIN, AND THE MIRROR WALL IS WHY -- ORIGINALLY.
 //
-// So there are TWO untouched walls, mirrored, and both are asserted. That is
-// better than one anyway: "a wall nobody touched did not move" is a stronger
-// claim when the walls sit on opposite sides of the thing that did.
+// fit() centres on the midpoint of DRAWN BOUNDS, not on (0,0), and at() USED
+// TO assume the origin sat at the canvas centre. One lone wall out at
+// (20..30, 14) dragged the centre to (10, 4) and every click in this check
+// landed somewhere else entirely -- the press selected nothing, the drag
+// became a PAN, and the wall sat at -6.042 looking exactly like a refused
+// move. The trap was written at the top of this file, in a fixture I copied
+// and then broke.
+//
+// THAT TRAP IS GONE: at() now asks the page where the camera is (helpers
+// .planFrame, reading #plan's data-view) instead of guessing, so an asymmetric
+// fixture aims correctly. The mirror stays anyway, on the reason that always
+// outranked the workaround: "a wall nobody touched did not move" is a stronger
+// claim when the walls sit on opposite sides of the thing that did. Symmetry
+// is no longer LOAD-BEARING here, which is worth saying -- the next person to
+// add a wall to this fixture should not have to rediscover which it is.
 const offGrid = () => base({
   board: 'toy',
   walls: [
@@ -630,11 +667,11 @@ const offGrid = () => base({
     wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' })),
 });
 
-const wallZ = (page, id) => page.evaluate(async ({ bucket, wid }) => {
+const wallZ = async (page, id) => r(await page.evaluate(async ({ bucket, wid }) => {
   const f = await window.SharedFileStore.loadSharedFile(bucket);
   const w = JSON.parse(await f.text()).walls.find(w => w.id === wid);
-  return Number(w.start.z.toFixed(4));
-}, { bucket: BUCKET, wid: id });
+  return w.start.z;
+}, { bucket: BUCKET, wid: id }));
 
 async function nudge(page, from, to) {
   const { at } = await frame(page);
@@ -749,10 +786,10 @@ test('a side wall moves along its own perpendicular, not always in z',
     const ex = await page.evaluate(async bucket => {
       const f = await window.SharedFileStore.loadSharedFile(bucket);
       const w = JSON.parse(await f.text()).walls.find(w => w.id === 'e');
-      return [Number(w.start.x.toFixed(4)), Number(w.start.z.toFixed(4))];
+      return [w.start.x, w.start.z];
     }, BUCKET);
-    expect(ex[0], 'it moved in x, its own perpendicular').toBe(14);
-    expect(ex[1], 'and not along its own run').toBe(-8);
+    expect(r(ex[0]), 'it moved in x, its own perpendicular').toBe(14);
+    expect(r(ex[1]), 'and not along its own run').toBe(-8);
   });
 
 test('a DRAFTING wall drags freely — the constraint path is TOY only',
@@ -824,8 +861,8 @@ const brokenRun = () => base({
 const wallEnds = (page, id) => page.evaluate(async ({ bucket, wid }) => {
   const f = await window.SharedFileStore.loadSharedFile(bucket);
   const w = JSON.parse(await f.text()).walls.find(w => w.id === wid);
-  return [w.start.x, w.start.z, w.end.x, w.end.z].map(n => Number(n.toFixed(4)));
-}, { bucket: BUCKET, wid: id });
+  return [w.start.x, w.start.z, w.end.x, w.end.z];
+}, { bucket: BUCKET, wid: id }).then(a => a.map(n => r(n)));
 
 // A wall is square iff one of its two runs is zero. Asserting THE ANGLE, not
 // a pair of coordinates: a check written as toEqual([...]) passes for any
@@ -1046,11 +1083,11 @@ async function selectThen(page, at, spot) {
 const wallsNamed = page => page.evaluate(async bucket => {
   const f = await window.SharedFileStore.loadSharedFile(bucket);
   return (JSON.parse(await f.text()).walls || []).map(w => ({
-    id: w.id,
-    s: [Number(w.start.x.toFixed(4)), Number(w.start.z.toFixed(4))],
-    e: [Number(w.end.x.toFixed(4)), Number(w.end.z.toFixed(4))],
+    id: w.id, s: [w.start.x, w.start.z], e: [w.end.x, w.end.z],
   }));
-}, BUCKET);
+}, BUCKET).then(list => list.map(w => ({
+  id: w.id, s: w.s.map(n => r(n)), e: w.e.map(n => r(n)),
+})));
 
 test('§4 — clicking a selected bone offers break here or move this wall',
   async ({ page }) => {
@@ -1178,8 +1215,9 @@ const ringOf = (page, id, where) => page.evaluate(async ({ bucket, oid, w }) => 
   const d = JSON.parse(await f.text());
   const list = w === 'master' ? (d.boneyardOutlines || []) : (d.outlines || []);
   const o = list.find(x => String(x.id) === oid);
-  return o ? (o.points || []).map(p => [Number(p.x.toFixed(4)), Number(p.z.toFixed(4))]) : null;
-}, { bucket: BUCKET, oid: id, w: where });
+  return o ? (o.points || []).map(p => [p.x, p.z]) : null;
+}, { bucket: BUCKET, oid: id, w: where })
+  .then(pts => (pts ? pts.map(p => p.map(n => r(n))) : null));
 
 test('§4 7a — a break on a mastered level cuts the master and every level on it',
   async ({ page }) => {
