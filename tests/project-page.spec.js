@@ -303,3 +303,94 @@ test('the garage schedule shows a sill and a floor 5 1/2" apart', async ({ page 
   };
   expect(inches(sill) - inches(floor)).toBeCloseTo(5.5, 5);
 });
+
+// THE BUILDING METHOD, AND THE DOOR THIS PAGE JUST GAINED ONTO IT. Movie,
+// 15 Sep: "if they go to the project area we should allow them to select
+// which method they would like to be currently using ... when they go
+// through the dog menu this is basically a way to easily 'change' the
+// project data". So the drive-thru and this page set ONE value, and the
+// old rule -- buildType is MODEL's alone, kept out of this page's writable
+// keys -- is deliberately reversed.
+//
+// RADIOS, NOT TICK BOXES, and that is the part worth a check of its own:
+// the bone builds "whatever the project says", so two methods on at once
+// has no answer. Pressing a second one must turn the first off.
+test('PROJECT sets the building method, one at a time, and it saves',
+  async ({ page }) => {
+    await h.openModel(page);
+    await openProjectPage(page);
+
+    // A fresh drawing has been through no build row, so nothing is chosen --
+    // and NOT CHOSEN is a real choice on the page rather than a blank,
+    // because the office reads an untyped drawing as the bungalow rule and
+    // a drafter has to be able to come back to it.
+    await expect(page.locator('[data-build-method="none"]')).toBeChecked();
+
+    await page.locator('[data-build-method="bilevel"]').check();
+    await expect(page.locator('#status')).toContainText('BILEVEL');
+    await expect(page.locator('[data-build-method="none"]')).not.toBeChecked();
+
+    // IT REACHED THE FILE, not just the radio. This page's save merges its
+    // own keys onto the stored drawing, so a key it does not own is dropped
+    // silently -- exactly what happened to buildType before this landed.
+    await expect.poll(async () => (await h.savedDrawing(page)).buildType,
+      { message: 'the chosen method never reached the drawing' })
+      .toBe('bilevel');
+
+    // And the choice is not merely recorded: the garage sill derive branches
+    // on it, so a page that stored the word and carried on deriving the
+    // bungalow rule fails here.
+    const offset = await page.locator('[data-zone-offset="attachedGarage"]').inputValue();
+
+    await page.locator('[data-build-method="bungalow"]').check();
+    await expect(page.locator('#status')).toContainText('BUNGALOW');
+    await expect(page.locator('[data-build-method="bilevel"]')).not.toBeChecked();
+    expect(await page.locator('[data-zone-offset="attachedGarage"]').inputValue(),
+      'the garage sill did not follow the method change')
+      .not.toBe(offset);
+
+    // Survives the reload, which is the whole claim of "project data".
+    await page.reload();
+    await expect(page.locator('[data-build-method="bungalow"]')).toBeChecked();
+  });
+
+// THE TWO DOORS, AND WHICH ONE WINS. Last press, and the trap it avoids is
+// the one the old omission was there to prevent: a PROJECT tab open on a
+// stale read must not flatten a method chosen in MODEL meanwhile. It cannot,
+// because the save re-reads the stored file and merges -- so the method only
+// changes when someone presses one HERE.
+test('a method chosen elsewhere is not clobbered by an unrelated PROJECT save',
+  async ({ page }) => {
+    await h.openModel(page);
+    await openProjectPage(page);
+    await expect(page.locator('[data-build-method="none"]')).toBeChecked();
+
+    // MODEL's press, arriving underneath the open page. A drawing nobody has
+    // saved yet has no file at all -- MODEL writes one on its first edit --
+    // so this plants the skeleton the press would have written.
+    await page.evaluate(async bucket => {
+      const file = await window.SharedFileStore.loadSharedFile(bucket);
+      const drawing = file ? JSON.parse(await file.text())
+        : { version: 1, levels: [{ id: 3, name: 'MAIN FL', elev: 0 }] };
+      drawing.buildType = 'twoStorey';
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(drawing)], file?.name || 'model-drawing.json',
+          { type: 'application/json' }), bucket);
+    }, h.STORAGE_BUCKET);
+
+    // An edit on this page that has nothing to do with the method.
+    const name = page.locator('[data-project-name]');
+    await name.fill('BONEYARD ROAD');
+    await name.dispatchEvent('change');
+    await expect(page.locator('#status')).toContainText('saved');
+
+    expect((await h.savedDrawing(page)).buildType,
+      'an unrelated PROJECT save reset the method chosen in the model space')
+      .toBe('twoStorey');
+
+    // AND THE PAGE CATCHES UP. A save re-reads the file, so it is also the
+    // moment this page can stop showing a method that is no longer the
+    // drawing's -- otherwise the radios sit there saying NOT CHOSEN over a
+    // two-storey, and the next press here is made on a false reading.
+    await expect(page.locator('[data-build-method="twoStorey"]')).toBeChecked();
+  });

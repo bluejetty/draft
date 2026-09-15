@@ -10,6 +10,7 @@
   <script src="./drawing-format.js"></script>
   <script src="./level-assembly.js"></script>
   <script src="./project-page.js"></script>
+  <script src="./build-menu.js"></script>
   <script src="./design-notices.js"></script>
   <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
        critical path of the page. -->
@@ -95,6 +96,10 @@
     .zone-input:hover, .zone-input:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
     .strip-caption { max-width:1090px; margin:6px auto 0; text-align:center; color:rgba(29,31,32,.55); font-size:12px; line-height:1.45; }
     .zone-note { margin-top:9px; color:rgba(29,31,32,.5); font-size:11px; line-height:1.4; }
+    .method-row { display:flex; flex-wrap:wrap; gap:8px 18px; }
+    .method-choice { display:flex; align-items:center; gap:7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; }
+    .method-choice input { width:15px; height:15px; accent-color:#5980a6; cursor:pointer; }
+    .method-choice input:disabled, .method-choice:has(input:disabled) { cursor:default; color:rgba(29,31,32,.45); }
     .table-card { margin-top:16px; }
     .table-scroll { overflow-x:auto; }
     table.section-table { border-collapse:collapse; font-family:'Barlow Condensed',system-ui,sans-serif; }
@@ -158,6 +163,14 @@
           <div class="field-label">Rooms &mdash; from the plan&#8217;s stamps</div>
           <div class="zone-note" data-room-counts>Counted when the bone builds &mdash; the room stamps are the latest word.</div>
         </div>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Building method">
+      <div class="card-title">Building method</div>
+      <div class="card-body">
+        <div class="method-row" id="method-row" role="radiogroup" aria-label="Building method"></div>
+        <div class="zone-note">The method this drawing is being built to. The drive-thru sets the same one &mdash; it is the quick way to change it, this is the long one &mdash; and whichever was pressed last is the one the bone builds. Changing it here does not move anything already drawn; it changes what the office assumes about it, starting with where an attached garage&#8217;s sill sits.</div>
       </div>
     </section>
 
@@ -360,17 +373,33 @@
       let projectInfo = format.projectInfo(drawing?.projectInfo);
       let zoneHeights = format.zoneHeights(drawing?.zoneHeights);
       let sectionTable = format.sectionTable(drawing?.sectionTable);
-      // READ ONLY, DELIBERATELY, and sitting with the other drawing reads
-      // rather than up with the constants -- `drawing` is not loaded until
-      // just above, so reading it earlier is a dead-zone ReferenceError that
-      // takes the whole page down rather than failing quietly.
+      // Sits with the other drawing reads rather than up with the constants
+      // -- `drawing` is not loaded until just above, so reading it earlier is
+      // a dead-zone ReferenceError that takes the whole page down rather than
+      // failing quietly.
       //
-      // The build type is MODEL's to set: pressing a button on the build row
-      // is what chooses it. This page only reads. It is deliberately absent
-      // from projectKeys() below, which is the ONLY set of keys this page may
-      // write -- that omission is what stops a PROJECT save from clobbering a
-      // choice made in the model space.
-      const buildType = format.buildType(drawing?.buildType);
+      // THIS PAGE NOW WRITES IT, and that is a reversal of what stood
+      // here: the build type was MODEL's alone to set, kept out of
+      // projectKeys() so a PROJECT save could not clobber a choice made in
+      // the model space. Movie, 15 Sep: "if they go to the project area we
+      // should allow them to select which method they would like to be
+      // currently using ... when they go through the dog menu this is
+      // basically a way to easily change the project data".
+      //
+      // So the drive-thru and this page are two doors onto ONE value, and
+      // the rule that replaces the old omission is: LAST PRESS WINS.
+      //
+      // LAST PRESS, NOT LAST SAVE -- the distinction is the whole of the
+      // flag below, and it is what the old omission was really protecting.
+      // Adding buildType to projectKeys() outright makes EVERY save on this
+      // page write it, so typing a project name in a tab opened before a
+      // method was chosen in MODEL would quietly put the file back to "not
+      // chosen". The merge does not save you: re-reading the stored file
+      // decides who wins a RACE, not who owns a KEY, and this page would be
+      // claiming the key on every write. So the page writes the method only
+      // once somebody has pressed one here. A check below fails without it.
+      let buildType = format.buildType(drawing?.buildType);
+      let methodPressedHere = false;
       const levelAssemblies = drawing?.levelAssemblies && typeof drawing.levelAssemblies === 'object'
         ? drawing.levelAssemblies : {};
       const levels = format.levels(drawing.levels || DEFAULT_LEVEL_LIST);
@@ -457,6 +486,7 @@
         roofHeelIn: roofHeelOverrideIn,
         activeWallType,
         foundationAttachment,
+        ...(methodPressedHere ? { buildType } : {}),
       });
 
       // This page used to write `drawing` — the whole file as it read it when
@@ -501,10 +531,15 @@
       // succession write in the order they were made. Each pass re-reads, so
       // the second sees the first's revision.
       let saveQueue = Promise.resolve();
+      // Set once the method radios exist: a save re-reads the stored file, so
+      // it is also this page's chance to notice a method chosen elsewhere
+      // since the tab opened and stop showing the stale one.
+      let refreshMethodRow = null;
       const save = note => {
         if (readOnly) return;
         saveQueue = saveQueue.catch(() => {})
           .then(() => writeProjectToStore())
+          .then(() => { refreshMethodRow?.(); })
           .then(() => showStatus(note || 'Saved with the drawing.'))
           .catch(error => {
             console.warn('Unable to save the project information:', error);
@@ -541,6 +576,60 @@
           save('Project information saved.');
         });
       });
+
+      // ── The building method ─────────────────────────────────────────────
+      // ONE CURRENT METHOD, so radios and not tick boxes: the bone builds
+      // "whatever the project says", and a pair of boxes both ticked has no
+      // answer to what that is.
+      //
+      // NULL IS A REAL STATE and gets its own choice. A drawing that has
+      // never been through the build row carries no type, and the office
+      // treats that as the bungalow rule (derivedAttachedOffsetFt) -- said
+      // out loud here rather than left as a blank nobody can return to.
+      //
+      // The names are build-menu.js's, which is the drive-thru's list, so
+      // the two doors cannot come to disagree about what the office builds.
+      // The list here is BUILD_TYPE_BUTTONS rather than the menu families:
+      // a family is a shelf of whole houses (garage, room over) and only the
+      // `type` on an entry reaches the file, which is what this chooses.
+      const methodRow = document.querySelector('#method-row');
+      const methodChoices = [
+        { id: null, label: 'NOT CHOSEN' },
+        ...window.DraftBuildMenu.BUILD_TYPE_BUTTONS.map(b => ({ id: b.id, label: b.label })),
+      ];
+      methodChoices.forEach(choice => {
+        const label = document.createElement('label');
+        label.className = 'method-choice';
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'building-method';
+        input.value = choice.id ?? '';
+        input.checked = buildType === choice.id;
+        input.disabled = readOnly;
+        input.dataset.buildMethod = choice.id ?? 'none';
+        input.addEventListener('change', () => {
+          if (!input.checked) return;
+          buildType = choice.id;
+          methodPressedHere = true;
+          // The garage sill branches on it, so the section, the zones and the
+          // table are all answering a different question now.
+          repaint(); fillZones(); fillTable();
+          save(`Building method: ${choice.label}.`);
+        });
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(choice.label));
+        methodRow.appendChild(label);
+      });
+      refreshMethodRow = () => {
+        const stored = format.buildType(drawing?.buildType);
+        if (stored === buildType) return;
+        buildType = stored;
+        methodRow.querySelectorAll('input').forEach(input => {
+          input.checked = (input.dataset.buildMethod === 'none' ? null
+            : input.dataset.buildMethod) === stored;
+        });
+        repaint(); fillZones(); fillTable();
+      };
 
       // Room counts (board #198): read-only — the MODEL writes them at BONE
       // time from the room-tag program, and the stamps win over anything
