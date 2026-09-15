@@ -422,6 +422,41 @@ test('the file row and the build bar cannot overlap at any width', async ({ page
   expect(geom.saveOwner, 'something is sitting on the SAVE button').toBe('save');
 });
 
+test('no tenant of the top bar is pushed off the sheet', async ({ page }) => {
+  // THE GAP THE OVERLAP CHECK ABOVE LEFT. Two bars that never meet each other
+  // can still both run off the right edge, and a flex row does exactly that
+  // when a control is added to it: it overflows rather than wrapping, so the
+  // last tenant -- the file row -- walks off the sheet a button at a time.
+  //
+  // PRINTSCREEN was the 94px that did it. At 1280 the bar's tenants wanted
+  // 1422px, SAVE AS sat at x=1296 on a 1280 sheet, and three file-row specs
+  // and a delete-verb one died as 180-second "element is outside of the
+  // viewport" timeouts in specs that never mention the strip. Nothing in the
+  // suite said the bar has to FIT; this does.
+  await openShell(page);
+
+  const strip = await page.evaluate(() => {
+    const bar = document.getElementById('strip');
+    return {
+      overflow: bar.scrollWidth - bar.clientWidth,
+      escaped: [...bar.querySelectorAll('a, button, input, select')]
+        .filter(el => el.offsetParent !== null)
+        .map(el => [el.id || el.textContent.trim().slice(0, 12),
+          el.getBoundingClientRect()])
+        .filter(([, box]) => box.width > 0
+          && (box.right > window.innerWidth || box.left < 0))
+        .map(([name, box]) => `${name} at ${Math.round(box.left)}..${Math.round(box.right)}`),
+    };
+  });
+
+  expect(strip.escaped,
+    `off the sheet at ${page.viewportSize().width}px: ${strip.escaped.join(', ')}`)
+    .toEqual([]);
+  // And the row is not merely fitting by a hair: overflow at all means the
+  // next control added repeats this, which is how it happened the first time.
+  expect(strip.overflow, 'the top bar overflows its own width').toBeLessThanOrEqual(0);
+});
+
 test('a tap that lands on a sidebar says which one', async ({ page }) => {
   await openShell(page, '&left=1&right=1');
 

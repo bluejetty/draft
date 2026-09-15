@@ -190,7 +190,7 @@
     font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.05em; text-transform:uppercase;
     display:inline-flex; align-items:center; justify-content:center;
-    min-width:64px; padding:4px 8px; margin-left:6px; flex:0 0 auto;
+    min-width:64px; padding:4px 6px; margin-left:6px; flex:0 0 auto;
     cursor:pointer; border:1px solid var(--edge-panel); border-radius:3px;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     color: var(--ink-primary); }
@@ -261,6 +261,19 @@
      arithmetic and cannot overlap anything. */
   #strip-center { flex:0 0 auto; height:var(--strip-h);
     display:flex; align-items:center; gap:10px; padding:0 8px; }
+  /* WHEN THE BAR RUNS OUT OF SHEET, the things with nothing behind them go
+     first. At 1280 the tenants want 1422px, so the file row -- NEW, OPEN,
+     SAVE, SAVE AS -- was pushed off the right edge and could not be clicked
+     at all. A control that does nothing yet must never cost one that saves
+     the drawing, so the three not-built-yet chips and the LENGTH caption are
+     dropped on a narrow sheet and the instruments close up. */
+  @media (max-width: 1500px) {
+    #strip-center { gap:6px; }
+    #strip-center .chip.dormant { display:none; }
+    #strip-length-box > span { display:none; }
+    #frozen-length { width:72px; }
+    #strip-len { min-width:66px; }
+  }
   .chip { display:inline-flex; align-items:center; gap:3px; padding:2px 4px;
     border:1px solid transparent; border-radius:4px; background:none;
     color: var(--ink-secondary); cursor:pointer; }
