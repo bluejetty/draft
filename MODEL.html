@@ -393,11 +393,11 @@
   #dt-line { font-size:clamp(11px, 2.1vw, 17px); font-weight:600; }
   #dt-note { font-size:clamp(9px, 1.5vw, 13px); opacity:0.7; }
   /* The tile strip: the house types, on the board's own shelf. */
-  #dt-tiles { position:absolute; left:8.6%; top:44.4%; width:81.3%; height:19%;
+  #dt-tiles { position:absolute; left:8%; top:43%; width:84%; height:23%;
     box-sizing:border-box; display:flex; flex-direction:column;
     justify-content:center; gap:4px; pointer-events:none; }
   #dt-tiles > * { pointer-events:auto; }
-  #dt-bone { position:absolute; left:50%; top:71.5%; width:14%;
+  #dt-bone { position:absolute; left:50%; top:72.4%; width:12%;
     transform:translateX(-50%); aspect-ratio:1 / 1; border:none; padding:0;
     border-radius:50%; background:transparent; cursor:pointer;
     pointer-events:auto; }
@@ -425,6 +425,24 @@
     cursor:pointer; color:#1f3f6b; padding:4px 8px; border-radius:2px;
     border:1px solid #1f3f6b; background:#f1e9d2; }
   #build-bar button:hover { background:#fff8e6; }
+  /* A CARD IS THE WHOLE BUTTON. Movie drew one per house type, lettering and
+     all, so the tile wearing one carries no text of its own -- the label
+     stays in the DOM for the reader and the check, clipped out of sight,
+     because a printed name under a printed name reads as a stutter. */
+  #build-bar button.card { padding:0; border:none; background:none;
+    line-height:0; }
+  /* TWO ROWS HAVE TO FIT THE SHELF. A family and its open submenu are both
+     on the board at once, so the card is sized so that pair clears the
+     black strip -- a tile that spills past the frame is an order the
+     drafter cannot reach. */
+  #build-bar button.card img { display:block; height:clamp(26px, 5vw, 46px);
+    width:auto; border:1px solid transparent; border-radius:2px; }
+  #build-bar button.card:hover img { border-color:#8f2a1d; }
+  #build-bar button.card.open img, #build-bar button.card.chosen img {
+    border-color:#8f2a1d; box-shadow:0 0 0 2px rgba(143,42,29,0.45); }
+  #build-bar button.card .said { position:absolute; width:1px; height:1px;
+    margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0);
+    white-space:nowrap; border:0; }
   /* The family whose submenu is open, and the type the drawing carries, both
      read as the page's one attention colour -- the same signal the wall tool
      uses when it is armed. */
@@ -3101,6 +3119,34 @@
   const familyRow = document.getElementById('build-families');
   const entryRow = document.getElementById('build-entries');
   let openFamilyId = null;
+  // THE CARDS ARE KEYED BY MENU ID, not by position in a list. Movie drew
+  // five -- 1 STOREY, 2 STOREY, BILEVEL, MODIFIED BILEVEL, DETACHED GARAGE --
+  // and they hang off whichever tile carries that id, family or entry. A tile
+  // with no card falls back to its lettering, so build-menu.js can grow an
+  // entry before the art for it exists and nothing disappears off the board.
+  const CARD_ART = Object.freeze({
+    bungalow: './assets/house-bungalow.png',
+    twoStorey: './assets/house-twoStorey.png',
+    bilevel: './assets/house-bilevel.png',
+    modifiedBilevel: './assets/house-modifiedBilevel.png',
+    detachedGarage: './assets/house-detachedGarage.png',
+  });
+
+  // The card if there is one, the words if there is not. Either way the
+  // label is the button's text, which is what every check reads and what a
+  // screen reader says.
+  const dressTile = (button, id, label) => {
+    const art = CARD_ART[id];
+    if (!art) { button.textContent = label; return; }
+    const card = document.createElement('img');
+    card.src = art;
+    card.alt = '';
+    const said = document.createElement('span');
+    said.className = 'said';
+    said.textContent = label;
+    button.replaceChildren(card, said);
+    button.classList.add('card');
+  };
   const chooseHandlers = [];
   const buildHandlers = [];
   let chosenEntryId = null;
@@ -3150,7 +3196,7 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.buildFamily = family.id;
-      button.textContent = family.label;
+      dressTile(button, family.id, family.label);
       button.title = family.title;
       button.classList.toggle('open', openFamilyId === family.id);
       // A family with the chosen entry under it wears the mark, so the bar
@@ -3170,7 +3216,7 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.buildEntry = entry.id;
-      button.textContent = entry.label;
+      dressTile(button, entry.id, entry.label);
       button.classList.toggle('chosen', entry.id === chosenEntryId);
       button.onclick = () => pressEntry(entry.id);
       return button;

@@ -210,3 +210,49 @@ test('the bone on the post is the same bone, not a second one', async ({ page })
   expect(seen.log, 'the two bones did not fire one seam with one order')
     .toEqual([seen.chosen, seen.chosen]);
 });
+
+test('every tile is on the shelf and says its own name, card or no card',
+  async ({ page }) => {
+    // THE WIDTH THE SPILL HAPPENED AT. The cards are sized in vw, so a
+    // narrow window shrinks them out of trouble and the check would pass on
+    // a board it never looked at.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openPage(page);
+    await h.openDriveThru(page);
+    // The submenu that spilled: BUNGALOW opens five entries under three
+    // families, which is the widest the shelf ever gets.
+    await page.locator('#dt-tiles [data-build-family="bungalow"]').click();
+    await expect(page.locator('#dt-tiles [data-build-entry]').first())
+      .toBeVisible();
+
+    // THE SHELF, not the whole board: the black strip is where the orders
+    // are printed, and a tile on the post or over Gruff's face is as lost as
+    // one off the frame.
+    const shelf = await page.locator('#dt-tiles').boundingBox();
+    const tiles = page.locator('#dt-tiles button');
+    const count = await tiles.count();
+    expect(count, 'the board went empty').toBeGreaterThan(5);
+
+    for (let i = 0; i < count; i += 1) {
+      const tile = tiles.nth(i);
+      const label = (await tile.textContent() || '').trim();
+
+      // A TILE WEARING ART STILL SAYS ITS NAME. Movie's cards carry their own
+      // lettering, so the words are clipped out of sight -- but a button
+      // whose only name is a picture is a button a screen reader cannot read
+      // and a check cannot find.
+      expect(label, `a tile ${i} with no name`).not.toBe('');
+
+      // ON THE BOARD, not past it. The card was sized at 62px and the open
+      // submenu hung below the frame, where the drafter could see an order
+      // and not press it.
+      const box = await tile.boundingBox();
+      expect(box.y + box.height,
+        `the ${label} tile hangs off the bottom of the shelf`)
+        .toBeLessThanOrEqual(shelf.y + shelf.height + 1);
+      expect(box.y, `the ${label} tile rides up off the shelf`)
+        .toBeGreaterThanOrEqual(shelf.y - 1);
+      expect(box.x, `the ${label} tile hangs off the side of the shelf`)
+        .toBeGreaterThanOrEqual(shelf.x - 1);
+    }
+  });
