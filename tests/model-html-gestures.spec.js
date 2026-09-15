@@ -498,6 +498,18 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       //   - THE T-SQUARE IS A CONSTRAINT ON THE EXISTING draw-wall GESTURE,
       //     not a second way to make a wall. With it down the page draws the
       //     same off-square walls it always did.
+      //   - AND SO IS THE FOOT LIGHT (`strip-scale`), for the same reason and
+      //     with the same reading. It arrived as a third instrument and this
+      //     check is how that was noticed rather than merged past: it went red
+      //     naming a button no parity row mentioned, which is exactly the job
+      //     it says it is for.
+      //
+      //     It constrains two EXISTING gestures -- the draw and the wall drag
+      //     -- to land on the whole foot in DRAFTING, and adds neither a verb
+      //     nor an entity. Unlit, which is how every page that has never been
+      //     touched opens, both gestures behave precisely as they did before
+      //     it existed. So no absence row changes: the old page has no such
+      //     instrument and this one draws nothing the old page could not.
       //   - THE LENGTH BOX COMMITS THROUGH draw-wall's own gesture: it is
       //     dead until a run is in hand, so it cannot start one.
       //   - TOY/DRAFTING, RUFF/ROUGH and NIGHT/DAY set board and skin state.
@@ -572,7 +584,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // is NOT the print path the boneyard's non-printing rule needs,
             // which still belongs to the layout sheet.
             'printscreen',
-            'strip-ruler', 'strip-tsquare',
+            'strip-ruler', 'strip-tsquare', 'strip-scale',
             'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'Continue', 'Stay in TOY',
             'Break here', 'Move this wall',

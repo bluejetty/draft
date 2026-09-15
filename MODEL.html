@@ -1246,12 +1246,13 @@
       <span id="strip-protractor-angle" data-protractor-angle>—</span>
     </span>
 
-    <span class="chip dormant" data-mode-scale title="SCALE — three-sided architect's rule — not built on this page yet">
+    <button type="button" id="strip-scale" class="chip" data-mode-scale
+      title="FOOT — every point and every drag lands on the whole foot">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <path d="M2 11 L8 4 L14 11 Z"></path>
         <path d="M5.5 11 L8 8 L10.5 11" stroke-width="0.9"></path>
       </svg>
-    </span>
+    </button>
     <span class="chip dormant" data-mode-shield title="ERASING SHIELD — not built on this page yet">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <rect x="2.5" y="3.5" width="11" height="9" rx="1"></rect>
@@ -1496,6 +1497,18 @@
   // before its declaration is a throw, not an undefined, and the boot paint
   // would hit it.
   let tsquareOn = false;    // T-SQUARE down: the run in hand is held square
+  // THE FOOT LIGHT. A PAGE SETTING, NOT DRAWING DATA -- a drawing carrying
+  // "the foot light was on" would arrive in someone else's session and start
+  // rounding his walls, so it rides in SKIN_KEY with the board and the theme.
+  //
+  // THE ORDER SAYS IT RIDES WITH THE T-SQUARE, "same store, same restore-on-
+  // load". Measured, the T-SQUARE HAS NO STORE: `tsquareOn` is a plain `let`
+  // that resets to false on every load, and nothing writes it anywhere. So
+  // the instruction cannot be followed literally; what it asks for is
+  // acceptance 3 -- survives reload, off on a page that has never seen it --
+  // and SKIN_KEY is where this page already keeps exactly that kind of
+  // setting. Reported rather than quietly reinterpreted.
+  let footOn = stored.footLight === true;
   let rulerOn = false;      // RULER down: presses measure instead of drawing
   let rulerFrom = null;     // the ruler's first press, in world feet
   let cursorWorld = null;   // where the cursor last was, for the live readouts
@@ -5778,6 +5791,23 @@
   // AND IT ROUNDS AFTER THE SNAP, so a corner the snap legitimately reached is
   // not then nudged off it. A snap that lands on a real corner is the one case
   // where the foot gives way: the corner is where the geometry actually joins.
+  // THE FOOT IS ROUNDED FOR TWO REASONS AND THE SWITCH REACHES ONE OF THEM.
+  // Read this beside `squaring()` -- same shape, same reason. `||` is what
+  // makes the leak impossible in both directions that matter:
+  //
+  //   TOY cannot be UNROUNDED by the light, because the board arm does not
+  //   consult it. §3's gate carries "TOY LEAKS: every board goes through the
+  //   constraint path"; a light that could unround TOY is that same defect
+  //   wearing the other coat, and the order asks for a check on both.
+  //
+  //   DRAFTING is not rounded unless the drafter lit it. Off by default, and
+  //   a drafter who has never touched it never finds his plan on the grid.
+  //
+  // AND IT ROUNDS DISTANCE ONLY. onTheFoot takes the run's LENGTH to the
+  // nearest foot along the direction the hand gave it; it does not square.
+  // The T-SQUARE is a different instrument and this is not a second one.
+  const onTheFoot_if = () => board === 'toy' || footOn;
+
   const onTheFoot = (from, pt) => {
     if (!from) return pt;
     const dx = pt.x - from.x, dz = pt.z - from.z;
@@ -5794,7 +5824,7 @@
     const snapped = fixed ? axisSnap(wanted, fixed) : cornerSnap(wanted, []);
     if (snapped) return snapped;
     const free = { x: wanted.x, y: 0, z: wanted.z };
-    return board === 'toy' ? onTheFoot(drawStart, free) : free;
+    return onTheFoot_if() ? onTheFoot(drawStart, free) : free;
   };
 
   // AN UNFINISHED RUN REFUSES A NEW ONE, AND SAYS SO. Ruled 13 Sep, after I
@@ -6213,6 +6243,7 @@
   const protractorOut = document.getElementById('strip-protractor-angle');
   const rulerChip = strip.querySelector('[data-mode-ruler]');
   const tsquareChip = strip.querySelector('[data-mode-tsquare]');
+  const scaleChip = strip.querySelector('[data-mode-scale]');
   const lengthBox = document.getElementById('frozen-length');
 
   const F = window.DraftFormatters;
@@ -6316,6 +6347,7 @@
     protractorOut.textContent = run ? angleLabel(run.from, run.to) : '—';
     rulerChip.classList.toggle('lit', rulerOn);
     tsquareChip.classList.toggle('lit', tsquareOn);
+    scaleChip.classList.toggle('lit', footOn);
     // THE LENGTH BOX IS LIVE ONLY WHILE A WALL IS IN HAND, because that is
     // the only moment a typed length has an anchor and a direction to be
     // measured along. Enabled at any other time it would take a number and
@@ -6364,6 +6396,20 @@
   });
   tsquareChip.addEventListener('click', () => {
     tsquareOn = !tsquareOn;
+    stripRefresh();
+    paint();
+  });
+
+  // THE SAME CONTROL AS THE T-SQUARE, with one line more: the store. The
+  // order says to follow that neighbour exactly, and this does -- toggle,
+  // refresh, paint -- but the T-SQUARE keeps nothing across a reload and
+  // acceptance 3 requires that this does.
+  scaleChip.addEventListener('click', () => {
+    footOn = !footOn;
+    try {
+      const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
+      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, footLight: footOn }));
+    } catch { /* a browser refusing storage still gets the light, for this tab */ }
     stripRefresh();
     paint();
   });
@@ -7359,7 +7405,31 @@
           // says why. DRAFTING keeps wallSnapDelta exactly as it was.
           const toy = board === 'toy' ? toyWallDelta(md, dx, dz) : null;
           if (toy) { dx = toy.dx; dz = toy.dz; }
-          else {
+          else if (footOn) {
+            // THE FOOT LIGHT'S DRAG, and it is NOT the TOY path with a
+            // different name. toyWallDelta discards the along-run component,
+            // welds the group and refuses a move that would leave a
+            // neighbour on an angle -- all correct for TOY and all wrong
+            // here, because acceptance 6 says DRAFTING's other freedoms are
+            // untouched. The light rounds DISTANCE. That is the whole of it.
+            //
+            // quantiseFeet is toy-constraints.js's own `round(d/step)*step`,
+            // reached rather than copied: the order says if you find yourself
+            // writing rounding code you are in the wrong function.
+            //
+            // PER AXIS, because a free drag has two components and the wall
+            // must land a whole foot in each. Quantising the MAGNITUDE and
+            // keeping the bearing would move an axis-aligned wall a whole
+            // foot -- the same answer -- but leave a diagonal drag's ends on
+            // no foot at all, which is the opposite of what the light says.
+            //
+            // It replaces wallSnapDelta rather than running after it, the way
+            // the TOY arm replaces it: with the light lit the foot IS the
+            // snap, and rounding a corner snap afterwards would pull the wall
+            // back off the corner it had just caught.
+            const Q = window.DraftToyConstraints;
+            if (Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
+          } else {
             const snapped = wallSnapDelta(md.before, dx, dz);
             if (snapped) { dx = snapped.dx; dz = snapped.dz; }
           }
