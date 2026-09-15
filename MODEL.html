@@ -353,13 +353,19 @@
   /* THE MIDDLE PAIR: the sign and the bone, the only two presses the sign
      covers. DELETE travels with them because it is a verb, not a place. */
   #dt-bar { flex:0 0 auto; display:flex; align-items:center; gap:8px; }
-  #dt-open { font-family: var(--font-ui); font-size:12px; font-weight:700;
-    letter-spacing:0.08em; text-transform:uppercase; cursor:pointer;
-    color: var(--ink-primary); padding:6px 14px; border-radius:6px;
-    border:1px solid var(--edge-panel);
-    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none); }
-  #dt-open:hover, #dt-open[aria-expanded="true"] {
-    color: var(--accent); border-color: var(--accent); }
+  /* MOVIE'S HOUSE BUTTON, two states in two files. The lit one is stacked
+     on the dark one and revealed rather than swapped in, so the press has
+     no flicker while the browser fetches the second image -- both are
+     already painted by the time a finger arrives. */
+  #dt-open { position:relative; display:block; padding:0; border:none;
+    background:none; line-height:0; cursor:pointer; }
+  #dt-open img { display:block; height:var(--foot-press-h, 34px); width:auto; }
+  #dt-open .lit { position:absolute; left:0; top:0; opacity:0;
+    transition:opacity 90ms linear; pointer-events:none; }
+  #dt-open[data-lit] .lit { opacity:1; }
+  #dt-open .said {
+    position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+    overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
 
   /* THE DRIVE-THRU SIGN. It rises from the foot and covers the two presses
      in the middle of the strip -- z-index 7, the page's modal layer, over
@@ -945,7 +951,10 @@
   <div id="dt-bar" data-drivethru-bar>
     <button id="dt-open" type="button" data-drivethru-open
       aria-expanded="false" aria-controls="drivethru"
-      title="Gruff's drive-thru: pick a house type">DRIVE-THRU MENU</button>
+      title="Gruff's drive-thru: pick a house type"><img
+        src="./assets/btn-drivethru-off.png" alt="" /><img class="lit"
+        src="./assets/btn-drivethru-on.png" alt=""
+        /><span class="said">DRIVE-THRU MENU</span></button>
     <button id="bone" type="button" data-bone-press title="Build the house you picked">BONE</button>
     <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
          for one of the types. It rides with the pair rather than with the
@@ -3274,7 +3283,24 @@
     // The board covers the pair; nothing under it should be tabbed into.
     signOpen.disabled = show;
   };
-  signOpen.addEventListener('click', () => setSign(signShut()));
+  // THE BUTTON LIGHTS BEFORE THE SIGN RISES (Movie, 15 Sep): the house
+  // button glows, then the board comes up. One constant, because he said
+  // he would want to change the length.
+  const SIGN_LIGHT_MS = 2000;
+  let lighting = 0;
+  signOpen.addEventListener('click', () => {
+    // A SECOND PRESS MID-GLOW IS NOT A SECOND ORDER. Without this the
+    // impatient double-press queues two rises, and the second one lands on
+    // a sign that is already up -- which reads as the board flickering shut.
+    if (lighting) return;
+    if (!signShut()) { setSign(false); return; }
+    signOpen.toggleAttribute('data-lit', true);
+    lighting = window.setTimeout(() => {
+      lighting = 0;
+      signOpen.toggleAttribute('data-lit', false);
+      setSign(true);
+    }, SIGN_LIGHT_MS);
+  });
   document.getElementById('dt-close').addEventListener('click', () => {
     setSign(false);
     signOpen.focus();

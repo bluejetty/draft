@@ -256,3 +256,28 @@ test('every tile is on the shelf and says its own name, card or no card',
         .toBeGreaterThanOrEqual(shelf.x - 1);
     }
   });
+
+test('the house button lights first, and the sign follows it up',
+  async ({ page }) => {
+    await openPage(page);
+    const press = page.locator('#dt-open');
+    const sign = page.locator('#drivethru');
+
+    // MOVIE, 15 Sep: "change the button to light up for about 2 seconds
+    // before the drivethru menu appears". The light is the acknowledgement
+    // -- a press that does nothing visible for two seconds reads as a dead
+    // button, and the drafter presses it again.
+    await press.click();
+    await expect(press).toHaveAttribute('data-lit', '');
+    await expect(sign, 'the sign came up without the button lighting first')
+      .toHaveAttribute('data-shut', '');
+
+    // A SECOND PRESS MID-GLOW IS NOT A SECOND ORDER.
+    await press.click();
+    await expect(press).toHaveAttribute('data-lit', '');
+
+    await expect(sign).not.toHaveAttribute('data-shut', '', { timeout: 5000 });
+    // The light goes out once the board is up; a button still glowing under
+    // an open sign is a button that looks like it is still working.
+    await expect(press).not.toHaveAttribute('data-lit', '');
+  });
