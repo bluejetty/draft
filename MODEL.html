@@ -204,6 +204,11 @@
      were drawn in, and the paper around them does not. */
   #presentation { display:none; }
   @media print {
+    /* THE APP IS A FIXED PANE -- html and body are height:100% with overflow
+       hidden so the drawing never scrolls. On paper that clips the set to
+       the first sheet: pages two and three exist and simply never come out
+       of the printer. Paper scrolls, so the pane rules are lifted here. */
+    html, body { height:auto; overflow:visible; }
     body > *:not(#presentation) { display:none !important; }
     #presentation { display:block; position:static; background:#fff; color:#000; }
     .pres-page { page-break-after:always; break-after:page;

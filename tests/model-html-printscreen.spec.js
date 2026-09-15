@@ -118,6 +118,22 @@ test('three pages: this view, the whole plan, and the views rail', async ({ page
   expect(tiles, 'the views page did not carry the rail seats').toBe(inked);
 });
 
+// THREE PAGES IN THE DOM IS NOT THREE SHEETS OF PAPER. This is the only
+// check here that asks the printer rather than the page: the app pane is
+// html/body height:100% with overflow hidden, which clipped the whole set to
+// sheet one while every DOM check above stayed green. Chromium's own
+// paginator counts them.
+test('three sheets come out, not one clipped one', async ({ page }) => {
+  await openHouse(page);
+  await settleRail(page);
+  await page.locator('#printscreen').click();
+  await page.emulateMedia({ media: 'print' });
+
+  const pdf = await page.pdf({ printBackground: true });
+  const count = (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+  expect(count, 'the presentation printed as one clipped sheet').toBe(3);
+});
+
 // THE DISCLAIMER IS CHECKED FOR ITS POSITION, not just its presence. Movie
 // asked for it ABOVE the logo: below it, the eye reaches the brand first and
 // the page reads as something the office is standing behind.
