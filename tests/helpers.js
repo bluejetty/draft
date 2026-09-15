@@ -232,7 +232,19 @@ async function waitForSaved(page) {
   await page.evaluate(() => new Promise(resolve =>
     requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await page.waitForFunction(() => document.body.dataset.saveDirty === '0', undefined, { timeout: 5000 });
-  await expect(page.locator('[data-model-status]')).toContainText('SAVED', { timeout: 5000 });
+  // EITHER PAGE'S STATUS. MODEL.dc.html has a separate [data-model-status]
+  // element; MODEL.html carries the status ON its SAVE button
+  // ([data-save-status]) since the chrome shell put the file row together. A
+  // helper that only knew the first read as "the save never landed" on the
+  // second, which is a false report about the page rather than a missing
+  // element -- and it costs a five-second timeout to find that out.
+  //
+  // Not `.or()` on one locator: each page has exactly one of these, so asking
+  // which is present first keeps the failure message pointing at the element
+  // that should have said SAVED rather than at a union that matched nothing.
+  const dc = page.locator('[data-model-status]');
+  const status = (await dc.count()) ? dc : page.locator('[data-save-status]');
+  await expect(status).toContainText('SAVED', { timeout: 5000 });
 }
 
 async function savedDrawing(page) {
