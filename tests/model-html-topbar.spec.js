@@ -28,6 +28,10 @@ async function openBar(page) {
   }, { bucket: BUCKET, saved: REPRO });
   await page.goto('/MODEL.html?mode=night');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  // THE TYPES MOVED ONTO THE SIGN (Movie, 15 Sep). Same chips, same data,
+  // same seam -- they are tiles on the drive-thru board now instead of a row
+  // on the foot, so the order starts by pulling up to the window.
+  await h.openDriveThru(page);
 }
 
 const wallCount = page => page.evaluate(() => Number(
@@ -76,7 +80,17 @@ test('THE SEAM: choosing a house draws nothing at all', async ({ page }) => {
     .toBe(before);
 
   // Pressing BONE draws nothing either. "The bone builds it" is the old
-  // page's phrase, and here the bone only says so.
+  // page's phrase, and here the bone only says so. BOTH BONES: the one on
+  // the sign's post is the easy place to quietly wire a generator in, which
+  // is why it is asserted rather than assumed.
+  await page.locator('#dt-bone').click();
+  await page.waitForTimeout(300);
+  expect(await wallCount(page), 'the sign\'s BONE drew geometry')
+    .toBe(before);
+
+  // And the one on the foot, which is only reachable with the sign down --
+  // the board covers it, deliberately.
+  await page.locator('[data-drivethru-close]').click();
   await page.locator('#bone').click();
   await page.waitForTimeout(300);
   expect(await wallCount(page), 'BONE drew geometry — the generator is wired in')

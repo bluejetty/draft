@@ -63,8 +63,11 @@ const hiddenPct = page => page.evaluate(() => {
   // EVERY BAND, TOP AND BOTTOM. The page row and the house strip are chrome
   // over the sheet exactly as the top row is, and leaving them out would
   // report a shell cheaper than the one the drafter has.
-  const boxes = ['left-tab', 'left-rail', 'right-tab', 'right-rail', 'top-row',
-    'strip', 'page-row', 'house-strip']
+  // THE TOP ROW IS GONE and its two tenants are inside the strip now (Movie,
+  // 15 Sep: everything into the two dark bars), so the strip's box is the
+  // whole of the top band. The page row is likewise inside the house strip.
+  const boxes = ['left-tab', 'left-rail', 'right-tab', 'right-rail',
+    'strip', 'house-strip', 'readout']
     .map(id => document.getElementById(id))
     .filter(el => el && !el.hidden)
     .map(el => el.getBoundingClientRect())
@@ -249,6 +252,89 @@ test('each side remembers its own state across a reload', async ({ page }) => {
     .toHaveAttribute('data-collapsed', '');
 });
 
+// THE TWO DARK BARS OWN THE CONTROLS (Movie, 15 Sep). The order he gave is
+// read back as tenancy, not as pixels: who is inside which bar, and in what
+// order along it. A coordinate check would pass on two bars stacked a pixel
+// apart, which is the arrangement that put the build bar on SAVE.
+test('every control is a tenant of a bar, and the counters sit above the foot',
+  async ({ page }) => {
+    await openShell(page);
+
+    const where = await page.evaluate(() => {
+      const owner = id => document.getElementById(id)?.parentElement?.id || null;
+      const strip = [...document.getElementById('strip').children]
+        .map(el => el.id).filter(Boolean);
+      const foot = [...document.getElementById('house-strip').children]
+        .map(el => el.id).filter(Boolean);
+      const box = id => document.getElementById(id).getBoundingClientRect();
+      return {
+        settings: owner('settings-corner'),
+        mode: owner('mode-corner'),
+        file: owner('file-row'),
+        page: owner('page-row'),
+        stripOrder: strip,
+        footOrder: foot,
+        topRow: !!document.getElementById('top-row'),
+        readout: box('readout'),
+        housetop: box('house-strip').top,
+        half: window.innerHeight / 2,
+        readoutText: document.getElementById('readout').textContent,
+      };
+    });
+
+    // THE TOP BAR, left to right as Movie listed it: SETTINGS / STANDARDS /
+    // UNITS come BEFORE the board switch, which is why the settings corner
+    // is first and not merely present.
+    expect(where.topRow, 'the old top row is gone, not hidden').toBe(false);
+    expect(where.settings).toBe('strip');
+    expect(where.mode).toBe('strip');
+    expect(where.file).toBe('strip');
+    expect(where.stripOrder.indexOf('settings-corner')).toBe(0);
+    expect(where.stripOrder.indexOf('mode-corner'))
+      .toBeGreaterThan(where.stripOrder.indexOf('settings-corner'));
+    expect(where.stripOrder[where.stripOrder.length - 1]).toBe('file-row');
+
+    // THE FOOT BAR: the page row leads it, the middle pair sits between the
+    // two ends, and the sheets close it (Movie, 15 Sep). The build bar is no
+    // longer a tenant of the foot at all -- it went up onto Gruff's board,
+    // which is the sign, not the bar, and lives outside both.
+    expect(where.page).toBe('house-strip');
+    expect(where.footOrder[0]).toBe('page-row');
+    expect(where.footOrder.indexOf('dt-bar'))
+      .toBeGreaterThan(where.footOrder.indexOf('page-row'));
+    expect(where.footOrder[where.footOrder.length - 1]).toBe('sheet-row');
+    expect(where.footOrder, 'the house menu is on the sign now, not in the bar')
+      .not.toContain('build-bar');
+
+    // THE COUNTERS CAME BACK DOWN -- "to the bottom of the grid area just
+    // above the darker area" -- and the view reads there with them, which is
+    // the one thing that was missing from the block.
+    expect(where.readout.top, 'the counters are in the lower half of the sheet')
+      .toBeGreaterThan(where.half);
+    expect(where.readout.bottom, 'and clear of the foot bar')
+      .toBeLessThanOrEqual(where.housetop);
+    expect(where.readoutText).toMatch(/view\s+\S+/);
+    expect(where.readoutText).toMatch(/walls\s+\d+\/\d+/);
+  });
+
+test('UNITS names the unit in force and switches the drawing over', async ({ page }) => {
+  await openShell(page);
+  const units = page.locator('#units-toggle');
+  await expect(units).toHaveText('UNITS: IMPERIAL');
+  await units.click();
+  await expect(units).toHaveText('UNITS: METRIC');
+  // The label is a statement about the file, so the FILE has to agree with
+  // it -- a button that renames itself and leaves `units` alone is the kind
+  // of green-and-hollow control this page has paid for before. Read back out
+  // of the store, not out of a test hook the page does not have.
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  expect((await h.savedDrawing(page)).units).toBe('metric');
+
+  await units.click();
+  await expect(units).toHaveText('UNITS: IMPERIAL');
+});
+
 test('NO PIECE OF CHROME COVERS ANY OTHER, shut or open', async ({ page }) => {
   // THE GUARD THIS SHELL KEPT NEEDING. Four collisions were shipped and caught
   // one at a time, each as a confusing failure somewhere else:
@@ -264,17 +350,28 @@ test('NO PIECE OF CHROME COVERS ANY OTHER, shut or open', async ({ page }) => {
   // pair, so the next one fails here, named, instead of surfacing three
   // specs away as a timeout.
   await openShell(page);
-  const ids = ['top-row', 'left-tab', 'left-rail', 'right-tab', 'right-rail',
-    'readout', 'hint', 'elsewhere', 'strip', 'page-row', 'house-strip'];
+  //
+  // THE CONTROLS MOVED INSIDE THE TWO BARS (Movie, 15 Sep), which is the
+  // arrangement this check has been arguing for all along: a flex child
+  // cannot leave its parent, so the pairs that kept colliding no longer
+  // exist as pairs. The bars themselves and the two loose panels are still
+  // checked -- and A CONTAINER IS NOT A COLLISION, so a pair where one
+  // element contains the other is skipped rather than reported. Without
+  // that, `strip overlaps file-row` would be a permanent red that says
+  // nothing, and a real collision would be read as more of the same.
+  const ids = ['left-tab', 'left-rail', 'right-tab', 'right-rail',
+    'readout', 'hint', 'elsewhere', 'strip', 'file-row', 'mode-corner',
+    'settings-corner', 'page-row', 'house-strip'];
   const clashesIn = () => page.evaluate(list => {
     const vis = list.map(id => document.getElementById(id))
       .filter(el => el && !el.hidden && getComputedStyle(el).display !== 'none')
-      .map(el => ({ id: el.id, r: el.getBoundingClientRect() }))
+      .map(el => ({ id: el.id, el, r: el.getBoundingClientRect() }))
       .filter(o => o.r.width > 0 && o.r.height > 0);
     const out = [];
     for (let i = 0; i < vis.length; i += 1) {
       for (let j = i + 1; j < vis.length; j += 1) {
         const a = vis[i].r; const b = vis[j].r;
+        if (vis[i].el.contains(vis[j].el) || vis[j].el.contains(vis[i].el)) continue;
         if (a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom) {
           out.push(`${vis[i].id} overlaps ${vis[j].id}`);
         }
@@ -323,6 +420,41 @@ test('the file row and the build bar cannot overlap at any width', async ({ page
   // every measurement after it described a tree that was not the page's.
   expect(geom.nested, '#file-row is not closed — it contains the build bar').toBe(false);
   expect(geom.saveOwner, 'something is sitting on the SAVE button').toBe('save');
+});
+
+test('no tenant of the top bar is pushed off the sheet', async ({ page }) => {
+  // THE GAP THE OVERLAP CHECK ABOVE LEFT. Two bars that never meet each other
+  // can still both run off the right edge, and a flex row does exactly that
+  // when a control is added to it: it overflows rather than wrapping, so the
+  // last tenant -- the file row -- walks off the sheet a button at a time.
+  //
+  // PRINTSCREEN was the 94px that did it. At 1280 the bar's tenants wanted
+  // 1422px, SAVE AS sat at x=1296 on a 1280 sheet, and three file-row specs
+  // and a delete-verb one died as 180-second "element is outside of the
+  // viewport" timeouts in specs that never mention the strip. Nothing in the
+  // suite said the bar has to FIT; this does.
+  await openShell(page);
+
+  const strip = await page.evaluate(() => {
+    const bar = document.getElementById('strip');
+    return {
+      overflow: bar.scrollWidth - bar.clientWidth,
+      escaped: [...bar.querySelectorAll('a, button, input, select')]
+        .filter(el => el.offsetParent !== null)
+        .map(el => [el.id || el.textContent.trim().slice(0, 12),
+          el.getBoundingClientRect()])
+        .filter(([, box]) => box.width > 0
+          && (box.right > window.innerWidth || box.left < 0))
+        .map(([name, box]) => `${name} at ${Math.round(box.left)}..${Math.round(box.right)}`),
+    };
+  });
+
+  expect(strip.escaped,
+    `off the sheet at ${page.viewportSize().width}px: ${strip.escaped.join(', ')}`)
+    .toEqual([]);
+  // And the row is not merely fitting by a hair: overflow at all means the
+  // next control added repeats this, which is how it happened the first time.
+  expect(strip.overflow, 'the top bar overflows its own width').toBeLessThanOrEqual(0);
 });
 
 test('a tap that lands on a sidebar says which one', async ({ page }) => {

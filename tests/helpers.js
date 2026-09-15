@@ -165,6 +165,38 @@ async function worldToClient(page, x, z) {
   return { x: box.x + box.width / 2 + x * ppf, y: box.y + box.height / 2 + z * ppf };
 }
 
+// WHERE THE 2D PLAN PUTS A WORLD POINT, asked of the page instead of guessed.
+//
+// Every spec that presses on MODEL.html's #plan used to rebuild the mapping
+// itself: read `scale N px/ft` out of the readout, then add x*scale to the
+// middle of the canvas box. The scale half is fine. The middle half is a
+// GUESS -- that the view is centred on world 0,0 -- and it is only true for a
+// fixture symmetric about the origin. fit() centres on the MIDPOINT OF THE
+// DRAWN BOUNDS, so a plan running z from -8.37 to 8 sits at z=-0.185 and every
+// press aimed by the guess lands 0.185*scale pixels off: ~7px at the usual
+// zoom. Those presses hit anyway for as long as the hit tolerance covered the
+// error and the canvas under them was bare -- and stopped the day the
+// instrument strip grew 10px and took the band they were landing in.
+//
+// The page now publishes the camera on the canvas as `data-view` ("cx cz
+// scale"), written by paint(). This reads it. There is no arithmetic here
+// that MODEL.html does not already own -- which is the point: a second copy
+// is how the two drift, and the drift is exactly what cost #401 a shard.
+async function planFrame(page) {
+  const box = await page.locator('#plan').boundingBox();
+  const view = await page.locator('#plan').getAttribute('data-view');
+  // No attribute means paint() has not run, not "assume the origin". Say so:
+  // the silent fallback is the bug class this helper exists to end.
+  if (!view) throw new Error('#plan carries no data-view — has the page painted?');
+  const [cx, cz, scale] = view.trim().split(/\s+/).map(Number);
+  if (![cx, cz, scale].every(Number.isFinite) || !(scale > 0)) {
+    throw new Error(`#plan data-view is not three numbers: ${JSON.stringify(view)}`);
+  }
+  const at = (x, z) => [box.x + box.width / 2 + (x - cx) * scale,
+    box.y + box.height / 2 + (z - cz) * scale];
+  return { at, cx, cz, scale, box };
+}
+
 async function moveTo(page, x, z) {
   const p = await worldToClient(page, x, z);
   await page.mouse.move(p.x, p.y);
@@ -343,6 +375,23 @@ async function pickBuild(page, type, { tap = false } = {}) {
   else await entry.click();
 }
 
+// MODEL.html's HOUSE TYPES MOVED ONTO GRUFF'S DRIVE-THRU SIGN (Movie, 15
+// Sep): the foot keeps two presses, DRIVE-THRU MENU and BONE, and the family
+// and entry chips are tiles on the board the sign raises. So a spec that
+// wants a chip has to order at the window first.
+//
+// IDEMPOTENT, and it WAITS for the board rather than sleeping: the sign
+// slides, and a click sent mid-rise lands on nothing. Every spec goes
+// through here for the reason pickBuild exists — when the menu moves again,
+// one function moves.
+async function openDriveThru(page) {
+  const sign = page.locator('#drivethru');
+  if (await sign.getAttribute('data-shut') === null) return;
+  await page.locator('[data-drivethru-open]').click();
+  await expect(sign).not.toHaveAttribute('data-shut', '');
+  await expect(page.locator('#build-families button').first()).toBeVisible();
+}
+
 // ── MODEL.html: the level and the view, now that the two SELECTs are gone ──
 //
 // §7 deleted the chrome bar, and with it `#level-pick` and `#view-pick`. The
@@ -474,10 +523,12 @@ module.exports = {
   waitForModelReady,
   suppressEntryCoach,
   worldToClient,
+  planFrame,
   moveTo,
   clickWorld,
   selectTool,
   pickBuild,
+  openDriveThru,
   BUILD_FAMILY,
   activeToolLabels,
   waitForSaved,

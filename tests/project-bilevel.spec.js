@@ -38,6 +38,19 @@ async function openProject(page) {
     null, { timeout: 10000 });
 }
 
+// READ THE CANVAS, NOT THE SCREEN. These comparisons used element
+// screenshots, which are taken of the page as it is scrolled -- so a canvas
+// landing on a half pixel comes back subtly different from the same canvas
+// landing on a whole one, and "did band 2 repaint?" quietly became "did the
+// page scroll?". Adding a card ABOVE these bands was enough to fail two of
+// them without a pixel of the drawing changing.
+//
+// toDataURL reads the canvas's own buffer. It cannot see the page at all, so
+// nothing above or beside the drawing can move the answer, and the tests go
+// back to asking what they were written to ask.
+const shootCanvas = (page, selector) =>
+  page.evaluate(sel => document.querySelector(sel).toDataURL(), selector);
+
 // BAND 2 IS WIRED, AND IT IS NOT BAND 1 REPAINTED.
 // The cheap version of this test asserts the canvas is non-blank, which a
 // second copy of the bungalow would also pass — and a second copy is exactly
@@ -48,7 +61,7 @@ test('band 2 is wired and draws without error', async ({ page }) => {
   page.on('pageerror', e => errors.push(String(e)));
   await openProject(page);
   await expect(page.locator('#bilevel-canvas')).toBeVisible();
-  const split = (await page.locator('#bilevel-canvas').screenshot()).toString('base64');
+  const split = await shootCanvas(page, '#bilevel-canvas');
   expect(errors).toEqual([]);
   expect(split.length).toBeGreaterThan(2000);
 });
@@ -66,8 +79,7 @@ test('band 2 is wired and draws without error', async ({ page }) => {
 // still leaves two unequal images. It passed the mutation and proved nothing.
 test('band 2 ignores a foundation edit in band 1', async ({ page }) => {
   await openProject(page);
-  const shoot = async () =>
-    (await page.locator('#bilevel-canvas').screenshot()).toString('base64');
+  const shoot = () => shootCanvas(page, '#bilevel-canvas');
   const before = await shoot();
 
   const fdn = page.locator('#sched-house').getByLabel('FDN WALL HT');
@@ -76,9 +88,7 @@ test('band 2 ignores a foundation edit in band 1', async ({ page }) => {
   await fdn.press('Enter');
 
   // Band 1 moved -- otherwise this asserts nothing about band 2.
-  await expect.poll(async () =>
-    (await page.locator('#detail-canvas').screenshot()).toString('base64')
-  ).not.toEqual(before);
+  await expect.poll(() => shootCanvas(page, '#detail-canvas')).not.toEqual(before);
   // Band 2 did not. Its pour is the office default for the type, 5'-0".
   expect(await shoot()).toEqual(before);
 });
@@ -94,8 +104,7 @@ test('band 2 ignores a foundation edit in band 1', async ({ page }) => {
 // only checked band 2 was non-blank would pass on that forever.
 test('a pitch change in band 1 moves band 2 too', async ({ page }) => {
   await openProject(page);
-  const shoot = async () =>
-    (await page.locator('#bilevel-canvas').screenshot()).toString('base64');
+  const shoot = () => shootCanvas(page, '#bilevel-canvas');
 
   const before = await shoot();
   // Scoped to the house schedule: PITCH :12 also labels a cell in every row

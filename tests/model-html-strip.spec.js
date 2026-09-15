@@ -134,9 +134,19 @@ test.describe('MODEL.html instrument strip', () => {
       // instrument, so it sits in the page row along the foot with the other
       // five destinations; the check follows it rather than being dropped.
       await expect(page.locator('#page-row [data-page="project"]')).toHaveText('PROJECT');
-      await expect(page.locator('#strip [data-page]'),
-        'a destination left behind in the strip is a second way to the same page')
-        .toHaveCount(0);
+      // NO DESTINATION IS REACHABLE FROM TWO BARS, which is what this check
+      // was really about. SETTINGS and STANDARDS are in the strip on purpose
+      // now (Movie, 15 Sep) and the page row does not hold them, so the
+      // claim is stated as the overlap rather than as a count: one page, one
+      // way to it, wherever it lives.
+      const twice = await page.evaluate(() => {
+        const names = sel => [...document.querySelectorAll(sel)]
+          .map(el => el.dataset.page);
+        const foot = new Set(names('#house-strip [data-page]'));
+        return names('#strip [data-page]').filter(p => foot.has(p));
+      });
+      expect(twice, 'a page reachable from both bars is two ways to one place')
+        .toEqual([]);
 
       // THE FOUR THAT WORK. Asserted as a set, so an instrument quietly
       // demoted to dormant during a refactor fails here rather than being
