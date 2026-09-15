@@ -84,13 +84,14 @@
      corner is actually being dragged -- equal specificity, later rule. */
   #plan.over-corner, #plan.over-wall { cursor:move; }
 
-  /* THE COUNTERS READ AT THE TOP NOW (§7b). They used to sit above the strip
-     at the foot of the sheet; the drive-thru sign rises from there and would
-     cover the one panel a drafter reads while drawing. Third band down --
-     instruments, then the mode corner and the file row, then this -- so the
-     numbers never share a line with a control that can grow with a level
-     name. */
-  #readout { position:fixed; left:40px; top:var(--readout-top); z-index:5;
+  /* THE COUNTERS READ AT THE FOOT OF THE SHEET (Movie, 15 Sep). They were
+     moved to the head when the controls were scattered across the sheet and
+     the foot belonged to the drive-thru sign; now every control lives in one
+     of the two dark bars, so the band the numbers want is the one just above
+     the bottom bar -- out of the drawing's centre, and beside nothing that
+     grows with a level name. The view counter reads in the same panel: the
+     level and the view are counts like the rest, not a separate instrument. */
+  #readout { position:fixed; left:40px; bottom:var(--readout-bottom); z-index:5;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px;
     padding:8px 11px; white-space:pre; pointer-events:none;
@@ -100,7 +101,7 @@
     font-variant-numeric:tabular-nums; letter-spacing:0.01em; }
   #readout b { color: var(--accent); font-weight:600; }
 
-  #hint { position:fixed; right:12px; bottom:calc(var(--house-h) + 12px); z-index:5; color: var(--ink-quiet);
+  #hint { position:fixed; right:12px; bottom:var(--readout-bottom); z-index:5; color: var(--ink-quiet);
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; pointer-events:none; }
 
@@ -129,28 +130,29 @@
      to 46, and the pairwise chrome check went red on `right-rail overlaps
      hint` -- its sixth catch, and the second one this file has produced from
      one distance being written down twice. */
-  :root { --strip-h: 34px;
+  :root { --strip-h: 44px;
     /* THE HOUSE STRIP, along the foot: BUNGALOW / BILEVEL / DETACHED GARAGE /
        BONE and the one DELETE. Named for the same reason --strip-h is: the
        hint, the page row and both sidebars all stop above it, and that
        distance was written out by hand three times the last time this file
        had two bands. */
     --house-h: 40px;
-    /* THE BAND THE SIDEBARS MUST STAY OUT OF at the foot: the house strip and
-       the page row above it, which is one row of buttons plus its gaps. */
-    --bottom-band: calc(var(--house-h) + 52px);
-    /* THE TOP BANDS, top down: the instrument strip, then the mode corner and
-       the file row, then the readout. Each derived from the one above it so a
-       taller strip moves the lot rather than leaving two of them behind --
-       the fault --strip-h was introduced to end. */
-    --top-row-top: calc(var(--strip-h) + 8px);
-    --readout-top: calc(var(--strip-h) + 48px);
-    --rail-top: calc(var(--strip-h) + 108px); }
+    /* THE BAND THE SIDEBARS MUST STAY OUT OF at the foot: the house strip,
+       which now carries the page row inside it, and the counters panel that
+       sits just above it. */
+    --readout-bottom: calc(var(--house-h) + 12px);
+    --bottom-band: calc(var(--house-h) + 72px);
+    /* THE TOP BAND IS ONE BAND NOW. Every control that was loose on the sheet
+       -- mode corner, file row, settings -- is a tenant of the strip, so the
+       only things still derived from its height are the two file notes and
+       the sidebars below them. */
+    --note-top: calc(var(--strip-h) + 8px);
+    --rail-top: calc(var(--strip-h) + 80px); }
   /* AT THE TOP OF THE SHEET NOW, not the foot (§7b). Movie: the drive-thru
      sign rises from the bottom and covers the house row, so nothing the
      drafter reads WHILE DRAWING may live down there. */
   #strip { position:fixed; left:0; right:0; top:0; z-index:6; height:var(--strip-h);
-    display:flex; align-items:center; gap:10px; padding:0 12px;
+    display:flex; align-items:center; gap:8px; padding:0 12px;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border-bottom:1px solid var(--edge-panel);
     font-family: var(--font-ui); font-size:12px; font-weight:600;
@@ -158,9 +160,30 @@
     user-select:none; }
   #strip a, #strip button { font:inherit; letter-spacing:inherit; }
   #strip .grow { flex:1; }
+  /* THE MESSAGE YIELDS. It shares the left end with the settings stack and
+     the mode corner now, and a message long enough to push either of them off
+     the bar would cost a control to report a sentence. */
   #strip-message { font-size:11px; text-transform:uppercase;
     color: var(--ink-quiet); white-space:nowrap; overflow:hidden;
-    text-overflow:ellipsis; max-width:24vw; }
+    text-overflow:ellipsis; max-width:16vw; flex:0 1 auto; min-width:0; }
+
+  /* THE SETTINGS STACK, first thing on the bar (Movie, 15 Sep): SETTINGS and
+     STANDARDS over each other and the unit toggle beside them -- MODEL.dc.html's
+     own corner (:430-443), including its ruling that units are ONE button
+     naming the unit in force, not two that fight for the same thumb. */
+  #settings-corner { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+  #settings-stack { display:flex; flex-direction:column; gap:1px; }
+  #settings-corner a, #settings-corner button {
+    font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.05em; text-transform:uppercase; text-decoration:none;
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:64px; padding:2px 6px; cursor:pointer;
+    border:1px solid var(--edge-panel); border-radius:3px;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-primary); }
+  #settings-corner a:hover, #settings-corner button:hover {
+    border-color: var(--accent); color: var(--accent); }
+  #units-toggle { padding:4px 8px; }
 
   /* THE CLUSTER IS ABSOLUTELY CENTRED, not laid out between the two ends.
      Flexed between them it would slide left and right as the message text
@@ -194,14 +217,14 @@
      to the corner the old LEVEL / VIEW / DRAW WALL / SAVE bar vacated. The
      buttons and what they do are untouched: this is a position, not a
      re-scope. */
-  #mode-corner { display:flex; align-items:center; gap:6px; flex:0 0 auto;
+  #mode-corner { display:flex; align-items:center; gap:5px; flex:0 0 auto;
     font-family: var(--font-ui); font-size:12px; font-weight:600;
     letter-spacing:0.04em; }
   #mode-corner .set { display:flex; align-items:center;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:4px; overflow:hidden; }
   #mode-corner button { font:inherit; letter-spacing:inherit;
-    padding:4px 9px; font-size:11px;
+    padding:4px 7px; font-size:11px;
     text-transform:uppercase; cursor:pointer; border:none; background:none;
     color: var(--ink-quiet); }
   #mode-corner button[aria-pressed="true"] { color: var(--accent-ink);
@@ -214,11 +237,11 @@
   #file-row { flex:0 0 auto; display:flex; align-items:center; gap:6px; }
   #file-row[hidden] { display:none; }
   #file-row button, #file-row select {
-    font-family: var(--font-ui); font-size:12px; font-weight:600;
+    font-family: var(--font-ui); font-size:11px; font-weight:600;
     letter-spacing:0.06em; text-transform:uppercase;
     color: var(--ink-primary); cursor:pointer;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
-    border:1px solid var(--edge-panel); border-radius:6px; padding:6px 12px; }
+    border:1px solid var(--edge-panel); border-radius:5px; padding:5px 9px; }
   #file-row button:hover, #file-row select:hover { border-color: var(--accent); }
   #file-row select { padding:5px 6px; text-transform:none; }
   /* SAVE IS ALSO THE STATUS, and that is a decision rather than a shortcut.
@@ -242,8 +265,7 @@
      A BUTTON THAT GOES NOWHERE LOOKS LIKE IT GOES NOWHERE -- the dormant
      chip's own treatment, quarter ink and no pointer, because a control that
      lights and does nothing is a worse lie than one that is plainly down. */
-  #page-row { position:fixed; left:12px; bottom:calc(var(--house-h) + 10px);
-    z-index:6; display:flex; align-items:center; gap:4px;
+  #page-row { flex:0 0 auto; display:flex; align-items:center; gap:4px;
     font-family: var(--font-ui); font-size:11px; font-weight:600;
     letter-spacing:0.06em; }
   #page-row a, #page-row button, #page-row span { font:inherit;
@@ -270,7 +292,7 @@
      than over the drawing. */
   /* Follows SAVE to the left: it is SAVE's note, and it was under the shell
      for the same reason SAVE was. */
-  #elsewhere { position:fixed; right:12px; top:var(--readout-top); z-index:5;
+  #elsewhere { position:fixed; right:12px; top:var(--note-top); z-index:5;
     font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
     text-transform:uppercase; color: var(--ink-quiet);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
@@ -281,7 +303,7 @@
      editing this" is not something a drafter can act on, and it carries the one
      press that resolves it. Sat under SAVE with the change note, so the page has
      one place where it says things about the file rather than three. */
-  #lease { position:fixed; right:12px; top:calc(var(--readout-top) + 34px); z-index:6;
+  #lease { position:fixed; right:12px; top:calc(var(--note-top) + 34px); z-index:6;
     display:flex; gap:10px; align-items:center;
     font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
     text-transform:uppercase; color: var(--ink-primary);
@@ -292,20 +314,7 @@
     color: var(--accent); background:none; border:1px solid var(--accent);
     border-radius:4px; padding:3px 8px; cursor:pointer; }
   /* The change note steps down when the banner is up, so they never overlap. */
-  body[data-lease-held="0"] #elsewhere { top:calc(var(--readout-top) + 68px); }
-
-  /* THE TOP ROW OWNS THE POSITION; its two children just flow inside it.
-     Inset past the tabs on both edges (26px each plus air) so the row never
-     sits on one.
-
-     ONE FLEX ROW, STILL, AND FOR THE SAME REASON: the mode corner grows with
-     nothing and the file row grows with the extension picker, but two
-     separately fixed-positioned bars is how the build bar came to be sitting
-     on SAVE. A flex row cannot overlap at any width. */
-  #top-row { position:fixed; top:var(--top-row-top); left:40px; right:40px; z-index:6;
-    display:flex; gap:12px; align-items:center;
-    justify-content:space-between; pointer-events:none; }
-  #top-row > * { pointer-events:auto; }
+  body[data-lease-held="0"] #elsewhere { top:calc(var(--note-top) + 68px); }
 
   /* THE HOUSE STRIP, along the foot (§7b): what the drafter PICKS. This is
      the region the drive-thru sign will rise into and cover, which is why
@@ -316,7 +325,7 @@
      at z-index 6. */
   #house-strip { position:fixed; left:0; right:0; bottom:0; z-index:6;
     min-height:var(--house-h);
-    display:flex; align-items:center; gap:10px; padding:0 12px;
+    display:flex; align-items:center; gap:8px; padding:0 12px;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border-top:1px solid var(--edge-panel); }
   #house-strip .grow { flex:1; }
@@ -771,64 +780,6 @@
 
 <canvas id="plan"></canvas>
 <div id="readout">loading…</div>
-<!-- ONE TOP ROW, so the two cannot land on each other. They were separately
-     fixed-positioned -- the chrome bar at left:12 and the build bar centred at
-     left:50% -- and both are as wide as their CONTENT, and on a drawing whose
-     level names ran long the chrome bar reached under the build bar and
-     BUNGALOW swallowed the SAVE button. Tuning the numbers would have fixed
-     one drawing; a flex row cannot overlap at any width. The two ends have
-     changed tenants since -- the mode corner at the left, the file row at the
-     right -- and the reason for the row has not. -->
-<div id="top-row" data-top-row>
-<!-- THE MODE CORNER (§7b): WHAT THE DRAWING IS. Carried whole out of the foot
-     strip -- same buttons, same data-* attributes, same listeners. TOY still
-     means cardinal, square and whole-foot and DRAFTING is still one-way; a
-     control that changed meaning because it changed corner would be the
-     re-scope §7b forbids. -->
-<div id="mode-corner" data-mode-corner>
-  <span class="set" data-board-switch>
-    <!-- NO title HERE. These two are set from script below, and a static one
-         would be overwritten -- which is exactly what happened when this
-         markup was given titles first: they read correctly in the file and
-         never reached the page. The wording, and the check that holds it to
-         the truth, live with the assignment. -->
-    <button type="button" data-board="toy" aria-pressed="false">TOY</button>
-    <button type="button" data-board="drafting" aria-pressed="false">DRAFTING</button>
-  </span>
-  <span class="set" data-theme-switch>
-    <button type="button" data-theme="ruff" aria-pressed="false">RUFF</button>
-    <button type="button" data-theme="rough" aria-pressed="false">ROUGH</button>
-  </span>
-  <span class="set" data-mode-switch>
-    <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
-    <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
-  </span>
-</div>
-<!-- THE FILE ROW (§1): WHAT THE FILE IS. NEW · OPEN · SAVE · SAVE AS · the
-     extension, after MODEL.dc.html:573-590. SAVE carries the status word
-     itself -- see the stylesheet note. The picker chooses what the GENERATED
-     NAME ends in and nothing else: every one of the four is plain JSON, which
-     is why OPEN takes all four without asking which it was given. -->
-<div id="file-row" data-file-row hidden>
-  <button id="file-new" type="button" data-file-new title="Start an empty drawing">NEW</button>
-  <button id="file-open" type="button" data-file-open title="Open a drawing file">OPEN</button>
-  <input id="file-input" type="file" data-file-input hidden
-    accept=".json,.draft,.model,.plan,application/json" />
-  <!-- SAVE MOVED OUT OF THE TOP-LEFT BAR, not out of the shell: the right tab
-       once landed on top of this button and every spec that pressed SAVE
-       timed out, so where it sits is measured, not chosen. The pairwise
-       chrome check is what keeps it that way. -->
-  <button id="save" type="button" data-model-save data-save-status>SAVE</button>
-  <button id="file-save-as" type="button" data-file-save-as
-    title="Save, and download a copy under a name you pick">SAVE AS</button>
-  <select id="file-ext" data-file-ext aria-label="File extension for the saved copy">
-    <option value="draft" selected>.draft</option>
-    <option value="json">.json</option>
-    <option value="model">.model</option>
-    <option value="plan">.plan</option>
-  </select>
-</div>
-</div>
 
 <div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
 <div id="lease" data-lease-banner hidden>
@@ -861,12 +812,27 @@
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 
-<!-- THE PAGE ROW (§7b), lower left: the six pages of the job, in the order
-     Movie listed them. Four exist. REAL ESTATE LAYOUT and ESTIMATES do not,
-     and they are DOWN rather than absent for the same reason a dormant chip
-     is on the strip: the row is the map of the job, and a map with two towns
-     missing teaches the drafter a shape that is wrong. Each says what it will
-     be when it is built. -->
+
+<!-- THE HOUSE STRIP (§7b), along the foot: what the drafter PICKS.
+     MODEL.dc.html's row is "three families between the turtle and the bone",
+     each opening ONE submenu (Movie, 6 Sep) -- that shape, from the same data,
+     through build-menu.js. It was at the top of the sheet; the drive-thru sign
+     rises from the foot and will cover exactly this row, which is why the
+     things a drafter reads WHILE DRAWING went the other way.
+     WHAT IS NOT HERE: the generator. See the seam note beside ModelBuild. -->
+<div id="house-strip" data-house-strip>
+<!-- THE PAGE ROW (§7b), now a TENANT OF THE BOTTOM BAR rather than a bar of
+     its own (Movie, 15 Sep: "move the PROJECT, MODEL, LAYOUT, SPECS etc down
+     to the darker bar"). Same six pages in the order Movie listed them. Four
+     exist. REAL ESTATE LAYOUT and ESTIMATES do not, and they are DOWN rather
+     than absent for the same reason a dormant chip is on the strip: the row
+     is the map of the job, and a map with two towns missing teaches the
+     drafter a shape that is wrong. Each says what it will be when it is
+     built.
+
+     INSIDE the strip, not floating above it, because two fixed bars stacked
+     a few pixels apart is the arrangement that put the build bar on SAVE. A
+     flex child cannot leave its parent. -->
 <div id="page-row" data-page-row>
   <a data-page="project" data-project-corner-bl href="./PROJECT.html"
     title="The project: every drawing in this job">PROJECT</a>
@@ -881,15 +847,6 @@
   <button type="button" data-page="estimates" disabled
     title="ESTIMATES — quantities and costs off this model, not built yet">ESTIMATES</button>
 </div>
-
-<!-- THE HOUSE STRIP (§7b), along the foot: what the drafter PICKS.
-     MODEL.dc.html's row is "three families between the turtle and the bone",
-     each opening ONE submenu (Movie, 6 Sep) -- that shape, from the same data,
-     through build-menu.js. It was at the top of the sheet; the drive-thru sign
-     rises from the foot and will cover exactly this row, which is why the
-     things a drafter reads WHILE DRAWING went the other way.
-     WHAT IS NOT HERE: the generator. See the seam note beside ModelBuild. -->
-<div id="house-strip" data-house-strip>
   <div class="grow"></div>
   <div id="build-bar" data-build-bar hidden>
     <div id="build-families" data-build-families></div>
@@ -914,6 +871,50 @@
      page has a night skin. Everything here paints in currentColor and takes
      it from a palette role. -->
 <div id="strip" data-instrument-strip>
+  <!-- THE SETTINGS CORNER, first on the bar: the two profile pages and the
+       unit in force. SETTINGS and STANDARDS are PAGES on this side of the
+       shop (SETTINGS.html, STANDARDS.html), where MODEL.dc.html opens them as
+       dialogs -- the page row already teaches that a place you go is a link,
+       and a modal that only links onward would be a door in front of a door.
+
+       UNITS IS ONE BUTTON NAMING THE UNIT IN FORCE, which is MODEL.dc.html's
+       own ruling (:435-442) and its reason: two stacked buttons at a 44px
+       touch target overlap, so METRIC ate every tap aimed at IMPERIAL. The
+       label is a STATEMENT, not a command -- "UNITS: IMPERIAL" cannot be
+       misread as "tapping makes it imperial" the way a lone "METRIC" can. -->
+  <div id="settings-corner" data-settings-corner>
+    <div id="settings-stack">
+      <a data-page="settings" href="./SETTINGS.html"
+        title="Keyboard and layer settings">SETTINGS</a>
+      <a data-page="standards" href="./STANDARDS.html"
+        title="Company standard layers, names and print rules">STANDARDS</a>
+    </div>
+    <button type="button" id="units-toggle" data-unit-toggle>UNITS: IMPERIAL</button>
+  </div>
+<!-- THE MODE CORNER (§7b): WHAT THE DRAWING IS. Carried whole out of the foot
+     strip -- same buttons, same data-* attributes, same listeners. TOY still
+     means cardinal, square and whole-foot and DRAFTING is still one-way; a
+     control that changed meaning because it changed corner would be the
+     re-scope §7b forbids. -->
+<div id="mode-corner" data-mode-corner>
+  <span class="set" data-board-switch>
+    <!-- NO title HERE. These two are set from script below, and a static one
+         would be overwritten -- which is exactly what happened when this
+         markup was given titles first: they read correctly in the file and
+         never reached the page. The wording, and the check that holds it to
+         the truth, live with the assignment. -->
+    <button type="button" data-board="toy" aria-pressed="false">TOY</button>
+    <button type="button" data-board="drafting" aria-pressed="false">DRAFTING</button>
+  </span>
+  <span class="set" data-theme-switch>
+    <button type="button" data-theme="ruff" aria-pressed="false">RUFF</button>
+    <button type="button" data-theme="rough" aria-pressed="false">ROUGH</button>
+  </span>
+  <span class="set" data-mode-switch>
+    <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
+    <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
+  </span>
+</div>
   <span id="strip-message" data-strip-message></span>
   <div class="grow"></div>
 
@@ -990,6 +991,30 @@
   </div>
 
   <div class="grow"></div>
+<!-- THE FILE ROW (§1): WHAT THE FILE IS. NEW · OPEN · SAVE · SAVE AS · the
+     extension, after MODEL.dc.html:573-590. SAVE carries the status word
+     itself -- see the stylesheet note. The picker chooses what the GENERATED
+     NAME ends in and nothing else: every one of the four is plain JSON, which
+     is why OPEN takes all four without asking which it was given. -->
+<div id="file-row" data-file-row hidden>
+  <button id="file-new" type="button" data-file-new title="Start an empty drawing">NEW</button>
+  <button id="file-open" type="button" data-file-open title="Open a drawing file">OPEN</button>
+  <input id="file-input" type="file" data-file-input hidden
+    accept=".json,.draft,.model,.plan,application/json" />
+  <!-- SAVE MOVED OUT OF THE TOP-LEFT BAR, not out of the shell: the right tab
+       once landed on top of this button and every spec that pressed SAVE
+       timed out, so where it sits is measured, not chosen. The pairwise
+       chrome check is what keeps it that way. -->
+  <button id="save" type="button" data-model-save data-save-status>SAVE</button>
+  <button id="file-save-as" type="button" data-file-save-as
+    title="Save, and download a copy under a name you pick">SAVE AS</button>
+  <select id="file-ext" data-file-ext aria-label="File extension for the saved copy">
+    <option value="draft" selected>.draft</option>
+    <option value="json">.json</option>
+    <option value="model">.model</option>
+    <option value="plan">.plan</option>
+  </select>
+</div>
 </div>
 
 <div id="notice"><div id="notice-body"></div></div>
@@ -3075,6 +3100,33 @@
   const levelsPanel = document.getElementById('levels-panel');
   const fileRow = document.getElementById('file-row');
 
+  // UNITS. The page already reads `drawing.units` everywhere it prints a
+  // length -- `drawing?.units !== 'metric'` is the test, in seven places --
+  // so the control is the one thing that was missing, not the plumbing.
+  // WHAT IT DOES NOT DO: re-snap the geometry. MODEL.dc.html's _setUnits
+  // moves the drawing onto the other system's increments; here the feet in
+  // the file are the truth and the unit is how they are READ, so switching
+  // changes no coordinate. That is a smaller promise than the old page's and
+  // it is the one this page can keep -- a re-snap that rounded a permit
+  // drawing's walls on a button press is the opposite of what Movie asked
+  // the foot light for.
+  const unitsToggle = document.getElementById('units-toggle');
+  const metric = () => drawing?.units === 'metric';
+  const paintUnits = () => {
+    if (!unitsToggle) return;
+    unitsToggle.textContent = metric() ? 'UNITS: METRIC' : 'UNITS: IMPERIAL';
+    unitsToggle.title = metric()
+      ? 'The drawing is in metric — tap to switch to imperial'
+      : 'The drawing is in imperial — tap to switch to metric';
+  };
+  unitsToggle?.addEventListener('click', () => {
+    if (!drawing) return;
+    drawing.units = metric() ? 'imperial' : 'metric';
+    markDirty();
+    paintUnits();
+    paint();
+  });
+
   // replaceState, not pushState: a switch is a change of viewpoint, not a
   // navigation, and forty pushes would bury whatever page the drafter came
   // from under forty presses of Back.
@@ -3500,6 +3552,7 @@
   // is the same job with one control left instead of three.
   const buildChrome = () => {
     buildLevelsPanel();
+    paintUnits();
     if (fileRow) fileRow.hidden = false;
   };
 
