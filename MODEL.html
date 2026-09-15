@@ -1604,6 +1604,11 @@
   let rulerOn = false;      // RULER down: presses measure instead of drawing
   let rulerFrom = null;     // the ruler's first press, in world feet
   let cursorWorld = null;   // where the cursor last was, for the live readouts
+  // THE CORNER UNDER THE CURSOR, or null. Painted, not just cursored -- see
+  // paintHoverCorner. Held as the POOLED VERTEX OBJECT rather than a copy of
+  // its numbers, so a corner that moves under the cursor keeps its highlight
+  // without anything re-finding it.
+  let hoverCorner = null;
 
   // View state in world units (feet). scale is screen pixels per foot.
   // Deliberately plain arithmetic: MODEL.dc.html projects through a three.js
@@ -3144,6 +3149,9 @@
         // (:7380 against :7432), so the highlight is never buried under the
         // geometry it marks but never covers the annotation either.
         paintSelection();
+        // AFTER the selection, so a hovered corner of a selected wall reads as
+        // the ring over its own handle rather than under it.
+        paintHoverCorner();
         paintBand();
         // Cut marks go with the annotation rather than the geometry: they are
         // a fact ABOUT the drawing, and the bone paints them late for the same
@@ -5648,6 +5656,36 @@
   // and cornerAt() only offers them when exactly one wall is selected
   // (selectedWall()). Drawing them on ten walls would advertise ten grabs that
   // do nothing, which is the same lie one step down.
+  // ── the corner under the cursor ────────────────────────────────────────────
+  // THE PAGE ALREADY KNEW WHERE THE GRAB WAS AND ONLY WHISPERED IT. `cornerAt`
+  // has been running on every pointermove since the corner drag landed, but its
+  // only output was a CSS cursor -- so the drafter learned where a node was
+  // grabbable by sweeping the mouse and watching the pointer flicker, and on a
+  // touch screen, where there is no cursor at all, never learned it.
+  //
+  // A RING, NOT A FILLED SQUARE. The 8px squares belong to the SELECTED wall's
+  // own ends and mean "this is yours, drag it"; hover is a weaker claim -- "you
+  // could take this" -- and drawing the same mark for both would make the
+  // selected handles stop meaning anything. Same ink, hollow, one pixel
+  // narrower than the grab circle it stands for.
+  //
+  // IT IS NOT A SECOND HIT TEST. It paints whatever cornerAt already returned,
+  // so the ring cannot promise a grab the drag would refuse: the two cannot
+  // disagree, because there is only one of them.
+  const HOVER_RING = 'rgba(89,128,166,0.85)';
+  const paintHoverCorner = () => {
+    if (!hoverCorner) return;
+    const p = toS(hoverCorner);
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return;
+    ctx.save();
+    ctx.strokeStyle = HOVER_RING;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  };
+
   const paintSelection = () => {
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines() };
@@ -8281,7 +8319,11 @@
       canvas.setPointerCapture(e.pointerId);
       return;
     }
+    // THE RING GOES WITH THE CLASSES. This runs when a press takes the
+    // gesture: a highlight left burning under a wall being dragged says "you
+    // could grab this" about a corner already in hand.
     canvas.classList.remove('over-corner', 'over-wall');
+    if (hoverCorner) { hoverCorner = null; paint(); }
     dragging = { sx: e.clientX, sy: e.clientY, cx: view.cx, cz: view.cz, moved: 0 };
     canvas.classList.add('dragging');
     canvas.setPointerCapture(e.pointerId);
@@ -8411,6 +8453,16 @@
       const corner = cornerAt(at);
       canvas.classList.toggle('over-corner', !!corner);
       canvas.classList.toggle('over-wall', !corner && !!wallBodyAt(at));
+      // REPAINT ONLY WHEN THE ANSWER CHANGES, and identity is what decides:
+      // cornerAt hands back the POOLED VERTEX OBJECT, so `!==` is "a different
+      // corner", not "different numbers". A pointermove fires on every pixel
+      // and this branch is the page's hot path -- repainting on each one would
+      // put a full canvas redraw behind a mouse sweep across the sheet, which
+      // is the cost the rail's one-seat-per-frame rule exists to avoid.
+      //
+      // Entering a corner, leaving it, and crossing straight from one to its
+      // neighbour are all the same test, which is why it is one line.
+      if (corner !== hoverCorner) { hoverCorner = corner; paint(); }
       return;
     }
     dragging.moved = Math.max(dragging.moved,
