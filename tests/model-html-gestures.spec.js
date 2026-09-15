@@ -416,7 +416,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
                   : el.dataset.assemblyFixed !== undefined ? 'assembly-fixed'
                     : el.dataset.assemblyLoose !== undefined ? 'assembly-loose'
                       : el.dataset.assemblyName !== undefined ? 'assembly-name'
-                        : el.tagName.toLowerCase());
+                        : el.dataset.levelLock !== undefined ? 'level-lock'
+                          : el.dataset.levelLockBreak !== undefined ? 'level-lock-break'
+                            : el.tagName.toLowerCase());
         return {
           buttons: [...document.querySelectorAll('button')].filter(outside)
             .map(b => b.id || b.textContent.trim()).sort(),
@@ -446,7 +448,26 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
                   : el.dataset.layer !== undefined ? 'layer-row'
                     : el.dataset.levelRow !== undefined ? 'level-row'
                       : el.dataset.view3d !== undefined ? 'view-3d'
-                        : el.tagName === 'BUTTON' ? 'cut-row' : el.tagName))].sort(),
+                        // THE BONEYARD'S TWO, named rather than absorbed. They
+                        // arrived with the shelf UI and this check stayed GREEN
+                        // through it: the fallback below turns any unnamed
+                        // button into 'cut-row', so three new kinds of control
+                        // entered the panel and the list that exists to notice
+                        // exactly that did not move.
+                        //
+                        // THE COMMENT ON THE EXPECTED LIST SAYS THE OPPOSITE --
+                        // "no unlabelled button: an entry this cannot name
+                        // would arrive as 'BUTTON' or 'INPUT' and fail" -- and
+                        // for the TOOL COLUMN's classifier below that is true
+                        // and is how its chips were caught. For the panel it is
+                        // not: `? 'cut-row'` is the same idea with the safety
+                        // off. Naming what can be named shrinks what the
+                        // fallback can swallow; giving a cut row its own marker
+                        // so the fallback could fail loudly is a change of its
+                        // own and is not smuggled in here.
+                        : el.dataset.addShelf !== undefined ? 'add-shelf'
+                          : el.dataset.shelf !== undefined ? 'shelf-row'
+                            : el.tagName === 'BUTTON' ? 'cut-row' : el.tagName))].sort(),
         };
       });
       // THE SIX SEATS ARRIVED WHILE THIS PR WAS OPEN, and this assertion is how
@@ -498,6 +519,18 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       //   - THE T-SQUARE IS A CONSTRAINT ON THE EXISTING draw-wall GESTURE,
       //     not a second way to make a wall. With it down the page draws the
       //     same off-square walls it always did.
+      //   - AND SO IS THE FOOT LIGHT (`strip-scale`), for the same reason and
+      //     with the same reading. It arrived as a third instrument and this
+      //     check is how that was noticed rather than merged past: it went red
+      //     naming a button no parity row mentioned, which is exactly the job
+      //     it says it is for.
+      //
+      //     It constrains two EXISTING gestures -- the draw and the wall drag
+      //     -- to land on the whole foot in DRAFTING, and adds neither a verb
+      //     nor an entity. Unlit, which is how every page that has never been
+      //     touched opens, both gestures behave precisely as they did before
+      //     it existed. So no absence row changes: the old page has no such
+      //     instrument and this one draws nothing the old page could not.
       //   - THE LENGTH BOX COMMITS THROUGH draw-wall's own gesture: it is
       //     dead until a run is in hand, so it cannot start one.
       //   - TOY/DRAFTING, RUFF/ROUGH and NIGHT/DAY set board and skin state.
@@ -541,8 +574,16 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // it, and `dt-bone` is the SECOND bone, on the post. It fires the
           // same seam the foot's bone does, and the seam's own suite asserts
           // both draw nothing -- so BUILD HOUSE stays absent, twice over.
+          //
+          // COPY and PASTE joined this page with the boneyard's cross-workspace
+          // clipboard and were NOT declared here at the time -- my own commit,
+          // and the same omission #401 caught in the drive-thru series for
+          // OUTLINE. It sat undetected because that work ran the boneyard spec
+          // and not this one; the census found it the moment anything else
+          // touched the list. Declared now rather than after a third one.
           buttons: ['left-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
+            'copy', 'paste',
             'delete', 'save', 'take-over',
             'file-new', 'file-open', 'file-save-as',
             'REAL ESTATE LAYOUT', 'ESTIMATES',
@@ -572,7 +613,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // is NOT the print path the boneyard's non-printing rule needs,
             // which still belongs to the layout sheet.
             'printscreen',
-            'strip-ruler', 'strip-tsquare',
+            'strip-ruler', 'strip-tsquare', 'strip-scale',
             'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'Continue', 'Stay in TOY',
             'Break here', 'Move this wall',
@@ -592,13 +633,25 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // counted because this row is what the INSERT UNDERLAY absence
           // rests on; that row's own check asserts the picker takes drawings
           // and not images.
-          inputs: ['file', 'text', 'text'].sort(),
+          // AND THE GARAGE'S TWO FIGURES (Movie, 15 Sep: "allow them to
+          // enter the size... or 4th option allow them to enter ___FT X
+          // ___FT"). They sit on the drive-thru board beside three stock
+          // sizes, and they are a SIZE, not a verb: the order carries the
+          // pair to the same onOrder seam nothing listens on yet, and the
+          // board still authors no entity. So no absence row moves -- but
+          // they are named here because this census counts every input in
+          // the page whether its board is up or not.
+          //
+          // The three stock chips are absent from `buttons` above for a
+          // real reason rather than an oversight: they exist only while a
+          // detached garage entry is chosen, and nothing is chosen at rest.
+          inputs: ['file', 'number', 'number', 'text', 'text'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as
           // 'BUTTON' or 'INPUT' and fail.
           panelKinds: ['add-level', 'cut-row', 'delete-level', 'layer-row',
-            'level-row', 'view-3d'].sort(),
+            'level-row', 'view-3d', 'add-shelf', 'shelf-row'].sort(),
           // The column's kinds. SELECTION's three modes and OBJECT TYPE's five
           // filters are named rather than counted for the same reason the keys
           // are not: a control the classifier cannot name arrives as 'button'
@@ -612,8 +665,18 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // in the tool column, not a file picker -- the underlay row's own
           // check asserts `input[type=file]` is still zero, which is the
           // guarantee that row actually needs.
+          // LEVEL LOCK AND BREAK LOCK are the two verbs the level-lock port
+          // added, and they are DECLARED here rather than found here later.
+          // This list is the reason #401 caught OUTLINE arriving undeclared,
+          // and the order for this port says the control goes in it in the
+          // same commit for exactly that reason.
+          //
+          // They live beside ASSEMBLY rather than in the LEVELS panel: a lock
+          // is made FROM assemblies, and the assemblies are what the drafter
+          // has in his hand when he wants one.
           toolKinds: ['assembly-fixed', 'assembly-loose', 'assembly-name',
             'assembly-start', 'assembly-ungroup',
+            'level-lock', 'level-lock-break',
             'sel-filter', 'sel-mode', 'tool-key'].sort(),
         });
     });
@@ -695,12 +758,20 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       'and every option must be a real level id').toBe(true);
   });
 
-  test('LEVEL LOCKS and SOURCE LINKS — no verb, and the keys are re-emitted untouched',
+  test('SOURCE LINKS have no verb; LEVEL LOCKS now do — and the keys are re-emitted untouched',
     async ({ page }) => {
-      // GROUPS LEFT THIS ROW. It used to read "LEVEL LOCKS, GROUPS and SOURCE
-      // LINKS — no verb", and that stopped being true the moment ASSEMBLY and
-      // UNGROUP landed in the tool column. The parity table's row moved from
-      // absent to present with it.
+      // GROUPS LEFT THIS ROW, AND NOW LOCKS HAVE TOO. It first read "LEVEL
+      // LOCKS, GROUPS and SOURCE LINKS — no verb"; that stopped being true for
+      // GROUPS when ASSEMBLY and UNGROUP landed in the tool column, and it has
+      // now stopped being true for LOCKS as well: the level-lock port added
+      // LEVEL LOCK and BREAK LOCK beside them. Both times the row moved from
+      // absent to present and the TITLE moved with it.
+      //
+      // That is the whole discipline here. Teaching the control census to
+      // accept two new buttons while leaving a title that says they do not
+      // exist would be the exact failure the census exists to prevent -- a
+      // control on the page that no row mentions, silenced instead of
+      // answered. SOURCE LINKS are the only half of the original claim left.
       //
       // The carry-through assertion below still covers groups, and still
       // should: a page that HAS a verb must also hand back untouched the

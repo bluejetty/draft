@@ -28,6 +28,10 @@ Nearly all of these are **pure** — no DOM, no component state, plain data in
 and plain data out — which is what makes them testable in node without a
 browser (see `proto/`). The handful that reach for the platform say so.
 
+A page that adopts one of them reaches it for every rule in it and keeps no
+copy of its own: `RULING-a-ported-rule-keeps-one-home.md`, which also says
+when a second table is not a copy at all.
+
 **Platform and storage**
 
 | File | Global | Role |

@@ -200,7 +200,11 @@
              under the same revision guard (the Write Tier,
              tests/write-tier.spec.js). -->
         <p class="preview">
-          <a class="preview-link" href="MODEL.html">Open the new model space (preview)</a>
+          <!-- ?from=entry is how the model space knows the drafter arrived
+               through the front door, and pulls the drive-thru up by itself
+               after its two seconds (Movie, 15 Sep). MODEL.html spends the
+               flag as it reads it, so a reload lands in the drawing. -->
+          <a class="preview-link" href="MODEL.html?from=entry">Open the new model space (preview)</a>
           <span class="preview-what">Reads, draws, and saves.</span>
         </p>
       </main>

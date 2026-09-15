@@ -42,7 +42,12 @@ test('the instrument cluster holds the center of the strip', async ({ page }) =>
   }
 });
 
-test('three dormant chips flank each side of the working instruments', async ({ page }) => {
+// THE TITLE SAID "three dormant chips" and SCALE is no longer one of them --
+// it is the foot light. The assertions here are about POSITION, so they went
+// on passing under a name that had stopped being true, which is the same
+// comment-says-one-thing-assertion-checks-another shape this session has
+// already cost a day to. Renamed to what it measures.
+test('three side chips flank each side of the working instruments', async ({ page }) => {
   await openModel(page);
 
   const leftChips = ['[data-mode-compass]', '[data-mode-triangle]', '[data-mode-brush]'];
