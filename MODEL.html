@@ -3806,9 +3806,47 @@
     const level = { id, name: String(name).toUpperCase().trim(), elev, visible: true };
     // Every regular level carries a copy of each BONEYARD master outline, so a
     // freshly added floor starts with the inherited geometry rather than bare.
+    //
+    // LINKED, AND WITH ITS OWN POINTS. This read
+    //
+    //   drawing.outlines.push({ ...master, id: ..., levelId: id });
+    //
+    // and was wrong twice, in opposite directions that hid each other.
+    //
+    // NO LINK. The copy carried no masterId and its points no srcId, so
+    // nothing could find it again. _propagateMasterOutline (MODEL.dc.html:
+    // 12057) selects copies by `outline.masterId === master.id` and then each
+    // point by `point.srcId`; with both null the ported propagation would have
+    // moved NOTHING, on every drawing this page has ever made -- and a check
+    // for it would have passed by finding no work to do. That is the order's
+    // "the master is a stamp, not a governor", measured.
+    //
+    // AND TOTAL ALIASING. `{ ...master }` is a shallow spread, so the copy and
+    // the master shared ONE points array. Moving a corner on the second floor
+    // moved the master and therefore every other floor -- not by propagation
+    // but by there only ever being one set of coordinates, which also makes a
+    // per-level override impossible to express.
+    //
+    // offX/offZ start at ZERO because the copy starts coincident, and
+    // relinkVertex re-measures them on every drag. That is the same
+    // srcId/offset contract the dimension ends, beams and columns already use.
     (drawing.boneyardOutlines || []).forEach(master => {
       drawing.outlines = drawing.outlines || [];
-      drawing.outlines.push({ ...master, id: newDrawingItemId('outline'), levelId: id });
+      drawing.outlines.push({
+        ...master,
+        id: newDrawingItemId('outline'),
+        levelId: id,
+        masterId: master.id,
+        shelfId: undefined,          // a level copy is not shelf storage
+        overriddenSrcIds: [],
+        points: (master.points || []).map(pt => ({
+          ...pt,
+          id: undefined,             // the copy's point is not the master's
+          srcId: pt.id,
+          offX: 0,
+          offZ: 0,
+        })),
+      });
     });
     // ABOVE THE TOP FLOOR AND BELOW ROOF, which is where the old page stacks a
     // new storey -- levels are stored top-down, so that is the top floor's own

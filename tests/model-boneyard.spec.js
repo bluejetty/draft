@@ -465,3 +465,57 @@ test('a shelf added to a gapped list takes a FREE id, not the next row number',
     expect(ids, 'the gap is left alone and the new shelf takes a free id')
       .toEqual([1, 3, 4]);
   });
+
+// ── §4: THE MASTER MUST BE A GOVERNOR, AND FIRST IT MUST BE LINKED ─────────
+// The order says propagation is a PORT: MODEL.dc.html:12057 already moves the
+// dimension strings, the columns, the auto-beams and the welded garage along
+// with the corners, and "anyone writing it fresh gets the corners right and
+// leaves the riders behind".
+//
+// MEASURED BEFORE PORTING, and the port cannot work without this first.
+// _propagateMasterOutline finds its copies by `outline.masterId === master.id`
+// and then each point by `point.srcId`. On this page addLevel stamps neither:
+// the copy came out with masterId null and every srcId null, so the ported
+// function would have propagated to NOTHING on every drawing this page has
+// ever made -- and every check for it would have passed by finding no work.
+//
+// AND THE COPY SHARED THE MASTER'S POINTS ARRAY. `{ ...master }` is a shallow
+// spread, so the level copy and the master held the SAME point objects: an
+// override could never differ from the master because there was only ever one
+// set of coordinates. That is the opposite failure to "a stamp, not a
+// governor" -- total aliasing -- and the two hid each other.
+test('§4: a level copy of a master is LINKED to it, and owns its own points',
+  async ({ page }) => {
+    await open(page, base({
+      outlines: [],
+      boneyardOutlines: [{
+        id: 'master-1', shelfId: 1,
+        points: [{ id: 'p1', x: 0, z: 0 }, { id: 'p2', x: 10, z: 0 },
+          { id: 'p3', x: 10, z: 8 }],
+      }],
+      nextLevelId: 7,
+    }));
+
+    page.on('dialog', d => d.accept(d.message().includes('feet') ? '9' : 'SECOND FL'));
+    await page.locator('[data-add-level]').click();
+    await page.waitForTimeout(400);
+
+    const file = await saveIt(page);
+    const copy = (file.outlines || []).find(o => Number(o.levelId) === 7);
+    expect(copy, 'the new floor starts with the inherited geometry').toBeTruthy();
+
+    // THE LINK, both halves. Without masterId the propagation loop never sees
+    // this outline; without srcId it sees it and moves nothing.
+    expect(copy.masterId, 'the copy knows which master governs it')
+      .toBe('master-1');
+    expect(copy.points.map(p => p.srcId),
+      'and every point knows which master point it came from')
+      .toEqual(['p1', 'p2', 'p3']);
+
+    // ITS OWN POINTS, not the master's. Moving the copy must not move the
+    // master, which is what a shared array would do.
+    const master = (file.boneyardOutlines || []).find(o => o.id === 'master-1');
+    expect(master.points.map(p => p.srcId ?? null),
+      'the master itself carries no srcId -- it IS the source')
+      .toEqual([null, null, null]);
+  });
