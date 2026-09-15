@@ -134,6 +134,22 @@ test('three sheets come out, not one clipped one', async ({ page }) => {
   expect(count, 'the presentation printed as one clipped sheet').toBe(3);
 });
 
+// LANDSCAPE IS READ OFF THE PAPER, not off the stylesheet. preferCSSPageSize
+// is what makes Chromium's headless printer obey @page at all -- a real print
+// dialog obeys it by itself -- and the MediaBox is the sheet the client holds.
+test('the sheets come out landscape', async ({ page }) => {
+  await openHouse(page);
+  await settleRail(page);
+  await page.locator('#printscreen').click();
+  await page.emulateMedia({ media: 'print' });
+
+  const pdf = await page.pdf({ printBackground: true, preferCSSPageSize: true });
+  const box = pdf.toString('latin1').match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)/);
+  expect(box, 'no sheet size in the pdf').not.toBeNull();
+  const [w, h] = [Number(box[1]), Number(box[2])];
+  expect(w, `the paper came out ${w}x${h}, taller than it is wide`).toBeGreaterThan(h);
+});
+
 // THE DISCLAIMER IS CHECKED FOR ITS POSITION, not just its presence. Movie
 // asked for it ABOVE the logo: below it, the eye reaches the brand first and
 // the page reads as something the office is standing behind.
