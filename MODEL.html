@@ -5408,19 +5408,29 @@
         if (!pt.srcId) return;
         const src = byId.get(String(pt.srcId));
         if (!src) return;
-        if (overridden.has(pt.srcId)) {
-          // DC RIDES AT THE OFFSET HERE. Movie ruled the opposite -- a
-          // hand-moved point FREEZES -- and the order is explicit that the
-          // port lands first and that branch changes separately, "because the
-          // two changes fail differently and a combined one cannot be
-          // bisected". So this is DC's behaviour, deliberately, for now.
-          if (Number.isFinite(pt.offX) && Number.isFinite(pt.offZ)) {
-            pt.x = src.x + pt.offX;
-            pt.z = src.z + pt.offZ;
-            moved += 1;
-          }
-          return;
-        }
+        // §5a: A HAND-MOVED POINT FREEZES. It stays exactly where the
+        // drafter put it and the master moves out from under it.
+        //
+        // THIS IS A DELIBERATE DIVERGENCE FROM MODEL.dc.html, which rides the
+        // point at its stored offset (:12057). Movie ruled the other way, and
+        // the reason is what an override MEANS: the drafter took this one
+        // corner off the master by hand. Riding keeps it following the master
+        // forever at a fixed gap, which is the one thing the override was
+        // pressed to stop -- it makes "overridden" mean "offset", and there is
+        // already a word for offset, on every rider below.
+        //
+        // The port landed first and this is its own commit, per the order:
+        // "the two changes fail differently and a combined one cannot be
+        // bisected". A freeze that is wrong strands a corner; a port that is
+        // wrong moves the whole plan.
+        //
+        // offX/offZ ARE LEFT ALONE rather than cleared. relinkVertex owns
+        // them and re-measures against the master on every drag, so they are
+        // re-established the moment this point is dragged again -- and a
+        // frozen point that still remembers its gap is what makes clearing an
+        // override put it back on the corner it came from, whenever that verb
+        // arrives. Clearing them here would throw that away silently.
+        if (overridden.has(pt.srcId)) return;
         pt.x = src.x; pt.z = src.z; pt.bulge = src.bulge || 0;
         moved += 1;
       });

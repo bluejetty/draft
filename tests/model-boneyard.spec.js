@@ -693,33 +693,69 @@ test('§4: the riders move too — a dimension, a column and a beam',
       .toBeCloseTo(6, 6);
   });
 
-test('§4: a point listed in overriddenSrcIds is not taken back by the master',
+test('§5a: a hand-moved point FREEZES — the master moves out from under it',
   async ({ page }) => {
     // ASSERTED AS AN ABSOLUTE COORDINATE, which the order names specifically:
     // "assert its absolute coordinate is unchanged after the master moves, not
     // merely that it differs from the master". Differing from the master is
-    // also what riding at an offset looks like.
+    // also what riding at an offset looks like, so "not taken back" is
+    // satisfied by the behaviour this commit is replacing.
     //
-    // THIS IS DC'S BEHAVIOUR AND IT IS DELIBERATE. Movie ruled the opposite --
-    // a hand-moved point FREEZES -- and the order says to land the port first
-    // and change that branch separately "because the two changes fail
-    // differently and a combined one cannot be bisected". So today the
-    // overridden point RIDES at its stored offset, which is DC, and the
-    // freeze is its own commit.
+    // MODEL.dc.html rides the point at its stored offset (:12057). Movie ruled
+    // the other way and the divergence is deliberate: an override means the
+    // drafter took this corner off the master BY HAND, and riding keeps it
+    // following the master forever at a fixed gap — which makes "overridden"
+    // mean "offset", and offset already has a name, on every rider.
+    // TWO COPIES OF THE SAME MASTER, and only one of them overridden. THE
+    // CONTRAST IS THE CHECK: one drag, one master, and the two copies must
+    // end up in DIFFERENT places.
+    //
+    // My first version of this used one copy and asserted that an untouched
+    // CORNER still followed. That could not fail. The drag moves p1 only, so
+    // p2's master coordinate never changes either — both sides of the
+    // comparison were static, and a freeze applied to EVERY point read
+    // exactly like a freeze applied to the right one. The mutation harness
+    // caught it and said so ("caught by another check — re-aim `test`"),
+    // which is the whole reason that line exists in the harness.
     const held = copyOn(MAIN);
     held.overriddenSrcIds = ['p1'];
     held.points = held.points.map(pt => (pt.srcId === 'p1'
       ? { ...pt, x: -5, z: -3, offX: 3, offZ: 3 } : pt));
 
-    await open(page, base({ boneyardOutlines: [MASTER], outlines: [held] }));
+    await open(page, base({
+      boneyardOutlines: [MASTER],
+      outlines: [held, copyOn(1)],          // FOUNDATION follows, MAIN is held
+    }));
     await card(page).click();
     await dragMaster(page, [-8, -6], [-8, -12]);
 
     const file = await saveIt(page);
     const z = file.boneyardOutlines[0].points.find(p => p.id === 'p1').z;
-    const pt = file.outlines[0].points.find(p => p.srcId === 'p1');
-    expect(pt.z, 'the overridden point rides at its offset — DC, for now')
-      .toBeCloseTo(z + 3, 6);
+    const heldPt = file.outlines.find(o => Number(o.levelId) === MAIN)
+      .points.find(p => p.srcId === 'p1');
+    const freePt = file.outlines.find(o => Number(o.levelId) === 1)
+      .points.find(p => p.srcId === 'p1');
+
+    // THE MASTER REALLY MOVED, or the rest of this proves nothing: a drag that
+    // silently failed would leave both copies untouched and read as a freeze.
+    expect(z, 'the master corner moved').toBeCloseTo(-12, 6);
+
+    // FROZEN: exactly where the hand left it, both axes.
+    expect(heldPt.z, 'the overridden point stayed where it was put')
+      .toBeCloseTo(-3, 6);
+    expect(heldPt.x, 'and did not drift in x either').toBeCloseTo(-5, 6);
+    // AND NOT RIDING, named, so a regression to DC's branch fails here with
+    // the reason on it rather than as a bare number mismatch.
+    expect(heldPt.z, 'it did not ride at its stored offset (DC behaviour)')
+      .not.toBeCloseTo(z + 3, 6);
+
+    // AND THE COPY NOBODY TOUCHED STILL FOLLOWS, to the master's new place.
+    // This is the half that fails when the freeze is over-broad: same point,
+    // same master, same drag, and it must have MOVED.
+    expect(freePt.z, 'the un-overridden copy followed the master')
+      .toBeCloseTo(z, 6);
+    expect(freePt.z, 'and it really moved, rather than starting there')
+      .not.toBeCloseTo(-6, 6);
   });
 
 test('§4: save, reload, move again — the same points follow', async ({ page }) => {

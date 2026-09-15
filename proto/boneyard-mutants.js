@@ -32,6 +32,32 @@ const fs = require('fs');
 const SPEC = 'tests/model-boneyard.spec.js';
 
 const MUTANTS = [
+  // §5a. The freeze is a DIVERGENCE from MODEL.dc.html, which rides the point
+  // at its stored offset, so the first mutant is simply DC's own branch put
+  // back. A check that only said "not taken back by the master" passed under
+  // BOTH -- riding also differs from the master -- which is why the check now
+  // asserts the absolute coordinate.
+  { file: 'MODEL.html',
+    name: 'the override RIDES at its offset instead of freezing (DC\'s branch back)',
+    find: '        if (overridden.has(pt.srcId)) return;',
+    with: `        if (overridden.has(pt.srcId)) {
+          if (Number.isFinite(pt.offX) && Number.isFinite(pt.offZ)) {
+            pt.x = src.x + pt.offX; pt.z = src.z + pt.offZ; moved += 1;
+          }
+          return;
+        }`,
+    test: '§5a: a hand-moved point FREEZES' },
+
+  // AND THE OVER-BROAD FREEZE, which is the same line with the condition
+  // dropped: every point stops following, not just the hand-moved one. That
+  // fails as "the outline no longer follows its master at all" and is caught
+  // by the untouched-corner assertion in the same check.
+  { file: 'MODEL.html',
+    name: 'the freeze is over-broad: EVERY point stops following, not just the overridden one',
+    find: '        if (overridden.has(pt.srcId)) return;',
+    with: '        return;',
+    test: '§5a: a hand-moved point FREEZES' },
+
   { file: 'MODEL.html',
     name: 'THE SHELF IS NOT A WORKSPACE: the level geometry never goes away',
     find: '    if (boneyardActive) return boneyardLevelId();',
