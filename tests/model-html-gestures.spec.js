@@ -564,6 +564,14 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // No absence row changes. Nothing listens on onOrder yet, and the
             // page could already reach this board.
             'units-toggle', 'dt-open', 'dt-close', 'dt-bone', 'outline',
+            // PRINTSCREEN PRINTS THE SCREEN, and that is the whole of it: a
+            // three-page presentation made from pictures the page has
+            // already painted -- this view, the whole plan, the rail's
+            // tiles -- each marked NOT TO SCALE. It authors no entity and
+            // moves no point, so no absence row changes; in particular this
+            // is NOT the print path the boneyard's non-printing rule needs,
+            // which still belongs to the layout sheet.
+            'printscreen',
             'strip-ruler', 'strip-tsquare',
             'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'Continue', 'Stay in TOY',
