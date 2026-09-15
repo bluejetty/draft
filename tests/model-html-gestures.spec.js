@@ -633,7 +633,19 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // counted because this row is what the INSERT UNDERLAY absence
           // rests on; that row's own check asserts the picker takes drawings
           // and not images.
-          inputs: ['file', 'text', 'text'].sort(),
+          // AND THE GARAGE'S TWO FIGURES (Movie, 15 Sep: "allow them to
+          // enter the size... or 4th option allow them to enter ___FT X
+          // ___FT"). They sit on the drive-thru board beside three stock
+          // sizes, and they are a SIZE, not a verb: the order carries the
+          // pair to the same onOrder seam nothing listens on yet, and the
+          // board still authors no entity. So no absence row moves -- but
+          // they are named here because this census counts every input in
+          // the page whether its board is up or not.
+          //
+          // The three stock chips are absent from `buttons` above for a
+          // real reason rather than an oversight: they exist only while a
+          // detached garage entry is chosen, and nothing is chosen at rest.
+          inputs: ['file', 'number', 'number', 'text', 'text'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as

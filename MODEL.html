@@ -528,6 +528,23 @@
   #build-bar button.card .said { position:absolute; width:1px; height:1px;
     margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0);
     white-space:nowrap; border:0; }
+  /* THE SIZE ROW sits under the entry chips, on the same shelf, because it
+     is the same question continued: which garage. The fields wear the
+     board's paper and ink rather than the browser's, or they read as a
+     form dropped on a picture. */
+  #build-sizes { display:flex; gap:4px; justify-content:center;
+    align-items:center; flex-wrap:wrap; }
+  #build-sizes[hidden] { display:none; }
+  #size-stock { display:flex; gap:4px; justify-content:center; flex-wrap:wrap; }
+  #size-custom { display:flex; gap:3px; align-items:center;
+    font-family:var(--font-ui); font-size:clamp(8px, 1.15vw, 11px);
+    font-weight:700; letter-spacing:0.04em; color:#1f3f6b; }
+  #size-custom[hidden] { display:none; }
+  #size-custom input { width:4.2em; font-family:var(--font-ui);
+    font-size:clamp(8px, 1.15vw, 11px); font-weight:700; text-align:center;
+    color:#1f3f6b; background:#f1e9d2; border:1px solid #1f3f6b;
+    border-radius:2px; padding:3px 4px; }
+  #size-custom input:focus { outline:2px solid #8f2a1d; outline-offset:1px; }
   /* The family whose submenu is open, and the type the drawing carries, both
      read as the page's one attention colour -- the same signal the wall tool
      uses when it is armed. */
@@ -1140,6 +1157,23 @@
       <div id="build-bar" data-build-bar hidden>
         <div id="build-families" data-build-families></div>
         <div id="build-entries" data-build-entries hidden></div>
+        <!-- HOW BIG THE GARAGE IS, and only the garage asks (Movie, 15 Sep).
+             Three sizes and a pair of fields, on the shelf under the entry
+             that raised the question -- a house's size arrives with its
+             premade design, a garage's size IS the design. -->
+        <div id="build-sizes" data-build-sizes hidden>
+          <div id="size-stock" data-build-size-stock></div>
+          <div id="size-custom" data-build-size-custom hidden>
+            <label class="said" for="size-w">Garage width in feet</label>
+            <input id="size-w" data-build-size-width type="number" inputmode="numeric"
+              min="8" max="60" step="1" placeholder="__" />
+            <span aria-hidden="true">FT X</span>
+            <label class="said" for="size-d">Garage depth in feet</label>
+            <input id="size-d" data-build-size-depth type="number" inputmode="numeric"
+              min="8" max="60" step="1" placeholder="__" />
+            <span aria-hidden="true">FT</span>
+          </div>
+        </div>
       </div>
     </div>
     <button id="dt-bone" type="button" data-drivethru-bone
@@ -3576,7 +3610,31 @@
     onOrder: fn => { if (typeof fn === 'function') orderHandlers.push(fn); },
   });
 
+  // HOW BIG, for the entries that ask (the detached garage, and only it).
+  // A stock id, 'custom', or null for not answered yet. The typed pair
+  // lives in the fields themselves rather than being mirrored here: two
+  // places holding one number is how they come to disagree.
+  let chosenSizeId = null;
+  const sizeRow = document.getElementById('build-sizes');
+  const sizeStock = document.getElementById('size-stock');
+  const sizeCustom = document.getElementById('size-custom');
+  const sizeWidth = document.getElementById('size-w');
+  const sizeDepth = document.getElementById('size-d');
+
+  // THE SIZE THE ORDER WOULD CARRY, or null if the question is open. A
+  // typed pair that is blank or out of bounds is NOT a size -- the bone
+  // refuses rather than building a garage nobody asked for.
+  const chosenSize = () => {
+    if (!chosen()?.entry?.needsSize || !chosenSizeId) return null;
+    if (chosenSizeId !== 'custom') return BM.garageSizeById(chosenSizeId);
+    return BM.customGarageSize(sizeWidth.value, sizeDepth.value);
+  };
+
   const pressEntry = entryId => {
+    // A NEW ENTRY IS A NEW QUESTION. Carrying the last garage's size onto
+    // the next press would build a 16x24 for a drafter who pressed a
+    // different tile and never saw the size asked.
+    if (entryId !== chosenEntryId) chosenSizeId = null;
     chosenEntryId = entryId;
     openFamilyId = null;
     const picked = chosen();
@@ -3631,15 +3689,56 @@
       button.onclick = () => pressEntry(entry.id);
       return button;
     }) : []));
+
+    // THE SIZE ROW BELONGS TO THE CHOSEN ENTRY, not to the open submenu:
+    // it is the question that follows the press, so it stays up after the
+    // submenu shuts and the drafter can still see what he answered.
+    const asks = chosen()?.entry?.needsSize === true;
+    sizeRow.hidden = !asks;
+    if (asks) {
+      sizeStock.replaceChildren(...BM.GARAGE_SIZES.map(size => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.buildSize = size.id;
+        button.textContent = size.label;
+        button.classList.toggle('chosen', size.id === chosenSizeId);
+        button.onclick = () => { chosenSizeId = size.id; syncBuildBar(); };
+        return button;
+      }), (() => {
+        // THE FOURTH IS NOT A SIZE, it is the fields. It presses like the
+        // other three so the row reads as one question with four answers.
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.buildSize = 'custom';
+        button.textContent = 'OTHER';
+        button.classList.toggle('chosen', chosenSizeId === 'custom');
+        button.onclick = () => {
+          chosenSizeId = 'custom';
+          syncBuildBar();
+          sizeWidth.focus();
+        };
+        return button;
+      })());
+      sizeCustom.hidden = chosenSizeId !== 'custom';
+    }
+
     buildBar.hidden = false;
     paintSign();
   };
+  // A TYPED FIGURE REDRAWS THE SIGN AND NOTHING ELSE. Rebuilding the row on
+  // every keystroke would take the field's focus away mid-number.
+  [sizeWidth, sizeDepth].forEach(field =>
+    field.addEventListener('input', () => paintSign()));
 
   const fireBuild = () => { buildHandlers.forEach(fn => fn(chosen())); };
   // THE ORDER CARRIES ITS ROUND: 'menu' means hand over the premade design
   // for this type, 'outline' means walk the drafter through drawing it.
+  // AND ITS SIZE, when the entry asked for one. `size` is null on every
+  // other order rather than absent, so the geometry side reads one shape.
   const fireOrder = () => {
-    const order = { ...(chosen() || { family: null, entry: null }), round };
+    const order = {
+      ...(chosen() || { family: null, entry: null }), round, size: chosenSize(),
+    };
     orderHandlers.forEach(fn => fn(order));
   };
   // The foot bone is wired under the sign, because an empty press is
@@ -3677,8 +3776,20 @@
       signLine.textContent = signRefusal.line;
       signNote.textContent = signRefusal.note;
       signRefusal = null;
+    } else if (picked?.entry?.needsSize && !chosenSize()) {
+      // THE GARAGE IS ASKED HOW BIG BEFORE IT IS PROMISED. Saying "press
+      // the bone and I'll build it" with the size still open would promise
+      // something the bone is about to refuse.
+      signLine.textContent = `${picked.entry.label}. HOW BIG?`;
+      signNote.textContent = chosenSizeId === 'custom'
+        ? `Type the two figures \u2014 anything from ${BM.GARAGE_SIZE_MIN_FT} to `
+          + `${BM.GARAGE_SIZE_MAX_FT} feet.`
+        : 'Pick a size off the shelf, or press OTHER and type your own.';
     } else if (picked) {
-      signLine.textContent = `ONE ${picked.entry.label}. GOOD CHOICE.`;
+      const size = chosenSize();
+      signLine.textContent = size
+        ? `ONE ${size.label} ${picked.entry.label}. GOOD CHOICE.`
+        : `ONE ${picked.entry.label}. GOOD CHOICE.`;
       // THE SAME BOARD SAYS WHICH ROUND IT IS. Both rounds end on the same
       // bone, so the screen is the only thing telling the drafter whether
       // the house arrives built or he draws it -- and that is the whole
@@ -3803,7 +3914,26 @@
   // still a press the geometry side is told about, and it carries the round
   // so "build me one" and "walk me through drawing one" cannot be confused
   // for each other by whoever writes them.
-  document.getElementById('dt-bone').addEventListener('click', fireOrder);
+  //
+  // EXCEPT A GARAGE WITH NO SIZE, which is not an order. The size is the
+  // whole design of a box, so an order without one has nothing in it --
+  // and the drafter who typed 4ft by 900ft is told so rather than watching
+  // a press do nothing.
+  document.getElementById('dt-bone').addEventListener('click', () => {
+    const picked = chosen();
+    if (picked?.entry?.needsSize && !chosenSize()) {
+      signRefusal = {
+        line: 'HOW BIG, THOUGH?',
+        note: chosenSizeId === 'custom'
+          ? `Both figures, between ${BM.GARAGE_SIZE_MIN_FT} and `
+            + `${BM.GARAGE_SIZE_MAX_FT} feet.`
+          : 'Pick a size off the shelf, or press OTHER and type your own.',
+      };
+      paintSign();
+      return;
+    }
+    fireOrder();
+  });
   // Escape shuts the sign, as it shuts every other thing this page puts over
   // the drawing. Captured before the drawing's own Escape so an open sign is
   // not also a cleared selection.

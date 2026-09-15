@@ -88,13 +88,55 @@ if (!window.DraftBuildMenu) {
       title: 'DETACHED GARAGE — pick its foundation, then draw its own loop',
       // No `type`: a detached garage says nothing about what house it stands
       // beside, and may stand beside none.
+      // `needsSize` is the detached garage's second question (Movie, 15 Sep:
+      // "allow them to enter the size give them choices 16x24 24x26 25x25
+      // (or 4th option allow them to enter ___FT X ___FT)"). A house's size
+      // comes with its premade design; a garage is a box, so its size IS the
+      // design and nothing can be built without it.
       entries: Object.freeze([
-        Object.freeze({ id: 'detached-thickened', label: 'THICKENED EDGE', foundation: 'thickened' }),
-        Object.freeze({ id: 'detached-gradebeam', label: 'GRADE BEAM', foundation: 'gradebeam' }),
-        Object.freeze({ id: 'detached-frostwall', label: 'FROST WALL', foundation: 'frostwall' }),
+        Object.freeze({ id: 'detached-thickened', label: 'THICKENED EDGE', foundation: 'thickened', needsSize: true }),
+        Object.freeze({ id: 'detached-gradebeam', label: 'GRADE BEAM', foundation: 'gradebeam', needsSize: true }),
+        Object.freeze({ id: 'detached-frostwall', label: 'FROST WALL', foundation: 'frostwall', needsSize: true }),
       ]),
     }),
   ]);
+
+  // ── HOW BIG THE GARAGE IS ────────────────────────────────────────────
+  // Movie's three, in his order, plus the fourth that is not a size but a
+  // pair of empty fields. Feet, because that is what the drafter says out
+  // loud -- "sixteen by twenty-four" -- and the page converts once, at the
+  // point it makes geometry, rather than storing two units.
+  //
+  // WIDTH IS ACROSS THE DOOR WALL, depth is back from it. 16x24 is a single
+  // bay you can walk past the car in; the other two are doubles. Naming
+  // which number is which is the whole difference between a 16x24 and a
+  // 24x16, and the label cannot say it.
+  const GARAGE_SIZES = Object.freeze([
+    Object.freeze({ id: '16x24', label: "16' x 24'", widthFt: 16, depthFt: 24 }),
+    Object.freeze({ id: '24x26', label: "24' x 26'", widthFt: 24, depthFt: 26 }),
+    Object.freeze({ id: '25x25', label: "25' x 25'", widthFt: 25, depthFt: 25 }),
+  ]);
+
+  // THE FOURTH OPTION HAS BOUNDS, and they are here rather than in the page
+  // because a typed size is the one a drafter can get wrong. Below 8ft
+  // nothing parks; above 60ft it is a shop, not a garage, and either is far
+  // more likely a slipped finger than a building.
+  const GARAGE_SIZE_MIN_FT = 8;
+  const GARAGE_SIZE_MAX_FT = 60;
+  const garageSizeById = id => GARAGE_SIZES.find(size => size.id === id) || null;
+  // A typed pair, checked and named, or null. Returning the same shape as a
+  // stock size means the caller has one kind of thing to carry: whoever
+  // builds the box never asks which of the four the drafter pressed.
+  const customGarageSize = (widthFt, depthFt) => {
+    const w = Number(widthFt);
+    const d = Number(depthFt);
+    const sane = value => Number.isFinite(value)
+      && value >= GARAGE_SIZE_MIN_FT && value <= GARAGE_SIZE_MAX_FT;
+    if (!sane(w) || !sane(d)) return null;
+    return Object.freeze({
+      id: 'custom', label: `${w}' x ${d}'`, widthFt: w, depthFt: d, custom: true,
+    });
+  };
 
   // The family a menu id belongs to, and the entry itself. Both pages ask
   // these questions; neither should walk the array in its own words.
@@ -111,6 +153,11 @@ if (!window.DraftBuildMenu) {
   window.DraftBuildMenu = Object.freeze({
     BUILD_TYPE_BUTTONS,
     BUILD_MENU,
+    GARAGE_SIZES,
+    GARAGE_SIZE_MIN_FT,
+    GARAGE_SIZE_MAX_FT,
+    garageSizeById,
+    customGarageSize,
     familyById,
     entryById,
     labelForType,

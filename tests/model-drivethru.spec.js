@@ -463,3 +463,119 @@ test('with a house and a detached garage already standing, the bone does nothing
       .toHaveAttribute('data-shut', '');
     await expect(page.locator('#dt-open')).not.toHaveAttribute('data-lit', '');
   });
+
+// ── HOW BIG IS THE GARAGE ────────────────────────────────────────────────
+// Movie, 15 Sep: "we could make a detached garage and even allow them to
+// enter the size give them choices 16x24 24x26 25x25 (or 4th option allow
+// them to enter ___FT X ___FT)".
+//
+// THE SIZE ROW IS ON THE SIGN, NOT A SECOND SUBMENU. The board is "only 1
+// submenu each" (Movie, 6 Sep), and the fourth option is two fields, which
+// a tile cannot carry.
+const openGarage = async page => {
+  await h.openDriveThru(page);
+  await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
+  await page.locator('#dt-tiles [data-build-entry="detached-thickened"]').click();
+};
+
+test('the detached garage is asked how big, and the house never is',
+  async ({ page }) => {
+    await openPage(page);
+    await openGarage(page);
+
+    await expect(page.locator('#build-sizes')).toBeVisible();
+    await expect(page.locator('#size-stock button'))
+      .toHaveText(["16' x 24'", "24' x 26'", "25' x 25'", 'OTHER']);
+    // AND GRUFF ASKS RATHER THAN PROMISING. Saying "press the bone and
+    // I'll build it" with the size still open promises what the bone is
+    // about to refuse.
+    await expect(page.locator('[data-drivethru-line]')).toContainText('HOW BIG');
+
+    // A HOUSE'S SIZE ARRIVES WITH ITS PREMADE DESIGN, so the row goes away
+    // again -- a bungalow asked for its dimensions would be the drive-thru
+    // asking a question the catalogue already answered.
+    await page.locator('#dt-tiles [data-build-family="bungalow"]').click();
+    await page.locator('#dt-tiles [data-build-entry="bungalow"]').click();
+    await expect(page.locator('#build-sizes')).toBeHidden();
+  });
+
+test('a stock size rides the order to the seam', async ({ page }) => {
+  await openPage(page);
+  await openGarage(page);
+  await page.locator('#size-stock [data-build-size="24x26"]').click();
+  await expect(page.locator('[data-drivethru-line]')).toContainText("24' x 26'");
+
+  const ordered = await page.evaluate(() => {
+    const seen = [];
+    window.ModelBuild.onOrder(order => seen.push(order.size));
+    document.getElementById('dt-bone').click();
+    return seen;
+  });
+  expect(ordered.length, 'the order never reached the seam').toBe(1);
+  expect({ w: ordered[0]?.widthFt, d: ordered[0]?.depthFt },
+    'the size the drafter pressed is not the size that was ordered')
+    .toEqual({ w: 24, d: 26 });
+});
+
+test('the fourth option is two fields, and they are checked before the bone',
+  async ({ page }) => {
+    await openPage(page);
+    await openGarage(page);
+    await page.locator('#size-stock [data-build-size="custom"]').click();
+    await expect(page.locator('#size-custom')).toBeVisible();
+
+    // A GARAGE WITH NO SIZE IS NOT AN ORDER. The size is the whole design
+    // of a box, so the bone refuses out loud rather than firing a seam
+    // with nothing in it -- and this is the half that would rot silently,
+    // because an empty field reads as 0 to anything that only asks "is it
+    // a number".
+    let fired = await page.evaluate(() => {
+      const seen = [];
+      window.ModelBuild.onOrder(order => seen.push(order));
+      document.getElementById('dt-bone').click();
+      return seen.length;
+    });
+    expect(fired, 'a garage with no size was ordered anyway').toBe(0);
+    await expect(page.locator('[data-drivethru-line]')).toContainText('HOW BIG');
+
+    // AND A SLIPPED FINGER IS NOT A BUILDING either: 4ft parks nothing.
+    await page.locator('#size-w').fill('4');
+    await page.locator('#size-d').fill('900');
+    fired = await page.evaluate(() => {
+      const seen = [];
+      window.ModelBuild.onOrder(order => seen.push(order));
+      document.getElementById('dt-bone').click();
+      return seen.length;
+    });
+    expect(fired, 'a 4ft by 900ft garage was ordered').toBe(0);
+
+    await page.locator('#size-w').fill('18');
+    await page.locator('#size-d').fill('22');
+    await expect(page.locator('[data-drivethru-line]')).toContainText("18' x 22'");
+    const ordered = await page.evaluate(() => {
+      const seen = [];
+      window.ModelBuild.onOrder(order => seen.push(order.size));
+      document.getElementById('dt-bone').click();
+      return seen;
+    });
+    expect({ w: ordered[0]?.widthFt, d: ordered[0]?.depthFt, own: ordered[0]?.custom },
+      'the typed pair did not reach the seam as a size')
+      .toEqual({ w: 18, d: 22, own: true });
+  });
+
+test('a size does not follow the drafter onto the next thing he picks',
+  async ({ page }) => {
+    await openPage(page);
+    await openGarage(page);
+    await page.locator('#size-stock [data-build-size="16x24"]').click();
+    await expect(page.locator('[data-drivethru-line]')).toContainText("16' x 24'");
+
+    // PRESSING A DIFFERENT FOUNDATION IS A NEW QUESTION. Carrying the last
+    // answer across would build a 16x24 for a drafter who never saw the
+    // size asked on the tile he actually pressed.
+    await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
+    await page.locator('#dt-tiles [data-build-entry="detached-frostwall"]').click();
+    await expect(page.locator('[data-drivethru-line]')).toContainText('HOW BIG');
+    await expect(page.locator('#size-stock [data-build-size="16x24"]'))
+      .not.toHaveClass(/chosen/);
+  });
