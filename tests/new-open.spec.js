@@ -58,7 +58,11 @@ test('SAVE FIRST downloads the drawing, then the new sheet appears', async ({ pa
   await page.getByRole('button', { name: 'SAVE FIRST' }).click();
 
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toContain('model-drawing');
+  // The name is a local timestamp to the minute now -- 20260913T2201.json --
+  // because every download used to arrive as `model-drawing` and the second
+  // save of a session overwrote the first. What this check is for is that
+  // SAVE FIRST downloads AT ALL before the sheet is replaced.
+  expect(download.suggestedFilename()).toMatch(/^\d{8}T\d{4}\.[a-z0-9]+$/);
   await expect(guard(page)).toHaveCount(0);
   await expect(page.locator('[data-model-drawing-message]')).toContainText('New drawing started');
   await h.waitForSaved(page);
