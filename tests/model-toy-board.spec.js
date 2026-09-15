@@ -108,8 +108,8 @@ test('the board round-trips, and a file that never had one still does not',
       'a recorded board comes back out').toBe('drafting');
 
     await open(page, base({}));
-    await page.locator('[data-draw-wall]').click();   // make it dirty honestly
-    await page.locator('[data-draw-wall]').click();
+    await h.armWall(page);   // make it dirty honestly
+    await h.disarmWall(page);
     await page.locator('#save').click();
     await page.waitForTimeout(400);
     const after = await stored(page);
@@ -145,8 +145,8 @@ test('a junk board is normalised out of the file, not carried in it',
     // sibling: "buildType: the reader normalises what it does not know, and
     // the writer never emits it". Same treatment.
     await open(page, base({ board: 'banana' }));
-    await page.locator('[data-draw-wall]').click();
-    await page.locator('[data-draw-wall]').click();
+    await h.armWall(page);
+    await h.disarmWall(page);
     await page.locator('#save').click();
     await page.waitForTimeout(400);
     // Same correction as above: "not carried in it" is a claim about the KEY,
@@ -179,9 +179,7 @@ async function startARun(page) {
   // the tool stays armed with the chain live -- so a second call that clicked
   // blindly disarmed it, the length box went dead, and the failure pointed at
   // the box rather than at the click that killed it.
-  const armed = await page.locator('[data-draw-wall]')
-    .evaluate(el => el.classList.contains('armed'));
-  if (!armed) await page.locator('[data-draw-wall]').click();
+  await h.armWall(page);
   await page.mouse.click(...at(0, 4));
   await page.mouse.move(...at(6, 4));
   await page.waitForTimeout(60);
@@ -292,9 +290,7 @@ async function drawnWall(page, from, to) {
   const scale = await page.evaluate(() => Number(
     /scale ([\d.]+) px\/ft/.exec(document.getElementById('readout').textContent)[1]));
   const at = (x, z) => [box.x + box.width / 2 + x * scale, box.y + box.height / 2 + z * scale];
-  const armed = await page.locator('[data-draw-wall]')
-    .evaluate(el => el.classList.contains('armed'));
-  if (!armed) await page.locator('[data-draw-wall]').click();
+  await h.armWall(page);
   await page.mouse.click(...at(...from));
   await page.waitForTimeout(60);
   await page.mouse.click(...at(...to));

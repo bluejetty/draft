@@ -232,7 +232,19 @@ async function waitForSaved(page) {
   await page.evaluate(() => new Promise(resolve =>
     requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await page.waitForFunction(() => document.body.dataset.saveDirty === '0', undefined, { timeout: 5000 });
-  await expect(page.locator('[data-model-status]')).toContainText('SAVED', { timeout: 5000 });
+  // EITHER PAGE'S STATUS. MODEL.dc.html has a separate [data-model-status]
+  // element; MODEL.html carries the status ON its SAVE button
+  // ([data-save-status]) since the chrome shell put the file row together. A
+  // helper that only knew the first read as "the save never landed" on the
+  // second, which is a false report about the page rather than a missing
+  // element -- and it costs a five-second timeout to find that out.
+  //
+  // Not `.or()` on one locator: each page has exactly one of these, so asking
+  // which is present first keeps the failure message pointing at the element
+  // that should have said SAVED rather than at a union that matched nothing.
+  const dc = page.locator('[data-model-status]');
+  const status = (await dc.count()) ? dc : page.locator('[data-save-status]');
+  await expect(status).toContainText('SAVED', { timeout: 5000 });
 }
 
 async function savedDrawing(page) {
@@ -331,12 +343,134 @@ async function pickBuild(page, type, { tap = false } = {}) {
   else await entry.click();
 }
 
+// ── MODEL.html: the level and the view, now that the two SELECTs are gone ──
+//
+// §7 deleted the chrome bar, and with it `#level-pick` and `#view-pick`. The
+// LEVELS panel in the right rail is the one control left: a `[data-level-row]`
+// per level and a `[data-layer]` per layer view inside it, which is what the
+// panel and the seats already shared. Every spec that drove the selects comes
+// through here instead, so the next time the control moves one function moves
+// with it rather than sixty call sites.
+//
+// THE RAIL IS OPENED FIRST. Collapsed shows the level names -- that is §7c's
+// whole point -- but not the layer rows, so a helper that works either way is
+// a helper that quietly does nothing half the time.
+async function openModelRail(page) {
+  const rail = page.locator('#right-rail');
+  if (await rail.getAttribute('data-collapsed') === null) return;
+  await page.locator('#right-tab').click();
+  await expect(rail).not.toHaveAttribute('data-collapsed', '');
+}
+
+async function pickModelLevel(page, id) {
+  await openModelRail(page);
+  await page.locator(`[data-level-row="${id}"]`).click();
+}
+
+async function pickModelLayer(page, levelId, viewId) {
+  await openModelRail(page);
+  await page.locator(`[data-layer="${levelId}:${viewId}"]`).click();
+}
+
+// WHAT THE PAGE IS LOOKING AT, read off the readout rather than the URL: the
+// URL omits both parameters at their defaults, so a URL read would report
+// "none" on the level the drafter is actually standing on. The readout prints
+// the resolved answer, which is the question every one of these specs asked
+// the select.
+async function modelLevelId(page) {
+  return page.evaluate(() => {
+    const m = /(\d+)\/\d+\s+view\s/.exec(document.getElementById('readout').textContent);
+    return m ? m[1] : null;
+  });
+}
+
+async function modelViewId(page) {
+  return page.evaluate(() => {
+    const m = /\sview\s+(\S+)/.exec(document.getElementById('readout').textContent);
+    return m ? m[1] : null;
+  });
+}
+
+// A SECTION OR AN ELEVATION, which the panel lists under its own headings
+// rather than among a level's layer rows -- they belong to the drawing, not
+// to a floor. Matched on the leading id so `E1 · FRONT` answers to `E1`.
+const cutRow = (page, id) => page.locator('.lv-layer')
+  .filter({ hasText: new RegExp(`^${id}(\\s|$)`) }).first();
+
+async function pickModelCut(page, id) {
+  await openModelRail(page);
+  await cutRow(page, id).click();
+}
+
+async function modelCutOffered(page, id) {
+  await openModelRail(page);
+  return await cutRow(page, id).count() > 0;
+}
+
+// The layer views a level offers, in the panel's order -- the count and the
+// labels the `#view-pick` options used to give.
+async function modelLayerIds(page, levelId) {
+  await openModelRail(page);
+  return page.evaluate(id => [...document.querySelectorAll(`[data-layer^="${id}:"]`)]
+    .map(el => el.dataset.layer.split(':')[1]), levelId);
+}
+
+// ── MODEL.html: arming the WALL tool, now that #draw-wall is gone ─────────
+//
+// §7b took the top row for the mode corner and the file row, and `#draw-wall`
+// went with the chrome bar it lived in. WALL was never that button's alone --
+// the tool column and the old button shared ONE register -- so arming it is
+// the same act through the key that remains, in the left rail.
+//
+// THE RAIL IS OPENED FIRST, because shut it is `hidden` and a click on a key
+// inside it waits for ever. Specs that used to press a button in the head
+// call this instead, so the next move of the control moves one function.
+async function openToolRail(page) {
+  const rail = page.locator('#left-rail');
+  if (!(await rail.isHidden())) return;
+  await page.locator('#left-tab').click();
+  await expect(rail).toBeVisible();
+}
+
+const wallKey = page => page.locator('[data-tool-key="wall"]');
+
+async function wallArmed(page) {
+  await openToolRail(page);
+  return await wallKey(page).getAttribute('aria-pressed') === 'true';
+}
+
+// IDEMPOTENT, unlike the press. Pressing the armed key returns to SELECT --
+// the register's rule -- so a helper that always clicked would disarm the
+// tool for any caller that was already holding it.
+async function armWall(page) {
+  if (await wallArmed(page)) return;
+  await wallKey(page).click();
+  await expect(wallKey(page)).toHaveAttribute('aria-pressed', 'true');
+}
+
+async function disarmWall(page) {
+  if (!(await wallArmed(page))) return;
+  await wallKey(page).click();
+  await expect(wallKey(page)).toHaveAttribute('aria-pressed', 'false');
+}
 
 module.exports = {
   HALF_HEIGHT_FT,
   STORAGE_BUCKET,
   openModel,
   openRails,
+  openModelRail,
+  pickModelLevel,
+  pickModelLayer,
+  modelLevelId,
+  modelViewId,
+  modelLayerIds,
+  pickModelCut,
+  modelCutOffered,
+  openToolRail,
+  armWall,
+  disarmWall,
+  wallArmed,
   waitForModelReady,
   suppressEntryCoach,
   worldToClient,

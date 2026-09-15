@@ -257,7 +257,7 @@ test('undo takes back a placed column, and does not spend a step doing nothing',
     // back, one more undo must still reach the WALL drawn before it.
     await open(page, base({}));
     const { at } = await frame(page);
-    await page.locator('[data-draw-wall]').click();
+    await h.armWall(page);
     await page.mouse.click(...at(-8, -6));
     await page.waitForTimeout(60);
     await page.mouse.click(...at(-2, -6));

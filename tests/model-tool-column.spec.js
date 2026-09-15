@@ -176,27 +176,30 @@ test('the register holds one tool, not seventeen booleans', async ({ page }) => 
   expect(got.filter(k => k.armed).map(k => k.id)).toEqual(['select']);
 });
 
-test('the old #draw-wall button and the WALL key are ONE register',
+test('the WALL key is the ONLY register: the old #draw-wall button is gone',
   async ({ page }) => {
     await openColumn(page);
-    const legacy = page.locator('[data-draw-wall]');
     const wallKey = page.locator('[data-tool-key="wall"]');
 
-    // Old button arms the new key.
-    await legacy.click();
-    await expect(wallKey).toHaveAttribute('aria-pressed', 'true');
-    await expect(legacy).toHaveClass(/armed/);
-
-    // And back the other way: the new key disarms the old button. This is the
-    // direction that catches a keypad given its own state — arming from the
-    // column while `drawArmed` stayed true would leave both lit and the page
-    // would commit walls from a tool the column says is not selected.
-    await page.locator('[data-tool-key="select"]').click();
-    await expect(wallKey).toHaveAttribute('aria-pressed', 'false');
-    await expect(legacy).not.toHaveClass(/armed/);
+    // §7b TOOK THE TOP ROW for the file row and the mode corner, and
+    // `#draw-wall` went with the chrome bar it sat in. This check kept the
+    // two controls agreeing while both existed; with one left, the claim it
+    // protects is that the SECOND ONE DID NOT SURVIVE anywhere — a stray
+    // button still calling the old arming path is the same page-with-two-
+    // states fault, minus the test that used to see it.
+    await expect(page.locator('[data-draw-wall]')).toHaveCount(0);
+    await expect(page.locator('#draw-wall')).toHaveCount(0);
 
     await wallKey.click();
-    await expect(legacy).toHaveClass(/armed/);
+    await expect(wallKey).toHaveAttribute('aria-pressed', 'true');
+
+    // And the other way: SELECT puts WALL down. One register, so exactly one
+    // key is lit at a time -- the sibling check above holds that -- and the
+    // page has no arming state left that the column cannot see.
+    await page.locator('[data-tool-key="select"]').click();
+    await expect(wallKey).toHaveAttribute('aria-pressed', 'false');
+    const lit = (await keys(page)).filter(k => k.armed).map(k => k.id);
+    expect(lit).toEqual(['select']);
   });
 
 test('a wall still commits when WALL is armed from the column',

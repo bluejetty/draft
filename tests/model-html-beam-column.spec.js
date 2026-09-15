@@ -122,11 +122,10 @@ test.describe('group A — beams and columns must be drawn before they can be pl
         + 'draws every level at once is not showing the drafter their level')
         .toEqual([]);
 
-      await page.locator('#level-pick').selectOption(String(beamHome.levelId));
-      const viewValues = await page.locator('#view-pick option')
-        .evaluateAll(nodes => nodes.map(n => n.value));
+      await h.pickModelLevel(page, beamHome.levelId);
+      const viewValues = await h.modelLayerIds(page, beamHome.levelId);
       const wanted = viewValues.find(v => v.toLowerCase().includes(String(beamHome.view).toLowerCase()));
-      if (wanted) await page.locator('#view-pick').selectOption(wanted);
+      if (wanted) await h.pickModelLayer(page, beamHome.levelId, wanted);
       console.log('VIEWS OFFERED:', JSON.stringify(viewValues), 'picked:', wanted);
       await page.waitForTimeout(200);
       // Force a paint with the spy live: the page paints once at boot, before
@@ -166,8 +165,8 @@ test.describe('group A — beams and columns must be drawn before they can be pl
       // assertion above.
       await page.reload();
       await expect(page.locator('#readout')).toContainText('walls', { timeout: 6000 });
-      await page.locator('#level-pick').selectOption(String(beamHome.levelId));
-      if (wanted) await page.locator('#view-pick').selectOption(wanted);
+      await h.pickModelLevel(page, beamHome.levelId);
+      if (wanted) await h.pickModelLayer(page, beamHome.levelId, wanted);
       await page.keyboard.press('0');
       await page.waitForTimeout(300);
       const after = await page.evaluate(() => window.__paintCalls || {});

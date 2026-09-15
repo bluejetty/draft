@@ -47,6 +47,8 @@ const BUCKET = 'model-drawing';
 const V = (x, z) => ({ x, y: 0, z });
 const WALL = 10;      // the square's half-width, and where the walls are
 const LINE_Z = 0;     // the probe line runs across the middle, clear of walls
+const STUB_E = -2;    // w-stub's east end -- interior, so a press cannot miss
+const STUB_Z = -7;
 
 const FIXTURE = {
   version: 1,
@@ -228,12 +230,13 @@ test('the WALL filter stops a line responding, and ALL lets it back',
   async ({ page }) => {
     await open(page);
 
-    // Under ALL the line at z = 0 is selectable. The DELETE button is the
-    // page's own tell for "exactly one wall is selected", so it must stay
-    // hidden here: a line was picked, not a wall.
+    // Under ALL the line at z = 0 is selectable. DELETE is the page's own
+    // tell for "something is selected" -- §7c widened it from a wall-only
+    // button to one verb over the whole selection, so a picked LINE shows it
+    // now where a wall-only DELETE stayed hidden.
     await page.mouse.click(...await at(page, 0, LINE_Z));
     await page.waitForTimeout(80);
-    await expect(page.locator('[data-delete-wall]')).toBeHidden();
+    await expect(page.locator('[data-delete]')).toBeVisible();
     const litUnderAll = await selCount(page);
 
     await page.locator('[data-sel-filter="wall"]').click();
@@ -248,7 +251,7 @@ test('the WALL filter stops a line responding, and ALL lets it back',
     // is still grabbable with WALL engaged.
     await page.mouse.click(...await at(page, 0, -WALL));
     await page.waitForTimeout(80);
-    await expect(page.locator('[data-delete-wall]')).toBeVisible();
+    await expect(page.locator('[data-delete]')).toBeVisible();
   });
 
 test('shift adds and shift removes', async ({ page }) => {
@@ -263,9 +266,11 @@ test('shift adds and shift removes', async ({ page }) => {
   expect(await selCount(page),
     'shift adds a second wall').toBe(2);
 
-  // The handles go with it: two walls selected is no longer "one wall", so the
-  // corner grab and the DELETE button both stand down.
-  await expect(page.locator('[data-delete-wall]')).toBeHidden();
+  // The corner handles go with it: two walls selected is no longer "one
+  // wall", so the corner grab stands down. DELETE does NOT -- it takes the
+  // whole selection now, and a verb that hid the moment a second item was
+  // picked was the wall-only button's limit, not a rule about deleting.
+  await expect(page.locator('[data-delete]')).toBeVisible();
 
   await page.mouse.click(...await at(page, 0, WALL));
   await page.waitForTimeout(60);
@@ -273,6 +278,82 @@ test('shift adds and shift removes', async ({ page }) => {
   expect(await selCount(page),
     'shift on a selected item removes it').toBe(1);
 });
+
+// WHAT THE WIDENED DELETE STOPPED OBSERVING, restored as the behaviour itself.
+//
+// The two assertions above read `[data-delete-wall]` and were correct to
+// change: §7c made DELETE one verb over the whole selection, so "hidden for a
+// line" and "hidden for two walls" were facts about the OLD wall-only button,
+// not rules about deleting. But that button's visibility was doing a second
+// job -- the comment said so in as many words, "the page's own tell for
+// exactly one wall is selected" -- and only the first job was replaced.
+//
+// So the claim went quiet: `cornerAt()` returns null unless selectedWall()
+// finds exactly one wall (MODEL.html:4319), and after the swap nothing watched
+// it. The handles are painted on the CANVAS, which is why a DOM button was
+// standing in for them; the grab they advertise is not, so the honest
+// substitute is to try the grab and see that it does nothing.
+//
+// THE CONTROL IS THE POINT. "The corner did not move" is also what a drag that
+// missed the corner entirely looks like, and what a page with no corner drag
+// at all looks like -- so the same gesture runs with ONE wall selected and
+// must move it. Without that half this passes on a page where nothing drags.
+test('two walls selected: the corner grab stands down, one wall: it still grabs',
+  async ({ page }) => {
+    // SAVED THROUGH THE PAGE'S OWN BUTTON rather than h.waitForSaved, which
+    // waits on [data-model-status] -- the DC page's element. This page carries
+    // the status ON the SAVE button (data-save-status) since the chrome shell.
+    const cornerZ = async (page, x, z) => {
+      await page.locator('[data-model-save]').click();
+      await expect(page.locator('[data-model-save]'))
+        .toHaveText(/saved/i, { timeout: 6000 });
+      const d = await h.savedDrawing(page);
+      const pt = (d.walls || []).flatMap(w => [w.start, w.end])
+        .find(p => Math.hypot(p.x - x, p.z - z) < 0.75);
+      return pt || null;
+    };
+
+    // ONE WALL FIRST, so the control is measured on the same fixture and the
+    // same corner before anything is added to the selection.
+    await open(page);
+    await page.mouse.click(...await at(page, -5, STUB_Z));   // on w-stub
+    await page.waitForTimeout(60);
+    expect(await selCount(page), 'one wall selected').toBe(1);
+
+    // THE STUB'S EAST END, not the square's corner. The square runs to the very
+    // edge of the fitted view, so its corners land on -- or under -- the page's
+    // own top chrome, and a press that misses is indistinguishable from a grab
+    // that stood down. w-stub is interior by construction; the fixture already
+    // put it there for a neighbouring reason.
+    const from = await at(page, STUB_E, STUB_Z);
+    await page.mouse.move(...from);
+    await page.mouse.down();
+    await page.mouse.move(from[0], from[1] - 40, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(120);
+    expect(await cornerZ(page, STUB_E, STUB_Z),
+      'CONTROL: with one wall selected the corner drag moves the corner, so a '
+      + 'point is no longer sitting at the place it started').toBe(null);
+
+    // NOW TWO. Fresh page: the drag above moved the drawing.
+    await open(page);
+    await page.mouse.click(...await at(page, -5, STUB_Z));   // w-stub
+    await page.waitForTimeout(60);
+    await page.keyboard.down('Shift');
+    await page.mouse.click(...await at(page, 0, WALL));      // and a second wall
+    await page.keyboard.up('Shift');
+    await page.waitForTimeout(60);
+    expect(await selCount(page), 'two walls selected').toBe(2);
+
+    await page.mouse.move(...from);
+    await page.mouse.down();
+    await page.mouse.move(from[0], from[1] - 40, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(120);
+    expect(await cornerZ(page, STUB_E, STUB_Z),
+      'with two walls selected cornerAt() offers no handle, so the same drag '
+      + 'must leave the corner exactly where it was').not.toBe(null);
+  });
 
 test('a plain click on empty space puts the selection down', async ({ page }) => {
   // THE MUTATION GATE FOUND THIS MISSING. Nine mutants died; "a plain click
