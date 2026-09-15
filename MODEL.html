@@ -628,7 +628,28 @@
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none); }
   aside[hidden] { display:none; }
   #left-rail { left:28px; border-right:1px solid var(--edge-panel); min-width:120px; }
-  #right-rail { right:28px; border-left:1px solid var(--edge-panel); }
+  /* THE PANEL IS BOUNDED, and this is the rule that keeps it off the sheet.
+     `aside` is position:fixed with no width, so it is SHRINK-TO-FIT: as wide
+     as its widest content's MAX-content, with nothing stopping it. That was
+     survivable while the LEVELS panel held level cards; the boneyard's card
+     put a title AND a + SHELF button on one line and took the rail from 277px
+     to 343px, which moved its left edge to x=909 and put it over the drawing.
+     model-html-draw-delete caught it: a tap aimed at world (4,-3) reached the
+     right sidebar instead of the canvas. I shipped that in the boneyard commit
+     because the run covered the boneyard cascade and not that spec.
+     WHY A BOUND RATHER THAN A SHAVE. The card was not uniquely guilty --
+     measured, FOUNDATION's card wanted exactly the same 343px -- so trimming
+     the boneyard's label would have handed the width to the next card and the
+     bug would have come back wearing different clothes. The same answer the
+     instrument strip got when PRINTSCREEN overflowed it at 1280: bound the
+     furniture and let its contents yield, rather than trim whichever tenant
+     happens to be longest this week.
+     288px is the seat grid's own width (two 82px seats, their gaps and the
+     panel's padding) -- the widest thing the rail has to show properly. Past
+     that a level name ellipsises, which is a label the drafter can still read
+     the start of, against a panel eating the sheet, which he cannot draw on. */
+  #right-rail { right:28px; border-left:1px solid var(--edge-panel);
+    max-width:288px; }
   /* THE RIGHT PANEL COLLAPSES TO A SEAT, NOT TO NOTHING (Devin, 12 Sep).
      MODEL.dc.html's rail comment (:1766) says the open LEVELS panel covers
      only the outer column and "the inner column always keeps its seat, so
