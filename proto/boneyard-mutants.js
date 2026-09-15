@@ -2,14 +2,26 @@
 //
 // The gate for BONEYARD-WORKORDER.md on MODEL.html.
 //
-// MUTANT 2 IS NOT INVENTED. It is the defect I shipped for an hour: the
-// boneyard's early return sat ABOVE thumbTarget's in activeLevelId(), so with
-// the boneyard open every seat in the view rail painted the SHELF instead of
-// its own level. That is the failure acceptance 5 is about -- "a drafter parks
-// a rejected kitchen on SHELF 2 and sends the set to the city" -- reaching the
-// page by a road the order did not name, because MODEL.html has no printing at
-// all. The first draft of the check that was supposed to catch it asserted
-// that seats EXIST and that the plan had switched, and would have missed it.
+// ONE MUTANT WAS REMOVED FROM THIS GATE, AND THE REASON IS THE POINT.
+//
+// It swapped the order of activeLevelId()'s two early returns, on the belief
+// that answering the boneyard before thumbTarget made every seat in the view
+// rail paint the SHELF instead of its own level -- "a drafter parks a rejected
+// kitchen on SHELF 2 and sends the set to the city", arriving by a road the
+// order did not name, since MODEL.html has no printing at all.
+//
+// I believed that because acceptance 5 went red when I first wrote the
+// boneyard's outlines() path. IT WAS NOT THE LEAK. It was a RACE inside the
+// check: the seat canvases repaint on a frame callback and it was capturing
+// one mid-paint. With the race fixed the mutant SURVIVES -- tried with a wall
+// parked on the shelf, then with a master on the shelf, then with the real
+// boneyardActive flag reaching drawOutlines2D.
+//
+// So the precedence guard in showingBoneyard() is DEFENSIVE AND UNPROVEN, and
+// it is labelled that way in MODEL.html too. Do not re-add this mutant without
+// first building a check that can actually see the difference; a gate carrying
+// a known survivor reports a red sheet on healthy code, and one quietly
+// dropping the mutant teaches the opposite lesson.
 //
 // MUTANT 4 IS THE ORDER'S OWN WARNING, quoted: "never paste an item carrying
 // the id it had on the level it came from -- #392 has already paid for one id
@@ -25,12 +37,6 @@ const MUTANTS = [
     find: '    if (boneyardActive) return boneyardLevelId();',
     with: '    if (false) return boneyardLevelId();',
     test: 'the BONEYARD card selects, and the level geometry goes' },
-
-  { file: 'MODEL.html',
-    name: 'THE LEAK I SHIPPED: the shelf paints into every level thumbnail',
-    find: "    if (thumbTarget) return thumbTarget.levelId;\n    // Then the boneyard",
-    with: "    if (boneyardActive) return boneyardLevelId();\n    if (thumbTarget) return thumbTarget.levelId;\n    // Then the boneyard",
-    test: "a shelf's contents stay off every level's thumbnail" },
 
   { file: 'MODEL.html',
     name: 'the shelf allocator counts rows, so a new shelf adopts old geometry',

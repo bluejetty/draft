@@ -374,6 +374,21 @@ test("ACCEPTANCE 5: a shelf's contents stay off every level's thumbnail",
       // A check run against an empty shelf passes on a page that leaks, and
       // one against an empty level cannot tell a leak from a blank seat.
       walls: [...base({}).walls, wall('parked', -1, V(-4, -4), V(4, -4))],
+      // AND A MASTER ON THE SHELF, which the gate insisted on. With only the
+      // parked WALL here, removing the thumbTarget guard from showingBoneyard
+      // changed nothing this check could see -- because walls are filtered
+      // through activeLevelId(), which answers thumbTarget first and was never
+      // the leaky path. Only outlines() reads showingBoneyard, and only a
+      // MASTER travels that road.
+      //
+      // So the fixture was missing the one kind of geometry the fault moves.
+      // Generated rather than assumed away, which is the same correction the
+      // gapped-shelf case needed.
+      boneyardOutlines: [{
+        id: 'shelf-master', shelfId: 1,
+        points: [{ id: 'q1', x: -6, z: -5 }, { id: 'q2', x: 6, z: -5 },
+          { id: 'q3', x: 6, z: 5 }, { id: 'q4', x: -6, z: 5 }],
+      }],
     }));
 
     await card(page).click();
@@ -396,9 +411,31 @@ test("ACCEPTANCE 5: a shelf's contents stay off every level's thumbnail",
     // OPEN and again with it CLOSED, and the two must be identical. A
     // thumbnail painting the shelf differs from one painting its own level,
     // and that difference is the whole failure.
-    const seatShots = () => page.evaluate(() =>
-      [...document.querySelectorAll('#view-rail .seat canvas')]
-        .map(c => c.toDataURL()));
+    // CAPTURED ONCE THE PAINT HAS SETTLED, and this check taught me that the
+    // hard way by going green, then red, then green on an unchanged page.
+    //
+    // The seats repaint on a frame callback, so a capture taken straight after
+    // a click can catch one canvas mid-paint -- and a mid-paint thumbnail
+    // differs from a finished one, which reads exactly like the leak this is
+    // hunting. A flaky check for a real fault is worse than none: it teaches
+    // people to re-run it.
+    //
+    // So it reads twice and only trusts a reading that agrees with itself.
+    const seatShots = async () => {
+      let last = null;
+      for (let i = 0; i < 12; i += 1) {
+        /* eslint-disable no-await-in-loop */
+        const shot = await page.evaluate(() => new Promise(done => {
+          requestAnimationFrame(() => requestAnimationFrame(() => done(
+            [...document.querySelectorAll('#view-rail .seat canvas')]
+              .map(c => c.toDataURL()))));
+        }));
+        if (last && JSON.stringify(last) === JSON.stringify(shot)) return shot;
+        last = shot;
+        await page.waitForTimeout(120);
+      }
+      return last;
+    };
 
     const open_ = await seatShots();
     expect(open_.length, 'the rail has seats to leak into').toBeGreaterThan(0);
@@ -519,3 +556,202 @@ test('§4: a level copy of a master is LINKED to it, and owns its own points',
       'the master itself carries no srcId -- it IS the source')
       .toEqual([null, null, null]);
   });
+
+// ── §4: THE MASTER MOVES AND EVERYTHING FOLLOWS ────────────────────────────
+// A PORT of MODEL.dc.html:12057, and the order says why it must be one: "the
+// propagation is not the outline, it is the dozen things that ride the
+// outline. A fresh implementation gets the corners right and silently leaves
+// the dimension strings, the teleposts and the garage behind."
+//
+// AND THE PORT NEEDED A GESTURE. Nothing on this page moved a master point --
+// a master lives in boneyardOutlines keyed by shelfId, so it did not even
+// DRAW on its own shelf. The propagation would have been dead code, which is
+// why Movie ruled the gesture into the same commit: drag a master's corner on
+// the boneyard, where masters live.
+
+const MASTER = {
+  id: 'master-1', shelfId: 1,
+  points: [{ id: 'p1', x: -8, z: -6 }, { id: 'p2', x: 8, z: -6 },
+    { id: 'p3', x: 8, z: 6 }, { id: 'p4', x: -8, z: 6 }],
+};
+
+// A COPY ON A LEVEL, linked the way addLevel now stamps it.
+const copyOn = levelId => ({
+  id: `copy-${levelId}`, levelId, masterId: 'master-1', overriddenSrcIds: [],
+  points: MASTER.points.map(pt => ({ x: pt.x, z: pt.z, srcId: pt.id, offX: 0, offZ: 0 })),
+});
+
+// THE CENTRE IS MEASURED, NOT ASSUMED, and the reload check is what forced
+// it. fit() centres the view on the MIDPOINT OF DRAWN BOUNDS, not the origin.
+// The fixture starts symmetric about (0,0) so the two agree -- and the moment
+// the first drag pulls a corner to z=-12 they stop agreeing. On the reload the
+// view re-fits around the new midpoint, and a helper still mapping from the
+// origin presses four feet from the corner it is aiming at.
+//
+// On the boneyard the master IS everything drawn, so its own bounds give the
+// centre exactly.
+const dragMaster = async (page, from, to) => {
+  const box = await page.locator('#plan').boundingBox();
+  const scale = await page.evaluate(() => Number(
+    /scale ([\d.]+) px\/ft/.exec(document.getElementById('readout').textContent)[1]));
+  // THE CENTRE IS THE ORIGIN HERE, and that is measured rather than assumed.
+  // fit() runs at LOAD, against everything drawn -- which at load is the
+  // LEVEL's geometry, since the page opens on a level and not on the boneyard.
+  // The fixture's four walls are symmetric about (0,0), so the centre is the
+  // origin and stays there: switching to a shelf does not re-fit.
+  //
+  // I first "fixed" a failure by computing the centre from the MASTER's
+  // bounds, which is what fit() would use if the boneyard were what it had
+  // fitted to. It is not, and that made the mapping wrong in a second way.
+  const at = (x, z) => [box.x + box.width / 2 + x * scale,
+    box.y + box.height / 2 + z * scale];
+  // SELECTION FIRST, then the grab -- the page's own rule for a corner.
+  await page.mouse.click(...at(...from));
+  await page.waitForTimeout(80);
+  await page.mouse.move(...at(...from));
+  await page.mouse.down();
+  await page.mouse.move(...at(...to), { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+};
+
+test('§4: moving a master corner moves EVERY level that follows it',
+  async ({ page }) => {
+    // TWO LEVELS, because "assert every locked level's copy moved with it --
+    // the master and all floors, not the one you can see". One floor would
+    // pass on a build that only ever reaches the active level.
+    await open(page, base({
+      boneyardOutlines: [MASTER],
+      outlines: [copyOn(MAIN), copyOn(1)],
+    }));
+
+    await card(page).click();
+    await dragMaster(page, [-8, -6], [-8, -12]);
+
+    const file = await saveIt(page);
+    const master = file.boneyardOutlines.find(o => o.id === 'master-1');
+    const src = master.points.find(p => p.id === 'p1');
+    expect(src.z, 'the master corner itself moved').toBeCloseTo(-12, 1);
+
+    for (const levelId of [MAIN, 1]) {
+      const copy = file.outlines.find(o => Number(o.levelId) === levelId);
+      const pt = copy.points.find(p => p.srcId === 'p1');
+      expect(pt.z, `level ${levelId} followed the master`).toBeCloseTo(src.z, 6);
+    }
+
+    // THE CONTROL: the other three corners did not move, so "everything
+    // followed" cannot pass by the whole drawing having been translated.
+    const far = file.outlines[0].points.find(p => p.srcId === 'p3');
+    expect(far.z, 'the far corner stayed where it was').toBeCloseTo(6, 6);
+  });
+
+test('§4: the riders move too — a dimension, a column and a beam',
+  async ({ page }) => {
+    // THE REASON THE ORDER SAYS PORT RATHER THAN WRITE. Each rides at the
+    // offset it was generated with, and each is its own loop so the gate can
+    // mutate them away separately: a check that only reads the outline passes
+    // with all three deleted.
+    await open(page, base({
+      boneyardOutlines: [MASTER],
+      outlines: [copyOn(MAIN)],
+      // INTEGER IDS, and the check found that out the hard way: the format
+      // takes `Number.isInteger(id)` for dimensions, beams and columns
+      // (drawing-format.js:199), so a string id is REFUSED on load and the
+      // rider never existed to ride. The first run reported "the dimension
+      // did not move" when the truth was that the fixture had no dimension.
+      dimensions: [{ id: 1, levelId: MAIN, view: 'plan',
+        start: { x: -8, y: 0, z: -6, srcId: 'p1', offX: 0, offZ: 0 },
+        end: { x: 8, y: 0, z: -6, srcId: 'p2', offX: 0, offZ: 0 } }],
+      columns: [{ id: 1, levelId: MAIN, view: 'floor',
+        point: { x: -6, y: 0, z: -4, srcId: 'p1', offX: 2, offZ: 2 } }],
+      beams: [{ id: 1, levelId: MAIN, view: 'floor',
+        start: { x: -8, y: 0, z: -6, srcId: 'p1', offX: 0, offZ: 0 },
+        end: { x: 8, y: 0, z: 6, srcId: 'p3', offX: 0, offZ: 0 } }],
+    }));
+
+    await card(page).click();
+    await dragMaster(page, [-8, -6], [-8, -12]);
+
+    const file = await saveIt(page);
+    const z = file.boneyardOutlines[0].points.find(p => p.id === 'p1').z;
+    expect(z, 'the master moved at all').toBeCloseTo(-12, 1);
+
+    expect(file.dimensions[0].start.z,
+      'the dimension string rides the corner it was strung from')
+      .toBeCloseTo(z, 6);
+    expect(file.columns[0].point.z,
+      'the column rides at the offset it was placed with')
+      .toBeCloseTo(z + 2, 6);
+    expect(file.beams[0].start.z, 'and the auto-beam snapped to that jog')
+      .toBeCloseTo(z, 6);
+
+    // EACH RIDER'S OTHER END IS LINKED TO A CORNER THAT DID NOT MOVE, so a
+    // build that dragged whole records rather than linked points fails here.
+    expect(file.dimensions[0].end.z, "the string's far end stayed")
+      .toBeCloseTo(-6, 6);
+    expect(file.beams[0].end.z, "and the beam's far end stayed")
+      .toBeCloseTo(6, 6);
+  });
+
+test('§4: a point listed in overriddenSrcIds is not taken back by the master',
+  async ({ page }) => {
+    // ASSERTED AS AN ABSOLUTE COORDINATE, which the order names specifically:
+    // "assert its absolute coordinate is unchanged after the master moves, not
+    // merely that it differs from the master". Differing from the master is
+    // also what riding at an offset looks like.
+    //
+    // THIS IS DC'S BEHAVIOUR AND IT IS DELIBERATE. Movie ruled the opposite --
+    // a hand-moved point FREEZES -- and the order says to land the port first
+    // and change that branch separately "because the two changes fail
+    // differently and a combined one cannot be bisected". So today the
+    // overridden point RIDES at its stored offset, which is DC, and the
+    // freeze is its own commit.
+    const held = copyOn(MAIN);
+    held.overriddenSrcIds = ['p1'];
+    held.points = held.points.map(pt => (pt.srcId === 'p1'
+      ? { ...pt, x: -5, z: -3, offX: 3, offZ: 3 } : pt));
+
+    await open(page, base({ boneyardOutlines: [MASTER], outlines: [held] }));
+    await card(page).click();
+    await dragMaster(page, [-8, -6], [-8, -12]);
+
+    const file = await saveIt(page);
+    const z = file.boneyardOutlines[0].points.find(p => p.id === 'p1').z;
+    const pt = file.outlines[0].points.find(p => p.srcId === 'p1');
+    expect(pt.z, 'the overridden point rides at its offset — DC, for now')
+      .toBeCloseTo(z + 3, 6);
+  });
+
+test('§4: save, reload, move again — the same points follow', async ({ page }) => {
+  await open(page, base({
+    boneyardOutlines: [MASTER],
+    outlines: [copyOn(MAIN)],
+  }));
+
+  await card(page).click();
+  await dragMaster(page, [-8, -6], [-8, -12]);
+  await saveIt(page);
+
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await card(page).click();
+
+  // A DIFFERENT CORNER for the second move, and deliberately so. Re-dragging
+  // p1 would ask the same question twice and make the check depend on knowing
+  // exactly where the first drag left it; moving p2 asks whether propagation
+  // is still live for a point it has never touched -- which is the thing a
+  // one-shot or a cached map would fail.
+  await dragMaster(page, [8, -6], [8, -10]);
+
+  const file = await saveIt(page);
+  const master = file.boneyardOutlines[0];
+  const moved = master.points.find(p => p.id === 'p2');
+  expect(moved.z, 'the second move landed too').toBeCloseTo(-10, 1);
+  expect(file.outlines[0].points.find(p => p.srcId === 'p2').z,
+    'and the copy followed it across the reload').toBeCloseTo(moved.z, 6);
+
+  // AND THE FIRST MOVE SURVIVED THE RELOAD, so this is a second edit to a
+  // drawing that remembers the first, not a fresh one that forgot it.
+  expect(master.points.find(p => p.id === 'p1').z,
+    "the first drag's corner is still where it was left").toBeCloseTo(-12, 1);
+});

@@ -1681,6 +1681,32 @@
   };
   const boneyardLevelId = (shelfId = activeShelfId()) => -shelfId;
 
+  // ONE PREDICATE FOR "THE BONEYARD IS WHAT IS BEING DRAWN", and it exists
+  // because the leak came back through a second door.
+  //
+  // activeLevelId() already answers thumbTarget BEFORE the boneyard, so the
+  // seat thumbnails were safe -- and then outlines() asked `boneyardActive`
+  // DIRECTLY, which is the same question without the precedence, and every
+  // seat painted the shelf's master again. Two spellings of one state is how a
+  // rule gets enforced in one place and forgotten in the other.
+  //
+  // A THUMBNAIL IS ALWAYS ABOUT ITS OWN TARGET, so it can never be about the
+  // boneyard, and nothing else needs to know why.
+  //
+  // THE `!thumbTarget` HALF IS UNPROVEN, and saying so is the point. I added
+  // it believing a red check had caught the shelf painting into every seat.
+  // It had not: that red was a RACE in the check itself, capturing a seat
+  // canvas mid-paint. With the race fixed, removing `!thumbTarget` changes
+  // nothing acceptance 5 can see -- tried with a wall on the shelf, then with
+  // a master on the shelf, then with the real flag reaching drawOutlines2D.
+  //
+  // It stays because it is the same precedence activeLevelId() enforces two
+  // functions up, and two spellings of one state that disagree is a fault
+  // waiting for its first witness. But it is a DEFENSIVE guard, not a gated
+  // one, and the honest label matters more than the tidy claim: nobody should
+  // read this line as measured when it is not.
+  const showingBoneyard = () => boneyardActive && !thumbTarget;
+
   const activeLevelId = () => {
     // THUMBTARGET FIRST, AND THE ORDER OF THESE TWO IS A BUG I SHIPPED FOR AN
     // HOUR. The boneyard check was written above this line, which reads
@@ -1935,8 +1961,17 @@
     .filter(c => onActiveLevel().byLevel(c) && onActiveLevel().onPlan(c));
   // Outlines take the same LEVEL-ONLY rule as roofs -- rule four above. They
   // are the room and garage footprints, level-wide, so no view filter.
-  const outlines = () => (drawing?.outlines || [])
-    .filter(o => onActiveLevel().byLevel(o));
+  // ON THE BONEYARD THE MASTERS ARE THE SHELF'S CONTENTS. A master lives in
+  // boneyardOutlines keyed by shelfId rather than in drawing.outlines keyed by
+  // levelId, so the byLevel filter can never reach one -- and until now this
+  // page drew nothing at all on a shelf that held only a master.
+  //
+  // That is also what made §4 unbuildable: the order says "the page has no
+  // gesture to move a master at all", and a master you cannot see is one you
+  // cannot grab.
+  const outlines = () => (showingBoneyard()
+    ? (drawing?.boneyardOutlines || []).filter(o => Number(o.shelfId) === activeShelfId())
+    : (drawing?.outlines || []).filter(o => onActiveLevel().byLevel(o)));
 
   // Every point that defines the drawing's extent, for fit-to-content.
   const allPoints = (wide = false) => {
@@ -2326,9 +2361,18 @@
     const G = window.DraftGeometry2D;
     R.drawOutlines2D(ctx, toS, {
       isPrinting: false,
-      // No boneyard on this page: it holds no unplaced geometry and offers no
-      // way to switch to it. The false is what selects the LEVEL colours below.
-      boneyardActive: false,
+      // THIS READ `boneyardActive: false` under "No boneyard on this page: it
+      // holds no unplaced geometry and offers no way to switch to it". Both
+      // halves were true when written and neither is now: the card selects,
+      // shelves hold geometry, and the masters ARE what a shelf draws.
+      //
+      // The flag picks the colours, so leaving it false painted a master in
+      // LEVEL ink while the drafter was standing on a shelf -- the page
+      // telling him he was somewhere he was not.
+      //
+      // showingBoneyard() rather than boneyardActive, for the precedence a
+      // thumbnail needs: a seat is always about its own level.
+      boneyardActive: showingBoneyard(),
       outlines: outlines(),
       boneyardOutlines: [],
       // Handles belong to the outline and select tools. This page has neither.
@@ -5330,6 +5374,84 @@
     return null;
   };
 
+  // ── §4: THE MASTER GOVERNS ─────────────────────────────────────────────────
+  // A PORT of MODEL.dc.html:12057 `_propagateMasterOutline(master)`, and the
+  // order is emphatic that it must be one: "the propagation is not the
+  // outline, it is the dozen things that ride the outline. A fresh
+  // implementation gets the corners right and silently leaves the dimension
+  // strings, the teleposts and the garage behind."
+  //
+  // So every rider below is carried across, each with its own loop, and the
+  // gate mutates them away SEPARATELY -- a check that only reads the outline
+  // passes with all four deleted.
+  //
+  // THE CONTRACT IS srcId + OFFSET, and it is already this page's: relinkVertex
+  // just below re-measures offX/offZ against the master on every drag, so a
+  // rider that has been dragged off the corner keeps the gap it was given.
+  // Propagation is the write half of the same contract relinkVertex reads.
+  //
+  // NAMES: storage calls a master point's id `id` (drawing-format.js:698) and
+  // only MODEL.dc.html renames it `pointId` in memory (:5828). This page reads
+  // the file's own spelling, which is what masterPointById already does.
+  const propagateMasterOutline = master => {
+    if (!master || !drawing) return 0;
+    const byId = new Map((master.points || []).map(pt => [String(pt.id), pt]));
+    if (!byId.size) return 0;
+    let moved = 0;
+
+    // THE COPIES. DC selects them by masterId and each point by srcId; both
+    // links are stamped at addLevel, which is what the previous commit fixed.
+    (drawing.outlines || []).forEach(outline => {
+      if (String(outline.masterId || '') !== String(master.id)) return;
+      const overridden = new Set(outline.overriddenSrcIds || []);
+      (outline.points || []).forEach(pt => {
+        if (!pt.srcId) return;
+        const src = byId.get(String(pt.srcId));
+        if (!src) return;
+        if (overridden.has(pt.srcId)) {
+          // DC RIDES AT THE OFFSET HERE. Movie ruled the opposite -- a
+          // hand-moved point FREEZES -- and the order is explicit that the
+          // port lands first and that branch changes separately, "because the
+          // two changes fail differently and a combined one cannot be
+          // bisected". So this is DC's behaviour, deliberately, for now.
+          if (Number.isFinite(pt.offX) && Number.isFinite(pt.offZ)) {
+            pt.x = src.x + pt.offX;
+            pt.z = src.z + pt.offZ;
+            moved += 1;
+          }
+          return;
+        }
+        pt.x = src.x; pt.z = src.z; pt.bulge = src.bulge || 0;
+        moved += 1;
+      });
+    });
+
+    // RIDER 1: POOLED WALL VERTICES. Generated walls hold points linked to the
+    // master they were built from; each follows at the offset measured when it
+    // was generated or last dragged.
+    const ride = vtx => {
+      const src = vtx?.srcId ? byId.get(String(vtx.srcId)) : null;
+      if (!src) return;
+      vtx.x = src.x + (vtx.offX || 0);
+      vtx.z = src.z + (vtx.offZ || 0);
+      moved += 1;
+    };
+    (drawing.walls || []).forEach(w => { ride(w.start); ride(w.end); });
+
+    // RIDER 2: AUTO-DIMENSION ENDS, so a footprint edit keeps every string
+    // outside the moved plan instead of stranding it over the old wall.
+    (drawing.dimensions || []).forEach(d => { ride(d.start); ride(d.end); });
+
+    // RIDER 3: AUTO-BEAMS snapped to a jog corner (board #244), corner
+    // teleposts with them -- the same srcId/offset contract.
+    (drawing.beams || []).forEach(b => { ride(b.start); ride(b.end); });
+
+    // RIDER 4: COLUMNS, which carry one point rather than two.
+    (drawing.columns || []).forEach(c => ride(c.point));
+
+    return moved;
+  };
+
   const relinkVertex = vtx => {
     if (!vtx?.srcId) return;
     const src = masterPointById(vtx.srcId);
@@ -5340,6 +5462,17 @@
   // then drag: without that rule every pan begun near any corner anywhere in
   // the drawing would move it instead of sliding the sheet.
   const cornerAt = worldPt => {
+    // THE MASTER'S OWN CORNERS, on the boneyard, and this is §4's missing
+    // gesture. Same rule as a wall's: SELECTION FIRST, then the grab -- so a
+    // pan begun near a corner still pans, and only the outline the drafter
+    // chose offers handles.
+    if (showingBoneyard()) {
+      const lone = selection.length === 1 && selection[0].type === 'outline'
+        ? selection[0].item : null;
+      if (!lone || !outlines().includes(lone)) return null;
+      const G = window.DraftGeometry2D;
+      return G.nearestVertex(lone.points || [], worldPt, CORNER_GRAB_PX / view.scale);
+    }
     const selectedSeg = selectedWall();
     if (!selectedSeg || !walls().includes(selectedSeg)) return null;
     const G = window.DraftGeometry2D;
@@ -7829,6 +7962,19 @@
         // every pointermove -- a roof record per mouse event would be hundreds
         // across one drag.
         if (board === 'toy') { boneFollows(md.before, md.body?.levelId); rebuildRoofs(); }
+        // §4: A MASTER POINT MOVED, so every level that follows it moves now.
+        // On the RELEASE rather than each pointermove, for §5's reason: the
+        // riders are hundreds of records and a drag is hundreds of events.
+        //
+        // Guarded by "was this actually a master's point", not by "are we on
+        // the boneyard": the two are the same today and would part the day
+        // anything else can edit a master, and the wrong one of them would go
+        // on looking correct.
+        if (md.kind === 'corner') {
+          const owner = (drawing?.boneyardOutlines || [])
+            .find(m => (m.points || []).includes(md.before[0].vtx));
+          if (owner) propagateMasterOutline(owner);
+        }
       } else if (board === 'toy' && md.kind === 'wall' && md.body) {
         // §4's CLICK, and it costs no new gesture. `wallBodyAt` only returns a
         // wall that is ALREADY SELECTED, so reaching here means the drafter
