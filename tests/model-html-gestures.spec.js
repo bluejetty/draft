@@ -426,8 +426,15 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             .map(a => a.textContent.trim()).sort(),
           selects: [...document.querySelectorAll('select')].filter(outside)
             .map(s => s.id).sort(),
+          // NAMED, NOT COUNTED BY TYPE. This read `i.type`, so every text
+          // box in the page arrived as the word 'text' and the list was
+          // three indistinguishable entries: a control swapped for another
+          // of the same type moved nothing, and only a change in the COUNT
+          // was ever visible. `buttons` above already reads `id || text`,
+          // so this is the file's own convention rather than a new idea --
+          // and every input on the page has an id.
           inputs: [...document.querySelectorAll('input')].filter(outside)
-            .map(i => i.type).sort(),
+            .map(i => i.id || i.type).sort(),
           toolKinds: [...new Set([...document.querySelectorAll('#tool-slot *')]
             .filter(el => ['BUTTON', 'INPUT', 'SELECT'].includes(el.tagName))
             .map(toolKind))].sort(),
@@ -652,7 +659,15 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // The three stock chips are absent from `buttons` above for a
           // real reason rather than an oversight: they exist only while a
           // detached garage entry is chosen, and nothing is chosen at rest.
-          inputs: ['file', 'number', 'number', 'text', 'text'].sort(),
+          // THE ANGLE BOX IS THE SIXTH, and it arrived undeclared -- this
+          // check went red naming one more 'text' than the list held, which
+          // is the job it advertises. It is the LENGTH box's twin: dead
+          // until a run is in hand, so it cannot START one, and it commits
+          // through draw-wall's own gesture exactly as the length box does.
+          // It authors no entity and moves no point, so no absence row
+          // changes.
+          inputs: ['size-w', 'size-d', 'frozen-length', 'frozen-angle',
+            'file-input', 'save-as-name'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as
