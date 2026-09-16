@@ -280,6 +280,19 @@
      arithmetic and cannot overlap anything. */
   #strip-center { flex:0 0 auto; height:var(--strip-h);
     display:flex; align-items:center; gap:10px; padding:0 8px; }
+  /* CENTRED ON THE SHEET, not on what is left over. Two flex spacers centre
+     the cluster only when the two corners weigh the same, and they never do
+     -- the settings/units/mode stack is wide, the file row hides itself at
+     narrow widths -- so the kit sat right of middle. Movie: "put all the
+     instrument lights and textboxes centered".
+     ABOVE 1280 ONLY, which is the whole guard against the bug the note above
+     records: absolute centring can slide a chip over a corner control, and
+     1280 is the width at which the tenants first want more bar than there is.
+     Below it the cluster goes back to being a flex child between spacers,
+     where it cannot overlap anything. */
+  @media (min-width: 1281px) {
+    #strip-center { position:absolute; left:50%; transform:translateX(-50%); }
+  }
   /* WHEN THE BAR RUNS OUT OF SHEET, the things with nothing behind them go
      first. At 1280 the tenants want 1422px, so the file row -- NEW, OPEN,
      SAVE, SAVE AS -- was pushed off the right edge and could not be clicked
@@ -304,7 +317,7 @@
   @media (max-width: 1500px) {
     #strip-center { gap:6px; }
     #frozen-length { width:72px; }
-    #strip-len { min-width:66px; }
+    #strip-len:not(:empty) { min-width:66px; }
   }
   /* AND THEY SIT AGAINST THE WORKING ONES. Movie: "snug them to the sides of
      the working ones". A dormant chip spaced like an instrument reads as one
@@ -320,8 +333,17 @@
   .chip.dormant:hover { border-color:transparent; }
   #strip .num { font-family: var(--font-mono); font-size:12px;
     font-variant-numeric:tabular-nums; color: var(--ink-primary); }
-  #strip-len { min-width:74px; text-align:right; }
-  #strip-ang { min-width:44px; color: var(--ink-quiet); }
+  /* THE READ-OUTS RESERVE THEIR WIDTH ONLY WHEN THEY ARE READING. The
+     min-width is there so a number growing from 4' to 12'-11 1/2" does not
+     shove the instruments sideways mid-gesture -- but with nothing in hand
+     it was 118px of held-open nothing between the ruler and LENGTH, which is
+     what Movie saw: "why big gap?". Empty, they take no room; the moment
+     they have a number they take the same room as before, so the jitter the
+     min-width was written for still cannot happen. */
+  #strip-len:not(:empty) { min-width:74px; }
+  #strip-len { text-align:right; }
+  #strip-ang:not(:empty) { min-width:44px; }
+  #strip-ang { color: var(--ink-quiet); }
   #strip-length-box { display:flex; align-items:center; gap:5px;
     font-size:11px; color: var(--ink-quiet); }
   #frozen-length { width:96px; text-align:right; padding:3px 6px;
