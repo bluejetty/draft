@@ -6810,6 +6810,19 @@
     cut(drawing.fenestrations, f => f && f.wallId === gone);
     // A fixture by either anchor: the tub needs its faucet-END wall too.
     cut(drawing.fixtures, f => f && (f.wallId === gone || f.endWallId === gone));
+    // AND THE REFUSED ONES, or refusing a record makes it IMMORTAL. Since the
+    // load block started normalising fixtures (tier 3j), a fixture the format
+    // turns down is held in `refusedItems` and put back by withRefused() on
+    // save -- which is right, because declining to act on a drafter's geometry
+    // must not delete it. But a delete cascade IS this page acting on the
+    // wall, and a refused fixture the cascade cannot reach outlives the wall
+    // it hung on: invisible, unpaintable, and back in the file after every
+    // save. That is the orphan this test names, arriving by a new road.
+    //
+    // Through `cut` rather than a filter, so the removal joins `deps` and undo
+    // restores it with everything else the wall took.
+    cut(refusedItems.fixtures, entry => entry && entry.item
+      && (entry.item.wallId === gone || entry.item.endWallId === gone));
     // AND GROUPS, which neither the order nor the review named. The old page
     // runs _cleanupGroups() beside the cascade; groups reference members by
     // {type, id}, so a group left holding a dead wall id adopts the next wall
