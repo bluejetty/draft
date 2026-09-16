@@ -63,6 +63,15 @@ test('the pressed family button glows and the one before it does not', async ({ 
   // The method radios are the same fact in another control: 2 STOREY there.
   await expect(page.locator('[data-build-method="twoStorey"]')).toBeChecked();
 
+  // A RELOAD RACES THE WRITE. The page queues its save and returns, so a
+  // reload fired the instant a button lights tears the queue down mid-flight
+  // and the file keeps the FIRST press -- which reads as the choice not
+  // surviving, when what happened is that it was never written. Both
+  // presses are the same note ('Attached garage, no storey over it'), so
+  // #status cannot tell the second save from the first; the store can.
+  await expect.poll(async () => (await h.savedDrawing(page)).buildType)
+    .toBe('twoStorey');
+
   await page.reload();
   await expect(page.locator('[data-family-entry="twoStorey-garage"]'))
     .toHaveAttribute('aria-pressed', 'true');
@@ -112,6 +121,10 @@ test('the press adds the 20" package and lands its deck on the 2nd floor', async
   await button.click();
   await expect(button).toHaveAttribute('aria-pressed', 'true');
 
+  // The button lights on the press and the file is written after it, so the
+  // read below has to wait for the store rather than for the paint.
+  await expect.poll(async () => (await h.savedDrawing(page)).garagePlan)
+    .toBe('attachedRoomOver');
   const saved = await h.savedDrawing(page);
   expect(saved.garagePlan).toBe('attachedRoomOver');
 
