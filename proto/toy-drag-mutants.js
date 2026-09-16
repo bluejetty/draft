@@ -19,6 +19,11 @@
 // but a mutant will ever ask again.
 const { execSync } = require('child_process');
 const fs = require('fs');
+// THE REPO ROOT, DERIVED. This read '/home/user/draft', which resolves on
+// exactly one machine -- the same fault test.yml records for
+// load-order-harness and palette-harness, and the reason nobody on another
+// checkout could run this gate at all.
+const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
   { file: 'MODEL.html',
@@ -159,7 +164,7 @@ const run = grep => {
   try {
     execSync('npx playwright test tests/model-toy-draw.spec.js'
       + (grep ? ` -g ${JSON.stringify(grep)}` : '') + ' --reporter=line',
-      { cwd: '/home/user/draft', stdio: 'pipe' });
+      { cwd: ROOT, stdio: 'pipe' });
     return 'passed';
   } catch { return 'failed'; }
 };
@@ -169,7 +174,7 @@ const run = grep => {
 // uncommitted work in it silently destroyed the first time a mutant touches
 // it. §3b added toy-constraints.js to the targets; it belongs here too.
 const dirty = execSync('git status --porcelain MODEL.html toy-constraints.js',
-  { cwd: '/home/user/draft' }).toString().trim();
+  { cwd: ROOT }).toString().trim();
 if (dirty) {
   console.error('REFUSING TO RUN: uncommitted changes; this restores from HEAD.\n' + dirty);
   process.exit(1);
@@ -177,7 +182,7 @@ if (dirty) {
 
 let killed = 0, ran = 0, ambiguous = 0;
 for (const m of MUTANTS) {
-  const path = `/home/user/draft/${m.file}`;
+  const path = `${ROOT}/${m.file}`;
   const before = fs.readFileSync(path, 'utf8');
   const hits = before.split(m.find).length - 1;
   if (hits === 0) { console.log(`  SKIPPED (anchor not found): ${m.name}`); continue; }
@@ -189,7 +194,7 @@ for (const m of MUTANTS) {
   if (result === 'passed' && run(null) === 'failed') {
     result = 'failed'; note = '  (caught by another check -- re-aim `test`)';
   }
-  execSync(`git checkout -- ${m.file}`, { cwd: '/home/user/draft' });
+  execSync(`git checkout -- ${m.file}`, { cwd: ROOT });
   if (result === 'failed') killed += 1;
   console.log(`  ${result === 'failed' ? 'KILLED  ' : 'SURVIVED'}  ${m.name}${note}`);
 }

@@ -11,6 +11,11 @@
 // rebase; every gate carries this guard now.
 const { execSync } = require('child_process');
 const fs = require('fs');
+// THE REPO ROOT, DERIVED. This read '/home/user/draft', which resolves on
+// exactly one machine -- the same fault test.yml records for
+// load-order-harness and palette-harness, and the reason nobody on another
+// checkout could run this gate at all.
+const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/model-corner-glow.spec.js';
 
@@ -44,7 +49,7 @@ const run = name => {
   try {
     execSync(`npx playwright test ${SPEC} --workers=1 --reporter=line`
       + (name ? ` -g ${JSON.stringify(name)}` : ''),
-      { cwd: '/home/user/draft', stdio: 'pipe',
+      { cwd: ROOT, stdio: 'pipe',
         env: { ...process.env, DRAFT_TEST_PORT: '4344' } });
     return 'passed';
   } catch { return 'failed'; }
@@ -63,7 +68,7 @@ const run = name => {
 
 let killed = 0, ran = 0, ambiguous = 0;
 for (const m of MUTANTS) {
-  const path = `/home/user/draft/${m.file}`;
+  const path = `${ROOT}/${m.file}`;
   const before = fs.readFileSync(path, 'utf8');
   if (!before.includes(m.find)) {
     console.log(`  SKIPPED   ${m.name}  (anchor not found — re-aim \`find\`)`);
@@ -77,7 +82,7 @@ for (const m of MUTANTS) {
   if (result === 'passed' && run(null) === 'failed') {
     result = 'failed'; note = '  (caught by another check — re-aim `test`)';
   }
-  execSync(`git checkout -- ${m.file}`, { cwd: '/home/user/draft' });
+  execSync(`git checkout -- ${m.file}`, { cwd: ROOT });
   if (result === 'failed') killed += 1;
   console.log(`  ${result === 'failed' ? 'KILLED  ' : 'SURVIVED'}  ${m.name}${note}`);
 }

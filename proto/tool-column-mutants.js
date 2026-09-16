@@ -17,6 +17,11 @@
 // nothing, the test passes, and the run reports a killed mutant it never made.
 const { execSync } = require('child_process');
 const fs = require('fs');
+// THE REPO ROOT, DERIVED. This read '/home/user/draft', which resolves on
+// exactly one machine -- the same fault test.yml records for
+// load-order-harness and palette-harness, and the reason nobody on another
+// checkout could run this gate at all.
+const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
   {
@@ -73,7 +78,7 @@ const MUTANTS = [
 const run = grep => {
   try {
     execSync(`npx playwright test tests/model-tool-column.spec.js -g ${JSON.stringify(grep)} --reporter=line`,
-      { cwd: '/home/user/draft', stdio: 'pipe' });
+      { cwd: ROOT, stdio: 'pipe' });
     return 'passed';
   } catch {
     return 'failed';
@@ -81,7 +86,7 @@ const run = grep => {
 };
 
 const dirty = execSync('git status --porcelain tool-roster.js MODEL.html',
-  { cwd: '/home/user/draft' }).toString().trim();
+  { cwd: ROOT }).toString().trim();
 if (dirty) {
   console.error('REFUSING TO RUN: tool-roster.js or MODEL.html has uncommitted '
     + 'changes, and this script restores them from HEAD.\n' + dirty);
@@ -90,7 +95,7 @@ if (dirty) {
 
 let killed = 0;
 for (const m of MUTANTS) {
-  const path = `/home/user/draft/${m.file}`;
+  const path = `${ROOT}/${m.file}`;
   const before = fs.readFileSync(path, 'utf8');
   if (!before.includes(m.find)) {
     console.log(`  SKIPPED (anchor not found): ${m.name}`);
@@ -98,7 +103,7 @@ for (const m of MUTANTS) {
   }
   fs.writeFileSync(path, before.replace(m.find, m.with));
   const result = run(m.test);
-  execSync(`git checkout -- ${m.file}`, { cwd: '/home/user/draft' });
+  execSync(`git checkout -- ${m.file}`, { cwd: ROOT });
   if (result === 'failed') killed += 1;
   console.log(`  ${result === 'failed' ? 'KILLED  ' : 'SURVIVED'}  ${m.name}`
     + `   (${m.test})`);

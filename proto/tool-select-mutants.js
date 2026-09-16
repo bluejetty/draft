@@ -11,6 +11,11 @@
 // run if it is not.
 const { execSync } = require('child_process');
 const fs = require('fs');
+// THE REPO ROOT, DERIVED. This read '/home/user/draft', which resolves on
+// exactly one machine -- the same fault test.yml records for
+// load-order-harness and palette-harness, and the reason nobody on another
+// checkout could run this gate at all.
+const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
   {
@@ -130,20 +135,20 @@ const run = grep => {
   try {
     execSync(`npx playwright test tests/model-tool-select.spec.js`
       + (grep ? ` -g ${JSON.stringify(grep)}` : '') + ' --reporter=line',
-      { cwd: '/home/user/draft', stdio: 'pipe' });
+      { cwd: ROOT, stdio: 'pipe' });
     return 'passed';
   } catch { return 'failed'; }
 };
 
 const dirty = execSync('git status --porcelain MODEL.html',
-  { cwd: '/home/user/draft' }).toString().trim();
+  { cwd: ROOT }).toString().trim();
 if (dirty) {
   console.error('REFUSING TO RUN: MODEL.html has uncommitted changes and this '
     + 'script restores it from HEAD.\n' + dirty);
   process.exit(1);
 }
 
-const PATH = '/home/user/draft/MODEL.html';
+const PATH = `${ROOT}/MODEL.html`;
 let killed = 0, ran = 0, ambiguous = 0;
 for (const m of MUTANTS) {
   const before = fs.readFileSync(PATH, 'utf8');
@@ -171,7 +176,7 @@ for (const m of MUTANTS) {
     // Aimed check let it through. Was anything else watching?
     if (run(null) === 'failed') { result = 'failed'; note = '  (caught by another check -- re-aim `test`)'; }
   }
-  execSync('git checkout -- MODEL.html', { cwd: '/home/user/draft' });
+  execSync('git checkout -- MODEL.html', { cwd: ROOT });
   if (result === 'failed') killed += 1;
   console.log(`  ${result === 'failed' ? 'KILLED  ' : 'SURVIVED'}  ${m.name}${note}`);
 }
