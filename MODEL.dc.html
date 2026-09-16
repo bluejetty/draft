@@ -11418,11 +11418,18 @@ class Component extends DCLogic {
   // the middle-drag, the HAND mode and the two-finger gesture all pan through
   // ONE piece of arithmetic — three copies of this would drift.
   _panBy(dx, dy) {
-    const h = this._canvas?.clientHeight || 600, w = this._canvas?.clientWidth || 800;
+    const h = this._canvas?.clientHeight || 600;
+    // FEET PER PIXEL IS THE SAME ON BOTH AXES, and the x axis used to be told
+    // otherwise. The frustum is 2*half*asp wide across w pixels, so horizontal
+    // feet per pixel is 2*half*asp/w = 2*half/h -- fpx itself. The plan branch
+    // multiplied by (w/h) on top of that and slid the drawing further than the
+    // finger, by the aspect ratio: 9% on a square-ish canvas and about half as
+    // much again on a wide one. FRONT and SIDE below always used bare fpx,
+    // which is what made the plan branch the odd one out rather than the rule.
     const fpx = (this._orthoHalfH * 2) / h;
     const e0 = this._drawElev || 0, view = this.state.activeView;
     if (view === 'top' || view === 'cut') {
-      this._orthoCamX -= dx * fpx * (w/h);
+      this._orthoCamX -= dx * fpx;
       this._orthoCamZ -= dy * fpx;
       if (view === 'top') {
         this._orthoCam.position.set(this._orthoCamX, e0 + 200, this._orthoCamZ);
