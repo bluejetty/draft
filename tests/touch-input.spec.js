@@ -111,6 +111,25 @@ test('a second finger landing mid-stroke takes the view, and commits nothing', a
   await h.selectTool(page, 'Wall');
   await tapWorld(page, -6, 0);
 
+  // THE RUN IS REALLY LIVE before the intruder arrives. Everything below this
+  // line asserts an ABSENCE — no wall, no line — and an absence is also what a
+  // page that ignored the tap entirely would show. That is not hypothetical:
+  // with the canvas made deaf to touch (a one-line `pointerType === 'touch'`
+  // return in the pointerdown handler, which is the C2 regression this whole
+  // file exists to catch) this test passed in 2.3s, against 2.5s green. It
+  // cost the same whether the feature worked or not.
+  //
+  // FINISH is the cheapest proof the finger landed: it appears only while a
+  // chain is pending, so it cannot be showing unless the tap drew a corner.
+  // The sibling test in touch-gestures.spec.js:132 already anchors this way,
+  // and it was the only one of the four that went red against the mutant.
+  //
+  // THIS LINE WAS WATCHED FAILING, which is the whole point of adding it:
+  // against the same deaf canvas it reports `element(s) not found` in 7.6s,
+  // and the test passes on the unmutated page. A guard nobody has seen fail
+  // is the false confidence this test already shipped once.
+  await expect(page.locator('[data-finish-chain]')).toBeVisible();
+
   const first = await h.worldToClient(page, 6, 0);
   const intruder = await h.worldToClient(page, 0, 8);
   const client = await page.context().newCDPSession(page);
