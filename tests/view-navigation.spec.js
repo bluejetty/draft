@@ -216,6 +216,48 @@ test('FINISH appears only during a run, and commits the same as Enter', async ({
   await expect(page.locator('[data-finish-chain]')).toHaveCount(0);
 });
 
+test('the HAND walks the plan exactly as far as the finger', async ({ browser }) => {
+  // THE RULE, not the bug and not its deletion. A pan is the one gesture with
+  // an exact right answer: the world point under the finger stays under it, so
+  // a drag of N pixels moves the camera N * feet-per-pixel and nothing else.
+  // Feet per pixel is the same on both axes -- the frustum is 2*half*asp wide
+  // across w pixels, so 2*half*asp/w = 2*half/h, which is fpx itself.
+  //
+  // Written this way on purpose. A test that checked "_panBy has no w/h in it"
+  // would pass the moment the factor moved somewhere else; this one stays red
+  // for any arithmetic that does not land the finger's distance, whatever
+  // route it takes to get there.
+  //
+  // BOTH AXES, AND THE Z AXIS IS THE CONTROL. z has always been right, so it
+  // passing here proves the drag was seen and the camera was read -- which is
+  // what tells a failure on x apart from a dead gesture.
+  const context = await browser.newContext({ hasTouch: true, viewport: { width: 1280, height: 900 } });
+  const touchPage = await context.newPage();
+  await h.openModel(touchPage);
+  await touchPage.locator('[data-hand-toggle]').tap();
+
+  const before = await h.modelFrame(touchPage);
+  const from = { x: before.box.x + before.box.width / 2, y: before.box.y + before.box.height / 2 };
+  const DX = 120, DY = 60;
+  const client = await context.newCDPSession(touchPage);
+  const touch = (type, pt) => client.send('Input.dispatchTouchEvent', {
+    type, touchPoints: type === 'touchEnd' ? [] : [{ x: pt.x, y: pt.y, id: 1 }] });
+  await touch('touchStart', from);
+  for (let i = 1; i <= 6; i++) {
+    await touch('touchMove', { x: from.x - (DX * i) / 6, y: from.y + (DY * i) / 6 });
+  }
+  await touch('touchEnd', { x: from.x - DX, y: from.y + DY });
+  await client.detach();
+  await touchPage.waitForTimeout(250);
+
+  const after = await h.modelFrame(touchPage);
+  expect(after.cx - before.cx,
+    'the plan slid west exactly as far as the finger did').toBeCloseTo(DX / before.scale, 3);
+  expect(after.cz - before.cz,
+    'and north exactly as far, on the axis that was already right').toBeCloseTo(-DY / before.scale, 3);
+  await context.close();
+});
+
 test('a finger finishes an outline with FINISH — no keyboard anywhere', async ({ page, browser }) => {
   const context = await browser.newContext({ hasTouch: true, viewport: { width: 1280, height: 900 } });
   const touchPage = await context.newPage();
