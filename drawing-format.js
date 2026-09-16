@@ -255,7 +255,14 @@ if (!window.DraftDrawingFormat) {
   // the island's near edge, so it stands free of the wall but still rides it.
   const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'dish', 'island', 'pantry', 'washer', 'dryer', 'toilet', 'tub', 'shower', 'stall', 'closet'];
   const FIXTURE_CASEWORK = ['cabinet', 'vanity'];
-  const fixtures = (rawFixtures, levelIds) => (Array.isArray(rawFixtures) ? rawFixtures : [])
+  // `env.drops` like walls, lines, floors and dimensions: a refused record is
+  // REPORTED rather than silently gone. MODEL.html re-emits what it refused
+  // on save (withRefused), so without this sink a caller that normalises
+  // fixtures would delete a drafter's fixture from the file instead of
+  // merely declining to act on it.
+  const fixtures = (rawFixtures, levelIds, env = {}) => collectRefusals(
+    Array.isArray(rawFixtures) ? rawFixtures : [],
+    (Array.isArray(rawFixtures) ? rawFixtures : [])
     .map(fixture => {
       const wallId = String(fixture?.wallId || '').trim();
       const fixtureLevelId = levelId(fixture?.levelId, levelIds);
@@ -281,7 +288,7 @@ if (!window.DraftDrawingFormat) {
         ...(standoff !== null && standoff > 0 ? { standoff } : {}),
         ...(endWallId ? { endWallId, dir: fixture?.dir === -1 ? -1 : 1 } : {}),
       };
-    }).filter(Boolean);
+    }), env.drops).filter(Boolean);
 
   // Surface openings are free-form closed outlines cut from a host floor or
   // roof footprint (stairwells, skylights, chimneys). Host existence is the
@@ -459,7 +466,9 @@ if (!window.DraftDrawingFormat) {
       };
     }), env.drops).filter(Boolean))(Array.isArray(rawFloors) ? rawFloors : []));
 
-  const shapes = (rawShapes, levelIds) => (Array.isArray(rawShapes) ? rawShapes : [])
+  const shapes = (rawShapes, levelIds, env = {}) => collectRefusals(
+    Array.isArray(rawShapes) ? rawShapes : [],
+    (Array.isArray(rawShapes) ? rawShapes : [])
     .map(shape => {
       const shapeLevelId = levelId(shape?.levelId, levelIds);
       const points = (Array.isArray(shape?.points) ? shape.points : []).map(point).filter(Boolean);
@@ -473,7 +482,7 @@ if (!window.DraftDrawingFormat) {
         flooring: shapeFlooring,
         layer: shapeFlooring ? 'A-FL-FLOORING' : 'SHAPE',
       };
-    }).filter(Boolean);
+    }), env.drops).filter(Boolean);
 
   // Roof footprints are closed outlines owned by a whole level; each footprint
   // segment classifies as EAVE or GABLE, and the overhang / pitch stay clamped
@@ -506,9 +515,10 @@ if (!window.DraftDrawingFormat) {
   // Columns are manual point supports (teleposts on pad footings) owned by a
   // level; the footing choice rides along so the FOUNDATION plan can mark the
   // pad centre and the estimates can price it.
-  const columns = (rawColumns, levelIds) => {
+  const columns = (rawColumns, levelIds, env = {}) => {
     const seen = new Set();
-    return (Array.isArray(rawColumns) ? rawColumns : []).map(column => {
+    const raw = Array.isArray(rawColumns) ? rawColumns : [];
+    return collectRefusals(raw, raw.map(column => {
       const id = Number(column?.id);
       const centre = point(column?.point);
       const columnLevelId = levelId(column?.levelId, levelIds);
@@ -537,15 +547,16 @@ if (!window.DraftDrawingFormat) {
           ? { pullSrcId, pullLevelId } : {}),
         layer: 'S-COL-FOOTING',
       };
-    }).filter(Boolean);
+    }), env.drops).filter(Boolean);
   };
 
   // A beam is one span between two supports, FLUSH (top flush with the joists,
   // bearing on the sill plate at foundation walls) or DROPPED (joists resting
   // on it — a beam pocket where it bears on a foundation wall).
-  const beams = (rawBeams, levelIds) => {
+  const beams = (rawBeams, levelIds, env = {}) => {
     const seen = new Set();
-    return (Array.isArray(rawBeams) ? rawBeams : []).map(beam => {
+    const raw = Array.isArray(rawBeams) ? rawBeams : [];
+    return collectRefusals(raw, raw.map(beam => {
       const id = Number(beam?.id);
       const start = point(beam?.start);
       const end = point(beam?.end);
@@ -564,7 +575,7 @@ if (!window.DraftDrawingFormat) {
         auto: beam?.auto === true, // tour-placed; the stair re-derive may replace it
         layer: 'S-BEAM',
       };
-    }).filter(Boolean);
+    }), env.drops).filter(Boolean);
   };
 
   // A stair placed from the top nosing: start is the upper-floor nosing at

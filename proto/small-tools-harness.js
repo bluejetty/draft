@@ -155,12 +155,20 @@ const LOAD_BLOCK = (() => {
 })();
 check('MODEL.html still has a load block to read', LOAD_BLOCK !== null);
 if (LOAD_BLOCK) {
-  for (const call of ['beams', 'columns', 'shapes', 'fixtures', 'notes']) {
-    check(`MODEL.html does not yet normalise ${call} (tier 3j's rung)`,
+  // NOTES IS THE ONE LEFT. The rung wired the four collections a small tool
+  // will PLACE -- beams, columns, shapes, fixtures. Annotation was not in it,
+  // so drawing.notes still rides through on `...parsed`, still painted and
+  // still unasked. This row stays red-on-change so that gap keeps a name.
+  for (const call of ['notes']) {
+    check(`MODEL.html does not yet normalise ${call} (the rung left it)`,
       !LOAD_BLOCK.includes(`F.${call}(`),
-      `it calls F.${call}() now — the rung is done, update the board`);
+      `it calls F.${call}() now — the gap is closed, update the board`);
   }
-  for (const call of ['walls', 'lines', 'floors', 'dimensions']) {
+  // THE GUARDED EIGHT, four of them wired by tier 3j on 16 Sep. Dropping one
+  // of these is a collection losing its guard, which is the silent direction:
+  // the page would go on painting and start acting on records nobody checked.
+  for (const call of ['walls', 'lines', 'floors', 'dimensions',
+    'beams', 'columns', 'shapes', 'fixtures']) {
     check(`MODEL.html still normalises ${call}`, LOAD_BLOCK.includes(`F.${call}(`),
       `it stopped calling F.${call}() — a collection lost its guard`);
   }

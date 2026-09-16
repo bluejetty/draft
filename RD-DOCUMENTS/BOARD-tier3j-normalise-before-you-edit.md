@@ -2,7 +2,9 @@
 
 **Movie, 16 Sep:** *"i'd like all the drafting tools to work"*
 
-Status: **MEASURED, 16 Sep. Not built.** This is the measure-first gate on
+Status: **BUILT, 16 Sep.** The rung below is done: beams, columns, shapes and
+fixtures are normalised in MODEL.html's load block and re-emitted on save.
+`notes` is NOT — see THE RUNG. Originally filed as **MEASURED, not built**. This is the measure-first gate on
 tier 3j (the seven small tools — beam, column, trim, shape, node, annotation,
 fixture) reporting what it found, and the rung it defines.
 
@@ -54,7 +56,7 @@ file on the next save and would have been discovered by a drafter, not by a
 test. An edit gesture on an un-normalised collection has that same shape: the
 first malformed record is carried in, acted on, and written back out.
 
-## THE RUNG
+## THE RUNG — BUILT
 
 **Wire the four existing normalisers into the load block, before any palette.**
 Smaller and better defined than "build seven tools", and it is the precondition
@@ -63,7 +65,26 @@ for the rest: `F.beams`, `F.columns`, `F.shapes`, `F.fixtures` -- with their
 refused record is reported rather than vanishing.
 
 `notes` rides with them if the annotation tool is in scope; it is painted today
-(`drawNoteScreen2D`, off `drawing.notes`) and equally un-normalised.
+(`drawNoteScreen2D`, off `drawing.notes`) and equally un-normalised. **It was
+NOT wired**: the rung took the four collections a small tool will PLACE, and
+annotation was not among them. The harness keeps that gap named.
+
+### WHAT THE BOARD GOT WRONG, AND IT MATTERED
+
+This said the four normalisers already took `drops` "as `walls`, `lines`,
+`floors` and `dimensions` already do". They did not. `beams`, `columns`,
+`shapes` and `fixtures` were TWO-parameter functions with no sink at all, so
+wiring them in as written would have made a refused record vanish -- worse than
+the state it replaced, where a malformed beam was at least carried through
+intact.
+
+So the rung grew a first half: those four now take `env = {}` and route their
+mapped array through `collectRefusals`, the helper `dimensions` already used.
+That is what makes the second half safe. `withRefused()` puts a refused record
+back on save, so refusing is DECLINING TO ACT ON a drafter's geometry rather
+than deleting it from the file -- proved end to end by
+`tests/model-small-tools-refusals.spec.js`, watched failing with the save's
+`withRefused('beams', ...)` removed.
 
 ## WHAT IS STILL UNMEASURED
 
