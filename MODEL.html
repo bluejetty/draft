@@ -331,16 +331,27 @@
      -- the settings/units/mode stack is wide, the file row hides itself at
      narrow widths -- so the kit sat right of middle. Movie: "put all the
      instrument lights and textboxes centered".
-     FROM 1280 UP, which is the whole guard against the bug the note above
-     records: absolute centring can slide a chip over a corner control, and
-     1280 is the narrowest sheet the suite measures the bone axis on -- with
-     PRINTSCREEN on the right corner the two corners weigh differently enough
-     that flex centring misses by a chip's width there. Below 1280 the cluster
-     goes back to being a flex child between spacers, where it cannot overlap
-     anything. */
-  @media (min-width: 1280px) {
+     FROM 1440 UP, and the number is a measurement, not a taste: at 1280 the
+     centred cluster's right edge already reaches NEW on an empty page, and a
+     drawing with a length in the box carries it over the whole file row --
+     absolute centring can slide a chip over a corner control, which is the
+     bug the note above records. 1440 is the narrowest sheet where the
+     cluster and both corners fit side by side. Below it the cluster goes
+     back to being a flex child between spacers, where it cannot overlap
+     anything -- the corners weigh nearly the same, so it sits within a
+     chip's width of centre rather than exactly on it. */
+  /* THE OVERLAY MUST NOT EAT CLICKS. An absolute cluster sits OVER the bar,
+     and its box is wider than its ink -- the 1fr tracks are empty space, and
+     a long live length widens the whole box symmetrically. That empty box
+     reaching NEW was seven specs' 180-second timeout: "#strip-center
+     intercepts pointer events". The box goes deaf; the tenants stay live. */
+  @media (min-width: 1440px) {
     #strip-center { position:absolute; left:50%; transform:translateX(-50%);
-      display:grid; grid-template-columns:1fr auto 1fr; }
+      display:grid; grid-template-columns:1fr auto 1fr; pointer-events:none; }
+    /* The halves' boxes equalise -- 1fr and 1fr -- so the quiet half is
+       wider than its chips too. Deaf boxes all the way down to the ink. */
+    #strip-center .strip-half { pointer-events:none; }
+    #strip-center .strip-half > *, #strip-divide { pointer-events:auto; }
   }
   /* WHEN THE BAR RUNS OUT OF SHEET, the things with nothing behind them go
      first. At 1280 the tenants want 1422px, so the file row -- NEW, OPEN,
@@ -3866,6 +3877,11 @@
   //                                    type myself" -- the sign was called
   //                                    up by OUTLINE rather than the house.
   //   window.ModelBuild.chosen()       the current choice, or null.
+  //   window.ModelBuild.orderServed()  the geometry side says an order was
+  //                                    BUILT. The choice is spent -- a tile
+  //                                    that stayed pressed after its garage
+  //                                    landed made the next foot-bone press
+  //                                    a re-build instead of a menu.
   //
   // TWO BONES, TWO VERBS (Movie, 15 Sep): "the bone on the drivethru menu
   // will auto build the house that is provided for their selection... the
@@ -3929,8 +3945,23 @@
     return { family, entry };
   };
 
+  // AN ORDER THAT WAS SERVED IS SPENT. Only the geometry side knows the
+  // build landed, so it says so through the seam rather than this side
+  // guessing from the sign shutting -- a drafter who opens the board to
+  // look and shuts it again keeps his choice; a drafter whose garage was
+  // built has been answered, and the tile un-presses. The persisted
+  // buildType stays: the FILE remembers what the project is; the menu
+  // only remembers the question currently being asked.
+  const orderServed = () => {
+    chosenEntryId = null;
+    chosenSizeId = null;
+    openFamilyId = null;
+    syncBuildBar();
+  };
+
   window.ModelBuild = Object.freeze({
     chosen,
+    orderServed,
     onChoose: fn => { if (typeof fn === 'function') chooseHandlers.push(fn); },
     onBuild: fn => { if (typeof fn === 'function') buildHandlers.push(fn); },
     onOrder: fn => { if (typeof fn === 'function') orderHandlers.push(fn); },
@@ -6640,7 +6671,9 @@
   // the drafter's next move is to look at the garage, and it is behind the
   // sign.
   window.ModelBuild.onOrder(order => {
-    if (buildOrderedGarage(order)) setSign(false);
+    if (!buildOrderedGarage(order)) return;
+    window.ModelBuild.orderServed();
+    setSign(false);
   });
 
   // ── STRUCTURE: PLACING A COLUMN AND A BEAM ───────────────────────────────

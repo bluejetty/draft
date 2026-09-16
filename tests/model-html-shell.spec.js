@@ -582,10 +582,19 @@ test('shut, the rail keeps nothing on the sheet; the tabs are the way back',
 // WINDOW's centre and not the strip's leftover space: the group is centred
 // between two flexible gaps, so a corner gaining a button walks it sideways,
 // and by the time it looks wrong nobody remembers which commit moved it.
+//
+// TRUE CENTRE COSTS 1440 (measured, 16 Sep): the cluster is 539px wide and
+// the corners take 371 + 360, so at 1280 there is NO seat both centred and
+// clear of the file row -- the absolute overlay's box reached 2px into NEW
+// on an empty page and right over it with a length showing, and seven specs
+// died as 180s interception timeouts. Below 1440 the cluster is an in-flow
+// flex child: near centre (the corners weigh almost the same), overlap
+// impossible. So the sheet's centre is asserted where it is bought, and at
+// 1280 the assertion is the one that page died of: NEW takes the click.
 test('the instrument group is centred on the sheet, not on what is left over',
   async ({ page }) => {
     await openShell(page);
-    for (const width of [1280, 1440, 1920]) {
+    for (const width of [1440, 1920]) {
       await page.setViewportSize({ width, height: 800 });
       await page.waitForTimeout(250);
       const off = await page.evaluate(() => {
@@ -595,6 +604,22 @@ test('the instrument group is centred on the sheet, not on what is left over',
       expect(off, `the instruments sit ${off}px off centre at ${width}`)
         .toBeLessThan(60);
     }
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.waitForTimeout(250);
+    const at1280 = await page.evaluate(() => {
+      const r = document.getElementById('strip-center').getBoundingClientRect();
+      const hit = (() => {
+        const b = document.getElementById('file-new').getBoundingClientRect();
+        const el = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+        return el ? (el.id || el.tagName) : 'nothing';
+      })();
+      return { off: Math.abs((r.x + r.width / 2) - window.innerWidth / 2), hit };
+    });
+    expect(at1280.off, `the instruments sit ${at1280.off}px off centre at 1280`)
+      .toBeLessThan(90);
+    expect(at1280.hit, 'the instrument cluster is lying over NEW at 1280')
+      .toBe('file-new');
   });
 
 // THE COUNTS ARE OFFERED, NOT IMPOSED (Movie, 15 Sep). Shut, the panel must
