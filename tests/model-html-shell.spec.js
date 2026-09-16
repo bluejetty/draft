@@ -26,6 +26,13 @@
 // replaced. So collapsed goes wide and short. The ruling's GOAL — drawing area
 // back, no view lost — is what is tested below; its mechanism was a guess at
 // how to reach it and the measurement beat it.
+//
+// AND THEN MOVIE OVERTURNED THE STRIP ITSELF (16 Sep). Shown the long panel
+// and the shortened one side by side, he said "delete the 2nd shorter
+// version" — so a shut rail shows NOTHING now, the two edge tabs are the
+// whole collapsed state, and every guarantee the strip carried moves one
+// press over, onto the open pane. The measurements above are history, kept
+// because they explain how the strip came to exist at all.
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
@@ -123,66 +130,33 @@ test('both sidebars start shut, and shut costs less sheet than the overlay did',
       .toBeLessThan(14);
   });
 
-test('the collapsed right panel keeps the whole chart, and every seat reachable',
+test('shut is shut; one press seats the whole chart, every seat reachable',
   async ({ page }) => {
     await openShell(page);
 
-    // THE RULING SURVIVED THE CHART GROWING, but its shape changed and the
-    // measurement is why. Collapsed used to show all six seats at 4.5%. The
-    // derived chart seats FOURTEEN, and at fourteen there is no arrangement
-    // that stays cheap -- 3 columns 13.2%, 4 columns 14.3%, 5 columns 14.5%,
-    // 6 columns 19.9%, every one worse than the full-height version rejected
-    // in #389 for being worse than the overlay it replaced.
+    // THE STRIP IS GONE (Movie, 16 Sep: "delete the 2nd shorter version").
+    // Shut used to be a capped two-column strip of the same seats; now a
+    // shut rail keeps NOTHING on the sheet, and the chart's guarantee moves
+    // one press over: open, the whole chart is seated and every seat is
+    // reachable without leaving the rail.
     //
-    // So collapsed is capped and scrolls, which is what MODEL.dc.html does
-    // with its own rail: cheap in drawing area, with more than twice the
-    // seats, and the ones past the fold one scroll rather than one click.
-    //
-    // THE SEATS LIVE IN THE LAYOUT PREVIEWS PANE NOW (Movie, 15 Sep), so the
+    // THE SEATS LIVE IN THE LAYOUT PREVIEWS PANE (Movie, 15 Sep), so the
     // rail is asked about while it is showing that pane.
     await page.goto('/MODEL.html?mode=night&pane=previews');
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
     await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
-    await expect(page.locator('.seat')).toHaveCount(14);
-    const panel = await page.locator('#right-rail').boundingBox();
-    // 182, not 180: the level chips §7c put under the seats are one short row,
-    // and that row is what keeps a level switch reachable with the rail shut.
-    expect(panel.height, 'the collapsed strip grew past its cap — re-measure the sheet')
-      .toBeLessThanOrEqual(182);
+    await expect(page.locator('#right-rail'), 'a shut rail keeps a face on the sheet')
+      .not.toBeVisible();
 
-    // WHAT TWO COLUMNS COST, MEASURED RATHER THAN ASSUMED. Three columns put
-    // six seats in sight inside the 182px cap. Two columns need three rows,
-    // and the rail has to stand 290px to show them:
-    //
-    //     cap 182   10.8% of the drawing hidden   2 seats in sight
-    //     cap 230   12.0%                         4
-    //     cap 290   13.6%                         6
-    //
-    // 13.6% against a shell budget of 14 is the six-seat price, and it is
-    // not worth paying: the seats past the fold were already reached by a
-    // scroll rather than a click -- that is how fourteen of them fit at all
-    // -- so "six in sight" was never the guarantee. THE GUARANTEE IS THAT
-    // THE WHOLE CHART IS SEATED AND EVERY SEAT IS REACHABLE WITHOUT LEAVING
-    // THE COLLAPSED RAIL, and that is what is asserted now. The seat count
-    // above (14) is the half of it this check keeps.
-    //
-    // "In sight" is asked of the panel's own scroll box rather than of
-    // visibility: a seat scrolled out of a clipping panel still reports
-    // visible to a CSS check.
-    const inSight = await page.evaluate(() => {
-      const box = document.getElementById('right-rail').getBoundingClientRect();
-      return [...document.querySelectorAll('.seat')]
-        .filter(el => el.getBoundingClientRect().bottom <= box.bottom + 1)
-        .map(el => el.dataset.seat);
-    });
-    expect(inSight.length, 'the collapsed rail seats nothing at all')
-      .toBeGreaterThanOrEqual(2);
-    expect(inSight[0]).toBe('E1');
+    await page.locator('#previews-tab').click();
+    await page.waitForTimeout(200);
+    await expect(page.locator('#right-rail')).not.toHaveAttribute('data-collapsed', '');
+    await expect(page.locator('.seat')).toHaveCount(14);
 
     // TWO COLUMNS AND NO MORE (Movie, 15 Sep: "only the one with 2 columns").
     // Asked as the seats' own geometry -- how many share a row -- because a
-    // grid-template-columns string can say `repeat(2, 84px)` while a
-    // collapsed override two rules below quietly says three.
+    // grid-template-columns string can say `repeat(2, 84px)` while an
+    // override elsewhere quietly says three.
     const perRow = await page.evaluate(() => {
       const tops = [...document.querySelectorAll('.seat')]
         .map(el => Math.round(el.getBoundingClientRect().top));
@@ -191,15 +165,13 @@ test('the collapsed right panel keeps the whole chart, and every seat reachable'
     });
     expect(perRow, 'the seat grid is not two across').toBe(2);
 
-    // And a seat still works from the collapsed strip — visible is not the
-    // same as reachable, and the claim is that no view is ever more than a
-    // scroll and a tap away.
+    // And a seat works -- the claim is that no view is ever more than a
+    // press, a scroll and a tap away.
     await page.locator('.seat[data-seat="E1"]').click();
     await page.waitForTimeout(200);
     expect(page.url()).toContain('view=cut%3AE1');
 
-    // THE SEATS BELOW THE FOLD ARE REACHED, not just present: the price
-    // above is only payable if the scroll actually gets there.
+    // THE SEATS BELOW THE FOLD ARE REACHED, not just present.
     // The last ENABLED seat: the section seats at the end are empty chairs
     // until a cut exists, and a disabled button proves nothing about scroll.
     const last = page.locator('.seat:not([disabled])').last();
@@ -346,7 +318,11 @@ test('every control is a tenant of a bar, and the counters sit above the foot',
     expect(where.stripOrder.indexOf('settings-corner')).toBe(0);
     expect(where.stripOrder.indexOf('mode-corner'))
       .toBeGreaterThan(where.stripOrder.indexOf('settings-corner'));
-    expect(where.stripOrder[where.stripOrder.length - 1]).toBe('file-row');
+    // PRINTSCREEN CLOSES THE BAR (Movie, 16 Sep: "fully to the RIGHT in
+    // upper corner to RIGHT of the save stuff") -- the file row keeps the
+    // corner and the paper button ends it.
+    expect(where.stripOrder[where.stripOrder.length - 1]).toBe('printscreen');
+    expect(where.stripOrder[where.stripOrder.length - 2]).toBe('file-row');
 
     // THE FOOT BAR: the page row leads it, the middle pair sits between the
     // two ends, and the sheets close it (Movie, 15 Sep). The build bar is no
@@ -538,15 +514,17 @@ test('the right edge has two tabs and shows one pane at a time', async ({ page }
   await expect(levelsTab).toHaveText('LEVELS / LAYERS');
   await expect(previewsTab).toHaveText('LAYOUT PREVIEWS');
 
-  // Shut, LEVELS is the pane on offer -- the default, and the one a drafter
-  // lands on without asking.
-  await expect(page.locator('#levels-panel')).toBeVisible();
-  await expect(page.locator('#view-rail')).toBeHidden();
+  // Shut, NOTHING shows (Movie, 16 Sep: "delete the 2nd shorter version")
+  // -- but LEVELS is still the pane on offer: the tab wears the light, and
+  // one press brings up the full panel, not a stub.
+  await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
+  await expect(levelsTab).toHaveAttribute('aria-selected', 'true');
 
   await levelsTab.click();
   await page.waitForTimeout(150);
   await expect(page.locator('#right-rail')).not.toHaveAttribute('data-collapsed', '');
   await expect(page.locator('#levels-panel')).toBeVisible();
+  await expect(page.locator('#view-rail')).toBeHidden();
 
   // The other tab SWAPS the pane and leaves the rail open -- shutting on a
   // swap would make the second tab cost two presses to use.
@@ -566,28 +544,36 @@ test('the right edge has two tabs and shows one pane at a time', async ({ page }
   await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
 
   // THE PANE IS IN THE URL, so it survives a reload and can be sent to
-  // someone else -- the same rule ?level=, ?view= and ?right= follow.
+  // someone else -- the same rule ?level=, ?view= and ?right= follow. The
+  // rail comes back shut, so the memory shows on the tab's light and on
+  // which pane the next press brings up.
   expect(page.url()).toContain('pane=previews');
   await page.reload();
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  await expect(page.locator('#view-rail'), 'the pane forgot across a reload').toBeVisible();
+  await expect(previewsTab, 'the pane forgot across a reload')
+    .toHaveAttribute('aria-selected', 'true');
+  await previewsTab.click();
+  await page.waitForTimeout(150);
+  await expect(page.locator('#view-rail')).toBeVisible();
+  await expect(page.locator('#levels-panel')).toBeHidden();
 });
 
-// SHUT, THE LEVEL CHIPS STAY WHICHEVER TAB IS UP (§7c). The chrome bar's
-// LEVEL picker is gone, so the collapsed panel is the page's only level
-// switch: if choosing LAYOUT PREVIEWS and shutting the rail took the chips
-// away too, the drafter would lose a control as a side effect of a tab press
-// he made ten minutes earlier.
-test('the collapsed rail keeps the level chips on the previews pane',
+// SHUT TOOK THE CHIPS WITH IT (Movie, 16 Sep: "delete the 2nd shorter
+// version"). §7c's worry -- a shut rail loses the level switch -- is answered
+// by the LEVELS / LAYERS tab now: one press opens the full panel, the same
+// one press the chips cost, and the panel it opens is the long one with
+// every level's own name on it.
+test('shut, the rail keeps nothing on the sheet; the tabs are the way back',
   async ({ page }) => {
     await openShell(page, '&pane=previews');
     await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
-    await expect(page.locator('.lv-card .lv-name').first()).toBeVisible();
-    await expect(page.locator('.seat').first()).toBeVisible();
+    await expect(page.locator('.lv-card .lv-name').first()).not.toBeVisible();
+    await expect(page.locator('.seat').first()).not.toBeVisible();
 
-    // Open, it IS a pane again and the two do not share the rail.
+    // Open, the pane asked for is the one that shows -- and only it.
     await page.locator('#previews-tab').click();
     await page.waitForTimeout(200);
+    await expect(page.locator('#view-rail')).toBeVisible();
     await expect(page.locator('#levels-panel')).toBeHidden();
   });
 
@@ -744,7 +730,12 @@ test('the right panel stays inside its bound, and keeps every control it holds',
     // stops the panel eating the sheet; it can just as easily CLIP a control
     // instead, which trades a bug you can see for one you cannot. So: the rail
     // is within its bound, AND every control inside it is still inside its box.
+    //
+    // OPENED FIRST: shut shows nothing at all now (Movie, 16 Sep), so the
+    // width worth measuring is the open panel's.
     await openShell(page);
+    await page.locator('#right-tab').click();
+    await page.waitForTimeout(200);
     const verdict = await page.evaluate(() => {
       const rail = document.getElementById('right-rail');
       if (!rail) return { missing: true };

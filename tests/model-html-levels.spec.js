@@ -130,40 +130,38 @@ test('every chrome hook is still exactly one control', async ({ page }) => {
   }
 });
 
-test('the panel is in the right-edge group, and collapsing it keeps the level names',
+test('the panel is in the right-edge group, and collapsing hides the whole rail',
   async ({ page }) => {
     await openPanel(page);
     await expect(page.locator('#levels-panel')).toBeVisible();
     await expect(page.locator('.lv-datum')).toBeVisible();
 
-    // ONE TAB GROUP, NOT TWO. Devin's ruling: LEVELS/LAYERS is a third pane
-    // beside VIEWS and PROPERTIES rather than a second rotated tab on the
-    // same edge, because two tabs on one edge is how #389's chrome-on-chrome
-    // collisions happened. So it collapses with the panel that holds it.
-    //
-    // WHAT COLLAPSING NO LONGER DOES IS HIDE IT (§7c). While the chrome bar
-    // had a level select, the panel was the SECOND way to change level and
-    // could go away with the rail; §7 deleted the select, so a collapsed
-    // rail that hid the cards would leave the page with no way to change
-    // level at all. Collapsed is the NAMES ONLY -- same buttons, same hook.
+    // COLLAPSED IS NOTHING NOW (Movie, 16 Sep: shown the long panel and the
+    // shortened one side by side, "delete the 2nd shorter version"). §7c's
+    // worry -- a shut rail loses the level switch, because §7 deleted the
+    // chrome bar's level select -- is answered by the tab instead of by a
+    // strip of chips: one press on LEVELS / LAYERS brings back the full
+    // panel, the same one press the chips cost.
     await page.locator('#right-tab').click();
     await page.waitForTimeout(200);
-    await expect(page.locator('.lv-datum'), 'collapsed must drop the editing furniture')
-      .toBeHidden();
-    await expect(page.locator('.lv-layer').first()).toBeHidden();
-    const rows = page.locator('[data-level-row]');
-    await expect(rows.first(), 'a collapsed rail left no way to change level')
-      .toBeVisible();
+    await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
+    await expect(page.locator('.lv-datum')).not.toBeVisible();
+    await expect(page.locator('[data-level-row]').first(),
+      'the shorter version is deleted, not shown shut').not.toBeVisible();
 
-    // Reachable, not merely present: the switch still works from here.
+    // Reachable, not merely present: one press opens the LONG panel -- every
+    // level's own name, its layers, the editing furniture -- and the switch
+    // works from it.
+    await page.locator('#right-tab').click();
+    await page.waitForTimeout(200);
+    await expect(page.locator('#right-rail')).not.toHaveAttribute('data-collapsed', '');
+    await expect(page.locator('.lv-datum')).toBeVisible();
+    await expect(page.locator('.lv-layer').first()).toBeVisible();
     const target = await page.evaluate(() => [...document.querySelectorAll('.lv-card')]
       .find(c => !c.hasAttribute('data-active')).dataset.level);
     await page.locator(`[data-level-row="${target}"]`).click();
     await page.waitForTimeout(250);
     expect(await h.modelLevelId(page)).toBe(target);
-
-    // The seats stay: reachable means one click, not simultaneously visible.
-    await expect(page.locator('.seat').first()).toBeVisible();
   });
 
 test('+ ADD appends a real level, and the panel grows by one card', async ({ page }) => {
@@ -348,7 +346,7 @@ test('a stored section gets a row and a delete that works', async ({ page }) => 
     'the page is still showing a section the drawing no longer has').not.toBe('cut:S1');
 });
 
-test('the BONEYARD is a workspace now, and 3D is still a chair', async ({ page }) => {
+test('the BONEYARD is a workspace now, and the panel holds no 3D chair', async ({ page }) => {
   await openPanel(page);
 
   // THIS CHECK ENCODED A RULING THAT HAS BEEN REVERSED, and the reversal is
@@ -375,8 +373,8 @@ test('the BONEYARD is a workspace now, and 3D is still a chair', async ({ page }
     'the card selects, rather than printing its shelves as dead text')
     .toHaveCount(1);
 
-  // 3D: a chair, not a button. Movie is leaving 3D to last, and there is no
-  // WebGL, three.js or perspective camera in this file at all — so the seat
-  // is held without the label promising anything.
-  await expect(page.locator('[data-view3d]')).toBeDisabled();
+  // 3D: NOT EVEN A CHAIR ANY MORE (Movie, 16 Sep: "keep the longer version
+  // but remove 3D"). The disabled seat held a place for a view this file
+  // cannot draw; the LEVELS pane is all text now, so the place is not held.
+  await expect(page.locator('[data-view3d]')).toHaveCount(0);
 });

@@ -242,7 +242,7 @@
     font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.05em; text-transform:uppercase;
     display:inline-flex; align-items:center; justify-content:center;
-    min-width:64px; padding:4px 6px; margin-left:6px; flex:0 0 auto;
+    min-width:64px; padding:4px 6px; margin-left:8px; flex:0 0 auto;
     cursor:pointer; border:1px solid var(--edge-panel); border-radius:3px;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     color: var(--ink-primary); }
@@ -313,18 +313,34 @@
      arithmetic and cannot overlap anything. */
   #strip-center { flex:0 0 auto; height:var(--strip-h);
     display:flex; align-items:center; gap:10px; padding:0 8px; }
+  /* TWO HALVES AND A LINE BETWEEN THEM (Movie, 16 Sep): the bar reads as
+     LENGTH on one side and ANGLE on the other, so the rule sits between the
+     two boxes and names the split. It is CENTRED ON THE SHEET rather than on
+     the cluster: the two halves are equal grid columns, so the middle column
+     lands on the cluster's centre line, and the cluster's centre line is the
+     window's -- which puts the rule on the same axis as the bone below. Flex
+     would have centred the CONTENT and the line would drift with whichever
+     side happens to be wider. */
+  .strip-half { display:flex; align-items:center; gap:10px; }
+  .strip-half-left { justify-content:flex-end; }
+  .strip-half-right { justify-content:flex-start; }
+  #strip-divide { width:1px; height:24px; flex:0 0 1px;
+    background: var(--edge-panel); }
   /* CENTRED ON THE SHEET, not on what is left over. Two flex spacers centre
      the cluster only when the two corners weigh the same, and they never do
      -- the settings/units/mode stack is wide, the file row hides itself at
      narrow widths -- so the kit sat right of middle. Movie: "put all the
      instrument lights and textboxes centered".
-     ABOVE 1280 ONLY, which is the whole guard against the bug the note above
+     FROM 1280 UP, which is the whole guard against the bug the note above
      records: absolute centring can slide a chip over a corner control, and
-     1280 is the width at which the tenants first want more bar than there is.
-     Below it the cluster goes back to being a flex child between spacers,
-     where it cannot overlap anything. */
-  @media (min-width: 1281px) {
-    #strip-center { position:absolute; left:50%; transform:translateX(-50%); }
+     1280 is the narrowest sheet the suite measures the bone axis on -- with
+     PRINTSCREEN on the right corner the two corners weigh differently enough
+     that flex centring misses by a chip's width there. Below 1280 the cluster
+     goes back to being a flex child between spacers, where it cannot overlap
+     anything. */
+  @media (min-width: 1280px) {
+    #strip-center { position:absolute; left:50%; transform:translateX(-50%);
+      display:grid; grid-template-columns:1fr auto 1fr; }
   }
   /* WHEN THE BAR RUNS OUT OF SHEET, the things with nothing behind them go
      first. At 1280 the tenants want 1422px, so the file row -- NEW, OPEN,
@@ -348,7 +364,7 @@
      "there is a big blank spot where it should say LENGTH". The box gives up
      the width instead -- 72px still holds 12'-11 1/2". */
   @media (max-width: 1500px) {
-    #strip-center { gap:6px; }
+    #strip-center, .strip-half { gap:6px; }
     #frozen-length { width:72px; }
     #strip-len:not(:empty) { min-width:66px; }
   }
@@ -559,11 +575,12 @@
      here, is unavailable while the sign is up.
 
      THREE GROUPS ACROSS IT (Movie, 15 Sep): the two live places on the left,
-     the two drive-thru presses in the middle, the sheets that come off this
-     model on the far right. The middle pair is what the sign covers, and it
-     is the only pair there for exactly that reason -- a control the sign
-     hides is a control the drafter cannot reach while ordering. */
+     the bone in the middle, the sheets that come off this model on the far
+     right. The middle is what the sign covers, and the bone is the only
+     press there for exactly that reason -- a control the sign hides is a
+     control the drafter cannot reach while ordering. */
   #house-strip { position:fixed; left:0; right:0; bottom:0; z-index:6;
+    --foot-press-h:34px;
     min-height:var(--house-h);
     display:flex; align-items:center; gap:8px; padding:0 12px;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
@@ -581,25 +598,21 @@
   #delete:hover { color: var(--accent); border-color: var(--accent); }
   #delete[hidden] { display:none; }
 
-  /* THE MIDDLE PAIR: the sign and the bone, the only two presses the sign
-     covers. DELETE travels with them because it is a verb, not a place. */
-  #dt-bar { flex:0 0 auto; display:flex; align-items:center; gap:8px; }
-  /* MOVIE'S HOUSE BUTTON, two states in two files. The lit one is stacked
-     on the dark one and revealed rather than swapped in, so the press has
-     no flicker while the browser fetches the second image -- both are
-     already painted by the time a finger arrives. */
-  #dt-open { position:relative; display:block; padding:0; border:none;
-    background:none; line-height:0; cursor:pointer; }
-  #dt-open img { display:block; height:var(--foot-press-h, 34px); width:auto; }
-  #dt-open .lit { position:absolute; left:0; top:0; opacity:0;
-    transition:opacity 90ms linear; pointer-events:none; }
-  #dt-open[data-lit] .lit { opacity:1; }
-  #dt-open .said {
-    position:absolute; width:1px; height:1px; margin:-1px; padding:0;
-    overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+  /* THE MIDDLE PRESS: the bone, the one press the sign covers. DELETE, COPY
+     and PASTE travel with it because they are verbs, not places.
 
-  /* THE DRIVE-THRU SIGN. It rises from the foot and covers the two presses
-     in the middle of the strip -- z-index 7, the page's modal layer, over
+     THE BONE STANDS ON THE SHEET'S CENTRE LINE (Movie, 16 Sep), the same
+     axis the instrument rule at the top of the page stands on -- so it is
+     placed absolutely at 50% rather than centred by flex spacers, which
+     centre on what is LEFT OVER between two corners that never weigh the
+     same. The verbs line up to its right, clear of the bone's own box, so a
+     selection appearing cannot walk the bone off the axis. */
+  #dt-bar { position:absolute; left:50%; top:0; bottom:0;
+    display:flex; align-items:center; gap:8px;
+    padding-left:calc(var(--foot-press-h, 34px) * 0.53 + 8px); }
+
+  /* THE DRIVE-THRU SIGN. It rises from the foot and covers the bone in the
+     middle of the strip -- z-index 7, the page's modal layer, over
      the strip's 6. Off screen rather than hidden while shut so the rise is a
      movement the drafter can follow; `visibility` goes with it so nothing
      under the foot takes a stray press.
@@ -610,8 +623,12 @@
      The same arrangement as gruff-drivethru.js, for the same reason: the
      board is a PICTURE, and only the controls painted on top of it take a
      press. */
+  /* BIGGER, BECAUSE MOVIE COULD NOT READ IT (16 Sep: "make the stuff in the
+     drivethru menu bigger its hard to see"). The board grows and the type on
+     it grows with it -- the zones are percentages of the picture, so nothing
+     re-measures. */
   #drivethru { position:fixed; left:50%; bottom:0; z-index:7;
-    width:min(560px, calc(100vw - 24px)); transform:translate(-50%, 0);
+    width:min(720px, calc(100vw - 24px)); transform:translate(-50%, 0);
     transition:transform 220ms ease-out, visibility 220ms;
     pointer-events:none; }
   #drivethru[data-shut] { transform:translate(-50%, 104%); visibility:hidden; }
@@ -627,8 +644,8 @@
     font-family: var(--font-mono); color:#ff4033;
     text-shadow:0 0 10px rgba(255,64,51,0.45); letter-spacing:0.03em;
     line-height:1.35; overflow:hidden; }
-  #dt-line { font-size:clamp(11px, 2.1vw, 17px); font-weight:600; }
-  #dt-note { font-size:clamp(9px, 1.5vw, 13px); opacity:0.7; }
+  #dt-line { font-size:clamp(13px, 2.6vw, 22px); font-weight:600; }
+  #dt-note { font-size:clamp(11px, 1.9vw, 17px); opacity:0.7; }
   /* The tile strip: the house types, on the board's own shelf. */
   #dt-tiles { position:absolute; left:8%; top:43%; width:84%; height:23%;
     box-sizing:border-box; display:flex; flex-direction:column;
@@ -657,9 +674,9 @@
   /* The tiles are the board's own blueprint cards: paper, blue ink, a hard
      edge. They are not palette tokens because the board is one picture in
      one light, and a night-skin chip on it would read as a hole. */
-  #build-bar button { font-family: var(--font-ui); font-size:clamp(8px, 1.15vw, 11px);
+  #build-bar button { font-family: var(--font-ui); font-size:clamp(10px, 1.5vw, 14px);
     font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
-    cursor:pointer; color:#1f3f6b; padding:4px 8px; border-radius:2px;
+    cursor:pointer; color:#1f3f6b; padding:5px 10px; border-radius:2px;
     border:1px solid #1f3f6b; background:#f1e9d2; }
   #build-bar button:hover { background:#fff8e6; }
   /* A CARD IS THE WHOLE BUTTON. Movie drew one per house type, lettering and
@@ -672,7 +689,7 @@
      on the board at once, so the card is sized so that pair clears the
      black strip -- a tile that spills past the frame is an order the
      drafter cannot reach. */
-  #build-bar button.card img { display:block; height:clamp(26px, 5vw, 46px);
+  #build-bar button.card img { display:block; height:clamp(34px, 6.5vw, 60px);
     width:auto; border:1px solid transparent; border-radius:2px; }
   #build-bar button.card:hover img { border-color:#8f2a1d; }
   #build-bar button.card.open img, #build-bar button.card.chosen img {
@@ -689,11 +706,11 @@
   #build-sizes[hidden] { display:none; }
   #size-stock { display:flex; gap:4px; justify-content:center; flex-wrap:wrap; }
   #size-custom { display:flex; gap:3px; align-items:center;
-    font-family:var(--font-ui); font-size:clamp(8px, 1.15vw, 11px);
+    font-family:var(--font-ui); font-size:clamp(10px, 1.5vw, 14px);
     font-weight:700; letter-spacing:0.04em; color:#1f3f6b; }
   #size-custom[hidden] { display:none; }
   #size-custom input { width:4.2em; font-family:var(--font-ui);
-    font-size:clamp(8px, 1.15vw, 11px); font-weight:700; text-align:center;
+    font-size:clamp(10px, 1.5vw, 14px); font-weight:700; text-align:center;
     color:#1f3f6b; background:#f1e9d2; border:1px solid #1f3f6b;
     border-radius:2px; padding:3px 4px; }
   #size-custom input:focus { outline:2px solid #8f2a1d; outline-offset:1px; }
@@ -704,27 +721,19 @@
     color:#8f2a1d; border-color:#8f2a1d; box-shadow:inset 0 0 0 1px #8f2a1d; }
   /* THE FOOT'S BONE is the same red bone that sits on the sign's post --
      one artwork for one press, so the two bones cannot start looking like
-     two different verbs. Sized off the same variable as the house button
-     beside it so the pair reads as a pair. */
-  #bone { position:relative; padding:0; border:none; background:none;
-    line-height:0; cursor:pointer; }
+     two different verbs. Its own box is centred on the strip's 50% axis,
+     the same axis the instrument divider above it stands on. */
+  #bone { position:absolute; left:0; top:50%;
+    transform:translate(-50%, -50%); padding:0; border:none;
+    background:none; line-height:0; cursor:pointer; }
   #bone img { display:block; height:var(--foot-press-h, 34px); width:auto; }
   #bone:hover img { filter:brightness(1.12); }
+  /* THE BONE LIGHTS BEFORE THE BOARD RISES, which was the house button's job
+     until the house button came off the strip. One artwork, so the glow is a
+     filter rather than a second file -- and it is the same two seconds. */
+  #bone[data-lit] img { filter:brightness(1.3)
+    drop-shadow(0 0 7px rgba(255,64,51,0.75)); }
   #bone .said {
-    position:absolute; width:1px; height:1px; margin:-1px; padding:0;
-    overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
-  /* THE OTHER WAY IN, and Movie drew it: the dotted house, unlit and lit.
-     Same two-file, stacked-and-revealed arrangement as the drive-thru press
-     for the same reason -- both images are painted before a finger arrives,
-     so the glow cannot flicker while the browser fetches the second one. */
-  #outline { position:relative; display:block; padding:0; border:none;
-    background:none; line-height:0; cursor:pointer; }
-  #outline img { display:block; height:var(--foot-press-h, 34px); width:auto; }
-  #outline .lit { position:absolute; left:0; top:0; opacity:0;
-    transition:opacity 90ms linear; pointer-events:none; }
-  #outline[data-lit] .lit { opacity:1; }
-  #outline:hover img { filter:brightness(1.12); }
-  #outline .said {
     position:absolute; width:1px; height:1px; margin:-1px; padding:0;
     overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
 
@@ -884,21 +893,14 @@
      one scroll away. Devin withdrew "simultaneously visible" in favour of
      "reachable means one click"; this is that ruling costing eight seats a
      scroll rather than costing the drafter 13% of the sheet. */
-  /* 150px WAS TWO ROWS OF SEATS; the level chips below add one short row,
-     and 182 is that row. The chart above is what makes this a price rather
-     than a preference: 277x194 hides 5.2% of the drawing against 4.3%, and
-     the nine tenths of a point buys the thing §7c will not go without --
-     a level switch that is still there when the rail is shut. */
-  #right-rail[data-collapsed] { box-sizing:border-box; padding:6px; max-height:182px; }
-  /* THE SEAT GRID IS TWO COLUMNS, OPEN OR COLLAPSED (Movie, 15 Sep: "only
-     the one with 2 columns"). The three-column collapsed variant above was
-     measured and it did hide less of the drawing -- 4.3% against the two
-     column 5.8% in the chart -- so this is a price being paid knowingly,
-     not the chart being forgotten. What it buys is one seat grid instead of
-     two: the rail a drafter learns open is the rail he meets collapsed,
-     where the widths changing under a collapse made the same six seats land
-     in different places depending on a state he was not thinking about. */
-  #right-rail[data-collapsed] #props-slot { display:none; }
+  /* SHUT IS SHUT (Movie, 16 Sep): shown two presentations of the levels
+     panel side by side he kept the long one and said "delete the 2nd
+     shorter version" -- so the charts above are history, not law. A
+     collapsed rail shows NOTHING: the tabs on the edge are the whole
+     collapsed state, and each pane has exactly one face, its open one.
+     §7c's worry (a shut rail takes the level switch away) is answered by
+     the tab itself: LEVELS / LAYERS is one press, same as the chips were. */
+  #right-rail[data-collapsed] { display:none; }
   /* PROPERTIES BELONG TO THE LEVELS PANE. The slot shows itself when a tool
      fills it, and that press can happen while the seats are showing -- so
      the pane rules it out here rather than trusting every future caller to
@@ -1034,50 +1036,11 @@
      scrolled away inside it while the rail below them stood empty. */
   #levels-panel { display:flex; flex-direction:column; gap:6px; }
   #levels-panel::-webkit-scrollbar { display:none; }
-  /* THE LEVELS SURVIVE THE COLLAPSE (§7c). This rule used to read
-     `display:none`, which was true while the chrome bar carried a LEVEL
-     picker: the panel was the second way to switch and the picker was the
-     first. §7 deletes the picker, so a collapsed rail would have left the
-     page with NO way to change level -- the hole the order names, and the
-     reason it forbids deleting the picker before this line changes.
-
-     COLLAPSED IS THE NAMES ONLY: no layer rows, no datum, no add or delete.
-     Same buttons and the same `data-level-row` the expanded panel carries, so
-     the collapsed rail is the SAME control drawn short -- not a second one
-     that can come to disagree with it. */
-  /* ONE COLUMN, SHUT AS WELL AS OPEN (Movie, 15 Sep: "it should be one column
-     not 5"). Wrapping the names across the panel's width read as a paragraph
-     of levels rather than a storey stack, and a storey stack is what a level
-     list IS -- DC's rail has never drawn them any other way. */
-  #right-rail[data-collapsed] #levels-panel { display:flex; flex-direction:column;
-    gap:2px; margin-top:6px; max-height:150px; overflow-y:auto;
-    scrollbar-width:none; }
-  #right-rail[data-collapsed] #levels-panel::-webkit-scrollbar { display:none; }
-  /* A COLUMN COSTS HEIGHT, AND THE SEATS ARE UNDER IT. Shut on the previews
-     pane the level names share the 182px cap with the seat grid, so the
-     column is cut to three names there and scrolls for the rest -- the whole
-     point of keeping it shut is that the chart is in sight. */
-  #right-rail[data-collapsed][data-pane-showing="previews"] #levels-panel {
-    max-height:66px; }
-  #right-rail[data-collapsed] #levels-panel > *:not(.lv-card) { display:none; }
-  #right-rail[data-collapsed] #levels-panel .lv-card { flex:0 0 auto; }
-  #right-rail[data-collapsed] #levels-panel .lv-layers,
-  #right-rail[data-collapsed] #levels-panel .lv-del { display:none; }
   /* ONE PANE SHOWS AT A TIME, and `hidden` is not enough on its own: both
      panes set `display` in their own rules, which beats the attribute's UA
-     style. Named rather than matched by [data-pane] because the collapsed
-     rules above carry two ids and would outrank an attribute selector, and
-     placed after them because they tie on specificity -- a hidden pane that
-     draws itself anyway is the silent kind of wrong this page keeps paying
-     for. */
+     style. */
   #right-rail #levels-panel[hidden],
   #right-rail #view-rail[hidden] { display:none; }
-  /* EXCEPT THE CHIPS, SHUT (§7c). Collapsed, the levels panel is not a pane
-     -- it is the level switch, reduced to the names, and it is the only one
-     the page has left now the chrome bar's picker is gone. Shutting the rail
-     on the previews pane would otherwise take the drafter's level switch away
-     as a side effect of which tab he last pressed. */
-  #right-rail[data-collapsed] #levels-panel[hidden] { display:flex; }
   .lv-head { display:flex; align-items:center; gap:6px; }
   .lv-head-title { flex:1; font-family: var(--font-ui); font-size:9px;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet); }
@@ -1343,26 +1306,19 @@
        go under the board with them and be unreachable mid-order. The build
        families went up onto the board itself; they ARE the menu. -->
   <div id="dt-bar" data-drivethru-bar>
-    <button id="dt-open" type="button" data-drivethru-open
-      aria-expanded="false" aria-controls="drivethru"
-      title="Gruff's drive-thru: pick a house type"><img
-        src="./assets/btn-drivethru-off.png" alt="" /><img class="lit"
-        src="./assets/btn-drivethru-on.png" alt=""
-        /><span class="said">DRIVE-THRU MENU</span></button>
-    <button id="bone" type="button" data-bone-press
-      title="Build the house you picked"><img src="./assets/bone-red.png"
+    <!-- ONE PRESS IN THE MIDDLE (Movie, 16 Sep): "in bottom center lets
+         remove the two house buttons and keep the BONE button just go to the
+         drivethru". The drive-thru press and the OUTLINE press were two ways
+         to the same board, and the bone is the third -- so the bone is the
+         one that stays, and a drafter who wants to draw the outline himself
+         reaches for the OUTLINE command rather than a second button under the
+         board. It stands on the sheet's centre line, the same axis the
+         instrument rule above it stands on. -->
+    <button id="bone" type="button" data-bone-press aria-controls="drivethru"
+      aria-expanded="false"
+      title="Gruff's drive-thru: pick a house type, then build it"><img
+        src="./assets/bone-red.png"
         alt="" /><span class="said">BONE</span></button>
-    <!-- THE SECOND WAY TO THE SAME WINDOW (Movie, 15 Sep): "on the right
-         side of the bone i should have an OUTLINE button. and if they press
-         it lets also have the same drivethru menu come up, but when they
-         press the bone at the end after that round, they are guided through
-         drawing" it themselves. One board, two exits. -->
-    <button id="outline" type="button" data-drivethru-outline
-      aria-expanded="false" aria-controls="drivethru"
-      title="Pick a type, then draw its outline yourself"><img
-        src="./assets/btn-outline-off.png" alt="" /><img class="lit"
-        src="./assets/btn-outline-on.png" alt=""
-        /><span class="said">OUTLINE</span></button>
     <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
          for one of the types. It rides with the pair rather than with the
          places, because it is a verb. -->
@@ -1538,21 +1494,11 @@
      LOOKED AT -- and the bottom bar is where the page's other "which way am I
      looking at this" controls already live. The markup moved whole: same
      data-* attributes, same listeners, same aria-pressed shading. -->
-  <!-- PRINTSCREEN (Movie, 15 Sep), and it is NOT a print of the drawing.
-       There is no print path on this page on purpose: a sheet's scale and
-       title block live on the layout, and a second renderer here would be a
-       second thing the city could be handed. What this makes is a
-       PRESENTATION -- three screen grabs for a client to look at -- and
-       every page says NOT TO SCALE above the logo so it can never be walked
-       into a builder's office as a drawing. Its place on the bar is Movie's:
-       "next over printscreen button by itself", after the three stacks and
-       before the instruments. -->
-  <button type="button" id="printscreen" data-printscreen
-    title="Three pages to show a client — this view, the whole plan, and the views rail. Not to scale.">PRINTSCREEN</button>
   <span id="strip-message" data-strip-message></span>
   <div class="grow"></div>
 
   <div id="strip-center" data-strip-center>
+   <span class="strip-half strip-half-left">
     <span class="chip dormant" data-mode-compass title="COMPASS — not built on this page yet">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <path d="M8 2 L3.5 13.5 M8 2 L12.5 13.5"></path>
@@ -1589,6 +1535,17 @@
       <input id="frozen-length" data-frozen-length type="text" disabled
         placeholder="—" aria-label="Frozen length" autocomplete="off" />
     </span>
+   </span>
+
+    <!-- THE CENTRE LINE (Movie, 16 Sep): "a dividing line between the length
+         and angle box and center that line perfectly (centered on the bone
+         below)". It is the sheet's spine -- the two halves of the bar are
+         equal grid columns, so the rule stands on the window's centre line
+         and the bone stands on the same one. Decoration, not a control, so
+         it carries no label and no press. -->
+    <span id="strip-divide" aria-hidden="true"></span>
+
+   <span class="strip-half strip-half-right">
 
     <!-- THE ANGLE BOX IS THE LENGTH BOX'S TWIN, and deliberately so: a
          drafter who can type 12'-6" should be able to type 30° for the same
@@ -1634,6 +1591,7 @@
         <path d="M9.5 6 L11.5 7.5" stroke-width="0.9"></path>
       </svg>
     </span>
+   </span>
   </div>
 
   <div class="grow"></div>
@@ -1661,6 +1619,20 @@
     <option value="plan">.plan</option>
   </select>
 </div>
+<!-- PRINTSCREEN, and it is NOT a print of the drawing. There is no print path
+     on this page on purpose: a sheet's scale and title block live on the
+     layout, and a second renderer here would be a second thing the city could
+     be handed. What this makes is a PRESENTATION -- three screen grabs for a
+     client to look at -- and every page says NOT TO SCALE above the logo so it
+     can never be walked into a builder's office as a drawing.
+
+     IN THE TOP-RIGHT CORNER, RIGHT OF THE FILE ROW (Movie, 16 Sep: "move the
+     PRINTSCREEN BUTTON fully to the RIGHT in upper corner to RIGHT of the save
+     stuff"). It started left of the instruments, which put a button that makes
+     PAPER in among the ones that measure -- and paper is what the file row is
+     about. So it ends the file row rather than beginning the instruments. -->
+  <button type="button" id="printscreen" data-printscreen
+    title="Three pages to show a client — this view, the whole plan, and the views rail. Not to scale.">PRINTSCREEN</button>
 </div>
 
 <div id="notice"><div id="notice-body"></div></div>
@@ -3827,7 +3799,8 @@
 
     const rightOpen = railOpen('right');
     const rightPanel = document.getElementById('right-rail');
-    // Never hidden: collapsed is a width, not an absence.
+    // The stylesheet owns the shut face: `[data-collapsed]` displays nothing,
+    // and the edge tabs are the whole collapsed state.
     rightPanel.hidden = false;
     rightPanel.toggleAttribute('data-collapsed', !rightOpen);
     const pane = paneShowing();
@@ -4112,10 +4085,16 @@
   // WHAT GRUFF SAYS IS DERIVED, never stored: it reads the menu's own state
   // each paint, so a line that disagrees with the tiles cannot happen.
   const sign = document.getElementById('drivethru');
-  const signOpen = document.getElementById('dt-open');
   const signLine = document.getElementById('dt-line');
   const signNote = document.getElementById('dt-note');
-  const signOutline = document.getElementById('outline');
+  // THE BONE IS THE ONE PRESS UNDER THE BOARD (Movie, 16 Sep: "remove the
+  // two house buttons and keep the BONE button just go to the drivethru").
+  // The house button and the OUTLINE button were two more ways to the same
+  // window, so the bone inherits their whole job: it calls the sign up, it
+  // wears the glow while the board rises, and it carries the aria-expanded
+  // the reader listens for. The outline ROUND still exists in `round` --
+  // what retired is its button, not its meaning.
+  const boneFoot = document.getElementById('bone');
   const signShut = () => sign.hasAttribute('data-shut');
 
   // WHAT GRUFF SAYS WHEN HE IS REFUSING, set by the press that was refused
@@ -4165,12 +4144,10 @@
   // edit, and the spec says so.
   const setSign = show => {
     sign.toggleAttribute('data-shut', !show);
-    signOpen.setAttribute('aria-expanded', String(show));
-    signOutline.setAttribute('aria-expanded', String(show));
+    boneFoot.setAttribute('aria-expanded', String(show));
     if (show) paintSign();
-    // The board covers the pair; nothing under it should be tabbed into.
-    signOpen.disabled = show;
-    signOutline.disabled = show;
+    // The board covers the bone; nothing under it should be tabbed into.
+    boneFoot.disabled = show;
   };
   // THE BUTTON LIGHTS BEFORE THE SIGN RISES (Movie, 15 Sep): the house
   // button glows, then the board comes up. One constant, because he said
@@ -4193,8 +4170,6 @@
       setSign(true);
     }, SIGN_LIGHT_MS);
   };
-  signOpen.addEventListener('click', () => callSign(signOpen, 'menu'));
-  signOutline.addEventListener('click', () => callSign(signOutline, 'outline'));
 
   // THE BONE ON THE SCREEN WITH NOTHING TO BUILD (Movie, 15 Sep: "what
   // happens if they press the bone if no outline?" -- then: "take them to
@@ -4215,7 +4190,7 @@
   //
   // The seam still hears every press either way -- what an empty press
   // means to the geometry side stays the geometry side's call.
-  document.getElementById('bone').addEventListener('click', () => {
+  boneFoot.addEventListener('click', () => {
     fireBuild();
     if (chosen()) return;
     if (window.DraftBuildingBodies.isFull(drawing)) return;
@@ -4224,7 +4199,7 @@
       note: 'Pick a type off the board and I\u2019ll build it.',
     };
     if (!signShut()) { paintSign(); return; }
-    callSign(signOpen, 'menu');
+    callSign(boneFoot, 'menu');
   });
 
   // ARRIVING FROM THE FRONT DOOR PULLS UP TO THE WINDOW BY ITSELF (Movie,
@@ -4251,15 +4226,15 @@
       if (!lighting) return;
       window.clearTimeout(lighting);
       lighting = 0;
-      signOpen.toggleAttribute('data-lit', false);
+      boneFoot.toggleAttribute('data-lit', false);
     };
     ['pointerdown', 'keydown', 'wheel'].forEach(type =>
       document.addEventListener(type, cancel, true));
-    callSign(signOpen, 'menu');
+    callSign(boneFoot, 'menu');
   }
   document.getElementById('dt-close').addEventListener('click', () => {
     setSign(false);
-    signOpen.focus();
+    boneFoot.focus();
   });
   // THE SIGN'S BONE IS THE ORDER, not the drafter's outline -- the other
   // seam, and nothing is listening on it yet because neither the premade
@@ -4307,7 +4282,7 @@
     if (event.key !== 'Escape' || signShut()) return;
     event.stopPropagation();
     setSign(false);
-    signOpen.focus();
+    boneFoot.focus();
   }, true);
 
   // ── the per-tool properties slot ──────────────────────────────────────────
@@ -4352,9 +4327,8 @@
   // this page has paid for repeatedly. The panel is the survivor because it
   // says MORE: the layer rows, the datum, the colours, ADD and DELETE. The
   // one thing the pickers had over it was that they were reachable with the
-  // rail shut, and that is why the collapsed rail now keeps the level names
-  // (see `#right-rail[data-collapsed] #levels-panel` in the stylesheet)
-  // rather than hiding them.
+  // rail shut, and the LEVELS / LAYERS tab answers that now: one press opens
+  // the panel, the same one press the pickers cost.
   const levelsPanel = document.getElementById('levels-panel');
   const fileRow = document.getElementById('file-row');
 
@@ -4904,15 +4878,6 @@
       levelsPanel.append(row);
     });
 
-    // ── 3D VIEW ─────────────────────────────────────────────────────────────
-    // A CHAIR, NOT A BUTTON, which is this page's own rule for a view that
-    // does not exist yet. There is no WebGL, no three.js and no perspective
-    // camera in this file at all -- so an enabled 3D VIEW would be a button
-    // that cannot do the one thing its label promises.
-    const threeD = rowButton('⬡ 3D VIEW',
-      'No 3D view on this page yet — the drawing is 2D only here', null, false);
-    threeD.dataset.view3d = '';
-
     markActiveLayer();
   };
 
@@ -5257,7 +5222,10 @@
     if (railEpoch !== modelEpoch && railFrame === null) {
       railFrame = requestAnimationFrame(stepSeats);
     }
-    rail.hidden = false;
+    // The PANE owns whether the rail shows: syncRail runs on every paint,
+    // and a bare `hidden = false` here would re-reveal PREVIEWS under the
+    // LEVELS pane on the first level switch after a swap.
+    rail.hidden = paneShowing() !== 'previews';
   };
 
   // ONE SEAT PER FRAME, and the reason is a measurement rather than a taste.
