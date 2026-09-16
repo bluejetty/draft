@@ -1942,8 +1942,16 @@
   // on its own, so a caller re-deriving the refusals one at a time would call
   // it accepted, never record it, and lose it on the next save — while looking
   // exactly like a caller that works.
-  const REFUSED_KEYS = ['walls', 'lines', 'floors', 'dimensions'];
-  let refusedItems = { walls: [], lines: [], floors: [], dimensions: [] };
+  // THE FOUR SMALL COLLECTIONS JOINED ON 16 SEP (tier 3j). A tool that can
+  // place a beam is a page ACTING on beams, and the load block's own rule is
+  // that a collection the page acts on is normalised on the way in. They
+  // carry `drops` for the same reason the first four do: withRefused() puts a
+  // refused record back on save, so refusing is declining to act on it rather
+  // than deleting it from the drafter's file.
+  const REFUSED_KEYS = ['walls', 'lines', 'floors', 'dimensions',
+    'beams', 'columns', 'shapes', 'fixtures'];
+  let refusedItems = { walls: [], lines: [], floors: [], dimensions: [],
+    beams: [], columns: [], shapes: [], fixtures: [] };
   // PAINT THE SUBSTITUTE, NEVER PERSIST IT (RULING-substitution-is-not-a-save,
   // Movie, 11 Sep). `LEGACY_WALL_TYPES` rewrites a retired wall type to the
   // nearest surviving assembly so the wall can be DRAWN — a reader's
@@ -6802,6 +6810,19 @@
     cut(drawing.fenestrations, f => f && f.wallId === gone);
     // A fixture by either anchor: the tub needs its faucet-END wall too.
     cut(drawing.fixtures, f => f && (f.wallId === gone || f.endWallId === gone));
+    // AND THE REFUSED ONES, or refusing a record makes it IMMORTAL. Since the
+    // load block started normalising fixtures (tier 3j), a fixture the format
+    // turns down is held in `refusedItems` and put back by withRefused() on
+    // save -- which is right, because declining to act on a drafter's geometry
+    // must not delete it. But a delete cascade IS this page acting on the
+    // wall, and a refused fixture the cascade cannot reach outlives the wall
+    // it hung on: invisible, unpaintable, and back in the file after every
+    // save. That is the orphan this test names, arriving by a new road.
+    //
+    // Through `cut` rather than a filter, so the removal joins `deps` and undo
+    // restores it with everything else the wall took.
+    cut(refusedItems.fixtures, entry => entry && entry.item
+      && (entry.item.wallId === gone || entry.item.endWallId === gone));
     // AND GROUPS, which neither the order nor the review named. The old page
     // runs _cleanupGroups() beside the cascade; groups reference members by
     // {type, id}, so a group left holding a dead wall id adopts the next wall
@@ -9345,7 +9366,8 @@
     const levelIds = new Set((parsed.levels || [])
       .map(level => Number(level.id)).concat(shelfIds));
     const WT = window.DraftWallTypes;
-    refusedItems = { walls: [], lines: [], floors: [], dimensions: [] };
+    refusedItems = { walls: [], lines: [], floors: [], dimensions: [],
+      beams: [], columns: [], shapes: [], fixtures: [] };
     drawing = {
       ...parsed,
       // NORMALISED, NOT PASSED THROUGH. `...parsed` would carry whatever the
@@ -9386,6 +9408,16 @@
       // the paint site would read it -- indistinguishable for a valid number,
       // wrong for a quoted one, since the format does not coerce.
       autoDimFirstOffsetFt: F.autoDimFirstOffsetFt(parsed.autoDimFirstOffsetFt),
+      // TIER 3J. These four were carried through on `...parsed` while nothing
+      // on this page acted on them -- the rule above, followed correctly. The
+      // small tools cross that line, so they are asked the format's own
+      // questions now: an id that is not an integer, a beam with no length, a
+      // level the drawing does not have, a shape with no points, and -- the
+      // one a deleted wall leaves behind -- a fixture hanging on no wall.
+      beams: F.beams(parsed.beams, levelIds, { drops: refusedItems.beams }),
+      columns: F.columns(parsed.columns, levelIds, { drops: refusedItems.columns }),
+      shapes: F.shapes(parsed.shapes, levelIds, { drops: refusedItems.shapes }),
+      fixtures: F.fixtures(parsed.fixtures, levelIds, { drops: refusedItems.fixtures }),
     };
     // Recorded against the RAW file: the normaliser is the only thing that knows
     // a substitution happened, and it does not say so — the two types differ and
@@ -9638,6 +9670,10 @@
       lines: withRefused('lines', drawing.lines),
       floors: withRefused('floors', drawing.floors),
       dimensions: withRefused('dimensions', drawing.dimensions),
+      beams: withRefused('beams', drawing.beams || []),
+      columns: withRefused('columns', drawing.columns || []),
+      shapes: withRefused('shapes', drawing.shapes || []),
+      fixtures: withRefused('fixtures', drawing.fixtures || []),
     };
   };
 
