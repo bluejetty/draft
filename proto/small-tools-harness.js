@@ -94,6 +94,26 @@ const ROWS = [
     bad: { id: 'fx-2', wallId: '', levelId: 1, kind: 'sink', width: 2, depth: 2, offset: 3 },
     broke: 'a fixture hanging on no wall',
     keeps: ['id', 'wallId', 'levelId', 'kind'] },
+
+  // THE ANNOTATION TOOL'S STORAGE. `notes` is the odd one of the five: it is
+  // already PAINTED on this page (drawNoteScreen2D, off drawing.notes) and
+  // still un-normalised, so a note reaches the painter without ever being
+  // asked whether it says anything. An annotation with no words is the record
+  // a half-finished gesture leaves behind.
+  { tool: 'annotation', call: 'notes',
+    good: { id: 1, anchor: P(0, 0), text: P(3, 3), levelId: 1, view: 'plan', body: 'BEARING WALL' },
+    bad: { id: 2, anchor: P(0, 0), text: P(3, 3), levelId: 1, view: 'plan', body: '   ' },
+    broke: 'an annotation with no words',
+    keeps: ['id', 'anchor', 'text', 'levelId', 'view', 'body'] },
+
+  // The leader has to GO somewhere: a note whose text sits on its own anchor
+  // draws an arrow of zero length, which is a mark the drafter cannot see and
+  // cannot grab.
+  { tool: 'annotation', call: 'notes',
+    good: { id: 3, anchor: P(0, 0), text: P(2, 2), levelId: 1, view: 'plan', body: 'SLOPE', end: 'line' },
+    bad: { id: 4, anchor: P(5, 5), text: P(5, 5), levelId: 1, view: 'plan', body: 'SLOPE' },
+    broke: 'a leader that points at itself',
+    keeps: ['id', 'body', 'end'] },
 ];
 
 console.log('\ntool        collection   good record   broken record                       refused?');
