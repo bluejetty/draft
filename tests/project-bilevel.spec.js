@@ -152,8 +152,17 @@ test('band 2 draws a split: fill wall present, entry landing below main', async 
   expect(feetBelow('floor-2', 'floor-3')).toBeGreaterThan(3);
   expect(feetBelow('floor-2', 'floor-3')).toBeLessThan(6);
 
-  // And the storey over the garage is above main by about a wall and a floor.
-  expect(feetBelow('floor-3', 'floor-5')).toBeGreaterThan(8);
+  // AND THE STOREY OVER THE GARAGE IS A BILEVEL'S, NOT A TWO-STOREY'S. This
+  // read "a wall and a floor above main" -- the stacked-storey figure -- and
+  // Movie ruled otherwise on 16 Sep: the upper deck sits about 9 ft above the
+  // ENTRY floor, which is where the balcony and the garage both start from.
+  // Measured from main, which is itself ~4.5 ft above entry, that leaves
+  // about 4.5 ft, and the bound is written from entry so the check says what
+  // the rule says rather than what a subtraction happens to leave.
+  expect(feetBelow('floor-2', 'floor-5')).toBeGreaterThan(8);
+  expect(feetBelow('floor-2', 'floor-5')).toBeLessThan(10);
+  expect(feetBelow('floor-3', 'floor-5'),
+    'the upper deck fell to or below main').toBeGreaterThan(3);
 
   // THE ENTRY FLOOR BEARS ON THE FILL WALL, so it sits BELOW that wall's
   // midpoint -- near its base, on the sill both of them share. This is the fact
@@ -175,10 +184,15 @@ test('band 2 draws a split: fill wall present, entry landing below main', async 
 // the split's and not, say, the same field read twice.
 test('band 2 schedule reads the split stack', async ({ page }) => {
   await openProject(page);
+  // A TYPED ROW IS AN INPUT, so its value is not its text. The card's cells
+  // became editable on 16 Sep ("be editable like the above BUNGALOW area"),
+  // and an input reports textContent '' -- which read as the schedule having
+  // lost its numbers when the numbers were sitting in the boxes.
   const rows = await page.evaluate(() => Object.fromEntries(
     [...document.querySelectorAll('#sched-bilevel-left .sched-row, #sched-bilevel-right .sched-row')]
       .filter(r => !r.hidden)
-      .map(r => [r.children[0].textContent, r.children[1].textContent])));
+      .map(r => [r.children[0].textContent,
+        r.children[1].value ?? r.children[1].textContent])));
 
   // Office defaults for the type, pinned: these are the numbers that make a
   // split a split, and all three are frozen in SECTION_TABLE_DEFAULTS.
