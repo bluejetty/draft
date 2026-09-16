@@ -84,6 +84,19 @@ if (!window.DraftLevelAssembly) {
   // would survive the pour changing, and the pour is the number a drafter
   // actually edits.
   const FOUNDATION_WALL_TOP_FT = (FOUNDATION_POUR_FT * 12 + SILL_PLATE_IN) / 12;
+  // AND IT IS THE BEARING LINE, WHICH IS NOT THE CONCRETE'S OWN HEIGHT. A
+  // level asks "how far up does the floor sit", and that is pour + plate;
+  // the PROJECT page's FDN WALL box asks "how tall is the pour", and that is
+  // this less the attachment. Movie, 16 Sep, reading the label off the
+  // section: "it says foundation 8'1.5\" the foundation should be 8' and then
+  // the sill plat is 1.5\"".
+  //
+  // THE STORED NUMBER DID NOT MOVE, on purpose -- MODEL.dc.html stands its
+  // foundation walls at this height with no plate of its own, so lowering it
+  // to the pour would drop every modelled main floor 1 1/2" and shorten the
+  // stair that reaches it. The split lives in the two pages' PRESENTATION:
+  // PROJECT shows the pour and the attachment as separate numbers that add
+  // back up to this one.
   // ONE HEIGHT FOR EVERY FOUNDATION WALL TYPE, ON PURPOSE. An ICF wall and a
   // PT SPF wood foundation do not stack to the same number as an 8" pour with
   // a sill, and Movie holds those: 7 Sep, "PT SPF wall and ICF wall heights

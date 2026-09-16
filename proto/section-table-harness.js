@@ -244,19 +244,54 @@ check('the garage offset is the SILL TOP, with the concrete a sill plate under i
     .filter(p => p.kind === 'rect').map(p => p.y + p.h));
   return [top, GARAGE.garage.sillOffsetFt];
 });
-check('the garage SLAB sits 5 1/2" below that offset, not on it', P => {
-  // Two traps here, both hit on the way to this line. The slab FALLS toward
-  // the door, so its lines are sloped and a horizontal-line filter finds none
-  // of them -- take the y where each meets the house wall at x = 0, the end
-  // that shares the datum. And the garage HAS A ROOF, so an unbounded max over
-  // those picks the ridge and reports the slab 12 ft above its own sill.
-  const atHouse = garage(P).parts.filter(p => p.kind === 'line')
-    .filter(l => l.x1 === 0 || l.x2 === 0)
-    .map(l => (l.x1 === 0 ? l.y1 : l.y2))
-    .filter(y => y < GARAGE.garage.sillOffsetFt);
-  const slabTop = Math.max(...atHouse);
-  return [Math.round((GARAGE.garage.sillOffsetFt - slabTop) * 12 * 16) / 16,
-    P.SILL_PLATE_IN + 4];
+// THE SLAB IS 5 1/2" DOWN, AND IT IS NOT DRAWN. Both halves are the check,
+// because they arrived together: this used to read the slab's own lines at
+// x = 0, and on 16 Sep those lines came out of both bands -- the cut runs
+// ALONG the beam, so the slab is behind the cut face and its two sloping
+// lines landed inside the beam band, which Movie read as strays at the sill
+// ("take out those extra lines they were probably slab before").
+//
+// So the height is now pinned on the CONSTANTS the builder composes, which is
+// where the 5 1/2" lives once no line carries it, and a second check says the
+// linework stayed gone. Without that second one, restoring the strays would
+// pass here and the drawing would be wrong again with nothing failing.
+check('the garage SLAB is 5 1/2" below the sill: a sill plate, then 4"', P =>
+  [P.SILL_PLATE_IN + P.GARAGE_SLAB_BELOW_CONCRETE_IN, 5.5]);
+check('and no line is drawn between the sill and the beam soffit', P => {
+  // Everything legitimately in that band is a rect (beam, sill plate) or the
+  // break. A LINE with both ends under the sill and above the beam's underside
+  // is the slab coming back.
+  const s = garage(P);
+  const soffit = GARAGE.garage.sillOffsetFt - P.SILL_PLATE_IN / 12
+    - GARAGE.garage.fdnWallHeightFt;
+  const inBand = y => y < GARAGE.garage.sillOffsetFt && y > soffit;
+  return [s.parts.filter(p => p.kind === 'line' && inBand(p.y1) && inBand(p.y2)).length, 0];
+});
+// THE PILE IS A MEMBER, NOT A LINE. Movie, 16 Sep, filling the shaft in green
+// over the render: two hairlines beside the break read as a stray, where
+// everything else down there -- beam, sill, footing -- is a closed band. The
+// hatch is what says the cut goes THROUGH it, and it is the only thing on
+// this drawing that does, so it is worth pinning that it exists, spans the
+// half width the cut leaves, and runs beam soffit to footing bottom.
+check('the pile is hatched over its half width, soffit to footing bottom', P => {
+  const s = garage(P);
+  const fill = s.parts.filter(p => p.kind === 'hatch');
+  const soffit = GARAGE.garage.sillOffsetFt - P.SILL_PLATE_IN / 12
+    - GARAGE.garage.fdnWallHeightFt;
+  const pileBot = GARAGE.garage.houseFootingTopFt - GARAGE.garage.footingDepthIn / 12;
+  const shaft = fill.find(p => near(p.y, pileBot));
+  return [shaft && [
+    Math.round(shaft.w * 12 * 16) / 16,
+    Math.round((shaft.y + shaft.h - soffit) * 16) / 16,
+  ].join(','), '5,0'];
+});
+// AND THE VOID FORM IS TOO, because it is the same pour's formwork read at
+// the same scale: a 4" band outlined and left white is a gap, and a gap under
+// a beam is what the void form is there to explain.
+check('the void form band is hatched as well', P => {
+  const s = garage(P);
+  return [s.parts.filter(p => p.kind === 'hatch'
+    && near(p.h, P.VOID_FORM_IN / 12)).length, 1];
 });
 // 1'-2", not the 8" this carried until 5 Sep. Movie moved every garage
 // foundation out to the house's own height above grade -- "for the grade beam

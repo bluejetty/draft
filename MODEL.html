@@ -285,14 +285,28 @@
      SAVE, SAVE AS -- was pushed off the right edge and could not be clicked
      at all. A control that does nothing yet must never cost one that saves
      the drawing, so the three not-built-yet chips and the LENGTH caption are
-     dropped on a narrow sheet and the instruments close up. */
+     dropped on a narrow sheet and the instruments close up.
+
+     THE THRESHOLD CAME DOWN when RUFF/ROUGH and NIGHT/DAY went to the bottom
+     bar: that is ~150px the left corner no longer spends, and 1500 was still
+     charging for it -- so a 1366 laptop, which now has room to spare, lost
+     the brush and the rest of the not-built chips for nothing. Movie, 15
+     Sep: "the drafting brush and a bunch of other unused instrument lights
+     vanished can we put them back". */
+  @media (max-width: 1180px) {
+    #strip-center .chip.dormant { display:none; }
+  }
   @media (max-width: 1500px) {
     #strip-center { gap:6px; }
-    #strip-center .chip.dormant { display:none; }
     #strip-length-box > span { display:none; }
     #frozen-length { width:72px; }
     #strip-len { min-width:66px; }
   }
+  /* AND THEY SIT AGAINST THE WORKING ONES. Movie: "snug them to the sides of
+     the working ones". A dormant chip spaced like an instrument reads as one
+     of the instruments; pulled tight to the live cluster it reads as what it
+     is -- the rest of the kit, not yet in hand. */
+  #strip-center .chip.dormant { margin-inline:-3px; padding:2px 2px; }
   .chip { display:inline-flex; align-items:center; gap:3px; padding:2px 4px;
     border:1px solid transparent; border-radius:4px; background:none;
     color: var(--ink-secondary); cursor:pointer; }
@@ -312,6 +326,19 @@
     border:1px solid var(--edge-panel); border-radius:4px; outline:none; }
   #frozen-length:disabled { color: var(--ink-quiet); opacity:0.5; }
   #frozen-length:focus { border-color: var(--accent); }
+  /* THE WORD SITS AFTER ITS BOX, between the box and the protractor, where
+     Movie put it: the instrument and its number read as one thing with the
+     name in the middle naming both. It stays at every width -- the angle box
+     is narrow enough to be taken for a second length box, and the label is
+     what tells them apart. */
+  #strip-angle-box { display:flex; align-items:center; gap:5px;
+    font-size:11px; color: var(--ink-quiet); }
+  #frozen-angle { width:62px; text-align:right; padding:3px 6px;
+    font-family: var(--font-mono); font-size:12px;
+    background-color: var(--surface-chip); color: var(--ink-primary);
+    border:1px solid var(--edge-panel); border-radius:4px; outline:none; }
+  #frozen-angle:disabled { color: var(--ink-quiet); opacity:0.5; }
+  #frozen-angle:focus { border-color: var(--accent); }
 
   /* THE MODE CORNER, upper-left (§7b): what the drawing IS -- board, finish,
      day/night. It sat at the right-hand end of the foot strip; Movie moved it
@@ -1426,9 +1453,6 @@
       </svg>
     </span>
 
-    <span id="strip-len" class="num" data-model-len></span>
-    <span id="strip-ang" class="num" data-model-ang></span>
-
     <button type="button" id="strip-ruler" class="chip" data-mode-ruler
       title="RULER — measure between two points without drawing anything">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
@@ -1437,10 +1461,33 @@
       </svg>
     </button>
 
+    <span id="strip-len" class="num" data-model-len></span>
+    <span id="strip-ang" class="num" data-model-ang></span>
+
     <span id="strip-length-box">
       <span>LENGTH</span>
       <input id="frozen-length" data-frozen-length type="text" disabled
         placeholder="—" aria-label="Frozen length" autocomplete="off" />
+    </span>
+
+    <!-- THE ANGLE BOX IS THE LENGTH BOX'S TWIN, and deliberately so: a
+         drafter who can type 12'-6" should be able to type 30° for the same
+         reason, and one instrument reading a number the drafter cannot set is
+         half a tool. It lives beside the protractor because the protractor is
+         where the number is read. -->
+    <span id="strip-angle-box">
+      <input id="frozen-angle" data-frozen-angle type="text" disabled
+        placeholder="—" aria-label="Frozen angle" autocomplete="off" />
+      <span>ANGLE</span>
+    </span>
+
+    <span class="chip" data-mode-protractor title="PROTRACTOR — reads the angle of the run in hand">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M2 12.5 A6 6 0 0 1 14 12.5 Z"></path>
+        <path d="M8 12.5 L11.6 8.3" stroke-width="0.9"></path>
+        <path d="M4.2 9.9 L5.1 10.8 M8 6.5 V7.9 M11.8 9.9 L10.9 10.8" stroke-width="0.9"></path>
+      </svg>
+      <span id="strip-protractor-angle" data-protractor-angle>—</span>
     </span>
 
     <button type="button" id="strip-tsquare" class="chip" data-mode-tsquare
@@ -1451,15 +1498,6 @@
         <path d="M8 6.5 H10.5 M8 9.5 H10.5 M8 12.5 H10.5" stroke-width="0.9"></path>
       </svg>
     </button>
-
-    <span class="chip" data-mode-protractor title="PROTRACTOR — reads the angle of the run in hand">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-        <path d="M2 12.5 A6 6 0 0 1 14 12.5 Z"></path>
-        <path d="M8 12.5 L11.6 8.3" stroke-width="0.9"></path>
-        <path d="M4.2 9.9 L5.1 10.8 M8 6.5 V7.9 M11.8 9.9 L10.9 10.8" stroke-width="0.9"></path>
-      </svg>
-      <span id="strip-protractor-angle" data-protractor-angle>—</span>
-    </span>
 
     <button type="button" id="strip-scale" class="chip" data-mode-scale
       title="FOOT — every point and every drag lands on the whole foot">
@@ -7352,6 +7390,7 @@
   const tsquareChip = strip.querySelector('[data-mode-tsquare]');
   const scaleChip = strip.querySelector('[data-mode-scale]');
   const lengthBox = document.getElementById('frozen-length');
+  const angleBox = document.getElementById('frozen-angle');
 
   const F = window.DraftFormatters;
   const feetLabel = ft => F.formatArchitecturalInches(ft * 12);
@@ -7463,6 +7502,15 @@
     if (lengthBox.disabled === typable) {
       lengthBox.disabled = !typable;
       if (!typable) lengthBox.value = '';
+    }
+    // THE ANGLE BOX LIVES UNDER THE SAME RULE, for the same reason: a typed
+    // bearing needs a start point to turn about.
+    if (angleBox.disabled === typable) {
+      angleBox.disabled = !typable;
+      if (!typable) angleBox.value = '';
+    }
+    if (typable && document.activeElement !== angleBox) {
+      angleBox.value = run ? angleLabel(run.from, run.to) : '';
     }
     // While the drafter is typing, the box is his; the live length would
     // overwrite the digits mid-word.
@@ -7601,6 +7649,52 @@
     stripRefresh();
     paint();
   };
+  // TYPING AN ANGLE COMMITS THE WALL TOO, and it is the length path with the
+  // two halves swapped: there the typed number is the distance and the cursor
+  // gives the direction, here the typed number is the direction and the
+  // distance comes from whatever the other box or the cursor is holding.
+  //
+  // WHICH WAY 30° POINTS is decided by the hand, not by the sign of the
+  // number. The protractor reads -90..90 off +X -- a wall drawn left reads
+  // the same as the same wall drawn right, deliberately -- so the typed
+  // bearing gives a LINE and the cursor's own aim picks the end of it. Type
+  // the number the protractor is showing and nothing moves, which is the test
+  // of a readout a drafter can also set.
+  const commitTypedAngle = () => {
+    const deg = parseFloat(String(angleBox.value).replace(/[°\s]/g, ''));
+    if (!Number.isFinite(deg) || Math.abs(deg) > 180) {
+      stripMessage.textContent = 'angle in degrees, -180 to 180';
+      return;
+    }
+    if (!drawStart || !cursorWorld) return;
+    if (board === 'toy' && !drawing?.boardPromptSeen) {
+      askToPromote(() => commitTypedAngle());
+      return;
+    }
+    const aim = squareTo(drawStart, cursorWorld);
+    const rad = deg * Math.PI / 180;
+    let ux = Math.cos(rad), uz = -Math.sin(rad);
+    if ((aim.x - drawStart.x) * ux + (aim.z - drawStart.z) * uz < 0) { ux = -ux; uz = -uz; }
+    // THE LENGTH THE DRAFTER CAN SEE, in the order he can see it: the length
+    // box if he has typed one, else the run the cursor is making.
+    const typed = F.parseArchitecturalLength(lengthBox.value);
+    const feet = typed.ok && typed.inches > 0 ? typed.inches / 12
+      : Math.hypot(aim.x - drawStart.x, aim.z - drawStart.z);
+    if (!(feet > 1e-6)) { stripMessage.textContent = 'point away from the start first'; return; }
+    const end = { x: drawStart.x + ux * feet, y: 0, z: drawStart.z + uz * feet };
+    const wall = commitWall(drawStart, end);
+    drawStart = wall.end;
+    setSelection([{ type: 'wall', item: wall }]);
+    angleBox.blur();
+    stripRefresh();
+    paint();
+  };
+  angleBox.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commitTypedAngle(); }
+    if (e.key === 'Escape') { e.preventDefault(); angleBox.blur(); stripRefresh(); }
+    e.stopPropagation();
+  });
+
   lengthBox.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); commitTypedLength(); }
     if (e.key === 'Escape') { e.preventDefault(); lengthBox.blur(); stripRefresh(); }
